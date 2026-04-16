@@ -207,18 +207,26 @@ void Coordinates::UpdateExcisionMasks() {
     // set up arrays to hold horizon information
     Real &horizon_factor = coord_data.horizon_factor; 
     int hsize = pmy_pack->pz4c->pfastflow.size();
-    DvceArray2D<Real> hcenter("hcenter", hsize, 3);
-    DvceArray2D<Real> hradius("hradius", hsize, 1);
-    DvceArray2D<bool> hfound("hfound", hsize, 1);
+    DualArray2D<Real> hcenter("hcenter", hsize, 3);
+    DualArray2D<Real> hradius("hradius", hsize, 1);
+    DualArray2D<bool> hfound("hfound", hsize, 1);
 
-    // fill horizon arrays
+    // fill horizon arrays on host
     for (int h = 0; h < hsize; ++h) {
-      hcenter(h,0) = pmy_pack->pz4c->pfastflow[h]->center[0];       // center x-coord.
-      hcenter(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1];       // center y-coord.
-      hcenter(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2];       // center z-coord.
-      hradius(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min;          // minimum radius
-      hfound(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found;         // found/not found horizon
+      hcenter.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->center[0];       // center x-coord.
+      hcenter.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1];       // center y-coord.
+      hcenter.h_view(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2];       // center z-coord.
+      hradius.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min;          // minimum radius
+      hfound.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found;         // found/not found horizon
     }
+
+    // sync to device
+    hcenter.template modify<HostMemSpace>();
+    hcenter.template sync<DevExeSpace>();
+    hradius.template modify<HostMemSpace>();
+    hradius.template sync<DevExeSpace>();
+    hfound.template modify<HostMemSpace>();
+    hfound.template sync<DevExeSpace>();
 
     par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -236,13 +244,13 @@ void Coordinates::UpdateExcisionMasks() {
 
       bool excise = false;
       for (int h = 0; h < hsize; ++h) {
-        if (!hfound(h,0)) continue;
+        if (!hfound.d_view(h,0)) continue;
 
-        const Real r2 = SQR(x1 - hcenter(h,0)) +
-                        SQR(x2 - hcenter(h,1)) +
-                        SQR(x3 - hcenter(h,2));
+        const Real r2 = SQR(x1 - hcenter.d_view(h,0)) +
+                        SQR(x2 - hcenter.d_view(h,1)) +
+                        SQR(x3 - hcenter.d_view(h,2));
 
-        if (r2 < SQR(hradius(h,0) * horizon_factor)) {
+        if (r2 < SQR(hradius.d_view(h,0) * horizon_factor)) {
           excise = true;
           break;
         }
