@@ -9,11 +9,14 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "bvals/bvals.hpp"
 #include "particles.hpp"
 
@@ -22,7 +25,8 @@ namespace particles {
 // constructor, initializes data structures and parameters
 
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack) {
+    pmy_pack(ppack),
+    rand_pool64(pmy_pack->gids) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -45,6 +49,8 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ptype = pin->GetString("particles","particle_type");
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
+    } else if (ptype.compare("lagrangian_mc") == 0) {
+      particle_type = ParticleType::lagrangian_mc;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle type = '" << ptype << "' not recognized"
@@ -58,6 +64,21 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ppush = pin->GetString("particles","pusher");
     if (ppush.compare("drift") == 0) {
       pusher = ParticlesPusher::drift;
+      if (particle_type == ParticleType::lagrangian_mc) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Particle pusher 'drift' not allowed for lagrangian_mc"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    } else if (ppush.compare("lagrangian_mc") == 0) {
+      // force driver to inherit timestep from fluid by setting particle dt to max value
+      dtnew = std::numeric_limits<float>::max();
+      pusher = ParticlesPusher::lagrangian_mc;
+      if (ppack->pmhd != nullptr) {
+        ppack->pmhd->SetSaveUFlxIdn();
+      } else if (ppack->phydro != nullptr) {
+        ppack->phydro->SetSaveUFlxIdn();
+      }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher must be specified in <particles> block"
@@ -81,6 +102,16 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
         nidata = 2;
         break;
       }
+    case ParticleType::lagrangian_mc:
+      {
+        nrdata = 3;
+        nidata = 4;
+        // idata: gid, ptag, lastmove, lastlevel
+        // lastmove encoding:
+        //  if >= 0 => parity of current zone as (i_isodd,j_isodd,k_isodd)*8 + direction
+        //  if -1   => freeze particle and perform no updates
+        break;
+      }
     default:
       break;
   }
@@ -95,6 +126,17 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 Particles::~Particles() {
+}
+
+//----------------------------------------------------------------------------------------
+// ReallocateParticles()
+// Update particle arrays for new number of particles in this pack.
+// This method does not preserve any existing particle data.
+
+void Particles::ReallocateParticles(int new_nprtcl_thispack) {
+  nprtcl_thispack = new_nprtcl_thispack;
+  Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
+  Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 }
 
 //----------------------------------------------------------------------------------------

@@ -37,6 +37,8 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
   id.recvp  = tl["before_timeintegrator"]->AddTask(&Particles::RecvP, this, id.sendp);
   id.crecv  = tl["before_timeintegrator"]->AddTask(&Particles::ClearRecv, this, id.recvp);
   id.csend  = tl["before_timeintegrator"]->AddTask(&Particles::ClearSend, this, id.crecv);
+  id.mradj  = tl["before_timeintegrator"]->AddTask(&Particles::AdjustMeshRefinement,
+                                                     this, id.csend);
 
   return;
 }

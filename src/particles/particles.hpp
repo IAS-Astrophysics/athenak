@@ -17,13 +17,15 @@
 #include "tasklist/task_list.hpp"
 #include "bvals/bvals.hpp"
 
+#include <Kokkos_Random.hpp>
+
 // forward declarations
 
 // constants that enumerate ParticlesPusher options
 enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 
 // constants that enumerate ParticleTypes
-enum class ParticleType {cosmic_ray};
+enum class ParticleType {cosmic_ray, lagrangian_mc};
 
 //----------------------------------------------------------------------------------------
 //! \struct ParticlesTaskIDs
@@ -38,6 +40,7 @@ struct ParticlesTaskIDs {
   TaskID recvp;
   TaskID csend;
   TaskID crecv;
+  TaskID mradj;
 };
 
 namespace particles {
@@ -55,9 +58,6 @@ class Particles {
   ParticleType particle_type;
   int nprtcl_thispack;             // number of particles this MeshBlockPack
   int nrdata, nidata;
-//  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
-//  DvceArray2D<Real> prtcl_pos;     // positions
-//  DvceArray2D<Real> prtcl_vel;     // velocities
   DvceArray2D<Real> prtcl_rdata;   // real number properties each particle (x,v,etc.)
   DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
   Real dtnew;
@@ -71,6 +71,7 @@ class Particles {
   ParticlesTaskIDs id;
 
   // functions...
+  void ReallocateParticles(int new_nprtcl_thispack);
   void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
@@ -81,9 +82,15 @@ class Particles {
   TaskStatus RecvP(Driver *pdriver, int stage);
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
+  TaskStatus AdjustMeshRefinement(Driver *pdriver, int stage);
+
+  // ... for particle pushers
+  void PushDrift();
+  void PushLagrangianMC();
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
+  Kokkos::Random_XorShift64_Pool<> rand_pool64;
 };
 
 } // namespace particles

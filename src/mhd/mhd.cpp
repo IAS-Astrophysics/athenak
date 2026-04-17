@@ -39,6 +39,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     u1("cons1",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    uflxidnsaved("uflxidn",1,1,1,1),
     efld("efld",1,1,1,1),
     wsaved("wsaved",1,1,1,1,1),
     bccsaved("bccsaved",1,1,1,1,1),

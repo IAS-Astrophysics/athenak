@@ -78,6 +78,7 @@ struct MHDTaskIDs {
   TaskID newdt;
   TaskID csend;
   TaskID crecv;
+  TaskID savef;
 };
 
 namespace mhd {
@@ -139,6 +140,10 @@ class MHD {
   DvceArray5D<Real> wsaved;
   DvceArray5D<Real> bccsaved;
 
+  // following used for saving density fluxes for Lagrangian MC tracer particles
+  bool uflxidn_saved = false;
+  DvceFaceFld4D<Real> uflxidnsaved;
+
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
@@ -148,6 +153,7 @@ class MHD {
 
   // functions...
   void SetSaveWBcc();
+  void SetSaveUFlxIdn();
   void AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_timeintegrator" task list
   TaskStatus SaveMHDState(Driver *d, int stage);
@@ -183,6 +189,7 @@ class MHD {
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus SaveFlux(Driver *d, int stage);
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
