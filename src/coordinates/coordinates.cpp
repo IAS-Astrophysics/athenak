@@ -23,7 +23,8 @@
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     pmy_pack(ppack),
     excision_floor("excision_floor",1,1,1,1),
-    excision_flux("excision_flux",1,1,1,1) {
+    excision_flux("excision_flux",1,1,1,1),
+    excision_taper("excision_taper",1,1,1,1) {
   // Check for relativistic dynamics
   // WGC: idea for handling new EOS
   is_dynamical_relativistic = (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))
@@ -73,6 +74,17 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("horizon") == 0) {
           if (pin->DoesBlockExist("fastflow")) {
             coord_data.excision_scheme = ExcisionScheme::horizon;
+            coord_data.horizon_factor = pin->GetOrAddReal("coord","horizon_factor",1.0);
+            coord_data.use_taper = pin->GetOrAddBoolean("coord","use_taper",false);
+            if (coord_data.use_taper) {
+              pin->GetOrAddReal("coord","taper_pow",1.0);
+              pin->GetOrAddReal("coord","taper_min",0.0);
+              pin->GetOrAddReal("coord","taper_dt_response",0.0);
+              pin->GetOrAddReal("coord","taper_lambda",0.0);
+              pin->GetOrAddReal("coord","taper_fr",0.0);
+              pin->GetOrAddReal("coord","texcise",1e-5);
+              pin->GetOrAddReal("coord","hydro_damping_factor",0.69);
+            }
           } else {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
@@ -97,6 +109,10 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       Kokkos::realloc(excision_flux, nmb, ncells3, ncells2, ncells1);
       if (coord_data.excision_scheme == ExcisionScheme::fixed) {
         SetExcisionMasks(excision_floor, excision_flux);
+      }
+      if (coord_data.excision_scheme == ExcisionScheme::horizon &&
+          coord_data.use_taper) {
+          Kokkos::realloc(excision_taper, nmb, ncells3, ncells2, ncells1);
       }
     }
   }

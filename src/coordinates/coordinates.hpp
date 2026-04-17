@@ -39,9 +39,18 @@ struct CoordData {
   Real rexcise;                    // excision radius (SKS)
   Real dexcise;                    // rest-mass density inside excised region
   Real pexcise;                    // pressure inside excised region
+  Real texcise;                    // temperature inside excised region
   Real flux_excise_r;              // reduce to first-order inside this radius
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
+  bool use_taper;                  // flag to specify smooth excision (used with fastflow)
+  Real horizon_factor;             // factor to muliply the horizon radius by (used with fastflow)
+  Real taper_pow;                  // taper(x) ^ taper_pow
+  Real taper_min;                  // lim x->0 taper(x) = taper_min
+  Real taper_dt_response;          // ramp taper up over this duration
+  Real taper_lambda;               // multiplying factor for taper
+  Real taper_fr;                   
+  Real hydro_damping_factor;       
 };
 
 //----------------------------------------------------------------------------------------
@@ -64,6 +73,7 @@ class Coordinates {
   // excision masks
   DvceArray4D<bool> excision_floor;  // cell-centered mask for C2P flooring about horizon
   DvceArray4D<bool> excision_flux;   // cell-centered mask for FOFC about horizon
+  DvceArray4D<Real> excision_taper;  // taper function for smooth excision
 
   // functions
   void CoordSrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,

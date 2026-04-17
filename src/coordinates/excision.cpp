@@ -196,7 +196,7 @@ void Coordinates::UpdateExcisionMasks() {
     auto &indcs = pmy_pack->pmesh->mb_indcs;
     auto &size = pmy_pack->pmb->mb_size;
     int &ng = indcs.ng;
-    int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
+    int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
     int n1 = indcs.nx1 + 2 * ng;
     int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
     int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
@@ -208,7 +208,7 @@ void Coordinates::UpdateExcisionMasks() {
     int hsize = pmy_pack->pz4c->pfastflow.size();
     DualArray2D<Real> hcenter("hcenter", hsize, 3);
     DualArray2D<Real> hradius("hradius", hsize, 1);
-    DualArray2D<bool> hfound("hfound", hsize, 1);
+    DualArray2D<bool> hfound("hfound", hsize, 2);
 
     // fill horizon arrays on host
     for (int h = 0; h < hsize; ++h) {
@@ -216,7 +216,9 @@ void Coordinates::UpdateExcisionMasks() {
       hcenter.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1];       // center y-coord.
       hcenter.h_view(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2];       // center z-coord.
       hradius.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min;          // minimum radius
+      hradius.h_view(h,0) *= coord_data.horizon_factor;                    // multiply with factor
       hfound.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found;         // found/not found horizon
+      hfound.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->time_first_found; // time horizon first found
     }
 
     // sync to device
@@ -226,6 +228,23 @@ void Coordinates::UpdateExcisionMasks() {
     hradius.template sync<DevExeSpace>();
     hfound.template modify<HostMemSpace>();
     hfound.template sync<DevExeSpace>();
+
+    // taper parameters
+    bool &use_taper = coord_data.use_taper;
+    Real &taper_pow = coord_data.taper_pow;
+    Real &taper_min = coord_data.taper_min;
+    Real &taper_dt_response = coord_data.taper_dt_response;
+    Real &eps_floor = pmy_pack->pz4c->opt.eps_floor;
+    Real &time_ = pmy_pack->pmesh->time;
+    Real &taper_lambda = coord_data.taper_lambda;
+    Real &taper_fr = coord_data.taper_fr;
+
+    if (use_taper) {
+      // fill the taper with 0.0 to also capture all 
+      // the points outside the excision region
+      Kokkos::deep_copy(excision_taper, 1.0);
+    }
+    auto &taper = excision_taper;
 
     par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -250,8 +269,45 @@ void Coordinates::UpdateExcisionMasks() {
                         SQR(x3 - hcenter.d_view(h,2));
 
         if (r2 < SQR(hradius.d_view(h,0))) {
-          excise = true;
-          break;
+          if (use_taper) {
+            // taper variables
+            Real excision_factor;
+            Real dist_ahf = std::sqrt(r2);
+            const Real time_elapsed = time_ - hfound.d_view(h,1); 
+            const Real t_arg = (taper_dt_response > 0)
+              ? std::max(
+                  std::min(1.0, time_elapsed / taper_dt_response),
+                  0.0
+              ) : 1.0;
+            
+            // smooth taper (spatial)
+            Real m_ = std::max(1 - t_arg, taper_min);
+
+            // argument on [0,1]
+            const Real f_arg = std::max(
+              std::min(1.0, dist_ahf / hradius.d_view(h,0)),
+              0.0
+            );
+            /* const Real f_arg = std::min(1.0 - eps_floor,
+                                        dist_ahf / (taper_fr * hradius.d_view(h,0))); */
+
+            excision_factor = (f_arg < eps_floor)
+              ? 0.0 : (f_arg > 1.0 - eps_floor)
+              ? 1.0 : (
+                (1.0 - m_) *
+                std::pow(1.0 - std::exp(1.0 + 1.0 / ((f_arg*f_arg) - 1.0)), taper_pow) + m_
+              );
+            /* excision_factor = taper_lambda * (1.0 -
+                std::pow(1.0 - std::exp(1.0 + 1.0 / (std::pow(f_arg, 2) - 1.0)), taper_pow)
+            ); */
+
+            taper(m,k,j,i) = excision_factor;
+            excise = true;
+            break;
+          } else {
+            excise = true;
+            break;
+          }
         }
       }
 
