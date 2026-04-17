@@ -373,8 +373,9 @@ void AddBoostedPuncture(MeshBlockPack* pmbp, ParameterInput* pin) {
     x1v += sep;
 
     Real r = Kokkos::sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+    Real psi = 1.0 + 0.5*mass/r;
 
-    adm.psi4(m,k,j,i) = Kokkos::pow(1.0 + 0.5*mass/r,4.0);
+    adm.psi4(m,k,j,i) = Kokkos::pow(psi,4.0);
 
     // Construct the puncture solution with precollapsed lapse and shift.
     Real g3d[NSPMETRIC] = {0.0};
@@ -382,7 +383,7 @@ void AddBoostedPuncture(MeshBlockPack* pmbp, ParameterInput* pin) {
     g3d[S22] = adm.psi4(m,k,j,i);
     g3d[S33] = adm.psi4(m,k,j,i);
 
-    Real alp = 1.0/Kokkos::sqrt(adm.psi4(m,k,j,i));
+    Real alp = 1.0/(psi*psi);
     Real beta_u[3] = {0.0};
 
     Real g_dd[4][4];
@@ -395,6 +396,8 @@ void AddBoostedPuncture(MeshBlockPack* pmbp, ParameterInput* pin) {
     Real lam_ud[4][4] = {0.0};
     Real g_dd_boost[4][4] = {0.0};
     ConstructXBoost(lam_ud, g3d, bh_boost);
+    Real v = bh_boost;
+    Real W = 1.0/Kokkos::sqrt(1.0 - v*v*g3d[S11]);
     
     for (int c = 0; c < 4; c++) {
       for (int b = 0; b < 4; b++) {
@@ -413,7 +416,79 @@ void AddBoostedPuncture(MeshBlockPack* pmbp, ParameterInput* pin) {
       }
     }
 
-    SpatialMetric(g3d, beta_u, alp, g_dd);
+    Real alpp;
+    SpatialMetric(g3d, beta_u, alpp, g_dd);
+
+    // Compute the extrinsic curvature for the boosted solution
+    // Spatial derivatives of psi, alpha, and the spatial metric.
+    Real dpsi_d[3] = {-mass*x1v/(2*r*r*r), mass*x2v/(2*r*r*r), mass*x3v/(2*r*r*r)};
+
+    Real dalp_d[3] = {-2.*dpsi_d[0]*alp/(psi), -2.*dpsi_d[1]*alp/(psi),
+                      -2.*dpsi_d[2]*alp/(psi)};
+
+    Real dg3_ddd[3][3][3] = {{{W*W*(dpsi_d[0] - 2.0*v*v*alp*dalp_d[0]), 0.0, 0.0},
+                              {0.0, dpsi_d[0], 0.0},
+                              {0.0, 0.0, dpsi_d[0]}},
+                             {{W*W*(dpsi_d[1] - 2.0*v*v*alp*dalp_d[1]), 0.0, 0.0},
+                              {0.0, dpsi_d[1], 0.0},
+                              {0.0, 0.0, dpsi_d[1]}},
+                             {{W*W*(dpsi_d[2] - 2.0*v*v*alp*dalp_d[2]), 0.0, 0.0},
+                              {0.0, dpsi_d[2], 0.0},
+                              {0.0, 0.0, dpsi_d[1]}}};
+    
+    // Time derivative of the metric, computed assuming that dx/dt = v.
+    Real dtg3_dd[3][3] = {{v*W*W*(dpsi_d[0] - 2.0*v*v*alp*dalp_d[0]), 0.0, 0.0},
+                           {0.0, v*dpsi_d[0], 0.0},
+                           {0.0, 0.0, v*dpsi_d[0]}};
+
+    // Metric inverse.
+    Real g3_uu[3][3] = {{1.0/g3d[S11], 0.0, 0.0},
+                        {0.0, 1.0/g3d[S22], 0.0},
+                        {0.0, 0.0, 1.0/g3d[S33]}};
+
+    // Christoffel symbols
+    Real Gamma_udd[3][3][3] = {0.0};
+    for (int c = 0; c < 3; c++) {
+      for (int a = 0; a < 3; a++) {
+        for (int b = 0; b < 3; b++) {
+          for (int d = 0; d < 3; d++) {
+            Gamma_udd[c][a][b] += 0.5*g3_uu[c][d]*(
+                                -dg3_ddd[d][a][b] + dg3_ddd[a][d][b] + dg3_ddd[b][a][d]);
+          }
+        }
+      }
+    }
+
+    // Covariant derivatives of beta_d.
+    Real beta_d[3] = {W*W*v*(alp*alp - psi), 0.0, 0.0};
+    Real Dbeta_dd[3][3] = {0.0};
+
+    for (int a = 0; a < 3; a++) {
+      Dbeta_dd[a][0] = W*W*v*(-dpsi_d[a] + 2.0*alp*dalp_d[a]);
+      for (int b = 0; b < 3; b++) {
+        for (int c = 0; c < 3; c++) {
+          Dbeta_du[a][b] -= Gamma_udd[c][a][b]*beta_d[c];
+        }
+      }
+    }
+
+    // Finally, the extrinsic curvature calculation
+    Real K_dd[3][3];
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        K_dd[a][b] = (-dtg3_dd[a][b] + Dbeta_dd[a][b] + Dbeta_dd[b][a])/(2.0*alpp);
+      }
+    }
+    Real Ka_ud[3][3];
+    Real Kb_ud[3][3];
+    for (int a = 0; a < 3; a++) {
+      for (int b = 0; b < 3; b++) {
+        for (int c = 0; c < 3; c++) {
+
+        }
+      }
+    }
+
 
     // Superpose the solution and subtract off Minkowski space.
     adm.g_dd(m,0,0,k,j,i) += g3d[S11] - 1.0;
@@ -437,7 +512,7 @@ void AddBoostedPuncture(MeshBlockPack* pmbp, ParameterInput* pin) {
     // Assumed precollapsed lapse
     adm.alpha(m,k,j,i) = Kokkos::sqrt(Kokkos::max(lapse_floor,
                             adm.alpha(m,k,j,i)*adm.alpha(m,k,j,i) +
-                            alp*alp - 1.0));
+                            alpp*alpp - 1.0));
   });
 }
 
@@ -480,7 +555,7 @@ KOKKOS_INLINE_FUNCTION
 void SpatialMetric(Real g3d[NSPMETRIC], Real beta_u[3], Real& alpha,
                    const Real g_dd[4][4]) {
   g3d[S11] = g_dd[1][1];
-  g3d[S12] = g_dd[1][2];
+6  g3d[S12] = g_dd[1][2];
   g3d[S13] = g_dd[1][3];
   g3d[S22] = g_dd[2][2];
   g3d[S23] = g_dd[2][3];
