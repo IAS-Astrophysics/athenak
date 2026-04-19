@@ -54,6 +54,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", true);
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", true);
   params.backreact_tmunu = pin->GetOrAddBoolean("radiation_m1", "backreact_tmunu", true);
+  params.backreact_chiral = pin->GetOrAddBoolean("radiation_m1", "backreact_chiral", false);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-14);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 164);

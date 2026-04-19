@@ -651,6 +651,16 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             umhd0_(m, IM3, k, j, i) -= theta * DrEFN[nuidx][M1_FZ_IDX];
             if (nspecies_ > 1) {
               umhd0_(m, IYF, k, j, i) += theta * DDxp[nuidx];
+              if (params_.backreact_chiral) {
+                // TODO: properly compute mass term
+                Real Gamma_m = 0.0;
+                umhd0_(m, IYF + 1, k, j, i) -= theta * DDxp[nuidx];
+                // Note that DDxp is already spacetime densitized and scaled with mb
+                // but these terms need to be included also for Gamma_m
+                umhd0_(m, IYF + 1, k, j, 1) -=
+                    Gamma_m * volform * adm.alpha(m, k, j, i) *
+                    w0_(m, IYF + 1, k, j, i) * w0_(m, IDN, k, j, i);
+              }
             }
           }
         }
