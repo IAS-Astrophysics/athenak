@@ -41,6 +41,9 @@ public:
   template <int NGHOST>
   void MetricInterp();
   void ComputeSphericalHarmonics();
+  void RadiiFromSphericalHarmonics();
+  void SurfaceIntegrals();
+
   Real GetHorizonRadius() const { return ah_prop[hmeanradius]; }
 
   // Some of the main parameters in the fast-flow algorithm
@@ -94,16 +97,14 @@ private:
   DualArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
 
   // Arrays for spectral coefficients
-  HostArray1D<Real> a0; 
-  HostArray1D<Real> ac; 
-  HostArray1D<Real> as; 
+  DualArray1D<Real> a0, ac, as; 
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  HostArray1D<Real> rr, rr_dth, rr_dph; 
+  DvceArray1D<Real> rr, rr_dth, rr_dph; 
 
   // Array computed in Surface Integrals
-  HostArray1D<Real> rho;
+  DualArray1D<Real> rho;
 
   // Indexes of surface integrals
   enum {
@@ -144,18 +145,15 @@ private:
   DvceArray5D<Real> dg;
 
   // Vectors to hold the DualArray1D interpolated values of GaussLegendreGrid
-  HostArray2D<Real> g_interp, K_interp, dg_interp;
+  DvceArray2D<Real> g_interp, K_interp, dg_interp;
 
   // Flag points
-  HostArray1D<int> havepoint;
+  DualArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
-  void SurfaceIntegrals();
   void FastFlowLoop();
   void UpdateFlowSpectralComponents();
-  void RadiiFromSphericalHarmonics();
   void InitialGuess();
-  int lmindex(const int l, const int m);
 
   // Pointers to MeshBlockPack and ParameterInput
   MeshBlockPack *pmbp;

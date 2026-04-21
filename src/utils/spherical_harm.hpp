@@ -133,4 +133,13 @@ void SphericalHarmSecondDerivs(Real *YlmR, Real *YlmI, Real *YlmRdth, Real *YlmI
   *YlmIdth2 = -l * (l+1) * (*YlmI) - cot_theta * (*YlmIdth) + Kokkos::pow(m, 2)/Kokkos::pow(sin_theta, 2) * (*YlmI);        
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn int lmindex(const int l, const int m, const lm)
+//! \brief Multipolar single index (l,m) -> index
+KOKKOS_INLINE_FUNCTION
+int lmindex(const int l, const int m, const int lm)
+{
+  return l * (lm + 1) + m;
+}
+
 #endif // UTILS_SPHERICAL_HARM_HPP_
