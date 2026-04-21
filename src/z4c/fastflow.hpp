@@ -38,7 +38,9 @@ public:
   void Write(int iter, Real time); // function for result writing
   template <int NGHOST>
   void MetricDerivatives(Real time); // compute the metric derivatives
-
+  template <int NGHOST>
+  void MetricInterp();
+  void ComputeSphericalHarmonics();
   Real GetHorizonRadius() const { return ah_prop[hmeanradius]; }
 
   // Some of the main parameters in the fast-flow algorithm
@@ -50,7 +52,7 @@ public:
   Real center[3]; // Center around which the horizon is searched
 
   // Fast-Flow parameters
-  Real hmean_tol; // for convergence
+  Real hmean_tol; // for convergence 
   Real mass_tol; // for convergence
   int flow_iterations; // number of flow iterations
   Real flow_alpha_beta_const; // alpha & beta constants in the iteration formula
@@ -72,7 +74,7 @@ public:
   // Start and Stop times for each surface
   Real start_time;
   Real stop_time;
-
+  
 private:
   int npunct; // Number of punctures
   int lmax1; // lmax + 1
@@ -85,18 +87,20 @@ private:
 
   // Pointer to Gauss-Legendre object
   GaussLegendreGrid *gl_grid;
-
+ 
   // Arrays of spherical harmonics and derivatives
-  HostArray2D<Real> Y0, Yc, Ys;
-  HostArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph;
-  HostArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2;
+  DualArray2D<Real> Y0, Yc, Ys; 
+  DualArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; 
+  DualArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
 
   // Arrays for spectral coefficients
-  HostArray1D<Real> a0, ac, as;
+  HostArray1D<Real> a0; 
+  HostArray1D<Real> ac; 
+  HostArray1D<Real> as; 
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  HostArray1D<Real> rr, rr_dth, rr_dph;
+  HostArray1D<Real> rr, rr_dth, rr_dph; 
 
   // Array computed in Surface Integrals
   HostArray1D<Real> rho;
@@ -126,25 +130,6 @@ private:
   };
   Real ah_prop[hnvar]; // Array of horizon quantities
 
-  // Indices to interpolate over
-  /* int g_idx[6] = {
-    pmbp->padm->I_ADM_GXX,
-    pmbp->padm->I_ADM_GXY,
-    pmbp->padm->I_ADM_GXZ,
-    pmbp->padm->I_ADM_GYY,
-    pmbp->padm->I_ADM_GYZ,
-    pmbp->padm->I_ADM_GZZ
-  };
-
-  int K_idx[6] = {
-    pmbp->padm->I_ADM_KXX,
-    pmbp->padm->I_ADM_KXY,
-    pmbp->padm->I_ADM_KXZ,
-    pmbp->padm->I_ADM_KYY,
-    pmbp->padm->I_ADM_KYZ,
-    pmbp->padm->I_ADM_KZZ
-  }; */
-
   // Enumerators for readability when calling interpolated arrays
   enum {
     DX_GXX, DX_GXY, DX_GXZ, DX_GYY, DX_GYZ, DX_GZZ,
@@ -152,32 +137,24 @@ private:
     DZ_GXX, DZ_GXY, DZ_GXZ, DZ_GYY, DZ_GYZ, DZ_GZZ, NDRVS
   };
 
-  enum {GXX, GXY, GXZ, GYY, GYZ, GZZ};
-  enum {KXX, KXY, KXZ, KYY, KYZ, KZZ};
+  enum {GXX, GXY, GXZ, GYY, GYZ, GZZ, INMETRIC};
+  enum {KXX, KXY, KXZ, KYY, KYZ, KZZ, INCURV};
 
   // 5D Device array for the metric derivatives
-  // (OS): this is a bad workaround, since we cannot use rank-3 tensors
-  //       and the InterpolateToSphere function in GaussLegendreGrid expects
-  //       this type
   DvceArray5D<Real> dg;
 
   // Vectors to hold the DualArray1D interpolated values of GaussLegendreGrid
-  /* std::vector<DualArray1D<Real>> g_interp;
-  std::vector<DualArray1D<Real>> K_interp;
-  std::vector<DualArray1D<Real>> dg_interp; */
   HostArray2D<Real> g_interp, K_interp, dg_interp;
 
   // Flag points
   HostArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
-  void MetricInterp();
   void SurfaceIntegrals();
   void FastFlowLoop();
   void UpdateFlowSpectralComponents();
   void RadiiFromSphericalHarmonics();
   void InitialGuess();
-  void ComputeSphericalHarmonics();
   int lmindex(const int l, const int m);
 
   // Pointers to MeshBlockPack and ParameterInput
@@ -198,7 +175,7 @@ private:
   FILE *pofile_ylm;
   FILE *pofile_grid;
 
-  // Functions to interface with puncture tracker
+  // Functions to interface with puncture tracker 
   Real PuncMaxDistance();
   Real PuncMaxDistance(const int pix);
   Real PuncSumMasses();

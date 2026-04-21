@@ -23,11 +23,12 @@
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "compact_object_tracker.hpp"
-#include "geodesic-grid/spherical_grid.hpp"
 #include "utils/spherical_harm.hpp"
 #include "utils/lagrange_interpolator.hpp"
 #include "z4c.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "utils/inline_interpolator.hpp"
+
 //----------------------------------------------------------------------------------------
 //! \fn FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput * pin, int n)
 //! \brief Constructor for FastFlow class
@@ -35,17 +36,16 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   pmbp(pmbp),
   pin(pin),
   Y0("Y0",1,1), Ys("Ys",1,1), Yc("Yc",1,1),
-  dY0dth("dY0dth",1,1), dYcdth("dYcdth",1,1),
-  dYsdth("dYsdth",1,1), dYcdph("dYcdph",1,1),
-  dYsdph("dYsdph",1,1), dY0dth2("dY0dth2",1,1),
-  dYcdth2("dYcdth2",1,1), dYcdthdph("dYcdthdph",1,1),
-  dYsdth2("dYsdth2",1,1), dYsdthdph("dYsdthdph",1,1),
+  dY0dth("dY0dth",1,1), dYcdth("dYcdth",1,1), 
+  dYsdth("dYsdth",1,1), dYcdph("dYcdph",1,1), 
+  dYsdph("dYsdph",1,1), dY0dth2("dY0dth2",1,1), 
+  dYcdth2("dYcdth2",1,1), dYcdthdph("dYcdthdph",1,1), 
+  dYsdth2("dYsdth2",1,1), dYsdthdph("dYsdthdph",1,1), 
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
-  a0("a0",1), ac("ac",1), as("as",1),
-  rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
+  a0("a0",1), ac("ac",1), as("as",1), 
+  rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1), 
   rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
-  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1),
-  havepoint("havepoint",1)
+  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1)
 {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
@@ -114,7 +114,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   lmpoints = lmax1 * lmax1;
 
   // Reallocate for the coefficients
-  Kokkos::realloc(a0, lmax1);
+  Kokkos::realloc(a0, lmax1); 
   Kokkos::realloc(ac, lmpoints);
   Kokkos::realloc(as, lmpoints);
 
@@ -129,7 +129,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(dYsdth, nangles, lmpoints);
   Kokkos::realloc(dYcdph, nangles, lmpoints);
   Kokkos::realloc(dYsdph, nangles, lmpoints);
-
+  
   Kokkos::realloc(dY0dth2, nangles, lmax1);
   Kokkos::realloc(dYcdth2, nangles, lmpoints);
   Kokkos::realloc(dYcdthdph, nangles, lmpoints);
@@ -137,7 +137,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(dYsdthdph, nangles, lmpoints);
   Kokkos::realloc(dYcdph2, nangles, lmpoints);
   Kokkos::realloc(dYsdph2, nangles, lmpoints);
-
+  
   ComputeSphericalHarmonics();
 
   // Fields on the sphere
@@ -146,20 +146,9 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(rr_dph, nangles);
 
   // Allocate the arrays holding the interpolated values
-  /* g_interp.resize(6);
-  K_interp.resize(6);
-  for (int d = 0; d < g_interp.size(); ++d) {
-    Kokkos::realloc(g_interp[d], nangles);
-    Kokkos::realloc(K_interp[d], nangles);
-  }
-
-  dg_interp.resize(18);
-  for (int d = 0; d < dg_interp.size(); ++d) {
-    Kokkos::realloc(dg_interp[d], nangles);
-  } */
-  Kokkos::realloc(g_interp, 6, nangles);
-  Kokkos::realloc(K_interp, 6, nangles);
-  Kokkos::realloc(dg_interp, 18, nangles);
+  Kokkos::realloc(g_interp, (INMETRIC), nangles);
+  Kokkos::realloc(K_interp, (INCURV), nangles);
+  Kokkos::realloc(dg_interp, (NDRVS), nangles);
 
   // Allocate memory for the array holding the metric derivatives
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -168,7 +157,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   int ncells2 = indcs.nx2 + 2 * (indcs.ng);
   int ncells3 = indcs.nx3 + 2 * (indcs.ng);
   Kokkos::realloc(dg, nmb, (NDRVS), ncells3, ncells2, ncells1);
-
+  
   // Array computed in surface integrals
   Kokkos::realloc(rho, nangles);
 
@@ -264,7 +253,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
       // Header
       fprintf(pofile_ylm, "# 1:Theta\t2:Phi\t3:l\t4:m\t5:Y0\t6:Yc\t7:Ys\t8:dY0dth\t9:dYcdth\t10:dYsdth\t"
-                   "11:dYcdphi\t12:dYsdphi\t13:dY0dth2\t14:dYcdth2\t15:dYsdth2\t16:dYcdph2\t17:dYsdph2\t"
+                   "11:dYcdphi\t12:dYsdphi\t13:dY0dth2\t14:dYcdth2\t15:dYsdth2\t16:dYcdph2\t17:dYsdph2\t" 
                    "18:dYcdthdphi\t19:dYsdthdphi\n");
 
       for (int l = 0; l <= lmax; ++l) {
@@ -275,28 +264,28 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
             if (m == 0){
               fprintf(pofile_ylm, "%.15e %.15e %d %d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
-                      theta, phi, l, m, Y0(p,l), 0.0, 0.0,
-                      dY0dth(p,l), 0.0, 0.0, 0.0, 0.0,
-                      dY0dth2(p,l), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+                      theta, phi, l, m, Y0.h_view(p,l), 0.0, 0.0,
+                      dY0dth.h_view(p,l), 0.0, 0.0, 0.0, 0.0,
+                      dY0dth2.h_view(p,l), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
             } else {
               const int l1 = lmindex(l,m);
               fprintf(pofile_ylm, "%.15e %.15e %d %d %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
                       theta, phi, l, m,
                       0.0,
-                      Yc(p,l1),
-                      Ys(p,l1),
+                      Yc.h_view(p,l1),
+                      Ys.h_view(p,l1),
                       0.0,
-                      dYcdth(p,l1),
-                      dYsdth(p,l1),
-                      dYcdph(p,l1),
-                      dYsdph(p,l1),
+                      dYcdth.h_view(p,l1),
+                      dYsdth.h_view(p,l1),
+                      dYcdph.h_view(p,l1),
+                      dYsdph.h_view(p,l1),
                       0.0,
-                      dYcdth2(p,l1),
-                      dYsdth2(p,l1),
-                      dYcdph2(p,l1),
-                      dYsdph2(p,l1),
-                      dYcdthdph(p,l1),
-                      dYsdthdph(p,l1)
+                      dYcdth2.h_view(p,l1),
+                      dYsdth2.h_view(p,l1),
+                      dYcdph2.h_view(p,l1),
+                      dYsdph2.h_view(p,l1),
+                      dYcdthdph.h_view(p,l1),
+                      dYsdthdph.h_view(p,l1)
                       );
             }
           }
@@ -341,7 +330,7 @@ void FastFlow::Write(int iter, Real time)
   if (ioproc) {
     if((time < start_time) || (time > stop_time)) return;
     if (wait_until_punc_are_close && !(PuncAreClose())) return;
-
+    
     // Summary file
     fprintf(pofile_summary, "%d %g ", iter, time);
     fprintf(pofile_summary, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e",
@@ -372,7 +361,7 @@ void FastFlow::Write(int iter, Real time)
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
       for(int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0(l));
-
+    
         for(int m = 1; m <= l; m++){
           int l1 = lmindex(l,m);
           fprintf(pofile_shape,"%e ",ac(l1));
@@ -424,18 +413,18 @@ void FastFlow::Find(int iter, Real time)
 //! \fn void FastFlow::InitialGuess()
 //! \brief Initial guess for spectral coefs of horizon n
 void FastFlow::InitialGuess()
-{
+{  
   // Reset Coefficients to Zero
-  Kokkos::deep_copy(a0, 0.0);
+  Kokkos::deep_copy(a0, 0.0); 
   Kokkos::deep_copy(ac, 0.0);
   Kokkos::deep_copy(as, 0.0);
-
+  
   if (use_puncture >= 0) {
     // Update the center to the puncture position
     center[0] = pmbp->pz4c->ptracker[use_puncture]->GetPos(0);
     center[1] = pmbp->pz4c->ptracker[use_puncture]->GetPos(1);
     center[2] = pmbp->pz4c->ptracker[use_puncture]->GetPos(2);
-
+    
     // Update a0
     // For single BH in isotropic coordinates: horizon radius=m/2
     // but make sure it can surround all punctures comfortably, i.e.
@@ -473,12 +462,12 @@ void FastFlow::InitialGuess()
 //! \brief compute drvts of ADM metric at MB level
 template <int NGHOST>
 void FastFlow::MetricDerivatives(Real time)
-{
+{ 
   // Check whether derivatives have to be computed
   if (use_stored_metric_drvts) return;
   if((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
-
+  
   // MeshBlock variables
   auto &adm = pmbp->padm->adm;
   auto &dg_ = dg;
@@ -529,95 +518,102 @@ template void FastFlow::MetricDerivatives<4>(Real time);
 //! \fn void FastFlow::MetricInterp(MeshBlock *pmb)
 //! \brief Interpolate metric on the surface n
 //!        Flag here the surface points contained (on this rank)
+template <int NGHOST>
 void FastFlow::MetricInterp()
-{
-  // Interpolate metric and extrinsic curvature to sphere
-  /* for (int c = 0; c < g_interp.size(); ++c) {
-    gl_grid->InterpolateToSphere(g_idx[c], pmbp->padm->u_adm);
-    Kokkos::deep_copy(g_interp[c], gl_grid->interp_vals);
-
-    gl_grid->InterpolateToSphere(K_idx[c], pmbp->padm->u_adm);
-    Kokkos::deep_copy(K_interp[c], gl_grid->interp_vals);
-  }
-
-  // Interpolate metric derivatives to sphere
-  for (int c = 0; c < dg_interp.size(); ++c) {
-    gl_grid->InterpolateToSphere(c, dg);
-    Kokkos::deep_copy(dg_interp[c], gl_grid->interp_vals);
-  } */
-
-  // Set havepoint flag
+{ 
+  // Set some necessary variables
   int nmb = pmbp->nmb_thispack;
+  auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
   const Real xc = center[0];
   const Real yc = center[1];
   const Real zc = center[2];
-  Real pos[3];
 
-  for (int p = 0; p < nangles; ++p) {
-    Real theta = gl_grid->polar_pos.h_view(p,0);
-    Real phi = gl_grid->polar_pos.h_view(p,1);
+  // explicit capture
+  auto &polar_pos = gl_grid->polar_pos;
+  auto &u_adm = pmbp->padm->u_adm;
+  auto &dg_ = dg;
+
+  // indices
+  int gind[INMETRIC] = {
+    pmbp->padm->I_ADM_GXX,
+    pmbp->padm->I_ADM_GXY,
+    pmbp->padm->I_ADM_GXZ,
+    pmbp->padm->I_ADM_GYY,
+    pmbp->padm->I_ADM_GYZ,
+    pmbp->padm->I_ADM_GZZ
+  };
+
+  int Kind[INCURV] = {
+    pmbp->padm->I_ADM_KXX,
+    pmbp->padm->I_ADM_KXY,
+    pmbp->padm->I_ADM_KXZ,
+    pmbp->padm->I_ADM_KYY,
+    pmbp->padm->I_ADM_KYZ,
+    pmbp->padm->I_ADM_KZZ
+  };
+
+  // create mirrors
+  auto dvce_gi = create_mirror_view(DevExeSpace(), g_interp);
+  auto dvce_Ki = create_mirror_view(DevExeSpace(), K_interp);
+  auto dvce_dgi = create_mirror_view(DevExeSpace(), dg_interp);
+  auto dvce_rr = create_mirror_view(DevExeSpace(), rr);
+  auto dvce_havepoint = create_mirror_view(DevExeSpace(), havepoint);
+
+  // this is necessary, as device rr is not initialized yet
+  Kokkos::deep_copy(dvce_rr, rr);
+
+  par_for("FastFlow_interpolate", DevExeSpace(), 0, nangles-1,
+  KOKKOS_LAMBDA(int p) {
+    Real theta = polar_pos.d_view(p,0);
+    Real phi = polar_pos.d_view(p,1);
 
     // Global coordinates of the surface
-    Real x = xc + rr(p) * Kokkos::sin(theta) * Kokkos::cos(phi);
-    Real y = yc + rr(p) * Kokkos::sin(theta) * Kokkos::sin(phi);
-    Real z = zc + rr(p) * Kokkos::cos(theta);
+    Real pos[3];
+    Real x = xc + dvce_rr(p) * Kokkos::sin(theta) * Kokkos::cos(phi);
+    Real y = yc + dvce_rr(p) * Kokkos::sin(theta) * Kokkos::sin(phi);
+    Real z = zc + dvce_rr(p) * Kokkos::cos(theta);
     pos[0] = x;
     pos[1] = y;
     pos[2] = z;
 
     // Set havepoint flag
     for (int m = 0; m < nmb; ++m) {
-      if ((size.h_view(m).x1min <= x) && (x <= size.h_view(m).x1max) &&
-          (size.h_view(m).x2min <= y) && (y <= size.h_view(m).x2max) &&
-          (size.h_view(m).x3min <= z) && (z <= size.h_view(m).x3max)) {
-            havepoint(p) += 1;
+      if ((size.d_view(m).x1min <= x) && (x <= size.d_view(m).x1max) &&
+          (size.d_view(m).x2min <= y) && (y <= size.d_view(m).x2max) &&
+          (size.d_view(m).x3min <= z) && (z <= size.d_view(m).x3max)) {
+            dvce_havepoint(p) += 1;
       }
     }
 
-    // Initialize interpolator at point
-    auto *S = new LagrangeInterpolator(pmbp, pos);
+    auto ind_and_wghts = IndicesAndWeights<NGHOST>(indcs, size, pos, nmb);
+    if (ind_and_wghts.point_exist) {
+      // Metric
+      for (int a = 0; a < INMETRIC; ++a) {
+        dvce_gi(a,p) = InterpolateLagrange<NGHOST>(u_adm, gind[a], indcs, ind_and_wghts);
+      }
 
-    if (S->point_exist) {
-      g_interp(GXX,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GXX);
-      g_interp(GXY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GXY);
-      g_interp(GXZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GXZ);
-      g_interp(GYY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GYY);
-      g_interp(GYZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GYZ);
-      g_interp(GZZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_GZZ);
+      // Extrinsic curvature
+      for (int b = 0; b < INCURV; ++b) {
+        dvce_Ki(b,p) = InterpolateLagrange<NGHOST>(u_adm, Kind[b], indcs, ind_and_wghts);
+      }
 
-      K_interp(KXX,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KXX);
-      K_interp(KXY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KXY);
-      K_interp(KXZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KXZ);
-      K_interp(KYY,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KYY);
-      K_interp(KYZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KYZ);
-      K_interp(KZZ,p) = S->Interpolate(pmbp->padm->u_adm, pmbp->padm->I_ADM_KZZ);
-
-      dg_interp(DX_GXX,p) = S->Interpolate(dg, DX_GXX);
-      dg_interp(DX_GXY,p) = S->Interpolate(dg, DX_GXY);
-      dg_interp(DX_GXZ,p) = S->Interpolate(dg, DX_GXZ);
-      dg_interp(DX_GYY,p) = S->Interpolate(dg, DX_GYY);
-      dg_interp(DX_GYZ,p) = S->Interpolate(dg, DX_GYZ);
-      dg_interp(DX_GZZ,p) = S->Interpolate(dg, DX_GZZ);
-
-      dg_interp(DY_GXX,p) = S->Interpolate(dg, DY_GXX);
-      dg_interp(DY_GXY,p) = S->Interpolate(dg, DY_GXY);
-      dg_interp(DY_GXZ,p) = S->Interpolate(dg, DY_GXZ);
-      dg_interp(DY_GYY,p) = S->Interpolate(dg, DY_GYY);
-      dg_interp(DY_GYZ,p) = S->Interpolate(dg, DY_GYZ);
-      dg_interp(DY_GZZ,p) = S->Interpolate(dg, DY_GZZ);
-
-      dg_interp(DZ_GXX,p) = S->Interpolate(dg, DZ_GXX);
-      dg_interp(DZ_GXY,p) = S->Interpolate(dg, DZ_GXY);
-      dg_interp(DZ_GXZ,p) = S->Interpolate(dg, DZ_GXZ);
-      dg_interp(DZ_GYY,p) = S->Interpolate(dg, DZ_GYY);
-      dg_interp(DZ_GYZ,p) = S->Interpolate(dg, DZ_GYZ);
-      dg_interp(DZ_GZZ,p) = S->Interpolate(dg, DZ_GZZ);
+      // Metric derivatives
+      for (int c = 0; c < NDRVS; ++c) {
+        dvce_dgi(c,p) = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
+      }
     }
+  });
 
-    delete S;
-  }
+  // fill host mirrors
+  Kokkos::deep_copy(g_interp, dvce_gi);
+  Kokkos::deep_copy(K_interp, dvce_Ki);
+  Kokkos::deep_copy(dg_interp, dvce_dgi);
+  Kokkos::deep_copy(havepoint, dvce_havepoint);
 }
+template void FastFlow::MetricInterp<2>();
+template void FastFlow::MetricInterp<3>();
+template void FastFlow::MetricInterp<4>();
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::FastFlowLoop()
@@ -661,7 +657,15 @@ void FastFlow::FastFlowLoop()
     Kokkos::deep_copy(dg_interp, 0.0);
 
     // Interpolate metric on surface
-    MetricInterp();
+    auto &indcs = pmbp->pmesh->mb_indcs;
+    switch (indcs.ng) {
+      case 2: MetricInterp<2>();
+              break;
+      case 3: MetricInterp<3>();
+              break;
+      case 4: MetricInterp<4>();
+              break;
+    }
     SurfaceIntegrals();
 
     area  = integrals[iarea];
@@ -683,7 +687,7 @@ void FastFlow::FastFlowLoop()
       failed = true;
       break;
     }
-
+ 
     if (!(std::isfinite(hmean))) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, hmean not finite\n");
@@ -692,7 +696,7 @@ void FastFlow::FastFlowLoop()
       failed = true;
       break;
     }
-
+    
     // Irreducible mass
     mass_prev = mass;
     mass = Kokkos::sqrt(area / (16.0 * M_PI));
@@ -769,7 +773,7 @@ void FastFlow::FastFlowLoop()
       fprintf(pofile_verbose, " Sy = %f\n", Sy);
       fprintf(pofile_verbose, " Sz = %f\n", Sz);
       fprintf(pofile_verbose, " S  = %f\n", S);
-    }
+    } 
     else if (!failed && !ah_found) {
       fprintf(pofile_verbose, "Failed, reached max iterations %d\n", flow_iterations);
     }
@@ -786,17 +790,17 @@ void FastFlow::UpdateFlowSpectralComponents()
   const Real beta = 0.5 * flow_alpha_beta_const;
   const Real A = alpha / (lmax * lmax1) + beta;
   const Real B = beta / alpha;
-
+  
   Real *ABfac = new Real[lmax1];
   Real *spec0 = new Real[lmax1];
   Real *specc = new Real[lmpoints];
   Real *specs = new Real[lmpoints];
-
+  
   // Initialize coefficients to zero
   for(int l = 0; l <= lmax; l++) {
     spec0[l] = 0;
     ABfac[l] = A / (1.0 + B * l * (l + 1));
-
+    
     for(int m = 1; m <= l; m++) {
       int l1 = lmindex(l,m);
       specc[l1] = 0;
@@ -809,18 +813,18 @@ void FastFlow::UpdateFlowSpectralComponents()
     if (!havepoint(p)) continue;
 
     const Real drho = gl_grid->int_weights.h_view(p) * rho(p);
-
+    
     for(int l = 0; l <= lmax; l++) {
-      spec0[l] += drho * Y0(p,l);
-
-      for(int m = 1; m <= l; m++) {
+      spec0[l] += drho * Y0.h_view(p,l);
+    
+      for(int m = 1; m <= l; m++) { 
         int l1 = lmindex(l,m);
-        specc[l1] += drho * Yc(p,l1);
-        specs[l1] += drho * Ys(p,l1);
+        specc[l1] += drho * Yc.h_view(p,l1);
+        specs[l1] += drho * Ys.h_view(p,l1);
       }
     }
   }
-
+   
   // MPI reduce
   #if MPI_PARALLEL_ENABLED
     MPI_Allreduce(MPI_IN_PLACE, spec0, lmax1,    MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
@@ -843,7 +847,7 @@ void FastFlow::UpdateFlowSpectralComponents()
   delete[] spec0;
   delete[] specc;
   delete[] specs;
-} // (OS): Sync DualArray? or change to Host
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::RadiiFromSphericalHarmonics()
@@ -853,23 +857,23 @@ void FastFlow::RadiiFromSphericalHarmonics()
   Kokkos::deep_copy(rr, 0.0);
   Kokkos::deep_copy(rr_dth, 0.0);
   Kokkos::deep_copy(rr_dph, 0.0);
-
+  
   rr_min = std::numeric_limits<Real>::infinity();
   for(int p = 0; p < nangles; p++){
     for(int l = 0; l <= lmax; l++){
-      rr(p) += a0(l) * Y0(p,l);
-      rr_dth(p) += a0(l) * dY0dth(p,l);
-
+      rr(p) += a0(l) * Y0.h_view(p,l);
+      rr_dth(p) += a0(l) * dY0dth.h_view(p,l);
+    
       for(int m = 1; m <= l; m++){
         int l1 = lmindex(l,m);
-        rr(p) += ac(l1) * Yc(p,l1) + as(l1) * Ys(p,l1);
-        rr_dth(p) += ac(l1) * dYcdth(p,l1) + as(l1) * dYsdth(p,l1);
-        rr_dph(p) += ac(l1) * dYcdph(p,l1) + as(l1) * dYsdph(p,l1);
+        rr(p) += ac(l1) * Yc.h_view(p,l1) + as(l1) * Ys.h_view(p,l1);
+        rr_dth(p) += ac(l1) * dYcdth.h_view(p,l1) + as(l1) * dYsdth.h_view(p,l1);
+        rr_dph(p) += ac(l1) * dYcdph.h_view(p,l1) + as(l1) * dYsdph.h_view(p,l1);
       }
     }
     rr_min = std::min(rr_min, rr(p));
   }
-} // (OS): Sync DualArray? or change to Host
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::SurfaceIntegrals()
@@ -917,7 +921,7 @@ void FastFlow::SurfaceIntegrals()
   }
 
   Kokkos::deep_copy(rho, 0.0); // Initialize rho
-
+  
   // Loop over surface points
   for(int p = 0; p < nangles; p++){
     Real const theta = gl_grid->polar_pos.h_view(p,0);
@@ -925,7 +929,7 @@ void FastFlow::SurfaceIntegrals()
     Real const costh = Kokkos::cos(theta);
 
     if (!havepoint(p)) continue;
-
+    
     Real const phi = gl_grid->polar_pos.h_view(p,1);
     Real const sinph = Kokkos::sin(phi);
     Real const cosph = Kokkos::cos(phi);
@@ -1014,13 +1018,13 @@ void FastFlow::SurfaceIntegrals()
       dFdi(a) = drdi(a);
 
       for(int l = 0; l <= lmax; l++){
-        dFdi(a) -= a0(l) * dthetadi(a) * dY0dth(p,l);
-
+        dFdi(a) -= a0(l) * dthetadi(a) * dY0dth.h_view(p,l);
+        
         for(int m = 1; m <= l; m++){
           const int l1 = lmindex(l,m);
           dFdi(a) -=
-            ac(l1) * (dthetadi(a) * dYcdth(p,l1) + dphidi(a) * dYcdph(p,l1)) +
-            as(l1) * (dthetadi(a) * dYsdth(p,l1) + dphidi(a) * dYsdph(p,l1));
+            ac(l1) * (dthetadi(a) * dYcdth.h_view(p,l1) + dphidi(a) * dYcdph.h_view(p,l1)) +
+            as(l1) * (dthetadi(a) * dYsdth.h_view(p,l1) + dphidi(a) * dYsdph.h_view(p,l1));
         }
       }
     }
@@ -1031,18 +1035,18 @@ void FastFlow::SurfaceIntegrals()
         dFdidj(a,b) = drdidj(a,b);
 
         for(int l = 0;l <= lmax; l++){
-          dFdidj(a,b) -= a0(l)*(dthetadidj(a,b)*dY0dth(p,l) + dthetadi(a)*dthetadi(b)*dY0dth2(p,l));
-
+          dFdidj(a,b) -= a0(l)*(dthetadidj(a,b)*dY0dth.h_view(p,l) + dthetadi(a)*dthetadi(b)*dY0dth2.h_view(p,l));
+          
           for(int m = 1; m <= l; m++){
             int l1 = lmindex(l,m);
-            dFdidj(a,b) -= ac(l1)*(dthetadidj(a,b)*dYcdth(p,l1)
-              + dthetadi(a)*(dthetadi(b)*dYcdth2(p,l1) + dphidi(b)*dYcdthdph(p,l1))
-              + dphididj(a,b)*dYcdph(p,l1)
-              + dphidi(a)*(dthetadi(b)*dYcdthdph(p,l1) + dphidi(b)*dYcdph2(p,l1)))
-              + as(l1)*(dthetadidj(a,b)*dYsdth(p,l1)
-              + dthetadi(a)*(dthetadi(b)*dYsdth2(p,l1) + dphidi(b)*dYsdthdph(p,l1))
-              + dphididj(a,b)*dYsdph(p,l1)
-              + dphidi(a)*(dthetadi(b)*dYsdthdph(p,l1) + dphidi(b)*dYsdph2(p,l1)));
+            dFdidj(a,b) -= ac(l1)*(dthetadidj(a,b)*dYcdth.h_view(p,l1)
+              + dthetadi(a)*(dthetadi(b)*dYcdth2.h_view(p,l1) + dphidi(b)*dYcdthdph.h_view(p,l1))
+              + dphididj(a,b)*dYcdph.h_view(p,l1)
+              + dphidi(a)*(dthetadi(b)*dYcdthdph.h_view(p,l1) + dphidi(b)*dYcdph2.h_view(p,l1)))
+              + as(l1)*(dthetadidj(a,b)*dYsdth.h_view(p,l1)
+              + dthetadi(a)*(dthetadi(b)*dYsdth2.h_view(p,l1) + dphidi(b)*dYsdthdph.h_view(p,l1))
+              + dphididj(a,b)*dYsdph.h_view(p,l1)
+              + dphidi(a)*(dthetadi(b)*dYsdthdph.h_view(p,l1) + dphidi(b)*dYsdph2.h_view(p,l1)));
           }
         }
       }
@@ -1050,7 +1054,7 @@ void FastFlow::SurfaceIntegrals()
 
     for (int a = 0; a < NDIM; ++a) {
       dFdi_u(a) = 0;
-
+      
       for (int b = 0; b < NDIM; ++b) {
         dFdi_u(a) += ginv(a,b) * dFdi(b); // Compute dFdi with the index up
         nnF(a,b) = dFdidj(a,b); // Compute nabla_a nabla_b F
@@ -1064,15 +1068,15 @@ void FastFlow::SurfaceIntegrals()
 
     Real u = (norm > 0) ? std::sqrt(norm) : 0.0;
 
-    nnF(0,0) -= 0.5*(dFdi_u(0)*dg_interp(DX_GXX,p) + dFdi_u(1)*(2.0*dg_interp(DX_GXY,p)-dg_interp(DY_GXX,p))
+    nnF(0,0) -= 0.5*(dFdi_u(0)*dg_interp(DX_GXX,p) + dFdi_u(1)*(2.0*dg_interp(DX_GXY,p)-dg_interp(DY_GXX,p)) 
                 + dFdi_u(2)*(2.0*dg_interp(DX_GXZ,p)-dg_interp(DZ_GXX,p)));
-    nnF(0,1) -= 0.5*(dFdi_u(0)*dg_interp(DY_GXX,p) + dFdi_u(1)*dg_interp(DX_GYY,p)
+    nnF(0,1) -= 0.5*(dFdi_u(0)*dg_interp(DY_GXX,p) + dFdi_u(1)*dg_interp(DX_GYY,p) 
                 + dFdi_u(2)*(dg_interp(DX_GYZ,p)+dg_interp(DY_GXZ,p)-dg_interp(DZ_GXY,p)));
     nnF(0,2) -= 0.5*(dFdi_u(0)*dg_interp(DZ_GXX,p) + dFdi_u(1)*(dg_interp(DX_GYZ,p)
                 +dg_interp(DZ_GXY,p)-dg_interp(DY_GXZ,p)) + dFdi_u(2)*dg_interp(DX_GZZ,p));
-    nnF(1,1) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DY_GXY,p)-dg_interp(DX_GYY,p)) + dFdi_u(1)*dg_interp(DY_GYY,p)
+    nnF(1,1) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DY_GXY,p)-dg_interp(DX_GYY,p)) + dFdi_u(1)*dg_interp(DY_GYY,p) 
                 + dFdi_u(2)*(2.0*dg_interp(DY_GYZ,p)-dg_interp(DZ_GYY,p)));
-    nnF(1,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DY_GXZ,p)+dg_interp(DZ_GXY,p)-dg_interp(DX_GYZ,p))
+    nnF(1,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DY_GXZ,p)+dg_interp(DZ_GXY,p)-dg_interp(DX_GYZ,p)) 
                 + dFdi_u(1)*dg_interp(DZ_GYY,p) + dFdi_u(2)*dg_interp(DY_GZZ,p));
     nnF(2,2) -= 0.5*(dFdi_u(0)*(2.0*dg_interp(DZ_GXZ,p)-dg_interp(DX_GZZ,p)) + dFdi_u(1)*(2.0*dg_interp(DZ_GYZ,p)
                 -dg_interp(DY_GZZ,p)) + dFdi_u(2)*dg_interp(DZ_GZZ,p));
@@ -1096,7 +1100,7 @@ void FastFlow::SurfaceIntegrals()
     dFdadFdbKab += dFdi_u(2) * dFdi_u(0) * K_interp(KXZ,p);
     dFdadFdbKab += dFdi_u(2) * dFdi_u(1) * K_interp(KYZ,p);
     dFdadFdbKab += dFdi_u(2) * dFdi_u(2) * K_interp(KZZ,p);
-
+    
     // Expansion & rho = H * u * sigma (sigma=1)
     Real divu = (norm > 0) ? 1.0 / u : 0.0;
     Real H = d2F * divu + dFdadFdbKab * (divu * divu) - dFdadFdbFdadb * (divu * divu * divu) - TrK;
@@ -1107,7 +1111,7 @@ void FastFlow::SurfaceIntegrals()
     for (int a = 0; a < NDIM; ++a) {
       R(a) = dFdi_u(a) * divu;
     }
-
+    
     // ---------------
     // Surface Element
     // ---------------
@@ -1117,7 +1121,7 @@ void FastFlow::SurfaceIntegrals()
     // dr/dtheta, dr/dphi
     Real const drdt = rr_dth(p);
     Real const drdp = rr_dph(p);
-
+    
     // Derivatives of (x,y,z) with respect to theta
     dXdth(0) = (drdt * sinth + rr(p) * costh) * cosph;
     dXdth(1) = (drdt * sinth + rr(p) * costh) * sinph;
@@ -1130,7 +1134,7 @@ void FastFlow::SurfaceIntegrals()
 
     // Induced metric on the horizon
     Real h11 = 0.;
-    Real h12 = 0.;
+    Real h12 = 0.; 
     Real h22 = 0.;
     h11 += dXdth(0) * dXdth(0) * g_interp(GXX,p);
     h11 += dXdth(0) * dXdth(1) * g_interp(GXY,p);
@@ -1141,7 +1145,7 @@ void FastFlow::SurfaceIntegrals()
     h11 += dXdth(2) * dXdth(0) * g_interp(GXZ,p);
     h11 += dXdth(2) * dXdth(1) * g_interp(GYZ,p);
     h11 += dXdth(2) * dXdth(2) * g_interp(GZZ,p);
-
+    
     h12 += dXdth(0) * dXdph(0) * g_interp(GXX,p);
     h12 += dXdth(0) * dXdph(1) * g_interp(GXY,p);
     h12 += dXdth(0) * dXdph(2) * g_interp(GXZ,p);
@@ -1151,7 +1155,7 @@ void FastFlow::SurfaceIntegrals()
     h12 += dXdth(2) * dXdph(0) * g_interp(GXZ,p);
     h12 += dXdth(2) * dXdph(1) * g_interp(GYZ,p);
     h12 += dXdth(2) * dXdph(2) * g_interp(GZZ,p);
-
+    
     h22 += dXdph(0) * dXdph(0) * g_interp(GXX,p);
     h22 += dXdph(0) * dXdph(1) * g_interp(GXY,p);
     h22 += dXdph(0) * dXdph(2) * g_interp(GXZ,p);
@@ -1165,7 +1169,7 @@ void FastFlow::SurfaceIntegrals()
     // Determinant of the induced metric
     Real deth = h11 * h22 - h12 * h12;
     if (deth < 0.) deth = 0.0;
-
+    
     // --------------
     // Spin integrand
     // --------------
@@ -1194,7 +1198,7 @@ void FastFlow::SurfaceIntegrals()
     intSx += phix(2) * R(0) * K_interp(KXZ,p);
     intSx += phix(2) * R(1) * K_interp(KYZ,p);
     intSx += phix(2) * R(2) * K_interp(KZZ,p);
-
+    
     intSy += phiy(0) * R(0) * K_interp(KXX,p);
     intSy += phiy(0) * R(1) * K_interp(KXY,p);
     intSy += phiy(0) * R(2) * K_interp(KXZ,p);
@@ -1204,7 +1208,7 @@ void FastFlow::SurfaceIntegrals()
     intSy += phiy(2) * R(0) * K_interp(KXZ,p);
     intSy += phiy(2) * R(1) * K_interp(KYZ,p);
     intSy += phiy(2) * R(2) * K_interp(KZZ,p);
-
+    
     intSz += phiz(0) * R(0) * K_interp(KXX,p);
     intSz += phiz(0) * R(1) * K_interp(KXY,p);
     intSz += phiz(0) * R(2) * K_interp(KXZ,p);
@@ -1228,7 +1232,7 @@ void FastFlow::SurfaceIntegrals()
     integrals[iSy]     += da * intSy;
     integrals[iSz]     += da * intSz;
   }
-
+  
   #if MPI_PARALLEL_ENABLED
     MPI_Allreduce(MPI_IN_PLACE, integrals, invar, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   #endif
@@ -1242,24 +1246,27 @@ void FastFlow::ComputeSphericalHarmonics()
 {
   const Real sqrt2 = Kokkos::sqrt(2.0);
 
-  // Initialize all arrays
-  Kokkos::deep_copy(Y0, 0.0);
-  Kokkos::deep_copy(Yc, 0.0);
-  Kokkos::deep_copy(Ys, 0.0);
+  // Initialize all arrays on the host side
+	// **SCALARS**
+  Kokkos::deep_copy(Y0.h_view, 0.0);
+  Kokkos::deep_copy(Yc.h_view, 0.0);
+  Kokkos::deep_copy(Ys.h_view, 0.0);
 
-  Kokkos::deep_copy(dY0dth, 0.0);
-  Kokkos::deep_copy(dYcdth, 0.0);
-  Kokkos::deep_copy(dYsdth, 0.0);
-  Kokkos::deep_copy(dYcdph, 0.0);
-  Kokkos::deep_copy(dYsdph, 0.0);
+	// **FIRST DERIVATIVES**
+  Kokkos::deep_copy(dY0dth.h_view, 0.0);
+  Kokkos::deep_copy(dYcdth.h_view, 0.0);
+  Kokkos::deep_copy(dYsdth.h_view, 0.0);
+  Kokkos::deep_copy(dYcdph.h_view, 0.0);
+  Kokkos::deep_copy(dYsdph.h_view, 0.0);
 
-  Kokkos::deep_copy(dY0dth2, 0.0);
-  Kokkos::deep_copy(dYcdth2, 0.0);
-  Kokkos::deep_copy(dYcdthdph, 0.0);
-  Kokkos::deep_copy(dYsdth2, 0.0);
-  Kokkos::deep_copy(dYsdthdph, 0.0);
-  Kokkos::deep_copy(dYcdph2, 0.0);
-  Kokkos::deep_copy(dYsdph2, 0.0);
+	// **SECOND DERIVATIVES**
+  Kokkos::deep_copy(dY0dth2.h_view, 0.0);
+  Kokkos::deep_copy(dYcdth2.h_view, 0.0);
+  Kokkos::deep_copy(dYcdthdph.h_view, 0.0);
+  Kokkos::deep_copy(dYsdth2.h_view, 0.0);
+  Kokkos::deep_copy(dYsdthdph.h_view, 0.0);
+  Kokkos::deep_copy(dYcdph2.h_view, 0.0);
+  Kokkos::deep_copy(dYsdph2.h_view, 0.0);
 
   // Loop over angles
   for(int p = 0; p < nangles; ++p){
@@ -1276,37 +1283,80 @@ void FastFlow::ComputeSphericalHarmonics()
                                   &YlmRdth, &YlmIdth, &YlmRdphi, &YlmIdphi,
                                   &YlmRdth2, &YlmIdth2, &YlmRdphi2, &YlmIdphi2,
                                   &YlmRdthdphi, &YlmIdthdphi, l, m, theta, phi);
-
+        
         if (m == 0) { // m = 0 spherical harmonics
-          Y0(p,l) = YlmR;
-          dY0dth(p,l) = YlmRdth;
-          dY0dth2(p,l) = YlmRdth2;
+          Y0.h_view(p,l) = YlmR;
+          dY0dth.h_view(p,l) = YlmRdth;
+          dY0dth2.h_view(p,l) = YlmRdth2;
         }
         else { // m > 0 spherical harmonics
           const int l1 = lmindex(l,m);
-          Yc(p,l1) = sqrt2 * YlmR;
-          Ys(p,l1) = sqrt2 * YlmI;
+          Yc.h_view(p,l1) = sqrt2 * YlmR;
+          Ys.h_view(p,l1) = sqrt2 * YlmI;
 
-          dYcdth(p,l1) = sqrt2 * YlmRdth;
-          dYsdth(p,l1) = sqrt2 * YlmIdth;
-          dYcdph(p,l1) = sqrt2 * YlmRdphi;
-          dYsdph(p,l1) = sqrt2 * YlmIdphi;
+          dYcdth.h_view(p,l1) = sqrt2 * YlmRdth;
+          dYsdth.h_view(p,l1) = sqrt2 * YlmIdth;
+          dYcdph.h_view(p,l1) = sqrt2 * YlmRdphi;
+          dYsdph.h_view(p,l1) = sqrt2 * YlmIdphi;
 
-          dYcdth2(p,l1)   = sqrt2 * YlmRdth2;
-          dYcdthdph(p,l1) = sqrt2 * YlmRdthdphi;
-          dYsdth2(p,l1)   = sqrt2 * YlmIdth2;
-          dYsdthdph(p,l1) = sqrt2 * YlmIdthdphi;
-          dYcdph2(p,l1)   = sqrt2 * YlmRdphi2;
-          dYsdph2(p,l1)   = sqrt2 * YlmIdphi2;
+          dYcdth2.h_view(p,l1)   = sqrt2 * YlmRdth2;
+          dYcdthdph.h_view(p,l1) = sqrt2 * YlmRdthdphi;
+          dYsdth2.h_view(p,l1)   = sqrt2 * YlmIdth2;
+          dYsdthdph.h_view(p,l1) = sqrt2 * YlmIdthdphi;
+          dYcdph2.h_view(p,l1)   = sqrt2 * YlmRdphi2;
+          dYsdph2.h_view(p,l1)   = sqrt2 * YlmIdphi2;
         }
       }
     }
   }
-}
+
+  // Sync the spherical harmonics to device.
+	// (OS): Although there is a lot to sync, this
+	//				is okay, since the function is only called
+	//				once, when the constructor is instantiated.
+	//				This will come in handy to speed up the rest
+	//				of the code.
+	// **SCALARS**
+  Y0.template modify<HostMemSpace>();
+	Y0.template sync<DevExeSpace>();
+	Yc.template modify<HostMemSpace>();
+	Yc.template sync<DevExeSpace>();
+	Ys.template modify<HostMemSpace>();
+	Ys.template sync<DevExeSpace>();
+
+	// **FIRST DERIVATIVES**
+	dY0dth.template modify<HostMemSpace>();
+	dY0dth.template sync<DevExeSpace>();
+	dYcdth.template modify<HostMemSpace>();
+	dYcdth.template sync<DevExeSpace>();
+	dYsdth.template modify<HostMemSpace>();
+	dYsdth.template sync<DevExeSpace>();
+	dYcdph.template modify<HostMemSpace>();
+	dYcdph.template sync<DevExeSpace>();
+	dYsdph.template modify<HostMemSpace>();
+	dYsdph.template sync<DevExeSpace>();
+
+	// **SECOND DERIVATIVES**
+	dY0dth2.template modify<HostMemSpace>();
+	dY0dth2.template sync<DevExeSpace>();
+	dYcdth2.template modify<HostMemSpace>();
+	dYcdth2.template sync<DevExeSpace>();
+	dYsdth2.template modify<HostMemSpace>();
+	dYsdth2.template sync<DevExeSpace>();
+	dYcdph2.template modify<HostMemSpace>();
+	dYcdph2.template sync<DevExeSpace>();
+	dYsdph2.template modify<HostMemSpace>();
+	dYsdph2.template sync<DevExeSpace>();
+	dYcdthdph.template modify<HostMemSpace>();
+	dYcdthdph.template sync<DevExeSpace>();
+	dYsdthdph.template modify<HostMemSpace>();
+	dYsdthdph.template sync<DevExeSpace>();
+} 
 
 //----------------------------------------------------------------------------------------
 //! \fn int FastFlow::lmindex(const int l, const int m)
 //! \brief Multipolar single index (l,m) -> index
+KOKKOS_INLINE_FUNCTION
 int FastFlow::lmindex(const int l, const int m)
 {
   return l * lmax1 + m;
