@@ -130,7 +130,6 @@ UnitSystem MakeGeometricKilometer();
   1.0, // kb
   CGS.Msun * CGS.G/(CGS.c*CGS.c)*1e-5, // Msun, km
   CGS.MeV * CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // MeV, km
-  1.0e54, // rescale so that number densities are in fm^-3
 
   1e-5, // length, km
   CGS.c * 1e-5, // time, km
