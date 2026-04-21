@@ -55,12 +55,17 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
             break;
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is-i-1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = 
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = 
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is-i-1) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) =
+                  i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is);
               }
             }
             break;
@@ -105,12 +110,17 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
             break;
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie+i+1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = 
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie + i + 1) = 
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie + i + 1) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie + i + 1) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie+i+1) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie + i + 1) =
+                  i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie);
               }
             }
             break;
@@ -164,12 +174,17 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
             break;
           case BoundaryFlag::outflow:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js-j-1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = 
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js - j - 1, i) = 
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js - j - 1, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js - j - 1, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js, i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js-j-1, i) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js - j - 1, i) =
+                  i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js, i);
               }
             }
             break;
@@ -214,12 +229,17 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
             break;
           case BoundaryFlag::outflow:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je+j+1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je + j + 1, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je + j + 1, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je, i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je+j+1, i) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je + j + 1, i) =
+                  i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je, i);
               }
             }
             break;
@@ -274,12 +294,17 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
           break;
         case BoundaryFlag::outflow:
           for (int k = 0; k < ng; ++k) {
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks-k-1, j, i) = params_.rad_E_floor;
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks - k - 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks - k - 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks - k - 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks, j, i);
             if (nspecies_ > 1) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks-k-1, j, i) = params_.rad_N_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks - k - 1, j, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks, j, i);
             }
           }
           break;
@@ -324,12 +349,17 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
           break;
         case BoundaryFlag::outflow:
           for (int k = 0; k < ng; ++k) {
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke+k+1, j, i) = params_.rad_E_floor;
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke + k + 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke + k + 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke + k + 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke + k + 1, j, i) =
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke, j, i);
             if (nspecies_ > 1) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke+k+1, j, i) = params_.rad_N_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke + k + 1, j, i) =
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke, j, i);
             }
           }
           break;
