@@ -759,7 +759,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 eta 0
-  if (out_params.variable.compare("rad_m1_eta_0") == 0) {
+  if (out_params.variable.compare("rad_m1_opac") == 0 ||
+      out_params.variable.compare("rad_m1_eta_0") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("eta_0:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->eta_0));
@@ -767,7 +768,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 abs 0
-  if (out_params.variable.compare("rad_m1_abs_0") == 0) {
+  if (out_params.variable.compare("rad_m1_opac") == 0 ||
+      out_params.variable.compare("rad_m1_abs_0") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("abs_0:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->abs_0));
@@ -775,7 +777,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 eta 1
-  if (out_params.variable.compare("rad_m1_eta_1") == 0) {
+  if (out_params.variable.compare("rad_m1_opac") == 0 ||
+      out_params.variable.compare("rad_m1_eta_1") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("eta_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->eta_1));
@@ -783,7 +786,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 abs 1
-  if (out_params.variable.compare("rad_m1_abs_1") == 0) {
+  if (out_params.variable.compare("rad_m1_opac") == 0 ||
+      out_params.variable.compare("rad_m1_abs_1") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("abs_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->abs_1));
@@ -791,7 +795,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 scat 1
-  if (out_params.variable.compare("rad_m1_scat_1") == 0) {
+  if (out_params.variable.compare("rad_m1_opac") == 0 ||
+      out_params.variable.compare("rad_m1_scat_1") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("scat_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->scat_1));
