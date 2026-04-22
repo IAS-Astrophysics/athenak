@@ -1,0 +1,100 @@
+# AthenaXXX input file for a low-compactness TOV-like star on a Kerr-Schild BH background
+
+<job>
+basename = z4c_tov_ks_main_sequence
+
+<mesh>
+nghost = 2
+nx1 = 256
+x1min = -12.0
+x1max = 12.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 128
+x2min = -6.0
+x2max = 6.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 128
+x3min = -6.0
+x3max = 6.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<time>
+evolution = dynamic
+integrator = rk4
+cfl_number = 0.2
+nlim = -1
+tlim = 2.0
+ndiag = 10
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+rsolver = llf
+fofc_method = llf
+gamma = 1.6666666666666667
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+gamma_max = 10.0
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+diss = 0.0
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+shift_Gamma = 1.0
+shift_eta = 2.0
+
+<problem>
+pgen_name = z4c_tov_ks
+
+# Unit-mass Kerr-Schild BH background
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+
+# Star location
+star_center_x1 = 8.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+isotropic = true
+
+# Low-compactness TOV parameters
+# This gives M_star ~= 1.07e-6 and R_iso ~= 1.15 with the current EOS settings.
+rhoc = 1.0e-6
+kappa = 5.0e-3
+npoints = 200000
+dr = 2.5e-4
+rho_cut = 1.0e-16
+
+<output1>
+file_type = hst
+dt = 0.1
+
+<output2>
+file_type = vtk
+variable = z4c
+dt = 0.5
