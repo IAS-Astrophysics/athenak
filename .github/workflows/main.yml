@@ -11,7 +11,7 @@ jobs:
   lint-job:
     runs-on: [self-hosted, ias-cluster]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Lint python, cplusplus
@@ -24,7 +24,7 @@ jobs:
           echo "Running test_suite..."
           python run_test_suite.py --style
       - name: Upload combinded lint log
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name:  lint_log.txt
           path:  ${{ github.workspace }}/tst/test_log.txt
@@ -33,7 +33,7 @@ jobs:
     needs: [lint-job]
     runs-on: [self-hosted, ias-cluster]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: cpu regression test
@@ -46,7 +46,7 @@ jobs:
           echo "Running regression script on CPU..."
           python run_test_suite.py --cpu
       - name: Archive log_file_cpu
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cpu_test_log.txt
           path: ${{ github.workspace }}/tst/test_log.txt
@@ -55,7 +55,7 @@ jobs:
     needs: [lint-job]
     runs-on: [self-hosted, ias-cluster]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: mpi cpu regression test
@@ -68,7 +68,7 @@ jobs:
           echo "Running regression script on multiple CPUs..."
           python run_test_suite.py --mpicpu
       - name: Archive log_file_mpi_cpu
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: log_file_mpi_cpu.txt
           path: ${{ github.workspace }}/tst/test_log.txt
@@ -77,7 +77,7 @@ jobs:
     needs: [lint-job]
     runs-on: [self-hosted, ias-apollo]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: gpu regression test
@@ -91,7 +91,7 @@ jobs:
           echo "Running regressions script on GPU..."
           python run_test_suite.py --gpu "-DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${{ github.workspace }}/kokkos/bin/nvcc_wrapper"
       - name: Archive log_file_gpu
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: log_file_gpu.txt
           path: ${{ github.workspace }}/tst/test_log.txt

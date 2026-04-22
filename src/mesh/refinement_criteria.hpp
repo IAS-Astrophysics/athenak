@@ -8,7 +8,7 @@
 //! \file refinement_criteria.hpp
 //! \brief defines RefinementCriteria class containing data and functions controlling
 //! how mesh is refined/derefined with AMR
-//! This class implementes default refinement conditions:
+//! This class implements default refinement conditions:
 //!   (1) min/max of selected variable
 //!   (2) gradient of selected variable
 //!   (3) second derivative of selected variable

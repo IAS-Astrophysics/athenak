@@ -34,7 +34,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
                 << "Table could not be read.\n";
       std::exit(EXIT_FAILURE);
     }
-    // Make sure table has correct dimentions
+    // Make sure table has correct dimensions
     assert(table.GetNDimensions()==3);
     // TODO(PH) check that required fields are present?
 
@@ -42,7 +42,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     auto& table_scalars = table.GetScalars();
     mb = table_scalars.at("mn");
 
-    // Get table dimesnions
+    // Get table dimensions
     auto& point_info = table.GetPointInfo();
     m_nn = point_info[0].second;
     m_ny = point_info[1].second;

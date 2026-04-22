@@ -312,10 +312,10 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   fname.append(out_params.file_id);
   fname.append("_");
   fname.append(std::to_string(out_params.coarsen_factor));
+  fname.append("/");
   if (single_file_per_rank) {
     char rank_dir[20];
     std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
-    fname.append("/");
     fname.append(rank_dir);
   }
   fname.append(out_params.file_basename);

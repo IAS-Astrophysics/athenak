@@ -141,6 +141,7 @@ class MHD {
 
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
+  DvceArray5D<bool> fofc_scal;  // flag for each cell to indicate if FOFC for scalar is needed
   bool use_fofc = false;   // flag to enable FOFC
 
   // container to hold names of TaskIDs
