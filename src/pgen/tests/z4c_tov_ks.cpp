@@ -30,10 +30,98 @@ Real bh_spin = 0.0;
 Real bh_center_x1 = 0.0;
 Real bh_center_x2 = 0.0;
 Real bh_center_x3 = 0.0;
+Real bh_horizon_radius = 1.0;
 Real star_center_x1 = 8.0;
 Real star_center_x2 = 0.0;
 Real star_center_x3 = 0.0;
 bool star_isotropic = true;
+Real excision_damp_rate = 50.0;
+
+KOKKOS_INLINE_FUNCTION
+Real KerrSchildRadius(Real x, Real y, Real z, Real a) {
+  Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
+  Real discr = SQR(SQR(rad) - SQR(a)) + 4.0*SQR(a)*SQR(z);
+  Real r = sqrt((SQR(rad) - SQR(a) + sqrt(discr))/2.0);
+  Real eps = 1.0e-6;
+  if (r < eps) {
+    r = 0.5*(eps + r*r/eps);
+  }
+  return r;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real HorizonDampWeight(Real x, Real y, Real z) {
+  Real r_ks = KerrSchildRadius(x, y, z, bh_spin);
+  if (r_ks >= bh_horizon_radius) {
+    return 0.0;
+  }
+  Real q = r_ks / bh_horizon_radius;
+  Real smoothstep = q*q*(3.0 - 2.0*q);
+  return 1.0 - smoothstep;
+}
+
+void ApplyHorizonDamping(Mesh *pm, Real bdt) {
+  if (excision_damp_rate <= 0.0) {
+    return;
+  }
+
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  auto &indcs = pm->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  int nmb = pmbp->nmb_thispack;
+  int is = indcs.is;
+  int ie = indcs.ie;
+  int js = indcs.js;
+  int je = indcs.je;
+  int ks = indcs.ks;
+  int ke = indcs.ke;
+
+  auto &mhd_u0 = pmbp->pmhd->u0;
+  int nmhd = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
+  par_for("z4c_tov_ks_horizon_damp_mhd", DevExeSpace(), 0, nmb - 1, 0, nmhd - 1,
+          ks, ke, js, je, is, ie,
+          KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+
+    Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1;
+    Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2;
+    Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3;
+    Real lambda = excision_damp_rate * HorizonDampWeight(x, y, z);
+    if (lambda <= 0.0) {
+      return;
+    }
+    Real scale = fmax(0.0, 1.0 - bdt*lambda);
+    mhd_u0(m,n,k,j,i) *= scale;
+  });
+
+  auto &z4c_u0 = pmbp->pz4c->u0;
+  auto &z4c_rhs = pmbp->pz4c->u_rhs;
+  int nz4c = pmbp->pz4c->nz4c;
+  par_for("z4c_tov_ks_horizon_damp_z4c", DevExeSpace(), 0, nmb - 1, 0, nz4c - 1,
+          ks, ke, js, je, is, ie,
+          KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+
+    Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1;
+    Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2;
+    Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3;
+    Real lambda = excision_damp_rate * HorizonDampWeight(x, y, z);
+    if (lambda <= 0.0) {
+      return;
+    }
+    z4c_rhs(m,n,k,j,i) -= lambda * z4c_u0(m,n,k,j,i);
+  });
+}
 
 template <typename ADMState>
 void FillFlatADM(MeshBlockPack *pmbp, ADMState &adm_state) {
@@ -373,6 +461,10 @@ void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart)
   star_center_x2 = pin->GetOrAddReal("problem", "star_center_x2", 0.0);
   star_center_x3 = pin->GetOrAddReal("problem", "star_center_x3", 0.0);
   star_isotropic = pin->GetOrAddBoolean("problem", "isotropic", true);
+  bh_horizon_radius = 1.0 + sqrt(fmax(0.0, 1.0 - SQR(bh_spin)));
+  excision_damp_rate = pin->GetOrAddReal("problem", "excision_damp_rate", 50.0);
+  user_srcs = true;
+  user_srcs_func = &ApplyHorizonDamping;
 
   if (restart) {
     return;

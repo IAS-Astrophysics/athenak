@@ -86,6 +86,7 @@ kappa = 5.0e-3
 npoints = 200000
 dr = 2.5e-4
 rho_cut = 1.0e-16
+excision_damp_rate = 50.0
 
 <output1>
 file_type = hst
