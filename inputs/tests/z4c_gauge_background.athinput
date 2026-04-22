@@ -1,0 +1,55 @@
+# AthenaXXX input file for testing Z4c analytic-background support with the gauge wave
+
+<job>
+basename  = gauge_bg
+
+<mesh>
+nghost    = 2
+nx1       = 32
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 4
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 4
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 32
+nx2       = 4
+nx3       = 4
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.4
+nlim       = -1
+tlim       = 0.1
+ndiag      = 10
+
+<z4c>
+use_analytic_background = true
+lapse_harmonic  = 0.0
+lapse_oplog     = 2.0
+shift_eta       = 2.0
+diss            = 0.0
+chi_div_floor   = 1.0e-5
+damp_kappa1     = 0.0
+damp_kappa2     = 0.0
+
+<problem>
+pgen_name = z4c_gauge_wave
+amp = 0.01
+
+<output1>
+file_type   = hst
+dt          = 1.0

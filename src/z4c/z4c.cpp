@@ -179,6 +179,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
+  use_analytic_background = pin->GetOrAddBoolean("z4c", "use_analytic_background",
+                                                 false);
 
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
 
@@ -395,6 +397,31 @@ void Z4c::RecastResidualState() {
         res.g_dd(m,a,b,k,j,i) = full_.g_dd(m,a,b,k,j,i) - bg_.g_dd(m,a,b,k,j,i);
         res.vA_dd(m,a,b,k,j,i) = full_.vA_dd(m,a,b,k,j,i) - bg_.vA_dd(m,a,b,k,j,i);
       }
+    }
+  });
+}
+
+void Z4c::PrescribeGaugeResidual() {
+  if (!(use_analytic_background) || SetADMBackground == nullptr) {
+    return;
+  }
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int nmb = pmy_pack->nmb_thispack;
+  int isg = indcs.is - indcs.ng;
+  int ieg = indcs.ie + indcs.ng;
+  int jsg = indcs.js - indcs.ng;
+  int jeg = indcs.je + indcs.ng;
+  int ksg = indcs.ks - indcs.ng;
+  int keg = indcs.ke + indcs.ng;
+
+  auto &res = z4c;
+  par_for("PrescribeGaugeResidual", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg, jeg, isg, ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    res.alpha(m,k,j,i) = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      res.beta_u(m,a,k,j,i) = 0.0;
+      res.vB_d(m,a,k,j,i) = 0.0;
     }
   });
 }

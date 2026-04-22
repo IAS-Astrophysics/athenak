@@ -279,6 +279,7 @@ class Z4c {
   void UpdateBackgroundState(Real time);
   void ReconstructFullState();
   void RecastResidualState();
+  void PrescribeGaugeResidual();
   void EnforceAlgConstrOn(Z4c_vars &state);
 
   Z4c_AMR *pamr;
