@@ -81,7 +81,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto rand_gen = rand_pool64.get_state();
 
     // scratch array holding random numbers for 12 variables.
-    // only perturbaion in the z direction is added
+    // only perturbation in the z direction is added
     // in the x and y directions the values of perturbation
     // are always the same
     ScrArray1D<Real> rnum(member.team_scratch(scr_level), 12);
