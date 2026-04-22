@@ -102,7 +102,7 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
   for(int nvar=0; nvar<16; nvar++) {
     // Interpolate here
     if (variable_to_dump[nvar].second) {
-      pcat_grid->InterpolateToGrid(variable_to_dump[nvar].first,pmbp->pz4c->u0);
+      pcat_grid->InterpolateToGrid(variable_to_dump[nvar].first,pmbp->pz4c->u_full);
     } else {
       pcat_grid->InterpolateToGrid(variable_to_dump[nvar].first,pmbp->padm->u_adm);
     }

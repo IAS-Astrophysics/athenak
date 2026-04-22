@@ -90,7 +90,7 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
     for (int k = 0; k < nr; ++k) {
       // Interpolate here
       if (variable_to_dump[nvar].second) {
-        grids[k]->InterpolateToSphere(variable_to_dump[nvar].first,pmbp->pz4c->u0);
+        grids[k]->InterpolateToSphere(variable_to_dump[nvar].first,pmbp->pz4c->u_full);
       } else {
         grids[k]->InterpolateToSphere(variable_to_dump[nvar].first,pmbp->padm->u_adm);
       }

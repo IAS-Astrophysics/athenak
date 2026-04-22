@@ -110,14 +110,14 @@ void CompactObjectTracker::InterpolateVelocity(MeshBlockPack *pmbp) {
   if (S->point_exist) {
     owns_compact_object = true;
 
-    Real betax = S->Interpolate(pz4c->u0, pz4c->I_Z4C_BETAX);
-    Real betay = S->Interpolate(pz4c->u0, pz4c->I_Z4C_BETAY);
-    Real betaz = S->Interpolate(pz4c->u0, pz4c->I_Z4C_BETAZ);
+    Real betax = S->Interpolate(pz4c->u_full, pz4c->I_Z4C_BETAX);
+    Real betay = S->Interpolate(pz4c->u_full, pz4c->I_Z4C_BETAY);
+    Real betaz = S->Interpolate(pz4c->u_full, pz4c->I_Z4C_BETAZ);
     vel[0] = - betax;
     vel[1] = - betay;
     vel[2] = - betaz;
     if (type == NeutronStar) {
-      Real alp = S->Interpolate(pz4c->u0, pz4c->I_Z4C_ALPHA);
+      Real alp = S->Interpolate(pz4c->u_full, pz4c->I_Z4C_ALPHA);
 
       Real zx = S->Interpolate(pmhd->w0, IVX);
       Real zy = S->Interpolate(pmhd->w0, IVY);

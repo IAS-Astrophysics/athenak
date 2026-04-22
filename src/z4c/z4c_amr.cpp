@@ -59,6 +59,13 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
 
 // 1: refines, -1: de-refines, 0: does nothing
 void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
+  if (method == Chi || method == dChi) {
+    if (pmy_pack->pz4c->use_analytic_background &&
+        pmy_pack->pz4c->SetADMBackground != nullptr) {
+      pmy_pack->pz4c->UpdateBackgroundState(pmy_pack->pmesh->time);
+    }
+    pmy_pack->pz4c->ReconstructFullState();
+  }
   if (method == Tracker) {
     RefineTracker(pmy_pack);
   } else if (method == Chi) {
@@ -142,7 +149,7 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   int &ks = indcs.ks, nx3 = indcs.nx3;
   const int nkji = nx3 * nx2 * nx1;
   const int nji  = nx2 * nx1;
-  auto &u0       = pmbp->pz4c->u0;
+  auto &u0       = pmbp->pz4c->u_full;
   int I_Z4C_CHI  = pmbp->pz4c->I_Z4C_CHI;
   // note: we need this to prevent capture by this in the lambda expr.
   auto chi_thresh = this->chi_thresh;
@@ -208,7 +215,7 @@ void Z4c_AMR::RefineDchiMax(MeshBlockPack *pmbp) {
   int &ks = indcs.ks, nx3 = indcs.nx3;
   const int nkji = nx3 * nx2 * nx1;
   const int nji  = nx2 * nx1;
-  auto &u0       = pmbp->pz4c->u0;
+  auto &u0       = pmbp->pz4c->u_full;
   int I_Z4C_CHI  = pmbp->pz4c->I_Z4C_CHI;
   // note: we need this to prevent capture by this in the lambda expr.
   auto dchi_thresh = this->dchi_thresh;

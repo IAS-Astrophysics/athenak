@@ -655,7 +655,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
       if (out_params.variable.compare("z4c") == 0 ||
           out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
-        outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+        outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u_full));
       }
     }
 

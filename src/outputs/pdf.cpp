@@ -177,7 +177,7 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   } else if (pm->pmb_pack->pmhd != nullptr) {
     u0_ptr = &(pm->pmb_pack->pmhd->u0);
   } else if (pm->pmb_pack->pz4c != nullptr) {
-    u0_ptr = &(pm->pmb_pack->pz4c->u0);
+    u0_ptr = &(pm->pmb_pack->pz4c->u_full);
   }
 
   // Check if a valid module was found

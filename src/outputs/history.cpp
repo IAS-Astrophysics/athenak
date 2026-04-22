@@ -173,10 +173,10 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[8] = "Volume";
 
   // capture class variabels for kernel
-  auto &u0_ = pm->pmb_pack->pz4c->u0;
+  auto &u0_ = pm->pmb_pack->pz4c->u_full;
   auto &u_con_ = pm->pmb_pack->pz4c->u_con;
   const int &I_Z4c_Theta_ =  pm->pmb_pack->pz4c->I_Z4C_THETA;
-  auto &z4c = pm->pmb_pack->pz4c->z4c;
+  auto &z4c = pm->pmb_pack->pz4c->full;
   auto &adm = pm->pmb_pack->padm->adm;
 
   auto &size = pm->pmb_pack->pmb->mb_size;

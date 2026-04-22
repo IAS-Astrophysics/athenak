@@ -276,6 +276,7 @@ class Z4c {
   void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
   void RefreshBackground(Real time);
+  void UpdateBackgroundState(Real time);
   void ReconstructFullState();
   void RecastResidualState();
   void EnforceAlgConstrOn(Z4c_vars &state);

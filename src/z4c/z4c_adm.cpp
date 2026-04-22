@@ -186,6 +186,26 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
 template void Z4c::ADMToZ4c<2>(MeshBlockPack *pmbp, ParameterInput *pin);
 template void Z4c::ADMToZ4c<3>(MeshBlockPack *pmbp, ParameterInput *pin);
 template void Z4c::ADMToZ4c<4>(MeshBlockPack *pmbp, ParameterInput *pin);
+
+void Z4c::UpdateBackgroundState(Real time) {
+  RefreshBackground(time);
+  if (!(use_analytic_background) || SetADMBackground == nullptr) {
+    Kokkos::deep_copy(DevExeSpace(), u_bg, 0.0);
+    return;
+  }
+  switch (pmy_pack->pmesh->mb_indcs.ng) {
+    case 2:
+      ADMToZ4cImpl<2>(pmy_pack, adm_bg, bg, opt);
+      break;
+    case 3:
+      ADMToZ4cImpl<3>(pmy_pack, adm_bg, bg, opt);
+      break;
+    case 4:
+      ADMToZ4cImpl<4>(pmy_pack, adm_bg, bg, opt);
+      break;
+  }
+  EnforceAlgConstrOn(bg);
+}
 //----------------------------------------------------------------------------------------
 //! \fn void Z4c::Z4cToADM(MeshBlockPack *pmbp)
 //! \brief Compute ADM Psi4, g_ij, and K_ij from Z4c variables
@@ -195,19 +215,7 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
   auto &pz4c = *pmbp->pz4c;
   auto &source = pz4c.z4c;
   if (pz4c.use_analytic_background && pz4c.SetADMBackground != nullptr) {
-    pz4c.RefreshBackground(pmbp->pmesh->time);
-    switch (pmbp->pmesh->mb_indcs.ng) {
-      case 2:
-        ADMToZ4cImpl<2>(pmbp, pz4c.adm_bg, pz4c.bg, pz4c.opt);
-        break;
-      case 3:
-        ADMToZ4cImpl<3>(pmbp, pz4c.adm_bg, pz4c.bg, pz4c.opt);
-        break;
-      case 4:
-        ADMToZ4cImpl<4>(pmbp, pz4c.adm_bg, pz4c.bg, pz4c.opt);
-        break;
-    }
-    pz4c.EnforceAlgConstrOn(pz4c.bg);
+    pz4c.UpdateBackgroundState(pmbp->pmesh->time);
     pz4c.ReconstructFullState();
     Z4cToADMImpl(pmbp, pz4c.full, pmbp->padm->adm, pz4c.opt);
     return;
@@ -239,7 +247,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
 
   int nmb = pmbp->nmb_thispack;
 
-  auto &z4c = pmbp->pz4c->z4c;
+  auto &z4c = pmbp->pz4c->full;
   auto &adm = pmbp->padm->adm;
   auto &u_con = pmbp->pz4c->u_con;
 

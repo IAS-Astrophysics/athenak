@@ -193,7 +193,12 @@ TaskStatus Z4c::RecvU(Driver *pdrive, int stage) {
 
 TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
   if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
-    AlgConstr(pmy_pack);
+    if (use_analytic_background && SetADMBackground != nullptr) {
+      UpdateBackgroundState(pmy_pack->pmesh->time);
+    }
+    ReconstructFullState();
+    EnforceAlgConstrOn(full);
+    RecastResidualState();
   }
   return TaskStatus::complete;
 }
@@ -227,6 +232,10 @@ TaskStatus Z4c::UpdateExcisionMasks(Driver *pdrive, int stage) {
 TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
+    if (use_analytic_background && SetADMBackground != nullptr) {
+      UpdateBackgroundState(pmy_pack->pmesh->time);
+    }
+    ReconstructFullState();
     switch (indcs.ng) {
       case 2: ADMConstraints<2>(pmy_pack);
               break;
