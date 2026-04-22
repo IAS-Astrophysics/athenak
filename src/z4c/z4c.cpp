@@ -63,6 +63,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   u_con("u_con",1,1,1,1,1),
   //u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
+  u_bg("u_bg z4c",1,1,1,1,1),
+  u_full("u_full z4c",1,1,1,1,1),
+  u_adm_bg("u_adm_bg",1,1,1,1,1),
   coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1),
@@ -85,8 +88,11 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   // Matter commented out
   // kokkos::realloc(u_mat, nmb, (N_MAT), ncells3, ncells2, ncells1);
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_bg,  nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_full,nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_adm_bg, nmb, 17, ncells3, ncells2, ncells1);
   Kokkos::realloc(u_weyl,    nmb, (2), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
@@ -105,6 +111,26 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   z4c.g_dd.InitWithShallowSlice  (u0, I_Z4C_GXX, I_Z4C_GZZ);
   z4c.vA_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, I_Z4C_AZZ);
 
+  bg.alpha.InitWithShallowSlice (u_bg, I_Z4C_ALPHA);
+  bg.beta_u.InitWithShallowSlice(u_bg, I_Z4C_BETAX, I_Z4C_BETAZ);
+  bg.vB_d.InitWithShallowSlice(u_bg, I_Z4C_BX, I_Z4C_BZ);
+  bg.chi.InitWithShallowSlice   (u_bg, I_Z4C_CHI);
+  bg.vKhat.InitWithShallowSlice  (u_bg, I_Z4C_KHAT);
+  bg.vTheta.InitWithShallowSlice (u_bg, I_Z4C_THETA);
+  bg.vGam_u.InitWithShallowSlice (u_bg, I_Z4C_GAMX, I_Z4C_GAMZ);
+  bg.g_dd.InitWithShallowSlice  (u_bg, I_Z4C_GXX, I_Z4C_GZZ);
+  bg.vA_dd.InitWithShallowSlice  (u_bg, I_Z4C_AXX, I_Z4C_AZZ);
+
+  full.alpha.InitWithShallowSlice (u_full, I_Z4C_ALPHA);
+  full.beta_u.InitWithShallowSlice(u_full, I_Z4C_BETAX, I_Z4C_BETAZ);
+  full.vB_d.InitWithShallowSlice(u_full, I_Z4C_BX, I_Z4C_BZ);
+  full.chi.InitWithShallowSlice   (u_full, I_Z4C_CHI);
+  full.vKhat.InitWithShallowSlice  (u_full, I_Z4C_KHAT);
+  full.vTheta.InitWithShallowSlice (u_full, I_Z4C_THETA);
+  full.vGam_u.InitWithShallowSlice (u_full, I_Z4C_GAMX, I_Z4C_GAMZ);
+  full.g_dd.InitWithShallowSlice  (u_full, I_Z4C_GXX, I_Z4C_GZZ);
+  full.vA_dd.InitWithShallowSlice  (u_full, I_Z4C_AXX, I_Z4C_AZZ);
+
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
   rhs.vB_d.InitWithShallowSlice  (u_rhs, I_Z4C_BX, I_Z4C_BZ);
@@ -114,6 +140,12 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   rhs.vGam_u.InitWithShallowSlice (u_rhs, I_Z4C_GAMX, I_Z4C_GAMZ);
   rhs.g_dd.InitWithShallowSlice  (u_rhs, I_Z4C_GXX, I_Z4C_GZZ);
   rhs.vA_dd.InitWithShallowSlice  (u_rhs, I_Z4C_AXX, I_Z4C_AZZ);
+
+  adm_bg.g_dd.InitWithShallowSlice(u_adm_bg, 0, 5);
+  adm_bg.vK_dd.InitWithShallowSlice(u_adm_bg, 6, 11);
+  adm_bg.psi4.InitWithShallowSlice(u_adm_bg, 12);
+  adm_bg.alpha.InitWithShallowSlice(u_adm_bg, 13);
+  adm_bg.beta_u.InitWithShallowSlice(u_adm_bg, 14, 16);
 
   weyl.rpsi4.InitWithShallowSlice (u_weyl, 0);
   weyl.ipsi4.InitWithShallowSlice (u_weyl, 1);
@@ -161,6 +193,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.target_kappa1 = pin->GetOrAddReal("z4c", "target_kappa1", 0.0);
 
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
+  Kokkos::deep_copy(DevExeSpace(), u_bg, 0.0);
+  Kokkos::deep_copy(DevExeSpace(), u_full, 0.0);
+  Kokkos::deep_copy(DevExeSpace(), u_adm_bg, 0.0);
   }
 
   // allocate memory for conserved variables on coarse mesh
@@ -237,9 +272,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 //! \brief algebraic constraints projection
 //
 // This function operates on all grid points of the MeshBlock
-void Z4c::AlgConstr(MeshBlockPack *pmbp) {
+void Z4c::EnforceAlgConstrOn(Z4c_vars &state) {
   // capture variables for the kernel
-  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
@@ -248,15 +283,13 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
 
-  int nmb = pmbp->nmb_thispack;
-
-  auto &z4c = pmbp->pz4c->z4c;
+  int nmb = pmy_pack->nmb_thispack;
   par_for("Alg constr loop",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
-                              z4c.g_dd(m,0,2,k,j,i),z4c.g_dd(m,1,1,k,j,i),
-                              z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+    Real detg = adm::SpatialDet(state.g_dd(m,0,0,k,j,i), state.g_dd(m,0,1,k,j,i),
+                              state.g_dd(m,0,2,k,j,i),state.g_dd(m,1,1,k,j,i),
+                              state.g_dd(m,1,2,k,j,i), state.g_dd(m,2,2,k,j,i));
     detg = detg > 0. ? detg : 1.;
     // Real eps = detg - 1.;
     // Real oopsi4 = (eps < opt.eps_floor) ? (1. - opt.eps_floor/3.) :
@@ -265,21 +298,103 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      z4c.g_dd(m,a,b,k,j,i) *= oopsi4;
+      state.g_dd(m,a,b,k,j,i) *= oopsi4;
     }
 
     // compute trace of A
     // note: here we are assuming that det g = 1, which we enforced above
     Real A = adm::Trace(1.0,
-              z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-              z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-              z4c.vA_dd(m,0,0,k,j,i), z4c.vA_dd(m,0,1,k,j,i), z4c.vA_dd(m,0,2,k,j,i),
-              z4c.vA_dd(m,1,1,k,j,i), z4c.vA_dd(m,1,2,k,j,i), z4c.vA_dd(m,2,2,k,j,i));
+              state.g_dd(m,0,0,k,j,i), state.g_dd(m,0,1,k,j,i), state.g_dd(m,0,2,k,j,i),
+              state.g_dd(m,1,1,k,j,i), state.g_dd(m,1,2,k,j,i), state.g_dd(m,2,2,k,j,i),
+              state.vA_dd(m,0,0,k,j,i), state.vA_dd(m,0,1,k,j,i), state.vA_dd(m,0,2,k,j,i),
+              state.vA_dd(m,1,1,k,j,i), state.vA_dd(m,1,2,k,j,i), state.vA_dd(m,2,2,k,j,i));
 
     // enforce trace of A to be zero
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      z4c.vA_dd(m,a,b,k,j,i) -= (1.0/3.0) * A * z4c.g_dd(m,a,b,k,j,i);
+      state.vA_dd(m,a,b,k,j,i) -= (1.0/3.0) * A * state.g_dd(m,a,b,k,j,i);
+    }
+  });
+}
+
+void Z4c::AlgConstr(MeshBlockPack *pmbp) {
+  EnforceAlgConstrOn(z4c);
+}
+
+void Z4c::RefreshBackground(Real time) {
+  if (!(use_analytic_background) || SetADMBackground == nullptr) {
+    Kokkos::deep_copy(DevExeSpace(), u_bg, 0.0);
+    return;
+  }
+  SetADMBackground(pmy_pack, time);
+}
+
+void Z4c::ReconstructFullState() {
+  if (!(use_analytic_background) || SetADMBackground == nullptr) {
+    Kokkos::deep_copy(DevExeSpace(), u_full, u0);
+    return;
+  }
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int nmb = pmy_pack->nmb_thispack;
+  int isg = indcs.is-indcs.ng; int ieg = indcs.ie+indcs.ng;
+  int jsg = indcs.js-indcs.ng; int jeg = indcs.je+indcs.ng;
+  int ksg = indcs.ks-indcs.ng; int keg = indcs.ke+indcs.ng;
+
+  auto &res = z4c;
+  auto &bg_ = bg;
+  auto &full_ = full;
+  par_for("ReconstructFullState", DevExeSpace(), 0, nmb-1, ksg, keg, jsg, jeg, isg, ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    full_.chi(m,k,j,i) = bg_.chi(m,k,j,i) + res.chi(m,k,j,i);
+    full_.vKhat(m,k,j,i) = bg_.vKhat(m,k,j,i) + res.vKhat(m,k,j,i);
+    full_.vTheta(m,k,j,i) = bg_.vTheta(m,k,j,i) + res.vTheta(m,k,j,i);
+    full_.alpha(m,k,j,i) = bg_.alpha(m,k,j,i);
+    for (int a = 0; a < 3; ++a) {
+      full_.vGam_u(m,a,k,j,i) = bg_.vGam_u(m,a,k,j,i) + res.vGam_u(m,a,k,j,i);
+      full_.beta_u(m,a,k,j,i) = bg_.beta_u(m,a,k,j,i);
+      full_.vB_d(m,a,k,j,i) = bg_.vB_d(m,a,k,j,i);
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        full_.g_dd(m,a,b,k,j,i) = bg_.g_dd(m,a,b,k,j,i) + res.g_dd(m,a,b,k,j,i);
+        full_.vA_dd(m,a,b,k,j,i) = bg_.vA_dd(m,a,b,k,j,i) + res.vA_dd(m,a,b,k,j,i);
+      }
+    }
+  });
+}
+
+void Z4c::RecastResidualState() {
+  if (!(use_analytic_background) || SetADMBackground == nullptr) {
+    Kokkos::deep_copy(DevExeSpace(), u0, u_full);
+    return;
+  }
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int nmb = pmy_pack->nmb_thispack;
+  int isg = indcs.is-indcs.ng; int ieg = indcs.ie+indcs.ng;
+  int jsg = indcs.js-indcs.ng; int jeg = indcs.je+indcs.ng;
+  int ksg = indcs.ks-indcs.ng; int keg = indcs.ke+indcs.ng;
+
+  auto &res = z4c;
+  auto &bg_ = bg;
+  auto &full_ = full;
+  par_for("RecastResidualState", DevExeSpace(), 0, nmb-1, ksg, keg, jsg, jeg, isg, ieg,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    res.chi(m,k,j,i) = full_.chi(m,k,j,i) - bg_.chi(m,k,j,i);
+    res.vKhat(m,k,j,i) = full_.vKhat(m,k,j,i) - bg_.vKhat(m,k,j,i);
+    res.vTheta(m,k,j,i) = full_.vTheta(m,k,j,i) - bg_.vTheta(m,k,j,i);
+    res.alpha(m,k,j,i) = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      res.vGam_u(m,a,k,j,i) = full_.vGam_u(m,a,k,j,i) - bg_.vGam_u(m,a,k,j,i);
+      res.beta_u(m,a,k,j,i) = 0.0;
+      res.vB_d(m,a,k,j,i) = 0.0;
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        res.g_dd(m,a,b,k,j,i) = full_.g_dd(m,a,b,k,j,i) - bg_.g_dd(m,a,b,k,j,i);
+        res.vA_dd(m,a,b,k,j,i) = full_.vA_dd(m,a,b,k,j,i) - bg_.vA_dd(m,a,b,k,j,i);
+      }
     }
   });
 }

@@ -84,18 +84,26 @@ class Z4c {
   DvceArray5D<Real> u0;        // z4c solution
   DvceArray5D<Real> u1;        // z4c solution at intermediate timestep
   DvceArray5D<Real> u_rhs;     // z4c rhs storage
+  DvceArray5D<Real> u_bg;      // analytic background state
+  DvceArray5D<Real> u_full;    // reconstructed full state
   DvceArray5D<Real> coarse_u0; // coarse representation of z4c solution
   DvceArray5D<Real> u_weyl; // weyl scalars
   DvceArray5D<Real> coarse_u_weyl; // coarse representation of weyl scalars
 
   struct ADM_vars {
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
   };
   ADM_vars adm;
+  DvceArray5D<Real> u_adm_bg;
+  ADM_vars adm_bg;
 
   struct ADMhost_vars {
+    AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> alpha;
+    AthenaHostTensor<Real, TensorSymm::NONE, 3, 1> beta_u;
     AthenaHostTensor<Real, TensorSymm::NONE, 3, 0> psi4;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;
     AthenaHostTensor<Real, TensorSymm::SYM2, 3, 2> vK_dd;
@@ -120,7 +128,13 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
   Z4c_vars z4c;
+  Z4c_vars bg;
+  Z4c_vars full;
   Z4c_vars rhs;
+
+  using SetADMBackgroundFnPtr = void (*)(MeshBlockPack *pmbp, Real time);
+  SetADMBackgroundFnPtr SetADMBackground = nullptr;
+  bool use_analytic_background = false;
 
   // aliases for the constraints
   struct Constraint_vars {
@@ -261,6 +275,10 @@ class Z4c {
   void Z4cWeyl(MeshBlockPack *pmbp);
   void WaveExtr(MeshBlockPack *pmbp);
   void AlgConstr(MeshBlockPack *pmbp);
+  void RefreshBackground(Real time);
+  void ReconstructFullState();
+  void RecastResidualState();
+  void EnforceAlgConstrOn(Z4c_vars &state);
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
