@@ -314,7 +314,6 @@ class PrimitiveSolverHydro {
     int &nscal = pmy_pack->pmhd->nscalars;
     int &nmb = pmy_pack->nmb_thispack;
     auto &fofc_ = pmy_pack->pmhd->fofc;
-    auto &fofc_scal_ = pmy_pack->pmhd->fofc_scal;
 
     // Some problem-specific parameters
     auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
@@ -438,7 +437,6 @@ class PrimitiveSolverHydro {
           result.cons_floor = false;
           result.prim_floor = false;
           result.cons_adjusted = true;
-          result.y_adjusted = false;
           ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
         } else {
           result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
@@ -449,8 +447,6 @@ class PrimitiveSolverHydro {
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
-      } else if (result.y_adjusted && floors_only) {
-        fofc_scal_(m,k,j,i) = true;
       } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           sumerrs++;
@@ -633,15 +629,6 @@ class PrimitiveSolverHydro {
         break;
       case Primitive::Error::NO_SOLUTION:
         return "NO_SOLUTION";
-        break;
-      case Primitive::Error::CONS_FLOOR:
-        return "CONS_FLOOR";
-        break;
-      case Primitive::Error::PRIM_FLOOR:
-        return "PRIM_FLOOR";
-        break;
-      case Primitive::Error::Y_ADJUSTED:
-        return "Y_ADJUSTED";
         break;
       default:
         return "OTHER";

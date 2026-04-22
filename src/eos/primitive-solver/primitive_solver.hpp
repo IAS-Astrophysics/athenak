@@ -336,7 +336,7 @@ template<typename EOSPolicy, typename ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM],
       Real cons[NCONS], Real b[NMAG], Real g3d[NSPMETRIC], Real g3u[NSPMETRIC]) const {
-  SolverResult solver_result{Error::SUCCESS, 0, false, false, false, false};
+  SolverResult solver_result{Error::SUCCESS, 0, false, false, false};
 
   // Extract the undensitized conserved variables.
   Real D = cons[CDN];
@@ -354,10 +354,6 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
   // Apply limits to Y to ensure a physical state
   bool Y_adjusted = eos.ApplySpeciesLimits(Y);
-  solver_result.y_adjusted = Y_adjusted;
-  if (solver_result.y_adjusted) {
-    solver_result.error = Error::Y_ADJUSTED;
-  }
 
   // Check the conserved variables for consistency and do whatever
   // the EOSPolicy wants us to.

@@ -137,8 +137,23 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             }
             if (utest_(m,nmhd_+n,k,j,i) > dmp_M_*varmax ||
                 utest_(m,nmhd_+n,k,j,i) < varmin/dmp_M_) {
-              fofc_scal_(m,k,j,i) = true;
+              fofc_scal_(m,n,k,j,i) = true;
             }
+          }
+        }
+      }
+
+      if ( nscal_ > 0 ) {
+        for (int n=0; n<nscal_; ++n) {
+          if ( utest_(m,IDN,k,j,i) > 0 ) {
+            Real min_Y_ = eos.ps.GetEOS().GetMinimumSpeciesFraction(n);
+            Real max_Y_ = eos.ps.GetEOS().GetMaximumSpeciesFraction(n);
+            if ( utest_(m,IDN,k,j,i) * min_Y_ > utest_(m,nmhd_+n,k,j,i) ||
+                 utest_(m,IDN,k,j,i) * max_Y_ < utest_(m,nmhd_+n,k,j,i) ) {
+              fofc_scal_(m,n,k,j,i) = true;
+            }
+          } else {
+            fofc_scal_(m,n,k,j,i) = true;
           }
         }
       }
@@ -194,15 +209,20 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     bool fofc_flag = false;
     if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
 
-    bool fofc_scalar = false;
-    if (use_fofc_ && nscal_ > 0) { fofc_scalar = fofc_scal_(m,k,j,i); }
+    bool fofc_scalar_any = fofc_flag;
+    if (use_fofc_ && nscal_ > 0 && not fofc_flag) { 
+      // Check if any scalar flag
+      for (int n=0; n < nscal_; ++n) {
+        fofc_scalar_any |= fofc_scal_(m,n,k,j,i); 
+      }
+    }
 
     // Check for GR + excision
     bool fofc_excision = false;
     if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
 
     // Apply FOFC
-    if (fofc_flag || fofc_excision || fofc_scalar) {
+    if (fofc_flag || fofc_excision || fofc_scalar_any) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
@@ -235,10 +255,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (flx1(m, IDN, k, j, i) >= 0.0) {
-          flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
-        } else {
-          flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wri[PYF + n];
+        if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+          if (flx1(m, IDN, k, j, i) >= 0.0) {
+            flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
+          } else {
+            flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wri[PYF + n];
+          }
         }
       }
 
@@ -273,10 +295,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx2(m, IDN, k, j, i) >= 0.0) {
-            flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
-          } else {
-            flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wrj[PYF + n];
+          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+            if (flx2(m, IDN, k, j, i) >= 0.0) {
+              flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
+            } else {
+              flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wrj[PYF + n];
+            }
           }
         }
       }
@@ -312,10 +336,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx3(m, IDN, k, j, i) >= 0.0) {
-            flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
-          } else {
-            flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wpk[PYF + n];
+          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+            if (flx3(m, IDN, k, j, i) >= 0.0) {
+              flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
+            } else {
+              flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wpk[PYF + n];
+            }
           }
         }
       }
@@ -330,15 +356,21 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     bool fofc_flag = false;
     if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
 
-    bool fofc_scalar = false;
-    if (use_fofc_ && nscal_ > 0) { fofc_scalar = fofc_scal_(m,k,j,i); }
+    // Initialize FOFC scalar flag to be FOFC flag
+    bool fofc_scalar_any = fofc_flag;
+    if (use_fofc_ && nscal_ > 0 && not fofc_flag) { 
+      // Check if any scalar flag
+      for (int n=0; n < nscal_; ++n) {
+        fofc_scalar_any |= fofc_scal_(m,n,k,j,i); 
+      }
+    }
 
     // Check for GR + excision
     bool fofc_excision = false;
     if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
 
     // Apply FOFC
-    if (fofc_flag || fofc_excision || fofc_scalar) {
+    if (fofc_flag || fofc_excision || fofc_scalar_any) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
@@ -371,10 +403,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (flx1(m, IDN, k, j, i+1) >= 0.0) {
-          flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
-        } else {
-          flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wri[PYF + n];
+        if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+          if (flx1(m, IDN, k, j, i+1) >= 0.0) {
+            flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
+          } else {
+            flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wri[PYF + n];
+          }
         }
       }
 
@@ -410,10 +444,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx2(m, IDN, k, j+1, i) >= 0.0) {
-            flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
-          } else {
-            flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wrj[PYF + n];
+          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+            if (flx2(m, IDN, k, j+1, i) >= 0.0) {
+              flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
+            } else {
+              flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wrj[PYF + n];
+            }
           }
         }
       }
@@ -450,15 +486,242 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx3(m, IDN, k+1, j, i) >= 0.0) {
-            flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
-          } else {
-            flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wpk[PYF + n];
+          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+            if (flx3(m, IDN, k+1, j, i) >= 0.0) {
+              flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
+            } else {
+              flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wpk[PYF + n];
+            }
           }
         }
       }
     }
   });
+
+  if (use_fofc_ && scalar_pplimiter && nscal_ > 0) {
+    Real &gam0 = pdriver->gam0[stage-1];
+    Real &gam1 = pdriver->gam1[stage-1];
+    Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
+
+    auto &u0_ = pmy_pack->pmhd->u0;
+    auto &u1_ = pmy_pack->pmhd->u1;
+    auto &utest_ = pmy_pack->pmhd->utest;
+
+    // Estimate updated density
+    par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      utest_(m,IDN,k,j,i) = gam0*u0_(m,IDN,k,j,i) + gam1*u1_(m,IDN,k,j,i);
+      for (int n=0; n<nscal_; ++n) {
+        utest_(m,nmhd_+n,k,j,i) = gam0*u0_(m,nmhd_+n,k,j,i) + gam1*u1_(m,nmhd_+n,k,j,i);
+      }
+    });
+
+    // Index bounds
+    Real alp_pp = 2.0;
+    il = is, iu = ie+1;
+    jl = js, ju = je;
+    kl = ks, ku = ke;
+    if (multi_d) { alp_pp = 4.0, jl = js, ju = je+1; }
+    if (three_d) { alp_pp = 6.0, kl = ks, ku = ke+1; }
+
+    // Positivity Presserving Limiter for scalar
+    par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real dtodx1 = beta_dt/size.d_view(m).dx1;
+
+      Real bet_pp = alp_pp * dtodx1;
+      Real bet_ppi = 1.0 / bet_pp;
+
+      Real wthe_m[MAX_SPECIES] = {0.0};
+      Real wthe_p[MAX_SPECIES] = {0.0};
+      Real wthe[MAX_SPECIES] = {0.0};
+      Real flx_llf[MAX_SPECIES] = {0.0};
+
+      // Evaluate LLF flux for scalar
+      if ( flx1(m,IDN,k,j,i) >= 0.0 ) {
+        for (int n=0; n < nscal_; ++n) {
+          flx_llf[n] = w0_(m,nmhd_+n,k,j,i-1) * flx1(m,IDN,k,j,i);
+        }
+      } else {
+        for (int n=0; n < nscal_; ++n) {
+          flx_llf[n] = w0_(m,nmhd_+n,k,j,i) * flx1(m,IDN,k,j,i);
+        }
+      }
+
+      // Estimate density D^- at boundary from i-1
+      Real uD = utest_(m,IDN,k,j,i-1) - bet_pp * flx1(m,IDN,k,j,i);
+      if ( uD > 0.0 ) {
+        for (int n=0; n < nscal_; ++n) {
+          Real uY_m = utest_(m,nmhd_+n,k,j,i-1) - bet_pp * flx1(m,nmhd_+n,k,j,i);
+          Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
+          Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+          if ( uY_m < min_DY_ ) {
+            wthe_m[n] = ( ( utest_(m,nmhd_+n,k,j,i-1) - min_DY_ ) * bet_ppi
+              - flx_llf[n] ) / ( flx1(m,nmhd_+n,k,j,i) - flx_llf[n] );
+          } else if ( uY_m > max_DY_ ) {
+            wthe_m[n] = ( ( max_DY_ - utest_(m,nmhd_+n,k,j,i-1) ) * bet_ppi
+              + flx_llf[n] ) / ( flx_llf[n] - flx1(m,nmhd_+n,k,j,i) );
+          } else {
+            wthe_m[n] = 1.0;
+          }
+        } 
+      } else {
+        for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
+      }
+      // Estimate density D^+ at boundary from i
+      uD = utest_(m,IDN,k,j,i) + bet_pp * flx1(m,IDN,k,j,i);
+      if ( uD > 0.0 ) {
+        for (int n=0; n < nscal_; ++n) {
+          Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx1(m,nmhd_+n,k,j,i);
+          Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
+          Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+          if ( uY_p < min_DY_ ) {
+            wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
+              + flx_llf[n] ) / ( flx_llf[n] - flx1(m,nmhd_+n,k,j,i) );
+          } else if ( uY_p > max_DY_ ) {
+            wthe_p[n] = ( ( max_DY_ - utest_(m,nmhd_+n,k,j,i) ) * bet_ppi
+              - flx_llf[n] ) / ( flx1(m,nmhd_+n,k,j,i) - flx_llf[n] );
+          } else {
+            wthe_p[n] = 1.0;
+          }
+        }
+      } else {
+        for (int n=0; n < nscal_; ++n) {wthe_p[n] = 0.0;}
+      }
+      for (int n=0; n < nscal_; ++n) {
+        wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
+        //flx1(m,nmhd_+n,k,j,i) = wthe[n] * flx1(m,nmhd_+n,k,j,i) 
+        //  + (1.0 - wthe[n]) * flx_llf[n];
+        flx1(m,nmhd_+n,k,j,i) = flx_llf[n]
+          + wthe[n] * (flx1(m,nmhd_+n,k,j,i) - flx_llf[n]);
+      }
+
+      if (multi_d) {
+        Real dtodx2 = beta_dt/size.d_view(m).dx2;
+        bet_pp = alp_pp * dtodx2;
+        bet_ppi = 1.0 / bet_pp;
+
+        if ( flx2(m,IDN,k,j,i) >= 0.0 ) {
+          for (int n=0; n < nscal_; ++n) {
+            flx_llf[n] = w0_(m,nmhd_+n,k,j-1,i) * flx2(m,IDN,k,j,i);
+          }
+        } else {
+          for (int n=0; n < nscal_; ++n) {
+            flx_llf[n] = w0_(m,nmhd_+n,k,j,i) * flx2(m,IDN,k,j,i);
+          }
+        }
+
+        uD = utest_(m,IDN,k,j-1,i) - bet_pp * flx2(m,IDN,k,j,i);
+        if ( uD > 0.0 ) {
+          for (int n=0; n < nscal_; ++n) {
+            Real uY_m = utest_(m,nmhd_+n,k,j-1,i) - bet_pp * flx2(m,nmhd_+n,k,j,i);
+            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            if ( uY_m < min_DY_ ) {
+              wthe_m[n] = ( ( utest_(m,nmhd_+n,k,j-1,i) - min_DY_ ) * bet_ppi
+                - flx_llf[n] ) / ( flx2(m,nmhd_+n,k,j,i) - flx_llf[n] );
+            } else if ( uY_m > max_DY_ ) {
+              wthe_m[n] = ( ( max_DY_ - utest_(m,nmhd_+n,k,j-1,i) ) * bet_ppi
+                + flx_llf[n] ) / ( flx_llf[n] - flx2(m,nmhd_+n,k,j,i) );
+            } else {
+              wthe_m[n] = 1.0;
+            }
+          } 
+        } else {
+          for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
+        }
+        uD = utest_(m,IDN,k,j,i) + bet_pp * flx2(m,IDN,k,j,i);
+        if ( uD > 0.0 ) {
+          for (int n=0; n < nscal_; ++n) {
+            Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx2(m,nmhd_+n,k,j,i);
+            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            if ( uY_p < min_DY_ ) {
+              wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
+                + flx_llf[n] ) / ( flx_llf[n] - flx2(m,nmhd_+n,k,j,i) );
+            } else if ( uY_p > max_DY_ ) {
+              wthe_p[n] = ( ( max_DY_ - utest_(m,nmhd_+n,k,j,i) ) * bet_ppi
+                - flx_llf[n] ) / ( flx2(m,nmhd_+n,k,j,i) - flx_llf[n] );
+            } else {
+              wthe_p[n] = 1.0;
+            }
+          }
+        } else {
+          for (int n=0; n < nscal_; ++n) {wthe_p[n] = 0.0;}
+        }
+        for (int n=0; n < nscal_; ++n) {
+          wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
+          //flx2(m,nmhd_+n,k,j,i) = wthe[n] * flx2(m,nmhd_+n,k,j,i) 
+          //  + (1.0 - wthe[n]) * flx_llf[n];
+          flx2(m,nmhd_+n,k,j,i) = flx_llf[n]
+            + wthe[n] * (flx2(m,nmhd_+n,k,j,i) - flx_llf[n]);
+        }
+      }
+
+      if (three_d) {
+        Real dtodx3 = beta_dt/size.d_view(m).dx3;
+        bet_pp = alp_pp * dtodx3;
+        bet_ppi = 1.0 / bet_pp;
+
+        if ( flx3(m,IDN,k,j,i) >= 0.0 ) {
+          for (int n=0; n < nscal_; ++n) {
+            flx_llf[n] = w0_(m,nmhd_+n,k-1,j,i) * flx3(m,IDN,k,j,i);
+          }
+        } else {
+          for (int n=0; n < nscal_; ++n) {
+            flx_llf[n] = w0_(m,nmhd_+n,k,j,i) * flx3(m,IDN,k,j,i);
+          }
+          bet_pp = - utest_(m,IDN,k,j,i) / flx3(m,IDN,k,j,i);
+        }
+
+        uD = utest_(m,IDN,k-1,j,i) - bet_pp * flx3(m,IDN,k,j,i);
+        if ( uD > 0.0 ) {
+          for (int n=0; n < nscal_; ++n) {
+            Real uY_m = utest_(m,nmhd_+n,k-1,j,i) - bet_pp * flx3(m,nmhd_+n,k,j,i);
+            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            if ( uY_m < min_DY_ ) {
+              wthe_m[n] = ( ( utest_(m,nmhd_+n,k-1,j,i) - min_DY_ ) * bet_ppi
+                - flx_llf[n] ) / ( flx3(m,nmhd_+n,k,j,i) - flx_llf[n] );
+            } else if ( uY_m > max_DY_ ) {
+              wthe_m[n] = ( ( max_DY_ - utest_(m,nmhd_+n,k-1,j,i) ) * bet_ppi
+                + flx_llf[n] ) / ( flx_llf[n] - flx3(m,nmhd_+n,k,j,i) );
+            } else {
+              wthe_m[n] = 1.0;
+            }
+          } 
+        } else {
+          for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
+        }
+        uD = utest_(m,IDN,k,j,i) + bet_pp * flx3(m,IDN,k,j,i);
+        if ( uD > 0.0 ) {
+          for (int n=0; n < nscal_; ++n) {
+            Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx3(m,nmhd_+n,k,j,i);
+            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            if ( uY_p < min_DY_ ) {
+              wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
+                + flx_llf[n] ) / ( flx_llf[n] - flx3(m,nmhd_+n,k,j,i) );
+            } else if ( uY_p > max_DY_ ) {
+              wthe_p[n] = ( ( max_DY_ - utest_(m,nmhd_+n,k,j,i) ) * bet_ppi
+                - flx_llf[n] ) / ( flx3(m,nmhd_+n,k,j,i) - flx_llf[n] );
+            } else {
+              wthe_p[n] = 1.0;
+            }
+          }
+        } else {
+          for (int n=0; n < nscal_; ++n) {wthe_p[n] = 0.0;}
+        }
+        for (int n=0; n < nscal_; ++n) {
+          wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
+          //flx3(m,nmhd_+n,k,j,i) = wthe[n] * flx3(m,nmhd_+n,k,j,i) 
+          //  + (1.0 - wthe[n]) * flx_llf[n];
+          flx3(m,nmhd_+n,k,j,i) = flx_llf[n]
+            + wthe[n] * (flx3(m,nmhd_+n,k,j,i) - flx_llf[n]);
+        }
+      }
+    });
+  }
 
   // reset FOFC flag (do not reset excision flag)
   if (use_fofc_) {

@@ -145,6 +145,7 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
+  scalar_pplimiter = pin->GetOrAddBoolean("mhd", "scalar_pplimiter", true);
 
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
 
