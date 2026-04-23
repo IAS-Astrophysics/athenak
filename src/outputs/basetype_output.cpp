@@ -29,6 +29,7 @@
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "outputs.hpp"
+#include "chemistry/chemistry.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -294,6 +295,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         std::string vname;
         vname.assign("s_");
         vname.append(number);
+
+        if (pin->DoesBlockExist("chemistry")) {
+          if(n>=pm->pmb_pack->pchemistry->get_chemistry_scalars_start_idx()
+             && n<=pm->pmb_pack->pchemistry->get_chemistry_scalars_stop_idx()) {
+              vname.append("_"+pm->pmb_pack->pchemistry->GetSpeciesNames(n));
+          }
+        }
+
         outvars.emplace_back(vname,n,&(pm->pmb_pack->phydro->w0));
       }
     }
@@ -432,6 +441,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         std::string vname;
         vname.assign("s_");
         vname.append(number);
+
+        if (pin->DoesBlockExist("chemistry")) {
+          if(n>=pm->pmb_pack->pchemistry->get_chemistry_scalars_start_idx()
+             && n<=pm->pmb_pack->pchemistry->get_chemistry_scalars_stop_idx()) {
+              vname.append("_"+pm->pmb_pack->pchemistry->GetSpeciesNames(n));
+          }
+        }
+
         outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
       }
     }
