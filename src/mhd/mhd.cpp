@@ -125,6 +125,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
+  gr_dt = pin->GetOrAddBoolean("time","gr_dt",false);
 
   // allocate memory for conserved and primitive variables
   // With AMR, maximum size of Views are limited by total device memory through an input

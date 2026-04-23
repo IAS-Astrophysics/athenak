@@ -98,6 +98,7 @@ class Hydro {
   DvceArray5D<Real> u1;       // conserved variables at intermediate step
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
+  bool gr_dt = false;         // flag for accurate GR timestep calculation
 
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed

@@ -19,6 +19,8 @@
 #include "hydro.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
+#include "coordinates/cell_locations.hpp"
+#include "coordinates/cartesian_ks.hpp"
 
 namespace hydro {
 
@@ -47,6 +49,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
   auto &is_special_relativistic_ = pmy_pack->pcoord->is_special_relativistic;
   auto &is_general_relativistic_ = pmy_pack->pcoord->is_general_relativistic;
   auto &is_dynamical_relativistic_ = pmy_pack->pcoord->is_dynamical_relativistic;
+  auto &gr_dt_ = gr_dt;
+  auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
+  auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -78,13 +83,68 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
       int i = (idx - m*nkji - k*nji - j*nx1) + is;
       k += ks;
       j += js;
-
       Real max_dv1 = 0.0, max_dv2 = 0.0, max_dv3 = 0.0;
 
-      if (is_general_relativistic_ || is_dynamical_relativistic_) {
+      if (is_dynamical_relativistic_) {
         max_dv1 = 1.0;
         max_dv2 = 1.0;
         max_dv3 = 1.0;
+      } else if (is_general_relativistic_) {
+        if (!gr_dt_) {
+          max_dv1 = 1.0;
+          max_dv2 = 1.0;
+          max_dv3 = 1.0;
+        } else {
+          // Use the GR sound speed to compute the time step
+          // References to left primitives
+          Real &wd = w0_(m,IDN,k,j,i);
+          Real &ux = w0_(m,IVX,k,j,i);
+          Real &uy = w0_(m,IVY,k,j,i);
+          Real &uz = w0_(m,IVZ,k,j,i);
+
+          // FIXME MG: Ideal fluid for now
+          Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
+
+          // Extract components of metric
+          Real &x1min = mbsize.d_view(m).x1min;
+          Real &x1max = mbsize.d_view(m).x1max;
+          Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+          Real &x2min = mbsize.d_view(m).x2min;
+          Real &x2max = mbsize.d_view(m).x2max;
+          Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+          Real &x3min = mbsize.d_view(m).x3min;
+          Real &x3max = mbsize.d_view(m).x3max;
+          Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
+          Real glower[4][4], gupper[4][4];
+          ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+          // Calculate 4-velocity (contravariant compt)
+          Real q = glower[IVX][IVX] * SQR(ux) + glower[IVY][IVY] * SQR(uy) +
+                  glower[IVZ][IVZ] * SQR(uz) + 2.0*glower[IVX][IVY] * ux * uy +
+              2.0*glower[IVX][IVZ] * ux * uz + 2.0*glower[IVY][IVZ] * uy * uz;
+
+          Real alpha = std::sqrt(-1.0/gupper[0][0]);
+          Real gamma = sqrt(1.0 + q);
+          Real uu[4];
+          uu[0] = gamma / alpha;
+          uu[IVX] = ux - alpha * gamma * gupper[0][IVX];
+          uu[IVY] = uy - alpha * gamma * gupper[0][IVY];
+          uu[IVZ] = uz - alpha * gamma * gupper[0][IVZ];
+
+          // Calculate wavespeeds
+          Real lm, lp;
+          eos.IdealGRHydroSoundSpeeds(wd, p, uu[0], uu[IVX], gupper[0][0],
+                                      gupper[0][IVX], gupper[IVX][IVX], lp, lm);
+          max_dv1 = fmax(fabs(lm), lp);
+
+          eos.IdealGRHydroSoundSpeeds(wd, p, uu[0], uu[IVY], gupper[0][0],
+                                      gupper[0][IVY], gupper[IVY][IVY], lp, lm);
+          max_dv2 = fmax(fabs(lm), lp);
+
+          eos.IdealGRHydroSoundSpeeds(wd, p, uu[0], uu[IVZ], gupper[0][0],
+                                      gupper[0][IVZ], gupper[IVZ][IVZ], lp, lm);
+          max_dv3 = fmax(fabs(lm), lp);
+        }
       } else if (is_special_relativistic_) {
         Real v2 = SQR(w0_(m,IVX,k,j,i)) + SQR(w0_(m,IVY,k,j,i)) + SQR(w0_(m,IVZ,k,j,i));
         Real lor = sqrt(1.0 + v2);
