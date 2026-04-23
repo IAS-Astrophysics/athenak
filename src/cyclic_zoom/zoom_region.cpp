@@ -110,8 +110,8 @@ void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
       pzdata->ApplyDataFromFiner(m, zm, zreg);
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "zoom MeshBlock level " << zlloc.level
-                << " is more than 1 level finer than MeshBlock level " << lloc.level
+                << std::endl << "zoom block " << zm + zmbs << " at level " << zlloc.level
+                << " incompatible with block " << m + mbs << " at level " << lloc.level
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }

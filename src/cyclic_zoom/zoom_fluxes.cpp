@@ -82,7 +82,7 @@ void ZoomData::StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
   auto e2 = efld_pre.x2e;
   auto e3 = efld_pre.x3e;
   // update coarse electric fields
-  par_for("zoom-update-efld",DevExeSpace(), cks,cke+1, cjs,cje+1, cis,cie+1,
+  par_for("zoom_store_efld_before",DevExeSpace(), cks,cke+1, cjs,cje+1, cis,cie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     int fi = 2*ci - cis;  // correct when cis=is
     int fj = 2*cj - cjs;  // correct when cjs=js
@@ -126,7 +126,7 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
   int ccke = ccks + hcnx3 - 1;
   auto zregion = pzoom->old_zregion; // previous zoom region
   // update coarse electric fields
-  par_for("zoom-finer-efld1",DevExeSpace(), ccks, ccke+1, ccjs, ccje+1, ccis, ccie,
+  par_for("zoom_finer_efld1",DevExeSpace(), ccks, ccke+1, ccjs, ccje+1, ccis, ccie,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     Real x1v = CellCenterX(ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2f = LeftEdgeX  (cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
@@ -141,7 +141,7 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
       e1(zm,ck,cj,ci) = 0.0;
     }
   });
-  par_for("zoom-finer-efld2",DevExeSpace(), ccks, ccke+1, ccjs, ccje, ccis, ccie+1,
+  par_for("zoom_finer_efld2",DevExeSpace(), ccks, ccke+1, ccjs, ccje, ccis, ccie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     Real x1f = LeftEdgeX  (ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2v = CellCenterX(cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
@@ -156,7 +156,7 @@ void ZoomData::CorrectEFieldsFromFiner(int zm, int m, int zmf, DvceEdgeFld4D<Rea
       e2(zm,ck,cj,ci) = 0.0;
     }
   });
-  par_for("zoom-finer-efld3",DevExeSpace(), ccks, ccke, ccjs, ccje+1, ccis, ccie+1,
+  par_for("zoom_finer_efld3",DevExeSpace(), ccks, ccke, ccjs, ccje+1, ccis, ccie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     Real x1f = LeftEdgeX  (ci-cis, cnx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2f = LeftEdgeX  (cj-cjs, cnx2, size.d_view(m).x2min, size.d_view(m).x2max);
@@ -204,7 +204,7 @@ void ZoomData::StoreEFieldsAfterAMR(int zm, int m, DvceEdgeFld4D<Real> efld) {
   auto w_ = pzoom->pmesh->pmb_pack->pmhd->w0;
   auto u_ = pzoom->pmesh->pmb_pack->pmhd->u0;
   // update electric fields
-  par_for("zoom-update-efld",DevExeSpace(), cks,cke+1, cjs,cje+1, cis,cie+1,
+  par_for("zoom_store_efld_after",DevExeSpace(), cks,cke+1, cjs,cje+1, cis,cie+1,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     // int fi = 2*ci - cis;  // correct when cis=is
     // int fj = 2*cj - cjs;  // correct when cjs=js
@@ -274,7 +274,7 @@ void ZoomData::LimitEFields() {
   auto de3 = delta_efld.x3e;
   int nzmbm1 = pzmesh->nzmb_thisdvce - 1;
 
-  par_for("zoom-limit-efld",DevExeSpace(), 0, nzmbm1, cks,cke+1, cjs,cje+1, cis,cie+1,
+  par_for("zoom_limit_efld",DevExeSpace(), 0, nzmbm1, cks,cke+1, cjs,cje+1, cis,cie+1,
   KOKKOS_LAMBDA(const int zm, const int ck, const int cj, const int ci) {
     // use copy sign function to avoid nan issue
     if (fabs(de1(zm,ck,cj,ci)) > emax) {

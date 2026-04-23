@@ -15,7 +15,6 @@ def arguments():
     """Assemble arguments for run command"""
     return [
         "job/basename=monopole",
-        "time/tlim=10.0",
         "time/integrator=rk2",
         "mhd/reconstruct=plm",
     ]

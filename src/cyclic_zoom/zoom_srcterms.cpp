@@ -76,7 +76,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
   DevExeSpace exec1, exec2, exec3;
 
   // Launch three kernels in parallel using separate execution spaces
-  par_for("apply-emf-x1", exec1, cks, cke+1, cjs, cje+1, cis, cie,
+  par_for("apply_emf_x1", exec1, cks, cke+1, cjs, cje+1, cis, cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -99,7 +99,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     }
   });
 
-  par_for("apply-emf-x2", exec2, cks, cke+1, cjs, cje, cis, cie+1,
+  par_for("apply_emf_x2", exec2, cks, cke+1, cjs, cje, cis, cie+1,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -122,7 +122,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     }
   });
 
-  par_for("apply-emf-x3", exec3, cks, cke, cjs, cje+1, cis, cie+1,
+  par_for("apply_emf_x3", exec3, cks, cke, cjs, cje+1, cis, cie+1,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;

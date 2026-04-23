@@ -33,13 +33,14 @@ void ZoomData::StoreData(int zm, int m) {
     auto w_ = pmbp->phydro->w0;
     StoreCCData(zm, u0, coarse_u0, m, u_);
     StoreCCData(zm, w0, coarse_w0, m, w_);
+    CoarseConToPrim(zm, m, coarse_u0, coarse_w0);
   }
   if (pmbp->pmhd != nullptr) {
     auto u_ = pmbp->pmhd->u0;
     auto w_ = pmbp->pmhd->w0;
     StoreCCData(zm, u0, coarse_u0, m, u_);
     StoreCCData(zm, w0, coarse_w0, m, w_);
-    StoreCoarsePrimData(zm, coarse_w0, m, w_);
+    StoreCoarsePrim(zm, coarse_w0, m, w_);
     auto efld = pmbp->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
   }
@@ -72,14 +73,14 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
   // TODO(@mhguo): 1D and 2D cases are not tested yet!
   // restrict in 1D
   if (pmesh->one_d) {
-    par_for("zoom-restrictCC-1D",DevExeSpace(), 0, nvar-1, cis-hg, cie+hg,
+    par_for("zoom_restrictCC-1D",DevExeSpace(), 0, nvar-1, cis-hg, cie+hg,
     KOKKOS_LAMBDA(const int n, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
       ca(zm,n,cks,cjs,i) = 0.5*(a(m,n,cks,cjs,finei) + a(m,n,cks,cjs,finei+1));
     });
   // restrict in 2D
   } else if (pmesh->two_d) {
-    par_for("zoom-restrictCC-2D",DevExeSpace(), 0, nvar-1,
+    par_for("zoom_restrictCC-2D",DevExeSpace(), 0, nvar-1,
             cjs-hg, cje+hg, cis-hg, cie+hg,
     KOKKOS_LAMBDA(const int n, const int j, const int i) {
       int finei = 2*i - cis;  // correct when cis=is
@@ -89,7 +90,7 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
     });
   // restrict in 3D
   } else {
-    par_for("zoom-restrictCC-3D",DevExeSpace(), 0, nvar-1, cks-hg, cke+hg,
+    par_for("zoom_restrictCC-3D",DevExeSpace(), 0, nvar-1, cks-hg, cke+hg,
             cjs-hg, cje+hg, cis-hg, cie+hg,
     KOKKOS_LAMBDA(const int n, const int k, const int j, const int i) {
       int finei = 2*i - cis;  // correct if cis = is
@@ -106,12 +107,123 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void ZoomData::StoreCoarsePrimData()
-//! \brief Store coarse-grained hydro primitives from meshblock m to zoom block zm
-//!        by averaging conserved variables. MHD only.
+//! \fn void ZoomData::CoarseConToPrim()
+//! \brief Convert coarse-grained conserved variables to primitive variables. Hydro only.
 
-void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
-                                    int m, DvceArray5D<Real> w_) {
+void ZoomData::CoarseConToPrim(int zm, int m, DvceArray5D<Real> cu,
+                               DvceArray5D<Real> cw) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  if (pmbp->phydro == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CoarseConToPrim only works for hydro case" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  auto pmesh = pzoom->pmesh;
+  auto &indcs = pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
+  bool is_gr = pmbp->pcoord->is_general_relativistic;
+  bool is_sr = pmbp->pcoord->is_special_relativistic;
+  auto eos = pmbp->phydro->peos->eos_data;
+  auto &coord = pmbp->pcoord->coord_data;
+  bool flat = true;
+  Real spin = 0.0;
+  if (is_gr) {
+    flat = coord.is_minkowski;
+    spin = coord.bh_spin;
+  }
+  const int nhyd = pmbp->phydro->nhydro;
+  const int nscal = pmbp->phydro->nscalars;
+  // TODO(@mhguo): may include 1D and 2D cases
+  int hg = indcs.ng / 2;
+  // convert coarse-grained hydro conserved variables to primitive variables
+  par_for("zoom_coarse_c2p",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
+  KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+
+    HydCons1D u;
+    u.d = cu(zm,IDN,ck,cj,ci);
+    u.mx = cu(zm,IM1,ck,cj,ci);
+    u.my = cu(zm,IM2,ck,cj,ci);
+    u.mz = cu(zm,IM3,ck,cj,ci);
+    u.e = cu(zm,IEN,ck,cj,ci);
+
+    HydPrim1D w;
+    bool dfloor_used=false, efloor_used=false, tfloor_used=false;
+    if (is_gr) {
+      // Extract components of metric
+      Real x1v = CellCenterX(ci-cis, cnx1, x1min, x1max);
+      Real x2v = CellCenterX(cj-cjs, cnx2, x2min, x2max);
+      Real x3v = CellCenterX(ck-cks, cnx3, x3min, x3max);
+      Real glower[4][4], gupper[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
+
+      HydCons1D u_sr;
+      Real s2;
+      TransformToSRHyd(u,glower,gupper,s2,u_sr);
+      bool c2p_failure=false;
+      int iter_used=0;
+      SingleC2P_IdealSRHyd(u_sr, eos, s2, w,
+                           dfloor_used, efloor_used, c2p_failure, iter_used);
+      // apply velocity ceiling if necessary
+      Real tmp = glower[1][1]*SQR(w.vx)
+                + glower[2][2]*SQR(w.vy)
+                + glower[3][3]*SQR(w.vz)
+                + 2.0*glower[1][2]*w.vx*w.vy + 2.0*glower[1][3]*w.vx*w.vz
+                + 2.0*glower[2][3]*w.vy*w.vz;
+      Real lor = sqrt(1.0+tmp);
+      if (lor > eos.gamma_max) {
+        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        w.vx *= factor;
+        w.vy *= factor;
+        w.vz *= factor;
+      }
+    } else if (is_sr) {
+      // Compute (S^i S_i) (eqn C2)
+      Real s2 = SQR(u.mx) + SQR(u.my) + SQR(u.mz);
+      bool c2p_failure=false;
+      int iter_used=0;
+      SingleC2P_IdealSRHyd(u, eos, s2, w,
+                           dfloor_used, efloor_used, c2p_failure, iter_used);
+      // apply velocity ceiling if necessary
+      Real lor = sqrt(1.0+SQR(w.vx)+SQR(w.vy)+SQR(w.vz));
+      if (lor > eos.gamma_max) {
+        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        w.vx *= factor;
+        w.vy *= factor;
+        w.vz *= factor;
+      }
+    } else {
+      SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+    }
+    cw(zm,IDN,ck,cj,ci) = w.d;
+    cw(zm,IVX,ck,cj,ci) = w.vx;
+    cw(zm,IVY,ck,cj,ci) = w.vy;
+    cw(zm,IVZ,ck,cj,ci) = w.vz;
+    cw(zm,IEN,ck,cj,ci) = w.e;
+    // store passive scalars (if any)
+    for (int n=nhyd; n<(nhyd+nscal); ++n) {
+      cw(zm,n,ck,cj,ci) = cu(zm,n,ck,cj,ci)/u.d;
+    }
+  });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::StoreCoarsePrim()
+//! \brief Store coarse-grained primitives from meshblock m to zoom block zm by averaging
+//!        hydro part of conserved variables. MHD only.
+
+void ZoomData::StoreCoarsePrim(int zm, DvceArray5D<Real> cw,
+                               int m, DvceArray5D<Real> w_) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->pmhd == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -119,7 +231,7 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
     std::exit(EXIT_FAILURE);
   }
   auto &indcs = pzoom->pmesh->mb_indcs;
-  auto &size = pzoom->pmesh->pmb_pack->pmb->mb_size;
+  auto &size = pmbp->pmb->mb_size;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
@@ -130,6 +242,7 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
   int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
   // DvceArray5D<Real> u0_, w0_;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
+  bool is_sr = pmbp->pcoord->is_special_relativistic;
   auto eos = pmbp->pmhd->peos->eos_data;
   bool flat = true;
   Real spin = 0.0;
@@ -141,7 +254,7 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
   const int nscal = pmbp->pmhd->nscalars;
   // TODO(@mhguo): may include 1D and 2D cases
   int hg = indcs.ng / 2;
-  par_for("zoom-store-cw",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
+  par_for("zoom_store_cw",DevExeSpace(), cks-hg, cke+hg, cjs-hg, cje+hg, cis-hg, cie+hg,
   KOKKOS_LAMBDA(const int ck, const int cj, const int ci) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -181,6 +294,8 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
             Real x3v = CellCenterX(fk+kk-ks, nx3, x3min, x3max);
             ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
             SingleP2C_IdealGRHyd(glower, gupper, w, eos.gamma, u);
+          } else if (is_sr) {
+            SingleP2C_IdealSRHyd(w, eos.gamma, u);
           } else {
             SingleP2C_IdealHyd(w, u);
           }
@@ -209,6 +324,7 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
     u.e  = cw(zm,IEN,ck,cj,ci);
 
     HydPrim1D w;
+    bool dfloor_used=false, efloor_used=false, tfloor_used=false;
     if (is_gr) {
       // Extract components of metric
       Real x1v = CellCenterX(ci-cis, cnx1, x1min, x1max);
@@ -219,11 +335,10 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
       HydCons1D u_sr;
       Real s2;
       TransformToSRHyd(u,glower,gupper,s2,u_sr);
-      bool dfloor_used=false, efloor_used=false;
       bool c2p_failure=false;
       int iter_used=0;
       SingleC2P_IdealSRHyd(u_sr, eos, s2, w,
-                        dfloor_used, efloor_used, c2p_failure, iter_used);
+                           dfloor_used, efloor_used, c2p_failure, iter_used);
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
                 + glower[2][2]*SQR(w.vy)
@@ -237,8 +352,22 @@ void ZoomData::StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
         w.vy *= factor;
         w.vz *= factor;
       }
+    } else if (is_sr) {
+      // Compute (S^i S_i) (eqn C2)
+      Real s2 = SQR(u.mx) + SQR(u.my) + SQR(u.mz);
+      bool c2p_failure=false;
+      int iter_used=0;
+      SingleC2P_IdealSRHyd(u, eos, s2, w,
+                           dfloor_used, efloor_used, c2p_failure, iter_used);
+      // apply velocity ceiling if necessary
+      Real lor = sqrt(1.0+SQR(w.vx)+SQR(w.vy)+SQR(w.vz));
+      if (lor > eos.gamma_max) {
+        Real factor = sqrt((SQR(eos.gamma_max)-1.0)/(SQR(lor)-1.0));
+        w.vx *= factor;
+        w.vy *= factor;
+        w.vz *= factor;
+      }
     } else {
-      bool dfloor_used=false, efloor_used=false, tfloor_used=false;
       SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
     }
     cw(zm,IDN,ck,cj,ci) = w.d;
@@ -322,8 +451,7 @@ void ZoomData::ApplyCCDataSameLevel(int m, DvceArray5D<Real> a,
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int nvar = a.extent_int(1);
-  // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-  par_for("zoom_apply", DevExeSpace(),ks,ke,js,je,is,ie,
+  par_for("zoom_apply_cc_same", DevExeSpace(),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -366,8 +494,7 @@ void ZoomData::ApplyCCDataFromFiner(int m, DvceArray5D<Real> a,
   int ox1 = ((zlloc.lx1 & 1) == 1);
   int ox2 = ((zlloc.lx2 & 1) == 1);
   int ox3 = ((zlloc.lx3 & 1) == 1);
-  // par_for("zoom_mask", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-  par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+  par_for("zoom_apply_cc_finer", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -411,6 +538,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
+  bool is_sr = pmbp->pcoord->is_special_relativistic;
   auto &coord = pmbp->pcoord->coord_data;
   bool flat = true;
   Real spin = 0.0;
@@ -423,8 +551,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
   auto u0_ = u0, w0_ = w0;
   auto b = pmbp->pmhd->b0;
-  // par_for("zoom_reinit", DevExeSpace(),ks-ng,ke+ng,js-ng,je+ng,is-ng,ie+ng,
-  par_for("zoom_reinit", DevExeSpace(),ks,ke,js,je,is,ie,
+  par_for("zoom_apply_prim_same", DevExeSpace(),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -471,6 +598,8 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
         Real glower[4][4], gupper[4][4];
         ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
         SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+      } else if (is_sr) {
+        SingleP2C_IdealSRMHD(w, gamma, u);
       } else {
         SingleP2C_IdealMHD(w, u);
       }
@@ -518,7 +647,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
-  auto &coord = pmbp->pcoord->coord_data;
+  bool is_sr = pmbp->pcoord->is_special_relativistic;
   bool flat = true;
   Real spin = 0.0;
   if (is_gr) {
@@ -536,7 +665,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto u_ = pmbp->pmhd->u0;
   auto w_ = pmbp->pmhd->w0;
   auto b = pmbp->pmhd->b0;
-  par_for("zoom_mask", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
+  par_for("zoom_apply_prim_finer", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -587,6 +716,8 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
         Real glower[4][4], gupper[4][4];
         ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
         SingleP2C_IdealGRMHD(glower, gupper, w, gamma, u);
+      } else if (is_sr) {
+        SingleP2C_IdealSRMHD(w, gamma, u);
       } else {
         SingleP2C_IdealMHD(w, u);
       }

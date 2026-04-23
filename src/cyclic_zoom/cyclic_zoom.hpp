@@ -261,8 +261,9 @@ class ZoomData {
   void StoreData(int zm, int m);
   void StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
                    int m, DvceArray5D<Real> a);
-  void StoreCoarsePrimData(int zm, DvceArray5D<Real> cw,
-                            int m, DvceArray5D<Real> w0_);
+  void CoarseConToPrim(int zm, int m, DvceArray5D<Real> cu, DvceArray5D<Real> cw);
+  void StoreCoarsePrim(int zm, DvceArray5D<Real> cw,
+                       int m, DvceArray5D<Real> w0_);
   void ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion);
   void ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion);
   void ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> a0,

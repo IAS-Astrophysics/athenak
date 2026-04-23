@@ -14,7 +14,6 @@ def arguments():
     """Assemble arguments for run command"""
     return [
         "job/basename=gr_bondi",
-        "time/tlim=50.0",
         "time/integrator=rk2",
         "hydro/reconstruct=plm",
     ]
@@ -32,7 +31,7 @@ def test_run():
         data = athena_read.error_dat("gr_bondi-errs.dat")
         L1_RMS_INDEX = 4  # Index for L1 RMS error in data
         l1_rms = data[0][L1_RMS_INDEX]
-        maxerror = 1.3e-5
+        maxerror = 6.0e-6
 
         if l1_rms > maxerror:
             pytest.fail(
