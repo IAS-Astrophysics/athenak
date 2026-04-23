@@ -36,6 +36,11 @@ Real star_center_x2 = 0.0;
 Real star_center_x3 = 0.0;
 bool star_isotropic = true;
 Real excision_damp_rate = 50.0;
+bool excision_project_state = true;
+Real excision_freeze_radius = 0.0;
+Real excision_ramp_radius = 0.0;
+Real excision_atmo_density = 0.0;
+Real excision_atmo_energy = 0.0;
 
 KOKKOS_INLINE_FUNCTION
 Real KerrSchildRadius(Real x, Real y, Real z, Real a) {
@@ -50,18 +55,37 @@ Real KerrSchildRadius(Real x, Real y, Real z, Real a) {
 }
 
 KOKKOS_INLINE_FUNCTION
-Real HorizonDampWeight(Real x, Real y, Real z) {
-  Real r_ks = KerrSchildRadius(x, y, z, bh_spin);
-  if (r_ks >= bh_horizon_radius) {
-    return 0.0;
-  }
-  Real q = r_ks / bh_horizon_radius;
-  Real smoothstep = q*q*(3.0 - 2.0*q);
-  return 1.0 - smoothstep;
+Real SmootherStep(Real q) {
+  q = fmax(0.0, fmin(1.0, q));
+  return q*q*q*(10.0 + q*(-15.0 + 6.0*q));
 }
 
-void ApplyHorizonDamping(Mesh *pm, Real bdt) {
-  if (excision_damp_rate <= 0.0) {
+KOKKOS_INLINE_FUNCTION
+Real InnerExcisionRamp(Real x, Real y, Real z) {
+  Real r_ks = KerrSchildRadius(x, y, z, bh_spin);
+  if (r_ks <= excision_freeze_radius) {
+    return 0.0;
+  }
+  if (r_ks >= excision_ramp_radius) {
+    return 1.0;
+  }
+  Real width = excision_ramp_radius - excision_freeze_radius;
+  if (width <= 0.0) {
+    return 1.0;
+  }
+  return SmootherStep((r_ks - excision_freeze_radius)/width);
+}
+
+KOKKOS_INLINE_FUNCTION
+Real BlendFiniteToTarget(Real value, Real target, Real ramp) {
+  if (!(isfinite(value))) {
+    return target;
+  }
+  return ramp*value + (1.0 - ramp)*target;
+}
+
+void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
+  if (excision_damp_rate <= 0.0 && !excision_project_state) {
     return;
   }
 
@@ -76,33 +100,52 @@ void ApplyHorizonDamping(Mesh *pm, Real bdt) {
   int ks = indcs.ks;
   int ke = indcs.ke;
 
-  auto &mhd_u0 = pmbp->pmhd->u0;
-  int nmhd = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
-  par_for("z4c_tov_ks_horizon_damp_mhd", DevExeSpace(), 0, nmb - 1, 0, nmhd - 1,
-          ks, ke, js, je, is, ie,
-          KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
+  if (project_mhd && pmbp->pmhd != nullptr) {
+    auto &mhd_u0 = pmbp->pmhd->u0;
+    auto &mhd_u1 = pmbp->pmhd->u1;
+    int nmhd = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
+    int nbase = pmbp->pmhd->nmhd;
+    par_for("z4c_tov_ks_inner_excision_mhd", DevExeSpace(), 0, nmb - 1, 0, nmhd - 1,
+            ks, ke, js, je, is, ie,
+            KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
 
-    Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1;
-    Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2;
-    Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3;
-    Real lambda = excision_damp_rate * HorizonDampWeight(x, y, z);
-    if (lambda <= 0.0) {
-      return;
-    }
-    Real scale = fmax(0.0, 1.0 - bdt*lambda);
-    mhd_u0(m,n,k,j,i) *= scale;
-  });
+      Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1;
+      Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2;
+      Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3;
+      Real ramp = InnerExcisionRamp(x, y, z);
+      if (ramp >= 1.0 && isfinite(mhd_u0(m,n,k,j,i)) && isfinite(mhd_u1(m,n,k,j,i))) {
+        return;
+      }
+
+      Real target = 0.0;
+      if (n == IDN) {
+        target = excision_atmo_density;
+      } else if (n == IEN && nbase > IEN) {
+        target = excision_atmo_energy;
+      }
+
+      // Only cell-centered hydrodynamic conserved variables are projected here.
+      // Face- and cell-centered magnetic fields are intentionally untouched.
+      if (excision_project_state) {
+        mhd_u0(m,n,k,j,i) = BlendFiniteToTarget(mhd_u0(m,n,k,j,i), target, ramp);
+        mhd_u1(m,n,k,j,i) = BlendFiniteToTarget(mhd_u1(m,n,k,j,i), target, ramp);
+      } else if (!(isfinite(mhd_u0(m,n,k,j,i)))) {
+        mhd_u0(m,n,k,j,i) = target;
+      }
+    });
+  }
 
   auto &z4c_u0 = pmbp->pz4c->u0;
+  auto &z4c_u1 = pmbp->pz4c->u1;
   auto &z4c_rhs = pmbp->pz4c->u_rhs;
   int nz4c = pmbp->pz4c->nz4c;
-  par_for("z4c_tov_ks_horizon_damp_z4c", DevExeSpace(), 0, nmb - 1, 0, nz4c - 1,
+  par_for("z4c_tov_ks_inner_excision_z4c", DevExeSpace(), 0, nmb - 1, 0, nz4c - 1,
           ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -115,12 +158,30 @@ void ApplyHorizonDamping(Mesh *pm, Real bdt) {
     Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1;
     Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2;
     Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3;
-    Real lambda = excision_damp_rate * HorizonDampWeight(x, y, z);
-    if (lambda <= 0.0) {
+    Real ramp = InnerExcisionRamp(x, y, z);
+    if (ramp >= 1.0 && isfinite(z4c_rhs(m,n,k,j,i)) && isfinite(z4c_u0(m,n,k,j,i)) &&
+        isfinite(z4c_u1(m,n,k,j,i))) {
       return;
     }
-    z4c_rhs(m,n,k,j,i) -= lambda * z4c_u0(m,n,k,j,i);
+    if (excision_damp_rate > 0.0) {
+      Real damp = fmax(0.0, 1.0 - bdt*excision_damp_rate*(1.0 - ramp));
+      z4c_rhs(m,n,k,j,i) = isfinite(z4c_rhs(m,n,k,j,i)) ?
+                            damp*ramp*z4c_rhs(m,n,k,j,i) : 0.0;
+    } else {
+      z4c_rhs(m,n,k,j,i) = isfinite(z4c_rhs(m,n,k,j,i)) ?
+                            ramp*z4c_rhs(m,n,k,j,i) : 0.0;
+    }
+    if (excision_project_state) {
+      z4c_u0(m,n,k,j,i) = isfinite(z4c_u0(m,n,k,j,i)) ?
+                           ramp*z4c_u0(m,n,k,j,i) : 0.0;
+      z4c_u1(m,n,k,j,i) = isfinite(z4c_u1(m,n,k,j,i)) ?
+                           ramp*z4c_u1(m,n,k,j,i) : 0.0;
+    }
   });
+}
+
+void ApplyInnerExcision(Mesh *pm, Real bdt) {
+  ApplyInnerExcision(pm, bdt, true);
 }
 
 template <typename ADMState>
@@ -182,6 +243,14 @@ void FillKerrSchildADM(MeshBlockPack *pmbp, ADMState &adm_state) {
     Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1;
     Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2;
     Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3;
+    Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
+    Real r_ks = KerrSchildRadius(x, y, z, bh_spin);
+    if (excision_project_state && r_ks < excision_freeze_radius) {
+      Real scale = excision_freeze_radius/fmax(rad, 1.0e-12);
+      x = (rad > 1.0e-12) ? x*scale : excision_freeze_radius;
+      y = (rad > 1.0e-12) ? y*scale : 0.0;
+      z = (rad > 1.0e-12) ? z*scale : 0.0;
+    }
 
     ComputeADMDecomposition(
         x, y, z, false, bh_spin,
@@ -389,6 +458,7 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
   pz4c->EnforceAlgConstrOn(pz4c->full);
   pz4c->RecastResidualState();
   pz4c->PrescribeGaugeResidual();
+  ApplyInnerExcision(pmy_mesh, 0.0, false);
   pz4c->Z4cToADM(pmbp);
 
   ZeroMagneticFields(pmbp);
@@ -398,6 +468,7 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
   pmbp->pdyngr->PrimToConInit(0, n1 - 1, 0, n2 - 1, 0, n3 - 1);
+  ApplyInnerExcision(pmy_mesh, 0.0);
 
   switch (indcs.ng) {
     case 2:
@@ -463,8 +534,26 @@ void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart)
   star_isotropic = pin->GetOrAddBoolean("problem", "isotropic", true);
   bh_horizon_radius = 1.0 + sqrt(fmax(0.0, 1.0 - SQR(bh_spin)));
   excision_damp_rate = pin->GetOrAddReal("problem", "excision_damp_rate", 50.0);
+  excision_project_state = pin->GetOrAddBoolean("problem", "excision_project_state", true);
+  excision_freeze_radius =
+      pin->GetOrAddReal("problem", "excision_freeze_radius", 0.85*bh_horizon_radius);
+  excision_ramp_radius =
+      pin->GetOrAddReal("problem", "excision_ramp_radius", 0.95*bh_horizon_radius);
+  if (excision_freeze_radius < 0.0 || excision_ramp_radius < excision_freeze_radius ||
+      excision_ramp_radius > bh_horizon_radius) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "z4c_tov_ks requires 0 <= excision_freeze_radius <= "
+              << "excision_ramp_radius <= Kerr-Schild horizon radius." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  Real dfloor = pin->GetOrAddReal("mhd", "dfloor", 1.0e-16);
+  Real pfloor = pin->GetOrAddReal("mhd", "pfloor", 1.0e-22);
+  Real gamma = pin->GetOrAddReal("mhd", "gamma", 5.0/3.0);
+  excision_atmo_density = pin->GetOrAddReal("problem", "excision_atmo_density", dfloor);
+  excision_atmo_energy =
+      pin->GetOrAddReal("problem", "excision_atmo_energy", pfloor/fmax(gamma - 1.0, 1.0e-12));
   user_srcs = true;
-  user_srcs_func = &ApplyHorizonDamping;
+  user_srcs_func = &ApplyInnerExcision;
 
   if (restart) {
     return;
