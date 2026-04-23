@@ -199,6 +199,13 @@ class Z4c {
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
+    // Optional Kerr-Schild horizon excision for constraint history only.
+    bool history_excise_ks_horizon;
+    Real history_excise_ks_radius;
+    Real history_excise_ks_spin;
+    Real history_excise_ks_x1;
+    Real history_excise_ks_x2;
+    Real history_excise_ks_x3;
 
     // Time dependent constraint damping
     bool roll_kappa;

@@ -22,7 +22,16 @@
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/adm.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "outputs.hpp"
+
+KOKKOS_INLINE_FUNCTION
+Real HistoryKerrSchildRadius(Real x, Real y, Real z, Real spin) {
+  Real const rad2 = SQR(x) + SQR(y) + SQR(z);
+  Real const a2 = SQR(spin);
+  Real const q = rad2 - a2;
+  return sqrt(0.5*(q + sqrt(SQR(q) + 4.0*a2*SQR(z))));
+}
 
 //----------------------------------------------------------------------------------------
 // Constructor: also calls BaseTypeOutput base class constructor
@@ -182,6 +191,12 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &nhist_ = pdata->nhist;
   auto &opt = pm->pmb_pack->pz4c->opt;
+  bool excise_ks_horizon = opt.history_excise_ks_horizon;
+  Real excise_ks_radius = opt.history_excise_ks_radius;
+  Real excise_ks_spin = opt.history_excise_ks_spin;
+  Real excise_ks_x1 = opt.history_excise_ks_x1;
+  Real excise_ks_x2 = opt.history_excise_ks_x2;
+  Real excise_ks_x3 = opt.history_excise_ks_x3;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -209,9 +224,21 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
     Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3
                * std::sqrt(std::abs(detg));
 
-    // Excise the punctures based on chi
+    bool include_cell = (z4c.chi(m,k,j,i) >= opt.excise_chi);
+    if (excise_ks_horizon) {
+      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real rks = HistoryKerrSchildRadius(x1v - excise_ks_x1,
+                                         x2v - excise_ks_x2,
+                                         x3v - excise_ks_x3,
+                                         excise_ks_spin);
+      include_cell = include_cell && (rks > excise_ks_radius);
+    }
+
+    // Excise the punctures based on chi, and optionally the KS horizon.
     array_sum::GlobalSum hvars;
-    if (z4c.chi(m,k,j,i)>=opt.excise_chi) {
+    if (include_cell) {
       hvars.the_array[0] = vol*u_con_(m,0,k,j,i); // ||C||^2 (comes already squared)
       hvars.the_array[1] = vol*SQR(u_con_(m,1,k,j,i)); //||H||^2
       hvars.the_array[2] = vol*u_con_(m,2,k,j,i); // ||M||^2 (comes already squared)

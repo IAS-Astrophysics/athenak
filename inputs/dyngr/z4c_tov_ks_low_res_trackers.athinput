@@ -1,0 +1,139 @@
+# AthenaXXX input file for evolving a low-compactness TOV-like star on a Kerr-Schild BH
+# background, with compact-object trackers for the central BH and the NS.
+
+<job>
+basename = z4c_tov_ks_xy_trackers
+
+<mesh>
+nghost = 2
+nx1 = 64
+x1min = -4.0
+x1max = 12.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 32
+x2min = -4.0
+x2max = 4.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 32
+x3min = -4.0
+x3max = 4.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 16
+nx2 = 16
+nx3 = 16
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim = -1
+tlim = 40
+ndiag = 1
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+rsolver = llf
+fofc_method = llf
+gamma = 1.6666666666666667
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+gamma_max = 10.0
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+diss = 0.5
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+shift_Gamma = 1.0
+shift_eta = 2.0
+
+# Compact object trackers.  co_1 is intentionally labeled NS so the tracker uses the
+# fluid velocity correction and writes a neutron-star-labeled tracker file.
+filename = co_
+tracker_mode = ode
+co_0_type = BH
+co_0_x = 0.0
+co_0_y = 0.0
+co_0_z = 0.0
+co_0_radius = 2.0
+co_0_out_every = 1
+co_1_type = NS
+co_1_x = 8.0
+co_1_y = 0.0
+co_1_z = 0.0
+co_1_radius = 1.5
+co_1_out_every = 1
+
+# Keep the default chi-only constraint-history mask in other runs.  This input additionally
+# excludes cells with Kerr-Schild radius at or below the central BH horizon.
+history_excise_ks_horizon = true
+
+<problem>
+pgen_name = z4c_tov_ks
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+
+star_center_x1 = 8.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+isotropic = true
+
+rhoc = 1.0e-6
+kappa = 5.0e-3
+npoints = 200000
+dr = 2.5e-4
+rho_cut = 1.0e-16
+excision_damp_rate = 50.0
+
+<output1>
+file_type = hst
+dt = 0.05
+
+<output2>
+file_type = bin
+variable = mhd_w
+id = xy_mhd
+dt = 0.05
+slice_x3 = 0.0
+
+<output3>
+file_type = bin
+variable = adm
+id = xy_adm
+dt = 0.05
+slice_x3 = 0.0
+
+<output4>
+file_type = bin
+variable = z4c
+id = xy_z4c
+dt = 0.05
+slice_x3 = 0.0
+
+<output5>
+file_type = rst
+dt = 10

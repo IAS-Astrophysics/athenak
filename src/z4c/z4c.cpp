@@ -25,6 +25,7 @@
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
+#include "coordinates/coordinates.hpp"
 #include "utils/cart_grid.hpp"
 
 namespace z4c {
@@ -185,6 +186,36 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
 
   opt.excise_chi = pin->GetOrAddReal("z4c", "excise_chi", 0.0625);
+  opt.history_excise_ks_horizon =
+      pin->GetOrAddBoolean("z4c", "history_excise_ks_horizon", false);
+  Real default_ks_spin = 0.0;
+  if (ppack->pcoord != nullptr) {
+    default_ks_spin = ppack->pcoord->coord_data.bh_spin;
+  }
+  opt.history_excise_ks_spin =
+      pin->GetOrAddReal("z4c", "history_excise_ks_spin", default_ks_spin);
+  Real horizon_spin = fmin(1.0, fabs(opt.history_excise_ks_spin));
+  Real default_ks_radius = 1.0 + sqrt(fmax(0.0, 1.0 - SQR(horizon_spin)));
+  opt.history_excise_ks_radius =
+      pin->GetOrAddReal("z4c", "history_excise_ks_radius", default_ks_radius);
+  Real default_ks_x1 = 0.0;
+  Real default_ks_x2 = 0.0;
+  Real default_ks_x3 = 0.0;
+  if (pin->DoesParameterExist("problem", "bh_center_x1")) {
+    default_ks_x1 = pin->GetReal("problem", "bh_center_x1");
+  }
+  if (pin->DoesParameterExist("problem", "bh_center_x2")) {
+    default_ks_x2 = pin->GetReal("problem", "bh_center_x2");
+  }
+  if (pin->DoesParameterExist("problem", "bh_center_x3")) {
+    default_ks_x3 = pin->GetReal("problem", "bh_center_x3");
+  }
+  opt.history_excise_ks_x1 =
+      pin->GetOrAddReal("z4c", "history_excise_ks_x1", default_ks_x1);
+  opt.history_excise_ks_x2 =
+      pin->GetOrAddReal("z4c", "history_excise_ks_x2", default_ks_x2);
+  opt.history_excise_ks_x3 =
+      pin->GetOrAddReal("z4c", "history_excise_ks_x3", default_ks_x3);
 
   opt.extrap_order = fmax(2,fmin(indcs.ng,fmin(4,
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
