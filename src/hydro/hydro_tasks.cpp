@@ -361,6 +361,11 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // physical BCs
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
 
+  // TODO(@mhguo): this is temporary, need to move to a general mask function later
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->ApplyMask();
+  }
+
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
