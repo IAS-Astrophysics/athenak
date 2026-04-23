@@ -32,12 +32,11 @@ nx2  = 16           # Number of cells in each MeshBlock, X2-dir
 nx3  = 16           # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
-#refinement = static    # type of refinement
-refinement       = adaptive  # type of refinement
-max_nmb_per_rank = 256       # max allowed number of MBs per device (memory limit for AMR)
-ncycle_check     = 1         # cycles between checking mesh for ref/derefinement
-refinement_interval = 1      # cycles between allowing successive ref/derefinement
-num_levels       = 6
+refinement          = adaptive # type of refinement
+max_nmb_per_rank    = 256      # max allowed number of MBs per device (memory limit for AMR)
+ncycle_check        = 1        # cycles between checking mesh for ref/derefinement
+refinement_interval = 1        # cycles between allowing successive ref/derefinement
+num_levels          = 6
 
 <refined_region1>
 level = 5
