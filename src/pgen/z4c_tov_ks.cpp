@@ -37,6 +37,16 @@ Real star_center_x3 = 0.0;
 Real star_boost_x = 0.0;
 Real star_boost_y = 0.0;
 Real star_boost_z = 0.0;
+Real star_boost_mag = 0.0;
+Real star_rot_00 = 1.0;
+Real star_rot_01 = 0.0;
+Real star_rot_02 = 0.0;
+Real star_rot_10 = 0.0;
+Real star_rot_11 = 1.0;
+Real star_rot_12 = 0.0;
+Real star_rot_20 = 0.0;
+Real star_rot_21 = 0.0;
+Real star_rot_22 = 1.0;
 bool star_isotropic = true;
 Real excision_damp_rate = 50.0;
 bool excision_project_state = true;
@@ -85,6 +95,74 @@ Real BlendFiniteToTarget(Real value, Real target, Real ramp) {
     return target;
   }
   return ramp*value + (1.0 - ramp)*target;
+}
+
+KOKKOS_INLINE_FUNCTION
+void RotateLabToBoostFrame(Real x, Real y, Real z, Real &xb, Real &yb, Real &zb) {
+  xb = star_rot_00*x + star_rot_01*y + star_rot_02*z;
+  yb = star_rot_10*x + star_rot_11*y + star_rot_12*z;
+  zb = star_rot_20*x + star_rot_21*y + star_rot_22*z;
+}
+
+KOKKOS_INLINE_FUNCTION
+void RotateBoostToLab(Real xb, Real yb, Real zb, Real &x, Real &y, Real &z) {
+  x = star_rot_00*xb + star_rot_10*yb + star_rot_20*zb;
+  y = star_rot_01*xb + star_rot_11*yb + star_rot_21*zb;
+  z = star_rot_02*xb + star_rot_12*yb + star_rot_22*zb;
+}
+
+template <class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+void SampleIsotropicTOV(const TOVEOS &eos, const tov::TOVStar &tov_star, Real r,
+                        Real &rho, Real &p, Real &mass, Real &alp, Real &psi4) {
+  tov_star.GetPrimitivesAtIsoPoint(eos, r, rho, p, mass, alp);
+  Real r_schw = tov_star.FindSchwarzschildR(r, mass);
+  Real fmet = 1.0;
+  if (r > 0.0) {
+    fmet = r_schw/r;
+  }
+  psi4 = fmet*fmet;
+}
+
+inline void SetStarBoostRotation() {
+  star_boost_mag = std::sqrt(SQR(star_boost_x) + SQR(star_boost_y) + SQR(star_boost_z));
+  if (star_boost_mag <= 0.0) {
+    star_rot_00 = 1.0; star_rot_01 = 0.0; star_rot_02 = 0.0;
+    star_rot_10 = 0.0; star_rot_11 = 1.0; star_rot_12 = 0.0;
+    star_rot_20 = 0.0; star_rot_21 = 0.0; star_rot_22 = 1.0;
+    return;
+  }
+
+  Real nx = star_boost_x/star_boost_mag;
+  Real ny = star_boost_y/star_boost_mag;
+  Real nz = star_boost_z/star_boost_mag;
+
+  Real rx = (std::fabs(nx) < 0.9) ? 1.0 : 0.0;
+  Real ry = (std::fabs(nx) < 0.9) ? 0.0 : 1.0;
+  Real rz = 0.0;
+
+  Real dot = nx*rx + ny*ry + nz*rz;
+  Real e2x = rx - dot*nx;
+  Real e2y = ry - dot*ny;
+  Real e2z = rz - dot*nz;
+  Real e2norm = std::sqrt(e2x*e2x + e2y*e2y + e2z*e2z);
+  if (e2norm <= 0.0) {
+    e2x = 0.0;
+    e2y = 0.0;
+    e2z = 1.0;
+    e2norm = 1.0;
+  }
+  e2x /= e2norm;
+  e2y /= e2norm;
+  e2z /= e2norm;
+
+  Real e3x = ny*e2z - nz*e2y;
+  Real e3y = nz*e2x - nx*e2z;
+  Real e3z = nx*e2y - ny*e2x;
+
+  star_rot_00 = nx;  star_rot_01 = ny;  star_rot_02 = nz;
+  star_rot_10 = e2x; star_rot_11 = e2y; star_rot_12 = e2z;
+  star_rot_20 = e3x; star_rot_21 = e3y; star_rot_22 = e3z;
 }
 
 void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
@@ -295,6 +373,7 @@ void FillTOVPrimitivesAndADM(ParameterInput *pin, Mesh *pmy_mesh, TOVEOS &eos,
   Real ye_atmo = pin->GetOrAddReal("mhd", "s0_atmosphere", 0.5);
   int nvars = pmbp->pmhd->nmhd;
   int nscalars = pmbp->pmhd->nscalars;
+  Real lorentz = 1.0/std::sqrt(fmax(1.0e-16, 1.0 - SQR(star_boost_mag)));
 
   par_for("z4c_tov_ks_star", DevExeSpace(), 0, pmbp->nmb_thispack - 1,
           ksg, keg, jsg, jeg, isg, ieg,
@@ -310,19 +389,23 @@ void FillTOVPrimitivesAndADM(ParameterInput *pin, Mesh *pmy_mesh, TOVEOS &eos,
     Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - star_center_x2;
     Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - star_center_x3;
 
-    Real r = sqrt(SQR(x) + SQR(y) + SQR(z));
-    Real rho, p, mass, alp;
+    Real xb, yb, zb;
+    RotateLabToBoostFrame(x, y, z, xb, yb, zb);
+    Real xr = lorentz*xb;
+    Real yr = yb;
+    Real zr = zb;
+    Real r = sqrt(SQR(xr) + SQR(yr) + SQR(zr));
+
+    Real rho, p, mass, alp, psi4_rest;
     if (star_isotropic) {
-      tov_star.GetPrimitivesAtIsoPoint(eos, r, rho, p, mass, alp);
+      SampleIsotropicTOV(eos, tov_star, r, rho, p, mass, alp, psi4_rest);
     } else {
       tov_star.GetPrimitivesAtPoint(eos, r, rho, p, mass, alp);
+      psi4_rest = 1.0;
     }
 
     w0(m,IDN,k,j,i) = fmax(rho, dfloor);
     w0(m,IPR,k,j,i) = fmax(p, pfloor);
-    w0(m,IVX,k,j,i) = star_boost_x;
-    w0(m,IVY,k,j,i) = star_boost_y;
-    w0(m,IVZ,k,j,i) = star_boost_z;
     if constexpr (use_ye) {
       if (nscalars >= 1) {
         Real ye = ye_atmo;
@@ -333,32 +416,46 @@ void FillTOVPrimitivesAndADM(ParameterInput *pin, Mesh *pmy_mesh, TOVEOS &eos,
       }
     }
 
-    adm_state.alpha(m,k,j,i) = alp;
-    adm_state.beta_u(m,0,k,j,i) = 0.0;
-    adm_state.beta_u(m,1,k,j,i) = 0.0;
-    adm_state.beta_u(m,2,k,j,i) = 0.0;
-    adm_state.vK_dd(m,0,0,k,j,i) = 0.0;
-    adm_state.vK_dd(m,0,1,k,j,i) = 0.0;
-    adm_state.vK_dd(m,0,2,k,j,i) = 0.0;
-    adm_state.vK_dd(m,1,1,k,j,i) = 0.0;
-    adm_state.vK_dd(m,1,2,k,j,i) = 0.0;
-    adm_state.vK_dd(m,2,2,k,j,i) = 0.0;
-
     if (star_isotropic) {
-      Real r_schw = tov_star.FindSchwarzschildR(r, mass);
-      Real fmet = 1.0;
-      if (r > 0.0) {
-        fmet = r_schw/r;
-      }
-      Real psi4 = fmet*fmet;
-      adm_state.g_dd(m,0,0,k,j,i) = psi4;
-      adm_state.g_dd(m,0,1,k,j,i) = 0.0;
-      adm_state.g_dd(m,0,2,k,j,i) = 0.0;
-      adm_state.g_dd(m,1,1,k,j,i) = psi4;
-      adm_state.g_dd(m,1,2,k,j,i) = 0.0;
-      adm_state.g_dd(m,2,2,k,j,i) = psi4;
-      adm_state.psi4(m,k,j,i) = psi4;
+      Real a_rest = SQR(alp);
+      Real A = SQR(lorentz)*(psi4_rest - SQR(star_boost_mag)*a_rest);
+      Real Bcov = SQR(lorentz)*star_boost_mag*(a_rest - psi4_rest);
+      Real alpha_lab = std::sqrt(fmax(1.0e-16, a_rest*psi4_rest/fmax(A, 1.0e-16)));
+      Real beta_par = Bcov/fmax(A, 1.0e-16);
+
+      adm_state.alpha(m,k,j,i) = alpha_lab;
+      adm_state.beta_u(m,0,k,j,i) = beta_par*star_rot_00;
+      adm_state.beta_u(m,1,k,j,i) = beta_par*star_rot_01;
+      adm_state.beta_u(m,2,k,j,i) = beta_par*star_rot_02;
+
+      adm_state.g_dd(m,0,0,k,j,i) =
+          psi4_rest + (A - psi4_rest)*SQR(star_rot_00);
+      adm_state.g_dd(m,0,1,k,j,i) =
+          (A - psi4_rest)*star_rot_00*star_rot_01;
+      adm_state.g_dd(m,0,2,k,j,i) =
+          (A - psi4_rest)*star_rot_00*star_rot_02;
+      adm_state.g_dd(m,1,1,k,j,i) =
+          psi4_rest + (A - psi4_rest)*SQR(star_rot_01);
+      adm_state.g_dd(m,1,2,k,j,i) =
+          (A - psi4_rest)*star_rot_01*star_rot_02;
+      adm_state.g_dd(m,2,2,k,j,i) =
+          psi4_rest + (A - psi4_rest)*SQR(star_rot_02);
+      adm_state.psi4(m,k,j,i) = pow(fmax(A*psi4_rest*psi4_rest, 1.0e-16), 1.0/3.0);
+
+      Real u0 = lorentz/fmax(alp, 1.0e-16);
+      Real ui_par = lorentz*star_boost_mag/fmax(alp, 1.0e-16);
+      Real uu_par = ui_par + u0*beta_par;
+      w0(m,IVX,k,j,i) = uu_par*star_rot_00;
+      w0(m,IVY,k,j,i) = uu_par*star_rot_01;
+      w0(m,IVZ,k,j,i) = uu_par*star_rot_02;
     } else {
+      w0(m,IVX,k,j,i) = 0.0;
+      w0(m,IVY,k,j,i) = 0.0;
+      w0(m,IVZ,k,j,i) = 0.0;
+      adm_state.alpha(m,k,j,i) = alp;
+      adm_state.beta_u(m,0,k,j,i) = 0.0;
+      adm_state.beta_u(m,1,k,j,i) = 0.0;
+      adm_state.beta_u(m,2,k,j,i) = 0.0;
       Real fmet = 0.0;
       if (r > 0.0) {
         fmet = (1.0/(1.0 - 2.0*mass/r) - 1.0)/(r*r);
@@ -377,6 +474,123 @@ void FillTOVPrimitivesAndADM(ParameterInput *pin, Mesh *pmy_mesh, TOVEOS &eos,
                                  adm_state.g_dd(m,2,2,k,j,i));
       adm_state.psi4(m,k,j,i) = pow(det, 1.0/3.0);
     }
+    adm_state.vK_dd(m,0,0,k,j,i) = 0.0;
+    adm_state.vK_dd(m,0,1,k,j,i) = 0.0;
+    adm_state.vK_dd(m,0,2,k,j,i) = 0.0;
+    adm_state.vK_dd(m,1,1,k,j,i) = 0.0;
+    adm_state.vK_dd(m,1,2,k,j,i) = 0.0;
+    adm_state.vK_dd(m,2,2,k,j,i) = 0.0;
+  });
+
+  if (!(star_isotropic) || star_boost_mag <= 0.0) {
+    return;
+  }
+
+  par_for("z4c_tov_ks_boosted_K", DevExeSpace(), 0, pmbp->nmb_thispack - 1,
+          ksg, keg, jsg, jeg, isg, ieg,
+          KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+
+    Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - star_center_x1;
+    Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - star_center_x2;
+    Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - star_center_x3;
+
+    Real xb, yb, zb;
+    RotateLabToBoostFrame(x, y, z, xb, yb, zb);
+    Real xr = lorentz*xb;
+    Real yr = yb;
+    Real zr = zb;
+    Real r = sqrt(SQR(xr) + SQR(yr) + SQR(zr));
+
+    Real rho0, p0, mass0, alp0, psi0;
+    SampleIsotropicTOV(eos, tov_star, r, rho0, p0, mass0, alp0, psi0);
+
+    Real dx1 = (indcs.nx1 > 1) ? size.d_view(m).dx1 : 1.0;
+    Real dx2 = (indcs.nx2 > 1) ? size.d_view(m).dx2 : dx1;
+    Real dx3 = (indcs.nx3 > 1) ? size.d_view(m).dx3 : dx1;
+    Real dr = 0.25*fmax(1.0e-6, fmin(dx1, fmin(dx2, dx3)));
+    Real rp = r + dr;
+    Real rm = fmax(0.0, r - dr);
+
+    Real rho_p, p_p, mass_p, alp_p, psi_p;
+    Real rho_m, p_m, mass_m, alp_m, psi_m;
+    SampleIsotropicTOV(eos, tov_star, rp, rho_p, p_p, mass_p, alp_p, psi_p);
+    SampleIsotropicTOV(eos, tov_star, rm, rho_m, p_m, mass_m, alp_m, psi_m);
+
+    Real inv_dr = 1.0/fmax(rp - rm, 1.0e-12);
+    Real da_dr = (SQR(alp_p) - SQR(alp_m))*inv_dr;
+    Real dpsi_dr = (psi_p - psi_m)*inv_dr;
+
+    Real dr_dxb = (r > 0.0) ? (SQR(lorentz)*xb/r) : 0.0;
+    Real dr_dyb = (r > 0.0) ? (yb/r) : 0.0;
+    Real dr_dzb = (r > 0.0) ? (zb/r) : 0.0;
+
+    Real da_dxb = da_dr*dr_dxb;
+    Real da_dyb = da_dr*dr_dyb;
+    Real da_dzb = da_dr*dr_dzb;
+    Real dpsi_dxb = dpsi_dr*dr_dxb;
+    Real dpsi_dyb = dpsi_dr*dr_dyb;
+    Real dpsi_dzb = dpsi_dr*dr_dzb;
+
+    Real a_rest = SQR(alp0);
+    Real A = SQR(lorentz)*(psi0 - SQR(star_boost_mag)*a_rest);
+    Real Bcov = SQR(lorentz)*star_boost_mag*(a_rest - psi0);
+    Real alpha_lab = std::sqrt(fmax(1.0e-16, a_rest*psi0/fmax(A, 1.0e-16)));
+
+    Real dA_dxb = SQR(lorentz)*(dpsi_dxb - SQR(star_boost_mag)*da_dxb);
+    Real dA_dyb = SQR(lorentz)*(dpsi_dyb - SQR(star_boost_mag)*da_dyb);
+    Real dA_dzb = SQR(lorentz)*(dpsi_dzb - SQR(star_boost_mag)*da_dzb);
+    Real dB_dxb = SQR(lorentz)*star_boost_mag*(da_dxb - dpsi_dxb);
+    Real dB_dyb = SQR(lorentz)*star_boost_mag*(da_dyb - dpsi_dyb);
+    Real dB_dzb = SQR(lorentz)*star_boost_mag*(da_dzb - dpsi_dzb);
+
+    Real inv_A = 1.0/fmax(A, 1.0e-16);
+    Real Kbb_xx = (star_boost_mag*dA_dxb + 2.0*dB_dxb - inv_A*dA_dxb*Bcov)/
+                  (2.0*fmax(alpha_lab, 1.0e-16));
+    Real Kbb_yy = (star_boost_mag + Bcov*inv_A)*dpsi_dxb/
+                  (2.0*fmax(alpha_lab, 1.0e-16));
+    Real Kbb_zz = Kbb_yy;
+    Real Kbb_xy = (dB_dyb - inv_A*dA_dyb*Bcov)/(2.0*fmax(alpha_lab, 1.0e-16));
+    Real Kbb_xz = (dB_dzb - inv_A*dA_dzb*Bcov)/(2.0*fmax(alpha_lab, 1.0e-16));
+
+    Real K00 = Kbb_xx;
+    Real K01 = Kbb_xy;
+    Real K02 = Kbb_xz;
+    Real K11 = Kbb_yy;
+    Real K12 = 0.0;
+    Real K22 = Kbb_zz;
+
+    auto rotate_K = [&](int a, int b) {
+      Real R[3][3] = {
+        {star_rot_00, star_rot_01, star_rot_02},
+        {star_rot_10, star_rot_11, star_rot_12},
+        {star_rot_20, star_rot_21, star_rot_22}
+      };
+      Real Kab[3][3] = {
+        {K00, K01, K02},
+        {K01, K11, K12},
+        {K02, K12, K22}
+      };
+      Real sum = 0.0;
+      for (int c = 0; c < 3; ++c) {
+        for (int d = 0; d < 3; ++d) {
+          sum += R[c][a]*R[d][b]*Kab[c][d];
+        }
+      }
+      return sum;
+    };
+
+    adm_state.vK_dd(m,0,0,k,j,i) = rotate_K(0, 0);
+    adm_state.vK_dd(m,0,1,k,j,i) = rotate_K(0, 1);
+    adm_state.vK_dd(m,0,2,k,j,i) = rotate_K(0, 2);
+    adm_state.vK_dd(m,1,1,k,j,i) = rotate_K(1, 1);
+    adm_state.vK_dd(m,1,2,k,j,i) = rotate_K(1, 2);
+    adm_state.vK_dd(m,2,2,k,j,i) = rotate_K(2, 2);
   });
 }
 
@@ -545,6 +759,13 @@ void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart)
     exit(EXIT_FAILURE);
   }
   star_isotropic = pin->GetOrAddBoolean("problem", "isotropic", true);
+  SetStarBoostRotation();
+  if (!star_isotropic && star_boost_mag > 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "z4c_tov_ks currently supports boosted stars only for "
+              << "isotropic TOV coordinates." << std::endl;
+    exit(EXIT_FAILURE);
+  }
   bh_horizon_radius = 1.0 + sqrt(fmax(0.0, 1.0 - SQR(bh_spin)));
   excision_damp_rate = pin->GetOrAddReal("problem", "excision_damp_rate", 50.0);
   excision_project_state = pin->GetOrAddBoolean("problem", "excision_project_state", true);
