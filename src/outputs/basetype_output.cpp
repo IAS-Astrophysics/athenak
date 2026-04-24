@@ -379,6 +379,9 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         variable.compare("rad_mhd_u_bcc") == 0) {
       if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         outvars.emplace_back("ener",4,&(pm->pmb_pack->pmhd->u0));
+        if (pm->pmb_pack->pmhd->peos->eos_data.is_cgl) { //if cgl output aniso variable also
+          outvars.emplace_back("aniso",5,&(pm->pmb_pack->pmhd->u0));
+        }
       }
     }
 
@@ -392,6 +395,9 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       if (pm->pmb_pack->pmhd->peos->eos_data.is_ideal) {
         if (pm->pmb_pack->pdyngr != nullptr) {
           outvars.emplace_back("press",4,&(pm->pmb_pack->pmhd->w0));
+        } else if (pm->pmb_pack->pmhd->peos->eos_data.is_cgl) { //if cgl output both pressures
+          outvars.emplace_back("pprl",4,&(pm->pmb_pack->pmhd->w0));
+          outvars.emplace_back("pprp",5,&(pm->pmb_pack->pmhd->w0));
         } else {
           outvars.emplace_back("eint",4,&(pm->pmb_pack->pmhd->w0));
         }

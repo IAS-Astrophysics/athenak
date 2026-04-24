@@ -34,7 +34,7 @@ namespace hydro {
 //! Many of the functions in the task list are implemented in this file because they are
 //! simple, or they are wrappers that call one or more other functions.
 //!
-//! "before_stagen" tasks are those that must be completed over all MeshBlocks BEFORE each
+//! "before_stagen" tasks are those that must be cmpleted over all MeshBlocks BEFORE each
 //! stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
 //!
 //! "stagen" tasks are those performed DURING each stage
@@ -84,27 +84,16 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
     TaskID psendf = tl["parabolic_stagen"]->AddTask(&Hydro::SendFlux, this, pflux);
     TaskID precvf = tl["parabolic_stagen"]->AddTask(&Hydro::RecvFlux, this, psendf);
     TaskID pupdt = tl["parabolic_stagen"]->AddTask(&Hydro::STSUpdate, this, precvf);
-    TaskID psendu_oa = tl["parabolic_stagen"]->AddTask(&Hydro::SendU_OA_Parabolic,
-                                                       this, pupdt);
-    TaskID precvu_oa = tl["parabolic_stagen"]->AddTask(&Hydro::RecvU_OA_Parabolic,
-                                                       this, psendu_oa);
-    TaskID prestu = tl["parabolic_stagen"]->AddTask(&Hydro::RestrictU, this, precvu_oa);
+    TaskID prestu = tl["parabolic_stagen"]->AddTask(&Hydro::RestrictU, this, pupdt);
     TaskID psendu = tl["parabolic_stagen"]->AddTask(&Hydro::SendU, this, prestu);
     TaskID precvu = tl["parabolic_stagen"]->AddTask(&Hydro::RecvU, this, psendu);
-    TaskID psendu_shr = tl["parabolic_stagen"]->AddTask(&Hydro::SendU_Shr_Parabolic,
-                                                        this, precvu);
-    TaskID precvu_shr = tl["parabolic_stagen"]->AddTask(&Hydro::RecvU_Shr_Parabolic,
-                                                        this, psendu_shr);
-    TaskID pbcs = tl["parabolic_stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this,
-                                                  precvu_shr);
+    TaskID pbcs = tl["parabolic_stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, precvu);
     TaskID pprol = tl["parabolic_stagen"]->AddTask(&Hydro::Prolongate, this, pbcs);
     TaskID pc2p = tl["parabolic_stagen"]->AddTask(&Hydro::ConToPrim, this, pprol);
     (void) tl["parabolic_stagen"]->AddTask(&Hydro::STSRefreshTimeStep, this, pc2p);
 
-    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&Hydro::ClearSendParabolic,
-                                                          this, none);
-    (void) tl["after_parabolic_stagen"]->AddTask(&Hydro::ClearRecvParabolic, this,
-                                                 pcsend);
+    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&Hydro::ClearSend, this, none);
+    (void) tl["after_parabolic_stagen"]->AddTask(&Hydro::ClearRecv, this, pcsend);
   }
 
   return;
@@ -137,7 +126,7 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
   }
   if (tstat != TaskStatus::complete) return tstat;
 
-  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
+  // with shearing box boundaries calculate x2-distance x1-boundarues have sheared and
   // with MPI post receives for U.
   // only execute if (3D OR 2d_r_phi)
   if (psbox_u != nullptr) {
@@ -155,7 +144,7 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::InitRecvParabolic
-//! \brief Parabolic-loop receive setup with sweep-aware shearing-box/orbital timing.
+//! \brief Wrapper task list function to post receives for one STS parabolic stage.
 
 TaskStatus Hydro::InitRecvParabolic(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nhydro+nscalars);
@@ -164,26 +153,6 @@ TaskStatus Hydro::InitRecvParabolic(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {
     tstat = pbval_u->InitFluxRecv(nhydro+nscalars);
   }
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->InitRecv();
-    }
-  }
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      Real shear_time = pmy_pack->pmesh->time;
-      if (pdrive->sts.sweep == Driver::STSSweep::post) {
-        shear_time += pmy_pack->pmesh->dt;
-      }
-      tstat = psbox_u->InitRecv(shear_time);
-    }
-  }
-
   return tstat;
 }
 
@@ -222,14 +191,6 @@ TaskStatus Hydro::CopyCons(Driver *pdrive, int stage) {
 //! of conserved variables
 
 TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
-  // The explicit Hydro path owns the face-flux scratch. Clear it before the
-  // base solver and any explicit diffusion operators contribute, so partially
-  // populated solvers (for example the kinematic advect solver) cannot leave
-  // stale components in slots such as energy flux.
-  Kokkos::deep_copy(DevExeSpace(), uflx.x1f, 0.0);
-  Kokkos::deep_copy(DevExeSpace(), uflx.x2f, 0.0);
-  Kokkos::deep_copy(DevExeSpace(), uflx.x3f, 0.0);
-
   // select which calculate_flux function to call based on rsolver_method
   if (rsolver_method == Hydro_RSolver::advect) {
     CalculateFluxes<Hydro_RSolver::advect>(pdrive, stage);
@@ -357,36 +318,6 @@ TaskStatus Hydro::RecvU_OA(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::SendU_OA_Parabolic
-//! \brief Sweep-final orbital-advection communication in the Hydro STS loop.
-
-TaskStatus Hydro::SendU_OA_Parabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = TaskStatus::complete;
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->PackAndSendCC(u0);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::RecvU_OA_Parabolic
-//! \brief Sweep-final orbital remap in the Hydro STS loop, using dt_sweep.
-
-TaskStatus Hydro::RecvU_OA_Parabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = TaskStatus::complete;
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->RecvAndUnpackCC(u0, recon_method, pdrive->sts.dt_sweep);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::RestrictU
 //! \brief Wrapper task list function to restrict conserved vars
 
@@ -448,40 +379,8 @@ TaskStatus Hydro::RecvU_Shr(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::SendU_Shr_Parabolic
-//! \brief Shearing-box x1-boundary exchange for each Hydro STS stage.
-
-TaskStatus Hydro::SendU_Shr_Parabolic(Driver *pdrive, int stage) {
-  (void) pdrive;
-  (void) stage;
-  TaskStatus tstat = TaskStatus::complete;
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->PackAndSendCC(u0, recon_method);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::RecvU_Shr_Parabolic
-//! \brief Shearing-box x1-boundary unpacking for each Hydro STS stage.
-
-TaskStatus Hydro::RecvU_Shr_Parabolic(Driver *pdrive, int stage) {
-  (void) pdrive;
-  (void) stage;
-  TaskStatus tstat = TaskStatus::complete;
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->RecvAndUnpackCC(u0);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call functions that set physical and user BCs,
+//! \brief Wrapper task list function to call funtions that set physical and user BCs,
 
 TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
@@ -616,68 +515,6 @@ TaskStatus Hydro::ClearRecv(Driver *pdrive, int stage) {
   if (psbox_u != nullptr) {
     if (((stage >= 0) || (stage == -4)) &&
         (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi)) {
-      tstat = psbox_u->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::ClearSendParabolic
-//! \brief Sweep-aware send cleanup for the Hydro STS loop.
-
-TaskStatus Hydro::ClearSendParabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_u->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_u->ClearFluxSend();
-    if (tstat != TaskStatus::complete) return tstat;
-  }
-
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList Hydro::ClearRecvParabolic
-//! \brief Sweep-aware receive cleanup for the Hydro STS loop.
-
-TaskStatus Hydro::ClearRecvParabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_u->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_u->ClearFluxRecv();
-    if (tstat != TaskStatus::complete) return tstat;
-  }
-
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
       tstat = psbox_u->ClearRecv();
       if (tstat != TaskStatus::complete) return tstat;
     }

@@ -275,7 +275,10 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   int &nscalars_ = pm->pmb_pack->pmhd->nscalars;
 
   // set number of and names of history variables for mhd
-  if (eos_data.is_ideal) {
+  if (eos_data.is_cgl) {
+    pdata->nhist = 12;
+    //std::cout << "writing out history data for cgl" << std::endl;
+  } else if (eos_data.is_ideal && !(eos_data.is_cgl)) {
     pdata->nhist = 11;
   } else {
     pdata->nhist = 10;
@@ -289,6 +292,9 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[IM3] = "3-mom";
   if (eos_data.is_ideal) {
     pdata->label[IEN] = "tot-E";
+  }
+  if (eos_data.is_cgl) {
+    pdata->label[IMU] = "aam-D"; //average absolute mean pressure anisotropy
   }
   pdata->label[nmhd_  ] = "1-KE";
   pdata->label[nmhd_+1] = "2-KE";
@@ -340,6 +346,9 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     hvars.the_array[IM3] = vol*u0_(m,IM3,k,j,i);
     if (eos_data.is_ideal) {
       hvars.the_array[IEN] = vol*u0_(m,IEN,k,j,i);
+    }
+    if (eos_data.is_cgl) {
+      hvars.the_array[IMU] = vol*u0_(m,IMU,k,j,i); //change to aam pressure anisotropy later
     }
 
     // MHD KE

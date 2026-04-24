@@ -8,7 +8,7 @@
 //  Sets up different initial conditions selected by flag "iprob"
 //    - iprob=1 : tanh profile with a single mode perturbation
 //    - iprob=2 : double tanh profile with a single mode perturbation
-//    - iprob=3 : sinusoidal velocity with random perturbations
+//    - iprob=3 : sinusiodal velocity with random perturbations
 //    - iprob=4 : Lecoanet test problem ICs
 
 #include <iostream>
@@ -48,7 +48,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real y1    = pin->GetOrAddReal("problem","y1",1.0);
   Real p_in  = pin->GetOrAddReal("problem","press",1.0);
   Real drho_rho0 = pin->GetOrAddReal("problem", "drho_rho0", 0.0);
-
+  std::string eq_state = pin->GetString("mhd","eos");
+  
   //user_hist_func = KHHistory;
 
   // capture variables for kernel
@@ -108,8 +109,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     w0_(m,IEN,k,j,i) = 20.0/gm1;
     w0_(m,IVZ,k,j,i) = 0.0;
+    
+    //check if cgl
+    if (eq_state.compare("cgl") == 0) {
+      w0_(m,IPP,k,j,i) = 1.0;
+    }
 
-    // Lorentz factor (needed to initialize 4-velocity in SR)
+    // Lorentz factor (needed to initializve 4-velocity in SR)
     Real u00 = 1.0;
 
     Real dens,pres,vx,vy,vz,scal;
@@ -148,7 +154,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         scal = y0 + y1*tanh((x2v-0.5)/a_char);
       }
     } else if (iprob == 3) {
-      // sinusoidal velocity with random perts (geometry of turbulence test)
+      // sinusiodal velocity with random perts (geometry of turbulence test)
       rval = amp*2.0*(rand_gen.frand() - 0.5);
       dens = 1.0;
       pres = 1.0;

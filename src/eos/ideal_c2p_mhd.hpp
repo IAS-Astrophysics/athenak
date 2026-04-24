@@ -84,6 +84,216 @@ void SingleP2C_IdealMHD(const MHDPrim1D &w, HydCons1D &u) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \!fn void SingleC2P_CGLMHD()
+//! \brief Converts conserved into primitive variables.  Operates over range of cells
+//! given in argument list.  Note input CONSERVED state contains cell-centered magnetic
+//! fields, but PRIMITIVE state returned through arguments does not.
+
+KOKKOS_INLINE_FUNCTION
+void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
+                        HydPrim1D &w,
+                        bool &dfloor_used, bool &efloor_used, bool &tfloor_used, bool &bfloor_used) {
+  const Real &dfloor_ = eos.dfloor;
+  Real efloor = 1.5*eos.pfloor;
+  Real pfloor = eos.pfloor;
+  Real tfloor = eos.tfloor;
+  Real sfloor = eos.sfloor;
+  Real bfloor = eos.bfloor;
+
+  // apply density floor, without changing momentum or energy
+  if (u.d < dfloor_) {
+    u.d = dfloor_;
+    dfloor_used = true;
+  }
+  w.d = u.d;
+
+  // compute velocities
+  Real di = 1.0/u.d;
+  w.vx = di*u.mx;
+  w.vy = di*u.my;
+  w.vz = di*u.mz;
+
+  // set internal energy, apply floor, correcting total energy
+  //Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
+  //Real e_m = 0.5*(SQR(u.bx) + SQR(u.by) + SQR(u.bz));
+  //w.e = (u.e - e_k - e_m);
+  //if (w.e < efloor) {
+  //  w.e = efloor;
+  // u.e = efloor + e_k + e_m;
+  //  efloor_used = true;
+  //}
+  // apply temperature floor
+  //if (gm1*w.e*di < tfloor) {
+  //  w.e = w.d*tfloor/gm1;
+  //  u.e = w.e + e_k + e_m;
+  //  tfloor_used =true;
+  //}
+  // apply entropy floor
+  //Real spe_over_eps = gm1/pow(w.d, gm1);
+  //Real spe = spe_over_eps*w.e*di;
+  //if (spe <= sfloor) {
+  //  w.e = w.d*sfloor/spe_over_eps;
+  //  efloor_used = true;
+  //}
+  
+  // set pressures, apply floors, correcting total energy
+  Real bsqr = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+  Real bmag = sqrt(bsqr);
+  Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
+  Real e_m = 0.5*bsqr;
+  Real eint = (u.e - e_k - e_m);
+  Real bcube_dsq_exp = bmag*bsqr*SQR(di) * exp(u.mu*di);
+  
+  w.e = (u.e - e_k - e_m) / (0.5 + bcube_dsq_exp);
+  w.pp = w.e * bcube_dsq_exp;
+  
+  if (bmag>bfloor) {
+    // Standard CGL EOS
+    w.e = (u.e - e_k - e_m) / (0.5 + bcube_dsq_exp);
+    w.pp = w.e * bcube_dsq_exp;
+  } else {
+    // If field goes to zero, CGL is invalid. Revert to (adiabatic) EOS with
+    // pprp=pprl=(2/3*pprp+1/3*pprl).
+    w.e = TWO_3RDS*(u.e - e_k - e_m);
+    w.pp = w.e;
+    bfloor_used = true;
+  }
+      
+  //next use pfloor for pressures
+  if (w.e < pfloor && w.pp < pfloor) {
+    w.e = pfloor;
+    w.pp = pfloor;
+    u.e = 1.5*pfloor+ e_k + e_m;
+    efloor_used = true;
+  }
+  if (w.e < pfloor) {
+    w.e = pfloor;
+    u.e = 0.5*pfloor + w.pp + e_k + e_m;
+    efloor_used = true;
+  }
+  if (w.pp < pfloor) {
+    w.pp = pfloor;
+    u.e = w.e + pfloor + e_k + e_m;
+    efloor_used = true;
+  }
+  
+  //check if bfloor then reset mu assuming pprl=pprp
+  if (bfloor_used) {
+    u.mu =  w.d*log(SQR(w.d)/(bfloor*SQR(bfloor)));
+  }
+  
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SingleP2C_CGLMHD()
+//! \brief Converts single state of primitive variables into conserved variables for
+//! non-relativistic CGL-MHD with an ideal gas EOS.  Note input PRIMITIVE state contains
+//! cell-centered magnetic fields, but CONSERVED state returned via arguments does not.
+
+KOKKOS_INLINE_FUNCTION
+void SingleP2C_CGLMHD(const MHDPrim1D &w, const Real &bfloor, HydCons1D &u) {
+  Real bsqr = SQR(w.bx) + SQR(w.by) + SQR(w.bz);
+  Real bmag = sqrt(bsqr);
+  
+  u.d  = w.d;
+  u.mx = w.d*w.vx;
+  u.my = w.d*w.vy;
+  u.mz = w.d*w.vz;
+  //u.e  = w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) +
+  //                      (SQR(w.bx) + SQR(w.by) + SQR(w.bz)) );
+  //u.mu = w.pp;
+  
+  u.e  = w.pp + 0.5*w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
+  u.mu = w.d * log(w.pp / w.e * SQR(w.d)/(bmag*SQR(bmag)) ) ;
+  
+  //bfloor to reset u.mu assuming pprp=pprl
+  if (bmag>bfloor) {
+    // Standard CGL EOS
+    u.e  = w.pp + 0.5*w.e + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
+    u.mu = w.d * log(w.pp / w.e * SQR(w.d)/(bmag*SQR(bmag)) ) ;
+  } else {
+    // If field goes to zero, CGL is invalid. Revert to (adiabatic) EOS with
+    // pprp=pprl=(2/3*pprp+1/3*pprl). mu has no dynamical effect (in RS) but
+    // is updated to pprp/Bmin
+    u.e  = 0.5*w.e + w.pp + 0.5*(w.d*(SQR(w.vx) + SQR(w.vy) + SQR(w.vz)) + bsqr );
+    u.mu = w.d * log(SQR(w.d)/(bfloor*SQR(bfloor)));
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SingleColl_CGLMHD()
+//! \brief Calculates the decay of pressure anisotropy due to scattering over one time step
+
+KOKKOS_INLINE_FUNCTION
+void SingleColl_CGLMHD(MHDPrim1D &w, const Real &nu_coll, const Real &lim_coll, 
+                       const Real &dtc, const bool &mlim, const bool &flim, 
+                       const bool &backup) {
+  
+  Real paniso = w.pp-w.e;
+  Real piso = ONE_3RD*w.e + TWO_3RDS*w.pp;
+  
+  // Apply background collisions
+  Real expdtnu = exp(-nu_coll*dtc);
+  paniso = paniso*expdtnu;
+  w.pp = ONE_3RD*(paniso + 3.0*piso);
+  w.e = w.pp - paniso;  
+  
+  // Apply limiters
+  Real nudt = lim_coll*dtc;
+  Real nudt_b = 10000000000.*dtc;
+  Real bsqr = w.bx*w.bx+w.by*w.by+w.bz*w.bz;
+  Real wpptmp;
+  
+  // Firehose block
+  if (flim && backup) { //if using backup
+
+    if ((paniso <= -0.7*bsqr) && (paniso > -bsqr)) { //in between limiters
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e - 0.7*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e + 2.*0.7*bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    } else if ((paniso <= -bsqr)) {  //beyond backup limiters
+      wpptmp = (3.*w.pp + nudt_b*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt_b);
+      w.e = (3.*w.e + nudt_b*(2.*w.pp + w.e + 2.*bsqr ))/(3.+3.*nudt_b);
+      w.pp = wpptmp;
+    }
+
+  } else if (flim && (!backup)) { //if not using backup, just standard flim
+
+    if ((paniso <= -0.7*bsqr)) {  
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e - 0.7*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e + 2.*0.7*bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    }
+  }
+
+  // Mirror block
+  if (mlim && backup) {
+
+    if ((paniso >= 0.5*bsqr) && (paniso < bsqr)) { //in between limiters
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e + 0.5*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    } else if ((paniso >= 0.5*bsqr)) {  //beyond backup limiters
+      wpptmp = (3.*w.pp + nudt_b*(2.*w.pp + w.e + bsqr ))/(3.+3.*nudt_b);
+      w.e = (3.*w.e + nudt_b*(2.*w.pp + w.e - 2.*bsqr ))/(3.+3.*nudt_b);
+      w.pp = wpptmp;
+    }
+
+  } else if (mlim && (!backup)) {  //if not using backup, just standard mlim
+
+    if ((paniso >= 0.5*bsqr)) {
+      wpptmp = (3.*w.pp + nudt*(2.*w.pp + w.e + 0.5*bsqr ))/(3.+3.*nudt);
+      w.e = (3.*w.e + nudt*(2.*w.pp + w.e - bsqr ))/(3.+3.*nudt);
+      w.pp = wpptmp;
+    }
+  }
+  
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn Real Equation49()
 //! \brief Inline function to compute function fa(mu) defined in eq. 49 of Kastaun et al.
 //! The root fa(mu)==0 of this function corresponds to the upper bracket for

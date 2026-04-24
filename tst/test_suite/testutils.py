@@ -60,62 +60,6 @@ def run_command(command: List[str], text: bool = False) -> bool:
     return process.returncode == 0
 
 
-def capture_command_output(command: List[str]) -> str:
-    """
-    Execute a shell command, require success, and return combined stdout/stderr text.
-
-    Args:
-        command (list): The command to execute.
-
-    Returns:
-        str: Combined stdout and stderr output.
-
-    Raises:
-        RuntimeError: If the command exits with a non-zero status.
-    """
-
-    logging.info(f"Executing command with captured output: {' '.join(command)}")
-    process = Popen(command, stdout=PIPE, stderr=PIPE, text=True)
-    output, errors = process.communicate()
-    combined = output + errors
-    with open(LOG_FILE_PATH, "a") as log_file:
-        log_file.write(combined)
-    if process.returncode != 0:
-        logging.error(f"Command failed with return code {process.returncode}")
-        raise RuntimeError(
-            f"Expected command to succeed, but it failed: {' '.join(command)}"
-        )
-    return combined
-
-
-def capture_command_failure(command: List[str]) -> str:
-    """
-    Execute a shell command, require failure, and return combined stdout/stderr text.
-
-    Args:
-        command (list): The command to execute.
-
-    Returns:
-        str: Combined stdout and stderr output.
-
-    Raises:
-        RuntimeError: If the command exits successfully.
-    """
-
-    logging.info(f"Executing command expecting failure: {' '.join(command)}")
-    process = Popen(command, stdout=PIPE, stderr=PIPE, text=True)
-    output, errors = process.communicate()
-    combined = output + errors
-    with open(LOG_FILE_PATH, "a") as log_file:
-        log_file.write(combined)
-    if process.returncode == 0:
-        logging.error("Command unexpectedly succeeded")
-        raise RuntimeError(
-            f"Expected command to fail, but it succeeded: {' '.join(command)}"
-        )
-    return combined
-
-
 def cmake(flags: List[str] = [], **kwargs) -> bool:
     """
     Runs the CMake command to configure the build system.
@@ -191,38 +135,6 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
     return True
 
 
-def run_capture(inputfile: str, flags=[]) -> str:
-    """
-    Execute AthenaK successfully and return combined stdout/stderr text.
-
-    Args:
-        inputfile (str): The input file to execute.
-        flags (list): Additional AthenaK flags.
-
-    Returns:
-        str: Combined stdout/stderr text.
-    """
-
-    command = ["./athena", "-i", inputfile] + flags
-    return capture_command_output(command)
-
-
-def run_expect_failure(inputfile: str, flags=[]) -> str:
-    """
-    Execute AthenaK expecting the run to fail and return combined stdout/stderr text.
-
-    Args:
-        inputfile (str): The input file to execute.
-        flags (list): Additional AthenaK flags.
-
-    Returns:
-        str: Combined stdout/stderr text from the failed run.
-    """
-
-    command = ["./athena", "-i", inputfile] + flags
-    return capture_command_failure(command)
-
-
 def mpi_run(
     inputfile: str, flags=[], threads: int = min(16, os.cpu_count()), **kwargs
 ) -> bool:
@@ -252,44 +164,6 @@ def mpi_run(
             f"and {threads}-threads"
         )
     return True
-
-
-def mpi_run_capture(
-    inputfile: str, flags=[], threads: int = min(16, os.cpu_count())
-) -> str:
-    """
-    Execute AthenaK with MPI successfully and return combined stdout/stderr text.
-
-    Args:
-        inputfile (str): The input file to execute.
-        flags (list): Additional AthenaK flags.
-        threads (int): Number of MPI ranks.
-
-    Returns:
-        str: Combined stdout/stderr text.
-    """
-
-    command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
-    return capture_command_output(command)
-
-
-def mpi_run_expect_failure(
-    inputfile: str, flags=[], threads: int = min(16, os.cpu_count())
-) -> str:
-    """
-    Execute AthenaK with MPI expecting failure and return combined stdout/stderr text.
-
-    Args:
-        inputfile (str): The input file to execute.
-        flags (list): Additional AthenaK flags.
-        threads (int): Number of MPI ranks.
-
-    Returns:
-        str: Combined stdout/stderr text from the failed run.
-    """
-
-    command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
-    return capture_command_failure(command)
 
 
 def cleanup(text=False) -> None:

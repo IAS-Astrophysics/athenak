@@ -23,6 +23,7 @@ EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInp
   eos_data.pfloor = pin->GetOrAddReal(bk,"pfloor",(FLT_MIN));
   eos_data.tfloor = pin->GetOrAddReal(bk,"tfloor",(FLT_MIN));
   eos_data.sfloor = pin->GetOrAddReal(bk,"sfloor",(FLT_MIN));
+  eos_data.bfloor = pin->GetOrAddReal(bk,"bfloor",sqrt(1024*FLT_MIN)); //using what Jono used, FLT_MIN might be too small
 }
 
 //----------------------------------------------------------------------------------------
@@ -68,4 +69,14 @@ void EquationOfState::PrimToCons(const DvceArray5D<Real> &prim,
   Kokkos::abort("NoOp MHD PrimToCons called.\n"
                 "  If using hydro, call hydro version instead.\n"
                 "  If using DynGRMHD, use the functions exposed in DynGRMHD instead.\n");
+}
+
+//-----------------------------------------------------------------------------------------
+//! \fn void PrimToCon()
+//! \brief No-Op version of collisional relaxation function for CGL.
+//! Required because only CGL derived class overrides it.
+
+void EquationOfState::Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                                 DvceArray5D<Real> &cons, const int il, const int iu,
+                                 const int jl, const int ju, const int kl, const int ku) {
 }

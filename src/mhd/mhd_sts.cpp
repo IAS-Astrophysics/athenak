@@ -29,6 +29,11 @@ bool UpdateSTSMHDVariable(const int n, const bool update_momentum,
   return false;
 }
 
+KOKKOS_INLINE_FUNCTION
+int CGLPressureVariable(const int n) {
+  return (n == 0) ? IPR : IPP;
+}
+
 } // namespace
 
 namespace mhd {
@@ -49,13 +54,13 @@ void MHD::AddSelectedDiffusionFluxes(DiffusionSelection selection) {
                                                        : has_sts_resistivity;
 
   if (add_viscosity && pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
+    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
   if (add_resistivity && presist != nullptr && peos->eos_data.is_ideal) {
-    presist->OhmicEnergyFlux(b0, uflx);
+    presist->AddResistiveFluxes(b0, uflx);
   }
   if (add_conduction && pcond != nullptr) {
-    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
+    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
   }
 }
 
@@ -69,7 +74,7 @@ void MHD::AddSelectedDiffusionEMF(DiffusionSelection selection) {
       (selection == DiffusionSelection::explicit_only) ? has_explicit_resistivity
                                                        : has_sts_resistivity;
   if (add_resistivity && presist != nullptr && presist->eta_ohm > 0.0) {
-    presist->OhmicEField(b0, efld);
+    presist->AddResistiveEMFs(b0, efld);
   }
 }
 
@@ -136,6 +141,10 @@ TaskStatus MHD::STSEField(Driver *pdrive, int stage) {
 TaskStatus MHD::STSUpdateU(Driver *pdrive, int stage) {
   if (!has_any_sts_cell_update || !(pdrive->sts.enabled)) {
     return TaskStatus::complete;
+  }
+
+  if (peos->eos_data.is_cgl && has_sts_conduction) {
+    return STSUpdateCGLHeatFlux(pdrive, stage);
   }
 
   if (stage == 1) {
@@ -218,6 +227,95 @@ TaskStatus MHD::STSUpdateU(Driver *pdrive, int stage) {
     });
   });
 
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::STSUpdateCGLHeatFlux()
+//! \brief Apply one CGL heat-flux RKL2 stage to parallel/perpendicular pressures.
+
+TaskStatus MHD::STSUpdateCGLHeatFlux(Driver *pdrive, int stage) {
+  if (!has_sts_conduction || !(pdrive->sts.enabled)) {
+    return TaskStatus::complete;
+  }
+
+  Kokkos::deep_copy(DevExeSpace(), cgl_p_sts2, cgl_p_sts1);
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  bool &multi_d = pmy_pack->pmesh->multi_d;
+  bool &three_d = pmy_pack->pmesh->three_d;
+
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  Real dt_sweep = pdrive->sts.dt_sweep;
+  Real pfloor = peos->eos_data.pfloor;
+  auto coeffs = pdrive->sts.coeffs;
+  auto w0_ = w0;
+  auto p_sts0_ = cgl_p_sts0;
+  auto p_sts1_ = cgl_p_sts1;
+  auto p_sts2_ = cgl_p_sts2;
+  auto p_sts_rhs_ = cgl_p_sts_rhs;
+  auto flx1 = uflx.x1f;
+  auto flx2 = uflx.x2f;
+  auto flx3 = uflx.x3f;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+
+  int scr_level = 0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1);
+
+  par_for_outer("mhd_cgl_sts_update_p", DevExeSpace(), scr_size, scr_level, 0, nmb1,
+                0, 1, ks, ke, js, je,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int n, const int k, const int j) {
+    ScrArray1D<Real> divf(member.team_scratch(scr_level), ncells1);
+    const int pressure_index = CGLPressureVariable(n);
+
+    par_for_inner(member, is, ie, [&](const int i) {
+      divf(i) = (flx1(m,pressure_index,k,j,i+1) -
+                 flx1(m,pressure_index,k,j,i))/mbsize.d_view(m).dx1;
+    });
+    member.team_barrier();
+
+    if (multi_d) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        divf(i) += (flx2(m,pressure_index,k,j+1,i) -
+                    flx2(m,pressure_index,k,j,i))/mbsize.d_view(m).dx2;
+      });
+      member.team_barrier();
+    }
+
+    if (three_d) {
+      par_for_inner(member, is, ie, [&](const int i) {
+        divf(i) += (flx3(m,pressure_index,k+1,j,i) -
+                    flx3(m,pressure_index,k,j,i))/mbsize.d_view(m).dx3;
+      });
+      member.team_barrier();
+    }
+
+    par_for_inner(member, is, ie, [&](const int i) {
+      const Real pressure_current = w0_(m,pressure_index,k,j,i);
+      if (stage == 1) {
+        p_sts0_(m,n,k,j,i) = pressure_current;
+      }
+      p_sts1_(m,n,k,j,i) = pressure_current;
+
+      const Real delta_p = -dt_sweep*divf(i);
+      Real pressure_next = coeffs.muj*pressure_current
+                         + coeffs.nuj*p_sts2_(m,n,k,j,i)
+                         + (1.0 - coeffs.muj - coeffs.nuj)*p_sts0_(m,n,k,j,i)
+                         + coeffs.gammaj_tilde*p_sts_rhs_(m,n,k,j,i)
+                         + coeffs.muj_tilde*delta_p;
+      pressure_next = fmax(pressure_next, pfloor);
+      w0_(m,pressure_index,k,j,i) = pressure_next;
+      if (stage == 1) {
+        p_sts_rhs_(m,n,k,j,i) = delta_p;
+      }
+    });
+  });
+
+  peos->PrimToCons(w0, bcc0, u0, is, ie, js, je, ks, ke);
   return TaskStatus::complete;
 }
 

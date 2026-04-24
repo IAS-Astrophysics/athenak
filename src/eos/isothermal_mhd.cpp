@@ -18,11 +18,12 @@
 IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin) :
     EquationOfState("mhd", pp, pin) {
   eos_data.is_ideal = false;
+  eos_data.is_cgl = false;
+  eos_data.coll = false;
   eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
   eos_data.gamma = 0.0;
-  eos_data.use_e = false;
-  eos_data.use_t = false;
   eos_data.sigma_max = pin->GetOrAddReal("mhd","sigma_max",(FLT_MAX));  // sigma ceiling
+  eos_data.passive = false;
 }
 
 //----------------------------------------------------------------------------------------

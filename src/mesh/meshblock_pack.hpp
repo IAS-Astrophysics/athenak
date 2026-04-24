@@ -15,8 +15,8 @@
 
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
-#include "driver/driver.hpp"
 #include "diffusion/parabolic_process.hpp"
+#include "driver/driver.hpp"
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
@@ -87,7 +87,7 @@ class MeshBlockPack {
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocks(ParameterInput *pin);
   void AddCoordinates(ParameterInput *pin);
-  void RegisterParabolicProcess(const parabolic::ParabolicProcessDescriptor &process) {
+  void RegisterParabolicProcess(parabolic::ParabolicProcessDescriptor process) {
     parabolic_processes.push_back(process);
   }
 

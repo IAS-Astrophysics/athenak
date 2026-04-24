@@ -10,12 +10,15 @@
 #include <iomanip>    // std::setprecision()
 #include <limits>
 #include <algorithm>
+#include <cstdlib>
 #include <string> // string
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "eos/eos.hpp"
+#include "diffusion/conduction.hpp"
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
@@ -309,9 +312,7 @@ void Driver::ResetSTSController() {
 
 //----------------------------------------------------------------------------------------
 //! \fn Driver::ValidateSTSConfiguration()
-//! \brief Validates the global STS configuration against the registered parabolic
-//! processes. Hydro and single-fluid MHD STS now support shearing-box/orbital-advection
-//! runs; all ion-neutral STS remains fenced.
+//! \brief Validates the global STS configuration against registered parabolic processes.
 
 void Driver::ValidateSTSConfiguration(Mesh *pm) {
   int nsts_processes = 0;
@@ -360,6 +361,11 @@ void Driver::ValidateSTSConfiguration(Mesh *pm) {
       DriverFatalError(__FILE__, __LINE__,
                        "Hydro STS was requested, but no Hydro module is active.");
     }
+    if (phydro->porb_u != nullptr || phydro->psbox_u != nullptr) {
+      DriverFatalError(__FILE__, __LINE__,
+                       "Hydro STS is not yet supported with shearing-box or orbital "
+                       "advection in this CGL port.");
+    }
   }
 
   if (has_mhd_sts) {
@@ -367,6 +373,26 @@ void Driver::ValidateSTSConfiguration(Mesh *pm) {
     if (pmhd == nullptr) {
       DriverFatalError(__FILE__, __LINE__,
                        "MHD STS was requested, but no MHD module is active.");
+    }
+    if (pmhd->peos->eos_data.is_cgl) {
+      if (pmhd->has_sts_viscosity || pmhd->has_sts_resistivity) {
+        DriverFatalError(__FILE__, __LINE__,
+                         "CGL STS currently supports heat flux only. Disable "
+                         "viscosity_integrator = sts and ohmic_resistivity_integrator = sts "
+                         "for <mhd>/eos = cgl.");
+      }
+      if (pmhd->has_sts_conduction && pmhd->pcond != nullptr &&
+          pmhd->pcond->iso_cond_type != "constant") {
+        DriverFatalError(__FILE__, __LINE__,
+                         "CGL heat-flux STS currently supports only "
+                         "<mhd>/isotropic_conduction = constant.");
+      }
+    }
+    if (pmhd->porb_u != nullptr || pmhd->porb_b != nullptr ||
+        pmhd->psbox_u != nullptr || pmhd->psbox_b != nullptr) {
+      DriverFatalError(__FILE__, __LINE__,
+                       "MHD STS is not yet supported with shearing-box or orbital "
+                       "advection in this CGL port.");
     }
   }
 }
@@ -502,7 +528,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   if (pionn != nullptr) {
     if (nimp_stages == 0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "IonNeutral MHD can only be run with ImEx integrators."
+          << std::endl << "IonNetral MHD can only be run with ImEx integrators."
           << std::endl;
       std::exit(EXIT_FAILURE);
     }

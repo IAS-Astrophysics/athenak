@@ -64,7 +64,7 @@ class Z4c {
     I_CON_MX, I_CON_MY, I_CON_MZ,
     ncon,
   };
-  // Names of constraint variables
+  // Names of costraint variables
   static char const * const Constraint_names[ncon];
   // Indices of matter fields
   /*enum {

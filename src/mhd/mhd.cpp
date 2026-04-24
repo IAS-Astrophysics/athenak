@@ -41,6 +41,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     u_sts1("cons_sts1",1,1,1,1,1),
     u_sts2("cons_sts2",1,1,1,1,1),
     u_sts_rhs("cons_sts_rhs",1,1,1,1,1),
+    cgl_p_sts0("cgl_p_sts0",1,1,1,1,1),
+    cgl_p_sts1("cgl_p_sts1",1,1,1,1,1),
+    cgl_p_sts2("cgl_p_sts2",1,1,1,1,1),
+    cgl_p_sts_rhs("cgl_p_sts_rhs",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
     b_sts0("B_sts0",1,1,1,1),
     b_sts1("B_sts1",1,1,1,1),
@@ -92,7 +96,20 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       peos = new IsothermalMHD(ppack, pin);
       nmhd = 4;
     }
-
+  
+  // chew-goldberger-low EOS
+  } else if (eqn_of_state.compare("cgl") == 0) {
+    if (pmy_pack->pcoord->is_special_relativistic ||
+        pmy_pack->pcoord->is_general_relativistic) {
+      std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
+                <<"<mhd> eos = cgl cannot be used with SR/GR"<< std::endl;
+      std::exit(EXIT_FAILURE);
+    } else {
+      std::cout <<"Using CGL equation of state"<< std::endl;
+      peos = new CGLMHD(ppack, pin);
+      nmhd = 6;
+    }  
+    
   // EOS string not recognized
   } else {
     std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
@@ -104,13 +121,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","viscosity")) {
+  if (pin->DoesParameterExist("mhd","isotropic_viscosity")) {
     pvisc = new Viscosity("mhd", ppack, pin);
-    has_sts_viscosity =
-        (pvisc->mode == parabolic::ParabolicIntegratorMode::sts);
+    has_sts_viscosity = (pvisc->mode == parabolic::ParabolicIntegratorMode::sts);
     has_explicit_viscosity =
         (pvisc->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
-    ppack->RegisterParabolicProcess({"mhd/viscosity",
+    ppack->RegisterParabolicProcess({"mhd/isotropic_viscosity",
                                      parabolic::ParabolicProcessOwner::mhd,
                                      pvisc->mode,
                                      parabolic::ParabolicUpdateShape::cell_centered,
@@ -122,8 +138,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Resistivity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
     presist = new Resistivity(ppack, pin);
-    has_sts_resistivity =
-        (presist->mode == parabolic::ParabolicIntegratorMode::sts);
+    has_sts_resistivity = (presist->mode == parabolic::ParabolicIntegratorMode::sts);
     has_explicit_resistivity =
         (presist->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
     ppack->RegisterParabolicProcess({"mhd/ohmic_resistivity",
@@ -136,18 +151,22 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","conductivity") ||
-      pin->DoesParameterExist("mhd","tdep_conductivity")) {
-    pcond = new Conduction("mhd", ppack, pin);
-    has_sts_conduction =
-        (pcond->mode == parabolic::ParabolicIntegratorMode::sts);
-    has_explicit_conduction =
-        (pcond->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
-    ppack->RegisterParabolicProcess({"mhd/conductivity",
-                                     parabolic::ParabolicProcessOwner::mhd,
-                                     pcond->mode,
-                                     parabolic::ParabolicUpdateShape::cell_centered,
-                                     &(pcond->dtnew)});
+  if (pin->DoesParameterExist("mhd","isotropic_conduction")) {
+    if (peos->eos_data.is_ideal || peos->eos_data.is_cgl) {
+      pcond = new Conduction("mhd", ppack, pin);
+      has_sts_conduction = (pcond->mode == parabolic::ParabolicIntegratorMode::sts);
+      has_explicit_conduction =
+          (pcond->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
+      ppack->RegisterParabolicProcess({"mhd/isotropic_conduction",
+                                       parabolic::ParabolicProcessOwner::mhd,
+                                       pcond->mode,
+                                       parabolic::ParabolicUpdateShape::cell_centered,
+                                       &(pcond->dtnew)});
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in MHD requires ideal gas or CGL EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }
@@ -159,7 +178,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   has_any_sts_diffusion = (has_sts_viscosity || has_sts_conduction || has_sts_resistivity);
   has_any_sts_cell_update = (has_sts_viscosity || has_sts_conduction ||
-                             (has_sts_resistivity && peos->eos_data.use_e));
+                             (has_sts_resistivity && peos->eos_data.is_ideal));
   has_any_sts_field_update = has_sts_resistivity;
 
   // (3) read time-evolution option [already error checked in driver constructor]
@@ -313,13 +332,29 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     } else if (evolution_t.compare("dynamic") == 0) {
       // LLF solver
       if (rsolver.compare("llf") == 0) {
-        rsolver_method = MHD_RSolver::llf;
+        if (eqn_of_state.compare("cgl") == 0) {
+          std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
+          <<"<mhd> llf cannot be used with CGL"<< std::endl;
+          std::exit(EXIT_FAILURE);
+        } else {
+          rsolver_method = MHD_RSolver::llf;
+        }          
       // HLLE solver
       } else if (rsolver.compare("hlle") == 0) {
-        rsolver_method = MHD_RSolver::hlle;
+        if (eqn_of_state.compare("cgl") == 0) {
+          rsolver_method = MHD_RSolver::hlle_cgl;
+        } else {
+          rsolver_method = MHD_RSolver::hlle;
+        }           
       // HLLD solver
       } else if (rsolver.compare("hlld") == 0) {
-        rsolver_method = MHD_RSolver::hlld;
+        if (eqn_of_state.compare("cgl") == 0) {
+          std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
+          <<"<mhd> hlld cannot be used with CGL"<< std::endl;
+          std::exit(EXIT_FAILURE);
+        } else {
+            rsolver_method = MHD_RSolver::hlld;
+        }   
       // Roe solver
       // } else if (rsolver.compare("roe") == 0) {
       //   rsolver_method = MHD_RSolver::roe;
@@ -351,29 +386,31 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      if (has_any_sts_cell_update) {
-        Kokkos::realloc(u_sts0,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-        Kokkos::realloc(u_sts1,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-        Kokkos::realloc(u_sts2,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-        Kokkos::realloc(u_sts_rhs, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts0, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts1, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts2, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts_rhs, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      if (peos->eos_data.is_cgl && has_sts_conduction) {
+        Kokkos::realloc(cgl_p_sts0, nmb, 2, ncells3, ncells2, ncells1);
+        Kokkos::realloc(cgl_p_sts1, nmb, 2, ncells3, ncells2, ncells1);
+        Kokkos::realloc(cgl_p_sts2, nmb, 2, ncells3, ncells2, ncells1);
+        Kokkos::realloc(cgl_p_sts_rhs, nmb, 2, ncells3, ncells2, ncells1);
       }
       Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
       Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);
       Kokkos::realloc(b1.x3f, nmb, ncells3+1, ncells2, ncells1);
-      if (has_any_sts_field_update) {
-        Kokkos::realloc(b_sts0.x1f,   nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts0.x2f,   nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts0.x3f,   nmb, ncells3+1, ncells2, ncells1);
-        Kokkos::realloc(b_sts1.x1f,   nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts1.x2f,   nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts1.x3f,   nmb, ncells3+1, ncells2, ncells1);
-        Kokkos::realloc(b_sts2.x1f,   nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts2.x2f,   nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts2.x3f,   nmb, ncells3+1, ncells2, ncells1);
-        Kokkos::realloc(b_sts_rhs.x1f, nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts_rhs.x2f, nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts_rhs.x3f, nmb, ncells3+1, ncells2, ncells1);
-      }
+      Kokkos::realloc(b_sts0.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts0.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts0.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts1.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts1.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts1.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts2.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts2.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts2.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts_rhs.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts_rhs.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts_rhs.x3f, nmb, ncells3+1, ncells2, ncells1);
 
       // allocate fluxes, electric fields
       Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1+1);

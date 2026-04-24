@@ -54,9 +54,8 @@ using Real = double;
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
 // constants that determine array index of Hydro/MHD variables
-// array indices for conserved: density, momentum, total energy
-enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4,
-                    ITM=4, IPR=4, IYF=5};
+// array indices for conserved: density, momemtum, total energy
+enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, IPR=4, IMU=5, IPP=5, IYF=6};
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2, NMAG=3};
 // array indices for metric matrices in GR
@@ -71,23 +70,27 @@ enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};
 
+// constants used to choose explicit or STS-only diffusion terms
+enum class DiffusionSelection {explicit_only, sts_only};
+
 // constants that enumerate Physics Modules implemented in code
 enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics,
                     SpaceTimeDynamics, UserDefined}; //SpaceTimeDynamics = Z4c
 
 // structs to store primitive/conserved variables in one-dimension
 // (density, velocity/momentum, internal/total energy, [transverse magnetic field])
+// For CGL: primitive e is p_parallel, primitive pp is p_perpendicular
 struct HydPrim1D {
-  Real d, vx, vy, vz, e;
+  Real d, vx, vy, vz, e, pp;
 };
 struct HydCons1D {
-  Real d, mx, my, mz, e;
+  Real d, mx, my, mz, e, mu;
 };
 struct MHDPrim1D {
-  Real d, vx, vy, vz, e, bx, by, bz;
+  Real d, vx, vy, vz, e, pp, bx, by, bz;
 };
 struct MHDCons1D {
-  Real d, mx, my, mz, e, bx, by, bz;
+  Real d, mx, my, mz, e, mu, bx, by, bz;
 };
 
 //----------------------------------------------------------------------------------------

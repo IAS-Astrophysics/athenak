@@ -61,8 +61,6 @@ struct HydroTaskIDs {
 
 namespace hydro {
 
-enum class DiffusionSelection {explicit_only, sts_only};
-
 //----------------------------------------------------------------------------------------
 //! \class Hydro
 
@@ -133,15 +131,11 @@ class Hydro {
   TaskStatus HydroSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);
-  TaskStatus SendU_OA_Parabolic(Driver *d, int stage);
-  TaskStatus RecvU_OA_Parabolic(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
-  TaskStatus SendU_Shr_Parabolic(Driver *d, int stage);
-  TaskStatus RecvU_Shr_Parabolic(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
@@ -153,8 +147,6 @@ class Hydro {
   // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
-  TaskStatus ClearSendParabolic(Driver *d, int stage);
-  TaskStatus ClearRecvParabolic(Driver *d, int stage);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <Hydro_RSolver T>

@@ -45,10 +45,10 @@ void Hydro::AddSelectedDiffusionFluxes(DiffusionSelection selection) {
                                                        : has_sts_conduction;
 
   if (add_viscosity && pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
+    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
   if (add_conduction && pcond != nullptr) {
-    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
+    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
   }
 }
 
@@ -97,7 +97,7 @@ TaskStatus Hydro::STSUpdate(Driver *pdrive, int stage) {
 
   const bool update_momentum = has_sts_viscosity;
   const bool update_energy = (has_sts_conduction ||
-                              (has_sts_viscosity && peos->eos_data.use_e));
+                              (has_sts_viscosity && peos->eos_data.is_ideal));
   if (!(update_momentum || update_energy)) {
     return TaskStatus::complete;
   }

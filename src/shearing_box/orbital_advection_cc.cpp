@@ -171,12 +171,10 @@ TaskStatus OrbitalAdvectionCC::PackAndSendCC(DvceArray5D<Real> &a) {
 //! \!fn void OrbitalAdvectionCC::RecvAndUnpackCC()
 //! \brief Receive and unpack boundary buffers for CC variables with orbital advection,
 //! and apply shift in x2- (y-) direction across entire MeshBlock by applying both an
-//! integer shift and a fractional offset to input array a. `remap_dt` allows the Hydro
-//! STS path to remap over `dt_sweep` instead of the full cycle timestep.
+//! integer shift and a fractional offset to input array a.
 
 TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
-                                               ReconstructionMethod rcon,
-                                               Real remap_dt) {
+                                               ReconstructionMethod rcon) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
@@ -229,7 +227,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
-  Real dt = (remap_dt >= 0.0) ? remap_dt : pmy_pack->pmesh->dt;
+  Real &dt = pmy_pack->pmesh->dt;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
   Real qo = qshear*omega0;
 

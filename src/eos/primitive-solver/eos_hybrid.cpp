@@ -33,7 +33,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
       std::cout << "Table could not be read.\n" << std::flush;
       abort();
     }
-    // Make sure table has correct dimensions
+    // Make sure table has correct dimentions
     assert(table.GetNDimensions()==1);
     // TODO(PH) check that required fields are present?
 
@@ -41,7 +41,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
     auto& table_scalars = table.GetScalars();
     mb = table_scalars.at("mn");
 
-    // Get table dimensions
+    // Get table dimesnions
     auto& point_info = table.GetPointInfo();
     m_nn = point_info[0].second;
 

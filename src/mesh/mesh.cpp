@@ -22,6 +22,9 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
+#include "diffusion/viscosity.hpp"
+#include "diffusion/resistivity.hpp"
+#include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
 #include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
@@ -574,9 +577,7 @@ void Mesh::NewTimeStep(const Real tlim) {
     dtold = 0.;
   }
 
-  // cycle over all MeshBlocks on this rank and find minimum dt
-  // Requires at least ONE of the physics modules to be defined.
-  // limit increase in timestep to 2x old value
+  // cycle over all MeshBlocks on this rank and find minimum dt.
   Real dt_legacy = 2.0*dt;
   Real dt_cycle_candidate = dt_legacy;
   dt_parabolic_sts = std::numeric_limits<float>::max();
@@ -588,7 +589,8 @@ void Mesh::NewTimeStep(const Real tlim) {
     // source terms timestep
     if (pmb_pack->phydro->psrc != nullptr) {
       dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
-      dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+      dt_cycle_candidate = std::min(dt_cycle_candidate,
+                                    (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
     }
   }
   // MHD timestep
@@ -598,7 +600,8 @@ void Mesh::NewTimeStep(const Real tlim) {
     // source terms timestep
     if (pmb_pack->pmhd->psrc != nullptr) {
       dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
-      dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+      dt_cycle_candidate = std::min(dt_cycle_candidate,
+                                    (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
     }
   }
 

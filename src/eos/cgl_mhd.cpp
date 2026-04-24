@@ -14,15 +14,62 @@
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
-IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
+CGLMHD::CGLMHD(MeshBlockPack *pp, ParameterInput *pin) :
     EquationOfState("mhd", pp, pin) {
+  std::cout <<"In CGL EOS constructor"<< std::endl;
   eos_data.is_ideal = true;
-  eos_data.is_cgl = false;
-  eos_data.coll = false;
-  eos_data.gamma = pin->GetReal("mhd","gamma");
-  eos_data.iso_cs = 0.0;
+  eos_data.is_cgl = true;
+  eos_data.mlim = false;
+  eos_data.flim = false;
+  eos_data.backup_lim = false;
+  eos_data.coll = false;  //overarching boolean for collisions
+  eos_data.gamma = 1.6666667;
+  eos_data.nu_coll = 0.0; //so they can be passed later, in case only one is initialized
+  eos_data.lim_coll = 0.0;
   eos_data.sigma_max = pin->GetOrAddReal("mhd","sigma_max",(FLT_MAX));  // sigma ceiling
-  eos_data.passive = false;
+  
+  //check for passive flag
+  std::string passive_flag = pin->GetString("mhd","passive");  // passive evolution for CGL
+  if (passive_flag.compare("true") == 0) {
+    eos_data.passive = true;
+    eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
+    std::cout << "Passive evolution turned on" << std::endl;
+  } else {
+    eos_data.passive = false;
+    eos_data.iso_cs = 0.0;
+  }
+  
+  //instability limiter flags
+  if (pin->DoesParameterExist("mhd","mirror_limiter")) {
+    eos_data.mlim = pin->GetBoolean("mhd","mirror_limiter");
+    eos_data.lim_coll = pin->GetReal("mhd","limiter_nu_coll");
+    std::cout << "Mirror limiter turned on" << std::endl;
+    eos_data.coll = true;
+    //check for backup limiter
+    if (pin->DoesParameterExist("mhd","backup_limiters")) {
+        eos_data.backup_lim = pin->GetBoolean("mhd","backup_limiters");
+        std::cout << "Backup mirror limiter turned on" << std::endl;
+    }
+  }
+  if (pin->DoesParameterExist("mhd","firehose_limiter")) {
+    eos_data.flim = pin->GetBoolean("mhd","firehose_limiter");
+    eos_data.lim_coll = pin->GetReal("mhd","limiter_nu_coll");
+    std::cout << "Firehose limiter turned on" << std::endl;
+    eos_data.coll = true;
+    //check for backup limiter
+    if (pin->DoesParameterExist("mhd","backup_limiters")) {
+        eos_data.backup_lim = pin->GetBoolean("mhd","backup_limiters");
+        std::cout << "Backup firehose limiter turned on" << std::endl;
+    }
+  }
+  
+  //set collision frequencies
+  if (pin->DoesParameterExist("mhd","nu_coll")) {    //collision frequency for CGL
+    eos_data.nu_coll = pin->GetReal("mhd","nu_coll");
+    std::cout << "Background collisions turned on" << std::endl;
+    eos_data.coll = true;
+  }
+
 }
 
 //----------------------------------------------------------------------------------------
@@ -30,7 +77,7 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
 //! \brief Converts conserved into primitive variables.  Operates over range of cells
 //! given in argument list.
 
-void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
+void CGLMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
                           DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
                           const bool only_testfloors,
                           const int il, const int iu, const int jl, const int ju,
@@ -63,6 +110,7 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
     u.my = cons(m,IM2,k,j,i);
     u.mz = cons(m,IM3,k,j,i);
     u.e  = cons(m,IEN,k,j,i);
+    u.mu = cons(m,IMU,k,j,i);
 
     // load cell-centered fields into conserved state
     // use input CC fields if only testing floors with FOFC
@@ -80,8 +128,8 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
     // call c2p function
     // (inline function in ideal_c2p_mhd.hpp file)
     HydPrim1D w;
-    bool dfloor_used=false, efloor_used=false, tfloor_used=false;
-    SingleC2P_IdealMHD(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+    bool dfloor_used=false, efloor_used=false, tfloor_used=false, bfloor_used=false;
+    SingleC2P_CGLMHD(u, eos, w, dfloor_used, efloor_used, tfloor_used, bfloor_used);
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
@@ -99,16 +147,22 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
         cons(m,IEN,k,j,i) = u.e;
         sume++;
       }
-      if (tfloor_used) {
-        cons(m,IEN,k,j,i) = u.e;
-        sumt++;
+      if (bfloor_used) {
+        cons(m,IMU,k,j,i) = u.mu;
       }
+      
+      //if (tfloor_used) {
+      //  cons(m,IEN,k,j,i) = u.e;
+      //  sumt++;
+      //}
+      
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;
       prim(m,IVX,k,j,i) = w.vx;
       prim(m,IVY,k,j,i) = w.vy;
       prim(m,IVZ,k,j,i) = w.vz;
       prim(m,IEN,k,j,i) = w.e;
+      prim(m,IPP,k,j,i) = w.pp;
       // store cell-centered fields in 3D array
       bcc(m,IBX,k,j,i) = u.bx;
       bcc(m,IBY,k,j,i) = u.by;
@@ -141,12 +195,13 @@ void IdealMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
 //! \brief Converts conserved into primitive variables.  Operates over range of cells
 //! given in argument list.  Does not change cell- or face-centered magnetic fields.
 
-void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+void CGLMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                           DvceArray5D<Real> &cons, const int il, const int iu,
                           const int jl, const int ju, const int kl, const int ku) {
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
   int &nmb = pmy_pack->nmb_thispack;
+  auto &bfloor = eos_data.bfloor;
 
   par_for("mhd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -157,6 +212,7 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
     w.vy = prim(m,IVY,k,j,i);
     w.vz = prim(m,IVZ,k,j,i);
     w.e  = prim(m,IEN,k,j,i);
+    w.pp = prim(m,IPP,k,j,i);
 
     // load cell-centered fields into primitive state
     w.bx = bcc(m,IBX,k,j,i);
@@ -165,7 +221,9 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
 
     // call p2c function
     HydCons1D u;
-    SingleP2C_IdealMHD(w, u);
+    SingleP2C_CGLMHD(w, bfloor, u);
+    
+    //no need to change pressures here if bfloor was hit as they'll be changed elsewhere
 
     // store conserved state in 3D array
     cons(m,IDN,k,j,i) = u.d;
@@ -173,11 +231,68 @@ void IdealMHD::PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real>
     cons(m,IM2,k,j,i) = u.my;
     cons(m,IM3,k,j,i) = u.mz;
     cons(m,IEN,k,j,i) = u.e;
+    cons(m,IMU,k,j,i) = u.mu;
 
     // convert scalars (if any), always stored at end of cons and prim arrays.
     for (int n=nmhd; n<(nmhd+nscal); ++n) {
       cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
+  });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \!fn void Collisions()
+//! \brief Decays pressure anisotropy according to scattering rate. Operates over range of cells
+//! given in argument list.
+
+void CGLMHD::Collisions(DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
+                          DvceArray5D<Real> &cons, const int il, const int iu,
+                          const int jl, const int ju, const int kl, const int ku) {
+  int &nmhd  = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+  int &nmb = pmy_pack->nmb_thispack;
+  auto &nu_coll = eos_data.nu_coll;
+  auto &lim_coll = eos_data.lim_coll;
+  auto &flim = eos_data.flim;
+  auto &mlim = eos_data.mlim;
+  auto &backup = eos_data.backup_lim;
+  auto &bfloor = eos_data.bfloor;
+  auto &dtc = pmy_pack->pmesh->dt;
+  
+  // Need state variable on grid for collisions that can be passed to the heat fluxes.
+  // May therefore need to consider having this go before time step in case heat flux
+  // oscillates? Or split before/after
+
+  par_for("mhd_coll", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    // load single state primitive variables
+    MHDPrim1D w;
+    w.d  = prim(m,IDN,k,j,i);
+    w.vx = prim(m,IVX,k,j,i);
+    w.vy = prim(m,IVY,k,j,i);
+    w.vz = prim(m,IVZ,k,j,i);
+    w.e  = prim(m,IPR,k,j,i);
+    w.pp = prim(m,IPP,k,j,i);
+
+    // load cell-centered fields into primitive state
+    w.bx = bcc(m,IBX,k,j,i);
+    w.by = bcc(m,IBY,k,j,i);
+    w.bz = bcc(m,IBZ,k,j,i);
+    
+    // call scattering and then p2c function
+    HydCons1D u;
+    SingleColl_CGLMHD(w, nu_coll, lim_coll, dtc, mlim, flim, backup);
+    SingleP2C_CGLMHD(w, bfloor, u);
+
+    // Correct conserved anisotropy variable
+    cons(m,IMU,k,j,i) = u.mu;
+    
+    // Correct pressures
+    prim(m,IPR,k,j,i) = w.e;
+    prim(m,IPP,k,j,i) = w.pp;
+
   });
 
   return;

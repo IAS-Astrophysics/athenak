@@ -413,9 +413,6 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
                 e3x2_(m,k,j,i-1) + e3x2_(m,k,j,i) + e3x1_(m,k,j-1,i) + e3x1_(m,k,j,i));
     });
   }
-
-  AddSelectedDiffusionEMF(DiffusionSelection::explicit_only);
-
   return TaskStatus::complete;
 }
 } // namespace mhd

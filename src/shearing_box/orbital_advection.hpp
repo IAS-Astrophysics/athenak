@@ -56,8 +56,7 @@ class OrbitalAdvectionCC : public OrbitalAdvection {
   OrbitalAdvectionCC(MeshBlockPack *ppack, ParameterInput *pin, int nvar);
   // functions to communicate CC data with orbital advection
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a);
-  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, ReconstructionMethod rcon,
-                             Real remap_dt = -1.0);
+  TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, ReconstructionMethod rcon);
 };
 
 //----------------------------------------------------------------------------------------
@@ -73,8 +72,7 @@ class OrbitalAdvectionFC : public OrbitalAdvection {
 
   // functions to communicate FC data with orbital advection
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b);
-  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon,
-                             Real remap_dt = -1.0);
+  TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b0, ReconstructionMethod rcon);
 };
 
 #endif // SHEARING_BOX_ORBITAL_ADVECTION_HPP_

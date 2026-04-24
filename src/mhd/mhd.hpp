@@ -36,7 +36,7 @@ using MHDBoundaryFnPtr = void (*)(int m, Mesh* pm, MHD* pmhd, DvceArray5D<Real> 
 }
 
 // constants that enumerate MHD Riemann Solver options
-enum class MHD_RSolver {advect, llf, hlle, hlld, roe,   // non-relativistic
+enum class MHD_RSolver {advect, llf, hlle, hlle_cgl, hlld, roe,   // non-relativistic
                         llf_sr, hlle_sr,                // SR
                         llf_gr, hlle_gr};                       // GR
 
@@ -61,7 +61,6 @@ struct MHDTaskIDs {
   TaskID sendu_shr;
   TaskID recvu_shr;
   TaskID efld;
-  TaskID efldsrc;
   TaskID sende;
   TaskID recve;
   TaskID ct;
@@ -78,11 +77,10 @@ struct MHDTaskIDs {
   TaskID newdt;
   TaskID csend;
   TaskID crecv;
+  TaskID cglcoll;
 };
 
 namespace mhd {
-
-enum class DiffusionSelection {explicit_only, sts_only};
 
 //----------------------------------------------------------------------------------------
 //! \class MHD
@@ -131,6 +129,10 @@ class MHD {
   DvceArray5D<Real> u_sts1;   // previous STS stage state
   DvceArray5D<Real> u_sts2;   // second previous STS stage state
   DvceArray5D<Real> u_sts_rhs;  // cached stage-1 RKL2 operator contribution
+  DvceArray5D<Real> cgl_p_sts0;   // CGL pressures at start of heat-flux STS sweep
+  DvceArray5D<Real> cgl_p_sts1;   // previous CGL heat-flux STS pressure state
+  DvceArray5D<Real> cgl_p_sts2;   // second previous CGL heat-flux STS pressure state
+  DvceArray5D<Real> cgl_p_sts_rhs;  // cached stage-1 CGL heat-flux contribution
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
   DvceFaceFld4D<Real> b_sts0;   // face-centered magnetic fields at start of STS sweep
   DvceFaceFld4D<Real> b_sts1;   // previous STS stage magnetic state
@@ -183,31 +185,23 @@ class MHD {
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);
-  TaskStatus SendU_OA_Parabolic(Driver *d, int stage);
-  TaskStatus RecvU_OA_Parabolic(Driver *d, int stage);
   TaskStatus RestrictU(Driver *d, int stage);
   TaskStatus SendU(Driver *d, int stage);
   TaskStatus RecvU(Driver *d, int stage);
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
-  TaskStatus SendU_Shr_Parabolic(Driver *d, int stage);
-  TaskStatus RecvU_Shr_Parabolic(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
-  TaskStatus EFieldSrc(Driver *d, int stage);
+  TaskStatus EField(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
   TaskStatus RecvE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
   TaskStatus SendB_OA(Driver *d, int stage);
   TaskStatus RecvB_OA(Driver *d, int stage);
-  TaskStatus SendB_OA_Parabolic(Driver *d, int stage);
-  TaskStatus RecvB_OA_Parabolic(Driver *d, int stage);
   TaskStatus RestrictB(Driver *d, int stage);
   TaskStatus SendB(Driver *d, int stage);
   TaskStatus RecvB(Driver *d, int stage);
   TaskStatus SendB_Shr(Driver *d, int stage);
   TaskStatus RecvB_Shr(Driver *d, int stage);
-  TaskStatus SendB_Shr_Parabolic(Driver *d, int stage);
-  TaskStatus RecvB_Shr_Parabolic(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
@@ -217,13 +211,13 @@ class MHD {
   TaskStatus STSFluxes(Driver *d, int stage);
   TaskStatus STSEField(Driver *d, int stage);
   TaskStatus STSUpdateU(Driver *d, int stage);
+  TaskStatus STSUpdateCGLHeatFlux(Driver *d, int stage);
   TaskStatus STSUpdateB(Driver *d, int stage);
   TaskStatus STSRefreshTimeStep(Driver *d, int stage);
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
-  TaskStatus ClearSendParabolic(Driver *d, int stage);
-  TaskStatus ClearRecvParabolic(Driver *d, int stage);
+  TaskStatus CGLCollisions(Driver *d, int stage);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>

@@ -18,6 +18,7 @@
 #include "eos/eos.hpp"
 #include "hydro.hpp"
 #include "diffusion/conduction.hpp"
+#include "diffusion/viscosity.hpp"
 #include "srcterms/srcterms.hpp"
 
 namespace hydro {
@@ -37,11 +38,9 @@ TaskStatus Hydro::NewTimeStep(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void Hydro::RecomputeTimeStepFromCurrentState()
-//! \brief recompute hydro and conduction timestep limits from the current live state
+//! \brief recompute hydro and parabolic timestep limits from the current live state.
 
 void Hydro::RecomputeTimeStepFromCurrentState(Driver *pdrive) {
-  dtnew = std::numeric_limits<float>::max();
-
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
@@ -138,9 +137,14 @@ void Hydro::RecomputeTimeStepFromCurrentState(Driver *pdrive) {
   if (pcond != nullptr) {
     pcond->NewTimeStep(w0, peos->eos_data);
   }
+  if (pvisc != nullptr) {
+    pvisc->NewTimeStep(w0, peos->eos_data);
+  }
   // compute source terms timestep
   if (psrc != nullptr) {
     psrc->NewTimeStep(w0, peos->eos_data);
   }
+
+  return;
 }
 } // namespace hydro

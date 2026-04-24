@@ -178,12 +178,10 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 //! update fields, the algorithm used here is different from that used for CC variables in
 //! RecvAndUnpackCC(). Here an effective electric field is computed including both the
 //! integer and fractional cell shifts. These fields are then used to update B using CT.
-//! The fields themselves are not directly remapped like the CC variables. `remap_dt`
-//! allows the MHD STS path to remap over `dt_sweep` instead of the full cycle timestep.
+//! The fields themselves are not directly remapped like the CC variables.
 
 TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
-                                               ReconstructionMethod rcon,
-                                               Real remap_dt) {
+                                             ReconstructionMethod rcon) {
   int nmb = pmy_pack->nmb_thispack;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
@@ -233,7 +231,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
 
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mesh_size = pmy_pack->pmesh->mesh_size;
-  Real dt = (remap_dt >= 0.0) ? remap_dt : pmy_pack->pmesh->dt;
+  Real &dt = pmy_pack->pmesh->dt;
   Real ly = (mesh_size.x2max - mesh_size.x2min);
   Real qo = qshear*omega0;
 

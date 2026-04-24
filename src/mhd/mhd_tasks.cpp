@@ -58,9 +58,8 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvu     = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
   id.sendu_shr = tl["stagen"]->AddTask(&MHD::SendU_Shr, this, id.recvu);
   id.recvu_shr = tl["stagen"]->AddTask(&MHD::RecvU_Shr, this, id.sendu_shr);
-  id.efld      = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu_shr);
-  id.efldsrc   = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
-  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
+  id.efld      = tl["stagen"]->AddTask(&MHD::EField, this, id.recvu_shr);
+  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efld);
   id.recve     = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
   id.ct        = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
   id.sendb_oa  = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
@@ -80,6 +79,10 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
+  
+  //after time integrator here
+  //needs to return task status - make sure to apply these to the ghost cells as well in the same exact way so is-nghost..
+  id.cglcoll = tl["after_timeintegrator"]->AddTask(&MHD::CGLCollisions, this, none);
 
   if (has_any_sts_diffusion) {
     tl["before_parabolic_stagen"]->AddTask(&MHD::InitRecvParabolic, this, none);
@@ -90,45 +93,25 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
     TaskID precvf = tl["parabolic_stagen"]->AddTask(&MHD::RecvFlux, this, psendf);
     TaskID pcleare = tl["parabolic_stagen"]->AddTask(&MHD::ClearSTSEField, this, precvf);
     TaskID pefld = tl["parabolic_stagen"]->AddTask(&MHD::STSEField, this, pcleare);
-    TaskID pefldsrc = tl["parabolic_stagen"]->AddTask(&MHD::EFieldSrc, this, pefld);
-    TaskID psende = tl["parabolic_stagen"]->AddTask(&MHD::SendE, this, pefldsrc);
+    TaskID psende = tl["parabolic_stagen"]->AddTask(&MHD::SendE, this, pefld);
     TaskID precve = tl["parabolic_stagen"]->AddTask(&MHD::RecvE, this, psende);
     TaskID pupdt = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateU, this, precve);
-    TaskID psendu_oa = tl["parabolic_stagen"]->AddTask(&MHD::SendU_OA_Parabolic,
-                                                       this, pupdt);
-    TaskID precvu_oa = tl["parabolic_stagen"]->AddTask(&MHD::RecvU_OA_Parabolic,
-                                                       this, psendu_oa);
-    TaskID pbstage = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateB, this, precvu_oa);
-    TaskID psendb_oa = tl["parabolic_stagen"]->AddTask(&MHD::SendB_OA_Parabolic,
-                                                       this, pbstage);
-    TaskID precvb_oa = tl["parabolic_stagen"]->AddTask(&MHD::RecvB_OA_Parabolic,
-                                                       this, psendb_oa);
-    TaskID prestu = tl["parabolic_stagen"]->AddTask(&MHD::RestrictU, this, precvb_oa);
+    TaskID pbstage = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateB, this, pupdt);
+    TaskID prestu = tl["parabolic_stagen"]->AddTask(&MHD::RestrictU, this, pbstage);
     TaskID psendu = tl["parabolic_stagen"]->AddTask(&MHD::SendU, this, prestu);
     TaskID precvu = tl["parabolic_stagen"]->AddTask(&MHD::RecvU, this, psendu);
-    TaskID psendu_shr = tl["parabolic_stagen"]->AddTask(&MHD::SendU_Shr_Parabolic,
-                                                        this, precvu);
-    TaskID precvu_shr = tl["parabolic_stagen"]->AddTask(&MHD::RecvU_Shr_Parabolic,
-                                                        this, psendu_shr);
-    TaskID prestb = tl["parabolic_stagen"]->AddTask(&MHD::RestrictB, this, precvu_shr);
+    TaskID prestb = tl["parabolic_stagen"]->AddTask(&MHD::RestrictB, this, precvu);
     TaskID psendb = tl["parabolic_stagen"]->AddTask(&MHD::SendB, this, prestb);
     TaskID precvb = tl["parabolic_stagen"]->AddTask(&MHD::RecvB, this, psendb);
-    TaskID psendb_shr = tl["parabolic_stagen"]->AddTask(&MHD::SendB_Shr_Parabolic,
-                                                        this, precvb);
-    TaskID precvb_shr = tl["parabolic_stagen"]->AddTask(&MHD::RecvB_Shr_Parabolic,
-                                                        this, psendb_shr);
-    TaskID pbcs = tl["parabolic_stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this,
-                                                  precvb_shr);
+    TaskID pbcs = tl["parabolic_stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, precvb);
     TaskID pprol = tl["parabolic_stagen"]->AddTask(&MHD::Prolongate, this, pbcs);
     TaskID pc2p = tl["parabolic_stagen"]->AddTask(&MHD::ConToPrim, this, pprol);
     (void) tl["parabolic_stagen"]->AddTask(&MHD::STSRefreshTimeStep, this, pc2p);
 
-    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&MHD::ClearSendParabolic,
-                                                          this, none);
-    (void) tl["after_parabolic_stagen"]->AddTask(&MHD::ClearRecvParabolic, this,
-                                                 pcsend);
+    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&MHD::ClearSend, this, none);
+    (void) tl["after_parabolic_stagen"]->AddTask(&MHD::ClearRecv, this, pcsend);
   }
-
+  
   return;
 }
 
@@ -185,7 +168,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
     }
   }
 
-  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
+  // with shearing box boundaries caluclate x2-distance x1-boundaries have sheared and
   // with MPI post receives for U and B
   if (psbox_u != nullptr) {
     // only execute when (3D OR 2d_r_phi)
@@ -206,7 +189,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::InitRecvParabolic
-//! \brief Parabolic-loop receive setup with sweep-aware shearing-box/orbital timing.
+//! \brief Wrapper task list function to post receives for one STS parabolic stage.
 
 TaskStatus MHD::InitRecvParabolic(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
@@ -219,31 +202,6 @@ TaskStatus MHD::InitRecvParabolic(Driver *pdrive, int stage) {
     if (tstat != TaskStatus::complete) return tstat;
   }
   tstat = pbval_b->InitFluxRecv(3);
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->InitRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-      tstat = porb_b->InitRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      Real shear_time = pmy_pack->pmesh->time;
-      if (pdrive->sts.sweep == Driver::STSSweep::post) {
-        shear_time += pmy_pack->pmesh->dt;
-      }
-      tstat = psbox_u->InitRecv(shear_time);
-      if (tstat != TaskStatus::complete) return tstat;
-      tstat = psbox_b->InitRecv(shear_time);
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
   return tstat;
 }
 
@@ -274,6 +232,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<MHD_RSolver::llf>(pdrive, stage);
   } else if (rsolver_method == MHD_RSolver::hlle) {
     CalculateFluxes<MHD_RSolver::hlle>(pdrive, stage);
+  } else if (rsolver_method == MHD_RSolver::hlle_cgl) {
+    CalculateFluxes<MHD_RSolver::hlle_cgl>(pdrive, stage);
   } else if (rsolver_method == MHD_RSolver::hlld) {
     CalculateFluxes<MHD_RSolver::hlld>(pdrive, stage);
   } else if (rsolver_method == MHD_RSolver::llf_sr) {
@@ -392,36 +352,6 @@ TaskStatus MHD::RecvU_OA(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::SendU_OA_Parabolic
-//! \brief Sweep-final orbital-advection communication for cell-centered MHD STS.
-
-TaskStatus MHD::SendU_OA_Parabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = TaskStatus::complete;
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->PackAndSendCC(u0);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::RecvU_OA_Parabolic
-//! \brief Sweep-final orbital remap for cell-centered MHD STS, using dt_sweep.
-
-TaskStatus MHD::RecvU_OA_Parabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = TaskStatus::complete;
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->RecvAndUnpackCC(u0, recon_method, pdrive->sts.dt_sweep);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::RestrictU
 //! \brief Wrapper task list function to restrict conserved vars
 
@@ -483,42 +413,16 @@ TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::SendU_Shr_Parabolic
-//! \brief Shearing-box x1-boundary exchange for cell-centered MHD STS.
+//! \fn TaskList MHD::EField
+//! \brief Wrapper task list function to compute electric field
 
-TaskStatus MHD::SendU_Shr_Parabolic(Driver *pdrive, int stage) {
-  (void) pdrive;
-  (void) stage;
-  TaskStatus tstat = TaskStatus::complete;
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->PackAndSendCC(u0, recon_method);
-    }
-  }
-  return tstat;
-}
+TaskStatus MHD::EField(Driver *pdrive, int stage) {
+  // Use CT to compute corner E
+  CornerE(pdrive, stage);
 
-//----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::RecvU_Shr_Parabolic
-//! \brief Shearing-box x1-boundary unpacking for cell-centered MHD STS.
+  AddSelectedDiffusionEMF(DiffusionSelection::explicit_only);
+  // TODO(@user): Add more resistive effects here
 
-TaskStatus MHD::RecvU_Shr_Parabolic(Driver *pdrive, int stage) {
-  (void) pdrive;
-  (void) stage;
-  TaskStatus tstat = TaskStatus::complete;
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->RecvAndUnpackCC(u0);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::EFieldSrc
-//! \brief Wrapper task list function to apply source terms to electric field
-
-TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
   if (psbox_b != nullptr) {
     // only execute when (2D)
     if (pmy_pack->pmesh->two_d) {
@@ -585,36 +489,6 @@ TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::SendB_OA_Parabolic
-//! \brief Sweep-final orbital-advection communication for face-centered MHD STS.
-
-TaskStatus MHD::SendB_OA_Parabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = TaskStatus::complete;
-  if (porb_b != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_b->shearing_box_r_phi)) {
-      tstat = porb_b->PackAndSendFC(b0);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::RecvB_OA_Parabolic
-//! \brief Sweep-final orbital remap for face-centered MHD STS, using dt_sweep.
-
-TaskStatus MHD::RecvB_OA_Parabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = TaskStatus::complete;
-  if (porb_b != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_b->shearing_box_r_phi)) {
-      tstat = porb_b->RecvAndUnpackFC(b0, recon_method, pdrive->sts.dt_sweep);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::SendB
 //! \brief Wrapper task list function to pack/send face-centered magnetic fields
 
@@ -664,40 +538,8 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::SendB_Shr_Parabolic
-//! \brief Shearing-box x1-boundary exchange for face-centered MHD STS.
-
-TaskStatus MHD::SendB_Shr_Parabolic(Driver *pdrive, int stage) {
-  (void) pdrive;
-  (void) stage;
-  TaskStatus tstat = TaskStatus::complete;
-  if (psbox_b != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
-      tstat = psbox_b->PackAndSendFC(b0, recon_method);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::RecvB_Shr_Parabolic
-//! \brief Shearing-box x1-boundary unpacking for face-centered MHD STS.
-
-TaskStatus MHD::RecvB_Shr_Parabolic(Driver *pdrive, int stage) {
-  (void) pdrive;
-  (void) stage;
-  TaskStatus tstat = TaskStatus::complete;
-  if (psbox_b != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
-      tstat = psbox_b->RecvAndUnpackFC(b0);
-    }
-  }
-  return tstat;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call functions that set physical and user BCs
+//! \brief Wrapper task list function to call funtions that set physical and user BCs
 
 TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
@@ -872,84 +714,6 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus MHD::ClearSendParabolic
-//! \brief Sweep-aware send cleanup for the MHD STS loop.
-
-TaskStatus MHD::ClearSendParabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_u->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
-  tstat = pbval_b->ClearSend();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_u->ClearFluxSend();
-    if (tstat != TaskStatus::complete) return tstat;
-  }
-  tstat = pbval_b->ClearFluxSend();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
-      tstat = porb_b->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
-      tstat = psbox_b->ClearSend();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskStatus MHD::ClearRecvParabolic
-//! \brief Sweep-aware receive cleanup for the MHD STS loop.
-
-TaskStatus MHD::ClearRecvParabolic(Driver *pdrive, int stage) {
-  TaskStatus tstat = pbval_u->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
-  tstat = pbval_b->ClearRecv();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_u->ClearFluxRecv();
-    if (tstat != TaskStatus::complete) return tstat;
-  }
-  tstat = pbval_b->ClearFluxRecv();
-  if (tstat != TaskStatus::complete) return tstat;
-
-  if (porb_u != nullptr) {
-    if ((stage == pdrive->sts.nstages) &&
-        (pmy_pack->pmesh->three_d || porb_u->shearing_box_r_phi)) {
-      tstat = porb_u->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-      tstat = porb_b->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  if (psbox_u != nullptr) {
-    if (pmy_pack->pmesh->three_d || psbox_u->shearing_box_r_phi) {
-      tstat = psbox_u->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-      tstat = psbox_b->ClearRecv();
-      if (tstat != TaskStatus::complete) return tstat;
-    }
-  }
-
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::RestrictB
 //! \brief Wrapper function that restricts face-centered variables (magnetic field)
 
@@ -960,5 +724,24 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   }
   return TaskStatus::complete;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::CGLCollisions
+//! \brief Wrapper task list function to collisionally decay pressure anisotropy over entire mesh (including gz)
+
+TaskStatus MHD::CGLCollisions(Driver *pdrive, int stage) { //need to ensure this only does something when collisions are on
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+  int n1m1 = indcs.nx1 + 2*ng - 1;
+  int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
+  int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+  
+  if (peos->eos_data.coll) {
+    std::cout << "In the collisions block" << std::endl;
+    peos->Collisions(w0, bcc0, u0, 0, n1m1, 0, n2m1, 0, n3m1);
+  }
+  return TaskStatus::complete;
+}
+
 
 } // namespace mhd
