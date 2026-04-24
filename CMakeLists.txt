@@ -193,8 +193,8 @@ if (${PROBLEM} STREQUAL "kadath_bns")
   # with libkadath.a in its lib/ directory.
   find_package(Boost REQUIRED)
   target_include_directories(athena PRIVATE
-      ${CMAKE_SOURCE_DIR}/kadath/include/for_Kadath
-      ${CMAKE_SOURCE_DIR}/kadath/include/for_Kadath/Kadath_point_h
+      ${CMAKE_SOURCE_DIR}/kadath/include
+      ${CMAKE_SOURCE_DIR}/kadath/include/Kadath_point_h
       #${CMAKE_SOURCE_DIR}/kadath/include/Solvers
       ${Boost_INCLUDE_DIRS})
   target_link_libraries(athena PUBLIC

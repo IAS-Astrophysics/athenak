@@ -70,7 +70,11 @@ void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
 //void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 template<class TOVEOS>
 void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
-  using namespace export_utils;  // PSI, ALP, BETX/Y/Z, AXX..AZZ, H, UX/Y/Z, NUM_QUANTS
+  using namespace export_utils;          // PSI, ALP, BETX/Y/Z, AXX..AZZ, H, UX/Y/Z, NUM_QUANTS
+  using namespace Kadath::FUKA_Config;  // BIN_INFO, kadath_config_boost, BCO1/2, QPIG, GOMEGA, …
+
+  // This Kadath version has one rotation vector per BCO (z-axis only).
+  // Map the x/z split used by the tilted-spin API onto the single vector.
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
   auto &size          = pmbp->pmb->mb_size;
@@ -113,10 +117,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   double &units    = bconfig(QPIG);
   double &omega    = bconfig(GOMEGA);
-  double &ome1     = bconfig(OMEGA,   BCO1);
-  double &ang1     = bconfig(INCLINE, BCO1);
-  double &ome2     = bconfig(OMEGA,   BCO2);
-  double &ang2     = bconfig(INCLINE, BCO2);
+  double &ome1     = bconfig(OMEGA, BCO1);
+  double &ome2     = bconfig(OMEGA, BCO2);
   double &axis     = bconfig(COM);
 
   std::string kadath_filename = bconfig.space_filename();
@@ -181,14 +183,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   syst.add_cst("PI",    M_PI);
   syst.add_cst("omes1", ome1);
   syst.add_cst("omes2", ome2);
-  syst.add_cst("angs1", ang1);
-  syst.add_cst("angs2", ang2);
 
   syst.add_cst("mg",   *coord_vectors[GLOBAL_ROT]);
-  syst.add_cst("mmx",  *coord_vectors[BCO1_ROTx]);
-  syst.add_cst("mmz",  *coord_vectors[BCO1_ROTz]);
-  syst.add_cst("mpx",  *coord_vectors[BCO2_ROTx]);
-  syst.add_cst("mpz",  *coord_vectors[BCO2_ROTz]);
+  syst.add_cst("mm",  *coord_vectors[BCO1_ROT]);
+  syst.add_cst("mp",  *coord_vectors[BCO2_ROT]);
   syst.add_cst("ex",   *coord_vectors[EX]);
   syst.add_cst("ey",   *coord_vectors[EY]);
   syst.add_cst("ez",   *coord_vectors[EZ]);
@@ -210,9 +208,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   syst.add_def("omega^i = bet^i + ome * Morb^i");
 
   for (int d = space.NS1; d <= space.ADAPTED1; ++d)
-    syst.add_def(d, "s^i  = omes1 * ( cos(angs1) * mmz^i + cos(angs1) * mmx^i ) ");
+    syst.add_def(d, "s^i  = omes1 * mm^i");
   for (int d = space.NS2; d <= space.ADAPTED2; ++d)
-    syst.add_def(d, "s^i  = omes2 * ( cos(angs2) * mpz^i + cos(angs2) * mpx^i ) ");
+    syst.add_def(d, "s^i  = omes2 * mp^i");
 
   syst.add_def("A_ij = (D_i bet_j + D_j bet_i - 2. / 3.* D^k bet_k * f_ij) /2. / N");
   syst.add_def("h = exp(H)");
