@@ -554,8 +554,17 @@ void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart)
       pin->GetOrAddReal("problem", "excision_atmo_energy", pfloor/fmax(gamma - 1.0, 1.0e-12));
   user_srcs = true;
   user_srcs_func = &ApplyInnerExcision;
+  pmbp->pz4c->SetADMBackground = &SetADMBackgroundKerrSchild;
 
   if (restart) {
+    pmbp->pz4c->UpdateBackgroundState(pmy_mesh_->time);
+    pmbp->pz4c->ReconstructFullState();
+    pmbp->pz4c->EnforceAlgConstrOn(pmbp->pz4c->full);
+    pmbp->pz4c->RecastResidualState();
+    pmbp->pz4c->PrescribeGaugeResidual();
+    ApplyInnerExcision(pmy_mesh_, 0.0, false);
+    pmbp->pz4c->Z4cToADM(pmbp);
+    ApplyInnerExcision(pmy_mesh_, 0.0);
     return;
   }
 
