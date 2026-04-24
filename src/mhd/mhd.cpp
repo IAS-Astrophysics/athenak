@@ -37,7 +37,19 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_w0("cprim",1,1,1,1,1),
     coarse_b0("cB_fc",1,1,1,1),
     u1("cons1",1,1,1,1,1),
+    u_sts0("cons_sts0",1,1,1,1,1),
+    u_sts1("cons_sts1",1,1,1,1,1),
+    u_sts2("cons_sts2",1,1,1,1,1),
+    u_sts_rhs("cons_sts_rhs",1,1,1,1,1),
+    cgl_p_sts0("cgl_p_sts0",1,1,1,1,1),
+    cgl_p_sts1("cgl_p_sts1",1,1,1,1,1),
+    cgl_p_sts2("cgl_p_sts2",1,1,1,1,1),
+    cgl_p_sts_rhs("cgl_p_sts_rhs",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
+    b_sts0("B_sts0",1,1,1,1),
+    b_sts1("B_sts1",1,1,1,1),
+    b_sts2("B_sts2",1,1,1,1),
+    b_sts_rhs("B_sts_rhs",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
     wsaved("wsaved",1,1,1,1,1),
@@ -111,6 +123,14 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","isotropic_viscosity")) {
     pvisc = new Viscosity("mhd", ppack, pin);
+    has_sts_viscosity = (pvisc->mode == parabolic::ParabolicIntegratorMode::sts);
+    has_explicit_viscosity =
+        (pvisc->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
+    ppack->RegisterParabolicProcess({"mhd/isotropic_viscosity",
+                                     parabolic::ParabolicProcessOwner::mhd,
+                                     pvisc->mode,
+                                     parabolic::ParabolicUpdateShape::cell_centered,
+                                     &(pvisc->dtnew)});
   } else {
     pvisc = nullptr;
   }
@@ -118,14 +138,30 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   // Resistivity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
     presist = new Resistivity(ppack, pin);
+    has_sts_resistivity = (presist->mode == parabolic::ParabolicIntegratorMode::sts);
+    has_explicit_resistivity =
+        (presist->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
+    ppack->RegisterParabolicProcess({"mhd/ohmic_resistivity",
+                                     parabolic::ParabolicProcessOwner::mhd,
+                                     presist->mode,
+                                     parabolic::ParabolicUpdateShape::cell_and_face,
+                                     &(presist->dtnew)});
   } else {
     presist = nullptr;
   }
 
   // Thermal conduction (only constructed if needed)
   if (pin->DoesParameterExist("mhd","isotropic_conduction")) {
-    if (peos->eos_data.is_ideal) {
+    if (peos->eos_data.is_ideal || peos->eos_data.is_cgl) {
       pcond = new Conduction("mhd", ppack, pin);
+      has_sts_conduction = (pcond->mode == parabolic::ParabolicIntegratorMode::sts);
+      has_explicit_conduction =
+          (pcond->mode == parabolic::ParabolicIntegratorMode::explicit_mode);
+      ppack->RegisterParabolicProcess({"mhd/isotropic_conduction",
+                                       parabolic::ParabolicProcessOwner::mhd,
+                                       pcond->mode,
+                                       parabolic::ParabolicUpdateShape::cell_centered,
+                                       &(pcond->dtnew)});
     } else {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
                 << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
@@ -139,6 +175,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesBlockExist("mhd_srcterms")) {
     psrc = new SourceTerms("mhd_srcterms", ppack, pin);
   }
+
+  has_any_sts_diffusion = (has_sts_viscosity || has_sts_conduction || has_sts_resistivity);
+  has_any_sts_cell_update = (has_sts_viscosity || has_sts_conduction ||
+                             (has_sts_resistivity && peos->eos_data.is_ideal));
+  has_any_sts_field_update = has_sts_resistivity;
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -345,9 +386,31 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts0, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts1, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts2, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u_sts_rhs, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      if (peos->eos_data.is_cgl && has_sts_conduction) {
+        Kokkos::realloc(cgl_p_sts0, nmb, 2, ncells3, ncells2, ncells1);
+        Kokkos::realloc(cgl_p_sts1, nmb, 2, ncells3, ncells2, ncells1);
+        Kokkos::realloc(cgl_p_sts2, nmb, 2, ncells3, ncells2, ncells1);
+        Kokkos::realloc(cgl_p_sts_rhs, nmb, 2, ncells3, ncells2, ncells1);
+      }
       Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
       Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);
       Kokkos::realloc(b1.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts0.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts0.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts0.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts1.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts1.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts1.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts2.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts2.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts2.x3f, nmb, ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(b_sts_rhs.x1f, nmb, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(b_sts_rhs.x2f, nmb, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(b_sts_rhs.x3f, nmb, ncells3+1, ncells2, ncells1);
 
       // allocate fluxes, electric fields
       Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1+1);

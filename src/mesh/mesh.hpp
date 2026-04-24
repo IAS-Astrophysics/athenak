@@ -16,6 +16,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -138,6 +139,8 @@ class Mesh {
   int *nprtcl_eachrank;    // number of particles on each rank
 
   Real time, dt, dtold, dt_last_completed, cfl_no;
+  Real dt_parabolic_sts, sts_max_dt_ratio;
+  parabolic::STSIntegrator sts_integrator;
   int ncycle;
   EventCounters ecounter;
 

@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <cinttypes>
+#include <cstdlib>
 #include <limits> // numeric_limits<>
 #include <memory> // make_unique<>
 
@@ -22,6 +23,34 @@
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
+
+namespace {
+
+parabolic::STSIntegrator ParseSTSIntegrator(ParameterInput *pin) {
+  std::string integrator = pin->GetOrAddString("time", "sts_integrator", "none");
+  if (integrator == "none") {
+    return parabolic::STSIntegrator::none;
+  } else if (integrator == "rkl2") {
+    return parabolic::STSIntegrator::rkl2;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<time>/sts_integrator = '" << integrator
+            << "' must be 'none' or 'rkl2'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+void LoadSTSConfig(Mesh *pmesh, ParameterInput *pin) {
+  pmesh->sts_integrator = ParseSTSIntegrator(pin);
+  pmesh->sts_max_dt_ratio = pin->GetOrAddReal("time", "sts_max_dt_ratio", -1.0);
+  if (pmesh->sts_max_dt_ratio != -1.0 && pmesh->sts_max_dt_ratio <= 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<time>/sts_max_dt_ratio must be -1.0 or a positive real" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::BuildTreeFromScratch():
@@ -304,7 +333,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   // set initial time/cycle parameters, output diagnostics
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
+  dt_parabolic_sts = std::numeric_limits<float>::max();
   cfl_no = pin->GetReal("time", "cfl_number");
+  LoadSTSConfig(this, pin);
   ncycle = 0;
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 
@@ -506,5 +537,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 
   // set remaining parameters, output diagnostics
   cfl_no = pin->GetReal("time", "cfl_number");
+  dt_parabolic_sts = std::numeric_limits<float>::max();
+  LoadSTSConfig(this, pin);
   if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
 }

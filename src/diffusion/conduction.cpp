@@ -10,6 +10,7 @@
 
 #include <float.h>
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <iostream> // cout
@@ -23,6 +24,25 @@
 #include "eos/eos.hpp"
 #include "conduction.hpp"
 #include "units/units.hpp"
+
+namespace {
+
+parabolic::ParabolicIntegratorMode ParseConductivityIntegrator(std::string block,
+    ParameterInput *pin) {
+  std::string integrator = pin->GetOrAddString(block, "conductivity_integrator", "explicit");
+  if (integrator == "explicit") {
+    return parabolic::ParabolicIntegratorMode::explicit_mode;
+  } else if (integrator == "sts") {
+    return parabolic::ParabolicIntegratorMode::sts;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<" << block << ">/conductivity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
 
 // VanLeer Limiter which takes 2 slopes
 KOKKOS_INLINE_FUNCTION
@@ -80,6 +100,9 @@ Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin
     }
     kappa_iso_limit = pin->GetOrAddReal(block,"kappa_iso_limit",
                       static_cast<Real>(std::numeric_limits<float>::max()));
+
+    mode = ParseConductivityIntegrator(block, pin);
+
   }
 }
 
@@ -350,8 +373,8 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   Real temp_unit=0.0, kappa_unit=0.0;
 
   if (spitzer) {
-    Real temp_unit = pmy_pack->punit->temperature_cgs();
-    Real kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
+    temp_unit = pmy_pack->punit->temperature_cgs();
+    kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
                       pmy_pack->punit->length_cgs()/pmy_pack->punit->temperature_cgs();
   }
 
@@ -368,6 +391,7 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   auto &three_d = pmy_pack->pmesh->three_d;
   auto &size = pmy_pack->pmb->mb_size;
   Real gm1 = eos_data.gamma-1.0;
+  Real pressure_to_temperature = (eos_data.is_cgl) ? 1.0 : gm1;
   Real kappa0 = kappa_iso;
 
   // find smallest timestep for thermal conduction in each cell
@@ -384,16 +408,19 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
 
     Real kappa_ = kappa0;
     if (spitzer) {
-      Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+      Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*pressure_to_temperature;
       kappa_ = TempDepKappa(temp*temp_unit, limit_)/kappa_unit;
     }
 
-    min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+    min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/kappa_*w0_(m,IDN,k,j,i)/
+                  pressure_to_temperature);
     if (multi_d) {
-      min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/kappa_*w0_(m,IDN,k,j,i)/
+                    pressure_to_temperature);
     }
     if (three_d) {
-      min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/kappa_*w0_(m,IDN,k,j,i)/
+                    pressure_to_temperature);
     }
   }, Kokkos::Min<Real>(dtnew));
   dtnew *= fac;

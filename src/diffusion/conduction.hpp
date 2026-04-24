@@ -12,6 +12,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -28,6 +29,7 @@ class Conduction {
   std::string iso_cond_type; // "constant", "spitzer", or "spitzer_limited"
   Real kappa_iso;            // isotropic thermal conductivity
   Real kappa_iso_limit;      // limit to isotropic thermal conductivity
+  parabolic::ParabolicIntegratorMode mode = parabolic::ParabolicIntegratorMode::explicit_mode;
 
   // functions
   void AddHeatFluxes(const DvceArray5D<Real> &w, const EOS_Data &eos,

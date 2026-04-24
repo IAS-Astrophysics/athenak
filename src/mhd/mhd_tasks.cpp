@@ -83,6 +83,34 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   //after time integrator here
   //needs to return task status - make sure to apply these to the ghost cells as well in the same exact way so is-nghost..
   id.cglcoll = tl["after_timeintegrator"]->AddTask(&MHD::CGLCollisions, this, none);
+
+  if (has_any_sts_diffusion) {
+    tl["before_parabolic_stagen"]->AddTask(&MHD::InitRecvParabolic, this, none);
+
+    TaskID pclearf = tl["parabolic_stagen"]->AddTask(&MHD::ClearSTSFlux, this, none);
+    TaskID pflux = tl["parabolic_stagen"]->AddTask(&MHD::STSFluxes, this, pclearf);
+    TaskID psendf = tl["parabolic_stagen"]->AddTask(&MHD::SendFlux, this, pflux);
+    TaskID precvf = tl["parabolic_stagen"]->AddTask(&MHD::RecvFlux, this, psendf);
+    TaskID pcleare = tl["parabolic_stagen"]->AddTask(&MHD::ClearSTSEField, this, precvf);
+    TaskID pefld = tl["parabolic_stagen"]->AddTask(&MHD::STSEField, this, pcleare);
+    TaskID psende = tl["parabolic_stagen"]->AddTask(&MHD::SendE, this, pefld);
+    TaskID precve = tl["parabolic_stagen"]->AddTask(&MHD::RecvE, this, psende);
+    TaskID pupdt = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateU, this, precve);
+    TaskID pbstage = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateB, this, pupdt);
+    TaskID prestu = tl["parabolic_stagen"]->AddTask(&MHD::RestrictU, this, pbstage);
+    TaskID psendu = tl["parabolic_stagen"]->AddTask(&MHD::SendU, this, prestu);
+    TaskID precvu = tl["parabolic_stagen"]->AddTask(&MHD::RecvU, this, psendu);
+    TaskID prestb = tl["parabolic_stagen"]->AddTask(&MHD::RestrictB, this, precvu);
+    TaskID psendb = tl["parabolic_stagen"]->AddTask(&MHD::SendB, this, prestb);
+    TaskID precvb = tl["parabolic_stagen"]->AddTask(&MHD::RecvB, this, psendb);
+    TaskID pbcs = tl["parabolic_stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, precvb);
+    TaskID pprol = tl["parabolic_stagen"]->AddTask(&MHD::Prolongate, this, pbcs);
+    TaskID pc2p = tl["parabolic_stagen"]->AddTask(&MHD::ConToPrim, this, pprol);
+    (void) tl["parabolic_stagen"]->AddTask(&MHD::STSRefreshTimeStep, this, pc2p);
+
+    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&MHD::ClearSend, this, none);
+    (void) tl["after_parabolic_stagen"]->AddTask(&MHD::ClearRecv, this, pcsend);
+  }
   
   return;
 }
@@ -160,6 +188,24 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::InitRecvParabolic
+//! \brief Wrapper task list function to post receives for one STS parabolic stage.
+
+TaskStatus MHD::InitRecvParabolic(Driver *pdrive, int stage) {
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+  tstat = pbval_b->InitRecv(3);
+  if (tstat != TaskStatus::complete) return tstat;
+
+  if (pmy_pack->pmesh->multilevel) {
+    tstat = pbval_u->InitFluxRecv(nmhd+nscalars);
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+  tstat = pbval_b->InitFluxRecv(3);
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::CopyCons
 //! \brief Simple task list function that copies u0 --> u1, and b0 --> b1 in first stage
 
@@ -200,16 +246,7 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<MHD_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add diffusive fluxes
-  if (pcond != nullptr) {
-    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
-  }
-  if (pvisc != nullptr) {
-    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
-  }
-  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->AddResistiveFluxes(b0, uflx);
-  }
+  AddSelectedDiffusionFluxes(DiffusionSelection::explicit_only);
 
   // call FOFC if necessary
   if (use_fofc) {
@@ -383,10 +420,7 @@ TaskStatus MHD::EField(Driver *pdrive, int stage) {
   // Use CT to compute corner E
   CornerE(pdrive, stage);
 
-  // Add resistive electric field (if needed)
-  if (presist != nullptr) {
-    presist->AddResistiveEMFs(b0, efld);
-  }
+  AddSelectedDiffusionEMF(DiffusionSelection::explicit_only);
   // TODO(@user): Add more resistive effects here
 
   if (psbox_b != nullptr) {

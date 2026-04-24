@@ -8,6 +8,7 @@
 
 #include <float.h>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <string> // string
@@ -19,6 +20,25 @@
 #include "resistivity.hpp"
 #include "current_density.hpp"
 
+namespace {
+
+parabolic::ParabolicIntegratorMode ParseOhmicResistivityIntegrator(ParameterInput *pin) {
+  std::string integrator = pin->GetOrAddString("mhd", "ohmic_resistivity_integrator",
+                                               "explicit");
+  if (integrator == "explicit") {
+    return parabolic::ParabolicIntegratorMode::explicit_mode;
+  } else if (integrator == "sts") {
+    return parabolic::ParabolicIntegratorMode::sts;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<mhd>/ohmic_resistivity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // ctor: also calls Resistivity base class constructor
 
@@ -26,7 +46,7 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
   // Read parameters for Ohmic resistivity (if any)
   if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
-    iso_resist_type = pin->GetString("mhd","ohmic_resisitivity");
+    iso_resist_type = pin->GetString("mhd","ohmic_resistivity");
     // Check for valid type
     if (iso_resist_type.compare("constant") != 0) {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
@@ -35,6 +55,8 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
     }
     // constant resistivity
     eta_ohm = pin->GetReal("mhd","eta_ohm");
+
+    mode = ParseOhmicResistivityIntegrator(pin);
   }
 }
 

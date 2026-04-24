@@ -33,6 +33,7 @@ add_executable(
 
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
+        diffusion/sts_rkl2.cpp
         diffusion/viscosity.cpp
 
         driver/driver.cpp
@@ -65,6 +66,7 @@ add_executable(
         hydro/hydro_fluxes.cpp
         hydro/hydro_fofc.cpp
         hydro/hydro_newdt.cpp
+        hydro/hydro_sts.cpp
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
 
@@ -86,6 +88,7 @@ add_executable(
         mhd/mhd_fluxes.cpp
         mhd/mhd_fofc.cpp
         mhd/mhd_newdt.cpp
+        mhd/mhd_sts.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 

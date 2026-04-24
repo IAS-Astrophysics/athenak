@@ -96,8 +96,18 @@ class Hydro {
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables at intermediate step
+  DvceArray5D<Real> u_sts0;   // conserved variables at start of STS sweep
+  DvceArray5D<Real> u_sts1;   // previous STS stage state
+  DvceArray5D<Real> u_sts2;   // second previous STS stage state
+  DvceArray5D<Real> u_sts_rhs;  // cached stage-1 RKL2 operator contribution
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
+
+  bool has_explicit_viscosity = false;
+  bool has_explicit_conduction = false;
+  bool has_sts_viscosity = false;
+  bool has_sts_conduction = false;
+  bool has_any_sts_diffusion = false;
 
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
@@ -111,6 +121,7 @@ class Hydro {
   void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus InitRecvParabolic(Driver *d, int stage);
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus Fluxes(Driver *d, int stage);
@@ -129,6 +140,10 @@ class Hydro {
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus ClearSTSFlux(Driver *d, int stage);
+  TaskStatus STSFluxes(Driver *d, int stage);
+  TaskStatus STSUpdate(Driver *d, int stage);
+  TaskStatus STSRefreshTimeStep(Driver *d, int stage);
   // ...in "after_stagen_tl" list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
@@ -141,6 +156,8 @@ class Hydro {
   void FOFC(Driver *d, int stage);
 
  private:
+  void AddSelectedDiffusionFluxes(DiffusionSelection selection);
+  void RecomputeTimeStepFromCurrentState(Driver *pdrive);
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };
 

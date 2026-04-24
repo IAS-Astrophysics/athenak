@@ -53,7 +53,10 @@ Mesh::Mesh(ParameterInput *pin) :
   nprtcl_thisrank(0),
   nprtcl_total(0),
   dtold(0.),
-  dt_last_completed(0.) {
+  dt_last_completed(0.),
+  dt_parabolic_sts(std::numeric_limits<float>::max()),
+  sts_max_dt_ratio(-1.0),
+  sts_integrator(parabolic::STSIntegrator::none) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -574,54 +577,58 @@ void Mesh::NewTimeStep(const Real tlim) {
     dtold = 0.;
   }
 
-  // cycle over all MeshBlocks on this rank and find minimum dt
-  // Requires at least ONE of the physics modules to be defined.
-  // limit increase in timestep to 2x old value
-  dt = 2.0*dt;
+  // cycle over all MeshBlocks on this rank and find minimum dt.
+  Real dt_legacy = 2.0*dt;
+  Real dt_cycle_candidate = dt_legacy;
+  dt_parabolic_sts = std::numeric_limits<float>::max();
 
   // Hydro timestep
   if (pmb_pack->phydro != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->phydro->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->phydro->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
-    }
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->phydro->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->phydro->dtnew) );
     // source terms timestep
     if (pmb_pack->phydro->psrc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+      dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+      dt_cycle_candidate = std::min(dt_cycle_candidate,
+                                    (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
     }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->pmhd->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
-    }
-    // resistivity timestep
-    if (pmb_pack->pmhd->presist != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->pmhd->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
-    }
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pmhd->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->pmhd->dtnew) );
     // source terms timestep
     if (pmb_pack->pmhd->psrc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+      dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+      dt_cycle_candidate = std::min(dt_cycle_candidate,
+                                    (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    }
+  }
+
+  // Parabolic-process timestep budgets
+  for (const auto &process : pmb_pack->parabolic_processes) {
+    Real process_dt = (cfl_no)*(process.ExplicitDt());
+    dt_legacy = std::min(dt_legacy, process_dt);
+    if (process.UsesSTS()) {
+      dt_parabolic_sts = std::min(dt_parabolic_sts, process_dt);
+    } else {
+      dt_cycle_candidate = std::min(dt_cycle_candidate, process_dt);
     }
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->pz4c->dtnew) );
   }
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
+    dt_legacy = std::min(dt_legacy, (cfl_no)*(pmb_pack->prad->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (cfl_no)*(pmb_pack->prad->dtnew) );
+  }
+  // Particles timestep
+  if (pmb_pack->ppart != nullptr) {
+    dt_legacy = std::min(dt_legacy, (pmb_pack->ppart->dtnew) );
+    dt_cycle_candidate = std::min(dt_cycle_candidate, (pmb_pack->ppart->dtnew) );
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
@@ -629,9 +636,25 @@ void Mesh::NewTimeStep(const Real tlim) {
   }
 
 #if MPI_PARALLEL_ENABLED
-  // get minimum dt over all MPI ranks
-  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  // get minimum timestep budgets over all MPI ranks
+  Real dt_reduction[3] = {dt_legacy, dt_cycle_candidate, dt_parabolic_sts};
+  MPI_Allreduce(MPI_IN_PLACE, dt_reduction, 3, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  dt_legacy = dt_reduction[0];
+  dt_cycle_candidate = dt_reduction[1];
+  dt_parabolic_sts = dt_reduction[2];
 #endif
+
+  if (sts_integrator != parabolic::STSIntegrator::none &&
+      sts_max_dt_ratio > 0.0 &&
+      dt_parabolic_sts < std::numeric_limits<float>::max()) {
+    dt_cycle_candidate = std::min(dt_cycle_candidate, sts_max_dt_ratio*dt_parabolic_sts);
+  }
+
+  if (sts_integrator == parabolic::STSIntegrator::none) {
+    dt = dt_legacy;
+  } else {
+    dt = dt_cycle_candidate;
+  }
 
   // limit last time step to stop at tlim *exactly*
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}

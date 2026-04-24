@@ -10,6 +10,7 @@
 
 #include <float.h>
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <iostream>
 #include <string> // string
@@ -20,6 +21,25 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "viscosity.hpp"
+
+namespace {
+
+parabolic::ParabolicIntegratorMode ParseViscosityIntegrator(std::string block,
+    ParameterInput *pin) {
+  std::string integrator = pin->GetOrAddString(block, "viscosity_integrator", "explicit");
+  if (integrator == "explicit") {
+    return parabolic::ParabolicIntegratorMode::explicit_mode;
+  } else if (integrator == "sts") {
+    return parabolic::ParabolicIntegratorMode::sts;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<" << block << ">/viscosity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // ctor:
@@ -40,6 +60,7 @@ Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin) 
     }
     // constant conductivity
     nu_iso = pin->GetReal(block,"nu_iso");
+    mode = ParseViscosityIntegrator(block, pin);
   }
 }
 

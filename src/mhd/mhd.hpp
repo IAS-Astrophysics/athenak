@@ -125,7 +125,19 @@ class MHD {
 
   // following only used for time-evolving flow
   DvceArray5D<Real> u1;       // conserved variables, second register
+  DvceArray5D<Real> u_sts0;   // conserved variables at start of STS sweep
+  DvceArray5D<Real> u_sts1;   // previous STS stage state
+  DvceArray5D<Real> u_sts2;   // second previous STS stage state
+  DvceArray5D<Real> u_sts_rhs;  // cached stage-1 RKL2 operator contribution
+  DvceArray5D<Real> cgl_p_sts0;   // CGL pressures at start of heat-flux STS sweep
+  DvceArray5D<Real> cgl_p_sts1;   // previous CGL heat-flux STS pressure state
+  DvceArray5D<Real> cgl_p_sts2;   // second previous CGL heat-flux STS pressure state
+  DvceArray5D<Real> cgl_p_sts_rhs;  // cached stage-1 CGL heat-flux contribution
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
+  DvceFaceFld4D<Real> b_sts0;   // face-centered magnetic fields at start of STS sweep
+  DvceFaceFld4D<Real> b_sts1;   // previous STS stage magnetic state
+  DvceFaceFld4D<Real> b_sts2;   // second previous STS stage magnetic state
+  DvceFaceFld4D<Real> b_sts_rhs;  // cached stage-1 RKL2 magnetic operator contribution
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   // temporary variables used to store face-centered electric fields returned by RS
@@ -143,6 +155,16 @@ class MHD {
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
 
+  bool has_explicit_viscosity = false;
+  bool has_explicit_conduction = false;
+  bool has_explicit_resistivity = false;
+  bool has_sts_viscosity = false;
+  bool has_sts_conduction = false;
+  bool has_sts_resistivity = false;
+  bool has_any_sts_diffusion = false;
+  bool has_any_sts_cell_update = false;
+  bool has_any_sts_field_update = false;
+
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
@@ -153,6 +175,7 @@ class MHD {
   TaskStatus SaveMHDState(Driver *d, int stage);
   // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
+  TaskStatus InitRecvParabolic(Driver *d, int stage);
   // ...in "stagen_tl" task list
   TaskStatus CopyCons(Driver *d, int stage);
   TaskStatus Fluxes(Driver *d, int stage);
@@ -183,6 +206,14 @@ class MHD {
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  TaskStatus ClearSTSFlux(Driver *d, int stage);
+  TaskStatus ClearSTSEField(Driver *d, int stage);
+  TaskStatus STSFluxes(Driver *d, int stage);
+  TaskStatus STSEField(Driver *d, int stage);
+  TaskStatus STSUpdateU(Driver *d, int stage);
+  TaskStatus STSUpdateCGLHeatFlux(Driver *d, int stage);
+  TaskStatus STSUpdateB(Driver *d, int stage);
+  TaskStatus STSRefreshTimeStep(Driver *d, int stage);
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
@@ -198,6 +229,9 @@ class MHD {
   DvceArray5D<Real> utest, bcctest;  // scratch arrays for FOFC
 
  private:
+  void AddSelectedDiffusionFluxes(DiffusionSelection selection);
+  void AddSelectedDiffusionEMF(DiffusionSelection selection);
+  void RecomputeTimeStepFromCurrentState(Driver *pdrive);
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;
