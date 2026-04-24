@@ -702,7 +702,7 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
 
 }  // namespace
 
-void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart) {
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_dynamical_relativistic || pmbp->pdyngr == nullptr ||
       pmbp->padm == nullptr || pmbp->pz4c == nullptr) {
