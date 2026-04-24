@@ -6,25 +6,11 @@ problem   = magnetosphere
 <job>
 basename  = magsph      # problem ID: basename of output filenames
 
-<output1>
-file_type   = bin        # Tabular data dump
-#variable   = hydro_u    # variables to be output
-variable    = mhd_u_bcc  # variables to be output
-dt          = 0.628      # time increment between outputs
-
-<output2>
-file_type   = hst       # history data dump
-dt          = 0.0314    # time increment between outputs
-
-<output3>
-file_type   = rst
-dt          = 6.28
-
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim        = 1000       # cycle limit
-tlim        = 125.6      # 12.56      #31.4  #6.28 # time limit
+tlim        = 1e10       # time limit (benchmark: terminate on cycle limit)
 integrator  = rk2        # time integration algorithm
 
 <mesh>
