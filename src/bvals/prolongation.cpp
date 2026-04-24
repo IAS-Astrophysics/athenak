@@ -15,11 +15,56 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/nghbr_index.hpp"
 #include "bvals.hpp"
 #include "mesh/prolongation.hpp" // implements prolongation operators
 #include "mesh/restriction.hpp" // implements restriction operators
 
 #include "coordinates/cell_locations.hpp"
+
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+void NeighborOffsetFromIndex(const int n, int &ox1, int &ox2, int &ox3) {
+  ox1 = 0;
+  ox2 = 0;
+  ox3 = 0;
+  for (int iz = -1; iz <= 1; ++iz) {
+    for (int iy = -1; iy <= 1; ++iy) {
+      for (int ix = -1; ix <= 1; ++ix) {
+        if ((ix == 0) && (iy == 0) && (iz == 0)) continue;
+        if (std::abs(ix*iy*iz) > 1) continue;
+        for (int n1 = 0; n1 <= 1; ++n1) {
+          for (int n2 = 0; n2 <= 1; ++n2) {
+            if (NeighborIndex(ix, iy, iz, n1, n2) == n) {
+              ox1 = ix;
+              ox2 = iy;
+              ox3 = iz;
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+int MaxNeighborLevelAtOffset(const int m, const int ox1, const int ox2, const int ox3,
+                             const DualArray2D<NeighborBlock> &nghbr) {
+  int max_lev = -1;
+  for (int n1 = 0; n1 <= 1; ++n1) {
+    for (int n2 = 0; n2 <= 1; ++n2) {
+      int idx = NeighborIndex(ox1, ox2, ox3, n1, n2);
+      if (idx >= 0 && nghbr.d_view(m, idx).gid >= 0) {
+        max_lev = (nghbr.d_view(m, idx).lev > max_lev) ? nghbr.d_view(m, idx).lev : max_lev;
+      }
+    }
+  }
+  return max_lev;
+}
+
+}  // namespace
 //----------------------------------------------------------------------------------------
 //! \fn void FillCoarseInBndryCC()
 //! \brief To ensure that the coarse array is up-to-date in all neighboring cells touched
@@ -338,12 +383,44 @@ void MeshBoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
 
     // only prolongate when neighbor exists and is at coarser level
     if ((nghbr.d_view(m,n).gid >= 0) && (nghbr.d_view(m,n).lev < mblev.d_view(m))) {
+      int ox1, ox2, ox3;
+      NeighborOffsetFromIndex(n, ox1, ox2, ox3);
+      const int my_lev = mblev.d_view(m);
+
       int il = rbuf[n].iprol[v].bis;
       int iu = rbuf[n].iprol[v].bie;
       int jl = rbuf[n].iprol[v].bjs;
       int ju = rbuf[n].iprol[v].bje;
       int kl = rbuf[n].iprol[v].bks;
       int ku = rbuf[n].iprol[v].bke;
+      if (v == 0) {
+        if ((ox1 >= 0) && (MaxNeighborLevelAtOffset(m, ox1 - 1, ox2, ox3, nghbr) >= my_lev)) {
+          il++;
+        }
+        if ((ox1 <= 0) && (MaxNeighborLevelAtOffset(m, ox1 + 1, ox2, ox3, nghbr) >= my_lev)) {
+          iu--;
+        }
+      } else if (v == 1) {
+        if ((ox2 >= 0) && (MaxNeighborLevelAtOffset(m, ox1, ox2 - 1, ox3, nghbr) >= my_lev)) {
+          jl++;
+        }
+        if ((ox2 <= 0) && (MaxNeighborLevelAtOffset(m, ox1, ox2 + 1, ox3, nghbr) >= my_lev)) {
+          ju--;
+        }
+      } else {
+        if ((ox3 >= 0) && (MaxNeighborLevelAtOffset(m, ox1, ox2, ox3 - 1, nghbr) >= my_lev)) {
+          kl++;
+        }
+        if ((ox3 <= 0) && (MaxNeighborLevelAtOffset(m, ox1, ox2, ox3 + 1, nghbr) >= my_lev)) {
+          ku--;
+        }
+      }
+
+      if ((il > iu) || (jl > ju) || (kl > ku)) {
+        tmember.team_barrier();
+        return;
+      }
+
       const int ni = iu - il + 1;
       const int nj = ju - jl + 1;
       const int nk = ku - kl + 1;
