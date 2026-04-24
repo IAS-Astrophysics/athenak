@@ -79,6 +79,9 @@ bh_center_x3 = 0.0
 star_center_x1 = 8.0
 star_center_x2 = 0.0
 star_center_x3 = 0.0
+star_boost_x = 0.0
+star_boost_y = 0.0
+star_boost_z = 0.0
 isotropic = true
 
 rhoc = 1.0e-6

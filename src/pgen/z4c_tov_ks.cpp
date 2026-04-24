@@ -34,6 +34,9 @@ Real bh_horizon_radius = 1.0;
 Real star_center_x1 = 8.0;
 Real star_center_x2 = 0.0;
 Real star_center_x3 = 0.0;
+Real star_boost_x = 0.0;
+Real star_boost_y = 0.0;
+Real star_boost_z = 0.0;
 bool star_isotropic = true;
 Real excision_damp_rate = 50.0;
 bool excision_project_state = true;
@@ -317,9 +320,9 @@ void FillTOVPrimitivesAndADM(ParameterInput *pin, Mesh *pmy_mesh, TOVEOS &eos,
 
     w0(m,IDN,k,j,i) = fmax(rho, dfloor);
     w0(m,IPR,k,j,i) = fmax(p, pfloor);
-    w0(m,IVX,k,j,i) = 0.0;
-    w0(m,IVY,k,j,i) = 0.0;
-    w0(m,IVZ,k,j,i) = 0.0;
+    w0(m,IVX,k,j,i) = star_boost_x;
+    w0(m,IVY,k,j,i) = star_boost_y;
+    w0(m,IVZ,k,j,i) = star_boost_z;
     if constexpr (use_ye) {
       if (nscalars >= 1) {
         Real ye = ye_atmo;
@@ -531,6 +534,16 @@ void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart)
   star_center_x1 = pin->GetOrAddReal("problem", "star_center_x1", 8.0);
   star_center_x2 = pin->GetOrAddReal("problem", "star_center_x2", 0.0);
   star_center_x3 = pin->GetOrAddReal("problem", "star_center_x3", 0.0);
+  star_boost_x = pin->GetOrAddReal("problem", "star_boost_x", 0.0);
+  star_boost_y = pin->GetOrAddReal("problem", "star_boost_y", 0.0);
+  star_boost_z = pin->GetOrAddReal("problem", "star_boost_z", 0.0);
+  Real star_boost_sq = SQR(star_boost_x) + SQR(star_boost_y) + SQR(star_boost_z);
+  if (star_boost_sq >= 1.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "z4c_tov_ks requires star_boost_x^2 + star_boost_y^2 + "
+              << "star_boost_z^2 < 1." << std::endl;
+    exit(EXIT_FAILURE);
+  }
   star_isotropic = pin->GetOrAddBoolean("problem", "isotropic", true);
   bh_horizon_radius = 1.0 + sqrt(fmax(0.0, 1.0 - SQR(bh_spin)));
   excision_damp_rate = pin->GetOrAddReal("problem", "excision_damp_rate", 50.0);
