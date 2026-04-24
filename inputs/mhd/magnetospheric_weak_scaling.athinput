@@ -1,37 +1,11 @@
-# AthenaK input file: Isotropic AMR weak scaling benchmark
+# AthenaK input file: weak scaling benchmark (magnetospheric accretion)
 #
-# Design principles:
-#   - Domain: [-32, 32]^3 (isotropic, all dims equal)
-#   - Root grid: 128^3 cells, meshblock 32^3 -> 4x4x4 = 64 root blocks
-#     root_level = ceil(log2(4)) = 2  (AthenaK internal octree level)
-#   - 7 static AMR levels, each covering half the extent of the previous:
-#       Level 1: +-16  (level= 1 -> log_level = 1+2 = 3)
-#       Level 2: +-8
-#       Level 3: +-4
-#       Level 4: +-2
-#       Level 5: +-1
-#       Level 6: +-0.5
-#       Level 7: +-0.25
-#   - Each level has EXACTLY 4 blocks per dimension in its region
-#     (block span = 32 * cell_size, region width = 2*extent, ratio = 4 always)
-#   - Doubling nx in one dimension doubles ALL levels by 2x in that dim
-#     -> total blocks scale exactly 2x per step -> perfect weak scaling
+# The root grid resolution (nx1, nx2, nx3) must be modified for each run
+# according to the scaling tables in:
+#   docs/vista_scaling_study.md   (Vista H200, 1-64 GPUs)
+#   docs/horizon_scaling_study.md (Horizon GB200, 2-256 GPUs)
 #
-# Block count (analytical):
-#   Root net: 64 - 8 = 56  (8 inner blocks at +-16 replaced by level 1)
-#   Levels 1-6 net: (64 - 8) = 56 each
-#   Level 7 net: 64 (innermost, not replaced)
-#   Total: 7*56 + 64 = 456 meshblocks
-#
-# Weak scaling series (all GPU counts exactly divide block count):
-#   baseline    (128x128x128): 456 blocks / 4 GPUs  = 114 blk/GPU
-#   double nx1  (256x128x128): 912 blocks / 8 GPUs  = 114 blk/GPU
-#   double nx2  (256x256x128): 1824 blocks / 16 GPUs = 114 blk/GPU
-#   double nx3  (256x256x256): 3648 blocks / 32 GPUs = 114 blk/GPU
-#
-# Based on the magnetosphere (magsph) problem generator with parameters
-# appropriate for the new domain. Strip outputs and set nlim=200 for
-# benchmark runs.
+# The <meshblock> dimensions must remain fixed at 32x32x32.
 
 <comment>
 problem = magnetosphere_weak_scaling_benchmark
