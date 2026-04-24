@@ -50,6 +50,7 @@ struct LinWaveVariables {
 
 // function to compute errors in solution at end of run
 void LinearWaveErrors(ParameterInput *pin, Mesh *pm);
+void LinearWaveRefinementCondition(MeshBlockPack *pmbp);
 
 // functions to compute eigenvectors of linearized eqns in PRIMITIVE variables
 void HydroEigensystemPrim(const Real d, const Real v1, const Real v2, const Real v3,
@@ -68,6 +69,138 @@ void RelMHDPerturbations(LinWaveVariables lwv, Real u[4], Real b[4],
 namespace {
 // global variable to control computation of initial conditions versus errors
 bool set_initial_conditions = true;
+
+struct LinearWaveAMRBox {
+  bool enabled = false;
+  bool moving = false;
+  bool binary_spheres = false;
+  int level = 1;
+  Real x1min = 0.0;
+  Real x1max = 0.0;
+  Real x2min = 0.0;
+  Real x2max = 0.0;
+  Real x3min = 0.0;
+  Real x3max = 0.0;
+  Real x1vel = 0.0;
+  Real x2vel = 0.0;
+  Real x3vel = 0.0;
+  Real center_x1 = 0.0;
+  Real center_x2 = 0.0;
+  Real center_x3 = 0.0;
+  Real orbit_radius = 0.0;
+  Real sphere_radius = 0.0;
+  Real omega = 0.0;
+  Real phase0 = 0.0;
+} linwave_amr;
+
+KOKKOS_INLINE_FUNCTION
+Real WrapPeriodicCoordinate(Real x, const Real xmin, const Real xmax) {
+  const Real width = xmax - xmin;
+  if (width <= 0.0) return x;
+  while (x < xmin) x += width;
+  while (x >= xmax) x -= width;
+  return x;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real PeriodicCenterDistance(const Real xc, const Real yc, const Real xmin,
+                            const Real xmax) {
+  const Real width = xmax - xmin;
+  if (width <= 0.0) return std::abs(xc - yc);
+  Real dx = std::abs(xc - yc);
+  return fmin(dx, width - dx);
+}
+
+KOKKOS_INLINE_FUNCTION
+bool BlockOverlapsMovingBox(const RegionSize &sz, const RegionSize &mesh_size, const Real t,
+                            const bool multi_d, const bool three_d,
+                            const LinearWaveAMRBox &cfg) {
+  const Real box_x1c0 = 0.5*(cfg.x1min + cfg.x1max);
+  const Real box_x2c0 = 0.5*(cfg.x2min + cfg.x2max);
+  const Real box_x3c0 = 0.5*(cfg.x3min + cfg.x3max);
+  const Real box_hx1 = 0.5*(cfg.x1max - cfg.x1min);
+  const Real box_hx2 = 0.5*(cfg.x2max - cfg.x2min);
+  const Real box_hx3 = 0.5*(cfg.x3max - cfg.x3min);
+
+  const Real box_x1c = cfg.moving ?
+      WrapPeriodicCoordinate(box_x1c0 + cfg.x1vel*t, mesh_size.x1min, mesh_size.x1max) :
+      box_x1c0;
+  const Real box_x2c = cfg.moving ?
+      WrapPeriodicCoordinate(box_x2c0 + cfg.x2vel*t, mesh_size.x2min, mesh_size.x2max) :
+      box_x2c0;
+  const Real box_x3c = cfg.moving ?
+      WrapPeriodicCoordinate(box_x3c0 + cfg.x3vel*t, mesh_size.x3min, mesh_size.x3max) :
+      box_x3c0;
+
+  const Real mb_x1c = 0.5*(sz.x1min + sz.x1max);
+  const Real mb_x2c = 0.5*(sz.x2min + sz.x2max);
+  const Real mb_x3c = 0.5*(sz.x3min + sz.x3max);
+  const Real mb_hx1 = 0.5*(sz.x1max - sz.x1min);
+  const Real mb_hx2 = 0.5*(sz.x2max - sz.x2min);
+  const Real mb_hx3 = 0.5*(sz.x3max - sz.x3min);
+
+  const bool overlap_x1 =
+      (PeriodicCenterDistance(mb_x1c, box_x1c, mesh_size.x1min, mesh_size.x1max)
+       <= (mb_hx1 + box_hx1));
+  const bool overlap_x2 =
+      (!multi_d) ||
+      (PeriodicCenterDistance(mb_x2c, box_x2c, mesh_size.x2min, mesh_size.x2max)
+       <= (mb_hx2 + box_hx2));
+  const bool overlap_x3 =
+      (!three_d) ||
+      (PeriodicCenterDistance(mb_x3c, box_x3c, mesh_size.x3min, mesh_size.x3max)
+       <= (mb_hx3 + box_hx3));
+  return overlap_x1 && overlap_x2 && overlap_x3;
+}
+
+KOKKOS_INLINE_FUNCTION
+bool BlockOverlapsSphere(const RegionSize &sz, const RegionSize &mesh_size, const Real cx,
+                         const Real cy, const Real cz, const Real radius,
+                         const bool multi_d, const bool three_d) {
+  const Real mb_x1c = 0.5*(sz.x1min + sz.x1max);
+  const Real mb_x2c = 0.5*(sz.x2min + sz.x2max);
+  const Real mb_x3c = 0.5*(sz.x3min + sz.x3max);
+  const Real mb_hx1 = 0.5*(sz.x1max - sz.x1min);
+  const Real mb_hx2 = 0.5*(sz.x2max - sz.x2min);
+  const Real mb_hx3 = 0.5*(sz.x3max - sz.x3min);
+
+  const Real dx = fmax(PeriodicCenterDistance(mb_x1c, cx, mesh_size.x1min, mesh_size.x1max)
+                       - mb_hx1, static_cast<Real>(0.0));
+  Real dy = 0.0;
+  Real dz = 0.0;
+  if (multi_d) {
+    dy = fmax(PeriodicCenterDistance(mb_x2c, cy, mesh_size.x2min, mesh_size.x2max)
+              - mb_hx2, static_cast<Real>(0.0));
+  }
+  if (three_d) {
+    dz = fmax(PeriodicCenterDistance(mb_x3c, cz, mesh_size.x3min, mesh_size.x3max)
+              - mb_hx3, static_cast<Real>(0.0));
+  }
+  return (SQR(dx) + SQR(dy) + SQR(dz)) <= SQR(radius);
+}
+
+KOKKOS_INLINE_FUNCTION
+bool BlockOverlapsOrbitingSpheres(const RegionSize &sz, const RegionSize &mesh_size,
+                                  const Real t, const bool multi_d, const bool three_d,
+                                  const LinearWaveAMRBox &cfg) {
+  const Real theta = cfg.phase0 + cfg.omega*t;
+  const Real cth = std::cos(theta);
+  const Real sth = std::sin(theta);
+  const Real x1a = WrapPeriodicCoordinate(cfg.center_x1 + cfg.orbit_radius*cth,
+                                          mesh_size.x1min, mesh_size.x1max);
+  const Real x2a = WrapPeriodicCoordinate(cfg.center_x2 + cfg.orbit_radius*sth,
+                                          mesh_size.x2min, mesh_size.x2max);
+  const Real x1b = WrapPeriodicCoordinate(cfg.center_x1 - cfg.orbit_radius*cth,
+                                          mesh_size.x1min, mesh_size.x1max);
+  const Real x2b = WrapPeriodicCoordinate(cfg.center_x2 - cfg.orbit_radius*sth,
+                                          mesh_size.x2min, mesh_size.x2max);
+  const Real x3c = cfg.center_x3;
+
+  return BlockOverlapsSphere(sz, mesh_size, x1a, x2a, x3c, cfg.sphere_radius,
+                             multi_d, three_d) ||
+         BlockOverlapsSphere(sz, mesh_size, x1b, x2b, x3c, cfg.sphere_radius,
+                             multi_d, three_d);
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn Real A1(const Real x1,const Real x2,const Real x3)
@@ -244,6 +377,36 @@ void QuarticRoots(Real a3, Real a2, Real a1, Real a0, Real *px1, Real *px2,
 void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   // set linear wave errors function
   pgen_final_func = LinearWaveErrors;
+  user_ref_func = LinearWaveRefinementCondition;
+  linwave_amr.enabled = pin->GetOrAddBoolean("problem", "use_amr_box_refinement", false);
+  if (linwave_amr.enabled) {
+    linwave_amr.level = pin->GetOrAddInteger("problem", "amr_box_level", 1);
+    linwave_amr.moving = pin->GetOrAddBoolean("problem", "amr_box_moving", false);
+    linwave_amr.binary_spheres =
+        pin->GetOrAddBoolean("problem", "amr_binary_spheres", false);
+    linwave_amr.x1min = pin->GetReal("problem", "amr_x1min");
+    linwave_amr.x1max = pin->GetReal("problem", "amr_x1max");
+    linwave_amr.x2min = pin->GetOrAddReal("problem", "amr_x2min", pmy_mesh_->mesh_size.x2min);
+    linwave_amr.x2max = pin->GetOrAddReal("problem", "amr_x2max", pmy_mesh_->mesh_size.x2max);
+    linwave_amr.x3min = pin->GetOrAddReal("problem", "amr_x3min", pmy_mesh_->mesh_size.x3min);
+    linwave_amr.x3max = pin->GetOrAddReal("problem", "amr_x3max", pmy_mesh_->mesh_size.x3max);
+    linwave_amr.x1vel = pin->GetOrAddReal("problem", "amr_x1vel", 0.0);
+    linwave_amr.x2vel = pin->GetOrAddReal("problem", "amr_x2vel", 0.0);
+    linwave_amr.x3vel = pin->GetOrAddReal("problem", "amr_x3vel", 0.0);
+    linwave_amr.center_x1 =
+        pin->GetOrAddReal("problem", "amr_center_x1",
+                          0.5*(pmy_mesh_->mesh_size.x1min + pmy_mesh_->mesh_size.x1max));
+    linwave_amr.center_x2 =
+        pin->GetOrAddReal("problem", "amr_center_x2",
+                          0.5*(pmy_mesh_->mesh_size.x2min + pmy_mesh_->mesh_size.x2max));
+    linwave_amr.center_x3 =
+        pin->GetOrAddReal("problem", "amr_center_x3",
+                          0.5*(pmy_mesh_->mesh_size.x3min + pmy_mesh_->mesh_size.x3max));
+    linwave_amr.orbit_radius = pin->GetOrAddReal("problem", "amr_orbit_radius", 0.0);
+    linwave_amr.sphere_radius = pin->GetOrAddReal("problem", "amr_sphere_radius", 0.0);
+    linwave_amr.omega = pin->GetOrAddReal("problem", "amr_orbit_omega", 0.0);
+    linwave_amr.phase0 = pin->GetOrAddReal("problem", "amr_orbit_phase0", 0.0);
+  }
   if (restart) return;
 
   // Read and/or calculate direction of wavevector
@@ -774,6 +937,45 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
   }  // End initialization MHD variables
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void LinearWaveRefinementCondition()
+//! \brief Refines MeshBlocks that overlap a user-specified box and derefines blocks that
+//! sit fully outside that box once they reach the requested level.
+
+void LinearWaveRefinementCondition(MeshBlockPack *pmbp) {
+  if (!linwave_amr.enabled) return;
+
+  Mesh *pmesh = pmbp->pmesh;
+  auto &refine_flag = pmbp->pmesh->pmr->refine_flag;
+  auto &mblev = pmbp->pmb->mb_lev;
+  auto &mb_size = pmbp->pmb->mb_size;
+  int nmb = pmbp->nmb_thispack;
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
+  const bool multi_d = pmesh->multi_d;
+  const bool three_d = pmesh->three_d;
+  const Real time = pmesh->time;
+  const RegionSize mesh_size = pmesh->mesh_size;
+  const auto cfg = linwave_amr;
+  const int target_level = pmesh->root_level + cfg.level;
+
+  par_for_outer("LinWaveMovingBoxAMR", DevExeSpace(), 0, 0, 0, (nmb - 1),
+  KOKKOS_LAMBDA(TeamMember_t, const int m) {
+    const auto sz = mb_size.d_view(m);
+    const bool overlaps = cfg.binary_spheres ?
+        BlockOverlapsOrbitingSpheres(sz, mesh_size, time, multi_d, three_d, cfg) :
+        BlockOverlapsMovingBox(sz, mesh_size, time, multi_d, three_d, cfg);
+    const int level = mblev.d_view(m);
+    if (overlaps && (level < target_level)) {
+      refine_flag.d_view(m + mbs) = 1;
+    } else if ((!overlaps) && (level >= target_level)) {
+      refine_flag.d_view(m + mbs) = -1;
+    }
+  });
+
+  refine_flag.template modify<DevExeSpace>();
+  refine_flag.template sync<HostMemSpace>();
 }
 
 //----------------------------------------------------------------------------------------
