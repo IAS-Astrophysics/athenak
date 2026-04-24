@@ -1,0 +1,225 @@
+# AthenaK input file: Isotropic AMR weak scaling benchmark
+#
+# Design principles:
+#   - Domain: [-32, 32]^3 (isotropic, all dims equal)
+#   - Root grid: 128^3 cells, meshblock 32^3 -> 4x4x4 = 64 root blocks
+#     root_level = ceil(log2(4)) = 2  (AthenaK internal octree level)
+#   - 7 static AMR levels, each covering half the extent of the previous:
+#       Level 1: +-16  (level= 1 -> log_level = 1+2 = 3)
+#       Level 2: +-8
+#       Level 3: +-4
+#       Level 4: +-2
+#       Level 5: +-1
+#       Level 6: +-0.5
+#       Level 7: +-0.25
+#   - Each level has EXACTLY 4 blocks per dimension in its region
+#     (block span = 32 * cell_size, region width = 2*extent, ratio = 4 always)
+#   - Doubling nx in one dimension doubles ALL levels by 2x in that dim
+#     -> total blocks scale exactly 2x per step -> perfect weak scaling
+#
+# Block count (analytical):
+#   Root net: 64 - 8 = 56  (8 inner blocks at +-16 replaced by level 1)
+#   Levels 1-6 net: (64 - 8) = 56 each
+#   Level 7 net: 64 (innermost, not replaced)
+#   Total: 7*56 + 64 = 456 meshblocks
+#
+# Weak scaling series (all GPU counts exactly divide block count):
+#   baseline    (128x128x128): 456 blocks / 4 GPUs  = 114 blk/GPU
+#   double nx1  (256x128x128): 912 blocks / 8 GPUs  = 114 blk/GPU
+#   double nx2  (256x256x128): 1824 blocks / 16 GPUs = 114 blk/GPU
+#   double nx3  (256x256x256): 3648 blocks / 32 GPUs = 114 blk/GPU
+#
+# Based on the magnetosphere (magsph) problem generator with parameters
+# appropriate for the new domain. Strip outputs and set nlim=200 for
+# benchmark runs.
+
+<comment>
+problem = magnetosphere_weak_scaling_benchmark
+
+<job>
+basename = weak_bench
+
+<output1>
+file_type = hst
+dt        = 1.0
+
+<time>
+evolution  = dynamic
+cfl_number = 0.3
+nlim       = 200
+tlim       = 1e10
+integrator = rk2
+
+<mesh>
+nghost = 4
+
+nx1    = 128
+x1min  = -32
+x1max  =  32
+ix1_bc = diode
+ox1_bc = diode
+
+nx2    = 128
+x2min  = -32
+x2max  =  32
+ix2_bc = diode
+ox2_bc = diode
+
+nx3    = 128
+x3min  = -32
+x3max  =  32
+ix3_bc = diode
+ox3_bc = diode
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = static
+
+# Level 1: +-16  (4 blocks/dim; block span = 32 * 0.5/2 = 8)
+<refined_region1>
+x1min = -16.0
+x1max =  16.0
+x2min = -16.0
+x2max =  16.0
+x3min = -16.0
+x3max =  16.0
+level = 1
+
+# Level 2: +-8  (4 blocks/dim; block span = 4)
+<refined_region2>
+x1min = -8.0
+x1max =  8.0
+x2min = -8.0
+x2max =  8.0
+x3min = -8.0
+x3max =  8.0
+level = 2
+
+# Level 3: +-4  (4 blocks/dim; block span = 2)
+<refined_region3>
+x1min = -4.0
+x1max =  4.0
+x2min = -4.0
+x2max =  4.0
+x3min = -4.0
+x3max =  4.0
+level = 3
+
+# Level 4: +-2  (4 blocks/dim; block span = 1)
+<refined_region4>
+x1min = -2.0
+x1max =  2.0
+x2min = -2.0
+x2max =  2.0
+x3min = -2.0
+x3max =  2.0
+level = 4
+
+# Level 5: +-1  (4 blocks/dim; block span = 0.5)
+<refined_region5>
+x1min = -1.0
+x1max =  1.0
+x2min = -1.0
+x2max =  1.0
+x3min = -1.0
+x3max =  1.0
+level = 5
+
+# Level 6: +-0.5  (4 blocks/dim; block span = 0.25)
+<refined_region6>
+x1min = -0.5
+x1max =  0.5
+x2min = -0.5
+x2max =  0.5
+x3min = -0.5
+x3max =  0.5
+level = 6
+
+# Level 7: +-0.25  (4 blocks/dim; block span = 0.125; innermost)
+<refined_region7>
+x1min = -0.25
+x1max =  0.25
+x2min = -0.25
+x2max =  0.25
+x3min = -0.25
+x3max =  0.25
+level = 7
+
+<mhd>
+eos         = ideal
+reconstruct = wenoz
+gamma       = 1.4
+dfloor      = 1.e-9
+rsolver     = hlld
+fofc        = true
+sofc        = false
+nscalars    = 0
+
+recon_region        = sphere
+recon_region_method = plm
+recon_region_x1_center = 0.0
+recon_region_x2_center = 0.0
+recon_region_x3_center = 0.0
+recon_region_radius    = 0.2
+
+<problem>
+pgen_name = magsph
+
+user_srcs        = true
+user_constraint  = true
+user_esrcs       = true
+user_fluxmask    = false
+user_hist        = false
+
+gm0     = 1.0
+rstar   = 0.1
+origid  = 2.8
+thetaw  = 0.0
+thetab  = 0.0
+mm      = -0.0178
+denstar = 1e5
+mag_option = 1
+
+rho0      = 1.0
+r0        = 1.0
+dslope    = -2.25
+qslope    = -0.5
+h_over_r0 = 0.1
+rmagsph   = 0.5
+sig_star_disc = 0.01
+
+gravsmooth = 0.1
+
+rfix = 0.16
+efix = 0.16
+
+esrc_method      = vecpot
+esrc_blend_width = 0.0
+avg_grid_bfields = false
+
+inflow_bc_depth = 0
+ghost_vr_frac   = 0.0
+
+sponge_width = 0.02
+sponge_tau   = 0.1
+
+rho_floor1        = 1e-6
+rho_floor_slope1  = -3.0
+rho_floor2        = 1.6e-6
+rho_floor_slope2  = -5.5
+
+rad_in_cutoff  = 0.5
+rad_in_smooth  = 0.1
+rad_out_cutoff = 28.0
+rad_out_smooth = 1.0
+
+cooling_direct_set = true
+
+disc_mask_rin  = -1
+disc_mask_rout = -1
+
+fofc_scalar_tau = 0.0
