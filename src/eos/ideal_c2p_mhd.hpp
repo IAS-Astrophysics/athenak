@@ -188,7 +188,7 @@ void SingleC2P_CGLMHD(MHDCons1D &u, const EOS_Data &eos,
 //----------------------------------------------------------------------------------------
 //! \fn void SingleP2C_CGLMHD()
 //! \brief Converts single state of primitive variables into conserved variables for
-//! non-relativistic MHD with an ideal gas EOS.  Note input PRIMITIVE state contains
+//! non-relativistic CGL-MHD with an ideal gas EOS.  Note input PRIMITIVE state contains
 //! cell-centered magnetic fields, but CONSERVED state returned via arguments does not.
 
 KOKKOS_INLINE_FUNCTION

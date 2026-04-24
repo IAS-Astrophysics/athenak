@@ -118,6 +118,7 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto size = pmy_pack->pmb->mb_size;
+  bool cgl = eos.is_cgl;
   Real gm1 = eos.gamma-1.0;
   Real &kappa_ = kappa_iso;
 
@@ -125,9 +126,16 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   auto &flx1 = flx.x1f;
   par_for("conduct1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k,j,i-1)/w0(m,IDN,k,j,i-1))
-              * gm1 / size.d_view(m).dx1;
-    flx1(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    if (cgl) { //for testing purposes
+      Real dtempdxprl = (w0(m,IPR,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IPR,k,j,i-1)/w0(m,IDN,k,j,i-1)) / size.d_view(m).dx1;
+      Real dtempdxprp = (w0(m,IPP,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IPP,k,j,i-1)/w0(m,IDN,k,j,i-1)) / size.d_view(m).dx1;
+      flx1(m,IPR,k,j,i) -= 0.0;
+      flx1(m,IPP,k,j,i) -= kappa_ * dtempdxprp;
+    } else { 
+      Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k,j,i-1)/w0(m,IDN,k,j,i-1))
+                * gm1 / size.d_view(m).dx1;
+      flx1(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    }
   });
   if (pmy_pack->pmesh->one_d) {return;}
 
@@ -135,9 +143,16 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   auto &flx2 = flx.x2f;
   par_for("conduct2",DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k,j-1,i)/w0(m,IDN,k,j-1,i))
-                * gm1 / size.d_view(m).dx2;
-    flx2(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    if (cgl) {
+      Real dtempdxprl = (w0(m,IPR,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IPR,k,j-1,i)/w0(m,IDN,k,j-1,i)) / size.d_view(m).dx2;
+      Real dtempdxprp = (w0(m,IPP,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IPP,k,j-1,i)/w0(m,IDN,k,j-1,i)) / size.d_view(m).dx2;
+      flx2(m,IPR,k,j,i) -= 0.0;
+      flx2(m,IPP,k,j,i) -= kappa_ * dtempdxprp;
+    } else { 
+      Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k,j-1,i)/w0(m,IDN,k,j-1,i))
+                  * gm1 / size.d_view(m).dx2;
+      flx2(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    }
   });
   if (pmy_pack->pmesh->two_d) {return;}
 
@@ -145,9 +160,16 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   auto &flx3 = flx.x3f;
   par_for("conduct3",DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k-1,j,i)/w0(m,IDN,k-1,j,i))
-                * gm1 / size.d_view(m).dx3;
-    flx3(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    if (cgl) {
+      Real dtempdxprl = (w0(m,IPR,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IPR,k-1,j,i)/w0(m,IDN,k-1,j,i)) / size.d_view(m).dx3;
+      Real dtempdxprp = (w0(m,IPP,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IPP,k-1,j,i)/w0(m,IDN,k-1,j,i)) / size.d_view(m).dx3;
+      flx3(m,IPR,k,j,i) -= 0.0;
+      flx3(m,IPP,k,j,i) -= kappa_ * dtempdxprp;
+    } else {       
+      Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k-1,j,i)/w0(m,IDN,k-1,j,i))
+                  * gm1 / size.d_view(m).dx3;
+      flx3(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    }
   });
   return;
 }

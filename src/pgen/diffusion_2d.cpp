@@ -28,10 +28,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (restart) return;
   // read problem parameters from input file
   Real amp   = pin->GetReal("problem","amp");
-  Real p0    = pin->GetOrAddReal("problem","p0",1.0);         //background pressure
-  Real DB0  = pin->GetOrAddReal("problem","DB0",0.0);         //background pressure anisotropy
-  Real mx  = pin->GetOrAddReal("problem","mx",1.0);         //x mode number
-  Real my  = pin->GetOrAddReal("problem","my",0.0);         //y mode number
+  Real p0    = pin->GetOrAddReal("problem","p0", 1.0);         //background pressure
+  Real n0    = pin->GetOrAddReal("problem","n0", 2.0);         //background density
+  Real mx  = pin->GetOrAddReal("problem","mx", 1.0);         //x mode number
+  Real my  = pin->GetOrAddReal("problem","my", 0.0);         //y mode number
   std::string eq_state = pin->GetString("mhd","eos");
 
   // capture variables for kernel
@@ -78,19 +78,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real dens,vx,vy,vz,scal;
 
     //set up primitives
-    dens = 1.0;
+    dens = n0;
     vx = 0.0;
     vy = 0.0;
-    vz = -sqrt(1+DB0/2)*amp*sin(2.*mx*M_PI*x1v+2.*my*M_PI*x2v);
+    vz = 0.0;
 
     // set primitives in newtonian MHD
     w0_(m,IDN,k,j,i) = dens;
     w0_(m,IVX,k,j,i) = u00*vx;
     w0_(m,IVY,k,j,i) = u00*vy;
     w0_(m,IVZ,k,j,i) = u00*vz;
-    w0_(m,IPR,k,j,i) = p0-DB0/3.0;
+    w0_(m,IPR,k,j,i) = p0;//-amp*sin(2.*mx*M_PI*x1v+2.*my*M_PI*x2v);
     if (eq_state.compare("cgl") == 0) {
-      w0_(m,IPP,k,j,i) = p0+DB0/6.0;
+      w0_(m,IPP,k,j,i) = p0+amp*sin(2.*mx*M_PI*x1v+2.*my*M_PI*x2v);
     }
   });
 
@@ -113,13 +113,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       
     b0.x1f(m,k,j,i) = 1.0;
     b0.x2f(m,k,j,i) = 0.0;
-    b0.x3f(m,k,j,i) = amp*sin(2.*mx*M_PI*x1f+2.*my*M_PI*x2v);
+    b0.x3f(m,k,j,i) = 0.0;
     if (i==ie) b0.x1f(m,k,j,i+1) = 1.0;
     if (j==je) b0.x2f(m,k,j+1,i) = 0.0;
-    if (k==ke) b0.x3f(m,k+1,j,i) = amp*sin(2.*mx*M_PI*x1f+2.*my*M_PI*x2f);
+    if (k==ke) b0.x3f(m,k+1,j,i) = 0.0;
     bcc0(m,IBX,k,j,i) = 1.0;
     bcc0(m,IBY,k,j,i) = 0.0;
-    bcc0(m,IBZ,k,j,i) = amp*sin(2.*mx*M_PI*x1v+2.*my*M_PI*x2v);
+    bcc0(m,IBZ,k,j,i) = 0.0;
   });
   
   
