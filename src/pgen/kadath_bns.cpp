@@ -25,8 +25,6 @@
 
 #include <cmath>
 #include <cstdio>
-#include <math.h>
-#include <stdio.h>
 
 #include <array>
 #include <functional>
@@ -189,8 +187,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   Param p;
   if (eos_type == "Cold_Table") {
-    using namespace Kadath::Margherita;
-    using eos_t = Cold_Table;
+    using eos_t = Kadath::Margherita::Cold_Table;
     const int interp_pts = (bconfig.eos<int>(INTERP_PTS, BCO1) == 0)
                            ? 2000 : bconfig.eos<int>(INTERP_PTS, BCO1);
     EOS<eos_t, PRESSURE>::init(eos_file, h_cut, interp_pts);
@@ -198,8 +195,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     syst.add_ope("press", &EOS<eos_t, PRESSURE>::action, &p);
     syst.add_ope("rho",   &EOS<eos_t, DENSITY>::action,  &p);
   } else if (eos_type == "Cold_PWPoly") {
-    using namespace Kadath::Margherita;
-    using eos_t = Cold_PWPoly;
+    using eos_t = Kadath::Margherita::Cold_PWPoly;
     EOS<eos_t, PRESSURE>::init(eos_file, h_cut);
     syst.add_ope("eps",   &EOS<eos_t, EPSILON>::action,  &p);
     syst.add_ope("press", &EOS<eos_t, PRESSURE>::action, &p);
@@ -283,7 +279,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     quants[kq].get().coef();
 
   if (global_variable::my_rank == 0) {
-    std::cout << "Kadath system assembled. Starting per-point interpolation..." 
+    std::cout << "Kadath system assembled. Starting per-point interpolation..."
               << std::endl;
   }
 
@@ -311,7 +307,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_KXX,
                                        adm::ADM::I_ADM_KZZ);
 
-  // Warm up the summation_1d static dispatch table 
+  // Warm up the summation_1d static dispatch table
   // on the main thread before the parallel loop.
   {
     Point pt_warm(3);
@@ -385,13 +381,14 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
       host_w0(m, IDN, k, j, i) = 0.0;
       host_w0(m, IPR, k, j, i) = 0.0;
     } else {
-      using namespace Kadath::Margherita;
       if (use_cold_table) {
-        host_w0(m, IDN, k, j, i) = EOS<Cold_Table,  DENSITY>::get(h_enth);
-        host_w0(m, IPR, k, j, i) = EOS<Cold_Table,  PRESSURE>::get(h_enth);
+        using eos_t = Kadath::Margherita::Cold_Table;
+        host_w0(m, IDN, k, j, i) = EOS<eos_t, DENSITY>::get(h_enth);
+        host_w0(m, IPR, k, j, i) = EOS<eos_t, PRESSURE>::get(h_enth);
       } else if (use_cold_pwpoly) {
-        host_w0(m, IDN, k, j, i) = EOS<Cold_PWPoly, DENSITY>::get(h_enth);
-        host_w0(m, IPR, k, j, i) = EOS<Cold_PWPoly, PRESSURE>::get(h_enth);
+        using eos_t = Kadath::Margherita::Cold_PWPoly;
+        host_w0(m, IDN, k, j, i) = EOS<eos_t, DENSITY>::get(h_enth);
+        host_w0(m, IPR, k, j, i) = EOS<eos_t, PRESSURE>::get(h_enth);
       }
     }
 
