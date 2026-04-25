@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file gauss_legendre.cpp
-//  \brief Initializes a Gauss-Legendra grid to interpolate data onto
+//  \brief Initializes a Gauss-Legendre grid to interpolate data onto
 
 #include "spherical_surface.hpp"
 
@@ -126,9 +126,9 @@ void SphericalSurface::SetInterpolationIndices() {
 
       // save MeshBlock and zone indicies for nearest position to spherical
       // patch center if this angle position resides in this MeshBlock
-      if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) <= x1max) &&
-          (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) <= x2max) &&
-          (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) <= x3max)) {
+      if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) < x1max) &&
+          (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) < x2max) &&
+          (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {
         iindcs.h_view(n, 0) = m;
         iindcs.h_view(n, 1) = static_cast<int>(
             std::floor((rcoord.h_view(n, 0) - (x1min + dx1 / 2.0)) / dx1));

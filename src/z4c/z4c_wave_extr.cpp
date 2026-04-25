@@ -33,13 +33,13 @@
 namespace z4c {
 
 //Factorial
-Real fac(Real n) {
-  if(n==0 || n==1) {
-    return 1.0;
-  } else {
-    n=n*fac(n-1);
-    return n;
+Real fac(int n) {
+  Real result = 1.0;
+  while (n > 1) {
+    result *= n;
+    n--;
   }
+  return result;
 }
 
 // Calculate spin weighted spherical harmonics sw=-2 using Wigner-d matrix notation
@@ -47,15 +47,15 @@ Real fac(Real n) {
 void swsh(Real * ylmR, Real * ylmI, int l, int m, Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
-  k1 = std::max(0, m-2);
-  k2 = std::min(l+m,l-2);
+  k1 = Kokkos::max(0, m-2);
+  k2 = Kokkos::min(l+m,l-2);
   for (k = k1; k<k2+1; ++k) {
     wignerd += pow((-1),k)*sqrt(fac(l+m)*fac(l-m)*fac(l+2)*fac(l-2))
-      *pow(std::cos(theta/2.0),2*l+m-2-2*k)*pow(std::sin(theta/2.0),2*k+2-m)
+      *pow(Kokkos::cos(theta/2.0),2*l+m-2-2*k)*pow(Kokkos::sin(theta/2.0),2*k+2-m)
       /(fac(l+m-k)*fac(l-2-k)*fac(k)*fac(k+2-m));
   }
-  *ylmR = sqrt((2*l+1)/(4*M_PI))*wignerd*std::cos(m*phi);
-  *ylmI = sqrt((2*l+1)/(4*M_PI))*wignerd*std::sin(m*phi);
+  *ylmR = sqrt((2*l+1)/(4*M_PI))*wignerd*Kokkos::cos(m*phi);
+  *ylmI = sqrt((2*l+1)/(4*M_PI))*wignerd*Kokkos::sin(m*phi);
 }
 int LmIndex(int l,int m) {
     return l*l+m+l-4;

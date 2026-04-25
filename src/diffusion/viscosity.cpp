@@ -22,7 +22,7 @@
 
 //----------------------------------------------------------------------------------------
 // ctor:
-// Note first argument passes string ("hydro" or "mhd") denoting in wihch class this
+// Note first argument passes string ("hydro" or "mhd") denoting in which class this
 // object is being constructed, and therefore which <block> in the input file from which
 // the parameters are read.
 

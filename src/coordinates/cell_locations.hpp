@@ -5,11 +5,11 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file cell_locationss.hpp
+//! \file cell_locations.hpp
 //  \brief functions to compute locations on a uniform Cartesian grid
 // They provide functionality of the Coordinates class in the C++ version of the code.
 // Very similar to cc_pos.c function in C version of the code (Athena4.2)
-// Not incoporated in Coordinates class so that they can be used anywhere (for exmaple
+// Not incorporated in Coordinates class so that they can be used anywhere (for example
 // to compute locations of MeshBlocks in Mesh).
 
 #include "athena.hpp"

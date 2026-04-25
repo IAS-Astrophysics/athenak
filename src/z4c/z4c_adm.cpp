@@ -246,7 +246,7 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
 // https://git.tpi.uni-jena.de/bamdev/adm/blob/master/adm_constraints_N.m
 //
 // The constraints are set only in the MeshBlock interior, because derivatives
-// of the ADM quantities are neded to compute them.
+// of the ADM quantities are needed to compute them.
 template <int NGHOST>
 void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   // capture variables for the kernel
