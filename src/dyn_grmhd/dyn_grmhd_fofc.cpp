@@ -224,10 +224,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
 
     bool fofc_scalar_any = fofc_flag;
-    if (use_fofc_ && nscal_ > 0 && not fofc_flag) { 
+    if (use_fofc_ && nscal_ > 0 && !fofc_flag) {
       // Check if any scalar flag
       for (int n=0; n < nscal_; ++n) {
-        fofc_scalar_any |= fofc_scal_(m,n,k,j,i); 
+        fofc_scalar_any |= fofc_scal_(m,n,k,j,i);
       }
     }
 
@@ -290,7 +290,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
 
           // Compute the metric terms at j-1/2
-          adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+          adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, 
+                            g3d, beta_u, alpha);
 
           // Compute new 1st-order LLF flux at j-face
           if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -331,7 +332,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
 
           // Compute the metric terms at k-1/2
-          adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+          adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, 
+                            g3d, beta_u, alpha);
 
           // Compute new 1st-order LLF flux at k-face
           if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -372,10 +374,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
     // Initialize FOFC scalar flag to be FOFC flag
     bool fofc_scalar_any = fofc_flag;
-    if (use_fofc_ && nscal_ > 0 && not fofc_flag) { 
+    if (use_fofc_ && nscal_ > 0 && !fofc_flag) {
       // Check if any scalar flag
       for (int n=0; n < nscal_; ++n) {
-        fofc_scalar_any |= fofc_scal_(m,n,k,j,i); 
+        fofc_scalar_any |= fofc_scal_(m,n,k,j,i);
       }
     }
 
@@ -398,7 +400,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i+1);
 
         // Compute the metric terms at i+1/2
-        adm::Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, g3d, beta_u, alpha);
+        adm::Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, 
+                          g3d, beta_u, alpha);
 
         // compute new 1st-order LLF flux at (i+1)-face
         if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -578,7 +581,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           } else {
             wthe_m[n] = 1.0;
           }
-        } 
+        }
       } else {
         for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
       }
@@ -604,8 +607,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
       for (int n=0; n < nscal_; ++n) {
         wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
-        //flx1(m,nmhd_+n,k,j,i) = wthe[n] * flx1(m,nmhd_+n,k,j,i) 
-        //  + (1.0 - wthe[n]) * flx_llf[n];
         flx1(m,nmhd_+n,k,j,i) = flx_llf[n]
           + wthe[n] * (flx1(m,nmhd_+n,k,j,i) - flx_llf[n]);
       }
@@ -640,7 +641,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             } else {
               wthe_m[n] = 1.0;
             }
-          } 
+          }
         } else {
           for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
         }
@@ -665,8 +666,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
-          //flx2(m,nmhd_+n,k,j,i) = wthe[n] * flx2(m,nmhd_+n,k,j,i) 
-          //  + (1.0 - wthe[n]) * flx_llf[n];
           flx2(m,nmhd_+n,k,j,i) = flx_llf[n]
             + wthe[n] * (flx2(m,nmhd_+n,k,j,i) - flx_llf[n]);
         }
@@ -703,7 +702,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             } else {
               wthe_m[n] = 1.0;
             }
-          } 
+          }
         } else {
           for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
         }
@@ -728,8 +727,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
-          //flx3(m,nmhd_+n,k,j,i) = wthe[n] * flx3(m,nmhd_+n,k,j,i) 
-          //  + (1.0 - wthe[n]) * flx_llf[n];
           flx3(m,nmhd_+n,k,j,i) = flx_llf[n]
             + wthe[n] * (flx3(m,nmhd_+n,k,j,i) - flx_llf[n]);
         }
