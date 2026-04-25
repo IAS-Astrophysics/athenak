@@ -156,7 +156,7 @@ void givens_rotation(const Real &a, const Real &b, Real &c, Real &s) {
     s = 0;
   } else if (Kokkos::fabs(b) > Kokkos::fabs(a)) {
     Real t = -a / b;
-    Real s1 = 1.0 / sqrt(1 + t * t);
+    Real s1 = 1.0 / Kokkos::sqrt(1 + t * t);
     s = s1;
     c = s1 * t;
   } else {
