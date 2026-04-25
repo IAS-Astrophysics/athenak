@@ -60,6 +60,20 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   int &nmhd_ = pmy_pack->pmhd->nmhd;
   int &nscal_ = pmy_pack->pmhd->nscalars;
 
+  // Extract EOS species fraction limits onto device before the GPU kernel.
+  DvceArray1D<Real> eos_min_Y("eos_min_Y", nscal_);
+  DvceArray1D<Real> eos_max_Y("eos_max_Y", nscal_);
+  if (nscal_ > 0) {
+    auto h_min_Y = Kokkos::create_mirror_view(eos_min_Y);
+    auto h_max_Y = Kokkos::create_mirror_view(eos_max_Y);
+    for (int n = 0; n < nscal_; ++n) {
+      h_min_Y(n) = eos.ps.GetEOS().GetMinimumSpeciesFraction(n);
+      h_max_Y(n) = eos.ps.GetEOS().GetMaximumSpeciesFraction(n);
+    }
+    Kokkos::deep_copy(eos_min_Y, h_min_Y);
+    Kokkos::deep_copy(eos_max_Y, h_max_Y);
+  }
+
   if (pmy_pack->pmhd->use_fofc) {
     Real &gam0 = pdriver->gam0[stage-1];
     Real &gam1 = pdriver->gam1[stage-1];
@@ -125,8 +139,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         // Enforce maximum principle for scalar
         if (nscal_ > 0) {
           for (int n = 0; n < nscal_; ++n) {
-            Real varmax = eos.ps.GetEOS().GetMinimumSpeciesFraction(n);
-            Real varmin = eos.ps.GetEOS().GetMaximumSpeciesFraction(n);
+            Real varmax = eos_min_Y(n);
+            Real varmin = eos_max_Y(n);
             for (int kt = k - kadd; kt <= k + kadd; kt++) {
               for (int jt = j - jadd; jt <= j + jadd; jt++) {
                 for (int it = i-1; it <= i+1; it++) {
@@ -146,8 +160,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       if ( nscal_ > 0 ) {
         for (int n=0; n<nscal_; ++n) {
           if ( utest_(m,IDN,k,j,i) > 0 ) {
-            Real min_Y_ = eos.ps.GetEOS().GetMinimumSpeciesFraction(n);
-            Real max_Y_ = eos.ps.GetEOS().GetMaximumSpeciesFraction(n);
+            Real min_Y_ = eos_min_Y(n);
+            Real max_Y_ = eos_max_Y(n);
             if ( utest_(m,IDN,k,j,i) * min_Y_ > utest_(m,nmhd_+n,k,j,i) ||
                  utest_(m,IDN,k,j,i) * max_Y_ < utest_(m,nmhd_+n,k,j,i) ) {
               fofc_scal_(m,n,k,j,i) = true;
@@ -391,7 +405,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                                g3d, beta_u, alpha, flux, bflux);
         } else if (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
-          SingleStateLLF_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
+          SingleStateHLLE_DYNGR<IVX>(eos_, wli, wri, bli, bri, nmhd_, nscal_,
                                g3d, beta_u, alpha, flux, bflux);
         }
 
@@ -553,8 +567,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       if ( uD > 0.0 ) {
         for (int n=0; n < nscal_; ++n) {
           Real uY_m = utest_(m,nmhd_+n,k,j,i-1) - bet_pp * flx1(m,nmhd_+n,k,j,i);
-          Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
-          Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+          Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
+          Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
           if ( uY_m < min_DY_ ) {
             wthe_m[n] = ( ( utest_(m,nmhd_+n,k,j,i-1) - min_DY_ ) * bet_ppi
               - flx_llf[n] ) / ( flx1(m,nmhd_+n,k,j,i) - flx_llf[n] );
@@ -573,8 +587,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       if ( uD > 0.0 ) {
         for (int n=0; n < nscal_; ++n) {
           Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx1(m,nmhd_+n,k,j,i);
-          Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
-          Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+          Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
+          Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
           if ( uY_p < min_DY_ ) {
             wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
               + flx_llf[n] ) / ( flx_llf[n] - flx1(m,nmhd_+n,k,j,i) );
@@ -615,8 +629,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_m = utest_(m,nmhd_+n,k,j-1,i) - bet_pp * flx2(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
             if ( uY_m < min_DY_ ) {
               wthe_m[n] = ( ( utest_(m,nmhd_+n,k,j-1,i) - min_DY_ ) * bet_ppi
                 - flx_llf[n] ) / ( flx2(m,nmhd_+n,k,j,i) - flx_llf[n] );
@@ -634,8 +648,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx2(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
             if ( uY_p < min_DY_ ) {
               wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
                 + flx_llf[n] ) / ( flx_llf[n] - flx2(m,nmhd_+n,k,j,i) );
@@ -678,8 +692,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_m = utest_(m,nmhd_+n,k-1,j,i) - bet_pp * flx3(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
             if ( uY_m < min_DY_ ) {
               wthe_m[n] = ( ( utest_(m,nmhd_+n,k-1,j,i) - min_DY_ ) * bet_ppi
                 - flx_llf[n] ) / ( flx3(m,nmhd_+n,k,j,i) - flx_llf[n] );
@@ -697,8 +711,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx3(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos.ps.GetEOS().GetMinimumSpeciesFraction(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos.ps.GetEOS().GetMaximumSpeciesFraction(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
+            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
             if ( uY_p < min_DY_ ) {
               wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
                 + flx_llf[n] ) / ( flx_llf[n] - flx3(m,nmhd_+n,k,j,i) );
@@ -726,7 +740,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   // reset FOFC flag (do not reset excision flag)
   if (use_fofc_) {
     Kokkos::deep_copy(fofc_, false);
-    Kokkos::deep_copy(fofc_scal_, false);
+    if (nscal_ > 0) {Kokkos::deep_copy(fofc_scal_, false);}
   }
 
   return;
