@@ -24,6 +24,7 @@
 //  The Kadath space file must reside next to the .info file (same stem, .dat extension).
 
 #include <cmath>
+#include <cstdio>
 #include <math.h>
 #include <stdio.h>
 
@@ -33,15 +34,6 @@
 #include <limits>
 #include <string>
 #include <vector>
-
-// Kadath headers (include dirs added to CMakeLists.txt).
-// exporter_utilities.hpp brings "using namespace Kadath" into file scope.
-#include <kadath_bin_ns.hpp>
-#include <EOS/EOS.hh>
-#include <coord_fields.hpp>
-#include <Configurator/config_binary.hpp>
-#include <exporter_utilities.hpp>
-#include <bco_utilities.hpp>
 
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
@@ -61,6 +53,14 @@
 #include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 
+// Kadath FUKa
+#include "kadath_bin_ns.hpp"
+#include "EOS/EOS.hh"
+#include "coord_fields.hpp"
+#include "Configurator/config_binary.hpp"
+#include "exporter_utilities.hpp"
+#include "bco_utilities.hpp"
+
 void KadathBNSHistory(HistoryData *pdata, Mesh *pm);
 void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
 
@@ -70,11 +70,38 @@ void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
 //void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 template<class TOVEOS>
 void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
-  using namespace export_utils;          // PSI, ALP, BETX/Y/Z, AXX..AZZ, H, UX/Y/Z, NUM_QUANTS
-  using namespace Kadath::FUKA_Config;  // BIN_INFO, kadath_config_boost, BCO1/2, QPIG, GOMEGA, …
+  // export_utils: field-index enumerators
+  using export_utils::PSI;
+  using export_utils::ALP;
+  using export_utils::BETX;
+  using export_utils::BETY;
+  using export_utils::BETZ;
+  using export_utils::AXX;
+  using export_utils::AXY;
+  using export_utils::AXZ;
+  using export_utils::AYY;
+  using export_utils::AYZ;
+  using export_utils::AZZ;
+  using export_utils::H;
+  using export_utils::UX;
+  using export_utils::UY;
+  using export_utils::UZ;
+  using export_utils::NUM_QUANTS;
 
-  // This Kadath version has one rotation vector per BCO (z-axis only).
-  // Map the x/z split used by the tilted-spin API onto the single vector.
+  // Kadath::FUKA_Config: config types and parameter enumerators
+  using Kadath::FUKA_Config::kadath_config_boost;
+  using Kadath::FUKA_Config::BIN_INFO;
+  using Kadath::FUKA_Config::BCO1;
+  using Kadath::FUKA_Config::BCO2;
+  using Kadath::FUKA_Config::QPIG;
+  using Kadath::FUKA_Config::GOMEGA;
+  using Kadath::FUKA_Config::OMEGA;
+  using Kadath::FUKA_Config::COM;
+  using Kadath::FUKA_Config::HCUT;
+  using Kadath::FUKA_Config::EOSFILE;
+  using Kadath::FUKA_Config::EOSTYPE;
+  using Kadath::FUKA_Config::INTERP_PTS;
+
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
   auto &size          = pmbp->pmb->mb_size;
@@ -256,7 +283,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     quants[kq].get().coef();
 
   if (global_variable::my_rank == 0) {
-    std::cout << "Kadath system assembled. Starting per-point interpolation..." << std::endl;
+    std::cout << "Kadath system assembled. Starting per-point interpolation..." 
+              << std::endl;
   }
 
   // Hoist EOS type checks out of the hot loop.
@@ -283,7 +311,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   host_adm.vK_dd.InitWithShallowSlice(host_u_adm, adm::ADM::I_ADM_KXX,
                                        adm::ADM::I_ADM_KZZ);
 
-  // Warm up the summation_1d static dispatch table on the main thread before the parallel loop.
+  // Warm up the summation_1d static dispatch table 
+  // on the main thread before the parallel loop.
   {
     Point pt_warm(3);
     pt_warm.set(1) = xc1;
