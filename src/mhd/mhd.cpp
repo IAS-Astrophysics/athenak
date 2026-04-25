@@ -53,7 +53,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     e3_cc("e3_cc",1,1,1,1),
     utest("utest",1,1,1,1,1),
     bcctest("bcctest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1), 
+    fofc("fofc",1,1,1,1),
     fofc_scal("fofc_scal",1,1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
