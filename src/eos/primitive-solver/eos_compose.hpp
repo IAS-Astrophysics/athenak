@@ -743,7 +743,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   // Minimum enthalpy per baryon
   Real m_min_h;
 
-  // bool to protect against access of uninitialised table and prevent repeated reading
+  // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
   bool m_initialized;
 

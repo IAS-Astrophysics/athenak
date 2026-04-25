@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
   }
   if (mpiprv != MPI_THREAD_MULTIPLE) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelzation. "
+              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelization. "
               << MPI_THREAD_MULTIPLE << " : " << mpiprv
               << std::endl;
     MPI_Finalize();
