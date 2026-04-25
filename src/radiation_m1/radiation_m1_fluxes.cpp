@@ -139,8 +139,8 @@ void CalcFlux(const int m, const int k, const int j, const int i, const int nuid
 
   // Speed of light -- note that gamma_uu has NDIM=3
   const Real clam[2] = {
-      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) - beta_u(dir),
-      adm.alpha(m, k, j, i) * std::sqrt(gamma_uu(dir - 1, dir - 1)) + beta_u(dir)};
+      adm.alpha(m, k, j, i) * Kokkos::sqrt(gamma_uu(dir - 1, dir - 1)) - beta_u(dir),
+      adm.alpha(m, k, j, i) * Kokkos::sqrt(gamma_uu(dir - 1, dir - 1)) + beta_u(dir)};
   const Real clight = Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
   cmax = clight;
 }
