@@ -290,7 +290,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           blj[IBY] = brj[IBY] = b0_.x2f(m, k, j, i);
 
           // Compute the metric terms at j-1/2
-          adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, 
+          adm::Face2Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha,
                             g3d, beta_u, alpha);
 
           // Compute new 1st-order LLF flux at j-face
@@ -332,7 +332,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           bmk[IBZ] = bpk[IBZ] = b0_.x3f(m, k, j, i);
 
           // Compute the metric terms at k-1/2
-          adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha, 
+          adm::Face3Metric(m, k, j, i, adm.g_dd, adm.beta_u, adm.alpha,
                             g3d, beta_u, alpha);
 
           // Compute new 1st-order LLF flux at k-face
@@ -400,7 +400,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         bli[IBX] = bri[IBX] = b0_.x1f(m, k, j, i+1);
 
         // Compute the metric terms at i+1/2
-        adm::Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha, 
+        adm::Face1Metric(m, k, j, i+1, adm.g_dd, adm.beta_u, adm.alpha,
                           g3d, beta_u, alpha);
 
         // compute new 1st-order LLF flux at (i+1)-face
