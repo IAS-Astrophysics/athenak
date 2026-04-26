@@ -6,6 +6,9 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -36,7 +39,6 @@
 
 
 #define h 5e-5
-#define D2(comp, h) ((met_p1.g).comp - (met_m1.g).comp) / (2*h)
 
 namespace {
 
@@ -50,6 +52,8 @@ enum {
   AX1, AY1, AZ1, AX2, AY2, AZ2,
   M1T, M2T, NTRAJ
 };
+
+enum { AD_T, AD_X, AD_Y, AD_Z, NAD };
 
 struct dd_sym {
   Real tt;
@@ -72,6 +76,116 @@ struct four_metric {
   struct dd_sym g_z;
 };
 
+struct dual_real {
+  Real val, d[NAD];
+  KOKKOS_INLINE_FUNCTION dual_real() : val(0) {
+    for (int n = 0; n < NAD; ++n)
+      d[n] = 0.0;
+  }
+  KOKKOS_INLINE_FUNCTION explicit dual_real(Real v) : val(v) {
+    for (int n = 0; n < NAD; ++n)
+      d[n] = 0.0;
+  }
+  KOKKOS_INLINE_FUNCTION dual_real(Real v, Real dt, Real dx = 0.0,
+                                  Real dy = 0.0, Real dz = 0.0)
+      : val(v) {
+    d[AD_T] = dt;
+    d[AD_X] = dx;
+    d[AD_Y] = dy;
+    d[AD_Z] = dz;
+  }
+};
+KOKKOS_INLINE_FUNCTION dual_real operator+(const dual_real &a,
+                                           const dual_real &b) {
+  dual_real c(a.val + b.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = a.d[n] + b.d[n];
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator+(const dual_real &a, Real b) {
+  dual_real c(a);
+  c.val += b;
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator+(Real a, const dual_real &b) {
+  return b + a;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator-(const dual_real &a,
+                                           const dual_real &b) {
+  dual_real c(a.val - b.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = a.d[n] - b.d[n];
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator-(const dual_real &a, Real b) {
+  dual_real c(a);
+  c.val -= b;
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator-(Real a, const dual_real &b) {
+  dual_real c(a - b.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = -b.d[n];
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator-(const dual_real &a) {
+  dual_real c(-a.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = -a.d[n];
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator*(const dual_real &a,
+                                           const dual_real &b) {
+  dual_real c(a.val * b.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = a.d[n] * b.val + a.val * b.d[n];
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator*(const dual_real &a, Real b) {
+  dual_real c(a.val * b);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = a.d[n] * b;
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator*(Real a, const dual_real &b) {
+  return b * a;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator/(const dual_real &a,
+                                           const dual_real &b) {
+  dual_real c(a.val / b.val);
+  Real iden = 1.0 / (b.val * b.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = (a.d[n] * b.val - a.val * b.d[n]) * iden;
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator/(const dual_real &a, Real b) {
+  dual_real c(a.val / b);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = a.d[n] / b;
+  return c;
+}
+KOKKOS_INLINE_FUNCTION dual_real operator/(Real a, const dual_real &b) {
+  dual_real c(a / b.val);
+  Real iden = 1.0 / (b.val * b.val);
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = -a * b.d[n] * iden;
+  return c;
+}
+KOKKOS_INLINE_FUNCTION Real metric_sqrt(Real a) { return sqrt(a); }
+KOKKOS_INLINE_FUNCTION dual_real metric_sqrt(const dual_real &a) {
+  Real s = sqrt(a.val);
+  dual_real c(s);
+  Real fac = 0.5 / s;
+  for (int n = 0; n < NAD; ++n)
+    c.d[n] = fac * a.d[n];
+  return c;
+}
+KOKKOS_INLINE_FUNCTION Real value_of(Real a) { return a; }
+KOKKOS_INLINE_FUNCTION Real value_of(const dual_real &a) { return a.val; }
+KOKKOS_INLINE_FUNCTION Real deriv_of(const dual_real &a, int n) {
+  return a.d[n];
+}
+
 struct three_metric {
   Real gxx;
   Real gxy;
@@ -91,6 +205,11 @@ struct three_metric {
   Real kzz;
 };
 
+struct bbh_traj_state {
+  Real q[NTRAJ];
+  Real dq[NTRAJ];
+};
+
 struct bbh_pgen {
   Real sep;
   Real om;
@@ -105,6 +224,7 @@ struct bbh_pgen {
   Real cutoff_floor;
   Real alpha_thr;
   Real radius_thr;
+  bool use_traj_table;
 
   Real spin;
 
@@ -136,19 +256,41 @@ struct bbh_refine {
 
 struct bbh_pgen bbh;
 struct bbh_refine bbh_ref;
+struct bbh_traj_table {
+  std::vector<Real> t;
+  std::vector<Real> x1, y1, z1, x2, y2, z2;
+  std::vector<Real> vx1, vy1, vz1, vx2, vy2, vz2;
+  std::vector<Real> ax1, ay1, az1, ax2, ay2, az2;
+  std::vector<Real> m1, m2;
+  std::size_t active_segment = 0;
+  DvceArray2D<Real> *d_rows = nullptr;
+};
+struct bbh_traj_table bbh_table;
 
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
+void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
+                            Real dtraj_array[NTRAJ]);
+bbh_traj_state find_traj_state(Real tt);
+void LoadTrajectoryTable(const std::string &fname);
 
 KOKKOS_INLINE_FUNCTION
-void numerical_4metric(const Real t, const Real x, const Real y,
-    const Real z, struct four_metric &outmet,
-    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen bbh_);
+void numerical_4metric(const Real t, const Real x, const Real y, const Real z,
+                       struct four_metric &outmet, const Real nz_0[NTRAJ],
+                       const Real dnz_0[NTRAJ], const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
-int four_metric_to_three_metric(const struct four_metric &met, struct three_metric &gam);
+int four_metric_to_three_metric(const struct four_metric &met,
+                                struct three_metric &gam);
 KOKKOS_INLINE_FUNCTION
 void get_metric(const Real t, const Real x, const Real y, const Real z,
-	       	        struct four_metric &met, const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_);
+                struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
+                const bbh_pgen bbh_);
+KOKKOS_INLINE_FUNCTION
+void get_metric_and_derivatives(const Real t, const Real x, const Real y,
+                                const Real z, struct four_metric &met,
+                                const Real bbh_traj_loc[NTRAJ],
+                                const Real dtraj_array[NTRAJ],
+                                const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen bbh_);
@@ -300,6 +442,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
+  bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
+  std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
+  if (bbh.use_traj_table) {
+    if (traj_file.empty()) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "use_traj_table=true requires traj_file" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    LoadTrajectoryTable(traj_file);
+  }
 
   for (int nr = 0; nr < 16; ++nr) {
     std::string name = "radius_" + std::to_string(nr) + "_rad";
@@ -1035,25 +1188,16 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
   auto &coord = pmbp->pcoord->coord_data;
 
-  Real bbh_traj_p1[NTRAJ];
-  Real bbh_traj_0[NTRAJ];
-  Real bbh_traj_m1[NTRAJ];
+  bbh_traj_state traj = find_traj_state(tt);
   auto bbh_ = bbh;
 
-  /* Load trajectories */
-
-  /* Whether we load traj from a table or we compute analytical trajectories */
-  find_traj_t(tt+h, bbh_traj_p1);
-  find_traj_t(tt, bbh_traj_0);
-  find_traj_t(tt-h, bbh_traj_m1);
-
   // update punc location for excision
-  coord.punc_0[0] = bbh_traj_0[X1];
-  coord.punc_0[1] = bbh_traj_0[Y1];
-  coord.punc_0[2] = bbh_traj_0[Z1];
-  coord.punc_1[0] = bbh_traj_0[X2];
-  coord.punc_1[1] = bbh_traj_0[Y2];
-  coord.punc_1[2] = bbh_traj_0[Z2];
+  coord.punc_0[0] = traj.q[X1];
+  coord.punc_0[1] = traj.q[Y1];
+  coord.punc_0[2] = traj.q[Z1];
+  coord.punc_1[0] = traj.q[X2];
+  coord.punc_1[1] = traj.q[Y2];
+  coord.punc_1[2] = traj.q[Z2];
 
 
 
@@ -1073,7 +1217,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0, bbh_traj_p1, bbh_);
+    numerical_4metric(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
   
     /* Transform 4D metric to 3+1 variables*/
     four_metric_to_three_metric(met4, met3);
@@ -1107,74 +1251,12 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
-    const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ], const bbh_pgen bbh_)
+    const Real nz_0[NTRAJ], const Real dnz_0[NTRAJ], const bbh_pgen bbh_)
 {
-  struct four_metric met_m1;
-  struct four_metric met_p1;
-
-  // Time
-  get_metric(t-1*h, x, y, z, met_m1, nz_m1, bbh_);
-  get_metric(t+1*h, x, y, z, met_p1, nz_p1, bbh_);
-  get_metric(t, x, y, z, outmet, nz_0, bbh_);
-
-  outmet.g_t.tt = D2(tt, h);
-  outmet.g_t.tx = D2(tx, h);
-  outmet.g_t.ty = D2(ty, h);
-  outmet.g_t.tz = D2(tz, h);
-  outmet.g_t.xx = D2(xx, h);
-  outmet.g_t.xy = D2(xy, h);
-  outmet.g_t.xz = D2(xz, h);
-  outmet.g_t.yy = D2(yy, h);
-  outmet.g_t.yz = D2(yz, h);
-  outmet.g_t.zz = D2(zz, h);
-
-  // X
-  get_metric(t, x-1*h, y, z, met_m1, nz_0, bbh_);
-  get_metric(t, x+1*h, y, z, met_p1, nz_0, bbh_);
-
-  outmet.g_x.tt = D2(tt, h);
-  outmet.g_x.tx = D2(tx, h);
-  outmet.g_x.ty = D2(ty, h);
-  outmet.g_x.tz = D2(tz, h);
-  outmet.g_x.xx = D2(xx, h);
-  outmet.g_x.xy = D2(xy, h);
-  outmet.g_x.xz = D2(xz, h);
-  outmet.g_x.yy = D2(yy, h);
-  outmet.g_x.yz = D2(yz, h);
-  outmet.g_x.zz = D2(zz, h);
-
-  // Y
-  get_metric(t, x, y-1*h, z, met_m1, nz_0, bbh_);
-  get_metric(t, x, y+1*h, z, met_p1, nz_0, bbh_);
-
-  outmet.g_y.tt = D2(tt, h);
-  outmet.g_y.tx = D2(tx, h);
-  outmet.g_y.ty = D2(ty, h);
-  outmet.g_y.tz = D2(tz, h);
-  outmet.g_y.xx = D2(xx, h);
-  outmet.g_y.xy = D2(xy, h);
-  outmet.g_y.xz = D2(xz, h);
-  outmet.g_y.yy = D2(yy, h);
-  outmet.g_y.yz = D2(yz, h);
-  outmet.g_y.zz = D2(zz, h);
-
-  // Z
-  get_metric(t, x, y, z-1*h, met_m1, nz_0, bbh_);
-  get_metric(t, x, y, z+1*h, met_p1, nz_0, bbh_);
-
-  outmet.g_z.tt = D2(tt, h);
-  outmet.g_z.tx = D2(tx, h);
-  outmet.g_z.ty = D2(ty, h);
-  outmet.g_z.tz = D2(tz, h);
-  outmet.g_z.xx = D2(xx, h);
-  outmet.g_z.xy = D2(xy, h);
-  outmet.g_z.xz = D2(xz, h);
-  outmet.g_z.yy = D2(yy, h);
-  outmet.g_z.yz = D2(yz, h);
-  outmet.g_z.zz = D2(zz, h);
+  get_metric_and_derivatives(t, x, y, z, outmet, nz_0, dnz_0, bbh_);
 
   return;
-} 
+}
 
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met,
@@ -1374,383 +1456,444 @@ int four_metric_to_three_metric(const struct four_metric &met,
   return 0;
 }
 
-// Function to calculate the position and velocity of m1 and m2 at time t
-void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
-
-  Real const r_BH1_0 = bbh.q/(1.0+bbh.q)*bbh.sep;
-  Real const r_BH2_0 = -bbh.sep/(1.0+bbh.q);
-  bbh_t[X1] = r_BH1_0*std::cos(bbh.om*t);
-  bbh_t[Y1] = r_BH1_0*std::sin(bbh.om*t);
-  bbh_t[Z1] = 0.0;
-  bbh_t[X2] = r_BH2_0*std::cos(bbh.om*t);
-  bbh_t[Y2] = r_BH2_0*std::sin(bbh.om*t);
-  bbh_t[Z2] = 0.0;
-  bbh_t[VX1] = -r_BH1_0*bbh.om*std::sin(bbh.om*t);
-  bbh_t[VY1] = r_BH1_0*bbh.om*std::cos(bbh.om*t);
-  bbh_t[VZ1] = 0.0;
-  bbh_t[VX2] = -r_BH2_0*bbh.om*std::sin(bbh.om*t);
-  bbh_t[VY2] = r_BH2_0*bbh.om*std::cos(bbh.om*t);
-  bbh_t[VZ2] = 0.0;
-  bbh_t[AX1] = bbh.a1*std::sin(bbh.th_a1)*std::cos(bbh.ph_a1);
-  bbh_t[AY1] = bbh.a1*std::sin(bbh.th_a1)*std::sin(bbh.ph_a1);
-  bbh_t[AZ1] = bbh.a1*std::cos(bbh.th_a1);
-  bbh_t[AX2] = bbh.a2*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
-  bbh_t[AY2] = bbh.a2*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
-  bbh_t[AZ2] = bbh.a2*std::cos(bbh.th_a2);
-  bbh_t[M1T] = 1.0/(bbh.q+1.0);
-  bbh_t[M2T] = 1.0 - bbh_t[M1T];
-}
-
-KOKKOS_INLINE_FUNCTION
-void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen bbh_)
-{
-  /* Superposition components*/
-  Real KS1[NDIM][NDIM];
-  Real KS2[NDIM][NDIM];
-  Real J1[NDIM][NDIM];
-  Real J2[NDIM][NDIM];
-
-  /* Load trajectories */
-  Real xi1x = traj_array[X1];
-  Real xi1y = traj_array[Y1]; 
-  Real xi1z = traj_array[Z1];
-  Real xi2x = traj_array[X2];
-  Real xi2y = traj_array[Y2];
-  Real xi2z = traj_array[Z2];
-  Real v1x  = traj_array[VX1] + 1e-40;
-  Real v1y  = traj_array[VY1] + 1e-40;
-  Real v1z  = traj_array[VZ1] + 1e-40;
-  Real v2x =  traj_array[VX2] + 1e-40;
-  Real v2y =  traj_array[VY2] + 1e-40;
-  Real v2z =  traj_array[VZ2] + 1e-40;
-  
-  Real v2  =  sqrt( v2x * v2x + v2y * v2y + v2z * v2z );
-  Real v1  =  sqrt( v1x * v1x + v1y * v1y + v1z * v1z ); 
-  
-  Real a1x  = traj_array[AX1];
-  Real a1y  = traj_array[AY1];
-  Real a1z  = traj_array[AZ1];
-  
-  Real a2x =  traj_array[AX2];
-  Real a2y =  traj_array[AY2];
-  Real a2z =  traj_array[AZ2];
-  
-  Real m1_t = traj_array[M1T];
-  Real m2_t = traj_array[M2T];
-
-  Real a1_t = sqrt( a1x*a1x + a1y*a1y + a1z*a1z + 1e-40) ;
-  Real a2_t = sqrt( a2x*a2x + a2y*a2y + a2z*a2z + 1e-40) ;
- 
-  /* Load coordinates */  
-
-   Real oo1 = v1 * v1;
-   Real oo2 = oo1 * -1;
-   Real oo3 = 1 + oo2;
-   Real oo4 = sqrt(oo3);
-   Real oo5 = 1 / oo4;
-   Real oo6 = x * -1;
-   Real oo7 = oo6 + xi1x;
-   Real oo8 = v1x * oo7;
-   Real oo9 = y * -1;
-   Real oo10 = z * -1;
-   Real oo11 = v2 * v2;
-   Real oo12 = oo11 * -1;
-   Real oo13 = 1 + oo12;
-   Real oo14 = sqrt(oo13);
-   Real oo15 = 1 / oo14;
-   Real oo16 = oo6 + xi2x;
-   Real oo17 = v2x * oo16;
-   Real oo18 = xi1x * -1;
-   Real oo19 = 1 / oo1;
-   Real oo20 = -1 + oo4;
-   Real oo21 = xi1y * -1;
-   Real oo22 = xi1z * -1;
-   Real oo23 = xi2x * -1;
-   Real oo24 = 1 / oo11;
-   Real oo25 = -1 + oo14;
-   Real oo26 = xi2y * -1;
-   Real oo27 = xi2z * -1;
-   Real oo28 = xi1y * v1y;
-   Real oo29 = xi1z * v1z;
-   Real oo30 = v1y * (y * -1);
-   Real oo31 = v1z * (z * -1);
-   Real oo32 = oo28 + (oo29 + (oo30 + (oo31 + oo8)));
-   Real oo33 = xi2y * v2y;
-   Real oo34 = xi2z * v2z;
-   Real oo35 = v2y * (y * -1);
-   Real oo36 = v2z * (z * -1);
-   Real oo37 = oo17 + (oo33 + (oo34 + (oo35 + oo36)));
-   //Real x0BH1 = (oo8 + ((oo9 + xi1y) * v1y + (oo10 + xi1z) * v1z)) * oo5;
-   //Real x0BH2 = (oo17 + ((oo9 + xi2y) * v2y + (oo10 + xi2z) * v2z)) * oo15;
-   Real x1BH1 = (oo18 + x) - oo20 * (oo5 * (v1x * (((oo18 + x) * v1x + ((oo21 + y) * v1y + (oo22 + z) * v1z)) * oo19)));
-   Real x1BH2 = (oo23 + x) - oo24 * (oo25 * (v2x * (((oo23 + x) * v2x + ((oo26 + y) * v2y + (oo27 + z) * v2z)) * oo15)));
-   Real x2BH1 = oo21 + (oo20 * (oo32 * (oo5 * (v1y * oo19))) + y);
-   Real x2BH2 = oo26 + (oo24 * (oo25 * (oo37 * (v2y * oo15))) + y);
-   Real x3BH1 = oo22 + (oo20 * (oo32 * (oo5 * (v1z * oo19))) + z);
-   Real x3BH2 = oo27 + (oo24 * (oo25 * (oo37 * (v2z * oo15))) + z);
-
- 
-  /* Adjust mass */
-  /* This is useful for reducing the effective mass of each BH */
-  /* Adjust by hand to get the correct irreducible mass of the BH */
-  Real a1 = a1_t * bbh_.adjust_mass1;
-  Real m1 = m1_t * bbh_.adjust_mass1;
-  Real a2 = a2_t * bbh_.adjust_mass2;
-  Real m2 = m2_t * bbh_.adjust_mass2;
- 
-  //============================================// 
-  // Regularize horizon and apply excision mask //
-  //============================================//
-
-  /* Define radius with respect to BH frame */
-  Real rBH1 = sqrt( x1BH1*x1BH1 + x2BH1*x2BH1 + x3BH1*x3BH1) ;
-  Real rBH2 = sqrt( x1BH2*x1BH2 + x2BH2*x2BH2 + x3BH2*x3BH2) ;
-
-   /* Define radius cutoff */
-  Real rBH1_Cutoff = fabs(a1) * ( 1.0 + bbh_.a1_buffer) + bbh_.cutoff_floor ;
-  Real rBH2_Cutoff = fabs(a2) * ( 1.0 + bbh_.a2_buffer) + bbh_.cutoff_floor ;
-
-  /* Apply excision */
-  if ((rBH1) < rBH1_Cutoff) { if(x3BH1>0) {x3BH1 = rBH1_Cutoff;} else {x3BH1 = -1.0*rBH1_Cutoff;}}
-  if ((rBH2) < rBH2_Cutoff) { if(x3BH2>0) {x3BH2 = rBH2_Cutoff;} else {x3BH2 = -1.0*rBH2_Cutoff;}}
- 
-  //=================//
-  //     Metric      //
-  //=================//
-  Real o1 = 1.4142135623730951;
-  Real o2 = 1 / o1;
-  Real o3 = a1x * a1x;
-  Real o4 = o3 * -1;
-  Real o5 = a1z * a1z;
-  Real o6 = o5 * -1;
-  Real o7 = a2x * a2x;
-  Real o8 = o7 * -1;
-  Real o9 = x1BH1 * x1BH1;
-  Real o10 = x2BH1 * x2BH1;
-  Real o11 = x3BH1 * x3BH1;
-  Real o12 = x1BH1 * a1x;
-  Real o13 = x2BH1 * a2x;
-  Real o14 = x3BH1 * a1z;
-  Real o15 = o12 + (o13 + o14);
-  Real o16 = o15 * o15;
-  Real o17 = o16 * 4;
-  Real o18 = o10 + (o11 + (o4 + (o6 + (o8 + o9))));
-  Real o19 = o18 * o18;
-  Real o20 = o17 + o19;
-  Real o21 = sqrt(o20);
-  Real o22 = o10 + (o11 + (o21 + (o4 + (o6 + (o8 + o9)))));
-  Real o23 = pow(o22, 1.5);
-  Real o24 = o22 * o22;
-  Real o25 = o24 * 0.25;
-  Real o26 = o16 + o25;
-  Real o27 = 1 / o26;
-  Real o28 = x2BH1 * a1z;
-  Real o29 = a2x * (x3BH1 * -1);
-  Real o30 = sqrt(o22);
-  Real o31 = 1 / o30;
-  Real o32 = o1 * (o15 * (o31 * a1x));
-  Real o33 = o30 * (x1BH1 * o2);
-  Real o34 = o28 + (o29 + (o32 + o33));
-  Real o35 = o22 * 0.5;
-  Real o36 = o3 + (o35 + (o5 + o7));
-  Real o37 = 1 / o36;
-  Real o38 = o2 * (o23 * (o27 * (o34 * (o37 * m1))));
-  Real o39 = a1z * (x1BH1 * -1);
-  Real o40 = x3BH1 * a1x;
-  Real o41 = o1 * (o15 * (o31 * a2x));
-  Real o42 = o30 * (x2BH1 * o2);
-  Real o43 = o39 + (o40 + (o41 + o42));
-  Real o44 = o2 * (o23 * (o27 * (o37 * (o43 * m1))));
-  Real o45 = x1BH1 * a2x;
-  Real o46 = a1x * (x2BH1 * -1);
-  Real o47 = o1 * (o15 * (o31 * a1z));
-  Real o48 = o30 * (x3BH1 * o2);
-  Real o49 = o45 + (o46 + (o47 + o48));
-  Real o50 = o2 * (o23 * (o27 * (o37 * (o49 * m1))));
-  Real o51 = o36 * o36;
-  Real o52 = 1 / o51;
-  Real o53 = o2 * (o23 * (o27 * (o34 * (o43 * (o52 * m1)))));
-  Real o54 = o2 * (o23 * (o27 * (o34 * (o49 * (o52 * m1)))));
-  Real o55 = o2 * (o23 * (o27 * (o43 * (o49 * (o52 * m1)))));
-  Real o56 = a2y * a2y;
-  Real o57 = o56 * -1;
-  Real o58 = a2z * a2z;
-  Real o59 = o58 * -1;
-  Real o60 = x1BH2 * x1BH2;
-  Real o61 = x2BH2 * x2BH2;
-  Real o62 = x3BH2 * x3BH2;
-  Real o63 = x1BH2 * a2x;
-  Real o64 = x2BH2 * a2y;
-  Real o65 = x3BH2 * a2z;
-  Real o66 = o63 + (o64 + o65);
-  Real o67 = o66 * o66;
-  Real o68 = o67 * 4;
-  Real o69 = o57 + (o59 + (o60 + (o61 + (o62 + o8))));
-  Real o70 = o69 * o69;
-  Real o71 = o68 + o70;
-  Real o72 = sqrt(o71);
-  Real o73 = o57 + (o59 + (o60 + (o61 + (o62 + (o72 + o8)))));
-  Real o74 = pow(o73, 1.5);
-  Real o75 = o73 * o73;
-  Real o76 = o75 * 0.25;
-  Real o77 = o67 + o76;
-  Real o78 = 1 / o77;
-  Real o79 = x2BH2 * a2z;
-  Real o80 = a2y * (x3BH2 * -1);
-  Real o81 = sqrt(o73);
-  Real o82 = 1 / o81;
-  Real o83 = o1 * (o66 * (o82 * a2x));
-  Real o84 = o81 * (x1BH2 * o2);
-  Real o85 = o79 + (o80 + (o83 + o84));
-  Real o86 = o73 * 0.5;
-  Real o87 = o56 + (o58 + (o7 + o86));
-  Real o88 = 1 / o87;
-  Real o89 = o2 * (o74 * (o78 * (o85 * (o88 * m2))));
-  Real o90 = a2z * (x1BH2 * -1);
-  Real o91 = x3BH2 * a2x;
-  Real o92 = o1 * (o66 * (o82 * a2y));
-  Real o93 = o81 * (x2BH2 * o2);
-  Real o94 = o90 + (o91 + (o92 + o93));
-  Real o95 = o2 * (o74 * (o78 * (o88 * (o94 * m2))));
-  Real o96 = x1BH2 * a2y;
-  Real o97 = a2x * (x2BH2 * -1);
-  Real o98 = o1 * (o66 * (o82 * a2z));
-  Real o99 = o81 * (x3BH2 * o2);
-  Real o100 = o96 + (o97 + (o98 + o99));
-  Real o101 = o100 * (o2 * (o74 * (o78 * (o88 * m2))));
-  Real o102 = o87 * o87;
-  Real o103 = 1 / o102;
-  Real o104 = o103 * (o2 * (o74 * (o78 * (o85 * (o94 * m2)))));
-  Real o105 = o100 * (o103 * (o2 * (o74 * (o78 * (o85 * m2)))));
-  Real o106 = o100 * (o103 * (o2 * (o74 * (o78 * (o94 * m2)))));
-  Real o107 = v1 * v1;
-  Real o108 = o107 * -1;
-  Real o109 = 1 + o108;
-  Real o110 = sqrt(o109);
-  Real o111 = 1 / o110;
-  Real o112 = o111 * (v1x * -1);
-  Real o113 = o111 * (v1y * -1);
-  Real o114 = o111 * (v1z * -1);
-  Real o115 = 1 / o107;
-  Real o116 = -1 + o111;
-  Real o117 = o116 * (v1x * (v1y * o115));
-  Real o118 = o116 * (v1x * (v1z * o115));
-  Real o119 = o116 * (v1y * (v1z * o115));
-  Real o120 = v2 * v2;
-  Real o121 = o120 * -1;
-  Real o122 = 1 + o121;
-  Real o123 = sqrt(o122);
-  Real o124 = 1 / o123;
-  Real o125 = o124 * (v2x * -1);
-  Real o126 = o124 * (v2y * -1);
-  Real o127 = o124 * (v2z * -1);
-  Real o128 = 1 / o120;
-  Real o129 = -1 + o124;
-  Real o130 = o129 * (v2x * (v2y * o128));
-  Real o131 = o129 * (v2x * (v2z * o128));
-  Real o132 = o129 * (v2y * (v2z * o128));
-  KS1[0][0] = o2 * (o23 * (o27 * m1));
-  KS1[0][1] = o38;
-  KS1[0][2] = o44;
-  KS1[0][3] = o50;
-  KS1[1][0] = o38;
-  KS1[1][1] = o2 * (o23 * (o27 * ((o34 * o34) * (o52 * m1))));
-  KS1[1][2] = o53;
-  KS1[1][3] = o54;
-  KS1[2][0] = o44;
-  KS1[2][1] = o53;
-  KS1[2][2] = o2 * (o23 * (o27 * ((o43 * o43) * (o52 * m1))));
-  KS1[2][3] = o55;
-  KS1[3][0] = o50;
-  KS1[3][1] = o54;
-  KS1[3][2] = o55;
-  KS1[3][3] = o2 * (o23 * (o27 * ((o49 * o49) * (o52 * m1))));
-  KS2[0][0] = o2 * (o74 * (o78 * m2));
-  KS2[0][1] = o89;
-  KS2[0][2] = o95;
-  KS2[0][3] = o101;
-  KS2[1][0] = o89;
-  KS2[1][1] = o103 * (o2 * (o74 * (o78 * ((o85 * o85) * m2))));
-  KS2[1][2] = o104;
-  KS2[1][3] = o105;
-  KS2[2][0] = o95;
-  KS2[2][1] = o104;
-  KS2[2][2] = o103 * (o2 * (o74 * (o78 * ((o94 * o94) * m2))));
-  KS2[2][3] = o106;
-  KS2[3][0] = o101;
-  KS2[3][1] = o105;
-  KS2[3][2] = o106;
-  KS2[3][3] = (o100 * o100) * (o103 * (o2 * (o74 * (o78 * m2))));
-  J1[0][0] = o111;
-  J1[0][1] = o112;
-  J1[0][2] = o113;
-  J1[0][3] = o114;
-  J1[1][0] = o112;
-  J1[1][1] = 1 + o116 * ((v1x * v1x) * o115);
-  J1[1][2] = o117;
-  J1[1][3] = o118;
-  J1[2][0] = o113;
-  J1[2][1] = o117;
-  J1[2][2] = 1 + o116 * ((v1y * v1y) * o115);
-  J1[2][3] = o119;
-  J1[3][0] = o114;
-  J1[3][1] = o118;
-  J1[3][2] = o119;
-  J1[3][3] = 1 + o116 * ((v1z * v1z) * o115);
-  J2[0][0] = o124;
-  J2[0][1] = o125;
-  J2[0][2] = o126;
-  J2[0][3] = o127;
-  J2[1][0] = o125;
-  J2[1][1] = 1 + o129 * ((v2x * v2x) * o128);
-  J2[1][2] = o130;
-  J2[1][3] = o131;
-  J2[2][0] = o126;
-  J2[2][1] = o130;
-  J2[2][2] = 1 + o129 * ((v2y * v2y) * o128);
-  J2[2][3] = o132;
-  J2[3][0] = o127;
-  J2[3][1] = o131;
-  J2[3][2] = o132;
-  J2[3][3] = 1 + o129 * ((v2z * v2z) * o128);
-  /* Initialize the flat part */
-  Real eta[4][4] = {{-1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
-  for (int i=0; i < 4; i++ ){ for (int j=0; j < 4; j++ ){ gcov[i][j] = eta[i][j]; }}
-
-  /* Load symmetric gcov (from chatGPT3)*/
-  for (int i = 0; i < 4; ++i) {
-      for (int j = i; j < 4; ++j) {
-  
-          Real sum = 0.0;
-          for (int m = 0; m < 4; ++m) {
-              Real term1 = J2[m][i];
-              Real term2 = J1[m][i];
-  
-              for (int n = 0; n < 4; ++n) {
-                  Real term3 = J2[n][j];
-                  Real term4 = J1[n][j];
-  
-                  sum += (term1 * term3 * KS2[m][n] + term2 * term4 * KS1[m][n]);
-              }
-          }
-  
-          gcov[i][j] += sum;
-          gcov[j][i] = gcov[i][j];
-      }
+void LoadTrajectoryTable(const std::string &fname) {
+  std::ifstream fin(fname);
+  if (!fin.is_open()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "could not open trajectory file: '" << fname << "'"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
+  bbh_table = bbh_traj_table();
+  std::string line;
+  std::size_t lineno = 0;
+  while (std::getline(fin, line)) {
+    ++lineno;
+    auto p = line.find_first_not_of(" \t\r\n");
+    if (p == std::string::npos || line[p] == '#')
+      continue;
+    std::istringstream iss(line);
+    Real c[21];
+    for (int i = 0; i < 21; ++i) {
+      if (!(iss >> c[i]) || !std::isfinite(c[i])) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "bad trajectory value in '" << fname << "' line " << lineno
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+    if (!(c[1] > 0.0) || !(c[2] > 0.0) ||
+        c[9] * c[9] + c[10] * c[10] + c[11] * c[11] > 1.0 + 1.e-12 ||
+        c[12] * c[12] + c[13] * c[13] + c[14] * c[14] > 1.0 + 1.e-12) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "invalid mass or spin in '" << fname << "' line " << lineno
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    bbh_table.t.push_back(c[0]);
+    bbh_table.m1.push_back(c[1]);
+    bbh_table.m2.push_back(c[2]);
+    bbh_table.x1.push_back(c[3]);
+    bbh_table.y1.push_back(c[4]);
+    bbh_table.z1.push_back(c[5]);
+    bbh_table.x2.push_back(c[6]);
+    bbh_table.y2.push_back(c[7]);
+    bbh_table.z2.push_back(c[8]);
+    bbh_table.ax1.push_back(c[9] * c[1]);
+    bbh_table.ay1.push_back(c[10] * c[1]);
+    bbh_table.az1.push_back(c[11] * c[1]);
+    bbh_table.ax2.push_back(c[12] * c[2]);
+    bbh_table.ay2.push_back(c[13] * c[2]);
+    bbh_table.az2.push_back(c[14] * c[2]);
+    bbh_table.vx1.push_back(c[15]);
+    bbh_table.vy1.push_back(c[16]);
+    bbh_table.vz1.push_back(c[17]);
+    bbh_table.vx2.push_back(c[18]);
+    bbh_table.vy2.push_back(c[19]);
+    bbh_table.vz2.push_back(c[20]);
+  }
+  if (bbh_table.t.size() < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "trajectory file has fewer than 2 rows" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (std::size_t i = 1; i < bbh_table.t.size(); ++i)
+    if (!(bbh_table.t[i] > bbh_table.t[i - 1])) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "trajectory times must increase" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  bbh_table.active_segment = 0;
+  // Keep this allocation alive through process teardown.  A namespace-static
+  // Kokkos::View would otherwise be destroyed after Kokkos::finalize().
+  bbh_table.d_rows =
+      new DvceArray2D<Real>("bbh_traj_table", bbh_table.t.size(), NTRAJ + 1);
+  auto h_rows = Kokkos::create_mirror_view(*bbh_table.d_rows);
+  for (std::size_t r = 0; r < bbh_table.t.size(); ++r) {
+    h_rows(r, 0) = bbh_table.t[r];
+    h_rows(r, 1 + X1) = bbh_table.x1[r];
+    h_rows(r, 1 + Y1) = bbh_table.y1[r];
+    h_rows(r, 1 + Z1) = bbh_table.z1[r];
+    h_rows(r, 1 + X2) = bbh_table.x2[r];
+    h_rows(r, 1 + Y2) = bbh_table.y2[r];
+    h_rows(r, 1 + Z2) = bbh_table.z2[r];
+    h_rows(r, 1 + VX1) = bbh_table.vx1[r];
+    h_rows(r, 1 + VY1) = bbh_table.vy1[r];
+    h_rows(r, 1 + VZ1) = bbh_table.vz1[r];
+    h_rows(r, 1 + VX2) = bbh_table.vx2[r];
+    h_rows(r, 1 + VY2) = bbh_table.vy2[r];
+    h_rows(r, 1 + VZ2) = bbh_table.vz2[r];
+    h_rows(r, 1 + AX1) = bbh_table.ax1[r];
+    h_rows(r, 1 + AY1) = bbh_table.ay1[r];
+    h_rows(r, 1 + AZ1) = bbh_table.az1[r];
+    h_rows(r, 1 + AX2) = bbh_table.ax2[r];
+    h_rows(r, 1 + AY2) = bbh_table.ay2[r];
+    h_rows(r, 1 + AZ2) = bbh_table.az2[r];
+    h_rows(r, 1 + M1T) = bbh_table.m1[r];
+    h_rows(r, 1 + M2T) = bbh_table.m2[r];
+  }
+  Kokkos::deep_copy(*bbh_table.d_rows, h_rows);
+  if (global_variable::my_rank == 0)
+    std::cout << "Loaded BBH trajectory table '" << fname << "' with "
+              << bbh_table.t.size() << " rows" << std::endl;
+}
 
-  return;
+void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
+  Real dbbh_t[NTRAJ];
+  find_traj_t_with_deriv(t, bbh_t, dbbh_t);
+}
+
+bbh_traj_state find_traj_state(Real t) {
+  bbh_traj_state state;
+  find_traj_t_with_deriv(t, state.q, state.dq);
+  return state;
+}
+
+void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
+  if (!bbh.use_traj_table) {
+    Real r1 = bbh.q / (1.0 + bbh.q) * bbh.sep, r2 = -bbh.sep / (1.0 + bbh.q),
+         c = std::cos(bbh.om * t), s = std::sin(bbh.om * t),
+         om2 = bbh.om * bbh.om;
+    bbh_t[X1] = r1 * c;
+    bbh_t[Y1] = r1 * s;
+    bbh_t[Z1] = 0;
+    bbh_t[X2] = r2 * c;
+    bbh_t[Y2] = r2 * s;
+    bbh_t[Z2] = 0;
+    bbh_t[VX1] = -r1 * bbh.om * s;
+    bbh_t[VY1] = r1 * bbh.om * c;
+    bbh_t[VZ1] = 0;
+    bbh_t[VX2] = -r2 * bbh.om * s;
+    bbh_t[VY2] = r2 * bbh.om * c;
+    bbh_t[VZ2] = 0;
+    bbh_t[AX1] = bbh.a1 * std::sin(bbh.th_a1) * std::cos(bbh.ph_a1);
+    bbh_t[AY1] = bbh.a1 * std::sin(bbh.th_a1) * std::sin(bbh.ph_a1);
+    bbh_t[AZ1] = bbh.a1 * std::cos(bbh.th_a1);
+    bbh_t[AX2] = bbh.a2 * std::sin(bbh.th_a2) * std::cos(bbh.ph_a2);
+    bbh_t[AY2] = bbh.a2 * std::sin(bbh.th_a2) * std::sin(bbh.ph_a2);
+    bbh_t[AZ2] = bbh.a2 * std::cos(bbh.th_a2);
+    bbh_t[M1T] = 1.0 / (bbh.q + 1.0);
+    bbh_t[M2T] = 1.0 - bbh_t[M1T];
+    dbbh_t[X1] = bbh_t[VX1];
+    dbbh_t[Y1] = bbh_t[VY1];
+    dbbh_t[Z1] = 0;
+    dbbh_t[X2] = bbh_t[VX2];
+    dbbh_t[Y2] = bbh_t[VY2];
+    dbbh_t[Z2] = 0;
+    dbbh_t[VX1] = -om2 * bbh_t[X1];
+    dbbh_t[VY1] = -om2 * bbh_t[Y1];
+    dbbh_t[VZ1] = 0;
+    dbbh_t[VX2] = -om2 * bbh_t[X2];
+    dbbh_t[VY2] = -om2 * bbh_t[Y2];
+    dbbh_t[VZ2] = 0;
+    dbbh_t[AX1] = dbbh_t[AY1] = dbbh_t[AZ1] = dbbh_t[AX2] = dbbh_t[AY2] =
+        dbbh_t[AZ2] = dbbh_t[M1T] = dbbh_t[M2T] = 0;
+    return;
+  }
+  const auto &T = bbh_table.t;
+  Real tol = h * (1.0 + 10.0 * std::numeric_limits<Real>::epsilon());
+  if (t < T.front() - tol || t > T.back() + tol) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "requested time outside trajectory-table range" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::size_t i0, i1;
+  std::size_t cached = std::min(bbh_table.active_segment, T.size() - 2);
+  if (t >= T[cached] && t <= T[cached + 1]) {
+    i0 = cached;
+    i1 = cached + 1;
+  } else {
+    auto it = std::upper_bound(T.begin(), T.end(), t);
+    if (it == T.begin()) {
+      i0 = 0;
+      i1 = 1;
+    } else if (it == T.end()) {
+      i0 = T.size() - 2;
+      i1 = T.size() - 1;
+    } else {
+      i1 = it - T.begin();
+      i0 = i1 - 1;
+    }
+    bbh_table.active_segment = i0;
+  }
+  Real dt = T[i1] - T[i0], w = (t - T[i0]) / dt;
+  auto H = [w, dt](Real p0, Real v0, Real p1, Real v1, Real *p, Real *dp,
+                   Real *ddp) {
+    Real w2 = w * w, w3 = w2 * w;
+    *p = (2 * w3 - 3 * w2 + 1) * p0 + (w3 - 2 * w2 + w) * dt * v0 +
+         (-2 * w3 + 3 * w2) * p1 + (w3 - w2) * dt * v1;
+    *dp = ((6 * w2 - 6 * w) * p0 + (3 * w2 - 4 * w + 1) * dt * v0 +
+           (-6 * w2 + 6 * w) * p1 + (3 * w2 - 2 * w) * dt * v1) /
+          dt;
+    *ddp = ((12 * w - 6) * p0 + (6 * w - 4) * dt * v0 + (-12 * w + 6) * p1 +
+            (6 * w - 2) * dt * v1) /
+           (dt * dt);
+  };
+  H(bbh_table.x1[i0], bbh_table.vx1[i0], bbh_table.x1[i1], bbh_table.vx1[i1],
+    &bbh_t[X1], &bbh_t[VX1], &dbbh_t[VX1]);
+  H(bbh_table.y1[i0], bbh_table.vy1[i0], bbh_table.y1[i1], bbh_table.vy1[i1],
+    &bbh_t[Y1], &bbh_t[VY1], &dbbh_t[VY1]);
+  H(bbh_table.z1[i0], bbh_table.vz1[i0], bbh_table.z1[i1], bbh_table.vz1[i1],
+    &bbh_t[Z1], &bbh_t[VZ1], &dbbh_t[VZ1]);
+  H(bbh_table.x2[i0], bbh_table.vx2[i0], bbh_table.x2[i1], bbh_table.vx2[i1],
+    &bbh_t[X2], &bbh_t[VX2], &dbbh_t[VX2]);
+  H(bbh_table.y2[i0], bbh_table.vy2[i0], bbh_table.y2[i1], bbh_table.vy2[i1],
+    &bbh_t[Y2], &bbh_t[VY2], &dbbh_t[VY2]);
+  H(bbh_table.z2[i0], bbh_table.vz2[i0], bbh_table.z2[i1], bbh_table.vz2[i1],
+    &bbh_t[Z2], &bbh_t[VZ2], &dbbh_t[VZ2]);
+  dbbh_t[X1] = bbh_t[VX1];
+  dbbh_t[Y1] = bbh_t[VY1];
+  dbbh_t[Z1] = bbh_t[VZ1];
+  dbbh_t[X2] = bbh_t[VX2];
+  dbbh_t[Y2] = bbh_t[VY2];
+  dbbh_t[Z2] = bbh_t[VZ2];
+  auto linear = [w](Real f0, Real f1) { return (1.0 - w) * f0 + w * f1; };
+  auto linear_deriv = [dt](Real f0, Real f1) { return (f1 - f0) / dt; };
+  bbh_t[AX1] = linear(bbh_table.ax1[i0], bbh_table.ax1[i1]);
+  bbh_t[AY1] = linear(bbh_table.ay1[i0], bbh_table.ay1[i1]);
+  bbh_t[AZ1] = linear(bbh_table.az1[i0], bbh_table.az1[i1]);
+  bbh_t[AX2] = linear(bbh_table.ax2[i0], bbh_table.ax2[i1]);
+  bbh_t[AY2] = linear(bbh_table.ay2[i0], bbh_table.ay2[i1]);
+  bbh_t[AZ2] = linear(bbh_table.az2[i0], bbh_table.az2[i1]);
+  bbh_t[M1T] = linear(bbh_table.m1[i0], bbh_table.m1[i1]);
+  bbh_t[M2T] = linear(bbh_table.m2[i0], bbh_table.m2[i1]);
+  dbbh_t[AX1] = linear_deriv(bbh_table.ax1[i0], bbh_table.ax1[i1]);
+  dbbh_t[AY1] = linear_deriv(bbh_table.ay1[i0], bbh_table.ay1[i1]);
+  dbbh_t[AZ1] = linear_deriv(bbh_table.az1[i0], bbh_table.az1[i1]);
+  dbbh_t[AX2] = linear_deriv(bbh_table.ax2[i0], bbh_table.ax2[i1]);
+  dbbh_t[AY2] = linear_deriv(bbh_table.ay2[i0], bbh_table.ay2[i1]);
+  dbbh_t[AZ2] = linear_deriv(bbh_table.az2[i0], bbh_table.az2[i1]);
+  dbbh_t[M1T] = linear_deriv(bbh_table.m1[i0], bbh_table.m1[i1]);
+  dbbh_t[M2T] = linear_deriv(bbh_table.m2[i0], bbh_table.m2[i1]);
+}
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
+                                               T J[NDIM][NDIM]) {
+  T v2 = vx * vx + vy * vy + vz * vz, g = T(1.0) / metric_sqrt(T(1.0) - v2),
+    gm1 = g - T(1.0), iv2 = T(1.0) / v2;
+  for (int i = 0; i < NDIM; ++i)
+    for (int j = 0; j < NDIM; ++j)
+      J[i][j] = T(0.0);
+  J[0][0] = g;
+  J[0][1] = -g * vx;
+  J[0][2] = -g * vy;
+  J[0][3] = -g * vz;
+  J[1][0] = J[0][1];
+  J[2][0] = J[0][2];
+  J[3][0] = J[0][3];
+  J[1][1] = T(1.0) + gm1 * vx * vx * iv2;
+  J[1][2] = gm1 * vx * vy * iv2;
+  J[1][3] = gm1 * vx * vz * iv2;
+  J[2][1] = J[1][2];
+  J[2][2] = T(1.0) + gm1 * vy * vy * iv2;
+  J[2][3] = gm1 * vy * vz * iv2;
+  J[3][1] = J[1][3];
+  J[3][2] = J[2][3];
+  J[3][3] = T(1.0) + gm1 * vz * vz * iv2;
+}
+template <typename T>
+KOKKOS_INLINE_FUNCTION void BoostedSpatialCoordinates(T x, T y, T z, T x0, T y0,
+                                                      T z0, T vx, T vy, T vz,
+                                                      T *xbh, T *ybh, T *zbh) {
+  T dx = x - x0, dy = y - y0, dz = z - z0, v2 = vx * vx + vy * vy + vz * vz,
+    g = T(1.0) / metric_sqrt(T(1.0) - v2), q = (g - T(1.0)) / v2,
+    vd = vx * dx + vy * dy + vz * dz;
+  *xbh = dx + q * vx * vd;
+  *ybh = dy + q * vy * vd;
+  *zbh = dz + q * vz * vd;
+}
+template <typename T>
+KOKKOS_INLINE_FUNCTION void
+KerrSchildPerturbation(T x, T y, T z, T ax, T ay, T az, T m, T KS[NDIM][NDIM]) {
+  T rt2 = T(1.4142135623730951), irt2 = T(1.0) / rt2,
+    a2 = ax * ax + ay * ay + az * az, x2 = x * x + y * y + z * z,
+    ad = ax * x + ay * y + az * z, term = x2 - a2,
+    rho2 = term + metric_sqrt(T(4.0) * ad * ad + term * term),
+    rho = metric_sqrt(rho2),
+    fac = irt2 * rho2 * rho * m / (ad * ad + T(0.25) * rho2 * rho2),
+    den = a2 + T(0.5) * rho2, iden = T(1.0) / den;
+  T ell[3];
+  ell[0] = y * az - z * ay + rt2 * ad * ax / rho + rho * x * irt2;
+  ell[1] = -x * az + z * ax + rt2 * ad * ay / rho + rho * y * irt2;
+  ell[2] = x * ay - y * ax + rt2 * ad * az / rho + rho * z * irt2;
+  for (int i = 0; i < NDIM; ++i)
+    for (int j = 0; j < NDIM; ++j)
+      KS[i][j] = T(0.0);
+  KS[0][0] = fac;
+  for (int i = 0; i < 3; ++i) {
+    KS[0][i + 1] = fac * ell[i] * iden;
+    KS[i + 1][0] = KS[0][i + 1];
+  }
+  for (int i = 0; i < 3; ++i)
+    for (int j = i; j < 3; ++j) {
+      KS[i + 1][j + 1] = fac * ell[i] * ell[j] * iden * iden;
+      KS[j + 1][i + 1] = KS[i + 1][j + 1];
+    }
+}
+template <typename T>
+KOKKOS_INLINE_FUNCTION void AddBoostedKerrSchildHole(const T KS[NDIM][NDIM],
+                                                     const T J[NDIM][NDIM],
+                                                     T gcov[NDIM][NDIM]) {
+  for (int i = 0; i < NDIM; ++i)
+    for (int j = i; j < NDIM; ++j) {
+      T sum = T(0.0);
+      for (int m = 0; m < NDIM; ++m)
+        for (int n = 0; n < NDIM; ++n)
+          sum = sum + J[m][i] * J[n][j] * KS[m][n];
+      gcov[i][j] = gcov[i][j] + sum;
+      gcov[j][i] = gcov[i][j];
+    }
+}
+template <typename T>
+KOKKOS_INLINE_FUNCTION void
+SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
+                      const bbh_pgen b) {
+  T v1x = tr[VX1] + T(1e-40), v1y = tr[VY1] + T(1e-40),
+    v1z = tr[VZ1] + T(1e-40), v2x = tr[VX2] + T(1e-40),
+    v2y = tr[VY2] + T(1e-40), v2z = tr[VZ2] + T(1e-40);
+  T a1x = tr[AX1], a1y = tr[AY1], a1z = tr[AZ1], a2x = tr[AX2], a2y = tr[AY2],
+    a2z = tr[AZ2];
+  if (b.use_traj_table) {
+    a1x = a1x * b.adjust_mass1;
+    a1y = a1y * b.adjust_mass1;
+    a1z = a1z * b.adjust_mass1;
+    a2x = a2x * b.adjust_mass2;
+    a2y = a2y * b.adjust_mass2;
+    a2z = a2z * b.adjust_mass2;
+  }
+  T m1 = tr[M1T] * b.adjust_mass1, m2 = tr[M2T] * b.adjust_mass2,
+    a1n = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + T(1e-40)),
+    a2n = metric_sqrt(a2x * a2x + a2y * a2y + a2z * a2z + T(1e-40)),
+    a1 = b.use_traj_table ? a1n : a1n * b.adjust_mass1,
+    a2 = b.use_traj_table ? a2n : a2n * b.adjust_mass2;
+  T x1, y1, z1, x2, y2, z2;
+  BoostedSpatialCoordinates(x, y, z, tr[X1], tr[Y1], tr[Z1], v1x, v1y, v1z, &x1,
+                            &y1, &z1);
+  BoostedSpatialCoordinates(x, y, z, tr[X2], tr[Y2], tr[Z2], v2x, v2y, v2z, &x2,
+                            &y2, &z2);
+  T r1 = metric_sqrt(x1 * x1 + y1 * y1 + z1 * z1),
+    r2 = metric_sqrt(x2 * x2 + y2 * y2 + z2 * z2),
+    c1 = metric_sqrt(a1 * a1) * (T(1.0) + b.a1_buffer) + b.cutoff_floor,
+    c2 = metric_sqrt(a2 * a2) * (T(1.0) + b.a2_buffer) + b.cutoff_floor;
+  if (value_of(r1) < value_of(c1))
+    z1 = (value_of(z1) > 0.0) ? c1 : -c1;
+  if (value_of(r2) < value_of(c2))
+    z2 = (value_of(z2) > 0.0) ? c2 : -c2;
+  T KS1[NDIM][NDIM], KS2[NDIM][NDIM], J1[NDIM][NDIM], J2[NDIM][NDIM];
+  // The analytic/default path keeps the historical generated expression.  The
+  // table path uses the explicit chi_1_y column supplied by the trajectory file.
+  T hole1_ay = b.use_traj_table ? a1y : a2x;
+  KerrSchildPerturbation(x1, y1, z1, a1x, hole1_ay, a1z, m1, KS1);
+  KerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, m2, KS2);
+  BuildBoostJacobian(v1x, v1y, v1z, J1);
+  BuildBoostJacobian(v2x, v2y, v2z, J2);
+  for (int i = 0; i < NDIM; ++i)
+    for (int j = 0; j < NDIM; ++j)
+      gcov[i][j] = (i == j) ? ((i == 0) ? T(-1.0) : T(1.0)) : T(0.0);
+  AddBoostedKerrSchildHole(KS1, J1, gcov);
+  AddBoostedKerrSchildHole(KS2, J2, gcov);
+}
+KOKKOS_INLINE_FUNCTION void
+SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
+              Real gcov[][NDIM], const Real tr[NTRAJ], const bbh_pgen b) {
+  (void)time;
+  SuperposedBBHTemplate<Real>(x, y, z, gcov, tr, b);
+}
+KOKKOS_INLINE_FUNCTION void
+get_metric_and_derivatives(const Real t, const Real x, const Real y,
+                           const Real z, struct four_metric &met,
+                           const Real tr[NTRAJ], const Real dtr[NTRAJ],
+                           const bbh_pgen b) {
+  (void)t;
+  dual_real gcov[NDIM][NDIM], td[NTRAJ];
+  for (int n = 0; n < NTRAJ; ++n)
+    td[n] = dual_real(tr[n], dtr[n]);
+  SuperposedBBHTemplate<dual_real>(
+      dual_real(x, 0.0, 1.0), dual_real(y, 0.0, 0.0, 1.0),
+      dual_real(z, 0.0, 0.0, 0.0, 1.0), gcov, td, b);
+  met.g.tt = value_of(gcov[TT][TT]);
+  met.g.tx = value_of(gcov[TT][XX]);
+  met.g.ty = value_of(gcov[TT][YY]);
+  met.g.tz = value_of(gcov[TT][ZZ]);
+  met.g.xx = value_of(gcov[XX][XX]);
+  met.g.xy = value_of(gcov[XX][YY]);
+  met.g.xz = value_of(gcov[XX][ZZ]);
+  met.g.yy = value_of(gcov[YY][YY]);
+  met.g.yz = value_of(gcov[YY][ZZ]);
+  met.g.zz = value_of(gcov[ZZ][ZZ]);
+  met.g_t.tt = deriv_of(gcov[TT][TT], AD_T);
+  met.g_t.tx = deriv_of(gcov[TT][XX], AD_T);
+  met.g_t.ty = deriv_of(gcov[TT][YY], AD_T);
+  met.g_t.tz = deriv_of(gcov[TT][ZZ], AD_T);
+  met.g_t.xx = deriv_of(gcov[XX][XX], AD_T);
+  met.g_t.xy = deriv_of(gcov[XX][YY], AD_T);
+  met.g_t.xz = deriv_of(gcov[XX][ZZ], AD_T);
+  met.g_t.yy = deriv_of(gcov[YY][YY], AD_T);
+  met.g_t.yz = deriv_of(gcov[YY][ZZ], AD_T);
+  met.g_t.zz = deriv_of(gcov[ZZ][ZZ], AD_T);
+  met.g_x.tt = deriv_of(gcov[TT][TT], AD_X);
+  met.g_x.tx = deriv_of(gcov[TT][XX], AD_X);
+  met.g_x.ty = deriv_of(gcov[TT][YY], AD_X);
+  met.g_x.tz = deriv_of(gcov[TT][ZZ], AD_X);
+  met.g_x.xx = deriv_of(gcov[XX][XX], AD_X);
+  met.g_x.xy = deriv_of(gcov[XX][YY], AD_X);
+  met.g_x.xz = deriv_of(gcov[XX][ZZ], AD_X);
+  met.g_x.yy = deriv_of(gcov[YY][YY], AD_X);
+  met.g_x.yz = deriv_of(gcov[YY][ZZ], AD_X);
+  met.g_x.zz = deriv_of(gcov[ZZ][ZZ], AD_X);
+  met.g_y.tt = deriv_of(gcov[TT][TT], AD_Y);
+  met.g_y.tx = deriv_of(gcov[TT][XX], AD_Y);
+  met.g_y.ty = deriv_of(gcov[TT][YY], AD_Y);
+  met.g_y.tz = deriv_of(gcov[TT][ZZ], AD_Y);
+  met.g_y.xx = deriv_of(gcov[XX][XX], AD_Y);
+  met.g_y.xy = deriv_of(gcov[XX][YY], AD_Y);
+  met.g_y.xz = deriv_of(gcov[XX][ZZ], AD_Y);
+  met.g_y.yy = deriv_of(gcov[YY][YY], AD_Y);
+  met.g_y.yz = deriv_of(gcov[YY][ZZ], AD_Y);
+  met.g_y.zz = deriv_of(gcov[ZZ][ZZ], AD_Y);
+  met.g_z.tt = deriv_of(gcov[TT][TT], AD_Z);
+  met.g_z.tx = deriv_of(gcov[TT][XX], AD_Z);
+  met.g_z.ty = deriv_of(gcov[TT][YY], AD_Z);
+  met.g_z.tz = deriv_of(gcov[TT][ZZ], AD_Z);
+  met.g_z.xx = deriv_of(gcov[XX][XX], AD_Z);
+  met.g_z.xy = deriv_of(gcov[XX][YY], AD_Z);
+  met.g_z.xz = deriv_of(gcov[XX][ZZ], AD_Z);
+  met.g_z.yy = deriv_of(gcov[YY][YY], AD_Z);
+  met.g_z.yz = deriv_of(gcov[YY][ZZ], AD_Z);
+  met.g_z.zz = deriv_of(gcov[ZZ][ZZ], AD_Z);
 }
 
 KOKKOS_INLINE_FUNCTION
-void get_metric(const Real t,
-	       	const Real x,
-	       	const Real y,
-	       	const Real z,
-	       	struct four_metric &met,
-          const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_)
-{
+void get_metric(const Real t, const Real x, const Real y, const Real z,
+                struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
+                const bbh_pgen bbh_) {
   Real gcov[NDIM][NDIM];
 
   SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, bbh_);
