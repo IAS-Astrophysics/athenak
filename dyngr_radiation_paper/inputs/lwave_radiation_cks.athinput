@@ -1,0 +1,74 @@
+# Legacy stationary-CKS radiation-hydro linear wave.
+
+<job>
+basename = paper_lwave_rad
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim = -1
+tlim = 0.05
+
+<mesh>
+nghost = 2
+nx1 = 32
+x1min = 0.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 1
+x2min = -0.5
+x2max = 0.5
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = -0.5
+x3max = 0.5
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 8
+nx2 = 1
+nx3 = 1
+
+<coord>
+general_rel = true
+minkowski = true
+
+<hydro>
+eos = ideal
+reconstruct = plm
+rsolver = hlle
+gamma = 1.6666666666666667
+
+<radiation>
+nlevel = 0
+rotate_geo = false
+angular_fluxes = false
+reconstruct = plm
+kappa_a = 10.0
+kappa_s = 10.0
+kappa_p = 0.0
+arad = 19.253382731290966
+
+<problem>
+pgen_name = rad_linear_wave
+along_x1 = true
+rho = 1.0
+pgas = 2.497687326549491e-01
+erad = 7.493061979648474e-02
+delta = 1.0e-4
+omega_real = 3.1488157526582414e+00
+omega_imag = -2.6190006385782953e-02
+drho_real = 8.3877889167048014e-01
+drho_imag = 0.0
+dpgas_real = 3.2084488925731219e-01
+dpgas_imag = -9.9134535607493107e-03
+dux_real = 4.2035369927276667e-01
+dux_imag = -3.4962560317943620e-03
+derad_real = 1.2904189937790903e-01
+derad_imag = 1.5203926879094193e-03
+dfxrad_real = 1.3260665610966586e-03
+dfxrad_imag = -6.7017329068802516e-03

@@ -1,0 +1,112 @@
+# Compact superposed-BBH ADM radiation beam and null-geodesic particle smoke test.
+# This input is intentionally tiny; it checks code paths, not production accuracy.
+
+<job>
+basename = paper_dynbbh_beam
+
+<mesh>
+nghost = 2
+nx1 = 16
+x1min = -8.0
+x1max = 8.0
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 16
+x2min = -8.0
+x2max = 8.0
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 8
+x3min = -4.0
+x3max = 4.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 4
+
+<coord>
+general_rel = true
+a = 0.0
+excise = false
+
+<adm>
+dynamic = false
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim = 4
+tlim = 0.2
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+gamma = 1.6666666666666667
+
+<dyn_radiation>
+geometry = adm
+rad_source = false
+nlevel = 1
+rotate_geo = false
+angular_fluxes = false
+reconstruct = plm
+
+<particles>
+particle_type = cosmic_ray
+ppc = 0.02
+pusher = null_geodesic
+cfl = 0.25
+
+<rad_srcterms>
+rad_beam = true
+dii_dt = 1.0
+pos_1 = -5.5
+pos_2 = -0.5
+pos_3 = -0.5
+dir_1 = 1.0
+dir_2 = 0.08
+dir_3 = 0.02
+width = 2.0
+spread = 120.0
+
+<problem>
+init_beam_edge_particles = true
+rho_min = 1.0e-10
+rho_pow = 1.5
+pgas_min = 1.0e-12
+pgas_pow = 1.5
+rho_max = 1.0
+r_edge = 7.0
+r_peak = 10.0
+M = 1.0
+sep = 4.0
+q = 1.0
+spin = 0.0
+spin_a1 = 0.55
+spin_a2 = 0.42
+th_a1 = 0.9
+ph_a1 = 0.4
+th_a2 = 1.1
+ph_a2 = 2.0
+profile = gaussian
+dr = 2.0
+
+<output1>
+file_type = tab
+variable = rad_coord
+dt = 0.2
+slice_x2 = -0.5
+slice_x3 = -0.5
+
+<output2>
+file_type = trk
+variable = prtcl_all
+nparticles = 8
+dt = 0.05
