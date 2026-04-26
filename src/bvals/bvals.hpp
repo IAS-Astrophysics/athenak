@@ -10,7 +10,7 @@
 //! types of Mesh variables. For Mesh variables, methods for cell-centered and
 //! face-centered fields are currently implemented, based on derived classes from the
 //! generic MeshBoundaryValue class.  A separate ParticlesBoundaryValues class is
-//! implemented for partciles.
+//! implemented for particles.
 
 // identifiers for all 6 faces of a MeshBlock
 enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, outer_x3};
@@ -37,9 +37,8 @@ class Particles;
 //----------------------------------------------------------------------------------------
 //! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
 //! \brief calculate an MPI tag for boundary buffer communications.  Note maximum size of
-//! lid that can be encoded is set by (NUM_BITS_LID) macro.
-//! The convention in Athena++ is lid and bufid are both for the *receiving* process.
-//! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
+//! lid that can be encoded is set by (NUM_BITS_LID) macro defined in athena.hpp.
+//! The convention in AthenaK is lid and bufid are both for the *receiving* process.
 static int CreateBvals_MPI_Tag(int lid, int bufid) {
   return (bufid << (NUM_BITS_LID)) | lid;
 }

@@ -34,11 +34,11 @@
 // Athena headers
 #include "athena.hpp"
 #include "globals.hpp"
-#include "utils/utils.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
+#include "utils/utils.hpp"
 
 // MPI/OpenMP headers
 #if MPI_PARALLEL_ENABLED
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
   }
   if (mpiprv != MPI_THREAD_MULTIPLE) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelzation. "
+              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelization. "
               << MPI_THREAD_MULTIPLE << " : " << mpiprv
               << std::endl;
     MPI_Finalize();
@@ -277,6 +277,7 @@ int main(int argc, char *argv[]) {
     infile.Open(input_file.c_str(), IOWrapper::FileMode::read);
     pinput->LoadFromFile(infile);
     infile.Close();
+    pinput->CheckBlockNames();
   }
   pinput->ModifyFromCmdline(argc, argv);
 

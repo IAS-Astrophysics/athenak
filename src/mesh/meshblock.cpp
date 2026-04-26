@@ -56,7 +56,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       mb_bcs.h_view(m,1) = BoundaryFlag::block;
     }
 
-    // calculate physical size and set BCs of each MeshBlock in x2, dependng on whether
+    // calculate physical size and set BCs of each MeshBlock in x2, depending on whether
     // there are none (1D), one, or more MeshBlocks in this direction
     if (!(pm->multi_d)) {
       mb_size.h_view(m).x2min = ms.x2min;
@@ -83,7 +83,7 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
       }
     }
 
-    // calculate physical size and set BCs of each MeshBlock in x1, dependng on whether
+    // calculate physical size and set BCs of each MeshBlock in x1, depending on whether
     // there are none (1D/2D), one, or more MeshBlocks in this direction
     if (!(pm->three_d)) {
       mb_size.h_view(m).x3min = ms.x3min;

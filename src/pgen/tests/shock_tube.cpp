@@ -42,7 +42,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
   shk_dir = pin->GetInteger("problem","shock_dir");
   if (shk_dir < 1 || shk_dir > 3) {
-    // Invaild input value for shk_dir
+    // Invalid input value for shk_dir
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
       << std::endl << "shock_dir=" <<shk_dir<< " must be either 1,2, or 3" << std::endl;
     exit(EXIT_FAILURE);
@@ -322,7 +322,6 @@ void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
   int ivy = IVX + ((ivx - IVX) + 1)%3;
   int ivz = IVX + ((ivx - IVX) + 2)%3;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
-  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
   int ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;

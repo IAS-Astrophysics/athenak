@@ -1,0 +1,77 @@
+<comment>
+problem   = Riemann problem from Figure 2a of Ryu & Jones (1995)
+reference = Ryu, D. & Jones, T.W., ApJ 442, 228-258 (1995)
+configure = -b --prob=shock_tube
+
+<job>
+basename  = RJ2a      # problem ID: basename of output filenames
+
+<mesh>
+nghost      = 2         # Number of ghost cells
+nx1         = 256       # Number of zones in X1-direction
+x1min       = -0.5      # minimum value of X1
+x1max       = 0.5       # maximum value of X1
+ix1_bc      = outflow   # Inner-X1 boundary condition flag
+ox1_bc      = outflow   # Outer-X1 boundary condition flag
+
+nx2         = 1         # Number of zones in X2-direction
+x2min       = -0.5      # minimum value of X2
+x2max       = 0.5       # maximum value of X2
+ix2_bc      = periodic  # Inner-X2 boundary condition flag
+ox2_bc      = periodic  # Outer-X2 boundary condition flag
+
+nx3         = 1         # Number of zones in X3-direction
+x3min       = -0.5      # minimum value of X3
+x3max       = 0.5       # maximum value of X3
+ix3_bc      = periodic  # Inner-X3 boundary condition flag
+ox3_bc      = periodic  # Outer-X3 boundary condition flag
+
+<meshblock>
+nx1       = 256       # Number of cells in each MeshBlock, X1-dir
+nx2       = 1         # Number of cells in each MeshBlock, X2-dir
+nx3       = 1         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic   # dynamic/kinematic/static
+integrator = rk2       # time integration algorithm
+cfl_number = 0.8       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 0.2      # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<mhd>
+eos         = ideal    # EOS type
+reconstruct = plm      # spatial reconstruction method
+rsolver     = llf      # Riemann-solver to be used
+gamma       = 1.66666666667   # gamma = C_p/C_v
+
+<problem>
+pgen_name = shock_tube  # problem generator name
+shock_dir     = 1         # Shock Direction -- (1,2,3) = (x1,x2,x3)
+xshock        = 0.0       # position of initial interface
+
+dl  = 1.08                # density on left half of grid
+pl  = 0.95                # pressure
+ul = 1.2                  # X-velocity
+vl = 0.01                 # Y-velocity
+wl = 0.5                  # Z-velocity
+bxl = 0.5641895835477562  # X-magnetic field
+byl = 1.0155412503859613  # Y-magnetic field
+bzl = 0.5641895835477562  # Z-magnetic field
+
+dr  = 1.0                 # density on right half of grid
+pr  = 1.0                 # pressure
+ur = 0.0                  # X-velocity
+vr = 0.0                  # Y-velocity
+wr = 0.0                  # Z-velocity
+bxr = 0.5641895835477562  # X-magnetic field
+byr = 1.1283791670955125  # Y-magnetic field
+bzr = 0.5641895835477562  # Z-magnetic field
+
+<output1>
+file_type   = tab       # Tabular data dump
+variable    = mhd_w     # variables to be output
+data_format = %12.5e    # Optional data format string
+dt          = 0.2       # time increment between outputs
+slice_x2    = 0.0       # slice in x2
+slice_x3    = 0.0       # slice in x3

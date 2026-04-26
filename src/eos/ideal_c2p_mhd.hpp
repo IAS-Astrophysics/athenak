@@ -21,7 +21,8 @@ KOKKOS_INLINE_FUNCTION
 void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
                         HydPrim1D &w,
                         bool &dfloor_used, bool &efloor_used, bool &tfloor_used) {
-  const Real &dfloor_ = eos.dfloor;
+  const Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+  const Real dfloor_ = fmax(eos.dfloor, b2/eos.sigma_max);
   Real efloor = eos.pfloor/(eos.gamma - 1.0);
   Real tfloor = eos.tfloor;
   Real sfloor = eos.sfloor;
@@ -128,13 +129,14 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
                           HydPrim1D &w, bool &dfloor_used, bool &efloor_used,
                           bool &c2p_failure, int &max_iter) {
   // Parameters
+  const Real dfloor_ = fmax(eos.dfloor, b2/eos.sigma_max);
   const int max_iterations = 25;
   const Real tol = 1.0e-12;
   const Real gm1 = eos.gamma - 1.0;
 
   // apply density floor, without changing momentum or energy
-  if (u.d < eos.dfloor) {
-    u.d = eos.dfloor;
+  if (u.d < dfloor_) {
+    u.d = dfloor_;
     dfloor_used = true;
   }
 
@@ -237,7 +239,7 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
   // development may trigger averaging of (successfully inverted) neighbors in the event
   // of a C2P failure.
   if (max_iter==max_iterations) {
-    w.d = eos.dfloor;
+    w.d = dfloor_;
     w.e = eos.pfloor/gm1;
     w.vx = 0.0;
     w.vy = 0.0;
@@ -256,8 +258,8 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
 
   // compute density then apply floor
   Real dens = u.d/lor;
-  if (dens < eos.dfloor) {
-    dens = eos.dfloor;
+  if (dens < dfloor_) {
+    dens = dfloor_;
     dfloor_used = true;
   }
 

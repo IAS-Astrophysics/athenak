@@ -97,7 +97,7 @@ class Mesh {
   friend class MeshBlockTree;
   friend class MeshRefinement;
   // needs to access tree to find target MB offset by shear
-  friend class ShearingBoxBoundary;
+  friend class ShearingBox;
 
  public:
   explicit Mesh(ParameterInput *pin);
@@ -137,7 +137,7 @@ class Mesh {
   // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
   int *nprtcl_eachrank;    // number of particles on each rank
 
-  Real time, dt, dtold, cfl_no;
+  Real time, dt, dtold, dt_last_completed, cfl_no;
   int ncycle;
   EventCounters ecounter;
 

@@ -38,7 +38,7 @@ nx3  = 8          # Number of cells in each MeshBlock, X3-dir
 <mesh_refinement>
 refinement = static  # type of refinement
 
-<refinement1>
+<refined_region1>
 level = 1
 x1min = -512.0
 x1max = 512.0
@@ -47,7 +47,7 @@ x2max = 512.0
 x3min = -512.0
 x3max = 512.0
 
-<refinement2>
+<refined_region2>
 level = 2
 x1min = -256.0
 x1max = 256.0
@@ -56,7 +56,7 @@ x2max = 256.0
 x3min = -256.0
 x3max = 256.0
 
-<refinement3>
+<refined_region3>
 level = 3
 x1min = -128.0
 x1max = 128.0
@@ -65,7 +65,7 @@ x2max = 128.0
 x3min = -128.0
 x3max = 128.0
 
-<refinement4>
+<refined_region4>
 level = 4
 x1min = -64.0
 x1max = 64.0
@@ -74,7 +74,7 @@ x2max = 64.0
 x3min = -64.0
 x3max = 64.0
 
-<refinement5>
+<refined_region5>
 level = 5
 x1min = -64.0
 x1max = 64.0
@@ -83,7 +83,7 @@ x2max = 64.0
 x3min = -64.0
 x3max = 64.0
 
-<refinement6>
+<refined_region6>
 level = 6
 x1min = -32.0
 x1max = 32.0
@@ -92,7 +92,7 @@ x2max = 32.0
 x3min = -32.0
 x3max = 32.0
 
-<refinement7>
+<refined_region7>
 level = 7
 x1min = -16.0
 x1max = 16.0
@@ -101,7 +101,7 @@ x2max = 16.0
 x3min = -16.0
 x3max = 16.0
 
-<refinement8>
+<refined_region8>
 level = 8
 x1min = -8.0
 x1max = 8.0
@@ -110,7 +110,7 @@ x2max = 8.0
 x3min = -8.0
 x3max = 8.0
 
-<refinement9>
+<refined_region9>
 level = 9
 x1min = -4.0
 x1max = 4.0

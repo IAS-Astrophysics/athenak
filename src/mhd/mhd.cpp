@@ -19,6 +19,7 @@
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "shearing_box/shearing_box.hpp"
+#include "shearing_box/orbital_advection.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 
@@ -62,6 +63,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (eqn_of_state.compare("ideal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic) {
       peos = new IdealSRMHD(ppack, pin);
+    } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
+      // DynGRMHD uses PrimitiveSolver instead, so use a no-op here.
+      peos = new NoOpDynGRMHD(ppack, pin);
     } else if (pmy_pack->pcoord->is_general_relativistic) {
       peos = new IdealGRMHD(ppack, pin);
     } else {
@@ -113,8 +117,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pcond = nullptr;
   }
 
-  // Source terms (constructor parses input file to initialize only srcterms needed)
-  psrc = new SourceTerms("mhd", ppack, pin);
+  // Source terms (if needed)
+  if (pin->DoesBlockExist("mhd_srcterms")) {
+    psrc = new SourceTerms("mhd_srcterms", ppack, pin);
+  }
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -161,8 +167,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesBlockExist("shearing_box")) {
     porb_u = new OrbitalAdvectionCC(ppack, pin, (nmhd+nscalars));
     porb_b = new OrbitalAdvectionFC(ppack, pin);
-    psbox_u = new ShearingBoxBoundaryCC(ppack, pin, (nmhd+nscalars));
-    psbox_b = new ShearingBoxBoundaryFC(ppack, pin);
+    psbox_u = new ShearingBoxCC(ppack, pin, (nmhd+nscalars));
+    psbox_b = new ShearingBoxFC(ppack, pin);
   } else {
     porb_u = nullptr;
     porb_b = nullptr;
@@ -344,13 +350,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 MHD::~MHD() {
-  delete peos;
-  delete pbval_u;
+  if (psbox_b != nullptr) {delete psbox_b;}
+  if (psbox_u != nullptr) {delete psbox_u;}
+  if (porb_b != nullptr) {delete porb_b;}
+  if (porb_u != nullptr) {delete porb_u;}
   delete pbval_b;
-  if (pvisc != nullptr) {delete pvisc;}
-  if (presist!= nullptr) {delete presist;}
-  if (pcond != nullptr) {delete pcond;}
+  delete pbval_u;
   if (psrc!= nullptr) {delete psrc;}
+  if (pcond != nullptr) {delete pcond;}
+  if (presist!= nullptr) {delete presist;}
+  if (pvisc != nullptr) {delete pvisc;}
+  delete peos;
 }
 
 //----------------------------------------------------------------------------------------

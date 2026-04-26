@@ -27,11 +27,11 @@ KOKKOS_INLINE_FUNCTION
 bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root);
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage)
-// \brief Add implicit radiation source term.  Based off of @c-white and @yanfeij's gr_rad
-// branch, radiation/coupling/emission.cpp commit be7f84565b.
+//! \fn TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage)
+//! \brief Add implicit radiation-fluid source terms.  Based on @c-white and @yanfeij's
+//! gr_rad branch, radiation/coupling/emission.cpp commit be7f84565b.
 
-TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
+TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage) {
   // Return if radiation source term disabled
   if (!(rad_source)) {
     return TaskStatus::complete;
@@ -270,7 +270,7 @@ TaskStatus Radiation::AddRadiationSourceTerm(Driver *pdriver, int stage) {
         // handle excision
         // NOTE(@pdmullen): The below zeroes all intensities within rks <= r_excision and
         // zeroes intensities within angles where n_0 is about zero. When Compton is
-        // enabled, we delay the n_0_floor excision so that intensites updated via
+        // enabled, we delay the n_0_floor excision so that intensities updated via
         // absorption and scattering inform the Compton update
         if (excise) {
           bool apply_excision = (rad_mask_(m,k,j,i) ||

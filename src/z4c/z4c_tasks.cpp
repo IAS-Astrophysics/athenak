@@ -286,7 +286,7 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
   if (stage == pdrive->nexp_stages) {
     for (auto & pt : ptracker) {
       pt->InterpolateVelocity(pmy_pack);
-      pt->EvolveTracker();
+      pt->EvolveTracker(pmy_pack);
       pt->WriteTracker();
     }
   }

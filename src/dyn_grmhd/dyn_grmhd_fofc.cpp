@@ -147,7 +147,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     // Test whether conversion to primitives requires floors
     // Note b0 and w0 passed to function, but not used/changed.
     eos.ConsToPrim(utest_, pmy_pack->pmhd->b0, bcctest_,
-                           pmy_pack->pmhd->w0, il, iu, jl, ju, kl, ku, true);
+                           pmy_pack->pmhd->w0, temperature,
+                           il, iu, jl, ju, kl, ku, true);
   }
 
   auto &use_fofc_ = pmy_pack->pmhd->use_fofc;
@@ -208,7 +209,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (flx1(m, nmhd_ + n, k, j, i) >= 0.0) {
+        if (flx1(m, IDN, k, j, i) >= 0.0) {
           flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
         } else {
           flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wri[PYF + n];
@@ -244,7 +245,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx2(m, nmhd_ + n, k, j, i) >= 0.0) {
+          if (flx2(m, IDN, k, j, i) >= 0.0) {
             flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
           } else {
             flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wrj[PYF + n];
@@ -281,7 +282,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx3(m, nmhd_ + n, k, j, i) >= 0.0) {
+          if (flx3(m, IDN, k, j, i) >= 0.0) {
             flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
           } else {
             flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wpk[PYF + n];
@@ -335,7 +336,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (flx1(m, nmhd_ + n, k, j, i+1) >= 0.0) {
+        if (flx1(m, IDN, k, j, i+1) >= 0.0) {
           flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
         } else {
           flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wri[PYF + n];
@@ -372,7 +373,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx2(m, nmhd_ + n, k, j+1, i) >= 0.0) {
+          if (flx2(m, IDN, k, j+1, i) >= 0.0) {
             flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
           } else {
             flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wrj[PYF + n];
@@ -410,7 +411,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (flx3(m, nmhd_ + n, k+1, j, i) >= 0.0) {
+          if (flx3(m, IDN, k+1, j, i) >= 0.0) {
             flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
           } else {
             flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wpk[PYF + n];
@@ -440,6 +441,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
 
 INSTANTIATE_FOFC(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
-INSTANTIATE_FOFC(Primitive::EOSCompOSE, Primitive::ResetFloor)
-
+INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NormalLogs>, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor)
 } // namespace dyngr

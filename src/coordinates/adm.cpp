@@ -67,7 +67,6 @@ void ADM::SetADMVariablesToKerrSchild(MeshBlockPack *pmbp) {
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
-  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;

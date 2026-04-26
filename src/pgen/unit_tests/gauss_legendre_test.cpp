@@ -27,6 +27,7 @@
 #include "utils/spherical_harm.hpp"
 
 using u32    = uint_least32_t;
+using s32    = int_least32_t;
 using engine = std::mt19937;
 
 //----------------------------------------------------------------------------------------
@@ -55,7 +56,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   for (int repetition = 0; repetition < 10; ++repetition) {
     int l = distribute_l(generator);
-    std::uniform_int_distribution< u32 > distribute_m( -l, l);
+    std::uniform_int_distribution< s32 > distribute_m( -l, l);
     int m = distribute_m(generator);
     ls.push_back(l);
     ms.push_back(m);

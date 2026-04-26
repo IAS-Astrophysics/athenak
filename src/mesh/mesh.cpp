@@ -18,6 +18,7 @@
 #include "parameter_input.hpp"
 #include "mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "refinement_criteria.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
@@ -51,7 +52,8 @@ Mesh::Mesh(ParameterInput *pin) :
   nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
   nprtcl_total(0),
-  dtold(0.) {
+  dtold(0.),
+  dt_last_completed(0.) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -335,15 +337,16 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  delete [] cost_eachmb;
-  delete [] rank_eachmb;
-  delete [] lloc_eachmb;
-  delete [] gids_eachrank;
-  delete [] nmb_eachrank;
-  delete pmb_pack;
+  if (pmb_pack->ppart != nullptr) {delete [] nprtcl_eachrank;}
   if (multilevel) {
     delete pmr;
   }
+  delete pmb_pack;
+  delete [] nmb_eachrank;
+  delete [] gids_eachrank;
+  delete [] lloc_eachmb;
+  delete [] rank_eachmb;
+  delete [] cost_eachmb;
 }
 
 //----------------------------------------------------------------------------------------
@@ -588,7 +591,9 @@ void Mesh::NewTimeStep(const Real tlim) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
     }
     // source terms timestep
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+    if (pmb_pack->phydro->psrc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+    }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
@@ -606,7 +611,9 @@ void Mesh::NewTimeStep(const Real tlim) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
     }
     // source terms timestep
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    if (pmb_pack->pmhd->psrc != nullptr) {
+      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+    }
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {
@@ -662,5 +669,11 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     if (pmb_pack->ppart != nullptr) {
       pmb_pack->ppart->CreateParticleTags(pinput);
     }
+  }
+
+  // Call RefinementCriteria constructor to enroll various criteria
+  // can only be done after the physics modules have been constructed
+  if (adaptive) {
+    pmr->pmrc = new RefinementCriteria(this, pinput);
   }
 }
