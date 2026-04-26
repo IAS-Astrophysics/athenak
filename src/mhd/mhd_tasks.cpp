@@ -381,7 +381,8 @@ TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
       psbox_b->SourceTermsFC(b0, efld);
     }
   }
-  if (pmy_pack->pmesh->pgen->user_efield) {
+  if (pmy_pack->pmesh->pgen->user_efield &&
+      pmy_pack->pmesh->pgen->user_efield_func != nullptr) {
     (pmy_pack->pmesh->pgen->user_efield_func)(pmy_pack->pmesh, efld);
   }
   return TaskStatus::complete;
