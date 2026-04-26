@@ -184,6 +184,10 @@ sink_pressure_floor = 1.0e-8
 
 amr_condition = none
 radius_thr = 10.0
+tracker_1_rad = 10.0
+tracker_2_rad = 10.0
+tracker_1_reflevel = -1
+tracker_2_reflevel = -1
 alpha_thr = 0.2
 {refinement_region}
 

@@ -270,6 +270,8 @@ struct bbh_pgen {
 struct bbh_refine {
   bool AlphaMin = false;
   bool Tracker = false;
+  Real tracker_radius[2] = {0.0, 0.0};
+  int tracker_reflevel[2] = {-1, -1};
   std::vector<Real> radius;
   std::vector<int> reflevel;
 };
@@ -598,6 +600,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
+  int tracker_reflevel = pin->GetOrAddInteger("problem", "tracker_reflevel", -1);
+  bbh_ref.tracker_radius[0] = pin->GetOrAddReal("problem", "tracker_1_rad",
+                                                bbh.radius_thr);
+  bbh_ref.tracker_radius[1] = pin->GetOrAddReal("problem", "tracker_2_rad",
+                                                bbh.radius_thr);
+  bbh_ref.tracker_reflevel[0] = pin->GetOrAddInteger(
+      "problem", "tracker_1_reflevel", tracker_reflevel);
+  bbh_ref.tracker_reflevel[1] = pin->GetOrAddInteger(
+      "problem", "tracker_2_reflevel", tracker_reflevel);
+  if (!(bbh_ref.tracker_radius[0] > 0.0) || !(bbh_ref.tracker_radius[1] > 0.0) ||
+      bbh_ref.tracker_reflevel[0] < -1 || bbh_ref.tracker_reflevel[1] < -1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "tracker radii must be positive and tracker reflevels must be >= -1"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.use_cooling_source = user_srcs;
   bbh.smooth_b_damping = pin->GetOrAddBoolean(
       "coord", "smooth_excision_b_damping", false);
@@ -2228,7 +2247,13 @@ void RefineTracker(MeshBlockPack *pmbp) {
   Real x1_BH2 = bbh_traj[X2];
   Real x2_BH2 = bbh_traj[Y2];
   Real x3_BH2 = bbh_traj[Z2];
+  const Real tracker_radius1 = bbh_ref.tracker_radius[0];
+  const Real tracker_radius2 = bbh_ref.tracker_radius[1];
+  const int tracker_reflevel1 = bbh_ref.tracker_reflevel[0];
+  const int tracker_reflevel2 = bbh_ref.tracker_reflevel[1];
   for (int m = 0; m < nmb; ++m) {
+
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
 
     // extract MeshBlock bounds
     Real &x1min = size.h_view(m).x1min;
@@ -2270,9 +2295,24 @@ void RefineTracker(MeshBlockPack *pmbp) {
       (x2_BH2 >= x2min && x2_BH2 <= x2max) &&
       (x3_BH2 >= x3min && x3_BH2 <= x3max);
 
-    if (dmin2_bh1 < SQR(bbh.radius_thr) || dmin2_bh2 < SQR(bbh.radius_thr) ||
-        iscontained_bh1 || iscontained_bh2) {
+    bool in_tracker1 = dmin2_bh1 < SQR(tracker_radius1) || iscontained_bh1;
+    bool in_tracker2 = dmin2_bh2 < SQR(tracker_radius2) || iscontained_bh2;
+    bool unlimited = (in_tracker1 && tracker_reflevel1 < 0) ||
+                     (in_tracker2 && tracker_reflevel2 < 0);
+    int target_level = -1;
+    if (in_tracker1) target_level = std::max(target_level, tracker_reflevel1);
+    if (in_tracker2) target_level = std::max(target_level, tracker_reflevel2);
+
+    if (unlimited) {
       refine_flag.h_view(m + mbs) = 1;
+    } else if (target_level >= 0) {
+      if (level < target_level) {
+        refine_flag.h_view(m + mbs) = 1;
+      } else if (level == target_level) {
+        refine_flag.h_view(m + mbs) = 0;
+      } else {
+        refine_flag.h_view(m + mbs) = -1;
+      }
     } else {
       refine_flag.h_view(m + mbs) = -1;
     }
