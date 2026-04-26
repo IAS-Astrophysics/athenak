@@ -439,14 +439,26 @@ Several implementation details were tightened during review:
 
 \section{Unresolved-Horizon Sink Fallback}
 
-If the finest active mesh spacing is larger than the smallest tabulated
-horizon radius, the puncture excision mask is under-resolved.  With the
-\texttt{problem/unresolved\_sink} flag and the replacement flag
+If the local mesh spacing around a hole is too large compared with that
+hole's horizon diameter, the puncture excision mask is under-resolved.  With
+the \texttt{problem/unresolved\_sink} flag and the replacement flag
 \texttt{problem/sink\_replace\_underresolved\_excision}, the problem generator
-disables geometric puncture excision at startup and instead applies a
-conservative sink over a larger radius.  This path is intended for cheap early
-inspiral evolutions where the binary is deliberately unresolved before a later
+suppresses only the under-resolved puncture masks and applies a conservative
+sink over a larger radius.  This path is intended for cheap early inspiral
+evolutions where one or both holes are deliberately unresolved before a later
 AMR restart resolves the horizons.
+
+The decision is made separately for each hole.  Let
+\(\Delta x_A\) be the largest cell spacing in the active MeshBlock containing
+hole \(A\).  The hole is treated as resolved when
+\begin{equation}
+  \frac{2r_{H,A}}{\Delta x_A} \ge N_{\rm H},
+  \qquad N_{\rm H}=20 \quad \hbox{by default}.
+\end{equation}
+When this condition is satisfied, the sink for that hole is disabled and the
+normal puncture radius is restored for that hole.  If only one hole is
+resolved, only that hole's sink is disabled; the other hole keeps its sink and
+continues to have its puncture mask suppressed.
 
 For hole \(A\), define the smooth sink weight
 \begin{equation}
@@ -456,8 +468,23 @@ For hole \(A\), define the smooth sink weight
   \qquad
   W^{\rm sink} = \max_A W_A^{\rm sink},
 \end{equation}
-with the same cubic smoothstep \(S\) used by smooth excision.  Over a step
-\(\Delta t\), the damping fraction is
+with the same cubic smoothstep \(S\) used by smooth excision.  The automatic
+sink radius is
+\begin{equation}
+  R_{{\rm sink},A}
+  =
+  \max\!\left(
+    N_R \Delta x_A,\;
+    R_{\rm sink,min},\;
+    r_{H,A}
+  \right),
+  \qquad N_R=10 \quad \hbox{by default},
+\end{equation}
+so the active sink is at least 20 cells wide, or 10 cells in radius.  As AMR
+refines the hole, \(\Delta x_A\) decreases and the sink radius shrinks
+automatically.  The optional configured \texttt{sink\_radius} acts as a
+minimum physical radius; setting it to zero gives a purely resolution-scaled
+sink.  Over a step \(\Delta t\), the damping fraction is
 \begin{equation}
   f_{\rm sink}
   =
@@ -480,10 +507,9 @@ pressure.
 This fallback is not a replacement for resolved horizon excision.  It is a
 coarse-grid drain that removes matter and momentum smoothly while preserving
 the constrained-transport representation of \(B_f\).  On a restarted zoom
-run, the recommended usage is to keep the sink enabled but set
-\texttt{sink\_replace\_underresolved\_excision=false}, allowing AMR to add the
-inner level and the geometric excision path to operate once the active mesh
-resolves the horizons.
+run, the same per-hole logic continues to apply after AMR regridding: the
+sink radius follows the local resolution and each sink turns off only after
+that hole satisfies the configured cells-across-horizon criterion.
 
 \section{Device, MPI, and AMR Safety}
 

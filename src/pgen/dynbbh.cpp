@@ -238,6 +238,8 @@ struct bbh_pgen {
   Real sink_timescale;
   Real sink_density_floor;
   Real sink_pressure_floor;
+  Real sink_cells_per_radius;
+  Real sink_resolved_cells_across_horizon;
   bool use_traj_table;
   bool smooth_b_damping;
   bool unresolved_sink;
@@ -273,6 +275,20 @@ struct bbh_refine {
   std::vector<int> reflevel;
 };
 
+struct bbh_sink_hole_state {
+  Real x, y, z;
+  Real horizon_radius;
+  Real mesh_dx;
+  Real sink_radius;
+  Real sink_width;
+  int active;
+};
+
+struct bbh_sink_state {
+  bbh_sink_hole_state hole1;
+  bbh_sink_hole_state hole2;
+};
+
 struct bbh_pgen bbh;
 struct bbh_refine bbh_ref;
 struct bbh_traj_table {
@@ -304,6 +320,39 @@ Real LocalFinestMeshSpacing(MeshBlockPack *pmbp) {
   return min_dx;
 }
 
+Real LocalMeshSpacingAtPoint(MeshBlockPack *pmbp, Real x, Real y, Real z) {
+  Real local_dx = std::numeric_limits<Real>::max();
+  auto &mb_size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  for (int m = 0; m < pmbp->nmb_thispack; ++m) {
+    auto mb = mb_size.h_view(m);
+    Real eps1 = 16.0*std::numeric_limits<Real>::epsilon()*
+                std::max({1.0, std::abs(mb.x1min), std::abs(mb.x1max)});
+    Real eps2 = 16.0*std::numeric_limits<Real>::epsilon()*
+                std::max({1.0, std::abs(mb.x2min), std::abs(mb.x2max)});
+    Real eps3 = 16.0*std::numeric_limits<Real>::epsilon()*
+                std::max({1.0, std::abs(mb.x3min), std::abs(mb.x3max)});
+    bool contains = (x >= mb.x1min - eps1 && x <= mb.x1max + eps1);
+    if (indcs.nx2 > 1) contains = contains &&
+        (y >= mb.x2min - eps2 && y <= mb.x2max + eps2);
+    if (indcs.nx3 > 1) contains = contains &&
+        (z >= mb.x3min - eps3 && z <= mb.x3max + eps3);
+    if (contains) {
+      Real dx = mb.dx1;
+      if (indcs.nx2 > 1) dx = std::max(dx, mb.dx2);
+      if (indcs.nx3 > 1) dx = std::max(dx, mb.dx3);
+      local_dx = std::min(local_dx, dx);
+    }
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &local_dx, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
+  if (local_dx == std::numeric_limits<Real>::max()) {
+    local_dx = LocalFinestMeshSpacing(pmbp);
+  }
+  return local_dx;
+}
+
 Real HorizonRadiusFromMassAndSpin(Real mass, Real ax, Real ay, Real az) {
   Real amag = std::sqrt(SQR(ax) + SQR(ay) + SQR(az));
   return mass + std::sqrt(std::max(SQR(mass) - SQR(amag), 0.0));
@@ -333,6 +382,43 @@ Real MinDynBBHHorizonRadius() {
       HorizonRadiusFromMassAndSpin(m2, state[AX2]*bbh.adjust_mass2,
                                    state[AY2]*bbh.adjust_mass2,
                                    state[AZ2]*bbh.adjust_mass2));
+}
+
+bbh_sink_hole_state MakeSinkHoleState(MeshBlockPack *pmbp, Real x, Real y, Real z,
+                                      Real horizon_radius) {
+  bbh_sink_hole_state h;
+  h.x = x;
+  h.y = y;
+  h.z = z;
+  h.horizon_radius = horizon_radius;
+  h.mesh_dx = LocalMeshSpacingAtPoint(pmbp, x, y, z);
+  Real cells_across_horizon = 2.0*horizon_radius / std::max(h.mesh_dx, 1.0e-300);
+  h.active = (cells_across_horizon < bbh.sink_resolved_cells_across_horizon) ? 1 : 0;
+  h.sink_radius = bbh.sink_cells_per_radius * h.mesh_dx;
+  if (bbh.sink_radius > 0.0) h.sink_radius = std::max(h.sink_radius, bbh.sink_radius);
+  h.sink_radius = std::max(h.sink_radius, horizon_radius);
+  h.sink_width = (bbh.sink_width > 0.0) ? std::min(bbh.sink_width, h.sink_radius)
+                                        : std::max(h.mesh_dx, 0.25*h.sink_radius);
+  return h;
+}
+
+bbh_sink_state ComputeUnresolvedSinkState(MeshBlockPack *pmbp,
+                                          const bbh_traj_state &traj) {
+  auto bbh_ = bbh;
+  Real m1 = traj.q[M1T] * bbh_.adjust_mass1;
+  Real m2 = traj.q[M2T] * bbh_.adjust_mass2;
+  Real spin_scale1 = bbh_.use_traj_table ? m1 : bbh_.adjust_mass1;
+  Real spin_scale2 = bbh_.use_traj_table ? m2 : bbh_.adjust_mass2;
+  Real rH1 = HorizonRadiusFromMassAndSpin(m1, traj.q[AX1]*spin_scale1,
+                                          traj.q[AY1]*spin_scale1,
+                                          traj.q[AZ1]*spin_scale1);
+  Real rH2 = HorizonRadiusFromMassAndSpin(m2, traj.q[AX2]*spin_scale2,
+                                          traj.q[AY2]*spin_scale2,
+                                          traj.q[AZ2]*spin_scale2);
+  bbh_sink_state s;
+  s.hole1 = MakeSinkHoleState(pmbp, traj.q[X1], traj.q[Y1], traj.q[Z1], rH1);
+  s.hole2 = MakeSinkHoleState(pmbp, traj.q[X2], traj.q[Y2], traj.q[Z2], rH2);
+  return s;
 }
 
 /* Declare functions */
@@ -539,13 +625,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.sink_timescale = pin->GetOrAddReal("problem", "sink_timescale", 0.0);
   bbh.sink_density_floor = pin->GetOrAddReal("problem", "sink_density_floor", -1.0);
   bbh.sink_pressure_floor = pin->GetOrAddReal("problem", "sink_pressure_floor", -1.0);
+  bbh.sink_cells_per_radius = pin->GetOrAddReal(
+      "problem", "sink_cells_per_radius", 10.0);
+  bbh.sink_resolved_cells_across_horizon = pin->GetOrAddReal(
+      "problem", "sink_resolved_cells_across_horizon", 20.0);
   if (bbh.unresolved_sink &&
-      (!(bbh.sink_radius > 0.0) || !(bbh.sink_width > 0.0) ||
-       !(bbh.sink_timescale > 0.0))) {
+      (!(bbh.sink_timescale > 0.0) || bbh.sink_radius < 0.0 ||
+       bbh.sink_width == 0.0 || !(bbh.sink_cells_per_radius > 0.0) ||
+       !(bbh.sink_resolved_cells_across_horizon > 0.0))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
-              << "unresolved_sink requires positive sink_radius, sink_width, and "
-              << "sink_timescale" << std::endl;
+              << "unresolved_sink requires positive sink_timescale, "
+              << "sink_cells_per_radius, and sink_resolved_cells_across_horizon; "
+              << "sink_radius must be non-negative and sink_width must be either "
+              << "positive or negative for automatic width" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
@@ -566,12 +659,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real min_horizon = MinDynBBHHorizonRadius();
     if (finest_dx > min_horizon) {
       if (bbh.unresolved_sink && bbh.sink_replace_underresolved_excision) {
-        coord_data.bh_excise = false;
         if (global_variable::my_rank == 0) {
-          std::cout << "Disabling puncture excision because the finest active dx="
+          std::cout << "Suppressing under-resolved puncture masks because finest active dx="
                     << finest_dx
                     << " exceeds the minimum tabulated horizon radius="
-                    << min_horizon << "; unresolved_sink will drain matter instead."
+                    << min_horizon << "; unresolved_sink will drain each "
+                    << "under-resolved hole until local AMR resolves it."
                     << std::endl;
         }
       } else if (bbh.require_resolved_horizon) {
@@ -1381,8 +1474,16 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1_vel[0] = traj.q[VX2];
   coord.punc_1_vel[1] = traj.q[VY2];
   coord.punc_1_vel[2] = traj.q[VZ2];
-  coord.punc_0_rad = m1_ex + sqrt(fmax(SQR(m1_ex) - SQR(a1_ex), 0.0));
-  coord.punc_1_rad = m2_ex + sqrt(fmax(SQR(m2_ex) - SQR(a2_ex), 0.0));
+  Real punc_0_rad = m1_ex + sqrt(fmax(SQR(m1_ex) - SQR(a1_ex), 0.0));
+  Real punc_1_rad = m2_ex + sqrt(fmax(SQR(m2_ex) - SQR(a2_ex), 0.0));
+  if (bbh_.unresolved_sink && bbh_.sink_replace_underresolved_excision) {
+    bbh_sink_state sink_state = ComputeUnresolvedSinkState(pmbp, traj);
+    coord.punc_0_rad = sink_state.hole1.active ? 0.0 : punc_0_rad;
+    coord.punc_1_rad = sink_state.hole2.active ? 0.0 : punc_1_rad;
+  } else {
+    coord.punc_0_rad = punc_0_rad;
+    coord.punc_1_rad = punc_1_rad;
+  }
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -2991,10 +3092,9 @@ void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
   Real p_target = (bbh.sink_pressure_floor > 0.0) ?
                   bbh.sink_pressure_floor : eos.pfloor;
   Real e_target = p_target / gm1;
-  Real radius = bbh.sink_radius;
-  Real width = bbh.sink_width;
   Real tau = bbh.sink_timescale;
   bbh_traj_state traj = find_traj_state(pm->time);
+  bbh_sink_state sink_state = ComputeUnresolvedSinkState(pmbp, traj);
 
   par_for("dynbbh_unresolved_sink", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -3010,12 +3110,21 @@ void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real r1 = sqrt(SQR(x1v - traj.q[X1]) + SQR(x2v - traj.q[Y1]) +
-                   SQR(x3v - traj.q[Z1]));
-    Real r2 = sqrt(SQR(x1v - traj.q[X2]) + SQR(x2v - traj.q[Y2]) +
-                   SQR(x3v - traj.q[Z2]));
-    Real sink_w = fmax(SinkSmoothStep01((radius - r1)/width),
-                       SinkSmoothStep01((radius - r2)/width));
+    Real sink_w = 0.0;
+    if (sink_state.hole1.active) {
+      Real r1 = sqrt(SQR(x1v - sink_state.hole1.x) +
+                     SQR(x2v - sink_state.hole1.y) +
+                     SQR(x3v - sink_state.hole1.z));
+      sink_w = fmax(sink_w, SinkSmoothStep01(
+          (sink_state.hole1.sink_radius - r1)/sink_state.hole1.sink_width));
+    }
+    if (sink_state.hole2.active) {
+      Real r2 = sqrt(SQR(x1v - sink_state.hole2.x) +
+                     SQR(x2v - sink_state.hole2.y) +
+                     SQR(x3v - sink_state.hole2.z));
+      sink_w = fmax(sink_w, SinkSmoothStep01(
+          (sink_state.hole2.sink_radius - r2)/sink_state.hole2.sink_width));
+    }
     if (sink_w <= 0.0) return;
 
     Real damp = 1.0 - exp(-bdt*sink_w/tau);

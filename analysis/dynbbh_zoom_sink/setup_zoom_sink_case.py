@@ -175,8 +175,10 @@ use_traj_table = true
 traj_file = {TABLE}
 unresolved_sink = true
 sink_replace_underresolved_excision = {sink_replace}
-sink_radius = 4.0
-sink_width = 1.0
+sink_radius = 0.0
+sink_width = -1.0
+sink_cells_per_radius = 10.0
+sink_resolved_cells_across_horizon = 20.0
 sink_timescale = {5.0 * TORBIT:.16e}
 sink_density_floor = 1.0e-6
 sink_pressure_floor = 1.0e-8
@@ -293,8 +295,14 @@ def masks_and_sigma(data):
     r1 = kerr_radius(x-x1, y-y1, z-z1, a1)
     r2 = kerr_radius(x-x2, y-y2, z-z2, a2)
     mask_h = (r1 <= rH1) | (r2 <= rH2)
-    mask_sink = (np.sqrt((x-x1)**2 + (y-y1)**2 + (z-z1)**2) <= 4.0) | (
-        np.sqrt((x-x2)**2 + (y-y2)**2 + (z-z2)**2) <= 4.0)
+    dxs = []
+    for coords in (data.x1v, data.x2v, z_centers_for(data)):
+        if len(coords) > 1:
+            dxs.append(float(np.nanmin(np.abs(np.diff(coords)))))
+    local_dx = max(dxs) if dxs else 1.0
+    auto_sink_radius = 10.0*local_dx
+    mask_sink = (np.sqrt((x-x1)**2 + (y-y1)**2 + (z-z1)**2) <= auto_sink_radius) | (
+        np.sqrt((x-x2)**2 + (y-y2)**2 + (z-z2)**2) <= auto_sink_radius)
     rho = data.variables['dens']
     b2 = data.variables['bcc1']**2 + data.variables['bcc2']**2 + data.variables['bcc3']**2
     sigma = b2/np.maximum(rho, 1.0e-300)
