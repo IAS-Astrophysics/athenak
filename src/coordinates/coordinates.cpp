@@ -8,6 +8,10 @@
 #include <iostream> // cout
 #include <string>
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
@@ -93,6 +97,9 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
           max_dx = fmax(max_dx, mb_size.h_view(m).dx3);
         }
       }
+#if MPI_PARALLEL_ENABLED
+      MPI_Allreduce(MPI_IN_PLACE, &max_dx, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
       Real default_smooth_width = fmax(0.25*coord_data.rexcise, 2.0*max_dx);
       coord_data.smooth_excise_width = pin->GetOrAddReal(
           "coord", "smooth_excision_width", default_smooth_width);
