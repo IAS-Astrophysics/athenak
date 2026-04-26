@@ -319,8 +319,26 @@ class PrimitiveSolverHydro {
     auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
     auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
     auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+    auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
     auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
     auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+    auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
+    auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
+    auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
+    Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
+    Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
+    Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
+    Real p0_vx = pmy_pack->pcoord->coord_data.punc_0_vel[0];
+    Real p0_vy = pmy_pack->pcoord->coord_data.punc_0_vel[1];
+    Real p0_vz = pmy_pack->pcoord->coord_data.punc_0_vel[2];
+    Real p1_x = pmy_pack->pcoord->coord_data.punc_1[0];
+    Real p1_y = pmy_pack->pcoord->coord_data.punc_1[1];
+    Real p1_z = pmy_pack->pcoord->coord_data.punc_1[2];
+    Real p1_vx = pmy_pack->pcoord->coord_data.punc_1_vel[0];
+    Real p1_vy = pmy_pack->pcoord->coord_data.punc_1_vel[1];
+    Real p1_vz = pmy_pack->pcoord->coord_data.punc_1_vel[2];
+    Real p0_rad = pmy_pack->pcoord->coord_data.punc_0_rad;
+    Real p1_rad = pmy_pack->pcoord->coord_data.punc_1_rad;
 
     auto &adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
@@ -374,6 +392,18 @@ class PrimitiveSolverHydro {
         }
       }
 
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
       // Extract the metric
       Real g3d[NSPMETRIC], g3u[NSPMETRIC], detg, sdetg;
       g3d[S11] = adm.g_dd(m, 0, 0, k, j, i);
@@ -418,8 +448,9 @@ class PrimitiveSolverHydro {
 
       // If we're in an excised region, set the primitives to some default value.
       Primitive::SolverResult result;
+      Real excise_weight = (excise && smooth_excise_) ? excision_weight_(m,k,j,i) : 0.0;
       if (excise) {
-        if (excision_floor_(m,k,j,i)) {
+        if (excision_floor_(m,k,j,i) && !smooth_excise_) {
           prim_pt[PRH] = dexcise_/mb;
           prim_pt[PVX] = 0.0;
           prim_pt[PVY] = 0.0;
@@ -445,24 +476,57 @@ class PrimitiveSolverHydro {
         result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
       }
 
+      if (!floors_only && smooth_excise_ && excise_weight > 0.0) {
+        Real rhotarget = dexcise_/mb;
+        if (excise_sigma_max_ > 0.0) {
+          Real b2cc = SQR(bcc0(m, IBX, k, j, i)) + SQR(bcc0(m, IBY, k, j, i)) +
+                      SQR(bcc0(m, IBZ, k, j, i));
+          rhotarget = fmax(rhotarget, (b2cc/excise_sigma_max_)/mb);
+        }
+        if (result.error != Primitive::Error::SUCCESS) {
+          prim_pt[PRH] = rhotarget;
+          prim_pt[PPR] = pexcise_;
+          for (int n = 0; n < nscal; n++) {
+            prim_pt[PYF + n] = cons_pt[CDN] != 0.0 ? cons_pt[CYD + n]/cons_pt[CDN] : 0.0;
+          }
+          excise_weight = 1.0;
+        }
+        Real dx0 = x1v - p0_x, dy0 = x2v - p0_y, dz0 = x3v - p0_z;
+        Real dx1 = x1v - p1_x, dy1 = x2v - p1_y, dz1 = x3v - p1_z;
+        bool use_p1 = (p1_rad > 0.0) &&
+                      (p0_rad <= 0.0 ||
+                       SQR(dx1) + SQR(dy1) + SQR(dz1) < SQR(dx0) + SQR(dy0) + SQR(dz0));
+        Real dx = use_p1 ? dx1 : dx0;
+        Real dy = use_p1 ? dy1 : dy0;
+        Real dz = use_p1 ? dz1 : dz0;
+        Real tvx = use_p1 ? p1_vx : p0_vx;
+        Real tvy = use_p1 ? p1_vy : p0_vy;
+        Real tvz = use_p1 ? p1_vz : p0_vz;
+        Real rinv = 1.0/sqrt(fmax(SQR(dx) + SQR(dy) + SQR(dz), 1.0e-300));
+        tvx -= excise_inflow_*dx*rinv;
+        tvy -= excise_inflow_*dy*rinv;
+        tvz -= excise_inflow_*dz*rinv;
+        Real keep = 1.0 - excise_weight;
+        prim_pt[PRH] = keep*prim_pt[PRH] + excise_weight*rhotarget;
+        prim_pt[PVX] = keep*prim_pt[PVX] + excise_weight*tvx;
+        prim_pt[PVY] = keep*prim_pt[PVY] + excise_weight*tvy;
+        prim_pt[PVZ] = keep*prim_pt[PVZ] + excise_weight*tvz;
+        prim_pt[PPR] = keep*prim_pt[PPR] + excise_weight*pexcise_;
+        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+        result.error = Primitive::Error::SUCCESS;
+        result.iterations = 0;
+        result.cons_floor = false;
+        result.prim_floor = false;
+        result.cons_adjusted = true;
+        ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+      }
+
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
       } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           sumerrs++;
           // Find out where the point went bad and report a bunch of information about it.
-          Real &x1min = size.d_view(m).x1min;
-          Real &x1max = size.d_view(m).x1max;
-          Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-          Real &x2min = size.d_view(m).x2min;
-          Real &x2max = size.d_view(m).x2max;
-          Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-          Real &x3min = size.d_view(m).x3min;
-          Real &x3max = size.d_view(m).x3max;
-          Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
           Kokkos::printf("An error occurred during the primitive solve: %s\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "            (%.17g, %.17g, %.17g)\n"

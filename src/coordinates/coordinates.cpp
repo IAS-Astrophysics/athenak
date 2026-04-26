@@ -23,7 +23,20 @@
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     pmy_pack(ppack),
     excision_floor("excision_floor",1,1,1,1),
-    excision_flux("excision_flux",1,1,1,1) {
+    excision_flux("excision_flux",1,1,1,1),
+    excision_weight("excision_weight",1,1,1,1) {
+  coord_data.bh_excise = false;
+  coord_data.smooth_excise = false;
+  coord_data.smooth_excise_width = 1.0;
+  coord_data.smooth_excise_lapse_width = 0.05;
+  coord_data.smooth_excise_inflow_speed = 0.0;
+  coord_data.smooth_excise_sigma_max = -1.0;
+  coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
+  for (int n = 0; n < 3; ++n) {
+    coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
+    coord_data.punc_0_spin[n] = coord_data.punc_1_spin[n] = 0.0;
+    coord_data.punc_0_vel[n] = coord_data.punc_1_vel[n] = 0.0;
+  }
   // Check for relativistic dynamics
   // WGC: idea for handling new EOS
   is_dynamical_relativistic = (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))
@@ -56,11 +69,39 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
       coord_data.pexcise = pin->GetReal("coord","pexcise");
+      for (int n = 0; n < 3; ++n) {
+        coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
+        coord_data.punc_0_spin[n] = coord_data.punc_1_spin[n] = 0.0;
+        coord_data.punc_0_vel[n] = coord_data.punc_1_vel[n] = 0.0;
+      }
+      coord_data.punc_0_spin[2] = coord_data.bh_spin;
+      coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
+      coord_data.smooth_excise = pin->GetOrAddBoolean("coord","smooth_excision", false);
+      coord_data.smooth_excise_width = pin->GetOrAddReal(
+          "coord", "smooth_excision_width", 0.25*coord_data.rexcise);
+      coord_data.smooth_excise_lapse_width = pin->GetOrAddReal(
+          "coord", "smooth_excision_lapse_width", 0.05);
+      coord_data.smooth_excise_inflow_speed = pin->GetOrAddReal(
+          "coord", "smooth_excision_inflow_speed", 0.25);
+      coord_data.smooth_excise_sigma_max = pin->GetOrAddReal(
+          "coord", "smooth_excision_sigma_max", -1.0);
+      if (coord_data.smooth_excise &&
+          (coord_data.smooth_excise_width <= 0.0 ||
+           coord_data.smooth_excise_lapse_width <= 0.0 ||
+           coord_data.smooth_excise_inflow_speed < 0.0 ||
+           coord_data.smooth_excise_sigma_max == 0.0)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "smooth_excision requires positive width/lapse_width and "
+                  << "non-negative inflow_speed; sigma_max must be positive or negative "
+                  << "to disable" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
 
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
@@ -92,6 +133,10 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(excision_floor, nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(excision_flux, nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(excision_weight, nmb, ncells3, ncells2, ncells1);
+      Kokkos::deep_copy(excision_floor, false);
+      Kokkos::deep_copy(excision_flux, false);
+      Kokkos::deep_copy(excision_weight, 0.0);
       if (coord_data.excision_scheme == ExcisionScheme::fixed) {
         SetExcisionMasks(excision_floor, excision_flux);
       }

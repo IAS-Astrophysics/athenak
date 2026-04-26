@@ -55,8 +55,26 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+  auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+  auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
+  auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
+  auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
+  Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
+  Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
+  Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
+  Real p0_vx = pmy_pack->pcoord->coord_data.punc_0_vel[0];
+  Real p0_vy = pmy_pack->pcoord->coord_data.punc_0_vel[1];
+  Real p0_vz = pmy_pack->pcoord->coord_data.punc_0_vel[2];
+  Real p1_x = pmy_pack->pcoord->coord_data.punc_1[0];
+  Real p1_y = pmy_pack->pcoord->coord_data.punc_1[1];
+  Real p1_z = pmy_pack->pcoord->coord_data.punc_1[2];
+  Real p1_vx = pmy_pack->pcoord->coord_data.punc_1_vel[0];
+  Real p1_vy = pmy_pack->pcoord->coord_data.punc_1_vel[1];
+  Real p1_vz = pmy_pack->pcoord->coord_data.punc_1_vel[2];
+  Real p0_rad = pmy_pack->pcoord->coord_data.punc_0_rad;
+  Real p1_rad = pmy_pack->pcoord->coord_data.punc_1_rad;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -114,11 +132,14 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     bool dfloor_used=false, efloor_used=false;
     bool vceiling_used=false, c2p_failure=false;
     int iter_used=0;
+    Real excise_weight = 0.0;
+    bool smooth_applied = false;
 
     // Only execute cons2prim if outside excised region
     bool excised = false;
     if (use_excise) {
-      if (excision_floor_(m,k,j,i)) {
+      excise_weight = smooth_excise_ ? excision_weight_(m,k,j,i) : 0.0;
+      if (excision_floor_(m,k,j,i) && !smooth_excise_) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
@@ -158,6 +179,46 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.vy *= factor;
         w.vz *= factor;
       }
+      if (smooth_excise_ && excise_weight > 0.0 && !only_testfloors) {
+        Real dtarget = dexcise_;
+        Real etarget = pexcise_/gm1;
+        if (excise_sigma_max_ > 0.0) {
+          Real b2cc = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+          dtarget = fmax(dtarget, b2cc/excise_sigma_max_);
+        }
+        if (c2p_failure) {
+          w.d = dtarget;
+          w.e = etarget;
+          excise_weight = 1.0;
+        }
+        Real dx0 = x1v - p0_x, dy0 = x2v - p0_y, dz0 = x3v - p0_z;
+        Real dx1 = x1v - p1_x, dy1 = x2v - p1_y, dz1 = x3v - p1_z;
+        bool use_p1 = (p1_rad > 0.0) &&
+                      (p0_rad <= 0.0 ||
+                       SQR(dx1) + SQR(dy1) + SQR(dz1) < SQR(dx0) + SQR(dy0) + SQR(dz0));
+        Real dx = use_p1 ? dx1 : dx0;
+        Real dy = use_p1 ? dy1 : dy0;
+        Real dz = use_p1 ? dz1 : dz0;
+        Real tvx = use_p1 ? p1_vx : p0_vx;
+        Real tvy = use_p1 ? p1_vy : p0_vy;
+        Real tvz = use_p1 ? p1_vz : p0_vz;
+        Real rinv = 1.0/sqrt(fmax(SQR(dx) + SQR(dy) + SQR(dz), 1.0e-300));
+        tvx -= excise_inflow_*dx*rinv;
+        tvy -= excise_inflow_*dy*rinv;
+        tvz -= excise_inflow_*dz*rinv;
+        if (c2p_failure) {
+          w.vx = tvx;
+          w.vy = tvy;
+          w.vz = tvz;
+        }
+        Real keep = 1.0 - excise_weight;
+        w.d = keep*w.d + excise_weight*dtarget;
+        w.vx = keep*w.vx + excise_weight*tvx;
+        w.vy = keep*w.vy + excise_weight*tvy;
+        w.vz = keep*w.vz + excise_weight*tvz;
+        w.e = keep*w.e + excise_weight*etarget;
+        smooth_applied = true;
+      }
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
@@ -186,7 +247,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBZ,k,j,i) = u.bz;
 
       // reset conserved variables if floor, ceiling, failure, or excision encountered
-      if (dfloor_used || efloor_used || vceiling_used || c2p_failure || excised) {
+      if (dfloor_used || efloor_used || vceiling_used || c2p_failure || excised ||
+          smooth_applied) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;

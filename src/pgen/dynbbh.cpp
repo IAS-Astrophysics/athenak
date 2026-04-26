@@ -38,8 +38,6 @@
 #include <Kokkos_Random.hpp>
 
 
-#define h 5e-5
-
 namespace {
 
 enum {
@@ -185,6 +183,14 @@ KOKKOS_INLINE_FUNCTION Real value_of(const dual_real &a) { return a.val; }
 KOKKOS_INLINE_FUNCTION Real deriv_of(const dual_real &a, int n) {
   return a.d[n];
 }
+template <typename T>
+KOKKOS_INLINE_FUNCTION T metric_norm3(T x, T y, T z) {
+  T r2 = x * x + y * y + z * z;
+  if (value_of(r2) <= 0.0) {
+    return T(0.0);
+  }
+  return metric_sqrt(r2);
+}
 
 struct three_metric {
   Real gxx;
@@ -263,7 +269,6 @@ struct bbh_traj_table {
   std::vector<Real> ax1, ay1, az1, ax2, ay2, az2;
   std::vector<Real> m1, m2;
   std::size_t active_segment = 0;
-  DvceArray2D<Real> *d_rows = nullptr;
 };
 struct bbh_traj_table bbh_table;
 
@@ -275,9 +280,9 @@ bbh_traj_state find_traj_state(Real tt);
 void LoadTrajectoryTable(const std::string &fname);
 
 KOKKOS_INLINE_FUNCTION
-void numerical_4metric(const Real t, const Real x, const Real y, const Real z,
-                       struct four_metric &outmet, const Real nz_0[NTRAJ],
-                       const Real dnz_0[NTRAJ], const bbh_pgen bbh_);
+void analytic_4metric(const Real t, const Real x, const Real y, const Real z,
+                      struct four_metric &outmet, const Real nz_0[NTRAJ],
+                      const Real dnz_0[NTRAJ], const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met,
                                 struct three_metric &gam);
@@ -422,7 +427,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
-  bbh.spin = 0.0; //delete eventually?
+  bbh.spin = 0.0;
 
   bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
   bbh.om = std::pow(bbh.sep, -1.5);
@@ -476,9 +481,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_ref_func = Refine;
   user_hist_func = TorusHistory;
-  user_srcs_func = AddValenciaGRCooling;
+  if (pmbp->pmhd != nullptr) {
+    user_srcs_func = AddValenciaGRCooling;
+  }
 
-  pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
+  if (pmbp->padm != nullptr) {
+    pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
+  }
 
   // Flux diagnostics setup
   // Resolution of surface grids
@@ -638,9 +647,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
   const int nji  = indcs.nx2*indcs.nx1;
 
-  Real bbh_traj_t0[NTRAJ];
-  find_traj_t(0.0, bbh_traj_t0);
-  auto& bbh_traj_ = bbh_traj_t0;
+  bbh_traj_state traj0 = find_traj_state(0.0);
 
   Kokkos::parallel_reduce("pgen_torus1", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &max_ptot) {
@@ -670,7 +677,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Extract metric and inverse -- presumably should get actual metric?????
     Real glower[4][4], gupper[4][4];
-    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
+    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
 
     // Calculate Boyer-Lindquist coordinates of cell
     Real r, theta, phi;
@@ -756,7 +763,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                       x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
       Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
+      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
 
       uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
       uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
@@ -817,6 +824,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Initialize ADM variables -------------------------------
   if (pmbp->padm != nullptr) {
     pmbp->padm->SetADMVariables(pmbp);
+    if (pmbp->pcoord->coord_data.bh_excise) {
+      pmbp->pcoord->UpdateExcisionMasks();
+    }
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
 
@@ -1042,7 +1052,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
+      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
 
       // Calculate Boyer-Lindquist coordinates of cell
       Real r, theta, phi;
@@ -1198,8 +1208,30 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1[0] = traj.q[X2];
   coord.punc_1[1] = traj.q[Y2];
   coord.punc_1[2] = traj.q[Z2];
-
-
+  Real m1_ex = traj.q[M1T] * bbh_.adjust_mass1;
+  Real m2_ex = traj.q[M2T] * bbh_.adjust_mass2;
+  Real a1x_ex = traj.q[AX1] * bbh_.adjust_mass1;
+  Real a1y_ex = traj.q[AY1] * bbh_.adjust_mass1;
+  Real a1z_ex = traj.q[AZ1] * bbh_.adjust_mass1;
+  Real a2x_ex = traj.q[AX2] * bbh_.adjust_mass2;
+  Real a2y_ex = traj.q[AY2] * bbh_.adjust_mass2;
+  Real a2z_ex = traj.q[AZ2] * bbh_.adjust_mass2;
+  Real a1_ex = sqrt(SQR(a1x_ex) + SQR(a1y_ex) + SQR(a1z_ex));
+  Real a2_ex = sqrt(SQR(a2x_ex) + SQR(a2y_ex) + SQR(a2z_ex));
+  coord.punc_0_spin[0] = a1x_ex;
+  coord.punc_0_spin[1] = a1y_ex;
+  coord.punc_0_spin[2] = a1z_ex;
+  coord.punc_1_spin[0] = a2x_ex;
+  coord.punc_1_spin[1] = a2y_ex;
+  coord.punc_1_spin[2] = a2z_ex;
+  coord.punc_0_vel[0] = traj.q[VX1];
+  coord.punc_0_vel[1] = traj.q[VY1];
+  coord.punc_0_vel[2] = traj.q[VZ1];
+  coord.punc_1_vel[0] = traj.q[VX2];
+  coord.punc_1_vel[1] = traj.q[VY2];
+  coord.punc_1_vel[2] = traj.q[VZ2];
+  coord.punc_0_rad = m1_ex + sqrt(fmax(SQR(m1_ex) - SQR(a1_ex), 0.0));
+  coord.punc_1_rad = m2_ex + sqrt(fmax(SQR(m2_ex) - SQR(a2_ex), 0.0));
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1217,7 +1249,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    numerical_4metric(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
+    analytic_4metric(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
   
     /* Transform 4D metric to 3+1 variables*/
     four_metric_to_three_metric(met4, met3);
@@ -1249,7 +1281,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void numerical_4metric(const Real t, const Real x, const Real y,
+void analytic_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
     const Real nz_0[NTRAJ], const Real dnz_0[NTRAJ], const bbh_pgen bbh_)
 {
@@ -1529,35 +1561,6 @@ void LoadTrajectoryTable(const std::string &fname) {
       std::exit(EXIT_FAILURE);
     }
   bbh_table.active_segment = 0;
-  // Keep this allocation alive through process teardown.  A namespace-static
-  // Kokkos::View would otherwise be destroyed after Kokkos::finalize().
-  bbh_table.d_rows =
-      new DvceArray2D<Real>("bbh_traj_table", bbh_table.t.size(), NTRAJ + 1);
-  auto h_rows = Kokkos::create_mirror_view(*bbh_table.d_rows);
-  for (std::size_t r = 0; r < bbh_table.t.size(); ++r) {
-    h_rows(r, 0) = bbh_table.t[r];
-    h_rows(r, 1 + X1) = bbh_table.x1[r];
-    h_rows(r, 1 + Y1) = bbh_table.y1[r];
-    h_rows(r, 1 + Z1) = bbh_table.z1[r];
-    h_rows(r, 1 + X2) = bbh_table.x2[r];
-    h_rows(r, 1 + Y2) = bbh_table.y2[r];
-    h_rows(r, 1 + Z2) = bbh_table.z2[r];
-    h_rows(r, 1 + VX1) = bbh_table.vx1[r];
-    h_rows(r, 1 + VY1) = bbh_table.vy1[r];
-    h_rows(r, 1 + VZ1) = bbh_table.vz1[r];
-    h_rows(r, 1 + VX2) = bbh_table.vx2[r];
-    h_rows(r, 1 + VY2) = bbh_table.vy2[r];
-    h_rows(r, 1 + VZ2) = bbh_table.vz2[r];
-    h_rows(r, 1 + AX1) = bbh_table.ax1[r];
-    h_rows(r, 1 + AY1) = bbh_table.ay1[r];
-    h_rows(r, 1 + AZ1) = bbh_table.az1[r];
-    h_rows(r, 1 + AX2) = bbh_table.ax2[r];
-    h_rows(r, 1 + AY2) = bbh_table.ay2[r];
-    h_rows(r, 1 + AZ2) = bbh_table.az2[r];
-    h_rows(r, 1 + M1T) = bbh_table.m1[r];
-    h_rows(r, 1 + M2T) = bbh_table.m2[r];
-  }
-  Kokkos::deep_copy(*bbh_table.d_rows, h_rows);
   if (global_variable::my_rank == 0)
     std::cout << "Loaded BBH trajectory table '" << fname << "' with "
               << bbh_table.t.size() << " rows" << std::endl;
@@ -1616,7 +1619,9 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
     return;
   }
   const auto &T = bbh_table.t;
-  Real tol = h * (1.0 + 10.0 * std::numeric_limits<Real>::epsilon());
+  Real trange = T.back() - T.front();
+  Real tol = 64.0 * std::numeric_limits<Real>::epsilon() *
+             std::max({1.0, std::abs(T.front()), std::abs(T.back()), trange});
   if (t < T.front() - tol || t > T.back() + tol) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
@@ -1694,13 +1699,22 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
 }
 
 template <typename T>
+KOKKOS_INLINE_FUNCTION T BoostGammaMinusOneOverV2(const T v2, const T gamma) {
+  if (value_of(v2) < 1.0e-12) {
+    return T(0.5) + T(0.375) * v2 + T(0.3125) * v2 * v2;
+  }
+  return (gamma - T(1.0)) / v2;
+}
+
+template <typename T>
 KOKKOS_INLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
                                                T J[NDIM][NDIM]) {
-  T v2 = vx * vx + vy * vy + vz * vz, g = T(1.0) / metric_sqrt(T(1.0) - v2),
-    gm1 = g - T(1.0), iv2 = T(1.0) / v2;
   for (int i = 0; i < NDIM; ++i)
     for (int j = 0; j < NDIM; ++j)
       J[i][j] = T(0.0);
+  T v2 = vx * vx + vy * vy + vz * vz;
+  T g = T(1.0) / metric_sqrt(T(1.0) - v2);
+  T q = BoostGammaMinusOneOverV2(v2, g);
   J[0][0] = g;
   J[0][1] = -g * vx;
   J[0][2] = -g * vy;
@@ -1708,23 +1722,25 @@ KOKKOS_INLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
   J[1][0] = J[0][1];
   J[2][0] = J[0][2];
   J[3][0] = J[0][3];
-  J[1][1] = T(1.0) + gm1 * vx * vx * iv2;
-  J[1][2] = gm1 * vx * vy * iv2;
-  J[1][3] = gm1 * vx * vz * iv2;
+  J[1][1] = T(1.0) + q * vx * vx;
+  J[1][2] = q * vx * vy;
+  J[1][3] = q * vx * vz;
   J[2][1] = J[1][2];
-  J[2][2] = T(1.0) + gm1 * vy * vy * iv2;
-  J[2][3] = gm1 * vy * vz * iv2;
+  J[2][2] = T(1.0) + q * vy * vy;
+  J[2][3] = q * vy * vz;
   J[3][1] = J[1][3];
   J[3][2] = J[2][3];
-  J[3][3] = T(1.0) + gm1 * vz * vz * iv2;
+  J[3][3] = T(1.0) + q * vz * vz;
 }
 template <typename T>
 KOKKOS_INLINE_FUNCTION void BoostedSpatialCoordinates(T x, T y, T z, T x0, T y0,
                                                       T z0, T vx, T vy, T vz,
                                                       T *xbh, T *ybh, T *zbh) {
-  T dx = x - x0, dy = y - y0, dz = z - z0, v2 = vx * vx + vy * vy + vz * vz,
-    g = T(1.0) / metric_sqrt(T(1.0) - v2), q = (g - T(1.0)) / v2,
-    vd = vx * dx + vy * dy + vz * dz;
+  T dx = x - x0, dy = y - y0, dz = z - z0;
+  T v2 = vx * vx + vy * vy + vz * vz;
+  T g = T(1.0) / metric_sqrt(T(1.0) - v2);
+  T q = BoostGammaMinusOneOverV2(v2, g);
+  T vd = vx * dx + vy * dy + vz * dz;
   *xbh = dx + q * vx * vd;
   *ybh = dy + q * vy * vd;
   *zbh = dz + q * vz * vd;
@@ -1775,31 +1791,27 @@ template <typename T>
 KOKKOS_INLINE_FUNCTION void
 SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
                       const bbh_pgen b) {
-  T v1x = tr[VX1] + T(1e-40), v1y = tr[VY1] + T(1e-40),
-    v1z = tr[VZ1] + T(1e-40), v2x = tr[VX2] + T(1e-40),
-    v2y = tr[VY2] + T(1e-40), v2z = tr[VZ2] + T(1e-40);
+  T v1x = tr[VX1], v1y = tr[VY1], v1z = tr[VZ1], v2x = tr[VX2],
+    v2y = tr[VY2], v2z = tr[VZ2];
   T a1x = tr[AX1], a1y = tr[AY1], a1z = tr[AZ1], a2x = tr[AX2], a2y = tr[AY2],
     a2z = tr[AZ2];
-  if (b.use_traj_table) {
-    a1x = a1x * b.adjust_mass1;
-    a1y = a1y * b.adjust_mass1;
-    a1z = a1z * b.adjust_mass1;
-    a2x = a2x * b.adjust_mass2;
-    a2y = a2y * b.adjust_mass2;
-    a2z = a2z * b.adjust_mass2;
-  }
+  a1x = a1x * b.adjust_mass1;
+  a1y = a1y * b.adjust_mass1;
+  a1z = a1z * b.adjust_mass1;
+  a2x = a2x * b.adjust_mass2;
+  a2y = a2y * b.adjust_mass2;
+  a2z = a2z * b.adjust_mass2;
   T m1 = tr[M1T] * b.adjust_mass1, m2 = tr[M2T] * b.adjust_mass2,
     a1n = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + T(1e-40)),
     a2n = metric_sqrt(a2x * a2x + a2y * a2y + a2z * a2z + T(1e-40)),
-    a1 = b.use_traj_table ? a1n : a1n * b.adjust_mass1,
-    a2 = b.use_traj_table ? a2n : a2n * b.adjust_mass2;
+    a1 = a1n, a2 = a2n;
   T x1, y1, z1, x2, y2, z2;
   BoostedSpatialCoordinates(x, y, z, tr[X1], tr[Y1], tr[Z1], v1x, v1y, v1z, &x1,
                             &y1, &z1);
   BoostedSpatialCoordinates(x, y, z, tr[X2], tr[Y2], tr[Z2], v2x, v2y, v2z, &x2,
                             &y2, &z2);
-  T r1 = metric_sqrt(x1 * x1 + y1 * y1 + z1 * z1),
-    r2 = metric_sqrt(x2 * x2 + y2 * y2 + z2 * z2),
+  T r1 = metric_norm3(x1, y1, z1),
+    r2 = metric_norm3(x2, y2, z2),
     c1 = metric_sqrt(a1 * a1) * (T(1.0) + b.a1_buffer) + b.cutoff_floor,
     c2 = metric_sqrt(a2 * a2) * (T(1.0) + b.a2_buffer) + b.cutoff_floor;
   if (value_of(r1) < value_of(c1))
@@ -1807,10 +1819,7 @@ SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
   if (value_of(r2) < value_of(c2))
     z2 = (value_of(z2) > 0.0) ? c2 : -c2;
   T KS1[NDIM][NDIM], KS2[NDIM][NDIM], J1[NDIM][NDIM], J2[NDIM][NDIM];
-  // The analytic/default path keeps the historical generated expression.  The
-  // table path uses the explicit chi_1_y column supplied by the trajectory file.
-  T hole1_ay = b.use_traj_table ? a1y : a2x;
-  KerrSchildPerturbation(x1, y1, z1, a1x, hole1_ay, a1z, m1, KS1);
+  KerrSchildPerturbation(x1, y1, z1, a1x, a1y, a1z, m1, KS1);
   KerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, m2, KS2);
   BuildBoostJacobian(v1x, v1y, v1z, J1);
   BuildBoostJacobian(v2x, v2y, v2z, J2);
@@ -2105,8 +2114,13 @@ static void GetBoyerLindquistCoordinates(struct bbh_pgen pgen,
 
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   *pr = r;
-  *ptheta = (fabs(x3/r) < 1.0) ? acos(x3/r) : acos(copysign(1.0, x3));
-  *pphi = atan2(r*x2, r*x1);
+  if (r > 0.0) {
+    *ptheta = (fabs(x3/r) < 1.0) ? acos(x3/r) : acos(copysign(1.0, x3));
+    *pphi = atan2(r*x2, r*x1);
+  } else {
+    *ptheta = 0.0;
+    *pphi = 0.0;
+  }
   return;
 }
 
@@ -2397,6 +2411,9 @@ Real A1(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+  if (r <= 1.0e-14) {
+    return 0.0;
+  }
 
   // calculate vector potential in spherical KS
   Real atheta, aphi;
@@ -2404,10 +2421,13 @@ Real A1(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
-  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+  Real cyl2 = SQR(x1) + SQR(x2);
+  Real safe_cyl2 = fmax(cyl2, 1.0e-12);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/safe_cyl2);
 
   return atheta*(x1*x3*isin_term/(r*sqrt_term)) +
-         aphi*(-x2/(SQR(x1)+SQR(x2))+pgen.spin*x1*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
+         aphi*(-x2/safe_cyl2 +
+               pgen.spin*x1*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
   //return -0.5*x2;
 }
 
@@ -2422,6 +2442,9 @@ Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+  if (r <= 1.0e-14) {
+    return 0.0;
+  }
 
   // calculate vector potential in spherical KS
   Real atheta, aphi;
@@ -2429,10 +2452,13 @@ Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
-  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+  Real cyl2 = SQR(x1) + SQR(x2);
+  Real safe_cyl2 = fmax(cyl2, 1.0e-12);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/safe_cyl2);
 
   return atheta*(x2*x3*isin_term/(r*sqrt_term)) +
-         aphi*(x1/(SQR(x1)+SQR(x2))+pgen.spin*x2*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
+         aphi*(x1/safe_cyl2 +
+               pgen.spin*x2*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
   //return 0.5*x1;
 }
 
@@ -2444,6 +2470,9 @@ Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
+  if (r <= 1.0e-14) {
+    return 0.0;
+  }
 
   // calculate vector potential in spherical KS
   Real atheta, aphi;
@@ -2451,7 +2480,9 @@ Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
-  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+  Real cyl2 = SQR(x1) + SQR(x2);
+  Real safe_cyl2 = fmax(cyl2, 1.0e-12);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/safe_cyl2);
 
   return atheta*(((1.0+SQR(pgen.spin/r))*SQR(x3)-sqrt_term)*isin_term/(r*sqrt_term)) +
          aphi*(pgen.spin*x3/(r*sqrt_term));
@@ -2566,15 +2597,17 @@ static void TransformVector(struct bbh_pgen pgen,
   Real rad = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real r = fmax((sqrt( SQR(rad) + sqrt(SQR(SQR(rad))) ) / sqrt(2.0)), 1.0);
   Real delta = SQR(r) - 2.0*r;
+  Real cyl2 = SQR(x1) + SQR(x2);
+  Real safe_cyl = sqrt(fmax(cyl2, 1.0e-12));
   *pa0 = a0_bl + 2.0*r/delta * a1_bl;
   *pa1 = a1_bl * ( (r*x1)/(SQR(r))) +
-         a2_bl * x1*x3/r * sqrt((SQR(r))/(SQR(x1) + SQR(x2))) -
+         a2_bl * x1*x3/safe_cyl -
          a3_bl * x2;
   *pa2 = a1_bl * ( (r*x2)/(SQR(r))) +
-         a2_bl * x2*x3/r * sqrt((SQR(r))/(SQR(x1) + SQR(x2))) +
+         a2_bl * x2*x3/safe_cyl +
          a3_bl * x1;
   *pa3 = a1_bl * x3/r -
-         a2_bl * r * sqrt((SQR(x1) + SQR(x2))/(SQR(r) ));
+         a2_bl * sqrt(cyl2);
   return;
 }
 
@@ -2646,6 +2679,9 @@ static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]){
 
 void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pmhd == nullptr || pmbp->padm == nullptr) {
+    return;
+  }
 
   // ---- Units ----
   Real temp_unit     = pmbp->punit->temperature_cgs();

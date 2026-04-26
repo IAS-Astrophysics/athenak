@@ -44,8 +44,17 @@ struct CoordData {
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
   Real punc_0[3];                  // if excision_scheme = puncture, excise within a radius
   Real punc_1[3];                  // of punc_n_rad of punc_n
+  Real punc_0_spin[3];             // Kerr a-vector used for puncture excision shape
+  Real punc_1_spin[3];
+  Real punc_0_vel[3];              // boost velocity used for puncture excision shape
+  Real punc_1_vel[3];
   Real punc_0_rad;
   Real punc_1_rad;
+  bool smooth_excise;              // smoothly drain primitive variables inside horizon
+  Real smooth_excise_width;        // radial width of drain layer inside geometric masks
+  Real smooth_excise_lapse_width;  // lapse width of drain layer for lapse masks
+  Real smooth_excise_inflow_speed; // inward normal-frame speed used in the drain layer
+  Real smooth_excise_sigma_max;    // optional B^2/rho cap inside smooth excision
 };
 
 //----------------------------------------------------------------------------------------
@@ -68,6 +77,7 @@ class Coordinates {
   // excision masks
   DvceArray4D<bool> excision_floor;  // cell-centered mask for C2P flooring about horizon
   DvceArray4D<bool> excision_flux;   // cell-centered mask for FOFC about horizon
+  DvceArray4D<Real> excision_weight;  // 0 outside, 1 in fully drained excision core
 
   // functions
   void CoordSrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos, const Real dt,
