@@ -27,6 +27,7 @@
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
@@ -118,6 +119,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   adm::ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad=pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad=pm->pmb_pack->pdynrad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0;
   if (phydro != nullptr) {
@@ -128,6 +130,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  } else if (pdynrad != nullptr) {
+    nrad = pdynrad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
@@ -267,7 +271,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*(nout2+1)*nout3*sizeof(Real);    // mhd b0.x2f
     data_size_ += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
   }
-  if (prad != nullptr) {
+  if (prad != nullptr || pdynrad != nullptr) {
     data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad i0
   }
   if (pturb != nullptr) {
@@ -486,7 +490,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     myoffset = offset_myrank;
   }
 
-  if (prad != nullptr) {
+  if (prad != nullptr || pdynrad != nullptr) {
     Kokkos::realloc(ccin, nmb, nrad, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to read, so read collectively
@@ -520,8 +524,13 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         myoffset += data_size;
       }
     }
-    Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    if (prad != nullptr) {
+      Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    } else {
+      Kokkos::deep_copy(Kokkos::subview(pdynrad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    }
     offset_myrank += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
     myoffset = offset_myrank;
   }

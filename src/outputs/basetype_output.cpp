@@ -95,7 +95,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing a <forcing> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (ivar==51 && (pm->pmb_pack->prad == nullptr)) {
+  if (ivar==51 && (pm->pmb_pack->prad == nullptr && pm->pmb_pack->pdynrad == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation moments requested in <output> block '"
        << out_params.block_name << "' but no Radiation object has been constructed."
@@ -103,7 +103,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     exit(EXIT_FAILURE);
   }
   if ((ivar==52 || ivar==53) &&
-      ((pm->pmb_pack->prad == nullptr) ||
+      ((pm->pmb_pack->prad == nullptr && pm->pmb_pack->pdynrad == nullptr) ||
        (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Fluid Frame Radiation moments requested in <output> block '"
@@ -112,7 +112,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     exit(EXIT_FAILURE);
   }
   if ((ivar>=53) && (ivar<68) &&
-      (pm->pmb_pack->prad == nullptr || pm->pmb_pack->phydro == nullptr)) {
+      ((pm->pmb_pack->prad == nullptr && pm->pmb_pack->pdynrad == nullptr) ||
+       pm->pmb_pack->phydro == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation Hydro variables requested in <output> block '"
        << out_params.block_name << "' but Radiation and/or Hydro object not constructed."
@@ -120,7 +121,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     exit(EXIT_FAILURE);
   }
   if ((ivar>=68) && (ivar<88) &&
-      (pm->pmb_pack->prad == nullptr || pm->pmb_pack->pmhd == nullptr)) {
+      ((pm->pmb_pack->prad == nullptr && pm->pmb_pack->pdynrad == nullptr) ||
+       pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Radiation MHD variables requested in <output> block '"
        << out_params.block_name << "' but Radiation and/or MHD object not constructed."

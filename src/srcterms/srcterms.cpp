@@ -25,6 +25,7 @@
 #include "parameter_input.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "units/units.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -226,7 +227,9 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = (pmy_pack->nmb_thispack-1);
-  int nang1 = (pmy_pack->prad->prgeo->nangles-1);
+  int nang1 = (pmy_pack->prad != nullptr) ?
+              (pmy_pack->prad->prgeo->nangles-1) :
+              (pmy_pack->pdynrad->prgeo->nangles-1);
 
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
@@ -241,9 +244,22 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   Real &width_ = width;
   Real &spread_ = spread;
 
-  auto &tc = pmy_pack->prad->tetcov_c;
-  auto &nh_c_ = pmy_pack->prad->nh_c;
-  auto &tet_c_ = pmy_pack->prad->tet_c;
+  DvceArray6D<Real> tc;
+  DualArray2D<Real> nh_c_;
+  DvceArray6D<Real> tet_c_;
+  DvceArray4D<Real> sqrt_detg_c_;
+  bool use_adm_radiation = false;
+  if (pmy_pack->prad != nullptr) {
+    tc = pmy_pack->prad->tetcov_c;
+    nh_c_ = pmy_pack->prad->nh_c;
+    tet_c_ = pmy_pack->prad->tet_c;
+  } else {
+    use_adm_radiation = pmy_pack->pdynrad->use_adm_geometry;
+    tc = pmy_pack->pdynrad->tetcov_c;
+    nh_c_ = pmy_pack->pdynrad->nh_c;
+    tet_c_ = pmy_pack->pdynrad->tet_c;
+    sqrt_detg_c_ = pmy_pack->pdynrad->sqrt_detg_c;
+  }
   par_for("rad_beam",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -307,7 +323,8 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
         Real n0 = tet_c_(m,0,0,k,j,i);
         Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
                  + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-        i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
+        Real conserved_norm = use_adm_radiation ? sqrt_detg_c_(m,k,j,i) : n0*n_0;
+        i0(m,n,k,j,i) += conserved_norm*dii_dt_*bdt;
       }
     }
   });

@@ -30,6 +30,7 @@
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 //#include "outputs.hpp"
 
@@ -67,6 +68,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   adm::ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad = pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad = pm->pmb_pack->pdynrad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   int nhydro=0, nmhd=0, nrad=0, nforce=3, nadm=0, nz4c=0;
   if (phydro != nullptr) {
@@ -83,6 +85,8 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   // if the spacetime is evolved, we do not need to checkpoint/recover the ADM variables
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  } else if (pdynrad != nullptr) {
+    nrad = pdynrad->prgeo->nangles;
   }
 
   // Note for restarts, outarrays are dimensioned (m,n,k,j,i)
@@ -105,10 +109,15 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
     Kokkos::deep_copy(outfield.x3f, Kokkos::subview(pmhd->b0.x3f, std::make_pair(0,nmb),
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
   }
-  if (prad != nullptr) {
+  if (prad != nullptr || pdynrad != nullptr) {
     Kokkos::realloc(outarray_rad, nmb, nrad, nout3, nout2, nout1);
-    Kokkos::deep_copy(outarray_rad, Kokkos::subview(prad->i0, std::make_pair(0,nmb),
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+    if (prad != nullptr) {
+      Kokkos::deep_copy(outarray_rad, Kokkos::subview(prad->i0, std::make_pair(0,nmb),
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+    } else {
+      Kokkos::deep_copy(outarray_rad, Kokkos::subview(pdynrad->i0, std::make_pair(0,nmb),
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+    }
   }
   if (pturb != nullptr) {
     Kokkos::realloc(outarray_force, nmb, nforce, nout3, nout2, nout1);
@@ -147,6 +156,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad = pm->pmb_pack->pdynrad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
@@ -159,6 +169,8 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  } else if (pdynrad != nullptr) {
+    nrad = pdynrad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
@@ -289,7 +301,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     data_size += nout1*(nout2+1)*nout3*sizeof(Real);    // mhd b0.x2f
     data_size += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
   }
-  if (prad != nullptr) {
+  if (prad != nullptr || pdynrad != nullptr) {
     data_size += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
   }
   if (pturb != nullptr) {
@@ -322,7 +334,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int max_vars = 0;
   if (phydro != nullptr) max_vars = std::max(max_vars, nhydro);
   if (pmhd != nullptr)   max_vars = std::max(max_vars, nmhd);
-  if (prad != nullptr)   max_vars = std::max(max_vars, nrad);
+  if (prad != nullptr || pdynrad != nullptr) max_vars = std::max(max_vars, nrad);
   if (pturb != nullptr)  max_vars = std::max(max_vars, nforce);
   if (pz4c != nullptr)   max_vars = std::max(max_vars, nz4c);
   else if (padm != nullptr) max_vars = std::max(max_vars, nadm);
@@ -573,7 +585,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     myoffset = offset_myrank;
   }
 
-  if (prad != nullptr) {
+  if (prad != nullptr || pdynrad != nullptr) {
     for (int m=0;  m<noutmbs_max; ++m) {
       // PACK DATA
       if (m < pm->nmb_thisrank) {

@@ -1,0 +1,89 @@
+# AthenaK input file for standalone dyn_radiation radiation-hydro linear wave SMR smoke
+
+<job>
+basename = dynrad_lwave_smr
+
+<mesh>
+nghost = 4
+nx1 = 32
+x1min = 0.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 1
+x2min = 0.0
+x2max = 1.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 8
+nx2 = 1
+nx3 = 1
+
+<mesh_refinement>
+refinement = static
+
+<refined_region1>
+level = 1
+x1min = 0.25
+x1max = 0.75
+x2min = 0.0
+x2max = 1.0
+x3min = 0.0
+x3max = 1.0
+
+<coord>
+general_rel = true
+minkowski = true
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim = 2
+tlim = 1.0
+
+<hydro>
+eos = ideal
+reconstruct = wenoz
+rsolver = hlle
+gamma = 1.6666666666666667
+
+<dyn_radiation>
+geometry = cks
+nlevel = 0
+rotate_geo = false
+angular_fluxes = false
+reconstruct = plm
+kappa_a = 10.0
+kappa_s = 10.0
+kappa_p = 0.0
+arad = 19.253382731290966
+
+<problem>
+pgen_name = rad_linear_wave
+along_x1 = true
+along_x2 = false
+along_x3 = false
+rho = 1.0
+pgas = 2.497687326549491e-01
+erad = 7.493061979648474e-02
+delta = 1.0e-4
+omega_real = 3.1488157526582414e+00
+omega_imag = -2.6190006385782953e-02
+drho_real = 8.3877889167048014e-01
+drho_imag = 0.0
+dpgas_real = 3.2084488925731219e-01
+dpgas_imag = -9.9134535607493107e-03
+dux_real = 4.2035369927276667e-01
+dux_imag = -3.4962560317943620e-03
+derad_real = 1.2904189937790903e-01
+derad_imag = 1.5203926879094193e-03
+dfxrad_real = 1.3260665610966586e-03
+dfxrad_imag = -6.7017329068802516e-03

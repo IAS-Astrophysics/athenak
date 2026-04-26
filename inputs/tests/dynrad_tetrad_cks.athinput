@@ -1,0 +1,48 @@
+# AthenaK input file for the standalone dyn_radiation CKS tetrad smoke test
+
+<job>
+basename = dynrad_tetrad_cks
+
+<mesh>
+nghost = 2
+nx1 = 8
+x1min = -8.0
+x1max = 8.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 8
+x2min = -8.0
+x2max = 8.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 8
+x3min = -8.0
+x3max = 8.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+
+<coord>
+general_rel = true
+a = 0.6
+excise = false
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim = 0
+tlim = 1.0
+
+<dyn_radiation>
+geometry = cks
+nlevel = 1
+rotate_geo = false
+angular_fluxes = false
+
+<problem>
+pgen_name = rad_beam

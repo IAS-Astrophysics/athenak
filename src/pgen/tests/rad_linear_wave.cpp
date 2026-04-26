@@ -29,6 +29,7 @@
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/srcterms.hpp"
 #include "pgen/pgen.hpp"
 
@@ -191,7 +192,14 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   auto &size = pmbp->pmb->mb_size;
-  int nangles_ = pmbp->prad->prgeo->nangles;
+  int nangles_ = -1;
+  if (pmbp->prad != nullptr) {
+    nangles_ = pmbp->prad->prgeo->nangles;
+  } else if (pmbp->pdynrad != nullptr) {
+    nangles_ = pmbp->pdynrad->prgeo->nangles;
+  } else {
+    throw std::runtime_error("rad_linear_wave requires either <radiation> or <dyn_radiation>");
+  }
   auto eig_ = eig;
   auto wv_ = rlw;
 
@@ -249,12 +257,24 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
 
   // initialize specific intensity over angles in initial conditions
   if (set_initial_conditions) {
-    auto &nh_c_ = pmbp->prad->nh_c;
-    auto &norm_to_tet_ = pmbp->prad->norm_to_tet;
-    auto &tet_c_ = pmbp->prad->tet_c;
-    auto &tetcov_c_ = pmbp->prad->tetcov_c;
-
-    auto &i0 = pmbp->prad->i0;
+    DualArray2D<Real> nh_c_;
+    DvceArray6D<Real> norm_to_tet_;
+    DvceArray6D<Real> tet_c_;
+    DvceArray6D<Real> tetcov_c_;
+    DvceArray5D<Real> i0;
+    if (pmbp->prad != nullptr) {
+      nh_c_ = pmbp->prad->nh_c;
+      norm_to_tet_ = pmbp->prad->norm_to_tet;
+      tet_c_ = pmbp->prad->tet_c;
+      tetcov_c_ = pmbp->prad->tetcov_c;
+      i0 = pmbp->prad->i0;
+    } else {
+      nh_c_ = pmbp->pdynrad->nh_c;
+      norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
+      tet_c_ = pmbp->pdynrad->tet_c;
+      tetcov_c_ = pmbp->pdynrad->tetcov_c;
+      i0 = pmbp->pdynrad->i0;
+    }
     par_for("rad_wave2",DevExeSpace(),0,(pmbp->nmb_thispack-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
