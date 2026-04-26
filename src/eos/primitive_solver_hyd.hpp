@@ -534,7 +534,7 @@ class PrimitiveSolverHydro {
         prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
         bool smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
                                     isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
-        for (int n = 0; n < NPRIM; ++n) {
+        for (int n = 0; n < PYF + nscal; ++n) {
           smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
         }
         if (!smooth_state_finite) {
@@ -548,9 +548,10 @@ class PrimitiveSolverHydro {
           }
           prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
           smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
-                                 isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]) &&
-                                 isfinite(prim_pt[PTM]) && isfinite(prim_pt[PVX]) &&
-                                 isfinite(prim_pt[PVY]) && isfinite(prim_pt[PVZ]));
+                                 isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
+          for (int n = 0; n < PYF + nscal; ++n) {
+            smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
+          }
         }
         if (smooth_state_finite) {
           result.error = Primitive::Error::SUCCESS;
