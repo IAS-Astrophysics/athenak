@@ -233,8 +233,17 @@ struct bbh_pgen {
   Real radius_thr;
   Real smooth_b_damping_eta;
   Real smooth_b_damping_cfl;
+  Real sink_radius;
+  Real sink_width;
+  Real sink_timescale;
+  Real sink_density_floor;
+  Real sink_pressure_floor;
   bool use_traj_table;
   bool smooth_b_damping;
+  bool unresolved_sink;
+  bool sink_replace_underresolved_excision;
+  bool require_resolved_horizon;
+  bool use_cooling_source;
 
   Real spin;
 
@@ -276,6 +285,56 @@ struct bbh_traj_table {
 };
 struct bbh_traj_table bbh_table;
 
+void find_traj_t(Real tt, Real traj_array[NTRAJ]);
+void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
+                            Real dtraj_array[NTRAJ]);
+
+Real LocalFinestMeshSpacing(MeshBlockPack *pmbp) {
+  Real min_dx = std::numeric_limits<Real>::max();
+  auto &mb_size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  for (int m = 0; m < pmbp->nmb_thispack; ++m) {
+    min_dx = std::min(min_dx, mb_size.h_view(m).dx1);
+    if (indcs.nx2 > 1) min_dx = std::min(min_dx, mb_size.h_view(m).dx2);
+    if (indcs.nx3 > 1) min_dx = std::min(min_dx, mb_size.h_view(m).dx3);
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &min_dx, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
+  return min_dx;
+}
+
+Real HorizonRadiusFromMassAndSpin(Real mass, Real ax, Real ay, Real az) {
+  Real amag = std::sqrt(SQR(ax) + SQR(ay) + SQR(az));
+  return mass + std::sqrt(std::max(SQR(mass) - SQR(amag), 0.0));
+}
+
+Real MinDynBBHHorizonRadius() {
+  if (bbh.use_traj_table && !bbh_table.t.empty()) {
+    Real rmin = std::numeric_limits<Real>::max();
+    for (std::size_t n = 0; n < bbh_table.t.size(); ++n) {
+      Real m1 = bbh_table.m1[n] * bbh.adjust_mass1;
+      Real m2 = bbh_table.m2[n] * bbh.adjust_mass2;
+      rmin = std::min(rmin, HorizonRadiusFromMassAndSpin(
+          m1, m1*bbh_table.ax1[n], m1*bbh_table.ay1[n], m1*bbh_table.az1[n]));
+      rmin = std::min(rmin, HorizonRadiusFromMassAndSpin(
+          m2, m2*bbh_table.ax2[n], m2*bbh_table.ay2[n], m2*bbh_table.az2[n]));
+    }
+    return rmin;
+  }
+  Real state[NTRAJ];
+  find_traj_t(0.0, state);
+  Real m1 = state[M1T] * bbh.adjust_mass1;
+  Real m2 = state[M2T] * bbh.adjust_mass2;
+  return std::min(
+      HorizonRadiusFromMassAndSpin(m1, state[AX1]*bbh.adjust_mass1,
+                                   state[AY1]*bbh.adjust_mass1,
+                                   state[AZ1]*bbh.adjust_mass1),
+      HorizonRadiusFromMassAndSpin(m2, state[AX2]*bbh.adjust_mass2,
+                                   state[AY2]*bbh.adjust_mass2,
+                                   state[AZ2]*bbh.adjust_mass2));
+}
+
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
 void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
@@ -309,6 +368,8 @@ void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
 void AddValenciaGRCooling(Mesh *pm, const Real bdt);
+void AddDynBBHUserSources(Mesh *pm, const Real bdt);
+void AddUnresolvedBHSink(Mesh *pm, const Real bdt);
 void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
 
 //----------------------------------------------------------------------------------------
@@ -452,6 +513,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
+  bbh.use_cooling_source = user_srcs;
   bbh.smooth_b_damping = pin->GetOrAddBoolean(
       "coord", "smooth_excision_b_damping", false);
   bbh.smooth_b_damping_eta = pin->GetOrAddReal(
@@ -466,6 +528,26 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "non-negative cfl cap" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  bbh.require_resolved_horizon = pin->GetOrAddBoolean(
+      "coord", "require_resolved_horizon", false);
+  bbh.unresolved_sink = pin->GetOrAddBoolean("problem", "unresolved_sink", false);
+  bbh.sink_replace_underresolved_excision = pin->GetOrAddBoolean(
+      "problem", "sink_replace_underresolved_excision", true);
+  bbh.sink_radius = pin->GetOrAddReal("problem", "sink_radius", 0.0);
+  bbh.sink_width = pin->GetOrAddReal("problem", "sink_width",
+                                     bbh.sink_radius > 0.0 ? 0.25*bbh.sink_radius : 0.0);
+  bbh.sink_timescale = pin->GetOrAddReal("problem", "sink_timescale", 0.0);
+  bbh.sink_density_floor = pin->GetOrAddReal("problem", "sink_density_floor", -1.0);
+  bbh.sink_pressure_floor = pin->GetOrAddReal("problem", "sink_pressure_floor", -1.0);
+  if (bbh.unresolved_sink &&
+      (!(bbh.sink_radius > 0.0) || !(bbh.sink_width > 0.0) ||
+       !(bbh.sink_timescale > 0.0))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "unresolved_sink requires positive sink_radius, sink_width, and "
+              << "sink_timescale" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
   std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
   if (bbh.use_traj_table) {
@@ -476,6 +558,37 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       std::exit(EXIT_FAILURE);
     }
     LoadTrajectoryTable(traj_file);
+  }
+
+  auto &coord_data = pmbp->pcoord->coord_data;
+  if (coord_data.bh_excise && coord_data.excision_scheme == ExcisionScheme::puncture) {
+    Real finest_dx = LocalFinestMeshSpacing(pmbp);
+    Real min_horizon = MinDynBBHHorizonRadius();
+    if (finest_dx > min_horizon) {
+      if (bbh.unresolved_sink && bbh.sink_replace_underresolved_excision) {
+        coord_data.bh_excise = false;
+        if (global_variable::my_rank == 0) {
+          std::cout << "Disabling puncture excision because the finest active dx="
+                    << finest_dx
+                    << " exceeds the minimum tabulated horizon radius="
+                    << min_horizon << "; unresolved_sink will drain matter instead."
+                    << std::endl;
+        }
+      } else if (bbh.require_resolved_horizon) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "puncture excision is under-resolved: finest active dx=" << finest_dx
+                  << " exceeds minimum horizon radius=" << min_horizon << std::endl
+                  << "Refine the mesh, set coord/require_resolved_horizon=false, "
+                  << "or enable problem/unresolved_sink=true with "
+                  << "problem/sink_replace_underresolved_excision=true." << std::endl;
+        std::exit(EXIT_FAILURE);
+      } else if (global_variable::my_rank == 0) {
+        std::cout << "WARNING: puncture excision is under-resolved: finest active dx="
+                  << finest_dx
+                  << " exceeds minimum horizon radius=" << min_horizon << std::endl;
+      }
+    }
   }
 
   for (int nr = 0; nr < 16; ++nr) {
@@ -500,8 +613,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_ref_func = Refine;
   user_hist_func = TorusHistory;
-  if (pmbp->pmhd != nullptr) {
-    user_srcs_func = AddValenciaGRCooling;
+  if (bbh.unresolved_sink && pmbp->pmhd == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "unresolved_sink currently requires MHD" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->pmhd != nullptr && (user_srcs || bbh.unresolved_sink)) {
+    user_srcs = user_srcs || bbh.unresolved_sink;
+    user_srcs_func = AddDynBBHUserSources;
   }
   if (bbh.smooth_b_damping) {
     if (pmbp->pmhd == nullptr) {
@@ -1565,12 +1685,12 @@ void LoadTrajectoryTable(const std::string &fname) {
     bbh_table.x2.push_back(c[6]);
     bbh_table.y2.push_back(c[7]);
     bbh_table.z2.push_back(c[8]);
-    bbh_table.ax1.push_back(c[9] * c[1]);
-    bbh_table.ay1.push_back(c[10] * c[1]);
-    bbh_table.az1.push_back(c[11] * c[1]);
-    bbh_table.ax2.push_back(c[12] * c[2]);
-    bbh_table.ay2.push_back(c[13] * c[2]);
-    bbh_table.az2.push_back(c[14] * c[2]);
+    bbh_table.ax1.push_back(c[9]);
+    bbh_table.ay1.push_back(c[10]);
+    bbh_table.az1.push_back(c[11]);
+    bbh_table.ax2.push_back(c[12]);
+    bbh_table.ay2.push_back(c[13]);
+    bbh_table.az2.push_back(c[14]);
     bbh_table.vx1.push_back(c[15]);
     bbh_table.vy1.push_back(c[16]);
     bbh_table.vz1.push_back(c[17]);
@@ -2834,6 +2954,87 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
 //----------------------------------------------------------------------------------------
 //! \fn void AddValenciaGRCooling(Mesh *pm, const Real bdt)
 //! \brief Valencia GR cooling source term with subcycling.
+
+KOKKOS_INLINE_FUNCTION
+Real SinkSmoothStep01(const Real x) {
+  Real s = fmin(1.0, fmax(0.0, x));
+  return s*s*(3.0 - 2.0*s);
+}
+
+void AddDynBBHUserSources(Mesh *pm, const Real bdt) {
+  if (bbh.use_cooling_source) {
+    AddValenciaGRCooling(pm, bdt);
+  }
+  AddUnresolvedBHSink(pm, bdt);
+}
+
+void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (!bbh.unresolved_sink || pmbp->pmhd == nullptr || pmbp->padm == nullptr) {
+    return;
+  }
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+  int nscal = pmbp->pmhd->nscalars;
+  int nmhd = pmbp->pmhd->nmhd;
+
+  auto &size = pmbp->pmb->mb_size;
+  auto &u0 = pmbp->pmhd->u0;
+  auto eos = pmbp->pmhd->peos->eos_data;
+  Real gm1 = eos.gamma - 1.0;
+  Real rho_target = (bbh.sink_density_floor > 0.0) ?
+                    bbh.sink_density_floor : eos.dfloor;
+  Real p_target = (bbh.sink_pressure_floor > 0.0) ?
+                  bbh.sink_pressure_floor : eos.pfloor;
+  Real e_target = p_target / gm1;
+  Real radius = bbh.sink_radius;
+  Real width = bbh.sink_width;
+  Real tau = bbh.sink_timescale;
+  bbh_traj_state traj = find_traj_state(pm->time);
+
+  par_for("dynbbh_unresolved_sink", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real r1 = sqrt(SQR(x1v - traj.q[X1]) + SQR(x2v - traj.q[Y1]) +
+                   SQR(x3v - traj.q[Z1]));
+    Real r2 = sqrt(SQR(x1v - traj.q[X2]) + SQR(x2v - traj.q[Y2]) +
+                   SQR(x3v - traj.q[Z2]));
+    Real sink_w = fmax(SinkSmoothStep01((radius - r1)/width),
+                       SinkSmoothStep01((radius - r2)/width));
+    if (sink_w <= 0.0) return;
+
+    Real damp = 1.0 - exp(-bdt*sink_w/tau);
+    if (damp <= 0.0) return;
+    Real keep = 1.0 - damp;
+
+    // This fallback is used when the horizon is too coarse for geometric
+    // excision.  Do not convert a primitive target through the unresolved
+    // puncture metric; that can inject enormous conserved energy near r=0.
+    u0(m,IDN,k,j,i) = keep*u0(m,IDN,k,j,i) + damp*rho_target;
+    u0(m,IM1,k,j,i) *= keep;
+    u0(m,IM2,k,j,i) *= keep;
+    u0(m,IM3,k,j,i) *= keep;
+    u0(m,IEN,k,j,i) = keep*u0(m,IEN,k,j,i) + damp*e_target;
+    for (int n = 0; n < nscal; ++n) {
+      u0(m,nmhd+n,k,j,i) *= keep;
+    }
+  });
+}
 
 void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   MeshBlockPack *pmbp = pm->pmb_pack;

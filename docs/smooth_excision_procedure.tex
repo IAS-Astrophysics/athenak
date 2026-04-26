@@ -6,7 +6,7 @@
 \usepackage{bm}
 \usepackage{hyperref}
 
-\title{Smooth Excision for Boosted Kerr--Schild Binary Black Holes}
+\title{DynBBH Tabulated Trajectories, Analytic Backgrounds, and Smooth Excision}
 \author{}
 \date{\today}
 
@@ -15,13 +15,102 @@
 
 \section{Scope}
 
-This note summarizes the smooth excision procedure implemented for the
-boosted Kerr--Schild binary black-hole problem generator.  The default
-hard-excision behavior is unchanged unless smooth excision is explicitly
-enabled.  The method acts only on fluid primitive and conserved variables;
-it does not directly rescale, zero, or window the face-centered magnetic
-field.  This is deliberate: direct pointwise modification of the staggered
-magnetic field can create discrete magnetic monopoles.
+This note summarizes the changes made to the boosted Kerr--Schild
+binary-black-hole problem generator and to the associated excision path.
+The historical circular Keplerian binary remains the default.  New behavior
+is enabled only by explicit runtime flags, chiefly the trajectory-table flag,
+smooth-excision flag, and optional magnetic-damping flag.
+
+The main additions are:
+\begin{itemize}
+  \item a tabulated black-hole trajectory/property path with masses,
+  positions, spins, and coordinate velocities;
+  \item cubic-Hermite interpolation of positions and velocities, with
+  analytic time derivatives used by the metric and extrinsic-curvature
+  calculation;
+  \item refactored boosted Kerr--Schild algebra built from reusable boost,
+  Kerr--Schild, and superposition helpers;
+  \item a smooth hydrodynamic drain inside the apparent horizons;
+  \item an optional constraint-transport-compatible magnetic damping term
+  applied through edge-centered EMFs.
+\end{itemize}
+
+The smooth hydrodynamic drain acts on primitive and conserved matter
+variables.  It does not directly rescale, zero, or window the face-centered
+magnetic field.  Direct pointwise modification of the staggered magnetic
+field can create discrete magnetic monopoles, so magnetic damping is instead
+implemented as an EMF contribution to the constrained-transport update.
+
+\section{Trajectory Tables and Analytic Derivatives}
+
+When the trajectory-table mode is disabled, the binary state is still the
+historical circular Keplerian orbit.  When it is enabled, the table columns
+are interpreted as
+\begin{equation}
+\begin{split}
+&t,\; m_1,\; m_2,\; X_1,\;Y_1,\;Z_1,\;X_2,\;Y_2,\;Z_2,\;
+\chi_{1x},\;\chi_{1y},\;\chi_{1z},\\
+&\chi_{2x},\;\chi_{2y},\;\chi_{2z},\;
+V_{1x},\;V_{1y},\;V_{1z},\;V_{2x},\;V_{2y},\;V_{2z}.
+\end{split}
+\end{equation}
+The table spin entries are dimensionless spins \(\chi_A^i\).  The Kerr
+spin vectors used by the metric and horizon shape are
+\begin{equation}
+  a_A^i = m_A\chi_A^i .
+\end{equation}
+
+For each position component \(x(t)\) on a segment
+\([t_0,t_1]\), let \(h=t_1-t_0\) and
+\(s=(t-t_0)/h\).  The interpolant is the cubic Hermite polynomial
+\begin{equation}
+\begin{split}
+  x(t) ={}&
+  (2s^3-3s^2+1)x_0
+  +(s^3-2s^2+s)h v_0\\
+  &+(-2s^3+3s^2)x_1
+  +(s^3-s^2)h v_1 .
+\end{split}
+\end{equation}
+The first derivative gives the interpolated velocity and the second
+derivative gives the acceleration used by the analytic time derivatives.
+Masses and spin components are linearly interpolated, with piecewise-constant
+time derivatives on each segment:
+\begin{equation}
+  f(t) = (1-s)f_0 + s f_1,
+  \qquad
+  \dot f(t) = \frac{f_1-f_0}{h}.
+\end{equation}
+The active table segment is cached so repeated calls at nearby times do not
+perform a full search.
+
+The metric path now evaluates the four-metric and its derivatives
+analytically through dual numbers rather than by finite-differencing metric
+evaluations in time.  In particular, the boost Jacobian has no zero-velocity
+early return.  Instead, the regular small-\(V^2\) expansion
+\begin{equation}
+  \frac{\gamma - 1}{V^2}
+  =
+  \frac{1}{2}
+  +\frac{3}{8}V^2
+  +\frac{5}{16}V^4
+  +O(V^6)
+\end{equation}
+is used.  This preserves dual-number derivatives of the boost even when an
+instantaneously stationary black hole has nonzero acceleration.
+
+\section{Boosted Kerr--Schild Superposition}
+
+Each black-hole contribution is assembled as a boosted Kerr--Schild
+perturbation and then superposed on the background.  The algebra is factored
+into helper routines for the Lorentz boost, spatial Kerr--Schild radius,
+single-hole perturbation, and final ADM conversion.  This avoids duplicating
+large expanded symbolic expressions and makes the table-driven and analytic
+Keplerian paths share the same metric assembly.
+
+For GPU safety, table states used inside Kokkos kernels are copied into
+plain by-value state objects before launching the kernel.  Device lambdas
+therefore capture POD data and Kokkos views, not host stack references.
 
 \section{Boosted Spinning Horizon Mask}
 
@@ -98,7 +187,9 @@ given in the input file, the code uses a conservative default
   =
   \max\!\left(0.25\,r_{\rm exc},\,2\Delta x_{\max}\right),
 \end{equation}
-with \(\Delta x_{\max}\) the largest active mesh spacing in the block pack.
+with \(\Delta x_{\max}\) the largest active mesh spacing across all MPI
+ranks.  The local block-pack maximum is reduced with a global maximum so the
+default is rank independent on decomposed AMR or uneven MPI layouts.
 The global cell weight is
 \begin{equation}
   W = \max_A W_A .
@@ -320,6 +411,116 @@ is later desired, an artificial advective EMF
 can also be added at edges, with \(v_{B,e}\) directed inward inside the
 horizon.  It is also CT-compatible, but it transports magnetic flux rather
 than deleting it locally.
+
+\section{Robustness and Safety Fixes}
+
+Several implementation details were tightened during review:
+\begin{itemize}
+  \item The trajectory state captured by initialization kernels is a
+  by-value POD object, not a reference to host stack storage.
+  \item The boost Jacobian uses the small-\(V^2\) series above instead of
+  returning an identity matrix at exactly zero velocity, so analytic time
+  derivatives are retained.
+  \item The Valencia cooling source now returns immediately unless both MHD
+  and ADM storage are present, avoiding a hydro-only null dereference.
+  \item The vector-potential transformation guards the cylindrical
+  denominator \(x^2+y^2\) with a positive floor before forming
+  \(A_x\) and \(A_y\), preventing \(0/0\) on the rotation axis.
+  \item Smooth-excision drain targets are converted from coordinate velocity
+  to the primitive Wilson/Valencia variable \(Wv^i\) before blending and are
+  capped with the configured velocity ceiling.
+  \item The post-blend primitive state is checked for positivity and
+  finiteness over the active primitive/scalar slots before it is accepted.
+  \item The optional user electric-field callback is dispatched only when
+  both its enable flag and function pointer are set.
+  \item The smooth-excision width default is made MPI consistent by a global
+  maximum over the local mesh spacings.
+\end{itemize}
+
+\section{Unresolved-Horizon Sink Fallback}
+
+If the finest active mesh spacing is larger than the smallest tabulated
+horizon radius, the puncture excision mask is under-resolved.  With the
+\texttt{problem/unresolved\_sink} flag and the replacement flag
+\texttt{problem/sink\_replace\_underresolved\_excision}, the problem generator
+disables geometric puncture excision at startup and instead applies a
+conservative sink over a larger radius.  This path is intended for cheap early
+inspiral evolutions where the binary is deliberately unresolved before a later
+AMR restart resolves the horizons.
+
+For hole \(A\), define the smooth sink weight
+\begin{equation}
+  W_A^{\rm sink}
+  =
+  S\!\left(\frac{R_{\rm sink}-|x-X_A|}{\Delta R_{\rm sink}}\right),
+  \qquad
+  W^{\rm sink} = \max_A W_A^{\rm sink},
+\end{equation}
+with the same cubic smoothstep \(S\) used by smooth excision.  Over a step
+\(\Delta t\), the damping fraction is
+\begin{equation}
+  f_{\rm sink}
+  =
+  1-\exp\!\left(-\frac{\Delta t\,W^{\rm sink}}{\tau_{\rm sink}}\right).
+\end{equation}
+The conservative matter variables are damped as
+\begin{align}
+  D' &= (1-f_{\rm sink})D + f_{\rm sink}D_{\rm floor},\\
+  S'_i &= (1-f_{\rm sink})S_i,\\
+  \tau' &= (1-f_{\rm sink})\tau + f_{\rm sink}\tau_{\rm floor},\\
+  (\rho Y_s)' &= (1-f_{\rm sink})(\rho Y_s),
+\end{align}
+where \(D_{\rm floor}\) and \(\tau_{\rm floor}\) are configured sink targets
+or fall back to the EOS floors.  The sink does not modify the face-centered
+magnetic field.  Avoiding a primitive-to-conserved conversion through the
+unresolved puncture metric is important: near \(r=0\), such a conversion can
+inject an artificially large conserved energy even for a small target
+pressure.
+
+This fallback is not a replacement for resolved horizon excision.  It is a
+coarse-grid drain that removes matter and momentum smoothly while preserving
+the constrained-transport representation of \(B_f\).  On a restarted zoom
+run, the recommended usage is to keep the sink enabled but set
+\texttt{sink\_replace\_underresolved\_excision=false}, allowing AMR to add the
+inner level and the geometric excision path to operate once the active mesh
+resolves the horizons.
+
+\section{Device, MPI, and AMR Safety}
+
+The new Kokkos kernels capture only scalars, POD state, and Kokkos views.
+No STL containers, host arrays, or host-only pointers are dereferenced inside
+device lambdas.  The tabulated trajectory itself remains host-side; only the
+interpolated state needed by a kernel launch is copied into a device-safe
+value object.
+
+The magnetic damping is MPI and AMR compatible because it modifies the same
+edge-centered EMF arrays used by the normal CT update.  The task ordering is
+\begin{equation}
+  {\rm CornerE}
+  \rightarrow
+  {\rm EFieldSrc}
+  \rightarrow
+  {\rm SendE/RecvE/CorrectE}
+  \rightarrow
+  {\rm CT},
+\end{equation}
+so damped EMFs are exchanged across MPI boundaries and corrected across
+coarse--fine interfaces before they update \(B_f\).
+
+\section{Validation Performed}
+
+The changes were checked with serial and MPI builds of the dynbbh problem
+generator.  A two-rank smooth-excision and magnetic-damping run completed
+with finite primitive and magnetic fields.  The inspected constrained
+transport diagnostic remained at roundoff,
+\begin{equation}
+  \max |D_h B_f| \simeq 1.6\times 10^{-16}.
+\end{equation}
+A separate discrete CT damping-rate check matched the analytic one-step
+diffusion amplification to roundoff while preserving zero discrete
+divergence.  Long stronger-field runs showed the prescribed damping reduces
+the magnetic-field strength inside the excision region relative to the
+undamped run while preserving the CT divergence constraint.
 
 \section{What Is Not Included}
 
