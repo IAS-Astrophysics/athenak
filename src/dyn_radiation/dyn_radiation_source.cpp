@@ -16,7 +16,9 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "units/units.hpp"
+#include "z4c/tmunu.hpp"
 #include "dyn_radiation.hpp"
 
 #include "dyn_radiation/dyn_radiation_tetrad.hpp"
@@ -26,6 +28,89 @@ namespace dyn_radiation {
 
 KOKKOS_INLINE_FUNCTION
 bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root);
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus DynRadiation::AddTmunu(Driver *pdriver, int stage)
+//! \brief Add the radiation stress-energy contribution to the Z4c matter source.
+
+TaskStatus DynRadiation::AddTmunu(Driver *pdriver, int stage) {
+  if (pmy_pack->ptmunu == nullptr) {
+    return TaskStatus::complete;
+  }
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie;
+  int &js = indcs.js, &je = indcs.je;
+  int &ks = indcs.ks, &ke = indcs.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+  int nang1 = prgeo->nangles - 1;
+
+  bool add_to_existing = (pmy_pack->pz4c != nullptr && pmy_pack->pdyngr != nullptr);
+  auto &tmunu = pmy_pack->ptmunu->tmunu;
+  if (!use_adm_geometry) {
+    if (!add_to_existing) {
+      par_for("dynrad_zero_tmunu", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        tmunu.E(m,k,j,i) = 0.0;
+        for (int a=0; a<3; ++a) {
+          tmunu.S_d(m,a,k,j,i) = 0.0;
+          for (int b=a; b<3; ++b) {
+            tmunu.S_dd(m,a,b,k,j,i) = 0.0;
+          }
+        }
+      });
+    }
+    return TaskStatus::complete;
+  }
+
+  auto &i0_ = i0;
+  auto &nh_c_ = nh_c;
+  auto &tet_c_ = tet_c;
+  auto &sqrt_detg_c_ = sqrt_detg_c;
+  auto &adm_g_dd_c_ = adm_g_dd_c;
+  auto &solid_angles_ = prgeo->solid_angles;
+
+  par_for("dynrad_tmunu_loop", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (!add_to_existing) {
+      tmunu.E(m,k,j,i) = 0.0;
+      for (int a=0; a<3; ++a) {
+        tmunu.S_d(m,a,k,j,i) = 0.0;
+        for (int b=a; b<3; ++b) {
+          tmunu.S_dd(m,a,b,k,j,i) = 0.0;
+        }
+      }
+    }
+
+    const Real inv_sqrtg = 1.0 / sqrt_detg_c_(m,k,j,i);
+    for (int n=0; n<=nang1; ++n) {
+      const Real intensity = fmax(i0_(m,n,k,j,i) * inv_sqrtg, 0.0);
+      const Real weight = intensity * solid_angles_.d_view(n);
+      Real s_u[3] = {0.0, 0.0, 0.0};
+      Real s_d[3] = {0.0, 0.0, 0.0};
+      for (int a=0; a<3; ++a) {
+        for (int d=0; d<3; ++d) {
+          s_u[d] += tet_c_(m,a+1,d+1,k,j,i) * nh_c_.d_view(n,a+1);
+        }
+      }
+      for (int a=0; a<3; ++a) {
+        for (int b=0; b<3; ++b) {
+          s_d[a] += adm_g_dd_c_(m,a,b,k,j,i) * s_u[b];
+        }
+      }
+
+      tmunu.E(m,k,j,i) += weight;
+      for (int a=0; a<3; ++a) {
+        tmunu.S_d(m,a,k,j,i) += weight*s_d[a];
+        for (int b=a; b<3; ++b) {
+          tmunu.S_dd(m,a,b,k,j,i) += weight*s_d[a]*s_d[b];
+        }
+      }
+    }
+  });
+
+  return TaskStatus::complete;
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage)
@@ -38,8 +123,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     return TaskStatus::complete;
   }
   if (use_adm_geometry) {
-    pmy_pack->padm->SetADMVariables(pmy_pack);
-    SetOrthonormalTetrad();
+    PrepareADMGeometry();
   }
 
   // Extract indices, size data, hydro/mhd/units flags, and coupling flags
@@ -56,6 +140,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   bool &is_compton_enabled_ = is_compton_enabled;
   bool &fixed_fluid_ = fixed_fluid;
   bool &affect_fluid_ = affect_fluid;
+  bool use_dyn_grmhd_ = (pmy_pack->pdyngr != nullptr);
 
   // Extract coordinate/excision data
   auto &coord = pmy_pack->pcoord->coord_data;
@@ -120,7 +205,9 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
 
   // Call ConsToPrim over active zones prior to source term application
   if (!(fixed_fluid_)) {
-    if (is_hydro_enabled_) {
+    if (use_dyn_grmhd_) {
+      (void) pmy_pack->pdyngr->ConToPrim(pdriver, stage);
+    } else if (is_hydro_enabled_) {
       pmy_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is,ie,js,je,ks,ke);
     } else if (is_mhd_enabled_) {
       auto &b0_ = pmy_pack->pmhd->b0;
@@ -175,7 +262,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     Real &wen = w0_(m,IEN,k,j,i);
 
     // derived quantities
-    Real pgas = gm1*wen;
+    Real pgas = use_dyn_grmhd_ ? wen : gm1*wen;
     Real tgas = pgas/wdn;
     Real q = glower[1][1]*wvx*wvx + 2.0*glower[1][2]*wvx*wvy + 2.0*glower[1][3]*wvx*wvz
            + glower[2][2]*wvy*wvy + 2.0*glower[2][3]*wvy*wvz
@@ -380,13 +467,20 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
 
       // compute partially updated dyn_radiation temperature
-      Real trad = sqrt(sqrt(jr_cm/arad_));
+      const Real tiny_coupling = 1.0e-300;
+      const bool compton_well_defined = (jr_cm > tiny_coupling &&
+                                         fabs(suma1) > tiny_coupling &&
+                                         arad_ > tiny_coupling &&
+                                         isfinite(jr_cm) && isfinite(suma1));
+      Real trad = compton_well_defined ? sqrt(sqrt(jr_cm/arad_)) : tgas;
       const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
 
       // Calculate new gas temperature due to Compton
       Real tradnew = trad;
       badcell = false;
-      if (!(temp_equil)) {
+      if (!(compton_well_defined)) {
+        badcell = true;
+      } else if (!(temp_equil)) {
         coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
         coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
         bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);

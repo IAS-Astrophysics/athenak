@@ -45,15 +45,15 @@ void Z4c::QueueZ4cTasks() {
   switch (indcs.ng) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, Rad_SetTmunu});
       break;
     case 3:
       pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, Rad_SetTmunu});
       break;
     case 4:
       pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, Rad_SetTmunu});
       break;
   }
   pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
@@ -192,7 +192,8 @@ TaskStatus Z4c::RecvU(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
-  if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
+  if (pmy_pack->pdyngr != nullptr || pmy_pack->pdynrad != nullptr ||
+      stage == pdrive->nexp_stages) {
     AlgConstr(pmy_pack);
   }
   return TaskStatus::complete;
@@ -203,7 +204,8 @@ TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::ConvertZ4cToADM(Driver *pdrive, int stage) {
-  if (pmy_pack->pdyngr != nullptr || stage == pdrive->nexp_stages) {
+  if (pmy_pack->pdyngr != nullptr || pmy_pack->pdynrad != nullptr ||
+      stage == pdrive->nexp_stages) {
     Z4cToADM(pmy_pack);
   }
   return TaskStatus::complete;

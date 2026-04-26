@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -138,34 +139,31 @@ void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     data[(6*p)+4] = static_cast<float>(outpart(p).vy);
     data[(6*p)+5] = static_cast<float>(outpart(p).vz);
   }
-  // calculate local data offset
-  std::vector<int> rank_offset(global_variable::nranks, 0);
-  int npout_min = pm->nprtcl_eachrank[0];
-  for (int n=1; n<global_variable::nranks; ++n) {
-    rank_offset[n] = rank_offset[n-1] + npout_eachrank[n-1];
-    npout_min = std::min(npout_min, npout_eachrank[n]);
-  }
-
-  // Write tracked particle data collectively over minimum shared number of prtcls
+  // Initialize a tag-indexed block so readers can locate particle tag p at record p.
   const IOWrapperSizeT datasize = sizeof(float);
-  if (npout_min > 0) {
-    IOWrapperSizeT myoffset =
-        header_offset + 6*rank_offset[global_variable::my_rank]*datasize;
-    if (partfile.Write_any_type_at_all(&(data[0]),6*npout_min,myoffset,"float") !=
-        static_cast<std::size_t>(6*npout_min)) {
+  if (global_variable::my_rank == 0) {
+    std::vector<float> empty(6*ntrack, std::numeric_limits<float>::quiet_NaN());
+    if (partfile.Write_any_type_at(empty.data(), empty.size(), header_offset, "float") !=
+        empty.size()) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "particle data not written correctly to tracked particle file"
-          << std::endl;
+                << std::endl << "particle data not initialized correctly in tracked particle "
+                << "file" << std::endl;
       exit(EXIT_FAILURE);
     }
   }
-  // Write particle positions individually for remaining particles on each rank
-  int nremain = npout - npout_min;
-  if (nremain > 0) {
+  #if MPI_PARALLEL_ENABLED
+  MPI_Barrier(MPI_COMM_WORLD);
+  #endif
+
+  // Write each local tracked particle into its global tag slot.
+  for (int p=0; p<npout; ++p) {
+    if (outpart(p).tag < 0 || outpart(p).tag >= ntrack) {
+      continue;
+    }
     IOWrapperSizeT myoffset =
-        header_offset + 6*(rank_offset[global_variable::my_rank] + npout_min)*datasize;
-    if (partfile.Write_any_type_at(&(data[6*npout_min]),6*nremain,myoffset,"float") !=
-        static_cast<std::size_t>(6*nremain)) {
+        header_offset + 6*outpart(p).tag*datasize;
+    if (partfile.Write_any_type_at(&(data[6*p]),6,myoffset,"float") !=
+        static_cast<std::size_t>(6)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "particle data not written correctly to tracked particle file"
           << std::endl;

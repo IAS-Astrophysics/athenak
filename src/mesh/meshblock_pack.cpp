@@ -235,20 +235,26 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ptmunu = new Tmunu(this, pin);
   }
 
-  if (pz4c != nullptr || padm != nullptr) {
-    pnr = new numrel::NumericalRelativity(this, pin);
-    pnr->AssembleNumericalRelativityTasks(tl_map);
-  }
-
   // (8b) DYNAMICAL-METRIC RADIATION
   // This is intentionally separate from the legacy <radiation> solver.  Construct it
-  // after ADM/Z4c so its geometry path can use packed ADM fields when requested.
+  // after ADM/Z4c so its geometry path can use packed ADM fields when requested,
+  // but before the NR task graph is assembled so ADM/Z4c dependencies can include it.
   if (pin->DoesBlockExist("dyn_radiation")) {
     pdynrad = new dyn_radiation::DynRadiation(this, pin);
     nphysics++;
-    pdynrad->AssembleRadTasks(tl_map);
   } else {
     pdynrad = nullptr;
+  }
+
+  if (pz4c != nullptr && pdynrad != nullptr && ptmunu == nullptr) {
+    ptmunu = new Tmunu(this, pin);
+  }
+
+  if (pz4c != nullptr || padm != nullptr) {
+    pnr = new numrel::NumericalRelativity(this, pin);
+    pnr->AssembleNumericalRelativityTasks(tl_map);
+  } else if (pdynrad != nullptr) {
+    pdynrad->AssembleRadTasks(tl_map);
   }
 
   // (8) PARTICLES

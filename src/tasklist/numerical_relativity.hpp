@@ -22,6 +22,7 @@
 // Forward declarations
 namespace z4c {class Z4c;}
 namespace dyngr {class DynGRMHD;}
+namespace dyn_radiation {class DynRadiation;}
 class ADM;
 class Tmunu;
 class MeshBlockPack;
@@ -87,13 +88,33 @@ enum TaskName {
   Z4c_PT,
   Z4c_CCE,
   Z4c_DumpHorizon,
-  Z4c_NTASKS
+  Z4c_NTASKS,
+
+  Rad_Recv,
+  Rad_CopyI,
+  Rad_SetTmunu,
+  Rad_Flux,
+  Rad_SendFlux,
+  Rad_RecvFlux,
+  Rad_ExplRK,
+  Rad_AddSrc,
+  Rad_Couple,
+  Rad_RestI,
+  Rad_SendI,
+  Rad_RecvI,
+  Rad_BCS,
+  Rad_Prolong,
+  Rad_Newdt,
+  Rad_ClearS,
+  Rad_ClearR,
+  Rad_NTASKS
 };
 
 enum PhysicsDependency {
   Phys_None,
   Phys_MHD,
-  Phys_Z4c
+  Phys_Z4c,
+  Phys_DynRad
 };
 
 enum TaskLocation {

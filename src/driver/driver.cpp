@@ -578,6 +578,9 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->ApplyPhysicalBCs(this, 0);
     (void) pz4c->Prolongate(this, 0);
+    if (pm->pmb_pack->pdynrad != nullptr && pm->pmb_pack->pdyngr == nullptr) {
+      (void) pz4c->ConvertZ4cToADM(this, 0);
+    }
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)

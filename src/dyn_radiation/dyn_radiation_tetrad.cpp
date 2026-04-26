@@ -21,6 +21,8 @@
 
 namespace dyn_radiation {
 
+constexpr Real adm_metric_floor = 1.0e-30;
+
 KOKKOS_INLINE_FUNCTION
 int Sym3Index(const int a, const int b) {
   const int i = (a < b) ? a : b;
@@ -39,12 +41,12 @@ void BuildADMSpatialTriad(const Real gxx, const Real gxy, const Real gxz,
                           Real e[3][3]) {
   // Cholesky factorization gamma_ij = L_iA L_jA.  The columns of e=L^{-T}
   // map orthonormal-frame direction cosines into coordinate spatial vectors.
-  const Real l00 = sqrt(fmax(gxx, 1.0e-300));
+  const Real l00 = sqrt(fmax(gxx, adm_metric_floor));
   const Real l10 = gxy/l00;
   const Real l20 = gxz/l00;
-  const Real l11 = sqrt(fmax(gyy - SQR(l10), 1.0e-300));
+  const Real l11 = sqrt(fmax(gyy - SQR(l10), adm_metric_floor));
   const Real l21 = (gyz - l20*l10)/l11;
-  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), 1.0e-300));
+  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), adm_metric_floor));
 
   e[0][0] = 1.0/l00;
   e[1][0] = 0.0;
@@ -65,12 +67,12 @@ void BuildADMCoTriad(const Real gxx, const Real gxy, const Real gxz,
                      Real co[3][3]) {
   // Cholesky factor gamma_ij = L_iA L_jA.  co[A][i] = L_iA maps
   // coordinate spatial vectors into the Eulerian orthonormal frame.
-  const Real l00 = sqrt(fmax(gxx, 1.0e-300));
+  const Real l00 = sqrt(fmax(gxx, adm_metric_floor));
   const Real l10 = gxy/l00;
   const Real l20 = gxz/l00;
-  const Real l11 = sqrt(fmax(gyy - SQR(l10), 1.0e-300));
+  const Real l11 = sqrt(fmax(gyy - SQR(l10), adm_metric_floor));
   const Real l21 = (gyz - l20*l10)/l11;
-  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), 1.0e-300));
+  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), adm_metric_floor));
 
   co[0][0] = l00;
   co[0][1] = l10;
@@ -91,12 +93,12 @@ void BuildADMCoTriadDerivative(const Real gxx, const Real gxy, const Real gxz,
                                const Real dgxx, const Real dgxy, const Real dgxz,
                                const Real dgyy, const Real dgyz, const Real dgzz,
                                Real dco[3][3]) {
-  const Real l00 = sqrt(fmax(gxx, 1.0e-300));
+  const Real l00 = sqrt(fmax(gxx, adm_metric_floor));
   const Real l10 = gxy/l00;
   const Real l20 = gxz/l00;
-  const Real l11 = sqrt(fmax(gyy - SQR(l10), 1.0e-300));
+  const Real l11 = sqrt(fmax(gyy - SQR(l10), adm_metric_floor));
   const Real l21 = (gyz - l20*l10)/l11;
-  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), 1.0e-300));
+  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), adm_metric_floor));
 
   const Real dl00 = 0.5*dgxx/l00;
   const Real dl10 = (dgxy - l10*dl00)/l00;
@@ -121,7 +123,7 @@ void BuildADMCoTriadDerivative(const Real gxx, const Real gxy, const Real gxz,
 KOKKOS_INLINE_FUNCTION
 Real ADMDetSqrt(const Real gxx, const Real gxy, const Real gxz,
                 const Real gyy, const Real gyz, const Real gzz) {
-  return sqrt(fmax(adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz), 1.0e-300));
+  return sqrt(fmax(adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz), adm_metric_floor));
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -307,7 +309,7 @@ void DynRadiation::SetOrthonormalTetrad() {
       BuildADMEulerianTetrad(adm_.alpha(m,k,j,i), beta, g3d, e, e_cov);
       Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
                                   g3d[S22], g3d[S23], g3d[S33]);
-      Real detginv = 1.0/fmax(detg, 1.0e-300);
+      Real detginv = 1.0/fmax(detg, adm_metric_floor);
       Real guu[6];
       adm::SpatialInv(detginv, g3d[S11], g3d[S12], g3d[S13],
                       g3d[S22], g3d[S23], g3d[S33],
@@ -322,7 +324,7 @@ void DynRadiation::SetOrthonormalTetrad() {
           tetcov_c_(m,d1,d2,k,j,i) = e_cov[d1][d2];
         }
       }
-      sqrt_detg_c_(m,k,j,i) = sqrt(fmax(detg, 1.0e-300));
+      sqrt_detg_c_(m,k,j,i) = sqrt(fmax(detg, adm_metric_floor));
       adm_alpha_c_(m,k,j,i) = adm_.alpha(m,k,j,i);
       for (int a=0; a<3; ++a) {
         adm_beta_u_c_(m,a,k,j,i) = beta[a];

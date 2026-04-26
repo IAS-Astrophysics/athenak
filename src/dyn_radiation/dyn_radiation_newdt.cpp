@@ -33,8 +33,7 @@ namespace dyn_radiation {
 
 TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   if (use_adm_geometry) {
-    pmy_pack->padm->SetADMVariables(pmy_pack);
-    SetOrthonormalTetrad();
+    PrepareADMGeometry();
   }
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -46,6 +45,7 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   Real dt2 = std::numeric_limits<float>::max();
   Real dt3 = std::numeric_limits<float>::max();
   Real dta = std::numeric_limits<float>::max();
+  Real dtg = std::numeric_limits<float>::max();
 
   // setup indicies for Kokkos parallel reduce
   auto &size = pmy_pack->pmb->mb_size;
@@ -63,6 +63,7 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   auto &t2d2 = tet_d2_x2f;
   auto &t3d3 = tet_d3_x3f;
   bool use_adm_geometry_ = use_adm_geometry;
+  bool adm_metric_source_ = adm_metric_source;
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
   auto &numn = prgeo->num_neighbors;
@@ -123,20 +124,35 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
                   t1d1(m,1,k,j,i)*nh_c_.d_view(n,1) +
                   t1d1(m,2,k,j,i)*nh_c_.d_view(n,2) +
                   t1d1(m,3,k,j,i)*nh_c_.d_view(n,3);
+        Real v1p = t1d1(m,0,k,j,i+1)*nh_c_.d_view(n,0) +
+                   t1d1(m,1,k,j,i+1)*nh_c_.d_view(n,1) +
+                   t1d1(m,2,k,j,i+1)*nh_c_.d_view(n,2) +
+                   t1d1(m,3,k,j,i+1)*nh_c_.d_view(n,3);
         cmax1 = fmax(cmax1, fabs(v1));
+        cmax1 = fmax(cmax1, fabs(v1p));
         if (nx2 > 1) {
           Real v2 = t2d2(m,0,k,j,i)*nh_c_.d_view(n,0) +
                     t2d2(m,1,k,j,i)*nh_c_.d_view(n,1) +
                     t2d2(m,2,k,j,i)*nh_c_.d_view(n,2) +
                     t2d2(m,3,k,j,i)*nh_c_.d_view(n,3);
+          Real v2p = t2d2(m,0,k,j+1,i)*nh_c_.d_view(n,0) +
+                     t2d2(m,1,k,j+1,i)*nh_c_.d_view(n,1) +
+                     t2d2(m,2,k,j+1,i)*nh_c_.d_view(n,2) +
+                     t2d2(m,3,k,j+1,i)*nh_c_.d_view(n,3);
           cmax2 = fmax(cmax2, fabs(v2));
+          cmax2 = fmax(cmax2, fabs(v2p));
         }
         if (nx3 > 1) {
           Real v3 = t3d3(m,0,k,j,i)*nh_c_.d_view(n,0) +
                     t3d3(m,1,k,j,i)*nh_c_.d_view(n,1) +
                     t3d3(m,2,k,j,i)*nh_c_.d_view(n,2) +
                     t3d3(m,3,k,j,i)*nh_c_.d_view(n,3);
+          Real v3p = t3d3(m,0,k+1,j,i)*nh_c_.d_view(n,0) +
+                     t3d3(m,1,k+1,j,i)*nh_c_.d_view(n,1) +
+                     t3d3(m,2,k+1,j,i)*nh_c_.d_view(n,2) +
+                     t3d3(m,3,k+1,j,i)*nh_c_.d_view(n,3);
           cmax3 = fmax(cmax3, fabs(v3));
+          cmax3 = fmax(cmax3, fabs(v3p));
         }
       }
     }
@@ -147,11 +163,49 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   }, Kokkos::Min<Real>(dt1),  Kokkos::Min<Real>(dt2), Kokkos::Min<Real>(dt3),
      Kokkos::Min<Real>(dta));
 
+  if (use_adm_geometry_ && adm_metric_source_) {
+    auto &adm_ = pmy_pack->padm->adm;
+    auto &adm_grad_alpha_c_ = adm_grad_alpha_c;
+    Kokkos::parallel_reduce("RadiationGeomDt",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &min_dtg) {
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
+
+      Real tmp_min_dtg = (FLT_MAX);
+      for (int n=0; n<=nang1; ++n) {
+        Real s[3] = {0.0, 0.0, 0.0};
+        for (int a=0; a<3; ++a) {
+          for (int d=0; d<3; ++d) {
+            s[d] += tet_c_(m,a+1,d+1,k,j,i)*nh_c_.d_view(n,a+1);
+          }
+        }
+        Real kss = 0.0;
+        Real sdalpha = 0.0;
+        for (int a=0; a<3; ++a) {
+          sdalpha += s[a]*adm_grad_alpha_c_(m,a,k,j,i);
+          for (int b=0; b<3; ++b) {
+            kss += adm_.vK_dd(m,a,b,k,j,i)*s[a]*s[b];
+          }
+        }
+        Real geom = adm_.alpha(m,k,j,i)*kss - sdalpha;
+        if (fabs(geom) > 1.0e-300) {
+          tmp_min_dtg = fmin(tmp_min_dtg, 1.0/fabs(geom));
+        }
+      }
+      min_dtg = fmin(tmp_min_dtg, min_dtg);
+    }, Kokkos::Min<Real>(dtg));
+  }
+
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
   dtnew = dt1;
   if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
   if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
   if (angular_fluxes_) { dtnew = std::min(dtnew, dta); }
+  if (use_adm_geometry && adm_metric_source) { dtnew = std::min(dtnew, dtg); }
 
   return TaskStatus::complete;
 }

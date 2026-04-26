@@ -28,8 +28,7 @@ namespace dyn_radiation {
 
 TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
   if (use_adm_geometry) {
-    pmy_pack->padm->SetADMVariables(pmy_pack);
-    SetOrthonormalTetrad();
+    PrepareADMGeometry();
   }
 
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;

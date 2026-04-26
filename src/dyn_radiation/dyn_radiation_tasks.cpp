@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <vector>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -23,6 +24,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "tasklist/numerical_relativity.hpp"
 
 namespace dyn_radiation {
 //----------------------------------------------------------------------------------------
@@ -71,6 +73,7 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.rad_prol  = tl["stagen"]->AddTask(&DynRadiation::Prolongate, this, id.bcs);
     id.mhd_prol  = tl["stagen"]->AddTask(&mhd::MHD::Prolongate, pmhd, id.rad_prol);
     id.mhd_c2p   = tl["stagen"]->AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_prol);
+    id.rad_newdt = tl["stagen"]->AddTask(&DynRadiation::NewTimeStep, this, id.mhd_c2p);
 
     // assemble "after_stagen" task list
     id.rad_csend = tl["after_stagen"]->AddTask(&DynRadiation::ClearSend, this, none);
@@ -109,6 +112,7 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.rad_prol  = tl["stagen"]->AddTask(&DynRadiation::Prolongate, this, id.bcs);
     id.hyd_prol  = tl["stagen"]->AddTask(&hydro::Hydro::Prolongate, phyd, id.rad_prol);
     id.hyd_c2p   = tl["stagen"]->AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_prol);
+    id.rad_newdt = tl["stagen"]->AddTask(&DynRadiation::NewTimeStep, this, id.hyd_c2p);
 
     // assemble "after_stagen" task list
     // assemble end task list
@@ -138,6 +142,7 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.bcs       = tl["stagen"]->AddTask(
                                     &DynRadiation::ApplyPhysicalBCs, this, id.rad_recvi);
     id.rad_prol  = tl["stagen"]->AddTask(&DynRadiation::Prolongate, this, id.bcs);
+    id.rad_newdt = tl["stagen"]->AddTask(&DynRadiation::NewTimeStep, this, id.rad_prol);
 
     // assemble "after_stagen" task list
     id.rad_csend = tl["after_stagen"]->AddTask(&DynRadiation::ClearSend, this, none);
@@ -147,6 +152,55 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
   }
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynRadiation::QueueDynRadiationTasks
+//! \brief Queue dyn_radiation tasks into the NumericalRelativity task graph.
+
+void DynRadiation::QueueDynRadiationTasks() {
+  using namespace numrel;  // NOLINT(build/namespaces)
+  NumericalRelativity *pnr = pmy_pack->pnr;
+
+  pnr->QueueTask(&DynRadiation::InitRecv, this, Rad_Recv, "Rad_Recv", Task_Start);
+
+  pnr->QueueTask(&DynRadiation::CopyCons, this, Rad_CopyI, "Rad_CopyI", Task_Run);
+
+  std::vector<TaskName> tmunu_deps = {Rad_CopyI};
+  if (pmy_pack->pz4c != nullptr && pmy_pack->pdyngr != nullptr) {
+    tmunu_deps.push_back(MHD_SetTmunu);
+  }
+  pnr->QueueTask(&DynRadiation::AddTmunu, this, Rad_SetTmunu, "Rad_SetTmunu",
+                 Task_Run, tmunu_deps);
+
+  pnr->QueueTask(&DynRadiation::CalculateFluxes, this, Rad_Flux, "Rad_Flux",
+                 Task_Run, {Rad_CopyI}, {Z4c_Z4c2ADM});
+  pnr->QueueTask(&DynRadiation::SendFlux, this, Rad_SendFlux, "Rad_SendFlux",
+                 Task_Run, {Rad_Flux});
+  pnr->QueueTask(&DynRadiation::RecvFlux, this, Rad_RecvFlux, "Rad_RecvFlux",
+                 Task_Run, {Rad_SendFlux});
+  pnr->QueueTask(&DynRadiation::RKUpdate, this, Rad_ExplRK, "Rad_ExplRK",
+                 Task_Run, {Rad_RecvFlux});
+  pnr->QueueTask(&DynRadiation::RadSrcTerms, this, Rad_AddSrc, "Rad_AddSrc",
+                 Task_Run, {Rad_ExplRK});
+  pnr->QueueTask(&DynRadiation::RadFluidCoupling, this, Rad_Couple, "Rad_Couple",
+                 Task_Run, {Rad_AddSrc}, {MHD_AddSrc});
+  pnr->QueueTask(&DynRadiation::RestrictI, this, Rad_RestI, "Rad_RestI",
+                 Task_Run, {Rad_Couple});
+  pnr->QueueTask(&DynRadiation::SendI, this, Rad_SendI, "Rad_SendI",
+                 Task_Run, {Rad_RestI});
+  pnr->QueueTask(&DynRadiation::RecvI, this, Rad_RecvI, "Rad_RecvI",
+                 Task_Run, {Rad_SendI});
+  pnr->QueueTask(&DynRadiation::ApplyPhysicalBCs, this, Rad_BCS, "Rad_BCS",
+                 Task_Run, {Rad_RecvI});
+  pnr->QueueTask(&DynRadiation::Prolongate, this, Rad_Prolong, "Rad_Prolong",
+                 Task_Run, {Rad_BCS});
+  pnr->QueueTask(&DynRadiation::NewTimeStep, this, Rad_Newdt, "Rad_Newdt",
+                 Task_Run, {Rad_Prolong});
+
+  pnr->QueueTask(&DynRadiation::ClearSend, this, Rad_ClearS, "Rad_ClearS", Task_End);
+  pnr->QueueTask(&DynRadiation::ClearRecv, this, Rad_ClearR, "Rad_ClearR",
+                 Task_End, {Rad_ClearS});
 }
 
 //----------------------------------------------------------------------------------------
@@ -180,16 +234,19 @@ TaskStatus DynRadiation::CopyCons(Driver *pdrive, int stage) {
     // dyn_radiation
     Kokkos::deep_copy(DevExeSpace(), i1, i0);
 
-    // hydro and MHD (if enabled)
-    hydro::Hydro *phyd = pmy_pack->phydro;
-    mhd::MHD *pmhd = pmy_pack->pmhd;
-    if (pmhd != nullptr) {
-      Kokkos::deep_copy(DevExeSpace(), pmhd->u1, pmhd->u0);
-      Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x1f, pmhd->b0.x1f);
-      Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x2f, pmhd->b0.x2f);
-      Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
-    } else if (phyd != nullptr) {
-      Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
+    // Legacy non-NR radiation-fluid runs own the fluid copy here.  ADM/Z4c runs
+    // queue fluid copies through NumericalRelativity.
+    if (pmy_pack->pnr == nullptr) {
+      hydro::Hydro *phyd = pmy_pack->phydro;
+      mhd::MHD *pmhd = pmy_pack->pmhd;
+      if (pmhd != nullptr) {
+        Kokkos::deep_copy(DevExeSpace(), pmhd->u1, pmhd->u0);
+        Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x1f, pmhd->b0.x1f);
+        Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x2f, pmhd->b0.x2f);
+        Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
+      } else if (phyd != nullptr) {
+        Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
+      }
     }
   }
   return TaskStatus::complete;
@@ -282,14 +339,16 @@ TaskStatus DynRadiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // physical BCs on dyn_radiation
   pbval_i->RadiationBCs((pmy_pack), (pbval_i->i_in), i0);
 
-  // physical BCs on (M)HD
-  hydro::Hydro *phyd = pmy_pack->phydro;
-  mhd::MHD *pmhd = pmy_pack->pmhd;
-  if (pmhd != nullptr) {
-    pmhd->pbval_u->HydroBCs((pmy_pack), (pmhd->pbval_u->u_in), pmhd->u0);
-    pmhd->pbval_b->BFieldBCs((pmy_pack), (pmhd->pbval_b->b_in), pmhd->b0);
-  } else if (phyd != nullptr) {
-    phyd->pbval_u->HydroBCs((pmy_pack), (phyd->pbval_u->u_in), phyd->u0);
+  // physical BCs on (M)HD for legacy non-NR coupled runs
+  if (pmy_pack->pnr == nullptr) {
+    hydro::Hydro *phyd = pmy_pack->phydro;
+    mhd::MHD *pmhd = pmy_pack->pmhd;
+    if (pmhd != nullptr) {
+      pmhd->pbval_u->HydroBCs((pmy_pack), (pmhd->pbval_u->u_in), pmhd->u0);
+      pmhd->pbval_b->BFieldBCs((pmy_pack), (pmhd->pbval_b->b_in), pmhd->b0);
+    } else if (phyd != nullptr) {
+      phyd->pbval_u->HydroBCs((pmy_pack), (phyd->pbval_u->u_in), phyd->u0);
+    }
   }
 
   // user BCs

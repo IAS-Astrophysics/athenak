@@ -74,8 +74,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
       if (three_d) {
         divf_s += (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3;
       }
-      i0_(m,n,k,j,i) = gam0*i0_(m,n,k,j,i)+gam1*i1_(m,n,k,j,i)-beta_dt*divf_s;
-      if (angular_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
+      Real i_stage = i0_(m,n,k,j,i);
+      Real i_new = gam0*i_stage + gam1*i1_(m,n,k,j,i) - beta_dt*divf_s;
+      if (angular_fluxes_) { i_new -= beta_dt*divfa_(m,n,k,j,i); }
 
       if (adm_metric_source_) {
         Real s[3] = {0.0, 0.0, 0.0};
@@ -98,10 +99,10 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
           }
         }
         Real geom = adm_.alpha(m,k,j,i)*kss - sdalpha;
-        i0_(m,n,k,j,i) += beta_dt*i0_(m,n,k,j,i)*geom;
+        i_new += beta_dt*i_stage*geom;
       }
 
-      i0_(m,n,k,j,i) = fmax(i0_(m,n,k,j,i), 0.0);
+      i0_(m,n,k,j,i) = fmax(i_new, 0.0);
       if (excise && rad_mask_(m,k,j,i)) { i0_(m,n,k,j,i) = 0.0; }
     });
     return TaskStatus::complete;

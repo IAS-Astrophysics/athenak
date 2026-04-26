@@ -261,7 +261,9 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
     DvceArray6D<Real> norm_to_tet_;
     DvceArray6D<Real> tet_c_;
     DvceArray6D<Real> tetcov_c_;
+    DvceArray4D<Real> sqrt_detg_c_;
     DvceArray5D<Real> i0;
+    bool use_adm_geometry_ = false;
     if (pmbp->prad != nullptr) {
       nh_c_ = pmbp->prad->nh_c;
       norm_to_tet_ = pmbp->prad->norm_to_tet;
@@ -273,7 +275,9 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
       norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
       tet_c_ = pmbp->pdynrad->tet_c;
       tetcov_c_ = pmbp->pdynrad->tetcov_c;
+      sqrt_detg_c_ = pmbp->pdynrad->sqrt_detg_c;
       i0 = pmbp->pdynrad->i0;
+      use_adm_geometry_ = pmbp->pdynrad->use_adm_geometry;
     }
     par_for("rad_wave2",DevExeSpace(),0,(pmbp->nmb_thispack-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -493,11 +497,15 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
           ii_f = ee_f/(9.0*M_PI)*(fn_f - 3.0*f_f + 2.0)/SQR(1.0 - f_f);
         }
 
-        // Calculate intensity in tetrad frame
-        Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-        i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
-      }
+	    // Calculate intensity in tetrad frame
+	    Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
+	    for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
+	    if (use_adm_geometry_) {
+	      i0(m,n,k,j,i) = sqrt_detg_c_(m,k,j,i)*ii_f/SQR(SQR(n0_f));
+	    } else {
+	      i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
+	    }
+	  }
     });
   }
 

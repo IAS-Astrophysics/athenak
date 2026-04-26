@@ -185,10 +185,7 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     Kokkos::realloc(norm_to_tet,nmb,4,4,ncells3,ncells2,ncells1);
   }
   }
-  if (use_adm_geometry) {
-    pmy_pack->padm->SetADMVariables(pmy_pack);
-  }
-  SetOrthonormalTetrad();
+  PrepareADMGeometry();
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -272,6 +269,17 @@ DynRadiation::~DynRadiation() {
   delete pbval_i;
   delete prgeo;
   if (psrc != nullptr) {delete psrc;}
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynRadiation::PrepareADMGeometry()
+//! \brief Refresh ADM geometry and cached tetrads used by radiation transport.
+
+void DynRadiation::PrepareADMGeometry() {
+  if (use_adm_geometry && pmy_pack->pz4c == nullptr) {
+    pmy_pack->padm->SetADMVariables(pmy_pack);
+  }
+  SetOrthonormalTetrad();
 }
 
 } // namespace dyn_radiation

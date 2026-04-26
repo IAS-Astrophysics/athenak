@@ -19,6 +19,7 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "coordinates/coordinates.hpp"
+#include "coordinates/adm.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
@@ -50,12 +51,20 @@ void ProblemGenerator::RadiationBeam(ParameterInput *pin, const bool restart) {
   int nmb1 = (pmbp->nmb_thispack-1);
   int nang1 = -1;
   DvceArray6D<Real> tet_c_;
+  DvceArray4D<Real> adm_alpha_c_;
+  DvceArray5D<Real> adm_beta_u_c_;
+  DvceArray6D<Real> adm_g_dd_c_;
+  bool use_adm_geometry_ = false;
   if (pmbp->prad != nullptr) {
     nang1 = pmbp->prad->prgeo->nangles - 1;
     tet_c_ = pmbp->prad->tet_c;
   } else if (pmbp->pdynrad != nullptr) {
     nang1 = pmbp->pdynrad->prgeo->nangles - 1;
     tet_c_ = pmbp->pdynrad->tet_c;
+    use_adm_geometry_ = pmbp->pdynrad->use_adm_geometry;
+    adm_alpha_c_ = pmbp->pdynrad->adm_alpha_c;
+    adm_beta_u_c_ = pmbp->pdynrad->adm_beta_u_c;
+    adm_g_dd_c_ = pmbp->pdynrad->adm_g_dd_c;
   } else {
     throw std::runtime_error("rad_beam requires either <radiation> or <dyn_radiation>");
   }
@@ -88,7 +97,26 @@ void ProblemGenerator::RadiationBeam(ParameterInput *pin, const bool restart) {
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
       Real glower[4][4], gupper[4][4];
-      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      if (use_adm_geometry_) {
+        Real g4[16];
+        adm::SpacetimeMetric(adm_alpha_c_(m,k,j,i),
+                             adm_beta_u_c_(m,0,k,j,i),
+                             adm_beta_u_c_(m,1,k,j,i),
+                             adm_beta_u_c_(m,2,k,j,i),
+                             adm_g_dd_c_(m,0,0,k,j,i),
+                             adm_g_dd_c_(m,0,1,k,j,i),
+                             adm_g_dd_c_(m,0,2,k,j,i),
+                             adm_g_dd_c_(m,1,1,k,j,i),
+                             adm_g_dd_c_(m,1,2,k,j,i),
+                             adm_g_dd_c_(m,2,2,k,j,i), g4);
+        for (int mu=0; mu<4; ++mu) {
+          for (int nu=0; nu<4; ++nu) {
+            glower[mu][nu] = g4[4*mu + nu];
+          }
+        }
+      } else {
+        ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      }
 
       // Compute eta_alpha beta = g_mu nu e^mu_alpha e^nu_beta
       Real test_eta[4][4] = {0.0};
