@@ -53,9 +53,13 @@ gamma = 1.6666666666666667
 <dyn_radiation>
 geometry = adm
 rad_source = false
+kappa_a = 0.1
+kappa_s = 0.05
+kappa_p = 0.0
+arad = 1.0
 nlevel = 1
 rotate_geo = false
-angular_fluxes = false
+angular_fluxes = true
 reconstruct = plm
 
 <particles>

@@ -37,15 +37,17 @@ hole backgrounds or for metric data supplied by a dynamical spacetime solver.
 The new \code{dyn\_radiation} module keeps an exact compatibility mode for the
 legacy stationary solver, but adds an ADM formulation in which the evolved
 quantity is the Eulerian densitized intensity, the spatial transport speed is
-\(\alpha s^i-\beta^i\), and the geometric energy source is written in Valencia
-form using \(\alpha\), \(\beta^i\), \(\gamma_{ij}\), and \(K_{ij}\).  This avoids
-assuming a time-independent metric and does not require explicit gauge-field
-time derivatives.  We also add a diagnostic null-geodesic particle pusher for
-beam-edge tracers on ADM backgrounds.  Flat-space beam tests reproduce the
-legacy solver to roundoff, radiation-hydrodynamic linear-wave tests reproduce
-the legacy error norms in stationary Kerr-Schild mode, and a superposed
-boosted-Kerr-Schild binary test exercises the ADM beam source and null-particle
-tracers.
+\(\alpha s^i-\beta^i\), angular geodesic advection is computed from the ADM
+Hamiltonian, and the geometric energy source is written in Valencia form using
+\(\alpha\), \(\beta^i\), \(\gamma_{ij}\), and \(K_{ij}\).  This avoids assuming a
+time-independent metric and does not require explicit gauge-field time
+derivatives beyond the ADM metric-evolution relation for
+\(\partial_t\gamma_{ij}\).  We also add a diagnostic null-geodesic particle
+pusher for beam-edge tracers on ADM backgrounds.  Flat-space beam tests
+reproduce the legacy solver to roundoff, radiation-hydrodynamic linear-wave
+tests reproduce the legacy error norms in stationary Kerr-Schild mode, and a
+superposed boosted-Kerr-Schild binary test exercises the ADM beam source, ADM
+matter coupling, and null-particle tracers.
 \end{abstract}
 
 \noindent\textbf{Keywords:} numerical relativity; radiation hydrodynamics;
@@ -68,12 +70,12 @@ The goal of the implementation described here is narrower than a full
 production radiation scheme.  We add a separate \code{dyn\_radiation} package,
 rather than changing the existing \code{radiation} module, so that the legacy
 stationary path remains available and bitwise comparisons remain possible.  The
-first ADM branch implements spatial transport and the radiation energy source in
-a Valencia-compatible form.  It deliberately does not yet include ADM angular
-geodesic advection; the code therefore requires \code{angular\_fluxes=false} in
-ADM mode.  This is sufficient for beam propagation, source-term verification,
-and dynamical-background smoke tests, while leaving a clean path toward the full
-momentum-space transport operator.
+current ADM branch implements spatial transport, angular geodesic advection,
+radiation-matter coupling, and the radiation energy source in a
+Valencia-compatible form.  The angular advection coefficients are rebuilt from
+cached ADM geometry each stage, so ADM mode now supports
+\code{angular\_fluxes=true}.  The implementation remains separate from the
+legacy solver so stationary CKS behavior can still be tested directly.
 
 The paper is organized as follows.  Section~\ref{sec:legacy} summarizes the
 stationary-metric solver.  Section~\ref{sec:adm} derives the ADM variables and
@@ -236,10 +238,51 @@ The corresponding Valencia momentum equation is
     -E\partial_j\alpha\right].
   \label{eq:valencia_momentum}
 \end{equation}
-Recovering Equation~\eqref{eq:valencia_momentum} at the discrete angular level
-requires a momentum-space advection operator for ADM geodesic bending.  That
-operator is not part of the present ADM transport branch; this is the reason ADM
-runs currently reject \code{angular\_fluxes=true}.
+\subsection{ADM angular geodesic advection}
+
+ADM angular advection is computed from the coordinate-time null Hamiltonian
+\begin{equation}
+  H(x^i,p_i)=\alpha\sqrt{\gamma^{ij}p_i p_j}-\beta^i p_i .
+  \label{eq:adm_hamiltonian}
+\end{equation}
+For the Eulerian tetrad normalization used here,
+\(\sqrt{\gamma^{ij}p_i p_j}=1\), \(p_i=e^{(\hat a)}_{\ i}\ell_{(\hat a)}\),
+and
+\begin{align}
+  \dot x^i &= \alpha s^i-\beta^i,\\
+  \dot p_i &=
+  -\partial_i\alpha+p_j\partial_i\beta^j
+  -\frac{\alpha}{2}p_jp_k\partial_i\gamma^{jk}.
+  \label{eq:adm_pdot}
+\end{align}
+The local angular direction is reconstructed using the cached Cholesky
+co-triad \(e^{(\hat a)}_{\ i}\),
+\begin{equation}
+  \ell^{(\hat a)} = E^i_{\ (\hat a)}p_i .
+\end{equation}
+Differentiating this relation in the same triad gauge gives
+\begin{equation}
+  \dot\ell^{(\hat a)}
+  =E^i_{\ (\hat a)}
+  \left[
+    \dot p_i
+    -\left(\partial_t e^{(\hat b)}_{\ i}
+    +\dot x^j\partial_j e^{(\hat b)}_{\ i}\right)\ell_{(\hat b)}
+  \right].
+  \label{eq:admdotell}
+\end{equation}
+The time derivative of the co-triad is obtained by differentiating the same
+Cholesky factorization used for the spatial triad, with
+\begin{equation}
+  \partial_t\gamma_{ij}
+  =-2\alpha K_{ij}+D_i\beta_j+D_j\beta_i .
+  \label{eq:adm_gdot}
+\end{equation}
+Equation~\eqref{eq:admdotell} is projected onto the existing geodesic-grid
+angular face normals.  The angular finite-volume flux then advects the ADM
+conserved intensity \(U_n=\sqrt{\gamma}I_n\) directly.  In the CKS
+compatibility branch the legacy angular primitive \(U_n/k^0_n\) is still used,
+so the stationary path is unchanged.
 
 \section{Numerical Algorithm and Implementation}
 \label{sec:alg}
@@ -266,11 +309,15 @@ At each explicit stage, ADM mode performs the following operations:
 \begin{enumerate}
   \item Fill or update ADM variables on cell centers and faces.
   \item Construct Eulerian spatial tetrads by factorizing \(\gamma_{ij}\).
-  \item Fill \(\sqrt{\gamma}\), \(\alpha\), \(\beta^i\), and tetrad columns on
-        the faces needed by spatial transport.
+  \item Fill cached \(\sqrt{\gamma}\), \(\alpha\), \(\beta^i\),
+        \(\gamma_{ij}\), \(\gamma^{ij}\), \(K_{ij}\), tetrad columns,
+        co-triads, spatial metric gradients, and co-triad derivatives.
   \item Reconstruct \(\I_n=U_n/\sqrt{\gamma}\) to faces.
   \item Compute face speeds \(v^i_n=\alpha s^i_n-\beta^i\) and fluxes from
         Equation~\eqref{eq:admflux}.
+  \item Compute angular drift from Equations~\eqref{eq:adm_pdot} and
+        \eqref{eq:admdotell}; form angular fluxes using \(U_n\) as the
+        upwinded quantity.
   \item Apply flux divergence to \(U_n\).
   \item Apply the per-angle geometric source in Equation~\eqref{eq:anglesource}.
   \item Apply matter/source terms, boundary exchange, and AMR operations.
@@ -317,9 +364,12 @@ forms
   s^i_n = E_{(\hat{a})}^{\ i}\ell_n^{(\hat{a})}
 \end{equation}
 with a small dense matrix-vector product.  The natural next optimization is to
-cache \(\sqrt{\gamma}\), \(\alpha\), \(\beta^i\), the tetrad columns, and any
-needed metric gradients once per stage, then reuse them across all angular
-transport and source kernels.  This keeps the cost scaling as
+cache all metric quantities needed by Equations~\eqref{eq:adm_pdot} and
+\eqref{eq:admdotell} once per stage, then reuse them across all angular
+transport and source kernels.  That cache now contains \(\sqrt{\gamma}\),
+\(\alpha\), \(\beta^i\), \(\gamma_{ij}\), \(\gamma^{ij}\), \(K_{ij}\), the
+triad and co-triad, spatial gradients, and \(\partial_t e^{(\hat a)}_{\ i}\).
+This keeps the cost scaling as
 \(O(N_{\mathrm{cell}})\) for metric preparation plus
 \(O(N_{\mathrm{cell}}N_\Omega)\) for angular transport, instead of rebuilding a
 complete tetrad inside each angle loop.
@@ -393,6 +443,25 @@ are \(0\) for both the CKS-compatible and ADM-flat branches.  The same ADM flat
 beam input also completed under \code{mpirun -n 2}, testing MPI decomposition
 for this path.
 
+A separate stationary Kerr-Schild ADM smoke test is included at
+\path{inputs/tests/dynrad_bh_beam_adm.athinput}.  That input keeps the metric
+time-independent but non-flat, and runs \code{geometry=adm} with
+\code{angular\_fluxes=true}.  It therefore exercises the Hamiltonian angular
+drift, metric-gradient cache, and ADM angular timestep limiter without relying
+on the BBH problem generator.  The short regression completed to \(t=0.2\)
+with finite radiation output.
+
+The dynamic-metric smoke input
+\begin{center}
+\small
+\path{inputs/tests/dynrad_z4c_wave_adm.athinput}
+\end{center}
+adds \code{dyn\_radiation} to the Z4c linear-wave background.  This checks
+that ADM metric fields supplied by the Z4c-to-ADM conversion are accepted by
+the standalone radiation module and that the per-stage geometry cache can be
+refreshed on a time-dependent metric with \code{angular\_fluxes=true}.  The
+compact regression completed without NaNs or infinities.
+
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.82\linewidth]{figures/beam_comparison.png}
@@ -453,14 +522,16 @@ The binary-background input is
 \path{dyngr_radiation_paper/inputs/dynbbh_beam_particles.athinput}.
 \end{center}
 It exercises the ADM beam source on the superposed boosted Kerr-Schild binary
-background in \code{src/pgen/dynbbh.cpp}.  It also initializes null particles on
-the beam edge and advances them using Equations~\eqref{eq:null_x} and
-\eqref{eq:null_k}.  The serial smoke test produced a finite beam slice with
-\(\max R^{00}=0.767972\), wrote a normal-size particle track file, and generated
-the diagnostic figure shown in Figure~\ref{fig:dynbbh}.  A zero-step MPI setup
-for this input completed, but a full coupled two-rank dynbbh/MHD evolution was
-not certified in this pass because the pre-existing coupled path stalled after
-cycle zero independently of the new particle-output fixes.
+background in \code{src/pgen/dynbbh.cpp}.  It runs with
+\code{geometry=adm} and \code{angular\_fluxes=true}.  It also initializes null
+particles on the beam edge and advances them using Equations~\eqref{eq:null_x}
+and \eqref{eq:null_k}.  The serial smoke test produced a finite beam slice with
+\(\max R^{00}=0.768007\), wrote a normal-size particle track file, and generated
+the diagnostic figure shown in Figure~\ref{fig:dynbbh}.  A second serial run
+enabled ADM radiation-matter coupling with absorption and scattering opacities
+and completed without NaNs.  A two-rank flat ADM beam run passed.  A full
+two-rank dynbbh/MHD evolution was not certified in this pass because that
+coupled path stalled after cycle zero even when ADM angular fluxes were disabled.
 
 \begin{figure}[htbp]
 \centering
@@ -480,8 +551,11 @@ Test & Quantity checked & Result \\
 Flat beam, CKS compatibility & \(\max |R^{00}_{\rm dynrad}-R^{00}_{\rm legacy}|\) & \(0\) \\
 Flat beam, ADM mode & \(\max |R^{00}_{\rm ADM}-R^{00}_{\rm legacy}|\) & \(0\) \\
 Flat ADM beam, MPI & two-rank decomposition & passed \\
+Stationary KS ADM beam & nonzero ADM angular drift & passed \\
+Dynamic Z4c ADM smoke & time-dependent ADM metric cache & passed \\
 CKS linear wave & final error row & identical \\
 BBH ADM beam & finite beam and particle tracks & passed in serial \\
+BBH ADM coupling & absorption/scattering with MHD primitives & passed in serial \\
 BBH coupled MPI evolution & full two-rank dynbbh/MHD run & not certified \\
 \bottomrule
 \end{tabular}
@@ -504,8 +578,8 @@ Metric source & Analytic stationary CKS metric & CKS compatibility mode or ADM m
 Conserved intensity & \(k^0k_0I\) & CKS: \(k^0k_0I\); ADM: \(\sqrt{\gamma}I\) \\
 Spatial speed & \(k^i\) from stationary tetrad & CKS: \(k^i\); ADM: \(\alpha s^i-\beta^i\) \\
 Metric source terms & Stationary tetrad and angular drift coefficients & ADM Valencia energy source using \(K_{ij}\) and \(\partial_i\alpha\) \\
-Angular bending & Precomputed CKS coefficients & Not yet enabled in ADM mode \\
-Matter coupling & Existing local implicit path & CKS-compatible path retained; full ADM validation pending \\
+Angular bending & Precomputed CKS coefficients & Cached ADM Hamiltonian angular drift \\
+Matter coupling & Existing local implicit path & CKS path retained; ADM uses \(I=U/\sqrt{\gamma}\), Eulerian tetrad frequency, and Valencia moment feedback \\
 Binary backgrounds & Not supported directly & Supported through ADM fields \\
 \bottomrule
 \end{tabular}
@@ -523,29 +597,21 @@ sources are built from ADM variables supplied by the active spacetime module.
 \section{Discussion and Limitations}
 \label{sec:discussion}
 
-The present implementation is a controlled first step toward dynamical
-radiation transport.  It is complete enough to move radiation energy on ADM
-backgrounds, to reproduce stationary beam and linear-wave regressions, and to
-diagnose beam propagation on the superposed binary metric.  It is not yet a
-complete general relativistic discrete-ordinates scheme on arbitrary dynamical
-spacetimes.
+The present implementation is a controlled step toward dynamical radiation
+transport.  It moves radiation energy on ADM backgrounds, bends the angular
+directions with an ADM Hamiltonian operator, reproduces stationary beam and
+linear-wave regressions, and diagnoses beam propagation on the superposed binary
+metric.  It is still not a final production radiation module.  The angular
+operator uses second-order metric-gradient caches; higher-order gradients and
+limiters can be added behind the same cache interface.  The discrete
+momentum-source consistency check in Equation~\eqref{eq:valencia_momentum} is
+the next validation target.
 
-The most important missing piece is the ADM angular transport operator.  In a
-full scheme, the angular directions \(\ell_n^{(\hat{a})}\) must be advected by
-the tetrad-frame geodesic equation so that the discrete moments reproduce both
-the energy source in Equation~\eqref{eq:valenciaE} and the momentum source in
-Equation~\eqref{eq:valencia_momentum}.  A practical implementation should avoid
-per-angle tetrad reconstruction by caching the Eulerian tetrad and metric
-gradients once per stage, then evaluating angular drift coefficients with
-matrix-vector operations in each angle bin.  This is also the natural place to
-add higher-order interpolation and flux-limited angular advection.
-
-Matter coupling is another area that needs a dedicated ADM pass.  The
-CKS-compatible branch preserves the existing behavior so that regression tests
-remain meaningful.  A production ADM radiation-hydrodynamics path should express
-emission, absorption, and scattering in the Eulerian/comoving tetrad used by the
-ADM transport variables, then update gas and radiation consistently with the
-Valencia conserved variables.
+The ADM matter-coupling path now uses the Eulerian tetrad frequency factor,
+\(I=U/\sqrt{\gamma}\), and gas feedback through the Valencia radiation moments.
+It has passed flat and BBH smoke tests, but it still needs a broader validation
+suite with moving-fluid absorption/scattering, optically thick diffusion, and
+time-dependent metric backgrounds.
 
 Finally, the null-particle pusher is currently a diagnostic tool.  It uses
 nearest-cell ADM fields and centered finite differences.  It is useful for beam
@@ -561,13 +627,14 @@ module for AthenaK.  The solver preserves legacy CKS behavior in a compatibility
 mode and adds an ADM mode based on Eulerian densitized intensity, Valencia
 coordinate speeds, and a per-angle geometric source whose angular sum recovers
 the Valencia radiation energy equation.  The formulation is suitable for
-time-dependent ADM backgrounds because the metric evolution enters through
-\(K_{ij}\), rather than through stationarity assumptions or explicit gauge-field
-time derivatives.  Regression tests show exact agreement with the legacy flat
-beam, identical stationary CKS linear-wave error norms, successful two-rank
-flat ADM beam transport, and a serial ADM beam-plus-null-particle smoke test on
-the superposed binary black-hole background.  The remaining work is to add ADM
-angular geodesic transport, complete the ADM matter-coupling validation, and
-upgrade the diagnostic particle pusher if high-accuracy geodesics are required.
+time-dependent ADM backgrounds because metric evolution enters through
+\(K_{ij}\) and the ADM co-triad time derivative, rather than through
+stationarity assumptions.  Regression tests show exact agreement with the
+legacy flat beam, identical stationary CKS linear-wave error norms, successful
+two-rank flat ADM beam transport, and serial ADM beam-plus-null-particle and
+matter-coupling smoke tests on the superposed binary black-hole background.  The
+remaining work is to strengthen the momentum-source and matter-coupling
+validation suite and upgrade the diagnostic particle pusher if high-accuracy
+geodesics are required.
 
 \end{document}

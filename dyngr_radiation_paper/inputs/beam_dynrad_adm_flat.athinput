@@ -44,7 +44,7 @@ tlim = 0.2
 geometry = adm
 nlevel = 2
 rotate_geo = false
-angular_fluxes = false
+angular_fluxes = true
 reconstruct = plm
 
 <rad_srcterms>
