@@ -27,6 +27,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "diffusion/current_density.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "utils/flux_generalized.hpp"
@@ -230,7 +231,10 @@ struct bbh_pgen {
   Real cutoff_floor;
   Real alpha_thr;
   Real radius_thr;
+  Real smooth_b_damping_eta;
+  Real smooth_b_damping_cfl;
   bool use_traj_table;
+  bool smooth_b_damping;
 
   Real spin;
 
@@ -305,6 +309,7 @@ void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
 void AddValenciaGRCooling(Mesh *pm, const Real bdt);
+void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
 
 //----------------------------------------------------------------------------------------
 //! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
@@ -447,6 +452,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
+  bbh.smooth_b_damping = pin->GetOrAddBoolean(
+      "coord", "smooth_excision_b_damping", false);
+  bbh.smooth_b_damping_eta = pin->GetOrAddReal(
+      "coord", "smooth_excision_b_damping_eta", 0.0);
+  bbh.smooth_b_damping_cfl = pin->GetOrAddReal(
+      "coord", "smooth_excision_b_damping_cfl", 0.25);
+  if (bbh.smooth_b_damping &&
+      (!(bbh.smooth_b_damping_eta > 0.0) || bbh.smooth_b_damping_cfl < 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "smooth_excision_b_damping requires positive eta and "
+              << "non-negative cfl cap" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
   std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
   if (bbh.use_traj_table) {
@@ -483,6 +502,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_hist_func = TorusHistory;
   if (pmbp->pmhd != nullptr) {
     user_srcs_func = AddValenciaGRCooling;
+  }
+  if (bbh.smooth_b_damping) {
+    if (pmbp->pmhd == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "smooth_excision_b_damping requires MHD" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    user_efield = true;
+    user_efield_func = AddSmoothExcisionMagneticDamping;
   }
 
   if (pmbp->padm != nullptr) {
@@ -2675,6 +2704,131 @@ static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]){
    gcon[ZZ][ZZ] = det *   ( gcov[TT][TT] * A1212 - gcov[TT][XX] * A0212 + gcov[TT][YY] * A0112 );
 
    return;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real SmoothExcisionBWeight(Real w) {
+  return fmin(fmax(w, 0.0), 1.0);
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX1(const WeightView &w, const int m, const int k,
+                                         const int j, const int i) {
+  return SmoothExcisionBWeight(0.25*(w(m,k,j,i) + w(m,k,j-1,i) +
+                                     w(m,k-1,j,i) + w(m,k-1,j-1,i)));
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX2(const WeightView &w, const int m, const int k,
+                                         const int j, const int i) {
+  return SmoothExcisionBWeight(0.25*(w(m,k,j,i) + w(m,k-1,j,i) +
+                                     w(m,k,j,i-1) + w(m,k-1,j,i-1)));
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX3(const WeightView &w, const int m, const int k,
+                                         const int j, const int i) {
+  return SmoothExcisionBWeight(0.25*(w(m,k,j,i) + w(m,k,j-1,i) +
+                                     w(m,k,j,i-1) + w(m,k,j-1,i-1)));
+}
+
+KOKKOS_INLINE_FUNCTION
+Real SmoothExcisionDampingEta(const RegionSize &size, const bool multi_d,
+                              const bool three_d, const Real eta0,
+                              const Real cfl_cap, const Real dt) {
+  Real eta = eta0;
+  if (cfl_cap > 0.0 && dt > 0.0) {
+    Real dxmin = size.dx1;
+    if (multi_d) dxmin = fmin(dxmin, size.dx2);
+    if (three_d) dxmin = fmin(dxmin, size.dx3);
+    eta = fmin(eta, cfl_cap*SQR(dxmin)/dt);
+  }
+  return eta;
+}
+
+//! \fn void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld)
+//! \brief Add a smooth-excision resistive EMF, E_damp = eta W curl(B), at edges.
+void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pmhd == nullptr || !(bbh.smooth_b_damping_eta > 0.0)) return;
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int nmb1 = pmbp->nmb_thispack - 1;
+  auto b0 = pmbp->pmhd->b0;
+  auto weight = pmbp->pcoord->excision_weight;
+  auto e1 = efld.x1e;
+  auto e2 = efld.x2e;
+  auto e3 = efld.x3e;
+  auto &mbsize = pmbp->pmb->mb_size;
+  bool multi_d = pm->multi_d;
+  bool three_d = pm->three_d;
+  Real eta0 = bbh.smooth_b_damping_eta;
+  Real cfl_cap = bbh.smooth_b_damping_cfl;
+  Real dt = pm->dt;
+
+  int scr_level = 0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
+
+  if (pm->one_d) {
+    par_for_outer("dynbbh_b_damp1", DevExeSpace(), scr_size, scr_level, 0, nmb1,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m) {
+      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+      auto size = mbsize.d_view(m);
+      Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+      CurrentDensity(member, m, ks, js, is, ie+1, b0, size, j1, j2, j3);
+      par_for_inner(member, is, ie+1, [&](const int i) {
+        Real w = SmoothExcisionBWeight(weight(m,ks,js,i));
+        e2(m,ks,  js,i) += eta*w*j2(i);
+        e2(m,ke+1,js,i) += eta*w*j2(i);
+        e3(m,ks,  js,i) += eta*w*j3(i);
+        e3(m,ks,je+1,i) += eta*w*j3(i);
+      });
+    });
+    return;
+  }
+
+  if (pm->two_d) {
+    par_for_outer("dynbbh_b_damp2", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je+1,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
+      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+      auto size = mbsize.d_view(m);
+      Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+      CurrentDensity(member, m, ks, j, is, ie+1, b0, size, j1, j2, j3);
+      par_for_inner(member, is, ie+1, [&](const int i) {
+        Real w = SmoothExcisionBWeight(0.5*(weight(m,ks,j,i) + weight(m,ks,j,i-1)));
+        e1(m,ks,  j,i) += eta*w*j1(i);
+        e1(m,ke+1,j,i) += eta*w*j1(i);
+        e2(m,ks,  j,i) += eta*w*j2(i);
+        e2(m,ke+1,j,i) += eta*w*j2(i);
+        e3(m,ks,  j,i) += eta*EdgeWeightX3(weight, m, ks, j, i)*j3(i);
+      });
+    });
+    return;
+  }
+
+  par_for_outer("dynbbh_b_damp3", DevExeSpace(), scr_size, scr_level,
+                0, nmb1, ks, ke+1, js, je+1,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+    ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+    ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+    ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+    auto size = mbsize.d_view(m);
+    Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+    CurrentDensity(member, m, k, j, is, ie+1, b0, size, j1, j2, j3);
+    par_for_inner(member, is, ie+1, [&](const int i) {
+      e1(m,k,j,i) += eta*EdgeWeightX1(weight, m, k, j, i)*j1(i);
+      e2(m,k,j,i) += eta*EdgeWeightX2(weight, m, k, j, i)*j2(i);
+      e3(m,k,j,i) += eta*EdgeWeightX3(weight, m, k, j, i)*j3(i);
+    });
+  });
 }
 
 //----------------------------------------------------------------------------------------

@@ -19,6 +19,7 @@
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
+using UserEFieldFnPtr = void (*)(Mesh* pm, DvceEdgeFld4D<Real> &efld);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 
@@ -40,6 +41,9 @@ class ProblemGenerator {
   // true if user srcterms are specified
   bool user_srcs;
 
+  // true if user electric-field terms are specified
+  bool user_efield;
+
   // true if user history outputs are specified
   bool user_hist;
 
@@ -53,6 +57,7 @@ class ProblemGenerator {
   // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
   UserBoundaryFnPtr user_bcs_func=nullptr;
   UserSrctermFnPtr user_srcs_func=nullptr;
+  UserEFieldFnPtr user_efield_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
 

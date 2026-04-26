@@ -299,6 +299,19 @@ schematically
 \begin{equation}
   \eta_e \lesssim C_{\rm diff}\frac{\Delta x_e^2}{\Delta t}.
 \end{equation}
+The implemented runtime controls are
+\begin{align}
+  {\tt coord/smooth\_excision\_b\_damping} &\in \{{\tt true},{\tt false}\},\\
+  {\tt coord/smooth\_excision\_b\_damping\_eta} &= \eta_0,\\
+  {\tt coord/smooth\_excision\_b\_damping\_cfl} &= C_{\rm diff}.
+\end{align}
+When \(C_{\rm diff}>0\), the active coefficient is capped as
+\begin{equation}
+  \eta_e =
+  \min\!\left(\eta_0,\,
+  C_{\rm diff}\frac{\Delta x_{\min}^2}{\Delta t}\right).
+\end{equation}
+Setting \(C_{\rm diff}=0\) disables the cap.
 This resistive term damps current-carrying structure.  If a true flux drain
 is later desired, an artificial advective EMF
 \begin{equation}
@@ -310,8 +323,8 @@ than deleting it locally.
 
 \section{What Is Not Included}
 
-No edge-centered EMF drain, resistive diffusion term, or direct magnetic
-window function is included in this implementation.  Such a term could be
-added later in a CT-compatible manner, but it is intentionally absent here.
+No direct magnetic window function is included in this implementation.  The
+optional magnetic damping path modifies only edge-centered EMFs and is disabled
+by default.
 
 \end{document}
