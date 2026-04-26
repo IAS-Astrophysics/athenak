@@ -57,7 +57,7 @@ def write_table() -> None:
 
 
 def common_input(mesh_refinement: str, num_levels: int, tlim: float,
-                 out_dt: float, rst_dt: float, sink_replace: str,
+                 out_dt: float, rst_dt: float,
                  require_resolved: str, refinement_region: str) -> str:
     return f"""<comment>
 problem   = dynbbh unresolved-sink to AMR zoom test
@@ -174,7 +174,6 @@ ph_a2 = 163.0
 use_traj_table = true
 traj_file = {TABLE}
 unresolved_sink = true
-sink_replace_underresolved_excision = {sink_replace}
 sink_radius = 0.0
 sink_width = -1.0
 sink_cells_per_radius = 10.0
@@ -212,7 +211,6 @@ def write_inputs() -> None:
             tlim=LOW_TLIM,
             out_dt=2.0 * TORBIT,
             rst_dt=LOW_TLIM,
-            sink_replace="true",
             require_resolved="false",
             refinement_region="radius_0_rad = 24.0\nradius_0_reflevel = 0",
         ),
@@ -225,7 +223,6 @@ def write_inputs() -> None:
             tlim=ZOOM_TLIM,
             out_dt=0.25 * TORBIT,
             rst_dt=10.0 * TORBIT,
-            sink_replace="false",
             require_resolved="false",
             refinement_region="radius_0_rad = 3.25\nradius_0_reflevel = 1",
         ),

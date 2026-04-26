@@ -440,13 +440,12 @@ Several implementation details were tightened during review:
 \section{Unresolved-Horizon Sink Fallback}
 
 If the local mesh spacing around a hole is too large compared with that
-hole's horizon diameter, the puncture excision mask is under-resolved.  With
-the \texttt{problem/unresolved\_sink} flag and the replacement flag
-\texttt{problem/sink\_replace\_underresolved\_excision}, the problem generator
-suppresses only the under-resolved puncture masks and applies a conservative
-sink over a larger radius.  This path is intended for cheap early inspiral
-evolutions where one or both holes are deliberately unresolved before a later
-AMR restart resolves the horizons.
+hole's horizon diameter, the puncture excision mask is formally
+under-resolved.  With the \texttt{problem/unresolved\_sink} flag, the problem
+generator keeps puncture excision enabled and applies an additional
+conservative sink over a larger radius.  This path is intended for cheap
+early inspiral evolutions where one or both holes are deliberately unresolved
+before a later AMR restart resolves the horizons.
 
 The decision is made separately for each hole.  Let
 \(\Delta x_A\) be the largest cell spacing in the active MeshBlock containing
@@ -455,10 +454,11 @@ hole \(A\).  The hole is treated as resolved when
   \frac{2r_{H,A}}{\Delta x_A} \ge N_{\rm H},
   \qquad N_{\rm H}=20 \quad \hbox{by default}.
 \end{equation}
-When this condition is satisfied, the sink for that hole is disabled and the
-normal puncture radius is restored for that hole.  If only one hole is
-resolved, only that hole's sink is disabled; the other hole keeps its sink and
-continues to have its puncture mask suppressed.
+When this condition is satisfied, the sink for that hole is disabled.  The
+puncture excision radius is never suppressed by the sink path: excision stays
+active whenever \texttt{coord/bh\_excise=true}.  If only one hole is resolved,
+only that hole's sink is disabled; the other hole keeps its sink while both
+holes continue to use the configured excision masks.
 
 For hole \(A\), define the smooth sink weight
 \begin{equation}
@@ -504,12 +504,12 @@ unresolved puncture metric is important: near \(r=0\), such a conversion can
 inject an artificially large conserved energy even for a small target
 pressure.
 
-This fallback is not a replacement for resolved horizon excision.  It is a
-coarse-grid drain that removes matter and momentum smoothly while preserving
-the constrained-transport representation of \(B_f\).  On a restarted zoom
-run, the same per-hole logic continues to apply after AMR regridding: the
-sink radius follows the local resolution and each sink turns off only after
-that hole satisfies the configured cells-across-horizon criterion.
+This fallback is not a replacement for horizon excision.  It is a coarse-grid
+drain that removes matter and momentum smoothly while preserving the
+constrained-transport representation of \(B_f\).  On a restarted zoom run, the
+same per-hole logic continues to apply after AMR regridding: the sink radius
+follows the local resolution and each sink turns off only after that hole
+satisfies the configured cells-across-horizon criterion.
 
 \section{Device, MPI, and AMR Safety}
 

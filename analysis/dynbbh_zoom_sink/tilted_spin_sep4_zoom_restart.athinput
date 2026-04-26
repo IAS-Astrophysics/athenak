@@ -113,7 +113,6 @@ ph_a2 = 163.0
 use_traj_table = true
 traj_file = /Users/hengrui/Desktop/research/gr/athenak/analysis/dynbbh_zoom_sink/tilted_spin_sep4_11orbit.dat
 unresolved_sink = true
-sink_replace_underresolved_excision = false
 sink_radius = 0.0
 sink_width = -1.0
 sink_cells_per_radius = 10.0

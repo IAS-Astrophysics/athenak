@@ -243,7 +243,6 @@ struct bbh_pgen {
   bool use_traj_table;
   bool smooth_b_damping;
   bool unresolved_sink;
-  bool sink_replace_underresolved_excision;
   bool require_resolved_horizon;
   bool use_cooling_source;
 
@@ -617,8 +616,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.require_resolved_horizon = pin->GetOrAddBoolean(
       "coord", "require_resolved_horizon", false);
   bbh.unresolved_sink = pin->GetOrAddBoolean("problem", "unresolved_sink", false);
-  bbh.sink_replace_underresolved_excision = pin->GetOrAddBoolean(
-      "problem", "sink_replace_underresolved_excision", true);
   bbh.sink_radius = pin->GetOrAddReal("problem", "sink_radius", 0.0);
   bbh.sink_width = pin->GetOrAddReal("problem", "sink_width",
                                      bbh.sink_radius > 0.0 ? 0.25*bbh.sink_radius : 0.0);
@@ -658,13 +655,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real finest_dx = LocalFinestMeshSpacing(pmbp);
     Real min_horizon = MinDynBBHHorizonRadius();
     if (finest_dx > min_horizon) {
-      if (bbh.unresolved_sink && bbh.sink_replace_underresolved_excision) {
+      if (bbh.unresolved_sink) {
         if (global_variable::my_rank == 0) {
-          std::cout << "Suppressing under-resolved puncture masks because finest active dx="
+          std::cout << "Keeping puncture excision enabled with finest active dx="
                     << finest_dx
                     << " exceeds the minimum tabulated horizon radius="
-                    << min_horizon << "; unresolved_sink will drain each "
-                    << "under-resolved hole until local AMR resolves it."
+                    << min_horizon << "; unresolved_sink will additionally drain "
+                    << "each under-resolved hole until local AMR resolves it."
                     << std::endl;
         }
       } else if (bbh.require_resolved_horizon) {
@@ -673,8 +670,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                   << "puncture excision is under-resolved: finest active dx=" << finest_dx
                   << " exceeds minimum horizon radius=" << min_horizon << std::endl
                   << "Refine the mesh, set coord/require_resolved_horizon=false, "
-                  << "or enable problem/unresolved_sink=true with "
-                  << "problem/sink_replace_underresolved_excision=true." << std::endl;
+                  << "or enable problem/unresolved_sink=true." << std::endl;
         std::exit(EXIT_FAILURE);
       } else if (global_variable::my_rank == 0) {
         std::cout << "WARNING: puncture excision is under-resolved: finest active dx="
@@ -1474,16 +1470,8 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1_vel[0] = traj.q[VX2];
   coord.punc_1_vel[1] = traj.q[VY2];
   coord.punc_1_vel[2] = traj.q[VZ2];
-  Real punc_0_rad = m1_ex + sqrt(fmax(SQR(m1_ex) - SQR(a1_ex), 0.0));
-  Real punc_1_rad = m2_ex + sqrt(fmax(SQR(m2_ex) - SQR(a2_ex), 0.0));
-  if (bbh_.unresolved_sink && bbh_.sink_replace_underresolved_excision) {
-    bbh_sink_state sink_state = ComputeUnresolvedSinkState(pmbp, traj);
-    coord.punc_0_rad = sink_state.hole1.active ? 0.0 : punc_0_rad;
-    coord.punc_1_rad = sink_state.hole2.active ? 0.0 : punc_1_rad;
-  } else {
-    coord.punc_0_rad = punc_0_rad;
-    coord.punc_1_rad = punc_1_rad;
-  }
+  coord.punc_0_rad = m1_ex + sqrt(fmax(SQR(m1_ex) - SQR(a1_ex), 0.0));
+  coord.punc_1_rad = m2_ex + sqrt(fmax(SQR(m2_ex) - SQR(a2_ex), 0.0));
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
