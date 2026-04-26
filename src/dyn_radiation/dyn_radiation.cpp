@@ -18,6 +18,7 @@
 #include "eos/eos.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "units/units.hpp"
@@ -40,6 +41,10 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     tet_d1_x1f("tet_d1_x1f",1,1,1,1,1),
     tet_d2_x2f("tet_d2_x2f",1,1,1,1,1),
     tet_d3_x3f("tet_d3_x3f",1,1,1,1,1),
+    sqrt_detg_c("sqrt_detg_c",1,1,1,1),
+    sqrt_detg_x1f("sqrt_detg_x1f",1,1,1,1),
+    sqrt_detg_x2f("sqrt_detg_x2f",1,1,1,1),
+    sqrt_detg_x3f("sqrt_detg_x3f",1,1,1,1),
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1) {
   // Check for general relativity
@@ -104,8 +109,35 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // Setup angular mesh and dyn_radiation geometry data
   int nlevel = pin->GetInteger("dyn_radiation", "nlevel");
+  std::string geometry = pin->GetOrAddString("dyn_radiation", "geometry",
+                                             (pmy_pack->padm != nullptr) ? "adm" : "cks");
+  if (geometry.compare("adm") == 0) {
+    use_adm_geometry = true;
+  } else if (geometry.compare("cks") == 0) {
+    use_adm_geometry = false;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation>/geometry = '" << geometry
+              << "' not implemented; use 'adm' or 'cks'." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (use_adm_geometry && pmy_pack->padm == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation> geometry='adm' requires an <adm> "
+              << "or <z4c> block." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  adm_metric_source = pin->GetOrAddBoolean("dyn_radiation", "adm_metric_source",
+                                           use_adm_geometry);
   rotate_geo = pin->GetOrAddBoolean("dyn_radiation","rotate_geo",true);
   angular_fluxes = pin->GetOrAddBoolean("dyn_radiation","angular_fluxes",true);
+  if (use_adm_geometry && angular_fluxes) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation> geometry='adm' currently requires "
+              << "angular_fluxes=false; angular bending will be added as a separate "
+              << "device-side geometric operator." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   n_0_floor = pin->GetOrAddReal("dyn_radiation","n_0_floor",0.1);
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
 
@@ -123,10 +155,17 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(tet_d1_x1f,nmb,4,ncells3,ncells2,ncells1+1);
   Kokkos::realloc(tet_d2_x2f,nmb,4,ncells3,ncells2+1,ncells1);
   Kokkos::realloc(tet_d3_x3f,nmb,4,ncells3+1,ncells2,ncells1);
+  Kokkos::realloc(sqrt_detg_c,nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(sqrt_detg_x1f,nmb,ncells3,ncells2,ncells1+1);
+  Kokkos::realloc(sqrt_detg_x2f,nmb,ncells3,ncells2+1,ncells1);
+  Kokkos::realloc(sqrt_detg_x3f,nmb,ncells3+1,ncells2,ncells1);
   if (angular_fluxes) {Kokkos::realloc(na,nmb,prgeo->nangles,ncells3,ncells2,ncells1,6);}
   if (is_hydro_enabled || is_mhd_enabled) {
     Kokkos::realloc(norm_to_tet,nmb,4,4,ncells3,ncells2,ncells1);
   }
+  }
+  if (use_adm_geometry) {
+    pmy_pack->padm->SetADMVariables(pmy_pack);
   }
   SetOrthonormalTetrad();
 

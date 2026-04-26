@@ -10,6 +10,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "eos/eos.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
@@ -26,6 +27,11 @@ namespace dyn_radiation {
 //! \brief Compute dyn_radiation fluxes
 
 TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
+  if (use_adm_geometry) {
+    pmy_pack->padm->SetADMVariables(pmy_pack);
+    SetOrthonormalTetrad();
+  }
+
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
@@ -38,11 +44,14 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
   auto &i0_ = i0;
   auto &nh_c_ = nh_c;
   auto &tet_c_ = tet_c;
+  auto &sqrt_detg_c_ = sqrt_detg_c;
+  bool use_adm_geometry_ = use_adm_geometry;
 
   //--------------------------------------------------------------------------------------
   // i-direction
 
   auto &t1d1 = tet_d1_x1f;
+  auto &sqrt_detg_x1f_ = sqrt_detg_x1f;
   auto &flx1 = iflx.x1f;
   par_for("rflux_x1",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie+1,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
@@ -52,15 +61,21 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
 
     // convert to primitive n_0 I
     Real iim1, iicc, iim2, iip1, iim3, iip2;
-    iim1 = i0_(m,n,k,j,i-1)/tet_c_(m,0,0,k,j,i-1);
-    iicc = i0_(m,n,k,j,i  )/tet_c_(m,0,0,k,j,i  );
+    Real norm_im1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i-1) : tet_c_(m,0,0,k,j,i-1);
+    Real norm_i   = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i  ) : tet_c_(m,0,0,k,j,i  );
+    iim1 = i0_(m,n,k,j,i-1)/norm_im1;
+    iicc = i0_(m,n,k,j,i  )/norm_i;
     if (recon_method_ > 0) {
-      iim2 = i0_(m,n,k,j,i-2)/tet_c_(m,0,0,k,j,i-2);
-      iip1 = i0_(m,n,k,j,i+1)/tet_c_(m,0,0,k,j,i+1);
+      Real norm_im2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i-2) : tet_c_(m,0,0,k,j,i-2);
+      Real norm_ip1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i+1) : tet_c_(m,0,0,k,j,i+1);
+      iim2 = i0_(m,n,k,j,i-2)/norm_im2;
+      iip1 = i0_(m,n,k,j,i+1)/norm_ip1;
     }
     if (recon_method_ > 1) {
-      iim3 = i0_(m,n,k,j,i-3)/tet_c_(m,0,0,k,j,i-3);
-      iip2 = i0_(m,n,k,j,i+2)/tet_c_(m,0,0,k,j,i+2);
+      Real norm_im3 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i-3) : tet_c_(m,0,0,k,j,i-3);
+      Real norm_ip2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i+2) : tet_c_(m,0,0,k,j,i+2);
+      iim3 = i0_(m,n,k,j,i-3)/norm_im3;
+      iip2 = i0_(m,n,k,j,i+2)/norm_ip2;
     }
 
     // reconstruct primitive intensity
@@ -95,7 +110,8 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
     }
 
     // compute x1flux
-    flx1(m,n,k,j,i) = n1*iiu;
+    Real face_norm = use_adm_geometry_ ? sqrt_detg_x1f_(m,k,j,i) : 1.0;
+    flx1(m,n,k,j,i) = face_norm*n1*iiu;
   });
 
   //--------------------------------------------------------------------------------------
@@ -103,6 +119,7 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   if (pmy_pack->pmesh->multi_d) {
     auto &t2d2 = tet_d2_x2f;
+    auto &sqrt_detg_x2f_ = sqrt_detg_x2f;
     auto &flx2 = iflx.x2f;
     par_for("rflux_x2",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je+1,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
@@ -112,15 +129,21 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
 
       // convert to primitive n_0 I
       Real iim1, iicc, iim2, iip1, iim3, iip2;
-      iim1 = i0_(m,n,k,j-1,i)/tet_c_(m,0,0,k,j-1,i);
-      iicc = i0_(m,n,k,j  ,i)/tet_c_(m,0,0,k,j  ,i);
+      Real norm_jm1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-1,i) : tet_c_(m,0,0,k,j-1,i);
+      Real norm_j   = use_adm_geometry_ ? sqrt_detg_c_(m,k,j  ,i) : tet_c_(m,0,0,k,j  ,i);
+      iim1 = i0_(m,n,k,j-1,i)/norm_jm1;
+      iicc = i0_(m,n,k,j  ,i)/norm_j;
       if (recon_method_ > 0) {
-        iim2 = i0_(m,n,k,j-2,i)/tet_c_(m,0,0,k,j-2,i);
-        iip1 = i0_(m,n,k,j+1,i)/tet_c_(m,0,0,k,j+1,i);
+        Real norm_jm2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-2,i) : tet_c_(m,0,0,k,j-2,i);
+        Real norm_jp1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j+1,i) : tet_c_(m,0,0,k,j+1,i);
+        iim2 = i0_(m,n,k,j-2,i)/norm_jm2;
+        iip1 = i0_(m,n,k,j+1,i)/norm_jp1;
       }
       if (recon_method_ > 1) {
-        iim3 = i0_(m,n,k,j-3,i)/tet_c_(m,0,0,k,j-3,i);
-        iip2 = i0_(m,n,k,j+2,i)/tet_c_(m,0,0,k,j+2,i);
+        Real norm_jm3 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-3,i) : tet_c_(m,0,0,k,j-3,i);
+        Real norm_jp2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j+2,i) : tet_c_(m,0,0,k,j+2,i);
+        iim3 = i0_(m,n,k,j-3,i)/norm_jm3;
+        iip2 = i0_(m,n,k,j+2,i)/norm_jp2;
       }
 
       // reconstruct primitive intensity
@@ -155,7 +178,8 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
 
       // compute x2flux
-      flx2(m,n,k,j,i) = n2*iiu;
+      Real face_norm = use_adm_geometry_ ? sqrt_detg_x2f_(m,k,j,i) : 1.0;
+      flx2(m,n,k,j,i) = face_norm*n2*iiu;
     });
   }
 
@@ -164,6 +188,7 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
 
   if (pmy_pack->pmesh->three_d) {
     auto &t3d3 = tet_d3_x3f;
+    auto &sqrt_detg_x3f_ = sqrt_detg_x3f;
     auto &flx3 = iflx.x3f;
     par_for("rflux_x3",DevExeSpace(),0,nmb1,0,nang1,ks,ke+1,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
@@ -173,15 +198,21 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
 
       // convert to primitive n_0 I
       Real iim1, iicc, iim2, iip1, iim3, iip2;
-      iim1 = i0_(m,n,k-1,j,i)/tet_c_(m,0,0,k-1,j,i);
-      iicc = i0_(m,n,k  ,j,i)/tet_c_(m,0,0,k  ,j,i);
+      Real norm_km1 = use_adm_geometry_ ? sqrt_detg_c_(m,k-1,j,i) : tet_c_(m,0,0,k-1,j,i);
+      Real norm_k   = use_adm_geometry_ ? sqrt_detg_c_(m,k  ,j,i) : tet_c_(m,0,0,k  ,j,i);
+      iim1 = i0_(m,n,k-1,j,i)/norm_km1;
+      iicc = i0_(m,n,k  ,j,i)/norm_k;
       if (recon_method_ > 0) {
-        iim2 = i0_(m,n,k-2,j,i)/tet_c_(m,0,0,k-2,j,i);
-        iip1 = i0_(m,n,k+1,j,i)/tet_c_(m,0,0,k+1,j,i);
+        Real norm_km2 = use_adm_geometry_ ? sqrt_detg_c_(m,k-2,j,i) : tet_c_(m,0,0,k-2,j,i);
+        Real norm_kp1 = use_adm_geometry_ ? sqrt_detg_c_(m,k+1,j,i) : tet_c_(m,0,0,k+1,j,i);
+        iim2 = i0_(m,n,k-2,j,i)/norm_km2;
+        iip1 = i0_(m,n,k+1,j,i)/norm_kp1;
       }
       if (recon_method_ > 1) {
-        iim3 = i0_(m,n,k-3,j,i)/tet_c_(m,0,0,k-3,j,i);
-        iip2 = i0_(m,n,k+2,j,i)/tet_c_(m,0,0,k+2,j,i);
+        Real norm_km3 = use_adm_geometry_ ? sqrt_detg_c_(m,k-3,j,i) : tet_c_(m,0,0,k-3,j,i);
+        Real norm_kp2 = use_adm_geometry_ ? sqrt_detg_c_(m,k+2,j,i) : tet_c_(m,0,0,k+2,j,i);
+        iim3 = i0_(m,n,k-3,j,i)/norm_km3;
+        iip2 = i0_(m,n,k+2,j,i)/norm_kp2;
       }
 
       // reconstruct primitive intensity
@@ -216,7 +247,8 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
 
       // compute x3flux
-      flx3(m,n,k,j,i) = n3*iiu;
+      Real face_norm = use_adm_geometry_ ? sqrt_detg_x3f_(m,k,j,i) : 1.0;
+      flx3(m,n,k,j,i) = face_norm*n3*iiu;
     });
   }
 

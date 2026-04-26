@@ -16,6 +16,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
@@ -31,6 +32,11 @@ namespace dyn_radiation {
 //        Only computed once at beginning of calculation.
 
 TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
+  if (use_adm_geometry) {
+    pmy_pack->padm->SetADMVariables(pmy_pack);
+    SetOrthonormalTetrad();
+  }
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &nx1 = indcs.nx1;
   int &js = indcs.js, &nx2 = indcs.nx2;
@@ -53,6 +59,10 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   auto &nh_c_ = nh_c;
   auto &na_ = na;
   auto &tet_c_ = tet_c;
+  auto &t1d1 = tet_d1_x1f;
+  auto &t2d2 = tet_d2_x2f;
+  auto &t3d3 = tet_d3_x3f;
+  bool use_adm_geometry_ = use_adm_geometry;
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
   auto &numn = prgeo->num_neighbors;
@@ -93,9 +103,38 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
         }
       }
     }
-    min_dt1 = fmin((size.d_view(m).dx1), min_dt1);
-    min_dt2 = fmin((size.d_view(m).dx2), min_dt2);
-    min_dt3 = fmin((size.d_view(m).dx3), min_dt3);
+    Real cmax1 = 1.0;
+    Real cmax2 = 1.0;
+    Real cmax3 = 1.0;
+    if (use_adm_geometry_) {
+      cmax1 = 1.0e-300;
+      cmax2 = 1.0e-300;
+      cmax3 = 1.0e-300;
+      for (int n=0; n<=nang1; ++n) {
+        Real v1 = t1d1(m,0,k,j,i)*nh_c_.d_view(n,0) +
+                  t1d1(m,1,k,j,i)*nh_c_.d_view(n,1) +
+                  t1d1(m,2,k,j,i)*nh_c_.d_view(n,2) +
+                  t1d1(m,3,k,j,i)*nh_c_.d_view(n,3);
+        cmax1 = fmax(cmax1, fabs(v1));
+        if (nx2 > 1) {
+          Real v2 = t2d2(m,0,k,j,i)*nh_c_.d_view(n,0) +
+                    t2d2(m,1,k,j,i)*nh_c_.d_view(n,1) +
+                    t2d2(m,2,k,j,i)*nh_c_.d_view(n,2) +
+                    t2d2(m,3,k,j,i)*nh_c_.d_view(n,3);
+          cmax2 = fmax(cmax2, fabs(v2));
+        }
+        if (nx3 > 1) {
+          Real v3 = t3d3(m,0,k,j,i)*nh_c_.d_view(n,0) +
+                    t3d3(m,1,k,j,i)*nh_c_.d_view(n,1) +
+                    t3d3(m,2,k,j,i)*nh_c_.d_view(n,2) +
+                    t3d3(m,3,k,j,i)*nh_c_.d_view(n,3);
+          cmax3 = fmax(cmax3, fabs(v3));
+        }
+      }
+    }
+    min_dt1 = fmin((size.d_view(m).dx1/cmax1), min_dt1);
+    min_dt2 = fmin((size.d_view(m).dx2/cmax2), min_dt2);
+    min_dt3 = fmin((size.d_view(m).dx3/cmax3), min_dt3);
     min_dta = fmin((tmp_min_dta),        min_dta);
   }, Kokkos::Min<Real>(dt1),  Kokkos::Min<Real>(dt2), Kokkos::Min<Real>(dt3),
      Kokkos::Min<Real>(dta));

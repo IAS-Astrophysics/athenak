@@ -11,6 +11,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -19,6 +20,88 @@
 #include "dyn_radiation/dyn_radiation_tetrad.hpp"
 
 namespace dyn_radiation {
+
+KOKKOS_INLINE_FUNCTION
+void BuildADMSpatialTriad(const Real gxx, const Real gxy, const Real gxz,
+                          const Real gyy, const Real gyz, const Real gzz,
+                          Real e[3][3]) {
+  // Cholesky factorization gamma_ij = L_iA L_jA.  The columns of e=L^{-T}
+  // map orthonormal-frame direction cosines into coordinate spatial vectors.
+  const Real l00 = sqrt(fmax(gxx, 1.0e-300));
+  const Real l10 = gxy/l00;
+  const Real l20 = gxz/l00;
+  const Real l11 = sqrt(fmax(gyy - SQR(l10), 1.0e-300));
+  const Real l21 = (gyz - l20*l10)/l11;
+  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), 1.0e-300));
+
+  e[0][0] = 1.0/l00;
+  e[1][0] = 0.0;
+  e[2][0] = 0.0;
+
+  e[0][1] = -l10/(l00*l11);
+  e[1][1] = 1.0/l11;
+  e[2][1] = 0.0;
+
+  e[0][2] = l10*l21/(l00*l11*l22) - l20/(l00*l22);
+  e[1][2] = -l21/(l11*l22);
+  e[2][2] = 1.0/l22;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real ADMDetSqrt(const Real gxx, const Real gxy, const Real gxz,
+                const Real gyy, const Real gyz, const Real gzz) {
+  return sqrt(fmax(adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz), 1.0e-300));
+}
+
+KOKKOS_INLINE_FUNCTION
+void BuildADMEulerianTetrad(const Real alpha, const Real beta[3], const Real g3d[6],
+                            Real e[4][4], Real e_cov[4][4]) {
+  Real triad[3][3];
+  BuildADMSpatialTriad(g3d[S11], g3d[S12], g3d[S13],
+                       g3d[S22], g3d[S23], g3d[S33], triad);
+
+  for (int a=0; a<4; ++a) {
+    for (int mu=0; mu<4; ++mu) {
+      e[a][mu] = 0.0;
+      e_cov[a][mu] = 0.0;
+    }
+  }
+
+  e[0][0] = 1.0/alpha;
+  for (int d=0; d<3; ++d) {
+    e[0][d+1] = -beta[d]/alpha;
+  }
+  for (int a=0; a<3; ++a) {
+    for (int d=0; d<3; ++d) {
+      e[a+1][d+1] = triad[d][a];
+    }
+  }
+
+  Real g4[16];
+  adm::SpacetimeMetric(alpha, beta[0], beta[1], beta[2],
+                       g3d[S11], g3d[S12], g3d[S13],
+                       g3d[S22], g3d[S23], g3d[S33], g4);
+  for (int a=0; a<4; ++a) {
+    for (int mu=0; mu<4; ++mu) {
+      for (int nu=0; nu<4; ++nu) {
+        e_cov[a][mu] += g4[4*mu + nu]*e[a][nu];
+      }
+    }
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void BuildADMFaceTransportCoeffs(const int dir, const Real alpha, const Real beta[3],
+                                 const Real g3d[6], Real coeff[4]) {
+  Real triad[3][3];
+  BuildADMSpatialTriad(g3d[S11], g3d[S12], g3d[S13],
+                       g3d[S22], g3d[S23], g3d[S33], triad);
+  coeff[0] = -beta[dir];
+  for (int a=0; a<3; ++a) {
+    coeff[a+1] = alpha*triad[dir][a];
+  }
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  void DynRadiation::SetOrthonormalTetrad()
 //! \brief Set orthonormal tetrad data
@@ -68,6 +151,89 @@ void DynRadiation::SetOrthonormalTetrad() {
   nh_c.template sync<DevExeSpace>();
   nh_f.template modify<HostMemSpace>();
   nh_f.template sync<DevExeSpace>();
+
+  if (use_adm_geometry) {
+    auto &adm_ = pmy_pack->padm->adm;
+    auto tet_c_ = tet_c;
+    auto tetcov_c_ = tetcov_c;
+    auto sqrt_detg_c_ = sqrt_detg_c;
+    par_for("dynrad_adm_tet_c",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real beta[3] = {adm_.beta_u(m,0,k,j,i),
+                      adm_.beta_u(m,1,k,j,i),
+                      adm_.beta_u(m,2,k,j,i)};
+      Real g3d[6] = {adm_.g_dd(m,0,0,k,j,i), adm_.g_dd(m,0,1,k,j,i),
+                     adm_.g_dd(m,0,2,k,j,i), adm_.g_dd(m,1,1,k,j,i),
+                     adm_.g_dd(m,1,2,k,j,i), adm_.g_dd(m,2,2,k,j,i)};
+      Real e[4][4], e_cov[4][4];
+      BuildADMEulerianTetrad(adm_.alpha(m,k,j,i), beta, g3d, e, e_cov);
+      for (int d1=0; d1<4; ++d1) {
+        for (int d2=0; d2<4; ++d2) {
+          tet_c_   (m,d1,d2,k,j,i) = e[d1][d2];
+          tetcov_c_(m,d1,d2,k,j,i) = e_cov[d1][d2];
+        }
+      }
+      sqrt_detg_c_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
+                                         g3d[S22], g3d[S23], g3d[S33]);
+    });
+
+    auto tet_d1_x1f_ = tet_d1_x1f;
+    auto sqrt_detg_x1f_ = sqrt_detg_x1f;
+    par_for("dynrad_adm_x1f",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),1,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real g3d[6], beta[3], alpha;
+      adm::Face1Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
+      Real coeff[4];
+      BuildADMFaceTransportCoeffs(0, alpha, beta, g3d, coeff);
+      for (int d=0; d<4; ++d) { tet_d1_x1f_(m,d,k,j,i) = coeff[d]; }
+      sqrt_detg_x1f_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
+                                           g3d[S22], g3d[S23], g3d[S33]);
+    });
+
+    auto tet_d2_x2f_ = tet_d2_x2f;
+    auto sqrt_detg_x2f_ = sqrt_detg_x2f;
+    if (pmy_pack->pmesh->multi_d) {
+      par_for("dynrad_adm_x2f",DevExeSpace(),0,(nmb-1),0,(n3-1),1,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real g3d[6], beta[3], alpha;
+        adm::Face2Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
+        Real coeff[4];
+        BuildADMFaceTransportCoeffs(1, alpha, beta, g3d, coeff);
+        for (int d=0; d<4; ++d) { tet_d2_x2f_(m,d,k,j,i) = coeff[d]; }
+        sqrt_detg_x2f_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
+                                             g3d[S22], g3d[S23], g3d[S33]);
+      });
+    }
+
+    auto tet_d3_x3f_ = tet_d3_x3f;
+    auto sqrt_detg_x3f_ = sqrt_detg_x3f;
+    if (pmy_pack->pmesh->three_d) {
+      par_for("dynrad_adm_x3f",DevExeSpace(),0,(nmb-1),1,(n3-1),0,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real g3d[6], beta[3], alpha;
+        adm::Face3Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
+        Real coeff[4];
+        BuildADMFaceTransportCoeffs(2, alpha, beta, g3d, coeff);
+        for (int d=0; d<4; ++d) { tet_d3_x3f_(m,d,k,j,i) = coeff[d]; }
+        sqrt_detg_x3f_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
+                                             g3d[S22], g3d[S23], g3d[S33]);
+      });
+    }
+
+    if (is_hydro_enabled || is_mhd_enabled) {
+      auto norm_to_tet_ = norm_to_tet;
+      par_for("dynrad_adm_norm_to_tet",DevExeSpace(),
+      0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        for (int a=0; a<4; ++a) {
+          for (int b=0; b<4; ++b) {
+            norm_to_tet_(m,a,b,k,j,i) = (a == b) ? 1.0 : 0.0;
+          }
+        }
+      });
+    }
+    return;
+  }
 
   // set tetrad components
   auto tet_c_ = tet_c;

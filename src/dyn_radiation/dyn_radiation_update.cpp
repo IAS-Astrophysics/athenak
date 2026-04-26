@@ -54,6 +54,7 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
 
   auto &angular_fluxes_ = angular_fluxes;
   auto &divfa_ = divfa;
+  bool use_adm_geometry_ = use_adm_geometry;
 
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
@@ -74,18 +75,27 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
     // angular fluxes
     if (angular_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
 
-    // zero intensity if negative
-    Real n0  = tt(m,0,0,k,j,i);
-    Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
-               tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-    i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
+    Real n_0 = 1.0;
+    if (use_adm_geometry_) {
+      i0_(m,n,k,j,i) = fmax(i0_(m,n,k,j,i), 0.0);
+    } else {
+      // zero intensity if negative
+      Real n0  = tt(m,0,0,k,j,i);
+      n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+            tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+            tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+            tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+      i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
+    }
 
     // handle excision
     // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
     // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
     // is about zero.  This needs future attention.
     if (excise) {
-      if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+      if (rad_mask_(m,k,j,i) || (!use_adm_geometry_ && fabs(n_0) < n_0_floor_)) {
+        i0_(m,n,k,j,i) = 0.0;
+      }
     }
   });
   return TaskStatus::complete;

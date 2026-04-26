@@ -109,6 +109,8 @@ class DynRadiation {
   SourceTerms *psrc = nullptr;
 
   // Angular mesh
+  bool use_adm_geometry;             // use ADM fields instead of analytic CKS geometry
+  bool adm_metric_source;            // include ADM lapse/K geometric energy source
   bool rotate_geo;                    // rotate geodesic mesh
   bool angular_fluxes;                // flag to enable/disable angular fluxes
   Real n_0_floor;                     // floor on n_0
@@ -122,6 +124,10 @@ class DynRadiation {
   DvceArray5D<Real> tet_d1_x1f;       // tetrad components (subset) at x1f
   DvceArray5D<Real> tet_d2_x2f;       // tetrad components (subset) at x2f
   DvceArray5D<Real> tet_d3_x3f;       // tetrad components (subset) at x3f
+  DvceArray4D<Real> sqrt_detg_c;      // sqrt(det gamma_ij) at cell centers
+  DvceArray4D<Real> sqrt_detg_x1f;    // sqrt(det gamma_ij) at x1 faces
+  DvceArray4D<Real> sqrt_detg_x2f;    // sqrt(det gamma_ij) at x2 faces
+  DvceArray4D<Real> sqrt_detg_x3f;    // sqrt(det gamma_ij) at x3 faces
   DvceArray6D<Real> na;               // n^a
   DvceArray6D<Real> norm_to_tet;      // used in transform b/w normal frame and tet frame
   void SetOrthonormalTetrad();
