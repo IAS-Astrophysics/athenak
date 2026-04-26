@@ -23,6 +23,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -317,6 +318,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  dyn_radiation::DynRadiation *pdynrad = pmesh->pmb_pack->pdynrad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
@@ -327,6 +329,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
     if (prad != nullptr) {
       (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
+    }
+    if (pdynrad != nullptr) {
+      (void) pmesh->pmb_pack->pdynrad->NewTimeStep(this, nexp_stages);
     }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
@@ -639,6 +644,17 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
     (void) prad->Prolongate(this, 0);
+  }
+  dyn_radiation::DynRadiation *pdynrad = pm->pmb_pack->pdynrad;
+  if (pdynrad != nullptr) {
+    (void) pdynrad->RestrictI(this, 0);
+    (void) pdynrad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pdynrad->SendI(this, 0);
+    (void) pdynrad->ClearSend(this, -1);
+    (void) pdynrad->ClearRecv(this, -1);
+    (void) pdynrad->RecvI(this, 0);
+    (void) pdynrad->ApplyPhysicalBCs(this, 0);
+    (void) pdynrad->Prolongate(this, 0);
   }
 
   return;

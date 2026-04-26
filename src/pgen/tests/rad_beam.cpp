@@ -23,6 +23,7 @@
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "pgen/pgen.hpp"
 
 // Prototypes for user-defined BCs
@@ -47,14 +48,23 @@ void ProblemGenerator::RadiationBeam(ParameterInput *pin, const bool restart) {
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
   int nmb1 = (pmbp->nmb_thispack-1);
-  int nang1 = (pmbp->prad->prgeo->nangles-1);
+  int nang1 = -1;
+  DvceArray6D<Real> tet_c_;
+  if (pmbp->prad != nullptr) {
+    nang1 = pmbp->prad->prgeo->nangles - 1;
+    tet_c_ = pmbp->prad->tet_c;
+  } else if (pmbp->pdynrad != nullptr) {
+    nang1 = pmbp->pdynrad->prgeo->nangles - 1;
+    tet_c_ = pmbp->pdynrad->tet_c;
+  } else {
+    throw std::runtime_error("rad_beam requires either <radiation> or <dyn_radiation>");
+  }
   auto &size = pmbp->pmb->mb_size;
   auto &flat = pmbp->pcoord->coord_data.is_minkowski;
   auto &spin = pmbp->pcoord->coord_data.bh_spin;
   auto &use_excise = pmbp->pcoord->coord_data.bh_excise;
   auto &excision_floor_ = pmbp->pcoord->excision_floor;
 
-  auto &tet_c_ = pmbp->prad->tet_c;
   par_for("check_tetrad",DevExeSpace(),0,nmb1,0,nang1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     bool excised = false;
@@ -126,11 +136,15 @@ void ZeroIntensity(Mesh *pm) {
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
 
   // Determine if radiation is enabled
-  bool is_radiation_enabled_ = (pm->pmb_pack->prad != nullptr) ? true : false;
+  bool is_radiation_enabled_ = (pm->pmb_pack->prad != nullptr ||
+                                pm->pmb_pack->pdynrad != nullptr);
   DvceArray5D<Real> i0_; int nang1;
-  if (is_radiation_enabled_) {
+  if (pm->pmb_pack->prad != nullptr) {
     i0_ = pm->pmb_pack->prad->i0;
     nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+  } else if (pm->pmb_pack->pdynrad != nullptr) {
+    i0_ = pm->pmb_pack->pdynrad->i0;
+    nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
   }
   int nmb = pm->pmb_pack->nmb_thispack;
 
@@ -190,4 +204,3 @@ void ZeroIntensity(Mesh *pm) {
 
   return;
 }
-

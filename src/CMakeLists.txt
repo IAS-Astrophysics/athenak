@@ -134,6 +134,13 @@ add_executable(
         radiation/radiation_tasks.cpp
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
+        dyn_radiation/dyn_radiation.cpp
+        dyn_radiation/dyn_radiation_fluxes.cpp
+        dyn_radiation/dyn_radiation_newdt.cpp
+        dyn_radiation/dyn_radiation_source.cpp
+        dyn_radiation/dyn_radiation_tasks.cpp
+        dyn_radiation/dyn_radiation_tetrad.cpp
+        dyn_radiation/dyn_radiation_update.cpp
 
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp

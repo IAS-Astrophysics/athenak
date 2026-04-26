@@ -27,6 +27,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "particles/particles.hpp"
 #include "units/units.hpp"
@@ -58,6 +59,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (padm   != nullptr) {delete padm;}
   if (ptmunu != nullptr) {delete ptmunu;}
   if (prad   != nullptr) {delete prad;}
+  if (pdynrad != nullptr) {delete pdynrad;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (pnr    != nullptr) {delete pnr;}
   if (pturb  != nullptr) {delete pturb;}
@@ -118,6 +120,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("dyn_radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       phydro->AssembleHydroTasks(tl_map);
     }
@@ -131,6 +134,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("dyn_radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pmhd->AssembleMHDTasks(tl_map);
     }
@@ -166,6 +170,12 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
 
   // (5) RADIATION
   // Create radiation physics module.  Create tasklist.
+  if (pin->DoesBlockExist("radiation") && pin->DoesBlockExist("dyn_radiation")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<radiation> and <dyn_radiation> are separate solvers; "
+              << "enable only one in a run." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
@@ -228,6 +238,17 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pz4c != nullptr || padm != nullptr) {
     pnr = new numrel::NumericalRelativity(this, pin);
     pnr->AssembleNumericalRelativityTasks(tl_map);
+  }
+
+  // (8b) DYNAMICAL-METRIC RADIATION
+  // This is intentionally separate from the legacy <radiation> solver.  Construct it
+  // after ADM/Z4c so its geometry path can use packed ADM fields when requested.
+  if (pin->DoesBlockExist("dyn_radiation")) {
+    pdynrad = new dyn_radiation::DynRadiation(this, pin);
+    nphysics++;
+    pdynrad->AssembleRadTasks(tl_map);
+  } else {
+    pdynrad = nullptr;
   }
 
   // (8) PARTICLES
