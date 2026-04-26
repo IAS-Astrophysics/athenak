@@ -384,8 +384,14 @@ The reproducibility inputs are stored in
 The maximum absolute difference in \(R^{00}\) between the legacy CKS beam and
 the standalone CKS beam is zero in the current regression.  The maximum
 absolute difference between the legacy CKS beam and the ADM flat-space beam is
-also zero.  The same ADM flat beam input also completed under
-\code{mpirun -n 2}, testing MPI decomposition for this path.
+also zero.  In addition to the one-dimensional slice in Figure~\ref{fig:beam},
+the same runs now write a two-dimensional \(x\)-\(y\) binary slice at
+\(z=0\).  The two-dimensional fields are shown in Figure~\ref{fig:beam2d},
+and residual maps against the legacy solver are shown in
+Figure~\ref{fig:beam2dresid}.  The maximum absolute residuals in the 2D maps
+are \(0\) for both the CKS-compatible and ADM-flat branches.  The same ADM flat
+beam input also completed under \code{mpirun -n 2}, testing MPI decomposition
+for this path.
 
 \begin{figure}[htbp]
 \centering
@@ -394,6 +400,24 @@ also zero.  The same ADM flat beam input also completed under
 solver, the standalone CKS-compatible branch, and the ADM flat-space branch.
 The plotted profiles overlap in the current regression.}
 \label{fig:beam}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/beam_2d_fields.png}
+\caption{Two-dimensional \(R^{00}\) fields for the flat-space beam test.  The
+legacy CKS solver, the standalone CKS-compatible branch, and the ADM flat-space
+branch use the same color scale.}
+\label{fig:beam2d}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.86\linewidth]{figures/beam_2d_residuals.png}
+\caption{Two-dimensional residuals in \(R^{00}\) for the flat-space beam test,
+computed against the legacy CKS solution.  The residuals are zero to the
+reported precision in the current regression.}
+\label{fig:beam2dresid}
 \end{figure}
 
 \subsection{Radiation-hydrodynamic linear wave}

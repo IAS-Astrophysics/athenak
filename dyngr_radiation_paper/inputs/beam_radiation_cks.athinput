@@ -64,3 +64,10 @@ variable = rad_coord
 dt = 0.2
 slice_x1 = 0.0
 slice_x3 = 0.0
+
+<output2>
+file_type = bin
+variable = rad_coord
+id = rad_xy
+dt = 0.2
+slice_x3 = 0.0
