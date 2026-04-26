@@ -89,6 +89,8 @@ Rules:
 - The loader rejects spin magnitudes larger than unity, within a small
   numerical tolerance.
 - The table must cover the full simulated time interval.
+  At startup, the pgen aborts if `time/tlim` is larger than the final table
+  time.
 
 The trajectory uses cubic Hermite interpolation for positions with the supplied
 velocities.  The same interpolation gives velocity and acceleration, which are
@@ -195,6 +197,118 @@ the unresolved sink does not disable puncture masks.
 
 For the smooth-excision equations and constrained-transport discussion, see
 `docs/smooth_excision_procedure.tex` and the compiled PDF.
+
+## Cooling Source Terms
+
+`dynbbh` can apply two independent optically thin/source-term cooling models.
+Both act as isotropic fluid-frame energy losses and are converted to Valencia
+conserved-variable source terms.  They can be used separately or together.  If
+both are enabled, the pgen evaluates them in one combined source kernel so the
+internal-energy floor is enforced once on the total cooling decrement.
+
+### ISM Cooling
+
+The historical `dynbbh` cooling path is enabled through the generic user-source
+flag:
+
+```ini
+<problem>
+user_srcs = true
+```
+
+This calls `ISMCoolFn(T)` from `src/srcterms/ismcooling.hpp`.  The code converts
+the primitive pressure to a temperature proxy,
+
+```text
+T_cgs = (p/rho) * temperature_unit,
+```
+
+and evaluates a tabulated/fit interstellar-medium cooling function
+`\Lambda(T)`.  In code units the comoving cooling emissivity is
+
+```text
+q_ISM = rho^2 * Lambda(T) / cooling_unit,
+cooling_unit = pressure_unit / (time_unit * n_unit^2),
+n_unit = density_unit / (mu * atomic_mass_unit).
+```
+
+The internal energy density obeys
+
+```text
+de_int/dt = -(alpha/W) q_ISM,
+```
+
+where `alpha` is the lapse and `W` is the Lorentz factor computed from the
+spatial metric and the primitive `W v^i` variables.  The operator is subcycled,
+and the instantaneous removal rate is capped so no more than approximately the
+global CFL fraction of `e_int` is removed over a hydro step.  Cooling never
+reduces the internal energy below `pfloor/(gamma-1)`.
+
+The corresponding conserved-variable decrement over an applied comoving energy
+loss `q dtau` is
+
+```text
+Delta tau = sqrt(gamma) * alpha * W   * q dtau,
+Delta S_i = sqrt(gamma) * alpha * u_i * q dtau.
+```
+
+The source subtracts these quantities from `u0(IEN)` and `u0(IM*)`.
+Because this path is a physical-cgs cooling curve, production inputs should set
+the `<units>` block consistently, especially `density_cgs`, `bhmass_msun`, and
+`mu` or equivalent code-unit scales.  Leaving the defaults in a dimensionless
+test problem can make the cooling rate physically meaningless or overly stiff.
+
+### Thin-Disk Orbital Cooling
+
+The thin-disk cooling term follows the prescription described in the tilted
+thin-disk paper: internal energy above a target scale height decays
+exponentially on an orbital timescale.  Enable it with:
+
+```ini
+<problem>
+thin_disk_cooling = true
+thin_cooling_h_over_r = 0.03
+thin_cooling_timescale_orbits = 1.0
+thin_cooling_cfl = 0.5
+thin_cooling_r_inner = 0.0
+thin_cooling_r_outer = 1.0e300
+```
+
+At each cell, the code computes the same Boyer-Lindquist-like radius `r` used
+by the torus initializer and applies the source only when
+`thin_cooling_r_inner <= r <= thin_cooling_r_outer`.  The target sound speed is
+
+```text
+c_s,target = (H/R)_target * v_K,
+v_K^2 = 1/max(r, 1).
+```
+
+Using the non-relativistic ideal-gas relation `c_s^2 = gamma p/rho`, the target
+pressure and internal energy are
+
+```text
+p_target = rho * (H/R)_target^2 * v_K^2 / gamma,
+e_target = max(p_target/(gamma-1), pfloor/(gamma-1)).
+```
+
+If `e_int <= e_target`, the source does nothing.  Otherwise the excess internal
+energy decays over
+
+```text
+t_cool = thin_cooling_timescale_orbits * 2*pi * max(r,1)^(3/2),
+Delta e = (e_int - e_target) * [1 - exp(-Delta t/t_cool)].
+```
+
+If `thin_cooling_cfl > 0`, the decrement is additionally limited by
+
+```text
+Delta e <= thin_cooling_cfl * (e_int - pfloor/(gamma-1)).
+```
+
+The applied `Delta e` is converted to the same Valencia conserved-variable
+decrements as the ISM cooling source.  Thus the cooling is a fluid-frame
+thermal-energy sink, not a direct subtraction from coordinate-frame total
+energy alone.
 
 ## Magnetic Damping Inside Smooth Excision
 
@@ -387,6 +501,7 @@ a1 = 0.0
 a2 = 0.0
 use_traj_table = false
 unresolved_sink = false
+thin_disk_cooling = false
 amr_condition = tracker
 radius_thr = 5.0
 tracker_reflevel = -1
@@ -450,6 +565,9 @@ sink_resolved_cells_across_horizon = 20.0
 sink_timescale = 250.0
 sink_density_floor = 1.0e-6
 sink_pressure_floor = 1.0e-8
+thin_disk_cooling = true
+thin_cooling_h_over_r = 0.03
+thin_cooling_timescale_orbits = 1.0
 
 amr_condition = none
 radius_0_rad = 24.0

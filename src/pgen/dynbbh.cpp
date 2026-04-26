@@ -240,9 +240,15 @@ struct bbh_pgen {
   Real sink_pressure_floor;
   Real sink_cells_per_radius;
   Real sink_resolved_cells_across_horizon;
+  Real thin_cooling_h_over_r;
+  Real thin_cooling_timescale_orbits;
+  Real thin_cooling_cfl;
+  Real thin_cooling_r_inner;
+  Real thin_cooling_r_outer;
   bool use_traj_table;
   bool smooth_b_damping;
   bool unresolved_sink;
+  bool thin_disk_cooling;
   bool require_resolved_horizon;
   bool use_cooling_source;
 
@@ -455,6 +461,8 @@ void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
 void Refine(MeshBlockPack* pmbp);
 void AddValenciaGRCooling(Mesh *pm, const Real bdt);
+void AddThinDiskCooling(Mesh *pm, const Real bdt);
+void AddDynBBHCombinedCooling(Mesh *pm, const Real bdt);
 void AddDynBBHUserSources(Mesh *pm, const Real bdt);
 void AddUnresolvedBHSink(Mesh *pm, const Real bdt);
 void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
@@ -645,6 +653,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       "problem", "sink_cells_per_radius", 10.0);
   bbh.sink_resolved_cells_across_horizon = pin->GetOrAddReal(
       "problem", "sink_resolved_cells_across_horizon", 20.0);
+  bbh.thin_disk_cooling = pin->GetOrAddBoolean("problem", "thin_disk_cooling", false);
+  bbh.thin_cooling_h_over_r = pin->GetOrAddReal(
+      "problem", "thin_cooling_h_over_r", 0.03);
+  bbh.thin_cooling_timescale_orbits = pin->GetOrAddReal(
+      "problem", "thin_cooling_timescale_orbits", 1.0);
+  bbh.thin_cooling_cfl = pin->GetOrAddReal("problem", "thin_cooling_cfl", 0.5);
+  bbh.thin_cooling_r_inner = pin->GetOrAddReal(
+      "problem", "thin_cooling_r_inner", 0.0);
+  bbh.thin_cooling_r_outer = pin->GetOrAddReal(
+      "problem", "thin_cooling_r_outer", std::numeric_limits<Real>::max());
   if (bbh.unresolved_sink &&
       (!(bbh.sink_timescale > 0.0) || bbh.sink_radius < 0.0 ||
        bbh.sink_width == 0.0 || !(bbh.sink_cells_per_radius > 0.0) ||
@@ -657,6 +675,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "positive or negative for automatic width" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (bbh.thin_disk_cooling &&
+      (!(bbh.thin_cooling_h_over_r > 0.0) ||
+       !(bbh.thin_cooling_timescale_orbits > 0.0) ||
+       bbh.thin_cooling_cfl < 0.0 ||
+       bbh.thin_cooling_r_inner < 0.0 ||
+       !(bbh.thin_cooling_r_outer > bbh.thin_cooling_r_inner))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "thin_disk_cooling requires positive thin_cooling_h_over_r "
+              << "and thin_cooling_timescale_orbits, non-negative "
+              << "thin_cooling_cfl and thin_cooling_r_inner, and "
+              << "thin_cooling_r_outer > thin_cooling_r_inner" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
   std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
   if (bbh.use_traj_table) {
@@ -667,6 +699,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       std::exit(EXIT_FAILURE);
     }
     LoadTrajectoryTable(traj_file);
+    Real tlim = pin->GetReal("time", "tlim");
+    Real tfinal = bbh_table.t.back();
+    Real tol = 64.0*std::numeric_limits<Real>::epsilon()*
+               std::max({1.0, std::abs(tlim), std::abs(tfinal)});
+    if (tlim > tfinal + tol) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "time/tlim=" << tlim
+                << " exceeds final trajectory-table time=" << tfinal
+                << " from traj_file='" << traj_file << "'" << std::endl
+                << "Extend the trajectory table or reduce time/tlim." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
 
   auto &coord_data = pmbp->pcoord->coord_data;
@@ -727,8 +772,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "unresolved_sink currently requires MHD" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (pmbp->pmhd != nullptr && (user_srcs || bbh.unresolved_sink)) {
-    user_srcs = user_srcs || bbh.unresolved_sink;
+  if (bbh.thin_disk_cooling && (pmbp->pmhd == nullptr || pmbp->padm == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "thin_disk_cooling currently requires MHD and ADM variables"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->pmhd != nullptr &&
+      (user_srcs || bbh.unresolved_sink || bbh.thin_disk_cooling)) {
+    user_srcs = user_srcs || bbh.unresolved_sink || bbh.thin_disk_cooling;
     user_srcs_func = AddDynBBHUserSources;
   }
   if (bbh.smooth_b_damping) {
@@ -3091,10 +3144,253 @@ Real SinkSmoothStep01(const Real x) {
 }
 
 void AddDynBBHUserSources(Mesh *pm, const Real bdt) {
-  if (bbh.use_cooling_source) {
+  if (bbh.use_cooling_source && bbh.thin_disk_cooling) {
+    AddDynBBHCombinedCooling(pm, bdt);
+  } else if (bbh.use_cooling_source) {
     AddValenciaGRCooling(pm, bdt);
+  } else if (bbh.thin_disk_cooling) {
+    AddThinDiskCooling(pm, bdt);
   }
   AddUnresolvedBHSink(pm, bdt);
+}
+
+void AddDynBBHCombinedCooling(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pmhd == nullptr || pmbp->padm == nullptr) return;
+
+  Real temp_unit = pmbp->punit->temperature_cgs();
+  Real density_unit = pmbp->punit->density_cgs();
+  Real time_unit = pmbp->punit->time_cgs();
+  Real pressure_unit = pmbp->punit->pressure_cgs();
+  Real mu = pmbp->punit->mu();
+  Real amu = pmbp->punit->atomic_mass_unit_cgs;
+  Real n_unit = density_unit / (mu * amu);
+  Real cooling_unit = pressure_unit / time_unit / (n_unit * n_unit);
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+
+  auto &adm = pmbp->padm->adm;
+  auto &w0 = pmbp->pmhd->w0;
+  auto &u0 = pmbp->pmhd->u0;
+  auto &size = pmbp->pmb->mb_size;
+  auto eos = pmbp->pmhd->peos->eos_data;
+  Real gamma_adi = eos.gamma;
+  Real gm1 = gamma_adi - 1.0;
+  Real rho_floor = eos.dfloor;
+  Real p_floor = eos.pfloor;
+  Real cfl_ism = pm->cfl_no;
+  Real h_over_r = bbh.thin_cooling_h_over_r;
+  Real tcool_orbits = bbh.thin_cooling_timescale_orbits;
+  Real cfl_thin = bbh.thin_cooling_cfl;
+  Real r_inner = bbh.thin_cooling_r_inner;
+  Real r_outer = bbh.thin_cooling_r_outer;
+  Real two_pi = 2.0*M_PI;
+  auto pgen = bbh;
+
+  constexpr int max_sub = 64;
+  constexpr Real tiny = 1.0e-30;
+
+  par_for("dynbbh_combined_cooling", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real rho = w0(m,IDN,k,j,i);
+    if (rho <= rho_floor) return;
+
+    Real pres = w0(m,IPR,k,j,i);
+    Real e_int = pres / gm1;
+    Real e_floor = p_floor / gm1;
+    if (e_int <= e_floor) return;
+
+    Real gxx = adm.g_dd(m,0,0,k,j,i);
+    Real gxy = adm.g_dd(m,0,1,k,j,i);
+    Real gxz = adm.g_dd(m,0,2,k,j,i);
+    Real gyy = adm.g_dd(m,1,1,k,j,i);
+    Real gyz = adm.g_dd(m,1,2,k,j,i);
+    Real gzz = adm.g_dd(m,2,2,k,j,i);
+
+    Real detg = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+    detg = fmax(detg, tiny);
+    Real sqrt_gamma = sqrt(detg);
+    Real alpha = fmax(adm.alpha(m,k,j,i), tiny);
+
+    Real u1p = w0(m,IVX,k,j,i);
+    Real u2p = w0(m,IVY,k,j,i);
+    Real u3p = w0(m,IVZ,k,j,i);
+    Real u_sq = gxx*u1p*u1p + 2.0*gxy*u1p*u2p + 2.0*gxz*u1p*u3p
+              + gyy*u2p*u2p + 2.0*gyz*u2p*u3p + gzz*u3p*u3p;
+    Real W = sqrt(fmax(1.0 + u_sq, 1.0));
+
+    Real de_total = 0.0;
+    Real dt_rem = bdt;
+    for (int n = 0; n < max_sub && dt_rem > 0.0; ++n) {
+      Real T_cgs = (e_int * gm1 / rho) * temp_unit;
+      Real Lambda_cgs = 0.0;
+      if (T_cgs >= eos.tfloor * temp_unit) {
+        Lambda_cgs = ISMCoolFn(T_cgs);
+      }
+      Real q = (rho * rho) * (Lambda_cgs / cooling_unit);
+      if (q <= 0.0) break;
+
+      Real rate_e_dt = (alpha / W) * q;
+      Real rate_max = (cfl_ism * e_int) / (bdt + tiny);
+      rate_e_dt = fmin(rate_e_dt, rate_max);
+      Real dt_sub = cfl_ism * e_int / (rate_e_dt + tiny);
+      dt_sub = fmin(dt_sub, dt_rem);
+      dt_sub = fmax(dt_sub, tiny * bdt);
+
+      Real de = rate_e_dt * dt_sub;
+      de = fmin(de, e_int - e_floor);
+      if (de <= 0.0) break;
+      e_int -= de;
+      de_total += de;
+      dt_rem -= dt_sub;
+    }
+
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real r, theta, phi;
+    GetBoyerLindquistCoordinates(pgen, x1v, x2v, x3v, &r, &theta, &phi);
+    if (r >= r_inner && r <= r_outer) {
+      Real vk2 = 1.0 / fmax(r, 1.0);
+      Real p_target = rho*SQR(h_over_r)*vk2 / gamma_adi;
+      Real e_target = fmax(p_target/gm1, e_floor);
+      if (e_int > e_target) {
+        Real tcool = tcool_orbits*two_pi*pow(fmax(r, 1.0), 1.5);
+        Real de = (e_int - e_target) * (1.0 - exp(-bdt/tcool));
+        if (cfl_thin > 0.0) de = fmin(de, cfl_thin*(e_int - e_floor));
+        de = fmin(de, e_int - e_floor);
+        if (de > 0.0) {
+          e_int -= de;
+          de_total += de;
+        }
+      }
+    }
+
+    if (de_total <= 0.0) return;
+
+    Real u1_cov = gxx*u1p + gxy*u2p + gxz*u3p;
+    Real u2_cov = gxy*u1p + gyy*u2p + gyz*u3p;
+    Real u3_cov = gxz*u1p + gyz*u2p + gzz*u3p;
+    Real q_dt = de_total * (W / alpha);
+    u0(m,IEN,k,j,i) -= sqrt_gamma * alpha * W * q_dt;
+    u0(m,IM1,k,j,i) -= sqrt_gamma * alpha * u1_cov * q_dt;
+    u0(m,IM2,k,j,i) -= sqrt_gamma * alpha * u2_cov * q_dt;
+    u0(m,IM3,k,j,i) -= sqrt_gamma * alpha * u3_cov * q_dt;
+  });
+}
+
+void AddThinDiskCooling(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (!bbh.thin_disk_cooling || pmbp->pmhd == nullptr || pmbp->padm == nullptr) {
+    return;
+  }
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+
+  auto &adm = pmbp->padm->adm;
+  auto &w0 = pmbp->pmhd->w0;
+  auto &u0 = pmbp->pmhd->u0;
+  auto &size = pmbp->pmb->mb_size;
+  auto eos = pmbp->pmhd->peos->eos_data;
+  Real gamma_adi = eos.gamma;
+  Real gm1 = gamma_adi - 1.0;
+  Real rho_floor = eos.dfloor;
+  Real p_floor = eos.pfloor;
+  Real h_over_r = bbh.thin_cooling_h_over_r;
+  Real tcool_orbits = bbh.thin_cooling_timescale_orbits;
+  Real cfl_limit = bbh.thin_cooling_cfl;
+  Real r_inner = bbh.thin_cooling_r_inner;
+  Real r_outer = bbh.thin_cooling_r_outer;
+  Real two_pi = 2.0*M_PI;
+  auto pgen = bbh;
+
+  constexpr Real tiny = 1.0e-30;
+
+  par_for("dynbbh_thin_disk_cooling", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    Real r, theta, phi;
+    GetBoyerLindquistCoordinates(pgen, x1v, x2v, x3v, &r, &theta, &phi);
+    if (!(r >= r_inner && r <= r_outer)) return;
+
+    Real rho = w0(m,IDN,k,j,i);
+    if (rho <= rho_floor) return;
+
+    Real pres = w0(m,IPR,k,j,i);
+    Real e_int = pres / gm1;
+    Real e_floor = p_floor / gm1;
+    if (e_int <= e_floor) return;
+
+    Real vk2 = 1.0 / fmax(r, 1.0);
+    Real p_target = rho*SQR(h_over_r)*vk2 / gamma_adi;
+    Real e_target = fmax(p_target/gm1, e_floor);
+    if (e_int <= e_target) return;
+
+    Real tcool = tcool_orbits*two_pi*pow(fmax(r, 1.0), 1.5);
+    Real de = (e_int - e_target) * (1.0 - exp(-bdt/tcool));
+    if (cfl_limit > 0.0) {
+      de = fmin(de, cfl_limit*(e_int - e_floor));
+    }
+    de = fmin(de, e_int - e_floor);
+    if (de <= 0.0) return;
+
+    Real gxx = adm.g_dd(m,0,0,k,j,i);
+    Real gxy = adm.g_dd(m,0,1,k,j,i);
+    Real gxz = adm.g_dd(m,0,2,k,j,i);
+    Real gyy = adm.g_dd(m,1,1,k,j,i);
+    Real gyz = adm.g_dd(m,1,2,k,j,i);
+    Real gzz = adm.g_dd(m,2,2,k,j,i);
+
+    Real detg = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+    detg = fmax(detg, tiny);
+    Real sqrt_gamma = sqrt(detg);
+    Real alpha = fmax(adm.alpha(m,k,j,i), tiny);
+
+    Real u1p = w0(m,IVX,k,j,i);
+    Real u2p = w0(m,IVY,k,j,i);
+    Real u3p = w0(m,IVZ,k,j,i);
+    Real u_sq = gxx*u1p*u1p + 2.0*gxy*u1p*u2p + 2.0*gxz*u1p*u3p
+              + gyy*u2p*u2p + 2.0*gyz*u2p*u3p + gzz*u3p*u3p;
+    Real W = sqrt(fmax(1.0 + u_sq, 1.0));
+
+    Real u1_cov = gxx*u1p + gxy*u2p + gxz*u3p;
+    Real u2_cov = gxy*u1p + gyy*u2p + gyz*u3p;
+    Real u3_cov = gxz*u1p + gyz*u2p + gzz*u3p;
+
+    Real q_dt = de * (W / alpha);
+    u0(m,IEN,k,j,i) -= sqrt_gamma * alpha * W * q_dt;
+    u0(m,IM1,k,j,i) -= sqrt_gamma * alpha * u1_cov * q_dt;
+    u0(m,IM2,k,j,i) -= sqrt_gamma * alpha * u2_cov * q_dt;
+    u0(m,IM3,k,j,i) -= sqrt_gamma * alpha * u3_cov * q_dt;
+  });
 }
 
 void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
