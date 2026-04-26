@@ -513,7 +513,7 @@ class PrimitiveSolverHydro {
           tvx = tvy = tvz = 0.0;
           tv2 = 0.0;
         }
-        constexpr Real target_vmax2 = 1.0 - 1.0e-12;
+        Real target_vmax2 = fmin(SQR(eos_.GetMaxVelocity()), 1.0 - 1.0e-12);
         if (tv2 > target_vmax2) {
           Real factor = sqrt(target_vmax2/tv2);
           tvx *= factor;
