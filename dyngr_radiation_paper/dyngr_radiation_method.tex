@@ -16,6 +16,8 @@
 \newcommand{\adm}{\mathrm{ADM}}
 \newcommand{\cks}{\mathrm{CKS}}
 \newcommand{\ud}{\mathrm{d}}
+\newcommand{\nuE}{\nu_{\rm E}}
+\newcommand{\nucm}{\nu_{\rm cm}}
 \newcommand{\code}[1]{\texttt{#1}}
 
 \title{\bfseries Dynamical-Spacetime Discrete-Ordinates Radiation in AthenaK}
@@ -77,13 +79,66 @@ cached ADM geometry each stage, so ADM mode now supports
 \code{angular\_fluxes=true}.  The implementation remains separate from the
 legacy solver so stationary CKS behavior can still be tested directly.
 
-The paper is organized as follows.  Section~\ref{sec:legacy} summarizes the
-stationary-metric solver.  Section~\ref{sec:adm} derives the ADM variables and
-Valencia-consistent source term used by the new solver.  Section~\ref{sec:alg}
+The paper is organized as follows.  Section~\ref{sec:notation} fixes notation
+and derives the radiation variables from the invariant distribution function.
+Section~\ref{sec:legacy} summarizes the stationary-metric solver.
+Section~\ref{sec:adm} derives the ADM variables, geometric source terms, and
+angular geodesic operator used by the new solver.  Section~\ref{sec:alg}
 describes the numerical algorithm and implementation.  Section~\ref{sec:null}
 documents the null-particle beam-edge diagnostic.  Section~\ref{sec:tests}
-presents the regression and smoke tests.  Section~\ref{sec:discussion}
-summarizes limitations and next implementation steps.
+presents the regression and smoke tests.  Section~\ref{sec:checklist}
+summarizes direct consistency checks.  Section~\ref{sec:discussion} summarizes
+limitations and next implementation steps.
+
+\section{Conventions and Radiation Variables}
+\label{sec:notation}
+
+We use units with \(c=G=1\) and metric signature \((-+++) \).  Greek indices
+\(\mu,\nu,\ldots\) run over spacetime components \(0,1,2,3\), Latin indices
+\(i,j,\ldots\) run over spatial components \(1,2,3\), and hatted Latin indices
+\(\hat a,\hat b,\ldots\) denote an orthonormal spatial tetrad.  Repeated
+indices are summed.  The radiation module is grey: it evolves intensity
+integrated over photon frequency, but still resolves propagation direction on
+a discrete angular grid.
+
+The invariant starting point is the photon distribution function \(f(x^\mu,p_i)\)
+on the null mass shell.  In vacuum, Liouville's theorem says that \(f\) is
+constant along null geodesics:
+\begin{equation}
+  \frac{\dd f}{\dd \lambda}
+  =
+  p^\mu\frac{\partial f}{\partial x^\mu}
+  +\frac{\dd p_i}{\dd \lambda}\frac{\partial f}{\partial p_i}
+  =0,
+  \label{eq:liouville}
+\end{equation}
+where \(\lambda\) is an affine parameter and \(p_\mu\) is the photon covector.
+Matter interaction adds an invariant collision term to the right-hand side.
+For a local orthonormal observer measuring photon frequency \(\nu\), the
+frequency-dependent specific intensity satisfies
+\begin{equation}
+  \frac{I_\nu}{\nu^3} \propto f .
+\end{equation}
+After integrating over frequency, the bolometric grey intensity transforms as
+\begin{equation}
+  I \propto \nu^4 f .
+  \label{eq:bolometric_transform}
+\end{equation}
+This is why the matter-coupling kernel converts Eulerian-frame intensity to
+fluid-comoving intensity with a fourth power of the frequency ratio.
+
+The angular grid stores a finite set of unit directions
+\(\ell_n^{(\hat a)}\) and quadrature weights \(w_n\), with
+\begin{equation}
+  \ell_n^{(\hat a)}\ell_{n(\hat a)}=1,\qquad
+  \sum_n w_n \simeq 4\pi .
+\end{equation}
+The continuum angular integrals are approximated by these quadrature sums.
+The code variable \(U_n\) is not the invariant distribution function itself; it
+is a finite-volume conserved density whose precise normalization depends on
+the metric formulation.  The CKS compatibility path keeps the historical
+Killing-energy normalization.  The ADM path uses the Eulerian volume density
+\(U_n=\sqrt{\gamma}I_n\), derived below.
 
 \section{Stationary-Metric Radiation Solver}
 \label{sec:legacy}
@@ -132,7 +187,7 @@ analytically, stationary, and tied to the CKS tetrad construction.
 \section{ADM Formulation for Dynamical Backgrounds}
 \label{sec:adm}
 
-\subsection{Eulerian tetrad and transport velocity}
+\subsection{ADM split and Eulerian observers}
 
 The dynamical branch uses the standard ADM line element
 \begin{equation}
@@ -148,7 +203,10 @@ where \(\alpha\) is the lapse, \(\beta^i\) is the shift, and
   \qquad
   n_\mu=(-\alpha,0,0,0).
 \end{equation}
-We choose the radiation tetrad timelike leg to be the Eulerian observer,
+The determinant of the spatial metric is denoted \(\gamma\), so the proper
+spatial volume element is \(\sqrt{\gamma}\,\dd^3x\).
+
+The radiation tetrad timelike leg is chosen to be the Eulerian observer,
 \begin{equation}
   e_{(\hat{0})}^{\ \mu}=n^\mu ,
 \end{equation}
@@ -160,24 +218,42 @@ and define spatial tetrad columns \(E_{(\hat{a})}^{\ i}\) satisfying
   = \delta_{\hat{a}\hat{b}} .
   \label{eq:spatial_tetrad}
 \end{equation}
+The dual spatial co-triad is \(e^{(\hat a)}_{\ i}\), with
+\begin{equation}
+  e^{(\hat a)}_{\ i}E_{(\hat b)}^{\ i}=\delta^{\hat a}_{\ \hat b},
+  \qquad
+  \gamma_{ij}=e^{(\hat a)}_{\ i}e_{(\hat a)j}.
+  \label{eq:cotriad_def}
+\end{equation}
 For angular-bin direction \(\ell_n^{(\hat{a})}\), the Eulerian spatial unit
-vector is
+vector in coordinates is
 \begin{equation}
   s^i_n = E_{(\hat{a})}^{\ i}\ell_n^{(\hat{a})},
   \qquad
   \gamma_{ij}s^i_n s^j_n=1 .
   \label{eq:eulerian_direction}
 \end{equation}
-The coordinate velocity of radiation through the grid is then
-\begin{equation}
-  v^i_n=\frac{\dd x^i}{\dd t}=\alpha s^i_n-\beta^i .
-  \label{eq:admspeed}
-\end{equation}
 
 \subsection{Densitized intensity}
 
-In ADM mode the conserved variable is the Eulerian volume density of the
-specific intensity,
+For a photon with Eulerian frequency
+\begin{equation}
+  \nuE = -n_\mu p^\mu = \alpha p^0 ,
+\end{equation}
+write the photon four-momentum as
+\begin{equation}
+  p^\mu = \nuE(n^\mu+s^\mu), \qquad s^\mu=(0,s^i),
+  \label{eq:photon_decomp}
+\end{equation}
+where \(s^\mu n_\mu=0\) and \(\gamma_{ij}s^is^j=1\).  Equation
+\eqref{eq:photon_decomp} immediately gives the coordinate propagation speed
+\begin{equation}
+  v^i_n=\frac{p^i}{p^0}=\alpha s^i_n-\beta^i .
+  \label{eq:admspeed}
+\end{equation}
+
+The ADM conserved variable is the Eulerian proper-volume density of grey
+intensity,
 \begin{equation}
   U_n = \sqrt{\gamma}\,\I_n ,
   \label{eq:admU}
@@ -194,17 +270,38 @@ the legacy solver explicit: ADM mode evolves the volume-weighted intensity
 seen by Eulerian observers, not the Killing-energy weighted intensity in
 Equation~\eqref{eq:legacyU}.
 
-\subsection{Valencia energy source}
+\subsection{Radiation moments and Valencia equations}
 
-The angular solution represents the Eulerian radiation moments
+The stress-energy tensor of a grey radiation field can be decomposed relative
+to the Eulerian observer as
+\begin{equation}
+  T_{\rm rad}^{\mu\nu}
+  =
+  E n^\mu n^\nu
+  +n^\mu F^\nu+F^\mu n^\nu
+  +P^{\mu\nu},
+  \label{eq:rad_tmunu_decomp}
+\end{equation}
+where \(F^\mu n_\mu=0\) and \(P^{\mu\nu}n_\nu=0\).  In the tetrad quadrature
+used by the code,
 \begin{align}
   E &= \sum_n w_n \I_n, \\
   F^i &= \sum_n w_n \I_n s^i_n, \\
   P^{ij} &= \sum_n w_n \I_n s^i_n s^j_n ,
   \label{eq:moments}
 \end{align}
-where \(w_n\) are quadrature weights.  The radiation energy equation in
-Valencia form, without matter interaction, is
+and \(P^i_{\ j}=P^{ik}\gamma_{kj}\).  These definitions are useful for
+verification: summing the discrete per-angle equations must recover the
+conservative equations for \(E\) and \(S_i=\gamma_{ij}F^j\).
+
+Starting from stress-energy conservation,
+\begin{equation}
+  \nabla_\mu T_{\rm rad}^{\mu\nu}=G^\nu ,
+  \label{eq:rad_conservation}
+\end{equation}
+where \(G^\nu\) is the radiation four-force density, the Eulerian energy
+equation is obtained by projecting along \(n_\nu\).  In vacuum
+\((G^\nu=0)\), or before applying matter coupling, this gives
 \begin{equation}
   \partial_t(\sqrt{\gamma}E)
   +\partial_i\left[\sqrt{\gamma}(\alpha F^i-\beta^iE)\right]
@@ -213,7 +310,31 @@ Valencia form, without matter interaction, is
   -F^i\partial_i\alpha\right).
   \label{eq:valenciaE}
 \end{equation}
-The implemented per-angle geometric source is
+Projecting Equation~\eqref{eq:rad_conservation} into the spatial slice gives
+the momentum equation
+\begin{equation}
+  \partial_t(\sqrt{\gamma}S_j)
+  +\partial_i\left[\sqrt{\gamma}(\alpha P^i_{\ j}-\beta^iS_j)\right]
+  =
+  \sqrt{\gamma}\left[
+    \frac{1}{2}\alpha P^{ik}\partial_j\gamma_{ik}
+    +S_i\partial_j\beta^i
+    -E\partial_j\alpha\right].
+  \label{eq:valencia_momentum}
+\end{equation}
+Equations~\eqref{eq:valenciaE} and \eqref{eq:valencia_momentum} are the same
+geometric source structure used by Valencia GR hydrodynamics.  The only time
+derivative of the spatial metric that enters is through the extrinsic
+curvature \(K_{ij}\).  This is the central reason the ADM radiation path is
+not tied to a stationary gauge.
+
+For a single angular bin, substitute
+\[
+  E\rightarrow I_n,\qquad
+  F^i\rightarrow I_ns^i_n,\qquad
+  P^{ij}\rightarrow I_ns^i_ns^j_n .
+\]
+The per-angle geometric energy source used in the code is therefore
 \begin{equation}
   S^{\mathrm{geom}}_n =
   U_n\left(\alpha K_{ij}s^i_ns^j_n
@@ -227,20 +348,44 @@ used to obtain the ADM data and does not require assuming
 \(\partial_t \alpha=0\), \(\partial_t\beta^i=0\), or
 \(\partial_t\gamma_{ij}=0\).
 
-The corresponding Valencia momentum equation is
-\begin{equation}
-  \partial_t(\sqrt{\gamma}S_j)
-  +\partial_i\left[\sqrt{\gamma}(\alpha P^i_{\ j}-\beta^iS_j)\right]
-  =
-  \sqrt{\gamma}\left[
-    \frac{1}{2}\alpha P^{ik}\partial_j\gamma_{ik}
-    +S_i\partial_j\beta^i
-    -E\partial_j\alpha\right].
-  \label{eq:valencia_momentum}
-\end{equation}
 \subsection{ADM angular geodesic advection}
 
-ADM angular advection is computed from the coordinate-time null Hamiltonian
+The angular advection operator accounts for geodesic bending, i.e. the change
+of \(\ell^{(\hat a)}\) as a ray moves through a curved or time-dependent
+tetrad.  It is derived from the null Hamiltonian.  The inverse ADM metric is
+\begin{equation}
+  g^{00}=-\frac{1}{\alpha^2},\qquad
+  g^{0i}=\frac{\beta^i}{\alpha^2},\qquad
+  g^{ij}=\gamma^{ij}-\frac{\beta^i\beta^j}{\alpha^2}.
+\end{equation}
+The null constraint \(g^{\mu\nu}p_\mu p_\nu=0\) gives
+\begin{equation}
+  -p_0 = H(x^i,p_i)
+  =\alpha \Pi-\beta^ip_i,\qquad
+  \Pi=\sqrt{\gamma^{ij}p_ip_j}.
+  \label{eq:adm_hamiltonian_full}
+\end{equation}
+Using coordinate time \(t\) as the evolution parameter, Hamilton's equations
+are
+\begin{align}
+  \dot x^i
+  &=\frac{\partial H}{\partial p_i}
+    =\alpha\frac{\gamma^{ij}p_j}{\Pi}-\beta^i,\\
+  \dot p_i
+  &=-\frac{\partial H}{\partial x^i}
+    =-(\partial_i\alpha)\Pi
+      +p_j\partial_i\beta^j
+      -\frac{\alpha}{2\Pi}p_jp_k\partial_i\gamma^{jk}.
+  \label{eq:adm_pdot_full}
+\end{align}
+The code normalizes the momentum by the Eulerian photon energy, so
+\(\Pi=1\),
+\begin{equation}
+  p_i=e^{(\hat a)}_{\ i}\ell_{(\hat a)},\qquad
+  s^i=\gamma^{ij}p_j=E^i_{\ (\hat a)}\ell^{(\hat a)}.
+\end{equation}
+With this normalization, Equations~\eqref{eq:adm_hamiltonian_full} and
+\eqref{eq:adm_pdot_full} reduce to the implementation formulas
 \begin{equation}
   H(x^i,p_i)=\alpha\sqrt{\gamma^{ij}p_i p_j}-\beta^i p_i .
   \label{eq:adm_hamiltonian}
@@ -255,12 +400,12 @@ and
   -\frac{\alpha}{2}p_jp_k\partial_i\gamma^{jk}.
   \label{eq:adm_pdot}
 \end{align}
-The local angular direction is reconstructed using the cached Cholesky
-co-triad \(e^{(\hat a)}_{\ i}\),
+
+The angular direction is obtained from the co-momentum through
 \begin{equation}
   \ell^{(\hat a)} = E^i_{\ (\hat a)}p_i .
 \end{equation}
-Differentiating this relation in the same triad gauge gives
+Differentiating in the same triad gauge gives
 \begin{equation}
   \dot\ell^{(\hat a)}
   =E^i_{\ (\hat a)}
@@ -271,6 +416,17 @@ Differentiating this relation in the same triad gauge gives
   \right].
   \label{eq:admdotell}
 \end{equation}
+Any component of \(\dot\ell^{(\hat a)}\) parallel to
+\(\ell^{(\hat a)}\) corresponds to a roundoff-level change in normalization,
+not a physical angular drift on the unit sphere, and is projected away:
+\begin{equation}
+  \dot\ell^{(\hat a)}
+  \leftarrow
+  \dot\ell^{(\hat a)}
+  -(\ell_{\hat b}\dot\ell^{(\hat b)})\ell^{(\hat a)} .
+  \label{eq:ell_projection}
+\end{equation}
+
 The time derivative of the co-triad is obtained by differentiating the same
 Cholesky factorization used for the spatial triad, with
 \begin{equation}
@@ -278,11 +434,72 @@ Cholesky factorization used for the spatial triad, with
   =-2\alpha K_{ij}+D_i\beta_j+D_j\beta_i .
   \label{eq:adm_gdot}
 \end{equation}
-Equation~\eqref{eq:admdotell} is projected onto the existing geodesic-grid
-angular face normals.  The angular finite-volume flux then advects the ADM
-conserved intensity \(U_n=\sqrt{\gamma}I_n\) directly.  In the CKS
-compatibility branch the legacy angular primitive \(U_n/k^0_n\) is still used,
-so the stationary path is unchanged.
+This relation is an identity in the ADM split and is independent of the
+particular gauge condition used to evolve \(\alpha\) and \(\beta^i\).
+
+\subsection{Cholesky tetrad gauge and derivatives}
+
+The implementation uses a Cholesky gauge for the spatial tetrad.  Let
+\(\gamma_{ij}=L_{i\hat a}L_{j\hat a}\), with \(L\) lower triangular:
+\begin{align}
+  L_{1\hat1}&=\sqrt{\gamma_{11}},&
+  L_{2\hat1}&=\frac{\gamma_{12}}{L_{1\hat1}},&
+  L_{3\hat1}&=\frac{\gamma_{13}}{L_{1\hat1}},\\
+  L_{2\hat2}&=\sqrt{\gamma_{22}-L_{2\hat1}^2},&
+  L_{3\hat2}&=\frac{\gamma_{23}-L_{3\hat1}L_{2\hat1}}{L_{2\hat2}},&
+  L_{3\hat3}&=\sqrt{\gamma_{33}-L_{3\hat1}^2-L_{3\hat2}^2}.
+\end{align}
+The co-triad is \(e^{(\hat a)}_{\ i}=L_{i\hat a}\), and the triad columns are
+\(E^i_{\ (\hat a)}=(L^{-T})^i_{\ \hat a}\).  For any derivative operator
+\(\partial_q\), where \(q\) may be a spatial coordinate or \(t\), the code uses
+the differentiated Cholesky relations
+\begin{align}
+  \partial_q L_{1\hat1}
+    &=\frac{\partial_q\gamma_{11}}{2L_{1\hat1}},\\
+  \partial_q L_{2\hat1}
+    &=\frac{\partial_q\gamma_{12}
+      -L_{2\hat1}\partial_qL_{1\hat1}}{L_{1\hat1}},\\
+  \partial_q L_{3\hat1}
+    &=\frac{\partial_q\gamma_{13}
+      -L_{3\hat1}\partial_qL_{1\hat1}}{L_{1\hat1}},\\
+  \partial_q L_{2\hat2}
+    &=\frac{\partial_q\gamma_{22}
+      -2L_{2\hat1}\partial_qL_{2\hat1}}{2L_{2\hat2}},\\
+  \partial_q L_{3\hat2}
+    &=\frac{
+      \partial_q\gamma_{23}
+      -(\partial_qL_{3\hat1})L_{2\hat1}
+      -L_{3\hat1}(\partial_qL_{2\hat1})
+      -L_{3\hat2}(\partial_qL_{2\hat2})}
+      {L_{2\hat2}},\\
+  \partial_q L_{3\hat3}
+    &=\frac{\partial_q\gamma_{33}
+      -2L_{3\hat1}\partial_qL_{3\hat1}
+      -2L_{3\hat2}\partial_qL_{3\hat2}}{2L_{3\hat3}}.
+  \label{eq:chol_derivatives}
+\end{align}
+These equations are important for reproducibility: the angular drift uses the
+same tetrad gauge as the spatial transport and matter-coupling transforms.
+
+\subsection{Projection to the angular finite-volume grid}
+
+The geodesic angular mesh is a finite-volume mesh on the unit sphere.  Writing
+\[
+  \ell=(\sin\theta\cos\psi,\sin\theta\sin\psi,\cos\theta),
+\]
+the tangent angular velocities are
+\begin{align}
+  \dot\theta &=-\frac{\dot\ell_z}{\sin\theta},\\
+  \sin^2\theta\,\dot\psi
+    &=\ell_x\dot\ell_y-\ell_y\dot\ell_x .
+  \label{eq:theta_psi_dot}
+\end{align}
+The code projects these two components onto the precomputed angular face
+normal stored by the geodesic grid.  The resulting scalar face speed is the
+array \(\code{na}\).  In ADM mode \(\code{na}\) is already a coordinate-time
+angular velocity, so the angular finite-volume flux upwinds \(U_n\) directly.
+In the CKS compatibility branch the historical angular primitive \(U_n/k^0_n\)
+is still used, preserving the stationary solver behavior.
 
 \section{Numerical Algorithm and Implementation}
 \label{sec:alg}
@@ -303,6 +520,51 @@ or the dynamical ADM path is active.  This is required so that the radiation
 state has access to the metric-dependent arrays used by the flux and source
 kernels.
 
+\subsection{Finite-volume equation actually advanced}
+
+For each angular cell \(n\), ADM mode advances
+\begin{equation}
+  \partial_t U_n
+  +\partial_i\left(\sqrt{\gamma}v_n^i I_n\right)
+  +\mathcal{D}_\Omega\left(U_n\dot\ell_n\right)
+  =
+  S^{\rm geom}_n+C_n ,
+  \label{eq:adm_angle_fv}
+\end{equation}
+where \(U_n=\sqrt{\gamma}I_n\), \(v_n^i=\alpha s_n^i-\beta^i\),
+\(\mathcal{D}_\Omega\) is the finite-volume angular divergence on the
+geodesic grid, \(S^{\rm geom}_n\) is Equation~\eqref{eq:anglesource}, and
+\(C_n\) contains emission, absorption, scattering, and user source terms.  On
+a Cartesian mesh cell with coordinate widths \(\Delta x^i\), the explicit
+transport part of one Runge--Kutta substep is
+\begin{equation}
+  U_n^{*}
+  =
+  U_n^m
+  -\Delta t
+  \sum_i
+  \frac{F^i_{n,+}-F^i_{n,-}}{\Delta x^i}
+  -\Delta t\,
+  \frac{1}{\Delta\Omega_n}
+  \sum_{f\in\partial\Omega_n}
+     \Delta l_f\, A_{n,f},
+  \label{eq:discrete_update}
+\end{equation}
+where \(F^i_{n,\pm}\) are reconstructed spatial face fluxes,
+\(\Delta\Omega_n=w_n\), \(\Delta l_f\) is the angular edge length, and
+\begin{equation}
+  A_{n,f} =
+  n^a_{n,f}
+  \begin{cases}
+    U_{\mathrm{upwind}}, & \text{ADM mode},\\
+    (U/k^0)_{\mathrm{upwind}}, & \text{CKS compatibility mode}.
+  \end{cases}
+  \label{eq:angular_upwind}
+\end{equation}
+Here \(n^a_{n,f}\) is the scalar angular face speed stored in \(\code{na}\).
+The distinction in Equation~\eqref{eq:angular_upwind} is the main
+normalization difference between the two metric modes.
+
 \subsection{Stage update}
 
 At each explicit stage, ADM mode performs the following operations:
@@ -322,6 +584,34 @@ At each explicit stage, ADM mode performs the following operations:
   \item Apply the per-angle geometric source in Equation~\eqref{eq:anglesource}.
   \item Apply matter/source terms, boundary exchange, and AMR operations.
 \end{enumerate}
+
+The cache is deliberately cell-local and device-resident.  The primary
+state arrays store the ADM fields and co-triad:
+\[
+\begin{gathered}
+\code{adm\_alpha\_c},\quad
+\code{adm\_beta\_u\_c},\quad
+\code{adm\_g\_dd\_c},\\
+\code{adm\_g\_uu\_c},\quad
+\code{adm\_K\_dd\_c},\quad
+\code{adm\_cotriad\_c}.
+\end{gathered}
+\]
+The derivative arrays
+\[
+\begin{gathered}
+\code{adm\_grad\_alpha\_c},\quad
+\code{adm\_grad\_beta\_u\_c},\\
+\code{adm\_grad\_g\_dd\_c},\quad
+\code{adm\_grad\_g\_uu\_c},\quad
+\code{adm\_grad\_cotriad\_c}
+\end{gathered}
+\]
+store centered spatial derivatives, using one-sided differences only at the
+edge of the allocated block.  The array \code{adm\_dt\_cotriad\_c} stores
+\(\partial_t e^{(\hat a)}_{\ i}\) computed from Equations~\eqref{eq:adm_gdot}
+and \eqref{eq:chol_derivatives}.  These arrays are Kokkos device views; no
+host containers or dynamic allocation enter the transport kernels.
 
 \subsection{Beam source and output normalization}
 
@@ -353,6 +643,82 @@ This separation is what allows the flat ADM beam test to reproduce the legacy
 flat CKS beam component by component, even though the conserved variables differ
 internally.
 
+\subsection{Radiation-matter coupling in ADM variables}
+
+The matter-coupling routine is local to a cell and follows the legacy grey
+implicit update, but with ADM frame transformations and moment feedback.  The
+fluid primitive velocity variables are the Valencia spatial four-velocity
+components \(u^i_{\rm(spatial)}\).  The Lorentz factor measured by the
+Eulerian observer is
+\begin{equation}
+  W=\sqrt{1+\gamma_{ij}u^i_{\rm(spatial)}u^j_{\rm(spatial)}} .
+\end{equation}
+The ADM normal-to-tetrad transform maps the fluid four-velocity into the
+Eulerian orthonormal frame:
+\begin{equation}
+  u^{(\hat0)}=W,\qquad
+  u^{(\hat a)}=e^{(\hat a)}_{\ i}u^i_{\rm(spatial)} .
+  \label{eq:fluid_tetrad_velocity}
+\end{equation}
+For a photon direction \((1,\ell^{(\hat a)})\) in the Eulerian tetrad, the
+frequency ratio between the fluid-comoving frame and the Eulerian frame is
+\begin{equation}
+  D \equiv \frac{\nucm}{\nuE}
+  =
+  u^{(\hat0)}-u^{(\hat a)}\ell_{(\hat a)} .
+  \label{eq:frequency_ratio}
+\end{equation}
+This is the special-relativistic Doppler factor written in the local Eulerian
+tetrad.  The grey intensity and solid angle used by the coupling update are
+\begin{equation}
+  I_{\rm cm}=I_{\rm E}D^4,\qquad
+  \dd\Omega_{\rm cm}=D^{-2}\dd\Omega_{\rm E},
+  \label{eq:intensity_angle_transform}
+\end{equation}
+which follows from \(I_\nu/\nu^3\) invariance and aberration.  In ADM mode
+\(I_{\rm E}=U/\sqrt{\gamma}\).  In CKS compatibility mode the legacy
+normalization \(I_{\rm E}=U/(k^0k_0)\) is retained.
+
+The grey absorption/scattering update can be written schematically as
+\begin{equation}
+  \frac{\Delta I_{\rm cm}}{\Delta \tau}
+  =
+  \sigma_a(B-I_{\rm cm})
+  +\sigma_s(J_{\rm cm}-I_{\rm cm})
+  +\sigma_p(B-J_{\rm cm}),
+  \label{eq:grey_coupling_schematic}
+\end{equation}
+where \(B=a_{\rm rad}T_{\rm gas}^4/(4\pi)\), \(J_{\rm cm}\) is the
+comoving-frame angular mean intensity, and \(\sigma_a,\sigma_s,\sigma_p\) are
+the absorption, scattering, and Planck-correction coefficients used by the
+existing opacity helper.  The gas internal energy is linear in \(T_{\rm gas}\)
+for the ideal-gas EOS, while \(B\propto T_{\rm gas}^4\).  The local implicit
+solve therefore reduces to the same quartic temperature equation used by the
+legacy solver.  The new ADM-specific parts are the frame normalization in
+Equations~\eqref{eq:frequency_ratio}--\eqref{eq:intensity_angle_transform} and
+the feedback moments below.
+
+Before and after the implicit radiation update, ADM mode computes the
+Valencia radiation conserved moments
+\begin{align}
+  \sqrt{\gamma}E &= \sum_n w_n U_n,\\
+  \sqrt{\gamma}S_i
+    &= \sum_n w_n U_n\,\gamma_{ij}s^j_n .
+  \label{eq:adm_feedback_moments}
+\end{align}
+The gas conserved variables receive the opposite change,
+\begin{equation}
+  \Delta(\sqrt{\gamma}\tau_{\rm gas}) =
+    -\Delta(\sqrt{\gamma}E_{\rm rad}),\qquad
+  \Delta(\sqrt{\gamma}S^{\rm gas}_i) =
+    -\Delta(\sqrt{\gamma}S^{\rm rad}_i),
+  \label{eq:gas_feedback}
+\end{equation}
+up to the existing choice of whether \code{affect\_fluid} is enabled.  This is
+the practical consistency condition for local matter coupling: the same
+Eulerian radiation variables used in the transport equation are used to feed
+energy and momentum back to the fluid.
+
 \subsection{Cost of tetrad construction}
 
 In the existing stationary solver, tetrads and angular maps are generated once.
@@ -373,6 +739,33 @@ This keeps the cost scaling as
 \(O(N_{\mathrm{cell}})\) for metric preparation plus
 \(O(N_{\mathrm{cell}}N_\Omega)\) for angular transport, instead of rebuilding a
 complete tetrad inside each angle loop.
+
+\subsection{Code-to-equation map}
+
+Table~\ref{tab:codemap} maps the main ADM formulas to the implementation.  The
+purpose is to make review of signs and normalizations straightforward.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{p{0.30\linewidth}p{0.26\linewidth}p{0.32\linewidth}}
+\toprule
+Mathematical object & Code storage or routine & Main use \\
+\midrule
+\(\alpha\) & \code{adm\_alpha\_c} & speed, source, Hamiltonian \\
+\(\beta^i\) & \code{adm\_beta\_u\_c} & \(v^i=\alpha s^i-\beta^i\), Hamiltonian \\
+\(\gamma_{ij}\), \(\gamma^{ij}\) & \code{adm\_g\_dd\_c}, \code{adm\_g\_uu\_c} & tetrad, momentum, metric gradients \\
+\(K_{ij}\) & \code{adm\_K\_dd\_c} & Valencia energy source \\
+\(E^i_{\ (\hat a)}\) & \code{tet\_c} spatial block & coordinate direction \(s^i\) \\
+\(e^{(\hat a)}_{\ i}\) & \code{adm\_cotriad\_c} & momentum \(p_i\), fluid tetrad velocity \\
+\(\partial_i\alpha\), \(\partial_i\beta^j\), \(\partial_i\gamma^{jk}\) & \code{adm\_grad\_*} arrays & Hamiltonian \(\dot p_i\), energy source \\
+\(\partial_t e^{(\hat a)}_{\ i}\) & \code{adm\_dt\_cotriad\_c} & tetrad time-dependence in \(\dot\ell^{(\hat a)}\) \\
+\(\dot\ell\cdot\hat n_{\Omega}\) & \code{na} & angular finite-volume flux \\
+\bottomrule
+\end{tabular}
+\caption{Code-to-equation map for the ADM radiation implementation.}
+\label{tab:codemap}
+\end{table}
 
 \section{Null Geodesic Beam-Edge Tracers}
 \label{sec:null}
@@ -593,6 +986,55 @@ normalization in ADM mode.  The key implementation difference is that metric
 data are no longer assumed to be analytic or time independent.  The new solver
 therefore fits the same design pattern as the Valencia GRMHD path: fluxes and
 sources are built from ADM variables supplied by the active spacetime module.
+
+\section{How to Check the Formalism}
+\label{sec:checklist}
+
+The derivation above gives several concrete checks that can be applied to the
+implementation.
+
+\paragraph{Flat-space limit.}
+Set \(\alpha=1\), \(\beta^i=0\), \(\gamma_{ij}=\delta_{ij}\), and
+\(K_{ij}=0\).  Then \(E^i_{\ (\hat a)}=\delta^i_{\hat a}\),
+\(U_n=I_n\), \(v^i=s^i\), \(S_n^{\rm geom}=0\), and all angular drift
+coefficients vanish.  The ADM solver must reduce to ordinary Cartesian
+free-streaming.  This is the reason the flat ADM beam can match the legacy
+flat CKS beam exactly.
+
+\paragraph{Moment-source check.}
+For any angular distribution, compute the discrete moments in
+Equation~\eqref{eq:moments}.  The angular sum of the per-angle energy source
+in Equation~\eqref{eq:anglesource} must equal the right-hand side of
+Equation~\eqref{eq:valenciaE}.  A stronger check, still to be automated, is
+that the angular geodesic operator produces the momentum source in
+Equation~\eqref{eq:valencia_momentum} when summed over angles.
+
+\paragraph{Tetrad consistency check.}
+At every cached cell,
+\begin{equation}
+  \gamma_{ij}E^i_{\ (\hat a)}E^j_{\ (\hat b)}
+  =\delta_{\hat a\hat b},\qquad
+  e^{(\hat a)}_{\ i}E^i_{\ (\hat b)}
+  =\delta^{\hat a}_{\ \hat b}.
+\end{equation}
+The same Cholesky gauge must be used for spatial transport, angular drift, and
+matter coupling; otherwise spurious angular drift appears even in locally flat
+coordinates.
+
+\paragraph{Frequency-transform check.}
+For a fluid comoving with the Eulerian observer,
+\(u^{(\hat0)}=1\) and \(u^{(\hat a)}=0\), so
+\(D=\nucm/\nuE=1\).  The ADM coupling must then use
+\(I_{\rm cm}=U/\sqrt{\gamma}\).  For a moving fluid, the fourth-power intensity
+transform and the inverse-square solid-angle transform in
+Equation~\eqref{eq:intensity_angle_transform} must be applied together; using
+one without the other gives the wrong comoving mean intensity.
+
+\paragraph{Local conservation check.}
+When \code{affect\_fluid=true}, the matter-coupling kernel should change gas
+energy and momentum by the negative of the change in the radiation moments in
+Equation~\eqref{eq:adm_feedback_moments}.  This is independent of how the
+implicit temperature solve is performed.
 
 \section{Discussion and Limitations}
 \label{sec:discussion}
