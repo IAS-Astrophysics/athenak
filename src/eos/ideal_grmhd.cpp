@@ -206,17 +206,48 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         tvx -= excise_inflow_*dx*rinv;
         tvy -= excise_inflow_*dy*rinv;
         tvz -= excise_inflow_*dz*rinv;
+        Real tv2 = glower[1][1]*SQR(tvx) + glower[2][2]*SQR(tvy) +
+                   glower[3][3]*SQR(tvz) + 2.0*glower[1][2]*tvx*tvy +
+                   2.0*glower[1][3]*tvx*tvz + 2.0*glower[2][3]*tvy*tvz;
+        if (!(tv2 >= 0.0) || !isfinite(tv2)) {
+          tvx = tvy = tvz = 0.0;
+          tv2 = 0.0;
+        }
+        Real gtarget = fmax(eos.gamma_max, 1.0 + 1.0e-12);
+        Real target_vmax2 = (gtarget > 1.0e12) ? 1.0 - 1.0e-12 :
+                             1.0 - 1.0/SQR(gtarget);
+        target_vmax2 = fmin(target_vmax2, 1.0 - 1.0e-12);
+        if (tv2 > target_vmax2) {
+          Real factor = sqrt(target_vmax2/tv2);
+          tvx *= factor;
+          tvy *= factor;
+          tvz *= factor;
+          tv2 = target_vmax2;
+        }
+        Real tlor = 1.0/sqrt(fmax(1.0 - tv2, 1.0e-300));
+        Real twvx = tlor*tvx;
+        Real twvy = tlor*tvy;
+        Real twvz = tlor*tvz;
         if (c2p_failure) {
-          w.vx = tvx;
-          w.vy = tvy;
-          w.vz = tvz;
+          w.vx = twvx;
+          w.vy = twvy;
+          w.vz = twvz;
         }
         Real keep = 1.0 - excise_weight;
         w.d = keep*w.d + excise_weight*dtarget;
-        w.vx = keep*w.vx + excise_weight*tvx;
-        w.vy = keep*w.vy + excise_weight*tvy;
-        w.vz = keep*w.vz + excise_weight*tvz;
+        w.vx = keep*w.vx + excise_weight*twvx;
+        w.vy = keep*w.vy + excise_weight*twvy;
+        w.vz = keep*w.vz + excise_weight*twvz;
         w.e = keep*w.e + excise_weight*etarget;
+        if (!(w.d > 0.0) || !(w.e > 0.0) || !isfinite(w.d) || !isfinite(w.e) ||
+            !isfinite(w.vx) || !isfinite(w.vy) || !isfinite(w.vz)) {
+          w.d = dtarget;
+          w.vx = twvx;
+          w.vy = twvy;
+          w.vz = twvz;
+          w.e = etarget;
+          c2p_failure = false;
+        }
         smooth_applied = true;
       }
     }

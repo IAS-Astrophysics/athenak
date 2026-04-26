@@ -1210,12 +1210,14 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1[2] = traj.q[Z2];
   Real m1_ex = traj.q[M1T] * bbh_.adjust_mass1;
   Real m2_ex = traj.q[M2T] * bbh_.adjust_mass2;
-  Real a1x_ex = traj.q[AX1] * bbh_.adjust_mass1;
-  Real a1y_ex = traj.q[AY1] * bbh_.adjust_mass1;
-  Real a1z_ex = traj.q[AZ1] * bbh_.adjust_mass1;
-  Real a2x_ex = traj.q[AX2] * bbh_.adjust_mass2;
-  Real a2y_ex = traj.q[AY2] * bbh_.adjust_mass2;
-  Real a2z_ex = traj.q[AZ2] * bbh_.adjust_mass2;
+  Real spin_scale1 = bbh_.use_traj_table ? m1_ex : bbh_.adjust_mass1;
+  Real spin_scale2 = bbh_.use_traj_table ? m2_ex : bbh_.adjust_mass2;
+  Real a1x_ex = traj.q[AX1] * spin_scale1;
+  Real a1y_ex = traj.q[AY1] * spin_scale1;
+  Real a1z_ex = traj.q[AZ1] * spin_scale1;
+  Real a2x_ex = traj.q[AX2] * spin_scale2;
+  Real a2y_ex = traj.q[AY2] * spin_scale2;
+  Real a2z_ex = traj.q[AZ2] * spin_scale2;
   Real a1_ex = sqrt(SQR(a1x_ex) + SQR(a1y_ex) + SQR(a1z_ex));
   Real a2_ex = sqrt(SQR(a2x_ex) + SQR(a2y_ex) + SQR(a2z_ex));
   coord.punc_0_spin[0] = a1x_ex;
@@ -1795,14 +1797,16 @@ SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
     v2y = tr[VY2], v2z = tr[VZ2];
   T a1x = tr[AX1], a1y = tr[AY1], a1z = tr[AZ1], a2x = tr[AX2], a2y = tr[AY2],
     a2z = tr[AZ2];
-  a1x = a1x * b.adjust_mass1;
-  a1y = a1y * b.adjust_mass1;
-  a1z = a1z * b.adjust_mass1;
-  a2x = a2x * b.adjust_mass2;
-  a2y = a2y * b.adjust_mass2;
-  a2z = a2z * b.adjust_mass2;
-  T m1 = tr[M1T] * b.adjust_mass1, m2 = tr[M2T] * b.adjust_mass2,
-    a1n = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + T(1e-40)),
+  T m1 = tr[M1T] * b.adjust_mass1, m2 = tr[M2T] * b.adjust_mass2;
+  T spin_scale1 = b.use_traj_table ? m1 : T(b.adjust_mass1);
+  T spin_scale2 = b.use_traj_table ? m2 : T(b.adjust_mass2);
+  a1x = a1x * spin_scale1;
+  a1y = a1y * spin_scale1;
+  a1z = a1z * spin_scale1;
+  a2x = a2x * spin_scale2;
+  a2y = a2y * spin_scale2;
+  a2z = a2z * spin_scale2;
+  T a1n = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + T(1e-40)),
     a2n = metric_sqrt(a2x * a2x + a2y * a2y + a2z * a2z + T(1e-40)),
     a1 = a1n, a2 = a2n;
   T x1, y1, z1, x2, y2, z2;

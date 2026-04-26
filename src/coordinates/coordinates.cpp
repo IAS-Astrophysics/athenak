@@ -82,8 +82,20 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
       coord_data.smooth_excise = pin->GetOrAddBoolean("coord","smooth_excision", false);
+      Real max_dx = 0.0;
+      auto &mb_size = pmy_pack->pmb->mb_size;
+      for (int m = 0; m < ppack->nmb_thispack; ++m) {
+        max_dx = fmax(max_dx, mb_size.h_view(m).dx1);
+        if (pmy_pack->pmesh->mb_indcs.nx2 > 1) {
+          max_dx = fmax(max_dx, mb_size.h_view(m).dx2);
+        }
+        if (pmy_pack->pmesh->mb_indcs.nx3 > 1) {
+          max_dx = fmax(max_dx, mb_size.h_view(m).dx3);
+        }
+      }
+      Real default_smooth_width = fmax(0.25*coord_data.rexcise, 2.0*max_dx);
       coord_data.smooth_excise_width = pin->GetOrAddReal(
-          "coord", "smooth_excision_width", 0.25*coord_data.rexcise);
+          "coord", "smooth_excision_width", default_smooth_width);
       coord_data.smooth_excise_lapse_width = pin->GetOrAddReal(
           "coord", "smooth_excision_lapse_width", 0.05);
       coord_data.smooth_excise_inflow_speed = pin->GetOrAddReal(

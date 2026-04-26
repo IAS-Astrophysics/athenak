@@ -1,0 +1,317 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{hyperref}
+
+\title{Smooth Excision for Boosted Kerr--Schild Binary Black Holes}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Scope}
+
+This note summarizes the smooth excision procedure implemented for the
+boosted Kerr--Schild binary black-hole problem generator.  The default
+hard-excision behavior is unchanged unless smooth excision is explicitly
+enabled.  The method acts only on fluid primitive and conserved variables;
+it does not directly rescale, zero, or window the face-centered magnetic
+field.  This is deliberate: direct pointwise modification of the staggered
+magnetic field can create discrete magnetic monopoles.
+
+\section{Boosted Spinning Horizon Mask}
+
+For black hole \(A\), let \(X_A^i\), \(V_A^i\), \(\chi_A^i\), and \(m_A\)
+denote the position, coordinate velocity, dimensionless spin vector, and
+mass.  The Kerr spin vector used in the horizon and metric algebra is
+\begin{equation}
+  a_A^i = m_A\chi_A^i .
+\end{equation}
+For a cell center \(x^i\), define the displacement
+\begin{equation}
+  \Delta x_A^i = x^i - X_A^i .
+\end{equation}
+The displacement is mapped into the instantaneously boosted local frame by
+\begin{equation}
+  \Delta \bar{x}_A^i
+  =
+  \Delta x_A^i
+  +
+  \frac{\gamma_A - 1}{V_A^2}
+  V_A^i
+  \left(V_{A j}\Delta x_A^j\right),
+  \qquad
+  \gamma_A = \frac{1}{\sqrt{1 - V_A^2}} .
+\end{equation}
+For small \(V_A^2\), the regular expansion
+\begin{equation}
+  \frac{\gamma_A - 1}{V_A^2}
+  =
+  \frac{1}{2}
+  + \frac{3}{8} V_A^2
+  + \frac{5}{16} V_A^4
+  + O(V_A^6)
+\end{equation}
+is used to avoid loss of precision.
+
+The spinning Kerr--Schild radial coordinate is computed from
+\begin{equation}
+  r_A^2 =
+  \frac{
+    \bar{r}_A^2 - a_A^2
+    +
+    \sqrt{\left(\bar{r}_A^2-a_A^2\right)^2 + 4a_A^2 z_A^2}
+  }{2},
+\end{equation}
+where
+\begin{equation}
+  \bar{r}_A^2 = \Delta \bar{x}_{A i}\Delta \bar{x}_A^i,
+  \qquad
+  z_A = \frac{a_{A i}\Delta \bar{x}_A^i}{|a_A|}.
+\end{equation}
+If \(a_A^2=0\), this reduces to the Euclidean radius
+\(\sqrt{\Delta \bar{x}_{A i}\Delta \bar{x}_A^i}\).
+
+The isolated Kerr horizon radius is approximated by
+\begin{equation}
+  r_{H,A} = m_A + \sqrt{m_A^2 - |a_A|^2}.
+\end{equation}
+A cell is marked as geometrically excised when
+\begin{equation}
+  \min_A \left(r_A - r_{H,A}\right) \leq 0 .
+\end{equation}
+
+\section{Smooth Excision Weight}
+
+The smooth drain weight for hole \(A\) is
+\begin{equation}
+  W_A = S\!\left(\frac{r_{H,A}-r_A}{\Delta r}\right),
+\end{equation}
+where \(\Delta r\) is the configured smooth-excision width.  If no width is
+given in the input file, the code uses a conservative default
+\begin{equation}
+  \Delta r_{\rm default}
+  =
+  \max\!\left(0.25\,r_{\rm exc},\,2\Delta x_{\max}\right),
+\end{equation}
+with \(\Delta x_{\max}\) the largest active mesh spacing in the block pack.
+The global cell weight is
+\begin{equation}
+  W = \max_A W_A .
+\end{equation}
+The limiter \(S\) is the cubic smoothstep
+\begin{equation}
+  S(q) =
+  \begin{cases}
+    0, & q \leq 0,\\
+    3q^2 - 2q^3, & 0 < q < 1,\\
+    1, & q \geq 1.
+  \end{cases}
+\end{equation}
+Thus \(W=0\) outside the horizon and \(W\to 1\) deeper inside the excision
+region.
+
+For lapse-based excision, the same construction is applied in lapse space:
+\begin{equation}
+  W = S\!\left(\frac{\alpha_{\rm exc} - \alpha}{\Delta \alpha}\right),
+\end{equation}
+where \(\alpha_{\rm exc}\) is the excision lapse threshold and
+\(\Delta \alpha\) is the configured lapse width.
+
+The floor mask and conservative-flux mask are deliberately distinct.  For
+puncture excision, the floor mask uses \(r_A \le r_{H,A}\), while the flux
+mask uses
+\begin{equation}
+  r_A \le \max(r_{H,A}, r_{\rm flux}).
+\end{equation}
+For lapse excision with smooth excision enabled, the flux mask is buffered to
+\begin{equation}
+  \alpha < \alpha_{\rm exc} + \Delta\alpha .
+\end{equation}
+Without smooth excision, the lapse flux mask reduces to the historical
+\(\alpha < \alpha_{\rm exc}\) mask.
+
+\section{Primitive Variable Drain}
+
+Let \(A_\ast\) be the nearest black hole center to the cell.  The target
+velocity is the black-hole coordinate velocity plus an inward drain speed:
+\begin{equation}
+  v_{\rm targ}^i
+  =
+  V_{A_\ast}^i
+  -
+  v_{\rm in}
+  \frac{x^i - X_{A_\ast}^i}
+       {\sqrt{(x^j-X_{A_\ast}^j)(x_j-X_{A_\ast j})}} .
+\end{equation}
+This is a coordinate three-velocity.  The GR hydro and GRMHD primitive
+variables store the Wilson/Valencia spatial four-velocity \(Wv^i\), so the
+target is converted before blending:
+\begin{align}
+  v_{\rm targ}^2 &= \gamma_{ij}v_{\rm targ}^i v_{\rm targ}^j,\\
+  v_{\rm targ}^i &\leftarrow
+  v_{\rm targ}^i
+  \min\!\left(1,\sqrt{\frac{v_{\max}^2}{v_{\rm targ}^2}}\right),\\
+  W_{\rm targ} &= \frac{1}{\sqrt{1-v_{\rm targ}^2}},\\
+  u_{\rm targ}^i &= W_{\rm targ}v_{\rm targ}^i .
+\end{align}
+Here \(v_{\max}^2 < 1\) is chosen consistently with the local velocity
+ceiling when one is available, and otherwise with a tight subluminal cap.
+The primitive variables are blended toward an excision state,
+\begin{align}
+  \rho' &= (1-W)\rho + W\rho_{\rm targ},\\
+  u'^i &= (1-W)u^i + Wu_{\rm targ}^i,\\
+  p' &= (1-W)p + Wp_{\rm exc}.
+\end{align}
+When no magnetization cap is requested,
+\begin{equation}
+  \rho_{\rm targ} = \rho_{\rm exc}.
+\end{equation}
+
+\section{Optional Magnetization Cap}
+
+The smooth excision can optionally cap the cell-centered proxy
+\(\sigma \equiv B_{\rm cc}^2/\rho\).  This is controlled by
+\(\sigma_{\max}\).  If \(\sigma_{\max}>0\),
+\begin{equation}
+  \rho_{\rm targ}
+  =
+  \max\!\left(
+    \rho_{\rm exc},
+    \frac{B_{\rm cc}^2}{\sigma_{\max}}
+  \right).
+\end{equation}
+If \(\sigma_{\max}<0\), the cap is disabled.  The value
+\(\sigma_{\max}=0\) is rejected.
+
+The magnetic field entering the cap is the existing cell-centered average of
+the face-centered field,
+\begin{equation}
+  B_{\rm cc}^i =
+  \frac{1}{2}\left(B^i_{f,-} + B^i_{f,+}\right).
+\end{equation}
+The cap therefore changes the matter state, not the staggered magnetic
+field.  After the primitive variables are blended, the conserved fluid
+variables are recomputed using the local metric and the unchanged magnetic
+field:
+\begin{equation}
+  U'_{\rm hydro} =
+  {\rm PrimToCon}\!\left(P', B_{\rm cc}, g_{\mu\nu}\right).
+\end{equation}
+
+\section{Magnetic Constraint Preservation}
+
+The face-centered magnetic field is not directly modified by the excision
+operator:
+\begin{equation}
+  B_f' = B_f .
+\end{equation}
+All changes to \(B_f\) remain those produced by the constrained-transport
+update.  Schematically, the CT update is
+\begin{equation}
+  B_f^{n+1}
+  =
+  B_f^n
+  -
+  \Delta t\, C_h(E_e),
+\end{equation}
+where \(C_h\) is the discrete curl mapping edge-centered EMFs \(E_e\) to
+face-centered magnetic fluxes.  Applying the discrete divergence operator
+\(D_h\) gives
+\begin{equation}
+  D_h B_f^{n+1}
+  =
+  D_h B_f^n
+  -
+  \Delta t\,D_h C_h(E_e).
+\end{equation}
+On the staggered CT mesh,
+\begin{equation}
+  D_h C_h(E_e) = 0
+\end{equation}
+as a discrete identity.  Therefore
+\begin{equation}
+  D_h B_f^{n+1} = D_h B_f^n .
+\end{equation}
+
+Because the smooth excision operator never multiplies or zeros the
+face-centered magnetic field, it does not introduce a new source term in the
+discrete magnetic divergence equation.  The optional magnetization cap also
+preserves this property: it modifies \(\rho_{\rm targ}\), not \(B_f\).
+
+\section{CT-Compatible Magnetic Damping Design}
+
+Magnetic-field damping inside the horizon should be implemented through an
+edge-centered EMF contribution, not through a pointwise face-field source.
+The minimal CT-compatible form is an additional EMF
+\begin{equation}
+  E_e = E_{e,{\rm ideal}} + E_{e,{\rm damp}},
+\end{equation}
+inserted after the ideal corner EMFs are built and before EMF exchange,
+restriction, and CT.  A resistive damping choice is
+\begin{equation}
+  E_{e,{\rm damp}} = \eta_e W_e J_e,
+  \qquad
+  J = \nabla_h \times B_f ,
+\end{equation}
+where \(W_e\) is the smooth excision weight interpolated to the edge,
+\(\eta_e \ge 0\) is a damping coefficient, and \(J_e\) is a compatible
+edge-centered current built from the staggered face field.  The magnetic
+update remains
+\begin{equation}
+  B_f^{n+1}
+  =
+  B_f^n
+  -
+  \Delta t\, C_h(E_{e,{\rm ideal}} + E_{e,{\rm damp}}),
+\end{equation}
+so
+\begin{equation}
+  D_h B_f^{n+1}
+  =
+  D_h B_f^n
+  -
+  \Delta t\,D_h C_h(E_{e,{\rm ideal}} + E_{e,{\rm damp}})
+  =
+  D_h B_f^n .
+\end{equation}
+The discrete divergence remains unchanged because the added term still
+enters only through the discrete curl.
+
+For adaptive mesh refinement, the damping EMF must be part of the same
+edge-centered EMF arrays that are exchanged and corrected across coarse--fine
+interfaces.  The intended task order is therefore
+\begin{equation}
+  {\rm CornerE}
+  \rightarrow
+  {\rm AddUserDampingE}
+  \rightarrow
+  {\rm SendE/RecvE/CorrectE}
+  \rightarrow
+  {\rm CT}.
+\end{equation}
+The damping coefficient should obey the explicit diffusion stability limit,
+schematically
+\begin{equation}
+  \eta_e \lesssim C_{\rm diff}\frac{\Delta x_e^2}{\Delta t}.
+\end{equation}
+This resistive term damps current-carrying structure.  If a true flux drain
+is later desired, an artificial advective EMF
+\begin{equation}
+  E_{e,{\rm adv}} = -v_{B,e}\times B_e
+\end{equation}
+can also be added at edges, with \(v_{B,e}\) directed inward inside the
+horizon.  It is also CT-compatible, but it transports magnetic flux rather
+than deleting it locally.
+
+\section{What Is Not Included}
+
+No edge-centered EMF drain, resistive diffusion term, or direct magnetic
+window function is included in this implementation.  Such a term could be
+added later in a CT-compatible manner, but it is intentionally absent here.
+
+\end{document}

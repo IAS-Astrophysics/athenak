@@ -228,18 +228,20 @@ void Coordinates::UpdateExcisionMasks() {
 
     Real &excise_lapse = coord_data.excise_lapse;
     Real lapse_width = coord_data.smooth_excise_lapse_width;
+    Real flux_lapse = coord_data.smooth_excise ? excise_lapse + lapse_width : excise_lapse;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       bool excise = (adm.alpha(m,k,j,i) < excise_lapse);
+      bool flux_excise = (adm.alpha(m,k,j,i) < flux_lapse);
       floor(m,k,j,i) = excise;
-      flux(m,k,j,i) = excise;
+      flux(m,k,j,i) = flux_excise;
       weight(m,k,j,i) = excise ? SmoothStep01((excise_lapse - adm.alpha(m,k,j,i))/
                                                 lapse_width) : 0.0;
     });
   } else if (coord_data.excision_scheme == ExcisionScheme::puncture) {
     // capture variables for kernel
-    auto &size = pmy_pack->pmb->mb_size; 
+    auto &size = pmy_pack->pmb->mb_size;
     auto &indcs = pmy_pack->pmesh->mb_indcs;
     int &ng = indcs.ng;
     int n1 = indcs.nx1 + 2*ng;
@@ -274,6 +276,7 @@ void Coordinates::UpdateExcisionMasks() {
     Real &punc_0_r = coord_data.punc_0_rad;
     Real &punc_1_r = coord_data.punc_1_rad;
     Real smooth_width = coord_data.smooth_excise_width;
+    Real flux_excise_r = coord_data.flux_excise_r;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -296,9 +299,14 @@ void Coordinates::UpdateExcisionMasks() {
       Real r0 = KSRXSpin(x0, y0, z0, p0_ax, p0_ay, p0_az);
       Real r1 = KSRXSpin(x1, y1, z1, p1_ax, p1_ay, p1_az);
 
-      bool excise = ( r0 <= punc_0_r || r1 <= punc_1_r );
+      bool excise = ((punc_0_r > 0.0 && r0 <= punc_0_r) ||
+                     (punc_1_r > 0.0 && r1 <= punc_1_r));
+      Real punc_0_flux_r = (punc_0_r > 0.0) ? fmax(punc_0_r, flux_excise_r) : -1.0;
+      Real punc_1_flux_r = (punc_1_r > 0.0) ? fmax(punc_1_r, flux_excise_r) : -1.0;
+      bool flux_excise = ((punc_0_flux_r > 0.0 && r0 <= punc_0_flux_r) ||
+                          (punc_1_flux_r > 0.0 && r1 <= punc_1_flux_r));
       floor(m,k,j,i) = excise;
-      flux(m,k,j,i) = excise;
+      flux(m,k,j,i) = flux_excise;
       Real w0 = (punc_0_r > 0.0) ? SmoothStep01((punc_0_r - r0)/smooth_width) : 0.0;
       Real w1 = (punc_1_r > 0.0) ? SmoothStep01((punc_1_r - r1)/smooth_width) : 0.0;
       weight(m,k,j,i) = fmax(w0, w1);

@@ -506,19 +506,62 @@ class PrimitiveSolverHydro {
         tvx -= excise_inflow_*dx*rinv;
         tvy -= excise_inflow_*dy*rinv;
         tvz -= excise_inflow_*dz*rinv;
+        Real tv2 = g3d[S11]*SQR(tvx) + g3d[S22]*SQR(tvy) + g3d[S33]*SQR(tvz) +
+                   2.0*g3d[S12]*tvx*tvy + 2.0*g3d[S13]*tvx*tvz +
+                   2.0*g3d[S23]*tvy*tvz;
+        if (!(tv2 >= 0.0) || !isfinite(tv2)) {
+          tvx = tvy = tvz = 0.0;
+          tv2 = 0.0;
+        }
+        constexpr Real target_vmax2 = 1.0 - 1.0e-12;
+        if (tv2 > target_vmax2) {
+          Real factor = sqrt(target_vmax2/tv2);
+          tvx *= factor;
+          tvy *= factor;
+          tvz *= factor;
+          tv2 = target_vmax2;
+        }
+        Real tlor = 1.0/sqrt(fmax(1.0 - tv2, 1.0e-300));
+        Real twvx = tlor*tvx;
+        Real twvy = tlor*tvy;
+        Real twvz = tlor*tvz;
         Real keep = 1.0 - excise_weight;
         prim_pt[PRH] = keep*prim_pt[PRH] + excise_weight*rhotarget;
-        prim_pt[PVX] = keep*prim_pt[PVX] + excise_weight*tvx;
-        prim_pt[PVY] = keep*prim_pt[PVY] + excise_weight*tvy;
-        prim_pt[PVZ] = keep*prim_pt[PVZ] + excise_weight*tvz;
+        prim_pt[PVX] = keep*prim_pt[PVX] + excise_weight*twvx;
+        prim_pt[PVY] = keep*prim_pt[PVY] + excise_weight*twvy;
+        prim_pt[PVZ] = keep*prim_pt[PVZ] + excise_weight*twvz;
         prim_pt[PPR] = keep*prim_pt[PPR] + excise_weight*pexcise_;
         prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
-        result.error = Primitive::Error::SUCCESS;
-        result.iterations = 0;
-        result.cons_floor = false;
-        result.prim_floor = false;
-        result.cons_adjusted = true;
-        ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+        bool smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
+                                    isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
+        for (int n = 0; n < NPRIM; ++n) {
+          smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
+        }
+        if (!smooth_state_finite) {
+          prim_pt[PRH] = rhotarget;
+          prim_pt[PVX] = twvx;
+          prim_pt[PVY] = twvy;
+          prim_pt[PVZ] = twvz;
+          prim_pt[PPR] = pexcise_;
+          for (int n = 0; n < nscal; n++) {
+            prim_pt[PYF + n] = cons_pt[CDN] != 0.0 ? cons_pt[CYD + n]/cons_pt[CDN] : 0.0;
+          }
+          prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+          smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
+                                 isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]) &&
+                                 isfinite(prim_pt[PTM]) && isfinite(prim_pt[PVX]) &&
+                                 isfinite(prim_pt[PVY]) && isfinite(prim_pt[PVZ]));
+        }
+        if (smooth_state_finite) {
+          result.error = Primitive::Error::SUCCESS;
+          result.iterations = 0;
+          result.cons_floor = false;
+          result.prim_floor = false;
+          result.cons_adjusted = true;
+          ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+        } else {
+          result.error = Primitive::Error::NO_SOLUTION;
+        }
       }
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
