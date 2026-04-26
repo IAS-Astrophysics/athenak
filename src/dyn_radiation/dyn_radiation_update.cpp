@@ -64,6 +64,7 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
 
   if (use_adm_geometry_) {
     auto &adm_ = pmy_pack->padm->adm;
+    auto &adm_grad_alpha_c_ = adm_grad_alpha_c;
     par_for("dynrad_adm_update",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       Real divf_s = (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
@@ -84,17 +85,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
           }
         }
 
-        Real grad_alpha[3] = {0.0, 0.0, 0.0};
-        grad_alpha[0] = 0.5*(adm_.alpha(m,k,j,i+1) - adm_.alpha(m,k,j,i-1))/
-                        mbsize.d_view(m).dx1;
-        if (multi_d) {
-          grad_alpha[1] = 0.5*(adm_.alpha(m,k,j+1,i) - adm_.alpha(m,k,j-1,i))/
-                          mbsize.d_view(m).dx2;
-        }
-        if (three_d) {
-          grad_alpha[2] = 0.5*(adm_.alpha(m,k+1,j,i) - adm_.alpha(m,k-1,j,i))/
-                          mbsize.d_view(m).dx3;
-        }
+        Real grad_alpha[3] = {adm_grad_alpha_c_(m,0,k,j,i),
+                              adm_grad_alpha_c_(m,1,k,j,i),
+                              adm_grad_alpha_c_(m,2,k,j,i)};
 
         Real kss = 0.0;
         Real sdalpha = 0.0;

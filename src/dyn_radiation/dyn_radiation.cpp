@@ -45,13 +45,28 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     sqrt_detg_x1f("sqrt_detg_x1f",1,1,1,1),
     sqrt_detg_x2f("sqrt_detg_x2f",1,1,1,1),
     sqrt_detg_x3f("sqrt_detg_x3f",1,1,1,1),
+    adm_alpha_c("adm_alpha_c",1,1,1,1),
+    adm_beta_u_c("adm_beta_u_c",1,1,1,1,1),
+    adm_g_dd_c("adm_g_dd_c",1,1,1,1,1,1),
+    adm_g_uu_c("adm_g_uu_c",1,1,1,1,1,1),
+    adm_K_dd_c("adm_K_dd_c",1,1,1,1,1,1),
+    adm_cotriad_c("adm_cotriad_c",1,1,1,1,1,1),
+    adm_grad_alpha_c("adm_grad_alpha_c",1,1,1,1,1),
+    adm_grad_beta_u_c("adm_grad_beta_u_c",1,1,1,1,1),
+    adm_grad_g_dd_c("adm_grad_g_dd_c",1,1,1,1,1),
+    adm_grad_g_uu_c("adm_grad_g_uu_c",1,1,1,1,1),
+    adm_grad_cotriad_c("adm_grad_cotriad_c",1,1,1,1,1),
+    adm_dt_cotriad_c("adm_dt_cotriad_c",1,1,1,1,1),
     na("na",1,1,1,1,1,1),
     norm_to_tet("norm_to_tet",1,1,1,1,1,1) {
-  // Check for general relativity
+  // Check for relativistic geometry.  ADM/Z4c runs provide metric fields through
+  // ppack->padm even when the coordinate object is not a stationary GR metric.
   if (!(pmy_pack->pcoord->is_general_relativistic ||
-        pmy_pack->pcoord->is_dynamical_relativistic)) {
+        pmy_pack->pcoord->is_dynamical_relativistic ||
+        pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-      << std::endl << "Radiation requires general relativity" << std::endl;
+      << std::endl << "Radiation requires general relativity or ADM/Z4c metric fields"
+      << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -132,13 +147,6 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
                                            use_adm_geometry);
   rotate_geo = pin->GetOrAddBoolean("dyn_radiation","rotate_geo",true);
   angular_fluxes = pin->GetOrAddBoolean("dyn_radiation","angular_fluxes",true);
-  if (use_adm_geometry && angular_fluxes) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "<dyn_radiation> geometry='adm' currently requires "
-              << "angular_fluxes=false; angular bending will be added as a separate "
-              << "device-side geometric operator." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
   n_0_floor = pin->GetOrAddReal("dyn_radiation","n_0_floor",0.1);
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
 
@@ -160,6 +168,18 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(sqrt_detg_x1f,nmb,ncells3,ncells2,ncells1+1);
   Kokkos::realloc(sqrt_detg_x2f,nmb,ncells3,ncells2+1,ncells1);
   Kokkos::realloc(sqrt_detg_x3f,nmb,ncells3+1,ncells2,ncells1);
+  Kokkos::realloc(adm_alpha_c,nmb,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_beta_u_c,nmb,3,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_g_dd_c,nmb,3,3,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_g_uu_c,nmb,3,3,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_K_dd_c,nmb,3,3,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_cotriad_c,nmb,3,3,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_grad_alpha_c,nmb,3,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_grad_beta_u_c,nmb,9,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_grad_g_dd_c,nmb,18,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_grad_g_uu_c,nmb,18,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_grad_cotriad_c,nmb,27,ncells3,ncells2,ncells1);
+  Kokkos::realloc(adm_dt_cotriad_c,nmb,9,ncells3,ncells2,ncells1);
   if (angular_fluxes) {Kokkos::realloc(na,nmb,prgeo->nangles,ncells3,ncells2,ncells1,6);}
   if (is_hydro_enabled || is_mhd_enabled) {
     Kokkos::realloc(norm_to_tet,nmb,4,4,ncells3,ncells2,ncells1);

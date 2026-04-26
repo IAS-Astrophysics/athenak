@@ -8,6 +8,7 @@
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -35,6 +36,10 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   // Return if dyn_radiation source term disabled
   if (!(rad_source)) {
     return TaskStatus::complete;
+  }
+  if (use_adm_geometry) {
+    pmy_pack->padm->SetADMVariables(pmy_pack);
+    SetOrthonormalTetrad();
   }
 
   // Extract indices, size data, hydro/mhd/units flags, and coupling flags
@@ -94,7 +99,11 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   auto &tt = tet_c;
   auto &tc = tetcov_c;
   auto &norm_to_tet_ = norm_to_tet;
+  auto &sqrt_detg_c_ = sqrt_detg_c;
+  auto &adm_alpha_c_ = adm_alpha_c;
+  auto &adm_g_dd_c_ = adm_g_dd_c;
   auto &solid_angles_ = prgeo->solid_angles;
+  bool use_adm_geometry_ = use_adm_geometry;
 
   // Extract hydro/mhd quantities
   DvceArray5D<Real> u0_, w0_;
@@ -135,10 +144,28 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    // compute metric and inverse
+    // Compute the metric needed by the fluid primitive convention.  In ADM mode,
+    // radiation quantities are evolved as U=sqrt(gamma) I and the tetrad is the
+    // Eulerian ADM tetrad cached once per stage.
     Real glower[4][4], gupper[4][4];
-    ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
-    Real alpha = sqrt(-1.0/gupper[0][0]);
+    Real alpha;
+    if (use_adm_geometry_) {
+      alpha = adm_alpha_c_(m,k,j,i);
+      for (int a=0; a<4; ++a) {
+        for (int b=0; b<4; ++b) {
+          glower[a][b] = 0.0;
+          gupper[a][b] = 0.0;
+        }
+      }
+      for (int a=0; a<3; ++a) {
+        for (int b=0; b<3; ++b) {
+          glower[a+1][b+1] = adm_g_dd_c_(m,a,b,k,j,i);
+        }
+      }
+    } else {
+      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      alpha = sqrt(-1.0/gupper[0][0]);
+    }
 
     // fluid state
     Real &wdn = w0_(m,IDN,k,j,i);
@@ -182,20 +209,29 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     u_tet[3] = (norm_to_tet_(m,3,0,k,j,i)*gamma + norm_to_tet_(m,3,1,k,j,i)*wvx +
                 norm_to_tet_(m,3,2,k,j,i)*wvy   + norm_to_tet_(m,3,3,k,j,i)*wvz);
 
-    // coordinate component n^0
-    Real n0 = tt(m,0,0,k,j,i);
+    // Coordinate component n^0 of the photon direction normalized to unit
+    // Eulerian/tetrad frequency.
+    Real n0 = use_adm_geometry_ ? 1.0/alpha : tt(m,0,0,k,j,i);
+    Real sqrtg = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i) : 1.0;
 
     // Calculate polynomial coefficients
     Real wght_sum = 0.0;
     Real suma1 = 0.0;
     Real suma2 = 0.0;
     for (int n=0; n<=nang1; ++n) {
-      Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
-                 tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+      Real n_0 = 1.0;
+      if (!(use_adm_geometry_)) {
+        n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+              tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+              tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+              tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+      }
       Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                     u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
       Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
-      Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+      Real intensity = use_adm_geometry_ ? i0_(m,n,k,j,i)/sqrtg :
+                                           i0_(m,n,k,j,i)/(n0*n_0);
+      Real intensity_cm = 4.0*M_PI*intensity*SQR(SQR(n0_cm));
       Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
       Real vncsigma2 = n0_cm*vncsigma;
       Real ir_weight = intensity_cm*omega_cm;
@@ -233,39 +269,66 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       Real jr_cm = (suma1*emission + suma2)/(1.0 - suma3);
       Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
       for (int n=0; n<=nang1; ++n) {
-        // compute coordinate normal components
-        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
-                 + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-        Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
-                 + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
-        Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
-                 + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
-        Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
-                 + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+        Real n_0 = 1.0;
+        Real mom[3] = {0.0, 0.0, 0.0};
+        if (use_adm_geometry_) {
+          Real s[3] = {0.0, 0.0, 0.0};
+          for (int a=0; a<3; ++a) {
+            for (int d=0; d<3; ++d) {
+              s[d] += tt(m,a+1,d+1,k,j,i)*nh_c_.d_view(n,a+1);
+            }
+          }
+          for (int a=0; a<3; ++a) {
+            for (int b=0; b<3; ++b) {
+              mom[a] += adm_g_dd_c_(m,a,b,k,j,i)*s[b];
+            }
+          }
+        } else {
+          n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+                tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+                tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+          Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0) +
+                     tc(m,1,1,k,j,i)*nh_c_.d_view(n,1) +
+                     tc(m,2,1,k,j,i)*nh_c_.d_view(n,2) +
+                     tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
+          Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0) +
+                     tc(m,1,2,k,j,i)*nh_c_.d_view(n,1) +
+                     tc(m,2,2,k,j,i)*nh_c_.d_view(n,2) +
+                     tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
+          Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0) +
+                     tc(m,1,3,k,j,i)*nh_c_.d_view(n,1) +
+                     tc(m,2,3,k,j,i)*nh_c_.d_view(n,2) +
+                     tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+          mom[0] = n_1/n_0;
+          mom[1] = n_2/n_0;
+          mom[2] = n_3/n_0;
+        }
+        Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
 
         // compute moments before coupling
         m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-        m_old[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-        m_old[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-        m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+        m_old[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        m_old[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        m_old[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
 
         // update intensity
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
-        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/conserved_norm)*SQR(SQR(n0_cm));
         Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
         Real vncsigma2 = n0_cm*vncsigma;
         Real di_cm = ( ((dtcsigs-dtcsigp)*jr_cm
                       + (dtcsiga+dtcsigp)*emission
                       - (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
-        i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
-                                     di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
+        i0_(m,n,k,j,i) = conserved_norm*fmax(i0_(m,n,k,j,i)/conserved_norm +
+                                             di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
 
         // compute moments after coupling
         m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-        m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-        m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-        m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+        m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
 
         // handle excision
         // NOTE(@pdmullen): The below zeroes all intensities within rks <= r_excision and
@@ -274,7 +337,8 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         // absorption and scattering inform the Compton update
         if (excise) {
           bool apply_excision = (rad_mask_(m,k,j,i) ||
-                                 (!(is_compton_enabled_) && fabs(n_0) < n_0_floor_));
+                                 (!(use_adm_geometry_) && !(is_compton_enabled_) &&
+                                  fabs(n_0) < n_0_floor_));
           if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
         }
       }
@@ -296,12 +360,19 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       suma1 = 0.0;
       Real jr_cm = 0.0;
       for (int n=0; n<=nang1; ++n) {
-        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
-                   tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        Real n_0 = 1.0;
+        if (!(use_adm_geometry_)) {
+          n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+                tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+                tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        }
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
         Real wght_cm = solid_angles_.d_view(n)/SQR(n0_cm)/wght_sum;
-        Real intensity_cm = 4.0*M_PI*(i0_(m,n,k,j,i)/(n0*n_0))*SQR(SQR(n0_cm));
+        Real intensity = use_adm_geometry_ ? i0_(m,n,k,j,i)/sqrtg :
+                                             i0_(m,n,k,j,i)/(n0*n_0);
+        Real intensity_cm = 4.0*M_PI*intensity*SQR(SQR(n0_cm));
         Real ir_weight = intensity_cm*wght_cm;
         jr_cm += ir_weight;
         suma1 += (n0_cm/n0)*4.0*dtcsigs*inv_t_electron_*wght_cm;
@@ -330,38 +401,59 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         tgasnew = (arad_*SQR(SQR(tradnew)) - jr_cm)/(suma1*jr_cm) + tradnew;
         Real m_old[4] = {0.0}; Real m_new[4] = {0.0};
         for (int n=0; n<=nang1; ++n) {
-          // compute coordinate normal components
-          Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
-                   + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-          Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
-                   + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
-          Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
-                   + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
-          Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
-                   + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+          Real n_0 = 1.0;
+          Real mom[3] = {0.0, 0.0, 0.0};
+          if (use_adm_geometry_) {
+            Real s[3] = {0.0, 0.0, 0.0};
+            for (int a=0; a<3; ++a) {
+              for (int d=0; d<3; ++d) {
+                s[d] += tt(m,a+1,d+1,k,j,i)*nh_c_.d_view(n,a+1);
+              }
+            }
+            for (int a=0; a<3; ++a) {
+              for (int b=0; b<3; ++b) {
+                mom[a] += adm_g_dd_c_(m,a,b,k,j,i)*s[b];
+              }
+            }
+          } else {
+            n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+                 +tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+            Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
+                     + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
+            Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
+                     + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
+            Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
+                     + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+            mom[0] = n_1/n_0;
+            mom[1] = n_2/n_0;
+            mom[2] = n_3/n_0;
+          }
+          Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
 
           // compute moments before coupling
           m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-          m_old[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-          m_old[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-          m_old[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+          m_old[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          m_old[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          m_old[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
 
           // update intensity
           Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
           Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
-          i0_(m,n,k,j,i) = n0*n_0*fmax(i0_(m,n,k,j,i)/(n0*n_0) +
-                                       di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
+          i0_(m,n,k,j,i) = conserved_norm*fmax(i0_(m,n,k,j,i)/conserved_norm +
+                                               di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
 
           // compute moments after coupling
           m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-          m_new[1] += (n_1*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-          m_new[2] += (n_2*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
-          m_new[3] += (n_3*i0_(m,n,k,j,i)/n_0*solid_angles_.d_view(n));
+          m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
 
           // handle excision (see notes above)
           if (excise) {
-            if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+            if (rad_mask_(m,k,j,i) || (!(use_adm_geometry_) && fabs(n_0) < n_0_floor_)) {
+              i0_(m,n,k,j,i) = 0.0;
+            }
           }
         }
 
@@ -378,11 +470,16 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         // was encountered.. apply excision
         if (excise) {
           for (int n=0; n<=nang1; ++n) {
-            Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+
-                       tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)+
-                       tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+
-                       tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-            if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+            Real n_0 = 1.0;
+            if (!(use_adm_geometry_)) {
+              n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+
+                    tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)+
+                    tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+
+                    tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+            }
+            if (rad_mask_(m,k,j,i) || (!(use_adm_geometry_) && fabs(n_0) < n_0_floor_)) {
+              i0_(m,n,k,j,i) = 0.0;
+            }
           }
         }
       }

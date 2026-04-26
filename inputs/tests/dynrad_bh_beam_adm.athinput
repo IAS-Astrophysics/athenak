@@ -1,18 +1,19 @@
-# AthenaK input file for a compact standalone dyn_radiation beam/output smoke test
+# AthenaK input file for standalone dyn_radiation ADM angular-bending smoke test
+# on a stationary Kerr-Schild black hole.
 
 <job>
-basename = dynrad_beam_cks
+basename = dynrad_bh_beam_adm
 
 <mesh>
 nghost = 2
-nx1 = 16
-x1min = -0.25
-x1max = 0.25
+nx1 = 24
+x1min = -0.5
+x1max = 4.5
 ix1_bc = user
 ox1_bc = user
-nx2 = 32
-x2min = 0.0
-x2max = 1.0
+nx2 = 24
+x2min = -0.5
+x2max = 4.5
 ix2_bc = user
 ox2_bc = user
 nx3 = 1
@@ -22,23 +23,29 @@ ix3_bc = periodic
 ox3_bc = periodic
 
 <meshblock>
-nx1 = 16
-nx2 = 16
+nx1 = 8
+nx2 = 8
 nx3 = 1
 
 <coord>
 general_rel = true
-minkowski = true
+a = -0.9
+excise = true
+dexcise = -1.0
+pexcise = -1.0
+
+<adm>
+dynamic = false
 
 <time>
 evolution = dynamic
 integrator = rk2
-cfl_number = 0.3
+cfl_number = 0.25
 nlim = -1
 tlim = 0.2
 
 <dyn_radiation>
-geometry = cks
+geometry = adm
 nlevel = 2
 rotate_geo = false
 angular_fluxes = true
@@ -47,14 +54,14 @@ reconstruct = plm
 <rad_srcterms>
 rad_beam = true
 dii_dt = 1.0
-pos_1 = 0.0
-pos_2 = 0.05
+pos_1 = 3.5
+pos_2 = 0.0
 pos_3 = 0.0
 dir_1 = 0.0
 dir_2 = 1.0
 dir_3 = 0.0
-width = 0.05
-spread = 60.0
+width = 0.7
+spread = 15.0
 
 <problem>
 pgen_name = rad_beam
@@ -63,5 +70,5 @@ pgen_name = rad_beam
 file_type = tab
 variable = rad_coord
 dt = 0.2
-slice_x1 = 0.0
+slice_x1 = 3.5
 slice_x3 = 0.0

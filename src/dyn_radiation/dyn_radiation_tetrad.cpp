@@ -22,6 +22,18 @@
 namespace dyn_radiation {
 
 KOKKOS_INLINE_FUNCTION
+int Sym3Index(const int a, const int b) {
+  const int i = (a < b) ? a : b;
+  const int j = (a < b) ? b : a;
+  if (i == 0 && j == 0) return 0;
+  if (i == 0 && j == 1) return 1;
+  if (i == 0 && j == 2) return 2;
+  if (i == 1 && j == 1) return 3;
+  if (i == 1 && j == 2) return 4;
+  return 5;
+}
+
+KOKKOS_INLINE_FUNCTION
 void BuildADMSpatialTriad(const Real gxx, const Real gxy, const Real gxz,
                           const Real gyy, const Real gyz, const Real gzz,
                           Real e[3][3]) {
@@ -45,6 +57,65 @@ void BuildADMSpatialTriad(const Real gxx, const Real gxy, const Real gxz,
   e[0][2] = l10*l21/(l00*l11*l22) - l20/(l00*l22);
   e[1][2] = -l21/(l11*l22);
   e[2][2] = 1.0/l22;
+}
+
+KOKKOS_INLINE_FUNCTION
+void BuildADMCoTriad(const Real gxx, const Real gxy, const Real gxz,
+                     const Real gyy, const Real gyz, const Real gzz,
+                     Real co[3][3]) {
+  // Cholesky factor gamma_ij = L_iA L_jA.  co[A][i] = L_iA maps
+  // coordinate spatial vectors into the Eulerian orthonormal frame.
+  const Real l00 = sqrt(fmax(gxx, 1.0e-300));
+  const Real l10 = gxy/l00;
+  const Real l20 = gxz/l00;
+  const Real l11 = sqrt(fmax(gyy - SQR(l10), 1.0e-300));
+  const Real l21 = (gyz - l20*l10)/l11;
+  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), 1.0e-300));
+
+  co[0][0] = l00;
+  co[0][1] = l10;
+  co[0][2] = l20;
+
+  co[1][0] = 0.0;
+  co[1][1] = l11;
+  co[1][2] = l21;
+
+  co[2][0] = 0.0;
+  co[2][1] = 0.0;
+  co[2][2] = l22;
+}
+
+KOKKOS_INLINE_FUNCTION
+void BuildADMCoTriadDerivative(const Real gxx, const Real gxy, const Real gxz,
+                               const Real gyy, const Real gyz, const Real gzz,
+                               const Real dgxx, const Real dgxy, const Real dgxz,
+                               const Real dgyy, const Real dgyz, const Real dgzz,
+                               Real dco[3][3]) {
+  const Real l00 = sqrt(fmax(gxx, 1.0e-300));
+  const Real l10 = gxy/l00;
+  const Real l20 = gxz/l00;
+  const Real l11 = sqrt(fmax(gyy - SQR(l10), 1.0e-300));
+  const Real l21 = (gyz - l20*l10)/l11;
+  const Real l22 = sqrt(fmax(gzz - SQR(l20) - SQR(l21), 1.0e-300));
+
+  const Real dl00 = 0.5*dgxx/l00;
+  const Real dl10 = (dgxy - l10*dl00)/l00;
+  const Real dl20 = (dgxz - l20*dl00)/l00;
+  const Real dl11 = 0.5*(dgyy - 2.0*l10*dl10)/l11;
+  const Real dl21 = (dgyz - dl20*l10 - l20*dl10 - l21*dl11)/l11;
+  const Real dl22 = 0.5*(dgzz - 2.0*l20*dl20 - 2.0*l21*dl21)/l22;
+
+  dco[0][0] = dl00;
+  dco[0][1] = dl10;
+  dco[0][2] = dl20;
+
+  dco[1][0] = 0.0;
+  dco[1][1] = dl11;
+  dco[1][2] = dl21;
+
+  dco[2][0] = 0.0;
+  dco[2][1] = 0.0;
+  dco[2][2] = dl22;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -102,6 +173,67 @@ void BuildADMFaceTransportCoeffs(const int dir, const Real alpha, const Real bet
   }
 }
 
+KOKKOS_INLINE_FUNCTION
+Real ADMGeodesicAngularSpeed(const Real ell[3], const Real unit_flux[2],
+                             const Real alpha, const Real beta[3],
+                             const Real triad[3][3], const Real cotriad[3][3],
+                             const Real grad_alpha[3],
+                             const Real grad_beta[3][3],
+                             const Real grad_guu[3][3][3],
+                             const Real grad_cotriad[3][3][3],
+                             const Real dt_cotriad[3][3]) {
+  Real p[3] = {0.0, 0.0, 0.0};
+  Real s[3] = {0.0, 0.0, 0.0};
+  for (int a=0; a<3; ++a) {
+    for (int i=0; i<3; ++i) {
+      p[i] += cotriad[a][i]*ell[a];
+      s[i] += triad[i][a]*ell[a];
+    }
+  }
+
+  Real v[3];
+  for (int i=0; i<3; ++i) {
+    v[i] = alpha*s[i] - beta[i];
+  }
+
+  Real pdot[3];
+  for (int i=0; i<3; ++i) {
+    pdot[i] = -grad_alpha[i];
+    for (int j=0; j<3; ++j) {
+      pdot[i] += p[j]*grad_beta[i][j];
+      for (int k=0; k<3; ++k) {
+        pdot[i] -= 0.5*alpha*p[j]*p[k]*grad_guu[i][j][k];
+      }
+    }
+  }
+
+  Real elldot[3] = {0.0, 0.0, 0.0};
+  for (int a=0; a<3; ++a) {
+    for (int i=0; i<3; ++i) {
+      Real frame_adv = 0.0;
+      for (int b=0; b<3; ++b) {
+        Real dcov = dt_cotriad[b][i];
+        for (int d=0; d<3; ++d) {
+          dcov += v[d]*grad_cotriad[d][b][i];
+        }
+        frame_adv += dcov*ell[b];
+      }
+      elldot[a] += triad[i][a]*(pdot[i] - frame_adv);
+    }
+  }
+
+  // Remove roundoff-level radial drift so the angular flux is tangent to S^2.
+  Real radial = ell[0]*elldot[0] + ell[1]*elldot[1] + ell[2]*elldot[2];
+  for (int a=0; a<3; ++a) {
+    elldot[a] -= radial*ell[a];
+  }
+
+  const Real sin2 = fmax(1.0 - SQR(ell[2]), 1.0e-300);
+  const Real theta_dot = -elldot[2]/sqrt(sin2);
+  const Real sin2_psi_dot = ell[0]*elldot[1] - ell[1]*elldot[0];
+  return theta_dot*unit_flux[0] + sin2_psi_dot*unit_flux[1];
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  void DynRadiation::SetOrthonormalTetrad()
 //! \brief Set orthonormal tetrad data
@@ -157,6 +289,12 @@ void DynRadiation::SetOrthonormalTetrad() {
     auto tet_c_ = tet_c;
     auto tetcov_c_ = tetcov_c;
     auto sqrt_detg_c_ = sqrt_detg_c;
+    auto adm_alpha_c_ = adm_alpha_c;
+    auto adm_beta_u_c_ = adm_beta_u_c;
+    auto adm_g_dd_c_ = adm_g_dd_c;
+    auto adm_g_uu_c_ = adm_g_uu_c;
+    auto adm_K_dd_c_ = adm_K_dd_c;
+    auto adm_cotriad_c_ = adm_cotriad_c;
     par_for("dynrad_adm_tet_c",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real beta[3] = {adm_.beta_u(m,0,k,j,i),
@@ -167,15 +305,228 @@ void DynRadiation::SetOrthonormalTetrad() {
                      adm_.g_dd(m,1,2,k,j,i), adm_.g_dd(m,2,2,k,j,i)};
       Real e[4][4], e_cov[4][4];
       BuildADMEulerianTetrad(adm_.alpha(m,k,j,i), beta, g3d, e, e_cov);
+      Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
+                                  g3d[S22], g3d[S23], g3d[S33]);
+      Real detginv = 1.0/fmax(detg, 1.0e-300);
+      Real guu[6];
+      adm::SpatialInv(detginv, g3d[S11], g3d[S12], g3d[S13],
+                      g3d[S22], g3d[S23], g3d[S33],
+                      &guu[S11], &guu[S12], &guu[S13],
+                      &guu[S22], &guu[S23], &guu[S33]);
+      Real cotriad[3][3];
+      BuildADMCoTriad(g3d[S11], g3d[S12], g3d[S13],
+                      g3d[S22], g3d[S23], g3d[S33], cotriad);
       for (int d1=0; d1<4; ++d1) {
         for (int d2=0; d2<4; ++d2) {
           tet_c_   (m,d1,d2,k,j,i) = e[d1][d2];
           tetcov_c_(m,d1,d2,k,j,i) = e_cov[d1][d2];
         }
       }
-      sqrt_detg_c_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
-                                         g3d[S22], g3d[S23], g3d[S33]);
+      sqrt_detg_c_(m,k,j,i) = sqrt(fmax(detg, 1.0e-300));
+      adm_alpha_c_(m,k,j,i) = adm_.alpha(m,k,j,i);
+      for (int a=0; a<3; ++a) {
+        adm_beta_u_c_(m,a,k,j,i) = beta[a];
+        for (int b=0; b<3; ++b) {
+          adm_g_dd_c_(m,a,b,k,j,i) = adm_.g_dd(m,a,b,k,j,i);
+          adm_g_uu_c_(m,a,b,k,j,i) = guu[Sym3Index(a,b)];
+          adm_K_dd_c_(m,a,b,k,j,i) = adm_.vK_dd(m,a,b,k,j,i);
+          adm_cotriad_c_(m,a,b,k,j,i) = cotriad[a][b];
+        }
+      }
     });
+
+    auto adm_grad_alpha_c_ = adm_grad_alpha_c;
+    auto adm_grad_beta_u_c_ = adm_grad_beta_u_c;
+    auto adm_grad_g_dd_c_ = adm_grad_g_dd_c;
+    auto adm_grad_g_uu_c_ = adm_grad_g_uu_c;
+    auto adm_grad_cotriad_c_ = adm_grad_cotriad_c;
+    auto adm_dt_cotriad_c_ = adm_dt_cotriad_c;
+    bool multi_d = pmy_pack->pmesh->multi_d;
+    bool three_d = pmy_pack->pmesh->three_d;
+    par_for("dynrad_adm_grad_cache",DevExeSpace(),
+    0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      int im[3] = {(i > 0) ? i-1 : i, j, k};
+      int ip[3] = {(i < n1-1) ? i+1 : i, j, k};
+      int jm[3] = {i, (j > 0) ? j-1 : j, k};
+      int jp[3] = {i, (j < n2-1) ? j+1 : j, k};
+      int km[3] = {i, j, (k > 0) ? k-1 : k};
+      int kp[3] = {i, j, (k < n3-1) ? k+1 : k};
+      Real inv_dx[3] = {
+        1.0/(size.d_view(m).dx1*((ip[0] == im[0]) ? 1.0 : static_cast<Real>(ip[0]-im[0]))),
+        multi_d ? 1.0/(size.d_view(m).dx2*((jp[1] == jm[1]) ? 1.0 :
+                      static_cast<Real>(jp[1]-jm[1]))) : 0.0,
+        three_d ? 1.0/(size.d_view(m).dx3*((kp[2] == km[2]) ? 1.0 :
+                       static_cast<Real>(kp[2]-km[2]))) : 0.0
+      };
+      int lo[3][3] = {{im[0], im[1], im[2]}, {jm[0], jm[1], jm[2]},
+                      {km[0], km[1], km[2]}};
+      int hi[3][3] = {{ip[0], ip[1], ip[2]}, {jp[0], jp[1], jp[2]},
+                      {kp[0], kp[1], kp[2]}};
+
+      Real grad_gdd[3][3][3];
+      Real grad_beta[3][3];
+      for (int d=0; d<3; ++d) {
+        const bool active = (d == 0) || (d == 1 && multi_d) || (d == 2 && three_d);
+        adm_grad_alpha_c_(m,d,k,j,i) = active ?
+          (adm_alpha_c_(m,hi[d][2],hi[d][1],hi[d][0]) -
+           adm_alpha_c_(m,lo[d][2],lo[d][1],lo[d][0]))*inv_dx[d] : 0.0;
+        for (int a=0; a<3; ++a) {
+          grad_beta[d][a] = active ?
+            (adm_beta_u_c_(m,a,hi[d][2],hi[d][1],hi[d][0]) -
+             adm_beta_u_c_(m,a,lo[d][2],lo[d][1],lo[d][0]))*inv_dx[d] : 0.0;
+          adm_grad_beta_u_c_(m,3*d+a,k,j,i) = grad_beta[d][a];
+          for (int b=0; b<3; ++b) {
+            const int sym = Sym3Index(a,b);
+            grad_gdd[d][a][b] = active ?
+              (adm_g_dd_c_(m,a,b,hi[d][2],hi[d][1],hi[d][0]) -
+               adm_g_dd_c_(m,a,b,lo[d][2],lo[d][1],lo[d][0]))*inv_dx[d] : 0.0;
+            adm_grad_g_dd_c_(m,6*d+sym,k,j,i) = grad_gdd[d][a][b];
+            adm_grad_g_uu_c_(m,6*d+sym,k,j,i) = active ?
+              (adm_g_uu_c_(m,a,b,hi[d][2],hi[d][1],hi[d][0]) -
+               adm_g_uu_c_(m,a,b,lo[d][2],lo[d][1],lo[d][0]))*inv_dx[d] : 0.0;
+          }
+        }
+      }
+
+      for (int d=0; d<3; ++d) {
+        for (int a=0; a<3; ++a) {
+          for (int b=0; b<3; ++b) {
+            adm_grad_cotriad_c_(m,9*d+3*a+b,k,j,i) =
+              ((d == 0) || (d == 1 && multi_d) || (d == 2 && three_d)) ?
+              (adm_cotriad_c_(m,a,b,hi[d][2],hi[d][1],hi[d][0]) -
+               adm_cotriad_c_(m,a,b,lo[d][2],lo[d][1],lo[d][0]))*inv_dx[d] : 0.0;
+          }
+        }
+      }
+
+      Real beta_d[3] = {0.0, 0.0, 0.0};
+      for (int a=0; a<3; ++a) {
+        for (int b=0; b<3; ++b) {
+          beta_d[a] += adm_g_dd_c_(m,a,b,k,j,i)*adm_beta_u_c_(m,b,k,j,i);
+        }
+      }
+      Real grad_beta_d[3][3];
+      for (int d=0; d<3; ++d) {
+        for (int a=0; a<3; ++a) {
+          grad_beta_d[d][a] = 0.0;
+          for (int b=0; b<3; ++b) {
+            grad_beta_d[d][a] += grad_gdd[d][a][b]*adm_beta_u_c_(m,b,k,j,i)
+                               + adm_g_dd_c_(m,a,b,k,j,i)*grad_beta[d][b];
+          }
+        }
+      }
+
+      Real dgdt[3][3];
+      for (int a=0; a<3; ++a) {
+        for (int b=0; b<3; ++b) {
+          Real conn_ab = 0.0;
+          Real conn_ba = 0.0;
+          for (int c=0; c<3; ++c) {
+            Real gamma_cab = 0.0;
+            Real gamma_cba = 0.0;
+            for (int e=0; e<3; ++e) {
+              gamma_cab += 0.5*adm_g_uu_c_(m,c,e,k,j,i)*
+                (grad_gdd[a][b][e] + grad_gdd[b][a][e] - grad_gdd[e][a][b]);
+              gamma_cba += 0.5*adm_g_uu_c_(m,c,e,k,j,i)*
+                (grad_gdd[b][a][e] + grad_gdd[a][b][e] - grad_gdd[e][b][a]);
+            }
+            conn_ab += gamma_cab*beta_d[c];
+            conn_ba += gamma_cba*beta_d[c];
+          }
+          Real d_a_beta_b = grad_beta_d[a][b] - conn_ab;
+          Real d_b_beta_a = grad_beta_d[b][a] - conn_ba;
+          dgdt[a][b] = -2.0*adm_alpha_c_(m,k,j,i)*adm_K_dd_c_(m,a,b,k,j,i)
+                     + d_a_beta_b + d_b_beta_a;
+        }
+      }
+
+      Real dco_dt[3][3];
+      BuildADMCoTriadDerivative(adm_g_dd_c_(m,0,0,k,j,i),
+                                adm_g_dd_c_(m,0,1,k,j,i),
+                                adm_g_dd_c_(m,0,2,k,j,i),
+                                adm_g_dd_c_(m,1,1,k,j,i),
+                                adm_g_dd_c_(m,1,2,k,j,i),
+                                adm_g_dd_c_(m,2,2,k,j,i),
+                                dgdt[0][0], dgdt[0][1], dgdt[0][2],
+                                dgdt[1][1], dgdt[1][2], dgdt[2][2],
+                                dco_dt);
+      for (int a=0; a<3; ++a) {
+        for (int b=0; b<3; ++b) {
+          adm_dt_cotriad_c_(m,3*a+b,k,j,i) = dco_dt[a][b];
+        }
+      }
+    });
+
+    if (is_hydro_enabled || is_mhd_enabled) {
+      auto norm_to_tet_ = norm_to_tet;
+      par_for("dynrad_adm_norm_to_tet",DevExeSpace(),
+      0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        for (int a=0; a<4; ++a) {
+          for (int b=0; b<4; ++b) {
+            norm_to_tet_(m,a,b,k,j,i) = 0.0;
+          }
+        }
+        norm_to_tet_(m,0,0,k,j,i) = 1.0;
+        for (int a=0; a<3; ++a) {
+          for (int b=0; b<3; ++b) {
+            norm_to_tet_(m,a+1,b+1,k,j,i) = adm_cotriad_c_(m,a,b,k,j,i);
+          }
+        }
+      });
+    }
+
+    if (angular_fluxes) {
+      auto uflux = prgeo->unit_flux;
+      auto nh_f_ = nh_f;
+      auto na_ = na;
+      par_for("dynrad_adm_na",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        Real beta[3] = {adm_beta_u_c_(m,0,k,j,i), adm_beta_u_c_(m,1,k,j,i),
+                        adm_beta_u_c_(m,2,k,j,i)};
+        Real triad[3][3];
+        Real cotriad[3][3];
+        for (int a=0; a<3; ++a) {
+          for (int b=0; b<3; ++b) {
+            triad[b][a] = tet_c_(m,a+1,b+1,k,j,i);
+            cotriad[a][b] = adm_cotriad_c_(m,a,b,k,j,i);
+          }
+        }
+        Real grad_alpha[3] = {adm_grad_alpha_c_(m,0,k,j,i),
+                              adm_grad_alpha_c_(m,1,k,j,i),
+                              adm_grad_alpha_c_(m,2,k,j,i)};
+        Real grad_beta[3][3];
+        Real grad_guu[3][3][3];
+        Real grad_cotriad[3][3][3];
+        Real dt_cotriad[3][3];
+        for (int d=0; d<3; ++d) {
+          for (int a=0; a<3; ++a) {
+            grad_beta[d][a] = adm_grad_beta_u_c_(m,3*d+a,k,j,i);
+            for (int b=0; b<3; ++b) {
+              grad_guu[d][a][b] = adm_grad_g_uu_c_(m,6*d+Sym3Index(a,b),k,j,i);
+              grad_cotriad[d][a][b] = adm_grad_cotriad_c_(m,9*d+3*a+b,k,j,i);
+            }
+          }
+        }
+        for (int a=0; a<3; ++a) {
+          for (int b=0; b<3; ++b) {
+            dt_cotriad[a][b] = adm_dt_cotriad_c_(m,3*a+b,k,j,i);
+          }
+        }
+        for (int n=0; n<=nang1; ++n) {
+          for (int nb=0; nb<num_neighbors_.d_view(n); ++nb) {
+            Real ell[3] = {nh_f_.d_view(n,nb,1), nh_f_.d_view(n,nb,2),
+                           nh_f_.d_view(n,nb,3)};
+            Real edge_flux[2] = {uflux.d_view(n,nb,0), uflux.d_view(n,nb,1)};
+            na_(m,n,k,j,i,nb) =
+              ADMGeodesicAngularSpeed(ell, edge_flux, adm_alpha_c_(m,k,j,i), beta,
+                                      triad, cotriad, grad_alpha, grad_beta,
+                                      grad_guu, grad_cotriad, dt_cotriad);
+          }
+        }
+      });
+    }
 
     auto tet_d1_x1f_ = tet_d1_x1f;
     auto sqrt_detg_x1f_ = sqrt_detg_x1f;
@@ -220,18 +571,6 @@ void DynRadiation::SetOrthonormalTetrad() {
       });
     }
 
-    if (is_hydro_enabled || is_mhd_enabled) {
-      auto norm_to_tet_ = norm_to_tet;
-      par_for("dynrad_adm_norm_to_tet",DevExeSpace(),
-      0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        for (int a=0; a<4; ++a) {
-          for (int b=0; b<4; ++b) {
-            norm_to_tet_(m,a,b,k,j,i) = (a == b) ? 1.0 : 0.0;
-          }
-        }
-      });
-    }
     return;
   }
 

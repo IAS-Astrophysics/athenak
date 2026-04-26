@@ -128,6 +128,18 @@ class DynRadiation {
   DvceArray4D<Real> sqrt_detg_x1f;    // sqrt(det gamma_ij) at x1 faces
   DvceArray4D<Real> sqrt_detg_x2f;    // sqrt(det gamma_ij) at x2 faces
   DvceArray4D<Real> sqrt_detg_x3f;    // sqrt(det gamma_ij) at x3 faces
+  DvceArray4D<Real> adm_alpha_c;       // cached ADM lapse at cell centers
+  DvceArray5D<Real> adm_beta_u_c;      // cached ADM shift at cell centers
+  DvceArray6D<Real> adm_g_dd_c;        // cached ADM spatial metric at cell centers
+  DvceArray6D<Real> adm_g_uu_c;        // cached ADM inverse spatial metric at cell centers
+  DvceArray6D<Real> adm_K_dd_c;        // cached ADM extrinsic curvature at cell centers
+  DvceArray6D<Real> adm_cotriad_c;     // cached ADM spatial co-triad e^a_i
+  DvceArray5D<Real> adm_grad_alpha_c;  // cached spatial derivatives of lapse
+  DvceArray5D<Real> adm_grad_beta_u_c; // cached spatial derivatives of shift
+  DvceArray5D<Real> adm_grad_g_dd_c;   // cached spatial derivatives of gamma_ij
+  DvceArray5D<Real> adm_grad_g_uu_c;   // cached spatial derivatives of gamma^ij
+  DvceArray5D<Real> adm_grad_cotriad_c;// cached spatial derivatives of co-triad
+  DvceArray5D<Real> adm_dt_cotriad_c;  // cached coordinate-time derivative of co-triad
   DvceArray6D<Real> na;               // n^a
   DvceArray6D<Real> norm_to_tet;      // used in transform b/w normal frame and tet frame
   void SetOrthonormalTetrad();

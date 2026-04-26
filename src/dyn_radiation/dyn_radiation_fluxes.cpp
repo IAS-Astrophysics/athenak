@@ -268,10 +268,21 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       divfa_(m,n,k,j,i) = 0.0;
       for (int nb=0; nb<numn.d_view(n); ++nb) {
-        Real flx_edge = na_(m,n,k,j,i,nb) *
-                        ((na_(m,n,k,j,i,nb) < 0.0) ?
-                         i0_(m,indn.d_view(n,nb),k,j,i)/tet_c_(m,0,0,k,j,i) :
-                         i0_(m,n,k,j,i)/tet_c_(m,0,0,k,j,i));
+        Real flx_edge;
+        if (use_adm_geometry_) {
+          // ADM angular drift is a coordinate-time angular velocity, so the
+          // finite-volume unknown is U=sqrt(gamma) I itself.
+          flx_edge = na_(m,n,k,j,i,nb) *
+                     ((na_(m,n,k,j,i,nb) < 0.0) ?
+                      i0_(m,indn.d_view(n,nb),k,j,i) : i0_(m,n,k,j,i));
+        } else {
+          // Preserve the legacy CKS normalization: the angular flux advects
+          // the invariant intensity primitive U/k^0.
+          flx_edge = na_(m,n,k,j,i,nb) *
+                     ((na_(m,n,k,j,i,nb) < 0.0) ?
+                      i0_(m,indn.d_view(n,nb),k,j,i)/tet_c_(m,0,0,k,j,i) :
+                      i0_(m,n,k,j,i)/tet_c_(m,0,0,k,j,i));
+        }
         divfa_(m,n,k,j,i) += (arcl.d_view(n,nb)*flx_edge/solid_angles_.d_view(n));
       }
     });

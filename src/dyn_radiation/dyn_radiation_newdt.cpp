@@ -92,8 +92,16 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
           Real yn = nh_c_.d_view(indn.d_view(n,nb),2);
           Real zn = nh_c_.d_view(indn.d_view(n,nb),3);
           // compute timestep limitation
-          Real n0 = tet_c_(m,0,0,k,j,i);
-          Real adt = fmin(tmp_min_dta,(acos(x*xn+y*yn+z*zn)/fabs(na_(m,n,k,j,i,nb)/n0)));
+          Real dot = fmin(1.0, fmax(-1.0, x*xn+y*yn+z*zn));
+          Real omega = fabs(na_(m,n,k,j,i,nb));
+          if (!(use_adm_geometry_)) {
+            Real n0 = tet_c_(m,0,0,k,j,i);
+            omega = fabs(na_(m,n,k,j,i,nb)/n0);
+          }
+          Real adt = tmp_min_dta;
+          if (omega > 1.0e-300) {
+            adt = fmin(tmp_min_dta, acos(dot)/omega);
+          }
           // set timestep limitation if not excising this cell
           if (excise) {
             if (!(rad_mask_(m,k,j,i))) { tmp_min_dta = adt; }
