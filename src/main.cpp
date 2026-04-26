@@ -63,6 +63,8 @@ int main(int argc, char *argv[]) {
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
   bool  res_flag = false;  // set to true if -r <file> argument is on cmdline
+  bool wdog_flag = false;  // set to true if -w ss     argument is on cmdline
+  int wdog_timeout = 0;
   Real wtlim = 0;
 
   //--- Step 1. --------------------------------------------------------------------------
@@ -173,6 +175,10 @@ int main(int argc, char *argv[]) {
           std::sscanf(argv[++i], "%d:%d:%d", &wth, &wtm, &wts);
           wtlim = static_cast<Real>(wth*3600 + wtm*60 + wts);
           break;
+        case 'w':
+          wdog_flag = true;
+          wdog_timeout = std::atoi(argv[++i]);
+          break;
         case 'c':
           if (global_variable::my_rank == 0) ShowConfig();
           Kokkos::finalize();
@@ -195,6 +201,7 @@ int main(int argc, char *argv[]) {
             std::cout << "  -c              show configuration and quit\n";
             std::cout << "  -m              output mesh structure and quit\n";
             std::cout << "  -t hh:mm:ss     wall time limit for final output\n";
+            std::cout << "  -w ss           watchdog timeout in seconds\n";
             std::cout << "  -h              this help\n";
             ShowConfig();
           }
@@ -343,9 +350,11 @@ int main(int argc, char *argv[]) {
   //    1. Initial conditions set in Driver::Initialize()
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
+  // Optionally start the WatchDog
 
+  if (wdog_flag) WatchDog(wdog_timeout);
   pdriver->Initialize(pmesh, pinput, pout, res_flag);
-  pdriver->Execute(pmesh, pinput, pout);
+  pdriver->Execute(pmesh, pinput, pout, wdog_flag);
   pdriver->Finalize(pmesh, pinput, pout);
 
   //--- Step 8. -------------------------------------------------------------------------
