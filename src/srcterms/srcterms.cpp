@@ -114,6 +114,7 @@ void SourceTerms::ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int nmb1 = pmy_pack->nmb_thispack - 1;
 
   Real &g = const_accel_val;
@@ -226,6 +227,7 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   int nmb1 = (pmy_pack->nmb_thispack-1);
   int nang1 = (pmy_pack->prad != nullptr) ?
               (pmy_pack->prad->prgeo->nangles-1) :
@@ -249,11 +251,13 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   DvceArray6D<Real> tet_c_;
   DvceArray4D<Real> sqrt_detg_c_;
   bool use_adm_radiation = false;
+  bool use_dyn_radiation = false;
   if (pmy_pack->prad != nullptr) {
     tc = pmy_pack->prad->tetcov_c;
     nh_c_ = pmy_pack->prad->nh_c;
     tet_c_ = pmy_pack->prad->tet_c;
   } else {
+    use_dyn_radiation = true;
     use_adm_radiation = pmy_pack->pdynrad->use_adm_geometry;
     tc = pmy_pack->pdynrad->tetcov_c;
     nh_c_ = pmy_pack->pdynrad->nh_c;
@@ -264,22 +268,34 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
-    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+    Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
 
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
-    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
 
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
-    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+    Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
     Real glower[4][4], gupper[4][4];
-    ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
-    Real dgx[4][4], dgy[4][4], dgz[4][4];
-    ComputeMetricDerivatives(x1v,x2v,x3v,flat,spin,dgx,dgy,dgz);
-    Real e[4][4], e_cov[4][4], omega[4][4][4];
-    ComputeTetrad(x1v,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
+    if (use_dyn_radiation) {
+      for (int mu=0; mu<4; ++mu) {
+        for (int nu=0; nu<4; ++nu) {
+          glower[mu][nu] = 0.0;
+          for (int a=0; a<4; ++a) {
+            Real eta = (a == 0) ? -1.0 : 1.0;
+            glower[mu][nu] += eta*tc(m,a,mu,k,j,i)*tc(m,a,nu,k,j,i);
+          }
+        }
+      }
+    } else {
+      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      Real dgx[4][4], dgy[4][4], dgz[4][4];
+      ComputeMetricDerivatives(x1v,x2v,x3v,flat,spin,dgx,dgy,dgz);
+      Real e[4][4], e_cov[4][4], omega[4][4][4];
+      ComputeTetrad(x1v,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
+    }
 
     // Calculate proper distance to beam origin and minimum angle between directions
     Real dx1 = x1v - p1;

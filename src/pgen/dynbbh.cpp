@@ -30,6 +30,7 @@
 #include "diffusion/current_density.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "particles/particles.hpp"
 #include "utils/flux_generalized.hpp"
 #include "units/units.hpp"
 #include "srcterms/ismcooling.hpp"
@@ -1487,6 +1488,103 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   } else {
     //pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+  }
+
+  bool init_beam_particles = pin->GetOrAddBoolean("problem", "init_beam_edge_particles",
+                                                  false);
+  if (init_beam_particles) {
+    if (pmbp->ppart == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "init_beam_edge_particles=true requires a <particles> block"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (pmbp->padm == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "init_beam_edge_particles=true requires <adm> so null momenta "
+                << "can be initialized with the BBH spatial metric" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    std::string beam_block = pin->DoesBlockExist("rad_srcterms") ? "rad_srcterms" : "problem";
+    Real p1 = pin->GetOrAddReal(beam_block, "pos_1", 0.0);
+    Real p2 = pin->GetOrAddReal(beam_block, "pos_2", 0.0);
+    Real p3 = pin->GetOrAddReal(beam_block, "pos_3", 0.0);
+    Real d1 = pin->GetOrAddReal(beam_block, "dir_1", 1.0);
+    Real d2 = pin->GetOrAddReal(beam_block, "dir_2", 0.0);
+    Real d3 = pin->GetOrAddReal(beam_block, "dir_3", 0.0);
+    Real spread = pin->GetOrAddReal(beam_block, "spread", 10.0) * (M_PI/180.0);
+    Real dnorm = std::sqrt(SQR(d1) + SQR(d2) + SQR(d3));
+    if (!(dnorm > 0.0)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "beam direction must be nonzero" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    d1 /= dnorm; d2 /= dnorm; d3 /= dnorm;
+
+    Real refx = 0.0;
+    Real refy = (std::abs(d3) < 0.9) ? 0.0 : 1.0;
+    Real refz = (std::abs(d3) < 0.9) ? 1.0 : 0.0;
+    Real e1x = d2*refz - d3*refy;
+    Real e1y = d3*refx - d1*refz;
+    Real e1z = d1*refy - d2*refx;
+    Real e1n = std::sqrt(SQR(e1x) + SQR(e1y) + SQR(e1z));
+    e1x /= e1n; e1y /= e1n; e1z /= e1n;
+    Real e2x = d2*e1z - d3*e1y;
+    Real e2y = d3*e1x - d1*e1z;
+    Real e2z = d1*e1y - d2*e1x;
+
+    auto &pr = pmbp->ppart->prtcl_rdata;
+    auto &pi = pmbp->ppart->prtcl_idata;
+    int npart = pmbp->ppart->nprtcl_thispack;
+    auto &adm = pmbp->padm->adm;
+    int gids = pmbp->gids;
+    par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart-1,
+    KOKKOS_LAMBDA(const int p) {
+      int msel = -1;
+      for (int m=0; m<nmb; ++m) {
+        bool inside = (p1 >= size.d_view(m).x1min && p1 <= size.d_view(m).x1max);
+        inside = inside && (p2 >= size.d_view(m).x2min && p2 <= size.d_view(m).x2max);
+        inside = inside && (p3 >= size.d_view(m).x3min && p3 <= size.d_view(m).x3max);
+        if (inside) msel = m;
+      }
+      bool active = (msel >= 0);
+      if (!(active)) msel = 0;
+
+      pi(PGID,p) = gids + msel;
+      Real px = active ? p1 : 0.5*(size.d_view(msel).x1min + size.d_view(msel).x1max);
+      Real py = active ? p2 : 0.5*(size.d_view(msel).x2min + size.d_view(msel).x2max);
+      Real pz = active ? p3 : 0.5*(size.d_view(msel).x3min + size.d_view(msel).x3max);
+      pr(IPX,p) = px;
+      pr(IPY,p) = py;
+      pr(IPZ,p) = pz;
+
+      Real phi = 2.0*M_PI*(static_cast<Real>(p) + 0.5)/fmax(static_cast<Real>(npart), 1.0);
+      Real st = sin(0.5*spread);
+      Real ct = cos(0.5*spread);
+      Real sx = ct*d1 + st*(cos(phi)*e1x + sin(phi)*e2x);
+      Real sy = ct*d2 + st*(cos(phi)*e1y + sin(phi)*e2y);
+      Real sz = ct*d3 + st*(cos(phi)*e1z + sin(phi)*e2z);
+
+      int i = static_cast<int>((px - size.d_view(msel).x1min)/size.d_view(msel).dx1) + is;
+      int j = static_cast<int>((py - size.d_view(msel).x2min)/size.d_view(msel).dx2) + js;
+      int k = static_cast<int>((pz - size.d_view(msel).x3min)/size.d_view(msel).dx3) + ks;
+      i = (i < is) ? is : ((i > ie) ? ie : i);
+      j = (j < js) ? js : ((j > je) ? je : j);
+      k = (k < ks) ? ks : ((k > ke) ? ke : k);
+
+      pr(IPVX,p) = adm.g_dd(msel,0,0,k,j,i)*sx
+                 + adm.g_dd(msel,0,1,k,j,i)*sy
+                 + adm.g_dd(msel,0,2,k,j,i)*sz;
+      pr(IPVY,p) = adm.g_dd(msel,0,1,k,j,i)*sx
+                 + adm.g_dd(msel,1,1,k,j,i)*sy
+                 + adm.g_dd(msel,1,2,k,j,i)*sz;
+      pr(IPVZ,p) = adm.g_dd(msel,0,2,k,j,i)*sx
+                 + adm.g_dd(msel,1,2,k,j,i)*sy
+                 + adm.g_dd(msel,2,2,k,j,i)*sz;
+    });
   }
   return;
 }

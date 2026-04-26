@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -58,6 +59,14 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ppush = pin->GetString("particles","pusher");
     if (ppush.compare("drift") == 0) {
       pusher = ParticlesPusher::drift;
+    } else if (ppush.compare("null_geodesic") == 0) {
+      pusher = ParticlesPusher::null_geodesic;
+      if (pmy_pack->padm == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "null_geodesic particle pusher requires <adm> "
+                  << "or <z4c> so it can use ADM metric fields" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher must be specified in <particles> block"
@@ -86,6 +95,19 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
+
+  Real cfl = pin->GetOrAddReal("particles", "cfl", 0.4);
+  dtnew = std::numeric_limits<Real>::max();
+  for (int m=0; m<pmy_pack->nmb_thispack; ++m) {
+    dtnew = std::min(dtnew, pmy_pack->pmb->mb_size.h_view(m).dx1);
+    if (pmy_pack->pmesh->multi_d) {
+      dtnew = std::min(dtnew, pmy_pack->pmb->mb_size.h_view(m).dx2);
+    }
+    if (pmy_pack->pmesh->three_d) {
+      dtnew = std::min(dtnew, pmy_pack->pmb->mb_size.h_view(m).dx3);
+    }
+  }
+  dtnew *= cfl;
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
