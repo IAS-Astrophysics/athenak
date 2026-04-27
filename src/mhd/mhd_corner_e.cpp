@@ -152,6 +152,44 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       });
     }
 
+    // chiral dynamo correction (2D, dynGRMHD only)
+    if (chiral_dynamo) {
+      auto &adm = pmy_pack->padm->adm;
+      par_for("e_cc_2d_chiral", DevExeSpace(), 0, nmb1, js-1, je+1, is-1, ie+1,
+      KOKKOS_LAMBDA(int m, int j, int i) {
+        const Real ux = w0_(m,IVX,ks,j,i);
+        const Real uy = w0_(m,IVY,ks,j,i);
+        const Real uz = w0_(m,IVZ,ks,j,i);
+        Real iW = 1.0/sqrt(1.0
+                    + adm.g_dd(m,0,0,ks,j,i)*ux*ux + 2.0*adm.g_dd(m,0,1,ks,j,i)*ux*uy
+                    + 2.0*adm.g_dd(m,0,2,ks,j,i)*ux*uz + adm.g_dd(m,1,1,ks,j,i)*uy*uy
+                    + 2.0*adm.g_dd(m,1,2,ks,j,i)*uy*uz + adm.g_dd(m,2,2,ks,j,i)*uz*uz);
+        const Real alpha = adm.alpha(m,ks,j,i);
+        const Real v1 = alpha*ux*iW - adm.beta_u(m, 0, ks, j, i);
+        const Real v2 = alpha*uy*iW - adm.beta_u(m, 1, ks, j, i);
+        const Real v3 = alpha*uz*iW - adm.beta_u(m, 2, ks, j, i);
+
+        const Real bx = bcc_(m,IBX,ks,j,i);
+        const Real by = bcc_(m,IBY,ks,j,i);
+        const Real bz = bcc_(m,IBZ,ks,j,i);
+
+        // Dynamo coefficient xi
+        constexpr Real alpha_em  = 1.0/137.0;
+        const Real xi_coeff  = -(4.0/M_PI) * SQR(alpha_em) * log(1.0/alpha_em);
+        const Real Y5 = w0_(m, IYF+1, ks, j, i);
+        const Real Ye = w0_(m, IYF,   ks, j, i);
+        const Real xi = (Ye != 0.0) ? xi_coeff * cbrt(Y5/Ye) : 0.0;
+
+        // v^2 = 1 - 1/W^2 in the Valencia formulation
+        const Real v2sq  = 1.0 - SQR(iW);
+        const Real xi2   = SQR(xi);
+        const Real D     = 1.0/(1.0 + xi2*v2sq);
+        const Real vdotB = v1*bx + v2*by + v3*bz;
+
+        e3cc_(m,ks,j,i) = D*(-(1+xi2)*(v1*by - v2*bx) + xi*(1-v2sq)*bz + xi*(xi2+1)*vdotB*v3);
+      });
+    }
+
     // capture class variables for the kernels
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
@@ -314,6 +352,46 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
                          w0_(m,IVZ,k,j,i)*bcc_(m,IBX,k,j,i);
         e3cc_(m,k,j,i) = w0_(m,IVY,k,j,i)*bcc_(m,IBX,k,j,i) -
                          w0_(m,IVX,k,j,i)*bcc_(m,IBY,k,j,i);
+      });
+    }
+
+    // chiral dynamo correction (3D, dynGRMHD only)
+    if (chiral_dynamo) {
+      auto &adm = pmy_pack->padm->adm;
+      par_for("e_cc_3d_chiral", DevExeSpace(), 0, nmb1, ks-1, ke+1, js-1, je+1, is-1, ie+1,
+      KOKKOS_LAMBDA(int m, int k, int j, int i) {
+        const Real ux = w0_(m,IVX,k,j,i);
+        const Real uy = w0_(m,IVY,k,j,i);
+        const Real uz = w0_(m,IVZ,k,j,i);
+        const Real iW = 1.0/sqrt(1.0
+            + adm.g_dd(m,0,0,k,j,i)*ux*ux + 2.0*adm.g_dd(m,0,1,k,j,i)*ux*uy
+            + 2.0*adm.g_dd(m,0,2,k,j,i)*ux*uz + adm.g_dd(m,1,1,k,j,i)*uy*uy
+            + 2.0*adm.g_dd(m,1,2,k,j,i)*uy*uz + adm.g_dd(m,2,2,k,j,i)*uz*uz);
+        const Real alpha = adm.alpha(m, k, j, i);
+        const Real v1 = alpha*ux*iW - adm.beta_u(m, 0, k, j, i);
+        const Real v2 = alpha*uy*iW - adm.beta_u(m, 1, k, j, i);
+        const Real v3 = alpha*uz*iW - adm.beta_u(m, 2, k, j, i);
+
+        const Real bx = bcc_(m,IBX,k,j,i);
+        const Real by = bcc_(m,IBY,k,j,i);
+        const Real bz = bcc_(m,IBZ,k,j,i);
+
+        // Dynamo coefficient xi
+        constexpr Real alpha_em  = 1.0/137.0;
+        const Real xi_coeff  = -(4.0/M_PI) * SQR(alpha_em) * log(1.0/alpha_em);
+        const Real Y5 = w0_(m, IYF+1, k, j, i);
+        const Real Ye = w0_(m, IYF,   k, j, i);
+        const Real xi = (Ye != 0.0) ? xi_coeff * cbrt(Y5/Ye) : 0.0;
+
+        // v^2 = 1 - 1/W^2 in the Valencia formulation
+        const Real v2sq  = 1.0 - SQR(iW);
+        const Real xi2   = SQR(xi);
+        const Real D     = 1.0/(1.0 + xi2*v2sq);
+        const Real vdotB = v1*bx + v2*by + v3*bz;
+
+        e1cc_(m,k,j,i) = D*(-(1+xi2)*(v2*bz - v3*by) + xi*(1-v2sq)*bx + xi*(xi2+1)*vdotB*v1);
+        e2cc_(m,k,j,i) = D*(-(1+xi2)*(v3*bx - v1*bz) + xi*(1-v2sq)*by + xi*(xi2+1)*vdotB*v2);
+        e3cc_(m,k,j,i) = D*(-(1+xi2)*(v1*by - v2*bx) + xi*(1-v2sq)*bz + xi*(xi2+1)*vdotB*v3);
       });
     }
 

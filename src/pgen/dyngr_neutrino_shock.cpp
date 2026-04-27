@@ -31,6 +31,8 @@
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
+#include <Kokkos_Random.hpp>
+
 // Forward declaration
 template <class EOSPolicy, class ErrorPolicy>
 void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin);
@@ -97,6 +99,7 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   wpt.by = pin->GetOrAddReal("problem", "by", 0.0);
   wpt.bz = pin->GetOrAddReal("problem", "bz", 0.0);
   Real yq = pin->GetReal("problem", "yq");
+  Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
 
   // compute Lorentz factor
   Real w_lorentz = 1.0 / sqrt(1.0 - (SQR(wpt.vx) + SQR(wpt.vy) + SQR(wpt.vz)));
@@ -128,11 +131,17 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   auto &m1_nvars_ = pmbp->pradm1->nvars;
 
   // setup grid variables
+  Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m,int k, int j, int i) {
     Real Y[2] = {yq, 0.0};
 
-    w0_(m,IDN,k,j,i) = wpt.d;
+    // apply white-noise density perturbation
+    auto rand_gen = rand_pool64.get_state();
+    Real rval = 1.0 + pert_amp*(rand_gen.frand() - 0.5);
+    w0_(m,IDN,k,j,i) = wpt.d * rval;
+    rand_pool64.free_state(rand_gen);
+
     w0_(m,IVX,k,j,i) = wpt.vx;
     w0_(m,IVY,k,j,i) = wpt.vy;
     w0_(m,IVZ,k,j,i) = wpt.vz;

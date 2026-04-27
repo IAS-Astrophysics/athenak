@@ -94,6 +94,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
+  chiral_dynamo = pin->GetOrAddBoolean("mhd", "chiral_dynamo", false);
+
+  // Error check: chiral_dynamo requires dynamical GRMHD
+  if (chiral_dynamo) {
+    if (pmy_pack->padm == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "chiral_dynamo requires dynamical GRMHD (padm != nullptr)." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","viscosity")) {

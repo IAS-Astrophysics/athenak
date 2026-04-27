@@ -107,6 +107,7 @@ class MHD {
 
   int nmhd;                // number of mhd variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
+  bool chiral_dynamo;      // enable chiral Ohm's law correction
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
