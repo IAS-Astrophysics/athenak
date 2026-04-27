@@ -657,7 +657,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                 umhd0_(m, IYF + 1, k, j, i) -= theta * DDxp[nuidx];
                 // Note that DDxp is already spacetime densitized and scaled with mb
                 // but these terms need to be included also for Gamma_m
-                umhd0_(m, IYF + 1, k, j, 1) -=
+                umhd0_(m, IYF + 1, k, j, i) -=
                     Gamma_m * volform * adm.alpha(m, k, j, i) *
                     w0_(m, IYF + 1, k, j, i) * w0_(m, IDN, k, j, i);
               }
