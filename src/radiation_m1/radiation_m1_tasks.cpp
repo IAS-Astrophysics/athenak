@@ -82,8 +82,10 @@ void RadiationM1::AssembleRadiationM1Tasks(
   id.M1_recvf = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.M1_sendf, "RadiationM1::RecvFlux");
   id.M1_rkupdt =
       tl["opsplit_stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.M1_recvf, "RadiationM1::TimeUpdate");
+  id.M1_flvmix =
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::FlavorMix, this, id.M1_rkupdt, "RadiationM1::FlavorMix");
   id.M1_restu =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.M1_rkupdt, "RadiationM1::RestrictU");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.M1_flvmix, "RadiationM1::RestrictU");
   id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu, "RadiationM1::SendU");
   id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu, "RadiationM1::RecvU");
   id.M1_bcs =

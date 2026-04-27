@@ -42,6 +42,7 @@ struct RadiationM1TaskIDs {
   TaskID M1_recvf;
   TaskID M1_rkupdt;
   TaskID M1_mattersrc;
+  TaskID M1_flvmix;
   TaskID M1_restu;
   TaskID M1_sendu;
   TaskID M1_recvu;
@@ -117,6 +118,7 @@ class RadiationM1 {
   TaskStatus CalcOpacityNurates(Driver* pdrive, int stage);
   TaskStatus CalcOpacityPhotons(Driver* pdrive, int stage);
   TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
+  TaskStatus FlavorMix(Driver* d, int stage);
   TaskStatus RestrictU(Driver* d, int stage);
   TaskStatus SendU(Driver* d, int stage);
   TaskStatus RecvU(Driver* d, int stage);

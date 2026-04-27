@@ -43,6 +43,15 @@ enum RadiationM1SrcUpdate {
 };
 
 //----------------------------------------------------------------------------------------
+//! \enum FlavorMixType
+//  \brief choice of neutrino flavor mixing scheme
+enum FlavorMixType {
+  FlavMixNone        = 0,  // no mixing
+  FlavMixEquilibrium = 1,  // equilibrium mixing (arXiv:2307.16793)
+  FlavMixMaximal     = 2,  // maximal mixing
+};
+
+//----------------------------------------------------------------------------------------
 //! \struct RadiationM1Params
 //  \brief parameters for the Grey M1 class
 struct RadiationM1Params {
@@ -78,6 +87,12 @@ struct RadiationM1Params {
   Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
+
+  // Flavor mixing parameters (ported from THC_M1)
+  FlavorMixType flavor_mix_type;  // mixing scheme
+  Real bgk_inv_tau_0;  // BGK number-density relaxation rate [1/code_time]; 0 = no mixing
+  Real bgk_inv_tau_1;  // BGK energy-density relaxation rate [1/code_time]; 0 = no mixing
+  Real flavor_mix_rho; // density threshold for mixing [code_density]; -1 = mix everywhere
 };
 
 enum SrcSignal {

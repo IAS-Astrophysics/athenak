@@ -196,6 +196,31 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
+  // Flavor mixing parameters (ported from THC_M1)
+  std::string flavor_mix = pin->GetOrAddString("radiation_m1", "flavor_mix", "none");
+  if (flavor_mix == "equilibrium") {
+    params.flavor_mix_type = FlavMixEquilibrium;
+  } else if (flavor_mix == "maximal") {
+    params.flavor_mix_type = FlavMixMaximal;
+  } else {
+    params.flavor_mix_type = FlavMixNone;
+  }
+  // BGK rates: input in 1/s if [units] block present, else in 1/code_time.
+  // Multiply by time_cgs() [s/code_time] to convert 1/s -> 1/code_time.
+  params.bgk_inv_tau_0 = pin->GetOrAddReal("radiation_m1", "bgk_inv_tau_0", 0.0);
+  params.bgk_inv_tau_1 = pin->GetOrAddReal("radiation_m1", "bgk_inv_tau_1", 0.0);
+  if (isunits) {
+    params.bgk_inv_tau_0 *= pmy_pack->punit->time_cgs();
+    params.bgk_inv_tau_1 *= pmy_pack->punit->time_cgs();
+  }
+  // Density threshold: input in g/cm^3 if [units] block present, else in code density.
+  // Divide by density_cgs() [g/cm^3 per code_density] to convert g/cm^3 -> code_density.
+  // Sentinel value -1 means mix everywhere; leave it untouched.
+  params.flavor_mix_rho = pin->GetOrAddReal("radiation_m1", "flavor_mix_rho", -1.0);
+  if (isunits && params.flavor_mix_rho >= 0.0) {
+    params.flavor_mix_rho /= pmy_pack->punit->density_cgs();
+  }
+
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 

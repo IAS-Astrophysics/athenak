@@ -186,6 +186,7 @@ add_executable(
         radiation_m1/radiation_m1.cpp
         radiation_m1/radiation_m1_tasks.cpp
         radiation_m1/radiation_m1_update.cpp
+        radiation_m1/radiation_m1_flavor_mix.cpp
         radiation_m1/radiation_m1_fluxes.cpp
         radiation_m1/radiation_m1_helpers.hpp
         radiation_m1/radiation_m1_newdt.cpp
