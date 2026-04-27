@@ -22,7 +22,19 @@ pdflatex -interaction=nonstopmode dyngr_radiation_method.tex
 
 The plotting step requires Python with NumPy and Matplotlib.
 
+The compact stress suite for the passive ADM/Z4c radiation path is:
+
+```sh
+python3 dyngr_radiation_paper/scripts/run_stress_tests.py
+```
+
+It runs serial, two-rank MPI, restart, unsupported-mode rejection, and dynbbh
+smoke cases with outputs under `/tmp`.  In sandboxed environments `mpirun` may
+need to be run outside the sandbox so it can bind local sockets.
+
 The `dynbbh_beam_particles.athinput` input requires a build configured with
-`PROBLEM=dynbbh`.  Its default keeps radiation-matter coupling off for a clean
+`PROBLEM=dynbbh`.  The dynbbh initializer now uses `pdynrad` only and rejects
+the legacy `<radiation>` solver because that path is not consistent with the
+ADM background.  Its default keeps radiation-matter coupling off for a clean
 beam/particle smoke test; set `dyn_radiation/rad_source=true` to exercise the
 ADM absorption/scattering coupling coefficients included in the input.

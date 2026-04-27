@@ -28,8 +28,8 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "diffusion/current_density.hpp"
-#include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "particles/particles.hpp"
 #include "utils/flux_generalized.hpp"
 #include "units/units.hpp"
@@ -799,6 +799,22 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   if (pmbp->padm != nullptr) {
     pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
   }
+  if (pmbp->prad != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh uses ADM background data and is incompatible "
+              << "with legacy <radiation>; use <dyn_radiation> instead." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->pdynrad != nullptr) {
+    if (!(pmbp->pdynrad->use_adm_geometry)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "dynbbh <dyn_radiation> requires geometry='adm'."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pmbp->padm->SetADMVariables(pmbp);
+    pmbp->pdynrad->PrepareADMGeometry();
+  }
 
   // Flux diagnostics setup
   // Resolution of surface grids
@@ -838,7 +854,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         "H2"));
   }
 
-  const bool is_radiation_enabled = (pmbp->prad != nullptr);
+  const bool is_radiation_enabled = (pmbp->pdynrad != nullptr);
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -870,15 +886,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Extract radiation parameters if enabled
   int nangles_;
   DualArray2D<Real> nh_c_;
-  DvceArray6D<Real> norm_to_tet_, tet_c_, tetcov_c_;
+  DvceArray6D<Real> norm_to_tet_;
+  DvceArray4D<Real> sqrt_detg_c_;
   DvceArray5D<Real> i0_;
   if (is_radiation_enabled) {
-    nangles_ = pmbp->prad->prgeo->nangles;
-    nh_c_ = pmbp->prad->nh_c;
-    norm_to_tet_ = pmbp->prad->norm_to_tet;
-    tet_c_ = pmbp->prad->tet_c;
-    tetcov_c_ = pmbp->prad->tetcov_c;
-    i0_ = pmbp->prad->i0;
+    nangles_ = pmbp->pdynrad->prgeo->nangles;
+    nh_c_ = pmbp->pdynrad->nh_c;
+    norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
+    sqrt_detg_c_ = pmbp->pdynrad->sqrt_detg_c;
+    i0_ = pmbp->pdynrad->i0;
   }
 
   // Get ideal gas EOS data
@@ -890,8 +906,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real gm1 = bbh.gamma_adi - 1.0;
 
   // Get Radiation constant (if radiation enabled)
-  if (pmbp->prad != nullptr) {
-    bbh.arad = pmbp->prad->arad;
+  if (pmbp->pdynrad != nullptr) {
+    bbh.arad = pmbp->pdynrad->arad;
   }
 
 
@@ -1116,9 +1132,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real n0_f = u_tet_[0]*nh_c_.d_view(n,0) - un_t;
 
         // Calculate intensity in tetrad frame
-        Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-        i0_(m,n,k,j,i) = n0*n_0*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+        i0_(m,n,k,j,i) =
+            sqrt_detg_c_(m,k,j,i)*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
       }
     }
     // Compute total pressure (equal to gas pressure in non-radiating runs)

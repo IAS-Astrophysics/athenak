@@ -63,7 +63,8 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
   Real &n_0_floor_ = n_0_floor;
 
   if (use_adm_geometry_) {
-    auto &adm_ = pmy_pack->padm->adm;
+    auto &adm_alpha_c_ = adm_alpha_c;
+    auto &adm_K_dd_c_ = adm_K_dd_c;
     auto &adm_grad_alpha_c_ = adm_grad_alpha_c;
     par_for("dynrad_adm_update",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
@@ -95,10 +96,10 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
         for (int a=0; a<3; ++a) {
           sdalpha += s[a]*grad_alpha[a];
           for (int b=0; b<3; ++b) {
-            kss += adm_.vK_dd(m,a,b,k,j,i)*s[a]*s[b];
+            kss += adm_K_dd_c_(m,a,b,k,j,i)*s[a]*s[b];
           }
         }
-        Real geom = adm_.alpha(m,k,j,i)*kss - sdalpha;
+        Real geom = adm_alpha_c_(m,k,j,i)*kss - sdalpha;
         i_new += beta_dt*i_stage*geom;
       }
 

@@ -45,7 +45,10 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
 
     // assemble "stagen" task list
     id.copyu     = tl["stagen"]->AddTask(&DynRadiation::CopyCons, this, none);
-    id.rad_flux  = tl["stagen"]->AddTask(&DynRadiation::CalculateFluxes, this, id.copyu);
+    id.rad_geom  = tl["stagen"]->AddTask(&DynRadiation::PrepareGeometryTask, this,
+                                         id.copyu);
+    id.rad_flux  = tl["stagen"]->AddTask(&DynRadiation::CalculateFluxes, this,
+                                         id.rad_geom);
     id.rad_sendf = tl["stagen"]->AddTask(&DynRadiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&DynRadiation::RecvFlux, this, id.rad_sendf);
     id.rad_rkupdt= tl["stagen"]->AddTask(&DynRadiation::RKUpdate, this, id.rad_recvf);
@@ -91,7 +94,10 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
 
     // assemble "stagen" task list
     id.copyu     = tl["stagen"]->AddTask(&DynRadiation::CopyCons, this, none);
-    id.rad_flux  = tl["stagen"]->AddTask(&DynRadiation::CalculateFluxes, this, id.copyu);
+    id.rad_geom  = tl["stagen"]->AddTask(&DynRadiation::PrepareGeometryTask, this,
+                                         id.copyu);
+    id.rad_flux  = tl["stagen"]->AddTask(&DynRadiation::CalculateFluxes, this,
+                                         id.rad_geom);
     id.rad_sendf = tl["stagen"]->AddTask(&DynRadiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&DynRadiation::RecvFlux, this, id.rad_sendf);
     id.rad_rkupdt= tl["stagen"]->AddTask(&DynRadiation::RKUpdate, this, id.rad_recvf);
@@ -130,7 +136,10 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
 
     // assemble "stagen" task list
     id.copyu     = tl["stagen"]->AddTask(&DynRadiation::CopyCons, this, none);
-    id.rad_flux  = tl["stagen"]->AddTask(&DynRadiation::CalculateFluxes, this, id.copyu);
+    id.rad_geom  = tl["stagen"]->AddTask(&DynRadiation::PrepareGeometryTask, this,
+                                         id.copyu);
+    id.rad_flux  = tl["stagen"]->AddTask(&DynRadiation::CalculateFluxes, this,
+                                         id.rad_geom);
     id.rad_sendf = tl["stagen"]->AddTask(&DynRadiation::SendFlux, this, id.rad_flux);
     id.rad_recvf = tl["stagen"]->AddTask(&DynRadiation::RecvFlux, this, id.rad_sendf);
     id.rad_rkupdt= tl["stagen"]->AddTask(&DynRadiation::RKUpdate, this, id.rad_recvf);
@@ -166,15 +175,11 @@ void DynRadiation::QueueDynRadiationTasks() {
 
   pnr->QueueTask(&DynRadiation::CopyCons, this, Rad_CopyI, "Rad_CopyI", Task_Run);
 
-  std::vector<TaskName> tmunu_deps = {Rad_CopyI};
-  if (pmy_pack->pz4c != nullptr && pmy_pack->pdyngr != nullptr) {
-    tmunu_deps.push_back(MHD_SetTmunu);
-  }
-  pnr->QueueTask(&DynRadiation::AddTmunu, this, Rad_SetTmunu, "Rad_SetTmunu",
-                 Task_Run, tmunu_deps);
+  pnr->QueueTask(&DynRadiation::PrepareGeometryTask, this, Rad_PrepareGeom,
+                 "Rad_PrepareGeom", Task_Run, {Rad_CopyI});
 
   pnr->QueueTask(&DynRadiation::CalculateFluxes, this, Rad_Flux, "Rad_Flux",
-                 Task_Run, {Rad_CopyI}, {Z4c_Z4c2ADM});
+                 Task_Run, {Rad_PrepareGeom});
   pnr->QueueTask(&DynRadiation::SendFlux, this, Rad_SendFlux, "Rad_SendFlux",
                  Task_Run, {Rad_Flux});
   pnr->QueueTask(&DynRadiation::RecvFlux, this, Rad_RecvFlux, "Rad_RecvFlux",
@@ -196,7 +201,7 @@ void DynRadiation::QueueDynRadiationTasks() {
   pnr->QueueTask(&DynRadiation::Prolongate, this, Rad_Prolong, "Rad_Prolong",
                  Task_Run, {Rad_BCS});
   pnr->QueueTask(&DynRadiation::NewTimeStep, this, Rad_Newdt, "Rad_Newdt",
-                 Task_Run, {Rad_Prolong});
+                 Task_Run, {Rad_Prolong}, {Z4c_Z4c2ADM});
 
   pnr->QueueTask(&DynRadiation::ClearSend, this, Rad_ClearS, "Rad_ClearS", Task_End);
   pnr->QueueTask(&DynRadiation::ClearRecv, this, Rad_ClearR, "Rad_ClearR",

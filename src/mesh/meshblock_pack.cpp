@@ -176,6 +176,14 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
               << "enable only one in a run." << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (pin->DoesBlockExist("radiation") &&
+      (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Legacy <radiation> cannot be combined with ADM/Z4c "
+              << "backgrounds; use <dyn_radiation> for ADM radiation transport."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
@@ -244,10 +252,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     nphysics++;
   } else {
     pdynrad = nullptr;
-  }
-
-  if (pz4c != nullptr && pdynrad != nullptr && ptmunu == nullptr) {
-    ptmunu = new Tmunu(this, pin);
   }
 
   if (pz4c != nullptr || padm != nullptr) {

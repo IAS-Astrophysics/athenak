@@ -33,6 +33,7 @@ struct DynRadiationTaskIDs {
   TaskID mhd_irecv;
   TaskID hyd_irecv;
   TaskID copyu;
+  TaskID rad_geom;
   TaskID rad_flux;
   TaskID mhd_flux;
   TaskID hyd_flux;
@@ -168,6 +169,7 @@ class DynRadiation {
   void AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   void QueueDynRadiationTasks();
   void PrepareADMGeometry();
+  TaskStatus PrepareGeometryTask(Driver *d, int stage);
   // ...in "before_stagen_tl" task list
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in "stagen_tl" task list

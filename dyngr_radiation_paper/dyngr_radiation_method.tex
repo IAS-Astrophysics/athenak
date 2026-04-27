@@ -44,8 +44,11 @@ Hamiltonian, and the geometric energy source is written in Valencia form using
 \(\alpha\), \(\beta^i\), \(\gamma_{ij}\), and \(K_{ij}\).  This avoids assuming a
 time-independent metric and does not require explicit gauge-field time
 derivatives beyond the ADM metric-evolution relation for
-\(\partial_t\gamma_{ij}\).  We also add a diagnostic null-geodesic particle
-pusher for beam-edge tracers on ADM backgrounds.  Flat-space beam tests
+\(\partial_t\gamma_{ij}\).  In the present implementation the radiation field
+is metric-passive: it is transported on ADM/Z4c geometry, but its
+stress-energy is not included in the Z4c metric right-hand side.  We also add a
+diagnostic null-geodesic particle pusher for beam-edge tracers on ADM
+backgrounds.  Flat-space beam tests
 reproduce the legacy solver to roundoff, radiation-hydrodynamic linear-wave
 tests reproduce the legacy error norms in stationary Kerr-Schild mode, and a
 superposed boosted-Kerr-Schild binary test exercises the ADM beam source, ADM
@@ -76,8 +79,11 @@ current ADM branch implements spatial transport, angular geodesic advection,
 radiation-matter coupling, and the radiation energy source in a
 Valencia-compatible form.  The angular advection coefficients are rebuilt from
 cached ADM geometry each stage, so ADM mode now supports
-\code{angular\_fluxes=true}.  The implementation remains separate from the
-legacy solver so stationary CKS behavior can still be tested directly.
+\code{angular\_fluxes=true}.  Radiation is deliberately one-way coupled to the
+metric in this pass: the metric can affect radiation through the ADM fields,
+but radiation does not source the Z4c evolution.  The implementation remains
+separate from the legacy solver so stationary CKS behavior can still be tested
+directly.
 
 The paper is organized as follows.  Section~\ref{sec:notation} fixes notation
 and derives the radiation variables from the invariant distribution function.
@@ -520,6 +526,14 @@ or the dynamical ADM path is active.  This is required so that the radiation
 state has access to the metric-dependent arrays used by the flux and source
 kernels.
 
+For Z4c evolutions the present solver is a test-field radiation system.  The
+NR task graph no longer queues a radiation stress-energy task before
+\code{Z4c\_CalcRHS}, and \code{Tmunu} storage is not allocated solely because
+\code{dyn\_radiation} is enabled.  Matter stress-energy from the MHD/dynGRMHD
+path is unchanged.  A run that combines \code{dyn\_radiation} and \code{z4c}
+must use \code{geometry=adm}; the CKS mode is retained only for fixed
+background compatibility and regression tests.
+
 \subsection{Finite-volume equation actually advanced}
 
 For each angular cell \(n\), ADM mode advances
@@ -569,7 +583,8 @@ normalization difference between the two metric modes.
 
 At each explicit stage, ADM mode performs the following operations:
 \begin{enumerate}
-  \item Fill or update ADM variables on cell centers and faces.
+  \item Refresh ADM variables on cell centers and faces from the stage-start
+        geometry.
   \item Construct Eulerian spatial tetrads by factorizing \(\gamma_{ij}\).
   \item Fill cached \(\sqrt{\gamma}\), \(\alpha\), \(\beta^i\),
         \(\gamma_{ij}\), \(\gamma^{ij}\), \(K_{ij}\), tetrad columns,
@@ -584,6 +599,15 @@ At each explicit stage, ADM mode performs the following operations:
   \item Apply the per-angle geometric source in Equation~\eqref{eq:anglesource}.
   \item Apply matter/source terms, boundary exchange, and AMR operations.
 \end{enumerate}
+
+In the NR task graph this refresh is a dedicated \code{Rad\_PrepareGeom} task.
+\code{Rad\_Flux} and the radiation coupling path depend on this cache refresh
+and therefore use the same stage-start ADM state.  \code{Rad\_Flux} does not
+wait for the post-update \code{Z4c\_Z4c2ADM} conversion.  The radiation
+timestep task may wait for \code{Z4c\_Z4c2ADM}, so the next timestep is limited
+by the post-stage ADM geometry.  This ordering keeps radiation transport
+consistent with the RK stage while still measuring the next CFL limit on the
+latest metric state.
 
 The cache is deliberately cell-local and device-resident.  The primary
 state arrays store the ADM fields and co-triad:
@@ -612,6 +636,12 @@ edge of the allocated block.  The array \code{adm\_dt\_cotriad\_c} stores
 \(\partial_t e^{(\hat a)}_{\ i}\) computed from Equations~\eqref{eq:adm_gdot}
 and \eqref{eq:chol_derivatives}.  These arrays are Kokkos device views; no
 host containers or dynamic allocation enter the transport kernels.
+
+The ADM CFL limiter has three parts: coordinate spatial speeds,
+angular-geodesic speeds, and the explicit geometric source estimate.  In runs
+with radiation excision, all three reductions skip cells marked by
+\code{rad\_mask}; otherwise masked cells with singular or intentionally
+unphysical metric data can set a meaningless global timestep.
 
 \subsection{Beam source and output normalization}
 
@@ -842,7 +872,9 @@ time-independent but non-flat, and runs \code{geometry=adm} with
 \code{angular\_fluxes=true}.  It therefore exercises the Hamiltonian angular
 drift, metric-gradient cache, and ADM angular timestep limiter without relying
 on the BBH problem generator.  The short regression completed to \(t=0.2\)
-with finite radiation output.
+with finite radiation output.  The excision-aware ADM CFL limiter kept the
+minimum reported timestep at \(4.374670\times10^{-2}\), rather than letting
+masked black-hole cells dominate the reduction.
 
 The dynamic-metric smoke input
 \begin{center}
@@ -854,6 +886,16 @@ that ADM metric fields supplied by the Z4c-to-ADM conversion are accepted by
 the standalone radiation module and that the per-stage geometry cache can be
 refreshed on a time-dependent metric with \code{angular\_fluxes=true}.  The
 compact regression completed without NaNs or infinities.
+
+The tracked stress harness
+\path{dyngr_radiation_paper/scripts/run_stress_tests.py} runs the compact
+serial, restart, MPI, and dynbbh cases with outputs under \path{/tmp}.  In the
+current run it passed all 20 checks: eight serial solver inputs, five two-rank
+MPI inputs, the write/resume restart pair, the expected fatal rejection of
+\code{dyn\_radiation} \code{geometry=cks} with \code{z4c}, the expected dynbbh
+rejection of legacy \code{radiation}, two serial dynbbh inputs, and one
+two-rank dynbbh smoke test.  The harness scans text outputs and logs for
+non-finite values.
 
 \begin{figure}[htbp]
 \centering
@@ -916,15 +958,19 @@ The binary-background input is
 \end{center}
 It exercises the ADM beam source on the superposed boosted Kerr-Schild binary
 background in \code{src/pgen/dynbbh.cpp}.  It runs with
-\code{geometry=adm} and \code{angular\_fluxes=true}.  It also initializes null
+\code{geometry=adm} and \code{angular\_fluxes=true}.  The dynbbh initializer
+now uses only \code{pdynrad}; the legacy \code{prad} path is rejected because
+its stationary CKS normalization is inconsistent with the ADM background.  It
+also initializes null
 particles on the beam edge and advances them using Equations~\eqref{eq:null_x}
 and \eqref{eq:null_k}.  The serial smoke test produced a finite beam slice with
-\(\max R^{00}=0.768007\), wrote a normal-size particle track file, and generated
+\(\max R^{00}=0.768586\), wrote a normal-size particle track file, and generated
 the diagnostic figure shown in Figure~\ref{fig:dynbbh}.  A second serial run
 enabled ADM radiation-matter coupling with absorption and scattering opacities
-and completed without NaNs.  A two-rank flat ADM beam run passed.  A full
-two-rank dynbbh/MHD evolution was not certified in this pass because that
-coupled path stalled after cycle zero even when ADM angular fluxes were disabled.
+and completed without NaNs.  The two-rank dynbbh smoke test also advanced past
+cycle zero and completed to its cycle limit.  These are compact runtime tests;
+long production dynbbh/MHD radiation evolutions remain a separate validation
+target.
 
 \begin{figure}[htbp]
 \centering
@@ -947,9 +993,12 @@ Flat ADM beam, MPI & two-rank decomposition & passed \\
 Stationary KS ADM beam & nonzero ADM angular drift & passed \\
 Dynamic Z4c ADM smoke & time-dependent ADM metric cache & passed \\
 CKS linear wave & final error row & identical \\
+Restart & write and resume \code{dynrad\_beam\_cks} & passed \\
+Z4c CKS rejection & unsupported metric mode guard & passed \\
+BBH legacy radiation rejection & \code{prad} guard & passed \\
 BBH ADM beam & finite beam and particle tracks & passed in serial \\
 BBH ADM coupling & absorption/scattering with MHD primitives & passed in serial \\
-BBH coupled MPI evolution & full two-rank dynbbh/MHD run & not certified \\
+BBH coupled MPI smoke & two-rank dynbbh/MHD run & passed \\
 \bottomrule
 \end{tabular}
 \caption{Current regression status for the standalone dynamical radiation
@@ -973,6 +1022,7 @@ Spatial speed & \(k^i\) from stationary tetrad & CKS: \(k^i\); ADM: \(\alpha s^i
 Metric source terms & Stationary tetrad and angular drift coefficients & ADM Valencia energy source using \(K_{ij}\) and \(\partial_i\alpha\) \\
 Angular bending & Precomputed CKS coefficients & Cached ADM Hamiltonian angular drift \\
 Matter coupling & Existing local implicit path & CKS path retained; ADM uses \(I=U/\sqrt{\gamma}\), Eulerian tetrad frequency, and Valencia moment feedback \\
+Metric backreaction & Not applicable to fixed metric & Not included; radiation is metric-passive \\
 Binary backgrounds & Not supported directly & Supported through ADM fields \\
 \bottomrule
 \end{tabular}
@@ -986,6 +1036,9 @@ normalization in ADM mode.  The key implementation difference is that metric
 data are no longer assumed to be analytic or time independent.  The new solver
 therefore fits the same design pattern as the Valencia GRMHD path: fluxes and
 sources are built from ADM variables supplied by the active spacetime module.
+At present this analogy is limited to transport and matter coupling.  The
+radiation stress-energy tensor is not passed to the metric solver, so Z4c
+evolutions see MHD/dynGRMHD matter sources only.
 
 \section{How to Check the Formalism}
 \label{sec:checklist}
@@ -1043,7 +1096,10 @@ The present implementation is a controlled step toward dynamical radiation
 transport.  It moves radiation energy on ADM backgrounds, bends the angular
 directions with an ADM Hamiltonian operator, reproduces stationary beam and
 linear-wave regressions, and diagnoses beam propagation on the superposed binary
-metric.  It is still not a final production radiation module.  The angular
+metric.  It is still not a final production radiation module.  The current
+coupling to dynamical spacetime is one-way: ADM/Z4c geometry drives radiation,
+but radiation does not feed \(T_{\mu\nu}\) back into the Z4c right-hand side.
+The angular
 operator uses second-order metric-gradient caches; higher-order gradients and
 limiters can be added behind the same cache interface.  The discrete
 momentum-source consistency check in Equation~\eqref{eq:valencia_momentum} is
@@ -1053,7 +1109,16 @@ The ADM matter-coupling path now uses the Eulerian tetrad frequency factor,
 \(I=U/\sqrt{\gamma}\), and gas feedback through the Valencia radiation moments.
 It has passed flat and BBH smoke tests, but it still needs a broader validation
 suite with moving-fluid absorption/scattering, optically thick diffusion, and
-time-dependent metric backgrounds.
+time-dependent metric backgrounds.  The explicit ADM update clips negative
+intensity to zero for positivity; a counter for that floor activation is still
+needed so production runs can monitor any silent radiation-energy loss.
+
+The changed kernels were reviewed for Kokkos device compatibility: the stage
+geometry cache, timestep reductions, fluxes, and coupling kernels capture only
+device views and POD scalars.  The tests reported here were run on the local
+CPU/MPI builds.  No CUDA, HIP, or SYCL runtime validation was available in this
+pass, so GPU execution should be treated as statically reviewed but not
+runtime-certified.
 
 Finally, the null-particle pusher is currently a diagnostic tool.  It uses
 nearest-cell ADM fields and centered finite differences.  It is useful for beam
@@ -1073,10 +1138,11 @@ time-dependent ADM backgrounds because metric evolution enters through
 \(K_{ij}\) and the ADM co-triad time derivative, rather than through
 stationarity assumptions.  Regression tests show exact agreement with the
 legacy flat beam, identical stationary CKS linear-wave error norms, successful
-two-rank flat ADM beam transport, and serial ADM beam-plus-null-particle and
-matter-coupling smoke tests on the superposed binary black-hole background.  The
-remaining work is to strengthen the momentum-source and matter-coupling
-validation suite and upgrade the diagnostic particle pusher if high-accuracy
-geodesics are required.
+two-rank flat ADM beam transport, excision-safe stationary black-hole ADM
+timesteps, restart coverage, and serial plus two-rank ADM beam/null-particle
+smoke tests on the superposed binary black-hole background.  The remaining work
+is to add radiation metric backreaction, strengthen the momentum-source and
+matter-coupling validation suite, monitor positivity clipping, and upgrade the
+diagnostic particle pusher if high-accuracy geodesics are required.
 
 \end{document}

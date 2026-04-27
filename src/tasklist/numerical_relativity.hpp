@@ -93,6 +93,7 @@ enum TaskName {
   Rad_Recv,
   Rad_CopyI,
   Rad_SetTmunu,
+  Rad_PrepareGeom,
   Rad_Flux,
   Rad_SendFlux,
   Rad_RecvFlux,

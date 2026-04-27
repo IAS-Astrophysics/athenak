@@ -27,10 +27,6 @@ namespace dyn_radiation {
 //! \brief Compute dyn_radiation fluxes
 
 TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
-  if (use_adm_geometry) {
-    PrepareADMGeometry();
-  }
-
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;

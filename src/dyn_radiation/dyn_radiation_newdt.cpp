@@ -41,11 +41,13 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   int &js = indcs.js, &nx2 = indcs.nx2;
   int &ks = indcs.ks, &nx3 = indcs.nx3;
 
-  Real dt1 = std::numeric_limits<float>::max();
-  Real dt2 = std::numeric_limits<float>::max();
-  Real dt3 = std::numeric_limits<float>::max();
-  Real dta = std::numeric_limits<float>::max();
-  Real dtg = std::numeric_limits<float>::max();
+  const Real tiny = std::numeric_limits<Real>::min();
+  const Real max_dt = std::numeric_limits<Real>::max();
+  Real dt1 = max_dt;
+  Real dt2 = max_dt;
+  Real dt3 = max_dt;
+  Real dta = max_dt;
+  Real dtg = max_dt;
 
   // setup indicies for Kokkos parallel reduce
   auto &size = pmy_pack->pmb->mb_size;
@@ -79,8 +81,11 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
     int i = (idx - m*nkji - k*nji - j*nx1) + is;
     k += ks;
     j += js;
+    if (excise && rad_mask_(m,k,j,i)) {
+      return;
+    }
 
-    Real tmp_min_dta = (FLT_MAX);
+    Real tmp_min_dta = max_dt;
     if (angular_fluxes_) {
       for (int n=0; n<=nang1; ++n) {
         // find position at angle center
@@ -100,15 +105,10 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
             omega = fabs(na_(m,n,k,j,i,nb)/n0);
           }
           Real adt = tmp_min_dta;
-          if (omega > 1.0e-300) {
+          if (omega > tiny) {
             adt = fmin(tmp_min_dta, acos(dot)/omega);
           }
-          // set timestep limitation if not excising this cell
-          if (excise) {
-            if (!(rad_mask_(m,k,j,i))) { tmp_min_dta = adt; }
-          } else {
-            tmp_min_dta = adt;
-          }
+          tmp_min_dta = adt;
         }
       }
     }
@@ -116,9 +116,9 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
     Real cmax2 = 1.0;
     Real cmax3 = 1.0;
     if (use_adm_geometry_) {
-      cmax1 = 1.0e-300;
-      cmax2 = 1.0e-300;
-      cmax3 = 1.0e-300;
+      cmax1 = tiny;
+      cmax2 = tiny;
+      cmax3 = tiny;
       for (int n=0; n<=nang1; ++n) {
         Real v1 = t1d1(m,0,k,j,i)*nh_c_.d_view(n,0) +
                   t1d1(m,1,k,j,i)*nh_c_.d_view(n,1) +
@@ -174,8 +174,11 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
       int i = (idx - m*nkji - k*nji - j*nx1) + is;
       k += ks;
       j += js;
+      if (excise && rad_mask_(m,k,j,i)) {
+        return;
+      }
 
-      Real tmp_min_dtg = (FLT_MAX);
+      Real tmp_min_dtg = max_dt;
       for (int n=0; n<=nang1; ++n) {
         Real s[3] = {0.0, 0.0, 0.0};
         for (int a=0; a<3; ++a) {
@@ -192,7 +195,7 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
           }
         }
         Real geom = adm_.alpha(m,k,j,i)*kss - sdalpha;
-        if (fabs(geom) > 1.0e-300) {
+        if (fabs(geom) > tiny) {
           tmp_min_dtg = fmin(tmp_min_dtg, 1.0/fabs(geom));
         }
       }

@@ -143,6 +143,13 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
               << "or <z4c> block." << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (!(use_adm_geometry) && pmy_pack->pz4c != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation> with <z4c> requires geometry='adm'; "
+              << "geometry='cks' is only for fixed-background compatibility runs."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   adm_metric_source = pin->GetOrAddBoolean("dyn_radiation", "adm_metric_source",
                                            use_adm_geometry);
   rotate_geo = pin->GetOrAddBoolean("dyn_radiation","rotate_geo",true);
@@ -280,6 +287,13 @@ void DynRadiation::PrepareADMGeometry() {
     pmy_pack->padm->SetADMVariables(pmy_pack);
   }
   SetOrthonormalTetrad();
+}
+
+TaskStatus DynRadiation::PrepareGeometryTask(Driver *pdriver, int stage) {
+  if (use_adm_geometry) {
+    PrepareADMGeometry();
+  }
+  return TaskStatus::complete;
 }
 
 } // namespace dyn_radiation
