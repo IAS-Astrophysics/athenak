@@ -16,6 +16,8 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "coordinates/adm.hpp"
+#include "driver/driver.hpp"
 #include "particles.hpp"
 
 namespace particles {
@@ -96,7 +98,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
 
-  Real cfl = pin->GetOrAddReal("particles", "cfl", 0.4);
+  particle_cfl = pin->GetOrAddReal("particles", "cfl", 0.4);
   dtnew = std::numeric_limits<Real>::max();
   for (int m=0; m<pmy_pack->nmb_thispack; ++m) {
     dtnew = std::min(dtnew, pmy_pack->pmb->mb_size.h_view(m).dx1);
@@ -107,7 +109,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       dtnew = std::min(dtnew, pmy_pack->pmb->mb_size.h_view(m).dx3);
     }
   }
-  dtnew *= cfl;
+  dtnew *= particle_cfl;
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
@@ -117,6 +119,85 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 Particles::~Particles() {
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Particles::NewTimeStep()
+//! \brief Compute a particle timestep cap.  Null-geodesic particles move with ADM
+//! coordinate light speeds, not necessarily with unit coordinate speed.
+
+TaskStatus Particles::NewTimeStep(Driver *pdriver, int stage) {
+  (void) pdriver;
+  (void) stage;
+
+  const Real max_dt = std::numeric_limits<Real>::max();
+  const Real tiny = std::numeric_limits<Real>::min();
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  const int is = indcs.is, nx1 = indcs.nx1;
+  const int js = indcs.js, nx2 = indcs.nx2;
+  const int ks = indcs.ks, nx3 = indcs.nx3;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+
+  auto &mbsize = pmy_pack->pmb->mb_size;
+  const bool multi_d = pmy_pack->pmesh->multi_d;
+  const bool three_d = pmy_pack->pmesh->three_d;
+
+  Real dt_min = max_dt;
+  if (pusher == ParticlesPusher::null_geodesic) {
+    auto &adm_vars = pmy_pack->padm->adm;
+    Kokkos::parallel_reduce("part_null_newdt",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &min_dt) {
+      int m = idx/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
+
+      const Real gxx = adm_vars.g_dd(m,0,0,k,j,i);
+      const Real gxy = adm_vars.g_dd(m,0,1,k,j,i);
+      const Real gxz = adm_vars.g_dd(m,0,2,k,j,i);
+      const Real gyy = adm_vars.g_dd(m,1,1,k,j,i);
+      const Real gyz = adm_vars.g_dd(m,1,2,k,j,i);
+      const Real gzz = adm_vars.g_dd(m,2,2,k,j,i);
+      const Real det = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+      const Real detinv = (fabs(det) > tiny) ? 1.0/det : 1.0/tiny;
+      Real uxx, uxy, uxz, uyy, uyz, uzz;
+      adm::SpatialInv(detinv, gxx, gxy, gxz, gyy, gyz, gzz,
+                      &uxx, &uxy, &uxz, &uyy, &uyz, &uzz);
+
+      const Real alpha = adm_vars.alpha(m,k,j,i);
+      const Real c1 = fabs(adm_vars.beta_u(m,0,k,j,i)) +
+                      alpha*sqrt(fmax(uxx, 0.0));
+      min_dt = fmin(min_dt, mbsize.d_view(m).dx1/fmax(c1, tiny));
+
+      if (multi_d) {
+        const Real c2 = fabs(adm_vars.beta_u(m,1,k,j,i)) +
+                        alpha*sqrt(fmax(uyy, 0.0));
+        min_dt = fmin(min_dt, mbsize.d_view(m).dx2/fmax(c2, tiny));
+      }
+      if (three_d) {
+        const Real c3 = fabs(adm_vars.beta_u(m,2,k,j,i)) +
+                        alpha*sqrt(fmax(uzz, 0.0));
+        min_dt = fmin(min_dt, mbsize.d_view(m).dx3/fmax(c3, tiny));
+      }
+    }, Kokkos::Min<Real>(dt_min));
+  } else {
+    Kokkos::parallel_reduce("part_newdt",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, pmy_pack->nmb_thispack),
+    KOKKOS_LAMBDA(const int &m, Real &min_dt) {
+      min_dt = fmin(min_dt, mbsize.d_view(m).dx1);
+      if (multi_d) { min_dt = fmin(min_dt, mbsize.d_view(m).dx2); }
+      if (three_d) { min_dt = fmin(min_dt, mbsize.d_view(m).dx3); }
+    }, Kokkos::Min<Real>(dt_min));
+  }
+
+  dtnew = particle_cfl*dt_min;
+  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------

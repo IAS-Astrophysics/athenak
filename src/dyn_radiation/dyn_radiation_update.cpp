@@ -57,6 +57,7 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
   auto &divfa_ = divfa;
   bool use_adm_geometry_ = use_adm_geometry;
   bool adm_metric_source_ = adm_metric_source;
+  auto &solid_angles_ = prgeo->solid_angles;
 
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
@@ -100,11 +101,15 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
           }
         }
         Real geom = adm_alpha_c_(m,k,j,i)*kss - sdalpha;
-        i_new += beta_dt*i_stage*geom;
+        i_new += i_stage*(exp(beta_dt*geom) - 1.0);
       }
 
-      i0_(m,n,k,j,i) = fmax(i_new, 0.0);
+      i0_(m,n,k,j,i) = i_new;
       if (excise && rad_mask_(m,k,j,i)) { i0_(m,n,k,j,i) = 0.0; }
+    });
+    par_for("dynrad_adm_update_positivity",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1);
     });
     return TaskStatus::complete;
   }
@@ -131,8 +136,6 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
           tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
           tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
           tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-    i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
-
     // handle excision
     // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
     // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
@@ -142,6 +145,11 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
         i0_(m,n,k,j,i) = 0.0;
       }
     }
+  });
+  par_for("r_update_positivity",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    ConservativePrimitiveAngularFloor(i0_, solid_angles_, tt, tc, nh_c_,
+                                      m, k, j, i, nang1);
   });
   return TaskStatus::complete;
 }

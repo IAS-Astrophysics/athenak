@@ -24,8 +24,10 @@ class BinarySlice:
     variables: dict[str, np.ndarray]
     x1f: np.ndarray
     x2f: np.ndarray
+    x3f: np.ndarray
     x1v: np.ndarray
     x2v: np.ndarray
+    x3v: np.ndarray
 
 
 def read_tab(path: Path) -> tuple[list[str], np.ndarray]:
@@ -207,7 +209,8 @@ def read_binary_slice(path: Path, quantities: list[str]) -> BinarySlice:
     xvs = [0.5 * (xf[:-1] + xf[1:]) for xf in xfs]
     variables = {name: arr[0] if arr.shape[0] == 1 else arr for name, arr in out.items()}
     return BinarySlice(path=path, time=time, cycle=cycle, variables=variables,
-                       x1f=xfs[0], x2f=xfs[1], x1v=xvs[0], x2v=xvs[1])
+                       x1f=xfs[0], x2f=xfs[1], x3f=xfs[2],
+                       x1v=xvs[0], x2v=xvs[1], x3v=xvs[2])
 
 
 def column(names: list[str], data: np.ndarray, preferred: str, fallback: int) -> np.ndarray:

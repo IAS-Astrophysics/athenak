@@ -77,7 +77,13 @@ class ProblemGenerator {
   void Shwave(ParameterInput *pin, const bool restart);
   void SphericalCollapse(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
+  void RadiationEquilibration(ParameterInput *pin, const bool restart);
   void RadiationBeam(ParameterInput *pin, const bool restart);
+  void RadiationCrossingBeams(ParameterInput *pin, const bool restart);
+  void RadiationKerrOrbitBeam(ParameterInput *pin, const bool restart);
+  void RadiationFLRWRedshift(ParameterInput *pin, const bool restart);
+  void RadiationLapseGradient(ParameterInput *pin, const bool restart);
+  void RadiationMomentumSource(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
 

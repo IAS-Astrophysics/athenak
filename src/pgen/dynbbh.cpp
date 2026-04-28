@@ -1551,55 +1551,81 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real e2y = d3*e1x - d1*e1z;
     Real e2z = d1*e1y - d2*e1x;
 
+    bool owns_beam_source = false;
+    for (int m=0; m<nmb; ++m) {
+      bool inside = (p1 >= size.h_view(m).x1min && p1 <= size.h_view(m).x1max);
+      inside = inside && (p2 >= size.h_view(m).x2min && p2 <= size.h_view(m).x2max);
+      inside = inside && (p3 >= size.h_view(m).x3min && p3 <= size.h_view(m).x3max);
+      owns_beam_source = owns_beam_source || inside;
+    }
+    if (!owns_beam_source) {
+      pmbp->ppart->nprtcl_thispack = 0;
+      Kokkos::resize(pmbp->ppart->prtcl_rdata, pmbp->ppart->nrdata, 0);
+      Kokkos::resize(pmbp->ppart->prtcl_idata, pmbp->ppart->nidata, 0);
+    }
+    pmbp->pmesh->nprtcl_thisrank = pmbp->ppart->nprtcl_thispack;
+#if MPI_PARALLEL_ENABLED
+    MPI_Allgather(&(pmbp->pmesh->nprtcl_thisrank), 1, MPI_INT,
+                  pmbp->pmesh->nprtcl_eachrank, 1, MPI_INT, MPI_COMM_WORLD);
+#else
+    pmbp->pmesh->nprtcl_eachrank[0] = pmbp->pmesh->nprtcl_thisrank;
+#endif
+    pmbp->pmesh->nprtcl_total = 0;
+    for (int n=0; n<global_variable::nranks; ++n) {
+      pmbp->pmesh->nprtcl_total += pmbp->pmesh->nprtcl_eachrank[n];
+    }
+    pmbp->ppart->CreateParticleTags(pin);
+
     auto &pr = pmbp->ppart->prtcl_rdata;
     auto &pi = pmbp->ppart->prtcl_idata;
     int npart = pmbp->ppart->nprtcl_thispack;
     auto &adm = pmbp->padm->adm;
     int gids = pmbp->gids;
-    par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart-1,
-    KOKKOS_LAMBDA(const int p) {
-      int msel = -1;
-      for (int m=0; m<nmb; ++m) {
-        bool inside = (p1 >= size.d_view(m).x1min && p1 <= size.d_view(m).x1max);
-        inside = inside && (p2 >= size.d_view(m).x2min && p2 <= size.d_view(m).x2max);
-        inside = inside && (p3 >= size.d_view(m).x3min && p3 <= size.d_view(m).x3max);
-        if (inside) msel = m;
-      }
-      bool active = (msel >= 0);
-      if (!(active)) msel = 0;
+    if (npart > 0) {
+      par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart-1,
+      KOKKOS_LAMBDA(const int p) {
+        int msel = -1;
+        for (int m=0; m<nmb; ++m) {
+          bool inside = (p1 >= size.d_view(m).x1min && p1 <= size.d_view(m).x1max);
+          inside = inside && (p2 >= size.d_view(m).x2min && p2 <= size.d_view(m).x2max);
+          inside = inside && (p3 >= size.d_view(m).x3min && p3 <= size.d_view(m).x3max);
+          if (inside) msel = m;
+        }
+        if (msel < 0) return;
 
-      pi(PGID,p) = gids + msel;
-      Real px = active ? p1 : 0.5*(size.d_view(msel).x1min + size.d_view(msel).x1max);
-      Real py = active ? p2 : 0.5*(size.d_view(msel).x2min + size.d_view(msel).x2max);
-      Real pz = active ? p3 : 0.5*(size.d_view(msel).x3min + size.d_view(msel).x3max);
-      pr(IPX,p) = px;
-      pr(IPY,p) = py;
-      pr(IPZ,p) = pz;
+        pi(PGID,p) = gids + msel;
+        Real px = p1;
+        Real py = p2;
+        Real pz = p3;
+        pr(IPX,p) = px;
+        pr(IPY,p) = py;
+        pr(IPZ,p) = pz;
 
-      Real phi = 2.0*M_PI*(static_cast<Real>(p) + 0.5)/fmax(static_cast<Real>(npart), 1.0);
-      Real st = sin(0.5*spread);
-      Real ct = cos(0.5*spread);
-      Real sx = ct*d1 + st*(cos(phi)*e1x + sin(phi)*e2x);
-      Real sy = ct*d2 + st*(cos(phi)*e1y + sin(phi)*e2y);
-      Real sz = ct*d3 + st*(cos(phi)*e1z + sin(phi)*e2z);
+        Real phi = 2.0*M_PI*(static_cast<Real>(p) + 0.5)/static_cast<Real>(npart);
+        Real st = sin(0.5*spread);
+        Real ct = cos(0.5*spread);
+        Real sx = ct*d1 + st*(cos(phi)*e1x + sin(phi)*e2x);
+        Real sy = ct*d2 + st*(cos(phi)*e1y + sin(phi)*e2y);
+        Real sz = ct*d3 + st*(cos(phi)*e1z + sin(phi)*e2z);
 
-      int i = static_cast<int>((px - size.d_view(msel).x1min)/size.d_view(msel).dx1) + is;
-      int j = static_cast<int>((py - size.d_view(msel).x2min)/size.d_view(msel).dx2) + js;
-      int k = static_cast<int>((pz - size.d_view(msel).x3min)/size.d_view(msel).dx3) + ks;
-      i = (i < is) ? is : ((i > ie) ? ie : i);
-      j = (j < js) ? js : ((j > je) ? je : j);
-      k = (k < ks) ? ks : ((k > ke) ? ke : k);
+        int i = static_cast<int>((px - size.d_view(msel).x1min)/size.d_view(msel).dx1) + is;
+        int j = static_cast<int>((py - size.d_view(msel).x2min)/size.d_view(msel).dx2) + js;
+        int k = static_cast<int>((pz - size.d_view(msel).x3min)/size.d_view(msel).dx3) + ks;
+        i = (i < is) ? is : ((i > ie) ? ie : i);
+        j = (j < js) ? js : ((j > je) ? je : j);
+        k = (k < ks) ? ks : ((k > ke) ? ke : k);
 
-      pr(IPVX,p) = adm.g_dd(msel,0,0,k,j,i)*sx
-                 + adm.g_dd(msel,0,1,k,j,i)*sy
-                 + adm.g_dd(msel,0,2,k,j,i)*sz;
-      pr(IPVY,p) = adm.g_dd(msel,0,1,k,j,i)*sx
-                 + adm.g_dd(msel,1,1,k,j,i)*sy
-                 + adm.g_dd(msel,1,2,k,j,i)*sz;
-      pr(IPVZ,p) = adm.g_dd(msel,0,2,k,j,i)*sx
-                 + adm.g_dd(msel,1,2,k,j,i)*sy
-                 + adm.g_dd(msel,2,2,k,j,i)*sz;
-    });
+        pr(IPVX,p) = adm.g_dd(msel,0,0,k,j,i)*sx
+                   + adm.g_dd(msel,0,1,k,j,i)*sy
+                   + adm.g_dd(msel,0,2,k,j,i)*sz;
+        pr(IPVY,p) = adm.g_dd(msel,0,1,k,j,i)*sx
+                   + adm.g_dd(msel,1,1,k,j,i)*sy
+                   + adm.g_dd(msel,1,2,k,j,i)*sz;
+        pr(IPVZ,p) = adm.g_dd(msel,0,2,k,j,i)*sx
+                   + adm.g_dd(msel,1,2,k,j,i)*sy
+                   + adm.g_dd(msel,2,2,k,j,i)*sz;
+      });
+    }
   }
   return;
 }

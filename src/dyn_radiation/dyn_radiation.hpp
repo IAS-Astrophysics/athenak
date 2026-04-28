@@ -83,6 +83,108 @@ struct DynRadiationTaskIDs {
 
 namespace dyn_radiation {
 
+// The transport and coupling updates can create small negative angular bins near
+// sharp features.  Redistribute the negative weighted angular energy over the
+// positive bins in the same cell, preserving the cell-integrated radiation
+// energy whenever that integral is nonnegative.
+template<typename IView, typename SolidAngles>
+KOKKOS_INLINE_FUNCTION
+void ConservativeAngularFloor(IView i0, SolidAngles solid_angles,
+                              const int m, const int k, const int j, const int i,
+                              const int nang1) {
+  Real positive = 0.0;
+  Real deficit = 0.0;
+  for (int n=0; n<=nang1; ++n) {
+    const Real value = i0(m,n,k,j,i);
+    if (!(Kokkos::isfinite(value))) {
+      i0(m,n,k,j,i) = 0.0;
+      continue;
+    }
+    const Real weighted_i = value*solid_angles.d_view(n);
+    if (value < 0.0) {
+      deficit -= weighted_i;
+    } else {
+      positive += weighted_i;
+    }
+  }
+  if (deficit <= 0.0) { return; }
+
+  if (positive > deficit) {
+    const Real scale = (positive - deficit)/positive;
+    for (int n=0; n<=nang1; ++n) {
+      if (i0(m,n,k,j,i) > 0.0) {
+        i0(m,n,k,j,i) *= scale;
+      } else {
+        i0(m,n,k,j,i) = 0.0;
+      }
+    }
+  } else {
+    for (int n=0; n<=nang1; ++n) {
+      i0(m,n,k,j,i) = 0.0;
+    }
+  }
+}
+
+template<typename IView, typename SolidAngles, typename TetradView,
+         typename TetradCovView, typename NhView>
+KOKKOS_INLINE_FUNCTION
+void ConservativePrimitiveAngularFloor(IView i0, SolidAngles solid_angles,
+                                       TetradView tet_c, TetradCovView tetcov_c,
+                                       NhView nh_c,
+                                       const int m, const int k, const int j, const int i,
+                                       const int nang1) {
+  Real positive = 0.0;
+  Real deficit = 0.0;
+  for (int n=0; n<=nang1; ++n) {
+    Real n_0 = 0.0;
+    for (int d=0; d<4; ++d) {
+      n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+    }
+    const Real norm = tet_c(m,0,0,k,j,i)*n_0;
+    if (!(Kokkos::isfinite(norm)) || norm == 0.0) {
+      i0(m,n,k,j,i) = 0.0;
+      continue;
+    }
+    const Real intensity = i0(m,n,k,j,i)/norm;
+    if (!(Kokkos::isfinite(intensity))) {
+      i0(m,n,k,j,i) = 0.0;
+      continue;
+    }
+    const Real weighted_i = intensity*solid_angles.d_view(n);
+    if (intensity < 0.0) {
+      deficit -= weighted_i;
+    } else {
+      positive += weighted_i;
+    }
+  }
+  if (deficit <= 0.0) { return; }
+
+  if (positive > deficit) {
+    const Real scale = (positive - deficit)/positive;
+    for (int n=0; n<=nang1; ++n) {
+      Real n_0 = 0.0;
+      for (int d=0; d<4; ++d) {
+        n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+      }
+      const Real norm = tet_c(m,0,0,k,j,i)*n_0;
+      if (!(Kokkos::isfinite(norm)) || norm == 0.0) {
+        i0(m,n,k,j,i) = 0.0;
+        continue;
+      }
+      const Real intensity = i0(m,n,k,j,i)/norm;
+      if (!(Kokkos::isfinite(intensity)) || intensity <= 0.0) {
+        i0(m,n,k,j,i) = 0.0;
+      } else {
+        i0(m,n,k,j,i) = norm*intensity*scale;
+      }
+    }
+  } else {
+    for (int n=0; n<=nang1; ++n) {
+      i0(m,n,k,j,i) = 0.0;
+    }
+  }
+}
+
 //----------------------------------------------------------------------------------------
 //! \class DynRadiation
 
@@ -106,6 +208,8 @@ class DynRadiation {
   Real kappa_p;             // Planck - Rosseland mean coefficient
   bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
   bool is_compton_enabled;  // flag to enable/disable compton
+  int source_max_iter;      // nonlinear radiation-matter coupling iterations
+  Real source_tolerance;    // relative gas-temperature convergence tolerance
 
   // dyn_radiation source term (i.e., beam)
   SourceTerms *psrc = nullptr;

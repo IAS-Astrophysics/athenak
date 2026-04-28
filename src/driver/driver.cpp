@@ -24,6 +24,7 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "particles/particles.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -320,6 +321,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   dyn_radiation::DynRadiation *pdynrad = pmesh->pmb_pack->pdynrad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  particles::Particles *ppart = pmesh->pmb_pack->ppart;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -335,6 +337,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
+    }
+    if (ppart != nullptr) {
+      (void) ppart->NewTimeStep(this, nexp_stages);
     }
 
     pmesh->NewTimeStep(tlim);
@@ -444,6 +449,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       // AMR
       if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
       // compute new timestep AFTER all Meshblocks refined/derefined
+      if (pmesh->pmb_pack->ppart != nullptr) {
+        (void) pmesh->pmb_pack->ppart->NewTimeStep(this, nexp_stages);
+      }
       pmesh->NewTimeStep(tlim);
 
       // Update wall clock time if needed.

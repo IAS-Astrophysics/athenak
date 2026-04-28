@@ -90,6 +90,12 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     rad_source = false;
   }
 
+  // Check for fluid evolution before reading source-feedback options.  A fixed fluid can
+  // still exchange energy with radiation as a prescribed background, but it must not have
+  // its conserved variables mutated by the coupling step.
+  fixed_fluid = pin->GetOrAddBoolean("dyn_radiation","fixed_fluid",false);
+  affect_fluid = false;
+
   // Set dyn_radiation coupling parameters including scattering and absorption opacities,
   // dyn_radiation constant, and source term behavior.
   if (rad_source) {
@@ -100,6 +106,13 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
       kappa_p = pin->GetReal("dyn_radiation","kappa_p");
     }
     is_compton_enabled = pin->GetOrAddBoolean("dyn_radiation","compton",false);
+    source_max_iter = pin->GetOrAddInteger("dyn_radiation","source_max_iter",12);
+    source_tolerance = pin->GetOrAddReal("dyn_radiation","source_tolerance",1.0e-10);
+    if (source_max_iter < 1) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "<dyn_radiation>/source_max_iter must be >= 1" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     if (is_compton_enabled && !(are_units_enabled)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
         << std::endl << "Compton requires enabling units" << std::endl;
@@ -112,11 +125,15 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     } else {
       arad = pin->GetReal("dyn_radiation","arad");
     }
-    affect_fluid = pin->GetOrAddBoolean("dyn_radiation","affect_fluid",true);
+    affect_fluid = pin->GetOrAddBoolean("dyn_radiation","affect_fluid",!(fixed_fluid));
+    if (fixed_fluid && affect_fluid) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+        << std::endl << "<dyn_radiation>/fixed_fluid=true is incompatible with "
+        << "affect_fluid=true; set affect_fluid=false for fixed-background coupling."
+        << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
-
-  // Check for fluid evolution
-  fixed_fluid = pin->GetOrAddBoolean("dyn_radiation","fixed_fluid",false);
 
   // Source terms (if needed)
   if (pin->DoesBlockExist("rad_srcterms")) {

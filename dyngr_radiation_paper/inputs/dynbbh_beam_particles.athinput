@@ -33,7 +33,9 @@ a = 0.0
 excise = false
 
 <adm>
-dynamic = false
+# The dynbbh pgen supplies an analytic superposed-BBH ADM metric that depends
+# on pmesh->time, so the ADM fields must be refreshed during evolution.
+dynamic = true
 
 <time>
 evolution = dynamic
@@ -81,6 +83,7 @@ width = 2.0
 spread = 120.0
 
 <problem>
+pgen_name = dynbbh
 init_beam_edge_particles = true
 rho_min = 1.0e-10
 rho_pow = 1.5
@@ -114,3 +117,24 @@ file_type = trk
 variable = prtcl_all
 nparticles = 8
 dt = 0.05
+
+<output3>
+file_type = bin
+variable = rad_coord
+id = rad_xy
+dt = 0.2
+slice_x3 = -0.5
+
+<output4>
+file_type = bin
+variable = rad_coord
+id = rad_xz
+dt = 0.2
+slice_x2 = -0.5
+
+<output5>
+file_type = bin
+variable = adm
+id = adm_xy
+dt = 0.2
+slice_x3 = 0.0

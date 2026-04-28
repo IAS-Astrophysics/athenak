@@ -954,8 +954,20 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     OrszagTang(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_equilibration") == 0) {
+    RadiationEquilibration(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_beam") == 0) {
     RadiationBeam(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_crossing_beams") == 0) {
+    RadiationCrossingBeams(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_kerr_orbit_beam") == 0) {
+    RadiationKerrOrbitBeam(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_flrw_redshift") == 0) {
+    RadiationFLRWRedshift(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_lapse_gradient") == 0) {
+    RadiationLapseGradient(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_momentum_source") == 0) {
+    RadiationMomentumSource(pin, is_restart);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, is_restart);
   } else if (pgen_fun_name.compare("shwave") == 0) {

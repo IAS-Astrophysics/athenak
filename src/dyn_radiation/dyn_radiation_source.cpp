@@ -63,6 +63,8 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   bool &is_compton_enabled_ = is_compton_enabled;
   bool &fixed_fluid_ = fixed_fluid;
   bool &affect_fluid_ = affect_fluid;
+  int &source_max_iter_ = source_max_iter;
+  Real &source_tolerance_ = source_tolerance;
   bool use_dyn_grmhd_ = (pmy_pack->pdyngr != nullptr);
 
   // Extract coordinate/excision data
@@ -90,7 +92,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   }
 
   // Extract adiabatic index
-  Real gm1;
+  Real gm1 = 0.0;
   if (is_hydro_enabled_) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
   } else if (is_mhd_enabled_) {
@@ -194,21 +196,6 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     Real gamma = sqrt(1.0 + q);
     Real u0 = gamma/alpha;
 
-    // set opacities
-    Real sigma_a, sigma_s, sigma_p;
-    OpacityFunction(wdn, density_scale_,
-                    tgas, temperature_scale_,
-                    length_scale_, gm1, mean_mol_weight_,
-                    power_opacity_, rosseland_coef_, planck_minus_rosseland_coef_,
-                    kappa_a_, kappa_s_, kappa_p_,
-                    sigma_a, sigma_s, sigma_p);
-    Real dtcsiga = dt_*sigma_a;
-    Real dtcsigs = dt_*sigma_s;
-    Real dtcsigp = dt_*sigma_p;
-    Real dtaucsiga = dtcsiga/u0;
-    Real dtaucsigs = dtcsigs/u0;
-    Real dtaucsigp = dtcsigp/u0;
-
     // compute fluid velocity in tetrad frame
     Real u_tet[4];
     u_tet[0] = (norm_to_tet_(m,0,0,k,j,i)*gamma + norm_to_tet_(m,0,1,k,j,i)*wvx +
@@ -225,53 +212,99 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     Real n0 = use_adm_geometry_ ? 1.0/alpha : tt(m,0,0,k,j,i);
     Real sqrtg = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i) : 1.0;
 
-    // Calculate polynomial coefficients
+    Real sigma_a = 0.0, sigma_s = 0.0, sigma_p = 0.0;
+    Real dtcsiga = 0.0, dtcsigs = 0.0, dtcsigp = 0.0;
+    Real dtaucsiga = 0.0, dtaucsigs = 0.0, dtaucsigp = 0.0;
     Real wght_sum = 0.0;
     Real suma1 = 0.0;
     Real suma2 = 0.0;
-    for (int n=0; n<=nang1; ++n) {
-      Real n_0 = 1.0;
-      if (!(use_adm_geometry_)) {
-        n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
-              tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
-              tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
-              tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-      }
-      Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
-                    u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
-      Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
-      Real intensity = use_adm_geometry_ ? i0_(m,n,k,j,i)/sqrtg :
-                                           i0_(m,n,k,j,i)/(n0*n_0);
-      Real intensity_cm = 4.0*M_PI*intensity*SQR(SQR(n0_cm));
-      Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
-      Real vncsigma2 = n0_cm*vncsigma;
-      Real ir_weight = intensity_cm*omega_cm;
-      wght_sum += omega_cm;
-      suma1 += omega_cm*vncsigma2;
-      suma2 += ir_weight*n0*vncsigma;
-    }
-    suma1 /= wght_sum;
-    suma2 /= wght_sum;
-    Real suma3 = suma1*(dtcsigs - dtcsigp);
-    suma1 *= (dtcsiga + dtcsigp);
-
-    // compute coefficients
-    Real coef[2];
-    coef[1] = (dtaucsiga+dtaucsigp-(dtaucsiga+dtaucsigp)*suma1/(1.0-suma3))*arad_*gm1/wdn;
-    coef[0] = -tgas-(dtaucsiga+dtaucsigp)*suma2*gm1/(wdn*(1.0-suma3));
-
-    // Calculate new gas temperature
+    Real suma3 = 0.0;
+    Real coef[2] = {0.0, 0.0};
     Real tgasnew = tgas;
     bool badcell = false;
-    if (fabs(coef[1]) > 1.0e-20) {
-      bool flag = FourthPolyRoot(coef[1], coef[0], tgasnew);
-      if (!(flag) || !(isfinite(tgasnew))) {
-        badcell = true;
-        tgasnew = tgas;
+
+    // Iterate the local nonlinear solve so temperature-dependent opacities and
+    // stiff radiation-matter exchange use mutually consistent coefficients.
+    for (int iter=0; iter<source_max_iter_; ++iter) {
+      const Real opacity_tgas = fmax(tgasnew, coupling_floor);
+      OpacityFunction(wdn, density_scale_,
+                      opacity_tgas, temperature_scale_,
+                      length_scale_, gm1, mean_mol_weight_,
+                      power_opacity_, rosseland_coef_, planck_minus_rosseland_coef_,
+                      kappa_a_, kappa_s_, kappa_p_,
+                      sigma_a, sigma_s, sigma_p);
+      dtcsiga = dt_*sigma_a;
+      dtcsigs = dt_*sigma_s;
+      dtcsigp = dt_*sigma_p;
+      dtaucsiga = dtcsiga/u0;
+      dtaucsigs = dtcsigs/u0;
+      dtaucsigp = dtcsigp/u0;
+
+      wght_sum = 0.0;
+      suma1 = 0.0;
+      suma2 = 0.0;
+      for (int n=0; n<=nang1; ++n) {
+        Real n_0 = 1.0;
+        if (!(use_adm_geometry_)) {
+          n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+                tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+                tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        }
+        Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
+                      u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
+        Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
+        Real intensity = use_adm_geometry_ ? i0_(m,n,k,j,i)/sqrtg :
+                                             i0_(m,n,k,j,i)/(n0*n_0);
+        Real intensity_cm = 4.0*M_PI*intensity*SQR(SQR(n0_cm));
+        // In ADM mode n0=1/alpha, so this denominator is n0 times
+        // (1 + alpha*dt*sigma*D); the coordinate step therefore uses the
+        // comoving optical-depth factor alpha*D*dt.
+        Real vncsigma = 1.0/(n0 + (dtcsiga + dtcsigs)*n0_cm);
+        Real vncsigma2 = n0_cm*vncsigma;
+        Real ir_weight = intensity_cm*omega_cm;
+        wght_sum += omega_cm;
+        suma1 += omega_cm*vncsigma2;
+        suma2 += ir_weight*n0*vncsigma;
       }
-    } else {
-      tgasnew = -coef[0];
+
+      if (wght_sum <= coupling_floor || !(Kokkos::isfinite(wght_sum))) {
+        badcell = true;
+        break;
+      }
+      suma1 /= wght_sum;
+      suma2 /= wght_sum;
+      suma3 = suma1*(dtcsigs - dtcsigp);
+      suma1 *= (dtcsiga + dtcsigp);
+      const Real denom = 1.0 - suma3;
+      if (fabs(denom) <= coupling_floor || !(Kokkos::isfinite(denom))) {
+        badcell = true;
+        break;
+      }
+
+      coef[1] = (dtaucsiga+dtaucsigp-(dtaucsiga+dtaucsigp)*suma1/denom)
+                *arad_*gm1/wdn;
+      coef[0] = -tgas-(dtaucsiga+dtaucsigp)*suma2*gm1/(wdn*denom);
+
+      Real tnext = tgasnew;
+      bool flag = true;
+      if (fabs(coef[1]) > 1.0e-20) {
+        flag = FourthPolyRoot(coef[1], coef[0], tnext);
+      } else {
+        tnext = -coef[0];
+      }
+      if (!(flag) || !(Kokkos::isfinite(tnext)) || tnext < 0.0) {
+        badcell = true;
+        break;
+      }
+
+      const Real tupdated = power_opacity_ ? (0.75*tgasnew + 0.25*tnext) : tnext;
+      const Real rel = fabs(tupdated - tgasnew)/
+                       fmax(fmax(fabs(tupdated), fabs(tgasnew)), coupling_floor);
+      tgasnew = tupdated;
+      if (!(power_opacity_) || rel <= source_tolerance_) { break; }
     }
+    if (badcell) { tgasnew = tgas; }
 
     // Update the specific intensity
     if (!(badcell)) {
@@ -315,14 +348,22 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           mom[1] = n_2/n_0;
           mom[2] = n_3/n_0;
         }
-        Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
-
         // compute moments before coupling
         m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
         m_old[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
         m_old[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
         m_old[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+      }
 
+      for (int n=0; n<=nang1; ++n) {
+        Real n_0 = 1.0;
+        if (!(use_adm_geometry_)) {
+          n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+                tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+                tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+        }
+        Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
         // update intensity
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
@@ -332,26 +373,77 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         Real di_cm = ( ((dtcsigs-dtcsigp)*jr_cm
                       + (dtcsiga+dtcsigp)*emission
                       - (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
-        i0_(m,n,k,j,i) = conserved_norm*fmax(i0_(m,n,k,j,i)/conserved_norm +
-                                             di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
+        i0_(m,n,k,j,i) = conserved_norm*(i0_(m,n,k,j,i)/conserved_norm +
+                                         di_cm/(4.0*M_PI*SQR(SQR(n0_cm))));
+      }
 
-        // compute moments after coupling
-        m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-        m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-        m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-        m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-
-        // handle excision
-        // NOTE(@pdmullen): The below zeroes all intensities within rks <= r_excision and
-        // zeroes intensities within angles where n_0 is about zero. When Compton is
-        // enabled, we delay the n_0_floor excision so that intensites updated via
-        // absorption and scattering inform the Compton update
-        if (excise) {
+      // handle excision
+      // NOTE(@pdmullen): The below zeroes all intensities within rks <= r_excision and
+      // zeroes intensities within angles where n_0 is about zero. When Compton is
+      // enabled, we delay the n_0_floor excision so that intensites updated via
+      // absorption and scattering inform the Compton update
+      if (excise) {
+        for (int n=0; n<=nang1; ++n) {
+          Real n_0 = 1.0;
+          if (!(use_adm_geometry_)) {
+            n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+                  tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                  tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+                  tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+          }
           bool apply_excision = (rad_mask_(m,k,j,i) ||
                                  (!(use_adm_geometry_) && !(is_compton_enabled_) &&
                                   fabs(n_0) < n_0_floor_));
           if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
         }
+      }
+      if (use_adm_geometry_) {
+        ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1);
+      } else {
+        ConservativePrimitiveAngularFloor(i0_, solid_angles_, tt, tc, nh_c_,
+                                          m, k, j, i, nang1);
+      }
+
+      for (int n=0; n<=nang1; ++n) {
+        Real n_0 = 1.0;
+        Real mom[3] = {0.0, 0.0, 0.0};
+        if (use_adm_geometry_) {
+          Real s[3] = {0.0, 0.0, 0.0};
+          for (int a=0; a<3; ++a) {
+            for (int d=0; d<3; ++d) {
+              s[d] += tt(m,a+1,d+1,k,j,i)*nh_c_.d_view(n,a+1);
+            }
+          }
+          for (int a=0; a<3; ++a) {
+            for (int b=0; b<3; ++b) {
+              mom[a] += adm_g_dd_c_(m,a,b,k,j,i)*s[b];
+            }
+          }
+        } else {
+          n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) +
+                tc(m,1,0,k,j,i)*nh_c_.d_view(n,1) +
+                tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
+                tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+          Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0) +
+                     tc(m,1,1,k,j,i)*nh_c_.d_view(n,1) +
+                     tc(m,2,1,k,j,i)*nh_c_.d_view(n,2) +
+                     tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
+          Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0) +
+                     tc(m,1,2,k,j,i)*nh_c_.d_view(n,1) +
+                     tc(m,2,2,k,j,i)*nh_c_.d_view(n,2) +
+                     tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
+          Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0) +
+                     tc(m,1,3,k,j,i)*nh_c_.d_view(n,1) +
+                     tc(m,2,3,k,j,i)*nh_c_.d_view(n,2) +
+                     tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+          mom[0] = n_1/n_0;
+          mom[1] = n_2/n_0;
+          mom[2] = n_3/n_0;
+        }
+        m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
+        m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
       }
       // update conserved fluid variables
       if (affect_fluid_) {
@@ -363,7 +455,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     }
 
     // compton scattering
-    if (is_compton_enabled_) {
+    if (is_compton_enabled_ && wght_sum > coupling_floor && Kokkos::isfinite(wght_sum)) {
       // use partially updated gas temperature
       tgas = tgasnew;
 
@@ -394,7 +486,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       const bool compton_well_defined = (jr_cm > coupling_floor &&
                                          fabs(suma1) > coupling_floor &&
                                          arad_ > coupling_floor &&
-                                         isfinite(jr_cm) && isfinite(suma1));
+                                         Kokkos::isfinite(jr_cm) && Kokkos::isfinite(suma1));
       Real trad = compton_well_defined ? sqrt(sqrt(jr_cm/arad_)) : tgas;
       const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
 
@@ -407,7 +499,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         coef[1] = (1.0 + suma2*jr_cm)/(suma1*jr_cm)*arad_;
         coef[0] = -(1.0 + suma2*jr_cm)/suma1 - tgas;
         bool flag = FourthPolyRoot(coef[1], coef[0], tradnew);
-        if (!(flag) || !(isfinite(tradnew))) {
+        if (!(flag) || !(Kokkos::isfinite(tradnew))) {
           badcell = true;
         }
       }
@@ -445,26 +537,27 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
             mom[1] = n_2/n_0;
             mom[2] = n_3/n_0;
           }
-          Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
 
           // compute moments before coupling
           m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
           m_old[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
           m_old[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
           m_old[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        }
 
+        for (int n=0; n<=nang1; ++n) {
+          Real n_0 = 1.0;
+          if (!(use_adm_geometry_)) {
+            n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+                 +tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+          }
+          Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
           // update intensity
           Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
           Real di_cm = (n0_cm/n0)*dtcsigs*4.0*jr_cm*inv_t_electron_*(tgasnew - tradnew);
-          i0_(m,n,k,j,i) = conserved_norm*fmax(i0_(m,n,k,j,i)/conserved_norm +
-                                               di_cm/(4.0*M_PI*SQR(SQR(n0_cm))), 0.0);
-
-          // compute moments after coupling
-          m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-          m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-          m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-          m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          i0_(m,n,k,j,i) = conserved_norm*(i0_(m,n,k,j,i)/conserved_norm +
+                                           di_cm/(4.0*M_PI*SQR(SQR(n0_cm))));
 
           // handle excision (see notes above)
           if (excise) {
@@ -472,6 +565,46 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
               i0_(m,n,k,j,i) = 0.0;
             }
           }
+        }
+        if (use_adm_geometry_) {
+          ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1);
+        } else {
+          ConservativePrimitiveAngularFloor(i0_, solid_angles_, tt, tc, nh_c_,
+                                            m, k, j, i, nang1);
+        }
+
+        for (int n=0; n<=nang1; ++n) {
+          Real n_0 = 1.0;
+          Real mom[3] = {0.0, 0.0, 0.0};
+          if (use_adm_geometry_) {
+            Real s[3] = {0.0, 0.0, 0.0};
+            for (int a=0; a<3; ++a) {
+              for (int d=0; d<3; ++d) {
+                s[d] += tt(m,a+1,d+1,k,j,i)*nh_c_.d_view(n,a+1);
+              }
+            }
+            for (int a=0; a<3; ++a) {
+              for (int b=0; b<3; ++b) {
+                mom[a] += adm_g_dd_c_(m,a,b,k,j,i)*s[b];
+              }
+            }
+          } else {
+            n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
+                 +tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
+            Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
+                     + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
+            Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
+                     + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
+            Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
+                     + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+            mom[0] = n_1/n_0;
+            mom[1] = n_2/n_0;
+            mom[2] = n_3/n_0;
+          }
+          m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
+          m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+          m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
         }
 
         // feedback on fluid
@@ -508,44 +641,65 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn  bool FourthPolyRoot
-//  \brief Exact solution for fourth order polynomial of
+//  \brief Bracketed monotone solve for fourth order polynomial of
 //  the form coef4 * x^4 + x + tconst = 0.
 
 KOKKOS_INLINE_FUNCTION
 bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root) {
-  // Calculate real root of z^3 - 4*tconst/coef4 * z - 1/coef4^2 = 0
-  Real ccubic = tconst * tconst * tconst;
-  Real delta1 = 0.25 - 64.0 * ccubic * coef4 / 27.0;
-  if (delta1 < 0.0) {
+  if (!(Kokkos::isfinite(coef4)) || !(Kokkos::isfinite(tconst)) || coef4 < 0.0) {
     return false;
   }
-  delta1 = sqrt(delta1);
-  if (delta1 < 0.5) {
-    return false;
+  if (fabs(coef4) <= 1.0e-300) {
+    root = -tconst;
+    return (root >= 0.0 && Kokkos::isfinite(root));
   }
-  Real zroot;
-  if (delta1 > 1.0e11) {  // to avoid small number cancellation
-    zroot = pow(delta1, -2.0/3.0) / 3.0;
-  } else {
-    zroot = pow(0.5 + delta1, 1.0/3.0) - pow(-0.5 + delta1, 1.0/3.0);
-  }
-  if (zroot < 0.0) {
-    return false;
-  }
-  zroot *= pow(coef4, -2.0/3.0);
 
-  // Calculate quartic root using cubic root
-  Real rcoef = sqrt(zroot);
-  Real delta2 = -zroot + 2.0 / (coef4 * rcoef);
-  if (delta2 < 0.0) {
-    return false;
+  // For coef4 >= 0, f(x)=coef4*x^4+x+tconst is monotone on x >= 0.
+  // A positive root exists only when f(0) <= 0.
+  if (tconst > 0.0) { return false; }
+
+  Real lo = 0.0;
+  Real hi = fmax(1.0, root);
+  if (!(Kokkos::isfinite(hi)) || hi <= 0.0) { hi = 1.0; }
+  bool bracketed = false;
+  for (int it=0; it<128; ++it) {
+    Real fhi = coef4*SQR(SQR(hi)) + hi + tconst;
+    if (!(Kokkos::isfinite(fhi))) { return false; }
+    if (fhi >= 0.0) {
+      bracketed = true;
+      break;
+    }
+    hi *= 2.0;
+    if (!(Kokkos::isfinite(hi))) { return false; }
   }
-  delta2 = sqrt(delta2);
-  root = 0.5 * (delta2 - rcoef);
-  if (root < 0.0) {
-    return false;
+  if (!(bracketed)) { return false; }
+
+  Real x = fmin(fmax(root, lo), hi);
+  if (x <= lo || x >= hi) { x = 0.5*(lo + hi); }
+  const Real ftol = 1.0e-13*(1.0 + fabs(tconst));
+  for (int it=0; it<80; ++it) {
+    const Real f = coef4*SQR(SQR(x)) + x + tconst;
+    if (!(Kokkos::isfinite(f))) { return false; }
+    if (fabs(f) <= ftol) {
+      root = x;
+      return true;
+    }
+    if (f > 0.0) {
+      hi = x;
+    } else {
+      lo = x;
+    }
+
+    const Real df = 4.0*coef4*x*x*x + 1.0;
+    Real xnew = x - f/df;
+    if (!(Kokkos::isfinite(xnew)) || xnew <= lo || xnew >= hi) {
+      xnew = 0.5*(lo + hi);
+    }
+    x = xnew;
   }
-  return true;
+
+  root = x;
+  return (root >= 0.0 && Kokkos::isfinite(root));
 }
 
 } // namespace dyn_radiation
