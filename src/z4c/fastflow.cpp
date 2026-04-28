@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <unistd.h>
-#include <cmath> // NAN
+#include <math.h> // NAN
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -439,8 +439,8 @@ void FastFlow::InitialGuess()
     if (ah_found && last_a0 > 0) {
       a0.h_view(0) = last_a0 * expand_guess;
     } else {
-      a0.h_view(0) = std::max(0.5 * mass, std::min(mass, 0.5 * largedist));
-      a0.h_view(0) *= std::sqrt(4.0 * M_PI);
+      a0.h_view(0) = Kokkos::fmax(0.5 * mass, Kokkos::fmin(mass, 0.5 * largedist));
+      a0.h_view(0) *= Kokkos::sqrt(4.0 * M_PI);
     }
 
     // Sync to device
@@ -466,7 +466,7 @@ void FastFlow::InitialGuess()
   if (ah_found && last_a0 > 0) {
     a0.h_view(0) = last_a0 * expand_guess;
   } else {
-    a0.h_view(0) = std::sqrt(4.0 * M_PI) * initial_radius;
+    a0.h_view(0) = Kokkos::sqrt(4.0 * M_PI) * initial_radius;
   }
   // Sync to device
   a0.template modify<HostMemSpace>();
@@ -687,7 +687,7 @@ void FastFlow::FastFlowLoop()
     meanradius = a0.h_view(0) / Kokkos::sqrt(4.0 * M_PI);
 
     // Step 4: Check that we get a finite result.
-    if (!(std::isfinite(area))) {
+    if (!(Kokkos::isfinite(area))) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, Area not finite\n");
         fflush(pofile_verbose);
@@ -696,7 +696,7 @@ void FastFlow::FastFlowLoop()
       break;
     }
 
-    if (!(std::isfinite(hmean))) {
+    if (!(Kokkos::isfinite(hmean))) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, hmean not finite\n");
         fflush(pofile_verbose);
@@ -715,7 +715,7 @@ void FastFlow::FastFlowLoop()
       fflush(pofile_verbose);
     }
 
-    if (std::fabs(hmean) > hmean_tol) {
+    if (Kokkos::fabs(hmean) > hmean_tol) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, hmean > %f\n", hmean_tol);
         fflush(pofile_verbose);
@@ -744,7 +744,7 @@ void FastFlow::FastFlowLoop()
     }
 
     // End flow when mass difference is small
-    if (std::fabs(mass_prev-mass) < mass_tol) {
+    if (Kokkos::fabs(mass_prev-mass) < mass_tol) {
       ah_found = true;
       break;
     }
@@ -766,7 +766,7 @@ void FastFlow::FastFlowLoop()
     ah_prop[hSy] = Sy;
     ah_prop[hSz] = Sz;
     ah_prop[hS]  = S;
-    ah_prop[hmass] = std::sqrt( SQR(mass) + 0.25*SQR(S/mass) ); // Christodoulu mass
+    ah_prop[hmass] = Kokkos::sqrt( SQR(mass) + 0.25*SQR(S/mass) ); // Christodoulu mass
   }
 
   if (verbose && ioproc) {
@@ -1456,7 +1456,7 @@ Real FastFlow::PuncMaxDistance() {
       Real x = pmbp->pz4c->ptracker[p]->GetPos(0);
       Real y = pmbp->pz4c->ptracker[p]->GetPos(1);
       Real z = pmbp->pz4c->ptracker[p]->GetPos(2);
-      maxdist = std::max(maxdist, std::sqrt(SQR(x - xp) + SQR(y - yp) + SQR(z - zp)));
+      maxdist = Kokkos::fmax(maxdist, Kokkos::sqrt(SQR(x - xp) + SQR(y - yp) + SQR(z - zp)));
     }
   }
   return maxdist;
@@ -1476,7 +1476,7 @@ Real FastFlow::PuncMaxDistance(const int pix) {
     Real x = pmbp->pz4c->ptracker[p]->GetPos(0);
     Real y = pmbp->pz4c->ptracker[p]->GetPos(1);
     Real z = pmbp->pz4c->ptracker[p]->GetPos(2);
-    maxdist = std::max(maxdist, std::sqrt(SQR(x - xp) + SQR(y - yp) + SQR(z - zp)));
+    maxdist = Kokkos::fmax(maxdist, Kokkos::sqrt(SQR(x - xp) + SQR(y - yp) + SQR(z - zp)));
   }
 
   return maxdist;
