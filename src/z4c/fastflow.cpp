@@ -31,26 +31,27 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput * pin, int n)
-//! \brief Constructor for FastFlow class
+//! \brief Constructor for FastFlow class.
 FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   pmbp(pmbp),
   pin(pin),
   Y0("Y0",1,1), Ys("Ys",1,1), Yc("Yc",1,1),
-  dY0dth("dY0dth",1,1), dYcdth("dYcdth",1,1), 
-  dYsdth("dYsdth",1,1), dYcdph("dYcdph",1,1), 
-  dYsdph("dYsdph",1,1), dY0dth2("dY0dth2",1,1), 
-  dYcdth2("dYcdth2",1,1), dYcdthdph("dYcdthdph",1,1), 
-  dYsdth2("dYsdth2",1,1), dYsdthdph("dYsdthdph",1,1), 
+  dY0dth("dY0dth",1,1), dYcdth("dYcdth",1,1),
+  dYsdth("dYsdth",1,1), dYcdph("dYcdph",1,1),
+  dYsdph("dYsdph",1,1), dY0dth2("dY0dth2",1,1),
+  dYcdth2("dYcdth2",1,1), dYcdthdph("dYcdthdph",1,1),
+  dYsdth2("dYsdth2",1,1), dYsdthdph("dYsdthdph",1,1),
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
-  a0("a0",1), ac("ac",1), as("as",1), 
-  rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1), 
+  a0("a0",1), ac("ac",1), as("as",1), ABfac("ABfac",1),
+  spec0("spec0",1), specc("specc",1), specs("specs",1),
+  rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
   rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
   K_interp("K_interp",1,1), dg_interp("dg_interp",1,1)
 {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
 
-  // Read parameter input variables
+  // Read parameter input variables.
   nhorizon = pin->GetOrAddInteger("fastflow", "num_horizons", 1); // Number of horizons
   ntheta = pin->GetOrAddInteger("fastflow", "ntheta", 5); // Number of points theta
 
@@ -91,7 +92,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   if (use_puncture >= 0) {
     // Center is determined on the fly during the initial guess
-    // to follow the chosen puncture
+    // to follow the chosen puncture.
     if (use_puncture >= npunct) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
@@ -106,20 +107,24 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   start_time = pin->GetOrAddReal("fastflow", "start_time_" + n_str, std::numeric_limits<double>::max());
   stop_time = pin->GetOrAddReal("fastflow", "stop_time_" + n_str, -1.0);
 
-  // Grid and quadrature weights
+  // Grid and quadrature weights.
   gl_grid = new GaussLegendreGrid(pmbp, ntheta, 1.0); // unit-sphere
   nangles = gl_grid->nangles;
 
-  // Points for spherical harmonics l >= 1
+  // Points for spherical harmonics l >= 1.
   lmpoints = lmax1 * lmax1;
 
-  // Reallocate for the coefficients
-  Kokkos::realloc(a0, lmax1); 
+  // Reallocate for the coefficients.
+  Kokkos::realloc(a0, lmax1);
   Kokkos::realloc(ac, lmpoints);
   Kokkos::realloc(as, lmpoints);
+  Kokkos::realloc(ABfac, lmax1);
+  Kokkos::realloc(spec0, lmax1);
+  Kokkos::realloc(specc, lmpoints);
+  Kokkos::realloc(specs, lmpoints);
 
-  // Reallocate for the spherical harmonics
-  // The spherical grid is the same for all surfaces
+  // Reallocate for the spherical harmonics.
+  // The spherical grid is the same for all surfaces.
   Kokkos::realloc(Y0, nangles, lmax1);
   Kokkos::realloc(Yc, nangles, lmpoints);
   Kokkos::realloc(Ys, nangles, lmpoints);
@@ -129,7 +134,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(dYsdth, nangles, lmpoints);
   Kokkos::realloc(dYcdph, nangles, lmpoints);
   Kokkos::realloc(dYsdph, nangles, lmpoints);
-  
+
   Kokkos::realloc(dY0dth2, nangles, lmax1);
   Kokkos::realloc(dYcdth2, nangles, lmpoints);
   Kokkos::realloc(dYcdthdph, nangles, lmpoints);
@@ -137,18 +142,18 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(dYsdthdph, nangles, lmpoints);
   Kokkos::realloc(dYcdph2, nangles, lmpoints);
   Kokkos::realloc(dYsdph2, nangles, lmpoints);
-  
+
   ComputeSphericalHarmonics();
 
-  // Fields on the sphere
+  // Fields on the sphere.
   Kokkos::realloc(rr, nangles);
   Kokkos::realloc(rr_dth, nangles);
   Kokkos::realloc(rr_dph, nangles);
 
-  // Allocate the arrays holding the interpolated values
-  Kokkos::realloc(g_interp, (INMETRIC), nangles);
-  Kokkos::realloc(K_interp, (INCURV), nangles);
-  Kokkos::realloc(dg_interp, (NDRVS), nangles);
+  // Allocate the arrays holding the interpolated values.
+  Kokkos::realloc(g_interp, (NSPMETRIC), nangles);
+  Kokkos::realloc(K_interp, (NEXCURV), nangles);
+  Kokkos::realloc(dg_interp, (NDRVSSPMETRIC), nangles);
 
   // Allocate memory for the array holding the metric derivatives
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -156,15 +161,15 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = indcs.nx2 + 2 * (indcs.ng);
   int ncells3 = indcs.nx3 + 2 * (indcs.ng);
-  Kokkos::realloc(dg, nmb, (NDRVS), ncells3, ncells2, ncells1);
-  
-  // Array computed in surface integrals
+  Kokkos::realloc(dg, nmb, (NDRVSSPMETRIC), ncells3, ncells2, ncells1);
+
+  // Array computed in surface integrals.
   Kokkos::realloc(rho, nangles);
 
-  // Flag points existing on this mesh
+  // Flag points existing on this mesh.
   Kokkos::realloc(havepoint, nangles);
 
-  // Initialize horizon properties to NAN
+  // Initialize horizon properties to NAN.
   for (int v = 0; v < hnvar; ++v) {
     ah_prop[v] = NAN;
   }
@@ -232,7 +237,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       // Header
       fprintf(pofile_grid, "# 1:Theta\t2:Phi\t3:Weight\n");
 
-      // Print grid to the output file
+      // Print grid to the output file.
       for (int p = 0; p < nangles; ++p) {
         const Real theta = gl_grid->polar_pos.h_view(p,0);
         const Real phi   = gl_grid->polar_pos.h_view(p,1);
@@ -253,7 +258,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
       // Header
       fprintf(pofile_ylm, "# 1:Theta\t2:Phi\t3:l\t4:m\t5:Y0\t6:Yc\t7:Ys\t8:dY0dth\t9:dYcdth\t10:dYsdth\t"
-                   "11:dYcdphi\t12:dYsdphi\t13:dY0dth2\t14:dYcdth2\t15:dYsdth2\t16:dYcdph2\t17:dYsdph2\t" 
+                   "11:dYcdphi\t12:dYsdphi\t13:dY0dth2\t14:dYcdth2\t15:dYsdth2\t16:dYcdph2\t17:dYsdph2\t"
                    "18:dYcdthdphi\t19:dYsdthdphi\n");
 
       for (int l = 0; l <= lmax; ++l) {
@@ -324,13 +329,13 @@ FastFlow::~FastFlow() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::Write(int iter, Real time)
-//! \brief Output summary and shape file, for each horizon
+//! \brief Output summary and shape file, for each horizon.
 void FastFlow::Write(int iter, Real time)
 {
   if (ioproc) {
     if((time < start_time) || (time > stop_time)) return;
     if (wait_until_punc_are_close && !(PuncAreClose())) return;
-    
+
     // Summary file
     fprintf(pofile_summary, "%d %g ", iter, time);
     fprintf(pofile_summary, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e",
@@ -349,7 +354,7 @@ void FastFlow::Write(int iter, Real time)
 
     if (ah_found)
     {
-      // Shape file (coefficients)
+      // Shape file (coefficients).
       pofile_shape = fopen(ofname_shape.c_str(), "a");
       if (NULL == pofile_shape)
       {
@@ -361,7 +366,7 @@ void FastFlow::Write(int iter, Real time)
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
       for(int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0.h_view(l));
-    
+
         for(int m = 1; m <= l; m++){
           int l1 = lmindex(l,m,lmax);
           fprintf(pofile_shape,"%e ",ac.h_view(l1));
@@ -413,18 +418,18 @@ void FastFlow::Find(int iter, Real time)
 //! \fn void FastFlow::InitialGuess()
 //! \brief Initial guess for spectral coefs of horizon n
 void FastFlow::InitialGuess()
-{  
+{
   // Reset Coefficients to Zero
-  Kokkos::deep_copy(a0.h_view, 0.0); 
+  Kokkos::deep_copy(a0.h_view, 0.0);
   Kokkos::deep_copy(ac.h_view, 0.0);
   Kokkos::deep_copy(as.h_view, 0.0);
-  
+
   if (use_puncture >= 0) {
     // Update the center to the puncture position
     center[0] = pmbp->pz4c->ptracker[use_puncture]->GetPos(0);
     center[1] = pmbp->pz4c->ptracker[use_puncture]->GetPos(1);
     center[2] = pmbp->pz4c->ptracker[use_puncture]->GetPos(2);
-    
+
     // Update a0
     // For single BH in isotropic coordinates: horizon radius=m/2
     // but make sure it can surround all punctures comfortably, i.e.
@@ -473,17 +478,17 @@ void FastFlow::InitialGuess()
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn bool FastFlow::MetricDerivatives(Real time)
-//! \brief compute drvts of ADM metric at MB level
+//! \fn void FastFlow::MetricDerivatives(Real time)
+//! \brief Compute drvts of ADM metric at MB level.
 template <int NGHOST>
 void FastFlow::MetricDerivatives(Real time)
-{ 
+{
   // Check whether derivatives have to be computed
   if (use_stored_metric_drvts) return;
   if((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
-  
-  // MeshBlock variables
+
+  // Explicitely capture the variables for the Kokkos kernel.
   auto &adm = pmbp->padm->adm;
   auto &dg_ = dg;
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -499,28 +504,28 @@ void FastFlow::MetricDerivatives(Real time)
     Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2, 1.0 / size.d_view(m).dx3};
 
     // x-derivative
-    dg_(m,DX_GXX,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,DX_GXY,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,DX_GXZ,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,DX_GYY,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,DX_GYZ,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,DX_GZZ,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 2, 2, k, j, i);
+    dg_(m,D1S11,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
+    dg_(m,D1S12,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 1, k, j, i);
+    dg_(m,D1S13,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 2, k, j, i);
+    dg_(m,D1S22,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 1, k, j, i);
+    dg_(m,D1S23,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 2, k, j, i);
+    dg_(m,D1S33,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 2, 2, k, j, i);
 
     // y-derivative
-    dg_(m,DY_GXX,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,DY_GXY,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,DY_GXZ,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,DY_GYY,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,DY_GYZ,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,DY_GZZ,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 2, 2, k, j, i);
+    dg_(m,D2S11,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 0, k, j, i);
+    dg_(m,D2S12,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 1, k, j, i);
+    dg_(m,D2S13,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 2, k, j, i);
+    dg_(m,D2S22,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 1, k, j, i);
+    dg_(m,D2S23,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 2, k, j, i);
+    dg_(m,D2S33,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 2, 2, k, j, i);
 
     // z-derivative
-    dg_(m,DZ_GXX,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,DZ_GXY,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,DZ_GXZ,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,DZ_GYY,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,DZ_GYZ,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,DZ_GZZ,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 2, 2, k, j, i);
+    dg_(m,D3S11,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 0, k, j, i);
+    dg_(m,D3S12,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 1, k, j, i);
+    dg_(m,D3S13,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 2, k, j, i);
+    dg_(m,D3S22,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 1, k, j, i);
+    dg_(m,D3S23,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 2, k, j, i);
+    dg_(m,D3S33,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 2, 2, k, j, i);
   });
 
   return;
@@ -531,21 +536,22 @@ template void FastFlow::MetricDerivatives<4>(Real time);
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::MetricInterp(MeshBlock *pmb)
-//! \brief Interpolate metric on the surface n
-//!        Flag here the surface points contained (on this rank)
+//! \brief Interpolate metric on the surface n.
+//!        Flag here the surface points contained (on this rank).
 template <int NGHOST>
 void FastFlow::MetricInterp()
-{ 
+{
   // In MetricInterp() we'll flag the surface points on this mesh
-  // default to 0 (no points)
-  Kokkos::deep_copy(havepoint.d_view, 0.0);
+  // default to 0 (no points).
+  Kokkos::deep_copy(havepoint, 0.0);
 
-  // Set metric interpolated on the surface to 0.0
+  // Set metric interpolated on the surface to 0.0.
   Kokkos::deep_copy(g_interp, 0.0);
   Kokkos::deep_copy(K_interp, 0.0);
   Kokkos::deep_copy(dg_interp, 0.0);
-  
-  // Set some necessary variables
+
+  // Set some necessary variables used
+  // for the interpolation.
   int nmb = pmbp->nmb_thispack;
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -553,7 +559,7 @@ void FastFlow::MetricInterp()
   const Real yc = center[1];
   const Real zc = center[2];
 
-  // explicit capture
+  // Explicitely capture the variables for the Kokkos kernel.
   auto &polar_pos = gl_grid->polar_pos;
   auto &u_adm = pmbp->padm->u_adm;
   auto &dg_ = dg;
@@ -563,8 +569,9 @@ void FastFlow::MetricInterp()
   auto &havepoint_ = havepoint;
   auto &rr_ = rr;
 
-  // indices
-  int gind[INMETRIC] = {
+  // Resolve the host pointers on the
+  // ADM indices.
+  int gind[NSPMETRIC] = {
     pmbp->padm->I_ADM_GXX,
     pmbp->padm->I_ADM_GXY,
     pmbp->padm->I_ADM_GXZ,
@@ -573,7 +580,7 @@ void FastFlow::MetricInterp()
     pmbp->padm->I_ADM_GZZ
   };
 
-  int Kind[INCURV] = {
+  int Kind[NEXCURV] = {
     pmbp->padm->I_ADM_KXX,
     pmbp->padm->I_ADM_KXY,
     pmbp->padm->I_ADM_KXZ,
@@ -587,7 +594,7 @@ void FastFlow::MetricInterp()
     Real theta = polar_pos.d_view(p,0);
     Real phi = polar_pos.d_view(p,1);
 
-    // Global coordinates of the surface
+    // Global coordinates of the surface.
     Real pos[3];
     Real x = xc + rr_(p) * Kokkos::sin(theta) * Kokkos::cos(phi);
     Real y = yc + rr_(p) * Kokkos::sin(theta) * Kokkos::sin(phi);
@@ -596,38 +603,28 @@ void FastFlow::MetricInterp()
     pos[1] = y;
     pos[2] = z;
 
-    // Set havepoint flag
-    for (int m = 0; m < nmb; ++m) {
-      if ((size.d_view(m).x1min <= x) && (x <= size.d_view(m).x1max) &&
-          (size.d_view(m).x2min <= y) && (y <= size.d_view(m).x2max) &&
-          (size.d_view(m).x3min <= z) && (z <= size.d_view(m).x3max)) {
-            havepoint_.d_view(p) += 1;
-      }
-    }
-
+    // Compute interpolation indices and weights (inline).
     auto ind_and_wghts = IndicesAndWeights<NGHOST>(indcs, size, pos, nmb);
+
+    // Set havepoint flag.
+    havepoint_(p) = ind_and_wghts.point_exist;
     if (ind_and_wghts.point_exist) {
       // Metric
-      for (int a = 0; a < INMETRIC; ++a) {
+      for (int a = 0; a < NSPMETRIC; ++a) {
         gi_(a,p) = InterpolateLagrange<NGHOST>(u_adm, gind[a], indcs, ind_and_wghts);
       }
 
       // Extrinsic curvature
-      for (int b = 0; b < INCURV; ++b) {
+      for (int b = 0; b < NEXCURV; ++b) {
         Ki_(b,p) = InterpolateLagrange<NGHOST>(u_adm, Kind[b], indcs, ind_and_wghts);
       }
 
       // Metric derivatives
-      for (int c = 0; c < NDRVS; ++c) {
+      for (int c = 0; c < NDRVSSPMETRIC; ++c) {
         dgi_(c,p) = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
       }
     }
   });
-
-  // Sync to host
-  havepoint.template modify<DevExeSpace>();
-  havepoint.template sync<HostMemSpace>();
-
 }
 template void FastFlow::MetricInterp<2>();
 template void FastFlow::MetricInterp<3>();
@@ -635,7 +632,7 @@ template void FastFlow::MetricInterp<4>();
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::FastFlowLoop()
-//! \brief Fast Flow loop for horizon n
+//! \brief Fast Flow loop for horizon n.
 void FastFlow::FastFlowLoop()
 {
   ah_found = false;
@@ -662,10 +659,10 @@ void FastFlow::FastFlowLoop()
   for(int k = 0; k < flow_iterations; k++){
     fastflow_iter = k;
 
-    // Compute radius r = a_lm Y_lm
+    // Step 1: Compute radius r = a_lm Y_lm.
     RadiiFromSphericalHarmonics();
 
-    // Interpolate metric on surface
+    // Step 2: Interpolate metric onto the surface.
     auto &indcs = pmbp->pmesh->mb_indcs;
     switch (indcs.ng) {
       case 2: MetricInterp<2>();
@@ -675,6 +672,8 @@ void FastFlow::FastFlowLoop()
       case 4: MetricInterp<4>();
               break;
     }
+
+    // Step 3: Compute the surface integrals.
     SurfaceIntegrals();
 
     area  = integrals[iarea];
@@ -687,7 +686,7 @@ void FastFlow::FastFlowLoop()
 
     meanradius = a0.h_view(0) / Kokkos::sqrt(4.0 * M_PI);
 
-    // Check we get a finite result
+    // Step 4: Check that we get a finite result.
     if (!(std::isfinite(area))) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, Area not finite\n");
@@ -696,7 +695,7 @@ void FastFlow::FastFlowLoop()
       failed = true;
       break;
     }
- 
+
     if (!(std::isfinite(hmean))) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, hmean not finite\n");
@@ -705,7 +704,7 @@ void FastFlow::FastFlowLoop()
       failed = true;
       break;
     }
-    
+
     // Irreducible mass
     mass_prev = mass;
     mass = Kokkos::sqrt(area / (16.0 * M_PI));
@@ -750,7 +749,7 @@ void FastFlow::FastFlowLoop()
       break;
     }
 
-    // Find new spectral components
+    // Step 5: Find new spectral components.
     UpdateFlowSpectralComponents();
   }
 
@@ -782,7 +781,7 @@ void FastFlow::FastFlowLoop()
       fprintf(pofile_verbose, " Sy = %f\n", Sy);
       fprintf(pofile_verbose, " Sz = %f\n", Sz);
       fprintf(pofile_verbose, " S  = %f\n", S);
-    } 
+    }
     else if (!failed && !ah_found) {
       fprintf(pofile_verbose, "Failed, reached max iterations %d\n", flow_iterations);
     }
@@ -792,90 +791,86 @@ void FastFlow::FastFlowLoop()
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::UpdateFlowSpectralComponents()
-//! \brief Find new spectral components with fast flow
+//! \brief Find new spectral components with fast-flow.
 void FastFlow::UpdateFlowSpectralComponents()
 {
   const Real alpha = flow_alpha_beta_const;
   const Real beta = 0.5 * flow_alpha_beta_const;
   const Real A = alpha / (lmax * lmax1) + beta;
   const Real B = beta / alpha;
-  
-  Real *ABfac = new Real[lmax1];
-  Real *spec0 = new Real[lmax1];
-  Real *specc = new Real[lmpoints];
-  Real *specs = new Real[lmpoints];
-  
-  // Initialize coefficients to zero
-  for(int l = 0; l <= lmax; l++) {
-    spec0[l] = 0;
-    ABfac[l] = A / (1.0 + B * l * (l + 1));
-    
-    for(int m = 1; m <= l; m++) {
-      int l1 = lmindex(l,m,lmax);
-      specc[l1] = 0;
-      specs[l1] = 0;
-    }
-  }
 
-  // Local sums
-  for(int p = 0; p < nangles; p++){
-    if (!havepoint.h_view(p)) continue;
+  // Initialize the coefficients to zero.
+  Kokkos::deep_copy(spec0, 0.0);
+  Kokkos::deep_copy(specc, 0.0);
+  Kokkos::deep_copy(specs, 0.0);
 
-    const Real drho = gl_grid->int_weights.h_view(p) * rho.h_view(p);
-    
-    for(int l = 0; l <= lmax; l++) {
-      spec0[l] += drho * Y0.h_view(p,l);
-    
-      for(int m = 1; m <= l; m++) { 
-        int l1 = lmindex(l,m,lmax);
-        specc[l1] += drho * Yc.h_view(p,l1);
-        specs[l1] += drho * Ys.h_view(p,l1);
+  // Explicitely capture the variables for the Kokkos kernel.
+  auto &int_weights = gl_grid->int_weights;
+  auto &rho_ = rho;
+  auto &havepoint_ = havepoint;
+  auto &ABfac_ = ABfac;
+  auto &spec0_ = spec0;
+  auto &specc_ = specc;
+  auto &specs_ = specs;
+  auto &Y0_ = Y0;
+  auto &Yc_ = Yc;
+  auto &Ys_ = Ys;
+  auto &a0_ = a0;
+  auto &ac_ = ac;
+  auto &as_ = as;
+  auto &lmax_ = lmax;
+
+  // Step 1: Compute the local sums.
+  par_for("FastFlow_LocalSums", DevExeSpace(), 0, nangles-1,
+  KOKKOS_LAMBDA(int p) {
+    if (havepoint_(p)) {
+      const Real drho = int_weights.d_view(p) * rho_(p);
+
+      for(int l = 0; l <= lmax_; l++) {
+        spec0_(l) += drho * Y0_.d_view(p,l);
+
+        for(int m = 1; m <= l; m++) {
+          int l1 = lmindex(l,m,lmax_);
+          specc_(l1) += drho * Yc_.d_view(p,l1);
+          specs_(l1) += drho * Ys_.d_view(p,l1);
+        }
       }
     }
-  }
-   
-  // MPI reduce
-  #if MPI_PARALLEL_ENABLED
-    MPI_Allreduce(MPI_IN_PLACE, spec0, lmax1,    MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, specc, lmpoints, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, specs, lmpoints, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
-  #endif
+  });
 
-  // Update the coefficients
-  for(int l = 0; l <= lmax; l++) {
-    a0.h_view(l) -= ABfac[l] * spec0[l];
+  // Step 2: Update the spectral coefficients.
+  par_for("FastFlow_UpdateSpCoeffs", DevExeSpace(), 0, lmax,
+  KOKKOS_LAMBDA(int l) {
+    ABfac_(l) = A / (1.0 + B * l * (l + 1));
+    a0_.d_view(l) -= ABfac_(l) * spec0_(l);
 
     for(int m = 1; m <= l; m++){
-      int l1 = lmindex(l,m,lmax);
-      ac.h_view(l1) -= ABfac[l] * specc[l1];
-      as.h_view(l1) -= ABfac[l] * specs[l1];
+      int l1 = lmindex(l,m,lmax_);
+      ac_.d_view(l1) -= ABfac_(l) * specc_(l1);
+      as_.d_view(l1) -= ABfac_(l) * specs_(l1);
     }
-  }
+  });
 
-  delete[] ABfac;
-  delete[] spec0;
-  delete[] specc;
-  delete[] specs;
-
-  // Sync to device
-  a0.template modify<HostMemSpace>();
-  a0.template sync<DevExeSpace>();
-  ac.template modify<HostMemSpace>();
-  ac.template sync<DevExeSpace>();
-  as.template modify<HostMemSpace>();
-  as.template sync<DevExeSpace>();
+  // Sync to back to device.
+  a0.template modify<DevExeSpace>();
+  a0.template sync<HostMemSpace>();
+  ac.template modify<DevExeSpace>();
+  ac.template sync<HostMemSpace>();
+  as.template modify<DevExeSpace>();
+  as.template sync<HostMemSpace>();
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::RadiiFromSphericalHarmonics()
-//! \brief Compute the radius of the surface
+//! \brief Compute the radius of the surface.
 void FastFlow::RadiiFromSphericalHarmonics()
 {
+  // Reset the radii on the surface to zero.
   Kokkos::deep_copy(rr, 0.0);
   Kokkos::deep_copy(rr_dth, 0.0);
   Kokkos::deep_copy(rr_dph, 0.0);
 
-  // explicit capture
+  // Explicitely capture the variables for the Kokkos kernel.
   auto &rr_ = rr;
   auto &rr_dth_ = rr_dth;
   auto &rr_dph_ = rr_dph;
@@ -892,13 +887,13 @@ void FastFlow::RadiiFromSphericalHarmonics()
   auto &dYcdph_ = dYcdph;
   auto &dYsdph_ = dYsdph;
 
-  // Step 1: compute the radii from the spherical harmonics
+  // Step 1: Compute the radii from the spherical harmonics.
   par_for("FastFlow_sphradii_compute", DevExeSpace(), 0, nangles-1,
   KOKKOS_LAMBDA(int p) {
     for(int l = 0; l <= lmax_; l++){
       rr_(p) += a0_.d_view(l) * Y0_.d_view(p,l);
       rr_dth_(p) += a0_.d_view(l) * dY0dth_.d_view(p,l);
-    
+
       for(int m = 1; m <= l; m++){
         int l1 = lmindex(l,m,lmax_);
         rr_(p) += ac_.d_view(l1) * Yc_.d_view(p,l1) + as_.d_view(l1) * Ys_.d_view(p,l1);
@@ -907,20 +902,20 @@ void FastFlow::RadiiFromSphericalHarmonics()
       }
     }
   });
-  
-  // Step 2: compute the global minimum
+
+  // Step 2: Compute the global minimum.
   rr_min = std::numeric_limits<Real>::infinity();
   Kokkos::parallel_reduce("FastFlow_sphradii", Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
-  KOKKOS_LAMBDA(int p, Real &lmin) {
+  KOKKOS_LAMBDA(const int &p, Real &lmin) {
     lmin = Kokkos::min(lmin, rr_(p));
   }, Kokkos::Min<Real>(rr_min));
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::SurfaceIntegrals()
-//! \brief Compute expansion, surface element and spin integrand on surface n
-//!        Needs metric and extr. curv. interpolated on the surface
-//!        Performs local sums and MPI reduce
+//! \brief Compute expansion, surface element and spin integrand on surface n.
+//!        Needs metric and extr. curv. interpolated on the surface.
+//!        Performs local sums and MPI reduce.
 void FastFlow::SurfaceIntegrals()
 {
   const Real min_rp = 1e-10;
@@ -930,9 +925,9 @@ void FastFlow::SurfaceIntegrals()
     integrals[v] = 0.0;
   }
 
-  Kokkos::deep_copy(rho.d_view, 0.0); // Initialize rho
+  Kokkos::deep_copy(rho, 0.0); // Initialize rho
 
-  // explicit capture
+  // Explicitely capture the variables for the Kokkos kernel.
   auto &polar_pos = gl_grid->polar_pos;
   auto &int_weights = gl_grid->int_weights;
   auto &havepoint_ = havepoint;
@@ -970,10 +965,40 @@ void FastFlow::SurfaceIntegrals()
 	auto &dYsdph2_ = dYsdph2;
 	auto &dYcdthdph_ = dYcdthdph;
 	auto &dYsdthdph_ = dYsdthdph;
-  
+
+  // Indices mapping
+  int gmap[3][3] = {
+    {S11, S12, S13},
+    {S12, S22, S23},
+    {S13, S23, S33}
+  };
+
+  int Kmap[3][3] = {
+    {K11, K12, K13},
+    {K12, K22, K23},
+    {K13, K23, K33}
+  };
+
+  int dgmap[3][3][3] = {
+    // Derivative in x1.
+    {{D1S11, D1S12, D1S13},
+     {D1S12, D1S22, D1S23},
+     {D1S13, D1S23, D1S33}},
+
+     // Derivative in x2.
+    {{D2S11, D2S12, D2S13},
+     {D2S12, D2S22, D2S23},
+     {D2S13, D2S23, D2S33}},
+
+     // Derivative in x3.
+    {{D3S11, D3S12, D3S13},
+     {D3S12, D3S22, D3S23},
+     {D3S13, D3S23, D3S33}},
+  };
+
   // Loop over surface points
   Kokkos::parallel_reduce("FastFlow_surfintegrals", Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
-  KOKKOS_LAMBDA(int p,
+  KOKKOS_LAMBDA(const int &p,
                 Real& area,
                 Real& coarea,
                 Real& hrms,
@@ -1012,26 +1037,7 @@ void FastFlow::SurfaceIntegrals()
 
     AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> nnF;
 
-    // Initialize everything to zero
-    drdi.ZeroClear();
-    dthetadi.ZeroClear();
-    dphidi.ZeroClear();
-    drdidj.ZeroClear();
-    dthetadidj.ZeroClear();
-    dphididj.ZeroClear();
-    dFdi.ZeroClear();
-    dFdi_u.ZeroClear();
-    dFdidj.ZeroClear();
-    ginv.ZeroClear();
-    R.ZeroClear();
-    dXdth.ZeroClear();
-    dXdph.ZeroClear();
-    phix.ZeroClear();
-    phiy.ZeroClear();
-    phiz.ZeroClear();
-    nnF.ZeroClear();
-    
-    if (havepoint_.d_view(p)) {
+    if (havepoint_(p)) {
       Real const theta = polar_pos.d_view(p,0);
       Real const sinth = Kokkos::sin(theta);
       Real const costh = Kokkos::cos(theta);
@@ -1046,25 +1052,25 @@ void FastFlow::SurfaceIntegrals()
 
       // Determinant of 3-metric
       Real detg = adm::SpatialDet(
-        gi_(GXX,p), gi_(GXY,p), gi_(GXZ,p),
-        gi_(GYY,p), gi_(GYZ,p), gi_(GZZ,p)
+        gi_(gmap[0][0],p), gi_(gmap[0][1],p), gi_(gmap[0][2],p),
+        gi_(gmap[1][1],p), gi_(gmap[1][2],p), gi_(gmap[2][2],p)
       );
 
       // Inverse metric
       adm::SpatialInv(
         1.0/detg,
-        gi_(GXX,p), gi_(GXY,p), gi_(GXZ,p),
-        gi_(GYY,p), gi_(GYZ,p), gi_(GZZ,p),
+        gi_(gmap[0][0],p), gi_(gmap[0][1],p), gi_(gmap[0][2],p),
+        gi_(gmap[1][1],p), gi_(gmap[1][2],p), gi_(gmap[2][2],p),
         &ginv(0,0), &ginv(0,1),  &ginv(0,2),
         &ginv(1,1), &ginv(1,2) , &ginv(2,2)
       );
 
       // Trace of K
       Real TrK = adm::Trace(1.0/detg,
-            gi_(GXX,p), gi_(GXY,p), gi_(GXZ,p),
-            gi_(GYY,p), gi_(GYZ,p), gi_(GZZ,p),
-            Ki_(KXX,p), Ki_(KXY,p), Ki_(KXZ,p),
-            Ki_(KYY,p), Ki_(KYZ,p), Ki_(KZZ,p));
+            gi_(gmap[0][0],p), gi_(gmap[0][1],p), gi_(gmap[0][2],p),
+            gi_(gmap[1][1],p), gi_(gmap[1][2],p), gi_(gmap[2][2],p),
+            Ki_(Kmap[0][0],p), Ki_(Kmap[0][1],p), Ki_(Kmap[0][2],p),
+            Ki_(Kmap[1][1],p), Ki_(Kmap[1][2],p), Ki_(Kmap[2][2],p));
 
       // Local coordinates of the surface (re-used below)
       Real const xp = rr_(p) * sinth * cosph;
@@ -1075,8 +1081,8 @@ void FastFlow::SurfaceIntegrals()
       Real const rhop = Kokkos::sqrt(xp * xp + yp * yp);
 
       if (rp < min_rp) {
-        // Do not stop the code, just FastFlow failing
-        // break the loop and catch the nans in FastFlow later.
+        // Do not stop the code, just FastFlow failing.
+        // Stop the thread and catch the NANs in FastFlow later.
         return;
       }
 
@@ -1119,13 +1125,14 @@ void FastFlow::SurfaceIntegrals()
       dphididj(1,2) = 0.0;
       dphididj(2,2) = 0.0;
 
-      // Compute first derivatives of F
+      // Compute first and second derivatives of F.
       for (int a = 0; a < NDIM; ++a) {
+        // First derivative of F.
         dFdi(a) = drdi(a);
 
         for(int l = 0; l <= lmax_; l++){
           dFdi(a) -= a0_.d_view(l) * dthetadi(a) * dY0dth_.d_view(p,l);
-          
+
           for(int m = 1; m <= l; m++){
             const int l1 = lmindex(l,m,lmax_);
             dFdi(a) -=
@@ -1133,91 +1140,99 @@ void FastFlow::SurfaceIntegrals()
               as_.d_view(l1) * (dthetadi(a) * dYsdth_.d_view(p,l1) + dphidi(a) * dYsdph_.d_view(p,l1));
           }
         }
-      }
 
-      // Compute second derivatives of F
-      for (int a = 0; a < NDIM; ++a) {
+        // Second derivative of F.
         for (int b = 0; b < NDIM; ++b) {
           dFdidj(a,b) = drdidj(a,b);
 
           for(int l = 0;l <= lmax_; l++){
-            dFdidj(a,b) -= a0_.d_view(l)*(dthetadidj(a,b)*dY0dth_.d_view(p,l) + dthetadi(a)*dthetadi(b)*dY0dth2_.d_view(p,l));
-            
+            dFdidj(a,b) -= a0_.d_view(l)*(dthetadidj(a,b) * dY0dth_.d_view(p,l)
+                            + dthetadi(a) * dthetadi(b) * dY0dth2_.d_view(p,l));
+
             for(int m = 1; m <= l; m++){
               int l1 = lmindex(l,m,lmax_);
-              dFdidj(a,b) -= ac_.d_view(l1)*(dthetadidj(a,b)*dYcdth_.d_view(p,l1)
-                + dthetadi(a)*(dthetadi(b)*dYcdth2_.d_view(p,l1) + dphidi(b)*dYcdthdph_.d_view(p,l1))
-                + dphididj(a,b)*dYcdph_.d_view(p,l1)
-                + dphidi(a)*(dthetadi(b)*dYcdthdph_.d_view(p,l1) + dphidi(b)*dYcdph2_.d_view(p,l1)))
-                + as_.d_view(l1)*(dthetadidj(a,b)*dYsdth_.d_view(p,l1)
-                + dthetadi(a)*(dthetadi(b)*dYsdth2_.d_view(p,l1) + dphidi(b)*dYsdthdph_.d_view(p,l1))
-                + dphididj(a,b)*dYsdph_.d_view(p,l1)
-                + dphidi(a)*(dthetadi(b)*dYsdthdph_.d_view(p,l1) + dphidi(b)*dYsdph2_.d_view(p,l1)));
+              dFdidj(a,b) -= ac_.d_view(l1) * (dthetadidj(a,b) * dYcdth_.d_view(p,l1)
+                + dthetadi(a) * (dthetadi(b) * dYcdth2_.d_view(p,l1) + dphidi(b) * dYcdthdph_.d_view(p,l1))
+                + dphididj(a,b) * dYcdph_.d_view(p,l1)
+                + dphidi(a) * (dthetadi(b) * dYcdthdph_.d_view(p,l1) + dphidi(b) * dYcdph2_.d_view(p,l1)))
+                + as_.d_view(l1) * (dthetadidj(a,b) * dYsdth_.d_view(p,l1)
+                + dthetadi(a) * (dthetadi(b) * dYsdth2_.d_view(p,l1) + dphidi(b) * dYsdthdph_.d_view(p,l1))
+                + dphididj(a,b) * dYsdph_.d_view(p,l1)
+                + dphidi(a) * (dthetadi(b) * dYsdthdph_.d_view(p,l1) + dphidi(b) * dYsdph2_.d_view(p,l1)));
             }
           }
         }
       }
 
+      // Compute dFdi with the index up.
       for (int a = 0; a < NDIM; ++a) {
         dFdi_u(a) = 0;
-        
+
         for (int b = 0; b < NDIM; ++b) {
-          dFdi_u(a) += ginv(a,b) * dFdi(b); // Compute dFdi with the index up
-          nnF(a,b) = dFdidj(a,b); // Compute nabla_a nabla_b F
+          dFdi_u(a) += ginv(a,b) * dFdi(b);
         }
       }
 
+      // Compute norm of dFdi.
       Real norm = 0;
-      for (int a = 0; a < NDIM; ++a){
-        norm += dFdi_u(a) * dFdi(a); // Compute norm of dFdi
+      for (int a = 0; a < NDIM; ++a) {
+        norm += dFdi_u(a) * dFdi(a);
       }
 
       Real u = (norm > 0) ? Kokkos::sqrt(norm) : 0.0;
 
-      nnF(0,0) -= 0.5*(dFdi_u(0)*dgi_(DX_GXX,p) + dFdi_u(1)*(2.0*dgi_(DX_GXY,p)-dgi_(DY_GXX,p)) 
-                  + dFdi_u(2)*(2.0*dgi_(DX_GXZ,p)-dgi_(DZ_GXX,p)));
-      nnF(0,1) -= 0.5*(dFdi_u(0)*dgi_(DY_GXX,p) + dFdi_u(1)*dgi_(DX_GYY,p) 
-                  + dFdi_u(2)*(dgi_(DX_GYZ,p)+dgi_(DY_GXZ,p)-dgi_(DZ_GXY,p)));
-      nnF(0,2) -= 0.5*(dFdi_u(0)*dgi_(DZ_GXX,p) + dFdi_u(1)*(dgi_(DX_GYZ,p)
-                  +dgi_(DZ_GXY,p)-dgi_(DY_GXZ,p)) + dFdi_u(2)*dgi_(DX_GZZ,p));
-      nnF(1,1) -= 0.5*(dFdi_u(0)*(2.0*dgi_(DY_GXY,p)-dgi_(DX_GYY,p)) + dFdi_u(1)*dgi_(DY_GYY,p) 
-                  + dFdi_u(2)*(2.0*dgi_(DY_GYZ,p)-dgi_(DZ_GYY,p)));
-      nnF(1,2) -= 0.5*(dFdi_u(0)*(2.0*dgi_(DY_GXZ,p)+dgi_(DZ_GXY,p)-dgi_(DX_GYZ,p)) 
-                  + dFdi_u(1)*dgi_(DZ_GYY,p) + dFdi_u(2)*dgi_(DY_GZZ,p));
-      nnF(2,2) -= 0.5*(dFdi_u(0)*(2.0*dgi_(DZ_GXZ,p)-dgi_(DX_GZZ,p)) + dFdi_u(1)*(2.0*dgi_(DZ_GYZ,p)
-                  - dgi_(DY_GZZ,p)) + dFdi_u(2)*dgi_(DZ_GZZ,p));
-
-      Real d2F = 0.; // Compute d2F = g^{ab} nabla_a nabla_b F
-      Real dFdadFdbKab = 0.; // Compute dFd^a dFd^b Kab
-      Real dFdadFdbFdadb = 0.; // Compute dFd^a dFd^b Fdadb
+      // Covariant Hessian: nabla_a nabla_b F = d_a d_b F - Gamma^c_{ab} d_c F.
       for (int a = 0; a < NDIM; ++a) {
         for (int b = 0; b < NDIM; ++b) {
-          d2F += ginv(a,b)*nnF(a,b);
-          dFdadFdbFdadb += dFdi_u(a) * dFdi_u(b) * nnF(a,b);
+          nnF(a,b) = dFdidj(a,b);
+          for (int d = 0; d < NDIM; ++d) {
+            nnF(a,b) -= 0.5 * dFdi_u(d) *
+                        (dgi_(dgmap[a][b][d],p) + dgi_(dgmap[b][a][d],p) - dgi_(dgmap[d][a][b],p));
+          }
+          nnF(b,a) = nnF(a,b);
         }
       }
 
-      dFdadFdbKab += dFdi_u(0) * dFdi_u(0) * Ki_(KXX,p);
-      dFdadFdbKab += dFdi_u(0) * dFdi_u(1) * Ki_(KXY,p);
-      dFdadFdbKab += dFdi_u(0) * dFdi_u(2) * Ki_(KXZ,p);
-      dFdadFdbKab += dFdi_u(1) * dFdi_u(0) * Ki_(KXY,p);
-      dFdadFdbKab += dFdi_u(1) * dFdi_u(1) * Ki_(KYY,p);
-      dFdadFdbKab += dFdi_u(1) * dFdi_u(2) * Ki_(KYZ,p);
-      dFdadFdbKab += dFdi_u(2) * dFdi_u(0) * Ki_(KXZ,p);
-      dFdadFdbKab += dFdi_u(2) * dFdi_u(1) * Ki_(KYZ,p);
-      dFdadFdbKab += dFdi_u(2) * dFdi_u(2) * Ki_(KZZ,p);
-      
-      // Expansion & rho = H * u * sigma (sigma=1)
+      // Compute symmetric tensor for expansion.
+      Real d2F = 0.0, dFdadFdbKab = 0.0, dFdadFdbFdadb = 0.0;
+      for (int a = 0; a < NDIM; ++a) {
+        for (int b = 0; b < NDIM; ++b) {
+          d2F += ginv(a,b) * nnF(a,b);
+          dFdadFdbFdadb += dFdi_u(a) * dFdi_u(b) * nnF(a,b);
+          dFdadFdbKab += dFdi_u(a) * dFdi_u(b) * Ki_(Kmap[a][b],p);
+        }
+      }
+
+      // Expansion: Theta = div(s) = (1/u) nabla^2 F + (1/u^3) dF^a dF^b K_ab
+      //                            - (1/u^3) dF^a dF^b nabla_a nabla_b F - K
       Real divu = (norm > 0) ? 1.0 / u : 0.0;
       Real H = d2F * divu + dFdadFdbKab * (divu * divu) - dFdadFdbFdadb * (divu * divu * divu) - TrK;
 
-      rho_.d_view(p) = H * u;
-
-      // Normal vector
+      // Normal vector.
       for (int a = 0; a < NDIM; ++a) {
         R(a) = dFdi_u(a) * divu;
       }
-      
+
+      // Compute the shear for the flow function.
+      Real sigma_para = (
+        ginv(0,0) + ginv(1,1) + ginv(2,2)
+        - ginv(0,0) * SQR(drdi(0))
+        - ginv(1,1) * SQR(drdi(1))
+        - ginv(2,2) * SQR(drdi(2))
+        - 2 * (ginv(0,1) * drdi(0) * drdi(1)
+             + ginv(0,2) * drdi(0) * drdi(2)
+             + ginv(1,2) * drdi(1) * drdi(2))
+        - SQR(R(0)) - SQR(R(1)) - SQR(R(2))
+        + SQR(R(0)) * SQR(drdi(0))
+        + SQR(R(1)) * SQR(drdi(1))
+        + SQR(R(2)) * SQR(drdi(2))
+        + 2 * (R(0) * R(1) * drdi(0) * drdi(1)
+             + R(0) * R(2) * drdi(0) * drdi(2)
+             + R(1) * R(2) * drdi(1) * drdi(2)));
+
+      Real sigma = 2 * SQR(rp) * (1 / sigma_para);
+      rho_(p) = H * u * sigma;
+
       // ---------------
       // Surface Element
       // ---------------
@@ -1227,7 +1242,7 @@ void FastFlow::SurfaceIntegrals()
       // dr/dtheta, dr/dphi
       Real const drdt = rr_dth_(p);
       Real const drdp = rr_dph_(p);
-      
+
       // Derivatives of (x,y,z) with respect to theta
       dXdth(0) = (drdt * sinth + rr_(p) * costh) * cosph;
       dXdth(1) = (drdt * sinth + rr_(p) * costh) * sinph;
@@ -1240,42 +1255,20 @@ void FastFlow::SurfaceIntegrals()
 
       // Induced metric on the horizon
       Real h11 = 0.;
-      Real h12 = 0.; 
+      Real h12 = 0.;
       Real h22 = 0.;
-      h11 += dXdth(0) * dXdth(0) * gi_(GXX,p);
-      h11 += dXdth(0) * dXdth(1) * gi_(GXY,p);
-      h11 += dXdth(0) * dXdth(2) * gi_(GXZ,p);
-      h11 += dXdth(1) * dXdth(0) * gi_(GXY,p);
-      h11 += dXdth(1) * dXdth(1) * gi_(GYY,p);
-      h11 += dXdth(1) * dXdth(2) * gi_(GYZ,p);
-      h11 += dXdth(2) * dXdth(0) * gi_(GXZ,p);
-      h11 += dXdth(2) * dXdth(1) * gi_(GYZ,p);
-      h11 += dXdth(2) * dXdth(2) * gi_(GZZ,p);
-      
-      h12 += dXdth(0) * dXdph(0) * gi_(GXX,p);
-      h12 += dXdth(0) * dXdph(1) * gi_(GXY,p);
-      h12 += dXdth(0) * dXdph(2) * gi_(GXZ,p);
-      h12 += dXdth(1) * dXdph(0) * gi_(GXY,p);
-      h12 += dXdth(1) * dXdph(1) * gi_(GYY,p);
-      h12 += dXdth(1) * dXdph(2) * gi_(GYZ,p);
-      h12 += dXdth(2) * dXdph(0) * gi_(GXZ,p);
-      h12 += dXdth(2) * dXdph(1) * gi_(GYZ,p);
-      h12 += dXdth(2) * dXdph(2) * gi_(GZZ,p);
-      
-      h22 += dXdph(0) * dXdph(0) * gi_(GXX,p);
-      h22 += dXdph(0) * dXdph(1) * gi_(GXY,p);
-      h22 += dXdph(0) * dXdph(2) * gi_(GXZ,p);
-      h22 += dXdph(1) * dXdph(0) * gi_(GXY,p);
-      h22 += dXdph(1) * dXdph(1) * gi_(GYY,p);
-      h22 += dXdph(1) * dXdph(2) * gi_(GYZ,p);
-      h22 += dXdph(2) * dXdph(0) * gi_(GXZ,p);
-      h22 += dXdph(2) * dXdph(1) * gi_(GYZ,p);
-      h22 += dXdph(2) * dXdph(2) * gi_(GZZ,p);
+      for (int a = 0; a < NDIM; ++a) {
+        for (int b = 0; b < NDIM; ++b) {
+          h11 += dXdth(a) * dXdth(b) * gi_(gmap[a][b],p);
+          h12 += dXdth(a) * dXdph(b) * gi_(gmap[a][b],p);
+          h22 += dXdph(a) * dXdph(b) * gi_(gmap[a][b],p);
+        }
+      }
 
       // Determinant of the induced metric
       Real deth = h11 * h22 - h12 * h12;
       if (deth < 0.) deth = 0.0;
-      
+
       // --------------
       // Spin integrand
       // --------------
@@ -1295,36 +1288,15 @@ void FastFlow::SurfaceIntegrals()
       Real intSx = 0;
       Real intSy = 0;
       Real intSz = 0;
-      intSx += phix(0) * R(0) * Ki_(KXX,p);
-      intSx += phix(0) * R(1) * Ki_(KXY,p);
-      intSx += phix(0) * R(2) * Ki_(KXZ,p);
-      intSx += phix(1) * R(0) * Ki_(KXY,p);
-      intSx += phix(1) * R(1) * Ki_(KYY,p);
-      intSx += phix(1) * R(2) * Ki_(KYZ,p);
-      intSx += phix(2) * R(0) * Ki_(KXZ,p);
-      intSx += phix(2) * R(1) * Ki_(KYZ,p);
-      intSx += phix(2) * R(2) * Ki_(KZZ,p);
-      
-      intSy += phiy(0) * R(0) * Ki_(KXX,p);
-      intSy += phiy(0) * R(1) * Ki_(KXY,p);
-      intSy += phiy(0) * R(2) * Ki_(KXZ,p);
-      intSy += phiy(1) * R(0) * Ki_(KXY,p);
-      intSy += phiy(1) * R(1) * Ki_(KYY,p);
-      intSy += phiy(1) * R(2) * Ki_(KYZ,p);
-      intSy += phiy(2) * R(0) * Ki_(KXZ,p);
-      intSy += phiy(2) * R(1) * Ki_(KYZ,p);
-      intSy += phiy(2) * R(2) * Ki_(KZZ,p);
-      
-      intSz += phiz(0) * R(0) * Ki_(KXX,p);
-      intSz += phiz(0) * R(1) * Ki_(KXY,p);
-      intSz += phiz(0) * R(2) * Ki_(KXZ,p);
-      intSz += phiz(1) * R(0) * Ki_(KXY,p);
-      intSz += phiz(1) * R(1) * Ki_(KYY,p);
-      intSz += phiz(1) * R(2) * Ki_(KYZ,p);
-      intSz += phiz(2) * R(0) * Ki_(KXZ,p);
-      intSz += phiz(2) * R(1) * Ki_(KYZ,p);
-      intSz += phiz(2) * R(2) * Ki_(KZZ,p);
+      for (int a = 0; a < NDIM; ++a) {
+        for (int b = 0; b < NDIM; ++b) {
+          intSx += phix(a) * R(b) * Ki_(Kmap[a][b],p);
+          intSy += phiy(a) * R(b) * Ki_(Kmap[a][b],p);
+          intSz += phiz(a) * R(b) * Ki_(Kmap[a][b],p);
+        }
+      }
 
+      // ----------
       // Local sums
       // ----------
       const Real wght = int_weights.d_view(p);
@@ -1338,21 +1310,17 @@ void FastFlow::SurfaceIntegrals()
       Sy     += da * intSy;
       Sz     += da * intSz;
     }
-  },  Kokkos::Sum<Real>(integrals[iarea]),
-      Kokkos::Sum<Real>(integrals[icoarea]),
-      Kokkos::Sum<Real>(integrals[ihrms]),
-      Kokkos::Sum<Real>(integrals[ihmean]),
-      Kokkos::Sum<Real>(integrals[iSx]),
-      Kokkos::Sum<Real>(integrals[iSy]),
-      Kokkos::Sum<Real>(integrals[iSz]));
-  
+  }, Kokkos::Sum<Real>(integrals[iarea]),
+     Kokkos::Sum<Real>(integrals[icoarea]),
+     Kokkos::Sum<Real>(integrals[ihrms]),
+     Kokkos::Sum<Real>(integrals[ihmean]),
+     Kokkos::Sum<Real>(integrals[iSx]),
+     Kokkos::Sum<Real>(integrals[iSy]),
+     Kokkos::Sum<Real>(integrals[iSz]));
+
   #if MPI_PARALLEL_ENABLED
     MPI_Allreduce(MPI_IN_PLACE, integrals, invar, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   #endif
-
-  // sync to host
-  rho.template modify<DevExeSpace>();
-  rho.template sync<HostMemSpace>();
 }
 
 //----------------------------------------------------------------------------------------
@@ -1363,34 +1331,38 @@ void FastFlow::ComputeSphericalHarmonics()
 {
   const Real sqrt2 = Kokkos::sqrt(2.0);
 
-  // Initialize all arrays on the host side
-	// **SCALARS**
-  Kokkos::deep_copy(Y0.h_view, 0.0);
-  Kokkos::deep_copy(Yc.h_view, 0.0);
-  Kokkos::deep_copy(Ys.h_view, 0.0);
+  // Explicitely capture the variables for the Kokkos kernel.
+  auto &polar_pos = gl_grid->polar_pos;
+  auto &lmax_ = lmax;
 
-	// **FIRST DERIVATIVES**
-  Kokkos::deep_copy(dY0dth.h_view, 0.0);
-  Kokkos::deep_copy(dYcdth.h_view, 0.0);
-  Kokkos::deep_copy(dYsdth.h_view, 0.0);
-  Kokkos::deep_copy(dYcdph.h_view, 0.0);
-  Kokkos::deep_copy(dYsdph.h_view, 0.0);
+  // **SCALAR SPHERICAL HARMONICS**
+  auto &Y0_ = Y0;
+  auto &Ys_ = Ys;
+  auto &Yc_ = Yc;
 
-	// **SECOND DERIVATIVES**
-  Kokkos::deep_copy(dY0dth2.h_view, 0.0);
-  Kokkos::deep_copy(dYcdth2.h_view, 0.0);
-  Kokkos::deep_copy(dYcdthdph.h_view, 0.0);
-  Kokkos::deep_copy(dYsdth2.h_view, 0.0);
-  Kokkos::deep_copy(dYsdthdph.h_view, 0.0);
-  Kokkos::deep_copy(dYcdph2.h_view, 0.0);
-  Kokkos::deep_copy(dYsdph2.h_view, 0.0);
+  // **FIRST DERIVATIVES SPHERICAL HARMONICS**
+	auto &dY0dth_ = dY0dth;
+	auto &dYcdth_ = dYcdth;
+	auto &dYsdth_ = dYsdth;
+	auto &dYcdph_ = dYcdph;
+	auto &dYsdph_ = dYsdph;
 
-  // Loop over angles
-  for(int p = 0; p < nangles; ++p){
-    const Real theta = gl_grid->polar_pos.h_view(p,0);
-    const Real phi   = gl_grid->polar_pos.h_view(p,1);
+	// **SECOND DERIVATIVES SPHERICAL HARMONICS**
+	auto &dY0dth2_ = dY0dth2;
+	auto &dYcdth2_ = dYcdth2;
+	auto &dYsdth2_ = dYsdth2;
+	auto &dYcdph2_ = dYcdph2;
+	auto &dYsdph2_ = dYsdph2;
+	auto &dYcdthdph_ = dYcdthdph;
+	auto &dYsdthdph_ = dYsdthdph;
 
-    for(int l = 0; l <= lmax; ++l){
+  // Loop over all angles.
+  par_for("FastFlow_sphharmonics", DevExeSpace(), 0, nangles-1,
+  KOKKOS_LAMBDA(int p) {
+    const Real theta = polar_pos.d_view(p,0);
+    const Real phi   = polar_pos.d_view(p,1);
+
+    for(int l = 0; l <= lmax_; ++l){
       for(int m = 0; m <= l; ++m){
         Real YlmR, YlmI;
         Real YlmRdth, YlmIdth, YlmRdphi, YlmIdphi;
@@ -1400,79 +1372,79 @@ void FastFlow::ComputeSphericalHarmonics()
                                   &YlmRdth, &YlmIdth, &YlmRdphi, &YlmIdphi,
                                   &YlmRdth2, &YlmIdth2, &YlmRdphi2, &YlmIdphi2,
                                   &YlmRdthdphi, &YlmIdthdphi, l, m, theta, phi);
-        
+
         if (m == 0) { // m = 0 spherical harmonics
-          Y0.h_view(p,l) = YlmR;
-          dY0dth.h_view(p,l) = YlmRdth;
-          dY0dth2.h_view(p,l) = YlmRdth2;
+          Y0_.d_view(p,l) = YlmR;
+          dY0dth_.d_view(p,l) = YlmRdth;
+          dY0dth2_.d_view(p,l) = YlmRdth2;
         }
         else { // m > 0 spherical harmonics
-          const int l1 = lmindex(l,m,lmax);
-          Yc.h_view(p,l1) = sqrt2 * YlmR;
-          Ys.h_view(p,l1) = sqrt2 * YlmI;
+          const int l1 = lmindex(l,m,lmax_);
+          Yc_.d_view(p,l1) = sqrt2 * YlmR;
+          Ys_.d_view(p,l1) = sqrt2 * YlmI;
 
-          dYcdth.h_view(p,l1) = sqrt2 * YlmRdth;
-          dYsdth.h_view(p,l1) = sqrt2 * YlmIdth;
-          dYcdph.h_view(p,l1) = sqrt2 * YlmRdphi;
-          dYsdph.h_view(p,l1) = sqrt2 * YlmIdphi;
+          dYcdth_.d_view(p,l1) = sqrt2 * YlmRdth;
+          dYsdth_.d_view(p,l1) = sqrt2 * YlmIdth;
+          dYcdph_.d_view(p,l1) = sqrt2 * YlmRdphi;
+          dYsdph_.d_view(p,l1) = sqrt2 * YlmIdphi;
 
-          dYcdth2.h_view(p,l1)   = sqrt2 * YlmRdth2;
-          dYcdthdph.h_view(p,l1) = sqrt2 * YlmRdthdphi;
-          dYsdth2.h_view(p,l1)   = sqrt2 * YlmIdth2;
-          dYsdthdph.h_view(p,l1) = sqrt2 * YlmIdthdphi;
-          dYcdph2.h_view(p,l1)   = sqrt2 * YlmRdphi2;
-          dYsdph2.h_view(p,l1)   = sqrt2 * YlmIdphi2;
+          dYcdth2_.d_view(p,l1) = sqrt2 * YlmRdth2;
+          dYsdth2_.d_view(p,l1) = sqrt2 * YlmIdth2;
+          dYcdph2_.d_view(p,l1) = sqrt2 * YlmRdphi2;
+          dYsdph2_.d_view(p,l1) = sqrt2 * YlmIdphi2;
+          dYsdthdph_.d_view(p,l1) = sqrt2 * YlmIdthdphi;
+          dYcdthdph_.d_view(p,l1) = sqrt2 * YlmRdthdphi;
         }
       }
     }
-  }
+  });
 
-  // Sync the spherical harmonics to device.
+  // Sync the spherical harmonics to Host.
 	// (OS): Although there is a lot to sync, this
 	//				is okay, since the function is only called
 	//				once, when the constructor is instantiated.
 	//				This will come in handy to speed up the rest
 	//				of the code.
 	// **SCALARS**
-  Y0.template modify<HostMemSpace>();
-	Y0.template sync<DevExeSpace>();
-	Yc.template modify<HostMemSpace>();
-	Yc.template sync<DevExeSpace>();
-	Ys.template modify<HostMemSpace>();
-	Ys.template sync<DevExeSpace>();
+  Y0.template modify<DevExeSpace>();
+	Y0.template sync<HostMemSpace>();
+	Yc.template modify<DevExeSpace>();
+	Yc.template sync<HostMemSpace>();
+	Ys.template modify<DevExeSpace>();
+	Ys.template sync<HostMemSpace>();
 
 	// **FIRST DERIVATIVES**
-	dY0dth.template modify<HostMemSpace>();
-	dY0dth.template sync<DevExeSpace>();
-	dYcdth.template modify<HostMemSpace>();
-	dYcdth.template sync<DevExeSpace>();
-	dYsdth.template modify<HostMemSpace>();
-	dYsdth.template sync<DevExeSpace>();
-	dYcdph.template modify<HostMemSpace>();
-	dYcdph.template sync<DevExeSpace>();
-	dYsdph.template modify<HostMemSpace>();
-	dYsdph.template sync<DevExeSpace>();
+	dY0dth.template modify<DevExeSpace>();
+	dY0dth.template sync<HostMemSpace>();
+	dYcdth.template modify<DevExeSpace>();
+	dYcdth.template sync<HostMemSpace>();
+	dYsdth.template modify<DevExeSpace>();
+	dYsdth.template sync<HostMemSpace>();
+	dYcdph.template modify<DevExeSpace>();
+	dYcdph.template sync<HostMemSpace>();
+	dYsdph.template modify<DevExeSpace>();
+	dYsdph.template sync<HostMemSpace>();
 
 	// **SECOND DERIVATIVES**
-	dY0dth2.template modify<HostMemSpace>();
-	dY0dth2.template sync<DevExeSpace>();
-	dYcdth2.template modify<HostMemSpace>();
-	dYcdth2.template sync<DevExeSpace>();
-	dYsdth2.template modify<HostMemSpace>();
-	dYsdth2.template sync<DevExeSpace>();
-	dYcdph2.template modify<HostMemSpace>();
-	dYcdph2.template sync<DevExeSpace>();
-	dYsdph2.template modify<HostMemSpace>();
-	dYsdph2.template sync<DevExeSpace>();
-	dYcdthdph.template modify<HostMemSpace>();
-	dYcdthdph.template sync<DevExeSpace>();
-	dYsdthdph.template modify<HostMemSpace>();
-	dYsdthdph.template sync<DevExeSpace>();
-} 
+	dY0dth2.template modify<DevExeSpace>();
+	dY0dth2.template sync<HostMemSpace>();
+	dYcdth2.template modify<DevExeSpace>();
+	dYcdth2.template sync<HostMemSpace>();
+	dYsdth2.template modify<DevExeSpace>();
+	dYsdth2.template sync<HostMemSpace>();
+	dYcdph2.template modify<DevExeSpace>();
+	dYcdph2.template sync<HostMemSpace>();
+	dYsdph2.template modify<DevExeSpace>();
+	dYsdph2.template sync<HostMemSpace>();
+	dYcdthdph.template modify<DevExeSpace>();
+	dYcdthdph.template sync<HostMemSpace>();
+	dYsdthdph.template modify<DevExeSpace>();
+	dYsdthdph.template sync<HostMemSpace>();
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn Real FastFlow::PuncMaxDistance()
-//! \brief Max Euclidean distance between punctures
+//! \brief Max Euclidean distance between punctures.
 Real FastFlow::PuncMaxDistance() {
   Real maxdist = 0.0;
   for (int pix = 0; pix < npunct; ++pix) {
@@ -1492,7 +1464,7 @@ Real FastFlow::PuncMaxDistance() {
 
 //----------------------------------------------------------------------------------------
 //! \fn Real FastFlow::PuncMaxDistance(const int pix)
-//! \brief Max Euclidean distance from puncture pix to other punctures
+//! \brief Max Euclidean distance from puncture pix to other punctures.
 Real FastFlow::PuncMaxDistance(const int pix) {
   Real xp = pmbp->pz4c->ptracker[pix]->GetPos(0);
   Real yp = pmbp->pz4c->ptracker[pix]->GetPos(1);
@@ -1512,7 +1484,7 @@ Real FastFlow::PuncMaxDistance(const int pix) {
 
 //----------------------------------------------------------------------------------------
 //! \fn Real FastFlow::PuncSumMasses()
-//! \brief Return sum of puncture's intial masses
+//! \brief Return sum of puncture's intial masses.
 Real FastFlow::PuncSumMasses() {
   Real mass = 0.0;
   for (int p = 0; p < npunct; ++p) {
@@ -1523,7 +1495,7 @@ Real FastFlow::PuncSumMasses() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc)
-//! \brief Return mss-weighted center of puncture positions
+//! \brief Return mss-weighted center of puncture positions.
 void FastFlow::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc) {
   Real sumx = 0.0; // sum of m_i*x_i
   Real sumy = 0.0;
@@ -1546,8 +1518,8 @@ void FastFlow::PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn int FastFlow::PuncAreClose()
-//! \brief Check when the maximal distance between all punctures is below threshold
+//! \fn bool FastFlow::PuncAreClose()
+//! \brief Check when the maximal distance between all punctures is below threshold.
 bool FastFlow::PuncAreClose() {
   Real const mass = PuncSumMasses();
   Real const maxdist = PuncMaxDistance();

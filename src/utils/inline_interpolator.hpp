@@ -29,7 +29,7 @@ struct IndAndWghts {
 template <int NGHOST>
 KOKKOS_INLINE_FUNCTION
 IndAndWghts<NGHOST> IndicesAndWeights(
-	const RegionIndcs &indcs, 
+	const RegionIndcs &indcs,
 	const DualArray1D<RegionSize> &size,
 	Real rcoords[3],
 	int nmb
@@ -41,7 +41,7 @@ IndAndWghts<NGHOST> IndicesAndWeights(
 	result.ii0 = result.ii1 = result.ii2 = result.ii3 = -1;
 	result.point_exist = false;
 
-	for (int m = 0; m < nmb - 1; ++m) {
+	for (int m = 0; m < nmb; ++m) {
 		// extract MeshBlock bounds
 		auto mb = size.d_view(m);
 

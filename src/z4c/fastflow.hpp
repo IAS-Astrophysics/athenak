@@ -15,6 +15,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
+#include "eos/primitive-solver/ps_types.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "z4c_macros.hpp"
 
@@ -42,9 +43,8 @@ public:
   void MetricInterp();
   void ComputeSphericalHarmonics();
   void RadiiFromSphericalHarmonics();
+  void UpdateFlowSpectralComponents();
   void SurfaceIntegrals();
-
-  Real GetHorizonRadius() const { return ah_prop[hmeanradius]; }
 
   // Some of the main parameters in the fast-flow algorithm
   bool ah_found; // Horizon found
@@ -55,7 +55,7 @@ public:
   Real center[3]; // Center around which the horizon is searched
 
   // Fast-Flow parameters
-  Real hmean_tol; // for convergence 
+  Real hmean_tol; // for convergence
   Real mass_tol; // for convergence
   int flow_iterations; // number of flow iterations
   Real flow_alpha_beta_const; // alpha & beta constants in the iteration formula
@@ -77,7 +77,7 @@ public:
   // Start and Stop times for each surface
   Real start_time;
   Real stop_time;
-  
+
 private:
   int npunct; // Number of punctures
   int lmax1; // lmax + 1
@@ -90,21 +90,22 @@ private:
 
   // Pointer to Gauss-Legendre object
   GaussLegendreGrid *gl_grid;
- 
+
   // Arrays of spherical harmonics and derivatives
-  DualArray2D<Real> Y0, Yc, Ys; 
-  DualArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph; 
-  DualArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2; 
+  DualArray2D<Real> Y0, Yc, Ys;
+  DualArray2D<Real> dY0dth, dYcdth, dYsdth, dYcdph, dYsdph;
+  DualArray2D<Real> dY0dth2, dYcdth2, dYcdthdph, dYsdth2, dYsdthdph, dYcdph2, dYsdph2;
 
   // Arrays for spectral coefficients
-  DualArray1D<Real> a0, ac, as; 
+  DualArray1D<Real> a0, ac, as;
+  DvceArray1D<Real> ABfac, spec0, specc, specs;
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
-  DvceArray1D<Real> rr, rr_dth, rr_dph; 
+  DvceArray1D<Real> rr, rr_dth, rr_dph;
 
   // Array computed in Surface Integrals
-  DualArray1D<Real> rho;
+  DvceArray1D<Real> rho;
 
   // Indexes of surface integrals
   enum {
@@ -131,16 +132,6 @@ private:
   };
   Real ah_prop[hnvar]; // Array of horizon quantities
 
-  // Enumerators for readability when calling interpolated arrays
-  enum {
-    DX_GXX, DX_GXY, DX_GXZ, DX_GYY, DX_GYZ, DX_GZZ,
-    DY_GXX, DY_GXY, DY_GXZ, DY_GYY, DY_GYZ, DY_GZZ,
-    DZ_GXX, DZ_GXY, DZ_GXZ, DZ_GYY, DZ_GYZ, DZ_GZZ, NDRVS
-  };
-
-  enum {GXX, GXY, GXZ, GYY, GYZ, GZZ, INMETRIC};
-  enum {KXX, KXY, KXZ, KYY, KYZ, KZZ, INCURV};
-
   // 5D Device array for the metric derivatives
   DvceArray5D<Real> dg;
 
@@ -148,11 +139,10 @@ private:
   DvceArray2D<Real> g_interp, K_interp, dg_interp;
 
   // Flag points
-  DualArray1D<int> havepoint;
+  DvceArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
   void FastFlowLoop();
-  void UpdateFlowSpectralComponents();
   void InitialGuess();
 
   // Pointers to MeshBlockPack and ParameterInput
@@ -173,7 +163,7 @@ private:
   FILE *pofile_ylm;
   FILE *pofile_grid;
 
-  // Functions to interface with puncture tracker 
+  // Functions to interface with puncture tracker
   Real PuncMaxDistance();
   Real PuncMaxDistance(const int pix);
   Real PuncSumMasses();
