@@ -34,15 +34,15 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
     switch (indcs.ng) {
       case 2:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 2>(pdrive, stage);
+                           Primitive::ResetFloor, 2, true>(pdrive, stage);
         break;
       case 3:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 3>(pdrive, stage);
+                           Primitive::ResetFloor, 3, true>(pdrive, stage);
         break;
       case 4:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 4>(pdrive, stage);
+                           Primitive::ResetFloor, 4, true>(pdrive, stage);
         break;
     }
   }
@@ -54,15 +54,15 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
     switch (indcs.ng) {
       case 2:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                           Primitive::ResetFloor, 2>(pdrive, stage);
+                           Primitive::ResetFloor, 2, true>(pdrive, stage);
         break;
       case 3:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                           Primitive::ResetFloor, 3>(pdrive, stage);
+                           Primitive::ResetFloor, 3, true>(pdrive, stage);
         break;
       case 4:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                           Primitive::ResetFloor, 4>(pdrive, stage);
+                           Primitive::ResetFloor, 4, true>(pdrive, stage);
         break;
     }
   }
@@ -71,15 +71,15 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
     switch (indcs.ng) {
       case 2:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 2>(pdrive, stage);
+                           Primitive::ResetFloor, 2, false>(pdrive, stage);
         break;
       case 3:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 3>(pdrive, stage);
+                           Primitive::ResetFloor, 3, false>(pdrive, stage);
         break;
       case 4:
         return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 4>(pdrive, stage);
+                           Primitive::ResetFloor, 4, false>(pdrive, stage);
         break;
     }
   }
@@ -97,7 +97,7 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
 //!  At each step we solve an implicit problem in the form
 //!     F = F^* + cdt S[F]
 //!  Where F^* = F^k + cdt A
-template <class EOSPolicy, class ErrorPolicy, int NGHOST>
+template <class EOSPolicy, class ErrorPolicy, int NGHOST, bool IsMHD>
 TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
@@ -137,12 +137,10 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
 
   Real mb{};
-  if (ismhd || ishydro) {
-    Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
-        static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(
-            pmy_pack->pdyngr)
-            ->eos.ps.GetEOSMutable();
-    mb = eos.GetBaryonMass();
+  if constexpr (IsMHD) {
+    mb = static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(
+             pmy_pack->pdyngr)
+             ->eos.ps.GetEOSMutable().GetBaryonMass();
   }
 
   Real beta[2] = {0.5, 1.};
@@ -652,19 +650,58 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             if (nspecies_ > 1) {
               umhd0_(m, IYF, k, j, i) += theta * DDxp[nuidx];
               if (params_.backreact_chiral) {
-                // TODO: properly compute mass term
-                Real Gamma_m = 0.0;
                 umhd0_(m, IYF + 1, k, j, i) -= theta * DDxp[nuidx];
-                // Note that DDxp is already spacetime densitized and scaled with mb
-                // but these terms need to be included also for Gamma_m
-                umhd0_(m, IYF + 1, k, j, i) -=
-                    Gamma_m * volform * adm.alpha(m, k, j, i) *
-                    w0_(m, IYF + 1, k, j, i) * w0_(m, IDN, k, j, i);
+                // Gamma_m (chirality-flip) is applied in a separate par_for
+                // below so that the EOS reference can be captured correctly
+                // on device (see if constexpr (IsMHD) block after this kernel).
               }
             }
           }
         }
       });
+
+  // Gamma_m (chirality-flip) kernel — MHD only.
+  // EOS reference lives at this scope so the lambda captures it the same way
+  // radiation_m1_calc_opacities_nurates.cpp does.  The if constexpr eliminates
+  // this entire block at compile time for the pure-radiation instantiation.
+  if constexpr (IsMHD) {
+    if (params_.backreact && stage == 2 && params_.backreact_chiral &&
+        params_.chiral_gamma_m && nspecies > 1) {
+      auto &eos =
+          static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(
+              pmy_pack->pdyngr)
+              ->eos.ps.GetEOSMutable();
+      const Real mb_                           = eos.GetBaryonMass();
+      const Primitive::UnitSystem code_units_ = eos.GetCodeUnitSystem();
+      const Real beta_dt_                      = beta_dt;
+      par_for(
+          "chiral_gamma_m", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+            // Non-degenerate proton limit (T > T_P ~ 13 MeV at n0, Ye=0.1);
+            // revisit for degenerate regime if needed.
+            const Real nb    = w0_(m, IDN, k, j, i) / mb_;
+            const Real p     = w0_(m, IPR, k, j, i);
+            Real Y           = w0_(m, IYF, k, j, i);
+            const Real T     = eos.GetTemperatureFromP(nb, p, &Y);
+            const Real mu_q  = eos.GetChargeChemicalPotential(nb, T, &Y);
+            const Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, T, &Y);
+            const Real mu_e  = mu_le - mu_q; // MeV (code chemical potential units)
+            constexpr Real alpha_em  = 1.0/137.036;
+            constexpr Real m_e_MeV   = 0.510999;        // MeV
+            constexpr Real hbar_MeVs = 6.582119569e-22; // hbar in MeV*s
+            const Real Gamma_m_MeV = SQR(alpha_em) * SQR(m_e_MeV)
+                                     / (3.0 * M_PI * mu_e)
+                                     * Kokkos::log(1.0/alpha_em);
+            const Real Gamma_m = Gamma_m_MeV / (hbar_MeVs * code_units_.time);
+            // Implicit update: U^{n+1} = U^* / (1 + dt_eff * alpha * Gamma_m).
+            // Unconditionally stable for any Gamma_m > 0; also fixes the missing
+            // beta_dt factor that the explicit form would have required.
+            umhd0_(m, IYF + 1, k, j, i) /=
+                1.0 + beta_dt_ * adm.alpha(m, k, j, i) * Gamma_m;
+          });
+    }
+  }
+
   is_chi_updated = false;
   return TaskStatus::complete;
 }
