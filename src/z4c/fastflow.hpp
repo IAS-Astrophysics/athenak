@@ -98,14 +98,13 @@ private:
 
   // Arrays for spectral coefficients
   DualArray1D<Real> a0, ac, as;
-  DvceArray1D<Real> ABfac, spec0, specc, specs;
   Real last_a0; // last coefficient a_00
 
   // Arrays used for the fields on the sphere
   DvceArray1D<Real> rr, rr_dth, rr_dph;
 
   // Array computed in Surface Integrals
-  DvceArray1D<Real> rho;
+  DualArray1D<Real> rho;
 
   // Indexes of surface integrals
   enum {
@@ -135,11 +134,11 @@ private:
   // 5D Device array for the metric derivatives
   DvceArray5D<Real> dg;
 
-  // Vectors to hold the DualArray1D interpolated values of GaussLegendreGrid
+  // Vectors to hold the DvceArray1D interpolated values of GaussLegendreGrid
   DvceArray2D<Real> g_interp, K_interp, dg_interp;
 
   // Flag points
-  DvceArray1D<int> havepoint;
+  DualArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
   void FastFlowLoop();

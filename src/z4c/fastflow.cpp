@@ -42,8 +42,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dYcdth2("dYcdth2",1,1), dYcdthdph("dYcdthdph",1,1),
   dYsdth2("dYsdth2",1,1), dYsdthdph("dYsdthdph",1,1),
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
-  a0("a0",1), ac("ac",1), as("as",1), ABfac("ABfac",1),
-  spec0("spec0",1), specc("specc",1), specs("specs",1),
+  a0("a0",1), ac("ac",1), as("as",1),
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
   rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
   K_interp("K_interp",1,1), dg_interp("dg_interp",1,1)
@@ -118,10 +117,6 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(a0, lmax1);
   Kokkos::realloc(ac, lmpoints);
   Kokkos::realloc(as, lmpoints);
-  Kokkos::realloc(ABfac, lmax1);
-  Kokkos::realloc(spec0, lmax1);
-  Kokkos::realloc(specc, lmpoints);
-  Kokkos::realloc(specs, lmpoints);
 
   // Reallocate for the spherical harmonics.
   // The spherical grid is the same for all surfaces.
@@ -543,7 +538,7 @@ void FastFlow::MetricInterp()
 {
   // In MetricInterp() we'll flag the surface points on this mesh
   // default to 0 (no points).
-  Kokkos::deep_copy(havepoint, 0.0);
+  Kokkos::deep_copy(havepoint.d_view, 0.0);
 
   // Set metric interpolated on the surface to 0.0.
   Kokkos::deep_copy(g_interp, 0.0);
@@ -607,7 +602,7 @@ void FastFlow::MetricInterp()
     auto ind_and_wghts = IndicesAndWeights<NGHOST>(indcs, size, pos, nmb);
 
     // Set havepoint flag.
-    havepoint_(p) = ind_and_wghts.point_exist;
+    havepoint_.d_view(p) = ind_and_wghts.point_exist;
     if (ind_and_wghts.point_exist) {
       // Metric
       for (int a = 0; a < NSPMETRIC; ++a) {
@@ -625,6 +620,10 @@ void FastFlow::MetricInterp()
       }
     }
   });
+
+  // Sync back to host.
+  havepoint.template modify<DevExeSpace>();
+  havepoint.template sync<HostMemSpace>();
 }
 template void FastFlow::MetricInterp<2>();
 template void FastFlow::MetricInterp<3>();
@@ -799,65 +798,70 @@ void FastFlow::UpdateFlowSpectralComponents()
   const Real A = alpha / (lmax * lmax1) + beta;
   const Real B = beta / alpha;
 
-  // Initialize the coefficients to zero.
-  Kokkos::deep_copy(spec0, 0.0);
-  Kokkos::deep_copy(specc, 0.0);
-  Kokkos::deep_copy(specs, 0.0);
+  Real *ABfac = new Real[lmax1];
+  Real *spec0 = new Real[lmax1];
+  Real *specc = new Real[lmpoints];
+  Real *specs = new Real[lmpoints];
 
-  // Explicitely capture the variables for the Kokkos kernel.
-  auto &int_weights = gl_grid->int_weights;
-  auto &rho_ = rho;
-  auto &havepoint_ = havepoint;
-  auto &ABfac_ = ABfac;
-  auto &spec0_ = spec0;
-  auto &specc_ = specc;
-  auto &specs_ = specs;
-  auto &Y0_ = Y0;
-  auto &Yc_ = Yc;
-  auto &Ys_ = Ys;
-  auto &a0_ = a0;
-  auto &ac_ = ac;
-  auto &as_ = as;
-  auto &lmax_ = lmax;
+  // Step 1: Initialize coefficients.
+  for(int l = 0; l <= lmax; l++) {
+    spec0[l] = 0;
+    ABfac[l] = A / (1.0 + B * l * (l + 1));
 
-  // Step 1: Compute the local sums.
-  par_for("FastFlow_LocalSums", DevExeSpace(), 0, nangles-1,
-  KOKKOS_LAMBDA(int p) {
-    if (havepoint_(p)) {
-      const Real drho = int_weights.d_view(p) * rho_(p);
+    for(int m = 1; m <= l; m++) {
+      int l1 = lmindex(l,m,lmax);
+      specc[l1] = 0;
+      specs[l1] = 0;
+    }
+  }
 
-      for(int l = 0; l <= lmax_; l++) {
-        spec0_(l) += drho * Y0_.d_view(p,l);
+  // Step 2: Build the local sums.
+  for(int p = 0; p < nangles; p++){
+    if (!havepoint.h_view(p)) continue;
 
-        for(int m = 1; m <= l; m++) {
-          int l1 = lmindex(l,m,lmax_);
-          specc_(l1) += drho * Yc_.d_view(p,l1);
-          specs_(l1) += drho * Ys_.d_view(p,l1);
-        }
+    const Real drho = gl_grid->int_weights.h_view(p) * rho.h_view(p);
+
+    for(int l = 0; l <= lmax; l++) {
+      spec0[l] += drho * Y0.h_view(p,l);
+
+      for(int m = 1; m <= l; m++) {
+        int l1 = lmindex(l,m,lmax);
+        specc[l1] += drho * Yc.h_view(p,l1);
+        specs[l1] += drho * Ys.h_view(p,l1);
       }
     }
-  });
+  }
 
-  // Step 2: Update the spectral coefficients.
-  par_for("FastFlow_UpdateSpCoeffs", DevExeSpace(), 0, lmax,
-  KOKKOS_LAMBDA(int l) {
-    ABfac_(l) = A / (1.0 + B * l * (l + 1));
-    a0_.d_view(l) -= ABfac_(l) * spec0_(l);
+  // Step 3: Communicate the results across ranks.
+  #if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, spec0, lmax1,    MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, specc, lmpoints, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, specs, lmpoints, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  #endif
+
+  // Step 4: Update the spectral coefficients.
+  for(int l = 0; l <= lmax; l++) {
+    a0.h_view(l) -= ABfac[l] * spec0[l];
 
     for(int m = 1; m <= l; m++){
-      int l1 = lmindex(l,m,lmax_);
-      ac_.d_view(l1) -= ABfac_(l) * specc_(l1);
-      as_.d_view(l1) -= ABfac_(l) * specs_(l1);
+      int l1 = lmindex(l,m,lmax);
+      ac.h_view(l1) -= ABfac[l] * specc[l1];
+      as.h_view(l1) -= ABfac[l] * specs[l1];
     }
-  });
+  }
+
+  delete[] ABfac;
+  delete[] spec0;
+  delete[] specc;
+  delete[] specs;
 
   // Sync to back to device.
-  a0.template modify<DevExeSpace>();
-  a0.template sync<HostMemSpace>();
-  ac.template modify<DevExeSpace>();
-  ac.template sync<HostMemSpace>();
-  as.template modify<DevExeSpace>();
-  as.template sync<HostMemSpace>();
+  a0.template modify<HostMemSpace>();
+  a0.template sync<DevExeSpace>();
+  ac.template modify<HostMemSpace>();
+  ac.template sync<DevExeSpace>();
+  as.template modify<HostMemSpace>();
+  as.template sync<DevExeSpace>();
 }
 
 //----------------------------------------------------------------------------------------
@@ -925,7 +929,7 @@ void FastFlow::SurfaceIntegrals()
     integrals[v] = 0.0;
   }
 
-  Kokkos::deep_copy(rho, 0.0); // Initialize rho
+  Kokkos::deep_copy(rho.d_view, 0.0); // Initialize rho
 
   // Explicitely capture the variables for the Kokkos kernel.
   auto &polar_pos = gl_grid->polar_pos;
@@ -1037,7 +1041,7 @@ void FastFlow::SurfaceIntegrals()
 
     AthenaPointTensor<Real, TensorSymm::SYM2, NDIM, 2> nnF;
 
-    if (havepoint_(p)) {
+    if (havepoint_.d_view(p)) {
       Real const theta = polar_pos.d_view(p,0);
       Real const sinth = Kokkos::sin(theta);
       Real const costh = Kokkos::cos(theta);
@@ -1231,7 +1235,7 @@ void FastFlow::SurfaceIntegrals()
              + R(1) * R(2) * drdi(1) * drdi(2)));
 
       Real sigma = 2 * SQR(rp) * (1 / sigma_para);
-      rho_(p) = H * u * sigma;
+      rho_.d_view(p) = H * u * sigma;
 
       // ---------------
       // Surface Element
@@ -1321,6 +1325,10 @@ void FastFlow::SurfaceIntegrals()
   #if MPI_PARALLEL_ENABLED
     MPI_Allreduce(MPI_IN_PLACE, integrals, invar, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   #endif
+
+  // Sync rho back to host.
+  rho.template modify<DevExeSpace>();
+  rho.template sync<HostMemSpace>();
 }
 
 //----------------------------------------------------------------------------------------
