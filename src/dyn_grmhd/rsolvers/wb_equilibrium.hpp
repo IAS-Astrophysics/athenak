@@ -20,6 +20,18 @@
 
 namespace dyngr {
 
+//---------------------------------------------------------------------------------------
+// A convenience structure for storing an input state for the well-balanced scheme.
+struct WBState {
+  const Real& n;
+  const Real& P;
+  const Real& T;
+  Real* Y;
+
+  const Real& alp;
+  Real* gdd;
+};
+
 //----------------------------------------------------------------------------------------
 //! \fn void PressureEquilibrium
 //! \brief inline function for well-balancing pressure at the L/R interfaces of a cell
@@ -69,135 +81,93 @@ void PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos
   pl_ip1 = pe;
 }
 
-//----------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
 //! \fn void PressureEquilibriumExtrap
 //! \brief inline function for well-balancing pressure at the L/R interfaces of a cell and
-//  extrapolating to neighboring cells.
+//  extrapolating to the nearest neighbor for a PLM operator.
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 bool PressureEquilibriumExtrap(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
-    const Real &alpm1, const Real &alp0, const Real &alpp1, Real gddm1[NSPMETRIC],
-    Real gdd0[NSPMETRIC], Real gddp1[NSPMETRIC], const Real &nm1, const Real &n0,
-    const Real &np1, const Real &Pm1, const Real &P0, const Real Pp1, const Real &Tm1,
-    const Real &T0, const Real Tp1, Real Ym1[MAX_SPECIES], Real Y0[MAX_SPECIES],
-    Real Yp1[MAX_SPECIES], Real &p_im1, Real &pr_i, Real &pl_ip1, Real &p_ip1) {
-  // Constants needed for both the left and right
-  Real e0 = eos.ps.GetEOS().GetEnergy(n0, T0, Y0);
-  Real guu0[NSPMETRIC];
-  Real sdetg0 = Kokkos::sqrt(Primitive::GetDeterminant(gdd0));
-  Primitive::InvertMatrix(guu0, gdd0, sdetg0*sdetg0);
-  constexpr Real tol = 1e-10;
-  constexpr int niter = 30;
+    const WBState& vm1, const WBState& v0, const WBState& vp1, const Real& dalpm,
+    const Real& dalpp, const Real dgddm[NSPMETRIC], const Real dgddp[NSPMETRIC],
+    Real &p_im1, Real &pr_i, Real &pl_ip1, Real &p_ip1) {
+  // Constants needed for both the left and right.
+  Real e0 = eos.ps.GetEOS().GetEnergy(v0.n, v0.T, v0.Y);
+  Real guu[NSPMETRIC];
+  Real sdetg0 = Kokkos::sqrt(Primitive::GetDeterminant(v0.gdd));
+  Primitive::InvertMatrix(guu, v0.gdd, sdetg0*sdetg0);
+
+  auto CalcQ = [](const Real guu[NSPMETRIC], const Real dgdd[NSPMETRIC]) -> Real {
+    return guu[S11]*dgdd[S11] + 2.0*guu[S12]*dgdd[S12] + 2.0*guu[S13]*dgdd[S13] +
+           guu[S22]*dgdd[S22] + 2.0*guu[S23]*dgdd[S23] + guu[S33]*dgdd[S33];
+  };
+  auto CalcPEq = [](const WBState& v, const Real& dalp, const Real& q,
+                    const Real& sdetg, const Real& e) -> Real {
+    return v.alp*sdetg*v.P*(1.0 + 0.5*q) - sdetg*e*dalp;
+  };
 
   // Right side of i-1/2
-  Real alp12 = 0.5*(alpm1 + alp0);
-  Real gdd12[NSPMETRIC];
-  for (int a = 0; a < NSPMETRIC; a++) {
-    gdd12[a] = 0.5*(gddm1[a] + gdd0[a]);
-  }
-  Real sdetg12 = Kokkos::sqrt(Primitive::GetDeterminant(gdd12));
-  Real q0 = guu0[S11]*(gddm1[S11] - gdd0[S11]) + 2.0*guu0[S12]*(gddm1[S12] - gdd0[S12])
-         + 2.0*guu0[S13]*(gddm1[S13] - gdd0[S13]) + guu0[S22]*(gddm1[S22] - gdd0[S22])
-         + 2.0*guu0[S23]*(gddm1[S23] - gdd0[S23]) + guu0[S33]*(gddm1[S33] - gdd0[S33]);
-  Real pe = alp0*sdetg0*P0*(1.0 + 0.25*q0) - 0.5*sdetg0*e0*(alpm1 - alp0);
-  if (pe < 0.0) {
-    pr_i = P0;
-    p_im1 = P0;
-    pl_ip1 = P0;
-    p_ip1 = P0;
+  Real q0l = CalcQ(guu, dgddm);
+  Real pem = CalcPEq(v0, dalpm, q0l, sdetg0, e0);
+  if (pem < 0.0) {
+    pr_i = p_im1 = pl_ip1 = p_ip1 = v0.P;
     return false;
-  } else {
-    pr_i = pe/(alp12*sdetg12);
-
-    // Extrapolated to i-1
-    Real guu1[NSPMETRIC];
-    Real sdetg1 = Kokkos::sqrt(Primitive::GetDeterminant(gddm1));
-    Primitive::InvertMatrix(guu1, gddm1, sdetg1*sdetg1);
-    Real q1 = guu1[S11]*(gddm1[S11] - gdd0[S11]) + 2.0*guu1[S12]*(gddm1[S12] - gdd0[S12])
-           + 2.0*guu1[S13]*(gddm1[S13] - gdd0[S13]) + guu1[S22]*(gddm1[S22] - gdd0[S22])
-           + 2.0*guu1[S23]*(gddm1[S23] - gdd0[S23]) + guu1[S33]*(gddm1[S33] - gdd0[S33]);
-    // Use fixed-point iteration to solve the correct equilibrium pressure
-    Real pstar = Pm1;
-    Real pold = pstar;
-    Real e1 = eos.ps.GetEOS().GetEnergy(nm1, Tm1, Ym1);
-    bool converged = false;
-    //for (int c = 0; c < niter; c++) {
-      //pstar = (pe + 0.25*alpm1*sdetg1*pstar*q1 - 0.5*sdetg1*e1*(alpm1 - alp0))/(alpm1*sdetg1);
-      pstar = (pe - 0.5*sdetg1*e1*(alpm1 - alp0))/(alpm1*sdetg1*(1. - 0.25*q1));
-      /*if (Kokkos::fabs(pstar - pold) < P0*tol) {
-        converged = true;
-        break;
-      }
-      Real t = eos.ps.GetEOS().GetTemperatureFromP(nm1, pstar, Ym1);
-      e1 = eos.ps.GetEOS().GetEnergy(nm1, t, Ym1);
-      pold = pstar;
-    }*/
-    //if (converged && pstar > 0.0) {
-    if (pstar > 0.0) {
-      p_im1 = pstar;
-    } else {
-      pr_i = P0;
-      p_im1 = P0;
-      pl_ip1 = P0;
-      p_ip1 = P0;
-      return false;
+  }
+  {
+    // Scoping to try to encourage the compiler to reduce register usage.
+    Real gdd12[NSPMETRIC];
+    for (int a = 0; a < NSPMETRIC; a++) {
+      gdd12[a] = 0.5*(vm1.gdd[a] + v0.gdd[a]);
     }
+    Real sdetg12 = Kokkos::sqrt(Primitive::GetDeterminant(gdd12));
+    Real alp12 = 0.5*(v0.alp + vm1.alp);
+    pr_i = pem/(alp12*sdetg12);
   }
 
   // Left side of i+1/2
-  alp12 = 0.5*(alpp1 + alp0);
-  for (int a = 0; a < NSPMETRIC; a++) {
-    gdd12[a] = 0.5*(gddp1[a] + gdd0[a]);
-  }
-  sdetg12 = Kokkos::sqrt(Primitive::GetDeterminant(gdd12));
-  q0 = guu0[S11]*(gddp1[S11] - gdd0[S11]) + 2.0*guu0[S12]*(gddp1[S12] - gdd0[S12])
-         + 2.0*guu0[S13]*(gddp1[S13] - gdd0[S13]) + guu0[S22]*(gddp1[S22] - gdd0[S22])
-         + 2.0*guu0[S23]*(gddp1[S23] - gdd0[S23]) + guu0[S33]*(gddp1[S33] - gdd0[S33]);
-  pe = alp0*sdetg0*P0*(1.0 + 0.25*q0) - 0.5*sdetg0*e0*(alpp1 - alp0);
-  if (pe < 0.0) {
-    pl_ip1 = P0;
-    p_ip1 = P0;
-    pr_i = P0;
-    p_im1 = P0;
+  Real q0r = CalcQ(guu, dgddp);
+  Real pep = CalcPEq(v0, dalpp, q0r, sdetg0, e0);
+  if (pep < 0.0) {
+    pr_i = p_im1 = pl_ip1 = p_ip1 = v0.P;
     return false;
-  } else {
-    pl_ip1 = pe/(alp12*sdetg12);
-
-    // Extrapolated to i+1
-    Real guu1[NSPMETRIC];
-    Real sdetg1 = Kokkos::sqrt(Primitive::GetDeterminant(gddp1));
-    Primitive::InvertMatrix(guu1, gddp1, sdetg1*sdetg1);
-    Real q1 = guu1[S11]*(gddp1[S11] - gdd0[S11]) + 2.0*guu1[S12]*(gddp1[S12] - gdd0[S12])
-           + 2.0*guu1[S13]*(gddp1[S13] - gdd0[S13]) + guu1[S22]*(gddp1[S22] - gdd0[S22])
-           + 2.0*guu1[S23]*(gddp1[S23] - gdd0[S23]) + guu1[S33]*(gddp1[S33] - gdd0[S33]);
-    // Use fixed-point iteration to solve the correct equilibrium pressure
-    Real pstar = Pp1;
-    Real pold = pstar;
-    Real e1 = eos.ps.GetEOS().GetEnergy(np1, Tp1, Yp1);
-    bool converged = false;
-    //for (int c = 0; c < niter; c++) {
-      //pstar = (pe + 0.25*alpp1*sdetg1*pstar*q1 - 0.5*sdetg1*e1*(alpp1 - alp0))/(alpp1*sdetg1);
-      pstar = (pe - 0.5*sdetg1*e1*(alpp1 - alp0))/(alpp1*sdetg1*(1. - 0.25*q1));
-      /*if (Kokkos::fabs(pstar - pold) < P0*tol) {
-        converged = true;
-        break;
-      }
-      Real t = eos.ps.GetEOS().GetTemperatureFromP(np1, pstar, Yp1);
-      e1 = eos.ps.GetEOS().GetEnergy(np1, t, Yp1);
-      pold = pstar;
-    }*/
-    //if (converged && pstar > 0.0) {
-    if (pstar > 0.0) {
-      p_ip1 = pstar;
-    } else {
-      //p_ip1 = 0.0;
-      pr_i = P0;
-      p_im1 = P0;
-      pl_ip1 = P0;
-      p_ip1 = P0;
-      return false;
-    }
   }
+  {
+    // Scoping to try to encourage the compiler to reduce register usage.
+    Real gdd12[NSPMETRIC];
+    for (int a = 0; a < NSPMETRIC; a++) {
+      gdd12[a] = 0.5*(vp1.gdd[a] + v0.gdd[a]);
+    }
+    Real sdetg12 = Kokkos::sqrt(Primitive::GetDeterminant(gdd12));
+    Real alp12 = 0.5*(v0.alp + vp1.alp);
+    pl_ip1 = pep/(alp12*sdetg12);
+  }
+
+  // Extrapolate to i-1
+  Real sdetg1 = Kokkos::sqrt(Primitive::GetDeterminant(vm1.gdd));
+  Primitive::InvertMatrix(guu, vm1.gdd, sdetg1*sdetg1);
+  Real q1 = CalcQ(guu, dgddm);
+  // Estimate the solution using a single step of fixed-point iteration.
+  Real e1 = eos.ps.GetEOS().GetEnergy(vm1.n, vm1.T, vm1.Y);
+  Real pstar = (pem - sdetg1*e1*dalpm)/(vm1.alp*sdetg1*(1.0 - 0.5*q1));
+  if (pstar <= 0.0) {
+    pr_i = p_im1 = pl_ip1 = p_ip1 = v0.P;
+    return false;
+  }
+  p_im1 = pstar;
+
+  // Extrapolate to i+1
+  sdetg1 = Kokkos::sqrt(Primitive::GetDeterminant(vp1.gdd));
+  Primitive::InvertMatrix(guu, vp1.gdd, sdetg1*sdetg1);
+  q1 = CalcQ(guu, dgddp);
+  // Estimate the solution using a single step of fixed-point iteration.
+  e1 = eos.ps.GetEOS().GetEnergy(vp1.n, vp1.T, vp1.Y);
+  pstar = (pep - sdetg1*e1*dalpp)/(vp1.alp*sdetg1*(1.0 - 0.5*q1));
+  if (pstar <= 0.0) {
+    pr_i = p_im1 = pl_ip1 = p_ip1 = v0.P;
+    return false;
+  }
+  p_ip1 = pstar;
+
   return true;
 }
 
@@ -319,7 +289,7 @@ void PressureEquilibriumX3(TeamMember_t const &member,
 //! \fn BalancePressureX1()
 //! \brief Wrapper function to apply well-balanced PLM reconstruction to pressure in x1
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
-template<class EOSPolicy, class ErrorPolicy>
+template<int width, class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 void BalancePressureX1(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
@@ -359,11 +329,30 @@ void BalancePressureX1(TeamMember_t const &member,
     Real gddm1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i-1), adm.g_dd(m, 0, 1, k, j, i-1),
                              adm.g_dd(m, 0, 2, k, j, i-1), adm.g_dd(m, 1, 1, k, j, i-1),
                              adm.g_dd(m, 1, 2, k, j, i-1), adm.g_dd(m, 2, 2, k, j, i-1)};
+    WBState v0{n0, P0, T0, Y0, alp0, gdd0};
+    WBState vm1{nm1, Pm1, Tm1, Ym1, alpm1, gddm1};
+    WBState vp1{np1, Pp1, Tp1, Yp1, alpp1, gddp1};
     Real p_im1, pr_i, pl_ip1, p_ip1;
-    bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
+    Real dalpm = HalfDifferenceInterface<width,0,-1>(adm.alpha, m, k, j, i);
+    Real dalpp = HalfDifferenceInterface<width,0, 1>(adm.alpha, m, k, j, i);
+    Real dgddm[NSPMETRIC] = {HalfDifferenceInterface<width,0,-1>(adm.g_dd,m,0,0,k,j,i),
+                             HalfDifferenceInterface<width,0,-1>(adm.g_dd,m,0,1,k,j,i),
+                             HalfDifferenceInterface<width,0,-1>(adm.g_dd,m,0,2,k,j,i),
+                             HalfDifferenceInterface<width,0,-1>(adm.g_dd,m,1,1,k,j,i),
+                             HalfDifferenceInterface<width,0,-1>(adm.g_dd,m,1,2,k,j,i),
+                             HalfDifferenceInterface<width,0,-1>(adm.g_dd,m,2,2,k,j,i)};
+    Real dgddp[NSPMETRIC] = {HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,0,0,k,j,i),
+                             HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,0,1,k,j,i),
+                             HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,0,2,k,j,i),
+                             HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,1,1,k,j,i),
+                             HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,1,2,k,j,i),
+                             HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,2,2,k,j,i)};
+    bool balanced = PressureEquilibriumExtrap(eos, vm1, v0, vp1, dalpm, dalpp, dgddm,
+                                              dgddp, p_im1, pr_i, pl_ip1, p_ip1);
+    /*bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
                               gddp1, nm1, n0, np1,
                               Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                              p_im1, pr_i, pl_ip1, p_ip1);
+                              p_im1, pr_i, pl_ip1, p_ip1);*/
     if (balanced) {
       PLM(q(m,IPR,k,j,i-1)-p_im1, 0.0, q(m,IPR,k,j,i+1)-p_ip1, ql(IPR,i+1), qr(IPR,i));
       ql(IPR,i+1) += pl_ip1;
@@ -376,7 +365,7 @@ void BalancePressureX1(TeamMember_t const &member,
 //! \fn BalancePressureX2()
 //! \brief Wrapper function to apply well-balanced PLM reconstruction to pressure in x2
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
-template<class EOSPolicy, class ErrorPolicy>
+template<int width, class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 void BalancePressureX2(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
@@ -407,20 +396,39 @@ void BalancePressureX2(TeamMember_t const &member,
       Yp1[s] = q(m, IYF+s, k, j+1, i);
       Ym1[s] = q(m, IYF+s, k, j-1, i);
     }
-    Real gdd0[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)};
-    Real gddp1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j+1, i), adm.g_dd(m, 0, 1, k, j+1, i),
-                             adm.g_dd(m, 0, 2, k, j+1, i), adm.g_dd(m, 1, 1, k, j+1, i),
-                             adm.g_dd(m, 1, 2, k, j+1, i), adm.g_dd(m, 2, 2, k, j+1, i)};
-    Real gddm1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j-1, i), adm.g_dd(m, 0, 1, k, j-1, i),
-                             adm.g_dd(m, 0, 2, k, j-1, i), adm.g_dd(m, 1, 1, k, j-1, i),
-                             adm.g_dd(m, 1, 2, k, j-1, i), adm.g_dd(m, 2, 2, k, j-1, i)};
+    Real gdd0[NSPMETRIC] = {adm.g_dd(m, 1, 1, k, j, i), adm.g_dd(m, 1, 2, k, j, i),
+                            adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
+                            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 0, 0, k, j, i)};
+    Real gddp1[NSPMETRIC] = {adm.g_dd(m, 1, 1, k, j+1, i), adm.g_dd(m, 1, 2, k, j+1, i),
+                             adm.g_dd(m, 0, 1, k, j+1, i), adm.g_dd(m, 2, 2, k, j+1, i),
+                             adm.g_dd(m, 0, 2, k, j+1, i), adm.g_dd(m, 0, 0, k, j+1, i)};
+    Real gddm1[NSPMETRIC] = {adm.g_dd(m, 1, 1, k, j-1, i), adm.g_dd(m, 1, 2, k, j-1, i),
+                             adm.g_dd(m, 0, 1, k, j-1, i), adm.g_dd(m, 2, 2, k, j-1, i),
+                             adm.g_dd(m, 0, 2, k, j-1, i), adm.g_dd(m, 0, 0, k, j-1, i)};
+    WBState v0{n0, P0, T0, Y0, alp0, gdd0};
+    WBState vm1{nm1, Pm1, Tm1, Ym1, alpm1, gddm1};
+    WBState vp1{np1, Pp1, Tp1, Yp1, alpp1, gddp1};
     Real p_jm1, pr_j, pl_jp1, p_jp1;
-    bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
+    Real dalpm = HalfDifferenceInterface<width,1,-1>(adm.alpha, m, k, j, i);
+    Real dalpp = HalfDifferenceInterface<width,1, 1>(adm.alpha, m, k, j, i);
+    Real dgddm[NSPMETRIC] = {HalfDifferenceInterface<width,1,-1>(adm.g_dd,m,1,1,k,j,i),
+                             HalfDifferenceInterface<width,1,-1>(adm.g_dd,m,1,2,k,j,i),
+                             HalfDifferenceInterface<width,1,-1>(adm.g_dd,m,0,1,k,j,i),
+                             HalfDifferenceInterface<width,1,-1>(adm.g_dd,m,2,2,k,j,i),
+                             HalfDifferenceInterface<width,1,-1>(adm.g_dd,m,0,2,k,j,i),
+                             HalfDifferenceInterface<width,1,-1>(adm.g_dd,m,0,0,k,j,i)};
+    Real dgddp[NSPMETRIC] = {HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,1,1,k,j,i),
+                             HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,1,2,k,j,i),
+                             HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,0,1,k,j,i),
+                             HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,2,2,k,j,i),
+                             HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,0,2,k,j,i),
+                             HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,0,0,k,j,i)};
+    bool balanced = PressureEquilibriumExtrap(eos, vm1, v0, vp1, dalpm, dalpp, dgddm,
+                                              dgddp, p_jm1, pr_j, pl_jp1, p_jp1);
+    /*bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
                               gddp1, nm1, n0, np1,
                               Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                              p_jm1, pr_j, pl_jp1, p_jp1);
+                              p_jm1, pr_j, pl_jp1, p_jp1);*/
     if (balanced) {
       PLM(q(m,IPR,k,j-1,i)-p_jm1, 0.0, q(m,IPR,k,j+1,i)-p_jp1, ql_jp1(IPR,i), qr_j(IPR,i));
       ql_jp1(IPR,i) += pl_jp1;
@@ -433,7 +441,7 @@ void BalancePressureX2(TeamMember_t const &member,
 //! \fn BalancePressureX3()
 //! \brief Wrapper function to apply well-balanced PLM reconstruction to pressure in x3
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
-template<class EOSPolicy, class ErrorPolicy>
+template<int width, class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 void BalancePressureX3(TeamMember_t const &member,
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
@@ -464,20 +472,39 @@ void BalancePressureX3(TeamMember_t const &member,
       Yp1[s] = q(m, IYF+s, k+1, j, i);
       Ym1[s] = q(m, IYF+s, k-1, j, i);
     }
-    Real gdd0[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)};
-    Real gddp1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k+1, j, i), adm.g_dd(m, 0, 1, k+1, j, i),
-                             adm.g_dd(m, 0, 2, k+1, j, i), adm.g_dd(m, 1, 1, k+1, j, i),
-                             adm.g_dd(m, 1, 2, k+1, j, i), adm.g_dd(m, 2, 2, k+1, j, i)};
-    Real gddm1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k-1, j, i), adm.g_dd(m, 0, 1, k-1, j, i),
-                             adm.g_dd(m, 0, 2, k-1, j, i), adm.g_dd(m, 1, 1, k-1, j, i),
-                             adm.g_dd(m, 1, 2, k-1, j, i), adm.g_dd(m, 2, 2, k-1, j, i)};
+    Real gdd0[NSPMETRIC] = {adm.g_dd(m, 2, 2, k, j, i), adm.g_dd(m, 0, 2, k, j, i),
+                            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 0, 0, k, j, i),
+                            adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 1, 1, k, j, i)};
+    Real gddp1[NSPMETRIC] = {adm.g_dd(m, 2, 2, k+1, j, i), adm.g_dd(m, 0, 2, k+1, j, i),
+                             adm.g_dd(m, 1, 2, k+1, j, i), adm.g_dd(m, 0, 0, k+1, j, i),
+                             adm.g_dd(m, 0, 1, k+1, j, i), adm.g_dd(m, 1, 1, k+1, j, i)};
+    Real gddm1[NSPMETRIC] = {adm.g_dd(m, 2, 2, k-1, j, i), adm.g_dd(m, 0, 2, k-1, j, i),
+                             adm.g_dd(m, 1, 2, k-1, j, i), adm.g_dd(m, 0, 0, k-1, j, i),
+                             adm.g_dd(m, 0, 1, k-1, j, i), adm.g_dd(m, 1, 1, k-1, j, i)};
+    WBState v0{n0, P0, T0, Y0, alp0, gdd0};
+    WBState vm1{nm1, Pm1, Tm1, Ym1, alpm1, gddm1};
+    WBState vp1{np1, Pp1, Tp1, Yp1, alpp1, gddp1};
     Real p_km1, pr_k, pl_kp1, p_kp1;
-    bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
+    Real dalpm = HalfDifferenceInterface<width,2,-1>(adm.alpha, m, k, j, i);
+    Real dalpp = HalfDifferenceInterface<width,2, 1>(adm.alpha, m, k, j, i);
+    Real dgddm[NSPMETRIC] = {HalfDifferenceInterface<width,2,-1>(adm.g_dd,m,2,2,k,j,i),
+                             HalfDifferenceInterface<width,2,-1>(adm.g_dd,m,0,2,k,j,i),
+                             HalfDifferenceInterface<width,2,-1>(adm.g_dd,m,1,2,k,j,i),
+                             HalfDifferenceInterface<width,2,-1>(adm.g_dd,m,0,0,k,j,i),
+                             HalfDifferenceInterface<width,2,-1>(adm.g_dd,m,0,1,k,j,i),
+                             HalfDifferenceInterface<width,2,-1>(adm.g_dd,m,1,1,k,j,i)};
+    Real dgddp[NSPMETRIC] = {HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,2,2,k,j,i),
+                             HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,0,2,k,j,i),
+                             HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,1,2,k,j,i),
+                             HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,0,0,k,j,i),
+                             HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,0,1,k,j,i),
+                             HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,1,1,k,j,i)};
+    bool balanced = PressureEquilibriumExtrap(eos, vm1, v0, vp1, dalpm, dalpp, dgddm,
+                                              dgddp, p_km1, pr_k, pl_kp1, p_kp1);
+    /*bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
                               gddp1, nm1, n0, np1,
                               Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                              p_km1, pr_k, pl_kp1, p_kp1);
+                              p_km1, pr_k, pl_kp1, p_kp1);*/
     if (balanced) {
       PLM(q(m,IPR,k-1,j,i)-p_km1, 0.0, q(m,IPR,k+1,j,i)-p_kp1, ql_kp1(IPR,i), qr_k(IPR,i));
       ql_kp1(IPR,i) += pl_kp1;

@@ -45,7 +45,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   int is = indcs_.is, ie = indcs_.ie;
   int js = indcs_.js, je = indcs_.je;
   int ks = indcs_.ks, ke = indcs_.ke;
-  int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
+  int &ng = indcs_.ng;
+  int ncells1 = indcs_.nx1 + 2*ng;
 
   int nhyd = pmy_pack->pmhd->nmhd;
   int nvars = pmy_pack->pmhd->nmhd + pmy_pack->pmhd->nscalars;
@@ -169,8 +170,19 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         break;
     }
     if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
-      BalancePressureX1(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_, adm,
-                        temp_, wl, wr);
+      switch (ng) {
+        case 2:
+          BalancePressureX1<1>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
+                               adm, temp_, wl, wr);
+          break;
+        case 3:
+          BalancePressureX1<2>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
+                               adm, temp_, wl, wr);
+          break;
+        case 4:
+          BalancePressureX1<3>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
+                               adm, temp_, wl, wr);
+      }
     }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
@@ -325,8 +337,20 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             break;
         }
         if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
-          BalancePressureX2(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_, adm,
-                            temp_, wl_jp1, wr);
+          switch (ng) {
+            case 2:
+              BalancePressureX2<1>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_jp1, wr);
+              break;
+            case 3:
+              BalancePressureX2<2>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_jp1, wr);
+              break;
+            case 4:
+              BalancePressureX2<3>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_jp1, wr);
+              break;
+          }
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
@@ -475,8 +499,20 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             break;
         }
         if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
-          BalancePressureX3(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1, w0_, adm,
-                            temp_, wl_kp1, wr);
+          switch (ng) {
+            case 2:
+              BalancePressureX3<1>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_kp1, wr);
+              break;
+            case 3:
+              BalancePressureX3<2>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_kp1, wr);
+              break;
+            case 4:
+              BalancePressureX3<3>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_kp1, wr);
+              break;
+          }
         }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();

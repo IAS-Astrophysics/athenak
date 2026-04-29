@@ -372,15 +372,14 @@ template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
     const Real dt, DvceArray5D<Real> &rhs, int nghost) {
-  /*switch (nghost) {
+  switch (nghost) {
     case 2: AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
             break;
     case 3: AddCoordTermsEOS<3>(prim, bcc, dt, rhs);
             break;
     case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
             break;
-  }*/
-  AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
+  }
 }
 
 //----------------------------------------------------------------------------------------
