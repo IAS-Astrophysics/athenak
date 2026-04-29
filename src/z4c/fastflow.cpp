@@ -1240,7 +1240,6 @@ void FastFlow::SurfaceIntegrals()
         Real sigma = 2 * SQR(rp) * (1 / sigma_para);
         rho_.d_view(p) = H * u * sigma;
       } else if (flow_ == "normal") {
-        printf("Yes");
         rho_.d_view(p) = H * u;
       } else {
         rho_.d_view(p) = H;
