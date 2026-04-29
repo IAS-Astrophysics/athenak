@@ -61,6 +61,11 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   flow_iterations = pin->GetOrAddInteger("fastflow", "flow_iterations_" + n_str, 100);
   flow_alpha_beta_const = pin->GetOrAddReal("fastflow", "flow_alpha_beta_const_" + n_str, 1.0);
   flow = pin->GetOrAddString("fastflow", "flow", "normal");
+  if (flow == "shear") {
+    flowflag = 1;
+  } else if (flow == "normal") {
+    flowflag = 2;
+  }
 
   // Convergence parameters
   hmean_tol = pin->GetOrAddReal("fastflow", "hmean_tol_" + n_str, 100.);
@@ -937,7 +942,7 @@ void FastFlow::SurfaceIntegrals()
   auto &int_weights = gl_grid->int_weights;
   auto &havepoint_ = havepoint;
   auto &lmax_ = lmax;
-  auto &flow_ = flow;
+  auto &flowflag_ = flowflag;
 
   // **INTERPOLATED SPACETIME**
   auto &gi_ = g_interp;
@@ -1219,7 +1224,7 @@ void FastFlow::SurfaceIntegrals()
         R(a) = dFdi_u(a) * divu;
       }
 
-      if (flow_ == "shear") {
+      if (flowflag_ == 1) {
         // Compute the shear for the flow function.
         Real sigma_para = (
           ginv(0,0) + ginv(1,1) + ginv(2,2)
@@ -1239,7 +1244,7 @@ void FastFlow::SurfaceIntegrals()
 
         Real sigma = 2 * SQR(rp) * (1 / sigma_para);
         rho_.d_view(p) = H * u * sigma;
-      } else if (flow_ == "normal") {
+      } else if (flowflag_ == 2) {
         rho_.d_view(p) = H * u;
       } else {
         rho_.d_view(p) = H;

@@ -87,6 +87,7 @@ private:
   bool use_stored_metric_drvts;
   int nhorizon; // Number of horizons
   std::string flow;
+  int flowflag = 0;
   int fastflow_iter = 0;
 
   // Pointer to Gauss-Legendre object
