@@ -60,6 +60,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   // Flow parameters
   flow_iterations = pin->GetOrAddInteger("fastflow", "flow_iterations_" + n_str, 100);
   flow_alpha_beta_const = pin->GetOrAddReal("fastflow", "flow_alpha_beta_const_" + n_str, 1.0);
+  flow = pin->GetOrAddString("fastflow", "flow", "normal");
 
   // Convergence parameters
   hmean_tol = pin->GetOrAddReal("fastflow", "hmean_tol_" + n_str, 100.);
@@ -936,6 +937,7 @@ void FastFlow::SurfaceIntegrals()
   auto &int_weights = gl_grid->int_weights;
   auto &havepoint_ = havepoint;
   auto &lmax_ = lmax;
+  auto &flow_ = flow;
 
   // **INTERPOLATED SPACETIME**
   auto &gi_ = g_interp;
@@ -1217,26 +1219,33 @@ void FastFlow::SurfaceIntegrals()
         R(a) = dFdi_u(a) * divu;
       }
 
-      // Compute the shear for the flow function.
-      Real sigma_para = (
-        ginv(0,0) + ginv(1,1) + ginv(2,2)
-        - ginv(0,0) * SQR(drdi(0))
-        - ginv(1,1) * SQR(drdi(1))
-        - ginv(2,2) * SQR(drdi(2))
-        - 2 * (ginv(0,1) * drdi(0) * drdi(1)
-             + ginv(0,2) * drdi(0) * drdi(2)
-             + ginv(1,2) * drdi(1) * drdi(2))
-        - SQR(R(0)) - SQR(R(1)) - SQR(R(2))
-        + SQR(R(0)) * SQR(drdi(0))
-        + SQR(R(1)) * SQR(drdi(1))
-        + SQR(R(2)) * SQR(drdi(2))
-        + 2 * (R(0) * R(1) * drdi(0) * drdi(1)
-             + R(0) * R(2) * drdi(0) * drdi(2)
-             + R(1) * R(2) * drdi(1) * drdi(2)));
+      if (flow_ == "shear") {
+        // Compute the shear for the flow function.
+        Real sigma_para = (
+          ginv(0,0) + ginv(1,1) + ginv(2,2)
+          - ginv(0,0) * SQR(drdi(0))
+          - ginv(1,1) * SQR(drdi(1))
+          - ginv(2,2) * SQR(drdi(2))
+          - 2 * (ginv(0,1) * drdi(0) * drdi(1)
+              + ginv(0,2) * drdi(0) * drdi(2)
+              + ginv(1,2) * drdi(1) * drdi(2))
+          - SQR(R(0)) - SQR(R(1)) - SQR(R(2))
+          + SQR(R(0)) * SQR(drdi(0))
+          + SQR(R(1)) * SQR(drdi(1))
+          + SQR(R(2)) * SQR(drdi(2))
+          + 2 * (R(0) * R(1) * drdi(0) * drdi(1)
+              + R(0) * R(2) * drdi(0) * drdi(2)
+              + R(1) * R(2) * drdi(1) * drdi(2)));
 
-      Real sigma = 2 * SQR(rp) * (1 / sigma_para);
-      rho_.d_view(p) = H * u * sigma;
-
+        Real sigma = 2 * SQR(rp) * (1 / sigma_para);
+        rho_.d_view(p) = H * u * sigma;
+      } else if (flow_ == "normal") {
+        printf("Yes");
+        rho_.d_view(p) = H * u;
+      } else {
+        rho_.d_view(p) = H;
+      }
+      
       // ---------------
       // Surface Element
       // ---------------
