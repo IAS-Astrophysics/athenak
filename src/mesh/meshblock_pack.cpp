@@ -57,19 +57,15 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
-  delete pcoord;
   if (ppart  != nullptr) {delete ppart;}
   if (phydro != nullptr) {delete phydro;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
   if (ptmunu != nullptr) {delete ptmunu;}
   if (prad   != nullptr) {delete prad;}
-  if (pradm1   != nullptr) {delete pradm1;}
+  if (pradm1 != nullptr) {delete pradm1;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (pnr    != nullptr) {delete pnr;}
-  if (pdyngr != nullptr) {delete pdyngr;}
-  if (ptmunu != nullptr) {delete ptmunu;}
-  if (padm   != nullptr) {delete padm;}
   if (pz4c   != nullptr) {
     delete pz4c;
     // cce dump
@@ -79,9 +75,6 @@ MeshBlockPack::~MeshBlockPack() {
     pz4c_cce.resize(0);
   }
   if (pturb  != nullptr) {delete pturb;}
-  if (prad   != nullptr) {delete prad;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (phydro != nullptr) {delete phydro;}
   if (punit  != nullptr) {delete punit;}
   delete pcoord;
   delete pmb;
