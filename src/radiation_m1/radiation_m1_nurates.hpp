@@ -9,6 +9,8 @@
 //! \file radiation_m1_nurates.hpp
 //  \brief structs and functions for bns_nurates
 
+#include <string>
+
 #include "config.hpp"
 
 #if ENABLE_NURATES
@@ -228,7 +230,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
-  grey_op_params.opacity_pars.use_BRT_brem = nurates_params.use_BRT_brem;
+  grey_op_params.opacity_pars.brem_implementation = nurates_params.use_BRT_brem ? BREM_BRT06 : BREM_HR98;
 
   // populate EOS quantities
   grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
