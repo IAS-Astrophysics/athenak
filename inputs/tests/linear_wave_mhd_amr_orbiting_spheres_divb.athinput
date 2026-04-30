@@ -1,0 +1,99 @@
+# AthenaK input file for 2D orbiting-sphere AMR divB diagnostics
+
+<comment>
+problem   = 2d mhd linear wave with orbiting spherical amr regions
+
+<job>
+basename  = LinWaveOrbitingSpheresDivB
+
+<mesh>
+nghost    = 2
+nx1       = 64
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 64
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 1
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 1
+
+<mesh_refinement>
+refinement          = adaptive
+max_nmb_per_rank    = 1024
+num_levels          = 2
+ncycle_check        = 1
+refinement_interval = 1
+
+<amr_criterion0>
+method    = user
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = -1
+tlim       = 2.0
+ndiag      = 1
+
+<mhd>
+eos         = ideal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.66666666667
+
+<problem>
+pgen_name                = linear_wave
+wave_flag                = 0
+amp                      = 1.0e-3
+dens                     = 1.0
+pgas                     = 0.6
+vx0                      = 0.0
+vy0                      = 0.0
+vz0                      = 0.0
+bx0                      = 1.0
+by0                      = 1.4142136
+bz0                      = 0.5
+along_x1                 = false
+along_x2                 = false
+along_x3                 = false
+use_amr_box_refinement   = true
+amr_binary_spheres       = true
+amr_box_level            = 1
+amr_x1min                = 0.0
+amr_x1max                = 0.0
+amr_center_x1            = 0.5
+amr_center_x2            = 0.5
+amr_center_x3            = 0.5
+amr_orbit_radius         = 0.18
+amr_sphere_radius        = 0.11
+amr_orbit_omega          = 18.0
+amr_orbit_phase0         = 0.0
+
+<output1>
+file_type   = bin
+variable    = mhd_divb
+dt          = 0.05
+
+<output2>
+file_type   = bin
+variable    = mhd_w_bcc
+dt          = 0.05
+
+<output3>
+file_type   = hst
+data_format = %12.5e
+dt          = 0.1

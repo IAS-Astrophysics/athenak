@@ -1,0 +1,66 @@
+# AthenaK input file for dyn_radiation ADM beam transport around a Kerr black hole.
+
+<job>
+basename = dynrad_kerr_orbit_beam_adm
+
+<mesh>
+nghost = 2
+nx1 = 72
+x1min = -4.5
+x1max = 4.5
+ix1_bc = user
+ox1_bc = user
+nx2 = 72
+x2min = -4.5
+x2max = 4.5
+ix2_bc = user
+ox2_bc = user
+nx3 = 1
+x3min = -0.05
+x3max = 0.05
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 36
+nx2 = 36
+nx3 = 1
+
+<coord>
+general_rel = true
+a = -0.5
+excise = true
+dexcise = -1.0
+pexcise = -1.0
+
+<adm>
+dynamic = false
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim = -1
+tlim = 5.0
+
+<dyn_radiation>
+geometry = adm
+nlevel = 4
+rotate_geo = true
+angular_fluxes = true
+reconstruct = plm
+
+<problem>
+pgen_name = rad_kerr_orbit_beam
+user_srcs = true
+beam_amp = 8.0
+beam_sigma = 0.18
+orbit_r = 3.532088886237956
+source_phi = 0.0
+
+<output1>
+file_type = bin
+variable = rad_coord
+id = rad_xy
+dt = 5.0
+slice_x3 = 0.0

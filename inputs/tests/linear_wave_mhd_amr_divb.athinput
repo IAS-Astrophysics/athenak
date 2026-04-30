@@ -1,0 +1,96 @@
+# AthenaXXX input file for 3D MHD linear-wave AMR boundary divB checks
+
+<comment>
+problem   = mhd linear wave with fixed AMR box
+reference = targeted refinement-boundary divB regression
+
+<job>
+basename  = LinWaveAMRDivB
+
+<mesh>
+nghost    = 2
+nx1       = 64
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 64
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 64
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 16
+nx2       = 16
+nx3       = 16
+
+<mesh_refinement>
+refinement          = adaptive
+max_nmb_per_rank    = 512
+num_levels          = 2
+ncycle_check        = 1
+refinement_interval = 1
+
+<amr_criterion0>
+method    = user
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = 60
+tlim       = 0.3
+ndiag      = 1
+
+<mhd>
+eos         = ideal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.66666666667
+
+<problem>
+pgen_name                = linear_wave
+wave_flag                = 0
+amp                      = 1.0e-3
+dens                     = 1.0
+pgas                     = 0.6
+vx0                      = 0.0
+vy0                      = 0.0
+vz0                      = 0.0
+bx0                      = 1.0
+by0                      = 1.4142136
+bz0                      = 0.5
+along_x1                 = false
+along_x2                 = false
+along_x3                 = false
+use_amr_box_refinement   = true
+amr_box_level            = 1
+amr_x1min                = 0.25
+amr_x1max                = 0.75
+amr_x2min                = 0.25
+amr_x2max                = 0.75
+amr_x3min                = 0.25
+amr_x3max                = 0.75
+
+<output1>
+file_type   = bin
+variable    = mhd_divb
+dt          = 0.03
+
+<output2>
+file_type   = bin
+variable    = mhd_w_bcc
+dt          = 0.03
+
+<output3>
+file_type   = hst
+data_format = %12.5e
+dt          = 0.03

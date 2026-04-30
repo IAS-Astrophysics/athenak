@@ -1,0 +1,63 @@
+# AthenaK input file for ADM dyn_radiation static lapse-gradient test
+
+<job>
+basename = dynrad_lapse_gradient
+
+<mesh>
+nghost = 2
+nx1 = 64
+x1min = 0.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 4
+x2min = 0.0
+x2max = 1.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 32
+nx2 = 4
+nx3 = 1
+
+<coord>
+general_rel = true
+minkowski = true
+
+<adm>
+dynamic = false
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 0.01
+
+<dyn_radiation>
+geometry = adm
+nlevel = 3
+rotate_geo = false
+angular_fluxes = true
+reconstruct = plm
+
+<problem>
+pgen_name = rad_lapse_gradient
+erad = 1.0
+flux_fraction = 0.7
+lapse_amp = 0.1
+lapse_k = 6.283185307179586
+lapse_tolerance = 0.35
+
+<output1>
+file_type = bin
+variable = rad_coord
+id = rad_xy
+dt = 0.01
+slice_x3 = 0.5

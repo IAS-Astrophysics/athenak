@@ -1,0 +1,71 @@
+# AthenaK input file for legacy radiation gas-radiation equilibration.
+
+<job>
+basename = rad_equilibration
+
+<mesh>
+nghost = 2
+nx1 = 4
+x1min = 0.0
+x1max = 100.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 1
+x2min = 0.0
+x2max = 1.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 4
+nx2 = 1
+nx3 = 1
+
+<coord>
+general_rel = true
+minkowski = true
+
+<time>
+evolution = dynamic
+integrator = rk1
+cfl_number = 0.01
+nlim = -1
+tlim = 1.0
+
+<hydro>
+eos = ideal
+reconstruct = plm
+rsolver = hlle
+gamma = 1.6666666666666667
+
+<radiation>
+nlevel = 0
+rotate_geo = false
+angular_fluxes = false
+reconstruct = plm
+rad_source = true
+fixed_fluid = false
+affect_fluid = true
+power_opacity = false
+kappa_a = 1.0
+kappa_s = 0.0
+kappa_p = 0.0
+arad = 1.0
+
+<problem>
+pgen_name = rad_equilibration
+rho = 1.0
+tgas = 2.0
+trad = 1.0
+
+<output1>
+file_type = bin
+variable = rad_hydro_w_e
+id = relax
+dt = 0.1
+dcycle = 1

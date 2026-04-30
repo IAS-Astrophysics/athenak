@@ -1,0 +1,62 @@
+# AthenaK input file for legacy radiation crossing-beams transport
+
+<job>
+basename = rad_crossing_beams
+
+<mesh>
+nghost = 2
+nx1 = 96
+x1min = 0.0
+x1max = 1.6
+ix1_bc = user
+ox1_bc = user
+nx2 = 60
+x2min = 0.0
+x2max = 1.0
+ix2_bc = user
+ox2_bc = user
+nx3 = 1
+x3min = -0.5
+x3max = 0.5
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 96
+nx2 = 60
+nx3 = 1
+
+<coord>
+general_rel = true
+minkowski = true
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim = -1
+tlim = 0.02
+
+<radiation>
+nlevel = 2
+rotate_geo = true
+angular_fluxes = false
+reconstruct = plm
+
+<problem>
+pgen_name = rad_crossing_beams
+beam_amp = 1.0
+beam_sigma = 0.055
+beam_x0 = 0.12
+beam_y_lower = 0.15
+beam_y_upper = 0.85
+beam_x_cross = 0.75
+beam_y_cross = 0.5
+beam_flux_fraction = 0.995
+
+<output1>
+file_type = bin
+variable = rad_coord
+id = rad_xy
+dt = 0.02
+slice_x3 = 0.0
