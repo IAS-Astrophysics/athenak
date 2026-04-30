@@ -64,6 +64,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &hlld_fail_ = hlld_fail;
   bool extrema = false;
   bool &well_balanced_ = well_balanced;
+  int &source_order_ = source_order;
   if (recon_method_ == ReconstructionMethod::ppmx) {
     extrema = true;
   }
@@ -170,16 +171,16 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         break;
     }
     if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
-      switch (ng) {
+      switch (source_order_) {
         case 2:
           BalancePressureX1<1>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
                                adm, temp_, wl, wr);
           break;
-        case 3:
+        case 4:
           BalancePressureX1<2>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
                                adm, temp_, wl, wr);
           break;
-        case 4:
+        case 6:
           BalancePressureX1<3>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
                                adm, temp_, wl, wr);
       }
@@ -337,16 +338,16 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             break;
         }
         if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
-          switch (ng) {
+          switch (source_order_) {
             case 2:
               BalancePressureX2<1>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
                                    w0_, adm, temp_, wl_jp1, wr);
               break;
-            case 3:
+            case 4:
               BalancePressureX2<2>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
                                    w0_, adm, temp_, wl_jp1, wr);
               break;
-            case 4:
+            case 6:
               BalancePressureX2<3>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
                                    w0_, adm, temp_, wl_jp1, wr);
               break;
@@ -499,16 +500,16 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
             break;
         }
         if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
-          switch (ng) {
+          switch (source_order_) {
             case 2:
               BalancePressureX3<1>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
                                    w0_, adm, temp_, wl_kp1, wr);
               break;
-            case 3:
+            case 4:
               BalancePressureX3<2>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
                                    w0_, adm, temp_, wl_kp1, wr);
               break;
-            case 4:
+            case 6:
               BalancePressureX3<3>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
                                    w0_, adm, temp_, wl_kp1, wr);
               break;

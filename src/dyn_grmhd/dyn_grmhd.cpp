@@ -159,6 +159,40 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
               << std::endl;
   }
 
+  // Select the correct order for computing derivative order.
+  // ng = 2 -> 2nd order, ng = 3 -> 4th order, ng = 4 -> 6th order.
+  int max_order = 2*(pmy_pack->pmesh->mb_indcs.ng-1);
+  bool use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+  if (well_balanced && use_fofc) {
+    // If well balancing and FOFC are enabled at the same time, we reduce the max order
+    // to avoid issues with running out of ghost zones.
+    max_order -= 2;
+    if (max_order < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Too few ghost zones for well balancing + FOFC!"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  source_order = pin->GetOrAddInteger("mhd", "source_order", max_order);
+  if (source_order % 2 == 1 || source_order < 2) {
+    std::cout << " FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Invalid source_order requested. Must be even number > 1."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (source_order > max_order) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "source_order = " << source_order << " requested, but"
+              << " max_order = " << max_order << "."
+              << std::endl << "Possible solutions: "
+              << std::endl << "  1. Decrease source_order."
+              << std::endl << "  2. Increase number of ghost cells."
+              << std::endl << "  3. Only activate well balancing OR FOFC, not both."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
 
   // allocate memory for temperature
@@ -371,13 +405,13 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
-    const Real dt, DvceArray5D<Real> &rhs, int nghost) {
-  switch (nghost) {
+    const Real dt, DvceArray5D<Real> &rhs) {
+  switch (source_order) {
     case 2: AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
             break;
-    case 3: AddCoordTermsEOS<3>(prim, bcc, dt, rhs);
+    case 4: AddCoordTermsEOS<3>(prim, bcc, dt, rhs);
             break;
-    case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
+    case 6: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
             break;
   }
 }

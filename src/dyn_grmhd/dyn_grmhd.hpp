@@ -96,7 +96,7 @@ class DynGRMHD {
                                                int js, int je, int ks, int ke) = 0;
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                             const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
+                             const Real dt, DvceArray5D<Real> &u0) = 0;
 
   // DynGRMHD policies
   DynGRMHD_RSolver rsolver_method;
@@ -119,6 +119,7 @@ class DynGRMHD {
   Real dmp_M;               // threshold multiplier for discrete maximum principle.
   bool fixed_evolution;     // Disable mhd evolution
   bool well_balanced;       // Use a well-balanced scheme for hydrostatic equilibria
+  int source_order;         // Derivative order for source terms.
 
   bool monitor_failures;
 };
@@ -153,7 +154,7 @@ class DynGRMHDPS : public DynGRMHD {
                                                int js, int je, int ks, int ke);
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                             const Real dt, DvceArray5D<Real> &u0, int nghost);
+                             const Real dt, DvceArray5D<Real> &u0);
 
   template<int NGHOST>
   void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
