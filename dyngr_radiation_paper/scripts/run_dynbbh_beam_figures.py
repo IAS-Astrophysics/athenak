@@ -322,7 +322,7 @@ def plot_summary(rad_xy, rad_xz, adm_xy, tab_path: Path, trk_path: Path,
     x = column(names, data, "x1v", 2)
     rtt = column(names, data, "r00", -10)
     print(f"dynbbh beam lineout max Rtt={float(np.nanmax(rtt)):.6e}")
-    print(f"dynbbh beam lineout integral={float(np.trapezoid(rtt[np.argsort(x)], np.sort(x))):.6e}")
+    print(f"dynbbh beam lineout integral={float(np.trapz(rtt[np.argsort(x)], np.sort(x))):.6e}")
 
 
 def plot_time_series(rad_paths: list[Path], trk_path: Path, blocks, fig_dir: Path,

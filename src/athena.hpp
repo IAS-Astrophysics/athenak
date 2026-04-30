@@ -479,10 +479,10 @@ typedef array_type<Real,(NREDUCTION_VARIABLES)> GlobalSum;  // simplifies code b
 } // namespace array_sum
 
 namespace Kokkos { //reduction identity must be defined in Kokkos namespace
-template<>
-struct reduction_identity< array_sum::GlobalSum > {
-  KOKKOS_FORCEINLINE_FUNCTION static array_sum::GlobalSum sum() {
-    return array_sum::GlobalSum();
+template<class ScalarType, int N>
+struct reduction_identity< array_sum::array_type<ScalarType, N> > {
+  KOKKOS_FORCEINLINE_FUNCTION static array_sum::array_type<ScalarType, N> sum() {
+    return array_sum::array_type<ScalarType, N>();
   }
 };
 }

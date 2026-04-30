@@ -697,6 +697,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 //! Function requires appropriate solutions already stored in u0 and u1.
 
 void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
+  constexpr int nerror_reductions = 16;
+  using ErrorSum = array_sum::array_type<Real, nerror_reductions>;
   Real l1_err[16];
   Real linfty_err=0.0;
   int nvars=0,nprev=0;
@@ -723,9 +725,9 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
     const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    array_sum::GlobalSum sum_this_mb;
+    ErrorSum sum_this_mb;
     Kokkos::parallel_reduce("L1-err",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
+    KOKKOS_LAMBDA(const int &idx, ErrorSum &mb_sum, Real &max_err) {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -737,7 +739,7 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
       Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
       // conserved variables:
-      array_sum::GlobalSum evars;
+      ErrorSum evars;
       evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
       max_err = fmax(max_err, evars.the_array[IDN]);
       evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
@@ -752,13 +754,13 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
       }
 
       // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+      for (int n=nvars; n<nerror_reductions; ++n) {
         evars.the_array[n] = 0.0;
       }
 
       // sum into parallel reduce
       mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
+    }, Kokkos::Sum<ErrorSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
@@ -787,9 +789,9 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
     const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    array_sum::GlobalSum sum_this_mb;
+    ErrorSum sum_this_mb;
     Kokkos::parallel_reduce("L1-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
+    KOKKOS_LAMBDA(const int &idx, ErrorSum &mb_sum, Real &max_err) {
       // compute n,k,j,i indices of thread
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
@@ -801,7 +803,7 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
       Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
 
       // conserved variables:
-      array_sum::GlobalSum evars;
+      ErrorSum evars;
       evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
       max_err = fmax(max_err, evars.the_array[IDN]);
       evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
@@ -832,13 +834,13 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
       max_err = fmax(max_err, evars.the_array[IEN+3]);
 
       // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
+      for (int n=nvars; n<nerror_reductions; ++n) {
         evars.the_array[n] = 0.0;
       }
 
       // sum into parallel reduce
       mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
+    }, Kokkos::Sum<ErrorSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
 
     // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
