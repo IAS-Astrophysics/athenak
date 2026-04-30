@@ -86,7 +86,7 @@ private:
   bool wait_until_punc_are_close;
   bool use_stored_metric_drvts;
   int nhorizon; // Number of horizons
-  std::string flow;
+  std::string flow_function;
   int flowflag = 0;
   int fastflow_iter = 0;
 

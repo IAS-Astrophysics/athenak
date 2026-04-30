@@ -60,11 +60,18 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   // Flow parameters
   flow_iterations = pin->GetOrAddInteger("fastflow", "flow_iterations_" + n_str, 100);
   flow_alpha_beta_const = pin->GetOrAddReal("fastflow", "flow_alpha_beta_const_" + n_str, 1.0);
-  flow = pin->GetOrAddString("fastflow", "flow", "normal");
-  if (flow == "shear") {
+  flow_function = pin->GetOrAddString("fastflow", "flow", "standard");
+  if (flow_function.compare("expansion") == 0) {
     flowflag = 1;
-  } else if (flow == "normal") {
+  } else if (flow_function.compare("standard") == 0) {
     flowflag = 2;
+  } else if (flow_function.compare("shear") == 0) {
+    flowflag = 3;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Invalid flow function specified! (Options are expansion, standard, shear)" << std::endl;
+    exit(EXIT_FAILURE);
   }
 
   // Convergence parameters
@@ -943,6 +950,7 @@ void FastFlow::SurfaceIntegrals()
   auto &havepoint_ = havepoint;
   auto &lmax_ = lmax;
   auto &flowflag_ = flowflag;
+  printf("Using flow: %d\n", flowflag_);
 
   // **INTERPOLATED SPACETIME**
   auto &gi_ = g_interp;
@@ -1225,6 +1233,10 @@ void FastFlow::SurfaceIntegrals()
       }
 
       if (flowflag_ == 1) {
+        rho_.d_view(p) = H;
+      } else if (flowflag_ == 2) {
+        rho_.d_view(p) = H * u;
+      } else {
         // Compute the shear for the flow function.
         Real sigma_para = (
           ginv(0,0) + ginv(1,1) + ginv(2,2)
@@ -1244,10 +1256,6 @@ void FastFlow::SurfaceIntegrals()
 
         Real sigma = 2 * SQR(rp) * (1 / sigma_para);
         rho_.d_view(p) = H * u * sigma;
-      } else if (flowflag_ == 2) {
-        rho_.d_view(p) = H * u;
-      } else {
-        rho_.d_view(p) = H;
       }
       
       // ---------------
