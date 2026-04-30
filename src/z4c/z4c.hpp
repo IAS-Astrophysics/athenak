@@ -183,6 +183,10 @@ class Z4c {
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
+    // Spatial finite-difference order for Z4c derivatives
+    int spatial_order;
+    // Internal finite-difference stencil selector: 2, 3, 4 -> 2nd, 4th, 6th order
+    int fd_stencil;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
 
