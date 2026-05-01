@@ -39,7 +39,7 @@ struct WBState {
 //! reconstruction in any dimension by passing in the appropriate q_im2,...,q _ip2.
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
+bool PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     const Real &alpm1, const Real &alp0, const Real &alpp1, Real gddm1[NSPMETRIC],
     Real gdd0[NSPMETRIC], Real gddp1[NSPMETRIC], const Real &n0, const Real &P0,
     const Real &T0, Real Y[MAX_SPECIES], Real &pl_ip1, Real &pr_i) {
@@ -60,9 +60,10 @@ void PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos
          + 2.0*guu0[S13]*(gddm1[S13] - gdd0[S13]) + guu0[S22]*(gddm1[S22] - gdd0[S22])
          + 2.0*guu0[S23]*(gddm1[S23] - gdd0[S23]) + guu0[S33]*(gddm1[S33] - gdd0[S33]);
   Real pe = (alp0*sdetg0*P0*(1.0 + 0.25*q0) - 0.5*sdetg0*e0*(alpm1 - alp0))/(alp12*sdetg12);
-  /*if (pe <= 0.0) {
-    pe = P0;
-  }*/
+  if (pe <= 0.0) {
+    pr_i = pl_ip1 = P0;
+    return false;
+  }
   pr_i = pe;
 
   // Left side of i+1/2
@@ -75,10 +76,13 @@ void PressureEquilibrium(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos
          + 2.0*guu0[S13]*(gddp1[S13] - gdd0[S13]) + guu0[S22]*(gddp1[S22] - gdd0[S22])
          + 2.0*guu0[S23]*(gddp1[S23] - gdd0[S23]) + guu0[S33]*(gddp1[S33] - gdd0[S33]);
   pe = (alp0*sdetg0*P0*(1.0 + 0.25*q0) - 0.5*sdetg0*e0*(alpp1 - alp0))/(alp12*sdetg12);
-  /*if (pe <= 0.0) {
-    pe = P0;
-  }*/
+  if (pe <= 0.0) {
+    pr_i = pl_ip1 = P0;
+    return false;
+  }
   pl_ip1 = pe;
+
+  return true;
 }
 
 //---------------------------------------------------------------------------------------
@@ -172,22 +176,23 @@ bool PressureEquilibriumExtrap(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PressureEquilibriumX1
+//! \fn void BalancePressureDCX1
 //! \brief inline function for well-balancing pressure in the x1-direction
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void PressureEquilibriumX1(TeamMember_t const &member, 
+void BalancePressureDCX1(TeamMember_t const &member, 
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     const DvceArray5D<Real> &temp, ScrArray1D<Real> &pl, ScrArray1D<Real> &pr) {
+     const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
     Real &alpp1 = adm.alpha(m, k, j, i+1);
     Real &alpm1 = adm.alpha(m, k, j, i-1);
     Real &rho0 = q(m, IDN, k, j, i);
-    Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
+    Real n0 = rho0/mb;
     Real &P0   = q(m, IPR, k, j, i);
     Real &T0   = temp(m, 0, k, j, i);
     Real Y[MAX_SPECIES];
@@ -204,28 +209,34 @@ void PressureEquilibriumX1(TeamMember_t const &member,
                              adm.g_dd(m, 0, 2, k, j, i-1), adm.g_dd(m, 1, 1, k, j, i-1),
                              adm.g_dd(m, 1, 2, k, j, i-1), adm.g_dd(m, 2, 2, k, j, i-1)};
 
-    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, T0, Y,
-                        pl(i+1), pr(i));
+    Real pl_ip1, pr_i;
+    bool balanced = PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0,
+                                        P0, T0, Y, pl_ip1, pr_i);
+    if (balanced) {
+      ql(IPR,i+1) = pl_ip1;
+      qr(IPR,i) = pr_i;
+    }
   });
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PressureEquilibriumX2
+//! \fn void BalancePressureDCX2
 //! \brief inline function for well-balancing pressure in the x2-direction
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void PressureEquilibriumX2(TeamMember_t const &member, 
+void BalancePressureDCX2(TeamMember_t const &member, 
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     const DvceArray5D<Real> &temp, ScrArray1D<Real> &pl_jp1, ScrArray1D<Real> &pr_j) {
+     const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
     Real &alpp1 = adm.alpha(m, k, j+1, i);
     Real &alpm1 = adm.alpha(m, k, j-1, i);
     Real &rho0 = q(m, IDN, k, j, i);
-    Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
+    Real n0 = rho0/mb;
     Real &P0   = q(m, IPR, k, j, i);
     Real &T0   = temp(m, 0, k, j, i);
     Real Y[MAX_SPECIES];
@@ -242,28 +253,34 @@ void PressureEquilibriumX2(TeamMember_t const &member,
                              adm.g_dd(m, 0, 2, k, j-1, i), adm.g_dd(m, 1, 1, k, j-1, i),
                              adm.g_dd(m, 1, 2, k, j-1, i), adm.g_dd(m, 2, 2, k, j-1, i)};
 
-    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, T0, Y,
-                        pl_jp1(i), pr_j(i));
+    Real pl_jp1, pr_j;
+    bool balanced = PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0,
+                                        P0, T0, Y, pl_jp1, pr_j);
+    if (balanced) {
+      ql_jp1(IPR,i) = pl_jp1;
+      qr_j(IPR,i) = pr_j;
+    }
   });
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void PressureEquilibriumX3
+//! \fn void BalancePressureDCX3
 //! \brief inline function for well-balancing pressure in the x3-direction
 //! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
-void PressureEquilibriumX3(TeamMember_t const &member, 
+void BalancePressureDCX3(TeamMember_t const &member, 
      const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     const DvceArray5D<Real> &temp, ScrArray1D<Real> &pl_kp1, ScrArray1D<Real> &pr_k) {
+     const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
   par_for_inner(member, il, iu, [&](const int i) {
     Real &alp0 = adm.alpha(m, k, j, i);
     Real &alpp1 = adm.alpha(m, k+1, j, i);
     Real &alpm1 = adm.alpha(m, k-1, j, i);
     Real &rho0 = q(m, IDN, k, j, i);
-    Real n0 = rho0/eos.ps.GetEOS().GetBaryonMass();
+    Real n0 = rho0/mb;
     Real &P0   = q(m, IPR, k, j, i);
     Real &T0   = temp(m, 0, k, j, i);
     Real Y[MAX_SPECIES];
@@ -280,8 +297,13 @@ void PressureEquilibriumX3(TeamMember_t const &member,
                              adm.g_dd(m, 0, 2, k-1, j, i), adm.g_dd(m, 1, 1, k-1, j, i),
                              adm.g_dd(m, 1, 2, k-1, j, i), adm.g_dd(m, 2, 2, k-1, j, i)};
 
-    PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0, P0, T0, Y,
-                        pl_kp1(i), pr_k(i));
+    Real pl_kp1, pr_k;
+    bool balanced = PressureEquilibrium(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, n0,
+                                        P0, T0, Y, pl_kp1, pr_k);
+    if (balanced) {
+      ql_kp1(IPR, i) = pl_kp1;
+      qr_k(IPR, i) = pr_k;
+    }
   });
 }
 
