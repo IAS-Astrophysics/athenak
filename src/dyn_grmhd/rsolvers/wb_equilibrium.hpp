@@ -103,7 +103,7 @@ bool PressureEquilibriumExtrap(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy
   };
   auto CalcPEq = [](const WBState& v, const Real& dalp, const Real& q,
                     const Real& sdetg, const Real& e) -> Real {
-    return v.alp*sdetg*v.P*(1.0 + 0.5*q) - sdetg*e*dalp;
+    return sdetg*(v.alp*sdetg*v.P*(1.0 + 0.5*q) - e*dalp);
   };
 
   // Right side of i-1/2
@@ -296,12 +296,12 @@ void BalancePressureX1(TeamMember_t const &member,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
      const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
   par_for_inner(member, il, iu, [&](const int i) {
     const Real &alp0 = adm.alpha(m, k, j, i);
     const Real &alpp1 = adm.alpha(m, k, j, i+1);
     const Real &alpm1 = adm.alpha(m, k, j, i-1);
 
-    const Real mb = eos.ps.GetEOS().GetBaryonMass();
     const Real n0 = q(m, IDN, k, j, i)/mb;
     const Real nm1 = q(m, IDN, k, j, i-1)/mb;
     const Real np1 = q(m, IDN, k, j, i+1)/mb;
@@ -349,10 +349,6 @@ void BalancePressureX1(TeamMember_t const &member,
                              HalfDifferenceInterface<width,0, 1>(adm.g_dd,m,2,2,k,j,i)};
     bool balanced = PressureEquilibriumExtrap(eos, vm1, v0, vp1, dalpm, dalpp, dgddm,
                                               dgddp, p_im1, pr_i, pl_ip1, p_ip1);
-    /*bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
-                              gddp1, nm1, n0, np1,
-                              Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                              p_im1, pr_i, pl_ip1, p_ip1);*/
     if (balanced) {
       PLM(q(m,IPR,k,j,i-1)-p_im1, 0.0, q(m,IPR,k,j,i+1)-p_ip1, ql(IPR,i+1), qr(IPR,i));
       ql(IPR,i+1) += pl_ip1;
@@ -372,12 +368,12 @@ void BalancePressureX2(TeamMember_t const &member,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
      const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
   par_for_inner(member, il, iu, [&](const int i) {
     const Real &alp0 = adm.alpha(m, k, j, i);
     const Real &alpp1 = adm.alpha(m, k, j+1, i);
     const Real &alpm1 = adm.alpha(m, k, j-1, i);
 
-    const Real mb = eos.ps.GetEOS().GetBaryonMass();
     const Real n0 = q(m, IDN, k, j, i)/mb;
     const Real nm1 = q(m, IDN, k, j-1, i)/mb;
     const Real np1 = q(m, IDN, k, j+1, i)/mb;
@@ -396,6 +392,7 @@ void BalancePressureX2(TeamMember_t const &member,
       Yp1[s] = q(m, IYF+s, k, j+1, i);
       Ym1[s] = q(m, IYF+s, k, j-1, i);
     }
+    // Metric indices are permuted to try to reduce floating-point symmetry errors.
     Real gdd0[NSPMETRIC] = {adm.g_dd(m, 1, 1, k, j, i), adm.g_dd(m, 1, 2, k, j, i),
                             adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 2, 2, k, j, i),
                             adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 0, 0, k, j, i)};
@@ -425,10 +422,6 @@ void BalancePressureX2(TeamMember_t const &member,
                              HalfDifferenceInterface<width,1, 1>(adm.g_dd,m,0,0,k,j,i)};
     bool balanced = PressureEquilibriumExtrap(eos, vm1, v0, vp1, dalpm, dalpp, dgddm,
                                               dgddp, p_jm1, pr_j, pl_jp1, p_jp1);
-    /*bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
-                              gddp1, nm1, n0, np1,
-                              Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                              p_jm1, pr_j, pl_jp1, p_jp1);*/
     if (balanced) {
       PLM(q(m,IPR,k,j-1,i)-p_jm1, 0.0, q(m,IPR,k,j+1,i)-p_jp1, ql_jp1(IPR,i), qr_j(IPR,i));
       ql_jp1(IPR,i) += pl_jp1;
@@ -448,12 +441,12 @@ void BalancePressureX3(TeamMember_t const &member,
      const int m, const int k, const int j, const int il, const int iu,
      const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
      const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
+  const Real mb = eos.ps.GetEOS().GetBaryonMass();
   par_for_inner(member, il, iu, [&](const int i) {
     const Real &alp0 = adm.alpha(m, k, j, i);
     const Real &alpp1 = adm.alpha(m, k+1, j, i);
     const Real &alpm1 = adm.alpha(m, k-1, j, i);
 
-    const Real mb = eos.ps.GetEOS().GetBaryonMass();
     const Real n0 = q(m, IDN, k, j, i)/mb;
     const Real nm1 = q(m, IDN, k-1, j, i)/mb;
     const Real np1 = q(m, IDN, k+1, j, i)/mb;
@@ -472,6 +465,7 @@ void BalancePressureX3(TeamMember_t const &member,
       Yp1[s] = q(m, IYF+s, k+1, j, i);
       Ym1[s] = q(m, IYF+s, k-1, j, i);
     }
+    // Metric indices are permuted to try to reduce floating-point symmetry errors.
     Real gdd0[NSPMETRIC] = {adm.g_dd(m, 2, 2, k, j, i), adm.g_dd(m, 0, 2, k, j, i),
                             adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 0, 0, k, j, i),
                             adm.g_dd(m, 0, 1, k, j, i), adm.g_dd(m, 1, 1, k, j, i)};
@@ -501,10 +495,6 @@ void BalancePressureX3(TeamMember_t const &member,
                              HalfDifferenceInterface<width,2, 1>(adm.g_dd,m,1,1,k,j,i)};
     bool balanced = PressureEquilibriumExtrap(eos, vm1, v0, vp1, dalpm, dalpp, dgddm,
                                               dgddp, p_km1, pr_k, pl_kp1, p_kp1);
-    /*bool balanced = PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0,
-                              gddp1, nm1, n0, np1,
-                              Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                              p_km1, pr_k, pl_kp1, p_kp1);*/
     if (balanced) {
       PLM(q(m,IPR,k-1,j,i)-p_km1, 0.0, q(m,IPR,k+1,j,i)-p_kp1, ql_kp1(IPR,i), qr_k(IPR,i));
       ql_kp1(IPR,i) += pl_kp1;
@@ -512,198 +502,6 @@ void BalancePressureX3(TeamMember_t const &member,
     }
   });
 }
-
-
-//----------------------------------------------------------------------------------------
-//! \fn PiecewiseLinearWBX1()
-//! \brief Wrapper function for well-balanced PLM reconstruction in x1-direction.
-//! This function should be called over [is-1,ie+1] to get BOTH L/R states over [is,ie]
-template<class EOSPolicy, class ErrorPolicy>
-KOKKOS_INLINE_FUNCTION
-void PiecewiseLinearWBX1(TeamMember_t const &member,
-     const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
-     const int m, const int k, const int j, const int il, const int iu,
-     const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql, ScrArray2D<Real> &qr) {
-  int nvar = q.extent_int(1);
-  for (int n = 0; n <nvar; n++) {
-    if (n == IPR) {
-      par_for_inner(member, il, iu, [&](const int i) {
-        const Real &alp0 = adm.alpha(m, k, j, i);
-        const Real &alpp1 = adm.alpha(m, k, j, i+1);
-        const Real &alpm1 = adm.alpha(m, k, j, i-1);
-
-        const Real mb = eos.ps.GetEOS().GetBaryonMass();
-        const Real n0 = q(m, IDN, k, j, i)/mb;
-        const Real nm1 = q(m, IDN, k, j, i-1)/mb;
-        const Real np1 = q(m, IDN, k, j, i+1)/mb;
-
-        const Real &P0 = q(m, IPR, k, j, i);
-        const Real &Pm1 = q(m, IPR, k, j, i-1);
-        const Real &Pp1 = q(m, IPR, k, j, i+1);
-        
-        const Real &T0 = temp(m, 0, k, j, i);
-        const Real &Tm1 = temp(m, 0, k, j, i-1);
-        const Real &Tp1 = temp(m, 0, k, j, i+1);
-
-        Real Y0[MAX_SPECIES], Ym1[MAX_SPECIES], Yp1[MAX_SPECIES];
-        for (int s = 0; s < nscal; s++) {
-          Y0[s] = q(m, IYF+s, k, j, i);
-          Yp1[s] = q(m, IYF+s, k, j, i+1);
-          Ym1[s] = q(m, IYF+s, k, j, i-1);
-        }
-        Real gdd0[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                                adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                                adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)};
-        Real gddp1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i+1), adm.g_dd(m, 0, 1, k, j, i+1),
-                                 adm.g_dd(m, 0, 2, k, j, i+1), adm.g_dd(m, 1, 1, k, j, i+1),
-                                 adm.g_dd(m, 1, 2, k, j, i+1), adm.g_dd(m, 2, 2, k, j, i+1)};
-        Real gddm1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i-1), adm.g_dd(m, 0, 1, k, j, i-1),
-                                 adm.g_dd(m, 0, 2, k, j, i-1), adm.g_dd(m, 1, 1, k, j, i-1),
-                                 adm.g_dd(m, 1, 2, k, j, i-1), adm.g_dd(m, 2, 2, k, j, i-1)};
-        Real p_im1, pr_i, pl_ip1, p_ip1;
-        PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, nm1, n0, np1,
-                                  Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                                  p_im1, pr_i, pl_ip1, p_ip1);
-        PLM(q(m,n,k,j,i-1)-p_im1, 0.0, q(m,n,k,j,i+1)-p_ip1, ql(n,i+1), qr(n,i));
-        ql(n,i+1) += pl_ip1;
-        qr(n,i) += pr_i;
-      });
-    } else {
-      par_for_inner(member, il, iu, [&](const int i) {
-        PLM(q(m,n,k,j,i-1), q(m,n,k,j,i), q(m,n,k,j,i+1), ql(n,i+1), qr(n,i));
-      });
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn PiecewiseLinearWBX2()
-//! \brief Wrapper function for well-balanced PLM reconstruction in x2-direction.
-//! This function should be called over [js-1,je+1] to get BOTH L/R states over [js,je]
-template<class EOSPolicy, class ErrorPolicy>
-KOKKOS_INLINE_FUNCTION
-void PiecewiseLinearWBX2(TeamMember_t const &member,
-     const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
-     const int m, const int k, const int j, const int il, const int iu,
-     const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql_jp1, ScrArray2D<Real> &qr_j) {
-  int nvar = q.extent_int(1);
-  for (int n = 0; n <nvar; n++) {
-    if (n == IPR) {
-      par_for_inner(member, il, iu, [&](const int i) {
-        const Real &alp0 = adm.alpha(m, k, j, i);
-        const Real &alpp1 = adm.alpha(m, k, j+1, i);
-        const Real &alpm1 = adm.alpha(m, k, j-1, i);
-
-        const Real mb = eos.ps.GetEOS().GetBaryonMass();
-        const Real n0 = q(m, IDN, k, j, i)/mb;
-        const Real nm1 = q(m, IDN, k, j-1, i)/mb;
-        const Real np1 = q(m, IDN, k, j+1, i)/mb;
-
-        const Real &P0 = q(m, IPR, k, j, i);
-        const Real &Pm1 = q(m, IPR, k, j-1, i);
-        const Real &Pp1 = q(m, IPR, k, j+1, i);
-        
-        const Real &T0 = temp(m, 0, k, j, i);
-        const Real &Tm1 = temp(m, 0, k, j-1, i);
-        const Real &Tp1 = temp(m, 0, k, j+1, i);
-
-        Real Y0[MAX_SPECIES], Ym1[MAX_SPECIES], Yp1[MAX_SPECIES];
-        for (int s = 0; s < nscal; s++) {
-          Y0[s] = q(m, IYF+s, k, j, i);
-          Yp1[s] = q(m, IYF+s, k, j+1, i);
-          Ym1[s] = q(m, IYF+s, k, j-1, i);
-        }
-        Real gdd0[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                                adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                                adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)};
-        Real gddp1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j+1, i), adm.g_dd(m, 0, 1, k, j+1, i),
-                                 adm.g_dd(m, 0, 2, k, j+1, i), adm.g_dd(m, 1, 1, k, j+1, i),
-                                 adm.g_dd(m, 1, 2, k, j+1, i), adm.g_dd(m, 2, 2, k, j+1, i)};
-        Real gddm1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j-1, i), adm.g_dd(m, 0, 1, k, j-1, i),
-                                 adm.g_dd(m, 0, 2, k, j-1, i), adm.g_dd(m, 1, 1, k, j-1, i),
-                                 adm.g_dd(m, 1, 2, k, j-1, i), adm.g_dd(m, 2, 2, k, j-1, i)};
-        Real p_jm1, pr_j, pl_jp1, p_jp1;
-        PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, nm1, n0, np1,
-                                  Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                                  p_jm1, pr_j, pl_jp1, p_jp1);
-        PLM(q(m,n,k,j-1,i)-p_jm1, 0.0, q(m,n,k,j+1,i)-p_jp1, ql_jp1(n,i), qr_j(n,i));
-        ql_jp1(n,i) += pl_jp1;
-        qr_j(n,i) += pr_j;
-      });
-    } else {
-      par_for_inner(member, il, iu, [&](const int i) {
-        PLM(q(m,n,k,j-1,i), q(m,n,k,j,i), q(m,n,k,j+1,i), ql_jp1(n,i), qr_j(n,i));
-      });
-    }
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn PiecewiseLinearWBX3()
-//! \brief Wrapper function for well-balanced PLM reconstruction in x3-direction.
-//! This function should be called over [ks-1,ke+1] to get BOTH L/R states over [js,je]
-template<class EOSPolicy, class ErrorPolicy>
-KOKKOS_INLINE_FUNCTION
-void PiecewiseLinearWBX3(TeamMember_t const &member,
-     const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos, const int nscal,
-     const int m, const int k, const int j, const int il, const int iu,
-     const DvceArray5D<Real> &q, const adm::ADM::ADM_vars& adm,
-     const DvceArray5D<Real> &temp, ScrArray2D<Real> &ql_kp1, ScrArray2D<Real> &qr_k) {
-  int nvar = q.extent_int(1);
-  for (int n = 0; n <nvar; n++) {
-    if (n == IPR) {
-      par_for_inner(member, il, iu, [&](const int i) {
-        const Real &alp0 = adm.alpha(m, k, j, i);
-        const Real &alpp1 = adm.alpha(m, k+1, j, i);
-        const Real &alpm1 = adm.alpha(m, k-1, j, i);
-
-        const Real mb = eos.ps.GetEOS().GetBaryonMass();
-        const Real n0 = q(m, IDN, k, j, i)/mb;
-        const Real nm1 = q(m, IDN, k-1, j, i)/mb;
-        const Real np1 = q(m, IDN, k+1, j, i)/mb;
-
-        const Real &P0 = q(m, IPR, k, j, i);
-        const Real &Pm1 = q(m, IPR, k-1, j, i);
-        const Real &Pp1 = q(m, IPR, k+1, j, i);
-        
-        const Real &T0 = temp(m, 0, k, j, i);
-        const Real &Tm1 = temp(m, 0, k-1, j, i);
-        const Real &Tp1 = temp(m, 0, k+1, j, i);
-
-        Real Y0[MAX_SPECIES], Ym1[MAX_SPECIES], Yp1[MAX_SPECIES];
-        for (int s = 0; s < nscal; s++) {
-          Y0[s] = q(m, IYF+s, k, j, i);
-          Yp1[s] = q(m, IYF+s, k+1, j, i);
-          Ym1[s] = q(m, IYF+s, k-1, j, i);
-        }
-        Real gdd0[NSPMETRIC] = {adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                                adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                                adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)};
-        Real gddp1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k+1, j, i), adm.g_dd(m, 0, 1, k+1, j, i),
-                                 adm.g_dd(m, 0, 2, k+1, j, i), adm.g_dd(m, 1, 1, k+1, j, i),
-                                 adm.g_dd(m, 1, 2, k+1, j, i), adm.g_dd(m, 2, 2, k+1, j, i)};
-        Real gddm1[NSPMETRIC] = {adm.g_dd(m, 0, 0, k-1, j, i), adm.g_dd(m, 0, 1, k-1, j, i),
-                                 adm.g_dd(m, 0, 2, k-1, j, i), adm.g_dd(m, 1, 1, k-1, j, i),
-                                 adm.g_dd(m, 1, 2, k-1, j, i), adm.g_dd(m, 2, 2, k-1, j, i)};
-        Real p_km1, pr_k, pl_kp1, p_kp1;
-        PressureEquilibriumExtrap(eos, alpm1, alp0, alpp1, gddm1, gdd0, gddp1, nm1, n0, np1,
-                                  Pm1, P0, Pp1, Tm1, T0, Tp1, Ym1, Y0, Yp1,
-                                  p_km1, pr_k, pl_kp1, p_kp1);
-        PLM(q(m,n,k-1,j,i)-p_km1, 0.0, q(m,n,k+1,j,i)-p_kp1, ql_kp1(n,i), qr_k(n,i));
-        ql_kp1(n,i) += pl_kp1;
-        qr_k(n,i) += pr_k;
-      });
-    } else {
-      par_for_inner(member, il, iu, [&](const int i) {
-        PLM(q(m,n,k-1,j,i), q(m,n,k,j,i), q(m,n,k+1,j,i), ql_kp1(n,i), qr_k(n,i));
-      });
-    }
-  }
-}
-
-
 
 } // namespace dyngr
 
