@@ -674,6 +674,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
       const Real mb_                           = eos.GetBaryonMass();
       const Primitive::UnitSystem code_units_ = eos.GetCodeUnitSystem();
       const Real beta_dt_                      = beta_dt;
+      auto &bcc0_ = pmy_pack->pmhd->bcc0;
       par_for(
           "chiral_gamma_m", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -693,11 +694,49 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                                      / (3.0 * M_PI * mu_e)
                                      * Kokkos::log(1.0/alpha_em);
             const Real Gamma_m = Gamma_m_MeV / (hbar_MeVs * code_units_.time);
-            // Implicit update: U^{n+1} = U^* / (1 + dt_eff * alpha * Gamma_m).
-            // Unconditionally stable for any Gamma_m > 0; also fixes the missing
-            // beta_dt factor that the explicit form would have required.
-            umhd0_(m, IYF + 1, k, j, i) /=
-                1.0 + beta_dt_ * adm.alpha(m, k, j, i) * Gamma_m;
+
+            // E·B chiral anomaly source: dn5/dt = (2*alpha_em/pi) * xi * b^2
+            const Real g11 = adm.g_dd(m,0,0,k,j,i), g12 = adm.g_dd(m,0,1,k,j,i);
+            const Real g13 = adm.g_dd(m,0,2,k,j,i), g22 = adm.g_dd(m,1,1,k,j,i);
+            const Real g23 = adm.g_dd(m,1,2,k,j,i), g33 = adm.g_dd(m,2,2,k,j,i);
+            const Real detg    = adm::SpatialDet(g11,g12,g13,g22,g23,g33);
+            const Real sqrtgam = Kokkos::sqrt(detg);
+            const Real ivol    = 1.0/sqrtgam;
+            const Real alpha   = adm.alpha(m, k, j, i);
+
+            const Real ux = w0_(m,IVX,k,j,i);
+            const Real uy = w0_(m,IVY,k,j,i);
+            const Real uz = w0_(m,IVZ,k,j,i);
+            const Real iW2 = 1.0/(1.0 + g11*ux*ux + 2.0*g12*ux*uy
+                                  + 2.0*g13*ux*uz + g22*uy*uy
+                                  + 2.0*g23*uy*uz + g33*uz*uz);
+
+            // densitized B: cB^i = sqrt(gamma)*B^i (stored in bcc0_)
+            const Real Bx = bcc0_(m,IBX,k,j,i);
+            const Real By = bcc0_(m,IBY,k,j,i);
+            const Real Bz = bcc0_(m,IBZ,k,j,i);
+
+            // physical covariant B: Bd_i = g_ij B^j
+            const Real Bd1 = (g11*Bx + g12*By + g13*Bz)*ivol;
+            const Real Bd2 = (g12*Bx + g22*By + g23*Bz)*ivol;
+            const Real Bd3 = (g13*Bx + g23*By + g33*Bz)*ivol;
+
+            const Real Bsq = (Bx*Bd1 + By*Bd2 + Bz*Bd3)*ivol; // g_ij B^i B^j
+            const Real Bv  = Bd1*ux + Bd2*uy + Bd3*uz;         // W g_ij B^i v^j
+            const Real bsq = (Bsq + Bv*Bv)*iW2;                // fluid-frame b^2
+
+            // dynamo coefficient xi (same formula as mhd_corner_e.cpp)
+            const Real xi_coeff = -(4.0/M_PI) * SQR(alpha_em) * log(1.0/alpha_em);
+            const Real Y5 = w0_(m, IYF+1, k, j, i);
+            const Real Ye = w0_(m, IYF,   k, j, i);
+            const Real xi = (Ye > 0.0) ? xi_coeff*cbrt(Y5/Ye) : 0.0;
+
+            // E·B explicit source; Gamma_m implicit damping — one combined step
+            const Real eb_src = - beta_dt_ * alpha * sqrtgam * mb_
+                                * (2.0*alpha_em/M_PI) * xi * bsq;
+            umhd0_(m, IYF + 1, k, j, i) =
+                (umhd0_(m, IYF + 1, k, j, i) + eb_src)
+                / (1.0 + beta_dt_ * alpha * Gamma_m);
           });
     }
   }
