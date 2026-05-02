@@ -107,7 +107,7 @@ bool PressureEquilibriumExtrap(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy
   };
   auto CalcPEq = [](const WBState& v, const Real& dalp, const Real& q,
                     const Real& sdetg, const Real& e) -> Real {
-    return sdetg*(v.alp*sdetg*v.P*(1.0 + 0.5*q) - e*dalp);
+    return sdetg*(v.alp*v.P*(1.0 + 0.5*q) - e*dalp);
   };
 
   // Right side of i-1/2
