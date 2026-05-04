@@ -1,7 +1,6 @@
 import argparse
 import glob
 import os
-import re
 import sys
 from multiprocessing import Pool
 from pathlib import Path
@@ -11,7 +10,33 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 
-DYNBBH_CPP = "/home/hzhu/athenak/src/pgen/dynbbh.cpp"
+def find_athenak_root():
+    candidates = [Path(__file__).resolve().parent.parent, Path.cwd(), *Path.cwd().parents]
+    for base in candidates:
+        direct = base / "src" / "pgen" / "dynbbh.cpp"
+        nested = base / "athenak" / "src" / "pgen" / "dynbbh.cpp"
+        if direct.exists():
+            return base
+        if nested.exists():
+            return base / "athenak"
+    return Path(__file__).resolve().parent.parent
+
+
+ATHENAK_ROOT = find_athenak_root()
+DYNBBH_CPP = ATHENAK_ROOT / "src" / "pgen" / "dynbbh.cpp"
+METRIC_KERNEL_SOURCE = None
+
+
+def parse_bool(value, default=False):
+    if value is None:
+        return default
+    text = str(value).strip().strip('"').strip("'").lower()
+    if text in {"true", "t", "yes", "y", "1", "on"}:
+        return True
+    if text in {"false", "f", "no", "n", "0", "off"}:
+        return False
+    return default
+
 
 def get_rot_matrix(tilt_angle_y=0.0, tilt_angle_x=0.0):
     cx, sx = np.cos(tilt_angle_x), np.sin(tilt_angle_x)
@@ -30,17 +55,96 @@ def get_rot_matrix(tilt_angle_y=0.0, tilt_angle_x=0.0):
     return ry @ rx
 
 
+def disk_axis_from_tilt_angle(tilt_angle_deg):
+    psi = np.deg2rad(tilt_angle_deg)
+    return np.array([np.sin(psi), 0.0, np.cos(psi)], dtype=np.float64)
+
+
+def normalize_vector(vec, fallback=None):
+    arr = np.asarray(vec, dtype=np.float64)
+    norm = np.linalg.norm(arr, axis=-1, keepdims=True)
+    out = np.divide(arr, norm, out=np.zeros_like(arr), where=norm > 0.0)
+    bad = (~np.isfinite(out).all(axis=-1)) | (norm[..., 0] <= 0.0)
+    if np.any(bad):
+        if fallback is None:
+            fallback_arr = np.zeros_like(arr)
+            fallback_arr[..., 2] = 1.0
+        else:
+            fallback_arr = np.broadcast_to(np.asarray(fallback, dtype=np.float64), arr.shape)
+        out = np.where(bad[..., None], fallback_arr, out)
+    return out
+
+
+def rotation_matrices_from_axes(axes):
+    z_axis = normalize_vector(axes)
+    ref = np.zeros_like(z_axis)
+    ref[..., 1] = 1.0
+    x_axis = np.cross(ref, z_axis)
+    x_norm = np.linalg.norm(x_axis, axis=-1)
+
+    fallback_ref = np.zeros_like(z_axis)
+    fallback_ref[..., 0] = 1.0
+    fallback_x = np.cross(fallback_ref, z_axis)
+    x_axis = np.where(np.expand_dims(x_norm <= 1.0e-12, axis=-1), fallback_x, x_axis)
+    x_axis = normalize_vector(x_axis)
+    y_axis = normalize_vector(np.cross(z_axis, x_axis))
+    return np.stack((x_axis, y_axis, z_axis), axis=-2)
+
+
+def rotation_matrix_from_axis(axis):
+    return rotation_matrices_from_axes(np.asarray(axis, dtype=np.float64))[()]
+
+
+def euler_zyx_from_rotation_matrix(rot):
+    rot = np.asarray(rot, dtype=np.float64)
+    pitch = np.arcsin(np.clip(-rot[..., 2, 0], -1.0, 1.0))
+    cp = np.cos(pitch)
+    regular = np.abs(cp) > 1.0e-12
+
+    yaw = np.empty_like(pitch)
+    roll = np.empty_like(pitch)
+    yaw_regular = np.arctan2(rot[..., 1, 0], rot[..., 0, 0])
+    roll_regular = np.arctan2(rot[..., 2, 1], rot[..., 2, 2])
+    yaw_gimbal = np.arctan2(-rot[..., 0, 1], rot[..., 1, 1])
+
+    yaw[...] = np.where(regular, yaw_regular, yaw_gimbal)
+    roll[...] = np.where(regular, roll_regular, 0.0)
+    return np.stack((yaw, pitch, roll), axis=-1)
+
+
+def tilt_is_dynamical(tilt_angle_deg, margin_deg=1.0):
+    angle = abs(float(tilt_angle_deg)) % 360.0
+    dist_0 = min(angle, 360.0 - angle)
+    dist_180 = abs(angle - 180.0)
+    return min(dist_0, dist_180) > margin_deg
+
+
 def parse_athena_parfile(parfile_path):
+    parfile_path = Path(parfile_path)
     values = {}
+    raw_values = {}
     for raw_line in Path(parfile_path).read_text().splitlines():
         line = raw_line.split("#", 1)[0].strip()
         if not line or line.startswith("<") or "=" not in line:
             continue
         key, value = [part.strip() for part in line.split("=", 1)]
+        raw_values[key] = value.strip().strip('"').strip("'")
         try:
             values[key] = float(value)
         except ValueError:
             continue
+
+    use_traj_table = parse_bool(raw_values.get("use_traj_table"), False)
+    traj_file = raw_values.get("traj_file", "")
+    traj_path = None
+    traj_table = None
+    if use_traj_table:
+        if not traj_file:
+            raise ValueError("problem/use_traj_table=true requires problem/traj_file")
+        traj_path = Path(traj_file).expanduser()
+        if not traj_path.is_absolute():
+            traj_path = parfile_path.parent / traj_path
+        traj_table = load_trajectory_table(traj_path)
 
     params = {
         "sep": values.get("sep", 25.0),
@@ -57,36 +161,148 @@ def parse_athena_parfile(parfile_path):
         "a1_buffer": values.get("a1_buffer", 0.01),
         "a2_buffer": values.get("a2_buffer", 0.01),
         "cutoff_floor": values.get("cutoff_floor", 1.0e-4),
+        "tilt_angle_deg": values.get("tilt_angle", 0.0),
+        "use_traj_table": use_traj_table,
+        "traj_file": str(traj_path) if traj_path is not None else "",
+        "traj_table": traj_table,
     }
     params["om"] = params["sep"] ** (-1.5)
     return params
 
 
-def load_superposed_metric_kernel(source_path):
-    text = Path(source_path).read_text()
-    start = text.index("  Real o1 = 1.4142135623730951;")
-    end = text.index("  /* Initialize the flat part */", start)
+TRAJ_COLUMNS = (
+    "time",
+    "m1_t",
+    "m2_t",
+    "xi1x",
+    "xi1y",
+    "xi1z",
+    "xi2x",
+    "xi2y",
+    "xi2z",
+    "a1x",
+    "a1y",
+    "a1z",
+    "a2x",
+    "a2y",
+    "a2z",
+    "v1x",
+    "v1y",
+    "v1z",
+    "v2x",
+    "v2y",
+    "v2z",
+)
 
-    translated = []
-    for raw in text[start:end].splitlines():
-        line = raw.strip()
-        if not line or line.startswith("//") or line.startswith("/*"):
-            continue
-        line = line.rstrip(";")
-        if line.startswith("Real "):
-            line = line[5:]
-        line = re.sub(r"\bpow\(", "np.power(", line)
-        line = re.sub(r"\bsqrt\(", "np.sqrt(", line)
-        line = re.sub(r"\bfabs\(", "np.abs(", line)
-        line = re.sub(r"([A-Za-z_]\w*)\[(\d+)\]\[(\d+)\]", r"\1[..., \2, \3]", line)
-        translated.append(line)
-    return "\n".join(translated)
+
+def load_trajectory_table(path):
+    rows = []
+    with Path(path).open() as handle:
+        for lineno, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            cols = line.split()
+            if len(cols) < len(TRAJ_COLUMNS):
+                raise ValueError(f"bad trajectory row in {path} line {lineno}")
+            try:
+                rows.append([float(cols[i]) for i in range(len(TRAJ_COLUMNS))])
+            except ValueError as exc:
+                raise ValueError(f"bad trajectory value in {path} line {lineno}") from exc
+
+    if len(rows) < 2:
+        raise ValueError(f"trajectory file has fewer than 2 rows: {path}")
+
+    arr = np.asarray(rows, dtype=np.float64)
+    if np.any(np.diff(arr[:, 0]) <= 0.0):
+        raise ValueError(f"trajectory times must increase: {path}")
+    if np.any(arr[:, 1] <= 0.0) or np.any(arr[:, 2] <= 0.0):
+        raise ValueError(f"trajectory masses must be positive: {path}")
+    spin1_sq = np.sum(arr[:, 9:12] ** 2, axis=1)
+    spin2_sq = np.sum(arr[:, 12:15] ** 2, axis=1)
+    if np.any(spin1_sq > 1.0 + 1.0e-12) or np.any(spin2_sq > 1.0 + 1.0e-12):
+        raise ValueError(f"invalid spin in trajectory file: {path}")
+    return {name: arr[:, i] for i, name in enumerate(TRAJ_COLUMNS)}
 
 
-METRIC_KERNEL_SOURCE = load_superposed_metric_kernel(DYNBBH_CPP)
+def interpolate_trajectory_table(time, table):
+    times = table["time"]
+    trange = times[-1] - times[0]
+    tol = 64.0 * np.finfo(np.float64).eps * max(1.0, abs(times[0]), abs(times[-1]), trange)
+    if time < times[0] - tol or time > times[-1] + tol:
+        raise ValueError(
+            f"requested time {time} is outside trajectory-table range "
+            f"[{times[0]}, {times[-1]}]"
+        )
+
+    time = float(np.clip(time, times[0], times[-1]))
+    i1 = int(np.searchsorted(times, time, side="right"))
+    if i1 == 0:
+        i0, i1 = 0, 1
+    elif i1 >= len(times):
+        i0, i1 = len(times) - 2, len(times) - 1
+    else:
+        i0 = i1 - 1
+
+    dt = times[i1] - times[i0]
+    w = (time - times[i0]) / dt
+
+    def hermite(pname, vname):
+        p0, p1 = table[pname][i0], table[pname][i1]
+        v0, v1 = table[vname][i0], table[vname][i1]
+        w2, w3 = w * w, w * w * w
+        pos = (
+            (2.0 * w3 - 3.0 * w2 + 1.0) * p0
+            + (w3 - 2.0 * w2 + w) * dt * v0
+            + (-2.0 * w3 + 3.0 * w2) * p1
+            + (w3 - w2) * dt * v1
+        )
+        vel = (
+            (6.0 * w2 - 6.0 * w) * p0
+            + (3.0 * w2 - 4.0 * w + 1.0) * dt * v0
+            + (-6.0 * w2 + 6.0 * w) * p1
+            + (3.0 * w2 - 2.0 * w) * dt * v1
+        ) / dt
+        return pos, vel
+
+    def linear(name):
+        return (1.0 - w) * table[name][i0] + w * table[name][i1]
+
+    x1, vx1 = hermite("xi1x", "v1x")
+    y1, vy1 = hermite("xi1y", "v1y")
+    z1, vz1 = hermite("xi1z", "v1z")
+    x2, vx2 = hermite("xi2x", "v2x")
+    y2, vy2 = hermite("xi2y", "v2y")
+    z2, vz2 = hermite("xi2z", "v2z")
+
+    return {
+        "xi1x": x1,
+        "xi1y": y1,
+        "xi1z": z1,
+        "xi2x": x2,
+        "xi2y": y2,
+        "xi2z": z2,
+        "v1x": vx1,
+        "v1y": vy1,
+        "v1z": vz1,
+        "v2x": vx2,
+        "v2y": vy2,
+        "v2z": vz2,
+        "a1x": linear("a1x"),
+        "a1y": linear("a1y"),
+        "a1z": linear("a1z"),
+        "a2x": linear("a2x"),
+        "a2y": linear("a2y"),
+        "a2z": linear("a2z"),
+        "m1_t": linear("m1_t"),
+        "m2_t": linear("m2_t"),
+    }
 
 
 def find_traj_t(time, params):
+    if params.get("use_traj_table", False):
+        return interpolate_trajectory_table(time, params["traj_table"])
+
     r_bh1_0 = params["q"] / (1.0 + params["q"]) * params["sep"]
     r_bh2_0 = -params["sep"] / (1.0 + params["q"])
     om_t = params["om"] * time
@@ -98,12 +314,12 @@ def find_traj_t(time, params):
         "xi2x": r_bh2_0 * np.cos(om_t),
         "xi2y": r_bh2_0 * np.sin(om_t),
         "xi2z": 0.0,
-        "v1x": -r_bh1_0 * params["om"] * np.sin(om_t) + 1.0e-40,
-        "v1y": r_bh1_0 * params["om"] * np.cos(om_t) + 1.0e-40,
-        "v1z": 1.0e-40,
-        "v2x": -r_bh2_0 * params["om"] * np.sin(om_t) + 1.0e-40,
-        "v2y": r_bh2_0 * params["om"] * np.cos(om_t) + 1.0e-40,
-        "v2z": 1.0e-40,
+        "v1x": -r_bh1_0 * params["om"] * np.sin(om_t),
+        "v1y": r_bh1_0 * params["om"] * np.cos(om_t),
+        "v1z": 0.0,
+        "v2x": -r_bh2_0 * params["om"] * np.sin(om_t),
+        "v2y": r_bh2_0 * params["om"] * np.cos(om_t),
+        "v2z": 0.0,
         "a1x": params["a1"] * np.sin(params["th_a1"]) * np.cos(params["ph_a1"]),
         "a1y": params["a1"] * np.sin(params["th_a1"]) * np.sin(params["ph_a1"]),
         "a1z": params["a1"] * np.cos(params["th_a1"]),
@@ -113,6 +329,86 @@ def find_traj_t(time, params):
         "m1_t": 1.0 / (params["q"] + 1.0),
         "m2_t": 1.0 - 1.0 / (params["q"] + 1.0),
     }
+
+
+def boost_gamma_minus_one_over_v2(v2, gamma):
+    v2 = np.asarray(v2, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    small = v2 < 1.0e-12
+    series = 0.5 + 0.375 * v2 + 0.3125 * v2 * v2
+    regular = (gamma - 1.0) / np.where(small, 1.0, v2)
+    return np.where(small, series, regular)
+
+
+def build_boost_jacobian(vx, vy, vz, shape):
+    v2 = vx * vx + vy * vy + vz * vz
+    gamma = 1.0 / np.sqrt(np.maximum(1.0 - v2, 1.0e-300))
+    q = boost_gamma_minus_one_over_v2(v2, gamma)
+
+    jac = np.zeros(shape + (4, 4), dtype=np.float64)
+    jac[..., 0, 0] = gamma
+    jac[..., 0, 1] = -gamma * vx
+    jac[..., 0, 2] = -gamma * vy
+    jac[..., 0, 3] = -gamma * vz
+    jac[..., 1, 0] = jac[..., 0, 1]
+    jac[..., 2, 0] = jac[..., 0, 2]
+    jac[..., 3, 0] = jac[..., 0, 3]
+    jac[..., 1, 1] = 1.0 + q * vx * vx
+    jac[..., 1, 2] = q * vx * vy
+    jac[..., 1, 3] = q * vx * vz
+    jac[..., 2, 1] = jac[..., 1, 2]
+    jac[..., 2, 2] = 1.0 + q * vy * vy
+    jac[..., 2, 3] = q * vy * vz
+    jac[..., 3, 1] = jac[..., 1, 3]
+    jac[..., 3, 2] = jac[..., 2, 3]
+    jac[..., 3, 3] = 1.0 + q * vz * vz
+    return jac
+
+
+def boosted_spatial_coordinates(x, y, z, x0, y0, z0, vx, vy, vz):
+    dx = x - x0
+    dy = y - y0
+    dz = z - z0
+    v2 = vx * vx + vy * vy + vz * vz
+    gamma = 1.0 / np.sqrt(np.maximum(1.0 - v2, 1.0e-300))
+    q = boost_gamma_minus_one_over_v2(v2, gamma)
+    vd = vx * dx + vy * dy + vz * dz
+    return dx + q * vx * vd, dy + q * vy * vd, dz + q * vz * vd
+
+
+def kerr_schild_perturbation(x, y, z, ax, ay, az, mass):
+    shape = x.shape
+    rt2 = np.sqrt(2.0)
+    irt2 = 1.0 / rt2
+    a2 = ax * ax + ay * ay + az * az
+    x2 = x * x + y * y + z * z
+    ad = ax * x + ay * y + az * z
+    term = x2 - a2
+    rho2 = term + np.sqrt(np.maximum(4.0 * ad * ad + term * term, 0.0))
+    rho2_safe = np.maximum(rho2, 1.0e-300)
+    rho = np.sqrt(rho2_safe)
+    denom = np.maximum(ad * ad + 0.25 * rho2_safe * rho2_safe, 1.0e-300)
+    fac = irt2 * rho2_safe * rho * mass / denom
+    den = np.maximum(a2 + 0.5 * rho2_safe, 1.0e-300)
+    iden = 1.0 / den
+
+    ell = np.empty(shape + (3,), dtype=np.float64)
+    ell[..., 0] = y * az - z * ay + rt2 * ad * ax / rho + rho * x * irt2
+    ell[..., 1] = -x * az + z * ax + rt2 * ad * ay / rho + rho * y * irt2
+    ell[..., 2] = x * ay - y * ax + rt2 * ad * az / rho + rho * z * irt2
+
+    ks = np.zeros(shape + (4, 4), dtype=np.float64)
+    ks[..., 0, 0] = fac
+    ks[..., 0, 1:] = fac[..., None] * ell * iden[..., None]
+    ks[..., 1:, 0] = ks[..., 0, 1:]
+    ks[..., 1:, 1:] = (
+        fac[..., None, None]
+        * ell[..., :, None]
+        * ell[..., None, :]
+        * iden[..., None, None]
+        * iden[..., None, None]
+    )
+    return ks
 
 
 def superposed_bbh_metric(x, y, z, time, params, kernel_source):
@@ -126,121 +422,37 @@ def superposed_bbh_metric(x, y, z, time, params, kernel_source):
     loc = {"x": x, "y": y, "z": z}
     loc.update(find_traj_t(time, params))
 
-    v1 = np.sqrt(loc["v1x"] ** 2 + loc["v1y"] ** 2 + loc["v1z"] ** 2)
-    v2 = np.sqrt(loc["v2x"] ** 2 + loc["v2y"] ** 2 + loc["v2z"] ** 2)
-
-    oo4 = np.sqrt(1.0 - v1 * v1)
-    oo5 = 1.0 / oo4
-    oo14 = np.sqrt(1.0 - v2 * v2)
-    oo15 = 1.0 / oo14
-    oo18, oo21, oo22 = -loc["xi1x"], -loc["xi1y"], -loc["xi1z"]
-    oo23, oo26, oo27 = -loc["xi2x"], -loc["xi2y"], -loc["xi2z"]
-    oo19 = 1.0 / (v1 * v1)
-    oo24 = 1.0 / (v2 * v2)
-    oo20 = -1.0 + oo4
-    oo25 = -1.0 + oo14
-
-    oo32 = (
-        loc["xi1y"] * loc["v1y"]
-        + loc["xi1z"] * loc["v1z"]
-        + loc["v1x"] * (-x + loc["xi1x"])
-        + loc["v1y"] * (-y)
-        + loc["v1z"] * (-z)
+    x1bh1, x2bh1, x3bh1 = boosted_spatial_coordinates(
+        x, y, z, loc["xi1x"], loc["xi1y"], loc["xi1z"], loc["v1x"], loc["v1y"], loc["v1z"]
     )
-    oo37 = (
-        loc["v2x"] * (-x + loc["xi2x"])
-        + loc["xi2y"] * loc["v2y"]
-        + loc["xi2z"] * loc["v2z"]
-        + loc["v2y"] * (-y)
-        + loc["v2z"] * (-z)
+    x1bh2, x2bh2, x3bh2 = boosted_spatial_coordinates(
+        x, y, z, loc["xi2x"], loc["xi2y"], loc["xi2z"], loc["v2x"], loc["v2y"], loc["v2z"]
     )
 
-    x1bh1 = (oo18 + x) - oo20 * (
-        oo5
-        * (
-            loc["v1x"]
-            * (
-                (
-                    (oo18 + x) * loc["v1x"]
-                    + ((oo21 + y) * loc["v1y"] + (oo22 + z) * loc["v1z"])
-                )
-                * oo19
-            )
-        )
-    )
-    x1bh2 = (oo23 + x) - oo24 * (
-        oo25
-        * (
-            loc["v2x"]
-            * (
-                (
-                    (oo23 + x) * loc["v2x"]
-                    + ((oo26 + y) * loc["v2y"] + (oo27 + z) * loc["v2z"])
-                )
-                * oo15
-            )
-        )
-    )
-    x2bh1 = oo21 + (oo20 * (oo32 * (oo5 * (loc["v1y"] * oo19))) + y)
-    x2bh2 = oo26 + (oo24 * (oo25 * (oo37 * (loc["v2y"] * oo15))) + y)
-    x3bh1 = oo22 + (oo20 * (oo32 * (oo5 * (loc["v1z"] * oo19))) + z)
-    x3bh2 = oo27 + (oo24 * (oo25 * (oo37 * (loc["v2z"] * oo15))) + z)
-
-    a1_t = np.sqrt(loc["a1x"] ** 2 + loc["a1y"] ** 2 + loc["a1z"] ** 2 + 1.0e-40)
-    a2_t = np.sqrt(loc["a2x"] ** 2 + loc["a2y"] ** 2 + loc["a2z"] ** 2 + 1.0e-40)
-    a1 = a1_t * params["adjust_mass1"]
     m1 = loc["m1_t"] * params["adjust_mass1"]
-    a2 = a2_t * params["adjust_mass2"]
     m2 = loc["m2_t"] * params["adjust_mass2"]
+    spin_scale1 = m1 if params.get("use_traj_table", False) else params["adjust_mass1"]
+    spin_scale2 = m2 if params.get("use_traj_table", False) else params["adjust_mass2"]
+    a1x = loc["a1x"] * spin_scale1
+    a1y = loc["a1y"] * spin_scale1
+    a1z = loc["a1z"] * spin_scale1
+    a2x = loc["a2x"] * spin_scale2
+    a2y = loc["a2y"] * spin_scale2
+    a2z = loc["a2z"] * spin_scale2
+    a1 = np.sqrt(a1x * a1x + a1y * a1y + a1z * a1z + 1.0e-40)
+    a2 = np.sqrt(a2x * a2x + a2y * a2y + a2z * a2z + 1.0e-40)
 
     rbh1 = np.sqrt(x1bh1 * x1bh1 + x2bh1 * x2bh1 + x3bh1 * x3bh1)
     rbh2 = np.sqrt(x1bh2 * x1bh2 + x2bh2 * x2bh2 + x3bh2 * x3bh2)
     rbh1_cutoff = np.abs(a1) * (1.0 + params["a1_buffer"]) + params["cutoff_floor"]
     rbh2_cutoff = np.abs(a2) * (1.0 + params["a2_buffer"]) + params["cutoff_floor"]
-
     x3bh1 = np.where(rbh1 < rbh1_cutoff, np.where(x3bh1 > 0.0, rbh1_cutoff, -rbh1_cutoff), x3bh1)
     x3bh2 = np.where(rbh2 < rbh2_cutoff, np.where(x3bh2 > 0.0, rbh2_cutoff, -rbh2_cutoff), x3bh2)
 
-    namespace = {
-        "np": np,
-        "KS1": np.zeros(shape + (4, 4), dtype=np.float64),
-        "KS2": np.zeros(shape + (4, 4), dtype=np.float64),
-        "J1": np.zeros(shape + (4, 4), dtype=np.float64),
-        "J2": np.zeros(shape + (4, 4), dtype=np.float64),
-        "x": x,
-        "y": y,
-        "z": z,
-        "x1BH1": x1bh1,
-        "x1BH2": x1bh2,
-        "x2BH1": x2bh1,
-        "x2BH2": x2bh2,
-        "x3BH1": x3bh1,
-        "x3BH2": x3bh2,
-        "a1x": loc["a1x"],
-        "a1y": loc["a1y"],
-        "a1z": loc["a1z"],
-        "a2x": loc["a2x"],
-        "a2y": loc["a2y"],
-        "a2z": loc["a2z"],
-        "v1": v1,
-        "v2": v2,
-        "v1x": loc["v1x"],
-        "v1y": loc["v1y"],
-        "v1z": loc["v1z"],
-        "v2x": loc["v2x"],
-        "v2y": loc["v2y"],
-        "v2z": loc["v2z"],
-        "a1": a1,
-        "a2": a2,
-        "m1": m1,
-        "m2": m2,
-    }
-    exec(kernel_source, namespace)
-
-    ks1 = namespace["KS1"]
-    ks2 = namespace["KS2"]
-    j1 = namespace["J1"]
-    j2 = namespace["J2"]
+    ks1 = kerr_schild_perturbation(x1bh1, x2bh1, x3bh1, a1x, a1y, a1z, m1)
+    ks2 = kerr_schild_perturbation(x1bh2, x2bh2, x3bh2, a2x, a2y, a2z, m2)
+    j1 = build_boost_jacobian(loc["v1x"], loc["v1y"], loc["v1z"], shape)
+    j2 = build_boost_jacobian(loc["v2x"], loc["v2y"], loc["v2z"], shape)
 
     gcov = np.zeros(shape + (4, 4), dtype=np.float64)
     gcov[..., 0, 0] = -1.0
@@ -248,15 +460,8 @@ def superposed_bbh_metric(x, y, z, time, params, kernel_source):
     gcov[..., 2, 2] = 1.0
     gcov[..., 3, 3] = 1.0
 
-    for i in range(4):
-        for j in range(i, 4):
-            total = np.zeros(shape, dtype=np.float64)
-            for m in range(4):
-                for n in range(4):
-                    total += j2[..., m, i] * j2[..., n, j] * ks2[..., m, n]
-                    total += j1[..., m, i] * j1[..., n, j] * ks1[..., m, n]
-            gcov[..., i, j] += total
-            gcov[..., j, i] = gcov[..., i, j]
+    gcov += np.einsum("...mi,...mn,...nj->...ij", j1, ks1, j1)
+    gcov += np.einsum("...mi,...mn,...nj->...ij", j2, ks2, j2)
     return gcov
 
 
@@ -276,11 +481,11 @@ def gamma_law_specific_enthalpy(rho, press, gamma_gas):
 
 
 def rotate_spatial_tensor(r_mat, tensor):
-    return np.einsum("ia,jb,...ab->...ij", r_mat, r_mat, tensor)
+    return np.einsum("...ia,...jb,...ab->...ij", r_mat, r_mat, tensor)
 
 
 def rotate_spatial_vector(r_mat, vector):
-    return np.einsum("ia,...a->...i", r_mat, vector)
+    return np.einsum("...ia,...a->...i", r_mat, vector)
 
 
 def aligned_spherical_transforms(pts_aligned):
@@ -552,6 +757,7 @@ def valencia_shell_diagnostics(
     coframe = np.stack((omega_t, omega_r, omega_theta, omega_phi), axis=-2)
     frame = np.linalg.inv(coframe)
     ehat_r_mean = frame[..., :, 1]
+    ehat_theta_mean = frame[..., :, 2]
     ehat_phi_mean = frame[..., :, 3]
 
     t_rey_cov_penna = rho_h[..., None, None] * u_cov_sph[..., :, None] * u_cov_sph[..., None, :] + press[..., None, None] * gcov_sph
@@ -559,17 +765,33 @@ def valencia_shell_diagnostics(
     stress_rey_penna_local = np.einsum(
         "...a,...ab,...b->...", ehat_r_mean, t_rey_cov_penna, ehat_phi_mean
     )
+    stress_shear_rey_penna_local = np.einsum(
+        "...a,...ab,...b->...", ehat_r_mean, t_rey_cov_penna, ehat_theta_mean
+    )
     uhat_r_penna = np.einsum("...a,...a->...", ehat_r_mean, u_cov_sph)
+    uhat_theta_penna = np.einsum("...a,...a->...", ehat_theta_mean, u_cov_sph)
     uhat_phi_penna = np.einsum("...a,...a->...", ehat_phi_mean, u_cov_sph)
     bhat_r_penna = np.einsum("...a,...a->...", ehat_r_mean, b_cov_sph)
+    bhat_theta_penna = np.einsum("...a,...a->...", ehat_theta_mean, b_cov_sph)
     bhat_phi_penna = np.einsum("...a,...a->...", ehat_phi_mean, b_cov_sph)
     stress_max_penna_local = -bhat_r_penna * bhat_phi_penna
+    stress_shear_max_penna_local = -bhat_r_penna * bhat_theta_penna
     stress_em_exact_penna_local = b_sq * uhat_r_penna * uhat_phi_penna + stress_max_penna_local
+    stress_shear_em_exact_penna_local = (
+        b_sq * uhat_r_penna * uhat_theta_penna + stress_shear_max_penna_local
+    )
     stress_tot_penna_local = stress_rey_penna_local + stress_em_exact_penna_local
+    stress_shear_tot_penna_local = stress_shear_rey_penna_local + stress_shear_em_exact_penna_local
     alpha_rey_penna_local = stress_rey_penna_local / np.maximum(total_pressure, 1.0e-300)
     alpha_max_penna_local = stress_max_penna_local / np.maximum(total_pressure, 1.0e-300)
     alpha_em_exact_penna_local = stress_em_exact_penna_local / np.maximum(total_pressure, 1.0e-300)
     alpha_penna_local = stress_tot_penna_local / np.maximum(total_pressure, 1.0e-300)
+    alpha_shear_rey_penna_local = stress_shear_rey_penna_local / np.maximum(total_pressure, 1.0e-300)
+    alpha_shear_max_penna_local = stress_shear_max_penna_local / np.maximum(total_pressure, 1.0e-300)
+    alpha_shear_em_exact_penna_local = (
+        stress_shear_em_exact_penna_local / np.maximum(total_pressure, 1.0e-300)
+    )
+    alpha_shear_penna_local = stress_shear_tot_penna_local / np.maximum(total_pressure, 1.0e-300)
 
     penna_scale_weight = rho * u_con_sph[..., 0] * sqrt_neg_g
     penna_scale_num = np.sum((midplane_distance ** 2) * penna_scale_weight, axis=(1, 2))
@@ -594,10 +816,19 @@ def valencia_shell_diagnostics(
     penna_max_theta = np.mean(stress_max_penna_local, axis=2)
     penna_em_exact_theta = np.mean(stress_em_exact_penna_local, axis=2)
     penna_total_theta = np.mean(stress_tot_penna_local, axis=2)
+    penna_shear_rey_theta = np.mean(stress_shear_rey_penna_local, axis=2)
+    penna_shear_max_theta = np.mean(stress_shear_max_penna_local, axis=2)
+    penna_shear_em_exact_theta = np.mean(stress_shear_em_exact_penna_local, axis=2)
+    penna_shear_total_theta = np.mean(stress_shear_tot_penna_local, axis=2)
     penna_alpha_rey_theta = np.mean(alpha_rey_penna_local, axis=2)
     penna_alpha_max_theta = np.mean(alpha_max_penna_local, axis=2)
     penna_alpha_em_exact_theta = np.mean(alpha_em_exact_penna_local, axis=2)
     penna_alpha_theta = np.mean(alpha_penna_local, axis=2)
+    penna_alpha_shear_rey_theta = np.mean(alpha_shear_rey_penna_local, axis=2)
+    penna_alpha_shear_max_theta = np.mean(alpha_shear_max_penna_local, axis=2)
+    penna_alpha_shear_em_exact_theta = np.mean(alpha_shear_em_exact_penna_local, axis=2)
+    penna_alpha_shear_theta = np.mean(alpha_shear_penna_local, axis=2)
+    mean_flow_con_sph_theta = np.mean(u_con_sph, axis=2)
 
     stress_profiles = {
         "stress_mean_press": shell_avg(press),
@@ -624,10 +855,24 @@ def valencia_shell_diagnostics(
         "penna_max_theta_weighted": penna_max_theta * penna_vert_weight_theta,
         "penna_em_exact_theta_weighted": penna_em_exact_theta * penna_vert_weight_theta,
         "penna_total_theta_weighted": penna_total_theta * penna_vert_weight_theta,
+        "penna_shear_rey_theta_weighted": penna_shear_rey_theta * penna_vert_weight_theta,
+        "penna_shear_max_theta_weighted": penna_shear_max_theta * penna_vert_weight_theta,
+        "penna_shear_em_exact_theta_weighted": penna_shear_em_exact_theta * penna_vert_weight_theta,
+        "penna_shear_total_theta_weighted": penna_shear_total_theta * penna_vert_weight_theta,
         "penna_alpha_rey_theta_weighted": penna_alpha_rey_theta * penna_vert_weight_theta,
         "penna_alpha_max_theta_weighted": penna_alpha_max_theta * penna_vert_weight_theta,
         "penna_alpha_em_exact_theta_weighted": penna_alpha_em_exact_theta * penna_vert_weight_theta,
         "penna_alpha_theta_weighted": penna_alpha_theta * penna_vert_weight_theta,
+        "penna_alpha_shear_rey_theta_weighted": penna_alpha_shear_rey_theta * penna_vert_weight_theta,
+        "penna_alpha_shear_max_theta_weighted": penna_alpha_shear_max_theta * penna_vert_weight_theta,
+        "penna_alpha_shear_em_exact_theta_weighted": (
+            penna_alpha_shear_em_exact_theta * penna_vert_weight_theta
+        ),
+        "penna_alpha_shear_theta_weighted": penna_alpha_shear_theta * penna_vert_weight_theta,
+        "penna_mean_flow_ut": mean_flow_con_sph_theta[..., 0],
+        "penna_mean_flow_ur": mean_flow_con_sph_theta[..., 1],
+        "penna_mean_flow_utheta": mean_flow_con_sph_theta[..., 2],
+        "penna_mean_flow_uphi": mean_flow_con_sph_theta[..., 3],
     }
 
     return mdot_density, mdot_surface, ur_coord, vr_euler, stress_profiles
@@ -652,6 +897,205 @@ def get_var_indices(h5_file):
 def get_dump_time(fname):
     with h5py.File(fname, "r") as f:
         return float(f.attrs.get("Time", 0.0))
+
+
+def make_shell_points(radii_axis, theta_vals, phi_vals, r_mats):
+    r_3d, theta_3d, phi_3d = np.meshgrid(radii_axis, theta_vals, phi_vals, indexing="ij")
+    x_aligned = r_3d * np.sin(theta_3d) * np.cos(phi_3d)
+    y_aligned = r_3d * np.sin(theta_3d) * np.sin(phi_3d)
+    z_aligned = r_3d * np.cos(theta_3d)
+    pts_aligned = np.stack((x_aligned, y_aligned, z_aligned), axis=-1)
+
+    r_mats = np.asarray(r_mats, dtype=np.float64)
+    if r_mats.ndim == 2:
+        pts_sim = np.einsum("ji,...j->...i", r_mats, pts_aligned)
+    else:
+        pts_sim = np.einsum("...ji,...j->...i", r_mats[:, None, None, :, :], pts_aligned)
+
+    dtheta = theta_vals[1] - theta_vals[0] if theta_vals.size > 1 else np.pi
+    dphi = phi_vals[1] - phi_vals[0] if phi_vals.size > 1 else 2.0 * np.pi
+    coord_dA = (r_3d ** 2) * np.sin(theta_3d) * dtheta * dphi
+    return r_3d, theta_3d, phi_3d, pts_aligned, pts_sim, coord_dA
+
+
+def interpolate_shell_samples(
+    ds_uov,
+    ds_b,
+    x1v,
+    x2v,
+    x3v,
+    x1f,
+    x2f,
+    x3f,
+    dens_i,
+    press_i,
+    vx_i,
+    vy_i,
+    vz_i,
+    pts_sim,
+):
+    n_bins, n_theta, n_phi = pts_sim.shape[:3]
+    n_tot = n_bins * n_theta * n_phi
+    x_flat = pts_sim[..., 0].ravel()
+    y_flat = pts_sim[..., 1].ravel()
+    z_flat = pts_sim[..., 2].ravel()
+
+    interp_dens = np.full(n_tot, np.nan, dtype=np.float64)
+    interp_press = np.full(n_tot, np.nan, dtype=np.float64)
+    interp_vx = np.full(n_tot, np.nan, dtype=np.float64)
+    interp_vy = np.full(n_tot, np.nan, dtype=np.float64)
+    interp_vz = np.full(n_tot, np.nan, dtype=np.float64)
+    interp_bx = np.zeros(n_tot, dtype=np.float64)
+    interp_by = np.zeros(n_tot, dtype=np.float64)
+    interp_bz = np.zeros(n_tot, dtype=np.float64)
+    unassigned = np.ones(n_tot, dtype=bool)
+    interp_kwargs = dict(method="linear", bounds_error=False, fill_value=None)
+
+    for b in range(ds_uov.shape[1]):
+        if not np.any(unassigned):
+            break
+        eps = 1.0e-8
+        mask = (
+            (x_flat >= x1f[b, 0] - eps)
+            & (x_flat <= x1f[b, -1] + eps)
+            & (y_flat >= x2f[b, 0] - eps)
+            & (y_flat <= x2f[b, -1] + eps)
+            & (z_flat >= x3f[b, 0] - eps)
+            & (z_flat <= x3f[b, -1] + eps)
+            & unassigned
+        )
+        if not np.any(mask):
+            continue
+
+        uov_block = ds_uov[:, b, :, :, :]
+        b_block = ds_b[:, b, :, :, :]
+        pts_query = np.column_stack([z_flat[mask], y_flat[mask], x_flat[mask]])
+        axes = (x3v[b], x2v[b], x1v[b])
+        interp_dens[mask] = RegularGridInterpolator(axes, uov_block[dens_i], **interp_kwargs)(pts_query)
+        interp_press[mask] = RegularGridInterpolator(axes, uov_block[press_i], **interp_kwargs)(pts_query)
+        interp_vx[mask] = RegularGridInterpolator(axes, uov_block[vx_i], **interp_kwargs)(pts_query)
+        interp_vy[mask] = RegularGridInterpolator(axes, uov_block[vy_i], **interp_kwargs)(pts_query)
+        interp_vz[mask] = RegularGridInterpolator(axes, uov_block[vz_i], **interp_kwargs)(pts_query)
+        interp_bx[mask] = RegularGridInterpolator(axes, b_block[0], **interp_kwargs)(pts_query)
+        interp_by[mask] = RegularGridInterpolator(axes, b_block[1], **interp_kwargs)(pts_query)
+        interp_bz[mask] = RegularGridInterpolator(axes, b_block[2], **interp_kwargs)(pts_query)
+        unassigned[mask] = False
+
+    if np.any(unassigned):
+        raise ValueError(f"left {np.count_nonzero(unassigned)} shell samples unassigned")
+
+    rho_grid = np.maximum(interp_dens, 0.0).reshape((n_bins, n_theta, n_phi))
+    press_grid = np.maximum(interp_press, 0.0).reshape((n_bins, n_theta, n_phi))
+    prim_wv = np.stack(
+        (
+            interp_vx.reshape((n_bins, n_theta, n_phi)),
+            interp_vy.reshape((n_bins, n_theta, n_phi)),
+            interp_vz.reshape((n_bins, n_theta, n_phi)),
+        ),
+        axis=-1,
+    )
+    b_tilde_sim = np.stack(
+        (
+            interp_bx.reshape((n_bins, n_theta, n_phi)),
+            interp_by.reshape((n_bins, n_theta, n_phi)),
+            interp_bz.reshape((n_bins, n_theta, n_phi)),
+        ),
+        axis=-1,
+    )
+    return rho_grid, press_grid, prim_wv, b_tilde_sim
+
+
+def compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edges):
+    mass_shell = np.zeros(n_bins, dtype=np.float64)
+    for b in range(ds_uov.shape[1]):
+        uov_block = ds_uov[:, b, :, :, :]
+        x = x1v[b]
+        y = x2v[b]
+        z = x3v[b]
+        dx = x[1] - x[0] if len(x) > 1 else 1.0
+        dy = y[1] - y[0] if len(y) > 1 else 1.0
+        dz = z[1] - z[0] if len(z) > 1 else 1.0
+        dV = dx * dy * dz
+
+        use_supersampling = (dx >= dr / 5.0) and (dy >= dr / 5.0) and (dz >= dr / 5.0)
+        h_r = 0.5 * np.sqrt(dx * dx + dy * dy + dz * dz)
+
+        z_grid, y_grid, x_grid = np.meshgrid(z, y, x, indexing="ij")
+        r_grid = np.sqrt(x_grid ** 2 + y_grid ** 2 + z_grid ** 2)
+
+        dens_flat_block = uov_block[dens_i].ravel()
+        x_block = x_grid.ravel()
+        y_block = y_grid.ravel()
+        z_block = z_grid.ravel()
+        r_block = r_grid.ravel()
+
+        idx_min = np.floor((r_block - h_r - rmin) / dr).astype(int)
+        idx_max = np.floor((r_block + h_r - rmin) / dr).astype(int)
+        mask_global = (idx_max >= 0) & (idx_min < n_bins)
+
+        if not np.any(mask_global):
+            continue
+
+        inds_min = idx_min[mask_global]
+        inds_max = idx_max[mask_global]
+        dens_active = dens_flat_block[mask_global]
+
+        if use_supersampling:
+            mask_easy = inds_min == inds_max
+        else:
+            mask_easy = np.ones(inds_min.shape, dtype=bool)
+            r_active = r_block[mask_global]
+            inds_min = np.digitize(r_active, bin_edges) - 1
+
+        if np.any(mask_easy):
+            final_bins = inds_min[mask_easy]
+            valid_easy = (final_bins >= 0) & (final_bins < n_bins)
+            if np.any(valid_easy):
+                bins_to_count = final_bins[valid_easy]
+                weights = dens_active[mask_easy][valid_easy] * dV
+                mass_shell += np.bincount(bins_to_count, weights=weights, minlength=n_bins)
+
+        mask_split = ~mask_easy
+        if use_supersampling and np.any(mask_split):
+            x_split = x_block[mask_global][mask_split]
+            y_split = y_block[mask_global][mask_split]
+            z_split = z_block[mask_global][mask_split]
+            dens_split = dens_active[mask_split]
+
+            off_x, off_y, off_z = 0.25 * dx, 0.25 * dy, 0.25 * dz
+            sub_dV = dV / 8.0
+            offsets = [
+                (off_x, off_y, off_z),
+                (off_x, off_y, -off_z),
+                (off_x, -off_y, off_z),
+                (off_x, -off_y, -off_z),
+                (-off_x, off_y, off_z),
+                (-off_x, off_y, -off_z),
+                (-off_x, -off_y, off_z),
+                (-off_x, -off_y, -off_z),
+            ]
+            for ox, oy, oz in offsets:
+                r_sub = np.sqrt((x_split + ox) ** 2 + (y_split + oy) ** 2 + (z_split + oz) ** 2)
+                bins_sub = np.floor((r_sub - rmin) / dr).astype(int)
+                mask_valid_sub = (bins_sub >= 0) & (bins_sub < n_bins)
+                if np.any(mask_valid_sub):
+                    valid_bins = bins_sub[mask_valid_sub]
+                    w_sub = dens_split[mask_valid_sub] * sub_dV
+                    mass_shell += np.bincount(valid_bins, weights=w_sub, minlength=n_bins)
+    return mass_shell
+
+
+def estimate_shell_angular_momentum_axes(rho, prim_wv_sim, pts_sim, proper_dA, fallback_axis):
+    weights = rho * proper_dA
+    shell_l = np.sum(np.cross(pts_sim, prim_wv_sim) * weights[..., None], axis=(1, 2))
+    fallback = np.broadcast_to(normalize_vector(fallback_axis), shell_l.shape)
+    norms = np.linalg.norm(shell_l, axis=1)
+    valid = np.isfinite(shell_l).all(axis=1) & (norms > 1.0e-300)
+    axes = np.divide(shell_l, norms[:, None], out=np.zeros_like(shell_l), where=norms[:, None] > 0.0)
+    axes = np.where(valid[:, None], axes, fallback)
+    flip = np.sum(axes * fallback, axis=1) < 0.0
+    axes = np.where(flip[:, None], -axes, axes)
+    return normalize_vector(axes, fallback)
 
 
 def integrate_and_save(args):
@@ -699,170 +1143,92 @@ def integrate_and_save(args):
             theta_vals = np.linspace(0.0, np.pi, n_theta, endpoint=False) + 0.5 * dtheta
             phi_vals = np.linspace(0.0, 2.0 * np.pi, n_phi, endpoint=False) + 0.5 * dphi
 
-            r_3d, theta_3d, phi_3d = np.meshgrid(radii_axis, theta_vals, phi_vals, indexing="ij")
-            x_aligned = r_3d * np.sin(theta_3d) * np.cos(phi_3d)
-            y_aligned = r_3d * np.sin(theta_3d) * np.sin(phi_3d)
-            z_aligned = r_3d * np.cos(theta_3d)
+            dynamic_disk_frame = tilt_is_dynamical(metric_params.get("tilt_angle_deg", 0.0))
+            fixed_r_mat = get_rot_matrix(tilt_y, tilt_x)
+            if dynamic_disk_frame and abs(tilt_y) < 1.0e-15 and abs(tilt_x) < 1.0e-15:
+                parfile_axis = disk_axis_from_tilt_angle(metric_params.get("tilt_angle_deg", 0.0))
+                initial_r_mat = rotation_matrix_from_axis(parfile_axis)
+            else:
+                # Preserve the original fixed-frame behavior for tilt_angle within
+                # one degree of 0 or 180, and for explicit --tilt_y/--tilt_x use.
+                initial_r_mat = fixed_r_mat
 
-            r_mat = get_rot_matrix(tilt_y, tilt_x)
-            pts_aligned = np.stack((x_aligned, y_aligned, z_aligned), axis=-1)
-            pts_sim = np.einsum("ij,...j->...i", r_mat.T, pts_aligned)
-
-            coord_dA = (r_3d ** 2) * np.sin(theta_3d) * dtheta * dphi
-
-            n_tot = n_bins * n_theta * n_phi
-            x_flat = pts_sim[..., 0].ravel()
-            y_flat = pts_sim[..., 1].ravel()
-            z_flat = pts_sim[..., 2].ravel()
-
-            interp_dens = np.full(n_tot, np.nan, dtype=np.float64)
-            interp_press = np.full(n_tot, np.nan, dtype=np.float64)
-            interp_vx = np.full(n_tot, np.nan, dtype=np.float64)
-            interp_vy = np.full(n_tot, np.nan, dtype=np.float64)
-            interp_vz = np.full(n_tot, np.nan, dtype=np.float64)
-            interp_bx = np.zeros(n_tot, dtype=np.float64)
-            interp_by = np.zeros(n_tot, dtype=np.float64)
-            interp_bz = np.zeros(n_tot, dtype=np.float64)
-            unassigned = np.ones(n_tot, dtype=bool)
-
-            mass_shell = np.zeros(n_bins, dtype=np.float64)
-
-            for b in range(ds_uov.shape[1]):
-                uov_block = ds_uov[:, b, :, :, :]
-                b_block = ds_b[:, b, :, :, :] if ds_b is not None else None
-
-                if np.any(unassigned):
-                    eps = 1.0e-8
-                    mask = (
-                        (x_flat >= x1f[b, 0] - eps)
-                        & (x_flat <= x1f[b, -1] + eps)
-                        & (y_flat >= x2f[b, 0] - eps)
-                        & (y_flat <= x2f[b, -1] + eps)
-                        & (z_flat >= x3f[b, 0] - eps)
-                        & (z_flat <= x3f[b, -1] + eps)
-                        & unassigned
-                    )
-                    if np.any(mask):
-                        pts_query = np.column_stack([z_flat[mask], y_flat[mask], x_flat[mask]])
-                        interp_kwargs = dict(method="linear", bounds_error=False, fill_value=None)
-                        interp_dens[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), uov_block[dens_i], **interp_kwargs)(pts_query)
-                        interp_press[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), uov_block[press_i], **interp_kwargs)(pts_query)
-                        interp_vx[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), uov_block[vx_i], **interp_kwargs)(pts_query)
-                        interp_vy[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), uov_block[vy_i], **interp_kwargs)(pts_query)
-                        interp_vz[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), uov_block[vz_i], **interp_kwargs)(pts_query)
-                        if b_block is not None:
-                            interp_bx[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), b_block[0], **interp_kwargs)(pts_query)
-                            interp_by[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), b_block[1], **interp_kwargs)(pts_query)
-                            interp_bz[mask] = RegularGridInterpolator((x3v[b], x2v[b], x1v[b]), b_block[2], **interp_kwargs)(pts_query)
-                        unassigned[mask] = False
-
-                x = x1v[b]
-                y = x2v[b]
-                z = x3v[b]
-                dx = x[1] - x[0] if len(x) > 1 else 1.0
-                dy = y[1] - y[0] if len(y) > 1 else 1.0
-                dz = z[1] - z[0] if len(z) > 1 else 1.0
-                dV = dx * dy * dz
-
-                use_supersampling = (dx >= dr / 5.0) and (dy >= dr / 5.0) and (dz >= dr / 5.0)
-                h_r = 0.5 * np.sqrt(dx * dx + dy * dy + dz * dz)
-
-                z_grid, y_grid, x_grid = np.meshgrid(z, y, x, indexing="ij")
-                r_grid = np.sqrt(x_grid ** 2 + y_grid ** 2 + z_grid ** 2)
-
-                dens_flat_block = uov_block[dens_i].ravel()
-                x_block = x_grid.ravel()
-                y_block = y_grid.ravel()
-                z_block = z_grid.ravel()
-                r_block = r_grid.ravel()
-
-                idx_min = np.floor((r_block - h_r - rmin) / dr).astype(int)
-                idx_max = np.floor((r_block + h_r - rmin) / dr).astype(int)
-                mask_global = (idx_max >= 0) & (idx_min < n_bins)
-
-                if np.any(mask_global):
-                    inds_min = idx_min[mask_global]
-                    inds_max = idx_max[mask_global]
-                    dens_active = dens_flat_block[mask_global]
-
-                    if use_supersampling:
-                        mask_easy = inds_min == inds_max
-                    else:
-                        mask_easy = np.ones(inds_min.shape, dtype=bool)
-                        r_active = r_block[mask_global]
-                        inds_min = np.digitize(r_active, bin_edges) - 1
-
-                    if np.any(mask_easy):
-                        final_bins = inds_min[mask_easy]
-                        valid_easy = (final_bins >= 0) & (final_bins < n_bins)
-                        if np.any(valid_easy):
-                            bins_to_count = final_bins[valid_easy]
-                            weights = dens_active[mask_easy][valid_easy] * dV
-                            mass_shell += np.bincount(bins_to_count, weights=weights, minlength=n_bins)
-
-                    mask_split = ~mask_easy
-                    if use_supersampling and np.any(mask_split):
-                        x_split = x_block[mask_global][mask_split]
-                        y_split = y_block[mask_global][mask_split]
-                        z_split = z_block[mask_global][mask_split]
-                        dens_split = dens_active[mask_split]
-
-                        off_x, off_y, off_z = 0.25 * dx, 0.25 * dy, 0.25 * dz
-                        sub_dV = dV / 8.0
-                        offsets = [
-                            (off_x, off_y, off_z),
-                            (off_x, off_y, -off_z),
-                            (off_x, -off_y, off_z),
-                            (off_x, -off_y, -off_z),
-                            (-off_x, off_y, off_z),
-                            (-off_x, off_y, -off_z),
-                            (-off_x, -off_y, off_z),
-                            (-off_x, -off_y, -off_z),
-                        ]
-                        for ox, oy, oz in offsets:
-                            r_sub = np.sqrt((x_split + ox) ** 2 + (y_split + oy) ** 2 + (z_split + oz) ** 2)
-                            bins_sub = np.floor((r_sub - rmin) / dr).astype(int)
-                            mask_valid_sub = (bins_sub >= 0) & (bins_sub < n_bins)
-                            if np.any(mask_valid_sub):
-                                valid_bins = bins_sub[mask_valid_sub]
-                                w_sub = dens_split[mask_valid_sub] * sub_dV
-                                mass_shell += np.bincount(valid_bins, weights=w_sub, minlength=n_bins)
-
-            if np.any(unassigned):
-                return False, f"{fname} left {np.count_nonzero(unassigned)} shell samples unassigned"
-
-            interp_dens = np.maximum(interp_dens, 0.0)
-            interp_press = np.maximum(interp_press, 0.0)
-
-            rho_grid = interp_dens.reshape((n_bins, n_theta, n_phi))
-            press_grid = interp_press.reshape((n_bins, n_theta, n_phi))
-            prim_wv = np.stack(
-                (
-                    interp_vx.reshape((n_bins, n_theta, n_phi)),
-                    interp_vy.reshape((n_bins, n_theta, n_phi)),
-                    interp_vz.reshape((n_bins, n_theta, n_phi)),
-                ),
-                axis=-1,
+            r_3d, theta_3d, phi_3d, pts_aligned, pts_sim, coord_dA = make_shell_points(
+                radii_axis, theta_vals, phi_vals, initial_r_mat
             )
-            b_tilde_sim = np.stack(
-                (
-                    interp_bx.reshape((n_bins, n_theta, n_phi)),
-                    interp_by.reshape((n_bins, n_theta, n_phi)),
-                    interp_bz.reshape((n_bins, n_theta, n_phi)),
-                ),
-                axis=-1,
+            rho_grid, press_grid, prim_wv, b_tilde_sim = interpolate_shell_samples(
+                ds_uov,
+                ds_b,
+                x1v,
+                x2v,
+                x3v,
+                x1f,
+                x2f,
+                x3f,
+                dens_i,
+                press_i,
+                vx_i,
+                vy_i,
+                vz_i,
+                pts_sim,
             )
 
             shell_geom = build_shell_geometry(
                 pts_aligned,
                 pts_sim,
                 coord_dA,
-                r_mat,
+                initial_r_mat,
                 t_val,
                 metric_params,
                 METRIC_KERNEL_SOURCE,
             )
             proper_dA = shell_geom["proper_dA"]
+
+            if dynamic_disk_frame:
+                fallback_axis = initial_r_mat[2]
+                disk_lhat = estimate_shell_angular_momentum_axes(
+                    rho_grid, prim_wv, pts_sim, proper_dA, fallback_axis
+                )
+                r_mats = rotation_matrices_from_axes(disk_lhat)
+                r_3d, theta_3d, phi_3d, pts_aligned, pts_sim, coord_dA = make_shell_points(
+                    radii_axis, theta_vals, phi_vals, r_mats
+                )
+                rho_grid, press_grid, prim_wv, b_tilde_sim = interpolate_shell_samples(
+                    ds_uov,
+                    ds_b,
+                    x1v,
+                    x2v,
+                    x3v,
+                    x1f,
+                    x2f,
+                    x3f,
+                    dens_i,
+                    press_i,
+                    vx_i,
+                    vy_i,
+                    vz_i,
+                    pts_sim,
+                )
+                shell_geom = build_shell_geometry(
+                    pts_aligned,
+                    pts_sim,
+                    coord_dA,
+                    r_mats[:, None, None, :, :],
+                    t_val,
+                    metric_params,
+                    METRIC_KERNEL_SOURCE,
+                )
+                proper_dA = shell_geom["proper_dA"]
+                frame_mode_id = 1
+                analysis_r_mat = r_mats[:, None, None, :, :]
+            else:
+                disk_lhat = np.broadcast_to(initial_r_mat[2], (n_bins, 3)).copy()
+                r_mats = np.broadcast_to(initial_r_mat, (n_bins, 3, 3)).copy()
+                frame_mode_id = 0
+                analysis_r_mat = initial_r_mat
+
+            mass_shell = compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edges)
+            disk_euler_zyx = euler_zyx_from_rotation_matrix(np.swapaxes(r_mats, -1, -2))
 
             lambda_mass = np.sum(rho_grid * proper_dA, axis=(1, 2))
             midplane_distance = np.abs(r_3d * (theta_3d - np.pi / 2.0))
@@ -875,7 +1241,7 @@ def integrate_and_save(args):
                 b_tilde_sim,
                 pts_aligned,
                 midplane_distance,
-                r_mat,
+                analysis_r_mat,
                 shell_geom,
                 metric_params,
             )
@@ -896,6 +1262,11 @@ def integrate_and_save(args):
             time=np.array([t_val]),
             radius=radii_axis,
             theta=theta_vals,
+            disk_frame_mode_id=np.array([frame_mode_id], dtype=np.int64),
+            disk_lhat=np.array([disk_lhat]),
+            disk_frame_matrix=np.array([r_mats]),
+            disk_euler_zyx=np.array([disk_euler_zyx]),
+            disk_euler_zyx_deg=np.array([np.rad2deg(disk_euler_zyx)]),
             lambda_mass=np.array([lambda_mass]),
             mass_shell=np.array([mass_shell]),
             mass_rtheta2=np.array([mass_rtheta2]),
@@ -932,10 +1303,22 @@ def integrate_and_save(args):
             penna_max_theta_weighted=np.array([stress_profiles["penna_max_theta_weighted"]]),
             penna_em_exact_theta_weighted=np.array([stress_profiles["penna_em_exact_theta_weighted"]]),
             penna_total_theta_weighted=np.array([stress_profiles["penna_total_theta_weighted"]]),
+            penna_shear_rey_theta_weighted=np.array([stress_profiles["penna_shear_rey_theta_weighted"]]),
+            penna_shear_max_theta_weighted=np.array([stress_profiles["penna_shear_max_theta_weighted"]]),
+            penna_shear_em_exact_theta_weighted=np.array([stress_profiles["penna_shear_em_exact_theta_weighted"]]),
+            penna_shear_total_theta_weighted=np.array([stress_profiles["penna_shear_total_theta_weighted"]]),
             penna_alpha_rey_theta_weighted=np.array([stress_profiles["penna_alpha_rey_theta_weighted"]]),
             penna_alpha_max_theta_weighted=np.array([stress_profiles["penna_alpha_max_theta_weighted"]]),
             penna_alpha_em_exact_theta_weighted=np.array([stress_profiles["penna_alpha_em_exact_theta_weighted"]]),
             penna_alpha_theta_weighted=np.array([stress_profiles["penna_alpha_theta_weighted"]]),
+            penna_alpha_shear_rey_theta_weighted=np.array([stress_profiles["penna_alpha_shear_rey_theta_weighted"]]),
+            penna_alpha_shear_max_theta_weighted=np.array([stress_profiles["penna_alpha_shear_max_theta_weighted"]]),
+            penna_alpha_shear_em_exact_theta_weighted=np.array([stress_profiles["penna_alpha_shear_em_exact_theta_weighted"]]),
+            penna_alpha_shear_theta_weighted=np.array([stress_profiles["penna_alpha_shear_theta_weighted"]]),
+            penna_mean_flow_ut=np.array([stress_profiles["penna_mean_flow_ut"]]),
+            penna_mean_flow_ur=np.array([stress_profiles["penna_mean_flow_ur"]]),
+            penna_mean_flow_utheta=np.array([stress_profiles["penna_mean_flow_utheta"]]),
+            penna_mean_flow_uphi=np.array([stress_profiles["penna_mean_flow_uphi"]]),
             rmin_used=rmin,
         )
 
@@ -982,6 +1365,11 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
 
     data_keys = [
         "time",
+        "disk_frame_mode_id",
+        "disk_lhat",
+        "disk_frame_matrix",
+        "disk_euler_zyx",
+        "disk_euler_zyx_deg",
         "lambda_mass",
         "mass_shell",
         "mass_rtheta2",
@@ -994,6 +1382,10 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         "ur_theta_phi_avg",
         "vr_theta_phi_avg",
         "mdot_of_radius",
+        "penna_mean_flow_ut",
+        "penna_mean_flow_ur",
+        "penna_mean_flow_utheta",
+        "penna_mean_flow_uphi",
     ]
     radii_axis = None
     theta_axis = None
@@ -1023,10 +1415,18 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         "penna_max_theta_weighted",
         "penna_em_exact_theta_weighted",
         "penna_total_theta_weighted",
+        "penna_shear_rey_theta_weighted",
+        "penna_shear_max_theta_weighted",
+        "penna_shear_em_exact_theta_weighted",
+        "penna_shear_total_theta_weighted",
         "penna_alpha_rey_theta_weighted",
         "penna_alpha_max_theta_weighted",
         "penna_alpha_em_exact_theta_weighted",
         "penna_alpha_theta_weighted",
+        "penna_alpha_shear_rey_theta_weighted",
+        "penna_alpha_shear_max_theta_weighted",
+        "penna_alpha_shear_em_exact_theta_weighted",
+        "penna_alpha_shear_theta_weighted",
     ]
     valid_entries = []
     shapes = {}
@@ -1179,10 +1579,26 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         mean_max_penna = penna_vertical_average(stress_sums["penna_max_theta_weighted"])
         mean_em_exact_penna = penna_vertical_average(stress_sums["penna_em_exact_theta_weighted"])
         mean_total_penna = penna_vertical_average(stress_sums["penna_total_theta_weighted"])
+        mean_shear_rey_penna = penna_vertical_average(stress_sums["penna_shear_rey_theta_weighted"])
+        mean_shear_max_penna = penna_vertical_average(stress_sums["penna_shear_max_theta_weighted"])
+        mean_shear_em_exact_penna = penna_vertical_average(
+            stress_sums["penna_shear_em_exact_theta_weighted"]
+        )
+        mean_shear_total_penna = penna_vertical_average(stress_sums["penna_shear_total_theta_weighted"])
         mean_alpha_rey_penna = penna_vertical_average(stress_sums["penna_alpha_rey_theta_weighted"])
         mean_alpha_max_penna = penna_vertical_average(stress_sums["penna_alpha_max_theta_weighted"])
         mean_alpha_em_exact_penna = penna_vertical_average(stress_sums["penna_alpha_em_exact_theta_weighted"])
         mean_alpha_penna = penna_vertical_average(stress_sums["penna_alpha_theta_weighted"])
+        mean_alpha_shear_rey_penna = penna_vertical_average(
+            stress_sums["penna_alpha_shear_rey_theta_weighted"]
+        )
+        mean_alpha_shear_max_penna = penna_vertical_average(
+            stress_sums["penna_alpha_shear_max_theta_weighted"]
+        )
+        mean_alpha_shear_em_exact_penna = penna_vertical_average(
+            stress_sums["penna_alpha_shear_em_exact_theta_weighted"]
+        )
+        mean_alpha_shear_penna = penna_vertical_average(stress_sums["penna_alpha_shear_theta_weighted"])
 
         out_data["h_over_r_penna"] = penna_h_over_r_exact
         out_data["scale_height_penna"] = penna_scale_height_exact
@@ -1194,10 +1610,18 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         out_data["stress_time_avg_max_penna"] = mean_max_penna
         out_data["stress_time_avg_em_exact_penna"] = mean_em_exact_penna
         out_data["stress_time_avg_total_penna"] = mean_total_penna
+        out_data["stress_time_avg_shear_rey_penna"] = mean_shear_rey_penna
+        out_data["stress_time_avg_shear_max_penna"] = mean_shear_max_penna
+        out_data["stress_time_avg_shear_em_exact_penna"] = mean_shear_em_exact_penna
+        out_data["stress_time_avg_shear_total_penna"] = mean_shear_total_penna
         out_data["alpha_rey_penna"] = mean_alpha_rey_penna
         out_data["alpha_max_penna"] = mean_alpha_max_penna
         out_data["alpha_em_exact_penna"] = mean_alpha_em_exact_penna
         out_data["alpha_penna"] = mean_alpha_penna
+        out_data["alpha_shear_rey_penna"] = mean_alpha_shear_rey_penna
+        out_data["alpha_shear_max_penna"] = mean_alpha_shear_max_penna
+        out_data["alpha_shear_em_exact_penna"] = mean_alpha_shear_em_exact_penna
+        out_data["alpha_shear_penna"] = mean_alpha_shear_penna
 
     np.savez(output_filename, **out_data)
 
@@ -1227,6 +1651,18 @@ def process_files(
         raise FileNotFoundError(f"Missing bin directory: {bin_dir}")
 
     metric_params = parse_athena_parfile(parfile)
+    if tilt_is_dynamical(metric_params.get("tilt_angle_deg", 0.0)):
+        print(
+            "Using angular-momentum-aligned disk frame "
+            f"(tilt_angle={metric_params['tilt_angle_deg']:.6g} deg)."
+        )
+    else:
+        print(
+            "Using fixed disk frame "
+            f"(tilt_angle={metric_params['tilt_angle_deg']:.6g} deg)."
+        )
+    if metric_params.get("use_traj_table", False):
+        print(f"Using trajectory table: {metric_params['traj_file']}")
     orbit_period = 2.0 * np.pi / metric_params["om"]
     if time_units == "orbit":
         tstart_abs = None if tstart is None else tstart * orbit_period
@@ -1243,6 +1679,7 @@ def process_files(
 
     selected_files = []
     tasks = []
+    script_mtime = Path(__file__).stat().st_mtime
     for fname in all_files:
         try:
             t_val = get_dump_time(fname)
@@ -1259,7 +1696,7 @@ def process_files(
         npz_out = fname[:-6] + ".npz"
         should_process = True
         if os.path.exists(npz_out):
-            if os.path.getmtime(npz_out) > os.path.getmtime(fname):
+            if os.path.getmtime(npz_out) > max(os.path.getmtime(fname), script_mtime):
                 should_process = False
             else:
                 try:
@@ -1347,4 +1784,3 @@ if __name__ == "__main__":
         delete_source=args.delete,
         nproc=args.nproc,
     )
-
