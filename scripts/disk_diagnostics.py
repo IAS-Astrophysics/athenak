@@ -25,6 +25,23 @@ def find_athenak_root():
 ATHENAK_ROOT = find_athenak_root()
 DYNBBH_CPP = ATHENAK_ROOT / "src" / "pgen" / "dynbbh.cpp"
 METRIC_KERNEL_SOURCE = None
+REQUIRED_H5_DATASETS = ("uov", "B", "x1v", "x2v", "x3v", "x1f", "x2f", "x3f")
+SKIPPED_H5_PREFIX = "Skipped HDF5 file"
+
+
+def format_h5_skip_message(fname, reason):
+    return f"{SKIPPED_H5_PREFIX}: {fname}: {reason}"
+
+
+def is_h5_skip_message(message):
+    return str(message).startswith(f"{SKIPPED_H5_PREFIX}:")
+
+
+def write_skip_log(log_path, messages):
+    if not messages:
+        return
+    text = "\n".join(str(message) for message in messages) + "\n"
+    Path(log_path).write_text(text)
 
 
 def parse_bool(value, default=False):
@@ -635,6 +652,7 @@ def valencia_shell_diagnostics(
     gcov = shell_geom["gcov"]
     gcon = shell_geom["gcon"]
     gamma_dd = shell_geom["gamma_dd"]
+    gamma_uu = shell_geom["gamma_uu"]
     alpha = shell_geom["alpha"]
     beta_u = shell_geom["beta_u"]
     d_sigma_cov = shell_geom["d_sigma_cov"]
@@ -712,6 +730,62 @@ def valencia_shell_diagnostics(
     rho_h = rho * gamma_law_specific_enthalpy(rho, press, params["gamma_gas"])
     b_sq = np.einsum("...a,...a->...", b_con, b_cov)
     total_pressure = press + 0.5 * b_sq
+
+    b0_euler = w_lorentz * bv
+    b_d_euler = (
+        np.einsum("...ij,...j->...i", gamma_dd, b_u) / w_lorentz[..., None]
+        + b0_euler[..., None] * v_d
+    )
+    w2 = w_lorentz * w_lorentz
+    fluid_momentum_d = rho_h[..., None] * w2[..., None] * v_d
+    em_momentum_d = (
+        b_sq[..., None] * w2[..., None] * v_d - b0_euler[..., None] * b_d_euler
+    )
+    fluid_stress_dd = (
+        rho_h[..., None, None]
+        * w2[..., None, None]
+        * v_d[..., :, None]
+        * v_d[..., None, :]
+        + press[..., None, None] * gamma_dd
+    )
+    em_stress_dd = (
+        b_sq[..., None, None]
+        * w2[..., None, None]
+        * v_d[..., :, None]
+        * v_d[..., None, :]
+        + 0.5 * b_sq[..., None, None] * gamma_dd
+        - b_d_euler[..., :, None] * b_d_euler[..., None, :]
+    )
+    fluid_stress_ud = np.einsum("...ik,...kj->...ij", gamma_uu, fluid_stress_dd)
+    em_stress_ud = np.einsum("...ik,...kj->...ij", gamma_uu, em_stress_dd)
+    fluid_flux_ud = (
+        alpha[..., None, None] * fluid_stress_ud
+        - beta_u[..., :, None] * fluid_momentum_d[..., None, :]
+    )
+    em_flux_ud = (
+        alpha[..., None, None] * em_stress_ud
+        - beta_u[..., :, None] * em_momentum_d[..., None, :]
+    )
+    pdot_fluid_density = np.einsum("...ij,...i->...j", fluid_flux_ud, unit_normal_cov)
+    pdot_em_density = np.einsum("...ij,...i->...j", em_flux_ud, unit_normal_cov)
+    pdot_fluid_surface = np.einsum("...ij,...i->...j", fluid_flux_ud, d_sigma_cov)
+    pdot_em_surface = np.einsum("...ij,...i->...j", em_flux_ud, d_sigma_cov)
+
+    def angular_momentum_flux(momentum_flux_d):
+        return np.stack(
+            (
+                y_aligned * momentum_flux_d[..., 2] - z_aligned * momentum_flux_d[..., 1],
+                z_aligned * momentum_flux_d[..., 0] - x_aligned * momentum_flux_d[..., 2],
+                x_aligned * momentum_flux_d[..., 1] - y_aligned * momentum_flux_d[..., 0],
+            ),
+            axis=-1,
+        )
+
+    ldot_fluid_density = angular_momentum_flux(pdot_fluid_density)
+    ldot_em_density = angular_momentum_flux(pdot_em_density)
+    ldot_fluid_surface = angular_momentum_flux(pdot_fluid_surface)
+    ldot_em_surface = angular_momentum_flux(pdot_em_surface)
+
     matter_stress = rho_h * ur_coord * u_phi
     maxwell_stress = -br_coord * b_phi
     em_exact_stress = b_sq * ur_coord * u_phi - br_coord * b_phi
@@ -873,6 +947,10 @@ def valencia_shell_diagnostics(
         "penna_mean_flow_ur": mean_flow_con_sph_theta[..., 1],
         "penna_mean_flow_utheta": mean_flow_con_sph_theta[..., 2],
         "penna_mean_flow_uphi": mean_flow_con_sph_theta[..., 3],
+        "ldot_fluid_density": ldot_fluid_density,
+        "ldot_em_density": ldot_em_density,
+        "ldot_fluid_surface": ldot_fluid_surface,
+        "ldot_em_surface": ldot_em_surface,
     }
 
     return mdot_density, mdot_surface, ur_coord, vr_euler, stress_profiles
@@ -897,6 +975,25 @@ def get_var_indices(h5_file):
 def get_dump_time(fname):
     with h5py.File(fname, "r") as f:
         return float(f.attrs.get("Time", 0.0))
+
+
+def inspect_h5_dump(fname):
+    try:
+        with h5py.File(fname, "r") as f:
+            missing = [key for key in REQUIRED_H5_DATASETS if key not in f]
+            if missing:
+                reason = "missing required dataset(s): " + ", ".join(missing)
+                return None, format_h5_skip_message(fname, reason)
+
+            _dens_i, _press_i, _vx_i, _vy_i, _vz_i, is_conserved = get_var_indices(f)
+            if is_conserved:
+                reason = (
+                    "does not contain primitive velocity output required for GR stresses"
+                )
+                return None, format_h5_skip_message(fname, reason)
+            return float(f.attrs.get("Time", 0.0)), None
+    except (OSError, KeyError) as exc:
+        return None, format_h5_skip_message(fname, exc)
 
 
 def make_shell_points(radii_axis, theta_vals, phi_vals, r_mats):
@@ -1113,15 +1210,17 @@ def integrate_and_save(args):
         metric_params,
     ) = args
 
+    reading_h5 = False
     try:
+        reading_h5 = True
         with h5py.File(fname, "r") as f:
-            if "uov" not in f or "x1v" not in f or "x1f" not in f:
-                return False, f"Corrupted structure in {fname}"
+            missing = [key for key in REQUIRED_H5_DATASETS if key not in f]
+            if missing:
+                reason = "missing required dataset(s): " + ", ".join(missing)
+                return False, format_h5_skip_message(fname, reason)
 
             ds_uov = f["uov"]
-            ds_b = f["B"] if "B" in f else None
-            if ds_b is None:
-                return False, f"{fname} is missing the B dataset required for GR stress diagnostics"
+            ds_b = f["B"]
             x1v = f["x1v"][:]
             x2v = f["x2v"][:]
             x3v = f["x3v"][:]
@@ -1132,7 +1231,10 @@ def integrate_and_save(args):
 
             dens_i, press_i, vx_i, vy_i, vz_i, is_conserved = get_var_indices(f)
             if is_conserved:
-                return False, f"{fname} does not contain primitive velocity output required for GR stresses"
+                reason = (
+                    "does not contain primitive velocity output required for GR stresses"
+                )
+                return False, format_h5_skip_message(fname, reason)
 
             bin_edges = np.arange(rmin, rmax + dr * 1.0e-9, dr)
             n_bins = len(bin_edges) - 1
@@ -1256,7 +1358,20 @@ def integrate_and_save(args):
             ur_theta_phi_avg = np.nanmean(ur_coord, axis=2)
             vr_theta_phi_avg = np.nanmean(vr_euler, axis=2)
             mdot_of_radius = np.nansum(mdot_surface, axis=(1, 2))
+            ldot_fluid_theta_phi_avg = np.nanmean(
+                stress_profiles["ldot_fluid_density"], axis=2
+            )
+            ldot_em_theta_phi_avg = np.nanmean(
+                stress_profiles["ldot_em_density"], axis=2
+            )
+            ldot_fluid_of_radius = np.nansum(
+                stress_profiles["ldot_fluid_surface"], axis=(1, 2)
+            )
+            ldot_em_of_radius = np.nansum(
+                stress_profiles["ldot_em_surface"], axis=(1, 2)
+            )
 
+        reading_h5 = False
         np.savez(
             npz_out,
             time=np.array([t_val]),
@@ -1279,6 +1394,18 @@ def integrate_and_save(args):
             ur_theta_phi_avg=np.array([ur_theta_phi_avg]),
             vr_theta_phi_avg=np.array([vr_theta_phi_avg]),
             mdot_of_radius=np.array([mdot_of_radius]),
+            ldot_x_fluid_theta_phi_avg=np.array([ldot_fluid_theta_phi_avg[..., 0]]),
+            ldot_y_fluid_theta_phi_avg=np.array([ldot_fluid_theta_phi_avg[..., 1]]),
+            ldot_z_fluid_theta_phi_avg=np.array([ldot_fluid_theta_phi_avg[..., 2]]),
+            ldot_x_em_theta_phi_avg=np.array([ldot_em_theta_phi_avg[..., 0]]),
+            ldot_y_em_theta_phi_avg=np.array([ldot_em_theta_phi_avg[..., 1]]),
+            ldot_z_em_theta_phi_avg=np.array([ldot_em_theta_phi_avg[..., 2]]),
+            ldot_x_fluid_of_radius=np.array([ldot_fluid_of_radius[..., 0]]),
+            ldot_y_fluid_of_radius=np.array([ldot_fluid_of_radius[..., 1]]),
+            ldot_z_fluid_of_radius=np.array([ldot_fluid_of_radius[..., 2]]),
+            ldot_x_em_of_radius=np.array([ldot_em_of_radius[..., 0]]),
+            ldot_y_em_of_radius=np.array([ldot_em_of_radius[..., 1]]),
+            ldot_z_em_of_radius=np.array([ldot_em_of_radius[..., 2]]),
             stress_mean_press=np.array([stress_profiles["stress_mean_press"]]),
             stress_mean_ptot=np.array([stress_profiles["stress_mean_ptot"]]),
             stress_mean_rhoh=np.array([stress_profiles["stress_mean_rhoh"]]),
@@ -1329,6 +1456,12 @@ def integrate_and_save(args):
                 pass
 
         return True, f"Saved {os.path.basename(npz_out)}"
+    except (OSError, KeyError) as exc:
+        if reading_h5:
+            return False, format_h5_skip_message(fname, exc)
+        import traceback
+
+        return False, f"Error in {fname}: {exc}\n{traceback.format_exc()}"
     except Exception as exc:
         import traceback
 
@@ -1382,6 +1515,18 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         "ur_theta_phi_avg",
         "vr_theta_phi_avg",
         "mdot_of_radius",
+        "ldot_x_fluid_theta_phi_avg",
+        "ldot_y_fluid_theta_phi_avg",
+        "ldot_z_fluid_theta_phi_avg",
+        "ldot_x_em_theta_phi_avg",
+        "ldot_y_em_theta_phi_avg",
+        "ldot_z_em_theta_phi_avg",
+        "ldot_x_fluid_of_radius",
+        "ldot_y_fluid_of_radius",
+        "ldot_z_fluid_of_radius",
+        "ldot_x_em_of_radius",
+        "ldot_y_em_of_radius",
+        "ldot_z_em_of_radius",
         "penna_mean_flow_ut",
         "penna_mean_flow_ur",
         "penna_mean_flow_utheta",
@@ -1677,16 +1822,19 @@ def process_files(
     if not all_files:
         return
 
+    skip_log_path = run_path / f"{Path(output_filename).stem}_skipped_h5.log"
+    skipped_messages = []
+    skipped_files = set()
     selected_files = []
     tasks = []
     script_mtime = Path(__file__).stat().st_mtime
     for fname in all_files:
-        try:
-            t_val = get_dump_time(fname)
-        except OSError as e:
-            print(f"Skipping unreadable file {fname}: {e}")
+        t_val, skip_message = inspect_h5_dump(fname)
+        if skip_message is not None:
+            print(skip_message)
+            skipped_messages.append(skip_message)
+            skipped_files.add(fname)
             continue
-        #t_val = get_dump_time(fname)
         if tstart_abs is not None and t_val < tstart_abs:
             continue
         if tend_abs is not None and t_val > tend_abs:
@@ -1722,6 +1870,7 @@ def process_files(
             )
 
     if not selected_files:
+        write_skip_log(skip_log_path, skipped_messages)
         print("No input dumps found in the requested time range.")
         return
 
@@ -1732,22 +1881,43 @@ def process_files(
                 for i, result in enumerate(pool.imap(integrate_and_save, tasks), start=1):
                     ok, message = result
                     if not ok:
-                        failures.append(message)
+                        if is_h5_skip_message(message):
+                            skipped_messages.append(message)
+                            skipped_files.add(tasks[i - 1][0])
+                        else:
+                            failures.append(message)
                     sys.stdout.write(f"\r[Proc] {i}/{len(tasks)}...")
                     sys.stdout.flush()
         else:
             for i, task in enumerate(tasks, start=1):
                 ok, message = integrate_and_save(task)
                 if not ok:
-                    failures.append(message)
+                    if is_h5_skip_message(message):
+                        skipped_messages.append(message)
+                        skipped_files.add(task[0])
+                    else:
+                        failures.append(message)
                 sys.stdout.write(f"\r[Proc] {i}/{len(tasks)}...")
                 sys.stdout.flush()
         print("\nBatch processing complete.")
+        write_skip_log(skip_log_path, skipped_messages)
+        if skipped_messages:
+            print(f"Wrote skipped HDF5 log: {skip_log_path}")
         if failures:
             raise RuntimeError("\n\n".join(failures))
+    else:
+        write_skip_log(skip_log_path, skipped_messages)
 
-    selected_npz_files = [fname[:-6] + ".npz" for fname in selected_files if os.path.exists(fname[:-6] + ".npz")]
-    stitch_archives(str(run_path / output_filename), files=selected_npz_files, omega_bin=metric_params["om"])
+    selected_npz_files = [
+        fname[:-6] + ".npz"
+        for fname in selected_files
+        if fname not in skipped_files and os.path.exists(fname[:-6] + ".npz")
+    ]
+    stitch_archives(
+        str(run_path / output_filename),
+        files=selected_npz_files,
+        omega_bin=metric_params["om"],
+    )
 
 
 if __name__ == "__main__":
