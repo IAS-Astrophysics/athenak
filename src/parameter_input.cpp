@@ -337,7 +337,7 @@ void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string 
     for (auto it = pb->line.begin(); it != pb->line.end(); ++it) {
       if (name.compare(it->param_name) == 0) {   // param name already exists
         it->param_value.assign(value);           // replace existing param value
-        it->param_comment.assign(comment);       // replace exisiting param comment
+        it->param_comment.assign(comment);       // replace existing param comment
         if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
         return;
       }

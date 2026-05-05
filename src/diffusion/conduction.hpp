@@ -28,7 +28,7 @@ class Conduction {
   Real kappa;         // thermal conductivity
   bool tdep_kappa;    // temperature-dependent conductivity
   Real kappa_ceiling; // ceiling of thermal conductivity
-  bool sat_hflux;     // saturtion of heat flux
+  bool sat_hflux;     // saturation of heat flux
 
   // function to add heat fluxes to Hydro and/or MHD fluxes
   void AddHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,

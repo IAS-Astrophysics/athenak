@@ -239,7 +239,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin) {
 //;  }
 
 
-  // Get parameters for gravitatonal potential of central point mass
+  // Get parameters for gravitational potential of central point mass
   if (std::strcmp(COORDINATE_SYSTEM, "cartesian") != 0
       && std::strcmp(COORDINATE_SYSTEM, "spherical_polar") != 0 ) {
     gm0 = pin->GetOrAddReal("problem","GM",0.0);
@@ -482,7 +482,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin) {
 }
 
 // Set B field from is to ke
-// We normally need to adjut js and je limist when it is polar boundary,
+// We normally need to adjust js and je limit when it is polar boundary,
 // since the B field at the pole
 // is not set by the user. It also avoids deviding by zero.
 // When we set the boundary conditions (e.g. i),
@@ -1561,5 +1561,3 @@ void Cooling(MeshBlock *pmb, const Real time, const Real dt,const AthenaArray<Re
 //;    vpz(k) -= a * zp0(k);
 //;  }
 //;}
-
-
