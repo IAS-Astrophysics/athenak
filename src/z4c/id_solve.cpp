@@ -677,12 +677,15 @@ void IDConformalThinSandwich::BuildFreeData() {
   switch (fd) {
     case 2:
       BuildGammaDotAndDK<2>();
+      FillHorizonJunk<2>();
       break;
     case 3:
       BuildGammaDotAndDK<3>();
+      FillHorizonJunk<3>();
       break;
     default:
       BuildGammaDotAndDK<4>();
+      FillHorizonJunk<4>();
       break;
   }
 }
@@ -757,6 +760,54 @@ void BuildGammaDotAndDKImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
 template <int NGHOST>
 void IDConformalThinSandwich::BuildGammaDotAndDK() {
   BuildGammaDotAndDKImpl<NGHOST>(pmy_pack_, u_cts, u_free);
+}
+
+template <int NGHOST>
+void FillHorizonJunkImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
+                         DvceArray5D<Real> u_free, Real rfill,
+                         Real cx, Real cy, Real cz) {
+  if (rfill <= 0.0) return;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+  int fd = pmbp->pz4c->opt.fd_stencil;
+  const Real rfill2 = rfill*rfill;
+  par_for("IDCTS::FillHorizonJunk", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real x = CellCenterX(i - indcs.is, indcs.nx1, size.d_view(m).x1min,
+                         size.d_view(m).x1max);
+    Real y = CellCenterX(j - indcs.js, indcs.nx2, size.d_view(m).x2min,
+                         size.d_view(m).x2max);
+    Real z = CellCenterX(k - indcs.ks, indcs.nx3, size.d_view(m).x3min,
+                         size.d_view(m).x3max);
+    Real r2 = (x-cx)*(x-cx) + (y-cy)*(y-cy) + (z-cz)*(z-cz);
+    if (r2 >= rfill2) return;
+
+    u_free(m, ID_FREE_E, k,j,i) = 0.0;
+    for (int a = 0; a < 3; ++a) u_free(m, ID_FREE_PX+a, k,j,i) = 0.0;
+
+    Real idx[3] = {1.0/size.d_view(m).dx1, 1.0/size.d_view(m).dx2,
+                   1.0/size.d_view(m).dx3};
+    Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+    CTSOperator<NGHOST>(u_cts, u_free, idx, fd, m, k, j, i, op, diag);
+
+    constexpr Real inv_two_pi = 1.0/(2.0*3.14159265358979323846);
+    constexpr Real inv_sixteen_pi = 1.0/(16.0*3.14159265358979323846);
+    u_free(m, ID_FREE_E, k,j,i) = -op[ID_CTS_PSI]*inv_two_pi;
+    for (int a = 0; a < 3; ++a) {
+      u_free(m, ID_FREE_PX+a, k,j,i) = op[ID_CTS_BETAX+a]*inv_sixteen_pi;
+    }
+  });
+}
+
+template <int NGHOST>
+void IDConformalThinSandwich::FillHorizonJunk() {
+  if (!fill_horizon_junk_) return;
+  FillHorizonJunkImpl<NGHOST>(pmy_pack_, u_cts, u_free, horizon_radius_,
+                              horizon_center_[0], horizon_center_[1], horizon_center_[2]);
 }
 
 void IDConformalThinSandwich::ApplySolution() {

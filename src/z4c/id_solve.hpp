@@ -102,6 +102,8 @@ class IDConformalThinSandwich {
 
   template <int NGHOST>
   void BuildGammaDotAndDK();
+  template <int NGHOST>
+  void FillHorizonJunk();
 
   friend class IDCTSMultigridDriver;
   friend class IDCTSMultigrid;
