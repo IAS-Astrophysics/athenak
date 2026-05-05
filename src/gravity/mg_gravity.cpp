@@ -237,6 +237,7 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
 }
 
 void MGGravity::SmoothPack(int color) {
+  color ^= pmy_driver_->GetCoffset();
   int ll = nlevel_-1-current_level_;
   int is = ngh_, ie = is+(indcs_.nx1>>ll)-1;
   int js = ngh_, je = js+(indcs_.nx2>>ll)-1;

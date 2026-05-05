@@ -267,7 +267,6 @@ class Multigrid {
     }();
     int rlev_l = rlev;
     Real odiag = stencil.omega_over_diag;
-    color ^= pmy_driver_->GetCoffset();
     par_for("Multigrid::Smooth", ExeSpace(), 0, nmmb_-1, kl, ku, jl, ju,
     KOKKOS_LAMBDA(const int m, const int k, const int j) {
       Real dx = (rlev_l <= 0) ? brdx(m) * static_cast<Real>(1<<(-rlev_l))

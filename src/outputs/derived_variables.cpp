@@ -1545,6 +1545,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
     });
     i_dv += n_comp;
+  }
 
   // Z4c Diagnostics: Kretschmann Scalar, Electric/Magnetic Weyl tensors, Super-Poynting Flux
   if (name.compare("z4c_diag") == 0) {
