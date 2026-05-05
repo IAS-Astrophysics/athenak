@@ -21,6 +21,7 @@
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/horizon_dump.hpp"
+#include "z4c/id_solve.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/cce/cce.hpp"
@@ -40,6 +41,10 @@ void Z4c::QueueZ4cTasks() {
   // Start task list
   pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start);
   pnr->QueueTask(&Z4c::InitRecvWeyl, this, Z4c_IRecvW, "Z4c_IRecvW", Task_Start);
+  if (pmy_pack->pid_solve != nullptr) {
+    pnr->QueueTask(&IDConformalThinSandwich::SolveTask, pmy_pack->pid_solve,
+                   Z4c_IDSolve, "Z4c_IDSolve", Task_Start, {Z4c_Recv});
+  }
 
   // Run task list
   pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run);

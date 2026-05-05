@@ -22,6 +22,7 @@
 #include "z4c/tmunu.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/id_solve.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
@@ -58,6 +59,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
   if (ptmunu != nullptr) {delete ptmunu;}
+  if (pid_solve != nullptr) {delete pid_solve;}
   if (prad   != nullptr) {delete prad;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (pnr    != nullptr) {delete pnr;}
@@ -224,6 +226,18 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
       (pin->DoesBlockExist("mhd")) ) {
     pdyngr = dyngr::BuildDynGRMHD(this, pin);
     ptmunu = new Tmunu(this, pin);
+  }
+
+  if (pin->DoesBlockExist("id_solve")) {
+    if (pz4c == nullptr || padm == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<id_solve> requires <z4c> so the native CTS solve "
+                << "can update ADM/Z4c data directly." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pid_solve = new z4c::IDConformalThinSandwich(this, pin);
+  } else {
+    pid_solve = nullptr;
   }
 
   if (pz4c != nullptr || padm != nullptr) {

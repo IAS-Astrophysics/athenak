@@ -35,7 +35,8 @@
 Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost,
                      bool on_host):
   pmy_driver_(pmd), pmy_pack_(pmbp), pmy_mesh_(pmd->pmy_mesh_), ngh_(nghost),
-  nvar_(pmd->nvar_), defscale_(1.0), on_host_(on_host)  {
+  nvar_(pmd->nvar_), ncoeff_(pmd->ncoeff_), nmatrix_(pmd->nmatrix_),
+  defscale_(1.0), on_host_(on_host)  {
   if(pmy_pack_ != nullptr) {
     //Meshblock levels
     indcs_ = pmy_mesh_->mb_indcs;
@@ -155,6 +156,12 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost,
     Kokkos::realloc(u_[l]  , nmmb_, nvar_, ncz, ncy, ncx);
     Kokkos::realloc(src_[l], nmmb_, nvar_, ncz, ncy, ncx);
     Kokkos::realloc(def_[l], nmmb_, nvar_, ncz, ncy, ncx);
+    if (ncoeff_ > 0) {
+      Kokkos::realloc(coeff_[l], nmmb_, ncoeff_, ncz, ncy, ncx);
+    }
+    if (nmatrix_ > 0) {
+      Kokkos::realloc(matrix_[l], nmmb_, nmatrix_, ncz, ncy, ncx);
+    }
 
     if (!((pmy_pack_ != nullptr) && (l == nlevel_-1)))
       Kokkos::realloc(uold_[l], nmmb_, nvar_, ncz, ncy, ncx);
@@ -245,6 +252,12 @@ void Multigrid::ReallocateForAMR() {
     Kokkos::realloc(u_[l],   nmmb_, nvar_, ncz, ncy, ncx);
     Kokkos::realloc(src_[l], nmmb_, nvar_, ncz, ncy, ncx);
     Kokkos::realloc(def_[l], nmmb_, nvar_, ncz, ncy, ncx);
+    if (ncoeff_ > 0) {
+      Kokkos::realloc(coeff_[l], nmmb_, ncoeff_, ncz, ncy, ncx);
+    }
+    if (nmatrix_ > 0) {
+      Kokkos::realloc(matrix_[l], nmmb_, nmatrix_, ncz, ncy, ncx);
+    }
     if (l != nlevel_ - 1)
       Kokkos::realloc(uold_[l], nmmb_, nvar_, ncz, ncy, ncx);
   }

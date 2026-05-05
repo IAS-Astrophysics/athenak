@@ -227,8 +227,23 @@ class Multigrid {
   int GetCurrentLevel() { return current_level_; }
   int GetLevelShift() { return nlevel_ - 1 - current_level_; }
   int GetSize() { return indcs_.nx1; }
+  int GetNumMeshBlocks() { return nmmb_; }
   int GetGhostCells() { return ngh_; }
   Real GetRootDx() { return rdx_; }
+  void SetCurrentLevel(int level) { current_level_ = level; }
+  auto GetBlockDx() { return block_rdx_.d_view; }
+  auto GetBlockDx_h() { return block_rdx_.h_view; }
+  auto GetCoefficientLevel(int level) { return coeff_[level].d_view; }
+  auto GetCoefficientLevel_h(int level) { return coeff_[level].h_view; }
+  void SyncCoefficientLevelToHost(int level) {
+    Kokkos::deep_copy(coeff_[level].h_view, coeff_[level].d_view);
+  }
+  void ModifyCoefficientLevelOnHost(int level) {
+    coeff_[level].template modify<HostExeSpace>();
+  }
+  void SyncCoefficientLevelToDevice(int level) {
+    coeff_[level].template sync<DevExeSpace>();
+  }
   auto GetCurrentData() { return u_[current_level_].d_view; }
   auto GetCurrentSource() { return src_[current_level_].d_view; }
   auto GetCurrentOldData() { return uold_[current_level_].d_view; }

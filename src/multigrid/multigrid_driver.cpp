@@ -42,7 +42,7 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     pmy_mesh_(pmbp->pmesh),
     needinit_(true), amr_seq_(0), nreflevel_(0), eps_(-1.0),
     niter_(-1), npresmooth_(1), npostsmooth_(1), coffset_(0), fprolongation_(0),
-    nb_rank_(0), ncoeff_(0),
+    nb_rank_(0), ncoeff_(0), nmatrix_(0),
     octets_(nullptr), octetmap_(nullptr), octetbflag_(nullptr), noctets_(nullptr),
     oct_u_buf_(nullptr), oct_def_buf_(nullptr),
     oct_src_buf_(nullptr), oct_uold_buf_(nullptr), octet_stride_(0),
