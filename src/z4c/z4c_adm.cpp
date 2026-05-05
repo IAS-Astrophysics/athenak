@@ -10,6 +10,7 @@
 #include <math.h> // pow
 
 // C++ standard headers
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 
@@ -45,8 +46,8 @@ namespace z4c {
 //
 // The Z4c variables will be set on the whole MeshBlock with the exception of
 // the Gamma's that can only be set in the interior of the MeshBlock.
-template <int NGHOST>
-void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
+template <int FD_STENCIL>
+void ADMToZ4cImpl(MeshBlockPack *pmbp, ParameterInput *pin) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -183,12 +184,33 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
     for (int a = 0; a < 3; ++a) {
       z4c.vGam_u(m, a, k, j, i) = 0.0;
       for (int b = 0; b < 3; ++b) {
-        z4c.vGam_u(m, a, k, j, i) -= Dx<NGHOST>(b, idx, g3u, m, b, a, k, j, i);
+        z4c.vGam_u(m, a, k, j, i) -= Dx<FD_STENCIL>(b, idx, g3u, m, b, a, k, j, i);
       }
     }
   });
-  AlgConstr(pmbp);
+  pmbp->pz4c->AlgConstr(pmbp);
   return;
+}
+
+template <int NGHOST>
+void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
+  switch (pmbp->pz4c->opt.fd_stencil) {
+    case 2:
+      ADMToZ4cImpl<2>(pmbp, pin);
+      break;
+    case 3:
+      ADMToZ4cImpl<3>(pmbp, pin);
+      break;
+    case 4:
+      ADMToZ4cImpl<4>(pmbp, pin);
+      break;
+    default:
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Unsupported Z4c finite-difference stencil selector "
+                << pmbp->pz4c->opt.fd_stencil << std::endl;
+      std::exit(EXIT_FAILURE);
+  }
 }
 template void Z4c::ADMToZ4c<2>(MeshBlockPack *pmbp, ParameterInput *pin);
 template void Z4c::ADMToZ4c<3>(MeshBlockPack *pmbp, ParameterInput *pin);
@@ -247,8 +269,8 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
 //
 // The constraints are set only in the MeshBlock interior, because derivatives
 // of the ADM quantities are neded to compute them.
-template <int NGHOST>
-void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
+template <int FD_STENCIL>
+void ADMConstraintsImpl(MeshBlockPack *pmbp) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -262,36 +284,25 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   auto &z4c = pmbp->pz4c->z4c;
   auto &adm = pmbp->padm->adm;
   auto &u_con = pmbp->pz4c->u_con;
+  auto &opt = pmbp->pz4c->opt;
 
   // vacuum or with matter?
-  bool is_vacuum = (pmy_pack->ptmunu == nullptr || !opt.back_reaction);
+  bool is_vacuum = (pmbp->ptmunu == nullptr || !opt.back_reaction);
   Tmunu::Tmunu_vars tmunu;
-  if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
+  if (!is_vacuum) tmunu = pmbp->ptmunu->tmunu;
 
   Kokkos::deep_copy(u_con, 0.);
   auto &con = pmbp->pz4c->con;
-  par_for("ADM constraints loop",DevExeSpace(),
+  par_for("ADM Hamiltonian constraint loop",DevExeSpace(),
   0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u_z4c;
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> M_u;
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dpsi4_d;
-
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
-    //AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu_z4c;
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> K_ud;
 
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
-    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd_z4c;
-    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
-    //AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd_z4c;
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
-    //AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd_z4c;
-    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
-    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;
 
     AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
@@ -304,14 +315,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int c = 0; c < 3; ++c)
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
-      dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
-      dg_ddd_z4c(c,a,b) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
-      dK_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
-    }
-
-    // first derivative of psi4
-    for (int a =0; a < 3; ++a) {
-      dpsi4_d(a) = Dx<NGHOST>(a, idx, adm.psi4, m, k, j, i);
+      dg_ddd(c,a,b) = Dx<FD_STENCIL>(c, idx, adm.g_dd, m,a,b,k,j,i);
     }
 
     // second derivatives of g
@@ -320,9 +324,9 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int c = 0; c < 3; ++c)
     for(int d = c; d < 3; ++d) {
       if(a == b) {
-        ddg_dddd(a,a,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
+        ddg_dddd(a,a,c,d) = Dxx<FD_STENCIL>(a, idx, adm.g_dd, m,c,d,k,j,i);
       } else {
-        ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
+        ddg_dddd(a,b,c,d) = Dxy<FD_STENCIL>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
       }
     }
 
@@ -337,15 +341,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
                adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
                &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
                &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
-
-    /*Real detg_z4c = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
-                                z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
-                                z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
-    adm::SpatialInv(1./detg_z4c,
-               z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
-               z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
-               &g_uu_z4c(0,0), &g_uu_z4c(0,1), &g_uu_z4c(0,2),
-               &g_uu_z4c(1,1), &g_uu_z4c(1,2), &g_uu_z4c(2,2));*/
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
@@ -362,45 +357,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     for(int b = a; b < 3; ++b)
     for(int d = 0; d < 3; ++d) {
       Gamma_udd(c,a,b) += g_uu(c,d)*Gamma_ddd(d,a,b);
-    }
-
-    for(int a = 0; a < 3; ++a) {
-      Gamma_u(a) = 0.0;
-      for(int b = 0; b < 3; ++b)
-      for(int c = 0; c < 3; ++c) {
-        Gamma_u(a) += g_uu(b,c)*Gamma_udd(a,b,c);
-      }
-    }
-
-    // same but for z4c metric
-    /*for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b) {
-      Gamma_ddd_z4c(c,a,b) = 0.5*(dg_ddd_z4c(a,b,c)
-                          + dg_ddd_z4c(b,a,c) - dg_ddd_z4c(c,a,b));
-      Gamma_udd_z4c(c,a,b) = 0.0;
-    }
-
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int d = 0; d < 3; ++d) {
-      Gamma_udd_z4c(c,a,b) += g_uu_z4c(c,d)*Gamma_ddd_z4c(d,a,b);
-    }
-
-    for(int a = 0; a < 3; ++a) {
-      Gamma_u_z4c(a) = 0.0;
-      for(int b = 0; b < 3; ++b)
-      for(int c = 0; c < 3; ++c) {
-        Gamma_u_z4c(a) += g_uu_z4c(b,c)*Gamma_udd_z4c(a,b,c);
-      }
-    }*/
-    // Find the contracted conformal Christoffel symbol
-    for (int a = 0; a < 3; ++a) {
-      Gamma_u_z4c(a) = adm.psi4(m,k,j,i)*Gamma_u(a);
-      for (int b = 0; b < 3; ++b) {
-        Gamma_u_z4c(a) += 0.5*g_uu(a,b)*dpsi4_d(b);
-      }
     }
 
     // -----------------------------------------------------------------------------------
@@ -450,6 +406,100 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
       KK += K_ud(a,b) * K_ud(b,a);
     }
 
+    // -----------------------------------------------------------------------------------
+    // Actual constraints
+    //
+    // Hamiltonian constraint
+    //
+    con.H(m,k,j,i) = R + SQR(K) - KK;
+    if(!is_vacuum) {
+      con.H(m,k,j,i) -= 16*M_PI * tmunu.E(m,k,j,i);
+    }
+  });
+
+  par_for("ADM momentum constraint loop",DevExeSpace(),
+  0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u_z4c;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> M_u;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dpsi4_d;
+
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_udd;
+
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
+
+    // -----------------------------------------------------------------------------------
+    // derivatives
+    //
+    // first derivatives of g and K
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      dg_ddd(c,a,b) = Dx<FD_STENCIL>(c, idx, adm.g_dd, m,a,b,k,j,i);
+      dK_ddd(c,a,b) = Dx<FD_STENCIL>(c, idx, adm.vK_dd, m,a,b,k,j,i);
+    }
+
+    // first derivative of psi4
+    for (int a =0; a < 3; ++a) {
+      dpsi4_d(a) = Dx<FD_STENCIL>(a, idx, adm.psi4, m, k, j, i);
+    }
+
+    // -----------------------------------------------------------------------------------
+    // inverse metric
+    //
+    Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                                adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                                adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+    adm::SpatialInv(1./detg,
+               adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+               adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
+               &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+               &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+    // -----------------------------------------------------------------------------------
+    // Christoffel symbols
+    //
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      Gamma_ddd(c,a,b) = 0.5*(dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
+      Gamma_udd(c,a,b) = 0.0;
+    }
+
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int d = 0; d < 3; ++d) {
+      Gamma_udd(c,a,b) += g_uu(c,d)*Gamma_ddd(d,a,b);
+    }
+
+    for(int a = 0; a < 3; ++a) {
+      Gamma_u(a) = 0.0;
+      for(int b = 0; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
+        Gamma_u(a) += g_uu(b,c)*Gamma_udd(a,b,c);
+      }
+    }
+
+    // Find the contracted conformal Christoffel symbol
+    for (int a = 0; a < 3; ++a) {
+      Gamma_u_z4c(a) = adm.psi4(m,k,j,i)*Gamma_u(a);
+      for (int b = 0; b < 3; ++b) {
+        Gamma_u_z4c(a) += 0.5*g_uu(a,b)*dpsi4_d(b);
+      }
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Extrinsic curvature derivatives
+    //
     // Covariant derivative of K
     for(int a = 0; a < 3; ++a)
     for(int b = 0; b < 3; ++b)
@@ -473,12 +523,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     // -----------------------------------------------------------------------------------
     // Actual constraints
     //
-    // Hamiltonian constraint
-    //
-    con.H(m,k,j,i) = R + SQR(K) - KK;
-    if(!is_vacuum) {
-      con.H(m,k,j,i) -= 16*M_PI * tmunu.E(m,k,j,i);
-    }
     // Momentum constraint (contravariant)
     //
     for(int a = 0; a < 3; ++a) {
@@ -519,6 +563,27 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
     con.C(m,k,j,i) = SQR(con.H(m,k,j,i)) + con.M(m,k,j,i) +
                      SQR(z4c.vTheta(m,k,j,i)) + 4.0*con.Z(m,k,j,i);
 });
+}
+
+template <int NGHOST>
+void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
+  switch (pmbp->pz4c->opt.fd_stencil) {
+    case 2:
+      ADMConstraintsImpl<2>(pmbp);
+      break;
+    case 3:
+      ADMConstraintsImpl<3>(pmbp);
+      break;
+    case 4:
+      ADMConstraintsImpl<4>(pmbp);
+      break;
+    default:
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Unsupported Z4c finite-difference stencil selector "
+                << pmbp->pz4c->opt.fd_stencil << std::endl;
+      std::exit(EXIT_FAILURE);
+  }
 }
 template void Z4c::ADMConstraints<2>(MeshBlockPack *pmbp);
 template void Z4c::ADMConstraints<3>(MeshBlockPack *pmbp);

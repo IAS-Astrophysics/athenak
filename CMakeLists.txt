@@ -209,7 +209,7 @@ if (${PROBLEM} STREQUAL "lorene_bns")
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
 endif()
 
-if (${PROBLEM} STREQUAL "gbondi")
+if ((${PROBLEM} STREQUAL "gbondi") OR (${PROBLEM} STREQUAL "id_solve"))
   # --- HDF5 I/O (dynamic by default, static optional) --------------------------
   #   • Set STATIC_HDF5=ON at CMake configure time to bake every HDF5 object
   #     into the executable for easy archival or clusters that disallow .so’s.
@@ -232,4 +232,3 @@ target_include_directories(athena PUBLIC
 configure_file(config.hpp.in config.hpp)
 
 install( TARGETS athena DESTINATION bin )
-

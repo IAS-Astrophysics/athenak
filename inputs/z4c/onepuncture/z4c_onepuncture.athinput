@@ -42,6 +42,7 @@ ndiag      = 1          # cycles between diagostic output
 
 <z4c>
 diss       = 1.
+spatial_order = -1  # -1 follows mesh/nghost: 2,3,4 -> 2nd,4th,6th order
 
 <problem>
 pgen_name = z4c_one_puncture

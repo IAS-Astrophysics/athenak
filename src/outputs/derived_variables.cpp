@@ -32,12 +32,16 @@
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
+#include "utils/finite_diff.hpp"
+#include "athena_tensor.hpp"
 
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
 
 void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int nmb = pm->pmb_pack->nmb_thispack;
+  int max_nmb = std::max((nmb), (pm->pmb_pack->pmesh->nmb_maxperrank));
+
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
@@ -58,7 +62,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // temperature = pressure / density
   if (name.compare("temperature") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
@@ -74,7 +78,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("hydro_wz") == 0 ||
       name.compare("mhd_wz") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
@@ -93,7 +97,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("hydro_w2") == 0 ||
       name.compare("mhd_w2") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_w2") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
@@ -120,7 +124,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_jz") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("jz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -137,7 +141,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_j2") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("j2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -164,7 +168,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -232,7 +236,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_alt") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_alt", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -317,7 +321,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // contravariant four-current jcon.  Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_jcon") == 0) {
-    Kokkos::realloc(derived_var, nmb, 4, n3, n2, n1);
+    Kokkos::realloc(derived_var, max_nmb, 4, n3, n2, n1);
     auto jcon = derived_var;
 
     // Coordinates
@@ -460,7 +464,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // get all sgs terms for the MHD equations
   if (name.compare("mhd_sgs") == 0) {
     int n_sgs = 59;
-    Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
+    Kokkos::realloc(derived_var, max_nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->pmhd->u0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -547,7 +551,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all sgs terms for the MHD equations
   if (name.compare("hydro_sgs") == 0) {
     int n_sgs = 23;
-    Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
+    Kokkos::realloc(derived_var, max_nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->phydro->u0;
     par_for("hydro_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -712,7 +716,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_k_jxb") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_k_jxb", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -749,7 +753,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_perp") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_perp", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -859,7 +863,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_bmag") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("bmag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -882,7 +886,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     // 5 = < |B.J|^2 >
     // 6 = < U^2 >
     // 7 = < (d_j U_i)(d_j U_i) >
-    Kokkos::realloc(derived_var, nmb, 8, n3, n2, n1);
+    Kokkos::realloc(derived_var, max_nmb, 8, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     auto &b = pm->pmb_pack->pmhd->b0;
@@ -976,7 +980,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // divergence of B, including ghost zones
   if (name.compare("mhd_divb") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, max_nmb, n_dv, n3, n2, n1);
 
     // set the loop limits for 1D/2D/3D problems
     int jl = js, ju = je, kl = ks, ku = ke;
@@ -1010,7 +1014,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     bool needs_both = !(needs_coord_only || needs_fluid_only);
     int mom_var_size = (needs_both) ? 20 : 10;
     int moments_offset = (needs_both) ? 10 : 0;
-    Kokkos::realloc(derived_var, nmb, mom_var_size, n3, n2, n1);
+    Kokkos::realloc(derived_var, max_nmb, mom_var_size, n3, n2, n1);
     auto dv = derived_var;
 
     // Coordinates
@@ -1185,7 +1189,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
   // Particle density binned to mesh.
   if (name.compare("prtcl_d") == 0) {
-    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, max_nmb, 1, n3, n2, n1);
     auto pdens = derived_var;
     auto pr = pm->pmb_pack->ppart->prtcl_rdata;
     auto pi = pm->pmb_pack->ppart->prtcl_idata;
@@ -1541,6 +1545,296 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
     });
     i_dv += n_comp;
+
+  // Z4c Diagnostics: Kretschmann Scalar, Electric/Magnetic Weyl tensors, Super-Poynting Flux
+  if (name.compare("z4c_diag") == 0) {
+    constexpr int n_z4c_vars = 16;
+    
+    Kokkos::realloc(derived_var, max_nmb, n_z4c_vars, n3, n2, n1);
+    auto dv = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+
+    par_for("z4c_diag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      const int NGHOST = 4;
+
+      Real idx[] = {1.0 / size.d_view(m).dx1, 
+                    1.0 / size.d_view(m).dx2, 
+                    1.0 / size.d_view(m).dx3};
+
+      // Scalars
+      Real detg = 0.0;
+      Real K = 0.0;
+
+      // Symmetric tensors
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> K_ud;
+      
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dK_ddd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_udd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> DK_ddd;
+      
+      AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
+
+      // Weyl and Output Tensors
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> E_dd;
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> B_dd;
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> P_u;
+
+      // Initialize tensors
+      for (int a = 0; a < 3; ++a) {
+        P_u(a) = 0.0;
+        for (int b = 0; b < 3; ++b) {
+          K_ud(a,b) = 0.0;
+          for (int c = 0; c < 3; ++c) {
+            dg_ddd(c,a,b) = 0.0;
+            dK_ddd(c,a,b) = 0.0;
+            Gamma_ddd(c,a,b) = 0.0;
+            Gamma_udd(c,a,b) = 0.0;
+            DK_ddd(c,a,b) = 0.0;
+            for (int d = c; d < 3; ++d) {
+              ddg_dddd(c,d,a,b) = 0.0;
+            }
+          }
+        }
+        for (int b = a; b < 3; ++b) {
+          g_uu(a,b) = 0.0;
+          R_dd(a,b) = 0.0;
+          E_dd(a,b) = 0.0;
+          B_dd(a,b) = 0.0;
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Inverse metric and Guard
+      // ---------------------------------------------------------------------------------
+      detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                             adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      
+      // Guard the inverse metric properly. If degenerate, set to NAN and return.
+      if (detg <= 1e-10) {
+        for(int var_idx = 0; var_idx < n_z4c_vars; ++var_idx) {
+            dv(m, var_idx, k, j, i) = NAN;
+        }
+        return;
+      }
+
+      adm::SpatialInv(1.0/detg,
+                      adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+                      adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i),
+                      &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                      &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+      // ---------------------------------------------------------------------------------
+      // Derivatives of g and K
+      // ---------------------------------------------------------------------------------
+      for(int c = 0; c < 3; ++c) {
+        for(int a = 0; a < 3; ++a) {
+          for(int b = 0; b < 3; ++b) {
+            dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.g_dd, m,a,b,k,j,i);
+            dK_ddd(c,a,b) = Dx<NGHOST>(c, idx, adm.vK_dd, m,a,b,k,j,i);
+          }
+        }
+      }
+
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = c; d < 3; ++d) {
+              if(a == b) {
+                ddg_dddd(a,b,c,d) = Dxx<NGHOST>(a, idx, adm.g_dd, m,c,d,k,j,i);
+              } else {
+                ddg_dddd(a,b,c,d) = Dxy<NGHOST>(a, b, idx, adm.g_dd, m,c,d,k,j,i);
+              }
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Christoffel symbols
+      // ---------------------------------------------------------------------------------
+      for(int c = 0; c < 3; ++c) {
+        for(int a = 0; a < 3; ++a) {
+          for(int b = a; b < 3; ++b) {
+            Gamma_ddd(c,a,b) = 0.5 * (dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
+          }
+        }
+      }
+
+      for(int c = 0; c < 3; ++c) {
+        for(int a = 0; a < 3; ++a) {
+          for(int b = a; b < 3; ++b) {
+            for(int d = 0; d < 3; ++d) {
+              Gamma_udd(c,a,b) += g_uu(c,d) * Gamma_ddd(d,a,b);
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Ricci tensor
+      // ---------------------------------------------------------------------------------
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = 0; d < 3; ++d) {
+              for(int e = 0; e < 3; ++e) {
+                R_dd(a,b) += g_uu(c,d) * Gamma_udd(e,a,c) * Gamma_ddd(e,b,d);
+                R_dd(a,b) -= g_uu(c,d) * Gamma_udd(e,a,b) * Gamma_ddd(e,c,d);
+              }
+              R_dd(a,b) += 0.5 * g_uu(c,d) * (
+                  - ddg_dddd(c,d,a,b) - ddg_dddd(a,b,c,d) +
+                    ddg_dddd(a,c,b,d) + ddg_dddd(b,c,a,d));
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Extrinsic curvature traces & Covariant Derivative
+      // ---------------------------------------------------------------------------------
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            K_ud(a,b) += g_uu(a,c) * adm.vK_dd(m,c,b,k,j,i);
+          }
+        }
+        K += K_ud(a,a);
+      }
+      
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            DK_ddd(a,b,c) = dK_ddd(a,b,c);
+            for(int d = 0; d < 3; ++d) {
+              DK_ddd(a,b,c) -= Gamma_udd(d,a,b) * adm.vK_dd(m,d,c,k,j,i);
+              DK_ddd(a,b,c) -= Gamma_udd(d,a,c) * adm.vK_dd(m,b,d,k,j,i);
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Electric and Magnetic Weyl, Kretschmann, and Super-Poynting Flux
+      // ---------------------------------------------------------------------------------
+      
+      // E_ij
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          E_dd(a,b) = R_dd(a,b) + K * adm.vK_dd(m,a,b,k,j,i);
+          for(int c = 0; c < 3; ++c) {
+            E_dd(a,b) -= adm.vK_dd(m,a,c,k,j,i) * K_ud(c,b);
+          }
+        }
+      }
+
+      // Levi-Civita Construction
+      Real sqrt_g = std::sqrt(detg);
+      Real LC[3][3][3] = {{{0}}};
+      LC[0][1][2] = LC[1][2][0] = LC[2][0][1] = 1.0;
+      LC[0][2][1] = LC[2][1][0] = LC[1][0][2] = -1.0;
+
+      Real eps_duu[3][3][3] = {{{0}}};
+      for(int i1=0; i1<3; ++i1) {
+        for(int k1=0; k1<3; ++k1) {
+          for(int l1=0; l1<3; ++l1) {
+            for(int m1=0; m1<3; ++m1) {
+              for(int n1=0; n1<3; ++n1) {
+                eps_duu[i1][k1][l1] += g_uu(k1,m1) * g_uu(l1,n1) * LC[i1][m1][n1] * sqrt_g;
+              }
+            }
+          }
+        }
+      }
+
+      // B_ij
+      Real B_tmp[3][3] = {{0}};
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = 0; d < 3; ++d) {
+              B_tmp[a][b] += eps_duu[a][c][d] * DK_ddd(c,d,b);
+            }
+          }
+        }
+      }
+
+      for(int a = 0; a < 3; ++a) {
+        for(int b = a; b < 3; ++b) {
+          B_dd(a,b) = 0.5 * (B_tmp[a][b] + B_tmp[b][a]);
+        }
+      }
+
+      // Kretschmann Scalar
+      Real Kretschmann = 0.0;
+      Real E_uu[3][3] = {{0}};
+      Real B_uu[3][3] = {{0}};
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int d = 0; d < 3; ++d) {
+              E_uu[a][b] += g_uu(a,c) * g_uu(b,d) * E_dd(std::min(c,d), std::max(c,d));
+              B_uu[a][b] += g_uu(a,c) * g_uu(b,d) * B_dd(std::min(c,d), std::max(c,d));
+            }
+          }
+        }
+      }
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          Kretschmann += 8.0 * (E_dd(std::min(a,b), std::max(a,b)) * E_uu[a][b] - 
+                                B_dd(std::min(a,b), std::max(a,b)) * B_uu[a][b]);
+        }
+      }
+
+      // Bel-Robinson / Super-Poynting Flux
+      Real eps_uuu[3][3][3] = {{{0}}};
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int m1 = 0; m1 < 3; ++m1) {
+              eps_uuu[a][b][c] += g_uu(a,m1) * eps_duu[m1][b][c];
+            }
+          }
+        }
+      }
+
+      for(int a = 0; a < 3; ++a) {
+        for(int b = 0; b < 3; ++b) {
+          for(int c = 0; c < 3; ++c) {
+            for(int m1 = 0; m1 < 3; ++m1) {
+              for(int l1 = 0; l1 < 3; ++l1) {
+                P_u(a) -= eps_uuu[a][b][c] * E_dd(std::min(b,m1), std::max(b,m1)) * g_uu(m1,l1) * B_dd(std::min(c,l1), std::max(c,l1));
+              }
+            }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------------------
+      // Storing Output
+      // ---------------------------------------------------------------------------------
+      dv(m, 0, k, j, i) = Kretschmann;
+      dv(m, 1, k, j, i) = E_dd(0,0);
+      dv(m, 2, k, j, i) = E_dd(0,1);
+      dv(m, 3, k, j, i) = E_dd(0,2);
+      dv(m, 4, k, j, i) = E_dd(1,1);
+      dv(m, 5, k, j, i) = E_dd(1,2);
+      dv(m, 6, k, j, i) = E_dd(2,2);
+      dv(m, 7, k, j, i) = B_dd(0,0);
+      dv(m, 8, k, j, i) = B_dd(0,1);
+      dv(m, 9, k, j, i) = B_dd(0,2);
+      dv(m, 10, k, j, i) = B_dd(1,1);
+      dv(m, 11, k, j, i) = B_dd(1,2);
+      dv(m, 12, k, j, i) = B_dd(2,2);
+      dv(m, 13, k, j, i) = P_u(0);
+      dv(m, 14, k, j, i) = P_u(1);
+      dv(m, 15, k, j, i) = P_u(2);
+    });
+    i_dv += n_z4c_vars;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
 }

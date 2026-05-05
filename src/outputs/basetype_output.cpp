@@ -169,21 +169,32 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==156) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr)) {
+  if ((ivar>=156) && (ivar<173) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c diagnostics requested in <output> block '"
+       << out_params.block_name << "' but Z4c object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==173) && (pm->pmb_pack->padm == nullptr ||
+      pm->pmb_pack->pdyngr == nullptr || pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of angular momentum requested in <output> block '"
-       << out_params.block_name << "' but no adm or dyngrmhd object has been constructed."
+       << out_params.block_name
+       << "' but no adm, dyngrmhd, or mhd object has been constructed."
        << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==157) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr)) {
+  if ((ivar==174) && (pm->pmb_pack->padm == nullptr ||
+      pm->pmb_pack->pdyngr == nullptr || pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of torque requested in <output> block '"
-       << out_params.block_name << "' but no adm or dyngrmhd object has been constructed."
+       << out_params.block_name
+       << "' but no adm, dyngrmhd, or mhd object has been constructed."
        << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (ivar==158 && (pm->pmb_pack->pgrav == nullptr)) {
+  if (ivar==175 && (pm->pmb_pack->pgrav == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of gravity potential requested in <output> block '"
        << out_params.block_name << "' but gravity object not constructed."
@@ -721,6 +732,22 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("r22_ff",moments_offset+7,&(derived_var));
       outvars.emplace_back("r23_ff",moments_offset+8,&(derived_var));
       outvars.emplace_back("r33_ff",moments_offset+9,&(derived_var));
+    }
+    // Z4c Diagnostics
+    if (variable.compare("z4c_diag") == 0) {
+      out_params.contains_derived = true;
+      const char* z4c_diag_names[16] = {
+        "z4c_Kretschmann",
+        "z4c_Exx", "z4c_Exy", "z4c_Exz", "z4c_Eyy", "z4c_Eyz", "z4c_Ezz",
+        "z4c_Bxx", "z4c_Bxy", "z4c_Bxz", "z4c_Byy", "z4c_Byz", "z4c_Bzz",
+        "z4c_Px", "z4c_Py", "z4c_Pz"
+      };
+      
+      for (int i = 0; i < 16; ++i) {
+        // out_params.n_derived offsets the index if other derived vars are in the same block
+        outvars.emplace_back(z4c_diag_names[i], out_params.n_derived + i, &(derived_var));
+      }
+      out_params.n_derived += 16;
     }
   }
 

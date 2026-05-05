@@ -296,11 +296,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   }
 #endif
 
-  // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
-  if (multilevel) {
-    pmr = new MeshRefinement(this, pin);
-  }
-
   // set initial time/cycle parameters, output diagnostics
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
@@ -497,11 +492,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
         << std::endl;
       std::exit(EXIT_FAILURE);
     }
-  }
-
-  // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
-  if (multilevel) {
-    pmr = new MeshRefinement(this, pin);
   }
 
   // set remaining parameters, output diagnostics
