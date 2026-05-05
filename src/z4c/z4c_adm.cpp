@@ -264,7 +264,7 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   auto &u_con = pmbp->pz4c->u_con;
 
   // vacuum or with matter?
-  bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
+  bool is_vacuum = (pmy_pack->ptmunu == nullptr || !opt.back_reaction);
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 

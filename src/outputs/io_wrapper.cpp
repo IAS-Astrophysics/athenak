@@ -193,6 +193,36 @@ std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn std::size_t IOWrapper::Read_Integers(void *buf, IOWrapperSizeT cnt,
+//!                                          bool single_file_per_rank)
+//! \brief wrapper for {MPI_File_read} versus {std::fread} for reading integers.
+//! Returns number of ints actually read.
+
+std::size_t IOWrapper::Read_Integers(void *buf, IOWrapperSizeT cnt,
+                                     bool single_file_per_rank) {
+#if MPI_PARALLEL_ENABLED
+  if (!single_file_per_rank) {
+    MPI_Status status;
+    int errcode = MPI_File_read(fh_, buf, cnt, MPI_INT, &status);
+    if (errcode != MPI_SUCCESS) {
+      char msg[MPI_MAX_ERROR_STRING];
+      int resultlen;
+      MPI_Error_string(errcode, msg, &resultlen);
+      Kokkos::printf("%.*s\n", resultlen, msg);
+      return 0;
+    }
+    int nread;
+    if (MPI_Get_count(&status, MPI_INT, &nread) == MPI_UNDEFINED) { return 0; }
+    return nread;
+  } else {
+    return std::fread(buf, sizeof(int), cnt, reinterpret_cast<FILE*>(fh_));
+  }
+#else
+  return std::fread(buf, sizeof(int), cnt, fh_);
+#endif
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn int IOWrapper::Read_Reals(void *buf, IOWrapperSizeT cnt,
 //!                               bool single_file_per_rank)
 //! \brief wrapper for {MPI_File_read} versus {std::fread} for reading Athena Reals.

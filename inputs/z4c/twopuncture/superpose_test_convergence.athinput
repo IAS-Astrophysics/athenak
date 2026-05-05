@@ -1,0 +1,91 @@
+# Athena++ (Kokkos version) input file for spherical blast problem
+
+<comment>
+problem   = z4c one puncture
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
+
+<job>
+basename  = z4c      # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 2        # Number of ghost cells
+nx1       = 64       # Number of zones in X1-direction
+x1min     = -1       # minimum value of X1
+x1max     = 1        # maximum value of X1
+ix1_bc    = outflow  # inner-X1 boundary flag
+ox1_bc    = outflow  # outer-X1 boundary flag
+
+nx2       = 64        # Number of zones in X2-direction
+x2min     = -1      # minimum value of X2
+x2max     = 1       # maximum value of X2
+ix2_bc    = outflow   # inner-X2 boundary flag
+ox2_bc    = outflow   # outer-X2 boundary flag
+
+nx3       = 64        # Number of zones in X3-direction
+x3min     = -1       # minimum value of X3
+x3max     = 1        # maximum value of X3
+ix3_bc    = outflow   # inner-X3 boundary flag
+ox3_bc    = outflow   # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 64         # Number of cells in each MeshBlock, X1-dir
+nx2       = 64         # Number of cells in each MeshBlock, X2-dir
+nx3       = 64         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk4        # time integration algorithm
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 0         # cycle limit
+tlim       = 200        # time limit
+ndiag      = 1          # cycles between diagostic output
+
+<z4c>
+# Puncture Gauge
+lapse_harmonic  = 0.0                 # Harmonic lapse parameter mu_L
+lapse_oplog     = 2.0                 # 1+log lapse parameter
+shift_eta       = 2.0                 # Shift damping term
+diss            = 0.5                 # Kreiss-Oliger dissipation parameter
+chi_div_floor   = 0.00001
+damp_kappa1     = 0.02      # Constraint damping factor 1
+damp_kappa2     = 0.00
+
+<problem>
+pgen_name = z4c_one_puncture
+punc_1_rest_mass = 1.
+punc_2_rest_mass = 1.
+punc_1_cetner_x1 = -0.
+punc_1_center_x2 = 0.
+punc_2_center_x1 = 50.
+punc_2_center_x2 = 0.
+punc_1_velocity_x1 = 0.86602540378
+punc_2_velocity_x1 = -0.86602540378
+
+<output1>
+file_type  = hst        # History data dump
+dt         = 1       # time increment between outputs
+
+<output2>
+file_type  = tab        # Binary data dump
+variable   = adm    # variables to be output
+dt         = 1       # time increment between outputs
+slice_x2    = 0
+slice_x3    = 0
+
+<output3>
+file_type  = tab        # Binary data dump
+variable   = z4c    # variables to be output
+dt         = 1      # time increment between outputs
+slice_x2    = 0
+slice_x3    = 0
+
+<output4>
+file_type  = tab        # Binary data dump
+variable   = con    # variables to be output
+dt         = 1      # time increment between outputs
+slice_x2    = 0
+slice_x3    = 0
+
+<output5>
+file_type   = rst
+dt          = 50

@@ -24,6 +24,7 @@
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -36,6 +37,7 @@
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -92,6 +94,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                    bool single_file_per_rank) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -135,6 +138,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // root process reads z4c last_output_time and tracker data
   if (pz4c != nullptr) {
     Real last_output_time;
+    Real cce_dump_last_output_time;
     if (global_variable::my_rank == 0 || single_file_per_rank) {
       if (resfile.Read_Reals(&last_output_time, 1,single_file_per_rank) != 1) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -143,12 +147,22 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         exit(EXIT_FAILURE);
       }
     }
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      if (resfile.Read_Reals(&cce_dump_last_output_time, 1,single_file_per_rank) != 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "z4c::cce_dump_last_output_time data size read from restart "
+                  << "file is incorrect, restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
 #if MPI_PARALLEL_ENABLED
     if (!single_file_per_rank) {
       MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&cce_dump_last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 #endif
     pz4c->last_output_time = last_output_time;
+    pz4c->cce_dump_last_output_time = cce_dump_last_output_time;
 
     for (auto &pt : pz4c->ptracker) {
       Real pos[3];
@@ -166,6 +180,24 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
 #endif
       pt->SetPos(&pos[0]);
+    }
+
+    for (auto &pt : pz4c->phorizon_dump) {
+      int output_count;
+      if (global_variable::my_rank == 0 || single_file_per_rank) {
+        if (resfile.Read_Integers(&output_count, 1, single_file_per_rank) != 1) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "horizon dump data size read from restart "
+                    << "file is incorrect, restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      if (!single_file_per_rank) {
+        MPI_Bcast(&output_count, sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+      }
+#endif
+      pt->output_count = output_count;
     }
   }
 

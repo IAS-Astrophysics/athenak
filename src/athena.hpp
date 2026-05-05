@@ -57,7 +57,6 @@ class Coordinates;
 #define SELF_GRAVITY_ENABLED 0
 
 
-
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
 // constants that determine array index of Hydro/MHD variables
@@ -73,7 +72,7 @@ enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8,
 enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 
 // integer constants to specify spatial reconstruction methods
-enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
+enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz, wenomz};
 
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};
@@ -451,7 +450,7 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
 }
 
-#define NREDUCTION_VARIABLES 20
+#define NREDUCTION_VARIABLES 2000
 //----------------------------------------------------------------------------------------
 //! \struct summed_array_type
 // Following code is copied from Kokkos wiki pages on building custom reducers.  It allows

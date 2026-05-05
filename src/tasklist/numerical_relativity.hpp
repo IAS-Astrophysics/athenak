@@ -41,6 +41,7 @@ enum TaskName {
   MHD_SendU,
   MHD_RecvU,
   MHD_EField,
+  MHD_EFieldSrc,
   MHD_SendE,
   MHD_RecvE,
   MHD_CT,

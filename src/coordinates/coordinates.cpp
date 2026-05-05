@@ -8,6 +8,10 @@
 #include <iostream> // cout
 #include <string>
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
@@ -23,7 +27,20 @@
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     pmy_pack(ppack),
     excision_floor("excision_floor",1,1,1,1),
-    excision_flux("excision_flux",1,1,1,1) {
+    excision_flux("excision_flux",1,1,1,1),
+    excision_weight("excision_weight",1,1,1,1) {
+  coord_data.bh_excise = false;
+  coord_data.smooth_excise = false;
+  coord_data.smooth_excise_width = 1.0;
+  coord_data.smooth_excise_lapse_width = 0.05;
+  coord_data.smooth_excise_inflow_speed = 0.0;
+  coord_data.smooth_excise_sigma_max = -1.0;
+  coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
+  for (int n = 0; n < 3; ++n) {
+    coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
+    coord_data.punc_0_spin[n] = coord_data.punc_1_spin[n] = 0.0;
+    coord_data.punc_0_vel[n] = coord_data.punc_1_vel[n] = 0.0;
+  }
   // Check for relativistic dynamics
   // WGC: idea for handling new EOS
   is_dynamical_relativistic = (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))
@@ -56,11 +73,54 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
       coord_data.pexcise = pin->GetReal("coord","pexcise");
+      for (int n = 0; n < 3; ++n) {
+        coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
+        coord_data.punc_0_spin[n] = coord_data.punc_1_spin[n] = 0.0;
+        coord_data.punc_0_vel[n] = coord_data.punc_1_vel[n] = 0.0;
+      }
+      coord_data.punc_0_spin[2] = coord_data.bh_spin;
+      coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
+      coord_data.smooth_excise = pin->GetOrAddBoolean("coord","smooth_excision", false);
+      Real max_dx = 0.0;
+      auto &mb_size = pmy_pack->pmb->mb_size;
+      for (int m = 0; m < ppack->nmb_thispack; ++m) {
+        max_dx = fmax(max_dx, mb_size.h_view(m).dx1);
+        if (pmy_pack->pmesh->mb_indcs.nx2 > 1) {
+          max_dx = fmax(max_dx, mb_size.h_view(m).dx2);
+        }
+        if (pmy_pack->pmesh->mb_indcs.nx3 > 1) {
+          max_dx = fmax(max_dx, mb_size.h_view(m).dx3);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      MPI_Allreduce(MPI_IN_PLACE, &max_dx, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
+      Real default_smooth_width = fmax(0.25*coord_data.rexcise, 2.0*max_dx);
+      coord_data.smooth_excise_width = pin->GetOrAddReal(
+          "coord", "smooth_excision_width", default_smooth_width);
+      coord_data.smooth_excise_lapse_width = pin->GetOrAddReal(
+          "coord", "smooth_excision_lapse_width", 0.05);
+      coord_data.smooth_excise_inflow_speed = pin->GetOrAddReal(
+          "coord", "smooth_excision_inflow_speed", 0.25);
+      coord_data.smooth_excise_sigma_max = pin->GetOrAddReal(
+          "coord", "smooth_excision_sigma_max", -1.0);
+      if (coord_data.smooth_excise &&
+          (coord_data.smooth_excise_width <= 0.0 ||
+           coord_data.smooth_excise_lapse_width <= 0.0 ||
+           coord_data.smooth_excise_inflow_speed < 0.0 ||
+           coord_data.smooth_excise_sigma_max == 0.0)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "smooth_excision requires positive width/lapse_width and "
+                  << "non-negative inflow_speed; sigma_max must be positive or negative "
+                  << "to disable" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
 
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
@@ -70,6 +130,12 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("lapse") == 0) {
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
+        } else if (emethod.compare("puncture") == 0) {
+          coord_data.excision_scheme = ExcisionScheme::puncture;
+          // set puncture locations in pgen or z4c
+          // TO DO (@hzhu): update with z4c
+          coord_data.punc_0_rad = pin->GetOrAddReal("coord","excise_1_rad", -1.);
+          coord_data.punc_1_rad = pin->GetOrAddReal("coord","excise_2_rad", -1.);
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
@@ -86,6 +152,10 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(excision_floor, nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(excision_flux, nmb, ncells3, ncells2, ncells1);
+      Kokkos::realloc(excision_weight, nmb, ncells3, ncells2, ncells1);
+      Kokkos::deep_copy(excision_floor, false);
+      Kokkos::deep_copy(excision_flux, false);
+      Kokkos::deep_copy(excision_weight, 0.0);
       if (coord_data.excision_scheme == ExcisionScheme::fixed) {
         SetExcisionMasks(excision_floor, excision_flux);
       }
