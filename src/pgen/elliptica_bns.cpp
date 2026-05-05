@@ -103,6 +103,18 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
     }
   }
 
+  // Check if the CompactObjectTracker is enabled, otherwise abort.
+  if (BHNS || BNS) {
+    if (pmbp->pz4c->ptracker.size() < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "There are two compact objects on the grid "
+              << "but only " << pmbp->pz4c->ptracker.size() 
+              << " tracker(s) is(are) set!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
   // Fields to interpolate
   idr->ifields =
     "alpha,betax,betay,betaz,"
