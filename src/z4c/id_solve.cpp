@@ -70,6 +70,40 @@ void MetricInverse(const ViewType &free, int m, int k, int j, int i, Real gu[3][
   gu[2][1] = gu[1][2];
 }
 
+template <typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+Real TotalU(const UView &u, const FView &free, int m, int v, int k, int j, int i) {
+  int base = (v == ID_CTS_PSI) ? ID_FREE_BASE_PSI : ID_FREE_BASE_BETAX + (v - ID_CTS_BETAX);
+  return free(m, base, k, j, i) + u(m, v, k, j, i);
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+Real DxTotal(int dir, const Real idx[], const UView &u, const FView &free, int m, int v,
+             int k, int j, int i) {
+  int base = (v == ID_CTS_PSI) ? ID_FREE_BASE_PSI : ID_FREE_BASE_BETAX + (v - ID_CTS_BETAX);
+  return Dx<NGHOST>(dir, idx, u, m, v, k, j, i)
+       + Dx<NGHOST>(dir, idx, free, m, base, k, j, i);
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+Real DxxTotal(int dir, const Real idx[], const UView &u, const FView &free, int m, int v,
+              int k, int j, int i) {
+  int base = (v == ID_CTS_PSI) ? ID_FREE_BASE_PSI : ID_FREE_BASE_BETAX + (v - ID_CTS_BETAX);
+  return Dxx<NGHOST>(dir, idx, u, m, v, k, j, i)
+       + Dxx<NGHOST>(dir, idx, free, m, base, k, j, i);
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+Real DxyTotal(int dir1, int dir2, const Real idx[], const UView &u, const FView &free,
+              int m, int v, int k, int j, int i) {
+  int base = (v == ID_CTS_PSI) ? ID_FREE_BASE_PSI : ID_FREE_BASE_BETAX + (v - ID_CTS_BETAX);
+  return Dxy<NGHOST>(dir1, dir2, idx, u, m, v, k, j, i)
+       + Dxy<NGHOST>(dir1, dir2, idx, free, m, base, k, j, i);
+}
+
 template <int NGHOST, typename ViewType>
 KOKKOS_INLINE_FUNCTION
 void Christoffel(const ViewType &free, const Real idx[], int m, int k, int j, int i,
@@ -161,12 +195,13 @@ Real AHatUU(const UView &u, const FView &free, const Real idx[], int m,
   Real div_beta = 0.0;
   Real dbeta[3][3];
   for (int c = 0; c < 3; ++c) {
-    dbeta[c][c] = Dx<NGHOST>(c, idx, u, m, ID_CTS_BETAX+c, k, j, i);
+    dbeta[c][c] = DxTotal<NGHOST>(c, idx, u, free, m, ID_CTS_BETAX+c, k, j, i);
     div_beta += dbeta[c][c];
   }
   for (int c = 0; c < 3; ++c) {
     for (int d = 0; d < 3; ++d) {
-      if (c != d) dbeta[c][d] = Dx<NGHOST>(c, idx, u, m, ID_CTS_BETAX+d, k, j, i);
+      if (c != d) dbeta[c][d] = DxTotal<NGHOST>(c, idx, u, free, m,
+                                                ID_CTS_BETAX+d, k, j, i);
     }
   }
 
@@ -174,7 +209,7 @@ Real AHatUU(const UView &u, const FView &free, const Real idx[], int m,
   for (int c = 0; c < 3; ++c) {
     lbeta += gu[a][c]*dbeta[b][c] + gu[b][c]*dbeta[a][c];
     for (int d = 0; d < 3; ++d) {
-      Real beta_d = u(m, ID_CTS_BETAX+d, k, j, i);
+      Real beta_d = TotalU(u, free, m, ID_CTS_BETAX+d, k, j, i);
       lbeta += (gu[a][c]*gamma[b][c][d] + gu[b][c]*gamma[a][c][d]
                 - (2.0/3.0)*gu[a][b]*gamma[c][c][d])*beta_d;
     }
@@ -203,14 +238,15 @@ void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_ste
   Christoffel<NGHOST>(free, idx, m, k, j, i, gu, gamma);
   Real ric = RicciScalar<NGHOST>(free, idx, m, k, j, i, gu, gamma);
 
-  Real psi = std::max(u(m, ID_CTS_PSI, k, j, i), static_cast<Real>(1.0e-8));
+  Real psi = std::max(TotalU(u, free, m, ID_CTS_PSI, k, j, i),
+                      static_cast<Real>(1.0e-8));
   Real dpsi[3];
   Real ddpsi[3][3];
   for (int a = 0; a < 3; ++a) {
-    dpsi[a] = Dx<NGHOST>(a, idx, u, m, ID_CTS_PSI, k, j, i);
+    dpsi[a] = DxTotal<NGHOST>(a, idx, u, free, m, ID_CTS_PSI, k, j, i);
     for (int b = 0; b < 3; ++b) {
-      ddpsi[a][b] = (a == b) ? Dxx<NGHOST>(a, idx, u, m, ID_CTS_PSI, k, j, i)
-                             : Dxy<NGHOST>(a, b, idx, u, m, ID_CTS_PSI, k, j, i);
+      ddpsi[a][b] = (a == b) ? DxxTotal<NGHOST>(a, idx, u, free, m, ID_CTS_PSI, k, j, i)
+                             : DxyTotal<NGHOST>(a, b, idx, u, free, m, ID_CTS_PSI, k, j, i);
     }
   }
 
@@ -298,7 +334,10 @@ void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const View
         Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] : ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
         u(m,v,k,j,i) -= omega*(op[v] - src(m,v,k,j,i))/d;
       }
-      if (u(m,ID_CTS_PSI,k,j,i) < 1.0e-8) u(m,ID_CTS_PSI,k,j,i) = 1.0e-8;
+      Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
+      if (psi < 1.0e-8) {
+        u(m,ID_CTS_PSI,k,j,i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
+      }
     }
   });
 }
@@ -516,11 +555,6 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
 
 void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
-  if (pmy_pack_->pmesh->multilevel && nreflevel_ > 0 && global_variable::my_rank == 0) {
-    std::cout << "### WARNING in IDCTSMultigridDriver::Solve" << std::endl
-              << "Native CTS AMR coefficient octets are not complete yet; "
-              << "this run uses MeshBlock/root multigrid coefficients only." << std::endl;
-  }
   PrepareForAMR();
   owner_->BuildFreeData();
 
@@ -530,6 +564,11 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   mglevels_->RestrictCoefficients();
 
   SetupMultigrid(dt, false);
+  if (pmy_pack_->pmesh->multilevel && nreflevel_ > 0 && global_variable::my_rank == 0) {
+    std::cout << "### WARNING in IDCTSMultigridDriver::Solve" << std::endl
+              << "Native CTS AMR coefficient octets are not complete yet; "
+              << "this run uses MeshBlock/root multigrid coefficients only." << std::endl;
+  }
   TransferCoefficientsFromBlocksToRoot();
 
   Real initial = CalculateDefectNorm(MGNormType::l2, 0);
@@ -540,7 +579,7 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   else SolveMG(pdriver);
 
   Real final = CalculateDefectNorm(MGNormType::l2, 0);
-  owner_->RecordConstraintHistory(niter_ >= 0 ? niter_ : -1, final);
+  owner_->RecordConstraintHistory(eps_ >= 0.0 ? -1 : niter_, final);
   if (fshowdef_) std::cout << "IDSolve final CTS defect = " << final << std::endl;
   if (reject_worse_ && (!std::isfinite(final) || final > initial)) {
     if (global_variable::my_rank == 0) {
@@ -620,15 +659,9 @@ void IDConformalThinSandwich::BuildFreeData() {
 
   par_for("IDCTS::BuildFreeData", DevExeSpace(), 0, nmb-1, ksg, keg, jsg, jeg, isg, ieg,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real detg = adm::SpatialDet(admvars.g_dd(m,0,0,k,j,i), admvars.g_dd(m,0,1,k,j,i),
-                                admvars.g_dd(m,0,2,k,j,i), admvars.g_dd(m,1,1,k,j,i),
-                                admvars.g_dd(m,1,2,k,j,i), admvars.g_dd(m,2,2,k,j,i));
-    detg = (detg > 0.0) ? detg : 1.0;
-    Real psi4 = std::cbrt(detg);
-    Real oopsi4 = 1.0/psi4;
     for (int a = 0; a < 3; ++a)
       for (int b = a; b < 3; ++b)
-        free(m, ID_FREE_GXX + SymIdx(a,b), k,j,i) = oopsi4*admvars.g_dd(m,a,b,k,j,i);
+        free(m, ID_FREE_GXX + SymIdx(a,b), k,j,i) = admvars.g_dd(m,a,b,k,j,i);
 
     Real gt_det = adm::SpatialDet(free(m,ID_FREE_GXX,k,j,i), free(m,ID_FREE_GXY,k,j,i),
                                   free(m,ID_FREE_GXZ,k,j,i), free(m,ID_FREE_GYY,k,j,i),
@@ -645,13 +678,17 @@ void IDConformalThinSandwich::BuildFreeData() {
     Real K = 0.0;
     for (int a = 0; a < 3; ++a)
       for (int b = 0; b < 3; ++b)
-        K += gu[a][b]*oopsi4*admvars.vK_dd(m,a,b,k,j,i);
+        K += gu[a][b]*admvars.vK_dd(m,a,b,k,j,i);
     free(m, ID_FREE_K, k,j,i) = K;
     free(m, ID_FREE_ALPHA, k,j,i) = admvars.alpha(m,k,j,i);
     free(m, ID_FREE_SOURCE, k,j,i) = 0.0;
     free(m, ID_FREE_MASK, k,j,i) = 1.0;
-    cts(m, ID_CTS_PSI, k,j,i) = 1.0;
-    for (int a = 0; a < 3; ++a) cts(m, ID_CTS_BETAX+a, k,j,i) = admvars.beta_u(m,a,k,j,i);
+    free(m, ID_FREE_BASE_PSI, k,j,i) = 1.0;
+    cts(m, ID_CTS_PSI, k,j,i) = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      free(m, ID_FREE_BASE_BETAX+a, k,j,i) = admvars.beta_u(m,a,k,j,i);
+      cts(m, ID_CTS_BETAX+a, k,j,i) = 0.0;
+    }
 
     Real E = 0.0;
     Real p[3] = {0.0, 0.0, 0.0};
@@ -734,7 +771,8 @@ void BuildGammaDotAndDKImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
     Real div_beta = 0.0;
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
-        dbeta[a][b] = Dx<NGHOST>(a, idx, u_cts, m, ID_CTS_BETAX+b, k, j, i);
+        dbeta[a][b] = DxTotal<NGHOST>(a, idx, u_cts, u_free, m,
+                                      ID_CTS_BETAX+b, k, j, i);
       }
       div_beta += dbeta[a][a];
     }
@@ -745,7 +783,7 @@ void BuildGammaDotAndDKImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
         for (int c = 0; c < 3; ++c) {
           lbeta += gu[a][c]*dbeta[b][c] + gu[b][c]*dbeta[a][c];
           for (int d = 0; d < 3; ++d) {
-            Real beta_d = u_cts(m, ID_CTS_BETAX+d, k, j, i);
+            Real beta_d = TotalU(u_cts, u_free, m, ID_CTS_BETAX+d, k, j, i);
             lbeta += (gu[a][c]*gamma[b][c][d] + gu[b][c]*gamma[a][c][d]
                       - (2.0/3.0)*gu[a][b]*gamma[c][c][d])*beta_d;
           }
@@ -827,7 +865,8 @@ void IDConformalThinSandwich::ApplySolution() {
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real idx[3] = {1.0/size.d_view(m).dx1, 1.0/size.d_view(m).dx2,
                      1.0/size.d_view(m).dx3};
-      Real psi = std::max(cts(m, ID_CTS_PSI, k,j,i), static_cast<Real>(1.0e-8));
+      Real psi = std::max(TotalU(cts, free, m, ID_CTS_PSI, k,j,i),
+                          static_cast<Real>(1.0e-8));
       Real psi2 = psi*psi;
       Real psi4 = psi2*psi2;
       for (int a = 0; a < 3; ++a)
@@ -835,7 +874,9 @@ void IDConformalThinSandwich::ApplySolution() {
           admvars.g_dd(m,a,b,k,j,i) = psi4*FreeSym(free, ID_FREE_GXX, m, a, b, k,j,i);
       admvars.psi4(m,k,j,i) = psi4;
       admvars.alpha(m,k,j,i) = free(m, ID_FREE_ALPHA, k,j,i);
-      for (int a = 0; a < 3; ++a) admvars.beta_u(m,a,k,j,i) = cts(m, ID_CTS_BETAX+a,k,j,i);
+      for (int a = 0; a < 3; ++a) {
+        admvars.beta_u(m,a,k,j,i) = TotalU(cts, free, m, ID_CTS_BETAX+a,k,j,i);
+      }
 
       Real ahat_uu[3][3];
       for (int a = 0; a < 3; ++a)

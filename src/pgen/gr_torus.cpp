@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/adm.hpp"
@@ -44,6 +45,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "z4c/z4c.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -66,6 +68,15 @@ static Real LogHAux(struct torus_pgen pgen, Real r, Real sin_theta);
 
 KOKKOS_INLINE_FUNCTION
 static Real CalculateT(struct torus_pgen pgen, Real rho, Real ptot_over_rho);
+
+KOKKOS_INLINE_FUNCTION
+static void CalculateBackgroundPrimitives(struct torus_pgen pgen,
+                                          Real x1, Real x2, Real x3,
+                                          Real dx1, Real dx2, Real dx3, Real r,
+                                          Real *rho_bg, Real *pgas_bg);
+
+KOKKOS_INLINE_FUNCTION
+static Real SpatialMetricDeterminant(const Real glower[4][4]);
 
 KOKKOS_INLINE_FUNCTION
 static void GetBoyerLindquistCoordinates(struct torus_pgen pgen,
@@ -237,6 +248,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   // local parameters
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
+  const Real target_disk_mass = pin->GetOrAddReal("problem", "target_disk_mass", -1.0);
 
   // excision parameters
   torus.dexcise = coord.dexcise;
@@ -359,19 +371,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // Calculate background primitives -- to be consistent with the excision algorithm,
     // we have to recalculate r; we try to avoid excising cells within the horizon which
     // might have a corner sticking out of the horizon.
-    Real r_excise, theta_excise, phi_excise;
-    GetBoyerLindquistCoordinates(trs, x1v + copysign(0.5*dx1,x1v),
-                                      x2v + copysign(0.5*dx2,x2v),
-                                      x3v + copysign(0.5*dx3,x3v), &r_excise,
-                                      &theta_excise, &phi_excise);
     Real rho_bg, pgas_bg;
-    if (r_excise > 1.0) {
-      rho_bg = trs.rho_min * pow(r, trs.rho_pow);
-      pgas_bg = trs.pgas_min * pow(r, trs.pgas_pow);
-    } else {
-      rho_bg = trs.dexcise;
-      pgas_bg = trs.pexcise;
-    }
+    CalculateBackgroundPrimitives(trs, x1v, x2v, x3v, dx1, dx2, dx3, r,
+                                  &rho_bg, &pgas_bg);
 
     Real rho = rho_bg;
     Real pgas = pgas_bg;
@@ -467,6 +469,133 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     if (is_radiation_enabled) ptot += urad/3.0;
     max_ptot = fmax(ptot, max_ptot);
   }, Kokkos::Max<Real>(ptotmax));
+
+  if (target_disk_mass > 0.0) {
+    Real disk_mass = 0.0;
+    Kokkos::parallel_reduce("pgen_torus_disk_mass",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &mass_sum) {
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/indcs.nx1;
+      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+      k += ks;
+      j += js;
+
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      Real glower[4][4], gupper[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
+                              glower, gupper);
+
+      Real r, theta, phi;
+      GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
+      Real rho_bg, pgas_bg;
+      CalculateBackgroundPrimitives(trs, x1v, x2v, x3v, dx1, dx2, dx3, r,
+                                    &rho_bg, &pgas_bg);
+
+      Real rho_disk = fmax(w0_(m,IDN,k,j,i) - rho_bg, 0.0);
+      if (rho_disk > 0.0) {
+        Real wvx = w0_(m,IVX,k,j,i);
+        Real wvy = w0_(m,IVY,k,j,i);
+        Real wvz = w0_(m,IVZ,k,j,i);
+        Real q = glower[1][1]*wvx*wvx + 2.0*glower[1][2]*wvx*wvy
+               + 2.0*glower[1][3]*wvx*wvz + glower[2][2]*wvy*wvy
+               + 2.0*glower[2][3]*wvy*wvz + glower[3][3]*wvz*wvz;
+        Real lor = sqrt(fmax(1.0 + q, 1.0));
+        Real sqrt_detg = sqrt(fmax(SpatialMetricDeterminant(glower), 0.0));
+        mass_sum += rho_disk*lor*sqrt_detg*dx1*dx2*dx3;
+      }
+    }, disk_mass);
+
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, &disk_mass, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+#endif
+
+    if (disk_mass <= 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "target_disk_mass requested but measured disk mass is "
+                << disk_mass << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
+    const Real disk_mass_scale = target_disk_mass/disk_mass;
+    torus.rho_peak /= disk_mass_scale;
+    torus.rho_max *= disk_mass_scale;
+
+    Real rescaled_ptotmax = std::numeric_limits<float>::min();
+    Kokkos::parallel_reduce("pgen_torus_mass_rescale",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, Real &max_ptot) {
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/indcs.nx1;
+      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
+      k += ks;
+      j += js;
+
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      Real dx1 = size.d_view(m).dx1;
+      Real dx2 = size.d_view(m).dx2;
+      Real dx3 = size.d_view(m).dx3;
+
+      Real r, theta, phi;
+      GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
+      Real rho_bg, pgas_bg;
+      CalculateBackgroundPrimitives(trs, x1v, x2v, x3v, dx1, dx2, dx3, r,
+                                    &rho_bg, &pgas_bg);
+
+      Real rho_disk = fmax(w0_(m,IDN,k,j,i) - rho_bg, 0.0);
+      w0_(m,IDN,k,j,i) = rho_bg + disk_mass_scale*rho_disk;
+      Real ptot = 0.0;
+      if (!use_dyngr) {
+        Real pgas = gm1*w0_(m,IEN,k,j,i);
+        Real pgas_disk = fmax(pgas - pgas_bg, 0.0);
+        pgas = pgas_bg + disk_mass_scale*pgas_disk;
+        w0_(m,IEN,k,j,i) = pgas/gm1;
+        ptot = pgas;
+      } else {
+        Real pgas = w0_(m,IPR,k,j,i);
+        Real pgas_disk = fmax(pgas - pgas_bg, 0.0);
+        pgas = pgas_bg + disk_mass_scale*pgas_disk;
+        w0_(m,IPR,k,j,i) = pgas;
+        ptot = pgas;
+      }
+      max_ptot = fmax(ptot, max_ptot);
+    }, Kokkos::Max<Real>(rescaled_ptotmax));
+    ptotmax = rescaled_ptotmax;
+
+    if (global_variable::my_rank == 0) {
+      std::cout << "Rescaled torus disk rest mass from " << disk_mass
+                << " to " << target_disk_mass << " with factor "
+                << disk_mass_scale << std::endl;
+    }
+  }
 
   // initialize ADM variables -----------------------------------------
 
@@ -830,10 +959,74 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
   }
 
+  if (pmbp->pz4c != nullptr) {
+    switch (indcs.ng) {
+      case 2:
+        pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
+        break;
+      case 3:
+        pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
+        break;
+      case 4:
+        pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
+        break;
+      default:
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Unsupported Z4c finite-difference stencil selector "
+                  << indcs.ng << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    pmbp->pz4c->Z4cToADM(pmbp);
+    switch (indcs.ng) {
+      case 2:
+        pmbp->pz4c->ADMConstraints<2>(pmbp);
+        break;
+      case 3:
+        pmbp->pz4c->ADMConstraints<3>(pmbp);
+        break;
+      case 4:
+        pmbp->pz4c->ADMConstraints<4>(pmbp);
+        break;
+    }
+  }
+
   return;
 }
 
 namespace {
+
+//----------------------------------------------------------------------------------------
+// Reconstructs the atmosphere state used by the primitive initialization.
+KOKKOS_INLINE_FUNCTION
+static void CalculateBackgroundPrimitives(struct torus_pgen pgen,
+                                          Real x1, Real x2, Real x3,
+                                          Real dx1, Real dx2, Real dx3, Real r,
+                                          Real *rho_bg, Real *pgas_bg) {
+  Real r_excise, theta_excise, phi_excise;
+  GetBoyerLindquistCoordinates(pgen, x1 + copysign(0.5*dx1, x1),
+                                     x2 + copysign(0.5*dx2, x2),
+                                     x3 + copysign(0.5*dx3, x3),
+                               &r_excise, &theta_excise, &phi_excise);
+  if (r_excise > 1.0) {
+    *rho_bg = pgen.rho_min * pow(r, pgen.rho_pow);
+    *pgas_bg = pgen.pgas_min * pow(r, pgen.pgas_pow);
+  } else {
+    *rho_bg = pgen.dexcise;
+    *pgas_bg = pgen.pexcise;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+static Real SpatialMetricDeterminant(const Real glower[4][4]) {
+  const Real g11 = glower[1][1];
+  const Real g12 = glower[1][2];
+  const Real g13 = glower[1][3];
+  const Real g22 = glower[2][2];
+  const Real g23 = glower[2][3];
+  const Real g33 = glower[3][3];
+  return g11*(g22*g33 - g23*g23) - g12*(g12*g33 - g13*g23)
+       + g13*(g12*g23 - g13*g22);
+}
 
 //----------------------------------------------------------------------------------------
 // Function for calculating angular momentum variable l in Fishbone-Moncrief torus
@@ -1368,10 +1561,11 @@ Real A1(struct torus_pgen pgen, Real x1, Real x2, Real x3) {
 
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
-  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+  Real cyl2 = fmax(SQR(x1)+SQR(x2), 1.0e-12);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/cyl2);
 
   return atheta*(x1*x3*isin_term/(r*sqrt_term)) +
-         aphi*(-x2/(SQR(x1)+SQR(x2))+pgen.spin*x1*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
+         aphi*(-x2/cyl2 + pgen.spin*x1*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
 }
 
 //----------------------------------------------------------------------------------------
@@ -1389,10 +1583,11 @@ Real A2(struct torus_pgen pgen, Real x1, Real x2, Real x3) {
 
   Real big_r = sqrt( SQR(x1) + SQR(x2) + SQR(x3) );
   Real sqrt_term =  2.0*SQR(r) - SQR(big_r) + SQR(pgen.spin);
-  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/fmax(SQR(x1)+SQR(x2),1.0e-12));
+  Real cyl2 = fmax(SQR(x1)+SQR(x2), 1.0e-12);
+  Real isin_term = sqrt((SQR(pgen.spin)+SQR(r))/cyl2);
 
   return atheta*(x2*x3*isin_term/(r*sqrt_term)) +
-         aphi*(x1/(SQR(x1)+SQR(x2))+pgen.spin*x2*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
+         aphi*(x1/cyl2 + pgen.spin*x2*r/((SQR(pgen.spin)+SQR(r))*sqrt_term));
 }
 
 //----------------------------------------------------------------------------------------

@@ -1,0 +1,123 @@
+<comment>
+problem = native CTS id_solve single Kerr-Schild black hole with self-gravitating torus and one static refinement level
+
+<job>
+basename = id_torus_smr
+
+<mesh>
+nghost = 4
+nx1 = 32
+x1min = -32.0
+x1max = 32.0
+ix1_bc = user
+ox1_bc = user
+
+nx2 = 32
+x2min = -32.0
+x2max = 32.0
+ix2_bc = user
+ox2_bc = user
+
+nx3 = 32
+x3min = -32.0
+x3max = 32.0
+ix3_bc = user
+ox3_bc = user
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+
+<mesh_refinement>
+refinement = static
+prolong_primitives = true
+
+<refined_region1>
+level = 1
+x1min = -16.0
+x1max = 16.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim = 1
+tlim = 1.0
+ndiag = 1
+
+<coord>
+general_rel = true
+a = 0.0
+excise = true
+dexcise = 1.0e-10
+pexcise = 1.0e-12
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = hlle
+dfloor = 1.0e-10
+pfloor = 1.0e-12
+tfloor = 1.0e-8
+gamma = 1.3333333333333333
+fofc = true
+gamma_max = 20.0
+enforce_maximum = false
+dmp_M = 1.2
+calculate_tmunu = true
+
+<adm>
+dynamic = true
+
+<z4c>
+spatial_order = 4
+diss = 0.0
+chi_div_floor = 1.0e-5
+chi_min_floor = 1.0e-12
+damp_kappa1 = 0.02
+damp_kappa2 = 0.0
+
+<id_solve>
+enable = true
+solve_once = true
+omega = 0.2
+threshold = 0.0
+niteration = 12
+npresmooth = 2
+npostsmooth = 2
+show_defect = true
+reject_worse = true
+fill_horizon_junk = true
+horizon_fill_radius = 2.0
+history_every = 1
+
+<problem>
+fm_torus = true
+r_edge = 6.0
+r_peak = 12.0
+tilt_angle = 0.0
+potential_beta_min = 1.0e20
+potential_cutoff = 0.2
+potential_falloff = 0.0
+potential_r_pow = 0.0
+potential_rho_pow = 1.0
+rho_min = 1.0e-8
+rho_pow = -1.5
+pgas_min = 1.0e-10
+pgas_pow = -2.5
+rho_max = 1.0
+l = 0.0
+pert_amp = 0.0
+target_disk_mass = 0.1
+user_hist = true
+
+<output1>
+file_type = hst
+dt = 1.0
