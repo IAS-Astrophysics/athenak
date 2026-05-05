@@ -1,0 +1,97 @@
+# AthenaK input file: linear MHD wave weak scaling benchmark
+#
+# Standard 3D MHD linear wave problem (pgen: linear_wave), used as a clean
+# GPU weak scaling test independent of custom magnetosphere physics.
+#
+# Design:
+#   MeshBlock:  64x64x64  (fixed for all runs)
+#   Base grid:  512x512x512  (8 blocks/dim -> 512 blocks/GPU at N=1)
+#   nghost:     4  (matching branch convention)
+#   Physics:    wenoz / hlld / ideal MHD (no FOFC, no AMR)
+#   Domain:     [0, 1]^3  — FIXED for all runs (only nx changes)
+#
+# Weak scaling: double one root dimension per GPU doubling.
+# The physical domain extent stays fixed at [0,1]^3; the grid resolution
+# increases with GPU count. CFL timestep varies but nlim=1000 is fixed.
+#
+# N  | nx1  | nx2  | nx3  | Total blocks | Blocks/GPU
+# ---+------+------+------+--------------+-----------
+#  1 |  512 |  512 |  512 |          512 |       512
+#  2 | 1024 |  512 |  512 |         1024 |       512
+#  4 | 1024 | 1024 |  512 |         2048 |       512
+#  8 | 1024 | 1024 | 1024 |         4096 |       512
+# 16 | 2048 | 1024 | 1024 |         8192 |       512
+# 32 | 2048 | 2048 | 1024 |        16384 |       512
+# 64 | 2048 | 2048 | 2048 |        32768 |       512
+#
+# Per run: update ONLY nx1/nx2/nx3 per the table above.
+# x1min/x1max/x2min/x2max/x3min/x3max are NEVER changed.
+# All other parameters remain fixed.
+#
+# GPU memory (target: Vista GH200, 96 GiB = 98,304 MiB HBM3):
+#   Measured on local H200 SXM (143,771 MiB/GPU) at N=2, 512 blocks/GPU:
+#     84,428 MiB peak (job 16562821)
+#   Projected fill on Vista: 84,428 / 98,304 = 85.9%  [well-filling]
+#   Per-block: 84,428 / 512 = 164.9 MiB/block
+
+<comment>
+problem = linear_wave weak-scaling benchmark (64^3 meshblocks, fixed domain)
+
+<job>
+basename = linwave_weak
+
+<mesh>
+nghost    = 4
+nx1       = 512
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 512
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 512
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 64
+nx2       = 64
+nx3       = 64
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = 200
+tlim       = 1e10
+ndiag      = 100
+
+<mhd>
+eos         = ideal
+reconstruct = wenoz
+rsolver     = hlld
+gamma       = 1.66666666667
+fofc        = false
+
+<problem>
+pgen_name = linear_wave
+wave_flag = 0
+amp       = 1.0e-6
+dens      = 1.0
+pgas      = 0.6
+vx0       = 0.0
+vy0       = 0.0
+vz0       = 0.0
+bx0       = 1.0
+by0       = 1.4142136
+bz0       = 0.5
+along_x1  = false
+along_x2  = false
+along_x3  = false

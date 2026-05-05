@@ -1706,9 +1706,10 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3f    = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real rc = sqrt(x1v*x1v+x2f*x2f+x3f*x3f);
+        Real rc2 = x1v*x1v + x2f*x2f + x3f*x3f;
 
-        if (rc<mp_.efix) {
+        if (rc2 < mp_.efix*mp_.efix) {
+            Real rc = sqrt(rc2);
 
             Real vx(0.0),vy(0.0),vz(0.0);
             Real Bx(0.0),By(0.0),Bz(0.0);
@@ -1756,9 +1757,10 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3f    = LeftEdgeX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real rc = sqrt(x1f*x1f+x2v*x2v+x3f*x3f);
+        Real rc2 = x1f*x1f + x2v*x2v + x3f*x3f;
 
-        if (rc<mp_.efix) {
+        if (rc2 < mp_.efix*mp_.efix) {
+            Real rc = sqrt(rc2);
 
             Real vx(0.0),vy(0.0),vz(0.0);
             Real Bx(0.0),By(0.0),Bz(0.0);
@@ -1806,9 +1808,10 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3v    = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real rc = sqrt(x1f*x1f+x2f*x2f+x3v*x3v);
+        Real rc2 = x1f*x1f + x2f*x2f + x3v*x3v;
 
-        if (rc<mp_.efix) {
+        if (rc2 < mp_.efix*mp_.efix) {
+            Real rc = sqrt(rc2);
 
             Real vx(0.0),vy(0.0),vz(0.0);
             Real Bx(0.0),By(0.0),Bz(0.0);
