@@ -59,6 +59,16 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
+  // Check if the CompactObjectTracker is enabled, otherwise abort.
+  if (pmbp->pz4c->ptracker.size() < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "There are two compact objects on the grid "
+            << "but only " << pmbp->pz4c->ptracker.size() 
+            << " tracker(s) is(are) set!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Conversion constants to translate between Lorene and AthenaK
   const Real c_light  = Lorene::Unites::c_si;      // speed of light [m/s]
   const Real nuc_dens = Lorene::Unites::rhonuc_si; // Nuclear density [kg/m^3]
