@@ -84,7 +84,7 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
 
         // Optional density threshold: skip cells below rho floor
         if (params_.flavor_mix_rho > 0.0 && (ismhd_ || ishydro_)) {
-          if (w0_(m, IDN, k, j, i) < params_.flavor_mix_rho) return;
+          if (w0_(m, IDN, k, j, i) > params_.flavor_mix_rho) return;
         }
 
         // -----------------------------------------------------------------------
