@@ -179,6 +179,8 @@ void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
 void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
                              const Real bdt, DvceArray5D<Real> &u0) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &coord = pmy_pack->pcoord->coord_data;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -191,6 +193,21 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
 
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    // Extract metric and inverse
+    Real glower[4][4], gupper[4][4];
+    ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
+                            glower, gupper);
+
     // temperature in cgs unit
     Real temp = 1.0;
     if (use_e) {
@@ -199,12 +216,14 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
       temp = w0(m,ITM,k,j,i);
     }
 
-    auto &ux = w0(m,IVX,k,j,i);
-    auto &uy = w0(m,IVY,k,j,i);
-    auto &uz = w0(m,IVZ,k,j,i);
+    Real &ux = w0(m,IVX,k,j,i);
+    Real &uy = w0(m,IVY,k,j,i);
+    Real &uz = w0(m,IVZ,k,j,i);
 
-    auto ut = 1.0 + ux*ux + uy*uy + uz*uz;
-    ut = sqrt(ut);
+    Real ut = glower[1][1]*ux*ux + glower[2][2]*uy*uy + glower[3][3]*uz*uz
+          + 2.0*glower[1][2]*ux*uy + 2.0*glower[1][3]*ux*uz
+          + 2.0*glower[2][3]*uy*uz;
+    ut = sqrt( 1.0 + ut );
 
     u0(m,IEN,k,j,i) -= bdt*w0(m,IDN,k,j,i)*ut*pow((temp*cooling_rate), cooling_power);
     u0(m,IM1,k,j,i) -= bdt*w0(m,IDN,k,j,i)*ux*pow((temp*cooling_rate), cooling_power);
