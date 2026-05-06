@@ -950,7 +950,6 @@ void FastFlow::SurfaceIntegrals()
   auto &havepoint_ = havepoint;
   auto &lmax_ = lmax;
   auto &flowflag_ = flowflag;
-  printf("Using flow: %d\n", flowflag_);
 
   // **INTERPOLATED SPACETIME**
   auto &gi_ = g_interp;
@@ -1257,7 +1256,7 @@ void FastFlow::SurfaceIntegrals()
         Real sigma = 2 * SQR(rp) * (1 / sigma_para);
         rho_.d_view(p) = H * u * sigma;
       }
-      
+
       // ---------------
       // Surface Element
       // ---------------
