@@ -176,6 +176,7 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     y_coords[idx] = y;
     z_coords[idx] = z;
   });
+  Kokkos::fence();
 
   if (BHNS) {
     idr->set_param("BH_filler_method","ChebTn_Ylm_perfect_s2",idr);
@@ -340,6 +341,7 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     host_w0(m, IVY, k, j, i) = W * vu[1];
     host_w0(m, IVZ, k, j, i) = W * vu[2];
   });
+  Kokkos::fence();
 
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;

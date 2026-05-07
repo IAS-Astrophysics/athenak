@@ -141,6 +141,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     y_coords[idx] = coord_unit * y;
     z_coords[idx] = coord_unit * z;
   });
+  Kokkos::fence();
 
   // Interpolate the data
   if (global_variable::my_rank == 0) {
@@ -271,6 +272,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     host_w0(m, IVY, k, j, i) = W*vu[1];
     host_w0(m, IVZ, k, j, i) = W*vu[2];
   });
+  Kokkos::fence();
 
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;
