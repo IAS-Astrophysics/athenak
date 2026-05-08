@@ -3,10 +3,10 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file kadath_bns.cpp
-//! \brief Initial data reader for binary neutron star data from Kadath (FUKa)
+//! \file kadath_bhns.cpp
+//! \brief Initial data reader for black hole-neutron star data from Kadath (FUKa)
 //
-//  Inlines the spectral interpolation from Kadath/src/Utilities/Exporters/export_bns.cpp
+//  Inlines the spectral interpolation from Kadath/src/Utilities/Exporters/export_bhns.cpp
 //  directly into the fill loop, eliminating the large intermediate output arrays and
 //  performing a single pass over all grid points.
 //
@@ -19,7 +19,7 @@
 //
 //  Required input block:
 //    <problem>
-//      initial_data_file = path/to/bns.info   # Kadath config file (.info)
+//      initial_data_file = path/to/bhns.info   # Kadath config file (.info)
 //
 //  The Kadath space file must reside next to the .info file (same stem, .dat extension).
 
@@ -53,17 +53,16 @@
 #include "utils/tov/tov_tabulated.hpp"
 
 // Kadath FUKa
-#include "kadath_bin_ns.hpp"
+#include "kadath.hpp"
 #include "EOS/EOS.hh"
 #include "coord_fields.hpp"
 #include "Configurator/config_enums.hpp"
 #include "Configurator/config_binary.hpp"
 #include "Configurator/configurator_boost.hpp"
 #include "exporter_utilities.hpp"
-#include "bco_utilities.hpp"
 
-void KadathBNSHistory(HistoryData *pdata, Mesh *pm);
-void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
+void KadathBHNSHistory(HistoryData *pdata, Mesh *pm);
+void KadathBHNSRefinementCondition(MeshBlockPack *pmbp);
 
 // Prototypes for magnetic vector potential
 KOKKOS_INLINE_FUNCTION
@@ -72,10 +71,10 @@ KOKKOS_INLINE_FUNCTION
 static Real A2(Real x, Real y, Real z, Real I_0, Real r_0);
 
 //----------------------------------------------------------------------------------------
-//! \fn void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_)
-//! \brief Problem generator for BNS with Kadath (FUKa)
+//! \fn void::SetupBHNS(ParameterInput *pin, Mesh *pmy_mesh_)
+//! \brief Problem generator for BHNS with Kadath (FUKa)
 template<class TOVEOS>
-void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
+void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   // export_utils: field-index enumerators
   using export_utils::PSI;
   using export_utils::ALP;
@@ -93,6 +92,8 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   using export_utils::UY;
   using export_utils::UZ;
   using export_utils::NUM_QUANTS;
+	using export_utils::point_spherical;
+	using export_utils::lagrange_gen_k;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
@@ -105,8 +106,11 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   int &ke             = indcs.ke;
 
   std::string fname = pin->GetString("problem", "initial_data_file");
+	const int interp_order = pin->GetOrAddInteger("problem", "interpolation_order", 8);
+	const Real interp_offset = pin->GetOrAddReal("problem", "interpolation_offset", 0.0);
+  const Real delta_r_rel = pin->GetOrAddReal("problem", "relative_dr_spacing", 0.3);
 
-  // MHD parameters
+	// MHD parameters
   Real gauss_cgs_to_geo = 8.3519664583273e+19;
   Real b_max   = pin->GetOrAddReal("problem", "b_max", 1e12) / gauss_cgs_to_geo;
   Real r_0     = pin->GetOrAddReal("problem", "r_0_current", 5.0);
@@ -127,11 +131,11 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
   // =========================================================================
-  // Kadath BNS setup (inlined from export_bns.cpp / KadathExportBNS)
+  // Kadath BHNS setup (inlined from export_bhns.cpp / KadathExportBHNS)
   // =========================================================================
 
   if (global_variable::my_rank == 0) {
-    std::cout << "Reading Kadath BNS config from " << fname << " ..." << std::endl;
+    std::cout << "Reading Kadath BHNS config from " << fname << " ..." << std::endl;
   }
 
   kadath_config_boost<BIN_INFO> bconfig(fname);
@@ -146,12 +150,13 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   Real &ome1     = bconfig(OMEGA, BCO1);
   Real &ome2     = bconfig(OMEGA, BCO2);
   Real &axis     = bconfig(COM);
+	Real &axisy		 = bconfig(COMY);
   Real &q        = bconfig(Q);
 
   std::string kadath_filename = bconfig.space_filename();
 
   FILE *fin = fopen(kadath_filename.c_str(), "r");
-  Space_bin_ns space(fin);
+  Space_bhns space(fin);
   Scalar conf (space, fin);
   Scalar lapse(space, fin);
   Vector shift(space, fin);
@@ -172,17 +177,25 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   quants[BETZ] = std::cref(shift(3));
 
   Base_tensor basis(shift.get_basis());
+  Real rbh; // Referenced below
   int ndom = space.get_nbr_domains();
 
-  Real xc1 = bco_utils::get_center(space, space.NS1);
-  Real xc2 = bco_utils::get_center(space, space.NS2);
-  Real xo  = bco_utils::get_center(space, ndom - 1);
+  Index center_pos (space.get_domain(space.NS)->get_nbr_points());
+  Real xm = space.get_domain(space.NS)->get_cart(1)(center_pos);
+  Real xp = space.get_domain(space.BH)->get_cart(1)(center_pos);
+	Real ym = space.get_domain(space.NS)->get_cart(2)(center_pos);
+  Real yp = space.get_domain(space.BH)->get_cart(2)(center_pos);
+  Real xo  = space.get_domain(ndom-1)->get_cart(1)(center_pos);
 
+  /* Setup system of equations for Aij and Matter terms */
   Metric_flat fmet(space, basis);
 
-  CoordFields<Space_bin_ns> cfields(space);
-  vec_ary_t coord_vectors{default_binary_vector_ary(space)};
-  update_fields(cfields, coord_vectors, {}, xo, xc1, xc2);
+  CoordFields<Space_bhns> cfields(space);
+  Vector global_rot = cfields.rot_z();
+  Vector star_rot = cfields.rot_z(xm);
+  Vector ey = cfields.e_cart(2);
+  Vector ex = cfields.e_cart(1);
+  Vector esurf = cfields.e_rad();
 
   System_of_eqs syst(space, 0, ndom - 1);
   fmet.set_system(syst, "f");
@@ -207,20 +220,15 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   syst.add_cst("4piG", units);
   syst.add_cst("PI", M_PI);
   syst.add_cst("omes1", ome1);
-  syst.add_cst("omes2", ome2);
 
-  syst.add_cst("mg", *coord_vectors[GLOBAL_ROT]);
-  syst.add_cst("mm", *coord_vectors[BCO1_ROT]);
-  syst.add_cst("mp", *coord_vectors[BCO2_ROT]);
-  syst.add_cst("ex", *coord_vectors[EX]);
-  syst.add_cst("ey", *coord_vectors[EY]);
-  syst.add_cst("ez", *coord_vectors[EZ]);
-  syst.add_cst("sm", *coord_vectors[S_BCO1]);
-  syst.add_cst("sp", *coord_vectors[S_BCO2]);
-  syst.add_cst("einf", *coord_vectors[S_INF]);
+  syst.add_cst("Mg", global_rot);
+	syst.add_cst("ome", omega);
+	syst.add_cst("xaxis", axis);
+	syst.add_cst("yaxis", axisy);
+  syst.add_cst("ex", ex);
+  syst.add_cst("ey", ey);
 
-  syst.add_cst("xaxis", axis);
-  syst.add_cst("ome", omega);
+  syst.add_cst("m1", star_rot);
   syst.add_cst("P", conf);
   syst.add_cst("N", lapse);
   syst.add_cst("bet", shift);
@@ -229,19 +237,18 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
 
   syst.add_def("NP = P*N");
   syst.add_def("Ntilde = N / P^6");
-  syst.add_def("Morb^i = mg^i + xaxis * ey^i");
-  syst.add_def("omega^i = bet^i + ome * Morb^i");
+  syst.add_def("Morb^i = Mg^i + xaxis * ey^i + yaxis * ex^i");
+  syst.add_def("B^i = bet^i + ome * Morb^i");
 
-  for (int d = space.NS1; d <= space.ADAPTED1; ++d)
-    syst.add_def(d, "s^i  = omes1 * mm^i");
-  for (int d = space.NS2; d <= space.ADAPTED2; ++d)
-    syst.add_def(d, "s^i  = omes2 * mp^i");
+  for (int d = space.NS; d <= space.ADAPTEDNS; ++d) {
+    syst.add_def(d, "s^i  = omes1 * m1^i");
+	}
 
   syst.add_def("A_ij = (D_i bet_j + D_j bet_i - 2. / 3.* D^k bet_k * f_ij) /2. / N");
   syst.add_def("h = exp(H)");
 
   for (int d = 0; d < ndom; ++d) {
-    if ((d <= space.ADAPTED1) || (d >= space.NS2 && d <= space.ADAPTED2))
+    if (d <= space.ADAPTEDNS)
       syst.add_def(d, "eta_i = D_i phi + P^4 * s_i");
     else
       syst.add_def(d, "eta_i = D_i phi");
@@ -275,6 +282,11 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   quants[UX] = std::cref(vel_kad(1));
   quants[UY] = std::cref(vel_kad(2));
   quants[UZ] = std::cref(vel_kad(3));
+
+	/* setup for filling in BH with junk */
+  Index I2(space.get_domain(space.BH+2)->get_radius().get_conf().get_dimensions());
+  rbh = space.get_domain(space.BH+2)->get_radius()(I2);
+  /* end BH setup */
 
   // Force spectral-coefficient transform for every field once (serial, one-time).
   for (int kq = 0; kq < NUM_QUANTS; ++kq)
@@ -313,15 +325,15 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   // on the main thread before the parallel loop.
   {
     Point pt_warm(3);
-    pt_warm.set(1) = xc1;
+    pt_warm.set(1) = xm;
     pt_warm.set(2) = 0.0;
     pt_warm.set(3) = 0.0;
     (void)quants[PSI].get().val_point(pt_warm);
   }
 
   Kokkos::parallel_for("kadath_fill",
-  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
-  [&](const int idx) {
+	Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+	[&](const int idx) {
     int m   = idx / ncells_per_mb;
     int rem = idx - m * ncells_per_mb;
     int k   = rem / (ncells2 * ncells1);
@@ -338,16 +350,56 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
                           size.h_view(m).x3min, size.h_view(m).x3max);
 
     // Kadath point shifted to the centre-of-mass frame.
-    Point pt(3);
-    pt.set(1) = static_cast<Real>(x) - axis;
-    pt.set(2) = static_cast<Real>(y);
-    pt.set(3) = static_cast<Real>(z);
+		Real qv[NUM_QUANTS];
+		Real x_com = static_cast<Real>(x) - axis;
+		Real y_com = static_cast<Real>(y) - axisy;
+		Real z_		 = static_cast<Real>(z);
+		Real xxp   = x_com - xp;
+		Real r2yz  = SQR(y_com) + SQR(z_);
 
-    // Evaluate all spectral quantities at this point.
-    Real qv[NUM_QUANTS];
-    for (int kq = 0; kq < NUM_QUANTS; ++kq) {
-      qv[kq] = quants[kq].get().val_point(pt);
-    }
+		// Radius measurement centered on the BH.
+		Real r_plus = sqrt(SQR(xxp) + r2yz);
+
+		// Lambda function for interpolation inside BH.
+		auto interp_f = [&](auto &ah_r, auto &extrap_r, auto &bh_ori) {
+			Real theta = acos(z_ / extrap_r);
+			Real phi   = atan2(y_com, (x_com - bh_ori));
+
+			std::vector<Real> r_points(interp_order);
+			for (int j = 0; j < interp_order; j++) {
+				r_points[j] = (1.0 + interp_offset) * (1.0 + j * delta_r_rel) * ah_r;
+			}
+
+			for (int k = 0; k < NUM_QUANTS; ++k) {
+				std::vector<Real> vals(interp_order);
+
+				for (int j = 0; j < interp_order; j++) {
+					vals[j] = quants[k].get().val_point(
+							point_spherical(r_points[j], theta, phi, bh_ori));
+				}
+
+				if (k == H) { qv[k] = 0.0; }
+				else if (k == UX || k == UY || k == UZ) {
+					qv[k] = 0.0;
+				} else {
+					qv[k] = lagrange_gen_k(interp_order, extrap_r, r_points.data(), vals.data());
+				}
+			}
+		};
+
+		if (r_plus <= (1.0 + interp_offset) * rbh) {
+			interp_f(rbh, r_plus, xp);
+		} else {
+			Point pt(3);
+			pt.set(1) = x_com;
+			pt.set(2) = y_com;
+			pt.set(3) = z;
+
+			// Evaluate all spectral quantities at this point.
+			for (int kq = 0; kq < NUM_QUANTS; ++kq) {
+				qv[kq] = quants[kq].get().val_point(pt);
+			}
+		}
 
     // Conformal factor and derived powers.
     const Real psi  = qv[PSI];
@@ -432,20 +484,35 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
   Kokkos::deep_copy(w0, host_w0);
   Kokkos::deep_copy(u_z4c, host_u_z4c);
 
-  Real COM_corr_NS1[3] = {-(q / (1.0 + q)) * sep, 0.0, 0.0};
-  Real COM_corr_NS2[3] = {(1.0 / (1.0 + q)) * sep, 0.0, 0.0};
-  pmbp->pz4c->ptracker[0]->SetPos(COM_corr_NS1);
-  pmbp->pz4c->ptracker[1]->SetPos(COM_corr_NS2);
+  Real COM_corr_NS[3] = {xm + axis, ym + axisy, 0.0};
+  Real COM_corr_BH[3] = {xp + axis, yp + axisy, 0.0};
+  if (pmbp->pz4c->ptracker[0]->GetType() == 0) { // CompactObjectTracker::BlackHole == 0
+		pmbp->pz4c->ptracker[0]->SetPos(COM_corr_BH);
+		pmbp->pz4c->ptracker[1]->SetPos(COM_corr_NS);
 
-  if (global_variable::my_rank == 0) {
-    std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
-    std::cout << "NS1: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
-              << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
-              << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
-    std::cout << "NS2: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
-              << ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
-              << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
-  }
+		if (global_variable::my_rank == 0) {
+			std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+			std::cout << "BH: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+								<< ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+								<< ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+			std::cout << "NS: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+								<< ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+								<< ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
+		}
+	} else {
+		pmbp->pz4c->ptracker[1]->SetPos(COM_corr_BH);
+		pmbp->pz4c->ptracker[0]->SetPos(COM_corr_NS);
+
+		if (global_variable::my_rank == 0) {
+			std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+			std::cout << "BH: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+								<< ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+								<< ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
+			std::cout << "NS: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+								<< ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+								<< ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+		}
+	}
 
   // compute vector potential over all faces
   DvceArray4D<Real> a1, a2, a3;
@@ -480,11 +547,15 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    a1(m,k,j,i) = A1(x1v - 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
-                  A1(x1v + 0.5 * sep - axis, x2f, x3f, I_0, r_0);
-    a2(m,k,j,i) = A2(x1f - 0.5 * sep - axis, x2v, x3f, I_0, r_0) +
-                  A2(x1f + 0.5 * sep - axis, x2v, x3f, I_0, r_0);
-    a3(m,k,j,i) = 0.0;
+		if (xm > 0.0) {
+			a1(m,k,j,i) = A1(x1v - 0.5 * sep - axis, x2f, x3f, I_0, r_0);
+			a2(m,k,j,i) = A2(x1f - 0.5 * sep - axis, x2v, x3f, I_0, r_0);
+			a3(m,k,j,i) = 0.0;
+		} else {
+			a1(m,k,j,i) = A1(x1v + 0.5 * sep - axis, x2f, x3f, I_0, r_0);
+			a2(m,k,j,i) = A2(x1f + 0.5 * sep - axis, x2v, x3f, I_0, r_0);
+			a3(m,k,j,i) = 0.0;
+		}
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
     // values at fine grid resolution.  This guarantees flux on shared fine/coarse
@@ -517,10 +588,14 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
         (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
-      a1(m,k,j,i) = 0.5*((A1(xl - 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
-                          A1(xl + 0.5 * sep - axis, x2f, x3f, I_0, r_0)) +
-                         (A1(xr - 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
-                          A1(xr + 0.5 * sep - axis, x2f, x3f, I_0, r_0)));
+
+			if (xm > 0.0) {
+				a1(m,k,j,i) = 0.5*(A1(xl - 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
+                           A1(xr - 0.5 * sep - axis, x2f, x3f, I_0, r_0));
+			} else {
+				a1(m,k,j,i) = 0.5*(A1(xl + 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
+                           A1(xr + 0.5 * sep - axis, x2f, x3f, I_0, r_0));
+			}
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -550,10 +625,14 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
         (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
-      a2(m,k,j,i) = 0.5*((A2(x1f - 0.5 * sep - axis, xl, x3f, I_0, r_0) +
-                          A2(x1f + 0.5 * sep - axis, xl, x3f, I_0, r_0)) +
-                         (A2(x1f - 0.5 * sep - axis, xr, x3f, I_0, r_0) +
-                          A2(x1f + 0.5 * sep - axis, xr, x3f, I_0, r_0)));
+
+			if (xm > 0.0) {
+				a2(m,k,j,i) = 0.5*(A2(x1f - 0.5 * sep - axis, xl, x3f, I_0, r_0) +
+                           A2(x1f - 0.5 * sep - axis, xr, x3f, I_0, r_0));
+			} else {
+				a2(m,k,j,i) = 0.5*(A2(x1f + 0.5 * sep - axis, xl, x3f, I_0, r_0) +
+                           A2(x1f + 0.5 * sep - axis, xr, x3f, I_0, r_0));
+			}
     }
   });
 
@@ -625,7 +704,7 @@ void SetupBNS(ParameterInput *pin, Mesh *pmy_mesh_) {
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for BNS with Kadath FUKa
+//! \brief Problem Generator for BHNS with Kadath FUKa
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_dynamical_relativistic) {
@@ -634,20 +713,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << std::endl;
     exit(EXIT_FAILURE);
   }
-  user_hist_func = &KadathBNSHistory;
-  user_ref_func = &KadathBNSRefinementCondition;
+  user_hist_func = &KadathBHNSHistory;
+  user_ref_func = &KadathBHNSRefinementCondition;
 
   if (restart) return;
 
   // Select the correct EOS template based on the EOS we need.
   if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
-    SetupBNS<tov::PolytropeEOS>(pin, pmy_mesh_);
+    SetupBHNS<tov::PolytropeEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-    SetupBNS<tov::TabulatedEOS>(pin, pmy_mesh_);
+    SetupBHNS<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
-    SetupBNS<tov::TabulatedEOS>(pin, pmy_mesh_);
+    SetupBHNS<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
-    SetupBNS<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
+    SetupBHNS<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Unknown EOS requested for Lorene BNS problem" << std::endl;
@@ -659,9 +738,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
 
 //----------------------------------------------------------------------------------------
-//! \fn KadathBNSHistory()
+//! \fn KadathBHNSHistory()
 //! \brief History function: tracks maximum rest-mass density and minimum lapse
-void KadathBNSHistory(HistoryData *pdata, Mesh *pm) {
+void KadathBHNSHistory(HistoryData *pdata, Mesh *pm) {
   pdata->nhist    = 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
@@ -684,7 +763,7 @@ void KadathBNSHistory(HistoryData *pdata, Mesh *pm) {
   Real alpha_min = -rho_max;
 
   Kokkos::parallel_reduce(
-      "KadathBNSHistSums",
+      "KadathBHNSHistSums",
       Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
       KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
         int m = (idx) / nkji;
@@ -722,7 +801,7 @@ void KadathBNSHistory(HistoryData *pdata, Mesh *pm) {
 //----------------------------------------------------------------------------------------
 //! \fn KadathBNSRefinementCondition()
 //! \brief AMR refinement condition (delegates to Z4c AMR)
-void KadathBNSRefinementCondition(MeshBlockPack *pmbp) {
+void KadathBHNSRefinementCondition(MeshBlockPack *pmbp) {
   pmbp->pz4c->pamr->Refine(pmbp);
 }
 

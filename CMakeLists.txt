@@ -187,7 +187,7 @@ if (${PROBLEM} STREQUAL "sgrid_bns")
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
 endif()
 
-if (${PROBLEM} STREQUAL "kadath_bns")
+if (${PROBLEM} STREQUAL "kadath_bns" OR ${PROBLEM} STREQUAL "kadath_bhns")
   # Kadath (FUKa) BNS initial data reader.
   # Expects Kadath to be linked at ${CMAKE_SOURCE_DIR}/kadath
   # with libkadath.a in its lib/ directory.
