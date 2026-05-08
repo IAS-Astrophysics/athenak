@@ -901,6 +901,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     BondiAccretion(pin, is_restart);
   } else if (pgen_fun_name.compare("cshock") == 0) {
     CShock(pin, is_restart);
+  } else if (pgen_fun_name.compare("divb_amr") == 0) {
+    DivBAMR(pin, is_restart);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("implode") == 0) {
