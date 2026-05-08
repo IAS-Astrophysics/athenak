@@ -92,8 +92,8 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   using export_utils::UY;
   using export_utils::UZ;
   using export_utils::NUM_QUANTS;
-	using export_utils::point_spherical;
-	using export_utils::lagrange_gen_k;
+  using export_utils::point_spherical;
+  using export_utils::lagrange_gen_k;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
@@ -106,11 +106,11 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   int &ke             = indcs.ke;
 
   std::string fname = pin->GetString("problem", "initial_data_file");
-	const int interp_order = pin->GetOrAddInteger("problem", "interpolation_order", 8);
-	const Real interp_offset = pin->GetOrAddReal("problem", "interpolation_offset", 0.0);
+  const int interp_order = pin->GetOrAddInteger("problem", "interpolation_order", 8);
+  const Real interp_offset = pin->GetOrAddReal("problem", "interpolation_offset", 0.0);
   const Real delta_r_rel = pin->GetOrAddReal("problem", "relative_dr_spacing", 0.3);
 
-	// MHD parameters
+  // MHD parameters
   Real gauss_cgs_to_geo = 8.3519664583273e+19;
   Real b_max   = pin->GetOrAddReal("problem", "b_max", 1e12) / gauss_cgs_to_geo;
   Real r_0     = pin->GetOrAddReal("problem", "r_0_current", 5.0);
@@ -150,7 +150,7 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real &ome1     = bconfig(OMEGA, BCO1);
   Real &ome2     = bconfig(OMEGA, BCO2);
   Real &axis     = bconfig(COM);
-	Real &axisy		 = bconfig(COMY);
+  Real &axisy		 = bconfig(COMY);
   Real &q        = bconfig(Q);
 
   std::string kadath_filename = bconfig.space_filename();
@@ -183,7 +183,7 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Index center_pos (space.get_domain(space.NS)->get_nbr_points());
   Real xm = space.get_domain(space.NS)->get_cart(1)(center_pos);
   Real xp = space.get_domain(space.BH)->get_cart(1)(center_pos);
-	Real ym = space.get_domain(space.NS)->get_cart(2)(center_pos);
+  Real ym = space.get_domain(space.NS)->get_cart(2)(center_pos);
   Real yp = space.get_domain(space.BH)->get_cart(2)(center_pos);
   Real xo  = space.get_domain(ndom-1)->get_cart(1)(center_pos);
 
@@ -222,9 +222,9 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   syst.add_cst("omes1", ome1);
 
   syst.add_cst("Mg", global_rot);
-	syst.add_cst("ome", omega);
-	syst.add_cst("xaxis", axis);
-	syst.add_cst("yaxis", axisy);
+  syst.add_cst("ome", omega);
+  syst.add_cst("xaxis", axis);
+  syst.add_cst("yaxis", axisy);
   syst.add_cst("ex", ex);
   syst.add_cst("ey", ey);
 
@@ -242,7 +242,7 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   for (int d = space.NS; d <= space.ADAPTEDNS; ++d) {
     syst.add_def(d, "s^i  = omes1 * m1^i");
-	}
+  }
 
   syst.add_def("A_ij = (D_i bet_j + D_j bet_i - 2. / 3.* D^k bet_k * f_ij) /2. / N");
   syst.add_def("h = exp(H)");
@@ -283,7 +283,7 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   quants[UY] = std::cref(vel_kad(2));
   quants[UZ] = std::cref(vel_kad(3));
 
-	/* setup for filling in BH with junk */
+  /* setup for filling in BH with junk */
   Index I2(space.get_domain(space.BH+2)->get_radius().get_conf().get_dimensions());
   rbh = space.get_domain(space.BH+2)->get_radius()(I2);
   /* end BH setup */
@@ -332,8 +332,8 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   Kokkos::parallel_for("kadath_fill",
-	Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
-	[&](const int idx) {
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
     int m   = idx / ncells_per_mb;
     int rem = idx - m * ncells_per_mb;
     int k   = rem / (ncells2 * ncells1);
@@ -350,56 +350,56 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
                           size.h_view(m).x3min, size.h_view(m).x3max);
 
     // Kadath point shifted to the centre-of-mass frame.
-		Real qv[NUM_QUANTS];
-		Real x_com = static_cast<Real>(x) - axis;
-		Real y_com = static_cast<Real>(y) - axisy;
-		Real z_		 = static_cast<Real>(z);
-		Real xxp   = x_com - xp;
-		Real r2yz  = SQR(y_com) + SQR(z_);
+    Real qv[NUM_QUANTS];
+    Real x_com = static_cast<Real>(x) - axis;
+    Real y_com = static_cast<Real>(y) - axisy;
+    Real z_		 = static_cast<Real>(z);
+    Real xxp   = x_com - xp;
+    Real r2yz  = SQR(y_com) + SQR(z_);
 
-		// Radius measurement centered on the BH.
-		Real r_plus = sqrt(SQR(xxp) + r2yz);
+    // Radius measurement centered on the BH.
+    Real r_plus = sqrt(SQR(xxp) + r2yz);
 
-		// Lambda function for interpolation inside BH.
-		auto interp_f = [&](auto &ah_r, auto &extrap_r, auto &bh_ori) {
-			Real theta = acos(z_ / extrap_r);
-			Real phi   = atan2(y_com, (x_com - bh_ori));
+    // Lambda function for interpolation inside BH.
+    auto interp_f = [&](auto &ah_r, auto &extrap_r, auto &bh_ori) {
+      Real theta = acos(z_ / extrap_r);
+      Real phi   = atan2(y_com, (x_com - bh_ori));
 
-			std::vector<Real> r_points(interp_order);
-			for (int j = 0; j < interp_order; j++) {
-				r_points[j] = (1.0 + interp_offset) * (1.0 + j * delta_r_rel) * ah_r;
-			}
+      std::vector<Real> r_points(interp_order);
+      for (int j = 0; j < interp_order; j++) {
+        r_points[j] = (1.0 + interp_offset) * (1.0 + j * delta_r_rel) * ah_r;
+      }
 
-			for (int k = 0; k < NUM_QUANTS; ++k) {
-				std::vector<Real> vals(interp_order);
+      for (int k = 0; k < NUM_QUANTS; ++k) {
+        std::vector<Real> vals(interp_order);
 
-				for (int j = 0; j < interp_order; j++) {
-					vals[j] = quants[k].get().val_point(
-							point_spherical(r_points[j], theta, phi, bh_ori));
-				}
+        for (int j = 0; j < interp_order; j++) {
+          vals[j] = quants[k].get().val_point(
+              point_spherical(r_points[j], theta, phi, bh_ori));
+        }
 
-				if (k == H) { qv[k] = 0.0; }
-				else if (k == UX || k == UY || k == UZ) {
-					qv[k] = 0.0;
-				} else {
-					qv[k] = lagrange_gen_k(interp_order, extrap_r, r_points.data(), vals.data());
-				}
-			}
-		};
+        if (k == H) { qv[k] = 0.0; }
+        else if (k == UX || k == UY || k == UZ) {
+          qv[k] = 0.0;
+        } else {
+          qv[k] = lagrange_gen_k(interp_order, extrap_r, r_points.data(), vals.data());
+        }
+      }
+    };
 
-		if (r_plus <= (1.0 + interp_offset) * rbh) {
-			interp_f(rbh, r_plus, xp);
-		} else {
-			Point pt(3);
-			pt.set(1) = x_com;
-			pt.set(2) = y_com;
-			pt.set(3) = z;
+    if (r_plus <= (1.0 + interp_offset) * rbh) {
+      interp_f(rbh, r_plus, xp);
+    } else {
+      Point pt(3);
+      pt.set(1) = x_com;
+      pt.set(2) = y_com;
+      pt.set(3) = z;
 
-			// Evaluate all spectral quantities at this point.
-			for (int kq = 0; kq < NUM_QUANTS; ++kq) {
-				qv[kq] = quants[kq].get().val_point(pt);
-			}
-		}
+      // Evaluate all spectral quantities at this point.
+      for (int kq = 0; kq < NUM_QUANTS; ++kq) {
+        qv[kq] = quants[kq].get().val_point(pt);
+      }
+    }
 
     // Conformal factor and derived powers.
     const Real psi  = qv[PSI];
@@ -487,32 +487,32 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real COM_corr_NS[3] = {xm + axis, ym + axisy, 0.0};
   Real COM_corr_BH[3] = {xp + axis, yp + axisy, 0.0};
   if (pmbp->pz4c->ptracker[0]->GetType() == 0) { // CompactObjectTracker::BlackHole == 0
-		pmbp->pz4c->ptracker[0]->SetPos(COM_corr_BH);
-		pmbp->pz4c->ptracker[1]->SetPos(COM_corr_NS);
+    pmbp->pz4c->ptracker[0]->SetPos(COM_corr_BH);
+    pmbp->pz4c->ptracker[1]->SetPos(COM_corr_NS);
 
-		if (global_variable::my_rank == 0) {
-			std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
-			std::cout << "BH: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
-								<< ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
-								<< ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
-			std::cout << "NS: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
-								<< ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
-								<< ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
-		}
-	} else {
-		pmbp->pz4c->ptracker[1]->SetPos(COM_corr_BH);
-		pmbp->pz4c->ptracker[0]->SetPos(COM_corr_NS);
+    if (global_variable::my_rank == 0) {
+      std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+      std::cout << "BH: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+                << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+                << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+      std::cout << "NS: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+                << ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+                << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
+    }
+  } else {
+    pmbp->pz4c->ptracker[1]->SetPos(COM_corr_BH);
+    pmbp->pz4c->ptracker[0]->SetPos(COM_corr_NS);
 
-		if (global_variable::my_rank == 0) {
-			std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
-			std::cout << "BH: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
-								<< ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
-								<< ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
-			std::cout << "NS: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
-								<< ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
-								<< ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
-		}
-	}
+    if (global_variable::my_rank == 0) {
+      std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+      std::cout << "BH: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+                << ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+                << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
+      std::cout << "NS: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+                << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+                << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+    }
+  }
 
   // compute vector potential over all faces
   DvceArray4D<Real> a1, a2, a3;
@@ -547,15 +547,15 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-		if (xm > 0.0) {
-			a1(m,k,j,i) = A1(x1v - 0.5 * sep - axis, x2f, x3f, I_0, r_0);
-			a2(m,k,j,i) = A2(x1f - 0.5 * sep - axis, x2v, x3f, I_0, r_0);
-			a3(m,k,j,i) = 0.0;
-		} else {
-			a1(m,k,j,i) = A1(x1v + 0.5 * sep - axis, x2f, x3f, I_0, r_0);
-			a2(m,k,j,i) = A2(x1f + 0.5 * sep - axis, x2v, x3f, I_0, r_0);
-			a3(m,k,j,i) = 0.0;
-		}
+    if (xm > 0.0) {
+      a1(m,k,j,i) = A1(x1v - 0.5 * sep - axis, x2f, x3f, I_0, r_0);
+      a2(m,k,j,i) = A2(x1f - 0.5 * sep - axis, x2v, x3f, I_0, r_0);
+      a3(m,k,j,i) = 0.0;
+    } else {
+      a1(m,k,j,i) = A1(x1v + 0.5 * sep - axis, x2f, x3f, I_0, r_0);
+      a2(m,k,j,i) = A2(x1f + 0.5 * sep - axis, x2v, x3f, I_0, r_0);
+      a3(m,k,j,i) = 0.0;
+    }
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
     // values at fine grid resolution.  This guarantees flux on shared fine/coarse
@@ -589,13 +589,13 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
 
-			if (xm > 0.0) {
-				a1(m,k,j,i) = 0.5*(A1(xl - 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
+      if (xm > 0.0) {
+        a1(m,k,j,i) = 0.5*(A1(xl - 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
                            A1(xr - 0.5 * sep - axis, x2f, x3f, I_0, r_0));
-			} else {
-				a1(m,k,j,i) = 0.5*(A1(xl + 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
+      } else {
+        a1(m,k,j,i) = 0.5*(A1(xl + 0.5 * sep - axis, x2f, x3f, I_0, r_0) +
                            A1(xr + 0.5 * sep - axis, x2f, x3f, I_0, r_0));
-			}
+      }
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -626,13 +626,13 @@ void SetupBHNS(ParameterInput *pin, Mesh* pmy_mesh_) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
 
-			if (xm > 0.0) {
-				a2(m,k,j,i) = 0.5*(A2(x1f - 0.5 * sep - axis, xl, x3f, I_0, r_0) +
+      if (xm > 0.0) {
+        a2(m,k,j,i) = 0.5*(A2(x1f - 0.5 * sep - axis, xl, x3f, I_0, r_0) +
                            A2(x1f - 0.5 * sep - axis, xr, x3f, I_0, r_0));
-			} else {
-				a2(m,k,j,i) = 0.5*(A2(x1f + 0.5 * sep - axis, xl, x3f, I_0, r_0) +
+      } else {
+        a2(m,k,j,i) = 0.5*(A2(x1f + 0.5 * sep - axis, xl, x3f, I_0, r_0) +
                            A2(x1f + 0.5 * sep - axis, xr, x3f, I_0, r_0));
-			}
+      }
     }
   });
 
