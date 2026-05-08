@@ -55,7 +55,9 @@
 #include "kadath_bin_ns.hpp"
 #include "EOS/EOS.hh"
 #include "coord_fields.hpp"
+#include "Configurator/config_enums.hpp"
 #include "Configurator/config_binary.hpp"
+#include "Configurator/configurator_boost.hpp"
 #include "exporter_utilities.hpp"
 #include "bco_utilities.hpp"
 
@@ -85,20 +87,6 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   using export_utils::UY;
   using export_utils::UZ;
   using export_utils::NUM_QUANTS;
-
-  // Kadath::FUKA_Config: config types and parameter enumerators
-  using Kadath::FUKA_Config::kadath_config_boost;
-  using Kadath::FUKA_Config::BIN_INFO;
-  using Kadath::FUKA_Config::BCO1;
-  using Kadath::FUKA_Config::BCO2;
-  using Kadath::FUKA_Config::QPIG;
-  using Kadath::FUKA_Config::GOMEGA;
-  using Kadath::FUKA_Config::OMEGA;
-  using Kadath::FUKA_Config::COM;
-  using Kadath::FUKA_Config::HCUT;
-  using Kadath::FUKA_Config::EOSFILE;
-  using Kadath::FUKA_Config::EOSTYPE;
-  using Kadath::FUKA_Config::INTERP_PTS;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
