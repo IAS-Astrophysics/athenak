@@ -2277,14 +2277,12 @@ SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
   T a1x = tr[AX1], a1y = tr[AY1], a1z = tr[AZ1], a2x = tr[AX2], a2y = tr[AY2],
     a2z = tr[AZ2];
   T m1 = tr[M1T] * b.adjust_mass1, m2 = tr[M2T] * b.adjust_mass2;
-  T spin_scale1 = b.use_traj_table ? m1 : T(b.adjust_mass1);
-  T spin_scale2 = b.use_traj_table ? m2 : T(b.adjust_mass2);
-  a1x = a1x * spin_scale1;
-  a1y = a1y * spin_scale1;
-  a1z = a1z * spin_scale1;
-  a2x = a2x * spin_scale2;
-  a2y = a2y * spin_scale2;
-  a2z = a2z * spin_scale2;
+  a1x = a1x * m1;
+  a1y = a1y * m1;
+  a1z = a1z * m1;
+  a2x = a2x * m2;
+  a2y = a2y * m2;
+  a2z = a2z * m2;
   T a1n = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + T(1e-40)),
     a2n = metric_sqrt(a2x * a2x + a2y * a2y + a2z * a2z + T(1e-40)),
     a1 = a1n, a2 = a2n;
@@ -2427,14 +2425,12 @@ SuperposedBBHTemplateMixed(C x, C y, C z, G gcov[NDIM][NDIM],
   auto a2x = tr[AX2], a2y = tr[AY2], a2z = tr[AZ2];
   auto m1 = tr[M1T] * b.adjust_mass1;
   auto m2 = tr[M2T] * b.adjust_mass2;
-  auto spin_scale1 = b.use_traj_table ? m1 : P(b.adjust_mass1);
-  auto spin_scale2 = b.use_traj_table ? m2 : P(b.adjust_mass2);
-  a1x = a1x * spin_scale1;
-  a1y = a1y * spin_scale1;
-  a1z = a1z * spin_scale1;
-  a2x = a2x * spin_scale2;
-  a2y = a2y * spin_scale2;
-  a2z = a2z * spin_scale2;
+  a1x = a1x * m1;
+  a1y = a1y * m1;
+  a1z = a1z * m1;
+  a2x = a2x * m2;
+  a2y = a2y * m2;
+  a2z = a2z * m2;
   auto a1 = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + P(1e-40));
   auto a2 = metric_sqrt(a2x * a2x + a2y * a2y + a2z * a2z + P(1e-40));
 
@@ -2512,6 +2508,14 @@ SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
 
   Real m1_t = traj_array[M1T];
   Real m2_t = traj_array[M2T];
+  Real m1 = m1_t * b.adjust_mass1;
+  Real m2 = m2_t * b.adjust_mass2;
+  a1x *= m1;
+  a1y *= m1;
+  a1z *= m1;
+  a2x *= m2;
+  a2y *= m2;
+  a2z *= m2;
 
   Real a1_t = metric_sqrt( a1x*a1x + a1y*a1y + a1z*a1z + 1e-40) ;
   Real a2_t = metric_sqrt( a2x*a2x + a2y*a2y + a2z*a2z + 1e-40) ;
@@ -2568,10 +2572,8 @@ SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   /* Adjust mass */
   /* This is useful for reducing the effective mass of each BH */
   /* Adjust by hand to get the correct irreducible mass of the BH */
-  Real a1 = a1_t * b.adjust_mass1;
-  Real m1 = m1_t * b.adjust_mass1;
-  Real a2 = a2_t * b.adjust_mass2;
-  Real m2 = m2_t * b.adjust_mass2;
+  Real a1 = a1_t;
+  Real a2 = a2_t;
 
   //============================================//
   // Regularize horizon and apply excision mask //
