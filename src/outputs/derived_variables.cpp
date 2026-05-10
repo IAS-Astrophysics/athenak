@@ -1243,7 +1243,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // det(gamma), sqrt(gamma)
       Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
                                   g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
-      Real sqrt_gamma = detg > 0.0 ? sqrt(detg) : 0.0;
+      if (detg <= 0.0) {
+        for (int n = 0; n < n_comp; ++n) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+        return;
+      }
+      Real sqrt_gamma = sqrt(detg);
 
       // Inverse metric g^ij
       AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;

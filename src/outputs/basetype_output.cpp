@@ -160,6 +160,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << "Output of Tmunu variable requested in <output> block '"
        << out_params.block_name << "' but no Tmunu object has been constructed."
        << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+    exit(EXIT_FAILURE);
   }
   if ((ivar>=154) && (ivar<156) && (pm->pmb_pack->ppart == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -168,17 +169,21 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==156) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr)) {
+  if ((ivar==156) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr ||
+                      pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of angular momentum requested in <output> block '"
-       << out_params.block_name << "' but no adm or dyngrmhd object has been constructed."
+       << out_params.block_name
+       << "' but no adm, dyngrmhd, or mhd object has been constructed."
        << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==157) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr)) {
+  if ((ivar==157) && (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr ||
+                      pm->pmb_pack->pmhd == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of torque requested in <output> block '"
-       << out_params.block_name << "' but no adm or dyngrmhd object has been constructed."
+       << out_params.block_name
+       << "' but no adm, dyngrmhd, or mhd object has been constructed."
        << std::endl;
     exit(EXIT_FAILURE);
   }
