@@ -184,6 +184,188 @@ KOKKOS_INLINE_FUNCTION Real value_of(const dual_real &a) { return a.val; }
 KOKKOS_INLINE_FUNCTION Real deriv_of(const dual_real &a, int n) {
   return a.d[n];
 }
+
+struct dual1_real {
+  Real val, d;
+  KOKKOS_INLINE_FUNCTION dual1_real() : val(0.0), d(0.0) {}
+  KOKKOS_INLINE_FUNCTION dual1_real(Real v) : val(v), d(0.0) {}
+  KOKKOS_INLINE_FUNCTION dual1_real(Real v, Real deriv) : val(v), d(deriv) {}
+};
+KOKKOS_INLINE_FUNCTION dual1_real operator+(const dual1_real &a,
+                                            const dual1_real &b) {
+  return dual1_real(a.val + b.val, a.d + b.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator+(const dual1_real &a, Real b) {
+  return dual1_real(a.val + b, a.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator+(Real a, const dual1_real &b) {
+  return b + a;
+}
+KOKKOS_INLINE_FUNCTION dual1_real &operator+=(dual1_real &a,
+                                              const dual1_real &b) {
+  a.val += b.val;
+  a.d += b.d;
+  return a;
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a,
+                                            const dual1_real &b) {
+  return dual1_real(a.val - b.val, a.d - b.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a, Real b) {
+  return dual1_real(a.val - b, a.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator-(Real a, const dual1_real &b) {
+  return dual1_real(a - b.val, -b.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a) {
+  return dual1_real(-a.val, -a.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator*(const dual1_real &a,
+                                            const dual1_real &b) {
+  return dual1_real(a.val * b.val, a.d * b.val + a.val * b.d);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator*(const dual1_real &a, Real b) {
+  return dual1_real(a.val * b, a.d * b);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator*(Real a, const dual1_real &b) {
+  return b * a;
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator/(const dual1_real &a,
+                                            const dual1_real &b) {
+  const Real inv = 1.0 / b.val;
+  return dual1_real(a.val * inv, (a.d * b.val - a.val * b.d) * inv * inv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator/(const dual1_real &a, Real b) {
+  const Real inv = 1.0 / b;
+  return dual1_real(a.val * inv, a.d * inv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator/(Real a, const dual1_real &b) {
+  const Real inv = 1.0 / b.val;
+  return dual1_real(a * inv, -a * b.d * inv * inv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real metric_sqrt(const dual1_real &a) {
+  const Real s = sqrt(a.val);
+  return dual1_real(s, 0.5 * a.d / s);
+}
+KOKKOS_INLINE_FUNCTION Real metric_abs(const Real a) { return fabs(a); }
+KOKKOS_INLINE_FUNCTION dual1_real metric_abs(const dual1_real &a) {
+  const Real sign = (a.val < 0.0) ? -1.0 : 1.0;
+  return dual1_real(fabs(a.val), sign * a.d);
+}
+KOKKOS_INLINE_FUNCTION Real metric_pow(const Real a, const Real p) {
+  return pow(a, p);
+}
+KOKKOS_INLINE_FUNCTION dual1_real metric_pow(const dual1_real &a, const Real p) {
+  const Real v = pow(a.val, p);
+  return dual1_real(v, p * pow(a.val, p - 1.0) * a.d);
+}
+KOKKOS_INLINE_FUNCTION bool operator<(const dual1_real &a,
+                                      const dual1_real &b) {
+  return a.val < b.val;
+}
+KOKKOS_INLINE_FUNCTION bool operator<(const dual1_real &a, const Real b) {
+  return a.val < b;
+}
+KOKKOS_INLINE_FUNCTION bool operator<(const Real a, const dual1_real &b) {
+  return a < b.val;
+}
+KOKKOS_INLINE_FUNCTION bool operator>(const dual1_real &a,
+                                      const dual1_real &b) {
+  return a.val > b.val;
+}
+KOKKOS_INLINE_FUNCTION bool operator>(const dual1_real &a, const Real b) {
+  return a.val > b;
+}
+KOKKOS_INLINE_FUNCTION bool operator>(const Real a, const dual1_real &b) {
+  return a > b.val;
+}
+KOKKOS_INLINE_FUNCTION Real value_of(const dual1_real &a) { return a.val; }
+KOKKOS_INLINE_FUNCTION Real deriv_of(const dual1_real &a) { return a.d; }
+
+struct dual3_real {
+  Real val, d[3];
+  KOKKOS_INLINE_FUNCTION dual3_real() : val(0.0), d{0.0, 0.0, 0.0} {}
+  KOKKOS_INLINE_FUNCTION dual3_real(Real v) : val(v), d{0.0, 0.0, 0.0} {}
+  KOKKOS_INLINE_FUNCTION dual3_real(Real v, Real dx, Real dy, Real dz)
+      : val(v), d{dx, dy, dz} {}
+};
+KOKKOS_INLINE_FUNCTION dual3_real operator+(const dual3_real &a,
+                                            const dual3_real &b) {
+  return dual3_real(a.val + b.val, a.d[0] + b.d[0], a.d[1] + b.d[1],
+                    a.d[2] + b.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator+(const dual3_real &a, Real b) {
+  return dual3_real(a.val + b, a.d[0], a.d[1], a.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator+(Real a, const dual3_real &b) {
+  return b + a;
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator-(const dual3_real &a,
+                                            const dual3_real &b) {
+  return dual3_real(a.val - b.val, a.d[0] - b.d[0], a.d[1] - b.d[1],
+                    a.d[2] - b.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator-(const dual3_real &a, Real b) {
+  return dual3_real(a.val - b, a.d[0], a.d[1], a.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator-(Real a, const dual3_real &b) {
+  return dual3_real(a - b.val, -b.d[0], -b.d[1], -b.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator-(const dual3_real &a) {
+  return dual3_real(-a.val, -a.d[0], -a.d[1], -a.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator*(const dual3_real &a,
+                                            const dual3_real &b) {
+  return dual3_real(a.val * b.val,
+                    a.d[0] * b.val + a.val * b.d[0],
+                    a.d[1] * b.val + a.val * b.d[1],
+                    a.d[2] * b.val + a.val * b.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator*(const dual3_real &a, Real b) {
+  return dual3_real(a.val * b, a.d[0] * b, a.d[1] * b, a.d[2] * b);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator*(Real a, const dual3_real &b) {
+  return b * a;
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator/(const dual3_real &a,
+                                            const dual3_real &b) {
+  const Real inv = 1.0 / b.val;
+  const Real inv2 = inv * inv;
+  return dual3_real(a.val * inv,
+                    (a.d[0] * b.val - a.val * b.d[0]) * inv2,
+                    (a.d[1] * b.val - a.val * b.d[1]) * inv2,
+                    (a.d[2] * b.val - a.val * b.d[2]) * inv2);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator/(const dual3_real &a, Real b) {
+  const Real inv = 1.0 / b;
+  return dual3_real(a.val * inv, a.d[0] * inv, a.d[1] * inv,
+                    a.d[2] * inv);
+}
+KOKKOS_INLINE_FUNCTION dual3_real operator/(Real a, const dual3_real &b) {
+  const Real inv = 1.0 / b.val;
+  const Real fac = -a * inv * inv;
+  return dual3_real(a * inv, fac * b.d[0], fac * b.d[1], fac * b.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real metric_sqrt(const dual3_real &a) {
+  const Real s = sqrt(a.val);
+  const Real fac = 0.5 / s;
+  return dual3_real(s, fac * a.d[0], fac * a.d[1], fac * a.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real metric_abs(const dual3_real &a) {
+  const Real sign = (a.val < 0.0) ? -1.0 : 1.0;
+  return dual3_real(fabs(a.val), sign * a.d[0], sign * a.d[1],
+                    sign * a.d[2]);
+}
+KOKKOS_INLINE_FUNCTION dual3_real metric_pow(const dual3_real &a, const Real p) {
+  const Real v = pow(a.val, p);
+  const Real fac = p * pow(a.val, p - 1.0);
+  return dual3_real(v, fac * a.d[0], fac * a.d[1], fac * a.d[2]);
+}
+KOKKOS_INLINE_FUNCTION Real value_of(const dual3_real &a) { return a.val; }
+KOKKOS_INLINE_FUNCTION Real deriv_of(const dual3_real &a, int n) {
+  return a.d[n];
+}
+
 template <typename T>
 KOKKOS_INLINE_FUNCTION T metric_norm3(T x, T y, T z) {
   T r2 = x * x + y * y + z * z;
@@ -360,9 +542,9 @@ Real LocalMeshSpacingAtPoint(MeshBlockPack *pmbp, Real x, Real y, Real z) {
   return local_dx;
 }
 
-Real HorizonRadiusFromMassAndSpin(Real mass, Real ax, Real ay, Real az) {
-  Real amag = std::sqrt(SQR(ax) + SQR(ay) + SQR(az));
-  return mass + std::sqrt(std::max(SQR(mass) - SQR(amag), 0.0));
+Real HorizonRadiusFromMassAndChi(Real mass, Real chix, Real chiy, Real chiz) {
+  Real chi2 = SQR(chix) + SQR(chiy) + SQR(chiz);
+  return mass * (1.0 + std::sqrt(std::max(1.0 - chi2, 0.0)));
 }
 
 Real MinDynBBHHorizonRadius() {
@@ -371,10 +553,10 @@ Real MinDynBBHHorizonRadius() {
     for (std::size_t n = 0; n < bbh_table.t.size(); ++n) {
       Real m1 = bbh_table.m1[n] * bbh.adjust_mass1;
       Real m2 = bbh_table.m2[n] * bbh.adjust_mass2;
-      rmin = std::min(rmin, HorizonRadiusFromMassAndSpin(
-          m1, m1*bbh_table.ax1[n], m1*bbh_table.ay1[n], m1*bbh_table.az1[n]));
-      rmin = std::min(rmin, HorizonRadiusFromMassAndSpin(
-          m2, m2*bbh_table.ax2[n], m2*bbh_table.ay2[n], m2*bbh_table.az2[n]));
+      rmin = std::min(rmin, HorizonRadiusFromMassAndChi(
+          m1, bbh_table.ax1[n], bbh_table.ay1[n], bbh_table.az1[n]));
+      rmin = std::min(rmin, HorizonRadiusFromMassAndChi(
+          m2, bbh_table.ax2[n], bbh_table.ay2[n], bbh_table.az2[n]));
     }
     return rmin;
   }
@@ -383,12 +565,8 @@ Real MinDynBBHHorizonRadius() {
   Real m1 = state[M1T] * bbh.adjust_mass1;
   Real m2 = state[M2T] * bbh.adjust_mass2;
   return std::min(
-      HorizonRadiusFromMassAndSpin(m1, state[AX1]*bbh.adjust_mass1,
-                                   state[AY1]*bbh.adjust_mass1,
-                                   state[AZ1]*bbh.adjust_mass1),
-      HorizonRadiusFromMassAndSpin(m2, state[AX2]*bbh.adjust_mass2,
-                                   state[AY2]*bbh.adjust_mass2,
-                                   state[AZ2]*bbh.adjust_mass2));
+      HorizonRadiusFromMassAndChi(m1, state[AX1], state[AY1], state[AZ1]),
+      HorizonRadiusFromMassAndChi(m2, state[AX2], state[AY2], state[AZ2]));
 }
 
 bbh_sink_hole_state MakeSinkHoleState(MeshBlockPack *pmbp, Real x, Real y, Real z,
@@ -414,14 +592,10 @@ bbh_sink_state ComputeUnresolvedSinkState(MeshBlockPack *pmbp,
   auto bbh_ = bbh;
   Real m1 = traj.q[M1T] * bbh_.adjust_mass1;
   Real m2 = traj.q[M2T] * bbh_.adjust_mass2;
-  Real spin_scale1 = bbh_.use_traj_table ? m1 : bbh_.adjust_mass1;
-  Real spin_scale2 = bbh_.use_traj_table ? m2 : bbh_.adjust_mass2;
-  Real rH1 = HorizonRadiusFromMassAndSpin(m1, traj.q[AX1]*spin_scale1,
-                                          traj.q[AY1]*spin_scale1,
-                                          traj.q[AZ1]*spin_scale1);
-  Real rH2 = HorizonRadiusFromMassAndSpin(m2, traj.q[AX2]*spin_scale2,
-                                          traj.q[AY2]*spin_scale2,
-                                          traj.q[AZ2]*spin_scale2);
+  Real rH1 = HorizonRadiusFromMassAndChi(m1, traj.q[AX1], traj.q[AY1],
+                                         traj.q[AZ1]);
+  Real rH2 = HorizonRadiusFromMassAndChi(m2, traj.q[AX2], traj.q[AY2],
+                                         traj.q[AZ2]);
   bbh_sink_state s;
   s.hole1 = MakeSinkHoleState(pmbp, traj.q[X1], traj.q[Y1], traj.q[Z1], rH1);
   s.hole2 = MakeSinkHoleState(pmbp, traj.q[X2], traj.q[Y2], traj.q[Z2], rH2);
@@ -435,11 +609,6 @@ void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
 bbh_traj_state find_traj_state(Real tt);
 void LoadTrajectoryTable(const std::string &fname);
 
-KOKKOS_INLINE_FUNCTION
-void analytic_4metric(const Real t, const Real x, const Real y, const Real z,
-                      struct four_metric &outmet, const Real nz_0[NTRAJ],
-                      const Real dnz_0[NTRAJ], const bbh_pgen bbh_);
-KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met,
                                 struct three_metric &gam);
 KOKKOS_INLINE_FUNCTION
@@ -454,7 +623,8 @@ void get_metric_and_derivatives(const Real t, const Real x, const Real y,
                                 const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-                   Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen bbh_);
+                   Real gcov[][NDIM], const Real traj_array[NTRAJ],
+                   const bbh_pgen bbh_);
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
@@ -481,21 +651,21 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
 
     // 1. Calculate current Black Hole Trajectory
     Real tt = pm->time;
-    Real bbh_traj[NTRAJ];
+    Real btraj[NTRAJ];
 
     // Ensure find_traj_t is visible here (it is declared global in your snippet)
-    find_traj_t(tt, bbh_traj);
+    find_traj_t(tt, btraj);
 
     // 2. Update Surface Grid Centers
     // We iterate through all grids and check labels to see if they are horizons
     for(auto& grid_ptr : pgen->surface_grids) {
         if (grid_ptr->Label() == "H1") {
             // Move grid to BH1 location (Indices 0, 1, 2)
-            grid_ptr->SetCenter(&bbh_traj[0]);
+            grid_ptr->SetCenter(&btraj[0]);
         }
         else if (grid_ptr->Label() == "H2") {
             // Move grid to BH2 location (Indices 3, 4, 5)
-            grid_ptr->SetCenter(&bbh_traj[3]);
+            grid_ptr->SetCenter(&btraj[3]);
         }
     }
 
@@ -512,9 +682,9 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
 
 
 KOKKOS_INLINE_FUNCTION
-static void GetSuperposedAndInverse(const Real t, 
-                            const Real x, const Real y, const Real z, 
-                            Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ], 
+static void GetSuperposedAndInverse(const Real t,
+                            const Real x, const Real y, const Real z,
+                            Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ],
                             const bbh_pgen bbh_);
 
 
@@ -1520,16 +1690,12 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1[2] = traj.q[Z2];
   Real m1_ex = traj.q[M1T] * bbh_.adjust_mass1;
   Real m2_ex = traj.q[M2T] * bbh_.adjust_mass2;
-  Real spin_scale1 = bbh_.use_traj_table ? m1_ex : bbh_.adjust_mass1;
-  Real spin_scale2 = bbh_.use_traj_table ? m2_ex : bbh_.adjust_mass2;
-  Real a1x_ex = traj.q[AX1] * spin_scale1;
-  Real a1y_ex = traj.q[AY1] * spin_scale1;
-  Real a1z_ex = traj.q[AZ1] * spin_scale1;
-  Real a2x_ex = traj.q[AX2] * spin_scale2;
-  Real a2y_ex = traj.q[AY2] * spin_scale2;
-  Real a2z_ex = traj.q[AZ2] * spin_scale2;
-  Real a1_ex = sqrt(SQR(a1x_ex) + SQR(a1y_ex) + SQR(a1z_ex));
-  Real a2_ex = sqrt(SQR(a2x_ex) + SQR(a2y_ex) + SQR(a2z_ex));
+  Real a1x_ex = traj.q[AX1] * m1_ex;
+  Real a1y_ex = traj.q[AY1] * m1_ex;
+  Real a1z_ex = traj.q[AZ1] * m1_ex;
+  Real a2x_ex = traj.q[AX2] * m2_ex;
+  Real a2y_ex = traj.q[AY2] * m2_ex;
+  Real a2z_ex = traj.q[AZ2] * m2_ex;
   coord.punc_0_spin[0] = a1x_ex;
   coord.punc_0_spin[1] = a1y_ex;
   coord.punc_0_spin[2] = a1z_ex;
@@ -1542,8 +1708,10 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1_vel[0] = traj.q[VX2];
   coord.punc_1_vel[1] = traj.q[VY2];
   coord.punc_1_vel[2] = traj.q[VZ2];
-  coord.punc_0_rad = m1_ex + sqrt(fmax(SQR(m1_ex) - SQR(a1_ex), 0.0));
-  coord.punc_1_rad = m2_ex + sqrt(fmax(SQR(m2_ex) - SQR(a2_ex), 0.0));
+  coord.punc_0_rad = HorizonRadiusFromMassAndChi(
+      m1_ex, traj.q[AX1], traj.q[AY1], traj.q[AZ1]);
+  coord.punc_1_rad = HorizonRadiusFromMassAndChi(
+      m2_ex, traj.q[AX2], traj.q[AY2], traj.q[AZ2]);
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1561,13 +1729,13 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    analytic_4metric(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
-  
+    get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
+
     /* Transform 4D metric to 3+1 variables*/
     four_metric_to_three_metric(met4, met3);
 
     /* Load (Cartesian) components of the metric and curvature */
-    
+
     // g_ab
     adm.g_dd(m,0,0,k,j,i) = met3.gxx;
     adm.g_dd(m,0,1,k,j,i) = met3.gxy;
@@ -1593,27 +1761,17 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void analytic_4metric(const Real t, const Real x, const Real y,
-    const Real z, struct four_metric &outmet,
-    const Real nz_0[NTRAJ], const Real dnz_0[NTRAJ], const bbh_pgen bbh_)
-{
-  get_metric_and_derivatives(t, x, y, z, outmet, nz_0, dnz_0, bbh_);
-
-  return;
-}
-
-KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met,
-                                struct three_metric &gam) 
-{   
-  /* Check determinant first */ 
+                                struct three_metric &gam)
+{
+  /* Check determinant first */
   gam.gxx = met.g.xx;
   gam.gxy = met.g.xy;
   gam.gxz = met.g.xz;
   gam.gyy = met.g.yy;
   gam.gyz = met.g.yz;
   gam.gzz = met.g.zz;
-  
+
   Real det = adm::SpatialDet(gam.gxx, gam.gxy, gam.gxz,
                                    gam.gyy, gam.gyz, gam.gzz);
 
@@ -1630,19 +1788,19 @@ int four_metric_to_three_metric(const struct four_metric &met,
     Real betadownx = 0.0;
     Real betadowny = 0.0;
     Real betadownz = 0.0;
-  
+
     Real dbetadownxx = 0.0;
     Real dbetadownyx = 0.0;
     Real dbetadownzx = 0.0;
-  
+
     Real dbetadownxy = 0.0;
     Real dbetadownyy = 0.0;
     Real dbetadownzy = 0.0;
-  
+
     Real dbetadownxz = 0.0;
     Real dbetadownyz = 0.0;
     Real dbetadownzz = 0.0;
-  
+
     Real dtgxx = 0.0;
     Real dtgxy = 0.0;
     Real dtgxz = 0.0;
@@ -2011,7 +2169,7 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION T BoostGammaMinusOneOverV2(const T v2, const T gamma) {
+KOKKOS_FORCEINLINE_FUNCTION T BoostGammaMinusOneOverV2(const T v2, const T gamma) {
   if (value_of(v2) < 1.0e-12) {
     return T(0.5) + T(0.375) * v2 + T(0.3125) * v2 * v2;
   }
@@ -2019,9 +2177,11 @@ KOKKOS_INLINE_FUNCTION T BoostGammaMinusOneOverV2(const T v2, const T gamma) {
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
+KOKKOS_FORCEINLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
                                                T J[NDIM][NDIM]) {
+  #pragma unroll
   for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
     for (int j = 0; j < NDIM; ++j)
       J[i][j] = T(0.0);
   T v2 = vx * vx + vy * vy + vz * vz;
@@ -2045,7 +2205,7 @@ KOKKOS_INLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
   J[3][3] = T(1.0) + q * vz * vz;
 }
 template <typename T>
-KOKKOS_INLINE_FUNCTION void BoostedSpatialCoordinates(T x, T y, T z, T x0, T y0,
+KOKKOS_FORCEINLINE_FUNCTION void BoostedSpatialCoordinates(T x, T y, T z, T x0, T y0,
                                                       T z0, T vx, T vy, T vz,
                                                       T *xbh, T *ybh, T *zbh) {
   T dx = x - x0, dy = y - y0, dz = z - z0;
@@ -2058,7 +2218,7 @@ KOKKOS_INLINE_FUNCTION void BoostedSpatialCoordinates(T x, T y, T z, T x0, T y0,
   *zbh = dz + q * vz * vd;
 }
 template <typename T>
-KOKKOS_INLINE_FUNCTION void
+KOKKOS_FORCEINLINE_FUNCTION void
 KerrSchildPerturbation(T x, T y, T z, T ax, T ay, T az, T m, T KS[NDIM][NDIM]) {
   T rt2 = T(1.4142135623730951), irt2 = T(1.0) / rt2,
     a2 = ax * ax + ay * ay + az * az, x2 = x * x + y * y + z * z,
@@ -2071,28 +2231,37 @@ KerrSchildPerturbation(T x, T y, T z, T ax, T ay, T az, T m, T KS[NDIM][NDIM]) {
   ell[0] = y * az - z * ay + rt2 * ad * ax / rho + rho * x * irt2;
   ell[1] = -x * az + z * ax + rt2 * ad * ay / rho + rho * y * irt2;
   ell[2] = x * ay - y * ax + rt2 * ad * az / rho + rho * z * irt2;
+  #pragma unroll
   for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
     for (int j = 0; j < NDIM; ++j)
       KS[i][j] = T(0.0);
   KS[0][0] = fac;
+  #pragma unroll
   for (int i = 0; i < 3; ++i) {
     KS[0][i + 1] = fac * ell[i] * iden;
     KS[i + 1][0] = KS[0][i + 1];
   }
+  #pragma unroll
   for (int i = 0; i < 3; ++i)
+    #pragma unroll
     for (int j = i; j < 3; ++j) {
       KS[i + 1][j + 1] = fac * ell[i] * ell[j] * iden * iden;
       KS[j + 1][i + 1] = KS[i + 1][j + 1];
     }
 }
 template <typename T>
-KOKKOS_INLINE_FUNCTION void AddBoostedKerrSchildHole(const T KS[NDIM][NDIM],
+KOKKOS_FORCEINLINE_FUNCTION void AddBoostedKerrSchildHole(const T KS[NDIM][NDIM],
                                                      const T J[NDIM][NDIM],
                                                      T gcov[NDIM][NDIM]) {
+  #pragma unroll
   for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
     for (int j = i; j < NDIM; ++j) {
       T sum = T(0.0);
+      #pragma unroll
       for (int m = 0; m < NDIM; ++m)
+        #pragma unroll
         for (int n = 0; n < NDIM; ++n)
           sum = sum + J[m][i] * J[n][j] * KS[m][n];
       gcov[i][j] = gcov[i][j] + sum;
@@ -2100,7 +2269,7 @@ KOKKOS_INLINE_FUNCTION void AddBoostedKerrSchildHole(const T KS[NDIM][NDIM],
     }
 }
 template <typename T>
-KOKKOS_INLINE_FUNCTION void
+KOKKOS_FORCEINLINE_FUNCTION void
 SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
                       const bbh_pgen b) {
   T v1x = tr[VX1], v1y = tr[VY1], v1z = tr[VZ1], v2x = tr[VX2],
@@ -2137,80 +2306,597 @@ SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
   KerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, m2, KS2);
   BuildBoostJacobian(v1x, v1y, v1z, J1);
   BuildBoostJacobian(v2x, v2y, v2z, J2);
+  #pragma unroll
   for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
     for (int j = 0; j < NDIM; ++j)
       gcov[i][j] = (i == j) ? ((i == 0) ? T(-1.0) : T(1.0)) : T(0.0);
   AddBoostedKerrSchildHole(KS1, J1, gcov);
   AddBoostedKerrSchildHole(KS2, J2, gcov);
 }
-KOKKOS_INLINE_FUNCTION void
-SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-              Real gcov[][NDIM], const Real tr[NTRAJ], const bbh_pgen b) {
-  (void)time;
-  SuperposedBBHTemplate<Real>(x, y, z, gcov, tr, b);
+
+template <typename V>
+KOKKOS_FORCEINLINE_FUNCTION void BuildBoostJacobianMixed(V vx, V vy, V vz,
+                                                    V J[NDIM][NDIM]) {
+  #pragma unroll
+  for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
+    for (int j = 0; j < NDIM; ++j)
+      J[i][j] = V(0.0);
+  auto v2 = vx * vx + vy * vy + vz * vz;
+  auto g = V(1.0) / metric_sqrt(V(1.0) - v2);
+  auto q = BoostGammaMinusOneOverV2(v2, g);
+  J[0][0] = g;
+  J[0][1] = -g * vx;
+  J[0][2] = -g * vy;
+  J[0][3] = -g * vz;
+  J[1][0] = J[0][1];
+  J[2][0] = J[0][2];
+  J[3][0] = J[0][3];
+  J[1][1] = V(1.0) + q * vx * vx;
+  J[1][2] = q * vx * vy;
+  J[1][3] = q * vx * vz;
+  J[2][1] = J[1][2];
+  J[2][2] = V(1.0) + q * vy * vy;
+  J[2][3] = q * vy * vz;
+  J[3][1] = J[1][3];
+  J[3][2] = J[2][3];
+  J[3][3] = V(1.0) + q * vz * vz;
 }
-KOKKOS_INLINE_FUNCTION void
+
+template <typename C, typename P, typename G>
+KOKKOS_FORCEINLINE_FUNCTION void
+BoostedSpatialCoordinatesMixed(C x, C y, C z, P x0, P y0, P z0,
+                               P vx, P vy, P vz, G *xbh, G *ybh, G *zbh) {
+  auto dx = x - x0, dy = y - y0, dz = z - z0;
+  auto v2 = vx * vx + vy * vy + vz * vz;
+  auto g = P(1.0) / metric_sqrt(P(1.0) - v2);
+  auto q = BoostGammaMinusOneOverV2(v2, g);
+  auto vd = vx * dx + vy * dy + vz * dz;
+  *xbh = dx + q * vx * vd;
+  *ybh = dy + q * vy * vd;
+  *zbh = dz + q * vz * vd;
+}
+
+template <typename C, typename P, typename G>
+KOKKOS_FORCEINLINE_FUNCTION void
+KerrSchildPerturbationMixed(C x, C y, C z, P ax, P ay, P az, P m,
+                            G KS[NDIM][NDIM]) {
+  G rt2 = G(1.4142135623730951), irt2 = G(1.0) / rt2;
+  auto a2 = ax * ax + ay * ay + az * az;
+  auto x2 = x * x + y * y + z * z;
+  auto ad = ax * x + ay * y + az * z;
+  auto term = x2 - a2;
+  auto rho2 = term + metric_sqrt(G(4.0) * ad * ad + term * term);
+  auto rho = metric_sqrt(rho2);
+  auto fac = irt2 * rho2 * rho * m /
+             (ad * ad + G(0.25) * rho2 * rho2);
+  auto den = a2 + G(0.5) * rho2;
+  auto iden = G(1.0) / den;
+  G ell[3];
+  ell[0] = y * az - z * ay + rt2 * ad * ax / rho + rho * x * irt2;
+  ell[1] = -x * az + z * ax + rt2 * ad * ay / rho + rho * y * irt2;
+  ell[2] = x * ay - y * ax + rt2 * ad * az / rho + rho * z * irt2;
+  #pragma unroll
+  for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
+    for (int j = 0; j < NDIM; ++j)
+      KS[i][j] = G(0.0);
+  KS[0][0] = fac;
+  #pragma unroll
+  for (int i = 0; i < 3; ++i) {
+    KS[0][i + 1] = fac * ell[i] * iden;
+    KS[i + 1][0] = KS[0][i + 1];
+  }
+  #pragma unroll
+  for (int i = 0; i < 3; ++i)
+    #pragma unroll
+    for (int j = i; j < 3; ++j) {
+      KS[i + 1][j + 1] = fac * ell[i] * ell[j] * iden * iden;
+      KS[j + 1][i + 1] = KS[i + 1][j + 1];
+    }
+}
+
+template <typename K, typename J, typename G>
+KOKKOS_FORCEINLINE_FUNCTION void
+AddBoostedKerrSchildHoleMixed(const K KS[NDIM][NDIM],
+                              const J Jmat[NDIM][NDIM],
+                              G gcov[NDIM][NDIM]) {
+  #pragma unroll
+  for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
+    for (int j = i; j < NDIM; ++j) {
+      G sum = G(0.0);
+      #pragma unroll
+      for (int m = 0; m < NDIM; ++m)
+        #pragma unroll
+        for (int n = 0; n < NDIM; ++n)
+          sum = sum + Jmat[m][i] * Jmat[n][j] * KS[m][n];
+      gcov[i][j] = gcov[i][j] + sum;
+      gcov[j][i] = gcov[i][j];
+    }
+}
+
+template <typename C, typename P, typename G>
+KOKKOS_FORCEINLINE_FUNCTION void
+SuperposedBBHTemplateMixed(C x, C y, C z, G gcov[NDIM][NDIM],
+                           const P tr[NTRAJ], const bbh_pgen b) {
+  auto v1x = tr[VX1], v1y = tr[VY1], v1z = tr[VZ1];
+  auto v2x = tr[VX2], v2y = tr[VY2], v2z = tr[VZ2];
+  auto a1x = tr[AX1], a1y = tr[AY1], a1z = tr[AZ1];
+  auto a2x = tr[AX2], a2y = tr[AY2], a2z = tr[AZ2];
+  auto m1 = tr[M1T] * b.adjust_mass1;
+  auto m2 = tr[M2T] * b.adjust_mass2;
+  auto spin_scale1 = b.use_traj_table ? m1 : P(b.adjust_mass1);
+  auto spin_scale2 = b.use_traj_table ? m2 : P(b.adjust_mass2);
+  a1x = a1x * spin_scale1;
+  a1y = a1y * spin_scale1;
+  a1z = a1z * spin_scale1;
+  a2x = a2x * spin_scale2;
+  a2y = a2y * spin_scale2;
+  a2z = a2z * spin_scale2;
+  auto a1 = metric_sqrt(a1x * a1x + a1y * a1y + a1z * a1z + P(1e-40));
+  auto a2 = metric_sqrt(a2x * a2x + a2y * a2y + a2z * a2z + P(1e-40));
+
+  G x1, y1, z1, x2, y2, z2;
+  BoostedSpatialCoordinatesMixed<C, P, G>(
+      x, y, z, tr[X1], tr[Y1], tr[Z1], v1x, v1y, v1z, &x1, &y1, &z1);
+  BoostedSpatialCoordinatesMixed<C, P, G>(
+      x, y, z, tr[X2], tr[Y2], tr[Z2], v2x, v2y, v2z, &x2, &y2, &z2);
+
+  auto r1 = metric_norm3(x1, y1, z1);
+  auto r2 = metric_norm3(x2, y2, z2);
+  auto c1 = metric_sqrt(a1 * a1) * (P(1.0) + b.a1_buffer) + b.cutoff_floor;
+  auto c2 = metric_sqrt(a2 * a2) * (P(1.0) + b.a2_buffer) + b.cutoff_floor;
+  if (value_of(r1) < value_of(c1))
+    z1 = (value_of(z1) > 0.0) ? c1 : -c1;
+  if (value_of(r2) < value_of(c2))
+    z2 = (value_of(z2) > 0.0) ? c2 : -c2;
+
+  using JType = decltype(v1x + v1y + v1z);
+  G KS1[NDIM][NDIM], KS2[NDIM][NDIM];
+  JType J1[NDIM][NDIM], J2[NDIM][NDIM];
+  KerrSchildPerturbationMixed<G, P, G>(x1, y1, z1, a1x, a1y, a1z, m1, KS1);
+  KerrSchildPerturbationMixed<G, P, G>(x2, y2, z2, a2x, a2y, a2z, m2, KS2);
+  BuildBoostJacobianMixed(v1x, v1y, v1z, J1);
+  BuildBoostJacobianMixed(v2x, v2y, v2z, J2);
+  #pragma unroll
+  for (int i = 0; i < NDIM; ++i)
+    #pragma unroll
+    for (int j = 0; j < NDIM; ++j)
+      gcov[i][j] = (i == j) ? ((i == 0) ? G(-1.0) : G(1.0)) : G(0.0);
+  AddBoostedKerrSchildHoleMixed(KS1, J1, gcov);
+  AddBoostedKerrSchildHoleMixed(KS2, J2, gcov);
+}
+KOKKOS_INLINE_FUNCTION
+void
+SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
+              Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen b)
+{
+  if (b.use_traj_table) {
+    (void)time;
+    SuperposedBBHTemplate<Real>(x, y, z, gcov, traj_array, b);
+    return;
+  }
+
+  /* Superposition components*/
+  Real KS1[NDIM][NDIM];
+  Real KS2[NDIM][NDIM];
+  Real J1[NDIM][NDIM];
+  Real J2[NDIM][NDIM];
+
+  /* Load trajectories */
+  Real xi1x = traj_array[X1];
+  Real xi1y = traj_array[Y1];
+  Real xi1z = traj_array[Z1];
+  Real xi2x = traj_array[X2];
+  Real xi2y = traj_array[Y2];
+  Real xi2z = traj_array[Z2];
+  Real v1x  = traj_array[VX1] + 1e-40;
+  Real v1y  = traj_array[VY1] + 1e-40;
+  Real v1z  = traj_array[VZ1] + 1e-40;
+  Real v2x =  traj_array[VX2] + 1e-40;
+  Real v2y =  traj_array[VY2] + 1e-40;
+  Real v2z =  traj_array[VZ2] + 1e-40;
+
+  Real v2  =  metric_sqrt( v2x * v2x + v2y * v2y + v2z * v2z );
+  Real v1  =  metric_sqrt( v1x * v1x + v1y * v1y + v1z * v1z );
+
+  Real a1x  = traj_array[AX1];
+  Real a1y  = traj_array[AY1];
+  Real a1z  = traj_array[AZ1];
+
+  Real a2x =  traj_array[AX2];
+  Real a2y =  traj_array[AY2];
+  Real a2z =  traj_array[AZ2];
+
+  Real m1_t = traj_array[M1T];
+  Real m2_t = traj_array[M2T];
+
+  Real a1_t = metric_sqrt( a1x*a1x + a1y*a1y + a1z*a1z + 1e-40) ;
+  Real a2_t = metric_sqrt( a2x*a2x + a2y*a2y + a2z*a2z + 1e-40) ;
+
+  /* Load coordinates */
+
+   Real oo1 = v1 * v1;
+   Real oo2 = oo1 * -1;
+   Real oo3 = 1 + oo2;
+   Real oo4 = metric_sqrt(oo3);
+   Real oo5 = 1 / oo4;
+   Real oo6 = x * -1;
+   Real oo7 = oo6 + xi1x;
+   Real oo8 = v1x * oo7;
+   Real oo9 = y * -1;
+   Real oo10 = z * -1;
+   Real oo11 = v2 * v2;
+   Real oo12 = oo11 * -1;
+   Real oo13 = 1 + oo12;
+   Real oo14 = metric_sqrt(oo13);
+   Real oo15 = 1 / oo14;
+   Real oo16 = oo6 + xi2x;
+   Real oo17 = v2x * oo16;
+   Real oo18 = xi1x * -1;
+   Real oo19 = 1 / oo1;
+   Real oo20 = -1 + oo4;
+   Real oo21 = xi1y * -1;
+   Real oo22 = xi1z * -1;
+   Real oo23 = xi2x * -1;
+   Real oo24 = 1 / oo11;
+   Real oo25 = -1 + oo14;
+   Real oo26 = xi2y * -1;
+   Real oo27 = xi2z * -1;
+   Real oo28 = xi1y * v1y;
+   Real oo29 = xi1z * v1z;
+   Real oo30 = v1y * (y * -1);
+   Real oo31 = v1z * (z * -1);
+   Real oo32 = oo28 + (oo29 + (oo30 + (oo31 + oo8)));
+   Real oo33 = xi2y * v2y;
+   Real oo34 = xi2z * v2z;
+   Real oo35 = v2y * (y * -1);
+   Real oo36 = v2z * (z * -1);
+   Real oo37 = oo17 + (oo33 + (oo34 + (oo35 + oo36)));
+   //Real x0BH1 = (oo8 + ((oo9 + xi1y) * v1y + (oo10 + xi1z) * v1z)) * oo5;
+   //Real x0BH2 = (oo17 + ((oo9 + xi2y) * v2y + (oo10 + xi2z) * v2z)) * oo15;
+   Real x1BH1 = (oo18 + x) - oo20 * (oo5 * (v1x * (((oo18 + x) * v1x + ((oo21 + y) * v1y + (oo22 + z) * v1z)) * oo19)));
+   Real x1BH2 = (oo23 + x) - oo24 * (oo25 * (v2x * (((oo23 + x) * v2x + ((oo26 + y) * v2y + (oo27 + z) * v2z)) * oo15)));
+   Real x2BH1 = oo21 + (oo20 * (oo32 * (oo5 * (v1y * oo19))) + y);
+   Real x2BH2 = oo26 + (oo24 * (oo25 * (oo37 * (v2y * oo15))) + y);
+   Real x3BH1 = oo22 + (oo20 * (oo32 * (oo5 * (v1z * oo19))) + z);
+   Real x3BH2 = oo27 + (oo24 * (oo25 * (oo37 * (v2z * oo15))) + z);
+
+
+  /* Adjust mass */
+  /* This is useful for reducing the effective mass of each BH */
+  /* Adjust by hand to get the correct irreducible mass of the BH */
+  Real a1 = a1_t * b.adjust_mass1;
+  Real m1 = m1_t * b.adjust_mass1;
+  Real a2 = a2_t * b.adjust_mass2;
+  Real m2 = m2_t * b.adjust_mass2;
+
+  //============================================//
+  // Regularize horizon and apply excision mask //
+  //============================================//
+
+  /* Define radius with respect to BH frame */
+  Real rBH1 = metric_sqrt( x1BH1*x1BH1 + x2BH1*x2BH1 + x3BH1*x3BH1) ;
+  Real rBH2 = metric_sqrt( x1BH2*x1BH2 + x2BH2*x2BH2 + x3BH2*x3BH2) ;
+
+   /* Define radius cutoff */
+  Real rBH1_Cutoff = metric_abs(a1) * ( 1.0 + b.a1_buffer) + b.cutoff_floor ;
+  Real rBH2_Cutoff = metric_abs(a2) * ( 1.0 + b.a2_buffer) + b.cutoff_floor ;
+
+  /* Apply excision */
+  if ((rBH1) < rBH1_Cutoff) { if(x3BH1>0) {x3BH1 = rBH1_Cutoff;} else {x3BH1 = -1.0*rBH1_Cutoff;}}
+  if ((rBH2) < rBH2_Cutoff) { if(x3BH2>0) {x3BH2 = rBH2_Cutoff;} else {x3BH2 = -1.0*rBH2_Cutoff;}}
+
+  //=================//
+  //     Metric      //
+  //=================//
+  Real o1 = 1.4142135623730951;
+  Real o2 = 1 / o1;
+  Real o3 = a1x * a1x;
+  Real o4 = o3 * -1;
+  Real o5 = a1z * a1z;
+  Real o6 = o5 * -1;
+  Real o7 = a2x * a2x;
+  Real o8 = o7 * -1;
+  Real o9 = x1BH1 * x1BH1;
+  Real o10 = x2BH1 * x2BH1;
+  Real o11 = x3BH1 * x3BH1;
+  Real o12 = x1BH1 * a1x;
+  Real o13 = x2BH1 * a2x;
+  Real o14 = x3BH1 * a1z;
+  Real o15 = o12 + (o13 + o14);
+  Real o16 = o15 * o15;
+  Real o17 = o16 * 4;
+  Real o18 = o10 + (o11 + (o4 + (o6 + (o8 + o9))));
+  Real o19 = o18 * o18;
+  Real o20 = o17 + o19;
+  Real o21 = metric_sqrt(o20);
+  Real o22 = o10 + (o11 + (o21 + (o4 + (o6 + (o8 + o9)))));
+  Real o23 = metric_pow(o22, 1.5);
+  Real o24 = o22 * o22;
+  Real o25 = o24 * 0.25;
+  Real o26 = o16 + o25;
+  Real o27 = 1 / o26;
+  Real o28 = x2BH1 * a1z;
+  Real o29 = a2x * (x3BH1 * -1);
+  Real o30 = metric_sqrt(o22);
+  Real o31 = 1 / o30;
+  Real o32 = o1 * (o15 * (o31 * a1x));
+  Real o33 = o30 * (x1BH1 * o2);
+  Real o34 = o28 + (o29 + (o32 + o33));
+  Real o35 = o22 * 0.5;
+  Real o36 = o3 + (o35 + (o5 + o7));
+  Real o37 = 1 / o36;
+  Real o38 = o2 * (o23 * (o27 * (o34 * (o37 * m1))));
+  Real o39 = a1z * (x1BH1 * -1);
+  Real o40 = x3BH1 * a1x;
+  Real o41 = o1 * (o15 * (o31 * a2x));
+  Real o42 = o30 * (x2BH1 * o2);
+  Real o43 = o39 + (o40 + (o41 + o42));
+  Real o44 = o2 * (o23 * (o27 * (o37 * (o43 * m1))));
+  Real o45 = x1BH1 * a2x;
+  Real o46 = a1x * (x2BH1 * -1);
+  Real o47 = o1 * (o15 * (o31 * a1z));
+  Real o48 = o30 * (x3BH1 * o2);
+  Real o49 = o45 + (o46 + (o47 + o48));
+  Real o50 = o2 * (o23 * (o27 * (o37 * (o49 * m1))));
+  Real o51 = o36 * o36;
+  Real o52 = 1 / o51;
+  Real o53 = o2 * (o23 * (o27 * (o34 * (o43 * (o52 * m1)))));
+  Real o54 = o2 * (o23 * (o27 * (o34 * (o49 * (o52 * m1)))));
+  Real o55 = o2 * (o23 * (o27 * (o43 * (o49 * (o52 * m1)))));
+  Real o56 = a2y * a2y;
+  Real o57 = o56 * -1;
+  Real o58 = a2z * a2z;
+  Real o59 = o58 * -1;
+  Real o60 = x1BH2 * x1BH2;
+  Real o61 = x2BH2 * x2BH2;
+  Real o62 = x3BH2 * x3BH2;
+  Real o63 = x1BH2 * a2x;
+  Real o64 = x2BH2 * a2y;
+  Real o65 = x3BH2 * a2z;
+  Real o66 = o63 + (o64 + o65);
+  Real o67 = o66 * o66;
+  Real o68 = o67 * 4;
+  Real o69 = o57 + (o59 + (o60 + (o61 + (o62 + o8))));
+  Real o70 = o69 * o69;
+  Real o71 = o68 + o70;
+  Real o72 = metric_sqrt(o71);
+  Real o73 = o57 + (o59 + (o60 + (o61 + (o62 + (o72 + o8)))));
+  Real o74 = metric_pow(o73, 1.5);
+  Real o75 = o73 * o73;
+  Real o76 = o75 * 0.25;
+  Real o77 = o67 + o76;
+  Real o78 = 1 / o77;
+  Real o79 = x2BH2 * a2z;
+  Real o80 = a2y * (x3BH2 * -1);
+  Real o81 = metric_sqrt(o73);
+  Real o82 = 1 / o81;
+  Real o83 = o1 * (o66 * (o82 * a2x));
+  Real o84 = o81 * (x1BH2 * o2);
+  Real o85 = o79 + (o80 + (o83 + o84));
+  Real o86 = o73 * 0.5;
+  Real o87 = o56 + (o58 + (o7 + o86));
+  Real o88 = 1 / o87;
+  Real o89 = o2 * (o74 * (o78 * (o85 * (o88 * m2))));
+  Real o90 = a2z * (x1BH2 * -1);
+  Real o91 = x3BH2 * a2x;
+  Real o92 = o1 * (o66 * (o82 * a2y));
+  Real o93 = o81 * (x2BH2 * o2);
+  Real o94 = o90 + (o91 + (o92 + o93));
+  Real o95 = o2 * (o74 * (o78 * (o88 * (o94 * m2))));
+  Real o96 = x1BH2 * a2y;
+  Real o97 = a2x * (x2BH2 * -1);
+  Real o98 = o1 * (o66 * (o82 * a2z));
+  Real o99 = o81 * (x3BH2 * o2);
+  Real o100 = o96 + (o97 + (o98 + o99));
+  Real o101 = o100 * (o2 * (o74 * (o78 * (o88 * m2))));
+  Real o102 = o87 * o87;
+  Real o103 = 1 / o102;
+  Real o104 = o103 * (o2 * (o74 * (o78 * (o85 * (o94 * m2)))));
+  Real o105 = o100 * (o103 * (o2 * (o74 * (o78 * (o85 * m2)))));
+  Real o106 = o100 * (o103 * (o2 * (o74 * (o78 * (o94 * m2)))));
+  Real o107 = v1 * v1;
+  Real o108 = o107 * -1;
+  Real o109 = 1 + o108;
+  Real o110 = metric_sqrt(o109);
+  Real o111 = 1 / o110;
+  Real o112 = o111 * (v1x * -1);
+  Real o113 = o111 * (v1y * -1);
+  Real o114 = o111 * (v1z * -1);
+  Real o115 = 1 / o107;
+  Real o116 = -1 + o111;
+  Real o117 = o116 * (v1x * (v1y * o115));
+  Real o118 = o116 * (v1x * (v1z * o115));
+  Real o119 = o116 * (v1y * (v1z * o115));
+  Real o120 = v2 * v2;
+  Real o121 = o120 * -1;
+  Real o122 = 1 + o121;
+  Real o123 = metric_sqrt(o122);
+  Real o124 = 1 / o123;
+  Real o125 = o124 * (v2x * -1);
+  Real o126 = o124 * (v2y * -1);
+  Real o127 = o124 * (v2z * -1);
+  Real o128 = 1 / o120;
+  Real o129 = -1 + o124;
+  Real o130 = o129 * (v2x * (v2y * o128));
+  Real o131 = o129 * (v2x * (v2z * o128));
+  Real o132 = o129 * (v2y * (v2z * o128));
+  KS1[0][0] = o2 * (o23 * (o27 * m1));
+  KS1[0][1] = o38;
+  KS1[0][2] = o44;
+  KS1[0][3] = o50;
+  KS1[1][0] = o38;
+  KS1[1][1] = o2 * (o23 * (o27 * ((o34 * o34) * (o52 * m1))));
+  KS1[1][2] = o53;
+  KS1[1][3] = o54;
+  KS1[2][0] = o44;
+  KS1[2][1] = o53;
+  KS1[2][2] = o2 * (o23 * (o27 * ((o43 * o43) * (o52 * m1))));
+  KS1[2][3] = o55;
+  KS1[3][0] = o50;
+  KS1[3][1] = o54;
+  KS1[3][2] = o55;
+  KS1[3][3] = o2 * (o23 * (o27 * ((o49 * o49) * (o52 * m1))));
+  KS2[0][0] = o2 * (o74 * (o78 * m2));
+  KS2[0][1] = o89;
+  KS2[0][2] = o95;
+  KS2[0][3] = o101;
+  KS2[1][0] = o89;
+  KS2[1][1] = o103 * (o2 * (o74 * (o78 * ((o85 * o85) * m2))));
+  KS2[1][2] = o104;
+  KS2[1][3] = o105;
+  KS2[2][0] = o95;
+  KS2[2][1] = o104;
+  KS2[2][2] = o103 * (o2 * (o74 * (o78 * ((o94 * o94) * m2))));
+  KS2[2][3] = o106;
+  KS2[3][0] = o101;
+  KS2[3][1] = o105;
+  KS2[3][2] = o106;
+  KS2[3][3] = (o100 * o100) * (o103 * (o2 * (o74 * (o78 * m2))));
+  J1[0][0] = o111;
+  J1[0][1] = o112;
+  J1[0][2] = o113;
+  J1[0][3] = o114;
+  J1[1][0] = o112;
+  J1[1][1] = 1 + o116 * ((v1x * v1x) * o115);
+  J1[1][2] = o117;
+  J1[1][3] = o118;
+  J1[2][0] = o113;
+  J1[2][1] = o117;
+  J1[2][2] = 1 + o116 * ((v1y * v1y) * o115);
+  J1[2][3] = o119;
+  J1[3][0] = o114;
+  J1[3][1] = o118;
+  J1[3][2] = o119;
+  J1[3][3] = 1 + o116 * ((v1z * v1z) * o115);
+  J2[0][0] = o124;
+  J2[0][1] = o125;
+  J2[0][2] = o126;
+  J2[0][3] = o127;
+  J2[1][0] = o125;
+  J2[1][1] = 1 + o129 * ((v2x * v2x) * o128);
+  J2[1][2] = o130;
+  J2[1][3] = o131;
+  J2[2][0] = o126;
+  J2[2][1] = o130;
+  J2[2][2] = 1 + o129 * ((v2y * v2y) * o128);
+  J2[2][3] = o132;
+  J2[3][0] = o127;
+  J2[3][1] = o131;
+  J2[3][2] = o132;
+  J2[3][3] = 1 + o129 * ((v2z * v2z) * o128);
+  /* Initialize the flat part */
+  Real eta[4][4] = {{-1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
+  for (int i=0; i < 4; i++ ){ for (int j=0; j < 4; j++ ){ gcov[i][j] = eta[i][j]; }}
+
+  /* Load symmetric gcov (from chatGPT3)*/
+  for (int i = 0; i < 4; ++i) {
+      for (int j = i; j < 4; ++j) {
+
+          Real sum = 0.0;
+          for (int m = 0; m < 4; ++m) {
+              Real term1 = J2[m][i];
+              Real term2 = J1[m][i];
+
+              for (int n = 0; n < 4; ++n) {
+                  Real term3 = J2[n][j];
+                  Real term4 = J1[n][j];
+
+                  sum += (term1 * term3 * KS2[m][n] + term2 * term4 * KS1[m][n]);
+              }
+          }
+
+          gcov[i][j] += sum;
+          gcov[j][i] = gcov[i][j];
+      }
+  }
+
+  return;
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+void FillMetricValue(const dual1_real gcov[NDIM][NDIM], struct dd_sym &g) {
+  g.tt = value_of(gcov[TT][TT]);
+  g.tx = value_of(gcov[TT][XX]);
+  g.ty = value_of(gcov[TT][YY]);
+  g.tz = value_of(gcov[TT][ZZ]);
+  g.xx = value_of(gcov[XX][XX]);
+  g.xy = value_of(gcov[XX][YY]);
+  g.xz = value_of(gcov[XX][ZZ]);
+  g.yy = value_of(gcov[YY][YY]);
+  g.yz = value_of(gcov[YY][ZZ]);
+  g.zz = value_of(gcov[ZZ][ZZ]);
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+void FillMetricDerivative(const dual1_real gcov[NDIM][NDIM],
+                          struct dd_sym &dg) {
+  dg.tt = deriv_of(gcov[TT][TT]);
+  dg.tx = deriv_of(gcov[TT][XX]);
+  dg.ty = deriv_of(gcov[TT][YY]);
+  dg.tz = deriv_of(gcov[TT][ZZ]);
+  dg.xx = deriv_of(gcov[XX][XX]);
+  dg.xy = deriv_of(gcov[XX][YY]);
+  dg.xz = deriv_of(gcov[XX][ZZ]);
+  dg.yy = deriv_of(gcov[YY][YY]);
+  dg.yz = deriv_of(gcov[YY][ZZ]);
+  dg.zz = deriv_of(gcov[ZZ][ZZ]);
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+void FillMetricDerivative(const dual3_real gcov[NDIM][NDIM], const int dir,
+                          struct dd_sym &dg) {
+  dg.tt = deriv_of(gcov[TT][TT], dir);
+  dg.tx = deriv_of(gcov[TT][XX], dir);
+  dg.ty = deriv_of(gcov[TT][YY], dir);
+  dg.tz = deriv_of(gcov[TT][ZZ], dir);
+  dg.xx = deriv_of(gcov[XX][XX], dir);
+  dg.xy = deriv_of(gcov[XX][YY], dir);
+  dg.xz = deriv_of(gcov[XX][ZZ], dir);
+  dg.yy = deriv_of(gcov[YY][YY], dir);
+  dg.yz = deriv_of(gcov[YY][ZZ], dir);
+  dg.zz = deriv_of(gcov[ZZ][ZZ], dir);
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+void TimeMetricAD(const Real x, const Real y, const Real z,
+                  const Real tr[NTRAJ], const Real dtr[NTRAJ],
+                  const bbh_pgen b, struct dd_sym &g, struct dd_sym &dg) {
+  dual1_real gcov[NDIM][NDIM];
+  dual1_real td[NTRAJ];
+  for (int n = 0; n < NTRAJ; ++n)
+    td[n] = dual1_real(tr[n], dtr[n]);
+  SuperposedBBHTemplateMixed<Real, dual1_real, dual1_real>(x, y, z, gcov, td,
+                                                           b);
+  FillMetricValue(gcov, g);
+  FillMetricDerivative(gcov, dg);
+}
+
+KOKKOS_FORCEINLINE_FUNCTION
+void SpatialMetricAD(const Real x, const Real y, const Real z,
+                     const Real tr[NTRAJ], const bbh_pgen b,
+                     struct dd_sym &dgx, struct dd_sym &dgy,
+                     struct dd_sym &dgz) {
+  dual3_real gcov[NDIM][NDIM];
+  SuperposedBBHTemplateMixed<dual3_real, Real, dual3_real>(
+      dual3_real(x, 1.0, 0.0, 0.0), dual3_real(y, 0.0, 1.0, 0.0),
+      dual3_real(z, 0.0, 0.0, 1.0), gcov, tr, b);
+  FillMetricDerivative(gcov, 0, dgx);
+  FillMetricDerivative(gcov, 1, dgy);
+  FillMetricDerivative(gcov, 2, dgz);
+}
+
+KOKKOS_FORCEINLINE_FUNCTION void
 get_metric_and_derivatives(const Real t, const Real x, const Real y,
                            const Real z, struct four_metric &met,
                            const Real tr[NTRAJ], const Real dtr[NTRAJ],
                            const bbh_pgen b) {
   (void)t;
-  dual_real gcov[NDIM][NDIM], td[NTRAJ];
-  for (int n = 0; n < NTRAJ; ++n)
-    td[n] = dual_real(tr[n], dtr[n]);
-  SuperposedBBHTemplate<dual_real>(
-      dual_real(x, 0.0, 1.0), dual_real(y, 0.0, 0.0, 1.0),
-      dual_real(z, 0.0, 0.0, 0.0, 1.0), gcov, td, b);
-  met.g.tt = value_of(gcov[TT][TT]);
-  met.g.tx = value_of(gcov[TT][XX]);
-  met.g.ty = value_of(gcov[TT][YY]);
-  met.g.tz = value_of(gcov[TT][ZZ]);
-  met.g.xx = value_of(gcov[XX][XX]);
-  met.g.xy = value_of(gcov[XX][YY]);
-  met.g.xz = value_of(gcov[XX][ZZ]);
-  met.g.yy = value_of(gcov[YY][YY]);
-  met.g.yz = value_of(gcov[YY][ZZ]);
-  met.g.zz = value_of(gcov[ZZ][ZZ]);
-  met.g_t.tt = deriv_of(gcov[TT][TT], AD_T);
-  met.g_t.tx = deriv_of(gcov[TT][XX], AD_T);
-  met.g_t.ty = deriv_of(gcov[TT][YY], AD_T);
-  met.g_t.tz = deriv_of(gcov[TT][ZZ], AD_T);
-  met.g_t.xx = deriv_of(gcov[XX][XX], AD_T);
-  met.g_t.xy = deriv_of(gcov[XX][YY], AD_T);
-  met.g_t.xz = deriv_of(gcov[XX][ZZ], AD_T);
-  met.g_t.yy = deriv_of(gcov[YY][YY], AD_T);
-  met.g_t.yz = deriv_of(gcov[YY][ZZ], AD_T);
-  met.g_t.zz = deriv_of(gcov[ZZ][ZZ], AD_T);
-  met.g_x.tt = deriv_of(gcov[TT][TT], AD_X);
-  met.g_x.tx = deriv_of(gcov[TT][XX], AD_X);
-  met.g_x.ty = deriv_of(gcov[TT][YY], AD_X);
-  met.g_x.tz = deriv_of(gcov[TT][ZZ], AD_X);
-  met.g_x.xx = deriv_of(gcov[XX][XX], AD_X);
-  met.g_x.xy = deriv_of(gcov[XX][YY], AD_X);
-  met.g_x.xz = deriv_of(gcov[XX][ZZ], AD_X);
-  met.g_x.yy = deriv_of(gcov[YY][YY], AD_X);
-  met.g_x.yz = deriv_of(gcov[YY][ZZ], AD_X);
-  met.g_x.zz = deriv_of(gcov[ZZ][ZZ], AD_X);
-  met.g_y.tt = deriv_of(gcov[TT][TT], AD_Y);
-  met.g_y.tx = deriv_of(gcov[TT][XX], AD_Y);
-  met.g_y.ty = deriv_of(gcov[TT][YY], AD_Y);
-  met.g_y.tz = deriv_of(gcov[TT][ZZ], AD_Y);
-  met.g_y.xx = deriv_of(gcov[XX][XX], AD_Y);
-  met.g_y.xy = deriv_of(gcov[XX][YY], AD_Y);
-  met.g_y.xz = deriv_of(gcov[XX][ZZ], AD_Y);
-  met.g_y.yy = deriv_of(gcov[YY][YY], AD_Y);
-  met.g_y.yz = deriv_of(gcov[YY][ZZ], AD_Y);
-  met.g_y.zz = deriv_of(gcov[ZZ][ZZ], AD_Y);
-  met.g_z.tt = deriv_of(gcov[TT][TT], AD_Z);
-  met.g_z.tx = deriv_of(gcov[TT][XX], AD_Z);
-  met.g_z.ty = deriv_of(gcov[TT][YY], AD_Z);
-  met.g_z.tz = deriv_of(gcov[TT][ZZ], AD_Z);
-  met.g_z.xx = deriv_of(gcov[XX][XX], AD_Z);
-  met.g_z.xy = deriv_of(gcov[XX][YY], AD_Z);
-  met.g_z.xz = deriv_of(gcov[XX][ZZ], AD_Z);
-  met.g_z.yy = deriv_of(gcov[YY][YY], AD_Z);
-  met.g_z.yz = deriv_of(gcov[YY][ZZ], AD_Z);
-  met.g_z.zz = deriv_of(gcov[ZZ][ZZ], AD_Z);
+  TimeMetricAD(x, y, z, tr, dtr, b, met.g, met.g_t);
+  SpatialMetricAD(x, y, z, tr, b, met.g_x, met.g_y, met.g_z);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -2948,9 +3634,9 @@ static void TransformVector(struct bbh_pgen pgen,
 
 
 KOKKOS_INLINE_FUNCTION
-static void GetSuperposedAndInverse(const Real t, 
-                            const Real x, const Real y, const Real z, 
-                            Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ], 
+static void GetSuperposedAndInverse(const Real t,
+                            const Real x, const Real y, const Real z,
+                            Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ],
                             const bbh_pgen bbh_){
   //Real gcov[NDIM][NDIM];
   //Real gcon[NDIM][NDIM];
@@ -3482,9 +4168,9 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   Real pressure_unit = pmbp->punit->pressure_cgs();
 
   Real mu  = pmbp->punit->mu();
-  Real amu = pmbp->punit->atomic_mass_unit_cgs; 
+  Real amu = pmbp->punit->atomic_mass_unit_cgs;
 
-  Real n_unit = density_unit / (mu * amu); 
+  Real n_unit = density_unit / (mu * amu);
   Real cooling_unit = pressure_unit / time_unit / (n_unit * n_unit);
 
   // ---- Indices ----
@@ -3497,19 +4183,19 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   // ---- Accessors ----
   auto &adm = pmbp->padm->adm;
   auto &w0  = pmbp->pmhd->w0;  // primitives
-  auto &u0  = pmbp->pmhd->u0;  // conserved 
+  auto &u0  = pmbp->pmhd->u0;  // conserved
 
   // ---- EOS ----
   auto &eos_data = pmbp->pmhd->peos->eos_data;
   Real gamma_adi = eos_data.gamma;
   Real gm1       = gamma_adi - 1.0;
-  Real rho_floor = eos_data.dfloor; 
-  Real p_floor   = eos_data.pfloor; 
+  Real rho_floor = eos_data.dfloor;
+  Real p_floor   = eos_data.pfloor;
 
   // ---- Stability Control ----
   // Use the simulation's global CFL number for consistency
   // instead of a hardcoded "by-hand" value.
-  Real cfl_limit = pm->cfl_no; 
+  Real cfl_limit = pm->cfl_no;
 
   constexpr int  max_sub  = 64;
   constexpr Real tiny     = 1.0e-30;
@@ -3567,7 +4253,7 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
     Real dS3_total  = 0.0;
 
     for (int n = 0; n < max_sub && dt_rem > 0.0; ++n) {
-      // Temperature proxy 
+      // Temperature proxy
       Real T_cgs = ( (e_int * gm1) / rho ) * temp_unit;
 
       // Determine Cooling Rate
@@ -3585,11 +4271,11 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       Real rate_e_dt = (alpha / W) * q;
 
       // === DYNAMIC CLAMP (Based on CFL) ===
-      // Max allowed rate is one that removes 'cfl_limit' fraction of e_int 
+      // Max allowed rate is one that removes 'cfl_limit' fraction of e_int
       // over the full timestep 'bdt'.
       // This ensures operator splitting doesn't shock the hydro solver.
       Real rate_max = (cfl_limit * e_int) / (bdt + tiny);
-      
+
       rate_e_dt = fmin(rate_e_dt, rate_max);
       // ====================================
 
@@ -3598,8 +4284,8 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       dt_sub = fmin(dt_sub, dt_rem);
       dt_sub = fmax(dt_sub, tiny * bdt);
 
-      // Proposed decrement 
-      Real de = rate_e_dt * dt_sub; 
+      // Proposed decrement
+      Real de = rate_e_dt * dt_sub;
 
       // Enforce floor on e_int
       Real de_applied = de;
@@ -3629,7 +4315,7 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       dt_rem -= dt_sub;
     }
 
-    // Apply to conserved variables 
+    // Apply to conserved variables
     u0(m,IEN,k,j,i) -= dTau_total;
     u0(m,IM1,k,j,i) -= dS1_total;
     u0(m,IM2,k,j,i) -= dS2_total;
