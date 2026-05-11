@@ -37,6 +37,9 @@
 template <class EOSPolicy, class ErrorPolicy>
 void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin);
 
+// Prototype for user-defined history
+void NeutrinoShockHistory(HistoryData *pdata, Mesh *pm);
+
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for a shock reflection
@@ -50,6 +53,8 @@ void ProblemGenerator::UserProblem(ParameterInput* pin, const bool restart) {
         << std::endl;
     std::exit(EXIT_FAILURE);
   }
+
+  user_hist_func = &NeutrinoShockHistory;
 
   if (restart) {
     return;
@@ -161,4 +166,84 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
 
   return;
+}
+
+// History function: maximum |B^i| (each Cartesian component) over the domain
+void NeutrinoShockHistory(HistoryData *pdata, Mesh *pm) {
+  pdata->nhist = 4;
+  pdata->label[0] = "bx-max";
+  pdata->label[1] = "by-max";
+  pdata->label[2] = "bz-max";
+  pdata->label[3] = "rhoy5-max";
+
+  // capture class variables for kernel
+  auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &bcc0_ = pm->pmb_pack->pmhd->bcc0;
+  auto &adm = pm->pmb_pack->padm->adm;
+
+  // loop over all MeshBlocks in this pack
+  auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
+  int is = indcs.is; int nx1 = indcs.nx1;
+  int js = indcs.js; int nx2 = indcs.nx2;
+  int ks = indcs.ks; int nx3 = indcs.nx3;
+  const int nmkji = (pm->pmb_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+  Real bx_max = 0.0;
+  Real by_max = 0.0;
+  Real bz_max = 0.0;
+  Real rhoy5_max = 0.0;
+  Kokkos::parallel_reduce("NeutrinoShockHistorySums",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_bx_max, Real &mb_by_max, Real &mb_bz_max,
+                Real &mb_rhoy5_max) {
+    // compute n,k,j,i indices of thread
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    // bcc0 stores the densitized B-field; divide by sqrt(det g) to get B^i
+    Real gamma = sqrt(
+        adm::SpatialDet(adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+                        adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+                        adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
+    Real bx = fabs(bcc0_(m,IBX,k,j,i)/gamma);
+    Real by = fabs(bcc0_(m,IBY,k,j,i)/gamma);
+    Real bz = fabs(bcc0_(m,IBZ,k,j,i)/gamma);
+    Real rhoy5 = fabs(w0_(m,IDN,k,j,i) * w0_(m,IYF+1,k,j,i));
+
+    mb_bx_max = fmax(bx, mb_bx_max);
+    mb_by_max = fmax(by, mb_by_max);
+    mb_bz_max = fmax(bz, mb_bz_max);
+    mb_rhoy5_max = fmax(rhoy5, mb_rhoy5_max);
+  }, Kokkos::Max<Real>(bx_max), Kokkos::Max<Real>(by_max), Kokkos::Max<Real>(bz_max),
+     Kokkos::Max<Real>(rhoy5_max));
+
+  // Currently AthenaK only supports MPI_SUM operations between ranks, but we need
+  // MPI_MAX here. This is a cheap hack to make it work as intended.
+#if MPI_PARALLEL_ENABLED
+  if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, &bx_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &by_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &bz_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &rhoy5_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&bx_max, &bx_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&by_max, &by_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&bz_max, &bz_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&rhoy5_max, &rhoy5_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    bx_max = 0.0;
+    by_max = 0.0;
+    bz_max = 0.0;
+    rhoy5_max = 0.0;
+  }
+#endif
+
+  pdata->hdata[0] = bx_max;
+  pdata->hdata[1] = by_max;
+  pdata->hdata[2] = bz_max;
+  pdata->hdata[3] = rhoy5_max;
 }
