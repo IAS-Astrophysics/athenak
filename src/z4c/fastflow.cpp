@@ -85,7 +85,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   root = pin->GetOrAddInteger("fastflow", "mpi_root", 0);
   merger_distance = pin->GetOrAddReal("fastflow", "merger_distance", 0.1);
-  use_stored_metric_drvts = pin->GetBoolean("z4c", "store_metric_drvts");
+  use_stored_metric_drvts = pin->GetBoolean("fastflow", "store_metric_drvts");
 
   // Initial guess
   initial_radius = pin->GetOrAddReal("fastflow", "initial_radius_" + n_str, 1.0);

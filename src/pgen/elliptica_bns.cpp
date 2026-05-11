@@ -260,6 +260,9 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::cout << "Label indices saved." << std::endl;
   }
 
+  // Check if initial shift shall be set to zero.
+  bool shift_zero = pin->GetOrAddBoolean("z4c", "shift_zero", false);
+
   Kokkos::parallel_for("pgen_fields",
   Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
   [&](const int idx) {
@@ -272,10 +275,17 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     int i   = rem % ncells1;
 
     // Extract metric quantities
-    host_adm.alpha(m, k, j, i)     = idr->field[i_alpha][idx];
-    host_adm.beta_u(m, 0, k, j, i) = idr->field[i_betax][idx];
-    host_adm.beta_u(m, 1, k, j, i) = idr->field[i_betay][idx];
-    host_adm.beta_u(m, 2, k, j, i) = idr->field[i_betaz][idx];
+    host_adm.alpha(m, k, j, i)       = idr->field[i_alpha][idx];
+
+    if (shift_zero) {
+      host_adm.beta_u(m, 0, k, j, i) = 0.0;
+      host_adm.beta_u(m, 1, k, j, i) = 0.0;
+      host_adm.beta_u(m, 2, k, j, i) = 0.0;
+    } else {
+      host_adm.beta_u(m, 0, k, j, i) = idr->field[i_betax][idx];
+      host_adm.beta_u(m, 1, k, j, i) = idr->field[i_betay][idx];
+      host_adm.beta_u(m, 2, k, j, i) = idr->field[i_betaz][idx];
+    }
 
     Real g3d[NSPMETRIC];
     host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = idr->field[i_gxx][idx];

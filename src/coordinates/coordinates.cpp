@@ -7,6 +7,7 @@
 //! \brief
 #include <iostream> // cout
 #include <string>
+#include <float.h> // FLT_MIN
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -54,8 +55,8 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     if (coord_data.bh_excise) {
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
-      coord_data.dexcise = pin->GetReal("coord","dexcise");
-      coord_data.pexcise = pin->GetReal("coord","pexcise");
+      coord_data.dexcise = pin->GetOrAddReal("coord","dexcise",(FLT_MIN));
+      coord_data.pexcise = pin->GetOrAddReal("coord","pexcise",(FLT_MIN));
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
