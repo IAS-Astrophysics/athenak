@@ -271,7 +271,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     }
     dhdn = Kokkos::fmax(Kokkos::fabs(((loge_right - loge)*m_id_log_nb - 1.0)*e +
                         ((logp_right - logp)*m_id_log_nb - 1.0)*p)/nb, dhdn);
-    m_min_h -= dhdn/m_id_log_nb;
+    m_min_h -= Kokkos::numbers::ln2_v<Real>*dhdn/m_id_log_nb;
     if (m_min_h <= 0.0) {
       Kokkos::abort("There was a problem computing the minimum enthalpy in the table!");
     }
