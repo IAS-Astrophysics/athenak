@@ -97,7 +97,7 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
                "initialize neutrinos in LTE."
             << std::endl;
   std::exit(EXIT_FAILURE);
-#else
+#endif  // ENABLE_NURATES
   // Get the EOS and set units to CGS
   MeshBlockPack* pmbp = pmesh->pmb_pack;
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
@@ -131,7 +131,6 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   //   E    = (4 W^2 - 1) J / 3            (lab energy density)
   //   F^i  = (4/3) J W^2 v^i              (lab energy flux, upper index)
   //   N    = W n                          (lab number density)
-  // F_i = gamma_{ij} F^j is computed per cell since gamma_{ij} can vary.
   Real W2 = w_lorentz * w_lorentz;
   Real cE = (4.0 * W2 - 1.0) / 3.0;
   Real cF = (4.0 / 3.0) * W2;
@@ -150,6 +149,7 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   int& je = indcs.je;
   int& ks = indcs.ks;
   int& ke = indcs.ke;
+  auto &size = pmbp->pmb->mb_size;
 
   // capture grid arrays
   auto &w0_ = pmbp->pmhd->w0;
@@ -176,13 +176,18 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   KOKKOS_LAMBDA(int m,int k, int j, int i) {
     Real Y[2] = {yq, 0.0};
 
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    int nx1 = indcs.nx1;
+    Real x = CellCenterX(i-is, nx1, x1min, x1max);
+
     // apply white-noise density perturbation
     auto rand_gen = rand_pool64.get_state();
     Real rval = 1.0 + pert_amp*(rand_gen.frand() - 0.5);
     w0_(m,IDN,k,j,i) = wpt.d * rval;
     rand_pool64.free_state(rand_gen);
 
-    w0_(m,IVX,k,j,i) = wpt.vx;
+    w0_(m,IVX,k,j,i) = wpt.vx * (x > 0 ? -1 : 1);
     w0_(m,IVY,k,j,i) = wpt.vy;
     w0_(m,IVZ,k,j,i) = wpt.vz;
     w0_(m,IPR,k,j,i) = eos.GetPressure(nb, temp, &Y[0]);
@@ -211,30 +216,15 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
     Real nuN[4] = {n_nue, n_anue, 0.5*n_nux, 0.5*n_nux};
     Real nuJ[4] = {e_nue, e_anue, 0.5*e_nux, 0.5*e_nux};
 
-    // Local 3-metric: needed to lower F^i and to densitize.
-    Real gxx = adm.g_dd(m,0,0,k,j,i);
-    Real gxy = adm.g_dd(m,0,1,k,j,i);
-    Real gxz = adm.g_dd(m,0,2,k,j,i);
-    Real gyy = adm.g_dd(m,1,1,k,j,i);
-    Real gyz = adm.g_dd(m,1,2,k,j,i);
-    Real gzz = adm.g_dd(m,2,2,k,j,i);
-    Real volform = Kokkos::sqrt(
-        adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz));
-
-    // v_i = gamma_{ij} v^j
-    Real vxd = gxx*v3x + gxy*v3y + gxz*v3z;
-    Real vyd = gxy*v3x + gyy*v3y + gyz*v3z;
-    Real vzd = gxz*v3x + gyz*v3y + gzz*v3z;
-
     for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
       Real J = nuJ[nuidx];
       Real n_fluid = nuN[nuidx];
 
-      Real E   = volform * cE * J;
-      Real Fxd = volform * cF * J * vxd;
-      Real Fyd = volform * cF * J * vyd;
-      Real Fzd = volform * cF * J * vzd;
-      Real N   = volform * w_lorentz * n_fluid;
+      Real E   = cE * J;
+      Real Fxd = cF * J * v3x * (x > 0.0 ? -1.0 : 1.0);
+      Real Fyd = cF * J * v3y;
+      Real Fzd = cF * J * v3z;
+      Real N   = w_lorentz * n_fluid;
 
       E = fmax(E, m1_params_.rad_E_floor);
       N = fmax(N, m1_params_.rad_N_floor);
@@ -250,7 +240,6 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
 
   return;
-#endif  // ENABLE_NURATES
 }
 
 // History function: maximum |B^i| (each Cartesian component) over the domain
