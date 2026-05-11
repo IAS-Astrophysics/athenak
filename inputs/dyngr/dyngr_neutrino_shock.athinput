@@ -61,7 +61,8 @@ dyn_scratch = 1
 
 c2p_tol     = 1.0e-12
 gamma_max   = 20.025        # Ceiling on Lorentz factor
-table       = DD2.athtab
+table       = DD2_NQT.athtab
+use_NQT     = true
 
 <radiation_m1>
 closure_fun      = minerbo
@@ -69,6 +70,7 @@ src_update       = implicit
 opacity_type     = bns-nurates
 backreact        = true
 backreact_chiral = true
+chiral_gamma_m   = true
 theta_limiter    = true
 
 <bns_nurates>
