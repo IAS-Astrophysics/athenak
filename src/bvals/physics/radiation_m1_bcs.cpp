@@ -15,147 +15,124 @@
 #include "radiation_m1/radiation_m1.hpp"
 
 //----------------------------------------------------------------------------------------
-//! \!fn void BoundaryValues::RadiationBCs()
-//! \brief Apply physical boundary conditions for radiation at faces of MB which
-//! are at the edge of the computational domain
+//! \fn ApplyRadM1BCsToArray()
+//! \brief Apply physical boundary conditions for radiation to a single array
+//! (either fine u0 or coarse coarse_u0). Parameterised by array dimensions
+//! (n1/n2/n3) and interior start/end indices (is/ie etc.) so the same logic
+//! can be reused for both grid levels.
 
-void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
-                                        DualArray2D<Real> i_in,
-                                        DvceArray5D<Real> i0) {
-  // loop over all MeshBlocks in this MeshBlockPack
+static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
+                                  DualArray2D<Real> i_in,
+                                  DvceArray5D<Real> i0,
+                                  int n1, int n2, int n3,
+                                  int is, int ie, int js, int je, int ks, int ke) {
   auto &pm = ppack->pmesh;
   auto &indcs = ppack->pmesh->mb_indcs;
   int &ng = indcs.ng;
   auto &nspecies_ = ppack->pmesh->pmb_pack->pradm1->nspecies;
-  auto &nvars_ = ppack->pmesh->pmb_pack->pradm1->nvars;
-  auto &mb_bcs = ppack->pmb->mb_bcs;
-  auto &params_ = ppack->pmesh->pmb_pack->pradm1->params;
-  int n1 = indcs.nx1 + 2 * ng;
-  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
-  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
+  auto &nvars_    = ppack->pmesh->pmb_pack->pradm1->nvars;
+  auto &mb_bcs    = ppack->pmb->mb_bcs;
+  auto &params_   = ppack->pmesh->pmb_pack->pradm1->params;
   int nmb = ppack->nmb_thispack;
 
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic) {
-    int &is = indcs.is;
-    int &ie = indcs.ie;
     par_for(
       "radiationm1bc_x1", DevExeSpace(), 0, (nmb - 1), 0, (nspecies_ - 1), 0,
       (n3 - 1), 0, (n2 - 1), KOKKOS_LAMBDA(int m, int nuidx, int k, int j) {
-          // apply physical boundaries to inner_x1
+        // apply physical boundaries to inner_x1
         switch (mb_bcs.d_view(m, BoundaryFace::inner_x1)) {
           case BoundaryFlag::reflect:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is + i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = -i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is + i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is + i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is + i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is+i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is-i-1) = -i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is+i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is+i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is+i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is + i);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is+i);
               }
             }
             break;
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is-i-1) = params_.rad_N_floor;
               }
             }
             break;
           case BoundaryFlag::diode:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) =  
-               fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is));
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is-i-1) = fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is-i-1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is);
               }
             }
-            break;          
+            break;
           case BoundaryFlag::vacuum:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is-i-1) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is-i-1) = params_.rad_N_floor;
               }
             }
             break;
           default:
             break;
-            
         }
 
-          // apply physical boundaries to outer_x1
+        // apply physical boundaries to outer_x1
         switch (mb_bcs.d_view(m, BoundaryFace::outer_x1)) {
           case BoundaryFlag::reflect:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie - i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie + i + 1) = -i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie - i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie - i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie - i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie-i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie+i+1) = -i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie-i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie-i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie-i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie - i);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie-i);
               }
             }
             break;
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie + i + 1) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie+i+1) = params_.rad_N_floor;
               }
             }
             break;
           case BoundaryFlag::diode:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie + i + 1) =  
-               fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie));
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie+i+1) = fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie + i + 1) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie+i+1) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie);
               }
             }
-            break; 
+            break;
           case BoundaryFlag::vacuum:
             for (int i = 0; i < ng; ++i) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie + i + 1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, ie+i+1) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie + i + 1) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, ie+i+1) = params_.rad_N_floor;
               }
             }
             break;
@@ -169,64 +146,52 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
 
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic) {
-    int &js = indcs.js;
-    int &je = indcs.je;
     par_for(
       "radiationbc_x2", DevExeSpace(), 0, (nmb - 1), 0, (nspecies_ - 1), 0,
       (n3 - 1), 0, (n1 - 1), KOKKOS_LAMBDA(int m, int nuidx, int k, int i) {
-          // apply physical boundaries to inner_x2
-      switch (mb_bcs.d_view(m, BoundaryFace::inner_x2)) {
+        // apply physical boundaries to inner_x2
+        switch (mb_bcs.d_view(m, BoundaryFace::inner_x2)) {
           case BoundaryFlag::reflect:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js + j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js - j - 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js + j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js - j - 1, i) = -i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js + j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js - j - 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js + j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js+j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js+j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js-j-1, i) = -i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js+j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js+j, i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js - j - 1, i) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js + j, i);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js+j, i);
               }
             }
             break;
           case BoundaryFlag::outflow:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js - j - 1, i) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js-j-1, i) = params_.rad_N_floor;
               }
             }
             break;
           case BoundaryFlag::diode:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js - j - 1, i) =  
-               fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js, i));
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js - j - 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js - j - 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js-j-1, i) = fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js, i));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js, i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js - j - 1, i) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js, i);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js-j-1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js, i);
               }
             }
             break;
           case BoundaryFlag::vacuum:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js - j - 1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, js-j-1, i) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js - j - 1, i) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, js-j-1, i) = params_.rad_N_floor;
               }
             }
             break;
@@ -234,59 +199,49 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
             break;
         }
 
-          // apply physical boundaries to outer_x2
+        // apply physical boundaries to outer_x2
         switch (mb_bcs.d_view(m, BoundaryFace::outer_x2)) {
           case BoundaryFlag::reflect:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je + j + 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je - j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je + j + 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je - j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) = -i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je - j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je - j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je-j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je-j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je+j+1, i) = -i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je-j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je-j, i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je + j + 1, i) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je - j, i);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je-j, i);
               }
             }
             break;
           case BoundaryFlag::outflow:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je + j + 1, i) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je+j+1, i) = params_.rad_N_floor;
               }
             }
             break;
           case BoundaryFlag::diode:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je + j + 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) =  
-               fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je, i));
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je + j + 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je+j+1, i) = fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je, i));
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je, i);
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je + j + 1, i) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je, i);
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je+j+1, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je, i);
               }
             }
             break;
           case BoundaryFlag::vacuum:
             for (int j = 0; j < ng; ++j) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je + j + 1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, je+j+1, i) = params_.rad_E_floor;
               if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je + j + 1, i) = params_.rad_N_floor;
+                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), k, je+j+1, i) = params_.rad_N_floor;
               }
             }
             break;
@@ -301,126 +256,104 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
   // only apply BCs if not periodic
   if (pm->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic)
     return;
-  int &ks = indcs.ks;
-  int &ke = indcs.ke;
   par_for(
     "radiationbc_x3", DevExeSpace(), 0, (nmb - 1), 0, (nspecies_ - 1), 0, (n2 - 1),
     0, (n1 - 1), KOKKOS_LAMBDA(int m, int nuidx, int j, int i) {
-        // apply physical boundaries to inner_x3
+      // apply physical boundaries to inner_x3
       switch (mb_bcs.d_view(m, BoundaryFace::inner_x3)) {
         case BoundaryFlag::reflect:
           for (int k = 0; k < ng; ++k) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks + k, j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks + k, j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks + k, j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks - k - 1, j, i) = -i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks + k, j, i);
-              if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks + k, j, i);
-              }
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks+k, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks+k, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks+k, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks-k-1, j, i) = -i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks+k, j, i);
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks+k, j, i);
             }
+          }
           break;
         case BoundaryFlag::outflow:
           for (int k = 0; k < ng; ++k) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks - k - 1, j, i) = params_.rad_N_floor;
-              }
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks-k-1, j, i) = params_.rad_N_floor;
             }
+          }
           break;
         case BoundaryFlag::diode:
           for (int k = 0; k < ng; ++k) {
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-              radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks, j, i);
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks - k - 1, j, i) =  
-              fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks, j, i));
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-              radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks, j, i);
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-              radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks-k-1, j, i) = fmin(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks, j, i));
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks, j, i);
             if (nspecies_ > 1) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks - k - 1, j, i) = i0(m,
-                radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks, j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks-k-1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks, j, i);
             }
           }
           break;
         case BoundaryFlag::vacuum:
           for (int k = 0; k < ng; ++k) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks - k - 1, j, i) = params_.rad_E_floor;
-              if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks - k - 1, j, i) = params_.rad_N_floor;
-              }
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ks-k-1, j, i) = params_.rad_E_floor;
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ks-k-1, j, i) = params_.rad_N_floor;
             }
+          }
           break;
         default:
           break;
       }
 
-        // apply physical boundaries to outer_x3
+      // apply physical boundaries to outer_x3
       switch (mb_bcs.d_view(m, BoundaryFace::outer_x3)) {
         case BoundaryFlag::reflect:
           for (int k = 0; k < ng; ++k) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke - k, j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke - k, j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke - k, j, i);
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke + k + 1, j, i) = -i0(m,
-               radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke - k, j, i);
-              if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-                 radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke - k, j, i);
-              }
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke-k, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke-k, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke-k, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke+k+1, j, i) = -i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke-k, j, i);
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke-k, j, i);
             }
+          }
           break;
         case BoundaryFlag::outflow:
           for (int k = 0; k < ng; ++k) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke + k + 1, j, i) = params_.rad_N_floor;
-              }
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke+k+1, j, i) = params_.rad_N_floor;
             }
+          }
           break;
         case BoundaryFlag::diode:
           for (int k = 0; k < ng; ++k) {
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-              radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke, j, i);
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke + k + 1, j, i) =  
-              fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke, j, i));
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-              radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke, j, i);
-            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-              radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke+k+1, j, i) = fmax(0.0, i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke, j, i));
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke, j, i);
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke, j, i);
             if (nspecies_ > 1) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke + k + 1, j, i) = i0(m,
-                radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke, j, i);
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke+k+1, j, i) = i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke, j, i);
             }
           }
           break;
         case BoundaryFlag::vacuum:
           for (int k = 0; k < ng; ++k) {
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke + k + 1, j, i) = params_.rad_E_floor;
-              if (nspecies_ > 1) {
-                i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke + k + 1, j, i) = params_.rad_N_floor;
-              }
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX,  nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            i0(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, nvars_), ke+k+1, j, i) = params_.rad_E_floor;
+            if (nspecies_ > 1) {
+              i0(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, nvars_), ke+k+1, j, i) = params_.rad_N_floor;
             }
+          }
           break;
         default:
           break;
@@ -428,4 +361,35 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
     });
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshBoundaryValues::RadiationM1BCs()
+//! \brief Apply physical boundary conditions for radiation at faces of MB which
+//! are at the edge of the computational domain. When multilevel (AMR/SMR),
+//! also applies BCs to coarse_i0 so that the ProlongCC stencil never reads
+//! uninitialized coarse ghost-zone values at physical boundaries.
+
+void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
+                                        DualArray2D<Real> i_in,
+                                        DvceArray5D<Real> i0,
+                                        DvceArray5D<Real> coarse_i0) {
+  auto &indcs = ppack->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+
+  ApplyRadM1BCsToArray(ppack, i_in, i0, n1, n2, n3,
+                       indcs.is, indcs.ie, indcs.js, indcs.je, indcs.ks, indcs.ke);
+
+  if (ppack->pmesh->multilevel) {
+    int cn1 = indcs.cnx1 + 2*ng;
+    int cn2 = (indcs.cnx2 > 1) ? (indcs.cnx2 + 2*ng) : 1;
+    int cn3 = (indcs.cnx3 > 1) ? (indcs.cnx3 + 2*ng) : 1;
+
+    ApplyRadM1BCsToArray(ppack, i_in, coarse_i0, cn1, cn2, cn3,
+                         indcs.cis, indcs.cie, indcs.cjs, indcs.cje, indcs.cks, indcs.cke);
+  }
 }
