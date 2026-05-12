@@ -193,7 +193,7 @@ TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
   // physical BCs
-  pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0);
+  pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0, coarse_u0);
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
