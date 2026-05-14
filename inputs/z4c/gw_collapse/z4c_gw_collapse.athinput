@@ -1,0 +1,117 @@
+# AthenaK input for parametrized Z4c gravitational-wave collapse free data.
+
+<comment>
+problem   = compact supported helical gravitational-wave collapse
+reference = critical_kerr_formation notes and arXiv:2401.00805
+
+<job>
+basename  = z4c_gw_collapse
+
+<mesh>
+nghost    = 4
+nx1       = 64
+x1min     = -16.0
+x1max     =  16.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 64
+x2min     = -16.0
+x2max     =  16.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 64
+x3min     = -16.0
+x3max     =  16.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.25
+nlim       = -1
+tlim       = 20.0
+ndiag      = 1
+
+<z4c>
+diss       = 0.2
+
+<mesh_refinement>
+refinement          = adaptive
+max_nmb_per_rank    = 4096
+num_levels          = 4
+refinement_interval = 1
+
+<amr_criterion>
+method              = user
+
+<problem_gw_collapse>
+ell                 = 2
+m                   = 2
+radial_modes        = 4
+amplitude           = 2.0e-2
+omega               = 0.35
+support_radius      = 12.0
+radial_center       = 6.0
+radial_width        = 1.5
+bump_steepness      = 4.0
+ingoing_weight      = 1.0
+rotation_weight     = 1.0
+helicity            = 1.0
+plus_weight         = 1.0
+cross_weight        = 1.0
+phase               = 0.0
+extrinsic_sign      = -0.5
+metric_coeff_0      = 1.0
+metric_coeff_1      = -0.25
+metric_coeff_2      = 0.05
+metric_coeff_3      = 0.0
+momentum_coeff_0    = 1.0
+momentum_coeff_1    = -0.15
+momentum_coeff_2    = 0.02
+momentum_coeff_3    = 0.0
+use_precollapsed_lapse = false
+
+<problem_gw_collapse_domain>
+filled_radius       = 2.0
+filled_reflevel     = 3
+shell_count         = 3
+shell_0_inner       = 2.0
+shell_0_outer       = 5.0
+shell_0_reflevel    = 3
+shell_1_inner       = 5.0
+shell_1_outer       = 9.0
+shell_1_reflevel    = 2
+shell_2_inner       = 9.0
+shell_2_outer       = 13.0
+shell_2_reflevel    = 1
+
+<output1>
+file_type   = hst
+data_format = %12.5e
+dt          = 0.1
+
+<output2>
+file_type   = tab
+variable    = con
+data_format = %.16e
+dt          = 0.5
+slice_x2    = 0.0
+slice_x3    = 0.0
+ghost_zones = false
+
+<output3>
+file_type   = tab
+variable    = adm
+data_format = %.16e
+dt          = 1.0
+slice_x2    = 0.0
+slice_x3    = 0.0
+ghost_zones = false

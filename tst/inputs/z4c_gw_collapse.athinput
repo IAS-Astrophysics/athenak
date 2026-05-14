@@ -1,0 +1,87 @@
+# Small smoke/regression input for the custom z4c_gravitational_wave_collapse pgen.
+
+<job>
+basename  = gwcollapse_smoke
+
+<mesh>
+nghost    = 4
+nx1       = 16
+x1min     = -4.0
+x1max     =  4.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 16
+x2min     = -4.0
+x2max     =  4.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 16
+x3min     = -4.0
+x3max     =  4.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.25
+nlim       = 1
+tlim       = 0.02
+ndiag      = 1
+
+<z4c>
+diss       = 0.1
+
+<mesh_refinement>
+refinement          = adaptive
+max_nmb_per_rank    = 256
+num_levels          = 2
+refinement_interval = 1
+
+<amr_criterion>
+method              = user
+
+<problem_gw_collapse>
+ell                 = 2
+m                   = 2
+radial_modes        = 3
+amplitude           = 1.0e-5
+omega               = 0.2
+support_radius      = 3.2
+radial_center       = 1.6
+radial_width        = 0.6
+bump_steepness      = 4.0
+ingoing_weight      = 1.0
+rotation_weight     = 1.0
+helicity            = 1.0
+plus_weight         = 1.0
+cross_weight        = 1.0
+metric_coeff_0      = 1.0
+metric_coeff_1      = -0.2
+metric_coeff_2      = 0.03
+momentum_coeff_0    = 1.0
+momentum_coeff_1    = -0.1
+momentum_coeff_2    = 0.01
+
+<problem_gw_collapse_domain>
+filled_radius       = 0.75
+filled_reflevel     = 1
+shell_count         = 2
+shell_0_inner       = 0.75
+shell_0_outer       = 1.75
+shell_0_reflevel    = 1
+shell_1_inner       = 1.75
+shell_1_outer       = 3.25
+shell_1_reflevel    = 0
+
+<output1>
+file_type   = hst
+data_format = %12.5e
+dt          = 0.01
