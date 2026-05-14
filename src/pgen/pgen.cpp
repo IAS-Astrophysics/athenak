@@ -953,6 +953,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("z4c_speck_cart_reader") == 0) {
+    Z4cSpeckCartReader(pin, is_restart);
   } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
     SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {

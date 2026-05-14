@@ -1,0 +1,56 @@
+# AthenaK input for importing SpECK GH Cartesian output into Z4c.
+
+<comment>
+problem   = SpECK Cartesian GH import
+reference = SpECK/SpEC generalized harmonic data handoff to AthenaK Z4c
+
+<job>
+basename  = z4c_speck_cart
+
+<mesh>
+nghost    = 3
+nx1       = 16
+x1min     = 3.0
+x1max     = 5.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 16
+x2min     = -1.0
+x2max     = 1.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 16
+x3min     = -1.0
+x3max     = 1.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 16
+nx2       = 16
+nx3       = 16
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.3
+nlim       = 0
+tlim       = 0.0
+ndiag      = 1
+
+<z4c>
+diss       = 0.0
+excise_chi = 0.0
+
+<problem>
+pgen_name = z4c_speck_cart_reader
+speck_cart_file = EMPTY
+require_ghost_coverage = true
+write_constraint_summary = true
+
+<output1>
+file_type   = hst
+data_format = %24.16e
+dt          = -1.0
