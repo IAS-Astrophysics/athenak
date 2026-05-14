@@ -64,6 +64,8 @@ struct MHDTaskIDs {
   TaskID efldsrc;
   TaskID sende;
   TaskID recve;
+  TaskID sende_shr;
+  TaskID recve_shr;
   TaskID ct;
   TaskID sendb_oa;
   TaskID recvb_oa;
@@ -171,6 +173,8 @@ class MHD {
   TaskStatus EFieldSrc(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
   TaskStatus RecvE(Driver *d, int stage);
+  TaskStatus SendE_Shr(Driver *d, int stage);
+  TaskStatus RecvE_Shr(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);
   TaskStatus SendB_OA(Driver *d, int stage);
   TaskStatus RecvB_OA(Driver *d, int stage);

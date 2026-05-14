@@ -37,6 +37,9 @@ struct ShearingBoxBoundaryBuffer {
   // Views that store buffer data and fluxes on device
   DvceArray5D<Real> vars, flux;
 #if MPI_PARALLEL_ENABLED
+  // Contiguous staging for EMF MPI messages.  The main flux view is indexed for
+  // correction kernels, but its per-component EMF subviews are not MPI-contiguous.
+  DvceArray2D<Real> flux_mpi;
   // vectors of length (number of MBs) to hold MPI requests
   // Using STL vector causes problems with some GPU compilers, so just use plain C array
   MPI_Request *vars_req, *flux_req;
@@ -116,9 +119,16 @@ class ShearingBoxCC : public ShearingBox {
 class ShearingBoxFC : public ShearingBox {
  public:
   ShearingBoxFC(MeshBlockPack *ppack, ParameterInput *pin);
+  ~ShearingBoxFC();
   // functions to communicate CC data with shearing box BCs
   TaskStatus PackAndSendFC(DvceFaceFld4D<Real> &b, ReconstructionMethod rcon);
   TaskStatus RecvAndUnpackFC(DvceFaceFld4D<Real> &b);
+  // functions to communicate EMFs with shearing box BCs before CT
+  TaskStatus InitEMFRecv();
+  TaskStatus PackAndSendEMF(DvceEdgeFld4D<Real> &efld);
+  TaskStatus RecvAndCorrectEMF(DvceEdgeFld4D<Real> &efld, ReconstructionMethod rcon);
+  TaskStatus ClearEMFRecv();
+  TaskStatus ClearEMFSend();
   // shearing box source terms for FC variables
   void SourceTermsFC(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
 };

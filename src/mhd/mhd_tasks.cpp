@@ -62,7 +62,9 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.efldsrc   = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
   id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
   id.recve     = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
-  id.ct        = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
+  id.sende_shr = tl["stagen"]->AddTask(&MHD::SendE_Shr, this, id.recve);
+  id.recve_shr = tl["stagen"]->AddTask(&MHD::RecvE_Shr, this, id.sende_shr);
+  id.ct        = tl["stagen"]->AddTask(&MHD::CT, this, id.recve_shr);
   id.sendb_oa  = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
   id.recvb_oa  = tl["stagen"]->AddTask(&MHD::RecvB_OA, this, id.sendb_oa);
   id.restb     = tl["stagen"]->AddTask(&MHD::RestrictB, this, id.recvb_oa);
@@ -150,6 +152,10 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
       if (tstat != TaskStatus::complete) return tstat;
       tstat = psbox_b->InitRecv(time);
       if (tstat != TaskStatus::complete) return tstat;
+      if (stage >= 0) {
+        tstat = psbox_b->InitEMFRecv();
+        if (tstat != TaskStatus::complete) return tstat;
+      }
     }
   }
 
@@ -409,6 +415,36 @@ TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::SendE_Shr
+//! \brief Wrapper task list function to pack/send shearing-box EMF correction buffers
+
+TaskStatus MHD::SendE_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  if (psbox_b != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
+      tstat = psbox_b->PackAndSendEMF(efld);
+    }
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus MHD::RecvE_Shr
+//! \brief Wrapper task list function to receive and apply shearing-box EMF correction
+
+TaskStatus MHD::RecvE_Shr(Driver *pdrive, int stage) {
+  TaskStatus tstat = TaskStatus::complete;
+  if (psbox_b != nullptr) {
+    // only execute when (3D OR 2d_r_phi)
+    if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
+      tstat = psbox_b->RecvAndCorrectEMF(efld, recon_method);
+    }
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::SendB_OA
 //! \brief Wrapper task list function to pack/send data for orbital advection
 
@@ -549,8 +585,8 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
 //! \fn TaskStatus MHD::ClearSend
 //! \brief Wrapper task list function that checks all MPI sends have completed. Used in
 //! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
-//! If stage=(last stage):      clears U, B, Flx_U, Flx_B, U_OA, B_OA, U_Shr, BShr
-//! If (last stage)>stage>=(0): clears U, B, Flx_U, Flx_B,             U_Shr, B_Shr
+//! If stage=(last stage):      clears U, B, Flx_U, Flx_B, E_Shr, U_OA, B_OA, U_Shr, BShr
+//! If (last stage)>stage>=(0): clears U, B, Flx_U, Flx_B, E_Shr,             U_Shr, B_Shr
 //! If stage=(-1):              clears U, B
 //! If stage=(-4):              clears                                 U_Shr, B_Shr
 
@@ -599,6 +635,10 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
       if (tstat != TaskStatus::complete) return tstat;
       tstat = psbox_b->ClearSend();
       if (tstat != TaskStatus::complete) return tstat;
+      if (stage >= 0) {
+        tstat = psbox_b->ClearEMFSend();
+        if (tstat != TaskStatus::complete) return tstat;
+      }
     }
   }
 
@@ -609,8 +649,8 @@ TaskStatus MHD::ClearSend(Driver *pdrive, int stage) {
 //! \fn TaskStatus MHD::ClearRecv
 //! \brief Wrapper task list function that checks all MPI receives have completed. Used in
 //! TaskList and in Driver::InitBoundaryValuesAndPrimitives()
-//! If stage=(last stage):      clears U, B, Flx_U, Flx_B, U_OA, B_OA, U_Shr, BShr
-//! If (last stage)>stage>=(0): clears U, B, Flx_U, Flx_B,             U_Shr, B_Shr
+//! If stage=(last stage):      clears U, B, Flx_U, Flx_B, E_Shr, U_OA, B_OA, U_Shr, BShr
+//! If (last stage)>stage>=(0): clears U, B, Flx_U, Flx_B, E_Shr,             U_Shr, B_Shr
 //! If stage=(-1):              clears U, B
 //! If stage=(-4):              clears                                 U_Shr, B_Shr
 
@@ -659,6 +699,10 @@ TaskStatus MHD::ClearRecv(Driver *pdrive, int stage) {
       if (tstat != TaskStatus::complete) return tstat;
       tstat = psbox_b->ClearRecv();
       if (tstat != TaskStatus::complete) return tstat;
+      if (stage >= 0) {
+        tstat = psbox_b->ClearEMFRecv();
+        if (tstat != TaskStatus::complete) return tstat;
+      }
     }
   }
 
