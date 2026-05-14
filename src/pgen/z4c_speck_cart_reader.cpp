@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -899,6 +900,62 @@ void SpeckCartConstraintReport(ParameterInput *pin, Mesh *pm) {
   EnforceConstraintThresholds(pin, summary);
 }
 
+void WriteAdmPsi4XyPlane(ParameterInput *pin, MeshBlockPack *pmbp) {
+  const std::string path =
+      pin->GetOrAddString("problem", "xy_plane_output", "EMPTY");
+  if (path == "EMPTY" || path.empty()) {
+    return;
+  }
+  if (global_variable::my_rank != 0) {
+    return;
+  }
+  const Real z_plane = pin->GetOrAddReal("problem", "xy_plane_z", 0.0);
+  const std::filesystem::path output_path(path);
+  if (!output_path.parent_path().empty()) {
+    std::filesystem::create_directories(output_path.parent_path());
+  }
+  std::ofstream output(path);
+  if (!output) {
+    throw std::runtime_error("failed to open xy-plane output: " + path);
+  }
+  auto host_adm =
+      Kokkos::create_mirror_view_and_copy(HostMemSpace(), pmbp->padm->u_adm);
+  pmbp->pmb->mb_size.sync_host();
+  auto size = pmbp->pmb->mb_size.h_view;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  output << "# x y z adm_psi4 block i j k\n";
+  for (int m = 0; m < pmbp->nmb_thispack; ++m) {
+    int k_plane = indcs.ks;
+    Real best = std::numeric_limits<Real>::infinity();
+    for (int k = indcs.ks; k <= indcs.ke; ++k) {
+      const Real z =
+          CellCenterX(k - indcs.ks, indcs.nx3, size(m).x3min,
+                      size(m).x3max);
+      const Real distance = std::abs(z - z_plane);
+      if (distance < best) {
+        best = distance;
+        k_plane = k;
+      }
+    }
+    for (int j = indcs.js; j <= indcs.je; ++j) {
+      const Real y =
+          CellCenterX(j - indcs.js, indcs.nx2, size(m).x2min,
+                      size(m).x2max);
+      for (int i = indcs.is; i <= indcs.ie; ++i) {
+        const Real x =
+            CellCenterX(i - indcs.is, indcs.nx1, size(m).x1min,
+                        size(m).x1max);
+        const Real z =
+            CellCenterX(k_plane - indcs.ks, indcs.nx3, size(m).x3min,
+                        size(m).x3max);
+        output << x << ' ' << y << ' ' << z << ' '
+               << host_adm(m, adm::ADM::I_ADM_PSI4, k_plane, j, i) << ' '
+               << m << ' ' << i << ' ' << j << ' ' << k_plane << '\n';
+      }
+    }
+  }
+}
+
 } // namespace
 
 void ProblemGenerator::Z4cSpeckCartReader(ParameterInput *pin,
@@ -958,6 +1015,15 @@ void ProblemGenerator::Z4cSpeckCartReader(ParameterInput *pin,
   RecomputeAdmConstraints(pmbp);
   const ConstraintSummary summary = ComputeConstraintSummary(pmy_mesh_);
   EnforceConstraintThresholds(pin, summary);
+  try {
+    WriteAdmPsi4XyPlane(pin, pmbp);
+  } catch (const std::exception &error) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Failed to write AthenaK SpECK cart xy-plane diagnostic: "
+              << error.what() << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   if (global_variable::my_rank == 0) {
     std::cout << "Initialized Z4c from SpECK cart GH data: " << filename

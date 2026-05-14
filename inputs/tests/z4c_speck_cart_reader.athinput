@@ -51,6 +51,12 @@ pgen_name = z4c_speck_cart_reader
 speck_cart_file = EMPTY
 require_ghost_coverage = true
 write_constraint_summary = true
+fail_if_c_rms_above = 1.0e300
+fail_if_h_rms_above = 1.0e300
+fail_if_m_rms_above = 1.0e300
+fail_if_z_rms_above = 1.0e300
+xy_plane_output = EMPTY
+xy_plane_z = 0.0
 
 <output1>
 file_type   = hst
