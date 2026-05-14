@@ -122,6 +122,15 @@ endif()
 if (ENABLE_OPENMP)
   target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
 endif()
+
+find_package(HDF5 REQUIRED COMPONENTS C)
+if(TARGET HDF5::HDF5)
+  target_link_libraries(athena PUBLIC HDF5::HDF5)
+else()
+  target_include_directories(athena PUBLIC ${HDF5_INCLUDE_DIRS})
+  target_link_libraries(athena PUBLIC ${HDF5_LIBRARIES})
+endif()
+
 if (${PROBLEM} STREQUAL "z4c_two_puncture")
 	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
 	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)
@@ -209,20 +218,6 @@ if (${PROBLEM} STREQUAL "lorene_bns")
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
 endif()
 
-if (${PROBLEM} STREQUAL "id_solve")
-  # --- HDF5 I/O (dynamic by default, static optional) --------------------------
-  #   • Set STATIC_HDF5=ON at CMake configure time to bake every HDF5 object
-  #     into the executable for easy archival or clusters that disallow .so’s.
-  #   • Leave it OFF (default) to keep the binary small and enable VOL/plugins.
-  #find_package(hdf5 COMPONENTS C HL REQUIRED)
-  #target_include_directories(athena PRIVATE
-  #    ${CMAKE_SOURCE_DIR}/hdf5/include)
-  find_package(HDF5 REQUIRED COMPONENTS C HL)
-  target_link_libraries(athena PUBLIC
-    hdf5::hdf5
-    hdf5::hdf5_hl)
-endif()
-
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -232,4 +227,3 @@ target_include_directories(athena PUBLIC
 configure_file(config.hpp.in config.hpp)
 
 install( TARGETS athena DESTINATION bin )
-

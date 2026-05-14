@@ -46,6 +46,8 @@ excise_chi = 0.0
 
 <problem>
 pgen_name = z4c_speck_cart_reader
+# Accepts the legacy SpECK cart binary format and the preferred
+# double-precision SpECK cart HDF5 format.
 speck_cart_file = EMPTY
 require_ghost_coverage = true
 write_constraint_summary = true

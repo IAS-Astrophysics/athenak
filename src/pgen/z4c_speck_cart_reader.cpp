@@ -19,6 +19,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <hdf5.h>
+
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -30,7 +32,7 @@
 
 namespace {
 
-struct CartMetadata {
+struct BinaryCartMetadata {
   int cycle;
   float time;
   float center[3];
@@ -38,6 +40,16 @@ struct CartMetadata {
   int numpoints[3];
   bool is_cheb;
   int noutvars;
+};
+
+struct CartMetadata {
+  int cycle = 0;
+  Real time = 0.0;
+  Real center[3] = {0.0, 0.0, 0.0};
+  Real extent[3] = {0.0, 0.0, 0.0};
+  int numpoints[3] = {0, 0, 0};
+  bool is_cheb = false;
+  int noutvars = 0;
 };
 
 struct CartGridDeviceSpec {
@@ -281,23 +293,137 @@ KOKKOS_INLINE_FUNCTION void FillSymmetricMatrixFromSpatialMetric(
   matrix[2][2] = gamma[5];
 }
 
-void ReadSpeckCartFile(const std::string &filename, CartMetadata &metadata,
-                       std::vector<std::string> &labels,
-                       DvceArray4D<Real> &device_data) {
+bool EndsWith(const std::string &value, const std::string &suffix) {
+  return value.size() >= suffix.size() &&
+         value.compare(value.size() - suffix.size(), suffix.size(), suffix) ==
+             0;
+}
+
+void RequireHdf5(const herr_t status, const std::string &action) {
+  if (status < 0) {
+    throw std::runtime_error("HDF5 failure while " + action);
+  }
+}
+
+std::size_t Hdf5ElementCount(const hid_t space, const std::string &path) {
+  const hssize_t count = H5Sget_simple_extent_npoints(space);
+  if (count < 0) {
+    throw std::runtime_error("failed to get HDF5 element count for " + path);
+  }
+  return static_cast<std::size_t>(count);
+}
+
+std::vector<int> ReadHdf5Ints(const hid_t file, const std::string &path,
+                              const int expected_count) {
+  const hid_t dataset = H5Dopen2(file, path.c_str(), H5P_DEFAULT);
+  if (dataset < 0) {
+    throw std::runtime_error("failed to open HDF5 dataset " + path);
+  }
+  const hid_t space = H5Dget_space(dataset);
+  if (space < 0) {
+    H5Dclose(dataset);
+    throw std::runtime_error("failed to get HDF5 dataspace " + path);
+  }
+  if (Hdf5ElementCount(space, path) !=
+      static_cast<std::size_t>(expected_count)) {
+    H5Sclose(space);
+    H5Dclose(dataset);
+    throw std::runtime_error("unexpected HDF5 element count for " + path);
+  }
+  std::vector<int> values(static_cast<std::size_t>(expected_count));
+  RequireHdf5(H5Dread(dataset, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                      values.data()),
+              "reading dataset " + path);
+  RequireHdf5(H5Sclose(space), "closing dataspace " + path);
+  RequireHdf5(H5Dclose(dataset), "closing dataset " + path);
+  return values;
+}
+
+std::vector<double> ReadHdf5Doubles(const hid_t file, const std::string &path,
+                                    const int expected_count) {
+  const hid_t dataset = H5Dopen2(file, path.c_str(), H5P_DEFAULT);
+  if (dataset < 0) {
+    throw std::runtime_error("failed to open HDF5 dataset " + path);
+  }
+  const hid_t space = H5Dget_space(dataset);
+  if (space < 0) {
+    H5Dclose(dataset);
+    throw std::runtime_error("failed to get HDF5 dataspace " + path);
+  }
+  if (Hdf5ElementCount(space, path) !=
+      static_cast<std::size_t>(expected_count)) {
+    H5Sclose(space);
+    H5Dclose(dataset);
+    throw std::runtime_error("unexpected HDF5 element count for " + path);
+  }
+  std::vector<double> values(static_cast<std::size_t>(expected_count));
+  RequireHdf5(H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                      H5P_DEFAULT, values.data()),
+              "reading dataset " + path);
+  RequireHdf5(H5Sclose(space), "closing dataspace " + path);
+  RequireHdf5(H5Dclose(dataset), "closing dataset " + path);
+  return values;
+}
+
+std::string ReadHdf5LabelString(const hid_t file) {
+  const hid_t dataset = H5Dopen2(file, "/labels", H5P_DEFAULT);
+  if (dataset < 0) {
+    throw std::runtime_error("failed to open HDF5 dataset /labels");
+  }
+  const hid_t space = H5Dget_space(dataset);
+  if (space < 0) {
+    H5Dclose(dataset);
+    throw std::runtime_error("failed to get HDF5 dataspace /labels");
+  }
+  if (H5Sget_simple_extent_ndims(space) != 1) {
+    H5Sclose(space);
+    H5Dclose(dataset);
+    throw std::runtime_error("SpECK HDF5 cart /labels must be rank 1");
+  }
+  const std::size_t length = Hdf5ElementCount(space, "/labels");
+  std::string labels(static_cast<std::size_t>(length), '\0');
+  RequireHdf5(H5Dread(dataset, H5T_NATIVE_CHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                      labels.data()),
+              "reading dataset /labels");
+  RequireHdf5(H5Sclose(space), "closing dataspace /labels");
+  RequireHdf5(H5Dclose(dataset), "closing dataset /labels");
+  return labels;
+}
+
+void ValidateCartMetadata(const std::string &filename,
+                          const CartMetadata &metadata) {
+  if (metadata.noutvars <= 0 || metadata.numpoints[0] < 2 ||
+      metadata.numpoints[1] < 2 || metadata.numpoints[2] < 2) {
+    throw std::runtime_error("invalid SpECK cart metadata in: " + filename);
+  }
+}
+
+void ReadSpeckCartBinaryFile(const std::string &filename,
+                             CartMetadata &metadata,
+                             std::vector<std::string> &labels,
+                             DvceArray4D<Real> &device_data) {
   std::ifstream input(filename, std::ios::binary);
   if (!input) {
     throw std::runtime_error("failed to open SpECK cart input file: " +
                              filename);
   }
-  input.read(reinterpret_cast<char *>(&metadata), sizeof(metadata));
+  BinaryCartMetadata binary_metadata{};
+  input.read(reinterpret_cast<char *>(&binary_metadata),
+             sizeof(binary_metadata));
   if (!input) {
     throw std::runtime_error("failed to read SpECK cart metadata from: " +
                              filename);
   }
-  if (metadata.noutvars <= 0 || metadata.numpoints[0] < 2 ||
-      metadata.numpoints[1] < 2 || metadata.numpoints[2] < 2) {
-    throw std::runtime_error("invalid SpECK cart metadata in: " + filename);
+  metadata.cycle = binary_metadata.cycle;
+  metadata.time = static_cast<Real>(binary_metadata.time);
+  metadata.is_cheb = binary_metadata.is_cheb;
+  metadata.noutvars = binary_metadata.noutvars;
+  for (int d = 0; d < 3; ++d) {
+    metadata.center[d] = static_cast<Real>(binary_metadata.center[d]);
+    metadata.extent[d] = static_cast<Real>(binary_metadata.extent[d]);
+    metadata.numpoints[d] = binary_metadata.numpoints[d];
   }
+  ValidateCartMetadata(filename, metadata);
 
   int label_length = 0;
   input.read(reinterpret_cast<char *>(&label_length), sizeof(int));
@@ -335,6 +461,106 @@ void ReadSpeckCartFile(const std::string &filename, CartMetadata &metadata,
   device_data = DvceArray4D<Real>("speck_cart_device", metadata.noutvars, nz,
                                   ny, nx);
   Kokkos::deep_copy(device_data, host_data);
+}
+
+void ReadSpeckCartHdf5File(const std::string &filename,
+                           CartMetadata &metadata,
+                           std::vector<std::string> &labels,
+                           DvceArray4D<Real> &device_data) {
+  const hid_t file = H5Fopen(filename.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+  if (file < 0) {
+    throw std::runtime_error("failed to open SpECK HDF5 cart input file: " +
+                             filename);
+  }
+  try {
+    metadata.cycle = ReadHdf5Ints(file, "/cycle", 1)[0];
+    metadata.time = static_cast<Real>(ReadHdf5Doubles(file, "/time", 1)[0]);
+    const std::vector<double> center = ReadHdf5Doubles(file, "/center", 3);
+    const std::vector<double> extent = ReadHdf5Doubles(file, "/extent", 3);
+    const std::vector<int> npts = ReadHdf5Ints(file, "/numpoints", 3);
+    metadata.is_cheb = ReadHdf5Ints(file, "/is_cheb", 1)[0] != 0;
+    metadata.noutvars = ReadHdf5Ints(file, "/noutvars", 1)[0];
+    for (int d = 0; d < 3; ++d) {
+      metadata.center[d] = static_cast<Real>(center[d]);
+      metadata.extent[d] = static_cast<Real>(extent[d]);
+      metadata.numpoints[d] = npts[d];
+    }
+    ValidateCartMetadata(filename, metadata);
+    labels = SplitLabels(ReadHdf5LabelString(file));
+    if (static_cast<int>(labels.size()) != metadata.noutvars) {
+      throw std::runtime_error(
+          "SpECK HDF5 cart label count does not match metadata");
+    }
+
+    const hid_t dataset = H5Dopen2(file, "/data", H5P_DEFAULT);
+    if (dataset < 0) {
+      throw std::runtime_error("failed to open HDF5 dataset /data");
+    }
+    const hid_t space = H5Dget_space(dataset);
+    if (space < 0) {
+      H5Dclose(dataset);
+      throw std::runtime_error("failed to get HDF5 dataspace /data");
+    }
+    hsize_t dims[4] = {0, 0, 0, 0};
+    if (H5Sget_simple_extent_ndims(space) != 4) {
+      H5Sclose(space);
+      H5Dclose(dataset);
+      throw std::runtime_error("SpECK HDF5 cart /data must be rank 4");
+    }
+    RequireHdf5(H5Sget_simple_extent_dims(space, dims, nullptr),
+                "reading /data extent");
+    if (dims[0] != static_cast<hsize_t>(metadata.noutvars) ||
+        dims[1] != static_cast<hsize_t>(metadata.numpoints[2]) ||
+        dims[2] != static_cast<hsize_t>(metadata.numpoints[1]) ||
+        dims[3] != static_cast<hsize_t>(metadata.numpoints[0])) {
+      H5Sclose(space);
+      H5Dclose(dataset);
+      throw std::runtime_error(
+          "SpECK HDF5 cart /data shape does not match metadata");
+    }
+    const std::size_t count =
+        static_cast<std::size_t>(dims[0] * dims[1] * dims[2] * dims[3]);
+    std::vector<double> raw(count);
+    RequireHdf5(H5Dread(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                        H5P_DEFAULT, raw.data()),
+                "reading dataset /data");
+    RequireHdf5(H5Sclose(space), "closing dataspace /data");
+    RequireHdf5(H5Dclose(dataset), "closing dataset /data");
+
+    const int nx = metadata.numpoints[0];
+    const int ny = metadata.numpoints[1];
+    const int nz = metadata.numpoints[2];
+    HostArray4D<Real> host_data("speck_hdf5_cart_host", metadata.noutvars, nz,
+                                ny, nx);
+    for (int v = 0; v < metadata.noutvars; ++v) {
+      for (int k = 0; k < nz; ++k) {
+        for (int j = 0; j < ny; ++j) {
+          for (int i = 0; i < nx; ++i) {
+            const std::size_t idx =
+                ((static_cast<std::size_t>(v) * nz + k) * ny + j) * nx + i;
+            host_data(v, k, j, i) = static_cast<Real>(raw[idx]);
+          }
+        }
+      }
+    }
+    device_data = DvceArray4D<Real>("speck_hdf5_cart_device",
+                                    metadata.noutvars, nz, ny, nx);
+    Kokkos::deep_copy(device_data, host_data);
+  } catch (...) {
+    H5Fclose(file);
+    throw;
+  }
+  RequireHdf5(H5Fclose(file), "closing HDF5 cart file");
+}
+
+void ReadSpeckCartFile(const std::string &filename, CartMetadata &metadata,
+                       std::vector<std::string> &labels,
+                       DvceArray4D<Real> &device_data) {
+  if (EndsWith(filename, ".h5") || EndsWith(filename, ".hdf5")) {
+    ReadSpeckCartHdf5File(filename, metadata, labels, device_data);
+  } else {
+    ReadSpeckCartBinaryFile(filename, metadata, labels, device_data);
+  }
 }
 
 void FillAdmFromSpeckGhCart(MeshBlockPack *pmbp, const CartMetadata &metadata,
