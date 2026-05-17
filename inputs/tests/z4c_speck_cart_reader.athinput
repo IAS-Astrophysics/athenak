@@ -1,8 +1,8 @@
-# AthenaK input for importing SpECK GH Cartesian output into Z4c.
+# AthenaK input for importing SpECK ADM/GH Cartesian output into Z4c.
 
 <comment>
-problem   = SpECK Cartesian GH import
-reference = SpECK/SpEC generalized harmonic data handoff to AthenaK Z4c
+problem   = SpECK Cartesian ADM/GH import
+reference = SpECK XCTS/SpEC generalized harmonic data handoff to AthenaK Z4c
 
 <job>
 basename  = z4c_speck_cart
@@ -46,8 +46,8 @@ excise_chi = 0.0
 
 <problem>
 pgen_name = z4c_speck_cart_reader
-# Accepts the legacy SpECK cart binary format and the preferred
-# double-precision SpECK cart HDF5 format.
+# Accepts direct ADM labels from the XCTS handoff, GH labels from evolution
+# handoff, and the legacy binary or preferred double-precision HDF5 container.
 speck_cart_file = EMPTY
 require_ghost_coverage = true
 write_constraint_summary = true

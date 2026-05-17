@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file z4c_speck_cart_reader.cpp
-//! \brief Initialize Z4c from a SpECK/AthenaK Cartesian GH data dump.
+//! \brief Initialize Z4c from a SpECK/AthenaK Cartesian ADM or GH data dump.
 
 #include <algorithm>
 #include <cmath>
@@ -66,6 +66,14 @@ struct GhIndexMap {
   int phi[3][4][4];
 };
 
+struct AdmIndexMap {
+  int gamma[3][3];
+  int extrinsic_curvature[3][3];
+  int psi4 = -1;
+  int alpha = -1;
+  int beta[3] = {-1, -1, -1};
+};
+
 struct ConstraintSummary {
   Real c_rms = 0.0;
   Real h_rms = 0.0;
@@ -93,6 +101,17 @@ int FindLabel(const std::unordered_map<std::string, int> &labels,
               const std::string &label) {
   const auto it = labels.find(label);
   return it == labels.end() ? -1 : it->second;
+}
+
+KOKKOS_INLINE_FUNCTION int SymmetricSpatialComponent(const int a, const int b) {
+  const int lo = a < b ? a : b;
+  const int hi = a < b ? b : a;
+  if (lo == 0 && hi == 0) return 0;
+  if (lo == 0 && hi == 1) return 1;
+  if (lo == 0 && hi == 2) return 2;
+  if (lo == 1 && hi == 1) return 3;
+  if (lo == 1 && hi == 2) return 4;
+  return 5;
 }
 
 GhIndexMap BuildGhIndexMap(const std::vector<std::string> &labels) {
@@ -153,6 +172,61 @@ GhIndexMap BuildGhIndexMap(const std::vector<std::string> &labels) {
     }
     if (static_cast<int>(missing.size()) > count) {
       message << " ...";
+    }
+    throw std::runtime_error(message.str());
+  }
+  return map;
+}
+
+bool LabelsContainAdm(const std::vector<std::string> &labels) {
+  return std::find(labels.begin(), labels.end(), "adm_gxx") != labels.end() ||
+         std::find(labels.begin(), labels.end(), "adm_alpha") != labels.end();
+}
+
+AdmIndexMap BuildAdmIndexMap(const std::vector<std::string> &labels) {
+  std::unordered_map<std::string, int> by_name;
+  for (int n = 0; n < static_cast<int>(labels.size()); ++n) {
+    by_name[labels[n]] = n;
+  }
+
+  AdmIndexMap map{};
+  const char *metric_labels[6] = {"adm_gxx", "adm_gxy", "adm_gxz",
+                                  "adm_gyy", "adm_gyz", "adm_gzz"};
+  const char *extrinsic_labels[6] = {"adm_Kxx", "adm_Kxy", "adm_Kxz",
+                                     "adm_Kyy", "adm_Kyz", "adm_Kzz"};
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      const int component = SymmetricSpatialComponent(a, b);
+      map.gamma[a][b] = FindLabel(by_name, metric_labels[component]);
+      map.extrinsic_curvature[a][b] =
+          FindLabel(by_name, extrinsic_labels[component]);
+    }
+  }
+  map.psi4 = FindLabel(by_name, "adm_psi4");
+  map.alpha = FindLabel(by_name, "adm_alpha");
+  map.beta[0] = FindLabel(by_name, "adm_betax");
+  map.beta[1] = FindLabel(by_name, "adm_betay");
+  map.beta[2] = FindLabel(by_name, "adm_betaz");
+
+  std::vector<std::string> missing;
+  for (int component = 0; component < 6; ++component) {
+    if (FindLabel(by_name, metric_labels[component]) < 0) {
+      missing.push_back(metric_labels[component]);
+    }
+    if (FindLabel(by_name, extrinsic_labels[component]) < 0) {
+      missing.push_back(extrinsic_labels[component]);
+    }
+  }
+  if (map.psi4 < 0) missing.push_back("adm_psi4");
+  if (map.alpha < 0) missing.push_back("adm_alpha");
+  if (map.beta[0] < 0) missing.push_back("adm_betax");
+  if (map.beta[1] < 0) missing.push_back("adm_betay");
+  if (map.beta[2] < 0) missing.push_back("adm_betaz");
+  if (!missing.empty()) {
+    std::ostringstream message;
+    message << "SpECK cart ADM input is missing required label(s):";
+    for (const std::string &label : missing) {
+      message << ' ' << label;
     }
     throw std::runtime_error(message.str());
   }
@@ -561,6 +635,104 @@ void ReadSpeckCartFile(const std::string &filename, CartMetadata &metadata,
     ReadSpeckCartHdf5File(filename, metadata, labels, device_data);
   } else {
     ReadSpeckCartBinaryFile(filename, metadata, labels, device_data);
+  }
+}
+
+void FillAdmFromSpeckAdmCart(MeshBlockPack *pmbp, const CartMetadata &metadata,
+                             const AdmIndexMap &index_map,
+                             const DvceArray4D<Real> &cart_data,
+                             const bool require_ghost_coverage) {
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  auto &adm_vars = pmbp->padm->adm;
+  auto &z4c_vars = pmbp->pz4c->z4c;
+  auto &u0 = pmbp->pz4c->u0;
+
+  const int is = indcs.is;
+  const int js = indcs.js;
+  const int ks = indcs.ks;
+  const int ng = indcs.ng;
+  const int n1 = indcs.nx1 + 2 * ng;
+  const int n2 = indcs.nx2 + 2 * ng;
+  const int n3 = indcs.nx3 + 2 * ng;
+  const int nmb = pmbp->nmb_thispack;
+
+  CartGridDeviceSpec grid{};
+  for (int d = 0; d < 3; ++d) {
+    grid.center[d] = static_cast<Real>(metadata.center[d]);
+    grid.extent[d] = static_cast<Real>(metadata.extent[d]);
+    grid.numpoints[d] = metadata.numpoints[d];
+  }
+  grid.is_cheb = metadata.is_cheb;
+
+  DvceArray1D<int> import_status("speck_adm_cart_import_status", 2);
+  Kokkos::deep_copy(import_status, 0);
+  Kokkos::deep_copy(u0, 0.0);
+
+  par_for("speck_adm_cart_to_adm", DevExeSpace(), 0, nmb - 1, 0, n3 - 1, 0,
+          n2 - 1, 0, n1 - 1,
+          KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+            const Real x = CellCenterX(i - is, indcs.nx1,
+                                       size.d_view(m).x1min,
+                                       size.d_view(m).x1max);
+            const Real y = CellCenterX(j - js, indcs.nx2,
+                                       size.d_view(m).x2min,
+                                       size.d_view(m).x2max);
+            const Real z = CellCenterX(k - ks, indcs.nx3,
+                                       size.d_view(m).x3min,
+                                       size.d_view(m).x3max);
+            int out_of_domain = 0;
+
+            Real gamma[6];
+            for (int a = 0; a < 3; ++a) {
+              for (int b = a; b < 3; ++b) {
+                const int component = SymmetricSpatialComponent(a, b);
+                gamma[component] = InterpolateCartValue(
+                    cart_data, grid, index_map.gamma[a][b], x, y, z,
+                    out_of_domain);
+                adm_vars.g_dd(m, a, b, k, j, i) = gamma[component];
+                adm_vars.vK_dd(m, a, b, k, j, i) = InterpolateCartValue(
+                    cart_data, grid, index_map.extrinsic_curvature[a][b], x, y,
+                    z, out_of_domain);
+              }
+            }
+            adm_vars.psi4(m, k, j, i) = InterpolateCartValue(
+                cart_data, grid, index_map.psi4, x, y, z, out_of_domain);
+            adm_vars.alpha(m, k, j, i) = InterpolateCartValue(
+                cart_data, grid, index_map.alpha, x, y, z, out_of_domain);
+            for (int a = 0; a < 3; ++a) {
+              adm_vars.beta_u(m, a, k, j, i) = InterpolateCartValue(
+                  cart_data, grid, index_map.beta[a], x, y, z, out_of_domain);
+            }
+            if (out_of_domain != 0) {
+              Kokkos::atomic_max(&import_status(0), 1);
+            }
+            const Real detg = adm::SpatialDet(gamma[0], gamma[1], gamma[2],
+                                              gamma[3], gamma[4], gamma[5]);
+            if (!(detg > 0.0) || detg != detg ||
+                !(adm_vars.psi4(m, k, j, i) > 0.0) ||
+                adm_vars.psi4(m, k, j, i) != adm_vars.psi4(m, k, j, i) ||
+                !(adm_vars.alpha(m, k, j, i) > 0.0) ||
+                adm_vars.alpha(m, k, j, i) != adm_vars.alpha(m, k, j, i)) {
+              Kokkos::atomic_max(&import_status(1), 1);
+            }
+            z4c_vars.vTheta(m, k, j, i) = 0.0;
+            for (int a = 0; a < 3; ++a) {
+              z4c_vars.vB_d(m, a, k, j, i) = 0.0;
+            }
+          });
+  Kokkos::fence();
+
+  auto host_status =
+      Kokkos::create_mirror_view_and_copy(HostMemSpace(), import_status);
+  if (require_ghost_coverage && host_status(0) != 0) {
+    throw std::runtime_error(
+        "SpECK cart input grid does not cover all AthenaK interior and ghost "
+        "cell centers");
+  }
+  if (host_status(1) != 0) {
+    throw std::runtime_error(
+        "SpECK cart ADM input produced invalid lapse, psi4, or spatial metric");
   }
 }
 
@@ -983,9 +1155,15 @@ void ProblemGenerator::Z4cSpeckCartReader(ParameterInput *pin,
   DvceArray4D<Real> cart_data;
   try {
     ReadSpeckCartFile(filename, metadata, labels, cart_data);
-    const GhIndexMap index_map = BuildGhIndexMap(labels);
-    FillAdmFromSpeckGhCart(pmbp, metadata, index_map, cart_data,
-                           require_ghost_coverage);
+    if (LabelsContainAdm(labels)) {
+      const AdmIndexMap index_map = BuildAdmIndexMap(labels);
+      FillAdmFromSpeckAdmCart(pmbp, metadata, index_map, cart_data,
+                              require_ghost_coverage);
+    } else {
+      const GhIndexMap index_map = BuildGhIndexMap(labels);
+      FillAdmFromSpeckGhCart(pmbp, metadata, index_map, cart_data,
+                             require_ghost_coverage);
+    }
   } catch (const std::exception &error) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
@@ -1026,7 +1204,7 @@ void ProblemGenerator::Z4cSpeckCartReader(ParameterInput *pin,
   }
 
   if (global_variable::my_rank == 0) {
-    std::cout << "Initialized Z4c from SpECK cart GH data: " << filename
+    std::cout << "Initialized Z4c from SpECK cart data: " << filename
               << " labels=" << labels.size() << " grid=("
               << metadata.numpoints[0] << "," << metadata.numpoints[1]
               << "," << metadata.numpoints[2] << ")"
