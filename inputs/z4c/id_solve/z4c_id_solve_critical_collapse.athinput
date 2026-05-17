@@ -1,0 +1,67 @@
+# AthenaK input for loading critical-collapse ADM data in id_solve HDF5 format.
+#
+# Build with:
+#   cmake -S . -B build-id-solve -D PROBLEM=z4c_id_solve
+#
+# Override mesh size and filename at runtime with AthenaK command-line
+# parameter replacements, for example:
+#   ./build-id-solve/src/athena -i inputs/z4c/id_solve/z4c_id_solve_critical_collapse.athinput \
+#     problem/id_filename=/path/to/id_solve_critical_collapse.h5 mesh/nx1=32 mesh/nx2=32 mesh/nx3=32
+
+<comment>
+problem   = critical-collapse id_solve import
+reference = SpECK/AthenaK critical-collapse ADM data loaded through the id_solve reader
+
+<job>
+basename  = z4c_id_solve_collapse
+
+<mesh>
+nghost    = 3
+nx1       = 16
+x1min     = -12.0
+x1max     =  12.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 16
+x2min     = -12.0
+x2max     =  12.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 16
+x3min     = -12.0
+x3max     =  12.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 16
+nx2       = 16
+nx3       = 16
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.3
+nlim       = 0
+tlim       = 0.0
+ndiag      = 1
+
+<z4c>
+diss       = 0.0
+excise_chi = 0.0
+
+<problem>
+pgen_name = z4c_id_solve
+id_filename = EMPTY
+write_constraint_summary = true
+fail_if_c_rms_above = 1.0e300
+fail_if_h_rms_above = 1.0e300
+fail_if_m_rms_above = 1.0e300
+fail_if_z_rms_above = 1.0e300
+
+<output1>
+file_type   = hst
+data_format = %24.16e
+dt          = -1.0

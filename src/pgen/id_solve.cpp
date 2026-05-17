@@ -9,9 +9,11 @@
 #include <algorithm> 
 #include <array> 
 #include <cmath> 
+#include <cstdio>
 #include <cstdlib> 
 #include <iostream> 
 #include <iterator>  
+#include <limits>
 #include <sstream> 
 #include <stdexcept> 
 #include <string> 
@@ -38,6 +40,20 @@ static double interpolate_3d_cmajor(
     const double *f, 
     double xp, double yp, double zp 
 ); 
+
+struct IDSolveConstraintSummary {
+  Real c_rms = 0.0;
+  Real h_rms = 0.0;
+  Real m_rms = 0.0;
+  Real z_rms = 0.0;
+  Real volume = 0.0;
+};
+
+IDSolveConstraintSummary ComputeIDSolveConstraintSummary(Mesh *pm);
+void WriteIDSolveConstraintSummary(ParameterInput *pin, Mesh *pm,
+                                   const IDSolveConstraintSummary &summary);
+void EnforceIDSolveConstraintThresholds(ParameterInput *pin,
+                                        const IDSolveConstraintSummary &summary);
 
 //----------------------------------------------------------------------------- 
 // Read a full dataset of doubles from an HDF5 file. 
@@ -122,6 +138,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       case 3: pmbp->pz4c->ADMConstraints<3>(pmbp); break; 
       case 4: pmbp->pz4c->ADMConstraints<4>(pmbp); break; 
     } 
+
+    const IDSolveConstraintSummary summary =
+        ComputeIDSolveConstraintSummary(pmy_mesh_);
+    if (pin->GetOrAddBoolean("problem", "write_constraint_summary", true)) {
+        WriteIDSolveConstraintSummary(pin, pmy_mesh_, summary);
+    }
+    EnforceIDSolveConstraintThresholds(pin, summary);
 
     std::cout << "Loading initial data complete." << std::endl; 
 } 
@@ -313,6 +336,127 @@ void LoadIDSolveData(MeshBlockPack *pmbp, ParameterInput *pin, const std::string
   delete[] metric_data; delete[] extrin_data; 
   Kokkos::deep_copy(u_adm, host_u_adm); 
 } 
+
+IDSolveConstraintSummary ComputeIDSolveConstraintSummary(Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  auto &indcs = pm->mb_indcs;
+  const int nx1 = indcs.nx1;
+  const int nx2 = indcs.nx2;
+  const int nx3 = indcs.nx3;
+  const int is = indcs.is;
+  const int js = indcs.js;
+  const int ks = indcs.ks;
+  const int nmkji = pmbp->nmb_thispack * nx3 * nx2 * nx1;
+  const int nkji = nx3 * nx2 * nx1;
+  const int nji = nx2 * nx1;
+  auto &u_con = pmbp->pz4c->u_con;
+  auto &adm_vars = pmbp->padm->adm;
+  auto &size = pmbp->pmb->mb_size;
+
+  array_sum::GlobalSum local_sum;
+  Kokkos::parallel_reduce(
+      "id_solve_constraint_summary",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int idx, array_sum::GlobalSum &sum) {
+        const int m = idx / nkji;
+        const int k0 = (idx - m * nkji) / nji;
+        const int j0 = (idx - m * nkji - k0 * nji) / nx1;
+        const int i = (idx - m * nkji - k0 * nji - j0 * nx1) + is;
+        const int j = j0 + js;
+        const int k = k0 + ks;
+        const Real detg = adm::SpatialDet(
+            adm_vars.g_dd(m, 0, 0, k, j, i),
+            adm_vars.g_dd(m, 0, 1, k, j, i),
+            adm_vars.g_dd(m, 0, 2, k, j, i),
+            adm_vars.g_dd(m, 1, 1, k, j, i),
+            adm_vars.g_dd(m, 1, 2, k, j, i),
+            adm_vars.g_dd(m, 2, 2, k, j, i));
+        const Real vol = size.d_view(m).dx1 * size.d_view(m).dx2 *
+                         size.d_view(m).dx3 *
+                         Kokkos::sqrt(Kokkos::abs(detg));
+        array_sum::GlobalSum cell_sum;
+        cell_sum.the_array[0] = vol * u_con(m, z4c::Z4c::I_CON_C, k, j, i);
+        cell_sum.the_array[1] =
+            vol * SQR(u_con(m, z4c::Z4c::I_CON_H, k, j, i));
+        cell_sum.the_array[2] = vol * u_con(m, z4c::Z4c::I_CON_M, k, j, i);
+        cell_sum.the_array[3] = vol * u_con(m, z4c::Z4c::I_CON_Z, k, j, i);
+        cell_sum.the_array[4] = vol;
+        for (int n = 5; n < NREDUCTION_VARIABLES; ++n) {
+          cell_sum.the_array[n] = 0.0;
+        }
+        sum += cell_sum;
+      },
+      Kokkos::Sum<array_sum::GlobalSum>(local_sum));
+
+  Real totals[5];
+  for (int n = 0; n < 5; ++n) {
+    totals[n] = local_sum.the_array[n];
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, totals, 5, MPI_ATHENA_REAL, MPI_SUM,
+                MPI_COMM_WORLD);
+#endif
+
+  IDSolveConstraintSummary summary;
+  summary.volume = totals[4];
+  if (summary.volume > 0.0) {
+    summary.c_rms = std::sqrt(totals[0] / summary.volume);
+    summary.h_rms = std::sqrt(totals[1] / summary.volume);
+    summary.m_rms = std::sqrt(totals[2] / summary.volume);
+    summary.z_rms = std::sqrt(totals[3] / summary.volume);
+  }
+  return summary;
+}
+
+void WriteIDSolveConstraintSummary(ParameterInput *pin, Mesh *pm,
+                                   const IDSolveConstraintSummary &summary) {
+  if (global_variable::my_rank != 0) {
+    return;
+  }
+  std::string fname = pin->GetString("job", "basename");
+  fname.append("-id-solve-constraints.dat");
+  FILE *pfile = std::fopen(fname.c_str(), "r");
+  if (pfile != nullptr) {
+    pfile = std::freopen(fname.c_str(), "a", pfile);
+  } else {
+    pfile = std::fopen(fname.c_str(), "w");
+    if (pfile != nullptr) {
+      std::fprintf(pfile,
+                   "# Nx1  Nx2  Nx3   Ncycle  C_rms  H_rms  M_rms  Z_rms  "
+                   "Volume\n");
+    }
+  }
+  if (pfile == nullptr) {
+    throw std::runtime_error("id_solve constraint output file could not be opened");
+  }
+  std::fprintf(pfile,
+               "%04d  %04d  %04d  %05d  %.16e  %.16e  %.16e  %.16e  "
+               "%.16e\n",
+               pm->mesh_indcs.nx1, pm->mesh_indcs.nx2,
+               pm->mesh_indcs.nx3, pm->ncycle, summary.c_rms,
+               summary.h_rms, summary.m_rms, summary.z_rms, summary.volume);
+  std::fclose(pfile);
+}
+
+void EnforceIDSolveConstraintThresholds(
+    ParameterInput *pin, const IDSolveConstraintSummary &summary) {
+  const Real c_threshold = pin->GetOrAddReal(
+      "problem", "fail_if_c_rms_above", std::numeric_limits<Real>::infinity());
+  const Real h_threshold = pin->GetOrAddReal(
+      "problem", "fail_if_h_rms_above", std::numeric_limits<Real>::infinity());
+  const Real m_threshold = pin->GetOrAddReal(
+      "problem", "fail_if_m_rms_above", std::numeric_limits<Real>::infinity());
+  const Real z_threshold = pin->GetOrAddReal(
+      "problem", "fail_if_z_rms_above", std::numeric_limits<Real>::infinity());
+  if (summary.c_rms > c_threshold || summary.h_rms > h_threshold ||
+      summary.m_rms > m_threshold || summary.z_rms > z_threshold) {
+    std::stringstream msg;
+    msg << "id_solve imported constraints exceeded threshold: C="
+        << summary.c_rms << " H=" << summary.h_rms
+        << " M=" << summary.m_rms << " Z=" << summary.z_rms;
+    throw std::runtime_error(msg.str());
+  }
+}
 
 void RefinementCondition(MeshBlockPack *pmbp) { pmbp->pz4c->pamr->Refine(pmbp); } 
 
