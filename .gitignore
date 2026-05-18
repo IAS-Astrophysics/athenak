@@ -1,5 +1,7 @@
 # build directories
 build*/
+build*
+twopuncturesc
 
 # Athena output files
 *.tab
@@ -8,6 +10,15 @@ build*/
 *.athdf*
 *.hst
 *.rst
+runs/
+plots/
+*.out
+*.err
+*.log
+*.pid
+*.mp4
+*.png
+*.csv
 
 # Mac OS metadata
 .DS_Store
@@ -17,3 +28,12 @@ build*/
 *~
 *.swp
 Lorene
+
+# Python/Jupyter generated files
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Local agent/environment state
+.codex
+athenak_env

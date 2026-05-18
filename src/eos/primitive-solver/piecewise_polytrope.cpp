@@ -41,15 +41,23 @@ bool Primitive::PiecewisePolytrope::ReadParametersFromInput(std::string block,
       break;
     }
   }
+  if (np <= 1) {
+    return false;
+  }
 
   Real P0 = densities[1]*pow(densities[1]/poly_rmd, gammas[0] - 1.0);
 
   // Initialize the EOS
-  InitializeFromData(densities, gammas, P0, 1.0, np);
+  bool initialized = InitializeFromData(densities, gammas, P0, 1.0, np);
+  if (!initialized) {
+    return false;
+  }
 
   // Set the gamma thermal (the default is 5/3)
   if (pin->DoesParameterExist(block, "gamma_thermal")) {
     SetThermalGamma(pin->GetReal(block, "gamma_thermal"));
+  } else if (pin->DoesParameterExist(block, "pwp_gamma_thermal")) {
+    SetThermalGamma(pin->GetReal(block, "pwp_gamma_thermal"));
   }
 
   return true;

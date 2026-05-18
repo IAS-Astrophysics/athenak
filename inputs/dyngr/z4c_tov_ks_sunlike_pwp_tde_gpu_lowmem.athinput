@@ -1,0 +1,136 @@
+# Low-memory GPU version of z4c_tov_ks_sunlike_pwp_tde.  It keeps the
+# tuned solar-scaled piecewise-polytropic star, grazing prograde orbit, dipole
+# magnetic field, and density-gradient AMR, but omits initial static refinement
+# because the available GPU memory in this session cannot fit the full mesh.
+
+<job>
+basename = z4c_tov_ks_sunlike_pwp_tde_gpu_lowmem
+
+<mesh>
+nghost = 2
+nx1 = 32
+x1min = -20.0
+x1max = 85.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 32
+x2min = -25.0
+x2max = 25.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 32
+x3min = -25.0
+x3max = 25.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 16
+nx2 = 16
+nx3 = 16
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 2
+refinement_interval = 2
+max_nmb_per_rank = 24
+
+<amr_criterion0>
+method = slope
+variable = mhd_w_d
+value_max = 0.04
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.35
+nlim = -1
+tlim = 100.0
+ndiag = 10
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = piecewise_poly
+dyn_error = reset_floor
+rsolver = llf
+fofc_method = llf
+gamma = 1.6666666666666667
+dfloor = 1.0e-24
+pfloor = 1.0e-32
+gamma_max = 10.0
+pwp_poly_rmd = 2.0e38
+pwp_density_pieces_0 = 0.0
+pwp_gamma_pieces_0 = 1.30
+pwp_density_pieces_1 = 6.1760035762e12
+pwp_gamma_pieces_1 = 1.40
+pwp_density_pieces_2 = 1.2352007152e15
+pwp_gamma_pieces_2 = 2.40
+pwp_density_pieces_3 = 6.1760035762e15
+pwp_gamma_pieces_3 = 3.00
+pwp_gamma_thermal = 1.6666666666666667
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.7
+excise = false
+
+<z4c>
+use_analytic_background = true
+diss = 0.5
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+shift_Gamma = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+
+<problem>
+pgen_name = z4c_tov_ks
+bh_mass = 1.0
+bh_spin = 0.7
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+
+star_center_x1 = 55.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = 0.0
+star_boost_y = 0.1907
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 7.3e-6
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-24
+excision_damp_rate = 50.0
+excision_atmo_density = 1.0e-24
+excision_atmo_energy = 1.0e-32
+
+b_norm = 1.0e6
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 1.0
+
+<output2>
+file_type = bin
+variable = mhd_w
+id = xy_mhd
+dt = 25.0
+slice_x3 = 0.0
+
+<output3>
+file_type = log
+dcycle = 10

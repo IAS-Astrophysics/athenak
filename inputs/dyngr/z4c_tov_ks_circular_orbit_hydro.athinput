@@ -1,0 +1,211 @@
+# Non-magnetized TOV star on a circular Schwarzschild geodesic.
+# The orbit radius is computed by the pgen as 2 times the Newtonian tidal radius.
+
+<job>
+basename = z4c_tov_ks_circular_orbit_hydro
+
+<mesh>
+nghost = 4
+nx1 = 144
+x1min = -64.0
+x1max = 512.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 128
+x2min = -256.0
+x2max = 256.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 128
+x3min = -256.0
+x3max = 256.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 16
+nx2 = 16
+nx3 = 16
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 6
+refinement_interval = 2
+max_nmb_per_rank = 4096
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+x1min = 192.0
+x1max = 256.0
+x2min = -32.0
+x2max = 32.0
+x3min = -32.0
+x3max = 32.0
+level = 1
+
+<refined_region2>
+x1min = 208.0
+x1max = 240.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+level = 2
+
+<refined_region3>
+x1min = 216.0
+x1max = 232.0
+x2min = -8.0
+x2max = 8.0
+x3min = -8.0
+x3max = 8.0
+level = 3
+
+<refined_region4>
+x1min = 220.0
+x1max = 230.0
+x2min = -5.0
+x2max = 5.0
+x3min = -5.0
+x3max = 5.0
+level = 4
+
+<refined_region5>
+x1min = 222.0
+x1max = 228.0
+x2min = -3.0
+x2max = 3.0
+x3min = -3.0
+x3max = 3.0
+level = 5
+
+<refined_region6>
+x1min = -32.0
+x1max = 32.0
+x2min = -32.0
+x2max = 32.0
+x3min = -32.0
+x3max = 32.0
+level = 1
+
+<refined_region7>
+x1min = -16.0
+x1max = 16.0
+x2min = -16.0
+x2max = 16.0
+x3min = -16.0
+x3max = 16.0
+level = 2
+
+<refined_region8>
+x1min = -8.0
+x1max = 8.0
+x2min = -8.0
+x2max = 8.0
+x3min = -8.0
+x3max = 8.0
+level = 3
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 250.0
+ndiag = 10
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = hlle
+fofc_method = hlle
+gamma = 1.6666666666666667
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+gamma_max = 10.0
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+diss = 0.5
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+shift_Gamma = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+
+star_orbit = circular_geodesic
+star_orbit_radius_factor = 2.0
+star_orbit_phase = 0.0
+star_center_x1 = 0.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = 0.0
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 1.0e-6
+kappa = 5.0e-3
+npoints = 200000
+dr = 2.5e-4
+rho_cut = 1.0e-16
+
+excision_damp_rate = 50.0
+excision_project_state = true
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 1.0e-12
+amr_bh_exclusion_radius = 0.0
+amr_star_refine = true
+amr_star_refine_radius = 3.0
+amr_star_refine_level = 5
+
+b_norm = 0.0
+
+<output1>
+file_type = hst
+dt = 1.0
+
+<output2>
+file_type = bin
+variable = mhd_w_bcc
+id = xy_mhd
+dt = 25.0
+slice_x3 = 0.0
+
+<output3>
+file_type = log
+dcycle = 10
+
+<output4>
+file_type = rst
+dt = 25.0
