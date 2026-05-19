@@ -62,7 +62,7 @@ TaskStatus Chemistry::UpdateChemistryTask(Driver* d, int stage) {
     auto h2_settings = H2Network::GetSettings(my_pin);
     if (ode_solver == "forward_euler") {
       auto fe_settings =
-          ode_solvers::ForwardEuler<H2Network>::GetSettings(my_pin);
+          ode_solvers::ForwardEuler<H2Network>::GetSettings(my_pin, "chemistry");
       UpdateChemistry<ode_solvers::ForwardEuler<H2Network>, H2Network>(
           fe_settings, h2_settings);
     }

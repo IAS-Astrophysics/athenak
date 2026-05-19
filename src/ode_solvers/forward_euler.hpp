@@ -9,6 +9,8 @@
 //  \brief The implementation of a forward euler solver for solving systems of
 //  ODEs
 
+#include <string>
+
 #include "athena.hpp"
 
 namespace ode_solvers {
@@ -77,13 +79,15 @@ class ForwardEuler {
    * file
    *
    * \param pin The ParameterInput object
+   * \param module The physics module that this ODE solver is called in. The
+   * name should match the block name in the input file for the physics module.
    * \return FESettings The settings for the Forward Euler solver
    */
-  static FESettings GetSettings(ParameterInput* pin) {
+  static FESettings GetSettings(ParameterInput* pin, std::string module) {
     unsigned int fe_n_subcycle_max =
-        pin->GetOrAddInteger("chemistry", "fe_n_subcycle_max", 1e5);
-    Real fe_cfl = pin->GetOrAddReal("chemistry", "fe_cfl", 0.1);
-    Real fe_yfloor = pin->GetOrAddReal("chemistry", "fe_yfloor", 1.e-3);
+        pin->GetOrAddInteger(module, "fe_n_subcycle_max", 1e5);
+    Real fe_cfl = pin->GetOrAddReal(module, "fe_cfl", 0.1);
+    Real fe_yfloor = pin->GetOrAddReal(module, "fe_yfloor", 1.e-3);
 
     return FESettings{fe_n_subcycle_max, fe_cfl, fe_yfloor};
   }
