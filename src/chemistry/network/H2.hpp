@@ -85,7 +85,7 @@ class H2Network {
    * \return H2Settings The settings for the H2 network
    */
   static H2Settings GetSettings(ParameterInput* pin) {
-    return H2Settings{pin->GetOrAddBoolean("problem", "constant_cv", false)};
+    return H2Settings{pin->GetOrAddBoolean("problem", "h2_constant_cv", false)};
   }
 
   /*!
