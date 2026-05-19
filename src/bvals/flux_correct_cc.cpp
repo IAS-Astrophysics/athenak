@@ -173,7 +173,8 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
 
           // get ptr to send buffer for fluxes
           int data_size = nvar*(sendbuf[n].iflxc_ndat);
-          auto send_ptr = Kokkos::subview(sendbuf[n].flux, m, Kokkos::ALL);
+          sendbuf[n].CopyFluxToHost(m);
+          auto send_ptr = Kokkos::subview(sendbuf[n].flux_host, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                comm_flux, &(sendbuf[n].flux_req[m]));
@@ -234,6 +235,17 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
   }
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
+
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >=0) &&
+           (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
+           ((n<16) || ((n>=24) && (n<32))) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
+        rbuf[n].CopyFluxToDevice(m);
+      }
+    }
+  }
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack
@@ -326,7 +338,7 @@ TaskStatus MeshBoundaryValuesCC::InitFluxRecv(const int nvars) {
 
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars*(recvbuf[n].iflxc_ndat);
-          auto recv_ptr = Kokkos::subview(recvbuf[n].flux, m, Kokkos::ALL);
+          auto recv_ptr = Kokkos::subview(recvbuf[n].flux_host, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,

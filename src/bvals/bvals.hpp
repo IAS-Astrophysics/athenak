@@ -78,6 +78,13 @@ struct MeshBoundaryBuffer {
   DvceArray2D<Real> vars, flux;
 
 #if MPI_PARALLEL_ENABLED
+  // Host staging buffers for MPI.  Some systems support GPU-aware MPI only for
+  // specific intra-node paths or fabric registration modes; staging mesh boundary
+  // messages through host memory keeps the mesh communication path portable.
+  HostArray2D<Real> vars_host, flux_host;
+#endif
+
+#if MPI_PARALLEL_ENABLED
   // vectors of length (number of MBs) to hold MPI requests
   // Using STL vector causes problems with some GPU compilers, so just use plain C array
   MPI_Request *vars_req, *flux_req;
@@ -90,13 +97,44 @@ struct MeshBoundaryBuffer {
     if (is_z4c) {
       int nmax = std::max(isame_z4c_ndat, std::max(icoar_ndat, ifine_ndat) );
       Kokkos::realloc(vars, nmb, (nvars*nmax));
+#if MPI_PARALLEL_ENABLED
+      Kokkos::realloc(vars_host, nmb, (nvars*nmax));
+#endif
     } else {
       int nmax = std::max(isame_ndat, std::max(icoar_ndat, ifine_ndat) );
       Kokkos::realloc(vars, nmb, (nvars*nmax));
+#if MPI_PARALLEL_ENABLED
+      Kokkos::realloc(vars_host, nmb, (nvars*nmax));
+#endif
     }
     int nmax = std::max(iflxs_ndat, iflxc_ndat);
     Kokkos::realloc(flux, nmb, (nvars*nmax));
+#if MPI_PARALLEL_ENABLED
+    Kokkos::realloc(flux_host, nmb, (nvars*nmax));
+#endif
   }
+
+#if MPI_PARALLEL_ENABLED
+  void CopyVarsToHost(int m) {
+    Kokkos::deep_copy(Kokkos::subview(vars_host, m, Kokkos::ALL),
+                      Kokkos::subview(vars, m, Kokkos::ALL));
+  }
+
+  void CopyVarsToDevice(int m) {
+    Kokkos::deep_copy(Kokkos::subview(vars, m, Kokkos::ALL),
+                      Kokkos::subview(vars_host, m, Kokkos::ALL));
+  }
+
+  void CopyFluxToHost(int m) {
+    Kokkos::deep_copy(Kokkos::subview(flux_host, m, Kokkos::ALL),
+                      Kokkos::subview(flux, m, Kokkos::ALL));
+  }
+
+  void CopyFluxToDevice(int m) {
+    Kokkos::deep_copy(Kokkos::subview(flux, m, Kokkos::ALL),
+                      Kokkos::subview(flux_host, m, Kokkos::ALL));
+  }
+#endif
 };
 
 // Forward declarations

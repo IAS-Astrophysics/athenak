@@ -209,7 +209,8 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
           } else {
             data_size *= sendbuf[n].ifine_ndat;
           }
-          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
+          sendbuf[n].CopyVarsToHost(m);
+          auto send_ptr = Kokkos::subview(sendbuf[n].vars_host, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                comm_vars, &(sendbuf[n].vars_req[m]));
@@ -267,6 +268,15 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
   }
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
+
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >= 0) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
+        rbuf[n].CopyVarsToDevice(m);
+      }
+    }
+  }
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack 3-components of field

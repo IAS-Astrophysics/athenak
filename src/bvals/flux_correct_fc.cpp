@@ -346,7 +346,8 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= sendbuf[n].iflxs_ndat;
           }
-          auto send_ptr = Kokkos::subview(sendbuf[n].flux, m, Kokkos::ALL);
+          sendbuf[n].CopyFluxToHost(m);
+          auto send_ptr = Kokkos::subview(sendbuf[n].flux_host, m, Kokkos::ALL);
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                comm_flux, &(sendbuf[n].flux_req[m]));
@@ -409,6 +410,17 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
   }
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
+
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if ( (nghbr.h_view(m,n).gid >=0) &&
+           (nghbr.h_view(m,n).lev >= mblev.h_view(m)) &&
+           (n<48) &&
+           (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
+        rbuf[n].CopyFluxToDevice(m);
+      }
+    }
+  }
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack and perform appropriate averaging
@@ -1072,7 +1084,7 @@ TaskStatus MeshBoundaryValuesFC::InitFluxRecv(const int nvars) {
           } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
             data_size *= recvbuf[n].iflxs_ndat;
           }
-          auto recv_ptr = Kokkos::subview(recvbuf[n].flux, m, Kokkos::ALL);
+          auto recv_ptr = Kokkos::subview(recvbuf[n].flux_host, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,

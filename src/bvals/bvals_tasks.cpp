@@ -60,7 +60,7 @@ TaskStatus MeshBoundaryValues::InitRecv(const int nvars) {
           } else {
             data_size *= recvbuf[n].ifine_ndat;
           }
-          auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, Kokkos::ALL);
+          auto recv_ptr = Kokkos::subview(recvbuf[n].vars_host, m, Kokkos::ALL);
 
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
@@ -99,6 +99,7 @@ TaskStatus MeshBoundaryValues::ClearRecv() {
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
         int ierr = MPI_Wait(&(recvbuf[n].vars_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
+        recvbuf[n].CopyVarsToDevice(m);
       }
     }
   }
@@ -164,6 +165,7 @@ TaskStatus MeshBoundaryValues::ClearFluxRecv() {
            (recvbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(recvbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
         if (ierr != MPI_SUCCESS) {no_errors=false;}
+        recvbuf[n].CopyFluxToDevice(m);
       }
     }
   }
