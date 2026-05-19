@@ -16,7 +16,7 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 
 namespace radiationm1 {
-TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
+TaskStatus RadiationM1::FloorAndCalcClosure(Driver* pdrive, int stage) {
   if (is_chi_updated) {
     return TaskStatus::complete;
   }
@@ -51,7 +51,6 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
 
-  // TODO: there is no need to have outer and inner par for here
   par_for(
       "radiation_m1_calc_closure", DevExeSpace(), 0, nmb1, ksg, keg, jsg, jeg,
       isg, ieg,
@@ -133,6 +132,22 @@ TaskStatus RadiationM1::CalcClosure(Driver* pdrive, int stage) {
                      u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
                      F_d);
             apply_floor(g_uu, E, F_d, params_);
+            // Write floored values back to u0 so downstream consumers see a
+            // physically consistent radiation state (CalcOpacityNurates and
+            // TimeUpdate in M1's opsplit, SetTmunu when feeding the spacetime
+            // solver from dyn_grmhd's tasklist).  Without this, AMR linear
+            // prolongation of near-floor radiation can leave E < rad_E_floor
+            // or |F| > E in u0, which propagates as NaN through bns_nurates
+            // and as junk into Tmunu.
+            u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i)  = E;
+            u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = F_d(1);
+            u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = F_d(2);
+            u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = F_d(3);
+            if (nspecies_ > 1) {
+              Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+              u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) =
+                  Kokkos::max<Real>(N, params_.rad_N_floor);
+            }
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};
             calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d,

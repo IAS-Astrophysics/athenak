@@ -107,7 +107,7 @@ class RadiationM1 {
   TaskStatus InitRecv(Driver* d, int stage);
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver* d, int stage);
-  TaskStatus CalcClosure(Driver* d, int stage);
+  TaskStatus FloorAndCalcClosure(Driver* d, int stage);
   TaskStatus CalculateFluxes(Driver* d, int stage);
   TaskStatus SendFlux(Driver* d, int stage);
   TaskStatus RecvFlux(Driver* d, int stage);
