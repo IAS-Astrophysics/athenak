@@ -90,16 +90,21 @@ void ProblemGenerator::UserProblem(ParameterInput* pin, const bool restart) {
 // Actual initial data solver
 template <class EOSPolicy, class ErrorPolicy>
 void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
-#ifndef ENABLE_NURATES
-  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl
-            << "dyngr_neutrino_shock pgen requires ENABLE_NURATES=ON to "
-               "initialize neutrinos in LTE."
-            << std::endl;
-  std::exit(EXIT_FAILURE);
-#endif  // ENABLE_NURATES
   // Get the EOS and set units to CGS
   MeshBlockPack* pmbp = pmesh->pmb_pack;
+  const bool has_m1 = (pmbp->pradm1 != nullptr);
+
+  if (has_m1) {
+#ifndef ENABLE_NURATES
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "dyngr_neutrino_shock pgen requires ENABLE_NURATES=ON to "
+                 "initialize neutrinos in LTE when M1 radiation is enabled."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+#endif  // ENABLE_NURATES
+  }
+
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmbp->pdyngr)
           ->eos.ps.GetEOSMutable();
@@ -125,22 +130,6 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   wpt.vy = w_lorentz*v3y;
   wpt.vz = w_lorentz*v3z;
 
-  // Optically-thick (Eddington) closure: in the fluid frame H^a = 0 and
-  // K^{ab} = (1/3) J h^{ab}, so T^{ab} = (4J/3) u^a u^b + (J/3) g^{ab}.
-  // Projecting onto the Eulerian observer gives, for a uniform 3-velocity,
-  //   E    = (4 W^2 - 1) J / 3            (lab energy density)
-  //   F^i  = (4/3) J W^2 v^i              (lab energy flux, upper index)
-  //   N    = W n                          (lab number density)
-  Real W2 = w_lorentz * w_lorentz;
-  Real cE = (4.0 * W2 - 1.0) / 3.0;
-  Real cF = (4.0 / 3.0) * W2;
-
-  // Unit systems and nurates parameters (host-only, no GPU table access)
-  auto code_units    = eos.GetCodeUnitSystem();
-  auto eos_units     = eos.GetEOSUnitSystem();
-  auto nurates_units = Primitive::MakeNGS();
-  auto &nurates_params_ = pmbp->pradm1->nurates_params;
-
   // capture variables for the kernel
   auto& indcs = pmesh->mb_indcs;
   int& is = indcs.is;
@@ -153,26 +142,15 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
 
   // capture grid arrays
   auto &w0_ = pmbp->pmhd->w0;
-  auto &uradm1_ = pmbp->pradm1->u0;
-  auto &nspecies_ = pmbp->pradm1->nspecies;
-  if (nspecies_ == 1) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl;
-    std::cout << "Neutrino radiation transport is required for this pgen!\n";
-    abort();
-  }
 
-  auto &m1_params_ = pmbp->pradm1->params;
-  auto &m1_nvars_ = pmbp->pradm1->nvars;
-
-  // Initialize ADM variables now so the metric is available inside the kernel
-  // for the Lorentz transformation of the radiation fields.
+  // Initialize ADM variables now so the metric is available later for the
+  // Lorentz transformation of the radiation fields (and for the prim-to-cons).
   pmbp->padm->SetADMVariables(pmbp);
-  auto &adm = pmbp->padm->adm;
 
-  // setup grid variables
+  // setup MHD primitives (always)
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+  par_for("pgen_shock1_mhd", DevExeSpace(),
+          0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m,int k, int j, int i) {
     Real Y[2] = {yq, 0.0};
 
@@ -193,49 +171,93 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
     w0_(m,IPR,k,j,i) = eos.GetPressure(nb, temp, &Y[0]);
     w0_(m,IYF,k,j,i) = Y[0];
     w0_(m,IYF+1,k,j,i) = Y[1];
-
-    // LTE neutrino fluid-frame number and energy densities.
-    // Use the uniform (unperturbed) matter state to match the uniform pressure
-    // init above. NeutrinoDens returns the total contribution from all four
-    // heavy-flavor species in n_nux/e_nux; we split that evenly between
-    // species 2 (nux) and species 3 (anti-nux), matching the convention used
-    // in radiation_m1_calc_opacities_nurates.cpp.
-    Real mu_b  = eos.GetBaryonChemicalPotential(nb, temp, &Y[0]);
-    Real mu_q  = eos.GetChargeChemicalPotential(nb, temp, &Y[0]);
-    Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, temp, &Y[0]);
-    Real mu_n = mu_b;
-    Real mu_p = mu_b + mu_q;
-    Real mu_e = mu_le - mu_q;
-
-    Real n_nue, n_anue, n_nux, e_nue, e_anue, e_nux;
-    radiationm1::NeutrinoDens(mu_n, mu_p, mu_e, temp,
-                              n_nue, n_anue, n_nux,
-                              e_nue, e_anue, e_nux,
-                              nurates_params_, code_units, eos_units,
-                              nurates_units);
-    Real nuN[4] = {n_nue, n_anue, 0.5*n_nux, 0.5*n_nux};
-    Real nuJ[4] = {e_nue, e_anue, 0.5*e_nux, 0.5*e_nux};
-
-    for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-      Real J = nuJ[nuidx];
-      Real n_fluid = nuN[nuidx];
-
-      Real E   = cE * J;
-      Real Fxd = cF * J * v3x * (x > 0.0 ? -1.0 : 1.0);
-      Real Fyd = cF * J * v3y;
-      Real Fzd = cF * J * v3z;
-      Real N   = w_lorentz * n_fluid;
-
-      E = fmax(E, m1_params_.rad_E_floor);
-      N = fmax(N, m1_params_.rad_N_floor);
-
-      uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_E_IDX, m1_nvars_),k,j,i) = E;
-      uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_FX_IDX,m1_nvars_),k,j,i) = Fxd;
-      uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_FY_IDX,m1_nvars_),k,j,i) = Fyd;
-      uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_FZ_IDX,m1_nvars_),k,j,i) = Fzd;
-      uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_N_IDX, m1_nvars_),k,j,i) = N;
-    }
   });
+
+  // setup M1 radiation fields (only if M1 is enabled)
+  if (has_m1) {
+#ifdef ENABLE_NURATES
+    // Optically-thick (Eddington) closure: in the fluid frame H^a = 0 and
+    // K^{ab} = (1/3) J h^{ab}, so T^{ab} = (4J/3) u^a u^b + (J/3) g^{ab}.
+    // Projecting onto the Eulerian observer gives, for a uniform 3-velocity,
+    //   E    = (4 W^2 - 1) J / 3            (lab energy density)
+    //   F^i  = (4/3) J W^2 v^i              (lab energy flux, upper index)
+    //   N    = W n                          (lab number density)
+    Real W2 = w_lorentz * w_lorentz;
+    Real cE = (4.0 * W2 - 1.0) / 3.0;
+    Real cF = (4.0 / 3.0) * W2;
+
+    // Unit systems and nurates parameters (host-only, no GPU table access)
+    auto code_units    = eos.GetCodeUnitSystem();
+    auto eos_units     = eos.GetEOSUnitSystem();
+    auto nurates_units = Primitive::MakeNGS();
+    auto &nurates_params_ = pmbp->pradm1->nurates_params;
+
+    auto &uradm1_ = pmbp->pradm1->u0;
+    auto &nspecies_ = pmbp->pradm1->nspecies;
+    if (nspecies_ == 1) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl;
+      std::cout << "Neutrino radiation transport is required for this pgen!\n";
+      abort();
+    }
+
+    auto &m1_params_ = pmbp->pradm1->params;
+    auto &m1_nvars_ = pmbp->pradm1->nvars;
+
+    par_for("pgen_shock1_m1", DevExeSpace(),
+            0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m,int k, int j, int i) {
+      Real Y[2] = {yq, 0.0};
+
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      int nx1 = indcs.nx1;
+      Real x = CellCenterX(i-is, nx1, x1min, x1max);
+
+      // LTE neutrino fluid-frame number and energy densities.
+      // Use the uniform (unperturbed) matter state to match the uniform pressure
+      // init above. NeutrinoDens returns the total contribution from all four
+      // heavy-flavor species in n_nux/e_nux; we split that evenly between
+      // species 2 (nux) and species 3 (anti-nux), matching the convention used
+      // in radiation_m1_calc_opacities_nurates.cpp.
+      Real mu_b  = eos.GetBaryonChemicalPotential(nb, temp, &Y[0]);
+      Real mu_q  = eos.GetChargeChemicalPotential(nb, temp, &Y[0]);
+      Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, temp, &Y[0]);
+      Real mu_n = mu_b;
+      Real mu_p = mu_b + mu_q;
+      Real mu_e = mu_le - mu_q;
+
+      Real n_nue, n_anue, n_nux, e_nue, e_anue, e_nux;
+      radiationm1::NeutrinoDens(mu_n, mu_p, mu_e, temp,
+                                n_nue, n_anue, n_nux,
+                                e_nue, e_anue, e_nux,
+                                nurates_params_, code_units, eos_units,
+                                nurates_units);
+      Real nuN[4] = {n_nue, n_anue, 0.5*n_nux, 0.5*n_nux};
+      Real nuJ[4] = {e_nue, e_anue, 0.5*e_nux, 0.5*e_nux};
+
+      for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+        Real J = nuJ[nuidx];
+        Real n_fluid = nuN[nuidx];
+
+        Real E   = cE * J;
+        Real Fxd = cF * J * v3x * (x > 0.0 ? -1.0 : 1.0);
+        Real Fyd = cF * J * v3y;
+        Real Fzd = cF * J * v3z;
+        Real N   = w_lorentz * n_fluid;
+
+        E = fmax(E, m1_params_.rad_E_floor);
+        N = fmax(N, m1_params_.rad_N_floor);
+
+        uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_E_IDX, m1_nvars_),k,j,i) = E;
+        uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_FX_IDX,m1_nvars_),k,j,i) = Fxd;
+        uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_FY_IDX,m1_nvars_),k,j,i) = Fyd;
+        uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_FZ_IDX,m1_nvars_),k,j,i) = Fzd;
+        uradm1_(m, radiationm1::CombinedIdx(nuidx,M1_N_IDX, m1_nvars_),k,j,i) = N;
+      }
+    });
+#endif  // ENABLE_NURATES
+  }
 
   pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
 
