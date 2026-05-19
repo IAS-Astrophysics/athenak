@@ -106,6 +106,8 @@ using TeamMember_t = Kokkos::TeamPolicy<>::member_type;   // for Kokkos thread t
 
 // template declarations for construction of Kokkos::View on device
 template <typename T>
+using DvceArray0D = Kokkos::View<T, LayoutWrapper, DevMemSpace>;
+template <typename T>
 using DvceArray1D = Kokkos::View<T *, LayoutWrapper, DevMemSpace>;
 template <typename T>
 using DvceArray2D = Kokkos::View<T **, LayoutWrapper, DevMemSpace>;

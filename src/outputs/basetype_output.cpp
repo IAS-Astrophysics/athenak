@@ -297,8 +297,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         vname.append(number);
 
         if (pin->DoesBlockExist("chemistry")) {
-          if(n>=pm->pmb_pack->pchemistry->get_chemistry_scalars_start_idx()
-             && n<=pm->pmb_pack->pchemistry->get_chemistry_scalars_stop_idx()) {
+          if(n>=pm->pmb_pack->pchemistry->get_chemistry_scalars_first_idx()
+             && n<=pm->pmb_pack->pchemistry->get_chemistry_scalars_last_idx()) {
               vname.append("_"+pm->pmb_pack->pchemistry->GetSpeciesNames(n));
           }
         }
@@ -443,8 +443,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         vname.append(number);
 
         if (pin->DoesBlockExist("chemistry")) {
-          if(n>=pm->pmb_pack->pchemistry->get_chemistry_scalars_start_idx()
-             && n<=pm->pmb_pack->pchemistry->get_chemistry_scalars_stop_idx()) {
+          if(n>=pm->pmb_pack->pchemistry->get_chemistry_scalars_first_idx()
+             && n<=pm->pmb_pack->pchemistry->get_chemistry_scalars_last_idx()) {
               vname.append("_"+pm->pmb_pack->pchemistry->GetSpeciesNames(n));
           }
         }

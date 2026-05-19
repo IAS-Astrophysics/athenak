@@ -48,6 +48,7 @@ class Units {
   static constexpr Real speed_of_light_cgs = 2.99792458e10;       // cm/s
   static constexpr Real rad_constant_cgs = 7.56573325e-15;        // erg/(cm^3*K^4)
   static constexpr Real electron_rest_mass_energy_cgs = 5.93e9;   // k
+  static constexpr Real hydrogen_mass_cgs = 1.6733e-24;           // g
 
   // Power Law Coefficients (cgs)
   static constexpr Real rosseland_coef_cgs = 1.95705e24;

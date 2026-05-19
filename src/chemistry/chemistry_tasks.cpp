@@ -21,8 +21,10 @@ void Chemistry::AssembleChemistryTasks(
   TaskID none(0);  // indicator of no dependency for a given task
 
   // assemble "after_timeintegrator" task list
-  id.test_kernel =
-      tl["after_timeintegrator"]->AddTask(&Chemistry::TestKernel, this, none);
+  id.update_chemistry = tl["after_timeintegrator"]->AddTask(
+      &Chemistry::UpdateChemistryTask, this, none);
+  id.prim_to_cons = tl["after_timeintegrator"]->AddTask(
+      &Chemistry::PrimToCons, this, id.update_chemistry);
 }
 
 }  // namespace chemistry

@@ -12,9 +12,11 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 
 #include "athena.hpp"
 #include "bvals/bvals.hpp"
+#include "chemistry/network/chemistry_networks.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 
@@ -23,7 +25,8 @@ namespace chemistry {
 //! \struct ChemistryTaskIDs
 //  \brief container to hold TaskIDs of all chemistry tasks
 struct ChemistryTaskIDs {
-  TaskID test_kernel;
+  TaskID update_chemistry;
+  TaskID prim_to_cons;
 };
 
 //! \class Chemistry
@@ -50,7 +53,21 @@ class Chemistry {
   void AssembleChemistryTasks(
       std::map<std::string, std::shared_ptr<TaskList>> tl);
 
-  TaskStatus TestKernel(Driver* d, int stage);
+  /*!
+   * \brief Updates the chemistry abundances and internal energy
+   */
+  TaskStatus UpdateChemistryTask(Driver* d, int stage);
+
+  template <typename ODE_Solver_t, typename Network_t, typename ODESettings,
+            typename NetworkSettings>
+  void UpdateChemistry(ODESettings const& ode_settings,
+                       NetworkSettings const& network_settings);
+
+  /*!
+   * \brief Updates the conserved grid with the updated values from the
+   * primitive grid
+   */
+  TaskStatus PrimToCons(Driver* pdrive, int stage);
 
   /*!
    * \brief Compute the number of required passive scalars that the chemistry
@@ -74,34 +91,43 @@ class Chemistry {
       nscalars_pre_chemistry = nscalars;
     }
 
-    // This is temporary, eventually it will return a value dependent on the
-    // chemistry module specified
-    return 3;
+    const std::string network = pin->GetString("chemistry", "network");
+    int num_species;
+    // We need to take number of equations minus 1 since neqs includes the
+    // internal energy equation
+    if (network == "H2") {
+      num_species = H2Network::neqs - 1;
+    }
+
+    return num_species;
   }
 
   /*!
-   * \brief Return the name of the chemical species at the grid field index provided
+   * \brief Return the name of the chemical species at the grid field index
+   * provided
    *
    * \param scalar_idx The index in the grid to the passive scalar in question
    * \return std::string The name of the chemical species
    */
-  std::string GetSpeciesNames(int const &scalar_idx);
+  std::string GetSpeciesNames(int const& scalar_idx);
 
   // ===================
   // Getters and Setters
   // ===================
-  int get_chemistry_scalars_start_idx() const {
-    return chemistry_scalars_start_idx;
+  int get_chemistry_scalars_first_idx() const {
+    return chemistry_scalars_first_idx;
   }
   // The index of the final chemistry scalar
-  int get_chemistry_scalars_stop_idx() const {
-    return chemistry_scalars_start_idx + nscalars_chemistry - 1;
+  int get_chemistry_scalars_last_idx() const {
+    return chemistry_scalars_first_idx + nscalars_chemistry - 1;
   }
 
  private:
   // ptr to MeshBlockPack containing this chemistry. note that this is a const
   // pointers, the contents can be changed but the pointer address can't
   MeshBlockPack* const pmy_pack;
+
+  ParameterInput* my_pin;
 
   // These indicate if hydro or MHD is in use
   bool const is_hydro_enabled;
@@ -111,10 +137,20 @@ class Chemistry {
   int inline static nscalars_pre_chemistry;
 
   // The beginning index of passive scalars reserved for chemisty
-  int const chemistry_scalars_start_idx;
+  int const chemistry_scalars_first_idx;
 
-  // Get the correct u0 array
+  // Get the correct conserved or primitive arrays array
   DvceArray5D<Real> GetU0();
+  DvceArray5D<Real> GetW0();
+
+  /*!
+   * \brief Get loop limits for looping over all the cells, this includes both
+   * real and ghost cells
+   *
+   * \return std::tuple<Kokkos::Array<int, 4>, Kokkos::Array<int, 4>> The
+   * MDRangePolicy start and end
+   */
+  std::tuple<Kokkos::Array<int, 4>, Kokkos::Array<int, 4>> LoopLimitsAllCells();
 
   // Functions for setting up
   int ComputeChemistryScalarsStartIndex();
