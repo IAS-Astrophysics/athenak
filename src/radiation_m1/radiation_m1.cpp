@@ -230,7 +230,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
   // allocate Eddington factor
   Kokkos::realloc(chi, nmb, nspecies, ncells3, ncells2, ncells1);
-  
+
   // allocate opacities
   Kokkos::realloc(eta_0, nmb, nspecies, ncells3, ncells2, ncells1);
   Kokkos::realloc(abs_0, nmb, nspecies, ncells3, ncells2, ncells1);
@@ -241,7 +241,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // radiation mask
   Kokkos::realloc(radiation_mask, nmb, ncells3, ncells2, ncells1);
   Kokkos::deep_copy(radiation_mask, false);
-  
+
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   // allocate fake fluid quantities if not using MHD

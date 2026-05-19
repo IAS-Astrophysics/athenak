@@ -54,7 +54,7 @@ void RadiationM1::AssembleRadiationM1Tasks(
   // assemble "stagen" task list
   id.M1_copyu = tl["opsplit_stagen"]->AddTask(&RadiationM1::CopyCons, this, none, "RadiationM1::CopyU");
   id.M1_closure =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcClosure, this, id.M1_copyu, "RadiationM1::CalcClosure");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::FloorAndCalcClosure, this, id.M1_copyu, "RadiationM1::FloorAndCalcClosure");
 
   // decide what type of opacities to compute
   if (!params.matter_sources) {
