@@ -21,8 +21,8 @@ namespace chemistry {
  * things so that the ODE solvers have a common interface to work with. They
  * need:
  *   - A `neqs` variable that specifies the number of equations. That should be
- *     the number of species plus 1 for the internal energy .  
- *   - `y` and `f` RegisterArray variables to hold the current state and the 
+ *     the number of species plus 1 for the internal energy .
+ *   - `y` and `f` RegisterArray variables to hold the current state and the
  *     result of evaluating the equations respectively.
  *   - An `evaluate_function` method that computes `f` from `y`
  */
