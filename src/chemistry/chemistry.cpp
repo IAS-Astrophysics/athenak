@@ -34,7 +34,7 @@ Chemistry::Chemistry(MeshBlockPack* ppack, ParameterInput* pin)
       chemistry_scalars_first_idx(ComputeChemistryScalarsStartIndex()),
       my_pin(pin) {
   // Verify that units are enables
-  if (! pin->DoesBlockExist("units")) {
+  if (!pin->DoesBlockExist("units")) {
     std::cerr
         << "### FATAL ERROR: The chemistry module requires that the units "
            "module be enabled. Please enable it in the athinput file."
@@ -140,7 +140,9 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
         ode_solver.SolveODE();
 
         // check if the ODE solver failed
-        chemisty_ode_failure() = ode_solver.failed;
+        if (ode_solver.failed) {
+          chemisty_ode_failure() = ode_solver.failed;
+        }
 
         // ------ Write cell values back out ------
         // Internal energy
