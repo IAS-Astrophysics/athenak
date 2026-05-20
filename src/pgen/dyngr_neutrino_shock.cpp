@@ -173,6 +173,28 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
     w0_(m,IYF+1,k,j,i) = Y[1];
   });
 
+  // Initialize face-centered and cell-centered magnetic fields (uniform)
+  {
+    auto &b0_ = pmbp->pmhd->b0;
+    auto &bcc0_ = pmbp->pmhd->bcc0;
+    Real bx0 = wpt.bx;
+    Real by0 = wpt.by;
+    Real bz0 = wpt.bz;
+    par_for("pgen_shock_bfield", DevExeSpace(),
+            0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      b0_.x1f(m,k,j,i) = bx0;
+      b0_.x2f(m,k,j,i) = by0;
+      b0_.x3f(m,k,j,i) = bz0;
+      if (i==ie) b0_.x1f(m,k,j,i+1) = bx0;
+      if (j==je) b0_.x2f(m,k,j+1,i) = by0;
+      if (k==ke) b0_.x3f(m,k+1,j,i) = bz0;
+      bcc0_(m,IBX,k,j,i) = bx0;
+      bcc0_(m,IBY,k,j,i) = by0;
+      bcc0_(m,IBZ,k,j,i) = bz0;
+    });
+  }
+
   // setup M1 radiation fields (only if M1 is enabled)
   if (has_m1) {
 #ifdef ENABLE_NURATES
