@@ -104,6 +104,13 @@ class Z4c {
   struct Wave_Extr_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> rpsi4;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> ipsi4;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mass;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mx;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_my;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_mz;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jx;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jy;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> adm_jz;
   };
   Wave_Extr_vars weyl;
 
@@ -157,6 +164,7 @@ class Z4c {
     Real lapse_harmonicf;
     Real lapse_harmonic;
     Real lapse_advect;
+    bool approx_shock_avoid;
     // slow start lapse condition
     bool slow_start_lapse;
     Real ssl_damping_amp;
@@ -174,6 +182,7 @@ class Z4c {
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
+    bool first_order_shift;
     // slow start shift condition
     Real sss_damping_amp;
     Real sss_damping_time;
@@ -209,6 +218,7 @@ class Z4c {
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   // array storing waveform at each radii
   Real * psi_out;
+  Real * adm_out;
   Real waveform_dt;
   Real last_output_time;
   int nrad; // number of radii to perform wave extraction
@@ -255,6 +265,7 @@ class Z4c {
   template <int NGHOST>
   void ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin);
   void GaugePreCollapsedLapse(MeshBlockPack *pmbp, ParameterInput *pin);
+  void GaugeHighBoostLapse(MeshBlockPack *pmbp, ParameterInput *pin);
   void Z4cToADM(MeshBlockPack *pmbp);
   template <int NGHOST>
   void ADMConstraints(MeshBlockPack *pmbp);
