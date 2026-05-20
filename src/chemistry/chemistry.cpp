@@ -33,13 +33,14 @@ Chemistry::Chemistry(MeshBlockPack* ppack, ParameterInput* pin)
       nscalars_chemistry(SetupGetNumChemistryScalars(ppack, pin, -1, false)),
       chemistry_scalars_first_idx(ComputeChemistryScalarsStartIndex()),
       my_pin(pin) {
-  // print a message telling users that this module isn't ready yet
-  std::string const red = "\033[31m";
-  std::string const reset = "\033[0m";
-  std::cerr << red
-            << "The chemistry module has been enabled. Chemistry is not fully "
-               "implemented yet and using it may lead to unpredictable results."
-            << reset << std::endl;
+  // Verify that units are enables
+  if (! pin->DoesBlockExist("units")) {
+    std::cerr
+        << "### FATAL ERROR: The chemistry module requires that the units "
+           "module be enabled. Please enable it in the athinput file."
+        << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -61,8 +62,8 @@ TaskStatus Chemistry::UpdateChemistryTask(Driver* d, int stage) {
   if (network == "H2") {
     auto h2_settings = H2Network::GetSettings(my_pin);
     if (ode_solver == "forward_euler") {
-      auto fe_settings =
-          ode_solvers::ForwardEuler<H2Network>::GetSettings(my_pin, "chemistry");
+      auto fe_settings = ode_solvers::ForwardEuler<H2Network>::GetSettings(
+          my_pin, "chemistry");
       UpdateChemistry<ode_solvers::ForwardEuler<H2Network>, H2Network>(
           fe_settings, h2_settings);
     }
