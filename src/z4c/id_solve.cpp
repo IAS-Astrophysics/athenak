@@ -387,13 +387,93 @@ bool IsFiniteForDevice(Real x) {
   return (x == x) && (std::abs(x) < 1.0e300);
 }
 
+struct SmootherCellStats {
+  Real values[ID_CTS_SMOOTH_NSTAT];
+
+  KOKKOS_INLINE_FUNCTION
+  void Clear() {
+    for (int n = 0; n < ID_CTS_SMOOTH_NSTAT; ++n) values[n] = 0.0;
+  }
+
+  KOKKOS_INLINE_FUNCTION
+  void Add(const SmootherCellStats &other) {
+    for (int n = 0; n < ID_CTS_SMOOTH_MAX_UPDATE; ++n) values[n] += other.values[n];
+    if (other.values[ID_CTS_SMOOTH_MAX_UPDATE] > values[ID_CTS_SMOOTH_MAX_UPDATE]) {
+      values[ID_CTS_SMOOTH_MAX_UPDATE] = other.values[ID_CTS_SMOOTH_MAX_UPDATE];
+    }
+  }
+};
+
+template <typename UView>
+struct LocalUpdatedUView {
+  UView u;
+  int pm;
+  int pk;
+  int pj;
+  int pi;
+  Real delta[ID_CTS_NVAR];
+
+  KOKKOS_INLINE_FUNCTION
+  Real operator()(int m, int v, int k, int j, int i) const {
+    Real value = u(m, v, k, j, i);
+    if (m == pm && k == pk && j == pj && i == pi) value += delta[v];
+    return value;
+  }
+};
+
+template <typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+Real TotalUScale(const UView &u, const FView &free, int m, int v, int k, int j, int i) {
+  return std::max(static_cast<Real>(1.0),
+                  std::abs(TotalU(u, free, m, v, k, j, i)));
+}
+
+KOKKOS_INLINE_FUNCTION
+Real LimitUpdate(Real update, Real abs_limit, Real frac_limit, Real scale, bool &limited) {
+  Real limit = 0.0;
+  if (abs_limit > 0.0) limit = abs_limit;
+  if (frac_limit > 0.0) {
+    Real scaled_limit = frac_limit*std::max(scale, static_cast<Real>(1.0e-30));
+    limit = (limit > 0.0) ? std::min(limit, scaled_limit) : scaled_limit;
+  }
+  if (limit > 0.0 && std::abs(update) > limit) {
+    limited = true;
+    return (update > 0.0) ? limit : -limit;
+  }
+  return update;
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+Real LocalResidualNorm2(const UView &u, const FView &src, const FView &free,
+                        const Real idx[], int fd_stencil,
+                        int m, int k, int j, int i) {
+  Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+  CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+  Real norm2 = 0.0;
+  for (int v = 0; v < ID_CTS_NVAR; ++v) {
+    Real r = op[v] - src(m, v, k, j, i);
+    if (!IsFiniteForDevice(r)) return 1.0e300;
+    norm2 += r*r;
+  }
+  return norm2;
+}
+
 KOKKOS_INLINE_FUNCTION
 bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
-                    Real x[ID_CTS_NVAR]) {
+                    const Real col_scale[ID_CTS_NVAR], Real x[ID_CTS_NVAR]) {
   Real aug[ID_CTS_NVAR][ID_CTS_NVAR + 1];
   for (int r = 0; r < ID_CTS_NVAR; ++r) {
-    for (int c = 0; c < ID_CTS_NVAR; ++c) aug[r][c] = a[r][c];
-    aug[r][ID_CTS_NVAR] = b[r];
+    Real row_scale = std::max(std::abs(b[r]), static_cast<Real>(1.0));
+    for (int c = 0; c < ID_CTS_NVAR; ++c) {
+      Real scaled = a[r][c]*std::max(col_scale[c], static_cast<Real>(1.0e-30));
+      row_scale = std::max(row_scale, std::abs(scaled));
+    }
+    row_scale = std::max(row_scale, static_cast<Real>(1.0e-30));
+    for (int c = 0; c < ID_CTS_NVAR; ++c) {
+      aug[r][c] = a[r][c]*std::max(col_scale[c], static_cast<Real>(1.0e-30))/row_scale;
+    }
+    aug[r][ID_CTS_NVAR] = b[r]/row_scale;
   }
 
   for (int p = 0; p < ID_CTS_NVAR; ++p) {
@@ -406,7 +486,7 @@ bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
         pivot_abs = candidate;
       }
     }
-    if (!(pivot_abs > 1.0e-30) || !IsFiniteForDevice(pivot_abs)) return false;
+    if (!(pivot_abs > 1.0e-12) || !IsFiniteForDevice(pivot_abs)) return false;
     if (pivot != p) {
       for (int c = p; c <= ID_CTS_NVAR; ++c) {
         Real tmp = aug[p][c];
@@ -424,7 +504,7 @@ bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
   }
 
   for (int r = 0; r < ID_CTS_NVAR; ++r) {
-    x[r] = aug[r][ID_CTS_NVAR];
+    x[r] = aug[r][ID_CTS_NVAR]*std::max(col_scale[r], static_cast<Real>(1.0e-30));
     if (!IsFiniteForDevice(x[r])) return false;
   }
   return true;
@@ -432,38 +512,79 @@ bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
 
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
-void ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView &free,
-                            const Real idx[], int fd_stencil,
-                            int m, int k, int j, int i, Real omega) {
+SmootherCellStats ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView &free,
+                                         const Real idx[], int fd_stencil,
+                                         int m, int k, int j, int i, Real omega,
+                                         Real abs_max_update, Real frac_max_update) {
+  SmootherCellStats stats;
+  stats.Clear();
   Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
   CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+  bool applied = false;
   for (int v = 0; v < ID_CTS_NVAR; ++v) {
-    Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] :
-             ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
-    u(m, v, k, j, i) -= omega*(op[v] - src(m, v, k, j, i))/d;
+    Real residual = op[v] - src(m, v, k, j, i);
+    Real scale = TotalUScale(u, free, m, v, k, j, i);
+    Real d_floor = std::max(static_cast<Real>(1.0e-30),
+                            static_cast<Real>(1.0e-14)
+                            *std::max(std::abs(residual), static_cast<Real>(1.0))/scale);
+    Real d = (std::abs(diag[v]) > d_floor) ? diag[v] :
+             ((diag[v] < 0.0) ? -d_floor : d_floor);
+    Real update = -omega*residual/d;
+    if (!IsFiniteForDevice(residual) || !IsFiniteForDevice(update)) {
+      stats.values[ID_CTS_SMOOTH_NONFINITE] += 1.0;
+      stats.values[ID_CTS_SMOOTH_REJECTED] += 1.0;
+      continue;
+    }
+    bool limited = false;
+    update = LimitUpdate(update, abs_max_update, frac_max_update, scale, limited);
+    if (limited) stats.values[ID_CTS_SMOOTH_LIMITED] += 1.0;
+    u(m, v, k, j, i) += update;
+    if (std::abs(update) > stats.values[ID_CTS_SMOOTH_MAX_UPDATE]) {
+      stats.values[ID_CTS_SMOOTH_MAX_UPDATE] = std::abs(update);
+    }
+    applied = true;
   }
+  Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
+  if (psi < 1.0e-8) {
+    u(m, ID_CTS_PSI, k, j, i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
+    stats.values[ID_CTS_SMOOTH_PSI_FLOOR] += 1.0;
+  }
+  if (applied) stats.values[ID_CTS_SMOOTH_ACCEPTED] += 1.0;
+  return stats;
 }
 
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
-void ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
-                            const Real idx[], int fd_stencil,
-                            int m, int k, int j, int i, Real omega,
-                            int niter, Real jac_eps, Real max_update) {
+SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
+                                         const Real idx[], int fd_stencil,
+                                         int m, int k, int j, int i, Real omega,
+                                         int niter, Real jac_eps, Real abs_max_update,
+                                         Real frac_max_update, int line_search_steps,
+                                         Real line_search_min) {
+  SmootherCellStats total_stats;
+  total_stats.Clear();
   const int local_iter = niter > 0 ? niter : 1;
   for (int it = 0; it < local_iter; ++it) {
     Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
     CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
 
     Real residual[ID_CTS_NVAR];
+    Real old_norm2 = 0.0;
     for (int r = 0; r < ID_CTS_NVAR; ++r) {
       residual[r] = op[r] - src(m, r, k, j, i);
+      if (!IsFiniteForDevice(residual[r])) {
+        total_stats.values[ID_CTS_SMOOTH_NONFINITE] += 1.0;
+        total_stats.values[ID_CTS_SMOOTH_REJECTED] += 1.0;
+        return total_stats;
+      }
+      old_norm2 += residual[r]*residual[r];
     }
 
     Real jac[ID_CTS_NVAR][ID_CTS_NVAR];
+    Real col_scale[ID_CTS_NVAR];
     for (int c = 0; c < ID_CTS_NVAR; ++c) {
-      Real uval = u(m, c, k, j, i);
-      Real eps = jac_eps*std::max(static_cast<Real>(1.0), std::abs(uval));
+      col_scale[c] = TotalUScale(u, free, m, c, k, j, i);
+      Real eps = jac_eps*col_scale[c];
       if (!(eps > 0.0) || !IsFiniteForDevice(eps)) eps = 1.0e-7;
       LocalPerturbedUView<UView> up{u, m, c, k, j, i, eps};
       Real op_pert[ID_CTS_NVAR], diag_pert[ID_CTS_NVAR];
@@ -477,28 +598,63 @@ void ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
     Real rhs[ID_CTS_NVAR];
     Real delta[ID_CTS_NVAR];
     for (int r = 0; r < ID_CTS_NVAR; ++r) rhs[r] = -residual[r];
-    bool solved = SolveLinear4x4(jac, rhs, delta);
+    bool solved = SolveLinear4x4(jac, rhs, col_scale, delta);
     if (!solved) {
+      total_stats.values[ID_CTS_SMOOTH_SINGULAR] += 1.0;
+      total_stats.values[ID_CTS_SMOOTH_FALLBACK] += 1.0;
+      SmootherCellStats fallback =
+          ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil, m, k, j, i,
+                                         omega, abs_max_update, frac_max_update);
+      total_stats.Add(fallback);
+      continue;
+    }
+
+    bool accepted = false;
+    bool any_backtrack = false;
+    Real lambda = 1.0;
+    const int nls = line_search_steps > 0 ? line_search_steps : 1;
+    for (int ls = 0; ls < nls; ++ls) {
+      LocalUpdatedUView<UView> uc{u, m, k, j, i, {0.0, 0.0, 0.0, 0.0}};
+      bool limited = false;
+      bool finite_update = true;
+      Real trial_max_update = 0.0;
       for (int v = 0; v < ID_CTS_NVAR; ++v) {
-        Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] :
-                 ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
-        delta[v] = -residual[v]/d;
+        Real update = omega*lambda*delta[v];
+        update = LimitUpdate(update, abs_max_update, frac_max_update, col_scale[v], limited);
+        if (!IsFiniteForDevice(update)) finite_update = false;
+        uc.delta[v] = update;
+        if (std::abs(update) > trial_max_update) trial_max_update = std::abs(update);
       }
+      Real trial_psi = TotalU(uc, free, m, ID_CTS_PSI, k, j, i);
+      Real new_norm2 = finite_update && trial_psi > 1.0e-8
+                       ? LocalResidualNorm2<NGHOST>(uc, src, free, idx, fd_stencil,
+                                                    m, k, j, i)
+                       : 1.0e300;
+      if (IsFiniteForDevice(new_norm2) && new_norm2 <= old_norm2) {
+        for (int v = 0; v < ID_CTS_NVAR; ++v) u(m, v, k, j, i) += uc.delta[v];
+        if (limited) total_stats.values[ID_CTS_SMOOTH_LIMITED] += 1.0;
+        if (any_backtrack) total_stats.values[ID_CTS_SMOOTH_BACKTRACKED] += 1.0;
+        if (trial_max_update > total_stats.values[ID_CTS_SMOOTH_MAX_UPDATE]) {
+          total_stats.values[ID_CTS_SMOOTH_MAX_UPDATE] = trial_max_update;
+        }
+        total_stats.values[ID_CTS_SMOOTH_ACCEPTED] += 1.0;
+        accepted = true;
+        break;
+      }
+      any_backtrack = true;
+      lambda *= 0.5;
+      if (lambda < line_search_min) break;
     }
 
-    for (int v = 0; v < ID_CTS_NVAR; ++v) {
-      Real update = omega*delta[v];
-      if (max_update > 0.0 && std::abs(update) > max_update) {
-        update = (update > 0.0 ? max_update : -max_update);
-      }
-      u(m, v, k, j, i) += update;
-    }
-
-    Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
-    if (psi < 1.0e-8) {
-      u(m, ID_CTS_PSI, k, j, i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
+    if (!accepted) {
+      total_stats.values[ID_CTS_SMOOTH_FALLBACK] += 1.0;
+      SmootherCellStats fallback =
+          ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil, m, k, j, i,
+                                         omega, abs_max_update, frac_max_update);
+      total_stats.Add(fallback);
     }
   }
+  return total_stats;
 }
 
 template <int NGHOST, typename UView, typename FView>
@@ -582,10 +738,13 @@ void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_ste
 }
 
 template <int NGHOST, typename ViewType>
-void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const ViewType &free,
-                int ll, int is, int ie, int js, int je, int ks, int ke, int color,
-                Real omega, int fd_stencil, int smoother_type, int ngs_iterations,
-                Real ngs_jacobian_eps, Real ngs_max_update) {
+SmootherCellStats SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src,
+                             const ViewType &free, int ll, int is, int ie, int js,
+                             int je, int ks, int ke, int color, Real omega,
+                             int fd_stencil, int smoother_type, int ngs_iterations,
+                             Real ngs_jacobian_eps, Real ngs_max_update,
+                             Real smoother_max_update_fraction,
+                             int ngs_line_search_steps, Real ngs_line_search_min) {
   using ExeSpace = typename ViewType::execution_space;
   auto brdx = [&]() {
     if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
@@ -593,28 +752,56 @@ void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const View
   }();
   int nmmb = mg->GetNumMeshBlocks();
   int rlev = -ll;
-  par_for("IDCTS::Smooth", ExeSpace(), 0, nmmb-1, ks, ke, js, je,
-  KOKKOS_LAMBDA(int m, int k, int j) {
+  SmootherCellStats stats;
+  stats.Clear();
+  Kokkos::parallel_reduce("IDCTS::Smooth",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<3>>(
+        {0, ks, js}, {nmmb, ke + 1, je + 1}),
+  KOKKOS_LAMBDA(int m, int k, int j, Real &accepted, Real &limited,
+                Real &backtracked, Real &fallback, Real &singular,
+                Real &nonfinite, Real &rejected, Real &psi_floor,
+                Real &max_update) {
     Real dx = (rlev <= 0) ? brdx(m)*static_cast<Real>(1<<(-rlev))
                           : brdx(m)/static_cast<Real>(1<<rlev);
     Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
     int c = (color + k + j) & 1;
     for (int i = is + c; i <= ie; i += 2) {
       if (free(m, ID_FREE_MASK, k, j, i) < 0.5) continue;
+      SmootherCellStats cell;
       if (smoother_type == 1) {
-        ApplyNewtonGSCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
-                                       m, k, j, i, omega, ngs_iterations,
-                                       ngs_jacobian_eps, ngs_max_update);
+        cell = ApplyNewtonGSCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
+                                              m, k, j, i, omega, ngs_iterations,
+                                              ngs_jacobian_eps, ngs_max_update,
+                                              smoother_max_update_fraction,
+                                              ngs_line_search_steps,
+                                              ngs_line_search_min);
       } else {
-        ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
-                                       m, k, j, i, omega);
+        cell = ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
+                                              m, k, j, i, omega, ngs_max_update,
+                                              smoother_max_update_fraction);
       }
-      Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
-      if (psi < 1.0e-8) {
-        u(m,ID_CTS_PSI,k,j,i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
+      accepted += cell.values[ID_CTS_SMOOTH_ACCEPTED];
+      limited += cell.values[ID_CTS_SMOOTH_LIMITED];
+      backtracked += cell.values[ID_CTS_SMOOTH_BACKTRACKED];
+      fallback += cell.values[ID_CTS_SMOOTH_FALLBACK];
+      singular += cell.values[ID_CTS_SMOOTH_SINGULAR];
+      nonfinite += cell.values[ID_CTS_SMOOTH_NONFINITE];
+      rejected += cell.values[ID_CTS_SMOOTH_REJECTED];
+      psi_floor += cell.values[ID_CTS_SMOOTH_PSI_FLOOR];
+      if (cell.values[ID_CTS_SMOOTH_MAX_UPDATE] > max_update) {
+        max_update = cell.values[ID_CTS_SMOOTH_MAX_UPDATE];
       }
     }
-  });
+  }, Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_ACCEPTED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_LIMITED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_BACKTRACKED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_FALLBACK]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_SINGULAR]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_NONFINITE]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_REJECTED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_PSI_FLOOR]),
+     Kokkos::Max<Real>(stats.values[ID_CTS_SMOOTH_MAX_UPDATE]));
+  return stats;
 }
 
 template <int NGHOST, typename ViewType>
@@ -797,43 +984,70 @@ void IDCTSMultigrid::SmoothPack(int color) {
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
   int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  SmootherCellStats stats;
+  stats.Clear();
   if (on_host_) {
     switch (fd) {
-      case 2: SmoothImpl<2>(this, u_[current_level_].h_view, src_[current_level_].h_view,
-                            coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, driver->smoother_type_,
-                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
-                            driver->ngs_max_update_); break;
-      case 3: SmoothImpl<3>(this, u_[current_level_].h_view, src_[current_level_].h_view,
-                            coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, driver->smoother_type_,
-                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
-                            driver->ngs_max_update_); break;
-      default: SmoothImpl<4>(this, u_[current_level_].h_view, src_[current_level_].h_view,
-                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                             color, driver->omega_, fd, driver->smoother_type_,
-                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
-                             driver->ngs_max_update_); break;
+      case 2: stats = SmoothImpl<2>(this, u_[current_level_].h_view,
+                                    src_[current_level_].h_view,
+                                    coeff_[current_level_].h_view, ll, is, ie, js, je,
+                                    ks, ke, color, driver->omega_, fd,
+                                    driver->smoother_type_, driver->ngs_iterations_,
+                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                    driver->smoother_max_update_fraction_,
+                                    driver->ngs_line_search_steps_,
+                                    driver->ngs_line_search_min_); break;
+      case 3: stats = SmoothImpl<3>(this, u_[current_level_].h_view,
+                                    src_[current_level_].h_view,
+                                    coeff_[current_level_].h_view, ll, is, ie, js, je,
+                                    ks, ke, color, driver->omega_, fd,
+                                    driver->smoother_type_, driver->ngs_iterations_,
+                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                    driver->smoother_max_update_fraction_,
+                                    driver->ngs_line_search_steps_,
+                                    driver->ngs_line_search_min_); break;
+      default: stats = SmoothImpl<4>(this, u_[current_level_].h_view,
+                                     src_[current_level_].h_view,
+                                     coeff_[current_level_].h_view, ll, is, ie, js, je,
+                                     ks, ke, color, driver->omega_, fd,
+                                     driver->smoother_type_, driver->ngs_iterations_,
+                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                     driver->smoother_max_update_fraction_,
+                                     driver->ngs_line_search_steps_,
+                                     driver->ngs_line_search_min_); break;
     }
   } else {
     switch (fd) {
-      case 2: SmoothImpl<2>(this, u_[current_level_].d_view, src_[current_level_].d_view,
-                            coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, driver->smoother_type_,
-                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
-                            driver->ngs_max_update_); break;
-      case 3: SmoothImpl<3>(this, u_[current_level_].d_view, src_[current_level_].d_view,
-                            coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, driver->smoother_type_,
-                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
-                            driver->ngs_max_update_); break;
-      default: SmoothImpl<4>(this, u_[current_level_].d_view, src_[current_level_].d_view,
-                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                             color, driver->omega_, fd, driver->smoother_type_,
-                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
-                             driver->ngs_max_update_); break;
+      case 2: stats = SmoothImpl<2>(this, u_[current_level_].d_view,
+                                    src_[current_level_].d_view,
+                                    coeff_[current_level_].d_view, ll, is, ie, js, je,
+                                    ks, ke, color, driver->omega_, fd,
+                                    driver->smoother_type_, driver->ngs_iterations_,
+                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                    driver->smoother_max_update_fraction_,
+                                    driver->ngs_line_search_steps_,
+                                    driver->ngs_line_search_min_); break;
+      case 3: stats = SmoothImpl<3>(this, u_[current_level_].d_view,
+                                    src_[current_level_].d_view,
+                                    coeff_[current_level_].d_view, ll, is, ie, js, je,
+                                    ks, ke, color, driver->omega_, fd,
+                                    driver->smoother_type_, driver->ngs_iterations_,
+                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                    driver->smoother_max_update_fraction_,
+                                    driver->ngs_line_search_steps_,
+                                    driver->ngs_line_search_min_); break;
+      default: stats = SmoothImpl<4>(this, u_[current_level_].d_view,
+                                     src_[current_level_].d_view,
+                                     coeff_[current_level_].d_view, ll, is, ie, js, je,
+                                     ks, ke, color, driver->omega_, fd,
+                                     driver->smoother_type_, driver->ngs_iterations_,
+                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                     driver->smoother_max_update_fraction_,
+                                     driver->ngs_line_search_steps_,
+                                     driver->ngs_line_search_min_); break;
     }
   }
+  driver->AccumulateSmootherStats(stats.values);
 }
 
 void IDCTSMultigrid::CalculateDefectPack() {
@@ -925,11 +1139,20 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   ngs_iterations_ = pin->GetOrAddInteger("id_solve", "ngs_iterations", 1);
   ngs_jacobian_eps_ = pin->GetOrAddReal("id_solve", "ngs_jacobian_eps", 1.0e-7);
   ngs_max_update_ = pin->GetOrAddReal("id_solve", "ngs_max_update", 0.0);
-  if (ngs_iterations_ < 1 || !(ngs_jacobian_eps_ > 0.0) || ngs_max_update_ < 0.0) {
+  smoother_max_update_fraction_ =
+      pin->GetOrAddReal("id_solve", "smoother_max_update_fraction", 0.25);
+  ngs_line_search_steps_ = pin->GetOrAddInteger("id_solve", "ngs_line_search_steps", 8);
+  ngs_line_search_min_ = pin->GetOrAddReal("id_solve", "ngs_line_search_min", 1.0e-4);
+  show_smoother_stats_ = pin->GetOrAddBoolean("id_solve", "show_smoother_stats", true);
+  if (ngs_iterations_ < 1 || !(ngs_jacobian_eps_ > 0.0) || ngs_max_update_ < 0.0 ||
+      smoother_max_update_fraction_ < 0.0 || ngs_line_search_steps_ < 1 ||
+      !(ngs_line_search_min_ > 0.0) || ngs_line_search_min_ > 1.0) {
     std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
               << std::endl
               << "<id_solve>/ngs_iterations must be >=1, ngs_jacobian_eps must be >0, "
-              << "and ngs_max_update must be >=0." << std::endl;
+              << "ngs_max_update and smoother_max_update_fraction must be >=0, "
+              << "ngs_line_search_steps must be >=1, and ngs_line_search_min must be "
+              << "in (0,1]." << std::endl;
     std::exit(EXIT_FAILURE);
   }
   eps_ = pin->GetOrAddReal("id_solve", "threshold", -1.0);
@@ -948,6 +1171,7 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
       pin->GetOrAddReal("id_solve", "defect_increase_tolerance", 1.0e-3);
   allow_incomplete_amr_ = pin->GetOrAddBoolean("id_solve", "allow_incomplete_amr", false);
   solution_applied_ = false;
+  ResetSmootherStats();
   fsubtract_average_ = false;
   fprolongation_ = 1;
 
@@ -1023,6 +1247,44 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
 IDCTSMultigridDriver::~IDCTSMultigridDriver() {
   delete mgroot_;
   delete mglevels_;
+}
+
+void IDCTSMultigridDriver::ResetSmootherStats() {
+  for (int n = 0; n < ID_CTS_SMOOTH_NSTAT; ++n) smoother_stats_[n] = 0.0;
+}
+
+void IDCTSMultigridDriver::AccumulateSmootherStats(
+    const Real stats[ID_CTS_SMOOTH_NSTAT]) {
+  for (int n = 0; n < ID_CTS_SMOOTH_MAX_UPDATE; ++n) smoother_stats_[n] += stats[n];
+  if (stats[ID_CTS_SMOOTH_MAX_UPDATE] > smoother_stats_[ID_CTS_SMOOTH_MAX_UPDATE]) {
+    smoother_stats_[ID_CTS_SMOOTH_MAX_UPDATE] = stats[ID_CTS_SMOOTH_MAX_UPDATE];
+  }
+}
+
+void IDCTSMultigridDriver::PrintSmootherStats(int iter) const {
+  if (!show_smoother_stats_) return;
+  Real sums[ID_CTS_SMOOTH_MAX_UPDATE];
+  for (int n = 0; n < ID_CTS_SMOOTH_MAX_UPDATE; ++n) sums[n] = smoother_stats_[n];
+  Real max_update = smoother_stats_[ID_CTS_SMOOTH_MAX_UPDATE];
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, sums, ID_CTS_SMOOTH_MAX_UPDATE, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &max_update, 1, MPI_ATHENA_REAL, MPI_MAX,
+                MPI_COMM_WORLD);
+#endif
+  if (global_variable::my_rank == 0) {
+    std::cout << "  CTS smoother stats";
+    if (iter >= 0) std::cout << " iteration " << iter;
+    std::cout << ": accepted=" << sums[ID_CTS_SMOOTH_ACCEPTED]
+              << ", limited=" << sums[ID_CTS_SMOOTH_LIMITED]
+              << ", backtracked=" << sums[ID_CTS_SMOOTH_BACKTRACKED]
+              << ", fallback=" << sums[ID_CTS_SMOOTH_FALLBACK]
+              << ", singular=" << sums[ID_CTS_SMOOTH_SINGULAR]
+              << ", nonfinite=" << sums[ID_CTS_SMOOTH_NONFINITE]
+              << ", rejected=" << sums[ID_CTS_SMOOTH_REJECTED]
+              << ", psi_floor=" << sums[ID_CTS_SMOOTH_PSI_FLOOR]
+              << ", max_update=" << max_update << std::endl;
+  }
 }
 
 void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
@@ -1242,19 +1504,23 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   Real final_defects[ID_CTS_NVAR];
   for (int v = 0; v < ID_CTS_NVAR; ++v) final_defects[v] = initial_defects[v];
   if (full_multigrid_) {
+    ResetSmootherStats();
     SolveFMG(pdriver);
     mg_defect = calculate_defects(final_defects);
     owner_->RecordConstraintHistory(eps_ >= 0.0 ? -1 : niter_, final_defects);
+    if (fshowdef_) PrintSmootherStats(eps_ >= 0.0 ? -1 : niter_);
   } else if (eps_ >= 0.0) {
     if (fshowdef_) std::cout << "MG initial defect = " << mg_defect << std::endl;
     int n = 0;
     while (mg_defect > eps_) {
+      ResetSmootherStats();
       SolveVCycle(pdriver, npresmooth_, npostsmooth_);
       Real olddef = mg_defect;
       mg_defect = calculate_defects(final_defects);
       owner_->RecordConstraintHistory(n + 1, final_defects);
       if (fshowdef_) {
         std::cout << "  MG iteration " << n << ": defect = " << mg_defect << std::endl;
+        PrintSmootherStats(n);
       }
       if (mg_defect/olddef > 0.9) {
         if (eps_ == 0.0) break;
@@ -1282,11 +1548,13 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
       mglevels_->RetrieveResult(owner_->u_cts, 0, indcs.ng);
     }
     for (int n = 0; n < niter_; ++n) {
+      ResetSmootherStats();
       SolveVCycle(pdriver, npresmooth_, npostsmooth_);
       mg_defect = calculate_defects(final_defects);
       owner_->RecordConstraintHistory(n + 1, final_defects);
       if (fshowdef_) {
         std::cout << "  MG iteration " << n << ": defect = " << mg_defect << std::endl;
+        PrintSmootherStats(n);
       }
       if (keep_best_solution_ && std::isfinite(mg_defect) && mg_defect < best_defect) {
         best_defect = mg_defect;
@@ -1337,52 +1605,64 @@ void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
   OctetArray u{oct.u, oct.nc};
   OctetArray src{oct.src, oct.nc};
   OctetArray free{oct.coeff, oct.nc};
+  SmootherCellStats stats;
+  stats.Clear();
   color ^= coffset_;
   for (int k = ngh; k <= ngh+1; ++k) {
     for (int j = ngh; j <= ngh+1; ++j) {
       int c = (color + k + j) & 1;
       for (int i = ngh + c; i <= ngh+1; i += 2) {
         if (free(0, ID_FREE_MASK, k, j, i) < 0.5) continue;
+        SmootherCellStats cell;
         switch (octet_fd_stencil_) {
           case 2:
             if (smoother_type_ == 1) {
-              ApplyNewtonGSCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
-                                        0, k, j, i, omega_, ngs_iterations_,
-                                        ngs_jacobian_eps_, ngs_max_update_);
+              cell = ApplyNewtonGSCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
+                                               0, k, j, i, omega_, ngs_iterations_,
+                                               ngs_jacobian_eps_, ngs_max_update_,
+                                               smoother_max_update_fraction_,
+                                               ngs_line_search_steps_,
+                                               ngs_line_search_min_);
             } else {
-              ApplyDiagonalCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
-                                        0, k, j, i, omega_);
+              cell = ApplyDiagonalCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
+                                               0, k, j, i, omega_, ngs_max_update_,
+                                               smoother_max_update_fraction_);
             }
             break;
           case 3:
             if (smoother_type_ == 1) {
-              ApplyNewtonGSCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
-                                        0, k, j, i, omega_, ngs_iterations_,
-                                        ngs_jacobian_eps_, ngs_max_update_);
+              cell = ApplyNewtonGSCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
+                                               0, k, j, i, omega_, ngs_iterations_,
+                                               ngs_jacobian_eps_, ngs_max_update_,
+                                               smoother_max_update_fraction_,
+                                               ngs_line_search_steps_,
+                                               ngs_line_search_min_);
             } else {
-              ApplyDiagonalCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
-                                        0, k, j, i, omega_);
+              cell = ApplyDiagonalCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
+                                               0, k, j, i, omega_, ngs_max_update_,
+                                               smoother_max_update_fraction_);
             }
             break;
           default:
             if (smoother_type_ == 1) {
-              ApplyNewtonGSCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
-                                        0, k, j, i, omega_, ngs_iterations_,
-                                        ngs_jacobian_eps_, ngs_max_update_);
+              cell = ApplyNewtonGSCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
+                                               0, k, j, i, omega_, ngs_iterations_,
+                                               ngs_jacobian_eps_, ngs_max_update_,
+                                               smoother_max_update_fraction_,
+                                               ngs_line_search_steps_,
+                                               ngs_line_search_min_);
             } else {
-              ApplyDiagonalCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
-                                        0, k, j, i, omega_);
+              cell = ApplyDiagonalCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
+                                               0, k, j, i, omega_, ngs_max_update_,
+                                               smoother_max_update_fraction_);
             }
             break;
         }
-        Real psi = TotalU(u, free, 0, ID_CTS_PSI, k, j, i);
-        if (psi < 1.0e-8) {
-          u(0, ID_CTS_PSI, k, j, i) =
-              1.0e-8 - free(0, ID_FREE_BASE_PSI, k, j, i);
-        }
+        stats.Add(cell);
       }
     }
   }
+  AccumulateSmootherStats(stats.values);
 }
 
 void IDCTSMultigridDriver::CalculateDefectOctet(MGOctet &oct, int rlev) {

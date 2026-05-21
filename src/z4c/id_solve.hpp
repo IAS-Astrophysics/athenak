@@ -26,6 +26,19 @@ enum IDCTSUVar {
   ID_CTS_NVAR
 };
 
+enum IDCTSSmootherStat {
+  ID_CTS_SMOOTH_ACCEPTED,
+  ID_CTS_SMOOTH_LIMITED,
+  ID_CTS_SMOOTH_BACKTRACKED,
+  ID_CTS_SMOOTH_FALLBACK,
+  ID_CTS_SMOOTH_SINGULAR,
+  ID_CTS_SMOOTH_NONFINITE,
+  ID_CTS_SMOOTH_REJECTED,
+  ID_CTS_SMOOTH_PSI_FLOOR,
+  ID_CTS_SMOOTH_MAX_UPDATE,
+  ID_CTS_SMOOTH_NSTAT
+};
+
 // CTS free data are stored with respect to the conformal background metric.
 // ID_FREE_GXX...ID_FREE_GZZ are gamma_bar_ij.  ID_FREE_GDOTXX...
 // ID_FREE_GDOTZZ store the contravariant trace-free tensor u_bar^ij_TF,
@@ -71,21 +84,29 @@ class IDCTSMultigridDriver : public MultigridDriver {
 
  private:
   void TransferCoefficientsFromBlocksToRoot();
+  void ResetSmootherStats();
+  void AccumulateSmootherStats(const Real stats[ID_CTS_SMOOTH_NSTAT]);
+  void PrintSmootherStats(int iter) const;
 
   IDConformalThinSandwich *owner_;
   Real omega_;
   Real defect_increase_tol_;
   Real ngs_jacobian_eps_;
   Real ngs_max_update_;
+  Real smoother_max_update_fraction_;
+  Real ngs_line_search_min_;
+  Real smoother_stats_[ID_CTS_SMOOTH_NSTAT];
   int max_iter_;
   int octet_fd_stencil_;
   int smoother_type_;
   int ngs_iterations_;
+  int ngs_line_search_steps_;
   bool reject_worse_;
   bool keep_best_solution_;
   bool stop_on_defect_increase_;
   bool allow_incomplete_amr_;
   bool solution_applied_;
+  bool show_smoother_stats_;
 
   friend class IDCTSMultigrid;
 };

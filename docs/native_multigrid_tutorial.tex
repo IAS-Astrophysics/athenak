@@ -320,10 +320,16 @@ under-relaxed diagonal nonlinear smoother.
 
 The CTS driver can also use \code{id\_solve/smoother = newton\_gs}.  In that
 mode, each active red/black point forms the four-component local residual for
-\((\Psi,\beta^x,\beta^y,\beta^z)\), finite-differences a local \(4\times4\)
-Jacobian of the CTS operator, solves the coupled Newton correction, and applies
-the damped update \(u \leftarrow u + \omega\delta u\).  If the local linear
-solve is singular, the code falls back to the diagonal update for that point.
+\((\Psi,\beta^x,\beta^y,\beta^z)\), finite-differences a scale-aware local
+\(4\times4\) Jacobian of the CTS operator, solves the coupled Newton correction,
+and applies a residual-checked damped update.  If the local linear solve is
+singular, ill-conditioned, non-finite, or cannot produce a local residual
+decrease after backtracking, the code falls back to the diagonal update for that
+point.
+This coupled update is the better long-term algorithmic target for nonlinear
+FAS, but it is not automatically faster: it does more work at every active
+point.  Production comparisons should therefore use defect reduction per
+wall-clock time, not stable \(\omega\) alone.
 
 Why red-black?  A centered stencil couples nearest neighbors.  If the grid is
 colored like a checkerboard, red cells depend mostly on black neighbors and vice
@@ -553,9 +559,15 @@ When multigrid misbehaves, classify the failure:
 
 For CTS specifically, the diagonal smoother remains the conservative default and
 is simple and parallel.  The optional \code{newton\_gs} smoother includes the
-local coupling among \(\Psi\) and \(\beta^i\), but still needs damping and can be
+local coupling among \(\Psi\) and \(\beta^i\), but still needs damping and is
 more expensive because it finite-differences and solves a \(4\times4\) system at
-each active point.
+each active point.  Current production safeguards include a residual-checked
+line search, scale-aware local linear algebra, finite-value guards, update
+limits, and MPI-reduced smoother counters.  Compare smoothers by defect
+reduction per wall-clock time rather than by stable \(\omega\) alone.  In the
+current \(64^3\), second-order, 40-cycle critical-Kerr comparison,
+\code{newton\_gs} reached a lower final defect than \code{diagonal} at
+\(\omega=0.05\), but was still slower per wall-clock time.
 
 \section{Glossary}
 
