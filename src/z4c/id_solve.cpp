@@ -1391,14 +1391,37 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
   int ngh = mgroot_->GetGhostCells();
   int bngh = mglevels_->GetGhostCells();
   int padding = nslist_[global_variable::my_rank];
+  std::vector<Real> block_coeff_global(static_cast<std::size_t>(ncoeff_) * nbtotal_,
+                                       0.0);
   for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
-    LogicalLocation loc = pmy_mesh_->lloc_eachmb[m + padding];
+    int gid = m + padding;
+    for (int v = 0; v < ncoeff_; ++v) {
+      block_coeff_global[static_cast<std::size_t>(v)*nbtotal_ + gid] =
+          block_coeff_h(m, v, bngh, bngh, bngh);
+    }
+  }
+#if MPI_PARALLEL_ENABLED
+  std::vector<Real> local_coeff(mglevels_->GetNumMeshBlocks());
+  for (int v = 0; v < ncoeff_; ++v) {
+    for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
+      local_coeff[m] = block_coeff_h(m, v, bngh, bngh, bngh);
+    }
+    MPI_Allgatherv(local_coeff.data(), nblist_[global_variable::my_rank],
+                   MPI_ATHENA_REAL,
+                   block_coeff_global.data() + static_cast<std::size_t>(v)*nbtotal_,
+                   nblist_, nslist_, MPI_ATHENA_REAL, MPI_COMM_WORLD);
+  }
+#endif
+
+  for (int n = 0; n < nbtotal_; ++n) {
+    LogicalLocation loc = pmy_mesh_->lloc_eachmb[n];
     if (loc.level == locrootlevel_) {
       int ri = static_cast<int>(loc.lx1) + ngh;
       int rj = static_cast<int>(loc.lx2) + ngh;
       int rk = static_cast<int>(loc.lx3) + ngh;
       for (int v = 0; v < ncoeff_; ++v) {
-        root_coeff_h(0, v, rk, rj, ri) = block_coeff_h(m, v, bngh, bngh, bngh);
+        root_coeff_h(0, v, rk, rj, ri) =
+            block_coeff_global[static_cast<std::size_t>(v)*nbtotal_ + n];
       }
     } else {
       LogicalLocation oloc;
@@ -1420,7 +1443,8 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
       int ok = (static_cast<int>(loc.lx3) & 1) + ngh;
       MGOctet &oct = octets_[olev][oid];
       for (int v = 0; v < ncoeff_; ++v) {
-        oct.Coeff(v, ok, oj, oi) = block_coeff_h(m, v, bngh, bngh, bngh);
+        oct.Coeff(v, ok, oj, oi) =
+            block_coeff_global[static_cast<std::size_t>(v)*nbtotal_ + n];
       }
     }
   }

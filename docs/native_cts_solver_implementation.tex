@@ -561,8 +561,9 @@ The default/used solver controls are read in
         or zero-gradient physical copies, not with correction-variable
         \code{mg\_zerofixed} sign flips.
   \item \code{SetupMultigrid()} initializes levels, tasks, root grids, and octets.
-  \item \code{TransferCoefficientsFromBlocksToRoot()} populates root and octet
-        coefficient storage.
+  \item \code{TransferCoefficientsFromBlocksToRoot()} gathers each rank's
+        coarsest MeshBlock coefficients with \code{MPI\_Allgatherv}, then
+        populates the replicated root and octet coefficient storage.
   \item Initial defect norms are computed with \code{CalculateDefectNorm()}.
   \item The code runs FMG, thresholded V-cycles, or fixed-count V-cycles.
   \item If accepted, \code{RetrieveResult()} copies the solved correction back
@@ -630,8 +631,9 @@ restricted down levels.  For SMR/octet handling:
   \item MeshBlock coefficient arrays use same-level exchange, physical free-data
         boundary fills, and \code{FillFineCoarseMGGhosts()} in the same order as
         the solution path.
-  \item \code{TransferCoefficientsFromBlocksToRoot()} copies block coefficients
-        to root cells or refined octets.
+  \item \code{TransferCoefficientsFromBlocksToRoot()} first makes coarsest block
+        coefficients MPI-complete with \code{MPI\_Allgatherv}, then copies them
+        to root cells or refined octets on every rank.
   \item Refined coefficient octets are restricted upward/downward as needed.
   \item Same-level octet neighbors copy boundary data.
   \item Coarse/fine octet boundaries use interpolation/prolongation helpers.
@@ -639,6 +641,10 @@ restricted down levels.  For SMR/octet handling:
         \code{ApplyCoefficientPhysicalBoundaries()} using Lagrange extrapolation
         for non-mask coefficients and direct copy for masks.
 \end{itemize}
+
+The MeshBlock fine/coarse ghost fill remains same-rank only.  A cross-rank
+fine/coarse MeshBlock neighbor triggers a fatal diagnostic rather than allowing
+CTS residuals or smoothers to read stale coefficient/free-data ghosts.
 
 \subsection{Z4c Boundary Conditions After Handoff}
 

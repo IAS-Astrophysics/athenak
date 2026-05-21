@@ -251,7 +251,8 @@ For CTS, \code{IDCTSMultigridDriver::Solve()} wraps setup with the physics data:
   \item load free-data coefficients and fill their finest-level halos,
   \item restrict coefficients and fill coefficient halos on each coarse level,
   \item setup the hierarchy,
-  \item transfer coefficients to root and octets.
+  \item MPI-gather coarsest MeshBlock coefficients and transfer them to root and
+        octets.
 \end{enumerate}
 
 \section{Restriction}
@@ -477,7 +478,9 @@ is used by gravity.  The CTS driver overrides the non-periodic default with
 When SMR/AMR is present, \code{FillFCBoundary()} calls
 \code{FillFineCoarseMGGhosts()}.  For root/octet paths, octet boundary helpers
 copy same-level data or interpolate from coarser neighbors.  CTS also transfers
-coefficient/free-data arrays through this hierarchy.
+coefficient/free-data arrays through this hierarchy after an
+\code{MPI\_Allgatherv} of coarsest MeshBlock coefficient values, so replicated
+root/octet coefficient storage is complete on every rank.
 
 The MeshBlock fine/coarse ghost helper is currently same-rank only.  If a
 MeshBlock has a fine/coarse MG neighbor on another MPI rank, the code now aborts
