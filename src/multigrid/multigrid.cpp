@@ -1552,6 +1552,29 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
   int my_rank = global_variable::my_rank;
+
+  auto &nghbr_h = pmy_pack->pmb->nghbr.h_view;
+  auto &mblev_h = pmy_pack->pmb->mb_lev.h_view;
+  auto &mbgid_h = pmy_pack->pmb->mb_gid.h_view;
+  for (int m = 0; m < nmb; ++m) {
+    int m_lev = mblev_h(m);
+    for (int n = 0; n < nnghbr; ++n) {
+      if (nghbr_h(m, n).gid < 0 || nghbr_h(m, n).lev == m_lev) continue;
+      if (nghbr_h(m, n).rank == my_rank) continue;
+      std::cout << "### FATAL ERROR in MultigridBoundaryValues::FillFineCoarseMGGhosts"
+                << std::endl
+                << "Cross-rank fine/coarse MG ghost fills are not implemented. "
+                << "Local block gid=" << mbgid_h(m) << " rank=" << my_rank
+                << " level=" << m_lev << " has neighbor gid=" << nghbr_h(m, n).gid
+                << " rank=" << nghbr_h(m, n).rank
+                << " level=" << nghbr_h(m, n).lev << ".  Use an SMR/MPI "
+                << "decomposition that keeps fine/coarse MG neighbors on the same "
+                << "rank until cross-rank fine/coarse buffers are implemented."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
   auto nghbr_d = pmy_pack->pmb->nghbr.d_view;
   auto mblev_d = pmy_pack->pmb->mb_lev.d_view;
   auto mbgid_d = pmy_pack->pmb->mb_gid.d_view;

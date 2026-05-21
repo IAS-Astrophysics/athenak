@@ -441,7 +441,11 @@ MeshBlock task lists use:
 \end{itemize}
 
 These are scheduled around smoothing, restriction, and prolongation so stencil
-operations see valid ghost data.
+operations see valid ghost data.  Each \code{RecvBoundary()} task depends on
+both the matching receive-post task and the matching send/pack task.  This is
+important for same-rank neighbors because \code{PackAndSendMG()} fills their
+receive buffers directly, and for MPI neighbors because receives must be posted
+before the unpack task polls them.
 
 CTS also exchanges and fills coefficient/free-data halos.  After
 \code{LoadCoefficients()} and after each \code{RestrictCoefficients()} step, the
@@ -474,6 +478,13 @@ When SMR/AMR is present, \code{FillFCBoundary()} calls
 \code{FillFineCoarseMGGhosts()}.  For root/octet paths, octet boundary helpers
 copy same-level data or interpolate from coarser neighbors.  CTS also transfers
 coefficient/free-data arrays through this hierarchy.
+
+The MeshBlock fine/coarse ghost helper is currently same-rank only.  If a
+MeshBlock has a fine/coarse MG neighbor on another MPI rank, the code now aborts
+with a clear fatal error instead of silently leaving those ghosts stale or
+crashing later in communication.  Until cross-rank fine/coarse MG buffers are
+implemented, SMR MPI tests should use decompositions that keep fine/coarse MG
+neighbors on the same rank.
 
 The current octet coefficient bridge still uses the generic compact
 coarse-buffer path, not the full Z4c high-order prolongation kernels.  That is
