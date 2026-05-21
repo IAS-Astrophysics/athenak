@@ -357,7 +357,203 @@ void Multigrid::LoadCoefficients(const DvceArray5D<Real> &coeff, int ngh) {
     cm_(m, v, mk, mj, mi) = coeff_(m, v, k, j, i);
   });
 
+  FillCoefficientBoundaries(nlevel_ - 1);
   return;
+}
+
+void Multigrid::FillCoefficientBoundaries(int level) {
+  if (ncoeff_ <= 0) return;
+  int saved_level = current_level_;
+  current_level_ = level;
+
+  if (pbval != nullptr) {
+    DvceArray5D<Real> coeff = coeff_[current_level_].d_view;
+    (void)pbval->InitRecvMG(ncoeff_);
+    (void)pbval->PackAndSendMG(coeff);
+    while (pbval->RecvAndUnpackMG(coeff) == TaskStatus::incomplete) {}
+    while (pbval->ClearSend() == TaskStatus::incomplete) {}
+    while (pbval->ClearRecv() == TaskStatus::incomplete) {}
+  }
+
+  int ll = nlevel_ - 1 - current_level_;
+  int ncells = indcs_.nx1 >> ll;
+  if (ncells < 1) {
+    current_level_ = saved_level;
+    return;
+  }
+  int nx = ncells + 2*ngh_;
+  int ny = (indcs_.nx2 >> ll) + 2*ngh_;
+  int nz = (indcs_.nx3 >> ll) + 2*ngh_;
+  int ngh = ngh_;
+
+  BoundaryFlag bc_ix1 = pmy_driver_->mg_mesh_bcs_[BoundaryFace::inner_x1];
+  BoundaryFlag bc_ox1 = pmy_driver_->mg_mesh_bcs_[BoundaryFace::outer_x1];
+  BoundaryFlag bc_ix2 = pmy_driver_->mg_mesh_bcs_[BoundaryFace::inner_x2];
+  BoundaryFlag bc_ox2 = pmy_driver_->mg_mesh_bcs_[BoundaryFace::outer_x2];
+  BoundaryFlag bc_ix3 = pmy_driver_->mg_mesh_bcs_[BoundaryFace::inner_x3];
+  BoundaryFlag bc_ox3 = pmy_driver_->mg_mesh_bcs_[BoundaryFace::outer_x3];
+
+  if (pmy_pack_ == nullptr) {
+    auto fill_root = [&](auto coeff) {
+      for (int v = 0; v < ncoeff_; ++v) {
+        for (int k = 0; k < nz; ++k) {
+          for (int j = 0; j < ny; ++j) {
+            for (int n = 0; n < ngh; ++n) {
+              coeff(0, v, k, j, ngh - 1 - n) =
+                  (bc_ix1 == BoundaryFlag::periodic)
+                  ? coeff(0, v, k, j, nx - 2*ngh + n)
+                  : coeff(0, v, k, j, ngh + n);
+              coeff(0, v, k, j, nx - ngh + n) =
+                  (bc_ox1 == BoundaryFlag::periodic)
+                  ? coeff(0, v, k, j, ngh + n)
+                  : coeff(0, v, k, j, nx - ngh - 1 - n);
+            }
+          }
+        }
+        for (int k = 0; k < nz; ++k) {
+          for (int i = 0; i < nx; ++i) {
+            for (int n = 0; n < ngh; ++n) {
+              coeff(0, v, k, ngh - 1 - n, i) =
+                  (bc_ix2 == BoundaryFlag::periodic)
+                  ? coeff(0, v, k, ny - 2*ngh + n, i)
+                  : coeff(0, v, k, ngh + n, i);
+              coeff(0, v, k, ny - ngh + n, i) =
+                  (bc_ox2 == BoundaryFlag::periodic)
+                  ? coeff(0, v, k, ngh + n, i)
+                  : coeff(0, v, k, ny - ngh - 1 - n, i);
+            }
+          }
+        }
+        for (int j = 0; j < ny; ++j) {
+          for (int i = 0; i < nx; ++i) {
+            for (int n = 0; n < ngh; ++n) {
+              coeff(0, v, ngh - 1 - n, j, i) =
+                  (bc_ix3 == BoundaryFlag::periodic)
+                  ? coeff(0, v, nz - 2*ngh + n, j, i)
+                  : coeff(0, v, ngh + n, j, i);
+              coeff(0, v, nz - ngh + n, j, i) =
+                  (bc_ox3 == BoundaryFlag::periodic)
+                  ? coeff(0, v, ngh + n, j, i)
+                  : coeff(0, v, nz - ngh - 1 - n, j, i);
+            }
+          }
+        }
+      }
+    };
+    if (on_host_) {
+      fill_root(coeff_[current_level_].h_view);
+      coeff_[current_level_].template modify<HostExeSpace>();
+      coeff_[current_level_].template sync<DevExeSpace>();
+    } else {
+      auto coeff_d = coeff_[current_level_].d_view;
+      Kokkos::parallel_for("MGCoeffRootBnd",
+        Kokkos::RangePolicy<DevExeSpace>(0, 1), KOKKOS_LAMBDA(const int) {
+          for (int v = 0; v < ncoeff_; ++v) {
+            for (int k = 0; k < nz; ++k) {
+              for (int j = 0; j < ny; ++j) {
+                for (int n = 0; n < ngh; ++n) {
+                  coeff_d(0, v, k, j, ngh - 1 - n) =
+                      (bc_ix1 == BoundaryFlag::periodic)
+                      ? coeff_d(0, v, k, j, nx - 2*ngh + n)
+                      : coeff_d(0, v, k, j, ngh + n);
+                  coeff_d(0, v, k, j, nx - ngh + n) =
+                      (bc_ox1 == BoundaryFlag::periodic)
+                      ? coeff_d(0, v, k, j, ngh + n)
+                      : coeff_d(0, v, k, j, nx - ngh - 1 - n);
+                }
+              }
+            }
+            for (int k = 0; k < nz; ++k) {
+              for (int i = 0; i < nx; ++i) {
+                for (int n = 0; n < ngh; ++n) {
+                  coeff_d(0, v, k, ngh - 1 - n, i) =
+                      (bc_ix2 == BoundaryFlag::periodic)
+                      ? coeff_d(0, v, k, ny - 2*ngh + n, i)
+                      : coeff_d(0, v, k, ngh + n, i);
+                  coeff_d(0, v, k, ny - ngh + n, i) =
+                      (bc_ox2 == BoundaryFlag::periodic)
+                      ? coeff_d(0, v, k, ngh + n, i)
+                      : coeff_d(0, v, k, ny - ngh - 1 - n, i);
+                }
+              }
+            }
+            for (int j = 0; j < ny; ++j) {
+              for (int i = 0; i < nx; ++i) {
+                for (int n = 0; n < ngh; ++n) {
+                  coeff_d(0, v, ngh - 1 - n, j, i) =
+                      (bc_ix3 == BoundaryFlag::periodic)
+                      ? coeff_d(0, v, nz - 2*ngh + n, j, i)
+                      : coeff_d(0, v, ngh + n, j, i);
+                  coeff_d(0, v, nz - ngh + n, j, i) =
+                      (bc_ox3 == BoundaryFlag::periodic)
+                      ? coeff_d(0, v, ngh + n, j, i)
+                      : coeff_d(0, v, nz - ngh - 1 - n, j, i);
+                }
+              }
+            }
+          }
+        });
+    }
+    current_level_ = saved_level;
+    return;
+  }
+
+  if (!pmy_mesh_->strictly_periodic) {
+    auto coeff = coeff_[current_level_].d_view;
+    auto &mb_bcs = pmy_pack_->pmb->mb_bcs;
+    int nmb = pmy_pack_->nmb_thispack;
+    Kokkos::parallel_for("MGCoeffPhysicalBoundary",
+      Kokkos::RangePolicy<DevExeSpace>(0, nmb), KOKKOS_LAMBDA(const int m) {
+        for (int v = 0; v < ncoeff_; ++v) {
+          if (mb_bcs.d_view(m, BoundaryFace::inner_x1) != BoundaryFlag::block &&
+              mb_bcs.d_view(m, BoundaryFace::inner_x1) != BoundaryFlag::periodic) {
+            for (int k = 0; k < nz; ++k)
+              for (int j = 0; j < ny; ++j)
+                for (int n = 0; n < ngh; ++n)
+                  coeff(m, v, k, j, ngh - 1 - n) = coeff(m, v, k, j, ngh + n);
+          }
+          if (mb_bcs.d_view(m, BoundaryFace::outer_x1) != BoundaryFlag::block &&
+              mb_bcs.d_view(m, BoundaryFace::outer_x1) != BoundaryFlag::periodic) {
+            for (int k = 0; k < nz; ++k)
+              for (int j = 0; j < ny; ++j)
+                for (int n = 0; n < ngh; ++n)
+                  coeff(m, v, k, j, nx - ngh + n) =
+                      coeff(m, v, k, j, nx - ngh - 1 - n);
+          }
+          if (mb_bcs.d_view(m, BoundaryFace::inner_x2) != BoundaryFlag::block &&
+              mb_bcs.d_view(m, BoundaryFace::inner_x2) != BoundaryFlag::periodic) {
+            for (int k = 0; k < nz; ++k)
+              for (int i = 0; i < nx; ++i)
+                for (int n = 0; n < ngh; ++n)
+                  coeff(m, v, k, ngh - 1 - n, i) = coeff(m, v, k, ngh + n, i);
+          }
+          if (mb_bcs.d_view(m, BoundaryFace::outer_x2) != BoundaryFlag::block &&
+              mb_bcs.d_view(m, BoundaryFace::outer_x2) != BoundaryFlag::periodic) {
+            for (int k = 0; k < nz; ++k)
+              for (int i = 0; i < nx; ++i)
+                for (int n = 0; n < ngh; ++n)
+                  coeff(m, v, k, ny - ngh + n, i) =
+                      coeff(m, v, k, ny - ngh - 1 - n, i);
+          }
+          if (mb_bcs.d_view(m, BoundaryFace::inner_x3) != BoundaryFlag::block &&
+              mb_bcs.d_view(m, BoundaryFace::inner_x3) != BoundaryFlag::periodic) {
+            for (int j = 0; j < ny; ++j)
+              for (int i = 0; i < nx; ++i)
+                for (int n = 0; n < ngh; ++n)
+                  coeff(m, v, ngh - 1 - n, j, i) = coeff(m, v, ngh + n, j, i);
+          }
+          if (mb_bcs.d_view(m, BoundaryFace::outer_x3) != BoundaryFlag::block &&
+              mb_bcs.d_view(m, BoundaryFace::outer_x3) != BoundaryFlag::periodic) {
+            for (int j = 0; j < ny; ++j)
+              for (int i = 0; i < nx; ++i)
+                for (int n = 0; n < ngh; ++n)
+                  coeff(m, v, nz - ngh + n, j, i) =
+                      coeff(m, v, nz - ngh - 1 - n, j, i);
+          }
+        }
+      });
+  }
+  current_level_ = saved_level;
 }
 
 
@@ -404,12 +600,15 @@ void Multigrid::ApplyMask() {
 void Multigrid::RestrictCoefficients() {
   int is, ie, js, je, ks, ke;
   is=js=ks=ngh_;
+  int saved_level = current_level_;
   if (on_host_) {
     for (int lev = nlevel_ - 1; lev > 0; lev--) {
       int ll = nlevel_ - lev;
       ie=is+(indcs_.nx1>>ll)-1, je=js+(indcs_.nx2>>ll)-1, ke=ks+(indcs_.nx3>>ll)-1;
       Restrict(coeff_[lev-1].h_view, coeff_[lev].h_view, ncoeff_,
                is, ie, js, je, ks, ke, false);
+      coeff_[lev-1].template modify<HostExeSpace>();
+      FillCoefficientBoundaries(lev - 1);
     }
   } else {
     for (int lev = nlevel_ - 1; lev > 0; lev--) {
@@ -417,8 +616,10 @@ void Multigrid::RestrictCoefficients() {
       ie=is+(indcs_.nx1>>ll)-1, je=js+(indcs_.nx2>>ll)-1, ke=ks+(indcs_.nx3>>ll)-1;
       Restrict(coeff_[lev-1].d_view, coeff_[lev].d_view, ncoeff_,
                is, ie, js, je, ks, ke, false);
+      FillCoefficientBoundaries(lev - 1);
     }
   }
+  current_level_ = saved_level;
 }
 
 

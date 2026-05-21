@@ -208,6 +208,7 @@ class Multigrid {
   void LoadFinestData(const DvceArray5D<Real> &src, int ns, int ngh);
   void LoadSource(const DvceArray5D<Real> &src, int ns, int ngh, Real fac);
   void LoadCoefficients(const DvceArray5D<Real> &coeff, int ngh);
+  void FillCoefficientBoundaries(int level);
   void ApplyMask();
   void RetrieveResult(DvceArray5D<Real> &dst, int ns, int ngh);
   void RetrieveDefect(DvceArray5D<Real> &dst, int ns, int ngh);

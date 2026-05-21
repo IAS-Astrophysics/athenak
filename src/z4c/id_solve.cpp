@@ -1304,7 +1304,7 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   mgroot_ = new IDCTSMultigrid(this, nullptr, nghost, root_on_host);
   mglevels_ = new IDCTSMultigrid(this, pmbp, nghost);
   mglevels_->pbval = new MultigridBoundaryValues(pmbp, pin, false, mglevels_);
-  mglevels_->pbval->InitializeBuffers(nvar_);
+  mglevels_->pbval->InitializeBuffers(std::max(nvar_, ncoeff_));
   mglevels_->pbval->RemapIndicesForMG();
 }
 
@@ -1434,6 +1434,7 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
   mgroot_->ModifyCoefficientLevelOnHost(nrootlevel_ - 1);
   mgroot_->SyncCoefficientLevelToDevice(nrootlevel_ - 1);
   mgroot_->SetCurrentLevel(nrootlevel_ - 1);
+  mgroot_->FillCoefficientBoundaries(nrootlevel_ - 1);
   mgroot_->RestrictCoefficients();
 
   if (nreflevel_ > 0) {
