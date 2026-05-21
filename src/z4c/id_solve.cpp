@@ -52,23 +52,6 @@ Real DxxCenterCoeff(int fd_stencil, Real idx) {
   return c*idx*idx;
 }
 
-KOKKOS_INLINE_FUNCTION
-int DivAHatStencil(int fd_stencil, int nghost_available) {
-  int inner_radius = fd_stencil - 1;
-  int outer_radius = nghost_available - inner_radius;
-  if (outer_radius >= 3 && fd_stencil >= 4) return 4;
-  if (outer_radius >= 2 && fd_stencil >= 3) return 3;
-  return 2;
-}
-
-KOKKOS_INLINE_FUNCTION
-int DivAHatRequiredGhosts(int fd_stencil, int div_ahat_stencil) {
-  // D_j Ahat^{ij} is currently formed by differencing Ahat, while Ahat itself
-  // contains derivatives of beta and the conformal metric.  The halo reach is
-  // therefore the sum of the inner Ahat radius and the outer divergence radius.
-  return (fd_stencil - 1) + (div_ahat_stencil - 1);
-}
-
 template <typename ViewType>
 KOKKOS_INLINE_FUNCTION
 Real FreeSym(const ViewType &free, int base, int m, int a, int b, int k, int j, int i) {
@@ -255,30 +238,130 @@ Real AHatUU(const UView &u, const FView &free, const Real idx[], int m,
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
 Real DxAHatUU(int dir, const Real idx[], const UView &u, const FView &free,
-              int div_ahat_stencil, int m, int k, int j, int i, int a, int b) {
-  int const shiftk = dir == 2;
-  int const shiftj = dir == 1;
-  int const shifti = dir == 0;
-  auto val = [&](int s) {
-    return AHatUU<NGHOST>(u, free, idx, m, k + s*shiftk, j + s*shiftj,
-                          i + s*shifti, a, b);
-  };
-  Real out = -0.5*val(-1) + 0.5*val(1);
-  if (div_ahat_stencil >= 3) {
-    out = (1.0/12.0)*val(-2) - (2.0/3.0)*val(-1)
-        + (2.0/3.0)*val(1) - (1.0/12.0)*val(2);
+              int m, int k, int j, int i, int a, int b) {
+  Real gu[3][3], gamma[3][3][3];
+  MetricInverse(free, m, k, j, i, gu);
+  Christoffel<NGHOST>(free, idx, m, k, j, i, gu, gamma);
+
+  Real dg[3][3][3];
+  Real ddg[3][3][3][3];
+  for (int p = 0; p < 3; ++p) {
+    for (int c = 0; c < 3; ++c) {
+      for (int d = 0; d < 3; ++d) {
+        int v = ID_FREE_GXX + SymIdx(c, d);
+        dg[p][c][d] = Dx<NGHOST>(p, idx, free, m, v, k, j, i);
+      }
+    }
   }
-  if (div_ahat_stencil >= 4) {
-    out = (-1.0/60.0)*val(-3) + (3.0/20.0)*val(-2) - (3.0/4.0)*val(-1)
-        + (3.0/4.0)*val(1) - (3.0/20.0)*val(2) + (1.0/60.0)*val(3);
+  for (int p = 0; p < 3; ++p) {
+    for (int q = 0; q < 3; ++q) {
+      for (int c = 0; c < 3; ++c) {
+        for (int d = 0; d < 3; ++d) {
+          int v = ID_FREE_GXX + SymIdx(c, d);
+          ddg[p][q][c][d] = (p == q) ? Dxx<NGHOST>(p, idx, free, m, v, k, j, i)
+                                     : Dxy<NGHOST>(p, q, idx, free, m, v, k, j, i);
+        }
+      }
+    }
   }
-  return out*idx[dir];
+
+  Real dgu[3][3][3];
+  for (int p = 0; p < 3; ++p) {
+    for (int c = 0; c < 3; ++c) {
+      for (int d = 0; d < 3; ++d) {
+        dgu[p][c][d] = 0.0;
+        for (int e = 0; e < 3; ++e) {
+          for (int f = 0; f < 3; ++f) {
+            dgu[p][c][d] -= gu[c][e]*gu[d][f]*dg[p][e][f];
+          }
+        }
+      }
+    }
+  }
+
+  Real dgamma[3][3][3][3];
+  for (int p = 0; p < 3; ++p) {
+    for (int c = 0; c < 3; ++c) {
+      for (int e = 0; e < 3; ++e) {
+        for (int f = 0; f < 3; ++f) {
+          dgamma[p][c][e][f] = 0.0;
+          for (int d = 0; d < 3; ++d) {
+            Real term = dg[e][f][d] + dg[f][e][d] - dg[d][e][f];
+            Real dterm = ddg[p][e][f][d] + ddg[p][f][e][d] - ddg[p][d][e][f];
+            dgamma[p][c][e][f] += 0.5*dgu[p][c][d]*term + 0.5*gu[c][d]*dterm;
+          }
+        }
+      }
+    }
+  }
+
+  Real dbeta[3][3], ddbeta[3][3][3];
+  Real div_beta = 0.0;
+  for (int c = 0; c < 3; ++c) {
+    for (int d = 0; d < 3; ++d) {
+      dbeta[c][d] = DxTotal<NGHOST>(c, idx, u, free, m, ID_CTS_BETAX+d, k, j, i);
+      for (int p = 0; p < 3; ++p) {
+        ddbeta[p][c][d] =
+            (p == c) ? DxxTotal<NGHOST>(p, idx, u, free, m, ID_CTS_BETAX+d, k, j, i)
+                     : DxyTotal<NGHOST>(p, c, idx, u, free, m, ID_CTS_BETAX+d, k, j, i);
+      }
+    }
+    div_beta += dbeta[c][c];
+  }
+
+  Real d_div_beta = 0.0;
+  for (int c = 0; c < 3; ++c) d_div_beta += ddbeta[dir][c][c];
+
+  Real gdot_trace = 0.0;
+  Real dgdot_trace = 0.0;
+  for (int c = 0; c < 3; ++c) {
+    for (int d = 0; d < 3; ++d) {
+      Real gdot_cd = FreeSym(free, ID_FREE_GDOTXX, m, c, d, k, j, i);
+      Real dgdot_cd = Dx<NGHOST>(dir, idx, free, m,
+                                 ID_FREE_GDOTXX + SymIdx(c, d), k, j, i);
+      gdot_trace += FreeSym(free, ID_FREE_GXX, m, c, d, k, j, i)*gdot_cd;
+      dgdot_trace += dg[dir][c][d]*gdot_cd
+                   + FreeSym(free, ID_FREE_GXX, m, c, d, k, j, i)*dgdot_cd;
+    }
+  }
+
+  Real gdot_tf = FreeSym(free, ID_FREE_GDOTXX, m, a, b, k, j, i)
+                 - (1.0/3.0)*gdot_trace*gu[a][b];
+  Real dgdot_tf = Dx<NGHOST>(dir, idx, free, m,
+                             ID_FREE_GDOTXX + SymIdx(a, b), k, j, i)
+                  - (1.0/3.0)*(dgdot_trace*gu[a][b]
+                                + gdot_trace*dgu[dir][a][b]);
+
+  Real lbeta = -(2.0/3.0)*gu[a][b]*div_beta;
+  Real dlbeta = -(2.0/3.0)*(dgu[dir][a][b]*div_beta + gu[a][b]*d_div_beta);
+  for (int c = 0; c < 3; ++c) {
+    lbeta += gu[a][c]*dbeta[c][b] + gu[b][c]*dbeta[c][a];
+    dlbeta += dgu[dir][a][c]*dbeta[c][b] + gu[a][c]*ddbeta[dir][c][b]
+            + dgu[dir][b][c]*dbeta[c][a] + gu[b][c]*ddbeta[dir][c][a];
+    for (int d = 0; d < 3; ++d) {
+      Real q = gu[a][c]*gamma[b][c][d] + gu[b][c]*gamma[a][c][d]
+             - (2.0/3.0)*gu[a][b]*gamma[c][c][d];
+      Real dq = dgu[dir][a][c]*gamma[b][c][d] + gu[a][c]*dgamma[dir][b][c][d]
+              + dgu[dir][b][c]*gamma[a][c][d] + gu[b][c]*dgamma[dir][a][c][d]
+              - (2.0/3.0)*(dgu[dir][a][b]*gamma[c][c][d]
+                            + gu[a][b]*dgamma[dir][c][c][d]);
+      Real beta_d = TotalU(u, free, m, ID_CTS_BETAX+d, k, j, i);
+      lbeta += beta_d*q;
+      dlbeta += dbeta[dir][d]*q + beta_d*dq;
+    }
+  }
+
+  Real alpha = std::max(free(m, ID_FREE_ALPHA, k, j, i), static_cast<Real>(1.0e-12));
+  Real dalpha = Dx<NGHOST>(dir, idx, free, m, ID_FREE_ALPHA, k, j, i);
+  Real num = gdot_tf + lbeta;
+  Real dnum = dgdot_tf + dlbeta;
+  return dnum/(2.0*alpha) - num*dalpha/(2.0*alpha*alpha);
 }
 
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
 void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_stencil,
-                 int div_ahat_stencil, int m, int k, int j, int i,
+                 int m, int k, int j, int i,
                  Real op[ID_CTS_NVAR], Real diag[ID_CTS_NVAR]);
 
 template <typename UView>
@@ -350,11 +433,10 @@ bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
 void ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView &free,
-                            const Real idx[], int fd_stencil, int div_ahat_stencil,
+                            const Real idx[], int fd_stencil,
                             int m, int k, int j, int i, Real omega) {
   Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-  CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
-                      m, k, j, i, op, diag);
+  CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
   for (int v = 0; v < ID_CTS_NVAR; ++v) {
     Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] :
              ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
@@ -365,14 +447,13 @@ void ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView &free,
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
 void ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
-                            const Real idx[], int fd_stencil, int div_ahat_stencil,
+                            const Real idx[], int fd_stencil,
                             int m, int k, int j, int i, Real omega,
                             int niter, Real jac_eps, Real max_update) {
   const int local_iter = niter > 0 ? niter : 1;
   for (int it = 0; it < local_iter; ++it) {
     Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-    CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
-                        m, k, j, i, op, diag);
+    CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
 
     Real residual[ID_CTS_NVAR];
     for (int r = 0; r < ID_CTS_NVAR; ++r) {
@@ -386,8 +467,8 @@ void ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
       if (!(eps > 0.0) || !IsFiniteForDevice(eps)) eps = 1.0e-7;
       LocalPerturbedUView<UView> up{u, m, c, k, j, i, eps};
       Real op_pert[ID_CTS_NVAR], diag_pert[ID_CTS_NVAR];
-      CTSOperator<NGHOST>(up, free, idx, fd_stencil, div_ahat_stencil,
-                          m, k, j, i, op_pert, diag_pert);
+      CTSOperator<NGHOST>(up, free, idx, fd_stencil, m, k, j, i,
+                          op_pert, diag_pert);
       for (int r = 0; r < ID_CTS_NVAR; ++r) {
         jac[r][c] = (op_pert[r] - op[r])/eps;
       }
@@ -423,7 +504,7 @@ void ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
 template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
 void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_stencil,
-                 int div_ahat_stencil, int m, int k, int j, int i,
+                 int m, int k, int j, int i,
                  Real op[ID_CTS_NVAR], Real diag[ID_CTS_NVAR]) {
   Real gu[3][3];
   Real gamma[3][3][3];
@@ -482,7 +563,7 @@ void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_ste
   for (int a = 0; a < 3; ++a) {
     Real div_a = 0.0;
     for (int b = 0; b < 3; ++b) {
-      div_a += DxAHatUU<NGHOST>(b, idx, u, free, div_ahat_stencil, m, k, j, i, a, b);
+      div_a += DxAHatUU<NGHOST>(b, idx, u, free, m, k, j, i, a, b);
       for (int c = 0; c < 3; ++c) {
         div_a += gamma[a][b][c]*ahat[c][b] + gamma[b][b][c]*ahat[a][c];
       }
@@ -503,8 +584,8 @@ void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_ste
 template <int NGHOST, typename ViewType>
 void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const ViewType &free,
                 int ll, int is, int ie, int js, int je, int ks, int ke, int color,
-                Real omega, int fd_stencil, int div_ahat_stencil, int smoother_type,
-                int ngs_iterations, Real ngs_jacobian_eps, Real ngs_max_update) {
+                Real omega, int fd_stencil, int smoother_type, int ngs_iterations,
+                Real ngs_jacobian_eps, Real ngs_max_update) {
   using ExeSpace = typename ViewType::execution_space;
   auto brdx = [&]() {
     if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
@@ -521,12 +602,12 @@ void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const View
     for (int i = is + c; i <= ie; i += 2) {
       if (free(m, ID_FREE_MASK, k, j, i) < 0.5) continue;
       if (smoother_type == 1) {
-        ApplyNewtonGSCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil, div_ahat_stencil,
+        ApplyNewtonGSCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
                                        m, k, j, i, omega, ngs_iterations,
                                        ngs_jacobian_eps, ngs_max_update);
       } else {
         ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
-                                       div_ahat_stencil, m, k, j, i, omega);
+                                       m, k, j, i, omega);
       }
       Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
       if (psi < 1.0e-8) {
@@ -539,7 +620,7 @@ void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const View
 template <int NGHOST, typename ViewType>
 void DefectImpl(IDCTSMultigrid *mg, ViewType &def, const ViewType &u, const ViewType &src,
                 const ViewType &free, int ll, int is, int ie, int js, int je, int ks, int ke,
-                int fd_stencil, int div_ahat_stencil) {
+                int fd_stencil) {
   using ExeSpace = typename ViewType::execution_space;
   auto brdx = [&]() {
     if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
@@ -553,8 +634,7 @@ void DefectImpl(IDCTSMultigrid *mg, ViewType &def, const ViewType &u, const View
                           : brdx(m)/static_cast<Real>(1<<rlev);
     Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
     Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-    CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
-                        m, k, j, i, op, diag);
+    CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
     for (int v = 0; v < ID_CTS_NVAR; ++v) {
       def(m,v,k,j,i) = (free(m, ID_FREE_MASK, k, j, i) >= 0.5)
                        ? src(m,v,k,j,i) - op[v] : 0.0;
@@ -564,8 +644,8 @@ void DefectImpl(IDCTSMultigrid *mg, ViewType &def, const ViewType &u, const View
 
 template <int NGHOST, typename ViewType>
 void FASRHSImpl(IDCTSMultigrid *mg, ViewType &src, const ViewType &u, const ViewType &free,
-                int ll, int is, int ie, int js, int je, int ks, int ke, int fd_stencil,
-                int div_ahat_stencil) {
+                int ll, int is, int ie, int js, int je, int ks, int ke,
+                int fd_stencil) {
   using ExeSpace = typename ViewType::execution_space;
   auto brdx = [&]() {
     if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
@@ -579,8 +659,7 @@ void FASRHSImpl(IDCTSMultigrid *mg, ViewType &src, const ViewType &u, const View
                           : brdx(m)/static_cast<Real>(1<<rlev);
     Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
     Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-    CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
-                        m, k, j, i, op, diag);
+    CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
     for (int v = 0; v < ID_CTS_NVAR; ++v) src(m,v,k,j,i) += op[v];
   });
 }
@@ -718,22 +797,21 @@ void IDCTSMultigrid::SmoothPack(int color) {
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
   int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
-  int da = driver->div_ahat_stencil_;
   if (on_host_) {
     switch (fd) {
       case 2: SmoothImpl<2>(this, u_[current_level_].h_view, src_[current_level_].h_view,
                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            color, driver->omega_, fd, driver->smoother_type_,
                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
                             driver->ngs_max_update_); break;
       case 3: SmoothImpl<3>(this, u_[current_level_].h_view, src_[current_level_].h_view,
                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            color, driver->omega_, fd, driver->smoother_type_,
                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
                             driver->ngs_max_update_); break;
       default: SmoothImpl<4>(this, u_[current_level_].h_view, src_[current_level_].h_view,
                              coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                             color, driver->omega_, fd, da, driver->smoother_type_,
+                             color, driver->omega_, fd, driver->smoother_type_,
                              driver->ngs_iterations_, driver->ngs_jacobian_eps_,
                              driver->ngs_max_update_); break;
     }
@@ -741,17 +819,17 @@ void IDCTSMultigrid::SmoothPack(int color) {
     switch (fd) {
       case 2: SmoothImpl<2>(this, u_[current_level_].d_view, src_[current_level_].d_view,
                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            color, driver->omega_, fd, driver->smoother_type_,
                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
                             driver->ngs_max_update_); break;
       case 3: SmoothImpl<3>(this, u_[current_level_].d_view, src_[current_level_].d_view,
                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            color, driver->omega_, fd, driver->smoother_type_,
                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
                             driver->ngs_max_update_); break;
       default: SmoothImpl<4>(this, u_[current_level_].d_view, src_[current_level_].d_view,
                              coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                             color, driver->omega_, fd, da, driver->smoother_type_,
+                             color, driver->omega_, fd, driver->smoother_type_,
                              driver->ngs_iterations_, driver->ngs_jacobian_eps_,
                              driver->ngs_max_update_); break;
     }
@@ -765,30 +843,29 @@ void IDCTSMultigrid::CalculateDefectPack() {
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
   int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
-  int da = driver->div_ahat_stencil_;
   if (on_host_) {
     switch (fd) {
       case 2: DefectImpl<2>(this, def_[current_level_].h_view, u_[current_level_].h_view,
                             src_[current_level_].h_view, coeff_[current_level_].h_view,
-                            ll, is, ie, js, je, ks, ke, fd, da); break;
+                            ll, is, ie, js, je, ks, ke, fd); break;
       case 3: DefectImpl<3>(this, def_[current_level_].h_view, u_[current_level_].h_view,
                             src_[current_level_].h_view, coeff_[current_level_].h_view,
-                            ll, is, ie, js, je, ks, ke, fd, da); break;
+                            ll, is, ie, js, je, ks, ke, fd); break;
       default: DefectImpl<4>(this, def_[current_level_].h_view, u_[current_level_].h_view,
                              src_[current_level_].h_view, coeff_[current_level_].h_view,
-                             ll, is, ie, js, je, ks, ke, fd, da); break;
+                             ll, is, ie, js, je, ks, ke, fd); break;
     }
   } else {
     switch (fd) {
       case 2: DefectImpl<2>(this, def_[current_level_].d_view, u_[current_level_].d_view,
                             src_[current_level_].d_view, coeff_[current_level_].d_view,
-                            ll, is, ie, js, je, ks, ke, fd, da); break;
+                            ll, is, ie, js, je, ks, ke, fd); break;
       case 3: DefectImpl<3>(this, def_[current_level_].d_view, u_[current_level_].d_view,
                             src_[current_level_].d_view, coeff_[current_level_].d_view,
-                            ll, is, ie, js, je, ks, ke, fd, da); break;
+                            ll, is, ie, js, je, ks, ke, fd); break;
       default: DefectImpl<4>(this, def_[current_level_].d_view, u_[current_level_].d_view,
                              src_[current_level_].d_view, coeff_[current_level_].d_view,
-                             ll, is, ie, js, je, ks, ke, fd, da); break;
+                             ll, is, ie, js, je, ks, ke, fd); break;
     }
   }
 }
@@ -800,30 +877,29 @@ void IDCTSMultigrid::CalculateFASRHSPack() {
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
   int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
-  int da = driver->div_ahat_stencil_;
   if (on_host_) {
     switch (fd) {
       case 2: FASRHSImpl<2>(this, src_[current_level_].h_view, u_[current_level_].h_view,
                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            fd, da); break;
+                            fd); break;
       case 3: FASRHSImpl<3>(this, src_[current_level_].h_view, u_[current_level_].h_view,
                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            fd, da); break;
+                            fd); break;
       default: FASRHSImpl<4>(this, src_[current_level_].h_view, u_[current_level_].h_view,
                              coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                             fd, da); break;
+                             fd); break;
     }
   } else {
     switch (fd) {
       case 2: FASRHSImpl<2>(this, src_[current_level_].d_view, u_[current_level_].d_view,
                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            fd, da); break;
+                            fd); break;
       case 3: FASRHSImpl<3>(this, src_[current_level_].d_view, u_[current_level_].d_view,
                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            fd, da); break;
+                            fd); break;
       default: FASRHSImpl<4>(this, src_[current_level_].d_view, u_[current_level_].d_view,
                              coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                             fd, da); break;
+                             fd); break;
     }
   }
 }
@@ -875,6 +951,24 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   fsubtract_average_ = false;
   fprolongation_ = 1;
 
+  std::string mg_bc_str = pin->GetOrAddString("id_solve", "mg_bc", "zerograd");
+  BoundaryFlag id_mg_bc;
+  if (mg_bc_str == "zerograd") {
+    id_mg_bc = BoundaryFlag::mg_zerograd;
+  } else if (mg_bc_str == "zerofixed") {
+    id_mg_bc = BoundaryFlag::mg_zerofixed;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/mg_bc must be 'zerograd' or 'zerofixed', but is "
+              << mg_bc_str << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (int f = 0; f < 6; ++f) {
+    mg_mesh_bcs_[f] = (pmbp->pmesh->mesh_bcs[f] == BoundaryFlag::periodic)
+                      ? BoundaryFlag::periodic : id_mg_bc;
+  }
+
   int mesh_nghost = pmbp->pmesh->mb_indcs.ng;
   int nghost = pin->GetOrAddInteger("id_solve", "mg_nghost", mesh_nghost);
   if (nghost > mesh_nghost) {
@@ -890,49 +984,10 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << std::endl
               << "<id_solve>/mg_nghost=" << nghost << " is too small for the CTS "
               << "operator selected by <z4c>/spatial_order="
-              << pmbp->pz4c->opt.spatial_order << ".  The composed "
+              << pmbp->pz4c->opt.spatial_order << ".  The compact "
               << "D_j Ahat^{ij} operator requires at least " << fd_stencil
               << " ghost cells." << std::endl;
     std::exit(EXIT_FAILURE);
-  }
-  int available_div_halo = std::min(nghost, mesh_nghost);
-  int max_div_stencil = DivAHatStencil(fd_stencil, available_div_halo);
-  int requested_div_stencil = pin->GetOrAddInteger("id_solve", "div_ahat_stencil", 0);
-  if (requested_div_stencil > 0) {
-    if (requested_div_stencil > max_div_stencil) {
-      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
-                << std::endl
-                << "Requested <id_solve>/div_ahat_stencil=" << requested_div_stencil
-                << " exceeds the available halo-limited maximum " << max_div_stencil
-                << ".  The nested D_j Ahat^{ij} operator needs "
-                << DivAHatRequiredGhosts(fd_stencil, requested_div_stencil)
-                << " ghost cells for this combination of stencils, but only "
-                << available_div_halo << " are available." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    div_ahat_stencil_ = requested_div_stencil;
-  } else {
-    div_ahat_stencil_ = fd_stencil;
-    if (div_ahat_stencil_ > max_div_stencil) {
-      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
-                << std::endl
-                << "The native CTS operator would silently lower "
-                << "D_j Ahat^{ij} from stencil " << div_ahat_stencil_
-                << " to " << max_div_stencil << " with the current halo.  "
-                << "Use <mesh>/nghost and <id_solve>/mg_nghost >= "
-                << DivAHatRequiredGhosts(fd_stencil, div_ahat_stencil_)
-                << " for a fully order-matched CTS operator, or explicitly set "
-                << "<id_solve>/div_ahat_stencil=" << max_div_stencil
-                << " to request the lower-order fallback." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  if (div_ahat_stencil_ < pmbp->pz4c->opt.fd_stencil && global_variable::my_rank == 0) {
-    std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
-              << std::endl
-              << "Using lower-order Ahat divergence stencil " << div_ahat_stencil_
-              << " because the composed CTS operator needs a wider halo than the base "
-              << "Z4c stencil." << std::endl;
   }
   int requested_octet_fd = pin->GetOrAddInteger("id_solve", "octet_fd_stencil", 0);
   octet_fd_stencil_ = (requested_octet_fd > 0) ? requested_octet_fd : fd_stencil;
@@ -951,31 +1006,10 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  int max_octet_div_stencil = DivAHatStencil(octet_fd_stencil_, nghost);
-  int requested_octet_div_stencil =
-      pin->GetOrAddInteger("id_solve", "octet_div_ahat_stencil", 0);
-  if (requested_octet_div_stencil > 0) {
-    if (requested_octet_div_stencil > max_octet_div_stencil) {
-      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
-                << std::endl
-                << "Requested <id_solve>/octet_div_ahat_stencil="
-                << requested_octet_div_stencil
-                << " exceeds the available octet halo-limited maximum "
-                << max_octet_div_stencil << ".  This stencil needs "
-                << DivAHatRequiredGhosts(octet_fd_stencil_, requested_octet_div_stencil)
-                << " ghost cells for the nested octet operator." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    octet_div_ahat_stencil_ = requested_octet_div_stencil;
-  } else {
-    octet_div_ahat_stencil_ = std::min(div_ahat_stencil_, max_octet_div_stencil);
-  }
-  if ((octet_fd_stencil_ < fd_stencil || octet_div_ahat_stencil_ < div_ahat_stencil_) &&
-      global_variable::my_rank == 0) {
+  if (octet_fd_stencil_ < fd_stencil && global_variable::my_rank == 0) {
     std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
               << std::endl
               << "Using CTS octet stencil fd=" << octet_fd_stencil_
-              << ", div_ahat=" << octet_div_ahat_stencil_
               << " for the halo-limited SMR bridge." << std::endl;
   }
   bool root_on_host = pin->GetOrAddBoolean("id_solve", "root_on_host", false);
@@ -1313,34 +1347,31 @@ void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
           case 2:
             if (smoother_type_ == 1) {
               ApplyNewtonGSCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
-                                        octet_div_ahat_stencil_, 0, k, j, i,
-                                        omega_, ngs_iterations_, ngs_jacobian_eps_,
-                                        ngs_max_update_);
+                                        0, k, j, i, omega_, ngs_iterations_,
+                                        ngs_jacobian_eps_, ngs_max_update_);
             } else {
               ApplyDiagonalCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
-                                        octet_div_ahat_stencil_, 0, k, j, i, omega_);
+                                        0, k, j, i, omega_);
             }
             break;
           case 3:
             if (smoother_type_ == 1) {
               ApplyNewtonGSCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
-                                        octet_div_ahat_stencil_, 0, k, j, i,
-                                        omega_, ngs_iterations_, ngs_jacobian_eps_,
-                                        ngs_max_update_);
+                                        0, k, j, i, omega_, ngs_iterations_,
+                                        ngs_jacobian_eps_, ngs_max_update_);
             } else {
               ApplyDiagonalCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
-                                        octet_div_ahat_stencil_, 0, k, j, i, omega_);
+                                        0, k, j, i, omega_);
             }
             break;
           default:
             if (smoother_type_ == 1) {
               ApplyNewtonGSCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
-                                        octet_div_ahat_stencil_, 0, k, j, i,
-                                        omega_, ngs_iterations_, ngs_jacobian_eps_,
-                                        ngs_max_update_);
+                                        0, k, j, i, omega_, ngs_iterations_,
+                                        ngs_jacobian_eps_, ngs_max_update_);
             } else {
               ApplyDiagonalCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
-                                        octet_div_ahat_stencil_, 0, k, j, i, omega_);
+                                        0, k, j, i, omega_);
             }
             break;
         }
@@ -1369,16 +1400,13 @@ void IDCTSMultigridDriver::CalculateDefectOctet(MGOctet &oct, int rlev) {
         Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
         switch (octet_fd_stencil_) {
           case 2:
-            CTSOperator<2>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            CTSOperator<2>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
             break;
           case 3:
-            CTSOperator<3>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            CTSOperator<3>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
             break;
           default:
-            CTSOperator<4>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            CTSOperator<4>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
             break;
         }
         for (int v = 0; v < ID_CTS_NVAR; ++v) {
@@ -1404,16 +1432,13 @@ void IDCTSMultigridDriver::CalculateFASRHSOctet(MGOctet &oct, int rlev) {
         Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
         switch (octet_fd_stencil_) {
           case 2:
-            CTSOperator<2>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            CTSOperator<2>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
             break;
           case 3:
-            CTSOperator<3>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            CTSOperator<3>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
             break;
           default:
-            CTSOperator<4>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            CTSOperator<4>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
             break;
         }
         for (int v = 0; v < ID_CTS_NVAR; ++v) {
@@ -1711,7 +1736,7 @@ void BuildGammaDotAndDKImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
-  int ahat_halo = DivAHatStencil(NGHOST, indcs.ng) - 1;
+  int ahat_halo = NGHOST - 1;
   int total_reach = (NGHOST - 1) + ahat_halo;
   if (total_reach > indcs.ng) {
     std::cout << "### FATAL ERROR in IDCTS::BuildGammaDotAndDK" << std::endl
@@ -1801,7 +1826,6 @@ void FillHorizonJunkImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
   int ks = indcs.ks, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int fd = pmbp->pz4c->opt.fd_stencil;
-  int div_ahat_stencil = DivAHatStencil(fd, indcs.ng);
   const Real rfill2 = rfill*rfill;
   par_for("IDCTS::FillHorizonJunk", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1820,7 +1844,7 @@ void FillHorizonJunkImpl(MeshBlockPack *pmbp, DvceArray5D<Real> u_cts,
     Real idx[3] = {1.0/size.d_view(m).dx1, 1.0/size.d_view(m).dx2,
                    1.0/size.d_view(m).dx3};
     Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-    CTSOperator<NGHOST>(u_cts, u_free, idx, fd, div_ahat_stencil, m, k, j, i, op, diag);
+    CTSOperator<NGHOST>(u_cts, u_free, idx, fd, m, k, j, i, op, diag);
 
     Real psi = std::max(TotalU(u_cts, u_free, m, ID_CTS_PSI, k,j,i),
                         static_cast<Real>(1.0e-8));

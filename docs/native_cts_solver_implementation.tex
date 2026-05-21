@@ -285,9 +285,9 @@ The mask controls where the residual and smoother are active.  If
         \]
 \end{itemize}
 
-The halo width needed here follows the same nested-stencil logic as
-\(D_j\hat{A}^{ij}\): \(\hat{A}\) contains derivatives, and its divergence may
-require an additional outer stencil.
+The halo width needed here follows the compact \(D_j\hat{A}^{ij}\) path: the
+stored trace-free tensor must be available far enough into the ghost zone for
+the later centered derivative in the momentum residual.
 
 \section{CTS Residual Operator}
 
@@ -298,8 +298,6 @@ Its inputs are:
   \item \code{free}: coefficient/free-data array.
   \item \code{idx}: inverse grid spacing.
   \item \code{fd\_stencil}: base derivative stencil selector.
-  \item \code{div\_ahat\_stencil}: outer stencil used for
-        \(D_j\hat{A}^{ij}\).
 \end{itemize}
 
 \subsection{Geometry Helpers}
@@ -321,10 +319,14 @@ Its inputs are:
   \hat{A}^{ij} =
   \frac{\bar{u}^{ij}_{TF} + (\bar{L}\beta)^{ij}}{2\alpha}.
 \]
-The implementation recomputes the Christoffels and \(\partial_i\beta^j\) at the
-cell where \(\hat{A}^{ij}\) is requested.  \code{DxAHatUU()} then computes a
-centered finite-difference derivative of \(\hat{A}^{ij}\) by sampling
-\code{AHatUU()} at neighboring cells.
+\code{DxAHatUU()} applies the chain rule to differentiate \(\hat{A}^{ij}\)
+directly at the cell center.  The derivative is expanded into first and second
+finite differences of the primitive fields \(\beta^i\), \(\bar{\gamma}_{ij}\),
+\(\bar{u}^{ij}_{TF}\), and \(\alpha\).  These derivatives use the existing
+\file{src/utils/finite\_diff.hpp} operators: \code{Dx}, \code{Dxx}, \code{Dxy},
+and the base-plus-correction wrappers \code{DxTotal}, \code{DxxTotal}, and
+\code{DxyTotal}.  This compact form is the only implemented
+\(D_j\hat{A}^{ij}\) path.
 
 \subsection{Hamiltonian Residual}
 
@@ -360,31 +362,14 @@ Christoffel terms.
 \code{NGHOST=2,3,4} in \file{finite\_diff.hpp} gives 2nd, 4th, and 6th-order
 centered derivative formulas.
 
-The \(D_j\hat{A}^{ij}\) path is nested: an outer derivative samples
-\(\hat{A}^{ij}\), and each \(\hat{A}^{ij}\) evaluation contains inner
-derivatives of \(\beta^i\) and \(\bar{\gamma}_{ij}\).  The current required halo
-is:
-\[
-  n_{\rm ghost}^{\rm required}
-  = (\code{fd\_stencil}-1) + (\code{div\_ahat\_stencil}-1).
-\]
-Therefore:
-\begin{center}
-\begin{tabular}{cccc}
-\toprule
-Spatial order & \code{fd\_stencil} & order-matched \code{div\_ahat\_stencil}
-& required ghost cells \\
-\midrule
-2 & 2 & 2 & 2 \\
-4 & 3 & 3 & 4 \\
-6 & 4 & 4 & 6 \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-The current code now refuses to silently downshift \code{div\_ahat\_stencil} in
-auto mode.  If the halo is too small, it asks for more ghost cells or an explicit
-lower-order fallback.
+The \(D_j\hat{A}^{ij}\) path is compact: it differentiates the expanded
+expression directly and uses the base finite-difference stencil.  Because the
+current free-data setup computes \(\bar{u}^{ij}_{TF}\) from ADM data before the
+solve, that prepass fills a halo of width \(\code{fd\_stencil}-1\) for
+\(\bar{u}^{ij}_{TF}\).  Computing that halo also uses centered derivatives, so
+the free-data prepass requires enough mesh ghost cells for the prepass stencil
+plus the stored \(\bar{u}^{ij}_{TF}\) halo.  For the current 4th-order
+critical-Kerr tests this is \code{mesh/nghost=4}.
 
 \section{Smoothing Kernel}
 
@@ -521,12 +506,15 @@ The base multigrid constructor in \file{src/multigrid/multigrid\_driver.cpp}
 initializes multigrid boundary conditions from the mesh:
 \begin{itemize}
   \item Periodic mesh faces remain periodic.
-  \item Every non-periodic mesh face defaults to \code{mg\_zerofixed}.
+  \item Every non-periodic mesh face defaults to \code{mg\_zerofixed} in the
+        generic base driver.
 \end{itemize}
 
-For the critical-Kerr input file, all mesh faces are \code{outflow}; therefore
-the CTS multigrid correction variables currently use \code{mg\_zerofixed} on all
-six physical faces.
+The CTS driver then overrides non-periodic faces according to
+\code{id\_solve/mg\_bc}.  The current default is \code{zerograd}, so the critical-
+Kerr input file uses \code{mg\_zerograd} on all six physical faces because all
+mesh faces are \code{outflow}.  Set \code{mg\_bc=zerofixed} to recover the older
+Dirichlet-zero correction boundary.
 
 The physical boundary fill in \code{MultigridDriver::PhysicalBoundary()} and
 \code{MGRootBoundary()} implements:
@@ -540,9 +528,9 @@ The physical boundary fill in \code{MultigridDriver::PhysicalBoundary()} and
         input parameters.
 \end{itemize}
 
-Unlike the gravity driver, the CTS driver does not currently parse an
-\code{id\_solve/mg\_bc} override.  So the practical choice today is: periodic if
-the mesh is periodic, otherwise zero-fixed corrections.
+Unlike the gravity driver, CTS currently exposes only \code{zerograd} and
+\code{zerofixed} through \code{id\_solve/mg\_bc}; multipole MG boundaries are not
+used by the CTS solve.
 
 \subsection{Coefficient and Coarse/Fine Boundaries}
 
@@ -639,9 +627,11 @@ current representative setup is:
   \item \code{threshold=-1.0}: fixed V-cycle count mode.
   \item \code{niteration=1} in the input file; convergence tests override this.
   \item \code{npresmooth=2}, \code{npostsmooth=2}.
-  \item \code{mg\_nghost=4}, \code{div\_ahat\_stencil=3}: order-matched for 4th
-        order.  For 6th order, use \code{mesh/nghost=6} and
-        \code{id\_solve/mg\_nghost=6}.
+  \item \code{mg\_nghost=4}: order-matched for current 4th-order critical-Kerr
+        CTS tests.  For 6th order with the current free-data prepass, use
+        \code{mesh/nghost=6} and \code{id\_solve/mg\_nghost=6}.
+  \item \code{mg\_bc=zerograd}: use zero-normal-gradient MG boundaries for CTS
+        correction variables on non-periodic faces.
   \item \code{reject\_worse=false}, \code{keep\_best\_solution=true}.
 \end{itemize}
 
@@ -660,9 +650,11 @@ current representative setup is:
         \code{admvars.alpha}.  If \code{ID\_FREE\_ALPHA} is interpreted as the
         CTS conformal lapse \(\tilde{\alpha}\), the physical lapse would require
         additional conformal scaling.
-  \item The CTS driver does not yet expose an \code{id\_solve/mg\_bc} input
-        override.  Boundary control is inherited from mesh periodicity/nonperiodic
-        defaults.
+  \item The CTS driver exposes \code{id\_solve/mg\_bc=zerograd|zerofixed}.  This
+        controls only the CTS multigrid correction-variable boundary; after
+        handoff, Z4c fields still use the normal Z4c/mesh boundary machinery.
+  \item The compact \(D_j\hat{A}^{ij}\) path should be validated by convergence
+        tests whenever changing order, boundary conditions, or free data.
   \item Sixth-order CTS on SMR is explicitly guarded off because the current octet
         coarse/fine bridge is not widened enough for the required stencil.
 \end{itemize}

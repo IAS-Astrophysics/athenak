@@ -432,14 +432,16 @@ operations see valid ghost data.
 The base multigrid driver initializes multigrid physical BCs from mesh BCs:
 \begin{itemize}
   \item periodic mesh faces stay periodic,
-  \item non-periodic mesh faces become \code{mg\_zerofixed}.
+  \item non-periodic mesh faces become \code{mg\_zerofixed} in the generic base
+        driver.
 \end{itemize}
 
 \code{mg\_zerofixed} uses odd reflection of the correction variable.  This
 approximately enforces zero value at the physical boundary.  \code{mg\_zerograd}
 uses even reflection.  Multipole BC support exists in the base MG machinery and
-is used by gravity, but CTS currently does not expose an \code{id\_solve/mg\_bc}
-override.
+is used by gravity.  The CTS driver overrides the non-periodic default with
+\code{id\_solve/mg\_bc}; its current default is \code{zerograd}, with
+\code{zerofixed} available for older behavior.
 
 \subsection{Fine/Coarse Ghosts}
 
@@ -543,7 +545,8 @@ When multigrid misbehaves, classify the failure:
         but correction from coarse levels hurts.  Inspect restriction,
         prolongation, and coefficient restriction.
   \item \textbf{Stencil/halo mismatch}: high-order operators use invalid ghost
-        data or silently reduce order.  Check stencil radius and ghost count.
+        data or silently reduce order.  Check stencil radius, ghost count, and
+        whether any precomputed free-data fields need their own ghost halo.
   \item \textbf{Bad free data or source scaling}: initial defect changes strongly
         with resolution or physical constraints do not improve after solving.
 \end{itemize}

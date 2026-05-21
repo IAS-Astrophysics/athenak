@@ -78,9 +78,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   Real ngs_jacobian_eps_;
   Real ngs_max_update_;
   int max_iter_;
-  int div_ahat_stencil_;
   int octet_fd_stencil_;
-  int octet_div_ahat_stencil_;
   int smoother_type_;
   int ngs_iterations_;
   bool reject_worse_;
