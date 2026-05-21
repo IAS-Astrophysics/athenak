@@ -141,34 +141,34 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=132) && (ivar<142) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=132) && (ivar<135) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of weyl variable requested in <output> block '"
        << out_params.block_name << "' but weyl object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=142) && (ivar<150) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=135) && (ivar<143) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of constraint variables request in <output> block '"
        << out_params.block_name << "' but Z4c object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=150) && (ivar<161) && (pm->pmb_pack->ptmunu == nullptr)) {
+  if ((ivar>=143) && (ivar<154) && (pm->pmb_pack->ptmunu == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Tmunu variable requested in <output> block '"
        << out_params.block_name << "' but no Tmunu object has been constructed."
        << std::endl << "Input file is likely missing a <adm> block" << std::endl;
   }
-  if ((ivar>=161) && (ivar<163) && (pm->pmb_pack->ppart == nullptr)) {
+  if ((ivar>=154) && (ivar<156) && (pm->pmb_pack->ppart == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=163) && (ivar<180) && (pm->pmb_pack->pz4c == nullptr)) {
+  if ((ivar>=156) && (ivar<173) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of Z4c diagnostics requested in <output> block '"
        << out_params.block_name << "' but Z4c object not constructed."
@@ -189,6 +189,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       variables.push_back(out_params.variable_2);
     }
   }
+
 
   for (const auto& variable : variables) {
     // hydro (lab-frame) density
@@ -662,13 +663,6 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     if (out_params.variable.compare("weyl") == 0) {
       outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
       outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_mass",2,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_mx",3,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_my",4,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_mz",5,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_jx",6,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_jy",7,&(pm->pmb_pack->pz4c->u_weyl));
-      outvars.emplace_back("adm_jz",8,&(pm->pmb_pack->pz4c->u_weyl));
     }
 
     // radiation moments in coordinate frame

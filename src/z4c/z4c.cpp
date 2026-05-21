@@ -9,7 +9,6 @@
 #include <math.h>
 #include <sys/stat.h>  // mkdir
 
-#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -88,7 +87,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(u0,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u1,    nmb, (nz4c), ncells3, ncells2, ncells1);
   Kokkos::realloc(u_rhs, nmb, (nz4c), ncells3, ncells2, ncells1);
-  Kokkos::realloc(u_weyl,    nmb, (9), ncells3, ncells2, ncells1);
+  Kokkos::realloc(u_weyl,    nmb, (2), ncells3, ncells2, ncells1);
 
   con.C.InitWithShallowSlice(u_con, I_CON_C);
   con.H.InitWithShallowSlice(u_con, I_CON_H);
@@ -118,13 +117,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   weyl.rpsi4.InitWithShallowSlice (u_weyl, 0);
   weyl.ipsi4.InitWithShallowSlice (u_weyl, 1);
-  weyl.adm_mass.InitWithShallowSlice (u_weyl, 2);
-  weyl.adm_mx.InitWithShallowSlice (u_weyl, 3);
-  weyl.adm_my.InitWithShallowSlice (u_weyl, 4);
-  weyl.adm_mz.InitWithShallowSlice (u_weyl, 5);
-  weyl.adm_jx.InitWithShallowSlice (u_weyl, 6);
-  weyl.adm_jy.InitWithShallowSlice (u_weyl, 7);
-  weyl.adm_jz.InitWithShallowSlice (u_weyl, 8);
 
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
@@ -138,7 +130,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
   opt.lapse_oplog = pin->GetOrAddReal("z4c", "lapse_oplog", 2.0);
   opt.lapse_advect = pin->GetOrAddReal("z4c", "lapse_advect", 1.0);
-  opt.approx_shock_avoid = pin->GetOrAddBoolean("z4c", "approx_shock_avoid", false);
   opt.slow_start_lapse = pin->GetOrAddBoolean("z4c", "slow_start_lapse", false);
   opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
   opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
@@ -154,21 +145,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
-  opt.first_order_shift = pin->GetOrAddBoolean("z4c", "first_order_shift", true);
-
-  // default shift damping to 1 if we use 2nd order shift
-  if (opt.first_order_shift) {
-    opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
-  } else {
-    opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 1.0);
-  }
-  if (opt.telegraph_lapse && !opt.first_order_shift) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "telegraph_lapse and second-order shift both use the Z4c B auxiliary "
-              << "fields. Set first_order_shift=true when telegraph_lapse is enabled."
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
@@ -194,7 +171,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
     Kokkos::realloc(coarse_u0, nmb, (nz4c), nccells3, nccells2, nccells1);
-    Kokkos::realloc(coarse_u_weyl, nmb, (9), nccells3, nccells2, nccells1);
+    Kokkos::realloc(coarse_u_weyl, nmb, (2), nccells3, nccells2, nccells1);
   }
   Kokkos::Profiling::popRegion();
 
@@ -203,7 +180,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, true);
   pbval_u->InitializeBuffers((nz4c));
   pbval_weyl = new MeshBoundaryValuesCC(ppack, pin, true);
-  pbval_weyl->InitializeBuffers((9));
+  pbval_weyl->InitializeBuffers((2));
   Kokkos::Profiling::popRegion();
 
   // wave extraction spheres
@@ -218,10 +195,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   // TODO(@dur566): Why is the size of psi_out hardcoded?
   psi_out = new Real[nrad*77*2];
-  adm_out = new Real[nrad*7];
   if (nrad > 0) {
     mkdir("waveforms",0775);
-    mkdir("adm",0775);
   }
   waveform_dt = pin->GetOrAddReal("z4c", "waveform_dt", 1);
   last_output_time = 0;
@@ -314,7 +289,6 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
 // destructor
 Z4c::~Z4c() {
   delete[] psi_out;
-  delete[] adm_out;
   delete pbval_u;
   delete pbval_weyl;
   delete pamr;

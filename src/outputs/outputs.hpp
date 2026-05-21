@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 180
+#define NOUTPUT_CHOICES 173
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -80,13 +80,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_Bx", "z4c_By", "z4c_Bz",
   "z4c",
 
-  // Weyl (132-141)
+  // Weyl (132-135)
   "weyl_rpsi4", "weyl_ipsi4",
-  "adm_E", "adm_Mx", "adm_My", "adm_Mz",
-  "adm_Jx", "adm_Jy", "adm_Jz",
   "weyl",
 
-  // ADM constraints (142-149)
+  // ADM constraints (136-142)
   "con_C",
   "con_H",
   "con_M",
@@ -94,16 +92,16 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "con_Mx", "con_My", "con_Mz",
   "con",
 
-  // Tmunu (150-160)
+  // Tmunu (143-153)
   "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
   "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
   "tmunu",
 
-  // Particles (161-162)
+  // Particles (154-155)
   "prtcl_all", "prtcl_d",
 
-  // Z4c Diagnostics (163-179)
+  // Z4c Diagnostics (156-172)
   "z4c_Kretschmann",
   "z4c_Exx", "z4c_Exy", "z4c_Exz", "z4c_Eyy", "z4c_Eyz", "z4c_Ezz",
   "z4c_Bxx", "z4c_Bxy", "z4c_Bxz", "z4c_Byy", "z4c_Byz", "z4c_Bzz",
