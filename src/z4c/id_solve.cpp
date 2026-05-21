@@ -1203,6 +1203,18 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
     std::exit(EXIT_FAILURE);
   }
   int fd_stencil = pmbp->pz4c->opt.fd_stencil;
+  int free_data_reach = 2*(fd_stencil - 1);
+  if (mesh_nghost < free_data_reach) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "Native CTS with <z4c>/spatial_order=" << pmbp->pz4c->opt.spatial_order
+              << " requires <mesh>/nghost >= " << free_data_reach
+              << " for the gamma-dot/DK free-data prepass, but <mesh>/nghost="
+              << mesh_nghost << ".  This CTS-specific prepass requirement can "
+              << "be stricter than the multigrid correction-variable halo."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (nghost < fd_stencil) {
     std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
               << std::endl

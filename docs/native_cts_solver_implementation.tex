@@ -178,7 +178,8 @@ In the current critical-Kerr seed, the base values are \(\Psi=1\) and
         in the header clarifies the actual stored quantity.
   \item \code{ID\_FREE\_K}: trace \(K\).
   \item \code{ID\_FREE\_DKX ... ID\_FREE\_DKZ}: \(\bar{D}^i K\).
-  \item \code{ID\_FREE\_ALPHA}: conformal lapse-like field used by the operator.
+  \item \code{ID\_FREE\_ALPHA}: physical/free ADM lapse copied from
+        \code{admvars.alpha} and used by the CTS operator.
   \item \code{ID\_FREE\_E}: Eulerian energy density source.
   \item \code{ID\_FREE\_PX/PY/PZ}: conformally raised momentum source
         \(\bar{\gamma}^{ij}S_j\).
@@ -254,7 +255,9 @@ For every active and ghost cell:
   \item \(\bar{\gamma}_{ij}\) is copied from \code{admvars.g\_dd}.
   \item The inverse metric is computed locally.
   \item \(K=\gamma^{ij}K_{ij}\) is computed from \code{admvars.vK\_dd}.
-  \item \code{ID\_FREE\_ALPHA} is copied from \code{admvars.alpha}.
+  \item \code{ID\_FREE\_ALPHA} is copied from \code{admvars.alpha}.  The current
+        implementation treats this as the physical/free ADM lapse throughout the
+        solve; it is not rescaled as a separate conformal lapse at handoff.
   \item The base conformal factor is set to 1.
   \item The base shift is copied from \code{admvars.beta\_u}.
   \item The correction variables in \code{u\_cts} are reset to zero.
@@ -374,7 +377,16 @@ solve, that prepass fills a halo of width \(\code{fd\_stencil}-1\) for
 \(\bar{u}^{ij}_{TF}\).  Computing that halo also uses centered derivatives, so
 the free-data prepass requires enough mesh ghost cells for the prepass stencil
 plus the stored \(\bar{u}^{ij}_{TF}\) halo.  For the current 4th-order
-critical-Kerr tests this is \code{mesh/nghost=4}.
+critical-Kerr tests this is \code{mesh/nghost=4}.  In general the constructor
+requires
+\[
+  \code{mesh/nghost} \ge 2(\code{fd\_stencil}-1),
+\]
+which is a CTS free-data prepass requirement.  The multigrid correction-variable
+halo separately requires
+\[
+  \code{id\_solve/mg\_nghost} \ge \code{fd\_stencil}.
+\]
 
 \section{Smoothing Kernel}
 
@@ -729,10 +741,11 @@ important for stronger free data, coarser grids, and FAS coarse-level states.
         \(P^i\Psi^6\), where \(P^i=\bar{\gamma}^{ij}S_j\) is the stored
         conformally raised momentum source.  In vacuum this is irrelevant, but
         matter runs should preserve this convention consistently.
-  \item \code{ApplySolution()} currently copies \code{ID\_FREE\_ALPHA} directly to
-        \code{admvars.alpha}.  If \code{ID\_FREE\_ALPHA} is interpreted as the
-        CTS conformal lapse \(\tilde{\alpha}\), the physical lapse would require
-        additional conformal scaling.
+  \item \code{ID\_FREE\_ALPHA} is currently the physical/free ADM lapse used
+        consistently by \code{BuildFreeData()}, \code{CTSOperator()}, and
+        \code{ApplySolution()}.  A future conformal-lapse convention would need
+        explicit conversion both when building free data and when applying the
+        solution.
   \item The CTS driver exposes \code{id\_solve/mg\_bc=zerograd|zerofixed}.  This
         controls only the CTS multigrid correction-variable boundary; after
         handoff, Z4c fields still use the normal Z4c/mesh boundary machinery.
