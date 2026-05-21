@@ -1,0 +1,583 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.85in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{microtype}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  pdftitle={AthenaK Native Multigrid Tutorial},
+  pdfauthor={Cursor agent}
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  breaklines=true,
+  frame=single,
+  framerule=0.2pt,
+  rulecolor=\color{black!30}
+}
+
+\newcommand{\file}[1]{\nolinkurl{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{AthenaK Native Multigrid Tutorial}
+\author{Concepts and code-reading guide}
+\date{May 21, 2026}
+
+\begin{document}
+\maketitle
+
+\section{What Problem Multigrid Solves}
+
+Multigrid is an algorithm for solving elliptic equations, such as Poisson-like
+equations or the CTS constraint equations.  These problems are difficult because
+local relaxation methods remove short-wavelength errors quickly, but long-
+wavelength errors decay slowly.
+
+For a simple scalar problem,
+\[
+  L u = f,
+\]
+where \(L\) is a discretized differential operator, the solver tracks:
+\begin{itemize}
+  \item \(u\): the current solution estimate.
+  \item \(f\): the right-hand side or source.
+  \item \(r = f - L(u)\): the residual or defect.
+  \item \(e = u_{\rm exact}-u\): the unknown error.
+\end{itemize}
+
+If \(u\) is wrong by a smooth, slowly varying error, pointwise smoothing on the
+fine grid sees only a tiny local slope and converges slowly.  On a coarser grid,
+the same smooth error is represented by fewer cells and becomes easier to remove.
+The multigrid idea is therefore:
+\begin{enumerate}
+  \item Smooth on the fine grid to remove oscillatory errors.
+  \item Restrict the remaining smooth residual/error information to a coarser
+        grid.
+  \item Correct the coarse-grid problem.
+  \item Prolongate the coarse correction back to the fine grid.
+  \item Smooth again to remove interpolation noise.
+\end{enumerate}
+
+\section{A Minimal V-Cycle}
+
+The classic V-cycle looks like this:
+
+\begin{lstlisting}
+V(level):
+  if level is coarsest:
+    solve or smooth many times
+  else:
+    pre-smooth u_level
+    residual_level = f_level - L_level(u_level)
+    restrict residual and solution to level-1
+    V(level-1)
+    prolongate coarse correction to level
+    post-smooth u_level
+\end{lstlisting}
+
+The ``V'' name comes from the path through the levels:
+
+\begin{center}
+\begin{tabular}{ccccccccc}
+fine & $\rightarrow$ & medium & $\rightarrow$ & coarse & $\rightarrow$ & medium & $\rightarrow$ & fine \\
+smooth & & restrict & & solve & & prolong & & smooth
+\end{tabular}
+\end{center}
+
+\section{Linear Correction vs FAS}
+
+For a linear problem \(Lu=f\), one often solves the error equation
+\[
+  L e = r.
+\]
+For nonlinear systems, such as the CTS residual \(F(u)=0\), AthenaK uses the
+full approximation storage (FAS) pattern.  In FAS, coarse levels store a full
+approximation \(u_H\), not just an error correction.  The coarse source is adjusted
+so that the coarse problem is consistent with the fine-grid solution:
+\[
+  F_H(u_H) = f_H.
+\]
+
+In the current code, the physics-specific class supplies:
+\begin{itemize}
+  \item a residual/operator evaluation,
+  \item a smoother,
+  \item a defect computation,
+  \item an FAS right-hand-side update.
+\end{itemize}
+
+The generic multigrid driver supplies hierarchy traversal, restriction,
+prolongation, boundary exchange, root-grid handling, and convergence norms.
+
+\section{The Main Code Objects}
+
+\begin{longtable}{p{0.32\linewidth} p{0.62\linewidth}}
+\toprule
+\textbf{File/class} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File/class} & \textbf{Purpose} \\
+\midrule
+\endhead
+\file{src/multigrid/multigrid.hpp} \newline \code{Multigrid} &
+Owns per-level arrays on MeshBlocks or on the root grid.  Provides generic
+operations such as loading data, restricting, prolongating, computing norms, and
+storing old solutions. \\
+\addlinespace
+\file{src/multigrid/multigrid.hpp} \newline \code{MGOctet} &
+Small \(2^3\)-interior cell object used to bridge static mesh-refinement
+coarse/fine boundaries.  It stores \code{u}, \code{src}, \code{def},
+\code{uold}, and optional coefficients. \\
+\addlinespace
+\file{src/multigrid/multigrid\_driver.cpp} \newline \code{MultigridDriver} &
+Controls the global solve: builds the hierarchy, chooses current levels, runs
+V-cycles/FMG cycles, moves data between MeshBlocks/root/octets, and computes
+global norms with MPI reduction. \\
+\addlinespace
+\file{src/multigrid/multigrid\_tasks.cpp} &
+Builds task lists for boundary exchange, smoothing, restriction, prolongation,
+fine/coarse ghost filling, and send/receive cleanup. \\
+\addlinespace
+\file{src/z4c/id\_solve.hpp} \newline \code{IDCTSMultigrid} &
+CTS-specific \code{Multigrid} subclass.  Implements \code{SmoothPack},
+\code{CalculateDefectPack}, and \code{CalculateFASRHSPack}. \\
+\addlinespace
+\file{src/z4c/id\_solve.cpp} \newline \code{IDCTSMultigridDriver} &
+CTS-specific driver.  Sets solver parameters, coefficient count, stencil choices,
+loads CTS free data, calls generic multigrid cycles, and applies the solution. \\
+\bottomrule
+\end{longtable}
+
+\section{The Arrays on Each Level}
+
+Each \code{Multigrid} object allocates one array per multigrid level:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Array} & \textbf{Meaning} & \textbf{CTS example} \\
+\midrule
+\code{u\_} & current solution approximation & \(\delta\Psi,\delta\beta^i\) \\
+\code{src\_} & source/RHS for the level & zero on finest CTS level; FAS RHS on coarser levels \\
+\code{def\_} & defect/residual storage & \(src-F(u)\) \\
+\code{coeff\_} & problem coefficients/free data & conformal metric, \(K\), \(\alpha\), sources \\
+\code{uold\_} & saved solution before coarse solve & used for FAS correction \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The constructor \code{Multigrid::Multigrid()} creates either:
+\begin{itemize}
+  \item MeshBlock-local levels when given a \code{MeshBlockPack}, or
+  \item root-grid levels when given \code{nullptr}.
+\end{itemize}
+
+MeshBlock levels require cubic, power-of-two MeshBlocks.  Root levels come from
+the number of root MeshBlocks in each direction.  Each coarser level halves the
+number of active cells per direction.
+
+\section{Levels in AthenaK}
+
+There are three kinds of levels in this implementation:
+
+\subsection{MeshBlock Levels}
+
+These are the normal levels inside each MeshBlock.  For a \(64^3\) MeshBlock,
+the internal multigrid levels are \(64^3,32^3,16^3,\ldots,1^3\), plus ghost
+zones.  \code{mglevels\_} owns these arrays.
+
+\subsection{Root Grid Levels}
+
+The root grid is built from the logical arrangement of root MeshBlocks.  For a
+\(2\times2\times2\) root MeshBlock layout, the root-grid active region starts
+as \(2^3\), then can coarsen to \(1^3\).  \code{mgroot\_} owns this part.
+
+\subsection{Octets for Mesh Refinement}
+
+For static mesh refinement, an octet represents a parent cell with \(2\times2
+\times2\) refined children.  Octets let the V-cycle pass through refinement
+levels without requiring every part of the domain to be uniformly refined.
+
+For the native CTS solver, there are explicit guards:
+\begin{itemize}
+  \item adaptive AMR is not supported,
+  \item sixth-order CTS on SMR is not supported by the current octet bridge.
+\end{itemize}
+
+\section{Setup Before a Solve}
+
+The generic setup path is in \code{MultigridDriver::PrepareForAMR()} and
+\code{MultigridDriver::SetupMultigrid()}.
+
+\subsection{\code{PrepareForAMR()}}
+
+Despite the name, this runs for every multigrid solve.  It:
+\begin{itemize}
+  \item records the root mesh level,
+  \item detects whether the MeshBlock layout changed,
+  \item recomputes how many refinement levels exist,
+  \item reallocates MeshBlock multigrid arrays if needed,
+  \item rebuilds octets if SMR/AMR levels exist,
+  \item updates per-block cell widths.
+\end{itemize}
+
+\subsection{\code{SetupMultigrid()}}
+
+This computes:
+\[
+  n_{\rm total} = n_{\rm root} + n_{\rm MeshBlock} + n_{\rm refinement} - 1.
+\]
+It sets \code{current\_level\_} to the finest level and initializes the FMG level
+bookkeeping.
+
+For CTS, \code{IDCTSMultigridDriver::Solve()} wraps setup with the physics data:
+\begin{enumerate}
+  \item build CTS free data,
+  \item load \code{u\_cts} into \code{u\_},
+  \item load zero source,
+  \item load free-data coefficients,
+  \item restrict coefficients,
+  \item setup the hierarchy,
+  \item transfer coefficients to root and octets.
+\end{enumerate}
+
+\section{Restriction}
+
+Restriction moves information from a fine grid to a coarser grid.  In a V-cycle,
+restriction is used on the way down.
+
+\code{Multigrid::RestrictPack()} does:
+\begin{enumerate}
+  \item call the physics-specific \code{CalculateDefectPack()},
+  \item restrict \code{def\_} to the coarser \code{src\_},
+  \item restrict \code{u\_} to the coarser \code{u\_},
+  \item decrement \code{current\_level\_}.
+\end{enumerate}
+
+For nonlinear FAS, restricting the current solution as well as the defect is
+important because the coarse grid stores a full approximation, not just an error.
+
+In the octet path, \code{RestrictOctets()} computes each octet defect and writes
+the restricted defect/source and restricted solution into either a coarser octet
+or the root grid.
+
+\section{Prolongation and Correction}
+
+Prolongation moves a coarse-grid correction back to a finer grid.  AthenaK uses:
+\begin{itemize}
+  \item \code{ProlongateAndCorrectPack()} for normal V-cycle corrections,
+  \item \code{FMGProlongatePack()} for direct FMG initialization,
+  \item \code{ProlongateAndCorrectOctets()} for octet coarse/fine paths.
+\end{itemize}
+
+The normal V-cycle path first computes a FAS correction:
+\[
+  \Delta u_H = u_H - u_{H,{\rm old}},
+\]
+then prolongates \(\Delta u_H\) and adds it to the next-finer solution.
+
+For MeshBlock-local levels, the code comments describe this as trilinear
+correction.  For some root/octet bridge paths, the implementation uses a
+3-by-3-by-3 coarse neighborhood with cubic-like weights.
+
+\section{Smoothing}
+
+Smoothing is the problem-specific local relaxation.  The generic driver only
+knows it can call:
+\[
+  \code{pmg->SmoothPack(color)}.
+\]
+
+For CTS, \code{IDCTSMultigrid::SmoothPack()} dispatches to
+\code{SmoothImpl<2/3/4>()} based on \code{z4c/opt.fd\_stencil}.  The smoothing
+kernel is red-black colored:
+\[
+  c = (\mathrm{color}+i+j+k)\bmod 2.
+\]
+Cells of one color are updated first, boundary/ghost zones are refreshed, then
+the other color is updated.
+
+The default CTS update is:
+\[
+  u_v \leftarrow u_v - \omega\,
+  \frac{F_v(u)-src_v}{D_v},
+\]
+where \(D_v\) is an approximate diagonal of the CTS operator.  This is an
+under-relaxed diagonal nonlinear smoother.
+
+The CTS driver can also use \code{id\_solve/smoother = newton\_gs}.  In that
+mode, each active red/black point forms the four-component local residual for
+\((\Psi,\beta^x,\beta^y,\beta^z)\), finite-differences a local \(4\times4\)
+Jacobian of the CTS operator, solves the coupled Newton correction, and applies
+the damped update \(u \leftarrow u + \omega\delta u\).  If the local linear
+solve is singular, the code falls back to the diagonal update for that point.
+
+Why red-black?  A centered stencil couples nearest neighbors.  If the grid is
+colored like a checkerboard, red cells depend mostly on black neighbors and vice
+versa.  Updating one color at a time gives Gauss-Seidel-like in-place relaxation
+while preserving parallelism within each color.
+
+\section{The Current V-Cycle in Code}
+
+The V-cycle entry point is:
+\[
+  \code{MultigridDriver::SolveVCycle(pdriver, npresmooth, npostsmooth)}.
+\]
+
+It does:
+\begin{lstlisting}
+startlevel = current_level
+coffset_ ^= 1
+while current_level > 0:
+  OneStepToCoarser(npresmooth)
+SolveCoarsestGrid()
+while current_level < startlevel:
+  OneStepToFiner(npostsmooth)
+\end{lstlisting}
+
+\subsection{One Step to Coarser}
+
+\code{OneStepToCoarser()} depends on which kind of level is active:
+\begin{itemize}
+  \item MeshBlock level: run the \code{mg\_to\_coarser} task list.
+  \item Octet level: smooth octets, refresh octet boundaries, restrict octets.
+  \item Root level: apply root boundary, optionally compute FAS RHS, smooth
+        red/black with root boundary after each color, restrict root grid.
+\end{itemize}
+
+The MeshBlock task list includes:
+\begin{enumerate}
+  \item start receive,
+  \item send boundary data,
+  \item receive/unpack boundary data,
+  \item physical boundary fill,
+  \item fine/coarse ghost fill,
+  \item FAS RHS computation,
+  \item red smoothing,
+  \item boundary exchange/fill,
+  \item black smoothing,
+  \item boundary exchange/fill,
+  \item optional extra red/black pair if \code{nsmooth > 1},
+  \item restriction,
+  \item clear send/recv.
+\end{enumerate}
+
+\subsection{Coarsest Grid Solve}
+
+\code{SolveCoarsestGrid()} does not use a direct matrix solve.  It applies root
+boundaries, stores old data, computes FAS RHS, then performs a number of
+red-black smoothing passes.  The number of passes is roughly the size of the
+coarsest root grid in one dimension.  If the coarsest root grid is \(1^3\) and
+average subtraction is enabled, it may zero-clear instead.
+
+\subsection{One Step to Finer}
+
+The upward path calls \code{OneStepToFiner()}.  It prolongates a coarse
+correction and then performs post-smoothing.  On MeshBlock levels, the
+\code{mg\_to\_finer} task list performs any needed boundary communication before
+prolongation, then boundary communication and red-black post-smoothing after
+prolongation.  On the final step to the finest level, it performs a final
+boundary exchange so the defect norm sees up-to-date ghost zones.
+
+\section{Full Multigrid (FMG)}
+
+FMG is an optional startup strategy controlled by \code{full\_multigrid}.  Instead
+of beginning on the finest grid with a rough guess, FMG:
+\begin{enumerate}
+  \item restricts the problem down to very coarse levels,
+  \item solves/coarsely smooths there,
+  \item prolongates to a finer level,
+  \item performs one or more V-cycles,
+  \item repeats until the finest level is reached,
+  \item then continues with the normal MG solve.
+\end{enumerate}
+
+In code, this is \code{SolveFMG()}, \code{SolveFMGCoarser()}, and
+\code{FMGProlongate()}.  CTS has \code{id\_solve/full\_multigrid} and
+\code{id\_solve/fmg\_ncycle} controls.
+
+\section{Boundary Handling}
+
+Boundary handling is essential because each smoother and residual evaluation
+uses ghost cells.
+
+\subsection{MeshBlock Boundary Exchange}
+
+MeshBlock task lists use:
+\begin{itemize}
+  \item \code{StartReceive()} \(\to\) \code{InitRecvMG()},
+  \item \code{SendBoundary()} \(\to\) \code{PackAndSendMG()},
+  \item \code{RecvBoundary()} \(\to\) \code{RecvAndUnpackMG()},
+  \item \code{ClearSend()} and \code{ClearRecv()} for cleanup.
+\end{itemize}
+
+These are scheduled around smoothing, restriction, and prolongation so stencil
+operations see valid ghost data.
+
+\subsection{Physical Boundaries}
+
+The base multigrid driver initializes multigrid physical BCs from mesh BCs:
+\begin{itemize}
+  \item periodic mesh faces stay periodic,
+  \item non-periodic mesh faces become \code{mg\_zerofixed}.
+\end{itemize}
+
+\code{mg\_zerofixed} uses odd reflection of the correction variable.  This
+approximately enforces zero value at the physical boundary.  \code{mg\_zerograd}
+uses even reflection.  Multipole BC support exists in the base MG machinery and
+is used by gravity, but CTS currently does not expose an \code{id\_solve/mg\_bc}
+override.
+
+\subsection{Fine/Coarse Ghosts}
+
+When SMR/AMR is present, \code{FillFCBoundary()} calls
+\code{FillFineCoarseMGGhosts()}.  For root/octet paths, octet boundary helpers
+copy same-level data or interpolate from coarser neighbors.  CTS also transfers
+coefficient/free-data arrays through this hierarchy.
+
+\section{Residual and Norms}
+
+\code{CalculateDefectPack()} is physics-specific.  For CTS it evaluates
+\[
+  def_v = src_v - F_v(u).
+\]
+\code{Multigrid::CalculateDefectNorm()} then reduces this defect over active
+cells.  For L1 and L2 norms the code multiplies by cell volume.  The driver
+\code{MultigridDriver::CalculateDefectNorm()} performs an MPI all-reduce and
+divides by the total domain volume; L2 norms are square-rooted:
+\[
+  \|def\|_2 =
+  \left(\frac{1}{V}\int |def|^2\,dV\right)^{1/2}.
+\]
+
+For multi-variable systems like CTS, the CTS driver computes each variable norm
+and then reports the total as the Euclidean combination:
+\[
+  \|def\|_{\rm total}
+  = \sqrt{\sum_v \|def_v\|_2^2}.
+\]
+
+\section{How CTS Uses the Generic Multigrid}
+
+The CTS solve is a good concrete example:
+\begin{enumerate}
+  \item \code{IDConformalThinSandwich::BuildFreeData()} builds all coefficients.
+  \item \code{IDCTSMultigridDriver::Solve()} loads the initial guess, source, and
+        coefficients into the multigrid arrays.
+  \item Generic V-cycle machinery calls back into:
+        \code{SmoothPack()}, \code{CalculateDefectPack()}, and
+        \code{CalculateFASRHSPack()}.
+  \item \code{SmoothPack()} calls the selected CTS smoother
+        (\code{diagonal} by default, or \code{newton\_gs}).
+  \item \code{CalculateDefectPack()} evaluates the CTS residual.
+  \item \code{CalculateFASRHSPack()} adds the CTS operator value to the coarse
+        FAS source.
+  \item After convergence or fixed V-cycles, \code{RetrieveResult()} copies the
+        finest \code{u} back to \code{u\_cts}.
+  \item \code{ApplySolution()} reconstructs ADM/Z4c data.
+\end{enumerate}
+
+\section{Fixed-Iteration vs Threshold Mode}
+
+The generic driver and CTS driver support two normal modes:
+
+\begin{itemize}
+  \item \textbf{Threshold mode}: if \code{threshold >= 0}, V-cycles continue until
+        the defect drops below the threshold or the iteration cap is reached.
+  \item \textbf{Fixed-count mode}: if \code{threshold < 0}, the solver runs
+        \code{niteration} V-cycles.
+\end{itemize}
+
+CTS adds best-solution guards:
+\begin{itemize}
+  \item \code{keep\_best\_solution}: stores the best-so-far correction if later
+        V-cycles diverge.
+  \item \code{stop\_on\_defect\_increase}: optionally stops when the defect grows
+        beyond a tolerance.
+  \item \code{reject\_worse}: rejects the solved update if the final defect is
+        worse than the initial defect.
+\end{itemize}
+
+\section{How to Read the Multigrid Code}
+
+A useful reading order is:
+\begin{enumerate}
+  \item \file{src/multigrid/multigrid.hpp}: learn the arrays, levels, \code{MGOctet},
+        and virtual physics hooks.
+  \item \file{src/multigrid/multigrid.cpp}: read \code{LoadFinestData},
+        \code{LoadSource}, \code{LoadCoefficients}, \code{RestrictPack},
+        \code{ProlongateAndCorrectPack}, and \code{CalculateDefectNorm}.
+  \item \file{src/multigrid/multigrid\_driver.cpp}: read \code{SetupMultigrid},
+        \code{SolveVCycle}, \code{SolveCoarsestGrid}, \code{SolveFMG}, and
+        \code{MGRootBoundary}.
+  \item \file{src/multigrid/multigrid\_tasks.cpp}: read task-list construction
+        for \code{mg\_to\_coarser} and \code{mg\_to\_finer}.
+  \item \file{src/z4c/id\_solve.cpp}: read how CTS plugs into the generic hooks.
+\end{enumerate}
+
+\section{Mental Model for Debugging}
+
+When multigrid misbehaves, classify the failure:
+\begin{itemize}
+  \item \textbf{Smoother instability}: defect grows during V-cycles.  Try smaller
+        \(\omega\), compare \code{smoother=diagonal} with
+        \code{smoother=newton\_gs}, inspect the local Jacobian/diagonal
+        approximation, or use the best-solution guard.
+  \item \textbf{Boundary/communication bug}: MPI stalls or rank-dependent results.
+        Inspect task dependencies around \code{StartReceive}, \code{SendBoundary},
+        \code{RecvBoundary}, \code{ClearSend}, and \code{ClearRecv}.
+  \item \textbf{Coarse-grid inconsistency}: fine-grid residual improves briefly
+        but correction from coarse levels hurts.  Inspect restriction,
+        prolongation, and coefficient restriction.
+  \item \textbf{Stencil/halo mismatch}: high-order operators use invalid ghost
+        data or silently reduce order.  Check stencil radius and ghost count.
+  \item \textbf{Bad free data or source scaling}: initial defect changes strongly
+        with resolution or physical constraints do not improve after solving.
+\end{itemize}
+
+For CTS specifically, the diagonal smoother remains the conservative default and
+is simple and parallel.  The optional \code{newton\_gs} smoother includes the
+local coupling among \(\Psi\) and \(\beta^i\), but still needs damping and can be
+more expensive because it finite-differences and solves a \(4\times4\) system at
+each active point.
+
+\section{Glossary}
+
+\begin{longtable}{p{0.25\linewidth} p{0.67\linewidth}}
+\toprule
+\textbf{Term} & \textbf{Meaning} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Meaning} \\
+\midrule
+\endhead
+Smoother & Local relaxation step that damps high-frequency error. \\
+Residual/defect & Difference between desired equation and current operator value,
+\(f-L(u)\) or \(src-F(u)\). \\
+Restriction & Fine-to-coarse transfer. \\
+Prolongation & Coarse-to-fine transfer. \\
+V-cycle & Down to coarse levels, coarse solve/smooth, back to fine levels. \\
+FAS & Full Approximation Storage, nonlinear multigrid method where coarse grids
+store full solutions rather than only corrections. \\
+Root grid & Coarse grid built from the logical root MeshBlock layout. \\
+MeshBlock level & Multigrid hierarchy inside each MeshBlock. \\
+Octet & \(2^3\)-interior-cell structure that bridges refinement levels. \\
+Ghost cells & Extra boundary cells needed for stencils and inter-block exchange. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

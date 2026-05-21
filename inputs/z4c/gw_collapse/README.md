@@ -7,6 +7,18 @@ cmake -S . -B build-gw-collapse -DPROBLEM=z4c_gravitational_wave_collapse
 cmake --build build-gw-collapse --target athena
 ```
 
+For the native CTS-solved critical-Kerr path, build:
+
+```sh
+cmake -S . -B build-critical-kerr -DPROBLEM=z4c_critical_kerr_formation
+cmake --build build-critical-kerr --target athena
+```
+
+The `z4c_critical_kerr_formation` pgen fills the conformal metric and
+trace-free conformal metric derivative described in the local notes, then the
+`<id_solve>` task solves the CTS constraints and applies the resulting ADM/Z4c
+data before evolution.
+
 The pgen initializes smooth, compactly supported vacuum gravitational-wave free
 data for Z4c collapse studies.  The parameterization follows the finite
 dimensional conformal-data scaffold in

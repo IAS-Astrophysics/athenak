@@ -27,7 +27,6 @@
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/compact_object_tracker.hpp"
-#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
@@ -150,7 +149,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
-  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0, nadm=0, nco=0, nhorizon=0;
+  int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0, nadm=0, nco=0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -163,7 +162,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
     nco = pz4c->ptracker.size();
-    nhorizon = pz4c->phorizon_dump.size();
   } else if (padm != nullptr) {
     nadm = padm->nadm;
   }
@@ -261,10 +259,6 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         resfile.Write_any_type(pt->GetPos(), 3*sizeof(Real), "byte",
                                single_file_per_rank);
       }
-      for (auto & pt : pz4c->phorizon_dump) {
-        resfile.Write_any_type(&(pt->output_count), sizeof(int), "byte",
-                               single_file_per_rank);
-      }
     }
 
     // turbulence driver internal RNG
@@ -310,7 +304,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                              sizeof(RegionSize) + 2*sizeof(RegionIndcs);
   IOWrapperSizeT step2size = (pm->nmb_total)*(sizeof(LogicalLocation) + sizeof(float));
 
-  IOWrapperSizeT step3size = 3*nco*sizeof(Real) + nhorizon*sizeof(int);
+  IOWrapperSizeT step3size = 3*nco*sizeof(Real);
   if (pz4c != nullptr) step3size += 2*sizeof(Real);
   if (pturb != nullptr) step3size += sizeof(RNG_State);
 

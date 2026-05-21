@@ -123,6 +123,9 @@ if (ENABLE_OPENMP)
   target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
+# BHaHAHA headers are C99 and use restrict; make them parse when included from C++.
+target_compile_definitions(athena PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:restrict=>")
+
 find_package(HDF5 REQUIRED COMPONENTS C)
 if(TARGET HDF5::HDF5)
   target_link_libraries(athena PUBLIC HDF5::HDF5)

@@ -5,6 +5,8 @@
 #=========================================================================================
 
 # list of files to be compiled into executable name
+file(GLOB BHAHAHA_SOURCES z4c/bhahaha/*.c)
+
 add_executable(
     athena
         main.cpp
@@ -171,11 +173,13 @@ add_executable(
         utils/tr_table.cpp
         utils/cart_grid.cpp
         utils/spherical_surface.cpp
+        utils/arbitrary_grid_interpolator.cpp
         utils/flux_generalized.cpp
         utils/surface_grid.cpp
 
         z4c/compact_object_tracker.cpp
-        z4c/horizon_dump.cpp
+        z4c/BHaHAHA_horizon_finder.cpp
+        ${BHAHAHA_SOURCES}
         z4c/id_solve.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp

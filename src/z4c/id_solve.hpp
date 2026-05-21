@@ -74,10 +74,18 @@ class IDCTSMultigridDriver : public MultigridDriver {
 
   IDConformalThinSandwich *owner_;
   Real omega_;
+  Real defect_increase_tol_;
+  Real ngs_jacobian_eps_;
+  Real ngs_max_update_;
+  int max_iter_;
   int div_ahat_stencil_;
   int octet_fd_stencil_;
   int octet_div_ahat_stencil_;
+  int smoother_type_;
+  int ngs_iterations_;
   bool reject_worse_;
+  bool keep_best_solution_;
+  bool stop_on_defect_increase_;
   bool allow_incomplete_amr_;
   bool solution_applied_;
 
@@ -113,10 +121,12 @@ class IDConformalThinSandwich {
   bool full_multigrid_;
   bool fill_horizon_junk_;
   bool mask_horizon_defect_;
+  bool dump_constraint_diagnostics_;
   int history_every_;
   Real horizon_radius_;
   Real horizon_mask_radius_;
   Real horizon_center_[3];
+  Real diagnostic_slice_z_;
   FILE *history_file_;
   std::string history_name_;
 
@@ -125,6 +135,8 @@ class IDConformalThinSandwich {
   template <int NGHOST>
   void FillHorizonJunk();
   void RefreshZ4cBoundariesAfterSolve(Driver *pdriver);
+  void RecomputeConstraintsAfterSolve();
+  void WriteConstraintDiagnostics(const char *stage);
 
   friend class IDCTSMultigridDriver;
   friend class IDCTSMultigrid;

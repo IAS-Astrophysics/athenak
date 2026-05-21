@@ -21,7 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
-#include "z4c/horizon_dump.hpp"
+#include "z4c/BHaHAHA_horizon_finder.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
@@ -242,18 +242,18 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  // Construct the Cartesian data grid for dumping horizon data
-  n = 0;
-  while (true) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      // phorizon_dump.emplace_back(pmy_pack, pin, n,false);
-      phorizon_dump.push_back(std::make_unique<HorizonDump>(pmy_pack, pin, n, 0));
-      std::string foldername = "horizon_"+std::to_string(n);
-      mkdir(foldername.c_str(),0775);
-      n++;
-    } else {
+  // BHaHAHA replaces the old ET/AHFinderDirect ADM cube dump. Keep it opt-in so
+  // ordinary Z4c/id_solve runs without compact-object trackers do not instantiate it.
+  bool enable_bhahaha = pin->GetOrAddBoolean("z4c", "bah_enable", false);
+  for (int h = 0; ; ++h) {
+    if (!pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(h), false)) {
       break;
     }
+    enable_bhahaha = true;
+  }
+  if (enable_bhahaha) {
+    mkdir("horizon", 0775);
+    pahfind = std::make_unique<BHAHAHorizonFinder>(pmy_pack, pin);
   }
 }
 

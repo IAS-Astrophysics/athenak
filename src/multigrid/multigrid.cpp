@@ -695,16 +695,14 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
   int is, ie, js, je, ks, ke;
   is=js=ks=ngh_;
   ie=is+(indcs_.nx1>>ll)-1, je=js+(indcs_.nx2>>ll)-1, ke=ks+(indcs_.nx3>>ll)-1;
-  Real dx = rdx_ * static_cast<Real>(1 << ll);
-  Real dy = rdy_ * static_cast<Real>(1 << ll);
-  Real dz = rdz_ * static_cast<Real>(1 << ll);
-  Real dV = dx * dy * dz;
+  int ll_l = ll;
   CalculateDefectPack();
 
   Real norm = 0.0;
 
   if (on_host_) {
     auto &def = def_[current_level_].h_view;
+    auto brdx = block_rdx_.h_view;
     if (nrm == MGNormType::max) {
       Kokkos::parallel_reduce("MG::DefectNorm_Linf",
         Kokkos::MDRangePolicy<HostExeSpace, Kokkos::Rank<5>>(
@@ -720,7 +718,9 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
             {0, n, ks, js, is}, {nmmb_, n+1, ke+1, je+1, ie+1}),
         KOKKOS_LAMBDA(const int m, const int v, const int k, const int j,
                        const int i, Real &local_sum) {
-          local_sum += std::abs(def(m, v, k, j, i));
+          Real dx = brdx(m) * static_cast<Real>(1 << ll_l);
+          Real dV = dx * dx * dx;
+          local_sum += dV * std::abs(def(m, v, k, j, i));
         }, Kokkos::Sum<Real>(norm));
     } else {
       Kokkos::parallel_reduce("MG::DefectNorm_L2",
@@ -728,12 +728,15 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
             {0, n, ks, js, is}, {nmmb_, n+1, ke+1, je+1, ie+1}),
         KOKKOS_LAMBDA(const int m, const int v, const int k, const int j,
                        const int i, Real &local_sum) {
+          Real dx = brdx(m) * static_cast<Real>(1 << ll_l);
+          Real dV = dx * dx * dx;
           Real val = def(m, v, k, j, i);
-          local_sum += val * val;
+          local_sum += dV * val * val;
         }, Kokkos::Sum<Real>(norm));
     }
   } else {
     auto &def = def_[current_level_].d_view;
+    auto brdx = block_rdx_.d_view;
     if (nrm == MGNormType::max) {
       Kokkos::parallel_reduce("MG::DefectNorm_Linf",
         Kokkos::MDRangePolicy<DevExeSpace, Kokkos::Rank<5>>(
@@ -749,7 +752,9 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
             {0, n, ks, js, is}, {nmmb_, n+1, ke+1, je+1, ie+1}),
         KOKKOS_LAMBDA(const int m, const int v, const int k, const int j,
                        const int i, Real &local_sum) {
-          local_sum += std::abs(def(m, v, k, j, i));
+          Real dx = brdx(m) * static_cast<Real>(1 << ll_l);
+          Real dV = dx * dx * dx;
+          local_sum += dV * std::abs(def(m, v, k, j, i));
         }, Kokkos::Sum<Real>(norm));
     } else {
       Kokkos::parallel_reduce("MG::DefectNorm_L2",
@@ -757,8 +762,10 @@ Real Multigrid::CalculateDefectNorm(MGNormType nrm, int n) {
             {0, n, ks, js, is}, {nmmb_, n+1, ke+1, je+1, ie+1}),
         KOKKOS_LAMBDA(const int m, const int v, const int k, const int j,
                        const int i, Real &local_sum) {
+          Real dx = brdx(m) * static_cast<Real>(1 << ll_l);
+          Real dV = dx * dx * dx;
           Real val = def(m, v, k, j, i);
-          local_sum += val * val;
+          local_sum += dV * val * val;
         }, Kokkos::Sum<Real>(norm));
     }
   }
@@ -1804,7 +1811,6 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   }
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
-  MPI_Barrier(comm_vars);
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack
@@ -1901,7 +1907,7 @@ TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
 
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;
-          data_size *= sendbuf[n].isame_ndat;
+          data_size *= recvbuf[n].isame_ndat;
           
           if (not(recvbuf[n].faces.h_view(0)))
             data_size >>= shift_;

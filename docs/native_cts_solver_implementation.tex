@@ -1,0 +1,691 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.85in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{microtype}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  urlcolor=blue!50!black,
+  pdftitle={Native CTS Solver Implementation Notes},
+  pdfauthor={Cursor agent}
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  columns=fullflexible,
+  breaklines=true,
+  frame=single,
+  framerule=0.2pt,
+  rulecolor=\color{black!30}
+}
+
+\newcommand{\file}[1]{\nolinkurl{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\dd}{\mathrm{d}}
+
+\title{Native CTS Solver Implementation Notes}
+\author{AthenaK code-reading guide}
+\date{May 21, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Purpose and Big Picture}
+
+The native initial-data solver lives primarily in \file{src/z4c/id_solve.cpp} and
+\file{src/z4c/id_solve.hpp}.  It solves a conformal thin sandwich (CTS) system for
+four correction variables,
+\[
+  u = (\delta\Psi,\delta\beta^x,\delta\beta^y,\delta\beta^z),
+\]
+stored in \code{IDConformalThinSandwich::u\_cts}.  The correction is added to a
+fixed background/free-data state stored in \code{u\_free}.  After the multigrid
+solve, the code reconstructs physical ADM variables and converts them into Z4c
+evolution variables.
+
+At a high level, the flow is:
+\begin{enumerate}
+  \item A problem generator initializes ADM-like seed data.
+  \item Z4c setup converts that seed to Z4c variables and computes initial
+        diagnostics.
+  \item At the start of the Z4c task list, \code{Z4c\_IDSolve} runs once
+        if \code{pmy\_pack->pid\_solve} exists.
+  \item The CTS solver builds free data from the current ADM variables.
+  \item The multigrid driver solves for \(\delta\Psi\) and \(\delta\beta^i\).
+  \item \code{ApplySolution()} writes solved physical ADM fields, converts them
+        to Z4c variables, refreshes boundary/ghost zones, and recomputes ADM
+        constraints.
+  \item Normal hyperbolic Z4c evolution proceeds from the solved data.
+\end{enumerate}
+
+\section{File-by-File Map}
+
+\begin{longtable}{p{0.34\linewidth} p{0.60\linewidth}}
+\toprule
+\textbf{File} & \textbf{Role in CTS/Z4c initial-data path} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File} & \textbf{Role in CTS/Z4c initial-data path} \\
+\midrule
+\endhead
+\file{src/z4c/id\_solve.hpp} &
+Declares the native CTS classes and variable enums.  Defines the four solved
+variables \code{ID\_CTS\_*}, all free-data slots \code{ID\_FREE\_*}, the
+\code{IDCTSMultigrid} subclass, the \code{IDCTSMultigridDriver}, and the owner
+class \code{IDConformalThinSandwich}. \\
+\addlinespace
+\file{src/z4c/id\_solve.cpp} &
+Main implementation.  Contains finite-difference helpers, conformal geometry
+helpers, the CTS residual operator, smoothing/defect/FAS kernels, multigrid
+driver construction and solve loop, free-data construction, ADM application, and
+constraint diagnostics. \\
+\addlinespace
+\file{src/z4c/z4c\_tasks.cpp} &
+Queues \code{IDConformalThinSandwich::SolveTask} as \code{Z4c\_IDSolve} in the
+\code{Task\_Start} phase after \code{Z4c\_Recv}.  Also shows the evolution task
+sequence that follows: copy, RHS, boundary RHS, RK update, restriction, send/recv,
+physical BCs, prolongation, algebraic constraints, ADM conversion, diagnostics,
+tracking, CCE, and horizon finding. \\
+\addlinespace
+\file{src/z4c/z4c.cpp} &
+Constructs Z4c options and boundary buffers.  Maps \code{z4c/spatial\_order} to
+\code{opt.fd\_stencil}: 2nd order \(\to 2\), 4th order \(\to 3\), 6th order
+\(\to 4\).  Allocates \code{pbval\_u} and \code{pbval\_weyl}. \\
+\addlinespace
+\file{src/z4c/z4c\_adm.cpp} &
+Implements \code{ADMToZ4c}, \code{Z4cToADM}, and \code{ADMConstraints}.  This is
+the conversion bridge between solved ADM data and Z4c evolution arrays. \\
+\addlinespace
+\file{src/pgen/z4c\_critical\_kerr\_formation.cpp} &
+Problem generator for the compact-support conformal-metric seed.  Builds
+\(\bar{\gamma}_{ij}\), a trace-free time-derivative/extrinsic-curvature seed,
+zero shift, and chosen lapse; then converts ADM to Z4c before the CTS task runs. \\
+\addlinespace
+\file{src/multigrid/multigrid.hpp} &
+Base multigrid data structures.  Defines \code{Multigrid}, \code{MGOctet}, task
+IDs, storage for \code{u}, \code{src}, \code{def}, \code{coeff}, and generic
+restriction/prolongation/smoothing interfaces. \\
+\addlinespace
+\file{src/multigrid/multigrid.cpp} &
+Generic multigrid operations: load finest data/source/coefficient arrays,
+restrict coefficients, retrieve solved data, restrict residuals, prolong and
+correct, compute defect norms, root-grid transfers. \\
+\addlinespace
+\file{src/multigrid/multigrid\_driver.cpp} &
+Base multigrid driver: hierarchy setup, V-cycle and FMG orchestration, root-grid
+boundary treatment, octet/coarse-fine bridge support, default multigrid boundary
+condition selection. \\
+\addlinespace
+\file{src/multigrid/multigrid\_tasks.cpp} &
+Task-list wiring for multigrid cycles: boundary receive/send, physical boundary
+fill, fine-coarse ghost fill, red/black smoothing, restriction, prolongation, and
+cleanup dependencies. \\
+\addlinespace
+\file{src/utils/finite\_diff.hpp} &
+Generated finite-difference stencils used by CTS and Z4c.  The template
+parameter \code{NGHOST=2,3,4} corresponds to 2nd, 4th, and 6th-order centered
+operators. \\
+\addlinespace
+\file{inputs/z4c/gw\_collapse/z4c\_critical\_kerr\_formation.athinput} &
+Representative input file.  Sets mesh boundaries, \code{z4c/spatial\_order},
+\code{id\_solve} controls, and the critical-Kerr seed parameters. \\
+\bottomrule
+\end{longtable}
+
+\section{Objects and Data Arrays}
+
+\subsection{Solved Variables}
+
+\file{src/z4c/id\_solve.hpp} defines:
+\begin{lstlisting}
+enum IDCTSUVar {
+  ID_CTS_PSI,
+  ID_CTS_BETAX,
+  ID_CTS_BETAY,
+  ID_CTS_BETAZ,
+  ID_CTS_NVAR
+};
+\end{lstlisting}
+
+The multigrid unknown \code{u\_cts} stores corrections to a base conformal factor
+and base shift.  The actual fields used by the residual are assembled with
+\code{TotalU()}:
+\[
+  \Psi = \code{ID\_FREE\_BASE\_PSI} + u_{\Psi}, \qquad
+  \beta^i = \code{ID\_FREE\_BASE\_BETA}^i + u_{\beta^i}.
+\]
+In the current critical-Kerr seed, the base values are \(\Psi=1\) and
+\(\beta^i=0\), so the solver starts from no correction.
+
+\subsection{Free-Data Variables}
+
+\code{IDCTSFreeVar} includes:
+\begin{itemize}
+  \item \code{ID\_FREE\_GXX ... ID\_FREE\_GZZ}: conformal metric
+        \(\bar{\gamma}_{ij}\).
+  \item \code{ID\_FREE\_GDOTXX ... ID\_FREE\_GDOTZZ}: contravariant trace-free
+        tensor \(\bar{u}^{ij}_{TF}\).  The names say \code{GDOT}, but the comment
+        in the header clarifies the actual stored quantity.
+  \item \code{ID\_FREE\_K}: trace \(K\).
+  \item \code{ID\_FREE\_DKX ... ID\_FREE\_DKZ}: \(\bar{D}^i K\).
+  \item \code{ID\_FREE\_ALPHA}: conformal lapse-like field used by the operator.
+  \item \code{ID\_FREE\_E}, \code{ID\_FREE\_PX/PY/PZ}: matter source terms.
+  \item \code{ID\_FREE\_SOURCE}: extra scalar source in the Hamiltonian equation.
+  \item \code{ID\_FREE\_MASK}: active-cell mask for the residual and smoother.
+  \item \code{ID\_FREE\_BASE\_PSI}, \code{ID\_FREE\_BASE\_BETAX/BETAY/BETAZ}:
+        base values to which corrections are added.
+\end{itemize}
+
+\section{Problem-Generator Seed Path}
+
+\file{src/pgen/z4c\_critical\_kerr\_formation.cpp} is the current compact-support
+test seed.  The important functions are:
+
+\begin{itemize}
+  \item \code{ReadOptions()}: reads \code{problem/*} options such as amplitude,
+        support radius, helicity, phase, lapse, and radial coefficients.
+  \item \code{RadialProfileAndDerivative()}: constructs a compact bump profile
+        and radial derivative using Legendre modes.
+  \item \code{FillCriticalKerrFreeDataADM()}: fills ADM fields on active and
+        ghost cells.  It constructs a regular \(\ell=m=2\) solid-harmonic tensor
+        perturbation, builds \(q_{ij}=\delta_{ij}+h_{ij}+h^2_{ij}/2\), rescales it
+        to unit determinant, and stores it as an ADM spatial metric seed.  It also
+        builds a trace-free \(\dot{u}_{ij}\)-like tensor and stores
+        \(K_{ij}=0.5\,\dot{u}_{ij}\), with zero shift and configured lapse.
+  \item \code{ConvertADMToZ4cAndConstraints()}: dispatches to
+        \code{ADMToZ4c<2/3/4>} based on \code{pz4c->opt.fd\_stencil}, computes
+        ADM constraints, then calls \code{Z4cToADM()} so the ADM view is
+        consistent with the Z4c storage.
+  \item \code{ProblemGenerator::UserProblem()}: checks that \code{z4c}, \code{adm},
+        and \code{id\_solve} exist, fills the seed, optionally sets a
+        pre-collapsed lapse, converts to Z4c, and returns.
+\end{itemize}
+
+\section{Task Scheduling and Handoff Timing}
+
+The solve is inserted in \file{src/z4c/z4c\_tasks.cpp}.  In
+\code{Z4c::QueueZ4cTasks()}, the start phase is:
+\begin{lstlisting}
+Z4c_Recv     = Z4c::InitRecv
+Z4c_IRecvW   = Z4c::InitRecvWeyl
+Z4c_IDSolve  = IDConformalThinSandwich::SolveTask, depends on Z4c_Recv
+\end{lstlisting}
+
+This means Z4c boundary receives are posted before the ID solve.  The solve is
+still before the hyperbolic RHS and RK update.  After the solve, regular evolution
+continues through \code{CopyU}, \code{CalcRHS}, \code{Z4cBoundaryRHS},
+\code{ExpRKUpdate}, mesh communication, physical BCs, prolongation, algebraic
+constraint enforcement, and \code{Z4cToADM}.
+
+Inside \code{IDConformalThinSandwich::SolveTask()}:
+\begin{enumerate}
+  \item Optionally write ``before'' constraint diagnostics.
+  \item Call \code{IDCTSMultigridDriver::Solve()}.
+  \item If a solution was accepted, call \code{RefreshZ4cBoundariesAfterSolve()}.
+  \item Recompute constraints on the refreshed solution.
+  \item Optionally write ``after'' diagnostics.
+\end{enumerate}
+
+The refresh step is important.  \code{ApplySolution()} writes Z4c data, but ghost
+zones and physical boundaries need to be made consistent before evolution and
+before final diagnostics.
+
+\section{Free-Data Construction}
+
+\code{IDConformalThinSandwich::BuildFreeData()} converts the current ADM fields
+into the free-data arrays consumed by the CTS residual.
+
+\subsection{Metric, Lapse, Shift, and Trace}
+
+For every active and ghost cell:
+\begin{itemize}
+  \item \(\bar{\gamma}_{ij}\) is copied from \code{admvars.g\_dd}.
+  \item The inverse metric is computed locally.
+  \item \(K=\gamma^{ij}K_{ij}\) is computed from \code{admvars.vK\_dd}.
+  \item \code{ID\_FREE\_ALPHA} is copied from \code{admvars.alpha}.
+  \item The base conformal factor is set to 1.
+  \item The base shift is copied from \code{admvars.beta\_u}.
+  \item The correction variables in \code{u\_cts} are reset to zero.
+\end{itemize}
+
+\subsection{Matter Sources and Masks}
+
+If \code{pmy\_pack->ptmunu} exists, the code reads Eulerian energy density
+\code{tmunu.E} and raises the covariant momentum \code{S\_d} using the conformal
+metric inverse.  Otherwise \(E=0\) and \(p^i=0\).
+
+The mask controls where the residual and smoother are active.  If
+\code{id\_solve/mask\_horizon\_defect=true}, cells inside
+\code{horizon\_mask\_radius} get \code{ID\_FREE\_MASK=0}.  If
+\code{id\_solve/fill\_horizon\_junk=true}, source terms inside
+\code{horizon\_fill\_radius} are adjusted by \code{FillHorizonJunk()}.
+
+\subsection{\(\bar{u}^{ij}_{TF}\) and \(\bar{D}^i K\)}
+
+\code{BuildGammaDotAndDK<NGHOST>()} computes:
+\begin{itemize}
+  \item \(\bar{D}^i K = \bar{\gamma}^{ij}\partial_j K\), stored in
+        \code{ID\_FREE\_DKX/DKY/DKZ}.
+  \item The trace-free extrinsic-curvature seed \( \hat{A}^{ij} \) by raising the
+        trace-free part of \(K_{ij}\) using the conformal metric.
+  \item The conformal longitudinal shift operator \((\bar{L}\beta)^{ij}\).
+  \item The stored tensor
+        \[
+          \bar{u}^{ij}_{TF} = 2\alpha\hat{A}^{ij} - (\bar{L}\beta)^{ij}.
+        \]
+\end{itemize}
+
+The halo width needed here follows the same nested-stencil logic as
+\(D_j\hat{A}^{ij}\): \(\hat{A}\) contains derivatives, and its divergence may
+require an additional outer stencil.
+
+\section{CTS Residual Operator}
+
+\code{CTSOperator<NGHOST>()} evaluates the four residual equations at one cell.
+Its inputs are:
+\begin{itemize}
+  \item \code{u}: current multigrid correction variables.
+  \item \code{free}: coefficient/free-data array.
+  \item \code{idx}: inverse grid spacing.
+  \item \code{fd\_stencil}: base derivative stencil selector.
+  \item \code{div\_ahat\_stencil}: outer stencil used for
+        \(D_j\hat{A}^{ij}\).
+\end{itemize}
+
+\subsection{Geometry Helpers}
+
+\begin{itemize}
+  \item \code{MetricInverse()} computes \(\bar{\gamma}^{ij}\).
+  \item \code{Christoffel<NGHOST>()} computes \(\bar{\Gamma}^i{}_{jk}\) using
+        centered finite differences of the conformal metric.
+  \item \code{RicciScalar<NGHOST>()} computes \(\bar{R}\) from first and second
+        finite differences of \(\bar{\gamma}_{ij}\).
+  \item \code{DxTotal()}, \code{DxxTotal()}, and \code{DxyTotal()} differentiate
+        base-plus-correction quantities.
+\end{itemize}
+
+\subsection{\(\hat{A}^{ij}\)}
+
+\code{AHatUU<NGHOST>()} computes:
+\[
+  \hat{A}^{ij} =
+  \frac{\bar{u}^{ij}_{TF} + (\bar{L}\beta)^{ij}}{2\alpha}.
+\]
+The implementation recomputes the Christoffels and \(\partial_i\beta^j\) at the
+cell where \(\hat{A}^{ij}\) is requested.  \code{DxAHatUU()} then computes a
+centered finite-difference derivative of \(\hat{A}^{ij}\) by sampling
+\code{AHatUU()} at neighboring cells.
+
+\subsection{Hamiltonian Residual}
+
+The implemented scalar residual is:
+\[
+  \bar{D}^2\Psi
+  - \frac{1}{8}\bar{R}\Psi
+  + \frac{1}{8}\hat{A}_{ij}\hat{A}^{ij}\Psi^{-7}
+  + 2\pi E\Psi^5
+  - \frac{1}{12}K^2\Psi^5
+  - S = 0.
+\]
+Here \(S\) is \code{ID\_FREE\_SOURCE}.  In vacuum critical-Kerr tests,
+\(E=S=0\).
+
+\subsection{Momentum Residual}
+
+For each component \(i\), the implemented residual is:
+\[
+  2\bar{D}_j\hat{A}^{ij}
+  - \frac{4}{3}\Psi^6\bar{D}^iK
+  - 16\pi\Psi^6 P^i = 0.
+\]
+\(\bar{D}_j\hat{A}^{ij}\) is assembled from \(\partial_j\hat{A}^{ij}\) plus
+Christoffel terms.
+
+\subsection{Stencil and Halo Selection}
+
+\code{z4c/spatial\_order} maps to \code{fd\_stencil} as:
+\[
+  2 \mapsto 2,\qquad 4 \mapsto 3,\qquad 6 \mapsto 4.
+\]
+\code{NGHOST=2,3,4} in \file{finite\_diff.hpp} gives 2nd, 4th, and 6th-order
+centered derivative formulas.
+
+The \(D_j\hat{A}^{ij}\) path is nested: an outer derivative samples
+\(\hat{A}^{ij}\), and each \(\hat{A}^{ij}\) evaluation contains inner
+derivatives of \(\beta^i\) and \(\bar{\gamma}_{ij}\).  The current required halo
+is:
+\[
+  n_{\rm ghost}^{\rm required}
+  = (\code{fd\_stencil}-1) + (\code{div\_ahat\_stencil}-1).
+\]
+Therefore:
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+Spatial order & \code{fd\_stencil} & order-matched \code{div\_ahat\_stencil}
+& required ghost cells \\
+\midrule
+2 & 2 & 2 & 2 \\
+4 & 3 & 3 & 4 \\
+6 & 4 & 4 & 6 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The current code now refuses to silently downshift \code{div\_ahat\_stencil} in
+auto mode.  If the halo is too small, it asks for more ghost cells or an explicit
+lower-order fallback.
+
+\section{Smoothing Kernel}
+
+The smoother is in \code{SmoothImpl()} and is called by
+\code{IDCTSMultigrid::SmoothPack()}.  The driver reads
+\code{id\_solve/smoother}; the default is the original red-black, pointwise,
+diagonally preconditioned nonlinear relaxation:
+\[
+  u_v \leftarrow u_v - \omega\,
+  \frac{\mathcal{F}_v(u)-{\rm src}_v}{D_v}.
+\]
+Here \(D_v\) is the approximate diagonal coefficient returned by
+\code{CTSOperator()}.  The scalar equation uses a diagonal built from the
+centered Laplacian coefficient and local nonlinear derivatives.  The shift
+equations use a diagonal approximation to the vector Laplacian-like principal
+part divided by \(\alpha\).
+
+This diagonal mode has the following properties:
+\begin{itemize}
+  \item The update is in-place and red-black colored.
+  \item It does not solve a coupled local \(4\times4\) Newton system for
+        \((\Psi,\beta^i)\).
+  \item It ignores off-diagonal Jacobian couplings between \(\Psi\) and
+        \(\beta^i\), and between shift components.
+  \item It is therefore closer to an under-relaxed diagonal Newton/Jacobi-GS
+        smoother.
+\end{itemize}
+
+The optional \code{smoother = newton\_gs} path applies a coupled local Newton
+update at each active red/black point.  At a fixed cell, it forms the local
+residual
+\[
+  R_v = \mathcal{F}_v(u)-{\rm src}_v
+\]
+for \(v=(\Psi,\beta^x,\beta^y,\beta^z)\), builds a \(4\times4\) Jacobian by
+finite differencing the full local CTS operator with respect to the four cell-
+centered unknowns, solves
+\[
+  J_{vw}\,\delta u_w = -R_v,
+\]
+and updates \(u \leftarrow u + \omega\,\delta u\).  The finite-difference
+Jacobian uses a read-only local perturbed view of the solution, so neighboring
+threads never observe a temporary perturbation of the shared grid.  If the local
+\(4\times4\) solve is singular or ill-conditioned, the code falls back to the
+diagonal update at that cell.
+
+The Newton-Gauss-Seidel option is closer to the relaxation described by East
+et al. (arXiv:1208.3473), because it keeps the in-place red-black
+Gauss-Seidel ordering but includes the local coupling among \(\Psi\) and the
+three shift components.  It is still damped by \(\omega\); for the current
+critical-Kerr CTS tests, \(\omega=1\) is too aggressive and small values such as
+\(\omega\simeq0.02\) remain safer.
+
+Properties common to both smoother modes:
+\begin{itemize}
+  \item The update is active only where \code{ID\_FREE\_MASK >= 0.5}.
+  \item MeshBlock smoothing and root-octet smoothing use the same smoother mode.
+  \item After each point update it floors \(\Psi\) at \(10^{-8}\).
+\end{itemize}
+
+The default/used solver controls are read in
+\code{IDCTSMultigridDriver::IDCTSMultigridDriver()}:
+\begin{itemize}
+  \item \code{id\_solve/omega}: relaxation factor.
+  \item \code{id\_solve/smoother}: \code{diagonal} (default) or
+        \code{newton\_gs}.
+  \item \code{id\_solve/ngs\_iterations}: number of local Newton updates per
+        smoothing visit when \code{smoother = newton\_gs}.
+  \item \code{id\_solve/ngs\_jacobian\_eps}: relative perturbation used to
+        finite-difference the local \(4\times4\) Jacobian.
+  \item \code{id\_solve/ngs\_max\_update}: optional absolute limiter on each
+        component update; \code{0} disables this limiter.
+  \item \code{id\_solve/npresmooth}, \code{id\_solve/npostsmooth}: V-cycle
+        smoothing counts.
+  \item \code{id\_solve/niteration}: fixed V-cycle budget when
+        \code{threshold < 0}.
+  \item \code{id\_solve/threshold}: convergence threshold when nonnegative.
+  \item \code{id\_solve/full\_multigrid}: optional FMG solve.
+  \item \code{id\_solve/keep\_best\_solution} and
+        \code{id\_solve/stop\_on\_defect\_increase}: guards for unstable or
+        over-relaxed runs.
+\end{itemize}
+
+\section{Multigrid Solve Lifecycle}
+
+\code{IDCTSMultigridDriver::Solve()} does the following:
+\begin{enumerate}
+  \item \code{PrepareForAMR()} constructs root-grid and octet bookkeeping.
+  \item Guards reject adaptive AMR and currently reject sixth-order CTS on SMR.
+  \item \code{owner\_->BuildFreeData()} builds \code{u\_free} and resets
+        \code{u\_cts}.
+  \item \code{mglevels\_->LoadFinestData(owner\_->u\_cts, ...)} loads the
+        correction initial guess.
+  \item \code{LoadSource(owner\_->u\_defect, ..., 0.0)} sets the source to zero.
+        This makes the problem \(F(u)=0\) on the finest level; FAS modifies source
+        arrays on coarser levels.
+  \item \code{LoadCoefficients(owner\_->u\_free, ...)} loads free-data
+        coefficients into the multigrid coefficient arrays.
+  \item \code{RestrictCoefficients()} restricts free-data arrays down the block
+        hierarchy.
+  \item \code{SetupMultigrid()} initializes levels, tasks, root grids, and octets.
+  \item \code{TransferCoefficientsFromBlocksToRoot()} populates root and octet
+        coefficient storage.
+  \item Initial defect norms are computed with \code{CalculateDefectNorm()}.
+  \item The code runs FMG, thresholded V-cycles, or fixed-count V-cycles.
+  \item If accepted, \code{RetrieveResult()} copies the solved correction back
+        into \code{owner\_->u\_cts}.
+  \item \code{owner\_->ApplySolution()} reconstructs ADM and Z4c data.
+\end{enumerate}
+
+\section{Restriction, Prolongation, and Defect Norms}
+
+\file{src/multigrid/multigrid.cpp} provides the generic transfer operations:
+\begin{itemize}
+  \item \code{RestrictPack()}: computes the defect and restricts it to the
+        coarser source.  It also restricts the current solution.
+  \item \code{ProlongateAndCorrectPack()}: computes a coarse-grid correction and
+        prolongates it to the next-finer solution.
+  \item \code{FMGProlongatePack()}: direct FMG prolongation.
+  \item \code{CalculateDefectNorm()}: computes L1/L2/Linf norms.  The current L1
+        and L2 paths multiply by cell volume, so the L2 norm is volume-normalized
+        after the driver scale factor is applied.
+\end{itemize}
+
+The V-cycle task lists in \file{src/multigrid/multigrid\_tasks.cpp} perform
+boundary exchange before smoothing/restriction/prolongation, then call
+\code{PhysicalBoundary()} and \code{FillFCBoundary()} before using ghost cells.
+
+\section{Boundary Conditions}
+
+\subsection{CTS Multigrid Boundary Conditions}
+
+The base multigrid constructor in \file{src/multigrid/multigrid\_driver.cpp}
+initializes multigrid boundary conditions from the mesh:
+\begin{itemize}
+  \item Periodic mesh faces remain periodic.
+  \item Every non-periodic mesh face defaults to \code{mg\_zerofixed}.
+\end{itemize}
+
+For the critical-Kerr input file, all mesh faces are \code{outflow}; therefore
+the CTS multigrid correction variables currently use \code{mg\_zerofixed} on all
+six physical faces.
+
+The physical boundary fill in \code{MultigridDriver::PhysicalBoundary()} and
+\code{MGRootBoundary()} implements:
+\begin{itemize}
+  \item \code{mg\_zerofixed}: odd reflection of the correction variable,
+        approximately enforcing zero Dirichlet value at the boundary.
+  \item \code{mg\_zerograd}: even reflection, enforcing zero normal derivative.
+  \item \code{periodic}: periodic copy.
+  \item \code{mg\_multipole}: multipole potential boundary support, inherited
+        from gravity multigrid, but not currently exposed by \code{id\_solve}
+        input parameters.
+\end{itemize}
+
+Unlike the gravity driver, the CTS driver does not currently parse an
+\code{id\_solve/mg\_bc} override.  So the practical choice today is: periodic if
+the mesh is periodic, otherwise zero-fixed corrections.
+
+\subsection{Coefficient and Coarse/Fine Boundaries}
+
+The free-data coefficients are loaded into multigrid coefficient arrays and
+restricted down levels.  For SMR/octet handling:
+\begin{itemize}
+  \item \code{TransferCoefficientsFromBlocksToRoot()} copies block coefficients
+        to root cells or refined octets.
+  \item Refined coefficient octets are restricted upward/downward as needed.
+  \item Same-level octet neighbors copy boundary data.
+  \item Coarse/fine octet boundaries use interpolation/prolongation helpers.
+  \item Physical coefficient boundaries are filled by
+        \code{ApplyCoefficientPhysicalBoundaries()} using Lagrange extrapolation
+        for non-mask coefficients and direct copy for masks.
+\end{itemize}
+
+\subsection{Z4c Boundary Conditions After Handoff}
+
+After \code{ApplySolution()} has written Z4c variables, the solve task refreshes
+Z4c boundaries:
+\begin{enumerate}
+  \item \code{RestrictU()}
+  \item \code{SendU()}
+  \item \code{ClearSend()}
+  \item \code{ClearRecv()}
+  \item \code{RecvU()}
+  \item \code{Z4cBoundaryRHS()}
+  \item \code{ApplyPhysicalBCs()}
+  \item \code{Prolongate()}
+  \item \code{InitRecv()} again if evolution will continue
+\end{enumerate}
+
+\code{Z4c::ApplyPhysicalBCs()} calls \code{pbval\_u->Z4cBCs(...)} unless the mesh
+is strictly periodic, then optional user boundary conditions from the pgen.
+Thus, CTS solve boundary conditions and Z4c evolution boundary conditions are
+separate:
+\begin{itemize}
+  \item CTS solves corrections with multigrid correction BCs.
+  \item The resulting Z4c fields are then put through normal Z4c ghost exchange
+        and physical BC machinery before evolution.
+\end{itemize}
+
+\section{Applying the Solution}
+
+\code{IDConformalThinSandwich::ApplySolution()} is the handoff from elliptic
+variables to evolution variables.
+
+At each active cell:
+\begin{itemize}
+  \item Compute \(\Psi = \code{base\_psi}+\delta\Psi\), then \(\Psi^4\).
+  \item Set physical ADM metric
+        \[
+          \gamma_{ij} = \Psi^4 \bar{\gamma}_{ij}.
+        \]
+  \item Set \code{admvars.psi4} from \(\Psi^4\det(\bar{\gamma})^{1/3}\).
+  \item Copy lapse from \code{ID\_FREE\_ALPHA}.
+  \item Set physical shift
+        \[
+          \beta^i = \beta^i_{\rm base}+\delta\beta^i.
+        \]
+  \item Recompute \(\hat{A}^{ij}\) from the solved shift.
+  \item Lower \(\hat{A}^{ij}\) with the conformal metric and reconstruct
+        \[
+          K_{ij} = \Psi^{-2}\hat{A}_{ij}
+                 + \frac{1}{3}\gamma_{ij}K.
+        \]
+\end{itemize}
+
+Then \code{ApplySolution()} calls:
+\begin{enumerate}
+  \item \code{ADMToZ4c<fd>()}: populate Z4c evolution variables.
+  \item \code{Z4cToADM()}: make the ADM diagnostic view consistent with Z4c.
+  \item \code{ADMConstraints<fd>()}: compute constraint diagnostics on the active
+        region.
+\end{enumerate}
+
+Finally, \code{SolveTask()} performs the boundary refresh described above and
+recomputes constraints one more time on the boundary-consistent state.
+
+\section{Current Critical-Kerr Input Choices}
+
+In \file{inputs/z4c/gw\_collapse/z4c\_critical\_kerr\_formation.athinput}, the
+current representative setup is:
+\begin{itemize}
+  \item Mesh BCs: \code{outflow} on all faces.
+  \item ADM dynamic: \code{true}.
+  \item Z4c spatial order: \code{4}, so \code{fd\_stencil=3}.
+  \item CTS enabled and solve-once.
+  \item \code{omega=0.02} in the file, though convergence sweeps found
+        \code{omega=0.03} useful for stable second-order native CTS runs.
+  \item \code{smoother=diagonal} by default.  Set
+        \code{smoother=newton\_gs} to use the coupled local
+        Newton-Gauss-Seidel relaxation.
+  \item \code{threshold=-1.0}: fixed V-cycle count mode.
+  \item \code{niteration=1} in the input file; convergence tests override this.
+  \item \code{npresmooth=2}, \code{npostsmooth=2}.
+  \item \code{mg\_nghost=4}, \code{div\_ahat\_stencil=3}: order-matched for 4th
+        order.  For 6th order, use \code{mesh/nghost=6} and
+        \code{id\_solve/mg\_nghost=6}.
+  \item \code{reject\_worse=false}, \code{keep\_best\_solution=true}.
+\end{itemize}
+
+\section{Known Implementation Caveats}
+
+\begin{itemize}
+  \item The default smoother remains the diagonal approximate Newton smoother
+        for continuity with previous runs.  The optional \code{newton\_gs}
+        smoother solves a local coupled \(4\times4\) Newton system, but it is
+        still under-relaxed and currently builds the Jacobian by finite
+        differences rather than analytic derivatives.
+  \item The matter-source convention in the residual uses \(E\Psi^5\) and
+        \(P^i\Psi^6\).  In vacuum this is irrelevant, but for matter runs the
+        intended conformal scaling should be documented or corrected.
+  \item \code{ApplySolution()} currently copies \code{ID\_FREE\_ALPHA} directly to
+        \code{admvars.alpha}.  If \code{ID\_FREE\_ALPHA} is interpreted as the
+        CTS conformal lapse \(\tilde{\alpha}\), the physical lapse would require
+        additional conformal scaling.
+  \item The CTS driver does not yet expose an \code{id\_solve/mg\_bc} input
+        override.  Boundary control is inherited from mesh periodicity/nonperiodic
+        defaults.
+  \item Sixth-order CTS on SMR is explicitly guarded off because the current octet
+        coarse/fine bridge is not widened enough for the required stencil.
+\end{itemize}
+
+\section{Where to Start Reading}
+
+A good code-reading order is:
+\begin{enumerate}
+  \item \file{src/z4c/id\_solve.hpp}: understand variable enums and class layout.
+  \item \file{src/pgen/z4c\_critical\_kerr\_formation.cpp}: see how the seed data
+        are constructed.
+  \item \file{src/z4c/z4c\_tasks.cpp}: see where the solve is queued.
+  \item \file{src/z4c/id\_solve.cpp}, starting with:
+        \code{IDConformalThinSandwich::SolveTask()},
+        \code{IDCTSMultigridDriver::Solve()},
+        \code{BuildFreeData()},
+        \code{CTSOperator()},
+        \code{SmoothImpl()}, and \code{ApplySolution()}.
+  \item \file{src/multigrid/multigrid\_driver.cpp} and
+        \file{src/multigrid/multigrid\_tasks.cpp}: see how V-cycles, red/black
+        smoothing, and boundary exchanges are scheduled.
+  \item \file{src/z4c/z4c\_adm.cpp}: see the ADM/Z4c conversion and constraint
+        diagnostics.
+\end{enumerate}
+
+\end{document}

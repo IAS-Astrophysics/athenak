@@ -1,0 +1,90 @@
+# Analytic Kerr-Schild background for BHaHAHA horizon-finder testing.
+
+<job>
+basename  = analysis/critical_kerr_convergence/bhahaha_kerr_schild
+
+<mesh>
+nghost    = 3
+nx1       = 64
+x1min     = -6.0
+x1max     =  6.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 64
+x2min     = -6.0
+x2max     =  6.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 64
+x3min     = -6.0
+x3max     =  6.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 32
+nx2       = 32
+nx3       = 32
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.25
+nlim       = 1
+tlim       = 0.001
+ndiag      = 1
+
+<adm>
+dynamic = true
+
+<z4c>
+spatial_order = 4
+diss          = 0.0
+chi_div_floor = 1.0e-5
+chi_min_floor = 1.0e-12
+damp_kappa1   = 0.0
+damp_kappa2   = 0.0
+use_z4c       = true
+
+bah_enable = true
+bah_find_mode = dcycle
+bah_find_every = 1
+bah_find_dcycle = 1
+bah_find_dt = 1.0
+bah_center_mode = tracker
+bah_use_min_lapse_centroid = false
+bah_num_horizons = 1
+bah_num_resolutions_multigrid = 2
+bah_Ntheta_array_multigrid_0 = 12
+bah_Nphi_array_multigrid_0 = 24
+bah_Ntheta_array_multigrid_1 = 24
+bah_Nphi_array_multigrid_1 = 48
+bah_Nr_interp = 48
+bah_Ntheta = 24
+bah_Nphi = 48
+bah_max_search_radius = 3.0
+bah_mass0 = 1
+bah_max_itr = 20000
+bah_Theta_Linf_tol = 1.0e-2
+bah_Theta_L2_tol = 2.0e-5
+bah_verbosity = 1
+
+co_0_type = BH
+co_0_x = 0.0
+co_0_y = 0.0
+co_0_z = 0.0
+tracker_mode = ode
+
+<problem>
+punc_ADM_mass = 1.0
+punc_center_x1 = 0.0
+punc_center_x2 = 0.0
+punc_center_x3 = 0.0
+punc_spin = 0.0
+
+<output1>
+file_type   = hst
+data_format = %12.5e
+dt          = 0.001

@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <type_traits>
+#include <vector>
 
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
@@ -19,6 +21,10 @@
 #include "utils/finite_diff.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
 
 namespace z4c {
 namespace {
@@ -53,6 +59,14 @@ int DivAHatStencil(int fd_stencil, int nghost_available) {
   if (outer_radius >= 3 && fd_stencil >= 4) return 4;
   if (outer_radius >= 2 && fd_stencil >= 3) return 3;
   return 2;
+}
+
+KOKKOS_INLINE_FUNCTION
+int DivAHatRequiredGhosts(int fd_stencil, int div_ahat_stencil) {
+  // D_j Ahat^{ij} is currently formed by differencing Ahat, while Ahat itself
+  // contains derivatives of beta and the conformal metric.  The halo reach is
+  // therefore the sum of the inner Ahat radius and the outer divergence radius.
+  return (fd_stencil - 1) + (div_ahat_stencil - 1);
 }
 
 template <typename ViewType>
@@ -265,6 +279,151 @@ template <int NGHOST, typename UView, typename FView>
 KOKKOS_INLINE_FUNCTION
 void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_stencil,
                  int div_ahat_stencil, int m, int k, int j, int i,
+                 Real op[ID_CTS_NVAR], Real diag[ID_CTS_NVAR]);
+
+template <typename UView>
+struct LocalPerturbedUView {
+  UView u;
+  int pm;
+  int pv;
+  int pk;
+  int pj;
+  int pi;
+  Real delta;
+
+  KOKKOS_INLINE_FUNCTION
+  Real operator()(int m, int v, int k, int j, int i) const {
+    Real value = u(m, v, k, j, i);
+    if (m == pm && v == pv && k == pk && j == pj && i == pi) value += delta;
+    return value;
+  }
+};
+
+KOKKOS_INLINE_FUNCTION
+bool IsFiniteForDevice(Real x) {
+  return (x == x) && (std::abs(x) < 1.0e300);
+}
+
+KOKKOS_INLINE_FUNCTION
+bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
+                    Real x[ID_CTS_NVAR]) {
+  Real aug[ID_CTS_NVAR][ID_CTS_NVAR + 1];
+  for (int r = 0; r < ID_CTS_NVAR; ++r) {
+    for (int c = 0; c < ID_CTS_NVAR; ++c) aug[r][c] = a[r][c];
+    aug[r][ID_CTS_NVAR] = b[r];
+  }
+
+  for (int p = 0; p < ID_CTS_NVAR; ++p) {
+    int pivot = p;
+    Real pivot_abs = std::abs(aug[p][p]);
+    for (int r = p + 1; r < ID_CTS_NVAR; ++r) {
+      Real candidate = std::abs(aug[r][p]);
+      if (candidate > pivot_abs) {
+        pivot = r;
+        pivot_abs = candidate;
+      }
+    }
+    if (!(pivot_abs > 1.0e-30) || !IsFiniteForDevice(pivot_abs)) return false;
+    if (pivot != p) {
+      for (int c = p; c <= ID_CTS_NVAR; ++c) {
+        Real tmp = aug[p][c];
+        aug[p][c] = aug[pivot][c];
+        aug[pivot][c] = tmp;
+      }
+    }
+    Real inv_pivot = 1.0/aug[p][p];
+    for (int c = p; c <= ID_CTS_NVAR; ++c) aug[p][c] *= inv_pivot;
+    for (int r = 0; r < ID_CTS_NVAR; ++r) {
+      if (r == p) continue;
+      Real factor = aug[r][p];
+      for (int c = p; c <= ID_CTS_NVAR; ++c) aug[r][c] -= factor*aug[p][c];
+    }
+  }
+
+  for (int r = 0; r < ID_CTS_NVAR; ++r) {
+    x[r] = aug[r][ID_CTS_NVAR];
+    if (!IsFiniteForDevice(x[r])) return false;
+  }
+  return true;
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+void ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView &free,
+                            const Real idx[], int fd_stencil, int div_ahat_stencil,
+                            int m, int k, int j, int i, Real omega) {
+  Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+  CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
+                      m, k, j, i, op, diag);
+  for (int v = 0; v < ID_CTS_NVAR; ++v) {
+    Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] :
+             ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
+    u(m, v, k, j, i) -= omega*(op[v] - src(m, v, k, j, i))/d;
+  }
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+void ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
+                            const Real idx[], int fd_stencil, int div_ahat_stencil,
+                            int m, int k, int j, int i, Real omega,
+                            int niter, Real jac_eps, Real max_update) {
+  const int local_iter = niter > 0 ? niter : 1;
+  for (int it = 0; it < local_iter; ++it) {
+    Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+    CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
+                        m, k, j, i, op, diag);
+
+    Real residual[ID_CTS_NVAR];
+    for (int r = 0; r < ID_CTS_NVAR; ++r) {
+      residual[r] = op[r] - src(m, r, k, j, i);
+    }
+
+    Real jac[ID_CTS_NVAR][ID_CTS_NVAR];
+    for (int c = 0; c < ID_CTS_NVAR; ++c) {
+      Real uval = u(m, c, k, j, i);
+      Real eps = jac_eps*std::max(static_cast<Real>(1.0), std::abs(uval));
+      if (!(eps > 0.0) || !IsFiniteForDevice(eps)) eps = 1.0e-7;
+      LocalPerturbedUView<UView> up{u, m, c, k, j, i, eps};
+      Real op_pert[ID_CTS_NVAR], diag_pert[ID_CTS_NVAR];
+      CTSOperator<NGHOST>(up, free, idx, fd_stencil, div_ahat_stencil,
+                          m, k, j, i, op_pert, diag_pert);
+      for (int r = 0; r < ID_CTS_NVAR; ++r) {
+        jac[r][c] = (op_pert[r] - op[r])/eps;
+      }
+    }
+
+    Real rhs[ID_CTS_NVAR];
+    Real delta[ID_CTS_NVAR];
+    for (int r = 0; r < ID_CTS_NVAR; ++r) rhs[r] = -residual[r];
+    bool solved = SolveLinear4x4(jac, rhs, delta);
+    if (!solved) {
+      for (int v = 0; v < ID_CTS_NVAR; ++v) {
+        Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] :
+                 ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
+        delta[v] = -residual[v]/d;
+      }
+    }
+
+    for (int v = 0; v < ID_CTS_NVAR; ++v) {
+      Real update = omega*delta[v];
+      if (max_update > 0.0 && std::abs(update) > max_update) {
+        update = (update > 0.0 ? max_update : -max_update);
+      }
+      u(m, v, k, j, i) += update;
+    }
+
+    Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
+    if (psi < 1.0e-8) {
+      u(m, ID_CTS_PSI, k, j, i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
+    }
+  }
+}
+
+template <int NGHOST, typename UView, typename FView>
+KOKKOS_INLINE_FUNCTION
+void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_stencil,
+                 int div_ahat_stencil, int m, int k, int j, int i,
                  Real op[ID_CTS_NVAR], Real diag[ID_CTS_NVAR]) {
   Real gu[3][3];
   Real gamma[3][3][3];
@@ -344,7 +503,8 @@ void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_ste
 template <int NGHOST, typename ViewType>
 void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const ViewType &free,
                 int ll, int is, int ie, int js, int je, int ks, int ke, int color,
-                Real omega, int fd_stencil, int div_ahat_stencil) {
+                Real omega, int fd_stencil, int div_ahat_stencil, int smoother_type,
+                int ngs_iterations, Real ngs_jacobian_eps, Real ngs_max_update) {
   using ExeSpace = typename ViewType::execution_space;
   auto brdx = [&]() {
     if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
@@ -360,12 +520,13 @@ void SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src, const View
     int c = (color + k + j) & 1;
     for (int i = is + c; i <= ie; i += 2) {
       if (free(m, ID_FREE_MASK, k, j, i) < 0.5) continue;
-      Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-      CTSOperator<NGHOST>(u, free, idx, fd_stencil, div_ahat_stencil,
-                          m, k, j, i, op, diag);
-      for (int v = 0; v < ID_CTS_NVAR; ++v) {
-        Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] : ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
-        u(m,v,k,j,i) -= omega*(op[v] - src(m,v,k,j,i))/d;
+      if (smoother_type == 1) {
+        ApplyNewtonGSCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil, div_ahat_stencil,
+                                       m, k, j, i, omega, ngs_iterations,
+                                       ngs_jacobian_eps, ngs_max_update);
+      } else {
+        ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
+                                       div_ahat_stencil, m, k, j, i, omega);
       }
       Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
       if (psi < 1.0e-8) {
@@ -562,25 +723,37 @@ void IDCTSMultigrid::SmoothPack(int color) {
     switch (fd) {
       case 2: SmoothImpl<2>(this, u_[current_level_].h_view, src_[current_level_].h_view,
                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da); break;
+                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
+                            driver->ngs_max_update_); break;
       case 3: SmoothImpl<3>(this, u_[current_level_].h_view, src_[current_level_].h_view,
                             coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da); break;
+                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
+                            driver->ngs_max_update_); break;
       default: SmoothImpl<4>(this, u_[current_level_].h_view, src_[current_level_].h_view,
                              coeff_[current_level_].h_view, ll, is, ie, js, je, ks, ke,
-                             color, driver->omega_, fd, da); break;
+                             color, driver->omega_, fd, da, driver->smoother_type_,
+                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
+                             driver->ngs_max_update_); break;
     }
   } else {
     switch (fd) {
       case 2: SmoothImpl<2>(this, u_[current_level_].d_view, src_[current_level_].d_view,
                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da); break;
+                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
+                            driver->ngs_max_update_); break;
       case 3: SmoothImpl<3>(this, u_[current_level_].d_view, src_[current_level_].d_view,
                             coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                            color, driver->omega_, fd, da); break;
+                            color, driver->omega_, fd, da, driver->smoother_type_,
+                            driver->ngs_iterations_, driver->ngs_jacobian_eps_,
+                            driver->ngs_max_update_); break;
       default: SmoothImpl<4>(this, u_[current_level_].d_view, src_[current_level_].d_view,
                              coeff_[current_level_].d_view, ll, is, ie, js, je, ks, ke,
-                             color, driver->omega_, fd, da); break;
+                             color, driver->omega_, fd, da, driver->smoother_type_,
+                             driver->ngs_iterations_, driver->ngs_jacobian_eps_,
+                             driver->ngs_max_update_); break;
     }
   }
 }
@@ -660,14 +833,43 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
     : MultigridDriver(pmbp, ID_CTS_NVAR), owner_(owner) {
   ncoeff_ = ID_FREE_NVAR;
   omega_ = pin->GetOrAddReal("id_solve", "omega", 0.02);
+  std::string smoother = pin->GetOrAddString("id_solve", "smoother", "diagonal");
+  if (smoother == "diagonal" || smoother == "diag") {
+    smoother_type_ = 0;
+  } else if (smoother == "newton_gs" || smoother == "newton-gauss-seidel" ||
+             smoother == "ngs") {
+    smoother_type_ = 1;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/smoother must be 'diagonal' or 'newton_gs', but is "
+              << smoother << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  ngs_iterations_ = pin->GetOrAddInteger("id_solve", "ngs_iterations", 1);
+  ngs_jacobian_eps_ = pin->GetOrAddReal("id_solve", "ngs_jacobian_eps", 1.0e-7);
+  ngs_max_update_ = pin->GetOrAddReal("id_solve", "ngs_max_update", 0.0);
+  if (ngs_iterations_ < 1 || !(ngs_jacobian_eps_ > 0.0) || ngs_max_update_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/ngs_iterations must be >=1, ngs_jacobian_eps must be >0, "
+              << "and ngs_max_update must be >=0." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   eps_ = pin->GetOrAddReal("id_solve", "threshold", -1.0);
   niter_ = pin->GetOrAddInteger("id_solve", "niteration", 1);
+  max_iter_ = pin->GetOrAddInteger("id_solve", "max_iterations", 40);
   npresmooth_ = pin->GetOrAddInteger("id_solve", "npresmooth", npresmooth_);
   npostsmooth_ = pin->GetOrAddInteger("id_solve", "npostsmooth", npostsmooth_);
   full_multigrid_ = pin->GetOrAddBoolean("id_solve", "full_multigrid", false);
   fmg_ncycle_ = pin->GetOrAddInteger("id_solve", "fmg_ncycle", 1);
   fshowdef_ = pin->GetOrAddBoolean("id_solve", "show_defect", true);
   reject_worse_ = pin->GetOrAddBoolean("id_solve", "reject_worse", true);
+  keep_best_solution_ = pin->GetOrAddBoolean("id_solve", "keep_best_solution", true);
+  stop_on_defect_increase_ =
+      pin->GetOrAddBoolean("id_solve", "stop_on_defect_increase", false);
+  defect_increase_tol_ =
+      pin->GetOrAddReal("id_solve", "defect_increase_tolerance", 1.0e-3);
   allow_incomplete_amr_ = pin->GetOrAddBoolean("id_solve", "allow_incomplete_amr", false);
   solution_applied_ = false;
   fsubtract_average_ = false;
@@ -693,7 +895,8 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << " ghost cells." << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  int max_div_stencil = DivAHatStencil(fd_stencil, std::min(nghost, mesh_nghost));
+  int available_div_halo = std::min(nghost, mesh_nghost);
+  int max_div_stencil = DivAHatStencil(fd_stencil, available_div_halo);
   int requested_div_stencil = pin->GetOrAddInteger("id_solve", "div_ahat_stencil", 0);
   if (requested_div_stencil > 0) {
     if (requested_div_stencil > max_div_stencil) {
@@ -701,12 +904,28 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
                 << std::endl
                 << "Requested <id_solve>/div_ahat_stencil=" << requested_div_stencil
                 << " exceeds the available halo-limited maximum " << max_div_stencil
-                << "." << std::endl;
+                << ".  The nested D_j Ahat^{ij} operator needs "
+                << DivAHatRequiredGhosts(fd_stencil, requested_div_stencil)
+                << " ghost cells for this combination of stencils, but only "
+                << available_div_halo << " are available." << std::endl;
       std::exit(EXIT_FAILURE);
     }
     div_ahat_stencil_ = requested_div_stencil;
   } else {
-    div_ahat_stencil_ = max_div_stencil;
+    div_ahat_stencil_ = fd_stencil;
+    if (div_ahat_stencil_ > max_div_stencil) {
+      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+                << std::endl
+                << "The native CTS operator would silently lower "
+                << "D_j Ahat^{ij} from stencil " << div_ahat_stencil_
+                << " to " << max_div_stencil << " with the current halo.  "
+                << "Use <mesh>/nghost and <id_solve>/mg_nghost >= "
+                << DivAHatRequiredGhosts(fd_stencil, div_ahat_stencil_)
+                << " for a fully order-matched CTS operator, or explicitly set "
+                << "<id_solve>/div_ahat_stencil=" << max_div_stencil
+                << " to request the lower-order fallback." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
   if (div_ahat_stencil_ < pmbp->pz4c->opt.fd_stencil && global_variable::my_rank == 0) {
     std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
@@ -742,7 +961,9 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
                 << "Requested <id_solve>/octet_div_ahat_stencil="
                 << requested_octet_div_stencil
                 << " exceeds the available octet halo-limited maximum "
-                << max_octet_div_stencil << "." << std::endl;
+                << max_octet_div_stencil << ".  This stencil needs "
+                << DivAHatRequiredGhosts(octet_fd_stencil_, requested_octet_div_stencil)
+                << " ghost cells for the nested octet operator." << std::endl;
       std::exit(EXIT_FAILURE);
     }
     octet_div_ahat_stencil_ = requested_octet_div_stencil;
@@ -1010,7 +1231,7 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
         }
       }
       ++n;
-      if (n >= 40) {
+      if (n >= max_iter_) {
         std::cout << "### FATAL ERROR in IDCTSMultigridDriver::Solve" << std::endl
                   << "Failed to converge after " << n << " iterations (defect = "
                   << mg_defect << ", threshold = " << eps_ << ")" << std::endl;
@@ -1020,6 +1241,12 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
     }
   } else {
     if (fshowdef_) std::cout << "MG initial defect = " << mg_defect << std::endl;
+    Real best_defect = mg_defect;
+    Real best_defects[ID_CTS_NVAR];
+    for (int v = 0; v < ID_CTS_NVAR; ++v) best_defects[v] = initial_defects[v];
+    if (keep_best_solution_) {
+      mglevels_->RetrieveResult(owner_->u_cts, 0, indcs.ng);
+    }
     for (int n = 0; n < niter_; ++n) {
       SolveVCycle(pdriver, npresmooth_, npostsmooth_);
       mg_defect = calculate_defects(final_defects);
@@ -1027,6 +1254,25 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
       if (fshowdef_) {
         std::cout << "  MG iteration " << n << ": defect = " << mg_defect << std::endl;
       }
+      if (keep_best_solution_ && std::isfinite(mg_defect) && mg_defect < best_defect) {
+        best_defect = mg_defect;
+        for (int v = 0; v < ID_CTS_NVAR; ++v) best_defects[v] = final_defects[v];
+        mglevels_->RetrieveResult(owner_->u_cts, 0, indcs.ng);
+      }
+      if (stop_on_defect_increase_ &&
+          (!std::isfinite(mg_defect) ||
+           mg_defect > best_defect*(1.0 + defect_increase_tol_))) {
+        if (fshowdef_) {
+          std::cout << "Stopping native CTS V-cycles after defect increase; "
+                    << "best defect = " << best_defect << std::endl;
+        }
+        break;
+      }
+    }
+    if (keep_best_solution_ && best_defect < mg_defect) {
+      mg_defect = best_defect;
+      for (int v = 0; v < ID_CTS_NVAR; ++v) final_defects[v] = best_defects[v];
+      mglevels_->LoadFinestData(owner_->u_cts, 0, indcs.ng);
     }
   }
   Kokkos::fence();
@@ -1063,25 +1309,40 @@ void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
       int c = (color + k + j) & 1;
       for (int i = ngh + c; i <= ngh+1; i += 2) {
         if (free(0, ID_FREE_MASK, k, j, i) < 0.5) continue;
-        Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
         switch (octet_fd_stencil_) {
           case 2:
-            CTSOperator<2>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            if (smoother_type_ == 1) {
+              ApplyNewtonGSCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
+                                        octet_div_ahat_stencil_, 0, k, j, i,
+                                        omega_, ngs_iterations_, ngs_jacobian_eps_,
+                                        ngs_max_update_);
+            } else {
+              ApplyDiagonalCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
+                                        octet_div_ahat_stencil_, 0, k, j, i, omega_);
+            }
             break;
           case 3:
-            CTSOperator<3>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            if (smoother_type_ == 1) {
+              ApplyNewtonGSCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
+                                        octet_div_ahat_stencil_, 0, k, j, i,
+                                        omega_, ngs_iterations_, ngs_jacobian_eps_,
+                                        ngs_max_update_);
+            } else {
+              ApplyDiagonalCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
+                                        octet_div_ahat_stencil_, 0, k, j, i, omega_);
+            }
             break;
           default:
-            CTSOperator<4>(u, free, idx, octet_fd_stencil_, octet_div_ahat_stencil_,
-                           0, k, j, i, op, diag);
+            if (smoother_type_ == 1) {
+              ApplyNewtonGSCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
+                                        octet_div_ahat_stencil_, 0, k, j, i,
+                                        omega_, ngs_iterations_, ngs_jacobian_eps_,
+                                        ngs_max_update_);
+            } else {
+              ApplyDiagonalCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
+                                        octet_div_ahat_stencil_, 0, k, j, i, omega_);
+            }
             break;
-        }
-        for (int v = 0; v < ID_CTS_NVAR; ++v) {
-          Real d = (std::abs(diag[v]) > 1.0e-30) ? diag[v] :
-                   ((diag[v] < 0.0) ? -1.0e-30 : 1.0e-30);
-          u(0, v, k, j, i) -= omega_*(op[v] - src(0, v, k, j, i))/d;
         }
         Real psi = TotalU(u, free, 0, ID_CTS_PSI, k, j, i);
         if (psi < 1.0e-8) {
@@ -1175,6 +1436,8 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp, ParameterI
   full_multigrid_ = pin->GetOrAddBoolean("id_solve", "full_multigrid", false);
   fill_horizon_junk_ = pin->GetOrAddBoolean("id_solve", "fill_horizon_junk", false);
   mask_horizon_defect_ = pin->GetOrAddBoolean("id_solve", "mask_horizon_defect", false);
+  dump_constraint_diagnostics_ =
+      pin->GetOrAddBoolean("id_solve", "dump_constraint_diagnostics", false);
   history_every_ = pin->GetOrAddInteger("id_solve", "history_every", 1);
   history_name_ = pin->GetString("job", "basename") + ".id_solve.hst";
   horizon_radius_ = pin->GetOrAddReal("id_solve", "horizon_fill_radius", -1.0);
@@ -1183,6 +1446,8 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp, ParameterI
   horizon_center_[0] = pin->GetOrAddReal("id_solve", "horizon_center_x1", 0.0);
   horizon_center_[1] = pin->GetOrAddReal("id_solve", "horizon_center_x2", 0.0);
   horizon_center_[2] = pin->GetOrAddReal("id_solve", "horizon_center_x3", 0.0);
+  diagnostic_slice_z_ =
+      pin->GetOrAddReal("id_solve", "diagnostic_slice_z", horizon_center_[2]);
 
   int nmb = std::max(pmbp->nmb_thispack, pmbp->pmesh->nmb_maxperrank);
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -1212,10 +1477,13 @@ void IDConformalThinSandwich::PrepareForRestart() {
 TaskStatus IDConformalThinSandwich::SolveTask(Driver *pdriver, int stage) {
   if (!enabled_) return TaskStatus::complete;
   if (solve_once_ && solved_) return TaskStatus::complete;
+  WriteConstraintDiagnostics("before");
   pmgd_->Solve(pdriver, stage, 0.0);
   if (pmgd_->SolutionApplied()) {
     RefreshZ4cBoundariesAfterSolve(pdriver);
+    RecomputeConstraintsAfterSolve();
   }
+  WriteConstraintDiagnostics("after");
   solved_ = true;
   return TaskStatus::complete;
 }
@@ -1236,6 +1504,109 @@ void IDConformalThinSandwich::RefreshZ4cBoundariesAfterSolve(Driver *pdriver) {
   (void) pz4c->Prolongate(pdriver, 0);
   if (!stop_after_solve_) {
     (void) pz4c->InitRecv(pdriver, -1);
+  }
+}
+
+void IDConformalThinSandwich::RecomputeConstraintsAfterSolve() {
+  Z4c *pz4c = pmy_pack_->pz4c;
+  if (pz4c == nullptr) return;
+
+  pz4c->Z4cToADM(pmy_pack_);
+  int fd = pz4c->opt.fd_stencil;
+  switch (fd) {
+    case 2:
+      pz4c->ADMConstraints<2>(pmy_pack_);
+      break;
+    case 3:
+      pz4c->ADMConstraints<3>(pmy_pack_);
+      break;
+    default:
+      pz4c->ADMConstraints<4>(pmy_pack_);
+      break;
+  }
+}
+
+void IDConformalThinSandwich::WriteConstraintDiagnostics(const char *stage) {
+  if (!dump_constraint_diagnostics_) return;
+
+  MeshBlockPack *pmbp = pmy_pack_;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  auto &gid = pmbp->pmb->mb_gid;
+  auto con_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), pmbp->pz4c->u_con);
+  size.sync<HostMemSpace>();
+  gid.sync<HostMemSpace>();
+
+  const int is = indcs.is, ie = indcs.ie;
+  const int js = indcs.js, je = indcs.je;
+  const int ks = indcs.ks, ke = indcs.ke;
+  const int nmb = pmbp->nmb_thispack;
+
+  Real local[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+  for (int m = 0; m < nmb; ++m) {
+    const Real vol = size.h_view(m).dx1*size.h_view(m).dx2*size.h_view(m).dx3;
+    for (int k = ks; k <= ke; ++k) {
+      for (int j = js; j <= je; ++j) {
+        for (int i = is; i <= ie; ++i) {
+          local[0] += vol*std::max(con_h(m, Z4c::I_CON_C, k, j, i), 0.0);
+          local[1] += vol*SQR(con_h(m, Z4c::I_CON_H, k, j, i));
+          local[2] += vol*std::max(con_h(m, Z4c::I_CON_M, k, j, i), 0.0);
+          local[3] += vol*std::max(con_h(m, Z4c::I_CON_Z, k, j, i), 0.0);
+          local[4] += vol;
+        }
+      }
+    }
+  }
+
+  Real global[5];
+  for (int n = 0; n < 5; ++n) global[n] = local[n];
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, global, 5, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+#endif
+
+  if (global_variable::my_rank == 0) {
+    const std::string norm_name = history_name_ + ".constraints.tsv";
+    const bool write_header = (std::string(stage) == "before");
+    std::ofstream norm_file(norm_name, write_header ? std::ios::out : std::ios::app);
+    if (write_header) {
+      norm_file << "# stage\tC_l2\tH_l2\tM_l2\tZ_l2\tvolume\n";
+    }
+    const Real inv_vol = (global[4] > 0.0) ? 1.0/global[4] : 0.0;
+    norm_file << stage << '\t'
+              << std::setprecision(16) << std::sqrt(global[0]*inv_vol) << '\t'
+              << std::sqrt(global[1]*inv_vol) << '\t'
+              << std::sqrt(global[2]*inv_vol) << '\t'
+              << std::sqrt(global[3]*inv_vol) << '\t'
+              << global[4] << '\n';
+  }
+
+  std::ostringstream rank;
+  rank << std::setw(6) << std::setfill('0') << global_variable::my_rank;
+  const std::string slice_name =
+      history_name_ + ".constraints." + stage + ".rank" + rank.str() + ".tsv";
+  std::ofstream slice_file(slice_name);
+  slice_file << "# gid\tx\ty\tz\tsqrt_C\tabs_H\tsqrt_M\tsqrt_Z\n";
+  for (int m = 0; m < nmb; ++m) {
+    const Real half_dz = 0.5*size.h_view(m).dx3;
+    for (int k = ks; k <= ke; ++k) {
+      const Real z = CellCenterX(k - ks, indcs.nx3, size.h_view(m).x3min,
+                                 size.h_view(m).x3max);
+      if (std::abs(z - diagnostic_slice_z_) > half_dz) continue;
+      for (int j = js; j <= je; ++j) {
+        const Real y = CellCenterX(j - js, indcs.nx2, size.h_view(m).x2min,
+                                   size.h_view(m).x2max);
+        for (int i = is; i <= ie; ++i) {
+          const Real x = CellCenterX(i - is, indcs.nx1, size.h_view(m).x1min,
+                                     size.h_view(m).x1max);
+          slice_file << gid.h_view(m) << '\t'
+                     << std::setprecision(16) << x << '\t' << y << '\t' << z << '\t'
+                     << std::sqrt(std::max(con_h(m, Z4c::I_CON_C, k, j, i), 0.0)) << '\t'
+                     << std::abs(con_h(m, Z4c::I_CON_H, k, j, i)) << '\t'
+                     << std::sqrt(std::max(con_h(m, Z4c::I_CON_M, k, j, i), 0.0)) << '\t'
+                     << std::sqrt(std::max(con_h(m, Z4c::I_CON_Z, k, j, i), 0.0)) << '\n';
+        }
+      }
+    }
   }
 }
 

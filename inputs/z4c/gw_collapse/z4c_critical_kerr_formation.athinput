@@ -1,0 +1,95 @@
+# Critical-Kerr conformal free data with native CTS solve and Z4c evolution.
+# Build with:
+#   cmake -S . -B build-critical-kerr -DPROBLEM=z4c_critical_kerr_formation
+
+<job>
+basename  = critical_kerr
+
+<mesh>
+nghost    = 4
+nx1       = 8
+x1min     = -5.0
+x1max     =  5.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 8
+x2min     = -5.0
+x2max     =  5.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 8
+x3min     = -5.0
+x3max     =  5.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.25
+nlim       = 1
+tlim       = 0.001
+ndiag      = 1
+
+<adm>
+dynamic = true
+
+<z4c>
+spatial_order = 4
+diss          = 0.1
+chi_div_floor = 1.0e-5
+chi_min_floor = 1.0e-12
+damp_kappa1   = 0.02
+damp_kappa2   = 0.0
+
+<id_solve>
+enable          = true
+solve_once      = true
+stop_after_solve = false
+omega           = 0.02
+smoother        = diagonal
+ngs_iterations  = 1
+ngs_jacobian_eps = 1.0e-7
+ngs_max_update  = 0.0
+threshold       = -1.0
+niteration      = 1
+npresmooth      = 2
+npostsmooth     = 2
+show_defect     = true
+reject_worse    = false
+keep_best_solution = true
+stop_on_defect_increase = false
+defect_increase_tolerance = 1.0e-3
+max_iterations  = 40
+mg_nghost       = 4
+div_ahat_stencil = 3
+history_every   = 1
+dump_constraint_diagnostics = false
+diagnostic_slice_z = 0.0
+
+<problem>
+ell                 = 2
+m                   = 2
+radial_modes        = 3
+amplitude           = 1.0e-3
+omega               = 0.2
+support_radius      = 4.0
+bump_steepness      = 0.35
+helicity            = 1.0
+ingoing_sign        = 1.0
+initial_lapse       = 1.0
+radial_coeff_0      = 1.0
+radial_coeff_1      = -0.2
+radial_coeff_2      = 0.03
+
+<output1>
+file_type   = hst
+data_format = %12.5e
+dt          = 0.001
