@@ -45,6 +45,8 @@ def base_overrides(
     spatial_order: int,
     nghost: int,
     mg_bc: str,
+    smoother_update: str,
+    mg_coarse_fd_stencil: int,
 ) -> list[str]:
     return [
         f"job/basename=analysis/critical_kerr_convergence/smoother_comparison/{basename}",
@@ -68,6 +70,8 @@ def base_overrides(
         f"id_solve/niteration={niter}",
         f"id_solve/mg_nghost={nghost}",
         f"id_solve/mg_bc={mg_bc}",
+        f"id_solve/smoother_update={smoother_update}",
+        f"id_solve/mg_coarse_fd_stencil={mg_coarse_fd_stencil}",
         "id_solve/npresmooth=2",
         "id_solve/npostsmooth=2",
         "id_solve/reject_worse=false",
@@ -167,12 +171,15 @@ def run_case(
     spatial_order: int,
     nghost: int,
     mg_bc: str,
+    smoother_update: str,
+    mg_coarse_fd_stencil: int,
 ) -> dict[str, object]:
     LOGDIR.mkdir(parents=True, exist_ok=True)
     OUTDIR.mkdir(parents=True, exist_ok=True)
     basename = (
         f"{tag}_{smoother}_omega{fmt_omega(omega)}_n{n}_"
-        f"ord{spatial_order}_ng{nghost}_{mg_bc}_iter{niter}"
+        f"ord{spatial_order}_ng{nghost}_{mg_bc}_{smoother_update}_"
+        f"cfd{mg_coarse_fd_stencil}_iter{niter}"
     )
     log_path = LOGDIR / f"{basename}.log"
     cmd = [
@@ -183,7 +190,8 @@ def run_case(
         "-i",
         str(INPUT),
         *base_overrides(n, meshblock, smoother, omega, niter, basename,
-                        spatial_order, nghost, mg_bc),
+                        spatial_order, nghost, mg_bc, smoother_update,
+                        mg_coarse_fd_stencil),
     ]
     print(f"RUN {basename}", flush=True)
     start = time.perf_counter()
@@ -201,6 +209,8 @@ def run_case(
         "spatial_order": spatial_order,
         "nghost": nghost,
         "mg_bc": mg_bc,
+        "smoother_update": smoother_update,
+        "mg_coarse_fd_stencil": mg_coarse_fd_stencil,
         "returncode": proc.returncode,
         "wall_seconds": elapsed,
         "log": str(log_path.relative_to(ROOT)),
@@ -228,6 +238,8 @@ def write_summary(rows: list[dict[str, object]], path: Path) -> None:
         "spatial_order",
         "nghost",
         "mg_bc",
+        "smoother_update",
+        "mg_coarse_fd_stencil",
         "niteration",
         "returncode",
         "wall_seconds",
@@ -268,6 +280,8 @@ def write_history(case_rows: list[dict[str, object]], path: Path) -> None:
         "spatial_order",
         "nghost",
         "mg_bc",
+        "smoother_update",
+        "mg_coarse_fd_stencil",
         "niteration",
         "iteration",
         "defect",
@@ -291,6 +305,8 @@ def write_history(case_rows: list[dict[str, object]], path: Path) -> None:
                         "spatial_order": row["spatial_order"],
                         "nghost": row["nghost"],
                         "mg_bc": row["mg_bc"],
+                        "smoother_update": row.get("smoother_update", ""),
+                        "mg_coarse_fd_stencil": row.get("mg_coarse_fd_stencil", ""),
                         "niteration": row["niteration"],
                         "iteration": entry["iteration"],
                         "defect": defect,
@@ -309,6 +325,8 @@ def main() -> None:
     parser.add_argument("--spatial-order", type=int, default=2)
     parser.add_argument("--nghost", type=int, default=2)
     parser.add_argument("--mg-bc", choices=["zerograd", "zerofixed"], default="zerograd")
+    parser.add_argument("--smoother-update", choices=["frozen_view"], default="frozen_view")
+    parser.add_argument("--mg-coarse-fd-stencil", type=int, default=2)
     parser.add_argument("--smoother", choices=["diagonal", "newton_gs"], action="append", required=True)
     parser.add_argument("--omega", type=float, action="append", required=True)
     parser.add_argument("--summary", default="smoother_omega_sweep_summary.csv")
@@ -322,6 +340,7 @@ def main() -> None:
             row = run_case(
                 args.n, args.meshblock, smoother, omega, args.niter, args.tag,
                 args.spatial_order, args.nghost, args.mg_bc,
+                args.smoother_update, args.mg_coarse_fd_stencil,
             )
             rows.append(row)
             if args.stop_after_unstable and not bool(row["stable"]):

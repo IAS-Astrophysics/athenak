@@ -248,8 +248,8 @@ For CTS, \code{IDCTSMultigridDriver::Solve()} wraps setup with the physics data:
   \item build CTS free data,
   \item load \code{u\_cts} into \code{u\_},
   \item load zero source,
-  \item load free-data coefficients,
-  \item restrict coefficients,
+  \item load free-data coefficients and fill their finest-level halos,
+  \item restrict coefficients and fill coefficient halos on each coarse level,
   \item setup the hierarchy,
   \item transfer coefficients to root and octets.
 \end{enumerate}
@@ -302,13 +302,21 @@ knows it can call:
 \]
 
 For CTS, \code{IDCTSMultigrid::SmoothPack()} dispatches to
-\code{SmoothImpl<2/3/4>()} based on \code{z4c/opt.fd\_stencil}.  The smoothing
-kernel is red-black colored:
+\code{SmoothImpl<2/3/4>()} based on the effective CTS stencil.  The finest
+MeshBlock MG level uses the Z4c stencil, while coarser MeshBlock/root levels use
+\code{id\_solve/mg\_coarse\_fd\_stencil} (default \code{2} for higher-order fine
+runs).  The smoothing kernel is red-black colored:
 \[
   c = (\mathrm{color}+i+j+k)\bmod 2.
 \]
 Cells of one color are updated first, boundary/ghost zones are refreshed, then
-the other color is updated.
+the other color is updated.  CTS now uses
+\code{id\_solve/smoother\_update=frozen\_view}: before each smoothing visit the
+active level is copied into a dedicated frozen scratch view.  Operator
+evaluations, diagonal updates, Newton-GS Jacobians, and line-search trial
+residuals read from the frozen view while accepted updates write to the live
+solution.  This removes same-color read/write races for mixed and high-order
+stencils without expanding the task list to an 8/27/64-color schedule.
 
 The default CTS update is:
 \[
@@ -334,7 +342,9 @@ wall-clock time, not stable \(\omega\) alone.
 Why red-black?  A centered stencil couples nearest neighbors.  If the grid is
 colored like a checkerboard, red cells depend mostly on black neighbors and vice
 versa.  Updating one color at a time gives Gauss-Seidel-like in-place relaxation
-while preserving parallelism within each color.
+while preserving parallelism within each color.  For CTS high-order and mixed
+derivative operators, the frozen view is what makes this two-color schedule
+race-free.
 
 \section{The Current V-Cycle in Code}
 
@@ -433,6 +443,13 @@ MeshBlock task lists use:
 These are scheduled around smoothing, restriction, and prolongation so stencil
 operations see valid ghost data.
 
+CTS also exchanges and fills coefficient/free-data halos.  After
+\code{LoadCoefficients()} and after each \code{RestrictCoefficients()} step, the
+coefficient arrays use the same same-level MG exchange buffers as \code{u\_}.
+Their physical boundaries are filled as free data: periodic faces wrap and
+non-periodic faces use zero-gradient copies.  They do not use
+correction-variable odd reflection from \code{mg\_zerofixed}.
+
 \subsection{Physical Boundaries}
 
 The base multigrid driver initializes multigrid physical BCs from mesh BCs:
@@ -455,6 +472,11 @@ When SMR/AMR is present, \code{FillFCBoundary()} calls
 \code{FillFineCoarseMGGhosts()}.  For root/octet paths, octet boundary helpers
 copy same-level data or interpolate from coarser neighbors.  CTS also transfers
 coefficient/free-data arrays through this hierarchy.
+
+The current octet coefficient bridge still uses the generic compact
+coarse-buffer path, not the full Z4c high-order prolongation kernels.  That is
+why sixth-order CTS on SMR remains guarded off even though unigrid high-order CTS
+operators are supported.
 
 \section{Residual and Norms}
 
