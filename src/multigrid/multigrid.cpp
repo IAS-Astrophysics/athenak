@@ -657,7 +657,8 @@ void Multigrid::SetFromRootGrid(bool folddata) {
       oloc.lx3 = (loc.lx3 >> 1);
       oloc.level = loc.level - 1;
       int olev = oloc.level - pmy_driver_->locrootlevel_;
-      int oid = pmy_driver_->octetmap_[olev][oloc];
+      int oid = pmy_driver_->FindOctetIdOrDie(olev, oloc,
+                                              "Multigrid::RetrieveResult");
       int ci = (static_cast<int>(loc.lx1) & 1);
       int cj = (static_cast<int>(loc.lx2) & 1);
       int ck = (static_cast<int>(loc.lx3) & 1);

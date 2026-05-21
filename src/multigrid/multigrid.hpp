@@ -75,21 +75,28 @@ class MGOctet {
  public:
   LogicalLocation loc;
   bool fleaf;
-  int nc, nvar;  // nc = 2 + 2*ngh
+  int nc, nvar, ncoeff;  // nc = 2 + 2*ngh
   OctetNeighborInfo neighbors[27];
 
   // Raw pointers into contiguous per-level buffers managed by MultigridDriver.
   Real *u, *def, *src, *uold;
+  Real *coeff;
 
-  void Init(int nv, int ngh) {
+  void Init(int nv, int ngh, int ncf = 0) {
     nc = 2 + 2*ngh;
     nvar = nv;
+    ncoeff = ncf;
     u = def = src = uold = nullptr;
+    coeff = nullptr;
   }
 
   int size() const { return nvar * nc * nc * nc; }
+  int coeff_size() const { return ncoeff * nc * nc * nc; }
   void ZeroClearU() { std::memset(u, 0, size() * sizeof(Real)); }
   void ZeroClearSrc() { std::memset(src, 0, size() * sizeof(Real)); }
+  void ZeroClearCoeff() {
+    if (coeff != nullptr && ncoeff > 0) std::memset(coeff, 0, coeff_size() * sizeof(Real));
+  }
   void StoreOld() { std::memcpy(uold, u, size() * sizeof(Real)); }
 
   inline Real& U(int v, int k, int j, int i) {
@@ -115,6 +122,12 @@ class MGOctet {
   }
   inline const Real& Uold(int v, int k, int j, int i) const {
     return uold[((v*nc + k)*nc + j)*nc + i];
+  }
+  inline Real& Coeff(int v, int k, int j, int i) {
+    return coeff[((v*nc + k)*nc + j)*nc + i];
+  }
+  inline const Real& Coeff(int v, int k, int j, int i) const {
+    return coeff[((v*nc + k)*nc + j)*nc + i];
   }
 };
 
@@ -379,6 +392,7 @@ class MultigridDriver {
   virtual void Solve(Driver *pdriver, int step, Real dt = 0.0) = 0;
   void PrepareForAMR();
   int GetCoffset() const { return coffset_; }
+  int FindOctetIdOrDie(int lev, const LogicalLocation &loc, const char *context) const;
   void MGRootBoundary();
   void TransferFromBlocksToRoot(bool initflag);
   void TransferFromRootToBlocks(bool folddata);
@@ -530,7 +544,9 @@ class MultigridDriver {
   // Contiguous per-level buffers backing MGOctet raw pointers.
   // Layout: octet_stride_ consecutive Reals per octet (nvar*nc*nc*nc).
   std::vector<Real> *oct_u_buf_, *oct_def_buf_, *oct_src_buf_, *oct_uold_buf_;
-  int octet_stride_;  // elements per octet = nvar * nc^3
+  std::vector<Real> *oct_coeff_buf_;
+  int octet_stride_;        // elements per octet = nvar * nc^3
+  int octet_coeff_stride_;  // elements per octet = ncoeff * nc^3
 
   std::vector<Real> root_u_buf_, root_uold_buf_;
   int root_buf_nc_;
@@ -583,6 +599,13 @@ inline Real RestrictOneDef(const MGOctet &oct, int v, int fi, int fj, int fk) {
                +oct.Def(v, fk,   fj+1, fi)   + oct.Def(v, fk,   fj+1, fi+1)
                +oct.Def(v, fk+1, fj,   fi)   + oct.Def(v, fk+1, fj,   fi+1)
                +oct.Def(v, fk+1, fj+1, fi)   + oct.Def(v, fk+1, fj+1, fi+1));
+}
+
+inline Real RestrictOneCoeff(const MGOctet &oct, int v, int fi, int fj, int fk) {
+  return 0.125*(oct.Coeff(v, fk,   fj,   fi)   + oct.Coeff(v, fk,   fj,   fi+1)
+               +oct.Coeff(v, fk,   fj+1, fi)   + oct.Coeff(v, fk,   fj+1, fi+1)
+               +oct.Coeff(v, fk+1, fj,   fi)   + oct.Coeff(v, fk+1, fj,   fi+1)
+               +oct.Coeff(v, fk+1, fj+1, fi)   + oct.Coeff(v, fk+1, fj+1, fi+1));
 }
 
 // access flat buffer of size (nvar, nc, nc, nc)

@@ -38,7 +38,6 @@ bool invertSymmetricMatrix4x4(const double g_dd[4][4], double g_dd_inv[4][4]);
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_ref_func  = RefinementCondition;
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  auto &indcs = pmy_mesh_->mb_indcs;
 
   if (pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -48,7 +47,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   KerrSchild(pmbp, pin);
-  switch (indcs.ng) {
+  switch (pmbp->pz4c->opt.fd_stencil) {
     case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
             break;
     case 3: pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
@@ -58,7 +57,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   pmbp->pz4c->Z4cToADM(pmbp);
   pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
-  switch (indcs.ng) {
+  switch (pmbp->pz4c->opt.fd_stencil) {
     case 2: pmbp->pz4c->ADMConstraints<2>(pmbp);
             break;
     case 3: pmbp->pz4c->ADMConstraints<3>(pmbp);
@@ -108,7 +107,8 @@ void KerrSchild(MeshBlockPack *pmbp, ParameterInput *pin) {
     Real &x3max = size.d_view(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    ComputeADMDecomposition(x1v, x2v, x3v, minkowski, a,
+    ComputeADMDecomposition(x1v - center_x1, x2v - center_x2, x3v - center_x3,
+      minkowski, a,
       &adm.alpha(m,k,j,i),
       &adm.beta_u(m,0,k,j,i), &adm.beta_u(m,1,k,j,i), &adm.beta_u(m,2,k,j,i),
       &adm.psi4(m,k,j,i),

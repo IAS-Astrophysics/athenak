@@ -45,7 +45,8 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     nb_rank_(0), ncoeff_(0), nmatrix_(0),
     octets_(nullptr), octetmap_(nullptr), octetbflag_(nullptr), noctets_(nullptr),
     oct_u_buf_(nullptr), oct_def_buf_(nullptr),
-    oct_src_buf_(nullptr), oct_uold_buf_(nullptr), octet_stride_(0),
+    oct_src_buf_(nullptr), oct_uold_buf_(nullptr), oct_coeff_buf_(nullptr),
+    octet_stride_(0), octet_coeff_stride_(0),
     root_buf_nc_(0), root_flat_buf_stale_(true),
     root_sync_state_(RootSyncState::SYNCED),
     mask_radius_(-1.0), autompo_(false), nodipole_(false),
@@ -96,6 +97,7 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     oct_def_buf_  = new std::vector<Real>[maxreflevel_];
     oct_src_buf_  = new std::vector<Real>[maxreflevel_];
     oct_uold_buf_ = new std::vector<Real>[maxreflevel_];
+    oct_coeff_buf_ = new std::vector<Real>[maxreflevel_];
   }
 }
 
@@ -117,6 +119,7 @@ MultigridDriver::~MultigridDriver() {
   delete [] oct_def_buf_;
   delete [] oct_src_buf_;
   delete [] oct_uold_buf_;
+  delete [] oct_coeff_buf_;
 }
 
 
@@ -156,6 +159,27 @@ void MultigridDriver::SyncRootToDevice() {
 void MultigridDriver::MarkRootDeviceModified() {
   if (!mgroot_->on_host_)
     root_sync_state_ = RootSyncState::DEVICE_MODIFIED;
+}
+
+
+int MultigridDriver::FindOctetIdOrDie(int lev, const LogicalLocation &loc,
+                                      const char *context) const {
+  if (lev < 0 || lev >= nreflevel_) {
+    std::cout << "### FATAL ERROR in " << context << std::endl
+              << "Requested octet level " << lev << " is outside [0,"
+              << nreflevel_ << ")." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  auto it = octetmap_[lev].find(loc);
+  if (it == octetmap_[lev].end()) {
+    std::cout << "### FATAL ERROR in " << context << std::endl
+              << "Missing octet for location (level=" << loc.level
+              << ", lx1=" << loc.lx1 << ", lx2=" << loc.lx2
+              << ", lx3=" << loc.lx3 << ") at octet level " << lev
+              << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  return it->second;
 }
 
 
@@ -292,7 +316,7 @@ void MultigridDriver::InitializeOctets() {
 
         if (static_cast<int>(octets_[l].size()) <= oid) {
           octets_[l].resize(oid + 1);
-          octets_[l][oid].Init(nvar_, ngh);
+          octets_[l][oid].Init(nvar_, ngh, ncoeff_);
         }
         octets_[l][oid].loc = oloc;
         octets_[l][oid].fleaf = false;
@@ -304,19 +328,30 @@ void MultigridDriver::InitializeOctets() {
   {
     int nc = 2 + 2*ngh;
     octet_stride_ = nvar_ * nc * nc * nc;
+    octet_coeff_stride_ = ncoeff_ * nc * nc * nc;
     for (int l = 0; l < nreflevel_; ++l) {
       int noct = noctets_[l];
       std::size_t total = static_cast<std::size_t>(noct) * octet_stride_;
+      std::size_t coeff_total = static_cast<std::size_t>(noct) * octet_coeff_stride_;
       oct_u_buf_[l].assign(total, 0.0);
       oct_def_buf_[l].assign(total, 0.0);
       oct_src_buf_[l].assign(total, 0.0);
       oct_uold_buf_[l].assign(total, 0.0);
+      oct_coeff_buf_[l].assign(coeff_total, 0.0);
       for (int o = 0; o < noct; ++o) {
         std::size_t off = static_cast<std::size_t>(o) * octet_stride_;
         octets_[l][o].u    = oct_u_buf_[l].data()    + off;
         octets_[l][o].def  = oct_def_buf_[l].data()  + off;
         octets_[l][o].src  = oct_src_buf_[l].data()   + off;
         octets_[l][o].uold = oct_uold_buf_[l].data() + off;
+        if (ncoeff_ > 0) {
+          std::size_t coff = static_cast<std::size_t>(o) * octet_coeff_stride_;
+          octets_[l][o].coeff = oct_coeff_buf_[l].data() + coff;
+          octets_[l][o].ncoeff = ncoeff_;
+        } else {
+          octets_[l][o].coeff = nullptr;
+          octets_[l][o].ncoeff = 0;
+        }
       }
     }
   }
@@ -396,8 +431,9 @@ void MultigridDriver::InitializeOctets() {
               oct.neighbors[dir] = {-2, -2};
               continue;
             }
-            if (octetmap_[l].count(nloc) == 1) {
-              oct.neighbors[dir] = {octetmap_[l][nloc], -1};
+            auto same = octetmap_[l].find(nloc);
+            if (same != octetmap_[l].end()) {
+              oct.neighbors[dir] = {same->second, -1};
             } else {
               int cid = -1;
               if (l > 0) {
@@ -406,7 +442,15 @@ void MultigridDriver::InitializeOctets() {
                 cloc.lx2 = nloc.lx2 >> 1;
                 cloc.lx3 = nloc.lx3 >> 1;
                 cloc.level = nloc.level - 1;
-                cid = octetmap_[l-1][cloc];
+                auto coarse = octetmap_[l-1].find(cloc);
+                if (coarse == octetmap_[l-1].end()) {
+                  std::cout << "### FATAL ERROR in MultigridDriver::InitializeOctets"
+                            << std::endl
+                            << "Missing coarser octet for refined neighbor boundary."
+                            << std::endl;
+                  std::exit(EXIT_FAILURE);
+                }
+                cid = coarse->second;
               }
               oct.neighbors[dir] = {-1, cid};
             }
@@ -515,7 +559,8 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
       oloc.lx3 = (loc[n].lx3 >> 1);
       oloc.level = loc[n].level - 1;
       int olev = oloc.level - rootlevel;
-      int oid = octetmap_[olev][oloc];
+      int oid = FindOctetIdOrDie(olev, oloc,
+                                 "MultigridDriver::TransferFromBlocksToRoot");
       int oi = (i & 1) + ngh;
       int oj = (j & 1) + ngh;
       int ok = (k & 1) + ngh;
@@ -971,7 +1016,8 @@ void MultigridDriver::RestrictFMGSourceOctets() {
       cloc.lx2 = (floc.lx2 >> 1);
       cloc.lx3 = (floc.lx3 >> 1);
       cloc.level = floc.level - 1;
-      int oid = octetmap_[l-1][cloc];
+      int oid = FindOctetIdOrDie(l-1, cloc,
+                                 "MultigridDriver::RestrictFMGSourceOctets");
       int oi = (static_cast<int>(floc.lx1) & 1) + ngh;
       int oj = (static_cast<int>(floc.lx2) & 1) + ngh;
       int ok = (static_cast<int>(floc.lx3) & 1) + ngh;
@@ -1013,7 +1059,8 @@ void MultigridDriver::RestrictOctets() {
       cloc.lx2 = (floc.lx2 >> 1);
       cloc.lx3 = (floc.lx3 >> 1);
       cloc.level = floc.level - 1;
-      int oid = octetmap_[lev-1][cloc];
+      int oid = FindOctetIdOrDie(lev-1, cloc,
+                                 "MultigridDriver::RestrictOctets");
       int oi = (static_cast<int>(floc.lx1) & 1) + ngh;
       int oj = (static_cast<int>(floc.lx2) & 1) + ngh;
       int ok = (static_cast<int>(floc.lx3) & 1) + ngh;
@@ -1108,7 +1155,8 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
       cloc.lx2 = (floc.lx2 >> 1);
       cloc.lx3 = (floc.lx3 >> 1);
       cloc.level = floc.level - 1;
-      int cid = octetmap_[clev][cloc];
+      int cid = FindOctetIdOrDie(clev, cloc,
+                                 "MultigridDriver::ProlongateAndCorrectOctets");
       MGOctet &coct = octets_[clev][cid];
       int ci = (static_cast<int>(floc.lx1) & 1) + ngh;
       int cj = (static_cast<int>(floc.lx2) & 1) + ngh;
@@ -1193,7 +1241,8 @@ void MultigridDriver::FMGProlongateOctets() {
       cloc.lx2 = (floc.lx2 >> 1);
       cloc.lx3 = (floc.lx3 >> 1);
       cloc.level = floc.level - 1;
-      int cid = octetmap_[clev][cloc];
+      int cid = FindOctetIdOrDie(clev, cloc,
+                                 "MultigridDriver::FMGProlongateOctets");
       MGOctet &coct = octets_[clev][cid];
       int ci = (static_cast<int>(floc.lx1) & 1) + ngh;
       int cj = (static_cast<int>(floc.lx2) & 1) + ngh;
@@ -1303,14 +1352,14 @@ void MultigridDriver::SetOctetBoundarySameLevel(MGOctet &dst, const MGOctet &src
   const int l = ngh, r = ngh + 1;
   int is, ie, js, je, ks, ke, nis, njs, nks;
   if (ox1 == 0)     is = ngh,   ie = ngh+1, nis = ngh;
-  else if (ox1 < 0) is = 0,     ie = ngh-1, nis = ngh+1;
-  else              is = ngh+2, ie = ngh+2, nis = ngh;
+  else if (ox1 < 0) is = 0,     ie = ngh-1, nis = 2;
+  else              is = ngh+2, ie = 2*ngh+1, nis = ngh;
   if (ox2 == 0)     js = ngh,   je = ngh+1, njs = ngh;
-  else if (ox2 < 0) js = 0,     je = ngh-1, njs = ngh+1;
-  else              js = ngh+2, je = ngh+2, njs = ngh;
+  else if (ox2 < 0) js = 0,     je = ngh-1, njs = 2;
+  else              js = ngh+2, je = 2*ngh+1, njs = ngh;
   if (ox3 == 0)     ks = ngh,   ke = ngh+1, nks = ngh;
-  else if (ox3 < 0) ks = 0,     ke = ngh-1, nks = ngh+1;
-  else              ks = ngh+2, ke = ngh+2, nks = ngh;
+  else if (ox3 < 0) ks = 0,     ke = ngh-1, nks = 2;
+  else              ks = ngh+2, ke = 2*ngh+1, nks = ngh;
   int ci = ox1 + 1, cj = ox2 + 1, ck = ox3 + 1;
 
   for (int v = 0; v < nvar; ++v) {
@@ -1528,6 +1577,70 @@ void MultigridDriver::ProlongateOctetBoundaries(MGOctet &oct,
       }
     }
   }
+
+  if (ngh > 2) {
+    auto weights = [](Real x, Real w[3]) {
+      w[0] = 0.5*x*(x - 1.0);
+      w[1] = 1.0 - x*x;
+      w[2] = 0.5*x*(x + 1.0);
+    };
+    auto fine_coord = [ngh](int n) -> Real {
+      return 0.5*static_cast<Real>(n - ngh) - 0.25;
+    };
+    auto qinterp = [&](const std::vector<Real> &buf, int v,
+                       Real x3, Real x2, Real x1) -> Real {
+      Real w1[3], w2[3], w3[3];
+      weights(x1, w1);
+      weights(x2, w2);
+      weights(x3, w3);
+      Real out = 0.0;
+      for (int kk = 0; kk < 3; ++kk) {
+        for (int jj = 0; jj < 3; ++jj) {
+          for (int ii = 0; ii < 3; ++ii) {
+            out += w3[kk]*w2[jj]*w1[ii]*BufRef(buf, 3, v, kk, jj, ii);
+          }
+        }
+      }
+      return out;
+    };
+
+    for (int ox3 = -1; ox3 <= 1; ++ox3) {
+      for (int ox2 = -1; ox2 <= 1; ++ox2) {
+        for (int ox1 = -1; ox1 <= 1; ++ox1) {
+          if (!ncoarse[(ox3+1)*9 + (ox2+1)*3 + (ox1+1)]) continue;
+          int is = (ox1 < 0) ? 0 : ((ox1 > 0) ? ngh+2 : ngh);
+          int ie = (ox1 < 0) ? ngh-1 : ((ox1 > 0) ? nc-1 : ngh+1);
+          int js = (ox2 < 0) ? 0 : ((ox2 > 0) ? ngh+2 : ngh);
+          int je = (ox2 < 0) ? ngh-1 : ((ox2 > 0) ? nc-1 : ngh+1);
+          int ks = (ox3 < 0) ? 0 : ((ox3 > 0) ? ngh+2 : ngh);
+          int ke = (ox3 < 0) ? ngh-1 : ((ox3 > 0) ? nc-1 : ngh+1);
+          for (int v = 0; v < nvar; ++v) {
+            for (int k = ks; k <= ke; ++k) {
+              for (int j = js; j <= je; ++j) {
+                for (int i = is; i <= ie; ++i) {
+                  bool missing = false;
+                  if (ox1 < 0) missing = missing || (i < ngh-2);
+                  if (ox1 > 0) missing = missing || (i > ngh+3);
+                  if (ox2 < 0) missing = missing || (j < ngh-2);
+                  if (ox2 > 0) missing = missing || (j > ngh+3);
+                  if (ox3 < 0) missing = missing || (k < ngh-2);
+                  if (ox3 > 0) missing = missing || (k > ngh+3);
+                  if (!missing) continue;
+                  Real x1 = fine_coord(i);
+                  Real x2 = fine_coord(j);
+                  Real x3 = fine_coord(k);
+                  oct.U(v,k,j,i) = qinterp(cbuf, v, x3, x2, x1);
+                  if (folddata) {
+                    oct.Uold(v,k,j,i) = qinterp(cbufold, v, x3, x2, x1);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 
@@ -1549,7 +1662,8 @@ void MultigridDriver::PreRestrictOctetU() {
       cloc.lx2 = (floc.lx2 >> 1);
       cloc.lx3 = (floc.lx3 >> 1);
       cloc.level = floc.level - 1;
-      int oid = octetmap_[l-1][cloc];
+      int oid = FindOctetIdOrDie(l-1, cloc,
+                                 "MultigridDriver::PreRestrictOctetU");
       MGOctet &coct = octets_[l-1][oid];
       int oi = (static_cast<int>(floc.lx1) & 1) + ngh;
       int oj = (static_cast<int>(floc.lx2) & 1) + ngh;
@@ -1576,7 +1690,8 @@ void MultigridDriver::RestrictOctetsBeforeTransfer() {
       cloc.lx2 = (floc.lx2 >> 1);
       cloc.lx3 = (floc.lx3 >> 1);
       cloc.level = floc.level - 1;
-      int oid = octetmap_[l-1][cloc];
+      int oid = FindOctetIdOrDie(l-1, cloc,
+                                 "MultigridDriver::RestrictOctetsBeforeTransfer");
       MGOctet &coct = octets_[l-1][oid];
       int oi = (static_cast<int>(floc.lx1) & 1) + ngh;
       int oj = (static_cast<int>(floc.lx2) & 1) + ngh;
@@ -1624,7 +1739,8 @@ void MultigridDriver::SetOctetBoundariesBeforeTransfer(bool folddata) {
     oloc.lx3 = loc.lx3 >> 1;
     oloc.level = loc.level - 1;
     int lev = oloc.level - locrootlevel_;
-    int oid = octetmap_[lev][oloc];
+    int oid = FindOctetIdOrDie(lev, oloc,
+                               "MultigridDriver::SetOctetBoundariesBeforeTransfer");
     if (octetbflag_[lev][oid]) continue;
     octetbflag_[lev][oid] = true;
 

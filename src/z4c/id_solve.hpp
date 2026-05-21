@@ -26,6 +26,10 @@ enum IDCTSUVar {
   ID_CTS_NVAR
 };
 
+// CTS free data are stored with respect to the conformal background metric.
+// ID_FREE_GXX...ID_FREE_GZZ are gamma_bar_ij.  ID_FREE_GDOTXX...
+// ID_FREE_GDOTZZ store the contravariant trace-free tensor u_bar^ij_TF,
+// despite the historical "GDOT" component names.
 enum IDCTSFreeVar {
   ID_FREE_GXX, ID_FREE_GXY, ID_FREE_GXZ, ID_FREE_GYY, ID_FREE_GYZ, ID_FREE_GZZ,
   ID_FREE_GDOTXX, ID_FREE_GDOTXY, ID_FREE_GDOTXZ,
@@ -63,13 +67,19 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void SmoothOctet(MGOctet &oct, int rlev, int color) final;
   void CalculateDefectOctet(MGOctet &oct, int rlev) final;
   void CalculateFASRHSOctet(MGOctet &oct, int rlev) final;
+  bool SolutionApplied() const { return solution_applied_; }
 
  private:
   void TransferCoefficientsFromBlocksToRoot();
 
   IDConformalThinSandwich *owner_;
   Real omega_;
+  int div_ahat_stencil_;
+  int octet_fd_stencil_;
+  int octet_div_ahat_stencil_;
   bool reject_worse_;
+  bool allow_incomplete_amr_;
+  bool solution_applied_;
 
   friend class IDCTSMultigrid;
 };
@@ -80,9 +90,12 @@ class IDConformalThinSandwich {
   ~IDConformalThinSandwich();
 
   TaskStatus SolveTask(Driver *pdriver, int stage);
+  void PrepareForRestart();
   void BuildFreeData();
   void ApplySolution();
-  void RecordConstraintHistory(int iter, Real defect);
+  void RecordConstraintHistory(int iter, const Real defects[ID_CTS_NVAR]);
+  bool StopAfterSolveRequested() const { return stop_after_solve_ && solved_; }
+  bool SkipInitialOutput() const { return skip_initial_output_; }
 
   DvceArray5D<Real> u_cts;
   DvceArray5D<Real> u_free;
@@ -94,10 +107,15 @@ class IDConformalThinSandwich {
   bool enabled_;
   bool solved_;
   bool solve_once_;
+  bool run_on_restart_;
+  bool stop_after_solve_;
+  bool skip_initial_output_;
   bool full_multigrid_;
   bool fill_horizon_junk_;
+  bool mask_horizon_defect_;
   int history_every_;
   Real horizon_radius_;
+  Real horizon_mask_radius_;
   Real horizon_center_[3];
   FILE *history_file_;
   std::string history_name_;
@@ -106,6 +124,7 @@ class IDConformalThinSandwich {
   void BuildGammaDotAndDK();
   template <int NGHOST>
   void FillHorizonJunk();
+  void RefreshZ4cBoundariesAfterSolve(Driver *pdriver);
 
   friend class IDCTSMultigridDriver;
   friend class IDCTSMultigrid;

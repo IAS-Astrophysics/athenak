@@ -87,8 +87,9 @@ damp_kappa2 = 0.0
 <id_solve>
 enable = true
 solve_once = true
-omega = 0.2
-threshold = 0.0
+stop_after_solve = true
+omega = 0.02
+threshold = -1.0
 niteration = 12
 npresmooth = 2
 npostsmooth = 2
@@ -96,6 +97,12 @@ show_defect = true
 reject_worse = true
 fill_horizon_junk = true
 horizon_fill_radius = 2.0
+mask_horizon_defect = true
+horizon_mask_radius = 2.5
+mg_nghost = 4
+div_ahat_stencil = 3
+octet_fd_stencil = 3
+octet_div_ahat_stencil = 3
 history_every = 1
 
 <problem>
@@ -120,4 +127,8 @@ user_hist = true
 
 <output1>
 file_type = hst
+dt = 1.0
+
+<output2>
+file_type = rst
 dt = 1.0

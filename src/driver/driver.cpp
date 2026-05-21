@@ -19,6 +19,7 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/id_solve.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
@@ -311,6 +312,10 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
 //  outputting ICs, and computing initial time step
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool res_flag) {
+  if (res_flag && pmesh->pmb_pack->pid_solve != nullptr) {
+    pmesh->pmb_pack->pid_solve->PrepareForRestart();
+  }
+
   //---- Step 1.  Set conserved variables in ghost zones for all physics
   InitBoundaryValuesAndPrimitives(pmesh);
 
@@ -337,7 +342,11 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
-  if (!res_flag) { // only write outputs at the beginning of the run
+  bool skip_initial_output = false;
+  if (pmesh->pmb_pack->pid_solve != nullptr) {
+    skip_initial_output = pmesh->pmb_pack->pid_solve->SkipInitialOutput();
+  }
+  if (!res_flag && !skip_initial_output) { // only write outputs at the beginning of the run
     for (auto &out : pout->pout_list) {
       out->LoadOutputData(pmesh);
       out->WriteOutputFile(pmesh, pin);
@@ -399,6 +408,15 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       // time-integrator tasks for each stage of integrator
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         ExecuteTaskList(pmesh, "before_stagen", stage);
+        if (pmesh->pmb_pack->pid_solve != nullptr &&
+            pmesh->pmb_pack->pid_solve->StopAfterSolveRequested()) {
+          if (global_variable::my_rank == 0) {
+            std::cout << "Stopping after native CTS id_solve; hyperbolic Z4c "
+                      << "evolution was not advanced." << std::endl;
+          }
+          nlim = pmesh->ncycle;
+          return;
+        }
         // solve gravity at each RK stage so the potential is consistent
         // with the current density (required for 2nd-order accuracy)
         if (pmesh->pmb_pack->pgrav != nullptr)
