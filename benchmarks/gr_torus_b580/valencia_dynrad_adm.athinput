@@ -1,0 +1,91 @@
+# AthenaK gr_torus B580 benchmark: Valencia GRMHD + dyn_radiation ADM tetrad.
+
+<job>
+basename = valencia_dynrad_adm
+
+<mesh>
+nghost = 4
+nx1 = 32
+x1min = -1024.0
+x1max = 1024.0
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 32
+x2min = -1024.0
+x2max = 1024.0
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 32
+x3min = -1024.0
+x3max = 1024.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 16
+nx2 = 16
+nx3 = 16
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim = 50
+tlim = 10000.0
+ndiag = 50
+
+<coord>
+a = 0.9375
+excise = true
+dexcise = 1.0e-8
+pexcise = 0.333e-10
+
+<adm>
+dynamic = false
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = ppm4
+rsolver = hlle
+dfloor = 1.0e-8
+pfloor = 0.333e-10
+tfloor = 1.0e-10
+gamma = 1.4444444444444444
+fofc = true
+gamma_max = 20.0
+dyn_scratch = 1
+calculate_tmunu = false
+
+<dyn_radiation>
+geometry = adm
+reconstruct = plm
+rotate_geo = false
+nlevel = 3
+power_opacity = true
+compton = true
+kappa_s = 0.34
+n_0_floor = 0.1
+
+<units>
+bhmass_msun = 10.0
+density_cgs = 1.0e-4
+mu = 0.5
+
+<problem>
+fm_torus = true
+r_edge = 20.0
+r_peak = 41.0
+tilt_angle = 0.0
+potential_beta_min = 100.0
+potential_cutoff = 0.2
+potential_rho_pow = 1.0
+rho_min = 1.0e-5
+rho_pow = -1.5
+pgas_min = 0.333e-7
+pgas_pow = -2.5
+rho_max = 1.0
+l = 0.0
+pert_amp = 2.0e-2
+user_hist = false

@@ -105,9 +105,17 @@ The compact dynbbh beam figure set can be regenerated with a dynbbh-enabled
 executable:
 
 ```sh
-cmake --build build_dynbbh_rad -j6
+cmake -S . -B build-mpi-dynbbh \
+  -D CMAKE_BUILD_TYPE=Release \
+  -D Athena_ENABLE_MPI=ON \
+  -D PROBLEM=dynbbh \
+  -D Kokkos_ENABLE_SERIAL=ON \
+  -D Kokkos_ENABLE_OPENMP=OFF \
+  -D Kokkos_ENABLE_SYCL=OFF
+cmake --build build-mpi-dynbbh -j6
 python dyngr_radiation_paper/scripts/run_dynbbh_beam_figures.py \
-  --run-dir /tmp/dynbbh_beam_figures --athena build_dynbbh_rad/src/athena
+  --run-dir /tmp/dynbbh_beam_figures \
+  --athena build-mpi-dynbbh/src/athena
 ```
 
 It runs the superposed orbiting Kerr-Schild binary background with
@@ -124,7 +132,7 @@ The higher-resolution time-series version used for the current figures is:
 python dyngr_radiation_paper/scripts/run_dynbbh_beam_figures.py \
   --run-dir /tmp/dynbbh_beam_highres_dynamic_t10 \
   --basename paper_dynbbh_beam_hi72z4_t10 \
-  --athena build_dynbbh_rad/src/athena --mpi-ranks 4 \
+  --athena build-mpi-dynbbh/src/athena --mpi-ranks 4 \
   --tlim 10.0 --nlim 340 --snapshot-dt 1.0 --track-dt 0.25 \
   --nx1 72 --nx2 72 --nx3 4 --mb-nx1 36 --mb-nx2 36 --mb-nx3 4 \
   --nlevel 4 --ppc 0.004 --ntrack 16 --beam-spread 20.0
@@ -133,6 +141,9 @@ python dyngr_radiation_paper/scripts/run_dynbbh_beam_figures.py \
 This run keeps the same angular resolution as the compact Kerr beam diagnostic
 (`nlevel=4`) and uses the minimum active z resolution accepted by the mesh
 driver (`nx3=4`, `meshblock/nx3=4`).
+When `--mpi-ranks` is greater than one, the executable must be built with
+`Athena_ENABLE_MPI=ON`; otherwise independent serial jobs can collide on the
+same output files.  The plotting script checks this before launching the run.
 
 ## Diagnostic plots
 

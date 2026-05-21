@@ -44,6 +44,31 @@ def get_float(blocks: dict[str, dict[str, str]], block: str, key: str, default: 
     return float(blocks.get(block, {}).get(key, default))
 
 
+def athena_config(root: Path, exe: Path) -> str:
+    result = subprocess.run([str(exe), "-c"], cwd=root, text=True,
+                            capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"could not inspect Athena executable {exe} with -c "
+            f"(exit code {result.returncode})\n{result.stdout}{result.stderr}"
+        )
+    return result.stdout + result.stderr
+
+
+def validate_athena(root: Path, exe: Path, mpi_ranks: int) -> None:
+    config = athena_config(root, exe)
+    if "Problem generator:          dynbbh" not in config:
+        raise RuntimeError(
+            f"{exe} is not a dynbbh executable. Rebuild with -D PROBLEM=dynbbh."
+        )
+    if mpi_ranks > 1 and "MPI parallelism:            ON" not in config:
+        raise RuntimeError(
+            f"--mpi-ranks={mpi_ranks} requires an MPI-enabled Athena executable, "
+            f"but {exe} reports MPI parallelism OFF. Rebuild with "
+            f"-D Athena_ENABLE_MPI=ON or run with --mpi-ranks 1."
+        )
+
+
 def run_case(root: Path, run_dir: Path, exe: Path, input_file: Path, basename: str,
              tlim: float, nlim: int, snapshot_dt: float, track_dt: float,
              nx1: int | None, nx2: int | None, nx3: int | None,
@@ -52,6 +77,7 @@ def run_case(root: Path, run_dir: Path, exe: Path, input_file: Path, basename: s
              beam_spread: float | None, mpi_ranks: int, skip_run: bool) -> None:
     if skip_run:
         return
+    validate_athena(root, exe, mpi_ranks)
     athena_cmd = [
         str(exe),
         "-i",
@@ -322,7 +348,7 @@ def plot_summary(rad_xy, rad_xz, adm_xy, tab_path: Path, trk_path: Path,
     x = column(names, data, "x1v", 2)
     rtt = column(names, data, "r00", -10)
     print(f"dynbbh beam lineout max Rtt={float(np.nanmax(rtt)):.6e}")
-    print(f"dynbbh beam lineout integral={float(np.trapz(rtt[np.argsort(x)], np.sort(x))):.6e}")
+    print(f"dynbbh beam lineout integral={float(np.trapezoid(rtt[np.argsort(x)], np.sort(x))):.6e}")
 
 
 def plot_time_series(rad_paths: list[Path], trk_path: Path, blocks, fig_dir: Path,
@@ -436,10 +462,14 @@ def main() -> int:
     fig_dir.mkdir(parents=True, exist_ok=True)
 
     blocks = read_input(input_file)
-    run_case(root, run_dir, exe, input_file, args.basename, args.tlim, args.nlim,
-             args.snapshot_dt, args.track_dt, args.nx1, args.nx2, args.nx3,
-             args.mb_nx1, args.mb_nx2, args.mb_nx3, args.nlevel, args.ppc,
-             args.ntrack, args.beam_spread, args.mpi_ranks, args.skip_run)
+    try:
+        run_case(root, run_dir, exe, input_file, args.basename, args.tlim, args.nlim,
+                 args.snapshot_dt, args.track_dt, args.nx1, args.nx2, args.nx3,
+                 args.mb_nx1, args.mb_nx2, args.mb_nx3, args.nlevel, args.ppc,
+                 args.ntrack, args.beam_spread, args.mpi_ranks, args.skip_run)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     rad_xy = read_binary_slice(latest(run_dir, args.basename, ".rad_xy.*.bin"),
                                ["r00", "r01", "r02", "r03"])

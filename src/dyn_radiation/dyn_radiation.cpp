@@ -169,6 +169,7 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   adm_metric_source = pin->GetOrAddBoolean("dyn_radiation", "adm_metric_source",
                                            use_adm_geometry);
+  angular_frame_initialized = false;
   rotate_geo = pin->GetOrAddBoolean("dyn_radiation","rotate_geo",true);
   angular_fluxes = pin->GetOrAddBoolean("dyn_radiation","angular_fluxes",true);
   n_0_floor = pin->GetOrAddReal("dyn_radiation","n_0_floor",0.1);
@@ -308,6 +309,9 @@ void DynRadiation::PrepareADMGeometry() {
 
 TaskStatus DynRadiation::PrepareGeometryTask(Driver *pdriver, int stage) {
   if (use_adm_geometry) {
+    if (pmy_pack->pz4c == nullptr && stage > 1) {
+      return TaskStatus::complete;
+    }
     PrepareADMGeometry();
   }
   return TaskStatus::complete;

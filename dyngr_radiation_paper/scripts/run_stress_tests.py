@@ -166,9 +166,41 @@ def mpi_case(
     return Case(name=name, command=command, tags=(tags or set()) | {"mpi"}, **kwargs)
 
 
-def build_cases(root: Path, run_dir: Path) -> list[Case]:
-    athena = root / "build" / "src" / "athena"
-    dynbbh = root / "build_dynbbh_rad" / "src" / "athena"
+def athena_config(exe: Path, root: Path) -> str:
+    result = subprocess.run([str(exe), "-c"], cwd=root, text=True,
+                            capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"could not inspect Athena executable {exe} with -c "
+            f"(exit code {result.returncode})\n{result.stdout}{result.stderr}"
+        )
+    return result.stdout + result.stderr
+
+
+def config_value(config: str, label: str) -> str | None:
+    prefix = label + ":"
+    for line in config.splitlines():
+        if line.strip().startswith(prefix):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def validate_executable(exe: Path, root: Path, *, problem: str,
+                        require_mpi: bool) -> None:
+    config = athena_config(exe, root)
+    observed_problem = config_value(config, "Problem generator")
+    if observed_problem != problem:
+        raise RuntimeError(
+            f"{exe} has problem generator {observed_problem!r}; expected {problem!r}"
+        )
+    if require_mpi and config_value(config, "MPI parallelism") != "ON":
+        raise RuntimeError(
+            f"{exe} is not MPI-enabled, but MPI stress cases are enabled. "
+            f"Rebuild with -D Athena_ENABLE_MPI=ON or rerun with --skip-mpi."
+        )
+
+
+def build_cases(root: Path, run_dir: Path, athena: Path, dynbbh: Path) -> list[Case]:
 
     restart_base = "stress_restart_src"
     restart_file = run_dir / "rst" / f"{restart_base}.00001.rst"
@@ -280,20 +312,24 @@ def main() -> int:
     parser.add_argument("--skip-mpi", action="store_true", help="skip two-rank MPI cases")
     parser.add_argument("--skip-dynbbh", action="store_true", help="skip dynbbh cases")
     parser.add_argument("--skip-restart", action="store_true", help="skip restart cases")
+    parser.add_argument("--athena", type=Path, default=None,
+                        help="Athena executable for the standard dyn_radiation cases")
+    parser.add_argument("--dynbbh-athena", type=Path, default=None,
+                        help="Athena executable for dynbbh-specific cases")
     parser.add_argument("--keep-going", action="store_true",
                         help="run remaining cases after a failure")
     args = parser.parse_args()
 
     root = repo_root()
+    athena = args.athena or root / "build" / "src" / "athena"
+    dynbbh = args.dynbbh_athena or root / "build_dynbbh_rad" / "src" / "athena"
     run_dir = args.run_dir or Path(f"/tmp/dynrad_stress_{int(time.time())}")
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "logs").mkdir(exist_ok=True)
 
-    missing = [
-        path for path in (root / "build" / "src" / "athena",
-                          root / "build_dynbbh_rad" / "src" / "athena")
-        if not path.exists()
-    ]
+    missing = [athena] if not athena.exists() else []
+    if not args.skip_dynbbh and not dynbbh.exists():
+        missing.append(dynbbh)
     if missing:
         for path in missing:
             print(f"missing executable: {path}", file=sys.stderr)
@@ -301,8 +337,17 @@ def main() -> int:
     if not shutil.which("mpirun") and not args.skip_mpi:
         print("mpirun not found; rerun with --skip-mpi or load MPI", file=sys.stderr)
         return 2
+    try:
+        validate_executable(athena, root, problem="built_in_pgens",
+                            require_mpi=not args.skip_mpi)
+        if not args.skip_dynbbh:
+            validate_executable(dynbbh, root, problem="dynbbh",
+                                require_mpi=not args.skip_mpi)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
-    cases = build_cases(root, run_dir)
+    cases = build_cases(root, run_dir, athena, dynbbh)
     if args.skip_mpi:
         cases = [case for case in cases if "mpi" not in case.tags]
     if args.skip_dynbbh:

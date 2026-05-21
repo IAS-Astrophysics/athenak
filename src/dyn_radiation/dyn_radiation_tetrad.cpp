@@ -184,55 +184,137 @@ Real ADMGeodesicAngularSpeed(const Real ell[3], const Real unit_flux[2],
                              const Real grad_guu[3][3][3],
                              const Real grad_cotriad[3][3][3],
                              const Real dt_cotriad[3][3]) {
-  Real p[3] = {0.0, 0.0, 0.0};
-  Real s[3] = {0.0, 0.0, 0.0};
-  for (int a=0; a<3; ++a) {
-    for (int i=0; i<3; ++i) {
-      p[i] += cotriad[a][i]*ell[a];
-      s[i] += triad[i][a]*ell[a];
-    }
+  const Real ell0 = ell[0];
+  const Real ell1 = ell[1];
+  const Real ell2 = ell[2];
+  Real p[3];
+  Real s[3];
+  for (int i=0; i<3; ++i) {
+    p[i] = cotriad[0][i]*ell0 + cotriad[1][i]*ell1 + cotriad[2][i]*ell2;
+    s[i] = triad[i][0]*ell0 + triad[i][1]*ell1 + triad[i][2]*ell2;
   }
 
-  Real v[3];
-  for (int i=0; i<3; ++i) {
-    v[i] = alpha*s[i] - beta[i];
-  }
+  Real v[3] = {alpha*s[0] - beta[0],
+               alpha*s[1] - beta[1],
+               alpha*s[2] - beta[2]};
 
-  Real pdot[3];
+  Real q[3];
   for (int i=0; i<3; ++i) {
-    pdot[i] = -grad_alpha[i];
+    Real pdot = -grad_alpha[i];
     for (int j=0; j<3; ++j) {
-      pdot[i] += p[j]*grad_beta[i][j];
+      pdot += p[j]*grad_beta[i][j];
       for (int k=0; k<3; ++k) {
-        pdot[i] -= 0.5*alpha*p[j]*p[k]*grad_guu[i][j][k];
+        pdot -= 0.5*alpha*p[j]*p[k]*grad_guu[i][j][k];
       }
     }
+    Real frame_adv = 0.0;
+    for (int b=0; b<3; ++b) {
+      Real dcov = dt_cotriad[b][i];
+      for (int d=0; d<3; ++d) {
+        dcov += v[d]*grad_cotriad[d][b][i];
+      }
+      frame_adv += dcov*ell[b];
+    }
+    q[i] = pdot - frame_adv;
   }
 
-  Real elldot[3] = {0.0, 0.0, 0.0};
+  Real elldot[3];
   for (int a=0; a<3; ++a) {
-    for (int i=0; i<3; ++i) {
-      Real frame_adv = 0.0;
-      for (int b=0; b<3; ++b) {
-        Real dcov = dt_cotriad[b][i];
-        for (int d=0; d<3; ++d) {
-          dcov += v[d]*grad_cotriad[d][b][i];
-        }
-        frame_adv += dcov*ell[b];
-      }
-      elldot[a] += triad[i][a]*(pdot[i] - frame_adv);
-    }
+    elldot[a] = triad[0][a]*q[0] + triad[1][a]*q[1] + triad[2][a]*q[2];
   }
 
   // Remove roundoff-level radial drift so the angular flux is tangent to S^2.
-  Real radial = ell[0]*elldot[0] + ell[1]*elldot[1] + ell[2]*elldot[2];
+  Real radial = ell0*elldot[0] + ell1*elldot[1] + ell2*elldot[2];
   for (int a=0; a<3; ++a) {
     elldot[a] -= radial*ell[a];
   }
 
-  const Real sin2 = fmax(1.0 - SQR(ell[2]), 1.0e-300);
+  const Real sin2 = fmax(1.0 - SQR(ell2), 1.0e-300);
   const Real theta_dot = -elldot[2]/sqrt(sin2);
-  const Real sin2_psi_dot = ell[0]*elldot[1] - ell[1]*elldot[0];
+  const Real sin2_psi_dot = ell0*elldot[1] - ell1*elldot[0];
+  return theta_dot*unit_flux[0] + sin2_psi_dot*unit_flux[1];
+}
+
+KOKKOS_INLINE_FUNCTION
+void BuildADMGeodesicAngularCoeffs(const Real alpha, const Real beta[3],
+                                   const Real triad[3][3], const Real cotriad[3][3],
+                                   const Real grad_alpha[3],
+                                   const Real grad_beta[3][3],
+                                   const Real grad_guu[3][3][3],
+                                   const Real grad_cotriad[3][3][3],
+                                   const Real dt_cotriad[3][3],
+                                   Real q0[3], Real q1[3][3], Real q2[3][3][3]) {
+  for (int i=0; i<3; ++i) {
+    q0[i] = -grad_alpha[i];
+    for (int a=0; a<3; ++a) {
+      q1[i][a] = -dt_cotriad[a][i];
+      q2[i][a][0] = 0.0;
+      q2[i][a][1] = 0.0;
+      q2[i][a][2] = 0.0;
+    }
+  }
+
+  for (int i=0; i<3; ++i) {
+    for (int a=0; a<3; ++a) {
+      for (int j=0; j<3; ++j) {
+        q1[i][a] += cotriad[a][j]*grad_beta[i][j];
+      }
+      for (int d=0; d<3; ++d) {
+        q1[i][a] += beta[d]*grad_cotriad[d][a][i];
+      }
+    }
+  }
+
+  for (int i=0; i<3; ++i) {
+    for (int a=0; a<3; ++a) {
+      for (int b=0; b<3; ++b) {
+        Real guu_coeff = 0.0;
+        for (int j=0; j<3; ++j) {
+          for (int k=0; k<3; ++k) {
+            guu_coeff += cotriad[a][j]*cotriad[b][k]*grad_guu[i][j][k];
+          }
+        }
+        q2[i][a][b] -= 0.5*alpha*guu_coeff;
+        for (int d=0; d<3; ++d) {
+          q2[i][a][b] -= alpha*triad[d][a]*grad_cotriad[d][b][i];
+        }
+      }
+    }
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+Real ADMGeodesicAngularSpeedFromCoeffs(const Real ell[3], const Real unit_flux[2],
+                                       const Real triad[3][3],
+                                       const Real q0[3], const Real q1[3][3],
+                                       const Real q2[3][3][3]) {
+  const Real ell0 = ell[0];
+  const Real ell1 = ell[1];
+  const Real ell2 = ell[2];
+  Real q[3];
+  for (int i=0; i<3; ++i) {
+    q[i] = q0[i];
+    for (int a=0; a<3; ++a) {
+      q[i] += q1[i][a]*ell[a];
+      for (int b=0; b<3; ++b) {
+        q[i] += q2[i][a][b]*ell[a]*ell[b];
+      }
+    }
+  }
+
+  Real elldot[3];
+  for (int a=0; a<3; ++a) {
+    elldot[a] = triad[0][a]*q[0] + triad[1][a]*q[1] + triad[2][a]*q[2];
+  }
+
+  Real radial = ell0*elldot[0] + ell1*elldot[1] + ell2*elldot[2];
+  for (int a=0; a<3; ++a) {
+    elldot[a] -= radial*ell[a];
+  }
+
+  const Real sin2 = fmax(1.0 - SQR(ell2), 1.0e-300);
+  const Real theta_dot = -elldot[2]/sqrt(sin2);
+  const Real sin2_psi_dot = ell0*elldot[1] - ell1*elldot[0];
   return theta_dot*unit_flux[0] + sin2_psi_dot*unit_flux[1];
 }
 
@@ -248,8 +330,11 @@ void DynRadiation::SetOrthonormalTetrad() {
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is;
+  int &ie = indcs.ie;
   int &js = indcs.js;
+  int &je = indcs.je;
   int &ks = indcs.ks;
+  int &ke = indcs.ke;
   int &nmb = pmy_pack->nmb_thispack;
 
   int nang1 = prgeo->nangles - 1;
@@ -260,31 +345,34 @@ void DynRadiation::SetOrthonormalTetrad() {
   bool &flat = coord.is_minkowski;
   Real &spin = coord.bh_spin;
 
-  // define tetrad frame
-  for (int n=0; n<=nang1; ++n) {
-    nh_c.h_view(n,0) = 1.0;
-    nh_c.h_view(n,1) = prgeo->cart_pos.h_view(n,0);
-    nh_c.h_view(n,2) = prgeo->cart_pos.h_view(n,1);
-    nh_c.h_view(n,3) = prgeo->cart_pos.h_view(n,2);
-    if (angular_fluxes) {
-      for (int nb=0; nb<num_neighbors_.h_view(n); ++nb) {
-        nh_f.h_view(n,nb,0) = 1.0;
-        nh_f.h_view(n,nb,1) = prgeo->cart_pos_mid.h_view(n,nb,0);
-        nh_f.h_view(n,nb,2) = prgeo->cart_pos_mid.h_view(n,nb,1);
-        nh_f.h_view(n,nb,3) = prgeo->cart_pos_mid.h_view(n,nb,2);
-      }
-      if (num_neighbors_.h_view(n)==5) {
-        nh_f.h_view(n,5,0) = (FLT_MAX);
-        nh_f.h_view(n,5,1) = (FLT_MAX);
-        nh_f.h_view(n,5,2) = (FLT_MAX);
-        nh_f.h_view(n,5,3) = (FLT_MAX);
+  if (!angular_frame_initialized) {
+    // define tetrad frame
+    for (int n=0; n<=nang1; ++n) {
+      nh_c.h_view(n,0) = 1.0;
+      nh_c.h_view(n,1) = prgeo->cart_pos.h_view(n,0);
+      nh_c.h_view(n,2) = prgeo->cart_pos.h_view(n,1);
+      nh_c.h_view(n,3) = prgeo->cart_pos.h_view(n,2);
+      if (angular_fluxes) {
+        for (int nb=0; nb<num_neighbors_.h_view(n); ++nb) {
+          nh_f.h_view(n,nb,0) = 1.0;
+          nh_f.h_view(n,nb,1) = prgeo->cart_pos_mid.h_view(n,nb,0);
+          nh_f.h_view(n,nb,2) = prgeo->cart_pos_mid.h_view(n,nb,1);
+          nh_f.h_view(n,nb,3) = prgeo->cart_pos_mid.h_view(n,nb,2);
+        }
+        if (num_neighbors_.h_view(n)==5) {
+          nh_f.h_view(n,5,0) = (FLT_MAX);
+          nh_f.h_view(n,5,1) = (FLT_MAX);
+          nh_f.h_view(n,5,2) = (FLT_MAX);
+          nh_f.h_view(n,5,3) = (FLT_MAX);
+        }
       }
     }
+    nh_c.template modify<HostMemSpace>();
+    nh_c.template sync<DevExeSpace>();
+    nh_f.template modify<HostMemSpace>();
+    nh_f.template sync<DevExeSpace>();
+    angular_frame_initialized = true;
   }
-  nh_c.template modify<HostMemSpace>();
-  nh_c.template sync<DevExeSpace>();
-  nh_f.template modify<HostMemSpace>();
-  nh_f.template sync<DevExeSpace>();
 
   if (use_adm_geometry) {
     auto &adm_ = pmy_pack->padm->adm;
@@ -346,7 +434,7 @@ void DynRadiation::SetOrthonormalTetrad() {
     bool multi_d = pmy_pack->pmesh->multi_d;
     bool three_d = pmy_pack->pmesh->three_d;
     par_for("dynrad_adm_grad_cache",DevExeSpace(),
-    0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    0,(nmb-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       int im[3] = {(i > 0) ? i-1 : i, j, k};
       int ip[3] = {(i < n1-1) ? i+1 : i, j, k};
@@ -458,12 +546,13 @@ void DynRadiation::SetOrthonormalTetrad() {
           adm_dt_cotriad_c_(m,3*a+b,k,j,i) = dco_dt[a][b];
         }
       }
+
     });
 
     if (is_hydro_enabled || is_mhd_enabled) {
       auto norm_to_tet_ = norm_to_tet;
       par_for("dynrad_adm_norm_to_tet",DevExeSpace(),
-      0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+      0,(nmb-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         for (int a=0; a<4; ++a) {
           for (int b=0; b<4; ++b) {
@@ -483,7 +572,7 @@ void DynRadiation::SetOrthonormalTetrad() {
       auto uflux = prgeo->unit_flux;
       auto nh_f_ = nh_f;
       auto na_ = na;
-      par_for("dynrad_adm_na",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
+      par_for("dynrad_adm_na",DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real beta[3] = {adm_beta_u_c_(m,0,k,j,i), adm_beta_u_c_(m,1,k,j,i),
                         adm_beta_u_c_(m,2,k,j,i)};
@@ -516,15 +605,19 @@ void DynRadiation::SetOrthonormalTetrad() {
             dt_cotriad[a][b] = adm_dt_cotriad_c_(m,3*a+b,k,j,i);
           }
         }
+        Real q0[3];
+        Real q1[3][3];
+        Real q2[3][3][3];
+        BuildADMGeodesicAngularCoeffs(adm_alpha_c_(m,k,j,i), beta, triad, cotriad,
+                                      grad_alpha, grad_beta, grad_guu, grad_cotriad,
+                                      dt_cotriad, q0, q1, q2);
         for (int n=0; n<=nang1; ++n) {
           for (int nb=0; nb<num_neighbors_.d_view(n); ++nb) {
             Real ell[3] = {nh_f_.d_view(n,nb,1), nh_f_.d_view(n,nb,2),
                            nh_f_.d_view(n,nb,3)};
             Real edge_flux[2] = {uflux.d_view(n,nb,0), uflux.d_view(n,nb,1)};
             na_(m,n,k,j,i,nb) =
-              ADMGeodesicAngularSpeed(ell, edge_flux, adm_alpha_c_(m,k,j,i), beta,
-                                      triad, cotriad, grad_alpha, grad_beta,
-                                      grad_guu, grad_cotriad, dt_cotriad);
+              ADMGeodesicAngularSpeedFromCoeffs(ell, edge_flux, triad, q0, q1, q2);
           }
         }
       });
@@ -532,7 +625,7 @@ void DynRadiation::SetOrthonormalTetrad() {
 
     auto tet_d1_x1f_ = tet_d1_x1f;
     auto sqrt_detg_x1f_ = sqrt_detg_x1f;
-    par_for("dynrad_adm_x1f",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),1,(n1-1),
+    par_for("dynrad_adm_x1f",DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,(ie+1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real g3d[6], beta[3], alpha;
       adm::Face1Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
@@ -546,7 +639,7 @@ void DynRadiation::SetOrthonormalTetrad() {
     auto tet_d2_x2f_ = tet_d2_x2f;
     auto sqrt_detg_x2f_ = sqrt_detg_x2f;
     if (pmy_pack->pmesh->multi_d) {
-      par_for("dynrad_adm_x2f",DevExeSpace(),0,(nmb-1),0,(n3-1),1,(n2-1),0,(n1-1),
+      par_for("dynrad_adm_x2f",DevExeSpace(),0,(nmb-1),ks,ke,js,(je+1),is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real g3d[6], beta[3], alpha;
         adm::Face2Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
@@ -561,7 +654,7 @@ void DynRadiation::SetOrthonormalTetrad() {
     auto tet_d3_x3f_ = tet_d3_x3f;
     auto sqrt_detg_x3f_ = sqrt_detg_x3f;
     if (pmy_pack->pmesh->three_d) {
-      par_for("dynrad_adm_x3f",DevExeSpace(),0,(nmb-1),1,(n3-1),0,(n2-1),0,(n1-1),
+      par_for("dynrad_adm_x3f",DevExeSpace(),0,(nmb-1),ks,(ke+1),js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real g3d[6], beta[3], alpha;
         adm::Face3Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);

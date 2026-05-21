@@ -17,18 +17,32 @@ repository root.
 
 ## Dynbbh High-Resolution Beam
 
-Build the dynbbh executable, then run:
+Build a CPU MPI dynbbh executable, then run:
 
 ```sh
-cmake --build build_dynbbh_rad -j6
+cmake -S . -B build-mpi-dynbbh \
+  -D CMAKE_BUILD_TYPE=Release \
+  -D Athena_ENABLE_MPI=ON \
+  -D PROBLEM=dynbbh \
+  -D Kokkos_ENABLE_SERIAL=ON \
+  -D Kokkos_ENABLE_OPENMP=OFF \
+  -D Kokkos_ENABLE_SYCL=OFF
+cmake --build build-mpi-dynbbh -j6
 python dyngr_radiation_paper/scripts/run_dynbbh_beam_figures.py \
   --run-dir /tmp/dynbbh_beam_highres_z4_mpi_t8 \
   --basename paper_dynbbh_beam_hi72z4_t8 \
-  --athena build_dynbbh_rad/src/athena --mpi-ranks 4 \
+  --athena build-mpi-dynbbh/src/athena --mpi-ranks 4 \
   --tlim 8.0 --nlim 260 --snapshot-dt 1.0 --track-dt 0.25 \
   --nx1 72 --nx2 72 --nx3 4 --mb-nx1 36 --mb-nx2 36 --mb-nx3 4 \
   --nlevel 4 --ppc 0.004 --ntrack 16 --beam-spread 20.0
 ```
+
+`--mpi-ranks > 1` requires an executable configured with
+`Athena_ENABLE_MPI=ON`; otherwise `mpirun` starts multiple independent serial
+jobs that can corrupt shared outputs such as tracked-particle files.  The
+figure script checks the executable configuration before launching MPI runs.
+The SYCL Level Zero dynbbh device-loss investigation is recorded in
+[`level_zero_device_lost_dynbbh.md`](level_zero_device_lost_dynbbh.md).
 
 This produces `figures/dynbbh_beam_summary.png`,
 `figures/dynbbh_beam_particles_lineout.png`, and

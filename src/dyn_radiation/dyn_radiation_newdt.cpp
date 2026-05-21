@@ -32,7 +32,7 @@ namespace dyn_radiation {
 //        Only computed once at beginning of calculation.
 
 TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
-  if (use_adm_geometry) {
+  if (use_adm_geometry && pmy_pack->pz4c != nullptr) {
     PrepareADMGeometry();
   }
 

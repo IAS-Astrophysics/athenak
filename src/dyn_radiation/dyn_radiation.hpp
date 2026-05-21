@@ -217,6 +217,7 @@ class DynRadiation {
   // Angular mesh
   bool use_adm_geometry;             // use ADM fields instead of analytic CKS geometry
   bool adm_metric_source;            // include ADM lapse/K geometric energy source
+  bool angular_frame_initialized;     // nh_c/nh_f have been initialized from prgeo
   bool rotate_geo;                    // rotate geodesic mesh
   bool angular_fluxes;                // flag to enable/disable angular fluxes
   Real n_0_floor;                     // floor on n_0
