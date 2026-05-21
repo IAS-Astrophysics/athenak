@@ -74,6 +74,7 @@ defect_increase_tolerance = 1.0e-3
 max_iterations  = 40
 mg_bc           = zerograd
 mg_nghost       = 4
+mg_coarse_fd_stencil = 2
 history_every   = 1
 dump_constraint_diagnostics = false
 diagnostic_slice_z = 0.0

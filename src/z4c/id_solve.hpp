@@ -103,6 +103,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   Real smoother_stats_[ID_CTS_SMOOTH_NSTAT];
   int max_iter_;
   int octet_fd_stencil_;
+  int mg_coarse_fd_stencil_;
   int smoother_type_;
   int ngs_iterations_;
   int ngs_line_search_steps_;

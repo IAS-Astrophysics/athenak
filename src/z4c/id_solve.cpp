@@ -1019,7 +1019,9 @@ void IDCTSMultigrid::SmoothPack(int color) {
   int is = ngh_, ie = is + (indcs_.nx1 >> ll) - 1;
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
-  int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fine_fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fd = (pmy_pack_ != nullptr && current_level_ == nlevel_ - 1)
+           ? fine_fd : driver->mg_coarse_fd_stencil_;
   SmootherCellStats stats;
   stats.Clear();
   PrepareFrozenView();
@@ -1099,7 +1101,9 @@ void IDCTSMultigrid::CalculateDefectPack() {
   int is = ngh_, ie = is + (indcs_.nx1 >> ll) - 1;
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
-  int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fine_fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fd = (pmy_pack_ != nullptr && current_level_ == nlevel_ - 1)
+           ? fine_fd : driver->mg_coarse_fd_stencil_;
   if (on_host_) {
     switch (fd) {
       case 2: DefectImpl<2>(this, def_[current_level_].h_view, u_[current_level_].h_view,
@@ -1133,7 +1137,9 @@ void IDCTSMultigrid::CalculateFASRHSPack() {
   int is = ngh_, ie = is + (indcs_.nx1 >> ll) - 1;
   int js = ngh_, je = js + (indcs_.nx2 >> ll) - 1;
   int ks = ngh_, ke = ks + (indcs_.nx3 >> ll) - 1;
-  int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fine_fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fd = (pmy_pack_ != nullptr && current_level_ == nlevel_ - 1)
+           ? fine_fd : driver->mg_coarse_fd_stencil_;
   if (on_host_) {
     switch (fd) {
       case 2: FASRHSImpl<2>(this, src_[current_level_].h_view, u_[current_level_].h_view,
@@ -1276,6 +1282,31 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << "D_j Ahat^{ij} operator requires at least " << fd_stencil
               << " ghost cells." << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  int requested_coarse_fd = pin->GetOrAddInteger("id_solve", "mg_coarse_fd_stencil", 0);
+  mg_coarse_fd_stencil_ = (requested_coarse_fd > 0) ? requested_coarse_fd :
+                          ((fd_stencil > 2) ? 2 : fd_stencil);
+  if (mg_coarse_fd_stencil_ < 2 || mg_coarse_fd_stencil_ > 4 ||
+      mg_coarse_fd_stencil_ > fd_stencil) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/mg_coarse_fd_stencil must be 2, 3, or 4 and cannot "
+              << "exceed the fine Z4c stencil " << fd_stencil << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (nghost < mg_coarse_fd_stencil_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/mg_nghost=" << nghost << " is too small for "
+              << "<id_solve>/mg_coarse_fd_stencil=" << mg_coarse_fd_stencil_ << "."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (mg_coarse_fd_stencil_ < fd_stencil && global_variable::my_rank == 0) {
+    std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "Using CTS coarse MG stencil fd=" << mg_coarse_fd_stencil_
+              << " below the finest MeshBlock level." << std::endl;
   }
   int requested_octet_fd = pin->GetOrAddInteger("id_solve", "octet_fd_stencil", 0);
   octet_fd_stencil_ = (requested_octet_fd > 0) ? requested_octet_fd : fd_stencil;
