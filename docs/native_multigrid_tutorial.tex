@@ -447,7 +447,9 @@ CTS also exchanges and fills coefficient/free-data halos.  After
 \code{LoadCoefficients()} and after each \code{RestrictCoefficients()} step, the
 coefficient arrays use the same same-level MG exchange buffers as \code{u\_}.
 Their physical boundaries are filled as free data: periodic faces wrap and
-non-periodic faces use zero-gradient copies.  They do not use
+non-periodic faces use zero-gradient copies.  When refinement is present, the
+coefficient arrays then call \code{FillFineCoarseMGGhosts()} so CTS residuals
+near fine/coarse interfaces do not read stale free-data ghosts.  They do not use
 correction-variable odd reflection from \code{mg\_zerofixed}.
 
 \subsection{Physical Boundaries}
@@ -476,7 +478,9 @@ coefficient/free-data arrays through this hierarchy.
 The current octet coefficient bridge still uses the generic compact
 coarse-buffer path, not the full Z4c high-order prolongation kernels.  That is
 why sixth-order CTS on SMR remains guarded off even though unigrid high-order CTS
-operators are supported.
+operators are supported.  Octet CTS operators therefore default to
+\code{id\_solve/mg\_coarse\_fd\_stencil}; \code{id\_solve/octet\_fd\_stencil}
+is an explicit override.
 
 \section{Residual and Norms}
 

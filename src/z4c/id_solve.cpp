@@ -1309,7 +1309,8 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << " below the finest MeshBlock level." << std::endl;
   }
   int requested_octet_fd = pin->GetOrAddInteger("id_solve", "octet_fd_stencil", 0);
-  octet_fd_stencil_ = (requested_octet_fd > 0) ? requested_octet_fd : fd_stencil;
+  octet_fd_stencil_ = (requested_octet_fd > 0) ? requested_octet_fd
+                                               : mg_coarse_fd_stencil_;
   if (octet_fd_stencil_ < 2 || octet_fd_stencil_ > 4 || octet_fd_stencil_ > fd_stencil) {
     std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
               << std::endl

@@ -553,6 +553,11 @@ void Multigrid::FillCoefficientBoundaries(int level) {
         }
       });
   }
+
+  if (pbval != nullptr && pmy_driver_->nreflevel_ > 0) {
+    DvceArray5D<Real> coeff = coeff_[current_level_].d_view;
+    (void)pbval->FillFineCoarseMGGhosts(coeff);
+  }
   current_level_ = saved_level;
 }
 

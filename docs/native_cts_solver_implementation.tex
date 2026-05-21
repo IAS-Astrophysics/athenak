@@ -393,9 +393,10 @@ Coarser MeshBlock levels and all root-grid levels use
 \code{id\_solve/mg\_coarse\_fd\_stencil}; the default is \code{2} when the fine
 operator is higher order.  This keeps high-order accuracy on the final residual
 while making coarse-level FAS operators less halo hungry and less sensitive to
-coarse coefficient interpolation.  The octet bridge still uses the independent
-\code{id\_solve/octet\_fd\_stencil} control and remains guarded for sixth-order
-SMR.
+coarse coefficient interpolation.  The octet bridge defaults to the same
+\code{mg\_coarse\_fd\_stencil} policy unless
+\code{id\_solve/octet\_fd\_stencil} is explicitly set, and remains guarded for
+sixth-order SMR.
 
 \section{Smoothing Kernel}
 
@@ -551,12 +552,14 @@ The default/used solver controls are read in
         arrays on coarser levels.
   \item \code{LoadCoefficients(owner\_->u\_free, ...)} loads free-data
         coefficients into the multigrid coefficient arrays and fills their
-        same-level and physical halos on the finest MeshBlock MG level.
+        same-level, physical, and fine/coarse halos on the finest MeshBlock MG
+        level.
   \item \code{RestrictCoefficients()} restricts free-data arrays down the block
         hierarchy and fills coefficient halos after each coarse restriction.
-        Root coefficients are filled with periodic copies or zero-gradient
-        physical copies, not with correction-variable \code{mg\_zerofixed}
-        sign flips.
+        MeshBlock coefficients use the same fine/coarse ghost fill as
+        correction variables; root coefficients are filled with periodic copies
+        or zero-gradient physical copies, not with correction-variable
+        \code{mg\_zerofixed} sign flips.
   \item \code{SetupMultigrid()} initializes levels, tasks, root grids, and octets.
   \item \code{TransferCoefficientsFromBlocksToRoot()} populates root and octet
         coefficient storage.
@@ -624,6 +627,9 @@ used by the CTS solve.
 The free-data coefficients are loaded into multigrid coefficient arrays and
 restricted down levels.  For SMR/octet handling:
 \begin{itemize}
+  \item MeshBlock coefficient arrays use same-level exchange, physical free-data
+        boundary fills, and \code{FillFineCoarseMGGhosts()} in the same order as
+        the solution path.
   \item \code{TransferCoefficientsFromBlocksToRoot()} copies block coefficients
         to root cells or refined octets.
   \item Refined coefficient octets are restricted upward/downward as needed.
