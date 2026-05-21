@@ -89,4 +89,5 @@ void PiecewiseLinearX3(TeamMember_t const &member, const int m, const int k, con
   }
   return;
 }
+
 #endif // RECONSTRUCT_PLM_HPP_

@@ -229,14 +229,13 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
       pmbp->phydro->peos->PrimToCons(w0_, u0_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
     }
   } else {
+    auto &u0_ = pmbp->pmhd->u0;
+    auto &u1_ = pmbp->pmhd->u1;
+    auto &bcc_ = pmbp->pmhd->bcc0;
     if (bondi.reset_ic) {
-      // TODO(JMF): need to call PrimToCon in a way that operates on u1, not u0.
-      auto &u0_ = pmbp->pmhd->u0;
-      auto &u1_ = pmbp->pmhd->u1;
-      Kokkos::deep_copy(DevExeSpace(), u1_, u0_);
-      pmbp->pdyngr->PrimToConInit(0, n1-1, 0, n2-1, 0, n3-1);
+      pmbp->pdyngr->PrimToConInit(w0_, bcc_, u1_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
     } else {
-      pmbp->pdyngr->PrimToConInit(0, n1-1, 0, n2-1, 0, n3-1);
+      pmbp->pdyngr->PrimToConInit(w0_, bcc_, u0_, 0, (n1-1), 0, (n2-1), 0, (n3-1));
     }
   }
 
@@ -559,6 +558,9 @@ void FixedBondiInflow(Mesh *pm) {
     pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is-ng,is-1,0,(n2-1),0,(n3-1));
     pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,ie+1,ie+ng,0,(n2-1),0,(n3-1));
     gm1 = bondi_.gm - 1.0;
+  } else {
+    pm->pmb_pack->pdyngr->ConToPrimBC(is-ng,is-1,0,(n2-1),0,(n3-1));
+    pm->pmb_pack->pdyngr->ConToPrimBC(ie+1,ie+ng,0,(n2-1),0,(n3-1));
   }
   par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -601,6 +603,9 @@ void FixedBondiInflow(Mesh *pm) {
   if (use_dyngr) {
     pm->pmb_pack->pdyngr->PrimToConInit(is-ng,is-1,0,(n2-1),0,(n3-1));
     pm->pmb_pack->pdyngr->PrimToConInit(ie+1,ie+ng,0,(n2-1),0,(n3-1));
+
+    pm->pmb_pack->pdyngr->ConToPrimBC(0,(n1-1),js-ng,js-1,0,(n3-1));
+    pm->pmb_pack->pdyngr->ConToPrimBC(0,(n1-1),je+1,je+ng,0,(n3-1));
   } else {
     pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
     pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
@@ -649,6 +654,9 @@ void FixedBondiInflow(Mesh *pm) {
   if (use_dyngr) {
     pm->pmb_pack->pdyngr->PrimToConInit(0,(n1-1),js-ng,js-1,0,(n3-1));
     pm->pmb_pack->pdyngr->PrimToConInit(0,(n1-1),je+1,je+ng,0,(n3-1));
+
+    pm->pmb_pack->pdyngr->ConToPrimBC(0,(n1-1),0,(n2-1),ks-ng,ks-1);
+    pm->pmb_pack->pdyngr->ConToPrimBC(0,(n1-1),0,(n2-1),ke+1,ke+ng);
   } else {
     pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
     pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));

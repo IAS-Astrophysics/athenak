@@ -447,6 +447,7 @@ class PrimitiveSolverHydro {
 
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
+        sumerrs++;
       } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           sumerrs++;
@@ -560,6 +561,7 @@ class PrimitiveSolverHydro {
     if (floors_only) {
       ps.GetEOSMutable().SetPrimitiveFloorFailure(prim_failure);
       ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
+      pmy_pack->pmesh->ecounter.nfofc += count_errs;
     } else {
       nerrs += count_errs;
     }
@@ -603,6 +605,33 @@ class PrimitiveSolverHydro {
     s = sqrt(s);
     lambda_p = (a1 >= 0.0) ? -2.0 * a0 / (a1 + s) : (-a1 + s) / 2.0;
     lambda_m = (a1 >= 0.0) ? (-a1 - s) / 2.0 : -2.0 * a0 / (a1 - s);
+  }
+
+  // Get the fast magnetosonic speeds assuming Minkowski space.
+  KOKKOS_INLINE_FUNCTION
+  void GetSRFastMagnetosonicSpeeds(Real& lambda_p, Real& lambda_m,
+                                   Real prim[NPRIM], Real bsq, int pvx) const {
+    // Calculate the sound speed and the Alfven speed
+    Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
+    Real csq = cs*cs;
+    Real H = ps.GetEOS().GetEnergy(prim[PRH], prim[PTM], &prim[PYF]) + prim[PPR];
+    Real vasq = bsq/(bsq + H);
+    Real cmsq = csq + vasq - csq*vasq;
+
+    Real usq = prim[PVX]*prim[PVX] + prim[PVY]*prim[PVY] + prim[PVZ]*prim[PVZ];
+    Real iWsq = 1.0/(1.0 + usq);
+    Real iW = Kokkos::sqrt(iWsq);
+    Real vsq = usq*iWsq;
+    Real visq = prim[pvx]*prim[pvx]*iWsq;
+
+    //Real sdis = cmsq*(1.0 - vsq)*(1.0 - vsq*cmsq - (1. - cmsq)*prim[pvx]*prim[pvx]);
+    Real sdis = cmsq*(1. - vsq)*(1. - visq - (vsq - visq)*cmsq);
+    sdis = Kokkos::sqrt(Kokkos::fmax(sdis,0.0));
+    Real Wcsq = 1.0/(1.0 - vsq*cmsq);
+    Real q = prim[pvx]*iW*(1. - cmsq);
+
+    lambda_p = Wcsq*(q + sdis);
+    lambda_m = Wcsq*(q - sdis);
   }
 
   // A function for converting PrimitiveSolver errors to strings

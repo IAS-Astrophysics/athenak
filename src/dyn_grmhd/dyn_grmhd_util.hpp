@@ -53,6 +53,135 @@ void InsertFluxes(const Real flux_pt[NCONS], const DvceArray5D<Real>& flx,
   flx(m, IEN, k, j, i) = flux_pt[CTA];
 }
 
+// Finite-difference operator used for well-balancing scheme to get 1/2\partial_x q
+// at the cell interface.
+// width: half-width of stencil with respect to the interface
+// dir: x = 0, y = 1, z = 2
+// sign: +1 computes at +1/2, -1 computes at -1/2
+// Type: a data structure for a scalar field
+template<int width, int dir, int sign, typename Type>
+KOKKOS_INLINE_FUNCTION
+Real HalfDifferenceInterface(Type& quant, int const m,
+    int const k, int const j, int const i) {
+  constexpr int shifti = sign*(dir == 0);
+  constexpr int shiftj = sign*(dir == 1);
+  constexpr int shiftk = sign*(dir == 2);
+  if constexpr (width == 1) {
+    // (f(i+1) - f(i))/2
+    return 0.5*(quant(m,k+shiftk,j+shiftj,i+shifti) - quant(m,k,j,i));
+  } else if (width == 2) {
+    // (f(i-1) - 9 f(i) + 9 f(i) - f(i+2))/12
+    return (quant(m,k-shiftk,j-shiftj,i-shifti) -
+           9.0*(quant(m,k,j,i) - quant(m,k+shiftk,j+shiftj,i+shifti)) -
+           quant(m,k+2*shiftk,j+2*shiftj,i+2*shifti))/12.0;
+  } else if (width == 3) {
+    // (-f(i-2) + 10 f(i-1) - 55 f(i) + 55(i+1) - 10 f(i+2) + f(i+3))/60
+    return (-quant(m,k-2*shiftk,j-2*shiftj,i-2*shifti) +
+            10.0*(quant(m,k-shiftk,j-shiftj,i-shifti) -
+                  quant(m,k+2*shiftk,j+2*shiftj,i+2*shifti)) -
+            55.0*(quant(m,k,j,i) - quant(m,k+shiftk,j+shiftj,i+shifti)) +
+            quant(m,k+3*shiftk,j+3*shiftj,i+3*shifti))/60.0;
+  }
+  static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
+  return 0.;
+}
+
+// Finite-difference operator used for well-balancing scheme to get 1/2\partial_x q
+// at the cell interface.
+// width: half-width of stencil with respect to the interface
+// dir: x = 0, y = 1, z = 2
+// sign: +1 computes at +1/2, -1 computes at -1/2
+// Type: a data structure for a scalar field
+template<int width, int dir, int sign, typename Type>
+KOKKOS_INLINE_FUNCTION
+Real HalfDifferenceInterface(Type& quant, int const m, int const a, int const b,
+    int const k, int const j, int const i) {
+  constexpr int shifti = sign*(dir == 0);
+  constexpr int shiftj = sign*(dir == 1);
+  constexpr int shiftk = sign*(dir == 2);
+  if constexpr (width == 1) {
+    // (f(i+1) - f(i))/2
+    return 0.5*(quant(m,a,b,k+shiftk,j+shiftj,i+shifti) - quant(m,a,b,k,j,i));
+  } else if (width == 2) {
+    // (f(i-1) - 9 f(i) + 9 f(i+1) - f(i+2))/12
+    return (quant(m,a,b,k-shiftk,j-shiftj,i-shifti) -
+           9.0*(quant(m,a,b,k,j,i) - quant(m,a,b,k+shiftk,j+shiftj,i+shifti)) -
+           quant(m,a,b,k+2*shiftk,j+2*shiftj,i+2*shifti))/12.0;
+  } else if (width == 3) {
+    // (-f(i-2) + 10 f(i-1) - 55 f(i) + 55(i+1) - 10 f(i+2) + f(i+3))/60
+    return (-quant(m,a,b,k-2*shiftk,j-2*shiftj,i-2*shifti) +
+            10.0*(quant(m,a,b,k-shiftk,j-shiftj,i-shifti) -
+                  quant(m,a,b,k+2*shiftk,j+2*shiftj,i+2*shifti)) -
+            55.0*(quant(m,a,b,k,j,i) - quant(m,a,b,k+shiftk,j+shiftj,i+shifti)) +
+            quant(m,a,b,k+3*shiftk,j+3*shiftj,i+3*shifti))/60.0;
+  }
+  static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
+  return 0.;
+}
+
+// Interpolation operator used to get quantities at cell interfaces.
+// width: half-width of stencil with respect to the interface
+// dir: x = 0, y = 1, z = 2
+// sign: +1 computes at +1/2, -1 computes at -1/2
+// Type: a data structure for a scalar field
+template<int width, int dir, int sign, typename Type>
+KOKKOS_INLINE_FUNCTION
+Real GetAtInterface(Type& quant, int const m, int const k, int const j, int const i) {
+  constexpr int shifti = sign*(dir == 0);
+  constexpr int shiftj = sign*(dir == 1);
+  constexpr int shiftk = sign*(dir == 2);
+  if constexpr (width == 1) {
+    // (f(i) + f(i+1))/2
+    return 0.5*(quant(m,k,j,i) + quant(m,k+shiftk,j+shiftj,i+shifti));
+  } else if (width == 2) {
+    // (-f(i-1) + 9 f(i) + 9 f(i+1) - f(i+2))/16
+    return 0.0625*(-quant(m,k-shiftk,j-shiftj,i-shifti) +
+               9.0*(quant(m,k,j,i) + quant(m,k+shiftk,j+shiftj,i+shifti)) - 
+                    quant(m,k+2*shiftk,j+2*shiftj,i+2*shifti));
+  } else if (width == 3) {
+    // (3 f(i-2) - 25 f(i-1) + 150 f(i) + 150 f(i+1) - 25 f(i+2) + 3 f(i+3))/256
+    return 0.00390625*(3.0*(quant(m,k-2*shiftk,j-2*shiftj,i-2*shifti) +
+                            quant(m,k+3*shiftk,j+3*shiftj,i+3*shifti)) -
+                       25.0*(quant(m,k-shiftk,j-shiftj,i-shifti) +
+                             quant(m,k+2*shiftk,j+2*shiftj,i+2*shifti)) +
+                       150.0*(quant(m,k,j,i) + quant(m,k+shiftk,j+shiftj,i+shifti)));
+  }
+  static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
+  return 0.;
+}
+
+// Interpolation operator used to get quantities at cell interfaces.
+// width: half-width of stencil with respect to the interface
+// dir: x = 0, y = 1, z = 2
+// sign: +1 computes at +1/2, -1 computes at -1/2
+// Type: a data structure for a scalar field
+template<int width, int dir, int sign, typename Type>
+KOKKOS_INLINE_FUNCTION
+Real GetAtInterface(Type& quant, int const m, int const v, int const k, int const j,
+    int const i) {
+  constexpr int shifti = sign*(dir == 0);
+  constexpr int shiftj = sign*(dir == 1);
+  constexpr int shiftk = sign*(dir == 2);
+  if constexpr (width == 1) {
+    // (f(i) + f(i+1))/2
+    return 0.5*(quant(m,v,k,j,i) + quant(m,v,k+shiftk,j+shiftj,i+shifti));
+  } else if (width == 2) {
+    // (-f(i-1) + 9 f(i) + 9 f(i+1) - f(i+2))/16
+    return 0.0625*(-quant(m,v,k-shiftk,j-shiftj,i-shifti) +
+               9.0*(quant(m,v,k,j,i) + quant(m,v,k+shiftk,j+shiftj,i+shifti)) - 
+                    quant(m,v,k+2*shiftk,j+2*shiftj,i+2*shifti));
+  } else if (width == 3) {
+    // (3 f(i-2) - 25 f(i-1) + 150 f(i) + 150 f(i+1) - 25 f(i+2) + 3 f(i+3))/256
+    return 0.00390625*(3.0*(quant(m,v,k-2*shiftk,j-2*shiftj,i-2*shifti) +
+                            quant(m,v,k+3*shiftk,j+3*shiftj,i+3*shifti)) -
+                       25.0*(quant(m,v,k-shiftk,j-shiftj,i-shifti) +
+                             quant(m,v,k+2*shiftk,j+2*shiftj,i+2*shifti)) +
+                       150.0*(quant(m,v,k,j,i) + quant(m,v,k+shiftk,j+shiftj,i+shifti)));
+  }
+  static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
+  return 0.;
+}
+
 } // namespace dyngr
 
 #endif  // DYN_GRMHD_DYN_GRMHD_UTIL_HPP_

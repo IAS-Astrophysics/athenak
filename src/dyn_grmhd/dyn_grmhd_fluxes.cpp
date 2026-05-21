@@ -25,6 +25,10 @@
 #include "reconstruct/wenoz.hpp"
 #include "dyn_grmhd/rsolvers/llf_dyn_grmhd.hpp"
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/hlle_transforming.hpp"
+#include "dyn_grmhd/rsolvers/hlld_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/wb_equilibrium.hpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -41,7 +45,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   int is = indcs_.is, ie = indcs_.ie;
   int js = indcs_.js, je = indcs_.je;
   int ks = indcs_.ks, ke = indcs_.ke;
-  int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
+  int &ng = indcs_.ng;
+  int ncells1 = indcs_.nx1 + 2*ng;
 
   int nhyd = pmy_pack->pmhd->nmhd;
   int nvars = pmy_pack->pmhd->nmhd + pmy_pack->pmhd->nscalars;
@@ -51,17 +56,32 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = pmy_pack->pmhd->w0;
   auto &b0_ = pmy_pack->pmhd->bcc0;
+  auto &temp_ = temperature;
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = pmy_pack->pmhd->peos->eos_data;
   auto &dyn_eos_ = eos;
   auto &use_fofc = pmy_pack->pmhd->use_fofc;
+  auto &hlld_fail_ = hlld_fail;
   bool extrema = false;
+  bool &well_balanced_ = well_balanced;
+  int &source_order_ = source_order;
   if (recon_method_ == ReconstructionMethod::ppmx) {
     extrema = true;
   }
   // Short-circuit the flux calculation if everything is to be fixed.
   if (fixed_evolution) {
     return TaskStatus::complete;
+  }
+
+  // If HLLD is enabled, temporarily reduce the tolerance of PrimitiveSolver to speed up
+  // the initial guess calculation
+  Real tol_old;
+  if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    tol_old = Kokkos::fmin(dyn_eos_.ps.tol, 1e-6);
+    dyn_eos_.ps.tol = 1e-6;
+    if (monitor_failures) {
+      Kokkos::deep_copy(hlld_fail, 0);
+    }
   }
 
   //--------------------------------------------------------------------------------------
@@ -100,6 +120,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       case ReconstructionMethod::dc:
         DonorCellX1(member, m, k, j, il-1, iu, w0_, wl, wr);
         DonorCellX1(member, m, k, j, il-1, iu, b0_, bl, br);
+        if (well_balanced_) {
+          BalancePressureDCX1(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_, adm,
+                              temp_, wl, wr);
+        }
         break;
       case ReconstructionMethod::plm:
         PiecewiseLinearX1(member, m, k, j, il-1, iu, w0_, wl, wr);
@@ -119,6 +143,21 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       default:
         break;
     }
+    if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
+      switch (source_order_) {
+        case 2:
+          BalancePressureX1<1>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
+                               adm, temp_, wl, wr);
+          break;
+        case 4:
+          BalancePressureX1<2>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
+                               adm, temp_, wl, wr);
+          break;
+        case 6:
+          BalancePressureX1<3>(member, dyn_eos_, nvars - nhyd, m, k, j, il-1, iu, w0_,
+                               adm, temp_, wl, wr);
+      }
+    }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
 
@@ -134,6 +173,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     auto &nhyd_ = nhyd;
     auto nscal_ = nvars - nhyd;
     auto &adm_ = adm;
+    auto &hlld_fail_mask = hlld_fail_;
     //int il = is; int iu = ie+1;
     if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
       LLF_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
@@ -143,6 +183,14 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       HLLE_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
                 wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
                 flx1, e31, e21);
+    } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+      HLLE_TRANSFORMING<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
+                wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
+                flx1, e31, e21);
+    } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+      HLLD_DYNGR<IVX>(member, dyn_eos, indcs, size, coord, m, k, j, il, iu,
+                wl, wr, bl, br, bx, nhyd_, nscal_, adm_,
+                flx1, e31, e21, hlld_fail_mask);
     }
     member.team_barrier();
 
@@ -210,6 +258,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           case ReconstructionMethod::dc:
             DonorCellX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             DonorCellX2(member, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            if (well_balanced_) {
+              BalancePressureDCX2(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                  w0_, adm, temp_, wl_jp1, wr);
+            }
             break;
           case ReconstructionMethod::plm:
             PiecewiseLinearX2(member, m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
@@ -231,6 +283,22 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           default:
             break;
         }
+        if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
+          switch (source_order_) {
+            case 2:
+              BalancePressureX2<1>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_jp1, wr);
+              break;
+            case 4:
+              BalancePressureX2<2>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_jp1, wr);
+              break;
+            case 6:
+              BalancePressureX2<3>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_jp1, wr);
+              break;
+          }
+        }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
 
@@ -246,6 +314,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
         auto &adm_ = adm;
+        auto &hlld_fail_mask = hlld_fail_;
         //int il = is; int iu = ie;
         if (j>(jl)) {
           if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -254,6 +323,12 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+            HLLE_TRANSFORMING<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+            HLLD_DYNGR<IVY>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, by, nhyd_, nscal_, adm_, flx2, e12, e32, hlld_fail_mask);
           }
         }
         member.team_barrier();
@@ -318,6 +393,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           case ReconstructionMethod::dc:
             DonorCellX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             DonorCellX3(member, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            if (well_balanced_) {
+              BalancePressureDCX3(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                  w0_, adm, temp_, wl_kp1, wr);
+            }
             break;
           case ReconstructionMethod::plm:
             PiecewiseLinearX3(member, m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
@@ -339,6 +418,22 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           default:
             break;
         }
+        if (well_balanced_ && recon_method_ != ReconstructionMethod::dc) {
+          switch (source_order_) {
+            case 2:
+              BalancePressureX3<1>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_kp1, wr);
+              break;
+            case 4:
+              BalancePressureX3<2>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_kp1, wr);
+              break;
+            case 6:
+              BalancePressureX3<3>(member, dyn_eos_, nvars - nhyd, m, k, j, is-1, ie+1,
+                                   w0_, adm, temp_, wl_kp1, wr);
+              break;
+          }
+        }
         // Sync all threads in the team so that scratch memory is consistent
         member.team_barrier();
 
@@ -354,6 +449,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto &adm_ = adm;
         auto &nhyd_ = nhyd;
         auto nscal_ = nvars - nhyd;
+        auto &hlld_fail_mask = hlld_fail_;
         //int il = is; int iu = ie;
         if (k>(kl)) {
           if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
@@ -362,6 +458,12 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
           } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
             HLLE_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
                       wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+            HLLE_TRANSFORMING<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13);
+          } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+            HLLD_DYNGR<IVZ>(member, dyn_eos, indcs, size, coord, m, k, j, is-1, ie+1,
+                      wl, wr, bl, br, bz, nhyd_, nscal_, adm_, flx3, e23, e13, hlld_fail_mask);
           }
         }
         member.team_barrier();
@@ -383,9 +485,45 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     });
   }
 
+  // Restore PrimitiveSolver to its original accuracy.
+  if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    dyn_eos_.ps.tol = tol_old;
+    // Reduce the number of failures if applicable.
+    if (monitor_failures) {
+      // failure_count
+
+      int nx1 = indcs_.nx1;
+      int nx2 = indcs_.nx2;
+      int nx3 = indcs_.nx3;
+      const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+      const int nkji = nx3*nx2*nx1;
+      const int nji = nx2*nx1;
+
+      size_t sum = 0;
+
+      Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, size_t &mb_sum) {
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+
+        mb_sum += hlld_fail_(m, k, j, i);
+      }, Kokkos::Sum<size_t>(sum));
+      failure_count += sum;
+    }
+  }
+
   // Call FOFC if necessary
   if (pmy_pack->pmhd->use_fofc || pmy_pack->pcoord->coord_data.bh_excise) {
-    FOFC<rsolver_method_>(pdriver, stage);
+    if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr ||
+                  rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+      FOFC<rsolver_method_>(pdriver, stage);
+    } else {
+      FOFC<DynGRMHD_RSolver::hlle_dyngr>(pdriver, stage);
+    }
   }
 
   return TaskStatus::complete;
@@ -399,7 +537,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
             CalcFluxes<DynGRMHD_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
 template \
 TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
-            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
+            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlle_transform>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlld_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
