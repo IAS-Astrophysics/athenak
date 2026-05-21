@@ -56,7 +56,7 @@ def arguments(iv, rv, fv, res):
     """Assemble arguments for run command"""
     return [
         "mesh/nx1=" + repr(res),
-        "meshblock/nx1=" + repr(np.min(_res)),
+        "meshblock/nx1=" + repr(int(np.min(_res))),
         "mesh/nghost=" + repr(2 if rv == "plm" else 3),
         "time/integrator=" + iv,
         "time/cfl_number=0.3",

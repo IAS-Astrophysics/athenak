@@ -37,6 +37,7 @@
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -93,6 +94,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                    bool single_file_per_rank) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -959,6 +961,12 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {
     Diffusion(pin, is_restart);
+  } else if (pgen_fun_name.compare("gravity") == 0) {
+    SelfGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("binary_gravity") == 0) {
+    BinaryGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("be_collapse") == 0) {
+    BECollapse(pin, is_restart);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

@@ -22,6 +22,7 @@
 #include "z4c/tmunu.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/id_solve.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
@@ -31,6 +32,7 @@
 #include "particles/particles.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
+#include "gravity/gravity.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -57,6 +59,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
   if (ptmunu != nullptr) {delete ptmunu;}
+  if (pid_solve != nullptr) {delete pid_solve;}
   if (prad   != nullptr) {delete prad;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (pnr    != nullptr) {delete pnr;}
@@ -225,6 +228,18 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ptmunu = new Tmunu(this, pin);
   }
 
+  if (pin->DoesBlockExist("id_solve")) {
+    if (pz4c == nullptr || padm == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<id_solve> requires <z4c> so the native CTS solve "
+                << "can update ADM/Z4c data directly." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pid_solve = new z4c::IDConformalThinSandwich(this, pin);
+  } else {
+    pid_solve = nullptr;
+  }
+
   if (pz4c != nullptr || padm != nullptr) {
     pnr = new numrel::NumericalRelativity(this, pin);
     pnr->AssembleNumericalRelativityTasks(tl_map);
@@ -240,6 +255,17 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ppart = nullptr;
   }
 
+  // (9) GRAVITY
+  // Create gravity physics module.  Create tasklist.
+  if (pin->DoesBlockExist("gravity")) {
+    // Gravity module uses Multigrid module
+    pgrav = new gravity::Gravity(this, pin);
+    //pgrav->AssembleTasks(tl_map);
+    nphysics++;
+  }
+  else {
+    pgrav = nullptr;
+  } 
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {

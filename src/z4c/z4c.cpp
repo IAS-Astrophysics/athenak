@@ -149,6 +149,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
+  opt.back_reaction = pin->GetOrAddBoolean("z4c", "back_reaction", true);
+
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
 
   opt.excise_chi = pin->GetOrAddReal("z4c", "excise_chi", 0.0625);
@@ -156,12 +158,34 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.extrap_order = fmax(2,fmin(indcs.ng,fmin(4,
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
 
+  int const default_spatial_order = 2 * (indcs.ng - 1);
+  int const requested_spatial_order = pin->GetOrAddInteger("z4c", "spatial_order",
+                                                           default_spatial_order);
+  opt.spatial_order = (requested_spatial_order > 0) ? requested_spatial_order
+                                                    : default_spatial_order;
+  if (opt.spatial_order != 2 && opt.spatial_order != 4 && opt.spatial_order != 6) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "<z4c>/spatial_order must be 2, 4, or 6, but is "
+              << opt.spatial_order << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  opt.fd_stencil = opt.spatial_order/2 + 1;
+  if (indcs.ng < opt.fd_stencil) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "<z4c>/spatial_order=" << opt.spatial_order
+              << " requires at least " << opt.fd_stencil
+              << " ghost cells, but <mesh>/nghost=" << indcs.ng << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   opt.roll_kappa = pin->GetOrAddBoolean("z4c", "roll_kappa", false);
   opt.kappa_roll_start_time = pin->GetOrAddReal("z4c", "kappa_roll_start_time", 0.0);
   opt.roll_window = pin->GetOrAddReal("z4c", "roll_window", 20.0);
   opt.target_kappa1 = pin->GetOrAddReal("z4c", "target_kappa1", 0.0);
 
-  diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
+  diss = opt.diss*pow(2., -2.*opt.fd_stencil)*(opt.fd_stencil % 2 == 0 ? -1. : 1.);
   }
 
   // allocate memory for conserved variables on coarse mesh

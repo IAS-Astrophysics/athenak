@@ -41,6 +41,7 @@ enum TaskName {
   MHD_SendU,
   MHD_RecvU,
   MHD_EField,
+  MHD_EFieldSrc,
   MHD_SendE,
   MHD_RecvE,
   MHD_CT,
@@ -59,6 +60,7 @@ enum TaskName {
 
   Z4c_Recv,
   Z4c_IRecvW,
+  Z4c_IDSolve,
   Z4c_CopyU,
   Z4c_CalcRHS,
   Z4c_SomBC,

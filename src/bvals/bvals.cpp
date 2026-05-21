@@ -124,7 +124,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
         InitRecvIndices(recvbuf[indx],n, 0, 0, fy, fz);
         sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-        indx++;
+        sendbuf[indx].faces.h_view(0) = 1;
+        recvbuf[indx].faces.h_view(0) = 1;
+        sendbuf[indx].faces.h_view(1) = 0;
+        recvbuf[indx].faces.h_view(1) = 0;
+        sendbuf[indx].faces.h_view(2) = 0;
+        recvbuf[indx].faces.h_view(2) = 0;
+        sendbuf[indx].faces.template modify<HostMemSpace>();
+        recvbuf[indx].faces.template modify<HostMemSpace>();
+        sendbuf[indx].faces.template sync<DevMemSpace>();
+        recvbuf[indx].faces.template sync<DevMemSpace>();
       }
     }
   }
@@ -140,7 +149,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],0, m, 0, fx, fz);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          indx++;
+          sendbuf[indx].faces.h_view(0) = 0;
+          recvbuf[indx].faces.h_view(0) = 0;
+          sendbuf[indx].faces.h_view(1) = 1;
+          recvbuf[indx].faces.h_view(1) = 1;
+          sendbuf[indx].faces.h_view(2) = 0;
+          recvbuf[indx].faces.h_view(2) = 0;
+          sendbuf[indx].faces.template modify<HostMemSpace>();
+          recvbuf[indx].faces.template modify<HostMemSpace>();
+          sendbuf[indx].faces.template sync<DevMemSpace>();
+          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -154,7 +172,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],n, m, 0, fz, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          indx++;
+          sendbuf[indx].faces.h_view(0) = 1;
+          recvbuf[indx].faces.h_view(0) = 1;
+          sendbuf[indx].faces.h_view(1) = 1;
+          recvbuf[indx].faces.h_view(1) = 1;
+          sendbuf[indx].faces.h_view(2) = 0;
+          recvbuf[indx].faces.h_view(2) = 0;
+          sendbuf[indx].faces.template modify<HostMemSpace>();
+          recvbuf[indx].faces.template modify<HostMemSpace>();
+          sendbuf[indx].faces.template sync<DevMemSpace>();
+          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -171,7 +198,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],0, 0, l, fx, fy);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          indx++;
+          sendbuf[indx].faces.h_view(0) = 0;
+          recvbuf[indx].faces.h_view(0) = 0;
+          sendbuf[indx].faces.h_view(1) = 0;
+          recvbuf[indx].faces.h_view(1) = 0;
+          sendbuf[indx].faces.h_view(2) = 1;
+          recvbuf[indx].faces.h_view(2) = 1;
+          sendbuf[indx].faces.template modify<HostMemSpace>();
+          recvbuf[indx].faces.template modify<HostMemSpace>();
+          sendbuf[indx].faces.template sync<DevMemSpace>();
+          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -185,7 +221,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],n, 0, l, fy, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          indx++;
+          sendbuf[indx].faces.h_view(0) = 1;
+          recvbuf[indx].faces.h_view(0) = 1;
+          sendbuf[indx].faces.h_view(1) = 0;
+          recvbuf[indx].faces.h_view(1) = 0;
+          sendbuf[indx].faces.h_view(2) = 1;
+          recvbuf[indx].faces.h_view(2) = 1;
+          sendbuf[indx].faces.template modify<HostMemSpace>();
+          recvbuf[indx].faces.template modify<HostMemSpace>();
+          sendbuf[indx].faces.template sync<DevMemSpace>();
+          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -199,7 +244,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],0, m, l, fx, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          indx++;
+          sendbuf[indx].faces.h_view(0) = 0;
+          recvbuf[indx].faces.h_view(0) = 0;
+          sendbuf[indx].faces.h_view(1) = 1;
+          recvbuf[indx].faces.h_view(1) = 1;
+          sendbuf[indx].faces.h_view(2) = 1;
+          recvbuf[indx].faces.h_view(2) = 1;
+          sendbuf[indx].faces.template modify<HostMemSpace>();
+          recvbuf[indx].faces.template modify<HostMemSpace>();
+          sendbuf[indx].faces.template sync<DevMemSpace>();
+          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -213,6 +267,16 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],n, m, l, 0, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
+          sendbuf[indx].faces.h_view(0) = 1;
+          recvbuf[indx].faces.h_view(0) = 1;
+          sendbuf[indx].faces.h_view(1) = 1;
+          recvbuf[indx].faces.h_view(1) = 1;
+          sendbuf[indx].faces.h_view(2) = 1;
+          recvbuf[indx].faces.h_view(2) = 1;
+          sendbuf[indx].faces.template modify<HostMemSpace>();
+          recvbuf[indx].faces.template modify<HostMemSpace>();
+          sendbuf[indx].faces.template sync<DevMemSpace>();
+          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }

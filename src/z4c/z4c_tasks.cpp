@@ -11,6 +11,7 @@
 #include <string>
 #include <iostream>
 #include <cstdio>
+#include <cstdlib>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -20,6 +21,7 @@
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/horizon_dump.hpp"
+#include "z4c/id_solve.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/cce/cce.hpp"
@@ -34,15 +36,19 @@ void Z4c::QueueZ4cTasks() {
   using namespace mhd;     // NOLINT(build/namespaces)
   using namespace numrel;  // NOLINT(build/namespaces)
   NumericalRelativity *pnr = pmy_pack->pnr;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int const fd_stencil = opt.fd_stencil;
 
   // Start task list
   pnr->QueueTask(&Z4c::InitRecv, this, Z4c_Recv, "Z4c_Recv", Task_Start);
   pnr->QueueTask(&Z4c::InitRecvWeyl, this, Z4c_IRecvW, "Z4c_IRecvW", Task_Start);
+  if (pmy_pack->pid_solve != nullptr) {
+    pnr->QueueTask(&IDConformalThinSandwich::SolveTask, pmy_pack->pid_solve,
+                   Z4c_IDSolve, "Z4c_IDSolve", Task_Start, {Z4c_Recv});
+  }
 
   // Run task list
   pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run);
-  switch (indcs.ng) {
+  switch (fd_stencil) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
                      Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
@@ -55,6 +61,12 @@ void Z4c::QueueZ4cTasks() {
       pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
                      Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
       break;
+    default:
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Unsupported Z4c finite-difference stencil selector "
+                << fd_stencil << std::endl;
+      std::exit(EXIT_FAILURE);
   }
   pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
                  {Z4c_CalcRHS});
@@ -225,15 +237,20 @@ TaskStatus Z4c::UpdateExcisionMasks(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
-    switch (indcs.ng) {
+    switch (opt.fd_stencil) {
       case 2: ADMConstraints<2>(pmy_pack);
               break;
       case 3: ADMConstraints<3>(pmy_pack);
               break;
       case 4: ADMConstraints<4>(pmy_pack);
               break;
+      default:
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "Unsupported Z4c finite-difference stencil selector "
+                  << opt.fd_stencil << std::endl;
+        std::exit(EXIT_FAILURE);
     }
   }
   return TaskStatus::complete;
@@ -323,14 +340,19 @@ TaskStatus Z4c::CalcWeylScalar(Driver *pdrive, int stage) {
   } else {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     if (last_output_time==time_32 && stage == pdrive->nexp_stages) {
-      auto &indcs = pmy_pack->pmesh->mb_indcs;
-      switch (indcs.ng) {
+      switch (opt.fd_stencil) {
         case 2: Z4cWeyl<2>(pmy_pack);
                 break;
         case 3: Z4cWeyl<3>(pmy_pack);
                 break;
         case 4: Z4cWeyl<4>(pmy_pack);
                 break;
+        default:
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl
+                    << "Unsupported Z4c finite-difference stencil selector "
+                    << opt.fd_stencil << std::endl;
+          std::exit(EXIT_FAILURE);
       }
     }
     return TaskStatus::complete;

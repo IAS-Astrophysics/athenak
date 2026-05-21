@@ -213,7 +213,15 @@ void SphericalGrid::SetInterpolationWeights() {
 //! \fn void SphericalGrid::InterpolateToSphere
 //! \brief interpolate Cartesian data to surface of sphere
 
-void SphericalGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
+void SphericalGrid::InterpolateToSphere(int nvars, DvceArray5D<Real>& val) {
+  InterpolateToSphere(0,nvars-1,val);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SphericalGrid::InterpolateToSphere
+//! \brief interpolate an (inclusive) index range of Cartesian data to surface of sphere
+
+void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) {
   // reinitialize interpolation indices and weights if AMR
   if (pmy_pack->pmesh->adaptive) {
     SetInterpolationIndices();
@@ -225,6 +233,7 @@ void SphericalGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;
   int nang1 = nangles - 1;
+  int nvars = ve - vs + 1;
   int nvar1 = nvars - 1;
 
   // reallocate container
@@ -248,7 +257,8 @@ void SphericalGrid::InterpolateToSphere(int nvars, DvceArray5D<Real> &val) {
         for (int j=0; j<2*ng; j++) {
           for (int k=0; k<2*ng; k++) {
             Real iwght = iwghts.d_view(n,i,0)*iwghts.d_view(n,j,1)*iwghts.d_view(n,k,2);
-            int_value += iwght*val(ii0,v,ii3-(ng-k-ks)+1,ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
+            int_value += iwght*val(ii0,v+vs,ii3-(ng-k-ks)+1,
+                                   ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
           }
         }
       }

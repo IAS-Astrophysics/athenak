@@ -28,6 +28,7 @@
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "gravity/gravity.hpp"
 #include "outputs.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -175,7 +176,31 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-
+  if ((ivar==173) && (pm->pmb_pack->padm == nullptr ||
+      pm->pmb_pack->pdyngr == nullptr || pm->pmb_pack->pmhd == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of angular momentum requested in <output> block '"
+       << out_params.block_name
+       << "' but no adm, dyngrmhd, or mhd object has been constructed."
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==174) && (pm->pmb_pack->padm == nullptr ||
+      pm->pmb_pack->pdyngr == nullptr || pm->pmb_pack->pmhd == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of torque requested in <output> block '"
+       << out_params.block_name
+       << "' but no adm, dyngrmhd, or mhd object has been constructed."
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (ivar==175 && (pm->pmb_pack->pgrav == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of gravity potential requested in <output> block '"
+       << out_params.block_name << "' but gravity object not constructed."
+       << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Now load STL vector of output variables
   outvars.clear();
@@ -617,6 +642,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
     }
 
+    // gravity potential
+    if (variable.compare("grav_phi") == 0) {
+      outvars.emplace_back("grav_phi",0,&(pm->pmb_pack->pgrav->phi));
+    }
+
     // ADM variables, excluding gauge
     for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
       if (variable.compare("adm") == 0 ||
@@ -637,8 +667,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // mat z4c variables
     for (int v = 0; v < Tmunu::N_Tmunu; ++v) {
-      if (out_params.variable.compare("tmunu") == 0 ||
-          out_params.variable.compare(Tmunu::Tmunu_names[v]) == 0) {
+      if (variable.compare("tmunu") == 0 ||
+          variable.compare(Tmunu::Tmunu_names[v]) == 0) {
         outvars.emplace_back(Tmunu::Tmunu_names[v], v, &(pm->pmb_pack->ptmunu->u_tmunu));
       }
     }
@@ -653,14 +683,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // z4c variables
     for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
-      if (out_params.variable.compare("z4c") == 0 ||
-          out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      if (variable.compare("z4c") == 0 ||
+          variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
         outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
       }
     }
 
     // weyl scalars
-    if (out_params.variable.compare("weyl") == 0) {
+    if (variable.compare("weyl") == 0) {
       outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
       outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
     }
@@ -724,7 +754,27 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // particle density binned to mesh
   if (out_params.variable.compare("prtcl_d") == 0) {
     out_params.contains_derived = true;
+    out_params.n_derived += 1;
     outvars.emplace_back("pdens",0,&(derived_var));
+  }
+
+  if (out_params.variable.compare("angular_momentum") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 6;
+    outvars.emplace_back("Jx",0,&(derived_var));
+    outvars.emplace_back("Jy",1,&(derived_var));
+    outvars.emplace_back("Jz",2,&(derived_var));
+    outvars.emplace_back("JEMx",3,&(derived_var));
+    outvars.emplace_back("JEMy",4,&(derived_var));
+    outvars.emplace_back("JEMz",5,&(derived_var));
+  }
+
+  if (out_params.variable.compare("torque") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 3;
+    outvars.emplace_back("Tx",0,&(derived_var));
+    outvars.emplace_back("Ty",1,&(derived_var));
+    outvars.emplace_back("Tz",2,&(derived_var));
   }
 
   // initialize vector containing number of output MBs per rank

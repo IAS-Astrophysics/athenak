@@ -17,3 +17,6 @@ build*/
 *~
 *.swp
 Lorene
+
+# python cache
+__pycache__/

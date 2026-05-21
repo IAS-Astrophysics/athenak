@@ -32,9 +32,11 @@ class TurbulenceDriver;
 namespace radiation {class Radiation;}
 namespace z4c {class Z4c;}
 namespace z4c {class CCE;}
+namespace z4c {class IDConformalThinSandwich;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
+namespace gravity {class Gravity;}
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlockPack
@@ -67,6 +69,7 @@ class MeshBlockPack {
   adm::ADM *padm=nullptr;
   Tmunu *ptmunu=nullptr;
   z4c::Z4c *pz4c=nullptr;
+  z4c::IDConformalThinSandwich *pid_solve=nullptr;
   dyngr::DynGRMHD *pdyngr=nullptr;
   numrel::NumericalRelativity *pnr=nullptr;
   ion_neutral::IonNeutral *pionn=nullptr;
@@ -74,6 +77,8 @@ class MeshBlockPack {
   radiation::Radiation *prad=nullptr;
   std::vector<z4c::CCE *> pz4c_cce;
   particles::Particles *ppart=nullptr;
+  gravity::Gravity *pgrav=nullptr;
+
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)
   units::Units *punit=nullptr;
