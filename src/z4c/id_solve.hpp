@@ -68,6 +68,11 @@ class IDCTSMultigrid : public Multigrid {
   void SmoothPack(int color) final;
   void CalculateDefectPack() final;
   void CalculateFASRHSPack() final;
+
+ private:
+  void PrepareFrozenView();
+
+  DualArray5D<Real> frozen_u_;
 };
 
 class IDCTSMultigridDriver : public MultigridDriver {

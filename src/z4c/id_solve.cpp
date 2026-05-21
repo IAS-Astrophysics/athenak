@@ -510,20 +510,21 @@ bool SolveLinear4x4(Real a[ID_CTS_NVAR][ID_CTS_NVAR], Real b[ID_CTS_NVAR],
   return true;
 }
 
-template <int NGHOST, typename UView, typename FView>
+template <int NGHOST, typename ReadView, typename WriteView, typename FView>
 KOKKOS_INLINE_FUNCTION
-SmootherCellStats ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView &free,
+SmootherCellStats ApplyDiagonalCTSUpdate(const ReadView &u_read, WriteView &u_write,
+                                         const FView &src, const FView &free,
                                          const Real idx[], int fd_stencil,
                                          int m, int k, int j, int i, Real omega,
                                          Real abs_max_update, Real frac_max_update) {
   SmootherCellStats stats;
   stats.Clear();
   Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-  CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+  CTSOperator<NGHOST>(u_read, free, idx, fd_stencil, m, k, j, i, op, diag);
   bool applied = false;
   for (int v = 0; v < ID_CTS_NVAR; ++v) {
     Real residual = op[v] - src(m, v, k, j, i);
-    Real scale = TotalUScale(u, free, m, v, k, j, i);
+    Real scale = TotalUScale(u_read, free, m, v, k, j, i);
     Real d_floor = std::max(static_cast<Real>(1.0e-30),
                             static_cast<Real>(1.0e-14)
                             *std::max(std::abs(residual), static_cast<Real>(1.0))/scale);
@@ -538,24 +539,25 @@ SmootherCellStats ApplyDiagonalCTSUpdate(UView &u, const FView &src, const FView
     bool limited = false;
     update = LimitUpdate(update, abs_max_update, frac_max_update, scale, limited);
     if (limited) stats.values[ID_CTS_SMOOTH_LIMITED] += 1.0;
-    u(m, v, k, j, i) += update;
+    u_write(m, v, k, j, i) += update;
     if (std::abs(update) > stats.values[ID_CTS_SMOOTH_MAX_UPDATE]) {
       stats.values[ID_CTS_SMOOTH_MAX_UPDATE] = std::abs(update);
     }
     applied = true;
   }
-  Real psi = TotalU(u, free, m, ID_CTS_PSI, k, j, i);
+  Real psi = TotalU(u_write, free, m, ID_CTS_PSI, k, j, i);
   if (psi < 1.0e-8) {
-    u(m, ID_CTS_PSI, k, j, i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
+    u_write(m, ID_CTS_PSI, k, j, i) = 1.0e-8 - free(m, ID_FREE_BASE_PSI, k, j, i);
     stats.values[ID_CTS_SMOOTH_PSI_FLOOR] += 1.0;
   }
   if (applied) stats.values[ID_CTS_SMOOTH_ACCEPTED] += 1.0;
   return stats;
 }
 
-template <int NGHOST, typename UView, typename FView>
+template <int NGHOST, typename ReadView, typename WriteView, typename FView>
 KOKKOS_INLINE_FUNCTION
-SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView &free,
+SmootherCellStats ApplyNewtonGSCTSUpdate(const ReadView &u_read, WriteView &u_write,
+                                         const FView &src, const FView &free,
                                          const Real idx[], int fd_stencil,
                                          int m, int k, int j, int i, Real omega,
                                          int niter, Real jac_eps, Real abs_max_update,
@@ -564,9 +566,15 @@ SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView
   SmootherCellStats total_stats;
   total_stats.Clear();
   const int local_iter = niter > 0 ? niter : 1;
+  Real accumulated_delta[ID_CTS_NVAR] = {0.0, 0.0, 0.0, 0.0};
   for (int it = 0; it < local_iter; ++it) {
+    LocalUpdatedUView<ReadView> u_current{u_read, m, k, j, i,
+                                          {accumulated_delta[0],
+                                           accumulated_delta[1],
+                                           accumulated_delta[2],
+                                           accumulated_delta[3]}};
     Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-    CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+    CTSOperator<NGHOST>(u_current, free, idx, fd_stencil, m, k, j, i, op, diag);
 
     Real residual[ID_CTS_NVAR];
     Real old_norm2 = 0.0;
@@ -583,10 +591,10 @@ SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView
     Real jac[ID_CTS_NVAR][ID_CTS_NVAR];
     Real col_scale[ID_CTS_NVAR];
     for (int c = 0; c < ID_CTS_NVAR; ++c) {
-      col_scale[c] = TotalUScale(u, free, m, c, k, j, i);
+      col_scale[c] = TotalUScale(u_current, free, m, c, k, j, i);
       Real eps = jac_eps*col_scale[c];
       if (!(eps > 0.0) || !IsFiniteForDevice(eps)) eps = 1.0e-7;
-      LocalPerturbedUView<UView> up{u, m, c, k, j, i, eps};
+      LocalPerturbedUView<LocalUpdatedUView<ReadView>> up{u_current, m, c, k, j, i, eps};
       Real op_pert[ID_CTS_NVAR], diag_pert[ID_CTS_NVAR];
       CTSOperator<NGHOST>(up, free, idx, fd_stencil, m, k, j, i,
                           op_pert, diag_pert);
@@ -603,9 +611,14 @@ SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView
       total_stats.values[ID_CTS_SMOOTH_SINGULAR] += 1.0;
       total_stats.values[ID_CTS_SMOOTH_FALLBACK] += 1.0;
       SmootherCellStats fallback =
-          ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil, m, k, j, i,
+          ApplyDiagonalCTSUpdate<NGHOST>(u_current, u_write, src, free, idx,
+                                         fd_stencil, m, k, j, i,
                                          omega, abs_max_update, frac_max_update);
       total_stats.Add(fallback);
+      for (int v = 0; v < ID_CTS_NVAR; ++v) {
+        accumulated_delta[v] =
+            u_write(m, v, k, j, i) - u_read(m, v, k, j, i);
+      }
       continue;
     }
 
@@ -614,7 +627,8 @@ SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView
     Real lambda = 1.0;
     const int nls = line_search_steps > 0 ? line_search_steps : 1;
     for (int ls = 0; ls < nls; ++ls) {
-      LocalUpdatedUView<UView> uc{u, m, k, j, i, {0.0, 0.0, 0.0, 0.0}};
+      LocalUpdatedUView<LocalUpdatedUView<ReadView>> uc{u_current, m, k, j, i,
+                                                        {0.0, 0.0, 0.0, 0.0}};
       bool limited = false;
       bool finite_update = true;
       Real trial_max_update = 0.0;
@@ -631,7 +645,10 @@ SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView
                                                     m, k, j, i)
                        : 1.0e300;
       if (IsFiniteForDevice(new_norm2) && new_norm2 <= old_norm2) {
-        for (int v = 0; v < ID_CTS_NVAR; ++v) u(m, v, k, j, i) += uc.delta[v];
+        for (int v = 0; v < ID_CTS_NVAR; ++v) {
+          u_write(m, v, k, j, i) += uc.delta[v];
+          accumulated_delta[v] += uc.delta[v];
+        }
         if (limited) total_stats.values[ID_CTS_SMOOTH_LIMITED] += 1.0;
         if (any_backtrack) total_stats.values[ID_CTS_SMOOTH_BACKTRACKED] += 1.0;
         if (trial_max_update > total_stats.values[ID_CTS_SMOOTH_MAX_UPDATE]) {
@@ -649,9 +666,14 @@ SmootherCellStats ApplyNewtonGSCTSUpdate(UView &u, const FView &src, const FView
     if (!accepted) {
       total_stats.values[ID_CTS_SMOOTH_FALLBACK] += 1.0;
       SmootherCellStats fallback =
-          ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil, m, k, j, i,
+          ApplyDiagonalCTSUpdate<NGHOST>(u_current, u_write, src, free, idx,
+                                         fd_stencil, m, k, j, i,
                                          omega, abs_max_update, frac_max_update);
       total_stats.Add(fallback);
+      for (int v = 0; v < ID_CTS_NVAR; ++v) {
+        accumulated_delta[v] =
+            u_write(m, v, k, j, i) - u_read(m, v, k, j, i);
+      }
     }
   }
   return total_stats;
@@ -738,11 +760,13 @@ void CTSOperator(const UView &u, const FView &free, const Real idx[], int fd_ste
 }
 
 template <int NGHOST, typename ViewType>
-SmootherCellStats SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &src,
-                             const ViewType &free, int ll, int is, int ie, int js,
-                             int je, int ks, int ke, int color, Real omega,
-                             int fd_stencil, int smoother_type, int ngs_iterations,
-                             Real ngs_jacobian_eps, Real ngs_max_update,
+SmootherCellStats SmoothImpl(IDCTSMultigrid *mg, ViewType &u,
+                             const ViewType &u_frozen, const ViewType &src,
+                             const ViewType &free, int ll, int is, int ie,
+                             int js, int je, int ks, int ke, int color,
+                             Real omega, int fd_stencil, int smoother_type,
+                             int ngs_iterations, Real ngs_jacobian_eps,
+                             Real ngs_max_update,
                              Real smoother_max_update_fraction,
                              int ngs_line_search_steps, Real ngs_line_search_min) {
   using ExeSpace = typename ViewType::execution_space;
@@ -769,14 +793,14 @@ SmootherCellStats SmoothImpl(IDCTSMultigrid *mg, ViewType &u, const ViewType &sr
       if (free(m, ID_FREE_MASK, k, j, i) < 0.5) continue;
       SmootherCellStats cell;
       if (smoother_type == 1) {
-        cell = ApplyNewtonGSCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
+        cell = ApplyNewtonGSCTSUpdate<NGHOST>(u_frozen, u, src, free, idx, fd_stencil,
                                               m, k, j, i, omega, ngs_iterations,
                                               ngs_jacobian_eps, ngs_max_update,
                                               smoother_max_update_fraction,
                                               ngs_line_search_steps,
                                               ngs_line_search_min);
       } else {
-        cell = ApplyDiagonalCTSUpdate<NGHOST>(u, src, free, idx, fd_stencil,
+        cell = ApplyDiagonalCTSUpdate<NGHOST>(u_frozen, u, src, free, idx, fd_stencil,
                                               m, k, j, i, omega, ngs_max_update,
                                               smoother_max_update_fraction);
       }
@@ -976,6 +1000,18 @@ IDCTSMultigrid::IDCTSMultigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int ng
 
 IDCTSMultigrid::~IDCTSMultigrid() {}
 
+void IDCTSMultigrid::PrepareFrozenView() {
+  const auto &u_level = u_[current_level_].d_view;
+  Kokkos::realloc(frozen_u_, u_level.extent_int(0), u_level.extent_int(1),
+                  u_level.extent_int(2), u_level.extent_int(3),
+                  u_level.extent_int(4));
+  if (on_host_) {
+    Kokkos::deep_copy(HostExeSpace(), frozen_u_.h_view, u_[current_level_].h_view);
+  } else {
+    Kokkos::deep_copy(DevExeSpace(), frozen_u_.d_view, u_[current_level_].d_view);
+  }
+}
+
 void IDCTSMultigrid::SmoothPack(int color) {
   auto *driver = static_cast<IDCTSMultigridDriver*>(pmy_driver_);
   color ^= driver->GetCoffset();
@@ -986,9 +1022,11 @@ void IDCTSMultigrid::SmoothPack(int color) {
   int fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
   SmootherCellStats stats;
   stats.Clear();
+  PrepareFrozenView();
   if (on_host_) {
     switch (fd) {
       case 2: stats = SmoothImpl<2>(this, u_[current_level_].h_view,
+                                    frozen_u_.h_view,
                                     src_[current_level_].h_view,
                                     coeff_[current_level_].h_view, ll, is, ie, js, je,
                                     ks, ke, color, driver->omega_, fd,
@@ -998,6 +1036,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     driver->ngs_line_search_steps_,
                                     driver->ngs_line_search_min_); break;
       case 3: stats = SmoothImpl<3>(this, u_[current_level_].h_view,
+                                    frozen_u_.h_view,
                                     src_[current_level_].h_view,
                                     coeff_[current_level_].h_view, ll, is, ie, js, je,
                                     ks, ke, color, driver->omega_, fd,
@@ -1007,6 +1046,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     driver->ngs_line_search_steps_,
                                     driver->ngs_line_search_min_); break;
       default: stats = SmoothImpl<4>(this, u_[current_level_].h_view,
+                                     frozen_u_.h_view,
                                      src_[current_level_].h_view,
                                      coeff_[current_level_].h_view, ll, is, ie, js, je,
                                      ks, ke, color, driver->omega_, fd,
@@ -1019,6 +1059,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
   } else {
     switch (fd) {
       case 2: stats = SmoothImpl<2>(this, u_[current_level_].d_view,
+                                    frozen_u_.d_view,
                                     src_[current_level_].d_view,
                                     coeff_[current_level_].d_view, ll, is, ie, js, je,
                                     ks, ke, color, driver->omega_, fd,
@@ -1028,6 +1069,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     driver->ngs_line_search_steps_,
                                     driver->ngs_line_search_min_); break;
       case 3: stats = SmoothImpl<3>(this, u_[current_level_].d_view,
+                                    frozen_u_.d_view,
                                     src_[current_level_].d_view,
                                     coeff_[current_level_].d_view, ll, is, ie, js, je,
                                     ks, ke, color, driver->omega_, fd,
@@ -1037,6 +1079,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     driver->ngs_line_search_steps_,
                                     driver->ngs_line_search_min_); break;
       default: stats = SmoothImpl<4>(this, u_[current_level_].d_view,
+                                     frozen_u_.d_view,
                                      src_[current_level_].d_view,
                                      coeff_[current_level_].d_view, ll, is, ie, js, je,
                                      ks, ke, color, driver->omega_, fd,
@@ -1137,6 +1180,15 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
     std::exit(EXIT_FAILURE);
   }
   ngs_iterations_ = pin->GetOrAddInteger("id_solve", "ngs_iterations", 1);
+  std::string smoother_update =
+      pin->GetOrAddString("id_solve", "smoother_update", "frozen_view");
+  if (smoother_update != "frozen_view") {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/smoother_update currently supports only 'frozen_view', "
+              << "but is " << smoother_update << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   ngs_jacobian_eps_ = pin->GetOrAddReal("id_solve", "ngs_jacobian_eps", 1.0e-7);
   ngs_max_update_ = pin->GetOrAddReal("id_solve", "ngs_max_update", 0.0);
   smoother_max_update_fraction_ =
@@ -1615,6 +1667,9 @@ void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
   Real dx = root_dx/static_cast<Real>(1 << rlev);
   Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
   OctetArray u{oct.u, oct.nc};
+  std::vector<Real> frozen_buf(static_cast<std::size_t>(oct.size()));
+  std::copy(oct.u, oct.u + oct.size(), frozen_buf.begin());
+  OctetArray u_frozen{frozen_buf.data(), oct.nc};
   OctetArray src{oct.src, oct.nc};
   OctetArray free{oct.coeff, oct.nc};
   SmootherCellStats stats;
@@ -1629,42 +1684,48 @@ void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
         switch (octet_fd_stencil_) {
           case 2:
             if (smoother_type_ == 1) {
-              cell = ApplyNewtonGSCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
+              cell = ApplyNewtonGSCTSUpdate<2>(u_frozen, u, src, free,
+                                               idx, octet_fd_stencil_,
                                                0, k, j, i, omega_, ngs_iterations_,
                                                ngs_jacobian_eps_, ngs_max_update_,
                                                smoother_max_update_fraction_,
                                                ngs_line_search_steps_,
                                                ngs_line_search_min_);
             } else {
-              cell = ApplyDiagonalCTSUpdate<2>(u, src, free, idx, octet_fd_stencil_,
+              cell = ApplyDiagonalCTSUpdate<2>(u_frozen, u, src, free,
+                                               idx, octet_fd_stencil_,
                                                0, k, j, i, omega_, ngs_max_update_,
                                                smoother_max_update_fraction_);
             }
             break;
           case 3:
             if (smoother_type_ == 1) {
-              cell = ApplyNewtonGSCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
+              cell = ApplyNewtonGSCTSUpdate<3>(u_frozen, u, src, free,
+                                               idx, octet_fd_stencil_,
                                                0, k, j, i, omega_, ngs_iterations_,
                                                ngs_jacobian_eps_, ngs_max_update_,
                                                smoother_max_update_fraction_,
                                                ngs_line_search_steps_,
                                                ngs_line_search_min_);
             } else {
-              cell = ApplyDiagonalCTSUpdate<3>(u, src, free, idx, octet_fd_stencil_,
+              cell = ApplyDiagonalCTSUpdate<3>(u_frozen, u, src, free,
+                                               idx, octet_fd_stencil_,
                                                0, k, j, i, omega_, ngs_max_update_,
                                                smoother_max_update_fraction_);
             }
             break;
           default:
             if (smoother_type_ == 1) {
-              cell = ApplyNewtonGSCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
+              cell = ApplyNewtonGSCTSUpdate<4>(u_frozen, u, src, free,
+                                               idx, octet_fd_stencil_,
                                                0, k, j, i, omega_, ngs_iterations_,
                                                ngs_jacobian_eps_, ngs_max_update_,
                                                smoother_max_update_fraction_,
                                                ngs_line_search_steps_,
                                                ngs_line_search_min_);
             } else {
-              cell = ApplyDiagonalCTSUpdate<4>(u, src, free, idx, octet_fd_stencil_,
+              cell = ApplyDiagonalCTSUpdate<4>(u_frozen, u, src, free,
+                                               idx, octet_fd_stencil_,
                                                0, k, j, i, omega_, ngs_max_update_,
                                                smoother_max_update_fraction_);
             }
