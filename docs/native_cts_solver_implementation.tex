@@ -628,9 +628,9 @@ used by the CTS solve.
 The free-data coefficients are loaded into multigrid coefficient arrays and
 restricted down levels.  For SMR/octet handling:
 \begin{itemize}
-  \item MeshBlock coefficient arrays use same-level exchange, physical free-data
-        boundary fills, and \code{FillFineCoarseMGGhosts()} in the same order as
-        the solution path.
+  \item MeshBlock coefficient arrays use same-level exchange, staged
+        fine/coarse exchange, physical free-data boundary fills, and
+        \code{FillFineCoarseMGGhosts()} in the same order as the solution path.
   \item \code{TransferCoefficientsFromBlocksToRoot()} first makes coarsest block
         coefficients MPI-complete with \code{MPI\_Allgatherv}, then copies them
         to root cells or refined octets on every rank.
@@ -642,9 +642,12 @@ restricted down levels.  For SMR/octet handling:
         for non-mask coefficients and direct copy for masks.
 \end{itemize}
 
-The MeshBlock fine/coarse ghost fill remains same-rank only.  A cross-rank
-fine/coarse MeshBlock neighbor triggers a fatal diagnostic rather than allowing
-CTS residuals or smoothers to read stale coefficient/free-data ghosts.
+MeshBlock fine/coarse ghost fills are MPI-complete.  Cross-level MPI payloads
+are treated as staging data: same-level neighbors unpack directly into the live
+array, while fine/coarse neighbors unpack into boundary buffers and the receiver
+then applies the MG fine/coarse formulas that combine staged neighbor data with
+local interior values.  The same staged path is used for correction variables
+and CTS coefficients.
 
 \subsection{Z4c Boundary Conditions After Handoff}
 

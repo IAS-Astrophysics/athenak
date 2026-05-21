@@ -579,6 +579,10 @@ class MultigridBoundaryValues : public MeshBoundaryValuesCC {
 
  private:
   Multigrid *pmy_mg;
+  int fc_stage_nvars_ = -1;
+  int fc_stage_level_ = -1;
+  int fc_stage_role_ = -1;
+  bool fc_stage_valid_ = false;
 };
 
 inline Real RestrictOne(const MGOctet &oct, int v, int fi, int fj, int fk) {

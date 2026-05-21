@@ -27,6 +27,108 @@
 #include "../parameter_input.hpp"
 #include "multigrid.hpp"
 
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+void DecodeNeighborIndexMG(const int idx, int &ox1, int &ox2, int &ox3,
+                           int &f1, int &f2) {
+  ox1 = ox2 = ox3 = 0;
+  f1 = f2 = 0;
+  for (int iz = -1; iz <= 1; ++iz) {
+    for (int iy = -1; iy <= 1; ++iy) {
+      for (int ix = -1; ix <= 1; ++ix) {
+        if (ix == 0 && iy == 0 && iz == 0) continue;
+        for (int sf2 = 0; sf2 <= 1; ++sf2) {
+          for (int sf1 = 0; sf1 <= 1; ++sf1) {
+            if (NeighborIndex(ix, iy, iz, sf1, sf2) == idx) {
+              ox1 = ix;
+              ox2 = iy;
+              ox3 = iz;
+              f1 = sf1;
+              f2 = sf2;
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void AdjustSendRangeForMG(int &il, int &iu, int &jl, int &ju, int &kl, int &ku,
+                          const MeshBoundaryBuffer &buf, int shift, int nx) {
+  while (shift > 0) {
+    if (buf.faces.d_view(0) && (il == nx)) {
+      int d = iu - il; il = il >> 1; iu = il + d;
+    } else if (!buf.faces.d_view(0)) {
+      iu = ((iu - il) >> 1) + il;
+    }
+    if (buf.faces.d_view(1) && (jl == nx)) {
+      int d = ju - jl; jl = jl >> 1; ju = jl + d;
+    } else if (!buf.faces.d_view(1)) {
+      ju = ((ju - jl) >> 1) + jl;
+    }
+    if (buf.faces.d_view(2) && (kl == nx)) {
+      int d = ku - kl; kl = kl >> 1; ku = kl + d;
+    } else if (!buf.faces.d_view(2)) {
+      ku = ((ku - kl) >> 1) + kl;
+    }
+    --shift;
+    nx = nx >> 1;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void AdjustRecvRangeForMG(int &il, int &iu, int &jl, int &ju, int &kl, int &ku,
+                          const MeshBoundaryBuffer &buf, int shift, int ngh) {
+  while (shift > 0) {
+    if (buf.faces.d_view(0) && il > 1) {
+      int d = iu - il; il = (il + ngh) >> 1; iu = il + d;
+    } else if (!buf.faces.d_view(0)) {
+      iu = ((iu - il) >> 1) + il;
+    }
+    if (buf.faces.d_view(1) && jl > 1) {
+      int d = ju - jl; jl = (jl + ngh) >> 1; ju = jl + d;
+    } else if (!buf.faces.d_view(1)) {
+      ju = ((ju - jl) >> 1) + jl;
+    }
+    if (buf.faces.d_view(2) && kl > 1) {
+      int d = ku - kl; kl = (kl + ngh) >> 1; ku = kl + d;
+    } else if (!buf.faces.d_view(2)) {
+      ku = ((ku - kl) >> 1) + kl;
+    }
+    --shift;
+  }
+}
+
+inline int AdjustMGBufferSizeHost(const MeshBoundaryBuffer &buf, int ndat,
+                                  int shift) {
+  int size = ndat;
+  if (!buf.faces.h_view(0)) size >>= shift;
+  if (!buf.faces.h_view(1)) size >>= shift;
+  if (!buf.faces.h_view(2)) size >>= shift;
+  return size;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real ReadMGStage(const MeshBoundaryBuffer &buf, int m, int v,
+                 int k, int j, int i, int il, int iu,
+                 int jl, int ju, int kl, int ku) {
+  if (i < il) i = il;
+  if (i > iu) i = iu;
+  if (j < jl) j = jl;
+  if (j > ju) j = ju;
+  if (k < kl) k = kl;
+  if (k > ku) k = ku;
+  int ni = iu - il + 1;
+  int nj = ju - jl + 1;
+  int nk = ku - kl + 1;
+  return buf.vars(m, i - il + ni*(j - jl + nj*(k - kl + nk*v)));
+}
+
+} // namespace
+
 //namespace multigrid{ // NOLINT (build/namespace)
 //----------------------------------------------------------------------------------------
 //! \fn Multigrid::Multigrid(MultigridDriver *pmd, MeshBlock *pmb, int nghost)
@@ -1561,15 +1663,15 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
     for (int n = 0; n < nnghbr; ++n) {
       if (nghbr_h(m, n).gid < 0 || nghbr_h(m, n).lev == m_lev) continue;
       if (nghbr_h(m, n).rank == my_rank) continue;
+      if (fc_stage_valid_) continue;
       std::cout << "### FATAL ERROR in MultigridBoundaryValues::FillFineCoarseMGGhosts"
                 << std::endl
-                << "Cross-rank fine/coarse MG ghost fills are not implemented. "
+                << "Cross-rank fine/coarse MG ghost fill requested before staged "
+                << "payloads were received. "
                 << "Local block gid=" << mbgid_h(m) << " rank=" << my_rank
                 << " level=" << m_lev << " has neighbor gid=" << nghbr_h(m, n).gid
                 << " rank=" << nghbr_h(m, n).rank
-                << " level=" << nghbr_h(m, n).lev << ".  Use an SMR/MPI "
-                << "decomposition that keeps fine/coarse MG neighbors on the same "
-                << "rank until cross-rank fine/coarse buffers are implemented."
+                << " level=" << nghbr_h(m, n).lev << "."
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -1581,6 +1683,7 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
   auto fc_cx = pmy_mg->fc_childx_;
   auto fc_cy = pmy_mg->fc_childy_;
   auto fc_cz = pmy_mg->fc_childz_;
+  auto &rbuf = recvbuf;
 
   int nmb_l = nmb;
   int nnghbr_l = nnghbr;
@@ -1588,6 +1691,7 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
   int nvar_l = nvar;
   int ngh_l = ngh;
   int ncells_l = ncells;
+  int shift_l = shift;
   constexpr Real ot = 1.0/3.0;
 
   Kokkos::parallel_for("FillFCMGGhosts",
@@ -1613,10 +1717,18 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
 
                 int nlev = nghbr_d(m, n).lev;
                 if (nlev == m_lev) continue;
-                if (nghbr_d(m, n).rank != my_rank_l) continue;
+                bool remote_fc = (nghbr_d(m, n).rank != my_rank_l);
 
                 int dm = nghbr_d(m, n).gid - mbgid_d(0);
-                if (dm < 0 || dm >= nmb_l) continue;
+                if (!remote_fc && (dm < 0 || dm >= nmb_l)) continue;
+
+                MeshBufferIndcs stage_idx = (nlev < m_lev) ? rbuf[n].icoar[0]
+                                           : rbuf[n].ifine[0];
+                int sil = stage_idx.bis, siu = stage_idx.bie;
+                int sjl = stage_idx.bjs, sju = stage_idx.bje;
+                int skl = stage_idx.bks, sku = stage_idx.bke;
+                AdjustRecvRangeForMG(sil, siu, sjl, sju, skl, sku,
+                                     rbuf[n], shift_l, ngh_l);
 
                 if (nlev < m_lev && nface == 1) {
                   // Coarser neighbor, face: flux-conserving prolongation
@@ -1631,13 +1743,32 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         for (int sj = sj0; sj < sj0 + half; ++sj) {
                           int fj = ngh_l + 2*(sj - sj0);
                           int fk = ngh_l + 2*(sk - sk0);
-                          Real cc = u(dm,v,sk,sj,si);
+                          Real cc = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,si);
                           int sjm = (sj > ngh_l) ? sj-1 : sj;
                           int sjp = (sj < ngh_l+ncells_l-1) ? sj+1 : sj;
                           int skm = (sk > ngh_l) ? sk-1 : sk;
                           int skp = (sk < ngh_l+ncells_l-1) ? sk+1 : sk;
-                          Real gy = 0.125*(u(dm,v,sk,sjp,si)-u(dm,v,sk,sjm,si));
-                          Real gz = 0.125*(u(dm,v,skp,sj,si)-u(dm,v,skm,sj,si));
+                          Real ym = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sjm, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sjm,si);
+                          Real yp = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sjp, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sjp,si);
+                          Real zm = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, skm, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,skm,sj,si);
+                          Real zp = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, skp, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,skp,sj,si);
+                          Real gy = 0.125*(yp - ym);
+                          Real gz = 0.125*(zp - zm);
                           u(m,v,fk  ,fj  ,fig)=ot*(2.0*(cc-gy-gz)+u(m,v,fk  ,fj  ,fi));
                           u(m,v,fk  ,fj+1,fig)=ot*(2.0*(cc+gy-gz)+u(m,v,fk  ,fj+1,fi));
                           u(m,v,fk+1,fj  ,fig)=ot*(2.0*(cc-gy+gz)+u(m,v,fk+1,fj  ,fi));
@@ -1656,13 +1787,32 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         for (int si = si0; si < si0 + half; ++si) {
                           int fi = ngh_l + 2*(si - si0);
                           int fk = ngh_l + 2*(sk - sk0);
-                          Real cc = u(dm,v,sk,sj,si);
+                          Real cc = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,si);
                           int sim = (si > ngh_l) ? si-1 : si;
                           int sip = (si < ngh_l+ncells_l-1) ? si+1 : si;
                           int skm = (sk > ngh_l) ? sk-1 : sk;
                           int skp = (sk < ngh_l+ncells_l-1) ? sk+1 : sk;
-                          Real gx = 0.125*(u(dm,v,sk,sj,sip)-u(dm,v,sk,sj,sim));
-                          Real gz = 0.125*(u(dm,v,skp,sj,si)-u(dm,v,skm,sj,si));
+                          Real xm = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, sim,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,sim);
+                          Real xp = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, sip,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,sip);
+                          Real zm = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, skm, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,skm,sj,si);
+                          Real zp = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, skp, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,skp,sj,si);
+                          Real gx = 0.125*(xp - xm);
+                          Real gz = 0.125*(zp - zm);
                           u(m,v,fk  ,fjg,fi  )=ot*(2.0*(cc-gx-gz)+u(m,v,fk  ,fj,fi  ));
                           u(m,v,fk  ,fjg,fi+1)=ot*(2.0*(cc+gx-gz)+u(m,v,fk  ,fj,fi+1));
                           u(m,v,fk+1,fjg,fi  )=ot*(2.0*(cc-gx+gz)+u(m,v,fk+1,fj,fi  ));
@@ -1681,13 +1831,32 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         for (int si = si0; si < si0 + half; ++si) {
                           int fi = ngh_l + 2*(si - si0);
                           int fj = ngh_l + 2*(sj - sj0);
-                          Real cc = u(dm,v,sk,sj,si);
+                          Real cc = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,si);
                           int sim = (si > ngh_l) ? si-1 : si;
                           int sip = (si < ngh_l+ncells_l-1) ? si+1 : si;
                           int sjm = (sj > ngh_l) ? sj-1 : sj;
                           int sjp = (sj < ngh_l+ncells_l-1) ? sj+1 : sj;
-                          Real gx = 0.125*(u(dm,v,sk,sj,sip)-u(dm,v,sk,sj,sim));
-                          Real gy = 0.125*(u(dm,v,sk,sjp,si)-u(dm,v,sk,sjm,si));
+                          Real xm = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, sim,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,sim);
+                          Real xp = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, sip,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sj,sip);
+                          Real ym = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sjm, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sjm,si);
+                          Real yp = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sjp, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm,v,sk,sjp,si);
+                          Real gx = 0.125*(xp - xm);
+                          Real gy = 0.125*(yp - ym);
                           u(m,v,fkg,fj  ,fi  )=ot*(2.0*(cc-gx-gy)+u(m,v,fk,fj  ,fi  ));
                           u(m,v,fkg,fj  ,fi+1)=ot*(2.0*(cc+gx-gy)+u(m,v,fk,fj  ,fi+1));
                           u(m,v,fkg,fj+1,fi  )=ot*(2.0*(cc-gx+gy)+u(m,v,fk,fj+1,fi  ));
@@ -1726,8 +1895,11 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         for (int gj = gjs; gj <= gje; ++gj) {
                           int fj0 = ngh_l + 2*(gj - (ngh_l + sub_y*half));
                           int fk0 = ngh_l + 2*(gk - (ngh_l + sub_z*half));
-                          Real favg = 0.25*(u(dm,v,fk0,fj0,fi)+u(dm,v,fk0,fj0+1,fi)
-                                           +u(dm,v,fk0+1,fj0,fi)+u(dm,v,fk0+1,fj0+1,fi));
+                          Real favg = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, gk, gj, gis,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : 0.25*(u(dm,v,fk0,fj0,fi)+u(dm,v,fk0,fj0+1,fi)
+                                     +u(dm,v,fk0+1,fj0,fi)+u(dm,v,fk0+1,fj0+1,fi));
                           u(m,v,gk,gj,gis) = ot*(4.0*favg - u(m,v,gk+ok,gj+oj,gis+oi));
                         }
                       }
@@ -1739,8 +1911,11 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         for (int gi = gis; gi <= gie; ++gi) {
                           int fi0 = ngh_l + 2*(gi - (ngh_l + sub_x*half));
                           int fk0 = ngh_l + 2*(gk - (ngh_l + sub_z*half));
-                          Real favg = 0.25*(u(dm,v,fk0,fj,fi0)+u(dm,v,fk0,fj,fi0+1)
-                                           +u(dm,v,fk0+1,fj,fi0)+u(dm,v,fk0+1,fj,fi0+1));
+                          Real favg = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, gk, gjs, gi,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : 0.25*(u(dm,v,fk0,fj,fi0)+u(dm,v,fk0,fj,fi0+1)
+                                     +u(dm,v,fk0+1,fj,fi0)+u(dm,v,fk0+1,fj,fi0+1));
                           u(m,v,gk,gjs,gi) = ot*(4.0*favg - u(m,v,gk+ok,gjs+oj,gi+oi));
                         }
                       }
@@ -1752,8 +1927,11 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                         for (int gi = gis; gi <= gie; ++gi) {
                           int fi0 = ngh_l + 2*(gi - (ngh_l + sub_x*half));
                           int fj0 = ngh_l + 2*(gj - (ngh_l + sub_y*half));
-                          Real favg = 0.25*(u(dm,v,fk,fj0,fi0)+u(dm,v,fk,fj0,fi0+1)
-                                           +u(dm,v,fk,fj0+1,fi0)+u(dm,v,fk,fj0+1,fi0+1));
+                          Real favg = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, gks, gj, gi,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : 0.25*(u(dm,v,fk,fj0,fi0)+u(dm,v,fk,fj0,fi0+1)
+                                     +u(dm,v,fk,fj0+1,fi0)+u(dm,v,fk,fj0+1,fi0+1));
                           u(m,v,gks,gj,gi) = ot*(4.0*favg - u(m,v,gks+ok,gj+oj,gi+oi));
                         }
                       }
@@ -1788,7 +1966,10 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                           else if (ox3 > 0) sk = ngh_l;
                           else sk = ngh_l + child_z*half + (gk - ngh_l)/2;
 
-                          u(m, v, gk, gj, gi) = u(dm, v, sk, sj, si);
+                          u(m, v, gk, gj, gi) = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, sk, sj, si,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : u(dm, v, sk, sj, si);
                         }
                       }
                     }
@@ -1839,11 +2020,14 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
                           } else {
                             fk0 = ngh_l+2*(gk-(ngh_l+sub_z*half)); fk1 = fk0+1;
                           }
-                          u(m, v, gk, gj, gi) = 0.125 * (
-                            u(dm,v,fk0,fj0,fi0) + u(dm,v,fk0,fj0,fi1) +
-                            u(dm,v,fk0,fj1,fi0) + u(dm,v,fk0,fj1,fi1) +
-                            u(dm,v,fk1,fj0,fi0) + u(dm,v,fk1,fj0,fi1) +
-                            u(dm,v,fk1,fj1,fi0) + u(dm,v,fk1,fj1,fi1));
+                          u(m, v, gk, gj, gi) = remote_fc
+                              ? ReadMGStage(rbuf[n], m, v, gk, gj, gi,
+                                            sil, siu, sjl, sju, skl, sku)
+                              : 0.125 * (
+                                  u(dm,v,fk0,fj0,fi0) + u(dm,v,fk0,fj0,fi1) +
+                                  u(dm,v,fk0,fj1,fi0) + u(dm,v,fk0,fj1,fi1) +
+                                  u(dm,v,fk1,fj0,fi0) + u(dm,v,fk1,fj0,fi1) +
+                                  u(dm,v,fk1,fj1,fi0) + u(dm,v,fk1,fj1,fi1));
                         }
                       }
                     }
@@ -1880,6 +2064,8 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
 
   int shift_ = pmy_mg->GetLevelShift();
   int nx1_ = pmy_mg->GetSize();
+  int ngh_ = pmy_mg->GetGhostCells();
+  int ncells_ = nx1_ >> shift_;
 
   {
   int nmnv = nmb * nnghbr * nvar;
@@ -1889,37 +2075,16 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
     const int n = (tmember.league_rank() - m * nnghbr * nvar) / nvar;
     const int v = tmember.league_rank() - m * nnghbr * nvar - n * nvar;
 
-    if (nghbr.d_view(m, n).gid >= 0 &&
-        nghbr.d_view(m, n).lev == mblev.d_view(m)) {
-      int il = sbuf[n].isame[0].bis;
-      int iu = sbuf[n].isame[0].bie;
-      int jl = sbuf[n].isame[0].bjs;
-      int ju = sbuf[n].isame[0].bje;
-      int kl = sbuf[n].isame[0].bks;
-      int ku = sbuf[n].isame[0].bke;
-
-      int sh = shift_;
-      int nx = nx1_;
-    
-      while (sh > 0) {
-        if (sbuf[n].faces.d_view(0) && (il == nx)) {
-          int d = iu - il; il = il >> 1; iu = il + d;
-        } else if (!sbuf[n].faces.d_view(0)) {
-          iu = ((iu - il) >> 1) + il;
-        }
-        if (sbuf[n].faces.d_view(1) && (jl == nx)) {
-          int d = ju - jl; jl = jl >> 1; ju = jl + d;
-        } else if (!sbuf[n].faces.d_view(1)) {
-          ju = ((ju - jl) >> 1) + jl;
-        }
-        if (sbuf[n].faces.d_view(2) && (kl == nx)) {
-          int d = ku - kl; kl = kl >> 1; ku = kl + d;
-        } else if (!sbuf[n].faces.d_view(2)) {
-          ku = ((ku - kl) >> 1) + kl;
-        }
-        sh--;
-        nx = nx >> 1;
-      }
+    if (nghbr.d_view(m, n).gid >= 0) {
+      int mlev = mblev.d_view(m);
+      int nlev = nghbr.d_view(m, n).lev;
+      MeshBufferIndcs bi = (nlev < mlev) ? sbuf[n].icoar[0]
+                         : (nlev == mlev) ? sbuf[n].isame[0]
+                                          : sbuf[n].ifine[0];
+      int il = bi.bis, iu = bi.bie;
+      int jl = bi.bjs, ju = bi.bje;
+      int kl = bi.bks, ku = bi.bke;
+      AdjustSendRangeForMG(il, iu, jl, ju, kl, ku, sbuf[n], shift_, nx1_);
 
       int ni = iu - il + 1;
       int nj = ju - jl + 1;
@@ -1938,14 +2103,80 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
         if (nghbr.d_view(m, n).rank == my_rank) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu + 1),
           [&](const int i) {
+            Real val = u(m, v, k, j, i);
+            if (nlev < mlev) {
+              int ox1, ox2, ox3, f1, f2;
+              DecodeNeighborIndexMG(n, ox1, ox2, ox3, f1, f2);
+              int nface = (ox1 != 0 ? 1 : 0) + (ox2 != 0 ? 1 : 0) + (ox3 != 0 ? 1 : 0);
+              int i0 = ngh_ + 2*(i - ngh_);
+              int j0 = ngh_ + 2*(j - ngh_);
+              int k0 = ngh_ + 2*(k - ngh_);
+              if (i0 < ngh_) i0 = ngh_;
+              if (j0 < ngh_) j0 = ngh_;
+              if (k0 < ngh_) k0 = ngh_;
+              if (i0 > ngh_ + ncells_ - 2) i0 = ngh_ + ncells_ - 2;
+              if (j0 > ngh_ + ncells_ - 2) j0 = ngh_ + ncells_ - 2;
+              if (k0 > ngh_ + ncells_ - 2) k0 = ngh_ + ncells_ - 2;
+              if (nface == 1 && ox1 != 0) {
+                int fi = (ox1 < 0) ? ngh_ : ngh_ + ncells_ - 1;
+                val = 0.25*(u(m,v,k0,j0,fi) + u(m,v,k0,j0+1,fi)
+                           +u(m,v,k0+1,j0,fi) + u(m,v,k0+1,j0+1,fi));
+              } else if (nface == 1 && ox2 != 0) {
+                int fj = (ox2 < 0) ? ngh_ : ngh_ + ncells_ - 1;
+                val = 0.25*(u(m,v,k0,fj,i0) + u(m,v,k0,fj,i0+1)
+                           +u(m,v,k0+1,fj,i0) + u(m,v,k0+1,fj,i0+1));
+              } else if (nface == 1 && ox3 != 0) {
+                int fk = (ox3 < 0) ? ngh_ : ngh_ + ncells_ - 1;
+                val = 0.25*(u(m,v,fk,j0,i0) + u(m,v,fk,j0,i0+1)
+                           +u(m,v,fk,j0+1,i0) + u(m,v,fk,j0+1,i0+1));
+              } else {
+                val = 0.125*(u(m,v,k0,j0,i0) + u(m,v,k0,j0,i0+1)
+                            +u(m,v,k0,j0+1,i0) + u(m,v,k0,j0+1,i0+1)
+                            +u(m,v,k0+1,j0,i0) + u(m,v,k0+1,j0,i0+1)
+                            +u(m,v,k0+1,j0+1,i0) + u(m,v,k0+1,j0+1,i0+1));
+              }
+            }
             rbuf[dn].vars(dm, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
-                = u(m, v, k, j, i);
+                = val;
           });
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember, il, iu + 1),
           [&](const int i) {
+            Real val = u(m, v, k, j, i);
+            if (nlev < mlev) {
+              int ox1, ox2, ox3, f1, f2;
+              DecodeNeighborIndexMG(n, ox1, ox2, ox3, f1, f2);
+              int nface = (ox1 != 0 ? 1 : 0) + (ox2 != 0 ? 1 : 0) + (ox3 != 0 ? 1 : 0);
+              int i0 = ngh_ + 2*(i - ngh_);
+              int j0 = ngh_ + 2*(j - ngh_);
+              int k0 = ngh_ + 2*(k - ngh_);
+              if (i0 < ngh_) i0 = ngh_;
+              if (j0 < ngh_) j0 = ngh_;
+              if (k0 < ngh_) k0 = ngh_;
+              if (i0 > ngh_ + ncells_ - 2) i0 = ngh_ + ncells_ - 2;
+              if (j0 > ngh_ + ncells_ - 2) j0 = ngh_ + ncells_ - 2;
+              if (k0 > ngh_ + ncells_ - 2) k0 = ngh_ + ncells_ - 2;
+              if (nface == 1 && ox1 != 0) {
+                int fi = (ox1 < 0) ? ngh_ : ngh_ + ncells_ - 1;
+                val = 0.25*(u(m,v,k0,j0,fi) + u(m,v,k0,j0+1,fi)
+                           +u(m,v,k0+1,j0,fi) + u(m,v,k0+1,j0+1,fi));
+              } else if (nface == 1 && ox2 != 0) {
+                int fj = (ox2 < 0) ? ngh_ : ngh_ + ncells_ - 1;
+                val = 0.25*(u(m,v,k0,fj,i0) + u(m,v,k0,fj,i0+1)
+                           +u(m,v,k0+1,fj,i0) + u(m,v,k0+1,fj,i0+1));
+              } else if (nface == 1 && ox3 != 0) {
+                int fk = (ox3 < 0) ? ngh_ : ngh_ + ncells_ - 1;
+                val = 0.25*(u(m,v,fk,j0,i0) + u(m,v,fk,j0,i0+1)
+                           +u(m,v,fk,j0+1,i0) + u(m,v,fk,j0+1,i0+1));
+              } else {
+                val = 0.125*(u(m,v,k0,j0,i0) + u(m,v,k0,j0,i0+1)
+                            +u(m,v,k0,j0+1,i0) + u(m,v,k0,j0+1,i0+1)
+                            +u(m,v,k0+1,j0,i0) + u(m,v,k0+1,j0,i0+1)
+                            +u(m,v,k0+1,j0+1,i0) + u(m,v,k0+1,j0+1,i0+1));
+              }
+            }
             sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))))
-                = u(m, v, k, j, i);
+                = val;
           });
         }
       });
@@ -1960,8 +2191,7 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0
-          && nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m)) {
+      if (nghbr.h_view(m,n).gid >= 0) {
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
         if (drank != my_rank) {
@@ -1969,16 +2199,20 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
           int tag = CreateBvals_MPI_Tag(lid, dn);
 
-          // get ptr to send buffer when neighbor is at coarser/same/fine level
           int data_size = nvar;
-          data_size *= sendbuf[n].isame_ndat;
-          
-          if (not(sendbuf[n].faces.h_view(0)))
-            data_size >>= shift_;
-          if (not(sendbuf[n].faces.h_view(1)))
-            data_size >>= shift_;
-          if (not(sendbuf[n].faces.h_view(2)))
-            data_size >>= shift_;
+          int mlev = pmy_pack->pmb->mb_lev.h_view(m);
+          int nlev = nghbr.h_view(m,n).lev;
+          int ndat = (nlev < mlev) ? sendbuf[n].icoar_ndat
+                   : (nlev == mlev) ? sendbuf[n].isame_ndat
+                                    : sendbuf[n].ifine_ndat;
+          data_size *= AdjustMGBufferSizeHost(sendbuf[n], ndat, shift_);
+          if (data_size > sendbuf[n].vars.extent_int(1)) {
+            std::cout << "### FATAL ERROR in MultigridBoundaryValues::PackAndSendMG"
+                      << std::endl
+                      << "MG send buffer is too small for fine/coarse payload."
+                      << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
 
           auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
@@ -2018,8 +2252,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0
-          && nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+      if (nghbr.h_view(m,n).gid >= 0) {
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           int test;
           int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
@@ -2045,6 +2278,10 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   //----- STEP 2: buffers have all completed, so unpack
   int nvar = u.extent_int(1);
   int ngh = pmy_mg->GetGhostCells();
+  fc_stage_nvars_ = nvar;
+  fc_stage_level_ = pmy_mg->GetCurrentLevel();
+  fc_stage_role_ = (pmy_mg->ncoeff_ > 0 && nvar == pmy_mg->ncoeff_) ? 1 : 0;
+  fc_stage_valid_ = true;
 
   {
   int nmnv = nmb * nnghbr * nvar;
@@ -2063,25 +2300,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
       int kl = rbuf[n].isame[0].bks;
       int ku = rbuf[n].isame[0].bke;
 
-      int sh = shift_;
-      while (sh > 0) {
-        if (rbuf[n].faces.d_view(0) && il > 1) {
-          int d = iu - il; il = (il + ngh) >> 1; iu = il + d;
-        } else if (!rbuf[n].faces.d_view(0)) {
-          iu = ((iu - il) >> 1) + il;
-        }
-        if (rbuf[n].faces.d_view(1) && jl > 1) {
-          int d = ju - jl; jl = (jl + ngh) >> 1; ju = jl + d;
-        } else if (!rbuf[n].faces.d_view(1)) {
-          ju = ((ju - jl) >> 1) + jl;
-        }
-        if (rbuf[n].faces.d_view(2) && kl > 1) {
-          int d = ku - kl; kl = (kl + ngh) >> 1; ku = kl + d;
-        } else if (!rbuf[n].faces.d_view(2)) {
-          ku = ((ku - kl) >> 1) + kl;
-        }
-        sh--;
-      }
+      AdjustRecvRangeForMG(il, iu, jl, ju, kl, ku, rbuf[n], shift_, ngh);
 
       int ni = iu - il + 1;
       int nj = ju - jl + 1;
@@ -2119,13 +2338,13 @@ TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
   int shift_ = pmy_mg->GetLevelShift();
+  fc_stage_valid_ = false;
 
   // Initialize communications of variables
   bool no_errors=true;
   for (int m=0; m<nmb; ++m) {
     for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0
-          && nghbr.h_view(m,n).lev == mblev.h_view(m)) {
+      if (nghbr.h_view(m,n).gid >= 0) {
         // rank of destination buffer
         int drank = nghbr.h_view(m,n).rank;
 
@@ -2136,14 +2355,19 @@ TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
 
           // calculate amount of data to be passed, get pointer to variables
           int data_size = nvars;
-          data_size *= recvbuf[n].isame_ndat;
-          
-          if (not(recvbuf[n].faces.h_view(0)))
-            data_size >>= shift_;
-          if (not(recvbuf[n].faces.h_view(1)))
-            data_size >>= shift_;
-          if (not(recvbuf[n].faces.h_view(2)))
-            data_size >>= shift_;
+          int mlev = mblev.h_view(m);
+          int nlev = nghbr.h_view(m,n).lev;
+          int ndat = (nlev < mlev) ? recvbuf[n].icoar_ndat
+                   : (nlev == mlev) ? recvbuf[n].isame_ndat
+                                    : recvbuf[n].ifine_ndat;
+          data_size *= AdjustMGBufferSizeHost(recvbuf[n], ndat, shift_);
+          if (data_size > recvbuf[n].vars.extent_int(1)) {
+            std::cout << "### FATAL ERROR in MultigridBoundaryValues::InitRecvMG"
+                      << std::endl
+                      << "MG receive buffer is too small for fine/coarse payload."
+                      << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
 
           auto recv_ptr = Kokkos::subview(recvbuf[n].vars, m, Kokkos::ALL);
 

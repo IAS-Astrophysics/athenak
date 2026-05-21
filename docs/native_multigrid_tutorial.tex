@@ -453,9 +453,10 @@ CTS also exchanges and fills coefficient/free-data halos.  After
 coefficient arrays use the same same-level MG exchange buffers as \code{u\_}.
 Their physical boundaries are filled as free data: periodic faces wrap and
 non-periodic faces use zero-gradient copies.  When refinement is present, the
-coefficient arrays then call \code{FillFineCoarseMGGhosts()} so CTS residuals
-near fine/coarse interfaces do not read stale free-data ghosts.  They do not use
-correction-variable odd reflection from \code{mg\_zerofixed}.
+coefficient arrays use the same staged fine/coarse exchange and
+\code{FillFineCoarseMGGhosts()} completion step as the solution path, so CTS
+residuals near fine/coarse interfaces do not read stale free-data ghosts.  They
+do not use correction-variable odd reflection from \code{mg\_zerofixed}.
 
 \subsection{Physical Boundaries}
 
@@ -476,18 +477,20 @@ is used by gravity.  The CTS driver overrides the non-periodic default with
 \subsection{Fine/Coarse Ghosts}
 
 When SMR/AMR is present, \code{FillFCBoundary()} calls
-\code{FillFineCoarseMGGhosts()}.  For root/octet paths, octet boundary helpers
-copy same-level data or interpolate from coarser neighbors.  CTS also transfers
-coefficient/free-data arrays through this hierarchy after an
-\code{MPI\_Allgatherv} of coarsest MeshBlock coefficient values, so replicated
-root/octet coefficient storage is complete on every rank.
+\code{FillFineCoarseMGGhosts()}.  MeshBlock fine/coarse exchange is
+MPI-complete: \code{PackAndSendMG()}, \code{InitRecvMG()}, and
+\code{RecvAndUnpackMG()} include level-mismatched neighbors.  Same-level
+neighbors unpack directly into the live array.  Cross-level payloads are staged
+in MG boundary buffers and \code{FillFineCoarseMGGhosts()} computes the final
+receiver-side ghost values, preserving the MG formulas that combine neighbor
+data with local interior values.  CTS coefficients use the same communication
+path, preserving the existing MG coefficient halo behavior.
 
-The MeshBlock fine/coarse ghost helper is currently same-rank only.  If a
-MeshBlock has a fine/coarse MG neighbor on another MPI rank, the code now aborts
-with a clear fatal error instead of silently leaving those ghosts stale or
-crashing later in communication.  Until cross-rank fine/coarse MG buffers are
-implemented, SMR MPI tests should use decompositions that keep fine/coarse MG
-neighbors on the same rank.
+For root/octet paths, octet boundary helpers copy same-level data or
+interpolate from coarser neighbors.  CTS also transfers coefficient/free-data
+arrays through this hierarchy after an \code{MPI\_Allgatherv} of coarsest
+MeshBlock coefficient values, so replicated root/octet coefficient storage is
+complete on every rank.
 
 The current octet coefficient bridge still uses the generic compact
 coarse-buffer path, not the full Z4c high-order prolongation kernels.  That is
