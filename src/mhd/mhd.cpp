@@ -96,11 +96,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
   chiral_dynamo = pin->GetOrAddBoolean("mhd", "chiral_dynamo", false);
 
-  // Error check: chiral_dynamo requires dynamical GRMHD
+  // Error check: chiral_dynamo requires dynamical GRMHD (<adm> or <z4c> block).
+  // padm is initialized after MHD (step 7 vs step 3 in meshblock_pack), so check pin.
   if (chiral_dynamo) {
-    if (pmy_pack->padm == nullptr) {
+    if (!pin->DoesBlockExist("adm") && !pin->DoesBlockExist("z4c")) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-                << "chiral_dynamo requires dynamical GRMHD (padm != nullptr)." << std::endl;
+                << "chiral_dynamo requires dynamical GRMHD (<adm> or <z4c> block)." << std::endl;
       std::exit(EXIT_FAILURE);
     }
   }
