@@ -14,6 +14,7 @@
 #include <iostream>
 #include <limits>
 #include <list>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -34,8 +35,6 @@
 #ifdef ENABLE_NURATES
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif
-
-#include <Kokkos_Random.hpp>
 
 // Forward declaration
 template <class EOSPolicy, class ErrorPolicy>
@@ -124,6 +123,79 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   Real yq = pin->GetReal("problem", "yq");
   Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
 
+  // Spectral density perturbation: delta_rho/rho = N * sum_n |k_n|^(-alpha/2)
+  // * cos(k_n . x + phi_n), with random phases and isotropic directions in the
+  // active dimensions. N is chosen so the analytic RMS equals pert_amp.
+  // pert_nmodes = 0 (default) disables the perturbation.
+  int pert_nmodes = pin->GetOrAddInteger("problem", "pert_nmodes", 0);
+  Real pert_kmin = pin->GetOrAddReal("problem", "pert_kmin", 1.0);
+  Real pert_kmax = pin->GetOrAddReal("problem", "pert_kmax", 64.0);
+  Real pert_alpha = pin->GetOrAddReal("problem", "pert_alpha", 5.0/3.0);
+  int pert_seed = pin->GetOrAddInteger("problem", "pert_seed", 12345);
+
+  int nmodes_alloc = std::max(pert_nmodes, 1);
+  DualArray1D<Real> pert_kx("pert_kx", nmodes_alloc);
+  DualArray1D<Real> pert_ky("pert_ky", nmodes_alloc);
+  DualArray1D<Real> pert_kz("pert_kz", nmodes_alloc);
+  DualArray1D<Real> pert_an("pert_an", nmodes_alloc);
+  DualArray1D<Real> pert_ph("pert_ph", nmodes_alloc);
+
+  if (pert_nmodes > 0) {
+    Real Lx = pmesh->mesh_size.x1max - pmesh->mesh_size.x1min;
+    Real two_pi = 2.0*acos(-1.0);
+    std::mt19937 rng(static_cast<unsigned>(pert_seed));
+    std::uniform_real_distribution<Real> uni01(0.0, 1.0);
+
+    Real sumsq = 0.0;
+    for (int n = 0; n < pert_nmodes; ++n) {
+      Real frac = (pert_nmodes > 1) ?
+                  static_cast<Real>(n)/static_cast<Real>(pert_nmodes - 1) : 0.0;
+      Real k_units = pert_kmin * pow(pert_kmax/pert_kmin, frac);
+      Real kmag = two_pi * k_units / Lx;
+
+      Real kxn, kyn, kzn;
+      if (pmesh->three_d) {
+        Real cos_th = 2.0*uni01(rng) - 1.0;
+        Real sin_th = sqrt(fmax(0.0, 1.0 - cos_th*cos_th));
+        Real phi = two_pi*uni01(rng);
+        kxn = kmag * sin_th * cos(phi);
+        kyn = kmag * sin_th * sin(phi);
+        kzn = kmag * cos_th;
+      } else if (pmesh->two_d) {
+        Real phi = two_pi*uni01(rng);
+        kxn = kmag * cos(phi);
+        kyn = kmag * sin(phi);
+        kzn = 0.0;
+      } else {
+        kxn = kmag;
+        kyn = 0.0;
+        kzn = 0.0;
+      }
+
+      pert_kx.h_view(n) = kxn;
+      pert_ky.h_view(n) = kyn;
+      pert_kz.h_view(n) = kzn;
+      Real raw_amp = pow(k_units, -0.5*pert_alpha);
+      pert_an.h_view(n) = raw_amp;
+      pert_ph.h_view(n) = two_pi*uni01(rng);
+      sumsq += raw_amp*raw_amp;
+    }
+    Real norm = (sumsq > 0.0) ? pert_amp*sqrt(2.0/sumsq) : 0.0;
+    for (int n = 0; n < pert_nmodes; ++n) {
+      pert_an.h_view(n) *= norm;
+    }
+    pert_kx.template modify<HostMemSpace>();
+    pert_ky.template modify<HostMemSpace>();
+    pert_kz.template modify<HostMemSpace>();
+    pert_an.template modify<HostMemSpace>();
+    pert_ph.template modify<HostMemSpace>();
+    pert_kx.template sync<DevExeSpace>();
+    pert_ky.template sync<DevExeSpace>();
+    pert_kz.template sync<DevExeSpace>();
+    pert_an.template sync<DevExeSpace>();
+    pert_ph.template sync<DevExeSpace>();
+  }
+
   // compute Lorentz factor
   Real w_lorentz = 1.0 / sqrt(1.0 - (SQR(v3x) + SQR(v3y) + SQR(v3z)));
   wpt.vx = w_lorentz*v3x;
@@ -148,7 +220,6 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
   pmbp->padm->SetADMVariables(pmbp);
 
   // setup MHD primitives (always)
-  Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("pgen_shock1_mhd", DevExeSpace(),
           0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m,int k, int j, int i) {
@@ -156,14 +227,26 @@ void NeutrinoDominatedShock(Mesh *pmesh, ParameterInput* pin) {
 
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
     int nx1 = indcs.nx1;
+    int nx2 = indcs.nx2;
+    int nx3 = indcs.nx3;
     Real x = CellCenterX(i-is, nx1, x1min, x1max);
+    Real y = CellCenterX(j-js, nx2, x2min, x2max);
+    Real z = CellCenterX(k-ks, nx3, x3min, x3max);
 
-    // apply white-noise density perturbation
-    auto rand_gen = rand_pool64.get_state();
-    Real rval = 1.0 + pert_amp*(rand_gen.frand() - 0.5);
-    w0_(m,IDN,k,j,i) = wpt.d * rval;
-    rand_pool64.free_state(rand_gen);
+    // spectral (turbulence-like) density perturbation
+    Real delta = 0.0;
+    for (int n = 0; n < pert_nmodes; ++n) {
+      delta += pert_an.d_view(n) * cos(pert_kx.d_view(n)*x
+                                     + pert_ky.d_view(n)*y
+                                     + pert_kz.d_view(n)*z
+                                     + pert_ph.d_view(n));
+    }
+    w0_(m,IDN,k,j,i) = wpt.d * (1.0 + delta);
 
     w0_(m,IVX,k,j,i) = wpt.vx * (x > 0 ? -1 : 1);
     w0_(m,IVY,k,j,i) = wpt.vy;
