@@ -422,6 +422,8 @@ struct bbh_pgen {
   Real sink_pressure_floor;
   Real sink_cells_per_radius;
   Real sink_resolved_cells_across_horizon;
+  Real puncture_excise_rad1;
+  Real puncture_excise_rad2;
   Real thin_cooling_h_over_r;
   Real thin_cooling_timescale_orbits;
   Real thin_cooling_cfl;
@@ -430,6 +432,7 @@ struct bbh_pgen {
   bool use_traj_table;
   bool smooth_b_damping;
   bool unresolved_sink;
+  bool puncture_excise_cap_to_horizon;
   bool thin_disk_cooling;
   bool require_resolved_horizon;
   bool use_cooling_source;
@@ -812,6 +815,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   bbh.require_resolved_horizon = pin->GetOrAddBoolean(
       "coord", "require_resolved_horizon", false);
+  bbh.puncture_excise_rad1 = pin->GetOrAddReal("coord", "excise_1_rad", -1.0);
+  bbh.puncture_excise_rad2 = pin->GetOrAddReal("coord", "excise_2_rad", -1.0);
+  bbh.puncture_excise_cap_to_horizon = pin->GetOrAddBoolean(
+      "coord", "excise_cap_to_horizon", true);
   bbh.unresolved_sink = pin->GetOrAddBoolean("problem", "unresolved_sink", false);
   bbh.sink_radius = pin->GetOrAddReal("problem", "sink_radius", 0.0);
   bbh.sink_width = pin->GetOrAddReal("problem", "sink_width",
@@ -1708,10 +1715,18 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1_vel[0] = traj.q[VX2];
   coord.punc_1_vel[1] = traj.q[VY2];
   coord.punc_1_vel[2] = traj.q[VZ2];
-  coord.punc_0_rad = HorizonRadiusFromMassAndChi(
-      m1_ex, traj.q[AX1], traj.q[AY1], traj.q[AZ1]);
-  coord.punc_1_rad = HorizonRadiusFromMassAndChi(
-      m2_ex, traj.q[AX2], traj.q[AY2], traj.q[AZ2]);
+  Real rH1 = HorizonRadiusFromMassAndChi(m1_ex, traj.q[AX1], traj.q[AY1],
+                                         traj.q[AZ1]);
+  Real rH2 = HorizonRadiusFromMassAndChi(m2_ex, traj.q[AX2], traj.q[AY2],
+                                         traj.q[AZ2]);
+  coord.punc_0_rad = (bbh_.puncture_excise_rad1 > 0.0) ?
+      bbh_.puncture_excise_rad1 : rH1;
+  coord.punc_1_rad = (bbh_.puncture_excise_rad2 > 0.0) ?
+      bbh_.puncture_excise_rad2 : rH2;
+  if (bbh_.puncture_excise_cap_to_horizon) {
+    coord.punc_0_rad = std::min(coord.punc_0_rad, rH1);
+    coord.punc_1_rad = std::min(coord.punc_1_rad, rH2);
+  }
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -3771,15 +3786,18 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
       auto size = mbsize.d_view(m);
       Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
-      CurrentDensity(member, m, ks, js, is, ie+1, b0, size, j1, j2, j3);
-      par_for_inner(member, is, ie+1, [&](const int i) {
-        Real w = SmoothExcisionBWeight(weight(m,ks,js,i));
-        e2(m,ks,  js,i) += eta*w*j2(i);
-        e2(m,ke+1,js,i) += eta*w*j2(i);
-        e3(m,ks,  js,i) += eta*w*j3(i);
-        e3(m,ks,je+1,i) += eta*w*j3(i);
-      });
-    });
+	      CurrentDensity(member, m, ks, js, is, ie+1, b0, size, j1, j2, j3);
+	      par_for_inner(member, is, ie+1, [&](const int i) {
+	        Real w = SmoothExcisionBWeight(weight(m,ks,js,i));
+	        if (w > 0.0 && isfinite(w)) {
+	          Real damp = eta*w;
+	          e2(m,ks,  js,i) += damp*j2(i);
+	          e2(m,ke+1,js,i) += damp*j2(i);
+	          e3(m,ks,  js,i) += damp*j3(i);
+	          e3(m,ks,je+1,i) += damp*j3(i);
+	        }
+	      });
+	    });
     return;
   }
 
@@ -3791,16 +3809,22 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
       auto size = mbsize.d_view(m);
       Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
-      CurrentDensity(member, m, ks, j, is, ie+1, b0, size, j1, j2, j3);
-      par_for_inner(member, is, ie+1, [&](const int i) {
-        Real w = SmoothExcisionBWeight(0.5*(weight(m,ks,j,i) + weight(m,ks,j,i-1)));
-        e1(m,ks,  j,i) += eta*w*j1(i);
-        e1(m,ke+1,j,i) += eta*w*j1(i);
-        e2(m,ks,  j,i) += eta*w*j2(i);
-        e2(m,ke+1,j,i) += eta*w*j2(i);
-        e3(m,ks,  j,i) += eta*EdgeWeightX3(weight, m, ks, j, i)*j3(i);
-      });
-    });
+	      CurrentDensity(member, m, ks, j, is, ie+1, b0, size, j1, j2, j3);
+	      par_for_inner(member, is, ie+1, [&](const int i) {
+	        Real w = SmoothExcisionBWeight(0.5*(weight(m,ks,j,i) + weight(m,ks,j,i-1)));
+	        if (w > 0.0 && isfinite(w)) {
+	          Real damp = eta*w;
+	          e1(m,ks,  j,i) += damp*j1(i);
+	          e1(m,ke+1,j,i) += damp*j1(i);
+	          e2(m,ks,  j,i) += damp*j2(i);
+	          e2(m,ke+1,j,i) += damp*j2(i);
+	        }
+	        Real w3 = EdgeWeightX3(weight, m, ks, j, i);
+	        if (w3 > 0.0 && isfinite(w3)) {
+	          e3(m,ks,  j,i) += eta*w3*j3(i);
+	        }
+	      });
+	    });
     return;
   }
 
@@ -3811,15 +3835,24 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
     ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
     ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
     auto size = mbsize.d_view(m);
-    Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
-    CurrentDensity(member, m, k, j, is, ie+1, b0, size, j1, j2, j3);
-    par_for_inner(member, is, ie+1, [&](const int i) {
-      e1(m,k,j,i) += eta*EdgeWeightX1(weight, m, k, j, i)*j1(i);
-      e2(m,k,j,i) += eta*EdgeWeightX2(weight, m, k, j, i)*j2(i);
-      e3(m,k,j,i) += eta*EdgeWeightX3(weight, m, k, j, i)*j3(i);
-    });
-  });
-}
+	    Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+	    CurrentDensity(member, m, k, j, is, ie+1, b0, size, j1, j2, j3);
+	    par_for_inner(member, is, ie+1, [&](const int i) {
+	      Real w1 = EdgeWeightX1(weight, m, k, j, i);
+	      if (w1 > 0.0 && isfinite(w1)) {
+	        e1(m,k,j,i) += eta*w1*j1(i);
+	      }
+	      Real w2 = EdgeWeightX2(weight, m, k, j, i);
+	      if (w2 > 0.0 && isfinite(w2)) {
+	        e2(m,k,j,i) += eta*w2*j2(i);
+	      }
+	      Real w3 = EdgeWeightX3(weight, m, k, j, i);
+	      if (w3 > 0.0 && isfinite(w3)) {
+	        e3(m,k,j,i) += eta*w3*j3(i);
+	      }
+	    });
+	  });
+	}
 
 //----------------------------------------------------------------------------------------
 //! \fn void AddValenciaGRCooling(Mesh *pm, const Real bdt)
