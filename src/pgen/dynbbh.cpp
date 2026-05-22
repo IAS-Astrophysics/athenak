@@ -186,6 +186,7 @@ struct bbh_pgen {
   Real gamma_adi;
   Real a1_buffer, a2_buffer;
   Real cutoff_floor;
+  Real metric_fd_step;
   Real alpha_thr;
   Real radius_thr;
   Real smooth_b_damping_eta;
@@ -576,6 +577,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.01);
   bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.01);
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
+  bbh.metric_fd_step = pin->GetOrAddReal("problem", "metric_fd_step", metric_fd_step);
+  if (!(bbh.metric_fd_step > 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "problem/metric_fd_step must be positive" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   std::string metric_derivative = pin->GetOrAddString(
       "problem", "metric_derivative", "ad");
   if (metric_derivative == "ad") {
@@ -1587,7 +1595,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   }
 
   Real traj_m[NTRAJ], traj_p[NTRAJ];
-  Real hm = metric_fd_step, hp = metric_fd_step;
+  Real hm = bbh_.metric_fd_step, hp = bbh_.metric_fd_step;
 
   if (bbh_.use_traj_table && !bbh_table.t.empty()) {
     Real tmin = bbh_table.t.front();
@@ -2403,7 +2411,7 @@ void numerical_4metric(const Real t, const Real x, const Real y,
                        const Real traj_p[NTRAJ], const Real hm, const Real hp,
                        const bbh_pgen b) {
   struct four_metric met_m, met_p;
-  constexpr Real hx = metric_fd_step;
+  Real hx = b.metric_fd_step;
 
   get_metric(t, x, y, z, outmet, traj_0, b);
 
