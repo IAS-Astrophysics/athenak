@@ -111,17 +111,8 @@ the Hermite trajectory derivatives; they no longer require finite-difference
 metric calls.  `SetADMVariablesToBBH` writes the ADM fields and puncture
 metadata used by the coordinate excision masks.
 
-Mass scaling:
-
-```ini
-<problem>
-adjust_mass1 = 1.0
-adjust_mass2 = 1.0
-```
-
-In table mode, the physical spin parameter used by Kerr-Schild is
-`a_i = chi_i * M_i * adjust_mass_i`.  In the legacy analytic mode, `a1` and
-`a2` follow the historical input convention and are scaled by `adjust_mass*`.
+The physical spin parameter used by Kerr-Schild is `a_i = chi_i * M_i`, where
+`chi_i` is the dimensionless spin vector and `M_i` is the trajectory mass.
 
 ## Torus Initialization
 
@@ -515,8 +506,6 @@ Use this when the trajectory and spin direction come from an external driver:
 <problem>
 use_traj_table = true
 traj_file = trajectories/tilted_spin.dat
-adjust_mass1 = 1.0
-adjust_mass2 = 1.0
 
 amr_condition = tracker
 tracker_1_rad = 6.0

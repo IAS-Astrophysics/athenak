@@ -173,8 +173,6 @@ def parse_athena_parfile(parfile_path):
         "th_a2": np.deg2rad(values.get("th_a2", 0.0)),
         "ph_a1": np.deg2rad(values.get("ph_a1", 0.0)),
         "ph_a2": np.deg2rad(values.get("ph_a2", 0.0)),
-        "adjust_mass1": values.get("adjust_mass1", 1.0),
-        "adjust_mass2": values.get("adjust_mass2", 1.0),
         "a1_buffer": values.get("a1_buffer", 0.01),
         "a2_buffer": values.get("a2_buffer", 0.01),
         "cutoff_floor": values.get("cutoff_floor", 1.0e-4),
@@ -446,16 +444,14 @@ def superposed_bbh_metric(x, y, z, time, params, kernel_source):
         x, y, z, loc["xi2x"], loc["xi2y"], loc["xi2z"], loc["v2x"], loc["v2y"], loc["v2z"]
     )
 
-    m1 = loc["m1_t"] * params["adjust_mass1"]
-    m2 = loc["m2_t"] * params["adjust_mass2"]
-    spin_scale1 = m1 if params.get("use_traj_table", False) else params["adjust_mass1"]
-    spin_scale2 = m2 if params.get("use_traj_table", False) else params["adjust_mass2"]
-    a1x = loc["a1x"] * spin_scale1
-    a1y = loc["a1y"] * spin_scale1
-    a1z = loc["a1z"] * spin_scale1
-    a2x = loc["a2x"] * spin_scale2
-    a2y = loc["a2y"] * spin_scale2
-    a2z = loc["a2z"] * spin_scale2
+    m1 = loc["m1_t"]
+    m2 = loc["m2_t"]
+    a1x = loc["a1x"] * m1
+    a1y = loc["a1y"] * m1
+    a1z = loc["a1z"] * m1
+    a2x = loc["a2x"] * m2
+    a2y = loc["a2y"] * m2
+    a2z = loc["a2z"] * m2
     a1 = np.sqrt(a1x * a1x + a1y * a1y + a1z * a1z + 1.0e-40)
     a2 = np.sqrt(a2x * a2x + a2y * a2y + a2z * a2z + 1.0e-40)
 
