@@ -52,6 +52,8 @@ enum {
   M1T, M2T, NTRAJ
 };
 
+constexpr Real metric_fd_step = 5.0e-5;
+
 struct dd_sym {
   Real tt;
   Real tx;
@@ -168,6 +170,11 @@ struct bbh_traj_state {
   Real dq[NTRAJ];
 };
 
+enum class MetricDerivativeMethod {
+  ad,
+  finite_difference
+};
+
 struct bbh_pgen {
   Real sep;
   Real om;
@@ -204,6 +211,7 @@ struct bbh_pgen {
   bool thin_disk_cooling;
   bool require_resolved_horizon;
   bool use_cooling_source;
+  MetricDerivativeMethod metric_derivative_method;
 
   Real spin;
 
@@ -395,6 +403,12 @@ void get_metric(const Real t, const Real x, const Real y, const Real z,
                 struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
                 const bbh_pgen bbh_);
 KOKKOS_INLINE_FUNCTION
+void numerical_4metric(const Real t, const Real x, const Real y,
+                       const Real z, struct four_metric &outmet,
+                       const Real traj_m[NTRAJ], const Real traj_0[NTRAJ],
+                       const Real traj_p[NTRAJ], const Real hm, const Real hp,
+                       const bbh_pgen bbh_);
+KOKKOS_INLINE_FUNCTION
 void get_metric_and_derivatives(const Real t, const Real x, const Real y,
                                 const Real z, struct four_metric &met,
                                 const Real bbh_traj_loc[NTRAJ],
@@ -562,6 +576,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.01);
   bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.01);
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
+  std::string metric_derivative = pin->GetOrAddString(
+      "problem", "metric_derivative", "ad");
+  if (metric_derivative == "ad") {
+    bbh.metric_derivative_method = MetricDerivativeMethod::ad;
+  } else if (metric_derivative == "finite_difference" || metric_derivative == "fd") {
+    bbh.metric_derivative_method = MetricDerivativeMethod::finite_difference;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Unknown problem/metric_derivative='" << metric_derivative
+              << "'. Use 'ad' or 'finite_difference'." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
   int tracker_reflevel = pin->GetOrAddInteger("problem", "tracker_reflevel", -1);
@@ -1453,6 +1480,30 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
 namespace {
 
+template <typename ADMVars>
+KOKKOS_INLINE_FUNCTION
+void StoreADMVariables(ADMVars adm_vars, const int m, const int k,
+                       const int j, const int i, const struct three_metric &met3) {
+  adm_vars.g_dd(m,0,0,k,j,i) = met3.gxx;
+  adm_vars.g_dd(m,0,1,k,j,i) = met3.gxy;
+  adm_vars.g_dd(m,0,2,k,j,i) = met3.gxz;
+  adm_vars.g_dd(m,1,1,k,j,i) = met3.gyy;
+  adm_vars.g_dd(m,1,2,k,j,i) = met3.gyz;
+  adm_vars.g_dd(m,2,2,k,j,i) = met3.gzz;
+
+  adm_vars.vK_dd(m,0,0,k,j,i) = met3.kxx;
+  adm_vars.vK_dd(m,0,1,k,j,i) = met3.kxy;
+  adm_vars.vK_dd(m,0,2,k,j,i) = met3.kxz;
+  adm_vars.vK_dd(m,1,1,k,j,i) = met3.kyy;
+  adm_vars.vK_dd(m,1,2,k,j,i) = met3.kyz;
+  adm_vars.vK_dd(m,2,2,k,j,i) = met3.kzz;
+
+  adm_vars.alpha(m,k,j,i) = met3.alpha;
+  adm_vars.beta_u(m,0,k,j,i) = met3.betax;
+  adm_vars.beta_u(m,1,k,j,i) = met3.betay;
+  adm_vars.beta_u(m,2,k,j,i) = met3.betaz;
+}
+
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   const Real tt = pmbp->pmesh->time;
   auto &adm = pmbp->padm->adm;
@@ -1511,7 +1562,58 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
     coord.punc_1_rad = std::min(coord.punc_1_rad, rH2);
   }
 
-  par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
+  if (bbh_.metric_derivative_method == MetricDerivativeMethod::ad) {
+    par_for("update_adm_vars_ad", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      struct four_metric met4;
+      struct three_metric met3;
+      get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
+      four_metric_to_three_metric(met4, met3);
+      StoreADMVariables(adm, m, k, j, i, met3);
+    });
+    return;
+  }
+
+  Real traj_m[NTRAJ], traj_p[NTRAJ];
+  Real hm = metric_fd_step, hp = metric_fd_step;
+
+  if (bbh_.use_traj_table && !bbh_table.t.empty()) {
+    Real tmin = bbh_table.t.front();
+    Real tmax = bbh_table.t.back();
+    hm = fmin(metric_fd_step, fmax(tt - tmin, 0.0));
+    hp = fmin(metric_fd_step, fmax(tmax - tt, 0.0));
+    if (hm == 0.0 && hp == 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "trajectory table does not bracket time for metric derivatives"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if (hm > 0.0) {
+    find_traj_t(tt - hm, traj_m);
+  } else {
+    for (int n = 0; n < NTRAJ; ++n) traj_m[n] = traj.q[n];
+  }
+  if (hp > 0.0) {
+    find_traj_t(tt + hp, traj_p);
+  } else {
+    for (int n = 0; n < NTRAJ; ++n) traj_p[n] = traj.q[n];
+  }
+
+  par_for("update_adm_vars_fd", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -1527,33 +1629,11 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
+    numerical_4metric(tt, x1v, x2v, x3v, met4, traj_m, traj.q, traj_p,
+                      hm, hp, bbh_);
 
-    /* Transform 4D metric to 3+1 variables*/
     four_metric_to_three_metric(met4, met3);
-
-    /* Load (Cartesian) components of the metric and curvature */
-
-    // g_ab
-    adm.g_dd(m,0,0,k,j,i) = met3.gxx;
-    adm.g_dd(m,0,1,k,j,i) = met3.gxy;
-    adm.g_dd(m,0,2,k,j,i) = met3.gxz;
-    adm.g_dd(m,1,1,k,j,i) = met3.gyy;
-    adm.g_dd(m,1,2,k,j,i) = met3.gyz;
-    adm.g_dd(m,2,2,k,j,i) = met3.gzz;
-
-    adm.vK_dd(m,0,0,k,j,i) = met3.kxx;
-    adm.vK_dd(m,0,1,k,j,i) = met3.kxy;
-    adm.vK_dd(m,0,2,k,j,i) = met3.kxz;
-    adm.vK_dd(m,1,1,k,j,i) = met3.kyy;
-    adm.vK_dd(m,1,2,k,j,i) = met3.kyz;
-    adm.vK_dd(m,2,2,k,j,i) = met3.kzz;
-
-    adm.alpha(m,k,j,i) = met3.alpha;
-    adm.beta_u(m,0,k,j,i) = met3.betax;
-    adm.beta_u(m,1,k,j,i) = met3.betay;
-    adm.beta_u(m,2,k,j,i) = met3.betaz;
-
+    StoreADMVariables(adm, m, k, j, i, met3);
   });
   return;
 }
@@ -2298,6 +2378,58 @@ void FillMetricDerivative(const dual1_real gcov[NDIM][NDIM],
   dg.yy = deriv_of(gcov[YY][YY]);
   dg.yz = deriv_of(gcov[YY][ZZ]);
   dg.zz = deriv_of(gcov[ZZ][ZZ]);
+}
+
+KOKKOS_INLINE_FUNCTION
+void DifferenceMetric(const struct dd_sym &plus, const struct dd_sym &minus,
+                      const Real denom, struct dd_sym &dg) {
+  Real inv = 1.0/denom;
+  dg.tt = (plus.tt - minus.tt)*inv;
+  dg.tx = (plus.tx - minus.tx)*inv;
+  dg.ty = (plus.ty - minus.ty)*inv;
+  dg.tz = (plus.tz - minus.tz)*inv;
+  dg.xx = (plus.xx - minus.xx)*inv;
+  dg.xy = (plus.xy - minus.xy)*inv;
+  dg.xz = (plus.xz - minus.xz)*inv;
+  dg.yy = (plus.yy - minus.yy)*inv;
+  dg.yz = (plus.yz - minus.yz)*inv;
+  dg.zz = (plus.zz - minus.zz)*inv;
+}
+
+KOKKOS_INLINE_FUNCTION
+void numerical_4metric(const Real t, const Real x, const Real y,
+                       const Real z, struct four_metric &outmet,
+                       const Real traj_m[NTRAJ], const Real traj_0[NTRAJ],
+                       const Real traj_p[NTRAJ], const Real hm, const Real hp,
+                       const bbh_pgen b) {
+  struct four_metric met_m, met_p;
+  constexpr Real hx = metric_fd_step;
+
+  get_metric(t, x, y, z, outmet, traj_0, b);
+
+  if (hm > 0.0 && hp > 0.0) {
+    get_metric(t - hm, x, y, z, met_m, traj_m, b);
+    get_metric(t + hp, x, y, z, met_p, traj_p, b);
+    DifferenceMetric(met_p.g, met_m.g, hm + hp, outmet.g_t);
+  } else if (hp > 0.0) {
+    get_metric(t + hp, x, y, z, met_p, traj_p, b);
+    DifferenceMetric(met_p.g, outmet.g, hp, outmet.g_t);
+  } else {
+    get_metric(t - hm, x, y, z, met_m, traj_m, b);
+    DifferenceMetric(outmet.g, met_m.g, hm, outmet.g_t);
+  }
+
+  get_metric(t, x - hx, y, z, met_m, traj_0, b);
+  get_metric(t, x + hx, y, z, met_p, traj_0, b);
+  DifferenceMetric(met_p.g, met_m.g, 2.0*hx, outmet.g_x);
+
+  get_metric(t, x, y - hx, z, met_m, traj_0, b);
+  get_metric(t, x, y + hx, z, met_p, traj_0, b);
+  DifferenceMetric(met_p.g, met_m.g, 2.0*hx, outmet.g_y);
+
+  get_metric(t, x, y, z - hx, met_m, traj_0, b);
+  get_metric(t, x, y, z + hx, met_p, traj_0, b);
+  DifferenceMetric(met_p.g, met_m.g, 2.0*hx, outmet.g_z);
 }
 
 void TimeMetricAD(const Real x, const Real y, const Real z,
