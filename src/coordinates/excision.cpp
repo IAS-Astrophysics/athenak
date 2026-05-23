@@ -27,39 +27,6 @@ Real SmoothStep01(const Real x) {
   return s*s*(3.0 - 2.0*s);
 }
 
-KOKKOS_INLINE_FUNCTION
-Real KSRXSpin(const Real x1, const Real x2, const Real x3,
-              const Real ax, const Real ay, const Real az) {
-  Real a2 = SQR(ax) + SQR(ay) + SQR(az);
-  if (a2 <= 0.0) {
-    return sqrt(SQR(x1) + SQR(x2) + SQR(x3));
-  }
-  Real a = sqrt(a2);
-  Real rad2 = SQR(x1) + SQR(x2) + SQR(x3);
-  Real zspin = (x1*ax + x2*ay + x3*az)/a;
-  return sqrt((rad2 - a2 + sqrt(SQR(rad2 - a2) + 4.0*a2*SQR(zspin)))/2.0);
-}
-
-KOKKOS_INLINE_FUNCTION
-void BoostedDisplacement(const Real x1, const Real x2, const Real x3,
-                         const Real cx, const Real cy, const Real cz,
-                         const Real vx, const Real vy, const Real vz,
-                         Real *xbh, Real *ybh, Real *zbh) {
-  Real dx = x1 - cx, dy = x2 - cy, dz = x3 - cz;
-  Real v2 = SQR(vx) + SQR(vy) + SQR(vz);
-  Real q;
-  if (v2 < 1.0e-12) {
-    q = 0.5 + 0.375*v2 + 0.3125*SQR(v2);
-  } else {
-    Real gamma = 1.0/sqrt(fmax(1.0 - v2, 1.0e-300));
-    q = (gamma - 1.0)/v2;
-  }
-  Real vd = vx*dx + vy*dy + vz*dz;
-  *xbh = dx + q*vx*vd;
-  *ybh = dy + q*vy*vd;
-  *zbh = dz + q*vz*vd;
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn void Coordinates::SetExcisionMasks()
 //  \brief Sets boolean masks for the excision in CKS
@@ -275,8 +242,6 @@ void Coordinates::UpdateExcisionMasks() {
 
     Real &punc_0_r = coord_data.punc_0_rad;
     Real &punc_1_r = coord_data.punc_1_rad;
-    Real smooth_width = coord_data.smooth_excise_width;
-    Real flux_excise_r = coord_data.flux_excise_r;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -292,23 +257,23 @@ void Coordinates::UpdateExcisionMasks() {
       Real x3v   = CellCenterX(k  -ks, indcs.nx3, x3min, x3max);
 
       Real x0, y0, z0, x1, y1, z1;
-      BoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z, p0_vx, p0_vy, p0_vz,
-                          &x0, &y0, &z0);
-      BoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z, p1_vx, p1_vy, p1_vz,
-                          &x1, &y1, &z1);
-      Real r0 = KSRXSpin(x0, y0, z0, p0_ax, p0_ay, p0_az);
-      Real r1 = KSRXSpin(x1, y1, z1, p1_ax, p1_ay, p1_az);
+      ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
+                                  p0_vx, p0_vy, p0_vz, &x0, &y0, &z0);
+      ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z,
+                                  p1_vx, p1_vy, p1_vz, &x1, &y1, &z1);
+      Real r0 = ExcisionKSRXSpin(x0, y0, z0, p0_ax, p0_ay, p0_az);
+      Real r1 = ExcisionKSRXSpin(x1, y1, z1, p1_ax, p1_ay, p1_az);
 
       bool excise = ((punc_0_r > 0.0 && r0 <= punc_0_r) ||
                      (punc_1_r > 0.0 && r1 <= punc_1_r));
-      Real punc_0_flux_r = (punc_0_r > 0.0) ? fmax(punc_0_r, flux_excise_r) : -1.0;
-      Real punc_1_flux_r = (punc_1_r > 0.0) ? fmax(punc_1_r, flux_excise_r) : -1.0;
-      bool flux_excise = ((punc_0_flux_r > 0.0 && r0 <= punc_0_flux_r) ||
-                          (punc_1_flux_r > 0.0 && r1 <= punc_1_flux_r));
+      bool flux_excise = ((punc_0_r > 0.0 && r0 <= punc_0_r) ||
+                          (punc_1_r > 0.0 && r1 <= punc_1_r));
       floor(m,k,j,i) = excise;
       flux(m,k,j,i) = flux_excise;
-      Real w0 = (punc_0_r > 0.0) ? SmoothStep01((punc_0_r - r0)/smooth_width) : 0.0;
-      Real w1 = (punc_1_r > 0.0) ? SmoothStep01((punc_1_r - r1)/smooth_width) : 0.0;
+      Real punc_0_width = 0.5*punc_0_r;
+      Real punc_1_width = 0.5*punc_1_r;
+      Real w0 = (punc_0_width > 0.0) ? SmoothStep01((punc_0_r - r0)/punc_0_width) : 0.0;
+      Real w1 = (punc_1_width > 0.0) ? SmoothStep01((punc_1_r - r1)/punc_1_width) : 0.0;
       weight(m,k,j,i) = fmax(w0, w1);
     });
   }

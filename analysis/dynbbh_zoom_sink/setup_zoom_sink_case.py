@@ -117,8 +117,6 @@ a           = 0.0
 excise      = true
 excision_scheme = puncture
 smooth_excision = true
-smooth_excision_width = 0.75
-smooth_excision_inflow_speed = 0.40
 smooth_excision_sigma_max = 1.0e5
 smooth_excision_b_damping = true
 smooth_excision_b_damping_eta = 0.5
@@ -173,14 +171,6 @@ th_a2 = 47.0
 ph_a2 = 163.0
 use_traj_table = true
 traj_file = {TABLE}
-unresolved_sink = true
-sink_radius = 0.0
-sink_width = -1.0
-sink_cells_per_radius = 10.0
-sink_resolved_cells_across_horizon = 20.0
-sink_timescale = {5.0 * TORBIT:.16e}
-sink_density_floor = 1.0e-6
-sink_pressure_floor = 1.0e-8
 
 amr_condition = none
 radius_thr = 10.0
@@ -301,13 +291,13 @@ def masks_and_sigma(data):
         if len(coords) > 1:
             dxs.append(float(np.nanmin(np.abs(np.diff(coords)))))
     local_dx = max(dxs) if dxs else 1.0
-    auto_sink_radius = 10.0*local_dx
-    mask_sink = (np.sqrt((x-x1)**2 + (y-y1)**2 + (z-z1)**2) <= auto_sink_radius) | (
-        np.sqrt((x-x2)**2 + (y-y2)**2 + (z-z2)**2) <= auto_sink_radius)
+    diagnostic_radius = 10.0*local_dx
+    mask_diagnostic = (np.sqrt((x-x1)**2 + (y-y1)**2 + (z-z1)**2) <= diagnostic_radius) | (
+        np.sqrt((x-x2)**2 + (y-y2)**2 + (z-z2)**2) <= diagnostic_radius)
     rho = data.variables['dens']
     b2 = data.variables['bcc1']**2 + data.variables['bcc2']**2 + data.variables['bcc3']**2
     sigma = b2/np.maximum(rho, 1.0e-300)
-    return mask_h, mask_sink, sigma
+    return mask_h, mask_diagnostic, sigma
 
 def collect():
     div_rows = []
@@ -326,8 +316,8 @@ def collect():
             for name, arr in d.variables.items():
                 if not np.all(np.isfinite(arr)):
                     finite_fail.append(f'{{path}}:{{name}}')
-            mask_h, mask_sink, sigma = masks_and_sigma(d)
-            for region, mask in [('horizon', mask_h), ('sink_radius', mask_sink)]:
+            mask_h, mask_diagnostic, sigma = masks_and_sigma(d)
+            for region, mask in [('horizon', mask_h), ('diagnostic_radius', mask_diagnostic)]:
                 vals = sigma[mask]
                 sigma_rows.append([label, region, d.time/torbit, vals.size,
                                    float(np.nanmean(vals)) if vals.size else np.nan,
@@ -356,11 +346,11 @@ fig.savefig(case_dir/'zoom_sink_divb_history.png', dpi=160)
 
 fig, ax = plt.subplots(figsize=(7,4))
 for label in labels:
-    rows = sigma_rows[(sigma_rows[:,0] == label) & (sigma_rows[:,1] == 'sink_radius')]
+    rows = sigma_rows[(sigma_rows[:,0] == label) & (sigma_rows[:,1] == 'diagnostic_radius')]
     if rows.size:
         ax.semilogy(rows[:,2].astype(float), rows[:,4].astype(float), 'o-', label=label)
 ax.set_xlabel('time [orbits]')
-ax.set_ylabel('mean sigma inside sink radius')
+ax.set_ylabel('mean sigma inside diagnostic radius')
 ax.grid(True, alpha=0.3)
 ax.legend()
 fig.tight_layout()
@@ -394,9 +384,10 @@ if div_rows.size and float(np.max(div_rows[:,2].astype(float))) > 1.0e-10:
     raise SystemExit(f'divB exceeded tolerance: {{np.max(div_rows[:,2].astype(float)):.3e}}')
 
 print('divB max', float(np.max(div_rows[:,2].astype(float))) if div_rows.size else float('nan'))
-sink_rows = sigma_rows[sigma_rows[:,1] == 'sink_radius']
-if sink_rows.size:
-    print('sink sigma first/last mean', float(sink_rows[0,4]), float(sink_rows[-1,4]))
+diagnostic_rows = sigma_rows[sigma_rows[:,1] == 'diagnostic_radius']
+if diagnostic_rows.size:
+    print('diagnostic sigma first/last mean',
+          float(diagnostic_rows[0,4]), float(diagnostic_rows[-1,4]))
 print('wrote diagnostics in', case_dir)
 """
 

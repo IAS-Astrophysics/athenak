@@ -25,6 +25,39 @@ enum class ExcisionScheme {
   puncture
 };
 
+KOKKOS_INLINE_FUNCTION
+Real ExcisionKSRXSpin(const Real x1, const Real x2, const Real x3,
+                      const Real ax, const Real ay, const Real az) {
+  Real a2 = SQR(ax) + SQR(ay) + SQR(az);
+  if (a2 <= 0.0) {
+    return sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+  }
+  Real a = sqrt(a2);
+  Real rad2 = SQR(x1) + SQR(x2) + SQR(x3);
+  Real zspin = (x1*ax + x2*ay + x3*az)/a;
+  return sqrt((rad2 - a2 + sqrt(SQR(rad2 - a2) + 4.0*a2*SQR(zspin)))/2.0);
+}
+
+KOKKOS_INLINE_FUNCTION
+void ExcisionBoostedDisplacement(const Real x1, const Real x2, const Real x3,
+                                 const Real cx, const Real cy, const Real cz,
+                                 const Real vx, const Real vy, const Real vz,
+                                 Real *xbh, Real *ybh, Real *zbh) {
+  Real dx = x1 - cx, dy = x2 - cy, dz = x3 - cz;
+  Real v2 = SQR(vx) + SQR(vy) + SQR(vz);
+  Real q;
+  if (v2 < 1.0e-12) {
+    q = 0.5 + 0.375*v2 + 0.3125*SQR(v2);
+  } else {
+    Real gamma = 1.0/sqrt(fmax(1.0 - v2, 1.0e-300));
+    q = (gamma - 1.0)/v2;
+  }
+  Real vd = vx*dx + vy*dy + vz*dz;
+  *xbh = dx + q*vx*vd;
+  *ybh = dy + q*vy*vd;
+  *zbh = dz + q*vz*vd;
+}
+
 //----------------------------------------------------------------------------------------
 //! \struct CoordData
 //! \brief container for Coordinate variables and functions needed inside kernels. Storing
@@ -53,7 +86,6 @@ struct CoordData {
   bool smooth_excise;              // smoothly drain primitive variables inside horizon
   Real smooth_excise_width;        // radial width of drain layer inside geometric masks
   Real smooth_excise_lapse_width;  // lapse width of drain layer for lapse masks
-  Real smooth_excise_inflow_speed; // inward normal-frame speed used in the drain layer
   Real smooth_excise_sigma_max;    // optional B^2/rho cap inside smooth excision
 };
 

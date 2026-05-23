@@ -60,16 +60,21 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
   auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
-  auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
   Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
   Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
   Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
+  Real p0_ax = pmy_pack->pcoord->coord_data.punc_0_spin[0];
+  Real p0_ay = pmy_pack->pcoord->coord_data.punc_0_spin[1];
+  Real p0_az = pmy_pack->pcoord->coord_data.punc_0_spin[2];
   Real p0_vx = pmy_pack->pcoord->coord_data.punc_0_vel[0];
   Real p0_vy = pmy_pack->pcoord->coord_data.punc_0_vel[1];
   Real p0_vz = pmy_pack->pcoord->coord_data.punc_0_vel[2];
   Real p1_x = pmy_pack->pcoord->coord_data.punc_1[0];
   Real p1_y = pmy_pack->pcoord->coord_data.punc_1[1];
   Real p1_z = pmy_pack->pcoord->coord_data.punc_1[2];
+  Real p1_ax = pmy_pack->pcoord->coord_data.punc_1_spin[0];
+  Real p1_ay = pmy_pack->pcoord->coord_data.punc_1_spin[1];
+  Real p1_az = pmy_pack->pcoord->coord_data.punc_1_spin[2];
   Real p1_vx = pmy_pack->pcoord->coord_data.punc_1_vel[0];
   Real p1_vy = pmy_pack->pcoord->coord_data.punc_1_vel[1];
   Real p1_vz = pmy_pack->pcoord->coord_data.punc_1_vel[2];
@@ -172,21 +177,19 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
           w.e = pexcise_/gm1;
           excise_weight = 1.0;
         }
-        Real dx0 = x1v - p0_x, dy0 = x2v - p0_y, dz0 = x3v - p0_z;
-        Real dx1 = x1v - p1_x, dy1 = x2v - p1_y, dz1 = x3v - p1_z;
+        Real bx0, by0, bz0, bx1, by1, bz1;
+        ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
+                                    p0_vx, p0_vy, p0_vz, &bx0, &by0, &bz0);
+        ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z,
+                                    p1_vx, p1_vy, p1_vz, &bx1, &by1, &bz1);
+        Real rks0 = ExcisionKSRXSpin(bx0, by0, bz0, p0_ax, p0_ay, p0_az);
+        Real rks1 = ExcisionKSRXSpin(bx1, by1, bz1, p1_ax, p1_ay, p1_az);
         bool use_p1 = (p1_rad > 0.0) &&
                       (p0_rad <= 0.0 ||
-                       SQR(dx1) + SQR(dy1) + SQR(dz1) < SQR(dx0) + SQR(dy0) + SQR(dz0));
-        Real dx = use_p1 ? dx1 : dx0;
-        Real dy = use_p1 ? dy1 : dy0;
-        Real dz = use_p1 ? dz1 : dz0;
+                       rks1 < rks0);
         Real tvx = use_p1 ? p1_vx : p0_vx;
         Real tvy = use_p1 ? p1_vy : p0_vy;
         Real tvz = use_p1 ? p1_vz : p0_vz;
-        Real rinv = 1.0/sqrt(fmax(SQR(dx) + SQR(dy) + SQR(dz), 1.0e-300));
-        tvx -= excise_inflow_*dx*rinv;
-        tvy -= excise_inflow_*dy*rinv;
-        tvz -= excise_inflow_*dz*rinv;
         Real tv2 = glower[1][1]*SQR(tvx) + glower[2][2]*SQR(tvy) +
                    glower[3][3]*SQR(tvz) + 2.0*glower[1][2]*tvx*tvy +
                    2.0*glower[1][3]*tvx*tvz + 2.0*glower[2][3]*tvy*tvz;

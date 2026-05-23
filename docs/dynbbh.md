@@ -6,8 +6,7 @@ keeps the historical behavior: two black holes follow a fixed circular
 Keplerian orbit and the metric is built from the two superposed boosted
 Kerr-Schild perturbations.  Optional paths allow a tabulated binary trajectory,
 smooth horizon excision, magnetic-field damping through the constrained
-transport EMF, an unresolved-horizon sink, and user-controlled AMR around each
-hole.
+transport EMF, cooling source terms, and user-controlled AMR around each hole.
 
 The pgen is intended for GRMHD circumbinary-disk tests and production setups.
 It can initialize a Chakrabarti/Fishbone-Moncrief-like torus, a magnetized torus
@@ -37,8 +36,8 @@ r_edge = ...
 r_peak = ...
 ```
 
-For MHD runs, also provide an `<mhd>` block.  The unresolved sink and
-smooth-excision magnetic damping both require MHD.
+For MHD runs, also provide an `<mhd>` block.  Smooth-excision magnetic damping
+and the cooling source terms require MHD.
 
 ## Binary Trajectory
 
@@ -142,8 +141,8 @@ Notes:
 - `pert_amp` applies a random pressure perturbation inside the torus.
 
 For a circumbinary disk, choose `r_edge` outside the binary orbit for production
-disk runs.  For stress tests of accretion and sink behavior, smaller values can
-be useful, but they should be treated as algorithm tests rather than
+disk runs.  For stress tests of accretion and excision behavior, smaller values
+can be useful, but they should be treated as algorithm tests rather than
 well-separated circumbinary initial data.
 
 ## Magnetic Field Initialization
@@ -174,8 +173,6 @@ Recommended puncture excision setup:
 excise = true
 excision_scheme = puncture
 smooth_excision = true
-smooth_excision_width = 0.75
-smooth_excision_inflow_speed = 0.40
 smooth_excision_sigma_max = 1.0e5
 dexcise = 1.0e-10
 pexcise = 1.0e-18
@@ -183,28 +180,32 @@ require_resolved_horizon = false
 ```
 
 The pgen updates `punc_0`, `punc_1`, spins, velocities, and horizon radii from
-the current trajectory.  Excision remains active whenever `coord/excise=true`;
-the unresolved sink does not disable puncture masks.
+the current trajectory.  Excision remains active whenever `coord/excise=true`.
 
 For the smooth-excision equations and constrained-transport discussion, see
 `docs/smooth_excision_procedure.tex` and the compiled PDF.
 
 ## Cooling Source Terms
 
-`dynbbh` can apply two independent optically thin/source-term cooling models.
-Both act as isotropic fluid-frame energy losses and are converted to Valencia
-conserved-variable source terms.  They can be used separately or together.  If
-both are enabled, the pgen evaluates them in one combined source kernel so the
-internal-energy floor is enforced once on the total cooling decrement.
-
-### ISM Cooling
-
-The historical `dynbbh` cooling path is enabled through the generic user-source
-flag:
+`dynbbh` can apply one of two optically thin/source-term cooling models.  Select
+the model explicitly:
 
 ```ini
 <problem>
-user_srcs = true
+cooling_source = none       # none | ism | thin_disk
+```
+
+Both cooling models act as isotropic fluid-frame energy losses and are converted
+to Valencia conserved-variable source terms.  `cooling_source` is single-valued,
+so ISM cooling and thin-disk cooling cannot be combined.
+
+### ISM Cooling
+
+Enable ISM cooling with:
+
+```ini
+<problem>
+cooling_source = ism
 ```
 
 This calls `ISMCoolFn(T)` from `src/srcterms/ismcooling.hpp`.  The code converts
@@ -257,7 +258,7 @@ exponentially on an orbital timescale.  Enable it with:
 
 ```ini
 <problem>
-thin_disk_cooling = true
+cooling_source = thin_disk
 thin_cooling_h_over_r = 0.03
 thin_cooling_timescale_orbits = 1.0
 thin_cooling_cfl = 0.5
@@ -313,49 +314,14 @@ smooth_excision_b_damping_eta = 0.5
 smooth_excision_b_damping_cfl = 0.25
 ```
 
-This adds a resistive term of the form `E_damp = eta W curl(B)` at CT edges,
-with edge weights derived from the smooth-excision cell weight.  The effective
-`eta` is capped by `smooth_excision_b_damping_cfl * dx_min^2 / dt` when the CFL
-cap is positive.
-
-## Unresolved-Horizon Sink
-
-Use the sink when the grid is too coarse to resolve a horizon but you still want
-to evolve many orbits before a zoom restart:
-
-```ini
-<problem>
-unresolved_sink = true
-sink_radius = 0.0
-sink_width = -1.0
-sink_cells_per_radius = 10.0
-sink_resolved_cells_across_horizon = 20.0
-sink_timescale = 250.0
-sink_density_floor = 1.0e-6
-sink_pressure_floor = 1.0e-8
-```
-
-Per hole, the local resolution is measured from the MeshBlock containing that
-hole.  A sink is active when:
-
-```text
-2*r_H/dx < sink_resolved_cells_across_horizon
-```
-
-The automatic sink radius is:
-
-```text
-R_sink = max(sink_cells_per_radius*dx, sink_radius, r_H)
-```
-
-With the defaults, the sink is at least 10 cells in radius, or 20 cells wide.
-As AMR refines the hole, `dx` decreases and the sink radius shrinks.  Once the
-horizon is resolved by the configured criterion, that hole's sink turns off.
-The other hole can remain sink-drained if it is still under-resolved.
-
-The sink damps conserved density, momentum, energy, and passive scalars.  It
-does not directly modify the face-centered magnetic field.  Magnetic cleanup
-inside the horizon should be handled by smooth-excision EMF damping.
+This adds a resistive term of the form `E_damp = eta W curl(B)` at CT edges.
+The edge weight is the minimum of the adjacent smooth-excision cell weights, so
+the damping EMF is nonzero only on edges strictly inside the smooth puncture
+region.  The effective `eta` is capped by
+`smooth_excision_b_damping_cfl * dx_min^2 / dt` when the CFL cap is positive.
+The user EMF is applied before the normal EMF exchange/restriction step, so
+same-level and coarse/fine boundaries use the synchronized CT EMF before the
+magnetic update.
 
 ## AMR Controls
 
@@ -475,8 +441,6 @@ general_rel = true
 excise = true
 excision_scheme = puncture
 smooth_excision = true
-smooth_excision_width = 0.75
-smooth_excision_inflow_speed = 0.40
 smooth_excision_sigma_max = 1.0e5
 smooth_excision_b_damping = true
 smooth_excision_b_damping_eta = 0.5
@@ -491,8 +455,7 @@ q = 1.0
 a1 = 0.0
 a2 = 0.0
 use_traj_table = false
-unresolved_sink = false
-thin_disk_cooling = false
+cooling_source = none
 amr_condition = tracker
 radius_thr = 5.0
 tracker_reflevel = -1
@@ -518,9 +481,11 @@ The table spin columns should contain dimensionless `chi`.  For high-spin
 tests, use `|chi| <= 0.95` unless you specifically want to test near-extremal
 behavior.
 
-### 3. Low-Resolution Many-Orbit Sink Stage
+### 3. Coarse Many-Orbit Trajectory Stage
 
-Use this to evolve cheaply before a zoom restart:
+Use this for a cheap trajectory/excision algorithm test.  Production runs should
+keep horizons resolved or use it only with `require_resolved_horizon=false`
+after checking the resolution warnings.
 
 ```ini
 <mesh>
@@ -546,15 +511,7 @@ require_resolved_horizon = false
 <problem>
 use_traj_table = true
 traj_file = trajectories/eleven_orbits.dat
-unresolved_sink = true
-sink_radius = 0.0
-sink_width = -1.0
-sink_cells_per_radius = 10.0
-sink_resolved_cells_across_horizon = 20.0
-sink_timescale = 250.0
-sink_density_floor = 1.0e-6
-sink_pressure_floor = 1.0e-8
-thin_disk_cooling = true
+cooling_source = thin_disk
 thin_cooling_h_over_r = 0.03
 thin_cooling_timescale_orbits = 1.0
 
@@ -563,8 +520,8 @@ radius_0_rad = 24.0
 radius_0_reflevel = 0
 ```
 
-Excision remains enabled.  The sink is only an additional drain where the local
-horizon resolution is insufficient.
+Excision remains enabled.  The pgen prints a warning if the local excision
+radius has fewer than 10 cells across its diameter.
 
 ### 4. Zoom Restart With Per-Hole Resolution
 
@@ -580,12 +537,6 @@ ncycle_check = 1
 prolong_primitives = false
 
 <problem>
-unresolved_sink = true
-sink_radius = 0.0
-sink_width = -1.0
-sink_cells_per_radius = 10.0
-sink_resolved_cells_across_horizon = 20.0
-
 amr_condition = tracker
 tracker_1_rad = 3.0
 tracker_2_rad = 5.0
@@ -595,10 +546,6 @@ tracker_2_reflevel = 3
 radius_0_rad = 12.0
 radius_0_reflevel = 1
 ```
-
-The sink radius follows the local resolution around each hole.  Once a hole
-satisfies `2*r_H/dx >= 20`, that hole's sink turns off even if the other hole's
-sink remains active.
 
 ### 5. Legacy Tracker Compatibility
 
@@ -629,12 +576,10 @@ Run these checks on a reduced problem before a long run:
 - Confirm the trajectory table covers the full time range.
 - Confirm each table spin satisfies `|chi| <= 1`.
 - For resolved excision, check `2*r_H/dx` near each hole.
-- For unresolved sink stages, check that the sink turns off after refinement
-  when the configured resolution criterion is met.
 - Output `mhd_divb` and verify the maximum remains at roundoff or within the
   expected prolongation/restriction error for the mesh hierarchy.
-- Track `sigma = b^2/rho` inside the sink or excision region when testing
-  magnetic damping.
+- Track `sigma = b^2/rho` inside the excision region when testing magnetic
+  damping.
 - Keep output cadence low for many-orbit low-resolution stages to avoid
   generating excessive local files.
 
@@ -644,8 +589,6 @@ Run these checks on a reduced problem before a long run:
 - No attenuation/window function is applied between the two Kerr-Schild holes.
 - Table positions use Hermite interpolation, while table masses and spins use
   linear interpolation.
-- The unresolved sink is a coarse-grid fallback, not a replacement for a
-  resolved horizon.
 - Magnetic damping modifies the CT EMF, not face-centered magnetic fields
   directly.
 - `amr_condition = tracker` follows the trajectory points, not an apparent

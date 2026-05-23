@@ -33,7 +33,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
   coord_data.smooth_excise = false;
   coord_data.smooth_excise_width = 1.0;
   coord_data.smooth_excise_lapse_width = 0.05;
-  coord_data.smooth_excise_inflow_speed = 0.0;
   coord_data.smooth_excise_sigma_max = -1.0;
   coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
   for (int n = 0; n < 3; ++n) {
@@ -105,22 +104,8 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
           "coord", "smooth_excision_width", default_smooth_width);
       coord_data.smooth_excise_lapse_width = pin->GetOrAddReal(
           "coord", "smooth_excision_lapse_width", 0.05);
-      coord_data.smooth_excise_inflow_speed = pin->GetOrAddReal(
-          "coord", "smooth_excision_inflow_speed", 0.25);
       coord_data.smooth_excise_sigma_max = pin->GetOrAddReal(
           "coord", "smooth_excision_sigma_max", -1.0);
-      if (coord_data.smooth_excise &&
-          (coord_data.smooth_excise_width <= 0.0 ||
-           coord_data.smooth_excise_lapse_width <= 0.0 ||
-           coord_data.smooth_excise_inflow_speed < 0.0 ||
-           coord_data.smooth_excise_sigma_max == 0.0)) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
-                  << __LINE__ << std::endl
-                  << "smooth_excision requires positive width/lapse_width and "
-                  << "non-negative inflow_speed; sigma_max must be positive or negative "
-                  << "to disable" << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
 
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
@@ -142,6 +127,24 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
                     << "Unknown excision method: " << emethod << std::endl;
           std::exit(EXIT_FAILURE);
         }
+      }
+      if (coord_data.smooth_excise &&
+          coord_data.excision_scheme != ExcisionScheme::puncture) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "smooth_excision currently requires "
+                  << "coord/excision_scheme=puncture" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (coord_data.smooth_excise &&
+          (coord_data.smooth_excise_width <= 0.0 ||
+           coord_data.smooth_excise_lapse_width <= 0.0 ||
+           coord_data.smooth_excise_sigma_max == 0.0)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "smooth_excision requires positive width/lapse_width; "
+                  << "sigma_max must be positive or negative to disable" << std::endl;
+        std::exit(EXIT_FAILURE);
       }
 
       // boolean masks allocation
