@@ -72,6 +72,7 @@ struct CoordData {
   Real rexcise;                    // excision radius (SKS)
   Real dexcise;                    // rest-mass density inside excised region
   Real pexcise;                    // pressure inside excised region
+  Real texcise;                    // temperature target inside excised region
   Real flux_excise_r;              // reduce to first-order inside this radius
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
@@ -85,8 +86,10 @@ struct CoordData {
   Real punc_1_rad;
   bool smooth_excise;              // smoothly drain primitive variables inside horizon
   Real smooth_excise_width;        // radial width of drain layer inside geometric masks
+  Real smooth_excise_puncture_width_fraction; // puncture smooth width / punc_rad
   Real smooth_excise_lapse_width;  // lapse width of drain layer for lapse masks
   Real smooth_excise_sigma_max;    // optional B^2/rho cap inside smooth excision
+  Real smooth_excise_temp_ceil;     // optional hard p/rho ceiling inside smooth region
 };
 
 //----------------------------------------------------------------------------------------

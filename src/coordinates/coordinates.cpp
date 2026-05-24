@@ -32,8 +32,10 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
   coord_data.bh_excise = false;
   coord_data.smooth_excise = false;
   coord_data.smooth_excise_width = 1.0;
+  coord_data.smooth_excise_puncture_width_fraction = 1.0;
   coord_data.smooth_excise_lapse_width = 0.05;
   coord_data.smooth_excise_sigma_max = -1.0;
+  coord_data.smooth_excise_temp_ceil = -1.0;
   coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
   for (int n = 0; n < 3; ++n) {
     coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
@@ -71,7 +73,16 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
-      coord_data.pexcise = pin->GetReal("coord","pexcise");
+      coord_data.texcise = pin->GetOrAddReal("coord","texcise", -1.0);
+      coord_data.pexcise = (coord_data.texcise > 0.0) ?
+          coord_data.dexcise*coord_data.texcise : pin->GetReal("coord","pexcise");
+      if (coord_data.texcise == 0.0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "coord/texcise must be positive or negative to disable"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       for (int n = 0; n < 3; ++n) {
         coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
         coord_data.punc_0_spin[n] = coord_data.punc_1_spin[n] = 0.0;
@@ -102,10 +113,14 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       Real default_smooth_width = fmax(0.25*coord_data.rexcise, 2.0*max_dx);
       coord_data.smooth_excise_width = pin->GetOrAddReal(
           "coord", "smooth_excision_width", default_smooth_width);
+      coord_data.smooth_excise_puncture_width_fraction = pin->GetOrAddReal(
+          "coord", "smooth_excision_puncture_width_fraction", 1.0);
       coord_data.smooth_excise_lapse_width = pin->GetOrAddReal(
           "coord", "smooth_excision_lapse_width", 0.05);
       coord_data.smooth_excise_sigma_max = pin->GetOrAddReal(
           "coord", "smooth_excision_sigma_max", -1.0);
+      coord_data.smooth_excise_temp_ceil = pin->GetOrAddReal(
+          "coord", "smooth_excision_temp_ceil", -1.0);
 
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
@@ -138,12 +153,16 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       }
       if (coord_data.smooth_excise &&
           (coord_data.smooth_excise_width <= 0.0 ||
+           coord_data.smooth_excise_puncture_width_fraction <= 0.0 ||
            coord_data.smooth_excise_lapse_width <= 0.0 ||
-           coord_data.smooth_excise_sigma_max == 0.0)) {
+           coord_data.smooth_excise_sigma_max == 0.0 ||
+           coord_data.smooth_excise_temp_ceil == 0.0)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                   << __LINE__ << std::endl
-                  << "smooth_excision requires positive width/lapse_width; "
-                  << "sigma_max must be positive or negative to disable" << std::endl;
+                  << "smooth_excision requires positive width/"
+                  << "puncture_width_fraction/lapse_width; "
+                  << "sigma_max and temp_ceil must be positive "
+                  << "or negative to disable" << std::endl;
         std::exit(EXIT_FAILURE);
       }
 

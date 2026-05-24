@@ -199,6 +199,8 @@ struct bbh_pgen {
   Real smooth_b_damping_cfl;
   Real puncture_excise_rad1;
   Real puncture_excise_rad2;
+  Real puncture_excise_shrink_timescale;
+  Real puncture_excise_shrink_start_time;
   Real thin_cooling_h_over_r;
   Real thin_cooling_timescale_orbits;
   Real thin_cooling_cfl;
@@ -207,6 +209,8 @@ struct bbh_pgen {
   bool use_traj_table;
   bool smooth_b_damping;
   bool puncture_excise_cap_to_horizon;
+  bool puncture_excise_to_horizon;
+  bool puncture_excise_shrink_to_horizon;
   bool require_resolved_horizon;
   CoolingSource cooling_source;
   MetricDerivativeMethod metric_derivative_method;
@@ -317,6 +321,22 @@ Real LocalMeshSpacingAtPoint(MeshBlockPack *pmbp, Real x, Real y, Real z) {
 Real HorizonRadiusFromMassAndChi(Real mass, Real chix, Real chiy, Real chiz) {
   Real chi2 = SQR(chix) + SQR(chiy) + SQR(chiz);
   return mass * (1.0 + std::sqrt(std::max(1.0 - chi2, 0.0)));
+}
+
+Real SmoothExcisionRadiusToHorizon(const Real requested_radius,
+                                   const Real horizon_radius,
+                                   const Real time,
+                                   const Real timescale,
+                                   const bool set_to_horizon,
+                                   const bool shrink_to_horizon) {
+  Real start_radius = (requested_radius > 0.0) ? requested_radius : horizon_radius;
+  if (set_to_horizon) return horizon_radius;
+  if (!shrink_to_horizon) return start_radius;
+  start_radius = std::max(start_radius, horizon_radius);
+  if (!(timescale > 0.0)) return horizon_radius;
+  Real f = std::min(std::max(time/timescale, 0.0), 1.0);
+  f = f*f*(3.0 - 2.0*f);
+  return (1.0 - f)*start_radius + f*horizon_radius;
 }
 
 Real MinDynBBHHorizonRadius() {
@@ -632,7 +652,22 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.puncture_excise_rad1 = pin->GetOrAddReal("coord", "excise_1_rad", -1.0);
   bbh.puncture_excise_rad2 = pin->GetOrAddReal("coord", "excise_2_rad", -1.0);
   bbh.puncture_excise_cap_to_horizon = pin->GetOrAddBoolean(
-      "coord", "excise_cap_to_horizon", true);
+      "coord", "excise_cap_to_horizon", false);
+  bbh.puncture_excise_to_horizon = pin->GetOrAddBoolean(
+      "coord", "excise_to_horizon", false);
+  bbh.puncture_excise_shrink_to_horizon = pin->GetOrAddBoolean(
+      "coord", "excise_shrink_to_horizon", false);
+  bbh.puncture_excise_shrink_timescale = pin->GetOrAddReal(
+      "coord", "excise_shrink_timescale", 50.0);
+  bbh.puncture_excise_shrink_start_time = pmbp->pmesh->time;
+  if (bbh.puncture_excise_shrink_to_horizon &&
+      !(bbh.puncture_excise_shrink_timescale > 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "excise_shrink_to_horizon requires positive "
+              << "coord/excise_shrink_timescale" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.thin_cooling_h_over_r = pin->GetOrAddReal(
       "problem", "thin_cooling_h_over_r", 0.03);
   bbh.thin_cooling_timescale_orbits = pin->GetOrAddReal(
@@ -707,9 +742,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                                            traj0.q[AZ1]);
     Real rH2 = HorizonRadiusFromMassAndChi(m2, traj0.q[AX2], traj0.q[AY2],
                                            traj0.q[AZ2]);
-    Real r0 = (bbh.puncture_excise_rad1 > 0.0) ? bbh.puncture_excise_rad1 : rH1;
-    Real r1 = (bbh.puncture_excise_rad2 > 0.0) ? bbh.puncture_excise_rad2 : rH2;
-    if (bbh.puncture_excise_cap_to_horizon) {
+    Real r0 = SmoothExcisionRadiusToHorizon(
+        bbh.puncture_excise_rad1, rH1, 0.0, bbh.puncture_excise_shrink_timescale,
+        bbh.puncture_excise_to_horizon, bbh.puncture_excise_shrink_to_horizon);
+    Real r1 = SmoothExcisionRadiusToHorizon(
+        bbh.puncture_excise_rad2, rH2, 0.0, bbh.puncture_excise_shrink_timescale,
+        bbh.puncture_excise_to_horizon, bbh.puncture_excise_shrink_to_horizon);
+    if (bbh.puncture_excise_cap_to_horizon &&
+        !bbh.puncture_excise_to_horizon &&
+        !bbh.puncture_excise_shrink_to_horizon) {
       r0 = std::min(r0, rH1);
       r1 = std::min(r1, rH2);
     }
@@ -1551,11 +1592,17 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
                                          traj.q[AZ1]);
   Real rH2 = HorizonRadiusFromMassAndChi(m2_ex, traj.q[AX2], traj.q[AY2],
                                          traj.q[AZ2]);
-  coord.punc_0_rad = (bbh_.puncture_excise_rad1 > 0.0) ?
-      bbh_.puncture_excise_rad1 : rH1;
-  coord.punc_1_rad = (bbh_.puncture_excise_rad2 > 0.0) ?
-      bbh_.puncture_excise_rad2 : rH2;
-  if (bbh_.puncture_excise_cap_to_horizon) {
+  coord.punc_0_rad = SmoothExcisionRadiusToHorizon(
+      bbh_.puncture_excise_rad1, rH1, tt - bbh_.puncture_excise_shrink_start_time,
+      bbh_.puncture_excise_shrink_timescale,
+      bbh_.puncture_excise_to_horizon, bbh_.puncture_excise_shrink_to_horizon);
+  coord.punc_1_rad = SmoothExcisionRadiusToHorizon(
+      bbh_.puncture_excise_rad2, rH2, tt - bbh_.puncture_excise_shrink_start_time,
+      bbh_.puncture_excise_shrink_timescale,
+      bbh_.puncture_excise_to_horizon, bbh_.puncture_excise_shrink_to_horizon);
+  if (bbh_.puncture_excise_cap_to_horizon &&
+      !bbh_.puncture_excise_to_horizon &&
+      !bbh_.puncture_excise_shrink_to_horizon) {
     coord.punc_0_rad = std::min(coord.punc_0_rad, rH1);
     coord.punc_1_rad = std::min(coord.punc_1_rad, rH2);
   }

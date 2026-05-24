@@ -60,6 +60,7 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
   auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
+  auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
   Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
   Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
   Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
@@ -218,18 +219,22 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
           w.vz = twvz;
         }
         Real keep = 1.0 - excise_weight;
+        Real etarget = pexcise_/gm1;
         w.d = keep*w.d + excise_weight*dexcise_;
         w.vx = keep*w.vx + excise_weight*twvx;
         w.vy = keep*w.vy + excise_weight*twvy;
         w.vz = keep*w.vz + excise_weight*twvz;
-        w.e = keep*w.e + excise_weight*(pexcise_/gm1);
+        w.e = keep*w.e + excise_weight*etarget;
+        if (excise_temp_ceil_ > 0.0) {
+          w.e = fmin(w.e, excise_temp_ceil_*w.d/gm1);
+        }
         if (!(w.d > 0.0) || !(w.e > 0.0) || !isfinite(w.d) || !isfinite(w.e) ||
             !isfinite(w.vx) || !isfinite(w.vy) || !isfinite(w.vz)) {
           w.d = dexcise_;
           w.vx = twvx;
           w.vy = twvy;
           w.vz = twvz;
-          w.e = pexcise_/gm1;
+          w.e = etarget;
           c2p_failure = false;
         }
         smooth_applied = true;

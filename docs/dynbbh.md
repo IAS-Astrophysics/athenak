@@ -174,13 +174,37 @@ excise = true
 excision_scheme = puncture
 smooth_excision = true
 smooth_excision_sigma_max = 1.0e5
+smooth_excision_puncture_width_fraction = 1.0
+smooth_excision_temp_ceil = -1.0
 dexcise = 1.0e-10
-pexcise = 1.0e-18
+texcise = 1.0e-8
 require_resolved_horizon = false
 ```
 
 The pgen updates `punc_0`, `punc_1`, spins, velocities, and horizon radii from
 the current trajectory.  Excision remains active whenever `coord/excise=true`.
+By default, explicit `excise_1_rad` and `excise_2_rad` values are used when they
+are positive; otherwise the local Kerr-Schild horizon radius is used.  Set
+`excise_to_horizon = true` to ignore explicit radii and use the horizon radius
+for both holes.  Set `excise_shrink_to_horizon = true` to smoothly reduce the
+current explicit radius to the horizon radius over
+`excise_shrink_timescale` (default `50 M`) after each run/restart begins.  The
+puncture smooth-excision weight always uses a transition width equal to
+`smooth_excision_puncture_width_fraction * punc_rad`, so the smooth layer
+follows the time-dependent radius.  The default fraction is `1.0`; with this
+default, the puncture smooth weight tapers across the full radius.  A value of
+`0.5` recovers the older behavior where the inner half of the radius is fully
+weighted and the outer half is the transition.  The same updated `punc_rad`
+values feed flux excision, smooth primitive damping, and the smooth magnetic
+damping weights.
+If `smooth_excision_temp_ceil > 0`, the post-blend thermal state is also
+strictly capped inside cells with nonzero smooth-excision weight.  In the
+Valencia/dyn GRMHD path this caps pressure through the EOS.  This is a hard
+local ceiling for keeping the excision region cold; it is not applied where the
+smooth puncture weight is zero.
+`texcise` specifies the smooth-excision target temperature directly; when
+`texcise > 0`, the code derives the excision pressure target from the EOS and
+`dexcise`.  If `texcise < 0`, the legacy `pexcise` pressure target is used.
 
 For the smooth-excision equations and constrained-transport discussion, see
 `docs/smooth_excision_procedure.tex` and the compiled PDF.

@@ -242,6 +242,7 @@ void Coordinates::UpdateExcisionMasks() {
 
     Real &punc_0_r = coord_data.punc_0_rad;
     Real &punc_1_r = coord_data.punc_1_rad;
+    Real width_fraction = coord_data.smooth_excise_puncture_width_fraction;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -270,8 +271,8 @@ void Coordinates::UpdateExcisionMasks() {
                           (punc_1_r > 0.0 && r1 <= punc_1_r));
       floor(m,k,j,i) = excise;
       flux(m,k,j,i) = flux_excise;
-      Real punc_0_width = 0.5*punc_0_r;
-      Real punc_1_width = 0.5*punc_1_r;
+      Real punc_0_width = width_fraction*punc_0_r;
+      Real punc_1_width = width_fraction*punc_1_r;
       Real w0 = (punc_0_width > 0.0) ? SmoothStep01((punc_0_r - r0)/punc_0_width) : 0.0;
       Real w1 = (punc_1_width > 0.0) ? SmoothStep01((punc_1_r - r1)/punc_1_width) : 0.0;
       weight(m,k,j,i) = fmax(w0, w1);

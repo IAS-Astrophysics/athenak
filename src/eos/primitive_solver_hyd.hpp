@@ -322,8 +322,10 @@ class PrimitiveSolverHydro {
     auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
     auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
     auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+    auto &texcise_ = pmy_pack->pcoord->coord_data.texcise;
     auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
     auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
+    auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
     Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
     Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
     Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
@@ -466,6 +468,8 @@ class PrimitiveSolverHydro {
             // default inside an excised region.
             prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
           }
+          prim_pt[PPR] = (texcise_ > 0.0) ?
+              eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]) : pexcise_;
           prim_pt[PTM] =
             eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
           result.error = Primitive::Error::SUCCESS;
@@ -490,12 +494,13 @@ class PrimitiveSolverHydro {
         }
         if (result.error != Primitive::Error::SUCCESS) {
           prim_pt[PRH] = rhotarget;
-          prim_pt[PPR] = pexcise_;
           for (int n = 0; n < nscal; n++) {
             prim_pt[PYF + n] = cons_pt[CDN] != 0.0 ? cons_pt[CYD + n]/cons_pt[CDN] : 0.0;
           }
           excise_weight = 1.0;
         }
+        Real ptarget = (texcise_ > 0.0) ?
+            eos_.GetPressure(rhotarget, texcise_, &prim_pt[PYF]) : pexcise_;
         Real bx0, by0, bz0, bx1, by1, bz1;
         ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
                                     p0_vx, p0_vy, p0_vz, &bx0, &by0, &bz0);
@@ -533,7 +538,11 @@ class PrimitiveSolverHydro {
         prim_pt[PVX] = keep*prim_pt[PVX] + excise_weight*twvx;
         prim_pt[PVY] = keep*prim_pt[PVY] + excise_weight*twvy;
         prim_pt[PVZ] = keep*prim_pt[PVZ] + excise_weight*twvz;
-        prim_pt[PPR] = keep*prim_pt[PPR] + excise_weight*pexcise_;
+        prim_pt[PPR] = keep*prim_pt[PPR] + excise_weight*ptarget;
+        if (excise_temp_ceil_ > 0.0) {
+          prim_pt[PPR] = fmin(prim_pt[PPR],
+              eos_.GetPressure(prim_pt[PRH], excise_temp_ceil_, &prim_pt[PYF]));
+        }
         prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
         bool smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
                                     isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
@@ -545,9 +554,13 @@ class PrimitiveSolverHydro {
           prim_pt[PVX] = twvx;
           prim_pt[PVY] = twvy;
           prim_pt[PVZ] = twvz;
-          prim_pt[PPR] = pexcise_;
+          prim_pt[PPR] = ptarget;
           for (int n = 0; n < nscal; n++) {
             prim_pt[PYF + n] = cons_pt[CDN] != 0.0 ? cons_pt[CYD + n]/cons_pt[CDN] : 0.0;
+          }
+          if (excise_temp_ceil_ > 0.0) {
+            prim_pt[PPR] = fmin(prim_pt[PPR],
+                eos_.GetPressure(prim_pt[PRH], excise_temp_ceil_, &prim_pt[PYF]));
           }
           prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
           smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&

@@ -60,6 +60,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
   auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
   auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
+  auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
   Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
   Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
   Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
@@ -242,6 +243,9 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.vy = keep*w.vy + excise_weight*twvy;
         w.vz = keep*w.vz + excise_weight*twvz;
         w.e = keep*w.e + excise_weight*etarget;
+        if (excise_temp_ceil_ > 0.0) {
+          w.e = fmin(w.e, excise_temp_ceil_*w.d/gm1);
+        }
         if (!(w.d > 0.0) || !(w.e > 0.0) || !isfinite(w.d) || !isfinite(w.e) ||
             !isfinite(w.vx) || !isfinite(w.vy) || !isfinite(w.vz)) {
           w.d = dtarget;
