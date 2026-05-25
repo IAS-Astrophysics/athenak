@@ -479,6 +479,8 @@ class MultigridDriver {
   virtual void CalculateDefectOctet(MGOctet &oct, int rlev) = 0;
   virtual void CalculateFASRHSOctet(MGOctet &oct, int rlev) = 0;
   virtual void DiagnosticRestrictOctets(int lev) {}
+  virtual void DiagnosticCompositeBridgeTransfer(bool initflag,
+                                                 bool restrict_from_transfer_level) {}
   virtual void ProlongateOctetBoundariesFluxCons(MGOctet &oct,
        std::vector<Real> &cbuf, const std::vector<bool> &ncoarse);
 

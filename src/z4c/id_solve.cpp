@@ -463,6 +463,21 @@ struct CompositeTauStats {
   Real consistency_max = 0.0;
 };
 
+struct CompositeBridgeStats {
+  long long valid_dst = 0;
+  long long staging_skipped = 0;
+  long long covered_skipped = 0;
+  long long half_weight = 0;
+  long long onesided = 0;
+  long long fallback = 0;
+  long long insufficient_valid = 0;
+  long long physical_boundary = 0;
+  long long refinement_interface = 0;
+  Real old_mismatch_sum2 = 0.0;
+  Real old_mismatch_max = 0.0;
+  long long old_mismatch_count = 0;
+};
+
 KOKKOS_INLINE_FUNCTION
 void AddRestrictionStats(CompositeRestrictionStats &dst,
                          const CompositeRestrictionStats &src) {
@@ -850,6 +865,37 @@ CompositeTauStats ReduceCompositeTauStats(const CompositeTauStats &local) {
   return global;
 }
 
+CompositeBridgeStats ReduceCompositeBridgeStats(const CompositeBridgeStats &local) {
+  CompositeBridgeStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.valid_dst, &global.valid_dst, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.staging_skipped, &global.staging_skipped, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.covered_skipped, &global.covered_skipped, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.half_weight, &global.half_weight, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided, &global.onesided, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.fallback, &global.fallback, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.insufficient_valid, &global.insufficient_valid, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.physical_boundary, &global.physical_boundary, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.refinement_interface, &global.refinement_interface, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.old_mismatch_sum2, &global.old_mismatch_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.old_mismatch_max, &global.old_mismatch_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.old_mismatch_count, &global.old_mismatch_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
 void PrintCompositeRestrictionStats(const char *entity, int level, const char *field,
                                     int mode, const CompositeRestrictionStats &stats) {
   if (global_variable::my_rank != 0) return;
@@ -896,6 +942,51 @@ void PrintCompositeTauStats(int fine_level, int coarse_level,
             << " tau_rms=" << tau
             << " consistency_max=" << stats.consistency_max
             << " consistency_rms=" << consistency << std::endl;
+}
+
+void PrintCompositeBridgeStats(const char *entity, int level, const char *region,
+                               const CompositeBridgeStats &stats) {
+  if (global_variable::my_rank != 0) return;
+  const Real old_rms = (stats.old_mismatch_count > 0)
+      ? std::sqrt(stats.old_mismatch_sum2/static_cast<Real>(stats.old_mismatch_count)) : 0.0;
+  std::cout << "CTS composite bridge:"
+            << " entity=" << entity
+            << " level=" << level
+            << " region=" << region
+            << " valid_dst=" << stats.valid_dst
+            << " staging_skipped=" << stats.staging_skipped
+            << " covered_skipped=" << stats.covered_skipped
+            << " half_weight=" << stats.half_weight
+            << " onesided=" << stats.onesided
+            << " fallback=" << stats.fallback
+            << " insufficient_valid=" << stats.insufficient_valid
+            << " physical_boundary=" << stats.physical_boundary
+            << " refinement_interface=" << stats.refinement_interface
+            << " ||R_f||=0 ||L_H_Ru||=0 ||R_L_h||=0 ||tau||=0"
+            << " tau_max=0 tau_rms=0"
+            << " old_state_mismatch_max=" << stats.old_mismatch_max
+            << " old_state_mismatch_rms=" << old_rms << std::endl;
+}
+
+template <typename ValidFn>
+bool CompositeBridgeAxisSupported(const ValidFn &valid, int i, int j, int k, int axis,
+                                  bool &used_onesided) {
+  auto at = [&](int off) {
+    const int ii = i + ((axis == 0) ? off : 0);
+    const int jj = j + ((axis == 1) ? off : 0);
+    const int kk = k + ((axis == 2) ? off : 0);
+    return valid(ii, jj, kk);
+  };
+  if (at(-1) && at(1)) return true;
+  if (at(-1) && at(-2) && at(-3)) {
+    used_onesided = true;
+    return true;
+  }
+  if (at(1) && at(2) && at(3)) {
+    used_onesided = true;
+    return true;
+  }
+  return false;
 }
 
 Real CompositeRestrictionPolynomial(int i, int j, int k) {
@@ -2627,6 +2718,8 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   debug_composite_tau_ =
       pin->GetOrAddBoolean("id_solve", "debug_composite_tau", false);
   composite_tau_deferred_note_printed_ = false;
+  debug_composite_bridge_ =
+      pin->GetOrAddBoolean("id_solve", "debug_composite_bridge", false);
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -3890,6 +3983,197 @@ void IDCTSMultigridDriver::DiagnosticRestrictOctets(int lev) {
   CompositeRestrictionStats global_def = ReduceCompositeRestrictionStats(local_def);
   PrintCompositeRestrictionStats("octet", lev, "u", composite_restriction_, global_u);
   PrintCompositeRestrictionStats("octet", lev, "def", composite_restriction_, global_def);
+}
+
+void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
+    bool initflag, bool restrict_from_transfer_level) {
+  if (!composite_fas_) return;
+  if (initflag) return;
+
+  // This hook runs after the MeshBlock transfer level is copied into root/octet
+  // storage.  If restrict_from_transfer_level is true the transfer first computes
+  // def=src-L(u); otherwise the transfer-level src already contains the
+  // restricted fine defect from the preceding MeshBlock RestrictPack call.  In
+  // both cases the current legacy bridge only copies R(f_h-L_h) and R(u_h); a
+  // future composite bridge RHS must add L_H(Ru_h) on these same valid
+  // root/octet cells.  The audit below deliberately treats covered/staging cells
+  // as stencil support candidates only, never as independent solved unknowns.
+  (void)restrict_from_transfer_level;
+  CompositeBridgeStats root_local;
+  CompositeBridgeStats octet_active_local;
+  CompositeBridgeStats octet_staging_local;
+  const int ngh = mgroot_->GetGhostCells();
+  if (global_variable::my_rank == 0) {
+    const int root_level = nrootlevel_ - 1;
+    auto root_mask = mgroot_->GetCompositeMaskLevel_h(root_level);
+    auto root_u = mgroot_->GetCurrentData_h();
+
+    auto classify_cell = [](CompositeBridgeStats &stats, bool valid, bool covered,
+                            bool physical, bool interface, bool supported,
+                            bool used_onesided, bool solved_cell) {
+      if (!solved_cell) {
+        ++stats.staging_skipped;
+        if (covered) ++stats.covered_skipped;
+        return;
+      }
+      if (!valid) {
+        if (covered) ++stats.covered_skipped;
+        else ++stats.staging_skipped;
+        return;
+      }
+      ++stats.valid_dst;
+      if (physical) ++stats.physical_boundary;
+      if (interface) ++stats.refinement_interface;
+      if (!supported) ++stats.insufficient_valid;
+      else if (used_onesided) ++stats.onesided;
+      else ++stats.half_weight;
+    };
+
+    for (int k = 0; k < nrbx3_; ++k) {
+      for (int j = 0; j < nrbx2_; ++j) {
+        for (int i = 0; i < nrbx1_; ++i) {
+          const int ii = i + ngh;
+          const int jj = j + ngh;
+          const int kk = k + ngh;
+          const bool valid = root_mask(0, COMP_VALID, kk, jj, ii) != 0;
+          const bool covered = root_mask(0, COMP_COVERED, kk, jj, ii) != 0;
+          bool used_onesided = false;
+          auto valid_root = [&](int ai, int aj, int ak) {
+            return ai >= 0 && ai < nrbx1_ && aj >= 0 && aj < nrbx2_ &&
+                   ak >= 0 && ak < nrbx3_ &&
+                   root_mask(0, COMP_VALID, ak + ngh, aj + ngh, ai + ngh) != 0;
+          };
+          bool supported = true;
+          for (int axis = 0; axis < 3; ++axis) {
+            if (!CompositeBridgeAxisSupported(valid_root, i, j, k, axis,
+                                              used_onesided)) {
+              supported = false;
+              break;
+            }
+          }
+          const bool physical = (i == 0 || i == nrbx1_ - 1 ||
+                                 j == 0 || j == nrbx2_ - 1 ||
+                                 k == 0 || k == nrbx3_ - 1);
+          const bool interface = root_mask(0, COMP_INTERFACE, kk, jj, ii) != 0;
+          classify_cell(root_local, valid, covered, physical, interface,
+                        supported, used_onesided, true);
+        }
+      }
+    }
+
+    for (int l = 0; l < nreflevel_; ++l) {
+      const int maxlx1 = nrbx1_ << l;
+      const int maxlx2 = nrbx2_ << l;
+      const int maxlx3 = nrbx3_ << l;
+      for (int o = 0; o < noctets_[l]; ++o) {
+        const MGOctet &oct = octets_[l][o];
+        auto valid_oct = [&](int ai, int aj, int ak) {
+          return ai >= 0 && ai < oct.nc && aj >= 0 && aj < oct.nc &&
+                 ak >= 0 && ak < oct.nc &&
+                 oct.Mask(COMP_VALID, ak, aj, ai) != 0;
+        };
+        for (int k = 0; k < oct.nc; ++k) {
+          for (int j = 0; j < oct.nc; ++j) {
+            for (int i = 0; i < oct.nc; ++i) {
+              const bool active = (i >= ngh && i <= ngh + 1 &&
+                                   j >= ngh && j <= ngh + 1 &&
+                                   k >= ngh && k <= ngh + 1);
+              CompositeBridgeStats &stats = active ? octet_active_local
+                                                    : octet_staging_local;
+              const bool valid = oct.Mask(COMP_VALID, k, j, i) != 0;
+              const bool covered = oct.Mask(COMP_COVERED, k, j, i) != 0;
+              bool used_onesided = false;
+              bool supported = true;
+              for (int axis = 0; axis < 3; ++axis) {
+                if (!CompositeBridgeAxisSupported(valid_oct, i, j, k, axis,
+                                                  used_onesided)) {
+                  supported = false;
+                  break;
+                }
+              }
+              const int ci = i - ngh;
+              const int cj = j - ngh;
+              const int ck = k - ngh;
+              const bool physical =
+                  active && ((oct.loc.lx1 == 0 && ci == 0) ||
+                             (oct.loc.lx1 == maxlx1 - 1 && ci == 1) ||
+                             (oct.loc.lx2 == 0 && cj == 0) ||
+                             (oct.loc.lx2 == maxlx2 - 1 && cj == 1) ||
+                             (oct.loc.lx3 == 0 && ck == 0) ||
+                             (oct.loc.lx3 == maxlx3 - 1 && ck == 1));
+              const bool interface = oct.Mask(COMP_INTERFACE, k, j, i) != 0;
+              classify_cell(stats, valid, covered, physical, interface,
+                            supported, used_onesided, active);
+            }
+          }
+        }
+      }
+    }
+
+    if (saved_block_u_payload_valid_) {
+      const auto loc = pmy_mesh_->lloc_eachmb;
+      for (int n = 0; n < nbtotal_; ++n) {
+        const int i = static_cast<int>(loc[n].lx1);
+        const int j = static_cast<int>(loc[n].lx2);
+        const int k = static_cast<int>(loc[n].lx3);
+        CompositeBridgeStats *stats = &root_local;
+        auto read_u = [&](int v) {
+          return root_u(0, v, k + ngh, j + ngh, i + ngh);
+        };
+        if (loc[n].level != locrootlevel_) {
+          LogicalLocation oloc;
+          oloc.lx1 = (loc[n].lx1 >> 1);
+          oloc.lx2 = (loc[n].lx2 >> 1);
+          oloc.lx3 = (loc[n].lx3 >> 1);
+          oloc.level = loc[n].level - 1;
+          const int olev = oloc.level - locrootlevel_;
+          const int oid = FindOctetIdOrDie(olev, oloc,
+                                           "DiagnosticCompositeBridgeTransfer");
+          const int oi = (i & 1) + ngh;
+          const int oj = (j & 1) + ngh;
+          const int ok = (k & 1) + ngh;
+          const MGOctet &oct = octets_[olev][oid];
+          stats = &octet_active_local;
+          for (int v = 0; v < nvar_; ++v) {
+            const Real expected =
+                saved_block_u_payload_[static_cast<std::size_t>(v)*nbtotal_ + n];
+            const Real diff = oct.U(v, ok, oj, oi) - expected;
+            stats->old_mismatch_sum2 += diff*diff;
+            stats->old_mismatch_max = std::max(stats->old_mismatch_max, std::abs(diff));
+            ++stats->old_mismatch_count;
+          }
+          continue;
+        }
+        for (int v = 0; v < nvar_; ++v) {
+          const Real expected =
+              saved_block_u_payload_[static_cast<std::size_t>(v)*nbtotal_ + n];
+          const Real diff = read_u(v) - expected;
+          stats->old_mismatch_sum2 += diff*diff;
+          stats->old_mismatch_max = std::max(stats->old_mismatch_max, std::abs(diff));
+          ++stats->old_mismatch_count;
+        }
+      }
+    }
+  }
+
+  CompositeBridgeStats root = ReduceCompositeBridgeStats(root_local);
+  CompositeBridgeStats octet_active = ReduceCompositeBridgeStats(octet_active_local);
+  CompositeBridgeStats octet_staging = ReduceCompositeBridgeStats(octet_staging_local);
+  if (debug_composite_bridge_ || debug_composite_tau_) {
+    PrintCompositeBridgeStats("root", nrootlevel_ - 1, "active", root);
+    PrintCompositeBridgeStats("octet", 0, "active", octet_active);
+    PrintCompositeBridgeStats("octet", 0, "staging", octet_staging);
+  }
+  if (root.insufficient_valid + octet_active.insufficient_valid > 0) {
+    if (global_variable::my_rank == 0) {
+      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer"
+                << std::endl
+                << "CTS composite bridge has insufficient root/octet stencil support "
+                << "on valid solve cells; enable debug_composite_bridge for counts."
+                << std::endl;
+    }
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {

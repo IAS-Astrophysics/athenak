@@ -632,6 +632,7 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag, bool restrict_from
   mgroot_->current_level_ = nrootlevel_ - 1;
   root_sync_state_ = RootSyncState::HOST_MODIFIED;
   if (nreflevel_ == 0) SyncRootToDevice();
+  DiagnosticCompositeBridgeTransfer(initflag, restrict_from_transfer_level);
   mglevels_->current_level_ = saved_level;
   return;
 }

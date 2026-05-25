@@ -91,6 +91,8 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void CalculateDefectOctet(MGOctet &oct, int rlev) final;
   void CalculateFASRHSOctet(MGOctet &oct, int rlev) final;
   void DiagnosticRestrictOctets(int lev) final;
+  void DiagnosticCompositeBridgeTransfer(bool initflag,
+                                         bool restrict_from_transfer_level) final;
   bool SolutionApplied() const { return solution_applied_; }
 
  private:
@@ -136,6 +138,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool composite_restriction_self_check_done_;
   bool debug_composite_tau_;
   bool composite_tau_deferred_note_printed_;
+  bool debug_composite_bridge_;
 
   friend class IDCTSMultigrid;
 };
