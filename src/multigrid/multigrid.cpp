@@ -11,6 +11,7 @@
 // C++ headers
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>    // getenv
 #include <cstring>    // memset, memcpy
 #include <iostream>
 #include <sstream>    // stringstream
@@ -28,6 +29,25 @@
 #include "multigrid.hpp"
 
 namespace {
+
+bool MGDebugEnabled() {
+  static bool enabled = (std::getenv("ATHENA_MG_DEBUG") != nullptr);
+  return enabled;
+}
+
+void ReduceCorrectionStats(Real local_sum2, Real local_max, long long local_count,
+                           Real &rms, Real &maxabs) {
+  Real global_sum2 = local_sum2;
+  Real global_max = local_max;
+  long long global_count = local_count;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local_sum2, &global_sum2, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_max, &global_max, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_count, &global_count, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  rms = (global_count > 0) ? std::sqrt(global_sum2/static_cast<Real>(global_count)) : 0.0;
+  maxabs = global_max;
+}
 
 KOKKOS_INLINE_FUNCTION
 void DecodeNeighborIndexMG(const int idx, int &ox1, int &ox2, int &ox3,
@@ -57,22 +77,26 @@ void DecodeNeighborIndexMG(const int idx, int &ox1, int &ox2, int &ox3,
 
 KOKKOS_INLINE_FUNCTION
 void AdjustSendRangeForMG(int &il, int &iu, int &jl, int &ju, int &kl, int &ku,
-                          const MeshBoundaryBuffer &buf, int shift, int nx) {
+                          const MeshBoundaryBuffer &buf, int shift, int nx,
+                          int ngh) {
   while (shift > 0) {
     if (buf.faces.d_view(0) && (il == nx)) {
       int d = iu - il; il = il >> 1; iu = il + d;
     } else if (!buf.faces.d_view(0)) {
-      iu = ((iu - il) >> 1) + il;
+      il = ngh + ((il - ngh) >> 1);
+      iu = ngh + ((iu - ngh) >> 1);
     }
     if (buf.faces.d_view(1) && (jl == nx)) {
       int d = ju - jl; jl = jl >> 1; ju = jl + d;
     } else if (!buf.faces.d_view(1)) {
-      ju = ((ju - jl) >> 1) + jl;
+      jl = ngh + ((jl - ngh) >> 1);
+      ju = ngh + ((ju - ngh) >> 1);
     }
     if (buf.faces.d_view(2) && (kl == nx)) {
       int d = ku - kl; kl = kl >> 1; ku = kl + d;
     } else if (!buf.faces.d_view(2)) {
-      ku = ((ku - kl) >> 1) + kl;
+      kl = ngh + ((kl - ngh) >> 1);
+      ku = ngh + ((ku - ngh) >> 1);
     }
     --shift;
     nx = nx >> 1;
@@ -86,17 +110,20 @@ void AdjustRecvRangeForMG(int &il, int &iu, int &jl, int &ju, int &kl, int &ku,
     if (buf.faces.d_view(0) && il > 1) {
       int d = iu - il; il = (il + ngh) >> 1; iu = il + d;
     } else if (!buf.faces.d_view(0)) {
-      iu = ((iu - il) >> 1) + il;
+      il = ngh + ((il - ngh) >> 1);
+      iu = ngh + ((iu - ngh) >> 1);
     }
     if (buf.faces.d_view(1) && jl > 1) {
       int d = ju - jl; jl = (jl + ngh) >> 1; ju = jl + d;
     } else if (!buf.faces.d_view(1)) {
-      ju = ((ju - jl) >> 1) + jl;
+      jl = ngh + ((jl - ngh) >> 1);
+      ju = ngh + ((ju - ngh) >> 1);
     }
     if (buf.faces.d_view(2) && kl > 1) {
       int d = ku - kl; kl = (kl + ngh) >> 1; ku = kl + d;
     } else if (!buf.faces.d_view(2)) {
-      ku = ((ku - kl) >> 1) + kl;
+      kl = ngh + ((kl - ngh) >> 1);
+      ku = ngh + ((ku - ngh) >> 1);
     }
     --shift;
   }
@@ -467,18 +494,20 @@ void Multigrid::FillCoefficientBoundaries(int level) {
   if (ncoeff_ <= 0) return;
   int saved_level = current_level_;
   current_level_ = level;
+  int ll = nlevel_ - 1 - current_level_;
+  int ncells = indcs_.nx1 >> ll;
 
   if (pbval != nullptr) {
     DvceArray5D<Real> coeff = coeff_[current_level_].d_view;
     (void)pbval->InitRecvMG(ncoeff_);
     (void)pbval->PackAndSendMG(coeff);
+    Kokkos::fence();
     while (pbval->RecvAndUnpackMG(coeff) == TaskStatus::incomplete) {}
+    Kokkos::fence();
     while (pbval->ClearSend() == TaskStatus::incomplete) {}
     while (pbval->ClearRecv() == TaskStatus::incomplete) {}
   }
 
-  int ll = nlevel_ - 1 - current_level_;
-  int ncells = indcs_.nx1 >> ll;
   if (ncells < 1) {
     current_level_ = saved_level;
     return;
@@ -654,11 +683,18 @@ void Multigrid::FillCoefficientBoundaries(int level) {
           }
         }
       });
+    Kokkos::fence();
   }
 
-  if (pbval != nullptr && pmy_driver_->nreflevel_ > 0) {
+  if (pbval != nullptr && pmy_driver_->nreflevel_ > 0 && CanFillFineCoarseGhosts()) {
     DvceArray5D<Real> coeff = coeff_[current_level_].d_view;
     (void)pbval->FillFineCoarseMGGhosts(coeff);
+    Kokkos::fence();
+  } else if (pbval != nullptr && pmy_driver_->nreflevel_ > 0 && MGDebugEnabled()) {
+    std::cerr << "[rank " << global_variable::my_rank
+              << "] skipping coefficient fine/coarse MG ghosts at level "
+              << current_level_ << " with " << ncells << " active cell(s)"
+              << std::endl;
   }
   current_level_ = saved_level;
 }
@@ -885,7 +921,84 @@ void Multigrid::ProlongateAndCorrectPack() {
   je=js+(indcs_.nx2>>ll)-1;
   ke=ks+(indcs_.nx3>>ll)-1;
 
+  const bool debug_meshblock =
+      pmy_pack_ != nullptr && pmy_driver_->nreflevel_ > 0 && current_level_ == 0
+      && pmy_driver_->debug_meshblock_correction_
+      && pmy_driver_->meshblock_correction_debug_pending_;
+  Real level1_defect_before = 0.0;
+  std::vector<Real> level1_before;
+  const int fine_level = current_level_ + 1;
+  const int fine_ncells = (fine_level < nlevel_) ? GetLevelActiveCells(fine_level) : 0;
+  if (debug_meshblock) {
+    level1_defect_before = CalculateDiagnosticDefectRMS(fine_level);
+    if (!on_host_) Kokkos::deep_copy(u_[fine_level].h_view, u_[fine_level].d_view);
+    auto fine_h = u_[fine_level].h_view;
+    level1_before.reserve(static_cast<std::size_t>(nmmb_) * nvar_ * fine_ncells
+                          * fine_ncells * fine_ncells);
+    for (int m = 0; m < nmmb_; ++m) {
+      for (int v = 0; v < nvar_; ++v) {
+        for (int k = ngh_; k < ngh_ + fine_ncells; ++k) {
+          for (int j = ngh_; j < ngh_ + fine_ncells; ++j) {
+            for (int i = ngh_; i < ngh_ + fine_ncells; ++i) {
+              level1_before.push_back(fine_h(m, v, k, j, i));
+            }
+          }
+        }
+      }
+    }
+  }
+
   ComputeCorrection();
+
+  if (pmy_pack_ != nullptr && pmy_driver_->nreflevel_ > 0 && current_level_ == 0
+      && pmy_driver_->meshblock_correction_mode_ == 3) {
+    ClampCurrentCorrectionGhostsToActive();
+  }
+
+  if (debug_meshblock) {
+    if (!on_host_) Kokkos::deep_copy(u_[current_level_].h_view, u_[current_level_].d_view);
+    auto coarse_h = u_[current_level_].h_view;
+    const int nall = GetCurrentLevelActiveCells() + 2*ngh_;
+    Real active_sum2 = 0.0, active_max = 0.0;
+    Real ghost_sum2 = 0.0, ghost_max = 0.0;
+    long long active_count = 0, ghost_count = 0;
+    for (int m = 0; m < nmmb_; ++m) {
+      for (int v = 0; v < nvar_; ++v) {
+        for (int k = 0; k < nall; ++k) {
+          for (int j = 0; j < nall; ++j) {
+            for (int i = 0; i < nall; ++i) {
+              Real val = coarse_h(m, v, k, j, i);
+              bool active = (i == ngh_ && j == ngh_ && k == ngh_);
+              if (active) {
+                active_sum2 += val*val;
+                active_max = std::max(active_max, std::abs(val));
+                ++active_count;
+              } else {
+                ghost_sum2 += val*val;
+                ghost_max = std::max(ghost_max, std::abs(val));
+                ++ghost_count;
+              }
+            }
+          }
+        }
+      }
+    }
+    Real active_rms = 0.0, active_global_max = 0.0;
+    Real ghost_rms = 0.0, ghost_global_max = 0.0;
+    ReduceCorrectionStats(active_sum2, active_max, active_count,
+                          active_rms, active_global_max);
+    ReduceCorrectionStats(ghost_sum2, ghost_max, ghost_count,
+                          ghost_rms, ghost_global_max);
+    if (global_variable::my_rank == 0) {
+      std::cout << "CTS MeshBlock correction debug: level0 active corr max="
+                << active_global_max << " rms=" << active_rms
+                << " ghost max=" << ghost_global_max << " rms=" << ghost_rms
+                << " level1 defect before=" << level1_defect_before
+                << " active/defect_rms="
+                << ((level1_defect_before > 0.0) ? active_rms/level1_defect_before : 0.0)
+                << std::endl;
+    }
+  }
 
   if (on_host_) {
     ProlongateAndCorrect(u_[current_level_+1].h_view, u_[current_level_].h_view,
@@ -896,11 +1009,46 @@ void Multigrid::ProlongateAndCorrectPack() {
   }
 
   current_level_++;
+  if (debug_meshblock) {
+    if (!on_host_) Kokkos::deep_copy(u_[current_level_].h_view, u_[current_level_].d_view);
+    auto fine_h = u_[current_level_].h_view;
+    Real applied_sum2 = 0.0, applied_max = 0.0;
+    long long applied_count = 0;
+    std::size_t idx = 0;
+    for (int m = 0; m < nmmb_; ++m) {
+      for (int v = 0; v < nvar_; ++v) {
+        for (int k = ngh_; k < ngh_ + fine_ncells; ++k) {
+          for (int j = ngh_; j < ngh_ + fine_ncells; ++j) {
+            for (int i = ngh_; i < ngh_ + fine_ncells; ++i) {
+              Real diff = fine_h(m, v, k, j, i) - level1_before[idx++];
+              applied_sum2 += diff*diff;
+              applied_max = std::max(applied_max, std::abs(diff));
+              ++applied_count;
+            }
+          }
+        }
+      }
+    }
+    Real applied_rms = 0.0, applied_global_max = 0.0;
+    ReduceCorrectionStats(applied_sum2, applied_max, applied_count,
+                          applied_rms, applied_global_max);
+    Real level1_defect_after = CalculateDiagnosticDefectRMS(current_level_);
+    if (global_variable::my_rank == 0) {
+      std::cout << "CTS MeshBlock correction debug: applied level1 corr max="
+                << applied_global_max << " rms=" << applied_rms
+                << " level1 defect after=" << level1_defect_after
+                << " defect_ratio="
+                << ((level1_defect_before > 0.0)
+                    ? level1_defect_after/level1_defect_before : 0.0)
+                << std::endl;
+    }
+    pmy_driver_->meshblock_correction_debug_pending_ = false;
+  }
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::FMGProlongatePack()
-//! \brief Prolongate the solution for FMG (direct overwrite, always tricubic)
+//! \brief Prolongate the solution for FMG (direct overwrite, linear/cubic policy)
 
 void Multigrid::FMGProlongatePack() {
   int ll=nlevel_-1-current_level_;
@@ -1276,6 +1424,58 @@ void Multigrid::ComputeCorrection() {
   }
 }
 
+void Multigrid::ClampCurrentCorrectionGhostsToActive() {
+  const int ncells = GetCurrentLevelActiveCells();
+  const int nall = ncells + 2*ngh_;
+  if (on_host_) {
+    auto u = u_[current_level_].h_view;
+    par_for("Multigrid::ClampCorrectionGhostsToActive", HostExeSpace(),
+            0, nmmb_-1, 0, nvar_-1, 0, nall-1, 0, nall-1, 0, nall-1,
+    KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+      u(m, v, k, j, i) = u(m, v, ngh_, ngh_, ngh_);
+    });
+  } else {
+    auto u = u_[current_level_].d_view;
+    par_for("Multigrid::ClampCorrectionGhostsToActive", DevExeSpace(),
+            0, nmmb_-1, 0, nvar_-1, 0, nall-1, 0, nall-1, 0, nall-1,
+    KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+      u(m, v, k, j, i) = u(m, v, ngh_, ngh_, ngh_);
+    });
+  }
+}
+
+Real Multigrid::CalculateDiagnosticDefectRMS(int level) {
+  const int saved_level = current_level_;
+  current_level_ = level;
+  CalculateDefectPack();
+  if (!on_host_) {
+    Kokkos::deep_copy(def_[level].h_view, def_[level].d_view);
+  }
+  auto def_h = def_[level].h_view;
+  const int ncells = GetLevelActiveCells(level);
+  Real local_sum2 = 0.0;
+  Real local_max = 0.0;
+  long long local_count = 0;
+  for (int m = 0; m < nmmb_; ++m) {
+    for (int v = 0; v < nvar_; ++v) {
+      for (int k = ngh_; k < ngh_ + ncells; ++k) {
+        for (int j = ngh_; j < ngh_ + ncells; ++j) {
+          for (int i = ngh_; i < ngh_ + ncells; ++i) {
+            Real val = def_h(m, v, k, j, i);
+            local_sum2 += val*val;
+            local_max = std::max(local_max, std::abs(val));
+            ++local_count;
+          }
+        }
+      }
+    }
+  }
+  Real rms = 0.0, maxabs = 0.0;
+  ReduceCorrectionStats(local_sum2, local_max, local_count, rms, maxabs);
+  current_level_ = saved_level;
+  return rms;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::ProlongateAndCorrect(...)
 //! \brief Actual implementation of prolongation and correction (templated on view type)
@@ -1291,10 +1491,44 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
   const int j0 = jl, j1 = ju;
   const int i0 = il, i1 = iu;
 
+  const bool meshblock_transfer_correction =
+      pmy_pack_ != nullptr && pmy_driver_->nreflevel_ > 0 && current_level_ == 0;
+  const int mode = meshblock_transfer_correction
+                   ? pmy_driver_->meshblock_correction_mode_ : 2;
+  if (meshblock_transfer_correction && mode == 0) return;
+
   const int ll = pmy_driver_->fprolongation_; // copy host flag for capture
+  Real corr_omega = (pmy_pack_ == nullptr)
+                    ? pmy_driver_->root_correction_omega_
+                    : pmy_driver_->meshblock_correction_omega_;
+  if (meshblock_transfer_correction) {
+    corr_omega *= static_cast<Real>(pmy_driver_->meshblock_correction_sign_);
+  }
+  const Real cubic_fac = corr_omega / 32768.0;
+  const Real linear_fac = corr_omega * 0.015625;
 
   auto dst_ = dst;
   auto src_ = src;
+
+  if (meshblock_transfer_correction && mode == 1) {
+    par_for("Multigrid::ProlongateAndCorrect_injection", ExeSpace(),
+            m0, m1, v0, v1,
+    KOKKOS_LAMBDA(const int m, const int v) {
+      const Real corr = corr_omega * src_(m, v, kl, jl, il);
+      const int fk = fkl;
+      const int fj = fjl;
+      const int fi = fil;
+      dst_(m, v, fk,   fj,   fi)   += corr;
+      dst_(m, v, fk,   fj,   fi+1) += corr;
+      dst_(m, v, fk,   fj+1, fi)   += corr;
+      dst_(m, v, fk,   fj+1, fi+1) += corr;
+      dst_(m, v, fk+1, fj,   fi)   += corr;
+      dst_(m, v, fk+1, fj,   fi+1) += corr;
+      dst_(m, v, fk+1, fj+1, fi)   += corr;
+      dst_(m, v, fk+1, fj+1, fi+1) += corr;
+    });
+    return;
+  }
 
   if (ll == 1) { // tricubic
     par_for("Multigrid::ProlongateAndCorrect_tricubic", ExeSpace(),
@@ -1316,7 +1550,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         -  75.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )+  45.*src_(m,v,k+1,j-1,i+1)
         - 450.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )+ 270.*src_(m,v,k+1,j,  i+1)
         +  45.*src_(m,v,k+1,j+1,i-1)+  270.*src_(m,v,k+1,j+1,i  )-  27.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk,  fj,  fi+1) += (
         -  75.*src_(m,v,k-1,j-1,i-1)+  750.*src_(m,v,k-1,j-1,i  )+ 125.*src_(m,v,k-1,j-1,i+1)
@@ -1328,7 +1562,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         +  45.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )-  75.*src_(m,v,k+1,j-1,i+1)
         + 270.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
         -  27.*src_(m,v,k+1,j+1,i-1)+  270.*src_(m,v,k+1,j+1,i  )+  45.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk  ,fj+1,fi  ) += (
         -  75.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )+  45.*src_(m,v,k-1,j-1,i+1)
@@ -1340,7 +1574,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         +  45.*src_(m,v,k+1,j-1,i-1)+  270.*src_(m,v,k+1,j-1,i  )-  27.*src_(m,v,k+1,j-1,i+1)
         - 450.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )+ 270.*src_(m,v,k+1,j,  i+1)
         -  75.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )+  45.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk,  fj+1,fi+1) += (
         +  45.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )-  75.*src_(m,v,k-1,j-1,i+1)
@@ -1352,7 +1586,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         -  27.*src_(m,v,k+1,j-1,i-1)+  270.*src_(m,v,k+1,j-1,i  )+  45.*src_(m,v,k+1,j-1,i+1)
         + 270.*src_(m,v,k+1,j,  i-1)- 2700.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
         +  45.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )-  75.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk+1,fj,  fi  ) += (
         -  75.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )+  45.*src_(m,v,k-1,j-1,i+1)
@@ -1364,7 +1598,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         + 125.*src_(m,v,k+1,j-1,i-1)+  750.*src_(m,v,k+1,j-1,i  )-  75.*src_(m,v,k+1,j-1,i+1)
         + 750.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
         -  75.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )+  45.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk+1,fj,  fi+1) += (
         +  45.*src_(m,v,k-1,j-1,i-1)-  450.*src_(m,v,k-1,j-1,i  )-  75.*src_(m,v,k-1,j-1,i+1)
@@ -1376,7 +1610,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         -  75.*src_(m,v,k+1,j-1,i-1)+  750.*src_(m,v,k+1,j-1,i  )+ 125.*src_(m,v,k+1,j-1,i+1)
         - 450.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )+ 750.*src_(m,v,k+1,j,  i+1)
         +  45.*src_(m,v,k+1,j+1,i-1)-  450.*src_(m,v,k+1,j+1,i  )-  75.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk+1,fj+1,fi  ) += (
         +  45.*src_(m,v,k-1,j-1,i-1)+  270.*src_(m,v,k-1,j-1,i  )-  27.*src_(m,v,k-1,j-1,i+1)
@@ -1388,7 +1622,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         -  75.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )+  45.*src_(m,v,k+1,j-1,i+1)
         + 750.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )- 450.*src_(m,v,k+1,j,  i+1)
         + 125.*src_(m,v,k+1,j+1,i-1)+  750.*src_(m,v,k+1,j+1,i  )-  75.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;
+      ) * cubic_fac;
 
       dst_(m,v,fk+1,fj+1,fi+1) += (
         -  27.*src_(m,v,k-1,j-1,i-1)+  270.*src_(m,v,k-1,j-1,i  )+  45.*src_(m,v,k-1,j-1,i+1)
@@ -1400,7 +1634,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
         +  45.*src_(m,v,k+1,j-1,i-1)-  450.*src_(m,v,k+1,j-1,i  )-  75.*src_(m,v,k+1,j-1,i+1)
         - 450.*src_(m,v,k+1,j,  i-1)+ 4500.*src_(m,v,k+1,j,  i  )+ 750.*src_(m,v,k+1,j,  i+1)
         -  75.*src_(m,v,k+1,j+1,i-1)+  750.*src_(m,v,k+1,j+1,i  )+ 125.*src_(m,v,k+1,j+1,i+1)
-      ) / 32768.0;  
+      ) * cubic_fac;
     });
   } else { // trilinear
     par_for("Multigrid::ProlongateAndCorrect_trilinear", ExeSpace(),
@@ -1411,35 +1645,35 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
       const int fi = 2*(i-il) + fil;
 
       dst_(m,v,fk  ,fj  ,fi  ) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j-1,i-1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j-1,i-1)
                     +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j-1,i)+src_(m,v,k-1,j,i))
                     +3.0*(src_(m,v,k-1,j-1,i)+src_(m,v,k-1,j,i-1)+src_(m,v,k,j-1,i-1)));
       dst_(m,v,fk  ,fj  ,fi+1) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j-1,i+1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j-1,i+1)
                     +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j-1,i)+src_(m,v,k-1,j,i))
                     +3.0*(src_(m,v,k-1,j-1,i)+src_(m,v,k-1,j,i+1)+src_(m,v,k,j-1,i+1)));
       dst_(m,v,fk  ,fj+1,fi  ) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j+1,i-1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j+1,i-1)
                     +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j+1,i)+src_(m,v,k-1,j,i))
                     +3.0*(src_(m,v,k-1,j+1,i)+src_(m,v,k-1,j,i-1)+src_(m,v,k,j+1,i-1)));
       dst_(m,v,fk+1,fj  ,fi  ) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j-1,i-1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j-1,i-1)
                     +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j-1,i)+src_(m,v,k+1,j,i))
                     +3.0*(src_(m,v,k+1,j-1,i)+src_(m,v,k+1,j,i-1)+src_(m,v,k,j-1,i-1)));
       dst_(m,v,fk+1,fj+1,fi  ) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j+1,i-1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j+1,i-1)
                     +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j+1,i)+src_(m,v,k+1,j,i))
                     +3.0*(src_(m,v,k+1,j+1,i)+src_(m,v,k+1,j,i-1)+src_(m,v,k,j+1,i-1)));
       dst_(m,v,fk+1,fj  ,fi+1) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j-1,i+1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j-1,i+1)
                     +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j-1,i)+src_(m,v,k+1,j,i))
                     +3.0*(src_(m,v,k+1,j-1,i)+src_(m,v,k+1,j,i+1)+src_(m,v,k,j-1,i+1)));
       dst_(m,v,fk  ,fj+1,fi+1) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j+1,i+1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j+1,i+1)
                     +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j+1,i)+src_(m,v,k-1,j,i))
                     +3.0*(src_(m,v,k-1,j+1,i)+src_(m,v,k-1,j,i+1)+src_(m,v,k,j+1,i+1)));
       dst_(m,v,fk+1,fj+1,fi+1) +=
-          0.015625*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j+1,i+1)
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j+1,i+1)
                     +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j+1,i)+src_(m,v,k+1,j,i))
                     +3.0*(src_(m,v,k+1,j+1,i)+src_(m,v,k+1,j,i+1)+src_(m,v,k,j+1,i+1)));
     });
@@ -1450,7 +1684,7 @@ void Multigrid::ProlongateAndCorrect(ViewType &dst, const ViewType &src,
 
 //----------------------------------------------------------------------------------------
 //! \fn void Multigrid::FMGProlongate(...)
-//! \brief FMG prolongation: direct overwrite (=) with tricubic interpolation.
+//! \brief FMG prolongation: direct overwrite (=) using the selected interpolation policy.
 //! Unlike ProlongateAndCorrect (+=), this overwrites the destination array.
 
 template <typename ViewType>
@@ -1464,8 +1698,55 @@ void Multigrid::FMGProlongate(ViewType &dst, const ViewType &src,
   const int j0 = jl, j1 = ju;
   const int i0 = il, i1 = iu;
 
+  const int ll = pmy_driver_->fprolongation_;
+  constexpr Real linear_fac = 0.015625;
+
   auto dst_ = dst;
   auto src_ = src;
+
+  if (ll != 1) { // trilinear direct overwrite for FMG initial guesses
+    par_for("Multigrid::FMGProlongate_trilinear", ExeSpace(),
+            m0, m1, v0, v1, k0, k1, j0, j1, i0, i1,
+    KOKKOS_LAMBDA(const int m, const int v, const int k, const int j, const int i) {
+      const int fk = 2*(k-kl) + fkl;
+      const int fj = 2*(j-jl) + fjl;
+      const int fi = 2*(i-il) + fil;
+
+      dst_(m,v,fk  ,fj  ,fi  ) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j-1,i-1)
+                    +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j-1,i)+src_(m,v,k-1,j,i))
+                    +3.0*(src_(m,v,k-1,j-1,i)+src_(m,v,k-1,j,i-1)+src_(m,v,k,j-1,i-1)));
+      dst_(m,v,fk  ,fj  ,fi+1) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j-1,i+1)
+                    +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j-1,i)+src_(m,v,k-1,j,i))
+                    +3.0*(src_(m,v,k-1,j-1,i)+src_(m,v,k-1,j,i+1)+src_(m,v,k,j-1,i+1)));
+      dst_(m,v,fk  ,fj+1,fi  ) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j+1,i-1)
+                    +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j+1,i)+src_(m,v,k-1,j,i))
+                    +3.0*(src_(m,v,k-1,j+1,i)+src_(m,v,k-1,j,i-1)+src_(m,v,k,j+1,i-1)));
+      dst_(m,v,fk+1,fj  ,fi  ) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j-1,i-1)
+                    +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j-1,i)+src_(m,v,k+1,j,i))
+                    +3.0*(src_(m,v,k+1,j-1,i)+src_(m,v,k+1,j,i-1)+src_(m,v,k,j-1,i-1)));
+      dst_(m,v,fk+1,fj+1,fi  ) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j+1,i-1)
+                    +9.0*(src_(m,v,k,j,i-1)+src_(m,v,k,j+1,i)+src_(m,v,k+1,j,i))
+                    +3.0*(src_(m,v,k+1,j+1,i)+src_(m,v,k+1,j,i-1)+src_(m,v,k,j+1,i-1)));
+      dst_(m,v,fk+1,fj  ,fi+1) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j-1,i+1)
+                    +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j-1,i)+src_(m,v,k+1,j,i))
+                    +3.0*(src_(m,v,k+1,j-1,i)+src_(m,v,k+1,j,i+1)+src_(m,v,k,j-1,i+1)));
+      dst_(m,v,fk  ,fj+1,fi+1) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k-1,j+1,i+1)
+                    +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j+1,i)+src_(m,v,k-1,j,i))
+                    +3.0*(src_(m,v,k-1,j+1,i)+src_(m,v,k-1,j,i+1)+src_(m,v,k,j+1,i+1)));
+      dst_(m,v,fk+1,fj+1,fi+1) =
+          linear_fac*(27.0*src_(m,v,k,j,i) + src_(m,v,k+1,j+1,i+1)
+                    +9.0*(src_(m,v,k,j,i+1)+src_(m,v,k,j+1,i)+src_(m,v,k+1,j,i))
+                    +3.0*(src_(m,v,k+1,j+1,i)+src_(m,v,k+1,j,i+1)+src_(m,v,k,j+1,i+1)));
+    });
+    return;
+  }
 
   par_for("Multigrid::FMGProlongate", ExeSpace(),
           m0, m1, v0, v1, k0, k1, j0, j1, i0, i1,
@@ -1650,6 +1931,15 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
   int ncells = nx >> shift;
 
   if (ncells < 1) return TaskStatus::complete;
+  if (ncells < 2) {
+    if (MGDebugEnabled()) {
+      std::cerr << "[rank " << global_variable::my_rank
+                << "] skipping fine/coarse MG ghosts at level "
+                << pmy_mg->GetCurrentLevel() << " with " << ncells
+                << " active cell(s)" << std::endl;
+    }
+    return TaskStatus::complete;
+  }
 
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -2039,6 +2329,7 @@ TaskStatus MultigridBoundaryValues::FillFineCoarseMGGhosts(DvceArray5D<Real> &u)
         }
       }
   });
+  Kokkos::fence();
 
   return TaskStatus::complete;
 }
@@ -2066,6 +2357,65 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
   int nx1_ = pmy_mg->GetSize();
   int ngh_ = pmy_mg->GetGhostCells();
   int ncells_ = nx1_ >> shift_;
+  bool can_fc_ = pmy_mg->CanFillFineCoarseGhosts();
+
+  for (int m = 0; m < nmb; ++m) {
+    for (int n = 0; n < nnghbr; ++n) {
+      if (nghbr.h_view(m, n).gid < 0) continue;
+      int mlev = mblev.h_view(m);
+      int nlev = nghbr.h_view(m, n).lev;
+      if (!can_fc_ && nlev != mlev) continue;
+
+      MeshBufferIndcs bi = (nlev < mlev) ? sendbuf[n].icoar[0]
+                         : (nlev == mlev) ? sendbuf[n].isame[0]
+                                          : sendbuf[n].ifine[0];
+      int il = bi.bis, iu = bi.bie;
+      int jl = bi.bjs, ju = bi.bje;
+      int kl = bi.bks, ku = bi.bke;
+      int raw_il = il, raw_iu = iu;
+      int raw_jl = jl, raw_ju = ju;
+      int raw_kl = kl, raw_ku = ku;
+      AdjustSendRangeForMG(il, iu, jl, ju, kl, ku, sendbuf[n], shift_, nx1_, ngh_);
+      int ni = iu - il + 1;
+      int nj = ju - jl + 1;
+      int nk = ku - kl + 1;
+      int data_size = nvar * ni * nj * nk;
+      bool invalid = (ni < 0 || nj < 0 || nk < 0 ||
+                      il < 0 || iu >= u.extent_int(4) ||
+                      jl < 0 || ju >= u.extent_int(3) ||
+                      kl < 0 || ku >= u.extent_int(2) ||
+                      data_size > sendbuf[n].vars.extent_int(1));
+      if (nghbr.h_view(m, n).rank == my_rank) {
+        int dn = nghbr.h_view(m, n).dest;
+        int dm = nghbr.h_view(m, n).gid - mbgid.h_view(0);
+        invalid = invalid || dm < 0 || dm >= nmb ||
+                  data_size > recvbuf[dn].vars.extent_int(1);
+      }
+      if (invalid) {
+        std::cout << "### FATAL ERROR in MultigridBoundaryValues::PackAndSendMG"
+                  << std::endl
+                  << "MG boundary payload exceeds buffer capacity or local block range."
+                  << std::endl
+                  << "m=" << m << " n=" << n
+                  << " mlev=" << mlev << " nlev=" << nlev
+                  << " ncells=" << ncells_ << " shift=" << shift_
+                  << " il=" << il << " iu=" << iu
+                  << " jl=" << jl << " ju=" << ju
+                  << " kl=" << kl << " ku=" << ku
+                  << " raw_il=" << raw_il << " raw_iu=" << raw_iu
+                  << " raw_jl=" << raw_jl << " raw_ju=" << raw_ju
+                  << " raw_kl=" << raw_kl << " raw_ku=" << raw_ku
+                  << " u_extents=(" << u.extent_int(2) << ","
+                  << u.extent_int(3) << "," << u.extent_int(4) << ")"
+                  << " data_size=" << data_size
+                  << " send_capacity=" << sendbuf[n].vars.extent_int(1)
+                  << " rank=" << nghbr.h_view(m, n).rank
+                  << " local_rank=" << my_rank
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+  }
 
   {
   int nmnv = nmb * nnghbr * nvar;
@@ -2078,13 +2428,14 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
     if (nghbr.d_view(m, n).gid >= 0) {
       int mlev = mblev.d_view(m);
       int nlev = nghbr.d_view(m, n).lev;
+      if (!can_fc_ && nlev != mlev) return;
       MeshBufferIndcs bi = (nlev < mlev) ? sbuf[n].icoar[0]
                          : (nlev == mlev) ? sbuf[n].isame[0]
                                           : sbuf[n].ifine[0];
       int il = bi.bis, iu = bi.bie;
       int jl = bi.bjs, ju = bi.bje;
       int kl = bi.bks, ku = bi.bke;
-      AdjustSendRangeForMG(il, iu, jl, ju, kl, ku, sbuf[n], shift_, nx1_);
+      AdjustSendRangeForMG(il, iu, jl, ju, kl, ku, sbuf[n], shift_, nx1_, ngh_);
 
       int ni = iu - il + 1;
       int nj = ju - jl + 1;
@@ -2093,6 +2444,10 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
 
       int dm = nghbr.d_view(m, n).gid - mbgid.d_view(0);
       int dn = nghbr.d_view(m, n).dest;
+      if (nghbr.d_view(m, n).rank == my_rank &&
+          (dm < 0 || dm >= nmb || dn < 0 || dn >= nnghbr)) {
+        return;
+      }
 
       Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj),
       [&](const int idx) {
@@ -2194,14 +2549,15 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
       if (nghbr.h_view(m,n).gid >= 0) {
         int dn = nghbr.h_view(m,n).dest;
         int drank = nghbr.h_view(m,n).rank;
+        int mlev = pmy_pack->pmb->mb_lev.h_view(m);
+        int nlev = nghbr.h_view(m,n).lev;
+        if (!can_fc_ && nlev != mlev) continue;
         if (drank != my_rank) {
           // create tag using local ID and buffer index of *receiving* MeshBlock
           int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
           int tag = CreateBvals_MPI_Tag(lid, dn);
 
           int data_size = nvar;
-          int mlev = pmy_pack->pmb->mb_lev.h_view(m);
-          int nlev = nghbr.h_view(m,n).lev;
           int ndat = (nlev < mlev) ? sendbuf[n].icoar_ndat
                    : (nlev == mlev) ? sendbuf[n].isame_ndat
                                     : sendbuf[n].ifine_ndat;
@@ -2246,6 +2602,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &rbuf = recvbuf;
   int shift_ = pmy_mg->GetLevelShift();
+  bool can_fc_ = pmy_mg->CanFillFineCoarseGhosts();
   #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
   bool bflag = false;
@@ -2254,6 +2611,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
     for (int n=0; n<nnghbr; ++n) {
       if (nghbr.h_view(m,n).gid >= 0) {
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
+          if (!can_fc_ && nghbr.h_view(m,n).lev != mblev.h_view(m)) continue;
           int test;
           int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -2281,7 +2639,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
   fc_stage_nvars_ = nvar;
   fc_stage_level_ = pmy_mg->GetCurrentLevel();
   fc_stage_role_ = (pmy_mg->ncoeff_ > 0 && nvar == pmy_mg->ncoeff_) ? 1 : 0;
-  fc_stage_valid_ = true;
+  fc_stage_valid_ = can_fc_;
 
   {
   int nmnv = nmb * nnghbr * nvar;
@@ -2323,6 +2681,7 @@ TaskStatus MultigridBoundaryValues::RecvAndUnpackMG(DvceArray5D<Real> &u) {
     tmember.team_barrier();
   });
   }
+  Kokkos::fence();
 
   return TaskStatus::complete;
 }
@@ -2338,6 +2697,7 @@ TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &mblev = pmy_pack->pmb->mb_lev;
   int shift_ = pmy_mg->GetLevelShift();
+  bool can_fc_ = pmy_mg->CanFillFineCoarseGhosts();
   fc_stage_valid_ = false;
 
   // Initialize communications of variables
@@ -2357,6 +2717,7 @@ TaskStatus MultigridBoundaryValues::InitRecvMG(const int nvars) {
           int data_size = nvars;
           int mlev = mblev.h_view(m);
           int nlev = nghbr.h_view(m,n).lev;
+          if (!can_fc_ && nlev != mlev) continue;
           int ndat = (nlev < mlev) ? recvbuf[n].icoar_ndat
                    : (nlev == mlev) ? recvbuf[n].isame_ndat
                                     : recvbuf[n].ifine_ndat;

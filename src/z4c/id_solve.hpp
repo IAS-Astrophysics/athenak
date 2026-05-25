@@ -113,6 +113,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool allow_incomplete_amr_;
   bool solution_applied_;
   bool show_smoother_stats_;
+  bool check_octet_coefficients_;
 
   friend class IDCTSMultigrid;
 };

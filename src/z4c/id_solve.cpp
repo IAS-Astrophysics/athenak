@@ -1031,7 +1031,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     frozen_u_.h_view,
                                     src_[current_level_].h_view,
                                     coeff_[current_level_].h_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->omega_, fd,
+                                    ks, ke, color, driver->active_smooth_omega_, fd,
                                     driver->smoother_type_, driver->ngs_iterations_,
                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
                                     driver->smoother_max_update_fraction_,
@@ -1041,7 +1041,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     frozen_u_.h_view,
                                     src_[current_level_].h_view,
                                     coeff_[current_level_].h_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->omega_, fd,
+                                    ks, ke, color, driver->active_smooth_omega_, fd,
                                     driver->smoother_type_, driver->ngs_iterations_,
                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
                                     driver->smoother_max_update_fraction_,
@@ -1051,7 +1051,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                      frozen_u_.h_view,
                                      src_[current_level_].h_view,
                                      coeff_[current_level_].h_view, ll, is, ie, js, je,
-                                     ks, ke, color, driver->omega_, fd,
+                                     ks, ke, color, driver->active_smooth_omega_, fd,
                                      driver->smoother_type_, driver->ngs_iterations_,
                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
                                      driver->smoother_max_update_fraction_,
@@ -1064,7 +1064,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     frozen_u_.d_view,
                                     src_[current_level_].d_view,
                                     coeff_[current_level_].d_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->omega_, fd,
+                                    ks, ke, color, driver->active_smooth_omega_, fd,
                                     driver->smoother_type_, driver->ngs_iterations_,
                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
                                     driver->smoother_max_update_fraction_,
@@ -1074,7 +1074,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                     frozen_u_.d_view,
                                     src_[current_level_].d_view,
                                     coeff_[current_level_].d_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->omega_, fd,
+                                    ks, ke, color, driver->active_smooth_omega_, fd,
                                     driver->smoother_type_, driver->ngs_iterations_,
                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
                                     driver->smoother_max_update_fraction_,
@@ -1084,7 +1084,7 @@ void IDCTSMultigrid::SmoothPack(int color) {
                                      frozen_u_.d_view,
                                      src_[current_level_].d_view,
                                      coeff_[current_level_].d_view, ll, is, ie, js, je,
-                                     ks, ke, color, driver->omega_, fd,
+                                     ks, ke, color, driver->active_smooth_omega_, fd,
                                      driver->smoother_type_, driver->ngs_iterations_,
                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
                                      driver->smoother_max_update_fraction_,
@@ -1171,7 +1171,48 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
                                            MeshBlockPack *pmbp, ParameterInput *pin)
     : MultigridDriver(pmbp, ID_CTS_NVAR), owner_(owner) {
   ncoeff_ = ID_FREE_NVAR;
-  omega_ = pin->GetOrAddReal("id_solve", "omega", 0.02);
+  locrootlevel_ = pmbp->pmesh->root_level;
+  nreflevel_ = 0;
+  if (pmbp->pmesh->multilevel) {
+    for (int n = 0; n < nbtotal_; ++n) {
+      int lev = pmbp->pmesh->lloc_eachmb[n].level - locrootlevel_;
+      nreflevel_ = std::max(nreflevel_, lev);
+    }
+  }
+  omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
+  default_smooth_omega_ = omega_;
+  active_smooth_omega_ = omega_;
+  post_smooth_omega_ = pin->GetOrAddReal("id_solve", "post_smooth_omega", omega_);
+  if (post_smooth_omega_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/post_smooth_omega must be non-negative." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::string post_smooth_mode =
+      pin->GetOrAddString("id_solve", "post_smooth_mode", "both");
+  if (post_smooth_mode == "both") {
+    post_smooth_mode_ = 0;
+  } else if (post_smooth_mode == "red_only") {
+    post_smooth_mode_ = 1;
+  } else if (post_smooth_mode == "black_only") {
+    post_smooth_mode_ = 2;
+  } else if (post_smooth_mode == "red_boundary") {
+    post_smooth_mode_ = 3;
+  } else if (post_smooth_mode == "no_fc_after_prolongation") {
+    post_smooth_mode_ = 4;
+  } else if (post_smooth_mode == "none" ||
+             post_smooth_mode == "none_at_transfer_level") {
+    post_smooth_mode_ = 5;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/post_smooth_mode must be 'both', 'red_only', "
+              << "'black_only', 'red_boundary', 'no_fc_after_prolongation', "
+              << "'none', or 'none_at_transfer_level', but is "
+              << post_smooth_mode << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   std::string smoother = pin->GetOrAddString("id_solve", "smoother", "diagonal");
   if (smoother == "diagonal" || smoother == "diag") {
     smoother_type_ = 0;
@@ -1231,7 +1272,20 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   solution_applied_ = false;
   ResetSmootherStats();
   fsubtract_average_ = false;
-  fprolongation_ = 1;
+  octet_correction_omega_ =
+      pin->GetOrAddReal("id_solve", "octet_correction_omega", 1.0);
+  disable_octet_correction_ =
+      pin->GetOrAddBoolean("id_solve", "disable_octet_correction", false);
+  check_octet_coefficients_ =
+      pin->GetOrAddBoolean("id_solve", "check_octet_coefficients", false);
+  if (disable_octet_correction_) octet_correction_omega_ = 0.0;
+  if (octet_correction_omega_ < 0.0 || octet_correction_omega_ > 1.0) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/octet_correction_omega must be in [0,1]."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   std::string mg_bc_str = pin->GetOrAddString("id_solve", "mg_bc", "zerograd");
   BoundaryFlag id_mg_bc;
@@ -1308,6 +1362,83 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << "Using CTS coarse MG stencil fd=" << mg_coarse_fd_stencil_
               << " below the finest MeshBlock level." << std::endl;
   }
+  std::string coarse_prolongation =
+      pin->GetOrAddString("id_solve", "coarse_prolongation", "auto");
+  if (coarse_prolongation == "auto") {
+    fprolongation_ = (nreflevel_ > 0 && mg_coarse_fd_stencil_ == 2) ? 0 : 1;
+  } else if (coarse_prolongation == "linear") {
+    fprolongation_ = 0;
+  } else if (coarse_prolongation == "cubic") {
+    fprolongation_ = 1;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/coarse_prolongation must be 'auto', 'linear', or "
+              << "'cubic', but is " << coarse_prolongation << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  bool explicit_coarse_omega =
+      pin->DoesParameterExist("id_solve", "coarse_correction_omega");
+  Real coarse_default =
+      (!explicit_coarse_omega && nreflevel_ > 0 && mg_coarse_fd_stencil_ == 2) ? 0.0 : 1.0;
+  coarse_correction_omega_ =
+      pin->GetOrAddReal("id_solve", "coarse_correction_omega", coarse_default);
+  if (coarse_correction_omega_ < 0.0 || coarse_correction_omega_ > 1.0) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/coarse_correction_omega must be in [0,1]."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  root_correction_omega_ =
+      pin->GetOrAddReal("id_solve", "root_correction_omega", coarse_correction_omega_);
+  meshblock_correction_omega_ =
+      pin->GetOrAddReal("id_solve", "meshblock_correction_omega", coarse_correction_omega_);
+  std::string meshblock_correction_mode =
+      pin->GetOrAddString("id_solve", "meshblock_correction_mode", "linear");
+  if (meshblock_correction_mode == "none") {
+    meshblock_correction_mode_ = 0;
+  } else if (meshblock_correction_mode == "injection") {
+    meshblock_correction_mode_ = 1;
+  } else if (meshblock_correction_mode == "linear") {
+    meshblock_correction_mode_ = 2;
+  } else if (meshblock_correction_mode == "linear_active_only") {
+    meshblock_correction_mode_ = 3;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/meshblock_correction_mode must be 'none', 'injection', "
+              << "'linear', or 'linear_active_only', but is "
+              << meshblock_correction_mode << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  meshblock_correction_sign_ =
+      pin->GetOrAddInteger("id_solve", "meshblock_correction_sign", 1);
+  if (meshblock_correction_sign_ != 1 && meshblock_correction_sign_ != -1) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/meshblock_correction_sign must be 1 or -1."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  debug_meshblock_correction_ =
+      pin->GetOrAddBoolean("id_solve", "debug_meshblock_correction", false);
+  if (root_correction_omega_ < 0.0 || root_correction_omega_ > 1.0 ||
+      meshblock_correction_omega_ < 0.0 || meshblock_correction_omega_ > 1.0) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/root_correction_omega and "
+              << "<id_solve>/meshblock_correction_omega must be in [0,1]."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (full_multigrid_ && nreflevel_ > 0 && mg_coarse_fd_stencil_ == 2
+      && fprolongation_ == 1 && global_variable::my_rank == 0) {
+    std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "Using tricubic coarse_prolongation with second-order SMR FMG; "
+              << "linear is the safer bridge policy." << std::endl;
+  }
   int requested_octet_fd = pin->GetOrAddInteger("id_solve", "octet_fd_stencil", 0);
   octet_fd_stencil_ = (requested_octet_fd > 0) ? requested_octet_fd
                                                : mg_coarse_fd_stencil_;
@@ -1331,6 +1462,21 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << std::endl
               << "Using CTS octet stencil fd=" << octet_fd_stencil_
               << " for the halo-limited SMR bridge." << std::endl;
+  }
+  std::string octet_prolongation =
+      pin->GetOrAddString("id_solve", "octet_prolongation", "auto");
+  if (octet_prolongation == "auto") {
+    octet_prolongation_ = (octet_fd_stencil_ == 2) ? 0 : 1;
+  } else if (octet_prolongation == "linear") {
+    octet_prolongation_ = 0;
+  } else if (octet_prolongation == "cubic") {
+    octet_prolongation_ = 1;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/octet_prolongation must be 'auto', 'linear', or "
+              << "'cubic', but is " << octet_prolongation << "." << std::endl;
+    std::exit(EXIT_FAILURE);
   }
   bool root_on_host = pin->GetOrAddBoolean("id_solve", "root_on_host", false);
   mgroot_ = new IDCTSMultigrid(this, nullptr, nghost, root_on_host);
@@ -1385,26 +1531,45 @@ void IDCTSMultigridDriver::PrintSmootherStats(int iter) const {
 
 void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
   if (ncoeff_ <= 0) return;
-  mglevels_->SyncCoefficientLevelToHost(0);
+  int transfer_level = MeshBlockTransferLevel();
+  mglevels_->SyncCoefficientLevelToHost(transfer_level);
   auto root_coeff_h = mgroot_->GetCoefficientLevel_h(nrootlevel_ - 1);
-  auto block_coeff_h = mglevels_->GetCoefficientLevel_h(0);
+  auto block_coeff_h = mglevels_->GetCoefficientLevel_h(transfer_level);
   int ngh = mgroot_->GetGhostCells();
   int bngh = mglevels_->GetGhostCells();
+  int bncells = mglevels_->GetLevelActiveCells(transfer_level);
+  Real inv_vol = 1.0/static_cast<Real>(bncells*bncells*bncells);
   int padding = nslist_[global_variable::my_rank];
   std::vector<Real> block_coeff_global(static_cast<std::size_t>(ncoeff_) * nbtotal_,
                                        0.0);
   for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
     int gid = m + padding;
     for (int v = 0; v < ncoeff_; ++v) {
+      Real sum = 0.0;
+      for (int k = bngh; k < bngh + bncells; ++k) {
+        for (int j = bngh; j < bngh + bncells; ++j) {
+          for (int i = bngh; i < bngh + bncells; ++i) {
+            sum += block_coeff_h(m, v, k, j, i);
+          }
+        }
+      }
       block_coeff_global[static_cast<std::size_t>(v)*nbtotal_ + gid] =
-          block_coeff_h(m, v, bngh, bngh, bngh);
+          sum * inv_vol;
     }
   }
 #if MPI_PARALLEL_ENABLED
   std::vector<Real> local_coeff(mglevels_->GetNumMeshBlocks());
   for (int v = 0; v < ncoeff_; ++v) {
     for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
-      local_coeff[m] = block_coeff_h(m, v, bngh, bngh, bngh);
+      Real sum = 0.0;
+      for (int k = bngh; k < bngh + bncells; ++k) {
+        for (int j = bngh; j < bngh + bncells; ++j) {
+          for (int i = bngh; i < bngh + bncells; ++i) {
+            sum += block_coeff_h(m, v, k, j, i);
+          }
+        }
+      }
+      local_coeff[m] = sum * inv_vol;
     }
     MPI_Allgatherv(local_coeff.data(), nblist_[global_variable::my_rank],
                    MPI_ATHENA_REAL,
@@ -1565,6 +1730,56 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
         ApplyCoefficientPhysicalBoundaries(this, oct, ncoeff_, locrootlevel_,
                                            nrbx1_, nrbx2_, nrbx3_);
       }
+    }
+  }
+  if (check_octet_coefficients_) {
+    mgroot_->SyncCoefficientLevelToHost(nrootlevel_ - 1);
+    auto root_coeff_check = mgroot_->GetCoefficientLevel_h(nrootlevel_ - 1);
+    Real local_l2 = 0.0;
+    Real local_max = 0.0;
+    long long local_count = 0;
+    for (int n = 0; n < nbtotal_; ++n) {
+      LogicalLocation loc = pmy_mesh_->lloc_eachmb[n];
+      for (int v = 0; v < ncoeff_; ++v) {
+        Real expected = block_coeff_global[static_cast<std::size_t>(v)*nbtotal_ + n];
+        Real actual;
+        if (loc.level == locrootlevel_) {
+          int ri = static_cast<int>(loc.lx1) + ngh;
+          int rj = static_cast<int>(loc.lx2) + ngh;
+          int rk = static_cast<int>(loc.lx3) + ngh;
+          actual = root_coeff_check(0, v, rk, rj, ri);
+        } else {
+          LogicalLocation oloc;
+          oloc.lx1 = loc.lx1 >> 1;
+          oloc.lx2 = loc.lx2 >> 1;
+          oloc.lx3 = loc.lx3 >> 1;
+          oloc.level = loc.level - 1;
+          int olev = oloc.level - locrootlevel_;
+          int oid = FindOctetIdOrDie(olev, oloc,
+                                     "IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot");
+          int oi = (static_cast<int>(loc.lx1) & 1) + ngh;
+          int oj = (static_cast<int>(loc.lx2) & 1) + ngh;
+          int ok = (static_cast<int>(loc.lx3) & 1) + ngh;
+          actual = octets_[olev][oid].Coeff(v, ok, oj, oi);
+        }
+        Real diff = actual - expected;
+        local_l2 += diff * diff;
+        local_max = std::max(local_max, std::abs(diff));
+        ++local_count;
+      }
+    }
+    Real global_l2 = local_l2;
+    Real global_max = local_max;
+    long long global_count = local_count;
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(&local_l2, &global_l2, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_max, &global_max, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+    MPI_Allreduce(&local_count, &global_count, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+    if (global_variable::my_rank == 0) {
+      Real rms = (global_count > 0) ? std::sqrt(global_l2/static_cast<Real>(global_count)) : 0.0;
+      std::cout << "CTS root/octet coefficient payload gather-scatter check: max=" << global_max
+                << " rms=" << rms << " count=" << global_count << std::endl;
     }
   }
 }

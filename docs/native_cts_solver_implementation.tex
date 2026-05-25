@@ -721,8 +721,7 @@ current representative setup is:
   \item ADM dynamic: \code{true}.
   \item Z4c spatial order: \code{4}, so \code{fd\_stencil=3}.
   \item CTS enabled and solve-once.
-  \item \code{omega=0.02} in the file, though convergence sweeps found
-        larger values useful for short second-order diagonal-smoother runs.
+  \item \code{omega=1.0} in the file.
   \item \code{smoother=diagonal} by default.  Set
         \code{smoother=newton\_gs} to use the coupled local
         Newton-Gauss-Seidel relaxation.

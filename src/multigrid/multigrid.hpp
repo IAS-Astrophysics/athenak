@@ -234,12 +234,17 @@ class Multigrid {
   void SetData(MGVariable type, int n, int k, int j, int i, Real v);
   void PrintActiveRegion(const DvceArray5D<Real> &data);
   void PrintAll(const DvceArray5D<Real> &data);
+  void ClampCurrentCorrectionGhostsToActive();
+  Real CalculateDiagnosticDefectRMS(int level);
 
   // small functions
   int GetCurrentNumberOfCells() { return 1<<current_level_; }
   int GetNumberOfLevels() { return nlevel_; }
   int GetCurrentLevel() { return current_level_; }
   int GetLevelShift() { return nlevel_ - 1 - current_level_; }
+  int GetLevelActiveCells(int level) const { return indcs_.nx1 >> (nlevel_ - 1 - level); }
+  int GetCurrentLevelActiveCells() const { return GetLevelActiveCells(current_level_); }
+  bool CanFillFineCoarseGhosts() const { return GetCurrentLevelActiveCells() >= 2; }
   int GetSize() { return indcs_.nx1; }
   int GetNumMeshBlocks() { return nmmb_; }
   int GetGhostCells() { return ngh_; }
@@ -395,8 +400,11 @@ class MultigridDriver {
   int GetCoffset() const { return coffset_; }
   int FindOctetIdOrDie(int lev, const LogicalLocation &loc, const char *context) const;
   void MGRootBoundary();
-  void TransferFromBlocksToRoot(bool initflag);
+  void TransferFromBlocksToRoot(bool initflag, bool restrict_from_transfer_level=false);
   void TransferFromRootToBlocks(bool folddata);
+  void PrintFirstAscentStageDiagnostic(const char *label);
+  int MeshBlockTransferLevel() const;
+  int MeshBlockTransferDriverLevel() const;
 
   // per-cell octet operations (Athena++ style)
   void InitializeOctets();
@@ -470,6 +478,8 @@ class MultigridDriver {
   TaskStatus ReceiveBoundaryForProlongation(Driver *pdrive, int stag);
   TaskStatus SmoothRed(Driver *pdrive, int stag);
   TaskStatus SmoothBlack(Driver *pdrive, int stag);
+  TaskStatus PostSmoothRed(Driver *pdrive, int stag);
+  TaskStatus PostSmoothBlack(Driver *pdrive, int stag);
   TaskStatus Smooth(Driver *pdrive, int stag);
   TaskStatus Restrict(Driver *pdrive, int stag);
   TaskStatus Prolongate(Driver *pdrive, int stag);
@@ -483,7 +493,7 @@ class MultigridDriver {
   TaskStatus ClearSend(Driver *pdrive, int stag);
   void SetMGTaskListToFiner(int nsmooth, int ngh, int flag=0);
   void SetMGTaskListFMGProlongate(int ngh);
-  void SetMGTaskListToCoarser(int nsmooth, int ngh);
+  void SetMGTaskListToCoarser(int nsmooth, int ngh, bool do_restrict=true);
   void DoTaskListOneStage();
 
   virtual void SolveCoarsestGrid();
@@ -516,7 +526,19 @@ class MultigridDriver {
   int os_, oe_;
   int coffset_;
   int fprolongation_;
+  Real coarse_correction_omega_, octet_correction_omega_;
+  Real root_correction_omega_, meshblock_correction_omega_;
+  int meshblock_correction_mode_, meshblock_correction_sign_;
+  bool debug_meshblock_correction_, meshblock_correction_debug_pending_;
+  Real default_smooth_omega_, active_smooth_omega_, post_smooth_omega_;
+  int post_smooth_mode_;
+  std::vector<Real> first_ascent_stage_u_;
+  bool first_ascent_stage_valid_;
+  std::vector<Real> saved_block_u_payload_;
+  bool saved_block_u_payload_valid_;
+  int octet_prolongation_;
   int fshowdef_;
+  bool disable_octet_correction_;
   bool full_multigrid_;
   int fmg_ncycle_;
 
@@ -555,6 +577,7 @@ class MultigridDriver {
   void BuildRootFlatBuffers();
   void SyncRootToHost();
   void SyncRootToDevice();
+  void CheckBlockTransferOldState();
 
   enum class RootSyncState { SYNCED, HOST_MODIFIED, DEVICE_MODIFIED };
   RootSyncState root_sync_state_;

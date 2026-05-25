@@ -42,6 +42,15 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     pmy_mesh_(pmbp->pmesh),
     needinit_(true), amr_seq_(0), nreflevel_(0), eps_(-1.0),
     niter_(-1), npresmooth_(1), npostsmooth_(1), coffset_(0), fprolongation_(0),
+    coarse_correction_omega_(1.0), octet_correction_omega_(1.0),
+    root_correction_omega_(1.0), meshblock_correction_omega_(1.0),
+    meshblock_correction_mode_(2), meshblock_correction_sign_(1),
+    debug_meshblock_correction_(false), meshblock_correction_debug_pending_(false),
+    default_smooth_omega_(1.0), active_smooth_omega_(1.0), post_smooth_omega_(1.0),
+    post_smooth_mode_(0),
+    first_ascent_stage_valid_(false),
+    saved_block_u_payload_valid_(false),
+    octet_prolongation_(1), disable_octet_correction_(false),
     nb_rank_(0), ncoeff_(0), nmatrix_(0),
     octets_(nullptr), octetmap_(nullptr), octetbflag_(nullptr), noctets_(nullptr),
     oct_u_buf_(nullptr), oct_def_buf_(nullptr),
@@ -99,6 +108,14 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     oct_uold_buf_ = new std::vector<Real>[maxreflevel_];
     oct_coeff_buf_ = new std::vector<Real>[maxreflevel_];
   }
+}
+
+int MultigridDriver::MeshBlockTransferLevel() const {
+  return (nreflevel_ > 0 && mglevels_ != nullptr && mglevels_->GetNumberOfLevels() > 1) ? 1 : 0;
+}
+
+int MultigridDriver::MeshBlockTransferDriverLevel() const {
+  return nrootlevel_ + nreflevel_ + MeshBlockTransferLevel();
 }
 
 //! destructor
@@ -510,19 +527,38 @@ void MultigridDriver::BuildRootFlatBuffers() {
 //! Following Athena++: each block sends its coarsest cell data to either
 //! the root grid (if at root level) or the appropriate octet.
 
-void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
+void MultigridDriver::TransferFromBlocksToRoot(bool initflag, bool restrict_from_transfer_level) {
   const int nv = nvar_;
   auto rootbuf = rootbuf_;
-  const auto &src = mglevels_->src_[0].d_view;
-  const auto &u = mglevels_->u_[0].d_view;
+  const int transfer_level = MeshBlockTransferLevel();
+  const int saved_level = mglevels_->current_level_;
+  mglevels_->current_level_ = transfer_level;
+  if (!initflag && restrict_from_transfer_level) {
+    mglevels_->CalculateDefectPack();
+  }
+  const auto &src = mglevels_->src_[transfer_level].d_view;
+  const auto &def = mglevels_->def_[transfer_level].d_view;
+  const auto &u = mglevels_->u_[transfer_level].d_view;
   const int ngh_mb = mglevels_->ngh_;
+  const int ncells = mglevels_->GetLevelActiveCells(transfer_level);
+  const Real inv_vol = 1.0/static_cast<Real>(ncells*ncells*ncells);
   int nmmb = mglevels_->nmmb_ - 1;
   int padding = nslist_[global_variable::my_rank];
   par_for("Multigrid:SaveToRoot", DevExeSpace(), 0, nmmb, KOKKOS_LAMBDA(const int m) {
     for (int v = 0; v < nv; ++v) {
-      rootbuf.d_view(v,    m+padding) = src(m, v, ngh_mb, ngh_mb, ngh_mb);
-      if (!initflag)
-        rootbuf.d_view(v+nv, m+padding) = u(m, v, ngh_mb, ngh_mb, ngh_mb);
+      Real src_sum = 0.0;
+      Real u_sum = 0.0;
+      for (int k = ngh_mb; k < ngh_mb + ncells; ++k) {
+        for (int j = ngh_mb; j < ngh_mb + ncells; ++j) {
+          for (int i = ngh_mb; i < ngh_mb + ncells; ++i) {
+            src_sum += (!initflag && restrict_from_transfer_level) ? def(m, v, k, j, i)
+                                                                    : src(m, v, k, j, i);
+            if (!initflag) u_sum += u(m, v, k, j, i);
+          }
+        }
+      }
+      rootbuf.d_view(v, m+padding) = src_sum * inv_vol;
+      if (!initflag) rootbuf.d_view(v+nv, m+padding) = u_sum * inv_vol;
     }
   });
   rootbuf.template modify<DevExeSpace>();
@@ -534,6 +570,18 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
                    &rootbuf.h_view(v,0), nblist_, nslist_, MPI_ATHENA_REAL, MPI_COMM_WORLD);
   }
 #endif
+  if (!initflag) {
+    saved_block_u_payload_.assign(static_cast<std::size_t>(nv)*nbtotal_, 0.0);
+    for (int n = 0; n < nbtotal_; ++n) {
+      for (int v = 0; v < nv; ++v) {
+        saved_block_u_payload_[static_cast<std::size_t>(v)*nbtotal_ + n] =
+            rootbuf.h_view(v+nv, n);
+      }
+    }
+    saved_block_u_payload_valid_ = true;
+  } else {
+    saved_block_u_payload_valid_ = false;
+  }
 
   const auto loc = pmy_mesh_->lloc_eachmb;
   int rootlevel = locrootlevel_;
@@ -576,6 +624,7 @@ void MultigridDriver::TransferFromBlocksToRoot(bool initflag) {
   mgroot_->current_level_ = nrootlevel_ - 1;
   root_sync_state_ = RootSyncState::HOST_MODIFIED;
   if (nreflevel_ == 0) SyncRootToDevice();
+  mglevels_->current_level_ = saved_level;
   return;
 }
 
@@ -591,7 +640,147 @@ void MultigridDriver::TransferFromRootToBlocks(bool folddata) {
     SetOctetBoundariesBeforeTransfer(folddata);
   }
   mglevels_->SetFromRootGrid(folddata);
+  if (folddata) {
+    CheckBlockTransferOldState();
+    meshblock_correction_debug_pending_ = debug_meshblock_correction_;
+  }
   return;
+}
+
+void MultigridDriver::CheckBlockTransferOldState() {
+  if (!debug_meshblock_correction_ || !saved_block_u_payload_valid_ ||
+      saved_block_u_payload_.empty()) {
+    return;
+  }
+  if (!mglevels_->on_host_) {
+    Kokkos::deep_copy(mglevels_->uold_[0].h_view, mglevels_->uold_[0].d_view);
+  }
+  auto uold_h = mglevels_->uold_[0].h_view;
+  const int ngh = mglevels_->ngh_;
+  const int padding = pmy_mesh_->gids_eachrank[global_variable::my_rank];
+  Real local_sum2 = 0.0;
+  Real local_max = 0.0;
+  long long local_count = 0;
+  for (int m = 0; m < mglevels_->nmmb_; ++m) {
+    int gid = m + padding;
+    for (int v = 0; v < nvar_; ++v) {
+      Real expected = saved_block_u_payload_[static_cast<std::size_t>(v)*nbtotal_ + gid];
+      Real diff = uold_h(m, v, ngh, ngh, ngh) - expected;
+      local_sum2 += diff*diff;
+      local_max = std::max(local_max, std::abs(diff));
+      ++local_count;
+    }
+  }
+  Real global_sum2 = local_sum2;
+  Real global_max = local_max;
+  long long global_count = local_count;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local_sum2, &global_sum2, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_max, &global_max, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_count, &global_count, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  if (global_variable::my_rank == 0) {
+    Real rms = (global_count > 0) ? std::sqrt(global_sum2/static_cast<Real>(global_count)) : 0.0;
+    std::cout << "CTS MeshBlock transfer old-state check: max=" << global_max
+              << " rms=" << rms << " count=" << global_count << std::endl;
+  }
+}
+
+void MultigridDriver::PrintFirstAscentStageDiagnostic(const char *label) {
+  if (!debug_meshblock_correction_ || mglevels_ == nullptr || pmg != mglevels_) return;
+
+  const int level = mglevels_->GetCurrentLevel();
+  if (level != MeshBlockTransferLevel()) return;
+
+  const Real defect_rms = mglevels_->CalculateDiagnosticDefectRMS(level);
+  if (!mglevels_->on_host_) {
+    Kokkos::deep_copy(mglevels_->u_[level].h_view, mglevels_->u_[level].d_view);
+  }
+  auto u_h = mglevels_->u_[level].h_view;
+  const int ncells = mglevels_->GetLevelActiveCells(level);
+  const int ngh = mglevels_->ngh_;
+  const int nall = ncells + 2*ngh;
+
+  std::vector<Real> current;
+  current.reserve(static_cast<std::size_t>(mglevels_->nmmb_) * nvar_
+                  * nall * nall * nall);
+  for (int m = 0; m < mglevels_->nmmb_; ++m) {
+    for (int v = 0; v < nvar_; ++v) {
+      for (int k = 0; k < nall; ++k) {
+        for (int j = 0; j < nall; ++j) {
+          for (int i = 0; i < nall; ++i) {
+            current.push_back(u_h(m, v, k, j, i));
+          }
+        }
+      }
+    }
+  }
+
+  Real local_active_sum2 = 0.0, local_active_max = 0.0;
+  Real local_ghost_sum2 = 0.0, local_ghost_max = 0.0;
+  long long local_active_count = 0, local_ghost_count = 0;
+  if (first_ascent_stage_valid_ && first_ascent_stage_u_.size() == current.size()) {
+    std::size_t n = 0;
+    for (int m = 0; m < mglevels_->nmmb_; ++m) {
+      for (int v = 0; v < nvar_; ++v) {
+        for (int k = 0; k < nall; ++k) {
+          for (int j = 0; j < nall; ++j) {
+            for (int i = 0; i < nall; ++i, ++n) {
+              Real diff = current[n] - first_ascent_stage_u_[n];
+              bool active = (i >= ngh && i < ngh + ncells &&
+                             j >= ngh && j < ngh + ncells &&
+                             k >= ngh && k < ngh + ncells);
+              if (active) {
+                local_active_sum2 += diff*diff;
+                local_active_max = std::max(local_active_max, std::abs(diff));
+                ++local_active_count;
+              } else {
+                local_ghost_sum2 += diff*diff;
+                local_ghost_max = std::max(local_ghost_max, std::abs(diff));
+                ++local_ghost_count;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  Real global_active_sum2 = local_active_sum2, global_active_max = local_active_max;
+  Real global_ghost_sum2 = local_ghost_sum2, global_ghost_max = local_ghost_max;
+  long long global_active_count = local_active_count, global_ghost_count = local_ghost_count;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local_active_sum2, &global_active_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_active_max, &global_active_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_active_count, &global_active_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_ghost_sum2, &global_ghost_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_ghost_max, &global_ghost_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local_ghost_count, &global_ghost_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+#endif
+  Real active_update_rms =
+      (global_active_count > 0)
+      ? std::sqrt(global_active_sum2/static_cast<Real>(global_active_count)) : 0.0;
+  Real ghost_update_rms =
+      (global_ghost_count > 0)
+      ? std::sqrt(global_ghost_sum2/static_cast<Real>(global_ghost_count)) : 0.0;
+  if (global_variable::my_rank == 0) {
+    std::cout << "CTS first MeshBlock ascent stage [" << label
+              << "]: level=" << level
+              << " active_defect_rms=" << defect_rms
+              << " active_update_max=" << global_active_max
+              << " active_update_rms=" << active_update_rms
+              << " active_update_count=" << global_active_count
+              << " ghost_update_max=" << global_ghost_max
+              << " ghost_update_rms=" << ghost_update_rms
+              << " ghost_update_count=" << global_ghost_count << std::endl;
+  }
+  first_ascent_stage_u_.swap(current);
+  first_ascent_stage_valid_ = true;
 }
 
 
@@ -640,7 +829,7 @@ void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
   if (current_level_ >= nrootlevel_ + nreflevel_ - 1) { // MeshBlocks
     pmg = mglevels_;
     int flag = 0;
-    // flag = 1: first time on meshblock levels
+    // flag = 1: first time on meshblock levels; level 0 may be transfer-only in SMR.
     if (current_level_ == nrootlevel_ + nreflevel_ - 1) flag = 1;
     
     if (current_level_ == ntotallevel_ - 2) flag = 2;
@@ -685,12 +874,14 @@ void MultigridDriver::OneStepToFiner(Driver *pdriver, int nsmooth) {
 
 void MultigridDriver::OneStepToCoarser(Driver *pdriver, int nsmooth) {
   int ngh = mgroot_->ngh_;
-  if (current_level_ >= nrootlevel_ + nreflevel_) { // MeshBlocks
+  const int mb_transfer_driver_level = MeshBlockTransferDriverLevel();
+  if (current_level_ >= mb_transfer_driver_level) { // MeshBlocks
     pmg = mglevels_;
-    SetMGTaskListToCoarser(nsmooth, ngh);
+    const bool do_restrict = (pmg->GetCurrentLevel() > MeshBlockTransferLevel());
+    SetMGTaskListToCoarser(nsmooth, ngh, do_restrict);
     pdriver->ExecuteTaskList(pmy_mesh_, "mg_to_coarser", 0);
-    if (current_level_ == nrootlevel_ + nreflevel_) {
-      TransferFromBlocksToRoot(false);
+    if (current_level_ == mb_transfer_driver_level) {
+      TransferFromBlocksToRoot(false, !do_restrict && MeshBlockTransferLevel() > 0);
       if (nreflevel_ > 0) {
         PreRestrictOctetU();
       }
@@ -787,10 +978,13 @@ void MultigridDriver::SolveFMG(Driver *pdriver) {
 
 
 void MultigridDriver::SolveFMGCoarser() {
-  while (current_level_ >= nrootlevel_ + nreflevel_) {
+  const int mb_transfer_driver_level = MeshBlockTransferDriverLevel();
+  while (current_level_ >= mb_transfer_driver_level) {
     pmg = mglevels_;
-    pmg->RestrictSourcePack();
-    if (current_level_ == nrootlevel_ + nreflevel_) {
+    if (pmg->GetCurrentLevel() > MeshBlockTransferLevel()) {
+      pmg->RestrictSourcePack();
+    }
+    if (current_level_ == mb_transfer_driver_level) {
       TransferFromBlocksToRoot(true);
     }
     current_level_--;
@@ -1102,13 +1296,17 @@ void MultigridDriver::RestrictOctets() {
 //! of the FAS correction (u - uold) from a 3x3x3 coarse neighborhood.
 
 void MultigridDriver::ProlongateAndCorrectOctets() {
+  if (octet_correction_omega_ == 0.0) return;
   int clev = current_level_ - nrootlevel_;
   int flev = clev + 1;
   if (flev == 0) SyncRootToHost();
   int ngh = mgroot_->ngh_;
+  const bool use_linear = (octet_prolongation_ == 0);
+  const Real oct_omega = octet_correction_omega_;
   constexpr Real w0[3] = {5.0, 30.0, -3.0};
   constexpr Real w1[3] = {-3.0, 30.0, 5.0};
   constexpr Real inv = 1.0 / 32768.0;
+  constexpr Real linv = 1.0 / 64.0;
 
   if (flev == 0) { // from root to octets
     auto root_u_h = GetRootData_h();
@@ -1129,6 +1327,17 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
               cbuf[kk+1][jj+1][ii+1] =
                   root_u_h(0, v, rk+kk, rj+jj, ri+ii)
                   - root_uold_h(0, v, rk+kk, rj+jj, ri+ii);
+        auto linear_corr = [&](int dk, int dj, int di) {
+          int sk = (dk == 0) ? -1 : 1;
+          int sj = (dj == 0) ? -1 : 1;
+          int si = (di == 0) ? -1 : 1;
+          Real c = cbuf[1][1][1];
+          return (27.0*c
+                  + 9.0*(cbuf[1][1][1+si] + cbuf[1][1+sj][1] + cbuf[1+sk][1][1])
+                  + 3.0*(cbuf[1][1+sj][1+si] + cbuf[1+sk][1][1+si]
+                         + cbuf[1+sk][1+sj][1])
+                  + cbuf[1+sk][1+sj][1+si]) * linv;
+        };
         for (int dk = 0; dk <= 1; ++dk) {
           const Real *wk = (dk == 0) ? w0 : w1;
           for (int dj = 0; dj <= 1; ++dj) {
@@ -1136,11 +1345,16 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
             for (int di = 0; di <= 1; ++di) {
               const Real *wi = (di == 0) ? w0 : w1;
               Real sum = 0.0;
-              for (int a = 0; a < 3; ++a)
-                for (int b = 0; b < 3; ++b)
-                  for (int c = 0; c < 3; ++c)
-                    sum += wk[a]*wj[b]*wi[c] * cbuf[a][b][c];
-              oct.U(v, ngh+dk, ngh+dj, ngh+di) += sum * inv;
+              if (use_linear) {
+                sum = linear_corr(dk, dj, di);
+              } else {
+                for (int a = 0; a < 3; ++a)
+                  for (int b = 0; b < 3; ++b)
+                    for (int c = 0; c < 3; ++c)
+                      sum += wk[a]*wj[b]*wi[c] * cbuf[a][b][c];
+                sum *= inv;
+              }
+              oct.U(v, ngh+dk, ngh+dj, ngh+di) += oct_omega * sum;
             }
           }
         }
@@ -1170,6 +1384,17 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
               cbuf[kk+1][jj+1][ii+1] =
                   coct.U(v, ck+kk, cj+jj, ci+ii)
                   - coct.Uold(v, ck+kk, cj+jj, ci+ii);
+        auto linear_corr = [&](int dk, int dj, int di) {
+          int sk = (dk == 0) ? -1 : 1;
+          int sj = (dj == 0) ? -1 : 1;
+          int si = (di == 0) ? -1 : 1;
+          Real c = cbuf[1][1][1];
+          return (27.0*c
+                  + 9.0*(cbuf[1][1][1+si] + cbuf[1][1+sj][1] + cbuf[1+sk][1][1])
+                  + 3.0*(cbuf[1][1+sj][1+si] + cbuf[1+sk][1][1+si]
+                         + cbuf[1+sk][1+sj][1])
+                  + cbuf[1+sk][1+sj][1+si]) * linv;
+        };
         for (int dk = 0; dk <= 1; ++dk) {
           const Real *wk = (dk == 0) ? w0 : w1;
           for (int dj = 0; dj <= 1; ++dj) {
@@ -1177,11 +1402,16 @@ void MultigridDriver::ProlongateAndCorrectOctets() {
             for (int di = 0; di <= 1; ++di) {
               const Real *wi = (di == 0) ? w0 : w1;
               Real sum = 0.0;
-              for (int a = 0; a < 3; ++a)
-                for (int b = 0; b < 3; ++b)
-                  for (int c = 0; c < 3; ++c)
-                    sum += wk[a]*wj[b]*wi[c] * cbuf[a][b][c];
-              foct.U(v, ngh+dk, ngh+dj, ngh+di) += sum * inv;
+              if (use_linear) {
+                sum = linear_corr(dk, dj, di);
+              } else {
+                for (int a = 0; a < 3; ++a)
+                  for (int b = 0; b < 3; ++b)
+                    for (int c = 0; c < 3; ++c)
+                      sum += wk[a]*wj[b]*wi[c] * cbuf[a][b][c];
+                sum *= inv;
+              }
+              foct.U(v, ngh+dk, ngh+dj, ngh+di) += oct_omega * sum;
             }
           }
         }
