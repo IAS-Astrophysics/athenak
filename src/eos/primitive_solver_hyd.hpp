@@ -326,6 +326,8 @@ class PrimitiveSolverHydro {
     auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
     auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
     auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
+    auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow;
+    auto &excise_inflow_speed_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
     Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
     Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
     Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
@@ -514,6 +516,45 @@ class PrimitiveSolverHydro {
         Real tvx = use_p1 ? p1_vx : p0_vx;
         Real tvy = use_p1 ? p1_vy : p0_vy;
         Real tvz = use_p1 ? p1_vz : p0_vz;
+        if (excise_inflow_ && excise_inflow_speed_ > 0.0) {
+          Real rx = use_p1 ? bx1 : bx0;
+          Real ry = use_p1 ? by1 : by0;
+          Real rz = use_p1 ? bz1 : bz0;
+          Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
+          if (rnorm > 0.0 && isfinite(rnorm)) {
+            Real nx = rx/rnorm;
+            Real ny = ry/rnorm;
+            Real nz = rz/rnorm;
+            Real vin = excise_inflow_speed_ * excise_weight;
+            Real cvx = tvx;
+            Real cvy = tvy;
+            Real cvz = tvz;
+            if (result.error == Primitive::Error::SUCCESS &&
+                isfinite(prim_pt[PVX]) && isfinite(prim_pt[PVY]) && isfinite(prim_pt[PVZ])) {
+              Real cu2 = g3d[S11]*SQR(prim_pt[PVX]) + g3d[S22]*SQR(prim_pt[PVY]) +
+                         g3d[S33]*SQR(prim_pt[PVZ]) + 2.0*g3d[S12]*prim_pt[PVX]*prim_pt[PVY] +
+                         2.0*g3d[S13]*prim_pt[PVX]*prim_pt[PVZ] +
+                         2.0*g3d[S23]*prim_pt[PVY]*prim_pt[PVZ];
+              if (cu2 >= 0.0 && isfinite(cu2)) {
+                Real cW = sqrt(1.0 + cu2);
+                cvx = prim_pt[PVX]/cW;
+                cvy = prim_pt[PVY]/cW;
+                cvz = prim_pt[PVZ]/cW;
+              }
+            }
+            Real vrad = (cvx - tvx)*nx + (cvy - tvy)*ny + (cvz - tvz)*nz;
+            if (vrad > -vin) {
+              Real dv = vrad + vin;
+              tvx = cvx - dv*nx;
+              tvy = cvy - dv*ny;
+              tvz = cvz - dv*nz;
+            } else {
+              tvx = cvx;
+              tvy = cvy;
+              tvz = cvz;
+            }
+          }
+        }
         Real tv2 = g3d[S11]*SQR(tvx) + g3d[S22]*SQR(tvy) + g3d[S33]*SQR(tvz) +
                    2.0*g3d[S12]*tvx*tvy + 2.0*g3d[S13]*tvx*tvz +
                    2.0*g3d[S23]*tvy*tvz;

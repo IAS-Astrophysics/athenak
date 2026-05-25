@@ -84,12 +84,15 @@ struct CoordData {
   Real punc_1_vel[3];
   Real punc_0_rad;
   Real punc_1_rad;
+  Real punc_flux_rad_factor;        // puncture flux-excision radius / punc_rad
   bool smooth_excise;              // smoothly drain primitive variables inside horizon
   Real smooth_excise_width;        // radial width of drain layer inside geometric masks
   Real smooth_excise_puncture_width_fraction; // puncture smooth width / punc_rad
   Real smooth_excise_lapse_width;  // lapse width of drain layer for lapse masks
   Real smooth_excise_sigma_max;    // optional B^2/rho cap inside smooth excision
   Real smooth_excise_temp_ceil;     // optional hard p/rho ceiling inside smooth region
+  bool smooth_excise_inflow;        // enforce minimum puncture-frame radial inflow
+  Real smooth_excise_inflow_speed;  // coordinate radial inflow speed target
 };
 
 //----------------------------------------------------------------------------------------

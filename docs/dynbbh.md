@@ -175,7 +175,10 @@ excision_scheme = puncture
 smooth_excision = true
 smooth_excision_sigma_max = 1.0e5
 smooth_excision_puncture_width_fraction = 1.0
+puncture_flux_excision_radius_factor = 1.0
 smooth_excision_temp_ceil = -1.0
+smooth_excision_inflow = false
+smooth_excision_inflow_speed = 0.0
 dexcise = 1.0e-10
 texcise = 1.0e-8
 require_resolved_horizon = false
@@ -197,6 +200,10 @@ default, the puncture smooth weight tapers across the full radius.  A value of
 weighted and the outer half is the transition.  The same updated `punc_rad`
 values feed flux excision, smooth primitive damping, and the smooth magnetic
 damping weights.
+Set `puncture_flux_excision_radius_factor > 1` to make the first-order flux
+region larger than the puncture smooth-excision region without changing the
+primitive damping or magnetic damping support.  For example, `1.2` extends the
+FOFC mask to `1.2 * punc_rad`.
 If `smooth_excision_temp_ceil > 0`, the post-blend thermal state is also
 strictly capped inside cells with nonzero smooth-excision weight.  In the
 Valencia/dyn GRMHD path this caps pressure through the EOS.  This is a hard
@@ -205,6 +212,13 @@ smooth puncture weight is zero.
 `texcise` specifies the smooth-excision target temperature directly; when
 `texcise > 0`, the code derives the excision pressure target from the EOS and
 `dexcise`.  If `texcise < 0`, the legacy `pexcise` pressure target is used.
+If `smooth_excision_inflow=true`, the smooth-excision velocity target is
+modified so the puncture-frame radial 3-velocity is at least inward by
+`smooth_excision_inflow_speed * weight`.  Gas that is already flowing inward
+faster than this target is not slowed down.  The Valencia/dyn GRMHD path
+computes this guard using the Lorentz factor to convert between the stored
+spatial 4-velocity components and coordinate 3-velocity, then applies the
+existing velocity ceiling before converting back.
 
 For the smooth-excision equations and constrained-transport discussion, see
 `docs/smooth_excision_procedure.tex` and the compiled PDF.

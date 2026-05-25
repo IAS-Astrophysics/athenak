@@ -61,6 +61,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
   auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
   auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
+  auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow;
+  auto &excise_inflow_speed_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
   Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
   Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
   Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
@@ -191,6 +193,39 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         Real tvx = use_p1 ? p1_vx : p0_vx;
         Real tvy = use_p1 ? p1_vy : p0_vy;
         Real tvz = use_p1 ? p1_vz : p0_vz;
+        if (excise_inflow_ && excise_inflow_speed_ > 0.0) {
+          Real rx = use_p1 ? bx1 : bx0;
+          Real ry = use_p1 ? by1 : by0;
+          Real rz = use_p1 ? bz1 : bz0;
+          Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
+          if (rnorm > 0.0 && isfinite(rnorm) &&
+              isfinite(w.vx) && isfinite(w.vy) && isfinite(w.vz)) {
+            Real nx = rx/rnorm;
+            Real ny = ry/rnorm;
+            Real nz = rz/rnorm;
+            Real u_sq = glower[1][1]*SQR(w.vx) + glower[2][2]*SQR(w.vy) +
+                        glower[3][3]*SQR(w.vz) + 2.0*glower[1][2]*w.vx*w.vy +
+                        2.0*glower[1][3]*w.vx*w.vz + 2.0*glower[2][3]*w.vy*w.vz;
+            if (u_sq >= 0.0 && isfinite(u_sq)) {
+              Real iW = 1.0/sqrt(1.0 + u_sq);
+              Real cvx = w.vx*iW;
+              Real cvy = w.vy*iW;
+              Real cvz = w.vz*iW;
+              Real vin = excise_inflow_speed_ * excise_weight;
+              Real vrad = (cvx - tvx)*nx + (cvy - tvy)*ny + (cvz - tvz)*nz;
+              if (vrad > -vin) {
+                Real dv = vrad + vin;
+                tvx = cvx - dv*nx;
+                tvy = cvy - dv*ny;
+                tvz = cvz - dv*nz;
+              } else {
+                tvx = cvx;
+                tvy = cvy;
+                tvz = cvz;
+              }
+            }
+          }
+        }
         Real tv2 = glower[1][1]*SQR(tvx) + glower[2][2]*SQR(tvy) +
                    glower[3][3]*SQR(tvz) + 2.0*glower[1][2]*tvx*tvy +
                    2.0*glower[1][3]*tvx*tvz + 2.0*glower[2][3]*tvy*tvz;

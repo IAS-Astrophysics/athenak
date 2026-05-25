@@ -31,11 +31,14 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     excision_weight("excision_weight",1,1,1,1) {
   coord_data.bh_excise = false;
   coord_data.smooth_excise = false;
+  coord_data.punc_flux_rad_factor = 1.0;
   coord_data.smooth_excise_width = 1.0;
   coord_data.smooth_excise_puncture_width_fraction = 1.0;
   coord_data.smooth_excise_lapse_width = 0.05;
   coord_data.smooth_excise_sigma_max = -1.0;
   coord_data.smooth_excise_temp_ceil = -1.0;
+  coord_data.smooth_excise_inflow = false;
+  coord_data.smooth_excise_inflow_speed = 0.0;
   coord_data.punc_0_rad = coord_data.punc_1_rad = -1.0;
   for (int n = 0; n < 3; ++n) {
     coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;
@@ -115,12 +118,18 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
           "coord", "smooth_excision_width", default_smooth_width);
       coord_data.smooth_excise_puncture_width_fraction = pin->GetOrAddReal(
           "coord", "smooth_excision_puncture_width_fraction", 1.0);
+      coord_data.punc_flux_rad_factor = pin->GetOrAddReal(
+          "coord", "puncture_flux_excision_radius_factor", 1.0);
       coord_data.smooth_excise_lapse_width = pin->GetOrAddReal(
           "coord", "smooth_excision_lapse_width", 0.05);
       coord_data.smooth_excise_sigma_max = pin->GetOrAddReal(
           "coord", "smooth_excision_sigma_max", -1.0);
       coord_data.smooth_excise_temp_ceil = pin->GetOrAddReal(
           "coord", "smooth_excision_temp_ceil", -1.0);
+      coord_data.smooth_excise_inflow = pin->GetOrAddBoolean(
+          "coord", "smooth_excision_inflow", false);
+      coord_data.smooth_excise_inflow_speed = pin->GetOrAddReal(
+          "coord", "smooth_excision_inflow_speed", 0.0);
 
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
@@ -154,15 +163,18 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       if (coord_data.smooth_excise &&
           (coord_data.smooth_excise_width <= 0.0 ||
            coord_data.smooth_excise_puncture_width_fraction <= 0.0 ||
+           coord_data.punc_flux_rad_factor <= 0.0 ||
            coord_data.smooth_excise_lapse_width <= 0.0 ||
            coord_data.smooth_excise_sigma_max == 0.0 ||
-           coord_data.smooth_excise_temp_ceil == 0.0)) {
+           coord_data.smooth_excise_temp_ceil == 0.0 ||
+           coord_data.smooth_excise_inflow_speed < 0.0)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                   << __LINE__ << std::endl
                   << "smooth_excision requires positive width/"
-                  << "puncture_width_fraction/lapse_width; "
-                  << "sigma_max and temp_ceil must be positive "
-                  << "or negative to disable" << std::endl;
+                  << "puncture_width_fraction/flux_radius_factor/lapse_width; "
+                  << "sigma_max and temp_ceil must be positive or negative "
+                  << "to disable; inflow_speed must be non-negative"
+                  << std::endl;
         std::exit(EXIT_FAILURE);
       }
 
