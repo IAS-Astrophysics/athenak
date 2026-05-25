@@ -3124,6 +3124,12 @@ void IDCTSMultigrid::CalculateFASRHSPack() {
 
 void IDCTSMultigridDriver::ValidateCompositeFASOptions() const {
   if (!composite_fas_) return;
+  if (global_variable::my_rank == 0) {
+    std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "CTS composite_fas is experimental; scalar composite-AMR "
+              << "validation is required before production use." << std::endl;
+  }
   auto *mesh = pmy_pack_->pmesh;
   auto fail = [](const std::string &msg) {
     std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"

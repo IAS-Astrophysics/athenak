@@ -139,6 +139,7 @@ add_executable(
         pgen/tests/jeans_wave.cpp
         pgen/tests/binary_gravity.cpp
         pgen/tests/be_collapse.cpp
+        pgen/tests/poisson_mg_test.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp

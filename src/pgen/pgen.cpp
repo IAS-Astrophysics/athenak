@@ -949,6 +949,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     BinaryGravity(pin, is_restart);
   } else if (pgen_fun_name.compare("be_collapse") == 0) {
     BECollapse(pin, is_restart);
+  } else if (pgen_fun_name.compare("poisson_mg_test") == 0) {
+    PoissonMGTest(pin, is_restart);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

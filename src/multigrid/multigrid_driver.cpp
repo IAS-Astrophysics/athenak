@@ -248,7 +248,7 @@ void MultigridDriver::PrepareForAMR() {
       int lev = pmy_mesh_->lloc_eachmb[n].level - locrootlevel_;
       nreflevel_ = std::max(nreflevel_, lev);
     }
-    if (nreflevel_ != old_nreflevel) {
+    if (nreflevel_ != old_nreflevel && global_variable::my_rank == 0) {
       std::cout << "MultigridDriver::SetupMultigrid: Number of refinement levels = "
                 << nreflevel_ << std::endl;
     }
@@ -498,7 +498,9 @@ void MultigridDriver::InitializeOctets() {
   ncoarse_.assign(3 * 3 * 3, false);
 
   for (int l = 0; l < nreflevel_; ++l) {
-    std::cout << "  Octet level " << l << ": " << noctets_[l] << " octets" << std::endl;
+    if (global_variable::my_rank == 0) {
+      std::cout << "  Octet level " << l << ": " << noctets_[l] << " octets" << std::endl;
+    }
   }
 }
 
@@ -1021,7 +1023,7 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
   for (int v = 0; v < nvar_; ++v) {
     def += CalculateDefectNorm(MGNormType::l2, v);
   }
-  if (fshowdef_) {
+  if (fshowdef_ && global_variable::my_rank == 0) {
     std::cout << "MG initial defect = " << def << std::endl;
   }
   int n = 0;
@@ -1032,12 +1034,12 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
     for (int v = 0; v < nvar_; ++v) {
       def += CalculateDefectNorm(MGNormType::l2, v);
     }
-    if (fshowdef_) {
+    if (fshowdef_ && global_variable::my_rank == 0) {
       std::cout << "  MG iteration " << n << ": defect = " << def << std::endl;
     }
     if (def/olddef > 0.9) {
       if (eps_ == 0.0) break;
-      if (fshowdef_) {
+      if (fshowdef_ && global_variable::my_rank == 0) {
         std::cout << "### WARNING in MultigridDriver::SolveIterative" << std::endl
                   << "Slow convergence: defect ratio = " << def/olddef << std::endl;
       }
@@ -1061,15 +1063,19 @@ void MultigridDriver::SolveIterative(Driver *pdriver) {
 //! \brief Solve iteratively niter_ times (fixed count)
 
 void MultigridDriver::SolveIterativeFixedTimes(Driver *pdriver) {
-  if (fshowdef_) {
+  if (fshowdef_ && global_variable::my_rank == 0) {
     Real norm = CalculateDefectNorm(MGNormType::l2, 0);
     std::cout << "MG initial defect = " << norm << std::endl;
+  } else if (fshowdef_) {
+    (void)CalculateDefectNorm(MGNormType::l2, 0);
   }
   for (int n = 0; n < niter_; ++n) {
     SolveVCycle(pdriver, npresmooth_, npostsmooth_);
-    if (fshowdef_) {
+    if (fshowdef_ && global_variable::my_rank == 0) {
       Real norm = CalculateDefectNorm(MGNormType::l2, 0);
       std::cout << "MG iteration " << n << ": defect = " << norm << std::endl;
+    } else if (fshowdef_) {
+      (void)CalculateDefectNorm(MGNormType::l2, 0);
     }
   }
   Kokkos::fence();

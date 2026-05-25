@@ -40,6 +40,12 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
     : MultigridDriver(pmbp, 1) {
     four_pi_G_ = pin->GetOrAddReal("gravity", "four_pi_G", -1.0);
     omega_ = pin->GetOrAddReal("gravity", "omega", 1.15);
+    poisson_test_enabled_ =
+        pin->GetOrAddBoolean("poisson_test", "enabled", false);
+    poisson_test_composite_fas_ =
+        pin->GetOrAddBoolean("poisson_test", "composite_fas", false);
+    poisson_test_debug_masks_ =
+        pin->GetOrAddBoolean("poisson_test", "debug_masks", false);
     eps_ = pin->GetOrAddReal("gravity", "threshold", -1.0);
     niter_ = pin->GetOrAddInteger("gravity", "niteration", -1);
     npresmooth_ = pin->GetOrAddReal("gravity", "npresmooth", npresmooth_);
@@ -177,6 +183,25 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
 
   // Reallocate MG arrays and phi if AMR has changed the mesh
   PrepareForAMR();
+  if (poisson_test_enabled_ && global_variable::my_rank == 0) {
+    std::cout << "Poisson MG test: mode="
+              << (pmy_pack_->pmesh->multilevel ? "SMR" : "unigrid")
+              << " composite_fas=" << (poisson_test_composite_fas_ ? 1 : 0)
+              << " ranks=" << global_variable::nranks
+              << " nreflevel=" << nreflevel_
+              << " meshblock_transfer_level=" << MeshBlockTransferLevel()
+              << " root_octet_bridge_used=" << ((nreflevel_ > 0) ? 1 : 0)
+              << std::endl;
+    if (poisson_test_composite_fas_) {
+      std::cout << "Poisson MG test: composite scaffold uses generic "
+                << "Multigrid traversal; invariant masks and AMR boundary "
+                << "contract are pending later stages." << std::endl;
+      if (poisson_test_debug_masks_) {
+        std::cout << "Poisson MG test masks: unavailable in scaffold "
+                  << "valid=0 covered=0 interface=0" << std::endl;
+      }
+    }
+  }
   {
     int nmb = pmy_pack_->nmb_thispack;
     if (static_cast<int>(pmy_pack_->pgrav->phi.extent_int(0)) != nmb) {
@@ -225,10 +250,12 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
   if (fshowdef_) {
     auto t_end = std::chrono::high_resolution_clock::now();
     double mg_elapsed = std::chrono::duration<double>(t_end - t_start).count();
-    std::cout << "mg_solve_time = " << std::scientific << std::setprecision(6)
-              << mg_elapsed << std::endl;
     Real norm = CalculateDefectNorm(MGNormType::l2, 0);
-    std::cout << "MGGravityDriver::Solve: Final defect norm = " << norm << std::endl;
+    if (global_variable::my_rank == 0) {
+      std::cout << "mg_solve_time = " << std::scientific << std::setprecision(6)
+                << mg_elapsed << std::endl;
+      std::cout << "MGGravityDriver::Solve: Final defect norm = " << norm << std::endl;
+    }
   }
 
   mglevels_->RetrieveResult(pmy_pack_->pgrav->phi, 0, indcs_.ng);

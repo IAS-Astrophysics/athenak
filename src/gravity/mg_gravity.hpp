@@ -70,6 +70,9 @@ class MGGravityDriver : public MultigridDriver {
     friend class MGGravity;
   private:
     Real four_pi_G_, omega_;
+    bool poisson_test_enabled_;
+    bool poisson_test_composite_fas_;
+    bool poisson_test_debug_masks_;
 };
 
 #endif // GRAVITY_MG_GRAVITY_HPP_

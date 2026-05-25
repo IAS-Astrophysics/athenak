@@ -391,9 +391,19 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
-    std::cout << "\nStatic time evolution selected, solving steady-state problem...\n"
-              << std::endl;
-    // TODO(@user): add work for time static problems here
+    if (global_variable::my_rank == 0) {
+      std::cout << "\nStatic time evolution selected, solving steady-state problem...\n"
+                << std::endl;
+    }
+    if (pin->GetOrAddBoolean("poisson_test", "enabled", false)) {
+      if (pmesh->pmb_pack->pgrav == nullptr) {
+        std::cout << "### FATAL ERROR in Driver::Execute" << std::endl
+                  << "<poisson_test>/enabled=true requires the <gravity> module."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      pmesh->pmb_pack->pgrav->pmgd->Solve(this, 0);
+    }
   } else {
     Real elapsed_time = -1.;
     if (wall_time > 0.) {
