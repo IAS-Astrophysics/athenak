@@ -26,6 +26,21 @@ struct PoissonCompositeMaskCounts {
   long long covered = 0;
 };
 
+struct PoissonBoundaryClosureStats {
+  long long closure_writes = 0;
+  long long solve_overlap_writes = 0;
+  long long reset_writes = 0;
+  long long stencil_writes = 0;
+  long long covered_writes = 0;
+  long long face_only_count = 0;
+  long long edge_corner_skipped = 0;
+  Real delta_sum2 = 0.0;
+  Real max_delta = 0.0;
+  long long interface_residual_count = 0;
+  Real interface_residual_before_sum2 = 0.0;
+  Real interface_residual_after_sum2 = 0.0;
+};
+
 // 7-point Laplacian stencil for Poisson gravity
 struct GravityStencil {
   Real omega_over_diag;
@@ -52,6 +67,9 @@ class MGGravity : public Multigrid {
   void SmoothPack(int color) final;
   void CalculateDefectPack() final;
   void CalculateFASRHSPack() final;
+
+ private:
+  void ApplyScalarBoundaryContract(const char *phase);
 };
 
 
@@ -84,10 +102,12 @@ class MGGravityDriver : public MultigridDriver {
     bool poisson_test_debug_residual_split_;
     bool poisson_test_debug_boundary_contract_;
     int poisson_test_scalar_boundary_contract_;
+    PoissonBoundaryClosureStats poisson_last_boundary_closure_stats_;
     void BuildPoissonCompositeMasks();
     void PrintPoissonCompositeMaskDiagnostics() const;
     void PrintPoissonResidualSplit(const char *label);
     void PrintPoissonBoundaryContractDiagnostics(const char *label);
+    void PrintPoissonBoundaryClosureDiagnostics(const char *label) const;
     bool PoissonCellCoveredByFiner(int level, int ix, int iy, int iz) const;
     bool PoissonCellCoveredAtOrAbove(int level, int ix, int iy, int iz) const;
     bool PoissonCellNeedsReset(int level, int ix, int iy, int iz) const;

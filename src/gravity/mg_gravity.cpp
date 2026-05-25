@@ -192,6 +192,40 @@ void PrintPoissonBoundaryRegion(const char *label, const char *mode,
   }
 }
 
+PoissonBoundaryClosureStats ReducePoissonBoundaryClosureStats(
+    const PoissonBoundaryClosureStats &local) {
+  PoissonBoundaryClosureStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.closure_writes, &global.closure_writes, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.solve_overlap_writes, &global.solve_overlap_writes, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.reset_writes, &global.reset_writes, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.stencil_writes, &global.stencil_writes, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.covered_writes, &global.covered_writes, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.face_only_count, &global.face_only_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.edge_corner_skipped, &global.edge_corner_skipped, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.delta_sum2, &global.delta_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.max_delta, &global.max_delta, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_residual_count, &global.interface_residual_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_residual_before_sum2,
+                &global.interface_residual_before_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_residual_after_sum2,
+                &global.interface_residual_after_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
 PoissonResidualSplit ReducePoissonResidualSplit(const PoissonResidualSplit &local) {
   PoissonResidualSplit global = local;
   auto reduce_category = [](const PoissonResidualCategory &l,
@@ -854,6 +888,50 @@ void MGGravityDriver::PrintPoissonBoundaryContractDiagnostics(const char *label)
   PrintPoissonBoundaryRegion(label, mode, "fine_coarse", global.fine_coarse);
   PrintPoissonBoundaryRegion(label, mode, "same_level", global.same_level);
   PrintPoissonBoundaryRegion(label, mode, "physical", global.physical);
+  PrintPoissonBoundaryClosureDiagnostics(label);
+}
+
+void MGGravityDriver::PrintPoissonBoundaryClosureDiagnostics(const char *label) const {
+  const auto global =
+      ReducePoissonBoundaryClosureStats(poisson_last_boundary_closure_stats_);
+  const Real rms_delta = global.closure_writes > 0
+      ? std::sqrt(global.delta_sum2/static_cast<Real>(global.closure_writes)) : 0.0;
+  const Real before = global.interface_residual_count > 0
+      ? std::sqrt(global.interface_residual_before_sum2
+                  /static_cast<Real>(global.interface_residual_count)) : 0.0;
+  const Real after = global.interface_residual_count > 0
+      ? std::sqrt(global.interface_residual_after_sum2
+                  /static_cast<Real>(global.interface_residual_count)) : 0.0;
+  const char *mode = "none";
+  if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+    mode = "conservative";
+  } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
+    mode = "normal";
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "Poisson boundary_closure: label=" << label
+              << " mode=" << mode
+              << " closure_writes=" << global.closure_writes
+              << " solve_overlap_writes=" << global.solve_overlap_writes
+              << " reset_writes=" << global.reset_writes
+              << " stencil_writes=" << global.stencil_writes
+              << " covered_writes=" << global.covered_writes
+              << " face_only_count=" << global.face_only_count
+              << " edge_corner_skipped=" << global.edge_corner_skipped
+              << " max_delta=" << global.max_delta
+              << " rms_delta=" << rms_delta
+              << " interface_residual_before=" << before
+              << " interface_residual_after=" << after
+              << std::endl;
+  }
+  if (poisson_test_debug_boundary_contract_ &&
+      global.solve_overlap_writes != 0) {
+    std::cout << "### FATAL ERROR in MGGravityDriver::PrintPoissonBoundaryClosureDiagnostics"
+              << std::endl
+              << "Scalar Poisson boundary closure attempted to write COMP_SOLVE cells."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -895,8 +973,8 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
               << std::endl;
     if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
       std::cout << "Poisson MG test: scalar_boundary_contract=conservative "
-                << "uses the existing fine/coarse MG ghost-fill task order; "
-                << "no duplicate fill pass is inserted." << std::endl;
+                << "applies scalar face-only AMR support closure after the "
+                << "existing fine/coarse MG ghost-fill task order." << std::endl;
     } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
       std::cout << "Poisson MG test: scalar_boundary_contract=normal is diagnostic-only "
                 << "in this stage." << std::endl;
@@ -986,6 +1064,12 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
 }
 
 void MGGravity::SmoothPack(int color) {
+  auto *gdriver = static_cast<MGGravityDriver*>(pmy_driver_);
+  if (gdriver->poisson_test_enabled_ &&
+      gdriver->poisson_test_scalar_boundary_contract_
+          == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+    ApplyScalarBoundaryContract("smooth");
+  }
   color ^= pmy_driver_->GetCoffset();
   int ll = nlevel_-1-current_level_;
   int is = ngh_, ie = is+(indcs_.nx1>>ll)-1;
@@ -1004,6 +1088,7 @@ void MGGravity::SmoothPack(int color) {
 }
 
 void MGGravity::CalculateDefectPack() {
+  ApplyScalarBoundaryContract("defect");
   int ll = nlevel_-1-current_level_;
   int is = ngh_, ie = is+(indcs_.nx1>>ll)-1;
   int js = ngh_, je = js+(indcs_.nx2>>ll)-1;
@@ -1023,6 +1108,7 @@ void MGGravity::CalculateDefectPack() {
 }
 
 void MGGravity::CalculateFASRHSPack() {
+  ApplyScalarBoundaryContract("fas_rhs");
   int ll = nlevel_-1-current_level_;
   int is = ngh_, ie = is+(indcs_.nx1>>ll)-1;
   int js = ngh_, je = js+(indcs_.nx2>>ll)-1;
@@ -1037,6 +1123,163 @@ void MGGravity::CalculateFASRHSPack() {
                     coeff_[current_level_].d_view, matrix_[current_level_].d_view,
                     stencil, -ll, is, ie, js, je, ks, ke, false);
   }
+}
+
+void MGGravity::ApplyScalarBoundaryContract(const char *phase) {
+  (void)phase;
+  auto *gdriver = static_cast<MGGravityDriver*>(pmy_driver_);
+  gdriver->poisson_last_boundary_closure_stats_ = {};
+  if (!gdriver->poisson_test_enabled_ ||
+      gdriver->poisson_test_scalar_boundary_contract_
+          != POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+    return;
+  }
+
+  const int level = current_level_;
+  const int ncells = GetLevelActiveCells(level);
+  if (ncells <= 0) return;
+  const int il = ngh_, iu = ngh_ + ncells - 1;
+  const int jl = ngh_, ju = ngh_ + ncells - 1;
+  const int kl = ngh_, ku = ngh_ + ncells - 1;
+  const int dirs[6][3] = {{1,0,0}, {-1,0,0}, {0,1,0},
+                          {0,-1,0}, {0,0,1}, {0,0,-1}};
+
+  if (!on_host_) {
+    SyncDataLevelToHost(level);
+    SyncSourceLevelToHost(level);
+  }
+  auto u = u_[level].h_view;
+  auto src = src_[level].h_view;
+  auto mask = comp_mask_[level].h_view;
+  auto brdx = block_rdx_.h_view;
+  PoissonBoundaryClosureStats stats;
+
+  auto in_active = [&](int k, int j, int i) {
+    return i >= il && i <= iu && j >= jl && j <= ju && k >= kl && k <= ku;
+  };
+  auto residual_at = [&](int m, int k, int j, int i) {
+    const int ll = nlevel_ - 1 - level;
+    const Real dx = brdx(m) * static_cast<Real>(1 << ll);
+    const Real idx2 = 1.0/(dx*dx);
+    const Real lap = 6.0*u(m,0,k,j,i) - u(m,0,k+1,j,i)
+                   - u(m,0,k,j+1,i) - u(m,0,k,j,i+1)
+                   - u(m,0,k-1,j,i) - u(m,0,k,j-1,i)
+                   - u(m,0,k,j,i-1);
+    return src(m,0,k,j,i) - lap*idx2;
+  };
+  auto accumulate_interface_residual = [&](bool after) {
+    for (int m = 0; m < nmmb_; ++m) {
+      for (int k = kl; k <= ku; ++k) {
+        for (int j = jl; j <= ju; ++j) {
+          for (int i = il; i <= iu; ++i) {
+            if (mask(m, COMP_SOLVE, k, j, i) == 0) continue;
+            bool adjacent_support = false;
+            for (int d = 0; d < 6; ++d) {
+              const int ni = i + dirs[d][0];
+              const int nj = j + dirs[d][1];
+              const int nk = k + dirs[d][2];
+              if (!in_active(nk, nj, ni)) continue;
+              if (mask(m, COMP_SOLVE, nk, nj, ni) == 0 &&
+                  (mask(m, COMP_RESET, nk, nj, ni) != 0 ||
+                   mask(m, COMP_STENCIL, nk, nj, ni) != 0 ||
+                   mask(m, COMP_COVERED, nk, nj, ni) != 0)) {
+                adjacent_support = true;
+                break;
+              }
+            }
+            if (!adjacent_support) continue;
+            const Real r = residual_at(m, k, j, i);
+            if (!after) {
+              ++stats.interface_residual_count;
+              stats.interface_residual_before_sum2 += r*r;
+            } else {
+              stats.interface_residual_after_sum2 += r*r;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  accumulate_interface_residual(false);
+
+  for (int m = 0; m < nmmb_; ++m) {
+    for (int k = kl; k <= ku; ++k) {
+      for (int j = jl; j <= ju; ++j) {
+        for (int i = il; i <= iu; ++i) {
+          const int solve = mask(m, COMP_SOLVE, k, j, i);
+          const int reset = mask(m, COMP_RESET, k, j, i);
+          const int stencil = mask(m, COMP_STENCIL, k, j, i);
+          const int covered = mask(m, COMP_COVERED, k, j, i);
+          if (reset == 0 && stencil == 0 && covered == 0) continue;
+          if (solve != 0) {
+            ++stats.solve_overlap_writes;
+            continue;
+          }
+
+          int solve_neighbors = 0;
+          int solve_dir = -1;
+          for (int d = 0; d < 6; ++d) {
+            const int ni = i + dirs[d][0];
+            const int nj = j + dirs[d][1];
+            const int nk = k + dirs[d][2];
+            if (!in_active(nk, nj, ni)) continue;
+            if (mask(m, COMP_SOLVE, nk, nj, ni) != 0) {
+              ++solve_neighbors;
+              solve_dir = d;
+            }
+          }
+          if (solve_neighbors != 1) {
+            if (solve_neighbors > 1) ++stats.edge_corner_skipped;
+            continue;
+          }
+
+          const int si = i + dirs[solve_dir][0];
+          const int sj = j + dirs[solve_dir][1];
+          const int sk = k + dirs[solve_dir][2];
+          const int oi = i - dirs[solve_dir][0];
+          const int oj = j - dirs[solve_dir][1];
+          const int ok = k - dirs[solve_dir][2];
+          if (oi < 0 || oi >= u.extent_int(4) ||
+              oj < 0 || oj >= u.extent_int(3) ||
+              ok < 0 || ok >= u.extent_int(2)) {
+            ++stats.edge_corner_skipped;
+            continue;
+          }
+
+          // Face-only second-order normal extrapolation from nearby fine solve
+          // values. The pre-filled coarse/support value remains available in the
+          // opposite normal direction but is not trusted as an elliptic closure.
+          const Real old = u(m, 0, k, j, i);
+          const Real fine_solve = u(m, 0, sk, sj, si);
+          const int ii = si + dirs[solve_dir][0];
+          const int ij = sj + dirs[solve_dir][1];
+          const int ik = sk + dirs[solve_dir][2];
+          const bool have_second_solve = in_active(ik, ij, ii) &&
+              mask(m, COMP_SOLVE, ik, ij, ii) != 0;
+          const Real updated = have_second_solve
+              ? 2.0*fine_solve - u(m, 0, ik, ij, ii) : fine_solve;
+          const Real delta = updated - old;
+          u(m, 0, k, j, i) = updated;
+          ++stats.closure_writes;
+          ++stats.face_only_count;
+          stats.delta_sum2 += delta*delta;
+          stats.max_delta = std::max(stats.max_delta, std::abs(delta));
+          if (reset != 0) ++stats.reset_writes;
+          if (stencil != 0) ++stats.stencil_writes;
+          if (covered != 0) ++stats.covered_writes;
+        }
+      }
+    }
+  }
+
+  accumulate_interface_residual(true);
+
+  if (stats.closure_writes > 0) {
+    ModifyDataLevelOnHost(level);
+    if (!on_host_) SyncDataLevelToDevice(level);
+  }
+  gdriver->poisson_last_boundary_closure_stats_ = stats;
 }
 
 
