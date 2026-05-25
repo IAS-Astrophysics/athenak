@@ -37,6 +37,12 @@ class MeshBlockPack;
 
 namespace {
 
+enum PoissonScalarBoundaryContractMode {
+  POISSON_BOUNDARY_CONTRACT_NONE = 0,
+  POISSON_BOUNDARY_CONTRACT_CONSERVATIVE = 1,
+  POISSON_BOUNDARY_CONTRACT_NORMAL = 2
+};
+
 PoissonCompositeMaskCounts ReducePoissonMaskCounts(
     const PoissonCompositeMaskCounts &local) {
   PoissonCompositeMaskCounts global = local;
@@ -86,6 +92,106 @@ struct PoissonResidualSplit {
   PoissonResidualCategory accepted;
 };
 
+struct PoissonBoundaryRegionStats {
+  long long reset_count = 0;
+  long long stencil_count = 0;
+  long long solve_count = 0;
+  long long jump_count = 0;
+  Real jump_sum2 = 0.0;
+  Real jump_max = 0.0;
+  Real residual_solve_sum2 = 0.0;
+  Real residual_reset_sum2 = 0.0;
+  Real residual_stencil_sum2 = 0.0;
+  long long residual_solve_count = 0;
+  long long residual_reset_count = 0;
+  long long residual_stencil_count = 0;
+};
+
+struct PoissonBoundaryContractStats {
+  PoissonBoundaryRegionStats fine_coarse;
+  PoissonBoundaryRegionStats same_level;
+  PoissonBoundaryRegionStats physical;
+};
+
+void ReducePoissonBoundaryRegion(const PoissonBoundaryRegionStats &local,
+                                 PoissonBoundaryRegionStats &global) {
+  global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.reset_count, &global.reset_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.stencil_count, &global.stencil_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.solve_count, &global.solve_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.jump_count, &global.jump_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.jump_sum2, &global.jump_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.jump_max, &global.jump_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.residual_solve_sum2, &global.residual_solve_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.residual_reset_sum2, &global.residual_reset_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.residual_stencil_sum2, &global.residual_stencil_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.residual_solve_count, &global.residual_solve_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.residual_reset_count, &global.residual_reset_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.residual_stencil_count, &global.residual_stencil_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+}
+
+PoissonBoundaryContractStats ReducePoissonBoundaryContractStats(
+    const PoissonBoundaryContractStats &local) {
+  PoissonBoundaryContractStats global;
+  ReducePoissonBoundaryRegion(local.fine_coarse, global.fine_coarse);
+  ReducePoissonBoundaryRegion(local.same_level, global.same_level);
+  ReducePoissonBoundaryRegion(local.physical, global.physical);
+  return global;
+}
+
+void AddPoissonJump(PoissonBoundaryRegionStats &stats, Real jump) {
+  const Real ajump = std::abs(jump);
+  ++stats.jump_count;
+  stats.jump_sum2 += jump*jump;
+  stats.jump_max = std::max(stats.jump_max, ajump);
+}
+
+void PrintPoissonBoundaryRegion(const char *label, const char *mode,
+                                const char *region,
+                                const PoissonBoundaryRegionStats &stats) {
+  const Real jump_rms = stats.jump_count > 0
+      ? std::sqrt(stats.jump_sum2/static_cast<Real>(stats.jump_count)) : 0.0;
+  const Real solve_l2 = stats.residual_solve_count > 0
+      ? std::sqrt(stats.residual_solve_sum2/static_cast<Real>(stats.residual_solve_count))
+      : 0.0;
+  const Real reset_l2 = stats.residual_reset_count > 0
+      ? std::sqrt(stats.residual_reset_sum2/static_cast<Real>(stats.residual_reset_count))
+      : 0.0;
+  const Real stencil_l2 = stats.residual_stencil_count > 0
+      ? std::sqrt(stats.residual_stencil_sum2/static_cast<Real>(stats.residual_stencil_count))
+      : 0.0;
+  if (global_variable::my_rank == 0) {
+    std::cout << "Poisson boundary_contract: label=" << label
+              << " mode=" << mode
+              << " region=" << region
+              << " ranks=" << global_variable::nranks
+              << " reset_count=" << stats.reset_count
+              << " stencil_count=" << stats.stencil_count
+              << " solve_count=" << stats.solve_count
+              << " jump_count=" << stats.jump_count
+              << " jump_rms=" << jump_rms
+              << " jump_max=" << stats.jump_max
+              << " residual_l2_solve=" << solve_l2
+              << " residual_l2_reset=" << reset_l2
+              << " residual_l2_stencil=" << stencil_l2
+              << std::endl;
+  }
+}
+
 PoissonResidualSplit ReducePoissonResidualSplit(const PoissonResidualSplit &local) {
   PoissonResidualSplit global = local;
   auto reduce_category = [](const PoissonResidualCategory &l,
@@ -134,6 +240,23 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
                              poisson_test_debug_masks);
     poisson_test_debug_residual_split_ =
         pin->GetOrAddBoolean("poisson_test", "debug_residual_split", false);
+    poisson_test_debug_boundary_contract_ =
+        pin->GetOrAddBoolean("poisson_test", "debug_boundary_contract", false);
+    std::string scalar_boundary_contract =
+        pin->GetOrAddString("poisson_test", "scalar_boundary_contract", "none");
+    if (scalar_boundary_contract == "none") {
+      poisson_test_scalar_boundary_contract_ = POISSON_BOUNDARY_CONTRACT_NONE;
+    } else if (scalar_boundary_contract == "conservative") {
+      poisson_test_scalar_boundary_contract_ = POISSON_BOUNDARY_CONTRACT_CONSERVATIVE;
+    } else if (scalar_boundary_contract == "normal") {
+      poisson_test_scalar_boundary_contract_ = POISSON_BOUNDARY_CONTRACT_NORMAL;
+    } else {
+      std::cout << "### FATAL ERROR in MGGravityDriver::MGGravityDriver" << std::endl
+                << "Unknown poisson_test/scalar_boundary_contract='"
+                << scalar_boundary_contract << "'. Expected none, conservative, or normal."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     eps_ = pin->GetOrAddReal("gravity", "threshold", -1.0);
     niter_ = pin->GetOrAddInteger("gravity", "niteration", -1);
     npresmooth_ = pin->GetOrAddReal("gravity", "npresmooth", npresmooth_);
@@ -638,6 +761,101 @@ void MGGravityDriver::PrintPoissonResidualSplit(const char *label) {
   }
 }
 
+void MGGravityDriver::PrintPoissonBoundaryContractDiagnostics(const char *label) {
+  const int level = mglevels_->GetNumberOfLevels() - 1;
+  mglevels_->SetCurrentLevel(level);
+  mglevels_->CalculateDefectPack();
+  Kokkos::fence();
+  mglevels_->SyncDataLevelToHost(level);
+  mglevels_->SyncDefectLevelToHost(level);
+
+  auto u = mglevels_->GetDataLevel_h(level);
+  auto def = mglevels_->GetDefectLevel_h(level);
+  auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+  const int ngh = mglevels_->GetGhostCells();
+  const int ncells = mglevels_->GetLevelActiveCells(level);
+  const int il = ngh, iu = ngh + ncells - 1;
+  const int jl = ngh, ju = ngh + ncells - 1;
+  const int kl = ngh, ku = ngh + ncells - 1;
+  const int dirs[3][3] = {{1,0,0}, {0,1,0}, {0,0,1}};
+  PoissonBoundaryContractStats local;
+
+  auto add_residual = [](PoissonBoundaryRegionStats &stats,
+                         int solve, int reset, int stencil, Real value) {
+    if (reset != 0) {
+      ++stats.residual_reset_count;
+      stats.residual_reset_sum2 += value*value;
+    } else if (solve != 0) {
+      ++stats.residual_solve_count;
+      stats.residual_solve_sum2 += value*value;
+    } else if (stencil != 0) {
+      ++stats.residual_stencil_count;
+      stats.residual_stencil_sum2 += value*value;
+    }
+  };
+
+  for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
+    for (int k = kl; k <= ku; ++k) {
+      for (int j = jl; j <= ju; ++j) {
+        for (int i = il; i <= iu; ++i) {
+          const int solve = mask(m, COMP_SOLVE, k, j, i);
+          const int reset = mask(m, COMP_RESET, k, j, i);
+          const int stencil = mask(m, COMP_STENCIL, k, j, i);
+          const Real r = def(m, 0, k, j, i);
+          bool adjacent_interface = (reset != 0);
+
+          if (reset != 0) ++local.fine_coarse.reset_count;
+          if (stencil != 0 && solve == 0) ++local.fine_coarse.stencil_count;
+
+          for (int d = 0; d < 3; ++d) {
+            const int ni = i + dirs[d][0];
+            const int nj = j + dirs[d][1];
+            const int nk = k + dirs[d][2];
+            if (ni > iu || nj > ju || nk > ku) continue;
+            const int nsolve = mask(m, COMP_SOLVE, nk, nj, ni);
+            const int nreset = mask(m, COMP_RESET, nk, nj, ni);
+            const int nstencil = mask(m, COMP_STENCIL, nk, nj, ni);
+            if ((reset != 0 && nsolve != 0) || (solve != 0 && nreset != 0)) {
+              AddPoissonJump(local.fine_coarse,
+                             u(m, 0, k, j, i) - u(m, 0, nk, nj, ni));
+              adjacent_interface = true;
+            } else if (solve != 0 && nsolve != 0) {
+              AddPoissonJump(local.same_level,
+                             u(m, 0, k, j, i) - u(m, 0, nk, nj, ni));
+            } else if ((stencil != 0 && nsolve != 0) ||
+                       (solve != 0 && nstencil != 0)) {
+              AddPoissonJump(local.fine_coarse,
+                             u(m, 0, k, j, i) - u(m, 0, nk, nj, ni));
+              adjacent_interface = true;
+            }
+          }
+
+          if (solve != 0) {
+            ++local.same_level.solve_count;
+            if (adjacent_interface) ++local.fine_coarse.solve_count;
+          }
+          if (adjacent_interface || reset != 0 || (stencil != 0 && solve == 0)) {
+            add_residual(local.fine_coarse, solve, reset, stencil, r);
+          } else if (solve != 0) {
+            add_residual(local.same_level, solve, reset, stencil, r);
+          }
+        }
+      }
+    }
+  }
+
+  const auto global = ReducePoissonBoundaryContractStats(local);
+  const char *mode = "none";
+  if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+    mode = "conservative";
+  } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
+    mode = "normal";
+  }
+  PrintPoissonBoundaryRegion(label, mode, "fine_coarse", global.fine_coarse);
+  PrintPoissonBoundaryRegion(label, mode, "same_level", global.same_level);
+  PrintPoissonBoundaryRegion(label, mode, "physical", global.physical);
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn MGGravity::MGGravity(MultigridDriver *pmd, MeshBlock *pmb)
 //! \brief MGGravity constructor
@@ -675,10 +893,17 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
               << " meshblock_transfer_level=" << MeshBlockTransferLevel()
               << " root_octet_bridge_used=" << ((nreflevel_ > 0) ? 1 : 0)
               << std::endl;
+    if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+      std::cout << "Poisson MG test: scalar_boundary_contract=conservative "
+                << "uses the existing fine/coarse MG ghost-fill task order; "
+                << "no duplicate fill pass is inserted." << std::endl;
+    } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
+      std::cout << "Poisson MG test: scalar_boundary_contract=normal is diagnostic-only "
+                << "in this stage." << std::endl;
+    }
     if (poisson_test_composite_fas_) {
       std::cout << "Poisson MG test: composite scaffold uses generic "
-                << "Multigrid traversal; invariant masks and AMR boundary "
-                << "contract are pending later stages." << std::endl;
+                << "Multigrid traversal with scalar composite masks." << std::endl;
     }
   }
   {
@@ -714,6 +939,9 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
     if (poisson_test_debug_composite_masks_) {
       PrintPoissonCompositeMaskDiagnostics();
     }
+    if (poisson_test_debug_boundary_contract_) {
+      PrintPoissonBoundaryContractDiagnostics("initial");
+    }
     if (poisson_test_debug_residual_split_) {
       PrintPoissonResidualSplit("initial");
     }
@@ -734,6 +962,9 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
     SolveMG(pdriver);
 
   Kokkos::fence();
+  if (poisson_test_enabled_ && poisson_test_debug_boundary_contract_) {
+    PrintPoissonBoundaryContractDiagnostics("final");
+  }
   if (poisson_test_enabled_ && poisson_test_debug_residual_split_) {
     PrintPoissonResidualSplit("final");
   }

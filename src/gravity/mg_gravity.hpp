@@ -82,9 +82,12 @@ class MGGravityDriver : public MultigridDriver {
     bool poisson_test_composite_fas_;
     bool poisson_test_debug_composite_masks_;
     bool poisson_test_debug_residual_split_;
+    bool poisson_test_debug_boundary_contract_;
+    int poisson_test_scalar_boundary_contract_;
     void BuildPoissonCompositeMasks();
     void PrintPoissonCompositeMaskDiagnostics() const;
     void PrintPoissonResidualSplit(const char *label);
+    void PrintPoissonBoundaryContractDiagnostics(const char *label);
     bool PoissonCellCoveredByFiner(int level, int ix, int iy, int iz) const;
     bool PoissonCellCoveredAtOrAbove(int level, int ix, int iy, int iz) const;
     bool PoissonCellNeedsReset(int level, int ix, int iy, int iz) const;
