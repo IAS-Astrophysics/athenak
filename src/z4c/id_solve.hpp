@@ -97,6 +97,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void BuildCompositeMeshBlockMasks();
   void BuildCompositeRootAndOctetMasks();
   void PrintCompositeMaskDiagnostics() const;
+  Real CalculateCompositeDefectNorm(MGNormType nrm, int n);
 
   IDConformalThinSandwich *owner_;
   Real omega_;
@@ -122,6 +123,8 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool composite_fas_;
   bool composite_second_order_only_;
   bool debug_composite_masks_;
+  bool debug_composite_residual_;
+  bool composite_masks_ready_;
 
   friend class IDCTSMultigrid;
 };

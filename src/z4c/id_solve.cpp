@@ -405,6 +405,30 @@ struct SmootherCellStats {
   }
 };
 
+struct CompositeResidualStats {
+  Real valid_sum2 = 0.0;
+  Real valid_sum_abs = 0.0;
+  Real valid_max = 0.0;
+  Real valid_volume = 0.0;
+  long long valid_count = 0;
+  Real interface_sum2 = 0.0;
+  Real interface_volume = 0.0;
+  long long interface_count = 0;
+  Real covered_sum2 = 0.0;
+  Real covered_volume = 0.0;
+  long long covered_count = 0;
+};
+
+const char *CTSVarName(int n) {
+  switch (n) {
+    case ID_CTS_PSI: return "psi";
+    case ID_CTS_BETAX: return "betax";
+    case ID_CTS_BETAY: return "betay";
+    case ID_CTS_BETAZ: return "betaz";
+    default: return "unknown";
+  }
+}
+
 template <typename UView>
 struct LocalUpdatedUView {
   UView u;
@@ -829,6 +853,76 @@ SmootherCellStats SmoothImpl(IDCTSMultigrid *mg, ViewType &u,
   return stats;
 }
 
+template <int NGHOST, typename ViewType, typename MaskViewType>
+SmootherCellStats SmoothImplMasked(IDCTSMultigrid *mg, ViewType &u,
+                             const ViewType &u_frozen, const ViewType &src,
+                             const ViewType &free, const MaskViewType &mask,
+                             int ll, int is, int ie, int js, int je, int ks, int ke,
+                             int color, Real omega, int fd_stencil, int smoother_type,
+                             int ngs_iterations, Real ngs_jacobian_eps,
+                             Real ngs_max_update,
+                             Real smoother_max_update_fraction,
+                             int ngs_line_search_steps, Real ngs_line_search_min) {
+  using ExeSpace = typename ViewType::execution_space;
+  auto brdx = [&]() {
+    if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
+    else return mg->GetBlockDx();
+  }();
+  int nmmb = mg->GetNumMeshBlocks();
+  int rlev = -ll;
+  SmootherCellStats stats;
+  stats.Clear();
+  Kokkos::parallel_reduce("IDCTS::SmoothMasked",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<3>>(
+        {0, ks, js}, {nmmb, ke + 1, je + 1}),
+  KOKKOS_LAMBDA(int m, int k, int j, Real &accepted, Real &limited,
+                Real &backtracked, Real &fallback, Real &singular,
+                Real &nonfinite, Real &rejected, Real &psi_floor,
+                Real &max_update) {
+    Real dx = (rlev <= 0) ? brdx(m)*static_cast<Real>(1<<(-rlev))
+                          : brdx(m)/static_cast<Real>(1<<rlev);
+    Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
+    int c = (color + k + j) & 1;
+    for (int i = is + c; i <= ie; i += 2) {
+      if (mask(m, COMP_RELAX, k, j, i) == 0) continue;
+      if (free(m, ID_FREE_MASK, k, j, i) < 0.5) continue;
+      SmootherCellStats cell;
+      if (smoother_type == 1) {
+        cell = ApplyNewtonGSCTSUpdate<NGHOST>(u_frozen, u, src, free, idx, fd_stencil,
+                                              m, k, j, i, omega, ngs_iterations,
+                                              ngs_jacobian_eps, ngs_max_update,
+                                              smoother_max_update_fraction,
+                                              ngs_line_search_steps,
+                                              ngs_line_search_min);
+      } else {
+        cell = ApplyDiagonalCTSUpdate<NGHOST>(u_frozen, u, src, free, idx, fd_stencil,
+                                              m, k, j, i, omega, ngs_max_update,
+                                              smoother_max_update_fraction);
+      }
+      accepted += cell.values[ID_CTS_SMOOTH_ACCEPTED];
+      limited += cell.values[ID_CTS_SMOOTH_LIMITED];
+      backtracked += cell.values[ID_CTS_SMOOTH_BACKTRACKED];
+      fallback += cell.values[ID_CTS_SMOOTH_FALLBACK];
+      singular += cell.values[ID_CTS_SMOOTH_SINGULAR];
+      nonfinite += cell.values[ID_CTS_SMOOTH_NONFINITE];
+      rejected += cell.values[ID_CTS_SMOOTH_REJECTED];
+      psi_floor += cell.values[ID_CTS_SMOOTH_PSI_FLOOR];
+      if (cell.values[ID_CTS_SMOOTH_MAX_UPDATE] > max_update) {
+        max_update = cell.values[ID_CTS_SMOOTH_MAX_UPDATE];
+      }
+    }
+  }, Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_ACCEPTED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_LIMITED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_BACKTRACKED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_FALLBACK]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_SINGULAR]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_NONFINITE]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_REJECTED]),
+     Kokkos::Sum<Real>(stats.values[ID_CTS_SMOOTH_PSI_FLOOR]),
+     Kokkos::Max<Real>(stats.values[ID_CTS_SMOOTH_MAX_UPDATE]));
+  return stats;
+}
+
 template <int NGHOST, typename ViewType>
 void DefectImpl(IDCTSMultigrid *mg, ViewType &def, const ViewType &u, const ViewType &src,
                 const ViewType &free, int ll, int is, int ie, int js, int je, int ks, int ke,
@@ -852,6 +946,107 @@ void DefectImpl(IDCTSMultigrid *mg, ViewType &def, const ViewType &u, const View
                        ? src(m,v,k,j,i) - op[v] : 0.0;
     }
   });
+}
+
+template <int NGHOST, typename ViewType, typename MaskViewType>
+void DefectImplMasked(IDCTSMultigrid *mg, ViewType &def, const ViewType &u,
+                const ViewType &src, const ViewType &free, const MaskViewType &mask,
+                int ll, int is, int ie, int js, int je, int ks, int ke,
+                int fd_stencil) {
+  using ExeSpace = typename ViewType::execution_space;
+  auto brdx = [&]() {
+    if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
+    else return mg->GetBlockDx();
+  }();
+  int nmmb = mg->GetNumMeshBlocks();
+  int rlev = -ll;
+  par_for("IDCTS::DefectMasked", ExeSpace(), 0, nmmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    if (mask(m, COMP_VALID, k, j, i) == 0 ||
+        free(m, ID_FREE_MASK, k, j, i) < 0.5) {
+      for (int v = 0; v < ID_CTS_NVAR; ++v) {
+        def(m, v, k, j, i) = 0.0;
+      }
+      return;
+    }
+    Real dx = (rlev <= 0) ? brdx(m)*static_cast<Real>(1<<(-rlev))
+                          : brdx(m)/static_cast<Real>(1<<rlev);
+    Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
+    Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+    CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+    for (int v = 0; v < ID_CTS_NVAR; ++v) {
+      def(m, v, k, j, i) = src(m, v, k, j, i) - op[v];
+    }
+  });
+}
+
+template <int NGHOST, typename ViewType, typename MaskViewType>
+CompositeResidualStats CompositeResidualStatsImpl(IDCTSMultigrid *mg,
+                const ViewType &u, const ViewType &src, const ViewType &free,
+                const MaskViewType &mask, int ll, int is, int ie, int js, int je,
+                int ks, int ke, int fd_stencil, int var, bool include_covered) {
+  using ExeSpace = typename ViewType::execution_space;
+  auto brdx = [&]() {
+    if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
+    else return mg->GetBlockDx();
+  }();
+  int nmmb = mg->GetNumMeshBlocks();
+  int rlev = -ll;
+  CompositeResidualStats stats;
+  Kokkos::parallel_reduce("IDCTS::CompositeResidualStats",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<4>>(
+        {0, ks, js, is}, {nmmb, ke + 1, je + 1, ie + 1}),
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i,
+                  Real &valid_sum2, Real &valid_sum_abs, Real &valid_max,
+                  Real &valid_volume, long long &valid_count,
+                  Real &interface_sum2, Real &interface_volume,
+                  long long &interface_count, Real &covered_sum2,
+                  Real &covered_volume, long long &covered_count) {
+      const bool is_valid = (mask(m, COMP_VALID, k, j, i) != 0);
+      const bool is_interface = is_valid && (mask(m, COMP_INTERFACE, k, j, i) != 0);
+      const bool is_covered = include_covered && (mask(m, COMP_COVERED, k, j, i) != 0);
+      if (!is_valid && !is_covered) return;
+
+      Real dx = (rlev <= 0) ? brdx(m)*static_cast<Real>(1<<(-rlev))
+                            : brdx(m)/static_cast<Real>(1<<rlev);
+      Real dV = dx*dx*dx;
+      Real residual = 0.0;
+      if (free(m, ID_FREE_MASK, k, j, i) >= 0.5) {
+        Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
+        Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+        CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+        residual = src(m, var, k, j, i) - op[var];
+      }
+      const Real abs_res = std::abs(residual);
+      if (is_valid) {
+        valid_sum2 += dV*residual*residual;
+        valid_sum_abs += dV*abs_res;
+        valid_max = std::max(valid_max, abs_res);
+        valid_volume += dV;
+        ++valid_count;
+      }
+      if (is_interface) {
+        interface_sum2 += dV*residual*residual;
+        interface_volume += dV;
+        ++interface_count;
+      }
+      if (is_covered) {
+        covered_sum2 += dV*residual*residual;
+        covered_volume += dV;
+        ++covered_count;
+      }
+    }, Kokkos::Sum<Real>(stats.valid_sum2),
+       Kokkos::Sum<Real>(stats.valid_sum_abs),
+       Kokkos::Max<Real>(stats.valid_max),
+       Kokkos::Sum<Real>(stats.valid_volume),
+       Kokkos::Sum<long long>(stats.valid_count),
+       Kokkos::Sum<Real>(stats.interface_sum2),
+       Kokkos::Sum<Real>(stats.interface_volume),
+       Kokkos::Sum<long long>(stats.interface_count),
+       Kokkos::Sum<Real>(stats.covered_sum2),
+       Kokkos::Sum<Real>(stats.covered_volume),
+       Kokkos::Sum<long long>(stats.covered_count));
+  return stats;
 }
 
 template <int NGHOST, typename ViewType>
@@ -1026,71 +1221,157 @@ void IDCTSMultigrid::SmoothPack(int color) {
   SmootherCellStats stats;
   stats.Clear();
   PrepareFrozenView();
+  const bool use_composite_mask =
+      driver->composite_fas_ && (pmy_pack_ != nullptr || current_level_ == nlevel_ - 1);
+  if (use_composite_mask && !driver->composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigrid::SmoothPack" << std::endl
+              << "Composite FAS smoother requested before composite masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (on_host_) {
-    switch (fd) {
-      case 2: stats = SmoothImpl<2>(this, u_[current_level_].h_view,
-                                    frozen_u_.h_view,
-                                    src_[current_level_].h_view,
-                                    coeff_[current_level_].h_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->active_smooth_omega_, fd,
-                                    driver->smoother_type_, driver->ngs_iterations_,
-                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
-                                    driver->smoother_max_update_fraction_,
-                                    driver->ngs_line_search_steps_,
-                                    driver->ngs_line_search_min_); break;
-      case 3: stats = SmoothImpl<3>(this, u_[current_level_].h_view,
-                                    frozen_u_.h_view,
-                                    src_[current_level_].h_view,
-                                    coeff_[current_level_].h_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->active_smooth_omega_, fd,
-                                    driver->smoother_type_, driver->ngs_iterations_,
-                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
-                                    driver->smoother_max_update_fraction_,
-                                    driver->ngs_line_search_steps_,
-                                    driver->ngs_line_search_min_); break;
-      default: stats = SmoothImpl<4>(this, u_[current_level_].h_view,
-                                     frozen_u_.h_view,
-                                     src_[current_level_].h_view,
-                                     coeff_[current_level_].h_view, ll, is, ie, js, je,
-                                     ks, ke, color, driver->active_smooth_omega_, fd,
-                                     driver->smoother_type_, driver->ngs_iterations_,
-                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
-                                     driver->smoother_max_update_fraction_,
-                                     driver->ngs_line_search_steps_,
-                                     driver->ngs_line_search_min_); break;
+    if (use_composite_mask) {
+      auto mask = comp_mask_[current_level_].h_view;
+      switch (fd) {
+        case 2: stats = SmoothImplMasked<2>(this, u_[current_level_].h_view,
+                                      frozen_u_.h_view,
+                                      src_[current_level_].h_view,
+                                      coeff_[current_level_].h_view, mask, ll, is, ie,
+                                      js, je, ks, ke, color,
+                                      driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        case 3: stats = SmoothImplMasked<3>(this, u_[current_level_].h_view,
+                                      frozen_u_.h_view,
+                                      src_[current_level_].h_view,
+                                      coeff_[current_level_].h_view, mask, ll, is, ie,
+                                      js, je, ks, ke, color,
+                                      driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        default: stats = SmoothImplMasked<4>(this, u_[current_level_].h_view,
+                                       frozen_u_.h_view,
+                                       src_[current_level_].h_view,
+                                       coeff_[current_level_].h_view, mask, ll, is, ie,
+                                       js, je, ks, ke, color,
+                                       driver->active_smooth_omega_, fd,
+                                       driver->smoother_type_, driver->ngs_iterations_,
+                                       driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                       driver->smoother_max_update_fraction_,
+                                       driver->ngs_line_search_steps_,
+                                       driver->ngs_line_search_min_); break;
+      }
+    } else {
+      switch (fd) {
+        case 2: stats = SmoothImpl<2>(this, u_[current_level_].h_view,
+                                      frozen_u_.h_view,
+                                      src_[current_level_].h_view,
+                                      coeff_[current_level_].h_view, ll, is, ie, js, je,
+                                      ks, ke, color, driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        case 3: stats = SmoothImpl<3>(this, u_[current_level_].h_view,
+                                      frozen_u_.h_view,
+                                      src_[current_level_].h_view,
+                                      coeff_[current_level_].h_view, ll, is, ie, js, je,
+                                      ks, ke, color, driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        default: stats = SmoothImpl<4>(this, u_[current_level_].h_view,
+                                       frozen_u_.h_view,
+                                       src_[current_level_].h_view,
+                                       coeff_[current_level_].h_view, ll, is, ie, js, je,
+                                       ks, ke, color, driver->active_smooth_omega_, fd,
+                                       driver->smoother_type_, driver->ngs_iterations_,
+                                       driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                       driver->smoother_max_update_fraction_,
+                                       driver->ngs_line_search_steps_,
+                                       driver->ngs_line_search_min_); break;
+      }
     }
   } else {
-    switch (fd) {
-      case 2: stats = SmoothImpl<2>(this, u_[current_level_].d_view,
-                                    frozen_u_.d_view,
-                                    src_[current_level_].d_view,
-                                    coeff_[current_level_].d_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->active_smooth_omega_, fd,
-                                    driver->smoother_type_, driver->ngs_iterations_,
-                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
-                                    driver->smoother_max_update_fraction_,
-                                    driver->ngs_line_search_steps_,
-                                    driver->ngs_line_search_min_); break;
-      case 3: stats = SmoothImpl<3>(this, u_[current_level_].d_view,
-                                    frozen_u_.d_view,
-                                    src_[current_level_].d_view,
-                                    coeff_[current_level_].d_view, ll, is, ie, js, je,
-                                    ks, ke, color, driver->active_smooth_omega_, fd,
-                                    driver->smoother_type_, driver->ngs_iterations_,
-                                    driver->ngs_jacobian_eps_, driver->ngs_max_update_,
-                                    driver->smoother_max_update_fraction_,
-                                    driver->ngs_line_search_steps_,
-                                    driver->ngs_line_search_min_); break;
-      default: stats = SmoothImpl<4>(this, u_[current_level_].d_view,
-                                     frozen_u_.d_view,
-                                     src_[current_level_].d_view,
-                                     coeff_[current_level_].d_view, ll, is, ie, js, je,
-                                     ks, ke, color, driver->active_smooth_omega_, fd,
-                                     driver->smoother_type_, driver->ngs_iterations_,
-                                     driver->ngs_jacobian_eps_, driver->ngs_max_update_,
-                                     driver->smoother_max_update_fraction_,
-                                     driver->ngs_line_search_steps_,
-                                     driver->ngs_line_search_min_); break;
+    if (use_composite_mask) {
+      auto mask = comp_mask_[current_level_].d_view;
+      switch (fd) {
+        case 2: stats = SmoothImplMasked<2>(this, u_[current_level_].d_view,
+                                      frozen_u_.d_view,
+                                      src_[current_level_].d_view,
+                                      coeff_[current_level_].d_view, mask, ll, is, ie,
+                                      js, je, ks, ke, color,
+                                      driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        case 3: stats = SmoothImplMasked<3>(this, u_[current_level_].d_view,
+                                      frozen_u_.d_view,
+                                      src_[current_level_].d_view,
+                                      coeff_[current_level_].d_view, mask, ll, is, ie,
+                                      js, je, ks, ke, color,
+                                      driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        default: stats = SmoothImplMasked<4>(this, u_[current_level_].d_view,
+                                       frozen_u_.d_view,
+                                       src_[current_level_].d_view,
+                                       coeff_[current_level_].d_view, mask, ll, is, ie,
+                                       js, je, ks, ke, color,
+                                       driver->active_smooth_omega_, fd,
+                                       driver->smoother_type_, driver->ngs_iterations_,
+                                       driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                       driver->smoother_max_update_fraction_,
+                                       driver->ngs_line_search_steps_,
+                                       driver->ngs_line_search_min_); break;
+      }
+    } else {
+      switch (fd) {
+        case 2: stats = SmoothImpl<2>(this, u_[current_level_].d_view,
+                                      frozen_u_.d_view,
+                                      src_[current_level_].d_view,
+                                      coeff_[current_level_].d_view, ll, is, ie, js, je,
+                                      ks, ke, color, driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        case 3: stats = SmoothImpl<3>(this, u_[current_level_].d_view,
+                                      frozen_u_.d_view,
+                                      src_[current_level_].d_view,
+                                      coeff_[current_level_].d_view, ll, is, ie, js, je,
+                                      ks, ke, color, driver->active_smooth_omega_, fd,
+                                      driver->smoother_type_, driver->ngs_iterations_,
+                                      driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                      driver->smoother_max_update_fraction_,
+                                      driver->ngs_line_search_steps_,
+                                      driver->ngs_line_search_min_); break;
+        default: stats = SmoothImpl<4>(this, u_[current_level_].d_view,
+                                       frozen_u_.d_view,
+                                       src_[current_level_].d_view,
+                                       coeff_[current_level_].d_view, ll, is, ie, js, je,
+                                       ks, ke, color, driver->active_smooth_omega_, fd,
+                                       driver->smoother_type_, driver->ngs_iterations_,
+                                       driver->ngs_jacobian_eps_, driver->ngs_max_update_,
+                                       driver->smoother_max_update_fraction_,
+                                       driver->ngs_line_search_steps_,
+                                       driver->ngs_line_search_min_); break;
+      }
     }
   }
   driver->AccumulateSmootherStats(stats.values);
@@ -1105,29 +1386,73 @@ void IDCTSMultigrid::CalculateDefectPack() {
   int fine_fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
   int fd = (pmy_pack_ != nullptr && current_level_ == nlevel_ - 1)
            ? fine_fd : driver->mg_coarse_fd_stencil_;
+  const bool use_composite_mask =
+      driver->composite_fas_ && (pmy_pack_ != nullptr || current_level_ == nlevel_ - 1);
+  if (use_composite_mask && !driver->composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigrid::CalculateDefectPack" << std::endl
+              << "Composite FAS defect requested before composite masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (on_host_) {
-    switch (fd) {
-      case 2: DefectImpl<2>(this, def_[current_level_].h_view, u_[current_level_].h_view,
-                            src_[current_level_].h_view, coeff_[current_level_].h_view,
-                            ll, is, ie, js, je, ks, ke, fd); break;
-      case 3: DefectImpl<3>(this, def_[current_level_].h_view, u_[current_level_].h_view,
-                            src_[current_level_].h_view, coeff_[current_level_].h_view,
-                            ll, is, ie, js, je, ks, ke, fd); break;
-      default: DefectImpl<4>(this, def_[current_level_].h_view, u_[current_level_].h_view,
-                             src_[current_level_].h_view, coeff_[current_level_].h_view,
-                             ll, is, ie, js, je, ks, ke, fd); break;
+    if (use_composite_mask) {
+      auto mask = comp_mask_[current_level_].h_view;
+      switch (fd) {
+        case 2: DefectImplMasked<2>(this, def_[current_level_].h_view,
+                              u_[current_level_].h_view, src_[current_level_].h_view,
+                              coeff_[current_level_].h_view, mask, ll, is, ie, js, je,
+                              ks, ke, fd); break;
+        case 3: DefectImplMasked<3>(this, def_[current_level_].h_view,
+                              u_[current_level_].h_view, src_[current_level_].h_view,
+                              coeff_[current_level_].h_view, mask, ll, is, ie, js, je,
+                              ks, ke, fd); break;
+        default: DefectImplMasked<4>(this, def_[current_level_].h_view,
+                               u_[current_level_].h_view, src_[current_level_].h_view,
+                               coeff_[current_level_].h_view, mask, ll, is, ie, js, je,
+                               ks, ke, fd); break;
+      }
+    } else {
+      switch (fd) {
+        case 2: DefectImpl<2>(this, def_[current_level_].h_view, u_[current_level_].h_view,
+                              src_[current_level_].h_view, coeff_[current_level_].h_view,
+                              ll, is, ie, js, je, ks, ke, fd); break;
+        case 3: DefectImpl<3>(this, def_[current_level_].h_view, u_[current_level_].h_view,
+                              src_[current_level_].h_view, coeff_[current_level_].h_view,
+                              ll, is, ie, js, je, ks, ke, fd); break;
+        default: DefectImpl<4>(this, def_[current_level_].h_view, u_[current_level_].h_view,
+                               src_[current_level_].h_view, coeff_[current_level_].h_view,
+                               ll, is, ie, js, je, ks, ke, fd); break;
+      }
     }
   } else {
-    switch (fd) {
-      case 2: DefectImpl<2>(this, def_[current_level_].d_view, u_[current_level_].d_view,
-                            src_[current_level_].d_view, coeff_[current_level_].d_view,
-                            ll, is, ie, js, je, ks, ke, fd); break;
-      case 3: DefectImpl<3>(this, def_[current_level_].d_view, u_[current_level_].d_view,
-                            src_[current_level_].d_view, coeff_[current_level_].d_view,
-                            ll, is, ie, js, je, ks, ke, fd); break;
-      default: DefectImpl<4>(this, def_[current_level_].d_view, u_[current_level_].d_view,
-                             src_[current_level_].d_view, coeff_[current_level_].d_view,
-                             ll, is, ie, js, je, ks, ke, fd); break;
+    if (use_composite_mask) {
+      auto mask = comp_mask_[current_level_].d_view;
+      switch (fd) {
+        case 2: DefectImplMasked<2>(this, def_[current_level_].d_view,
+                              u_[current_level_].d_view, src_[current_level_].d_view,
+                              coeff_[current_level_].d_view, mask, ll, is, ie, js, je,
+                              ks, ke, fd); break;
+        case 3: DefectImplMasked<3>(this, def_[current_level_].d_view,
+                              u_[current_level_].d_view, src_[current_level_].d_view,
+                              coeff_[current_level_].d_view, mask, ll, is, ie, js, je,
+                              ks, ke, fd); break;
+        default: DefectImplMasked<4>(this, def_[current_level_].d_view,
+                               u_[current_level_].d_view, src_[current_level_].d_view,
+                               coeff_[current_level_].d_view, mask, ll, is, ie, js, je,
+                               ks, ke, fd); break;
+      }
+    } else {
+      switch (fd) {
+        case 2: DefectImpl<2>(this, def_[current_level_].d_view, u_[current_level_].d_view,
+                              src_[current_level_].d_view, coeff_[current_level_].d_view,
+                              ll, is, ie, js, je, ks, ke, fd); break;
+        case 3: DefectImpl<3>(this, def_[current_level_].d_view, u_[current_level_].d_view,
+                              src_[current_level_].d_view, coeff_[current_level_].d_view,
+                              ll, is, ie, js, je, ks, ke, fd); break;
+        default: DefectImpl<4>(this, def_[current_level_].d_view, u_[current_level_].d_view,
+                               src_[current_level_].d_view, coeff_[current_level_].d_view,
+                               ll, is, ie, js, je, ks, ke, fd); break;
+      }
     }
   }
 }
@@ -1224,6 +1549,9 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
       pin->GetOrAddBoolean("id_solve", "composite_second_order_only", true);
   debug_composite_masks_ =
       pin->GetOrAddBoolean("id_solve", "debug_composite_masks", false);
+  debug_composite_residual_ =
+      pin->GetOrAddBoolean("id_solve", "debug_composite_residual", false);
+  composite_masks_ready_ = false;
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -1832,6 +2160,7 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
 
 void IDCTSMultigridDriver::BuildCompositeMasks() {
   if (!composite_fas_) return;
+  composite_masks_ready_ = false;
   mgroot_->ClearCompositeMasks();
   mglevels_->ClearCompositeMasks();
   for (int l = 0; l < nreflevel_; ++l) {
@@ -1841,6 +2170,7 @@ void IDCTSMultigridDriver::BuildCompositeMasks() {
   }
   BuildCompositeMeshBlockMasks();
   BuildCompositeRootAndOctetMasks();
+  composite_masks_ready_ = true;
   if (debug_composite_masks_) PrintCompositeMaskDiagnostics();
 }
 
@@ -2148,6 +2478,148 @@ void IDCTSMultigridDriver::PrintCompositeMaskDiagnostics() const {
   }
 }
 
+Real IDCTSMultigridDriver::CalculateCompositeDefectNorm(MGNormType nrm, int n) {
+  if (!composite_fas_) return CalculateDefectNorm(nrm, n);
+  if (!composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::CalculateCompositeDefectNorm"
+              << std::endl
+              << "Composite FAS residual requested before composite masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  IDCTSMultigrid *mg = static_cast<IDCTSMultigrid*>(mglevels_);
+  const int level = mglevels_->GetCurrentLevel();
+  const int ll = mglevels_->GetLevelShift();
+  const int is = mglevels_->GetGhostCells();
+  const int js = is;
+  const int ks = is;
+  const int ncells = mglevels_->GetLevelActiveCells(level);
+  const int ie = is + ncells - 1;
+  const int je = js + ncells - 1;
+  const int ke = ks + ncells - 1;
+  const int fine_fd = owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  const int fd = (level == mglevels_->GetNumberOfLevels() - 1)
+                 ? fine_fd : mg_coarse_fd_stencil_;
+
+  {
+    auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+    auto u = mglevels_->GetCurrentData_h();
+    if (mask.extent_int(0) != u.extent_int(0) ||
+        mask.extent_int(2) != u.extent_int(2) ||
+        mask.extent_int(3) != u.extent_int(3) ||
+        mask.extent_int(4) != u.extent_int(4)) {
+      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::CalculateCompositeDefectNorm"
+                << std::endl
+                << "Composite mask extents do not match the current CTS MG level."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  mglevels_->CalculateDefectPack();
+  CompositeResidualStats local;
+  const bool include_covered = debug_composite_residual_;
+  if (mglevels_->OnHost()) {
+    auto u = mglevels_->GetCurrentData_h();
+    auto src = mglevels_->GetCurrentSource_h();
+    auto free = mglevels_->GetCoefficientLevel_h(level);
+    auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+    switch (fd) {
+      case 2:
+        local = CompositeResidualStatsImpl<2>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, n, include_covered);
+        break;
+      case 3:
+        local = CompositeResidualStatsImpl<3>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, n, include_covered);
+        break;
+      default:
+        local = CompositeResidualStatsImpl<4>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, n, include_covered);
+        break;
+    }
+  } else {
+    auto u = mglevels_->GetCurrentData();
+    auto src = mglevels_->GetCurrentSource();
+    auto free = mglevels_->GetCurrentCoefficient();
+    auto mask = mglevels_->GetCompositeMaskLevel(level);
+    switch (fd) {
+      case 2:
+        local = CompositeResidualStatsImpl<2>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, n, include_covered);
+        break;
+      case 3:
+        local = CompositeResidualStatsImpl<3>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, n, include_covered);
+        break;
+      default:
+        local = CompositeResidualStatsImpl<4>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, n, include_covered);
+        break;
+    }
+  }
+
+  CompositeResidualStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.valid_sum2, &global.valid_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.valid_sum_abs, &global.valid_sum_abs, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.valid_max, &global.valid_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.valid_volume, &global.valid_volume, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.valid_count, &global.valid_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_sum2, &global.interface_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_volume, &global.interface_volume, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_count, &global.interface_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.covered_sum2, &global.covered_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.covered_volume, &global.covered_volume, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.covered_count, &global.covered_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+#endif
+  if (global.valid_count == 0 || !(global.valid_volume > 0.0)) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::CalculateCompositeDefectNorm"
+              << std::endl
+              << "Composite residual norm has zero valid cells on level " << level
+              << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  Real accepted = 0.0;
+  if (nrm == MGNormType::max) {
+    accepted = global.valid_max;
+  } else if (nrm == MGNormType::l1) {
+    accepted = global.valid_sum_abs / global.valid_volume;
+  } else {
+    accepted = std::sqrt(global.valid_sum2 / global.valid_volume);
+  }
+
+  if (debug_composite_residual_ && global_variable::my_rank == 0) {
+    const Real valid_l2 = std::sqrt(global.valid_sum2 / global.valid_volume);
+    const Real interface_l2 = (global.interface_count > 0 && global.interface_volume > 0.0)
+        ? std::sqrt(global.interface_sum2 / global.interface_volume) : 0.0;
+    const Real covered_l2 = (global.covered_count > 0 && global.covered_volume > 0.0)
+        ? std::sqrt(global.covered_sum2 / global.covered_volume) : 0.0;
+    std::cout << "CTS composite residual: level=" << level
+              << " var=" << CTSVarName(n)
+              << " valid_count=" << global.valid_count
+              << " valid_l2=" << valid_l2
+              << " interface_count=" << global.interface_count
+              << " interface_l2=" << interface_l2
+              << " covered_count=" << global.covered_count
+              << " covered_l2=" << covered_l2
+              << " accepted_l2=" << valid_l2 << std::endl;
+  }
+  return accepted;
+}
+
 void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   solution_applied_ = false;
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
@@ -2187,7 +2659,8 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   auto calculate_defects = [&](Real defects[ID_CTS_NVAR]) {
     Real sumsq = 0.0;
     for (int v = 0; v < ID_CTS_NVAR; ++v) {
-      defects[v] = CalculateDefectNorm(MGNormType::l2, v);
+      defects[v] = composite_fas_ ? CalculateCompositeDefectNorm(MGNormType::l2, v)
+                                  : CalculateDefectNorm(MGNormType::l2, v);
       sumsq += defects[v]*defects[v];
     }
     return std::sqrt(sumsq);
@@ -2316,6 +2789,7 @@ void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {
     for (int j = ngh; j <= ngh+1; ++j) {
       int c = (color + k + j) & 1;
       for (int i = ngh + c; i <= ngh+1; i += 2) {
+        if (composite_fas_ && oct.Mask(COMP_RELAX, k, j, i) == 0) continue;
         if (free(0, ID_FREE_MASK, k, j, i) < 0.5) continue;
         SmootherCellStats cell;
         switch (octet_fd_stencil_) {
@@ -2387,6 +2861,12 @@ void IDCTSMultigridDriver::CalculateDefectOctet(MGOctet &oct, int rlev) {
   for (int k = ngh; k <= ngh+1; ++k) {
     for (int j = ngh; j <= ngh+1; ++j) {
       for (int i = ngh; i <= ngh+1; ++i) {
+        if (composite_fas_ && oct.Mask(COMP_VALID, k, j, i) == 0) {
+          for (int v = 0; v < ID_CTS_NVAR; ++v) {
+            def(0, v, k, j, i) = 0.0;
+          }
+          continue;
+        }
         Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
         switch (octet_fd_stencil_) {
           case 2:
