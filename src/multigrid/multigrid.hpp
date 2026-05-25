@@ -308,6 +308,12 @@ class Multigrid {
   void SyncDataLevelToHost(int level) {
     Kokkos::deep_copy(u_[level].h_view, u_[level].d_view);
   }
+  void ModifyDataLevelOnHost(int level) {
+    u_[level].template modify<HostExeSpace>();
+  }
+  void SyncDataLevelToDevice(int level) {
+    u_[level].template sync<DevExeSpace>();
+  }
   void SyncSourceLevelToHost(int level) {
     Kokkos::deep_copy(src_[level].h_view, src_[level].d_view);
   }
@@ -493,6 +499,7 @@ class MultigridDriver {
   virtual void DiagnosticRestrictOctets(int lev) {}
   virtual void DiagnosticCompositeBridgeTransfer(bool initflag,
                                                  bool restrict_from_transfer_level) {}
+  virtual void PostProlongationCorrection(Multigrid *pmg) {}
   virtual void ProlongateOctetBoundariesFluxCons(MGOctet &oct,
        std::vector<Real> &cbuf, const std::vector<bool> &ncoarse);
 

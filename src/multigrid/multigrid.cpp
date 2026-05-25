@@ -1055,6 +1055,7 @@ void Multigrid::ProlongateAndCorrectPack() {
   }
 
   current_level_++;
+  pmy_driver_->PostProlongationCorrection(this);
   if (debug_meshblock) {
     if (!on_host_) Kokkos::deep_copy(u_[current_level_].h_view, u_[current_level_].d_view);
     auto fine_h = u_[current_level_].h_view;

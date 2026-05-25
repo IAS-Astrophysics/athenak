@@ -435,6 +435,19 @@ enum CompositeRestrictionMode {
   ID_CTS_RESTRICT_AVERAGE = 1
 };
 
+enum CompositeBoundaryResetMode {
+  ID_CTS_RESET_NONE = 0,
+  ID_CTS_RESET_LINEAR = 1,
+  ID_CTS_RESET_FOURTH_ORDER = 2
+};
+
+struct CompositeResetStats {
+  long long reset_count = 0;
+  long long overlap_relax_count = 0;
+  Real delta_sum2 = 0.0;
+  Real delta_max = 0.0;
+};
+
 struct CompositeRestrictionStats {
   long long dst_count = 0;
   long long valid_child_count = 0;
@@ -971,6 +984,21 @@ CompositeBridgeMissingStats ReduceCompositeBridgeMissingStats(
   return global;
 }
 
+CompositeResetStats ReduceCompositeResetStats(const CompositeResetStats &local) {
+  CompositeResetStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.reset_count, &global.reset_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.overlap_relax_count, &global.overlap_relax_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.delta_sum2, &global.delta_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.delta_max, &global.delta_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
 void PrintCompositeRestrictionStats(const char *entity, int level, const char *field,
                                     int mode, const CompositeRestrictionStats &stats) {
   if (global_variable::my_rank != 0) return;
@@ -1227,6 +1255,75 @@ std::size_t BridgeFieldIndex(int nvar, int nk, int nj, int ni,
                              int v, int k, int j, int i) {
   (void)nvar;
   return static_cast<std::size_t>(((v*nk + k)*nj + j)*ni + i);
+}
+
+template <typename ViewType, typename ReadViewType, typename MaskViewType>
+CompositeResetStats ResetCompositeBoundaryLinearImpl(
+    const ViewType &u, const ReadViewType &u0, const MaskViewType &mask, int nvar,
+    int is, int ie, int js, int je, int ks, int ke) {
+  using ExeSpace = typename ViewType::execution_space;
+  const int nm = u.extent_int(0);
+  CompositeResetStats stats;
+  Kokkos::parallel_reduce("IDCTS::ResetCompositeBoundaryLinear",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<5>>(
+        {0, 0, ks, js, is}, {nm, nvar, ke + 1, je + 1, ie + 1}),
+    KOKKOS_LAMBDA(int m, int v, int k, int j, int i,
+                  long long &reset_count, long long &overlap_relax_count,
+                  Real &delta_sum2, Real &delta_max) {
+      if (mask(m, COMP_VALID, k, j, i) == 0 ||
+          mask(m, COMP_INTERFACE, k, j, i) == 0) {
+        return;
+      }
+      if (mask(m, COMP_RELAX, k, j, i) != 0) {
+        ++overlap_relax_count;
+        return;
+      }
+      Real value = 0.0;
+      int count = 0;
+      if (i == is && i + 2 <= ie &&
+          mask(m, COMP_INTERFACE, k, j, i + 1) == 0) {
+        value += 2.0*u0(m, v, k, j, i + 1) - u0(m, v, k, j, i + 2);
+        ++count;
+      }
+      if (i == ie && i - 2 >= is &&
+          mask(m, COMP_INTERFACE, k, j, i - 1) == 0) {
+        value += 2.0*u0(m, v, k, j, i - 1) - u0(m, v, k, j, i - 2);
+        ++count;
+      }
+      if (j == js && j + 2 <= je &&
+          mask(m, COMP_INTERFACE, k, j + 1, i) == 0) {
+        value += 2.0*u0(m, v, k, j + 1, i) - u0(m, v, k, j + 2, i);
+        ++count;
+      }
+      if (j == je && j - 2 >= js &&
+          mask(m, COMP_INTERFACE, k, j - 1, i) == 0) {
+        value += 2.0*u0(m, v, k, j - 1, i) - u0(m, v, k, j - 2, i);
+        ++count;
+      }
+      if (k == ks && k + 2 <= ke &&
+          mask(m, COMP_INTERFACE, k + 1, j, i) == 0) {
+        value += 2.0*u0(m, v, k + 1, j, i) - u0(m, v, k + 2, j, i);
+        ++count;
+      }
+      if (k == ke && k - 2 >= ks &&
+          mask(m, COMP_INTERFACE, k - 1, j, i) == 0) {
+        value += 2.0*u0(m, v, k - 1, j, i) - u0(m, v, k - 2, j, i);
+        ++count;
+      }
+      if (count == 0) return;
+      value /= static_cast<Real>(count);
+      const Real old = u0(m, v, k, j, i);
+      const Real delta = value - old;
+      u(m, v, k, j, i) = value;
+      ++reset_count;
+      delta_sum2 += delta*delta;
+      const Real abs_delta = std::abs(delta);
+      if (abs_delta > delta_max) delta_max = abs_delta;
+    }, Kokkos::Sum<long long>(stats.reset_count),
+       Kokkos::Sum<long long>(stats.overlap_relax_count),
+       Kokkos::Sum<Real>(stats.delta_sum2),
+       Kokkos::Max<Real>(stats.delta_max));
+  return stats;
 }
 
 template <typename ViewType>
@@ -3107,6 +3204,34 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
       pin->GetOrAddBoolean("id_solve", "debug_composite_bridge", false);
   composite_bridge_rhs_ready_ = false;
   composite_bridge_rhs_note_printed_ = false;
+  std::string boundary_reset =
+      pin->GetOrAddString("id_solve", "composite_boundary_reset", "none");
+  if (boundary_reset == "none") {
+    composite_boundary_reset_ = ID_CTS_RESET_NONE;
+  } else if (boundary_reset == "linear") {
+    composite_boundary_reset_ = ID_CTS_RESET_LINEAR;
+    if (global_variable::my_rank == 0) {
+      std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
+                << std::endl
+                << "<id_solve>/composite_boundary_reset=linear is a diagnostic "
+                << "second-order AMR boundary reset." << std::endl;
+    }
+  } else if (boundary_reset == "fourth_order") {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/composite_boundary_reset=fourth_order is not yet "
+              << "implemented for CTS composite SMR." << std::endl;
+    std::exit(EXIT_FAILURE);
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "<id_solve>/composite_boundary_reset must be 'none', 'linear', "
+              << "or 'fourth_order', but is " << boundary_reset << "."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  debug_composite_reset_ =
+      pin->GetOrAddBoolean("id_solve", "debug_composite_reset", false);
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -3789,8 +3914,12 @@ void IDCTSMultigridDriver::BuildCompositeMeshBlockMasks() {
         for (int k = ks; k <= ke; ++k)
           for (int j = js; j <= je; ++j)
             for (int i = is; i <= ie; ++i)
-              if (mask(m, COMP_VALID, k, j, i) != 0)
+              if (mask(m, COMP_VALID, k, j, i) != 0) {
                 mask(m, COMP_INTERFACE, k, j, i) = 1;
+                if (composite_boundary_reset_ != ID_CTS_RESET_NONE) {
+                  mask(m, COMP_RELAX, k, j, i) = 0;
+                }
+              }
       };
       mark_face(-1, 0, 0);
       mark_face( 1, 0, 0);
@@ -4173,6 +4302,155 @@ Real IDCTSMultigridDriver::CalculateCompositeDefectNorm(MGNormType nrm, int n) {
               << " accepted_l2=" << valid_l2 << std::endl;
   }
   return accepted;
+}
+
+Real IDCTSMultigridDriver::CalculateCompositeInterfaceResidual(
+    IDCTSMultigrid *mg, int var) {
+  const int level = mg->GetCurrentLevel();
+  const int ll = mg->GetLevelShift();
+  const int is = mg->GetGhostCells();
+  const int js = is;
+  const int ks = is;
+  const int ncells = mg->GetLevelActiveCells(level);
+  const int ie = is + ncells - 1;
+  const int je = js + ncells - 1;
+  const int ke = ks + ncells - 1;
+  const int fine_fd = owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  const int fd = (level == mg->GetNumberOfLevels() - 1)
+                 ? fine_fd : mg_coarse_fd_stencil_;
+  CompositeResidualStats local;
+  if (mg->OnHost()) {
+    auto u = mg->GetCurrentData_h();
+    auto src = mg->GetCurrentSource_h();
+    auto free = mg->GetCoefficientLevel_h(level);
+    auto mask = mg->GetCompositeMaskLevel_h(level);
+    switch (fd) {
+      case 2:
+        local = CompositeResidualStatsImpl<2>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, var, false);
+        break;
+      case 3:
+        local = CompositeResidualStatsImpl<3>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, var, false);
+        break;
+      default:
+        local = CompositeResidualStatsImpl<4>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, var, false);
+        break;
+    }
+  } else {
+    auto u = mg->GetCurrentData();
+    auto src = mg->GetCurrentSource();
+    auto free = mg->GetCurrentCoefficient();
+    auto mask = mg->GetCompositeMaskLevel(level);
+    switch (fd) {
+      case 2:
+        local = CompositeResidualStatsImpl<2>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, var, false);
+        break;
+      case 3:
+        local = CompositeResidualStatsImpl<3>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, var, false);
+        break;
+      default:
+        local = CompositeResidualStatsImpl<4>(mg, u, src, free, mask, ll, is, ie,
+                                              js, je, ks, ke, fd, var, false);
+        break;
+    }
+  }
+
+  Real interface_sum2 = local.interface_sum2;
+  Real interface_volume = local.interface_volume;
+  long long interface_count = local.interface_count;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &interface_sum2, 1, MPI_ATHENA_REAL, MPI_SUM,
+                MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &interface_volume, 1, MPI_ATHENA_REAL, MPI_SUM,
+                MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, &interface_count, 1, MPI_LONG_LONG, MPI_SUM,
+                MPI_COMM_WORLD);
+#endif
+  return (interface_count > 0 && interface_volume > 0.0)
+      ? std::sqrt(interface_sum2/interface_volume) : 0.0;
+}
+
+void IDCTSMultigridDriver::PostProlongationCorrection(Multigrid *pmg) {
+  if (!composite_fas_ || composite_boundary_reset_ == ID_CTS_RESET_NONE) return;
+  if (pmg != mglevels_) return;
+  if (!composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::PostProlongationCorrection"
+              << std::endl
+              << "Composite boundary reset requested before composite masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  auto *mg = static_cast<IDCTSMultigrid*>(pmg);
+  const int level = mg->GetCurrentLevel();
+  if (level <= MeshBlockTransferLevel()) return;
+
+  const int is = mg->GetGhostCells();
+  const int js = is;
+  const int ks = is;
+  const int ncells = mg->GetLevelActiveCells(level);
+  const int ie = is + ncells - 1;
+  const int je = js + ncells - 1;
+  const int ke = ks + ncells - 1;
+
+  const Real interface_before = debug_composite_reset_
+      ? CalculateCompositeInterfaceResidual(mg, ID_CTS_PSI) : 0.0;
+
+  CompositeResetStats local;
+  if (composite_boundary_reset_ == ID_CTS_RESET_LINEAR) {
+    if (mg->OnHost()) {
+      auto u = mg->GetCurrentData_h();
+      HostArray5D<Real> u0("cts_reset_u0_h", u.extent_int(0), u.extent_int(1),
+                           u.extent_int(2), u.extent_int(3), u.extent_int(4));
+      Kokkos::deep_copy(u0, u);
+      local = ResetCompositeBoundaryLinearImpl(u, u0, mg->GetCompositeMaskLevel_h(level),
+                                               ID_CTS_NVAR, is, ie, js, je, ks, ke);
+      mg->ModifyDataLevelOnHost(level);
+      mg->SyncDataLevelToDevice(level);
+    } else {
+      auto u = mg->GetCurrentData();
+      DvceArray5D<Real> u0("cts_reset_u0", u.extent_int(0), u.extent_int(1),
+                           u.extent_int(2), u.extent_int(3), u.extent_int(4));
+      Kokkos::deep_copy(u0, u);
+      local = ResetCompositeBoundaryLinearImpl(u, u0, mg->GetCompositeMaskLevel(level),
+                                               ID_CTS_NVAR, is, ie, js, je, ks, ke);
+    }
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::PostProlongationCorrection"
+              << std::endl
+              << "Unsupported CTS composite boundary reset mode." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  Kokkos::fence();
+
+  CompositeResetStats global = ReduceCompositeResetStats(local);
+  const Real interface_after = debug_composite_reset_
+      ? CalculateCompositeInterfaceResidual(mg, ID_CTS_PSI) : 0.0;
+
+  if (debug_composite_reset_ && global.overlap_relax_count != 0) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::PostProlongationCorrection"
+              << std::endl
+              << "CTS composite boundary reset touched " << global.overlap_relax_count
+              << " relaxed cells." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (debug_composite_reset_ && global_variable::my_rank == 0) {
+    const Real reset_rms = (global.reset_count > 0)
+        ? std::sqrt(global.delta_sum2/static_cast<Real>(global.reset_count)) : 0.0;
+    std::cout << "CTS composite reset: level=" << level
+              << " mode=linear"
+              << " reset_count=" << global.reset_count
+              << " reset_max=" << global.delta_max
+              << " reset_rms=" << reset_rms
+              << " overlap_with_relax_cells=" << global.overlap_relax_count
+              << " interface_residual_before=" << interface_before
+              << " interface_residual_after=" << interface_after
+              << std::endl;
+  }
 }
 
 void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {

@@ -93,6 +93,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void DiagnosticRestrictOctets(int lev) final;
   void DiagnosticCompositeBridgeTransfer(bool initflag,
                                          bool restrict_from_transfer_level) final;
+  void PostProlongationCorrection(Multigrid *pmg) final;
   bool SolutionApplied() const { return solution_applied_; }
 
  private:
@@ -106,6 +107,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void BuildCompositeRootAndOctetMasks();
   void PrintCompositeMaskDiagnostics() const;
   Real CalculateCompositeDefectNorm(MGNormType nrm, int n);
+  Real CalculateCompositeInterfaceResidual(IDCTSMultigrid *mg, int var);
 
   IDConformalThinSandwich *owner_;
   Real omega_;
@@ -141,6 +143,8 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool debug_composite_bridge_;
   bool composite_bridge_rhs_ready_;
   bool composite_bridge_rhs_note_printed_;
+  int composite_boundary_reset_;
+  bool debug_composite_reset_;
   std::vector<Real> composite_bridge_root_rf_;
   std::vector<Real> composite_bridge_root_rlh_;
   std::vector<Real> composite_bridge_root_ru_;
