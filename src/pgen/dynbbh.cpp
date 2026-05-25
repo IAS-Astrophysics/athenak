@@ -188,6 +188,8 @@ struct bbh_pgen {
   Real a1, a2;
   Real th_a1, th_a2;
   Real ph_a1, ph_a2;
+  Real spin_ramp_timescale;
+  Real spin_ramp_start_time;
   Real d;
   Real gamma_adi;
   Real a1_buffer, a2_buffer;
@@ -207,6 +209,7 @@ struct bbh_pgen {
   Real thin_cooling_r_inner;
   Real thin_cooling_r_outer;
   bool use_traj_table;
+  bool spin_ramp;
   bool smooth_b_damping;
   bool puncture_excise_cap_to_horizon;
   bool puncture_excise_to_horizon;
@@ -337,6 +340,17 @@ Real SmoothExcisionRadiusToHorizon(const Real requested_radius,
   Real f = std::min(std::max(time/timescale, 0.0), 1.0);
   f = f*f*(3.0 - 2.0*f);
   return (1.0 - f)*start_radius + f*horizon_radius;
+}
+
+Real SmoothRamp01(const Real time, const Real start_time, const Real timescale,
+                  Real *dfdt) {
+  *dfdt = 0.0;
+  if (!(timescale > 0.0)) return (time >= start_time) ? 1.0 : 0.0;
+  Real u = (time - start_time) / timescale;
+  if (u <= 0.0) return 0.0;
+  if (u >= 1.0) return 1.0;
+  *dfdt = 6.0*u*(1.0 - u) / timescale;
+  return u*u*(3.0 - 2.0*u);
 }
 
 Real MinDynBBHHorizonRadius() {
@@ -550,6 +564,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0) * (M_PI/180.0);
   bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0) * (M_PI/180.0);
   bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0) * (M_PI/180.0);
+  bbh.spin_ramp = pin->GetOrAddBoolean("problem", "spin_ramp", false);
+  bbh.spin_ramp_timescale = pin->GetOrAddReal(
+      "problem", "spin_ramp_timescale", 50.0);
+  bbh.spin_ramp_start_time = pin->GetOrAddReal(
+      "problem", "spin_ramp_start_time", pmbp->pmesh->time);
   bbh.d = pin->GetOrAddReal("problem", "duniform", 1.0);
   bbh.gamma_adi = pin->GetOrAddReal("problem", "gamma_adi", 1.6666666);
   if (!SpinMagnitudeWithinExtremality(bbh.a1) ||
@@ -559,6 +578,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "Dimensionless spin magnitudes problem/a1 and problem/a2 "
               << "must satisfy 0 <= chi <= 1"
               << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (bbh.spin_ramp && (!(bbh.spin_ramp_timescale > 0.0) ||
+                        !std::isfinite(bbh.spin_ramp_start_time))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "problem/spin_ramp requires positive spin_ramp_timescale "
+              << "and finite spin_ramp_start_time" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.01);
@@ -693,6 +720,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
   std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
+  if (bbh.use_traj_table && bbh.spin_ramp) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "problem/spin_ramp only applies to the analytic circular "
+              << "orbit path; encode time-dependent spins in traj_file when "
+              << "use_traj_table=true" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (bbh.use_traj_table) {
     if (traj_file.empty()) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -1992,12 +2027,23 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
     bbh_t[VX2] = -r2 * bbh.om * s;
     bbh_t[VY2] = r2 * bbh.om * c;
     bbh_t[VZ2] = 0;
-    bbh_t[AX1] = bbh.a1 * std::sin(bbh.th_a1) * std::cos(bbh.ph_a1);
-    bbh_t[AY1] = bbh.a1 * std::sin(bbh.th_a1) * std::sin(bbh.ph_a1);
-    bbh_t[AZ1] = bbh.a1 * std::cos(bbh.th_a1);
-    bbh_t[AX2] = bbh.a2 * std::sin(bbh.th_a2) * std::cos(bbh.ph_a2);
-    bbh_t[AY2] = bbh.a2 * std::sin(bbh.th_a2) * std::sin(bbh.ph_a2);
-    bbh_t[AZ2] = bbh.a2 * std::cos(bbh.th_a2);
+    Real spin_factor = 1.0, dspin_factor = 0.0;
+    if (bbh.spin_ramp) {
+      spin_factor = SmoothRamp01(t, bbh.spin_ramp_start_time,
+                                 bbh.spin_ramp_timescale, &dspin_factor);
+    }
+    Real e1x = std::sin(bbh.th_a1) * std::cos(bbh.ph_a1);
+    Real e1y = std::sin(bbh.th_a1) * std::sin(bbh.ph_a1);
+    Real e1z = std::cos(bbh.th_a1);
+    Real e2x = std::sin(bbh.th_a2) * std::cos(bbh.ph_a2);
+    Real e2y = std::sin(bbh.th_a2) * std::sin(bbh.ph_a2);
+    Real e2z = std::cos(bbh.th_a2);
+    bbh_t[AX1] = bbh.a1 * spin_factor * e1x;
+    bbh_t[AY1] = bbh.a1 * spin_factor * e1y;
+    bbh_t[AZ1] = bbh.a1 * spin_factor * e1z;
+    bbh_t[AX2] = bbh.a2 * spin_factor * e2x;
+    bbh_t[AY2] = bbh.a2 * spin_factor * e2y;
+    bbh_t[AZ2] = bbh.a2 * spin_factor * e2z;
     bbh_t[M1T] = 1.0 / (bbh.q + 1.0);
     bbh_t[M2T] = 1.0 - bbh_t[M1T];
     dbbh_t[X1] = bbh_t[VX1];
@@ -2012,8 +2058,13 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
     dbbh_t[VX2] = -om2 * bbh_t[X2];
     dbbh_t[VY2] = -om2 * bbh_t[Y2];
     dbbh_t[VZ2] = 0;
-    dbbh_t[AX1] = dbbh_t[AY1] = dbbh_t[AZ1] = dbbh_t[AX2] = dbbh_t[AY2] =
-        dbbh_t[AZ2] = dbbh_t[M1T] = dbbh_t[M2T] = 0;
+    dbbh_t[AX1] = bbh.a1 * dspin_factor * e1x;
+    dbbh_t[AY1] = bbh.a1 * dspin_factor * e1y;
+    dbbh_t[AZ1] = bbh.a1 * dspin_factor * e1z;
+    dbbh_t[AX2] = bbh.a2 * dspin_factor * e2x;
+    dbbh_t[AY2] = bbh.a2 * dspin_factor * e2y;
+    dbbh_t[AZ2] = bbh.a2 * dspin_factor * e2z;
+    dbbh_t[M1T] = dbbh_t[M2T] = 0;
     return;
   }
   const auto &T = bbh_table.t;

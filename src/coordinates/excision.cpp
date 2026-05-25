@@ -28,26 +28,10 @@ Real SmoothStep01(const Real x) {
 }
 
 KOKKOS_INLINE_FUNCTION
-Real SlowStartSmoothStep01(const Real x) {
+Real PunctureSmoothWeight01(const Real x, const Real exponent) {
   Real s = fmin(1.0, fmax(0.0, x));
-  return SQR(SQR(s))*(5.0 - 4.0*s);
-}
-
-KOKKOS_INLINE_FUNCTION
-Real SmootherStartSmoothStep01(const Real x) {
-  Real s = fmin(1.0, fmax(0.0, x));
-  return SQR(SQR(s))*SQR(s)*(7.0 - 6.0*s);
-}
-
-KOKKOS_INLINE_FUNCTION
-Real PunctureSmoothWeight01(const Real x, const SmoothExcisionPunctureWeight weight_type) {
-  if (weight_type == SmoothExcisionPunctureWeight::smoother_start) {
-    return SmootherStartSmoothStep01(x);
-  }
-  if (weight_type == SmoothExcisionPunctureWeight::slow_start) {
-    return SlowStartSmoothStep01(x);
-  }
-  return SmoothStep01(x);
+  Real n = fmax(exponent, 1.0e-12);
+  return pow(s, 2.0*n)*((2.0*n + 1.0) - 2.0*n*s);
 }
 
 //----------------------------------------------------------------------------------------
@@ -267,7 +251,7 @@ void Coordinates::UpdateExcisionMasks() {
     Real &punc_1_r = coord_data.punc_1_rad;
     Real width_fraction = coord_data.smooth_excise_puncture_width_fraction;
     Real flux_rad_factor = coord_data.punc_flux_rad_factor;
-    auto weight_type = coord_data.smooth_excise_puncture_weight;
+    Real weight_exponent = coord_data.smooth_excise_puncture_weight_exponent;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -299,9 +283,9 @@ void Coordinates::UpdateExcisionMasks() {
       Real punc_0_width = width_fraction*punc_0_r;
       Real punc_1_width = width_fraction*punc_1_r;
       Real w0 = (punc_0_width > 0.0) ?
-          PunctureSmoothWeight01((punc_0_r - r0)/punc_0_width, weight_type) : 0.0;
+          PunctureSmoothWeight01((punc_0_r - r0)/punc_0_width, weight_exponent) : 0.0;
       Real w1 = (punc_1_width > 0.0) ?
-          PunctureSmoothWeight01((punc_1_r - r1)/punc_1_width, weight_type) : 0.0;
+          PunctureSmoothWeight01((punc_1_r - r1)/punc_1_width, weight_exponent) : 0.0;
       weight(m,k,j,i) = fmax(w0, w1);
     });
   }

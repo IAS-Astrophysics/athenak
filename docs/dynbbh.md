@@ -55,13 +55,23 @@ th_a1 = 0.0
 ph_a1 = 0.0
 th_a2 = 0.0
 ph_a2 = 0.0
+spin_ramp = false
+spin_ramp_timescale = 50.0
+# spin_ramp_start_time defaults to the segment's starting mesh time if omitted
 use_traj_table = false
 ```
 
 Here `sep` is the binary separation, `q` sets the mass ratio through
 `M1=1/(q+1)` and `M2=1-M1`, and the orbital frequency is `sep^(-3/2)`.
 The spin angles are in degrees.  This is the compatibility mode and should
-remain unchanged for older input files.
+remain unchanged for older input files.  For analytic-orbit spin-up tests, set
+`spin_ramp = true`; then `a1` and `a2` are interpreted as the final
+dimensionless spin magnitudes and are multiplied by
+`S(u) = u^2 (3 - 2u)`, where
+`u = clamp((t - spin_ramp_start_time)/spin_ramp_timescale, 0, 1)`.
+If `spin_ramp_start_time` is omitted, the ramp begins at the mesh time when the
+segment starts.  The trajectory-table path does not use these ramp parameters;
+encode time-dependent spin directly in the table instead.
 
 ### Tabulated Trajectory and Hole Properties
 
@@ -174,7 +184,7 @@ excise = true
 excision_scheme = puncture
 smooth_excision = true
 smooth_excision_sigma_max = 1.0e5
-smooth_excision_puncture_weight = smoothstep
+smooth_excision_puncture_weight_exponent = 1.0
 smooth_excision_puncture_width_fraction = 1.0
 puncture_flux_excision_radius_factor = 1.0
 smooth_excision_temp_ceil = -1.0
@@ -195,11 +205,12 @@ current explicit radius to the horizon radius over
 `excise_shrink_timescale` (default `50 M`) after each run/restart begins.  The
 puncture smooth-excision weight always uses a transition width equal to
 `smooth_excision_puncture_width_fraction * punc_rad`, so the smooth layer
-follows the time-dependent radius.  `smooth_excision_puncture_weight` selects
-the radial weight profile.  The default `smoothstep` preserves the traditional
-`s^2(3-2s)` profile.  The `slow_start` profile uses `s^4(5-4s)`, and
-`smoother_start` uses `s^6(7-6s)`; both stay weaker near the excision boundary
-and approach full weight more gradually.
+follows the time-dependent radius.  `smooth_excision_puncture_weight_exponent`
+selects the radial weight profile
+`s^(2n) * ((2n + 1) - 2n*s)`, with
+`s = clamp((punc_rad - r)/width, 0, 1)`.  The default `n=1` preserves the
+traditional `s^2(3-2s)` profile; `n=2` matches the previous `slow_start`
+profile, and `n=3` matches the previous `smoother_start` profile.
 The default width fraction is `1.0`; with this default, the puncture smooth
 weight tapers across the full radius.  A value of `0.5` recovers the older
 behavior where the inner half of the radius is fully weighted and the outer half
@@ -566,7 +577,74 @@ radius_0_reflevel = 0
 Excision remains enabled.  The pgen prints a warning if the local excision
 radius has fewer than 10 cells across its diameter.
 
-### 4. Zoom Restart With Per-Hole Resolution
+### 4. Staged Schwarzschild-to-Spin Workflow
+
+For the analytic circular-orbit branch, the most conservative high-spin setup is
+usually to change one hard thing at a time:
+
+1. **Schwarzschild burn-in**: keep `a1 = a2 = 0`, `spin_ramp = false`, and use a
+   generous explicit puncture radius while the disk and sink settle.
+2. **Refine and shrink excision**: restart from the burn-in and either shrink the
+   explicit puncture radius to the local Kerr-Schild horizon with
+   `excise_shrink_to_horizon = true`, or switch directly to
+   `excise_to_horizon = true` once the horizon-resolved run is stable.
+3. **Spin ramp**: restart from a stable Schwarzschild/horizon-sized segment,
+   set the desired final `a1` and `a2`, and enable `spin_ramp = true` over a
+   long timescale such as one orbit.
+4. **Static-spin continuation**: restart from the end of the ramp with
+   `a1 = a2 = a_target` and `spin_ramp = false` to test long-term stability
+   without further metric forcing.
+
+The helper script `scripts/setup_dynbbh_stage.py` automates the parfile and PBS
+edits for these restart-to-restart stages.  Example sequence:
+
+```bash
+# 1. Start from a known restart/template and keep the analytic holes nonspinning.
+python scripts/setup_dynbbh_stage.py \
+  --base-dir /path/to/runs \
+  --case bbh_schwarzschild_burnin \
+  --stage burnin-schwarzschild \
+  --template-parfile /path/to/template.par \
+  --restart /path/to/original.rst \
+  --exe /home/hzhu/athenak/build_cb/src/athena \
+  --submit
+
+# 2. Continue by shrinking the explicit excision region to the horizon.
+python scripts/setup_dynbbh_stage.py \
+  --base-dir /path/to/runs \
+  --case bbh_shrink_horizon \
+  --stage shrink-to-horizon \
+  --source-run /path/to/runs/bbh_schwarzschild_burnin/run_0 \
+  --shrink-timescale 785.0 \
+  --submit
+
+# 3. Continue from the stable horizon-sized Schwarzschild run and ramp to spin.
+python scripts/setup_dynbbh_stage.py \
+  --base-dir /path/to/runs \
+  --case bbh_spin09_ramp \
+  --stage spin-ramp \
+  --source-run /path/to/runs/bbh_shrink_horizon/run_0 \
+  --spin-target 0.9 \
+  --spin-ramp-timescale 785.0 \
+  --submit
+
+# 4. Continue at fixed high spin.
+python scripts/setup_dynbbh_stage.py \
+  --base-dir /path/to/runs \
+  --case bbh_spin09_static \
+  --stage spin-static \
+  --source-run /path/to/runs/bbh_spin09_ramp/run_0 \
+  --spin-target 0.9 \
+  --submit
+```
+
+The script chooses the latest `rst/rank_00000000/torus.*.rst` from
+`--source-run`, copies the executable into the new run directory, writes a fresh
+`launch.sh`, and generates a PBS script next to the run cases.  Use
+`--set block/key=value` for local overrides that are not covered by a stage, for
+example `--set coord/smooth_excision_b_damping_eta=0.01`.
+
+### 5. Zoom Restart With Per-Hole Resolution
 
 Use this after a low-resolution restart when one hole needs more refinement
 than the other:
@@ -590,7 +668,7 @@ radius_0_rad = 12.0
 radius_0_reflevel = 1
 ```
 
-### 5. Legacy Tracker Compatibility
+### 6. Legacy Tracker Compatibility
 
 This reproduces the old tracker behavior:
 
@@ -632,6 +710,8 @@ Run these checks on a reduced problem before a long run:
 - No attenuation/window function is applied between the two Kerr-Schild holes.
 - Table positions use Hermite interpolation, while table masses and spins use
   linear interpolation.
+- The analytic-orbit spin ramp changes only the prescribed background spin; it
+  is not a self-consistent binary spin evolution.
 - Magnetic damping modifies the CT EMF, not face-centered magnetic fields
   directly.
 - `amr_condition = tracker` follows the trajectory points, not an apparent
