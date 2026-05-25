@@ -451,6 +451,18 @@ struct CompositeRestrictionStats {
   Real diff_max = 0.0;
 };
 
+struct CompositeTauStats {
+  long long dst_count = 0;
+  long long insufficient_count = 0;
+  Real rf_sum2 = 0.0;
+  Real lhr_sum2 = 0.0;
+  Real rlh_sum2 = 0.0;
+  Real tau_sum2 = 0.0;
+  Real tau_max = 0.0;
+  Real consistency_sum2 = 0.0;
+  Real consistency_max = 0.0;
+};
+
 KOKKOS_INLINE_FUNCTION
 void AddRestrictionStats(CompositeRestrictionStats &dst,
                          const CompositeRestrictionStats &src) {
@@ -468,6 +480,19 @@ void AddRestrictionStats(CompositeRestrictionStats &dst,
   dst.diff_count += src.diff_count;
   dst.diff_sum2 += src.diff_sum2;
   if (src.diff_max > dst.diff_max) dst.diff_max = src.diff_max;
+}
+
+KOKKOS_INLINE_FUNCTION
+void AddTauStats(CompositeTauStats &dst, const CompositeTauStats &src) {
+  dst.dst_count += src.dst_count;
+  dst.insufficient_count += src.insufficient_count;
+  dst.rf_sum2 += src.rf_sum2;
+  dst.lhr_sum2 += src.lhr_sum2;
+  dst.rlh_sum2 += src.rlh_sum2;
+  dst.tau_sum2 += src.tau_sum2;
+  if (src.tau_max > dst.tau_max) dst.tau_max = src.tau_max;
+  dst.consistency_sum2 += src.consistency_sum2;
+  if (src.consistency_max > dst.consistency_max) dst.consistency_max = src.consistency_max;
 }
 
 template <typename MaskViewType>
@@ -653,6 +678,117 @@ CompositeRestrictionStats DiagnoseHalfWeightRestrictionImpl(
   return stats;
 }
 
+template <typename DstViewType, typename SrcViewType, typename MaskViewType>
+CompositeRestrictionStats RestrictHalfWeightImpl(
+    const DstViewType &dst, const SrcViewType &src, const MaskViewType &mask, int nvar,
+    int i0, int i1, int j0, int j1, int k0, int k1, int ngh) {
+  using ExeSpace = typename DstViewType::execution_space;
+  const int nm = src.extent_int(0);
+  const int nk = src.extent_int(2);
+  const int nj = src.extent_int(3);
+  const int ni = src.extent_int(4);
+  CompositeRestrictionStats stats;
+  Kokkos::parallel_reduce("IDCTS::RestrictHalfWeight",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<5>>(
+        {0, 0, k0, j0, i0}, {nm, nvar, k1 + 1, j1 + 1, i1 + 1}),
+    KOKKOS_LAMBDA(int m, int v, int k, int j, int i,
+                  long long &dst_count, long long &valid_child_count,
+                  long long &invalid_child_count, long long &centered_count,
+                  long long &onesided_xm_count, long long &onesided_xp_count,
+                  long long &onesided_ym_count, long long &onesided_yp_count,
+                  long long &onesided_zm_count, long long &onesided_zp_count,
+                  long long &insufficient_count, long long &diff_count,
+                  Real &diff_sum2, Real &diff_max) {
+      ++dst_count;
+      const int fk = 2*k - ngh;
+      const int fj = 2*j - ngh;
+      const int fi = 2*i - ngh;
+      Real average = 0.0;
+      for (int dk = 0; dk <= 1; ++dk)
+        for (int dj = 0; dj <= 1; ++dj)
+          for (int di = 0; di <= 1; ++di)
+            average += src(m, v, fk + dk, fj + dj, fi + di);
+      average *= 0.125;
+
+      Real hw_sum = 0.0;
+      int hw_count = 0;
+      for (int dk = 0; dk <= 1; ++dk) {
+        for (int dj = 0; dj <= 1; ++dj) {
+          for (int di = 0; di <= 1; ++di) {
+            const int ck = fk + dk;
+            const int cj = fj + dj;
+            const int ci = fi + di;
+            if (!CompositeSourceValid(mask, m, ck, cj, ci, nk, nj, ni)) {
+              ++invalid_child_count;
+              continue;
+            }
+            ++valid_child_count;
+            Real d2[3] = {0.0, 0.0, 0.0};
+            int kind[3] = {0, 0, 0};
+            bool ok = true;
+            for (int axis = 0; axis < 3; ++axis) {
+              if (!CompositeSecondDifference(src, mask, m, v, ck, cj, ci, axis,
+                                             nk, nj, ni, d2[axis], kind[axis])) {
+                ok = false;
+                break;
+              }
+            }
+            if (!ok) {
+              ++insufficient_count;
+              continue;
+            }
+            for (int axis = 0; axis < 3; ++axis) {
+              if (kind[axis] == 0) {
+                ++centered_count;
+              } else if (axis == 0 && kind[axis] < 0) {
+                ++onesided_xm_count;
+              } else if (axis == 0 && kind[axis] > 0) {
+                ++onesided_xp_count;
+              } else if (axis == 1 && kind[axis] < 0) {
+                ++onesided_ym_count;
+              } else if (axis == 1 && kind[axis] > 0) {
+                ++onesided_yp_count;
+              } else if (axis == 2 && kind[axis] < 0) {
+                ++onesided_zm_count;
+              } else if (axis == 2 && kind[axis] > 0) {
+                ++onesided_zp_count;
+              }
+            }
+            hw_sum += src(m, v, ck, cj, ci) + (d2[0] + d2[1] + d2[2])/12.0;
+            ++hw_count;
+          }
+        }
+      }
+      if (hw_count > 0) {
+        const Real hw_average = hw_sum/static_cast<Real>(hw_count);
+        const Real diff = hw_average - average;
+        const Real abs_diff = std::abs(diff);
+        diff_sum2 += diff*diff;
+        ++diff_count;
+        if (abs_diff > diff_max) diff_max = abs_diff;
+        dst(m, v, k, j, i) = hw_average;
+      } else {
+        dst(m, v, k, j, i) = average;
+      }
+    },
+    Kokkos::Sum<long long>(stats.dst_count),
+    Kokkos::Sum<long long>(stats.valid_child_count),
+    Kokkos::Sum<long long>(stats.invalid_child_count),
+    Kokkos::Sum<long long>(stats.centered_count),
+    Kokkos::Sum<long long>(stats.onesided_xm_count),
+    Kokkos::Sum<long long>(stats.onesided_xp_count),
+    Kokkos::Sum<long long>(stats.onesided_ym_count),
+    Kokkos::Sum<long long>(stats.onesided_yp_count),
+    Kokkos::Sum<long long>(stats.onesided_zm_count),
+    Kokkos::Sum<long long>(stats.onesided_zp_count),
+    Kokkos::Sum<long long>(stats.insufficient_count),
+    Kokkos::Sum<long long>(stats.diff_count),
+    Kokkos::Sum<Real>(stats.diff_sum2),
+    Kokkos::Max<Real>(stats.diff_max));
+  if (stats.diff_count == 0) stats.diff_max = 0.0;
+  return stats;
+}
+
 CompositeRestrictionStats ReduceCompositeRestrictionStats(
     const CompositeRestrictionStats &local) {
   CompositeRestrictionStats global = local;
@@ -689,6 +825,31 @@ CompositeRestrictionStats ReduceCompositeRestrictionStats(
   return global;
 }
 
+CompositeTauStats ReduceCompositeTauStats(const CompositeTauStats &local) {
+  CompositeTauStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.dst_count, &global.dst_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.insufficient_count, &global.insufficient_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.rf_sum2, &global.rf_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.lhr_sum2, &global.lhr_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.rlh_sum2, &global.rlh_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.tau_sum2, &global.tau_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.tau_max, &global.tau_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.consistency_sum2, &global.consistency_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.consistency_max, &global.consistency_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
 void PrintCompositeRestrictionStats(const char *entity, int level, const char *field,
                                     int mode, const CompositeRestrictionStats &stats) {
   if (global_variable::my_rank != 0) return;
@@ -711,6 +872,30 @@ void PrintCompositeRestrictionStats(const char *entity, int level, const char *f
             << " insufficient=" << stats.insufficient_count
             << " avg_diff_max=" << stats.diff_max
             << " avg_diff_rms=" << diff_rms << std::endl;
+}
+
+void PrintCompositeTauStats(int fine_level, int coarse_level,
+                            const CompositeTauStats &stats) {
+  if (global_variable::my_rank != 0) return;
+  const Real denom = (stats.dst_count > 0) ? static_cast<Real>(stats.dst_count) : 1.0;
+  const Real rf = std::sqrt(stats.rf_sum2/denom);
+  const Real lhr = std::sqrt(stats.lhr_sum2/denom);
+  const Real rlh = std::sqrt(stats.rlh_sum2/denom);
+  const Real tau = std::sqrt(stats.tau_sum2/denom);
+  const Real consistency = std::sqrt(stats.consistency_sum2/denom);
+  std::cout << "CTS composite tau: entity=meshblock"
+            << " fine_level=" << fine_level
+            << " coarse_level=" << coarse_level
+            << " dst_count=" << stats.dst_count
+            << " insufficient=" << stats.insufficient_count
+            << " ||R_f||=" << rf
+            << " ||L_H_Ru||=" << lhr
+            << " ||R_L_h||=" << rlh
+            << " ||tau||=" << tau
+            << " tau_max=" << stats.tau_max
+            << " tau_rms=" << tau
+            << " consistency_max=" << stats.consistency_max
+            << " consistency_rms=" << consistency << std::endl;
 }
 
 Real CompositeRestrictionPolynomial(int i, int j, int k) {
@@ -1562,6 +1747,114 @@ void FASRHSImpl(IDCTSMultigrid *mg, ViewType &src, const ViewType &u, const View
   });
 }
 
+template <int NGHOST, typename OpViewType, typename UViewType, typename SrcViewType,
+          typename FreeViewType, typename MaskViewType>
+void ComputeCTSOperatorImpl(IDCTSMultigrid *mg, const OpViewType &opdst,
+                const UViewType &u, const SrcViewType &src, const FreeViewType &free,
+                const MaskViewType &mask, int ll, int is, int ie, int js, int je,
+                int ks, int ke, int fd_stencil) {
+  using ExeSpace = typename OpViewType::execution_space;
+  auto brdx = [&]() {
+    if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
+    else return mg->GetBlockDx();
+  }();
+  int nmmb = mg->GetNumMeshBlocks();
+  int rlev = -ll;
+  par_for("IDCTS::ComputeCTSOperator", ExeSpace(), 0, nmmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    if (mask(m, COMP_VALID, k, j, i) == 0 ||
+        free(m, ID_FREE_MASK, k, j, i) < 0.5) {
+      for (int v = 0; v < ID_CTS_NVAR; ++v) {
+        opdst(m, v, k, j, i) = src(m, v, k, j, i);
+      }
+      return;
+    }
+    Real dx = (rlev <= 0) ? brdx(m)*static_cast<Real>(1<<(-rlev))
+                          : brdx(m)/static_cast<Real>(1<<rlev);
+    Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
+    Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
+    CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+    for (int v = 0; v < ID_CTS_NVAR; ++v) {
+      opdst(m, v, k, j, i) = op[v];
+    }
+  });
+}
+
+template <typename ViewType, typename MaskViewType>
+void SetCompositePreFASSourceImpl(const ViewType &dst_src, const ViewType &rf,
+                                  const ViewType &rlh, const MaskViewType &mask,
+                                  int nvar, int is, int ie, int js, int je,
+                                  int ks, int ke) {
+  using ExeSpace = typename ViewType::execution_space;
+  const int nm = dst_src.extent_int(0);
+  par_for("IDCTS::SetCompositePreFASSource", ExeSpace(),
+          0, nm-1, 0, nvar-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int v, int k, int j, int i) {
+    dst_src(m, v, k, j, i) = (mask(m, COMP_VALID, k, j, i) != 0)
+        ? rf(m, v, k, j, i) - rlh(m, v, k, j, i) : 0.0;
+  });
+}
+
+template <int NGHOST, typename ViewType, typename MaskViewType>
+CompositeTauStats CompositeFASRHSImpl(IDCTSMultigrid *mg, const ViewType &src,
+                const ViewType &u, const ViewType &free, const ViewType &rf,
+                const ViewType &rlh, const MaskViewType &mask, int ll, int is,
+                int ie, int js, int je, int ks, int ke, int fd_stencil) {
+  using ExeSpace = typename ViewType::execution_space;
+  auto brdx = [&]() {
+    if constexpr (std::is_same_v<ExeSpace, HostExeSpace>) return mg->GetBlockDx_h();
+    else return mg->GetBlockDx();
+  }();
+  int nmmb = mg->GetNumMeshBlocks();
+  int rlev = -ll;
+  CompositeTauStats stats;
+  Kokkos::parallel_reduce("IDCTS::CompositeFASRHS",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<4>>(
+        {0, ks, js, is}, {nmmb, ke + 1, je + 1, ie + 1}),
+    KOKKOS_LAMBDA(int m, int k, int j, int i, long long &dst_count,
+                  long long &insufficient_count, Real &rf_sum2, Real &lhr_sum2,
+                  Real &rlh_sum2, Real &tau_sum2, Real &tau_max,
+                  Real &consistency_sum2, Real &consistency_max) {
+      if (mask(m, COMP_VALID, k, j, i) == 0) return;
+      ++dst_count;
+      Real op[ID_CTS_NVAR];
+      for (int v = 0; v < ID_CTS_NVAR; ++v) op[v] = 0.0;
+      if (free(m, ID_FREE_MASK, k, j, i) >= 0.5) {
+        Real dx = (rlev <= 0) ? brdx(m)*static_cast<Real>(1<<(-rlev))
+                              : brdx(m)/static_cast<Real>(1<<rlev);
+        Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
+        Real diag[ID_CTS_NVAR];
+        CTSOperator<NGHOST>(u, free, idx, fd_stencil, m, k, j, i, op, diag);
+      }
+      for (int v = 0; v < ID_CTS_NVAR; ++v) {
+        const Real rf_v = rf(m, v, k, j, i);
+        const Real rlh_v = rlh(m, v, k, j, i);
+        const Real lhr_v = op[v];
+        const Real tau_v = lhr_v - rlh_v;
+        src(m, v, k, j, i) += lhr_v;
+        const Real consistency = (src(m, v, k, j, i) - lhr_v) - (rf_v - rlh_v);
+        rf_sum2 += rf_v*rf_v;
+        lhr_sum2 += lhr_v*lhr_v;
+        rlh_sum2 += rlh_v*rlh_v;
+        tau_sum2 += tau_v*tau_v;
+        const Real abs_tau = std::abs(tau_v);
+        if (abs_tau > tau_max) tau_max = abs_tau;
+        consistency_sum2 += consistency*consistency;
+        const Real abs_consistency = std::abs(consistency);
+        if (abs_consistency > consistency_max) consistency_max = abs_consistency;
+      }
+    }, Kokkos::Sum<long long>(stats.dst_count),
+       Kokkos::Sum<long long>(stats.insufficient_count),
+       Kokkos::Sum<Real>(stats.rf_sum2),
+       Kokkos::Sum<Real>(stats.lhr_sum2),
+       Kokkos::Sum<Real>(stats.rlh_sum2),
+       Kokkos::Sum<Real>(stats.tau_sum2),
+       Kokkos::Max<Real>(stats.tau_max),
+       Kokkos::Sum<Real>(stats.consistency_sum2),
+       Kokkos::Max<Real>(stats.consistency_max));
+  return stats;
+}
+
 struct OctetArray {
   Real *data;
   int nc;
@@ -1683,7 +1976,18 @@ void ApplyCoefficientPhysicalBoundaries(MultigridDriver *driver, MGOctet &oct,
 
 IDCTSMultigrid::IDCTSMultigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost,
                                bool on_host)
-    : Multigrid(pmd, pmbp, nghost, on_host) {}
+    : Multigrid(pmd, pmbp, nghost, on_host),
+      composite_rf_(nlevel_), composite_rlh_(nlevel_),
+      composite_pre_fas_ready_(nlevel_, 0) {
+  for (int l = 0; l < nlevel_; ++l) {
+    int ll = nlevel_ - 1 - l;
+    int ncx = (indcs_.nx1 >> ll) + 2*ngh_;
+    int ncy = (indcs_.nx2 >> ll) + 2*ngh_;
+    int ncz = (indcs_.nx3 >> ll) + 2*ngh_;
+    Kokkos::realloc(composite_rf_[l], nmmb_, nvar_, ncz, ncy, ncx);
+    Kokkos::realloc(composite_rlh_[l], nmmb_, nvar_, ncz, ncy, ncx);
+  }
+}
 
 IDCTSMultigrid::~IDCTSMultigrid() {}
 
@@ -2014,6 +2318,144 @@ void IDCTSMultigrid::DiagnosticRestrictPack() {
                                  driver->composite_restriction_, global_def);
 }
 
+bool IDCTSMultigrid::CompositeRestrictPack() {
+  auto *driver = static_cast<IDCTSMultigridDriver*>(pmy_driver_);
+  if (!driver->composite_fas_) return false;
+  if (pmy_pack_ == nullptr) return false;
+  if (current_level_ - 1 <= driver->MeshBlockTransferLevel()) return false;
+  if (driver->composite_restriction_ != ID_CTS_RESTRICT_HALF_WEIGHT) {
+    std::cout << "### FATAL ERROR in IDCTSMultigrid::CompositeRestrictPack"
+              << std::endl
+              << "Production composite FAS restriction requires "
+              << "id_solve/composite_restriction=half_weight." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!driver->composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigrid::CompositeRestrictPack"
+              << std::endl
+              << "Composite FAS restriction requested before masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  const int fine_level = current_level_;
+  const int coarse_level = current_level_ - 1;
+  const int fine_shift = nlevel_ - 1 - fine_level;
+  const int coarse_shift = nlevel_ - fine_level;
+  const int fis = ngh_;
+  const int fjs = ngh_;
+  const int fks = ngh_;
+  const int fie = fis + (indcs_.nx1 >> fine_shift) - 1;
+  const int fje = fjs + (indcs_.nx2 >> fine_shift) - 1;
+  const int fke = fks + (indcs_.nx3 >> fine_shift) - 1;
+  const int cis = ngh_;
+  const int cjs = ngh_;
+  const int cks = ngh_;
+  const int cie = cis + (indcs_.nx1 >> coarse_shift) - 1;
+  const int cje = cjs + (indcs_.nx2 >> coarse_shift) - 1;
+  const int cke = cks + (indcs_.nx3 >> coarse_shift) - 1;
+
+  DualArray5D<Real> fine_op;
+  Kokkos::realloc(fine_op, nmmb_, nvar_, def_[fine_level].d_view.extent_int(2),
+                  def_[fine_level].d_view.extent_int(3),
+                  def_[fine_level].d_view.extent_int(4));
+  int fine_fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
+  int fd = (fine_level == nlevel_ - 1) ? fine_fd : driver->mg_coarse_fd_stencil_;
+  if (on_host_) {
+    auto fine_mask = comp_mask_[fine_level].h_view;
+    switch (fd) {
+      case 2:
+        ComputeCTSOperatorImpl<2>(this, fine_op.h_view, u_[fine_level].h_view,
+                                  src_[fine_level].h_view, coeff_[fine_level].h_view,
+                                  fine_mask, fine_shift, fis, fie, fjs, fje, fks, fke, fd);
+        break;
+      case 3:
+        ComputeCTSOperatorImpl<3>(this, fine_op.h_view, u_[fine_level].h_view,
+                                  src_[fine_level].h_view, coeff_[fine_level].h_view,
+                                  fine_mask, fine_shift, fis, fie, fjs, fje, fks, fke, fd);
+        break;
+      default:
+        ComputeCTSOperatorImpl<4>(this, fine_op.h_view, u_[fine_level].h_view,
+                                  src_[fine_level].h_view, coeff_[fine_level].h_view,
+                                  fine_mask, fine_shift, fis, fie, fjs, fje, fks, fke, fd);
+        break;
+    }
+    CompositeRestrictionStats u_stats =
+        RestrictHalfWeightImpl(u_[coarse_level].h_view, u_[fine_level].h_view,
+                               fine_mask, nvar_, cis, cie, cjs, cje, cks, cke, ngh_);
+    CompositeRestrictionStats rf_stats =
+        RestrictHalfWeightImpl(composite_rf_[coarse_level].h_view, src_[fine_level].h_view,
+                               fine_mask, nvar_, cis, cie, cjs, cje, cks, cke, ngh_);
+    CompositeRestrictionStats rlh_stats =
+        RestrictHalfWeightImpl(composite_rlh_[coarse_level].h_view, fine_op.h_view,
+                               fine_mask, nvar_, cis, cie, cjs, cje, cks, cke, ngh_);
+    CompositeRestrictionStats gu = ReduceCompositeRestrictionStats(u_stats);
+    CompositeRestrictionStats grf = ReduceCompositeRestrictionStats(rf_stats);
+    CompositeRestrictionStats grlh = ReduceCompositeRestrictionStats(rlh_stats);
+    const long long insufficient =
+        gu.insufficient_count + grf.insufficient_count + grlh.insufficient_count;
+    if (insufficient != 0) {
+      std::cout << "### FATAL ERROR in IDCTSMultigrid::CompositeRestrictPack"
+                << std::endl
+                << "MeshBlock composite half-weight restriction has insufficient "
+                << "stencil support: " << insufficient << "." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    auto coarse_mask = comp_mask_[coarse_level].h_view;
+    SetCompositePreFASSourceImpl(src_[coarse_level].h_view,
+                                 composite_rf_[coarse_level].h_view,
+                                 composite_rlh_[coarse_level].h_view,
+                                 coarse_mask, nvar_, cis, cie, cjs, cje, cks, cke);
+  } else {
+    auto fine_mask = comp_mask_[fine_level].d_view;
+    switch (fd) {
+      case 2:
+        ComputeCTSOperatorImpl<2>(this, fine_op.d_view, u_[fine_level].d_view,
+                                  src_[fine_level].d_view, coeff_[fine_level].d_view,
+                                  fine_mask, fine_shift, fis, fie, fjs, fje, fks, fke, fd);
+        break;
+      case 3:
+        ComputeCTSOperatorImpl<3>(this, fine_op.d_view, u_[fine_level].d_view,
+                                  src_[fine_level].d_view, coeff_[fine_level].d_view,
+                                  fine_mask, fine_shift, fis, fie, fjs, fje, fks, fke, fd);
+        break;
+      default:
+        ComputeCTSOperatorImpl<4>(this, fine_op.d_view, u_[fine_level].d_view,
+                                  src_[fine_level].d_view, coeff_[fine_level].d_view,
+                                  fine_mask, fine_shift, fis, fie, fjs, fje, fks, fke, fd);
+        break;
+    }
+    CompositeRestrictionStats u_stats =
+        RestrictHalfWeightImpl(u_[coarse_level].d_view, u_[fine_level].d_view,
+                               fine_mask, nvar_, cis, cie, cjs, cje, cks, cke, ngh_);
+    CompositeRestrictionStats rf_stats =
+        RestrictHalfWeightImpl(composite_rf_[coarse_level].d_view, src_[fine_level].d_view,
+                               fine_mask, nvar_, cis, cie, cjs, cje, cks, cke, ngh_);
+    CompositeRestrictionStats rlh_stats =
+        RestrictHalfWeightImpl(composite_rlh_[coarse_level].d_view, fine_op.d_view,
+                               fine_mask, nvar_, cis, cie, cjs, cje, cks, cke, ngh_);
+    CompositeRestrictionStats gu = ReduceCompositeRestrictionStats(u_stats);
+    CompositeRestrictionStats grf = ReduceCompositeRestrictionStats(rf_stats);
+    CompositeRestrictionStats grlh = ReduceCompositeRestrictionStats(rlh_stats);
+    const long long insufficient =
+        gu.insufficient_count + grf.insufficient_count + grlh.insufficient_count;
+    if (insufficient != 0) {
+      std::cout << "### FATAL ERROR in IDCTSMultigrid::CompositeRestrictPack"
+                << std::endl
+                << "MeshBlock composite half-weight restriction has insufficient "
+                << "stencil support: " << insufficient << "." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    auto coarse_mask = comp_mask_[coarse_level].d_view;
+    SetCompositePreFASSourceImpl(src_[coarse_level].d_view,
+                                 composite_rf_[coarse_level].d_view,
+                                 composite_rlh_[coarse_level].d_view,
+                                 coarse_mask, nvar_, cis, cie, cjs, cje, cks, cke);
+  }
+  composite_pre_fas_ready_[coarse_level] = 1;
+  return true;
+}
+
 void IDCTSMultigrid::CalculateFASRHSPack() {
   auto *driver = static_cast<IDCTSMultigridDriver*>(pmy_driver_);
   int ll = nlevel_ - 1 - current_level_;
@@ -2023,6 +2465,63 @@ void IDCTSMultigrid::CalculateFASRHSPack() {
   int fine_fd = driver->owner_->pmy_pack_->pz4c->opt.fd_stencil;
   int fd = (pmy_pack_ != nullptr && current_level_ == nlevel_ - 1)
            ? fine_fd : driver->mg_coarse_fd_stencil_;
+  if (driver->composite_fas_ && composite_pre_fas_ready_[current_level_]) {
+    // CTS uses def = src - L(u).  CompositeRestrictPack stores
+    // src_H = R(src_h - L_h(u_h)); this step adds L_H(Ru_h), giving
+    // the FAS RHS f_H = L_H(Ru_h) + R(f_h - L_h(u_h)).
+    CompositeTauStats local_stats;
+    if (on_host_) {
+      auto mask = comp_mask_[current_level_].h_view;
+      switch (fd) {
+        case 2:
+          local_stats = CompositeFASRHSImpl<2>(
+              this, src_[current_level_].h_view, u_[current_level_].h_view,
+              coeff_[current_level_].h_view, composite_rf_[current_level_].h_view,
+              composite_rlh_[current_level_].h_view, mask, ll, is, ie, js, je, ks, ke, fd);
+          break;
+        case 3:
+          local_stats = CompositeFASRHSImpl<3>(
+              this, src_[current_level_].h_view, u_[current_level_].h_view,
+              coeff_[current_level_].h_view, composite_rf_[current_level_].h_view,
+              composite_rlh_[current_level_].h_view, mask, ll, is, ie, js, je, ks, ke, fd);
+          break;
+        default:
+          local_stats = CompositeFASRHSImpl<4>(
+              this, src_[current_level_].h_view, u_[current_level_].h_view,
+              coeff_[current_level_].h_view, composite_rf_[current_level_].h_view,
+              composite_rlh_[current_level_].h_view, mask, ll, is, ie, js, je, ks, ke, fd);
+          break;
+      }
+    } else {
+      auto mask = comp_mask_[current_level_].d_view;
+      switch (fd) {
+        case 2:
+          local_stats = CompositeFASRHSImpl<2>(
+              this, src_[current_level_].d_view, u_[current_level_].d_view,
+              coeff_[current_level_].d_view, composite_rf_[current_level_].d_view,
+              composite_rlh_[current_level_].d_view, mask, ll, is, ie, js, je, ks, ke, fd);
+          break;
+        case 3:
+          local_stats = CompositeFASRHSImpl<3>(
+              this, src_[current_level_].d_view, u_[current_level_].d_view,
+              coeff_[current_level_].d_view, composite_rf_[current_level_].d_view,
+              composite_rlh_[current_level_].d_view, mask, ll, is, ie, js, je, ks, ke, fd);
+          break;
+        default:
+          local_stats = CompositeFASRHSImpl<4>(
+              this, src_[current_level_].d_view, u_[current_level_].d_view,
+              coeff_[current_level_].d_view, composite_rf_[current_level_].d_view,
+              composite_rlh_[current_level_].d_view, mask, ll, is, ie, js, je, ks, ke, fd);
+          break;
+      }
+    }
+    if (driver->debug_composite_tau_) {
+      CompositeTauStats global_stats = ReduceCompositeTauStats(local_stats);
+      PrintCompositeTauStats(current_level_ + 1, current_level_, global_stats);
+    }
+    composite_pre_fas_ready_[current_level_] = 0;
+    return;
+  }
   if (on_host_) {
     switch (fd) {
       case 2: FASRHSImpl<2>(this, src_[current_level_].h_view, u_[current_level_].h_view,
@@ -2125,6 +2624,9 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   debug_composite_restriction_ =
       pin->GetOrAddBoolean("id_solve", "debug_composite_restriction", false);
   composite_restriction_self_check_done_ = false;
+  debug_composite_tau_ =
+      pin->GetOrAddBoolean("id_solve", "debug_composite_tau", false);
+  composite_tau_deferred_note_printed_ = false;
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -3227,6 +3729,12 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
 
   SetupMultigrid(dt, false);
   BuildCompositeMasks();
+  if (composite_fas_ && debug_composite_tau_ && !composite_tau_deferred_note_printed_
+      && global_variable::my_rank == 0) {
+    std::cout << "CTS composite tau: root/octet composite tau deferred because "
+              << "Commit 3 reported insufficient stencil support there." << std::endl;
+    composite_tau_deferred_note_printed_ = true;
+  }
   TransferCoefficientsFromBlocksToRoot();
 
   auto calculate_defects = [&](Real defects[ID_CTS_NVAR]) {

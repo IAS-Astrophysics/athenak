@@ -251,6 +251,7 @@ class Multigrid {
   virtual void CalculateDefectPack() = 0;
   virtual void CalculateFASRHSPack() = 0;
   virtual void DiagnosticRestrictPack() {}
+  virtual bool CompositeRestrictPack() { return false; }
   void ComputeCorrection();
   void CalculateMatrixPack(Real dt);
   void SetFromRootGrid(bool folddata);

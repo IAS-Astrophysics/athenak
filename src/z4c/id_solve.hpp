@@ -69,11 +69,15 @@ class IDCTSMultigrid : public Multigrid {
   void CalculateDefectPack() final;
   void CalculateFASRHSPack() final;
   void DiagnosticRestrictPack() final;
+  bool CompositeRestrictPack() final;
 
  private:
   void PrepareFrozenView();
 
   DualArray5D<Real> frozen_u_;
+  std::vector<DualArray5D<Real>> composite_rf_;
+  std::vector<DualArray5D<Real>> composite_rlh_;
+  std::vector<char> composite_pre_fas_ready_;
 };
 
 class IDCTSMultigridDriver : public MultigridDriver {
@@ -130,6 +134,8 @@ class IDCTSMultigridDriver : public MultigridDriver {
   int composite_restriction_;
   bool debug_composite_restriction_;
   bool composite_restriction_self_check_done_;
+  bool debug_composite_tau_;
+  bool composite_tau_deferred_note_printed_;
 
   friend class IDCTSMultigrid;
 };
