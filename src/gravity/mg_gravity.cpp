@@ -40,7 +40,8 @@ namespace {
 enum PoissonScalarBoundaryContractMode {
   POISSON_BOUNDARY_CONTRACT_NONE = 0,
   POISSON_BOUNDARY_CONTRACT_CONSERVATIVE = 1,
-  POISSON_BOUNDARY_CONTRACT_NORMAL = 2
+  POISSON_BOUNDARY_CONTRACT_NORMAL = 2,
+  POISSON_BOUNDARY_CONTRACT_MANUFACTURED = 3
 };
 
 PoissonCompositeMaskCounts ReducePoissonMaskCounts(
@@ -210,6 +211,15 @@ PoissonBoundaryClosureStats ReducePoissonBoundaryClosureStats(
                 MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.edge_corner_skipped, &global.edge_corner_skipped, 1,
                 MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.multi_constraint_count, &global.multi_constraint_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.skipped_no_solve_neighbor, &global.skipped_no_solve_neighbor, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.skipped_missing_transverse,
+                &global.skipped_missing_transverse, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.exact_consistent_count, &global.exact_consistent_count, 1,
+                MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.delta_sum2, &global.delta_sum2, 1,
                 MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.max_delta, &global.max_delta, 1,
@@ -222,6 +232,12 @@ PoissonBoundaryClosureStats ReducePoissonBoundaryClosureStats(
   MPI_Allreduce(&local.interface_residual_after_sum2,
                 &global.interface_residual_after_sum2, 1,
                 MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_residual_before_max,
+                &global.interface_residual_before_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.interface_residual_after_max,
+                &global.interface_residual_after_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
 #endif
   return global;
 }
@@ -284,10 +300,13 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
       poisson_test_scalar_boundary_contract_ = POISSON_BOUNDARY_CONTRACT_CONSERVATIVE;
     } else if (scalar_boundary_contract == "normal") {
       poisson_test_scalar_boundary_contract_ = POISSON_BOUNDARY_CONTRACT_NORMAL;
+    } else if (scalar_boundary_contract == "manufactured") {
+      poisson_test_scalar_boundary_contract_ = POISSON_BOUNDARY_CONTRACT_MANUFACTURED;
     } else {
       std::cout << "### FATAL ERROR in MGGravityDriver::MGGravityDriver" << std::endl
                 << "Unknown poisson_test/scalar_boundary_contract='"
-                << scalar_boundary_contract << "'. Expected none, conservative, or normal."
+                << scalar_boundary_contract
+                << "'. Expected none, conservative, normal, or manufactured."
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -884,6 +903,8 @@ void MGGravityDriver::PrintPoissonBoundaryContractDiagnostics(const char *label)
     mode = "conservative";
   } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
     mode = "normal";
+  } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_MANUFACTURED) {
+    mode = "manufactured";
   }
   PrintPoissonBoundaryRegion(label, mode, "fine_coarse", global.fine_coarse);
   PrintPoissonBoundaryRegion(label, mode, "same_level", global.same_level);
@@ -907,6 +928,8 @@ void MGGravityDriver::PrintPoissonBoundaryClosureDiagnostics(const char *label) 
     mode = "conservative";
   } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
     mode = "normal";
+  } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_MANUFACTURED) {
+    mode = "manufactured";
   }
   if (global_variable::my_rank == 0) {
     std::cout << "Poisson boundary_closure: label=" << label
@@ -918,10 +941,16 @@ void MGGravityDriver::PrintPoissonBoundaryClosureDiagnostics(const char *label) 
               << " covered_writes=" << global.covered_writes
               << " face_only_count=" << global.face_only_count
               << " edge_corner_skipped=" << global.edge_corner_skipped
+              << " multi_constraint_count=" << global.multi_constraint_count
+              << " skipped_no_solve_neighbor=" << global.skipped_no_solve_neighbor
+              << " skipped_missing_transverse=" << global.skipped_missing_transverse
+              << " exact_consistent_count=" << global.exact_consistent_count
               << " max_delta=" << global.max_delta
               << " rms_delta=" << rms_delta
               << " interface_residual_before=" << before
               << " interface_residual_after=" << after
+              << " interface_residual_before_max=" << global.interface_residual_before_max
+              << " interface_residual_after_max=" << global.interface_residual_after_max
               << std::endl;
   }
   if (poisson_test_debug_boundary_contract_ &&
@@ -978,6 +1007,10 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
     } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_NORMAL) {
       std::cout << "Poisson MG test: scalar_boundary_contract=normal is diagnostic-only "
                 << "in this stage." << std::endl;
+    } else if (poisson_test_scalar_boundary_contract_ == POISSON_BOUNDARY_CONTRACT_MANUFACTURED) {
+      std::cout << "Poisson MG test: scalar_boundary_contract=manufactured "
+                << "sets scalar face support values from the current manufactured "
+                << "MG source as a diagnostic closure only." << std::endl;
     }
     if (poisson_test_composite_fas_) {
       std::cout << "Poisson MG test: composite scaffold uses generic "
@@ -1066,8 +1099,10 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
 void MGGravity::SmoothPack(int color) {
   auto *gdriver = static_cast<MGGravityDriver*>(pmy_driver_);
   if (gdriver->poisson_test_enabled_ &&
-      gdriver->poisson_test_scalar_boundary_contract_
-          == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+      (gdriver->poisson_test_scalar_boundary_contract_
+          == POISSON_BOUNDARY_CONTRACT_CONSERVATIVE ||
+       gdriver->poisson_test_scalar_boundary_contract_
+          == POISSON_BOUNDARY_CONTRACT_MANUFACTURED)) {
     ApplyScalarBoundaryContract("smooth");
   }
   color ^= pmy_driver_->GetCoffset();
@@ -1130,10 +1165,15 @@ void MGGravity::ApplyScalarBoundaryContract(const char *phase) {
   auto *gdriver = static_cast<MGGravityDriver*>(pmy_driver_);
   gdriver->poisson_last_boundary_closure_stats_ = {};
   if (!gdriver->poisson_test_enabled_ ||
-      gdriver->poisson_test_scalar_boundary_contract_
-          != POISSON_BOUNDARY_CONTRACT_CONSERVATIVE) {
+      (gdriver->poisson_test_scalar_boundary_contract_
+          != POISSON_BOUNDARY_CONTRACT_CONSERVATIVE &&
+       gdriver->poisson_test_scalar_boundary_contract_
+          != POISSON_BOUNDARY_CONTRACT_MANUFACTURED)) {
     return;
   }
+  const bool manufactured =
+      gdriver->poisson_test_scalar_boundary_contract_
+          == POISSON_BOUNDARY_CONTRACT_MANUFACTURED;
 
   const int level = current_level_;
   const int ncells = GetLevelActiveCells(level);
@@ -1192,8 +1232,15 @@ void MGGravity::ApplyScalarBoundaryContract(const char *phase) {
             if (!after) {
               ++stats.interface_residual_count;
               stats.interface_residual_before_sum2 += r*r;
+              stats.interface_residual_before_max =
+                  std::max(stats.interface_residual_before_max, std::abs(r));
             } else {
               stats.interface_residual_after_sum2 += r*r;
+              stats.interface_residual_after_max =
+                  std::max(stats.interface_residual_after_max, std::abs(r));
+              if (std::abs(r) <= 64.0*std::numeric_limits<Real>::epsilon()) {
+                ++stats.exact_consistent_count;
+              }
             }
           }
         }
@@ -1219,6 +1266,8 @@ void MGGravity::ApplyScalarBoundaryContract(const char *phase) {
 
           int solve_neighbors = 0;
           int solve_dir = -1;
+          std::array<Real, 6> candidates{};
+          int candidate_count = 0;
           for (int d = 0; d < 6; ++d) {
             const int ni = i + dirs[d][0];
             const int nj = j + dirs[d][1];
@@ -1227,10 +1276,36 @@ void MGGravity::ApplyScalarBoundaryContract(const char *phase) {
             if (mask(m, COMP_SOLVE, nk, nj, ni) != 0) {
               ++solve_neighbors;
               solve_dir = d;
+              if (manufactured) {
+                bool missing = false;
+                Real known_sum = 0.0;
+                for (int od = 0; od < 6; ++od) {
+                  if (od == d + (d % 2 == 0 ? 1 : -1)) continue;
+                  const int oi = ni + dirs[od][0];
+                  const int oj = nj + dirs[od][1];
+                  const int ok = nk + dirs[od][2];
+                  if (oi < 0 || oi >= u.extent_int(4) ||
+                      oj < 0 || oj >= u.extent_int(3) ||
+                      ok < 0 || ok >= u.extent_int(2)) {
+                    missing = true;
+                    break;
+                  }
+                  known_sum += u(m, 0, ok, oj, oi);
+                }
+                if (missing) {
+                  ++stats.skipped_missing_transverse;
+                } else {
+                  const int ll = nlevel_ - 1 - level;
+                  const Real dx = brdx(m) * static_cast<Real>(1 << ll);
+                  candidates[candidate_count++] =
+                      6.0*u(m, 0, nk, nj, ni) - known_sum
+                      - src(m, 0, nk, nj, ni)*dx*dx;
+                }
+              }
             }
           }
-          if (solve_neighbors != 1) {
-            if (solve_neighbors > 1) ++stats.edge_corner_skipped;
+          if (solve_neighbors == 0) {
+            ++stats.skipped_no_solve_neighbor;
             continue;
           }
 
@@ -1240,25 +1315,38 @@ void MGGravity::ApplyScalarBoundaryContract(const char *phase) {
           const int oi = i - dirs[solve_dir][0];
           const int oj = j - dirs[solve_dir][1];
           const int ok = k - dirs[solve_dir][2];
-          if (oi < 0 || oi >= u.extent_int(4) ||
-              oj < 0 || oj >= u.extent_int(3) ||
-              ok < 0 || ok >= u.extent_int(2)) {
+          if (!manufactured &&
+              (oi < 0 || oi >= u.extent_int(4) ||
+               oj < 0 || oj >= u.extent_int(3) ||
+               ok < 0 || ok >= u.extent_int(2))) {
             ++stats.edge_corner_skipped;
             continue;
           }
 
-          // Face-only second-order normal extrapolation from nearby fine solve
-          // values. The pre-filled coarse/support value remains available in the
-          // opposite normal direction but is not trusted as an elliptic closure.
           const Real old = u(m, 0, k, j, i);
-          const Real fine_solve = u(m, 0, sk, sj, si);
-          const int ii = si + dirs[solve_dir][0];
-          const int ij = sj + dirs[solve_dir][1];
-          const int ik = sk + dirs[solve_dir][2];
-          const bool have_second_solve = in_active(ik, ij, ii) &&
-              mask(m, COMP_SOLVE, ik, ij, ii) != 0;
-          const Real updated = have_second_solve
-              ? 2.0*fine_solve - u(m, 0, ik, ij, ii) : fine_solve;
+          Real updated = old;
+          if (manufactured) {
+            if (candidate_count == 0) continue;
+            for (int c = 0; c < candidate_count; ++c) updated += candidates[c];
+            updated = (updated - old)/static_cast<Real>(candidate_count);
+            if (candidate_count > 1) ++stats.multi_constraint_count;
+          } else {
+            if (solve_neighbors != 1) {
+              ++stats.edge_corner_skipped;
+              continue;
+            }
+            // Face-only second-order normal extrapolation from nearby fine solve
+            // values. The pre-filled coarse/support value remains available in the
+            // opposite normal direction but is not trusted as an elliptic closure.
+            const Real fine_solve = u(m, 0, sk, sj, si);
+            const int ii = si + dirs[solve_dir][0];
+            const int ij = sj + dirs[solve_dir][1];
+            const int ik = sk + dirs[solve_dir][2];
+            const bool have_second_solve = in_active(ik, ij, ii) &&
+                mask(m, COMP_SOLVE, ik, ij, ii) != 0;
+            updated = have_second_solve
+                ? 2.0*fine_solve - u(m, 0, ik, ij, ii) : fine_solve;
+          }
           const Real delta = updated - old;
           u(m, 0, k, j, i) = updated;
           ++stats.closure_writes;

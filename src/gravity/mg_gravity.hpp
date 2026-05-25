@@ -34,11 +34,17 @@ struct PoissonBoundaryClosureStats {
   long long covered_writes = 0;
   long long face_only_count = 0;
   long long edge_corner_skipped = 0;
+  long long multi_constraint_count = 0;
+  long long skipped_no_solve_neighbor = 0;
+  long long skipped_missing_transverse = 0;
+  long long exact_consistent_count = 0;
   Real delta_sum2 = 0.0;
   Real max_delta = 0.0;
   long long interface_residual_count = 0;
   Real interface_residual_before_sum2 = 0.0;
   Real interface_residual_after_sum2 = 0.0;
+  Real interface_residual_before_max = 0.0;
+  Real interface_residual_after_max = 0.0;
 };
 
 // 7-point Laplacian stencil for Poisson gravity
