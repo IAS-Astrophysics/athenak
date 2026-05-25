@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <type_traits>
 #include <vector>
@@ -487,6 +488,12 @@ struct CompositeBridgeStats {
   long long dry_count = 0;
   Real ru_sum2 = 0.0;
   Real rf_sum2 = 0.0;
+  Real rlh_sum2 = 0.0;
+  Real lhr_sum2 = 0.0;
+  Real tau_sum2 = 0.0;
+  Real tau_max = 0.0;
+  Real rhs_consistency_sum2 = 0.0;
+  Real rhs_consistency_max = 0.0;
   Real old_mismatch_sum2 = 0.0;
   Real old_mismatch_max = 0.0;
   long long old_mismatch_count = 0;
@@ -932,6 +939,18 @@ CompositeBridgeStats ReduceCompositeBridgeStats(const CompositeBridgeStats &loca
                 MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.rf_sum2, &global.rf_sum2, 1,
                 MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.rlh_sum2, &global.rlh_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.lhr_sum2, &global.lhr_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.tau_sum2, &global.tau_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.tau_max, &global.tau_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.rhs_consistency_sum2, &global.rhs_consistency_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.rhs_consistency_max, &global.rhs_consistency_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(&local.old_mismatch_sum2, &global.old_mismatch_sum2, 1,
                 MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.old_mismatch_max, &global.old_mismatch_max, 1,
@@ -1041,6 +1060,51 @@ void PrintCompositeBridgeStats(const char *entity, int level, const char *region
             << " old_state_mismatch_rms=" << old_rms << std::endl;
 }
 
+void PrintCompositeBridgeRHSStats(const char *entity, int level,
+                                  const CompositeBridgeStats &stats) {
+  if (global_variable::my_rank != 0) return;
+  const Real denom = (stats.valid_dst > 0) ? static_cast<Real>(stats.valid_dst) : 1.0;
+  const Real old_denom = (stats.old_mismatch_count > 0)
+      ? static_cast<Real>(stats.old_mismatch_count) : 1.0;
+  std::cout << "CTS composite bridge RHS:"
+            << " entity=" << entity
+            << " level=" << level
+            << " valid_dst=" << stats.valid_dst
+            << " staging_used=" << stats.staging_used
+            << " insufficient_valid=" << stats.insufficient_valid
+            << " ||R_f||=" << std::sqrt(stats.rf_sum2/denom)
+            << " ||R_L_h||=" << std::sqrt(stats.rlh_sum2/denom)
+            << " ||L_H_Ru||=" << std::sqrt(stats.lhr_sum2/denom)
+            << " ||tau||=" << std::sqrt(stats.tau_sum2/denom)
+            << " tau_max=" << stats.tau_max
+            << " tau_rms=" << std::sqrt(stats.tau_sum2/denom)
+            << " old_state_mismatch_max=" << stats.old_mismatch_max
+            << " old_state_mismatch_rms="
+            << std::sqrt(stats.old_mismatch_sum2/old_denom)
+            << " rhs_consistency_max=" << stats.rhs_consistency_max
+            << " rhs_consistency_rms="
+            << std::sqrt(stats.rhs_consistency_sum2/denom)
+            << " assembly=R_def_plus_later_L_H" << std::endl;
+}
+
+void CheckCompositeBridgeOldState(const char *entity, int level,
+                                  const CompositeBridgeStats &stats) {
+  if (stats.old_mismatch_count == 0) return;
+  const Real scale = std::max(
+      static_cast<Real>(1.0),
+      std::sqrt(stats.ru_sum2/static_cast<Real>(stats.old_mismatch_count)));
+  const Real tol = static_cast<Real>(128.0)*std::numeric_limits<Real>::epsilon()*scale;
+  if (stats.old_mismatch_max <= tol) return;
+  if (global_variable::my_rank == 0) {
+    std::cout << "### FATAL ERROR in CTS composite bridge RHS" << std::endl
+              << "Old-state mismatch after staged R(u_h) for entity=" << entity
+              << " level=" << level
+              << " max=" << stats.old_mismatch_max
+              << " tolerance=" << tol << std::endl;
+  }
+  std::exit(EXIT_FAILURE);
+}
+
 void PrintCompositeBridgeMissingStats(const char *entity, int level, const char *region,
                                       const CompositeBridgeMissingStats &stats) {
   if (global_variable::my_rank != 0) return;
@@ -1122,6 +1186,47 @@ void CountBridgeStencilKind(CompositeBridgeStats &stats, int axis, int kind) {
   } else if (axis == 2 && kind > 0) {
     ++stats.onesided_zp_count;
   }
+}
+
+void AddBridgeStats(CompositeBridgeStats &dst, const CompositeBridgeStats &src) {
+  dst.valid_dst += src.valid_dst;
+  dst.staging_skipped += src.staging_skipped;
+  dst.staging_used += src.staging_used;
+  dst.covered_skipped += src.covered_skipped;
+  dst.half_weight += src.half_weight;
+  dst.onesided += src.onesided;
+  dst.centered_count += src.centered_count;
+  dst.onesided_xm_count += src.onesided_xm_count;
+  dst.onesided_xp_count += src.onesided_xp_count;
+  dst.onesided_ym_count += src.onesided_ym_count;
+  dst.onesided_yp_count += src.onesided_yp_count;
+  dst.onesided_zm_count += src.onesided_zm_count;
+  dst.onesided_zp_count += src.onesided_zp_count;
+  dst.fallback += src.fallback;
+  dst.insufficient_valid += src.insufficient_valid;
+  dst.physical_boundary += src.physical_boundary;
+  dst.refinement_interface += src.refinement_interface;
+  dst.diff_count += src.diff_count;
+  dst.diff_sum2 += src.diff_sum2;
+  dst.diff_max = std::max(dst.diff_max, src.diff_max);
+  dst.dry_count += src.dry_count;
+  dst.ru_sum2 += src.ru_sum2;
+  dst.rf_sum2 += src.rf_sum2;
+  dst.rlh_sum2 += src.rlh_sum2;
+  dst.lhr_sum2 += src.lhr_sum2;
+  dst.tau_sum2 += src.tau_sum2;
+  dst.tau_max = std::max(dst.tau_max, src.tau_max);
+  dst.rhs_consistency_sum2 += src.rhs_consistency_sum2;
+  dst.rhs_consistency_max = std::max(dst.rhs_consistency_max, src.rhs_consistency_max);
+  dst.old_mismatch_sum2 += src.old_mismatch_sum2;
+  dst.old_mismatch_max = std::max(dst.old_mismatch_max, src.old_mismatch_max);
+  dst.old_mismatch_count += src.old_mismatch_count;
+}
+
+std::size_t BridgeFieldIndex(int nvar, int nk, int nj, int ni,
+                             int v, int k, int j, int i) {
+  (void)nvar;
+  return static_cast<std::size_t>(((v*nk + k)*nj + j)*ni + i);
 }
 
 template <typename ViewType>
@@ -2820,6 +2925,79 @@ void IDCTSMultigrid::CalculateFASRHSPack() {
     composite_pre_fas_ready_[current_level_] = 0;
     return;
   }
+  if (driver->composite_fas_ && driver->composite_bridge_rhs_ready_ && on_host_ &&
+      current_level_ == driver->nrootlevel_ - 1 &&
+      !driver->composite_bridge_root_rf_.empty()) {
+    auto src = src_[current_level_].h_view;
+    auto u = u_[current_level_].h_view;
+    auto uold = uold_[current_level_].h_view;
+    auto free = coeff_[current_level_].h_view;
+    auto mask = comp_mask_[current_level_].h_view;
+    auto brdx = GetBlockDx_h();
+    const int nk = u.extent_int(2);
+    const int nj = u.extent_int(3);
+    const int ni = u.extent_int(4);
+    const int rlev = -ll;
+    CompositeBridgeStats local_stats;
+    for (int k = ks; k <= ke; ++k) {
+      for (int j = js; j <= je; ++j) {
+        for (int i = is; i <= ie; ++i) {
+          if (mask(0, COMP_VALID, k, j, i) == 0) continue;
+          ++local_stats.valid_dst;
+          Real op[ID_CTS_NVAR];
+          for (int v = 0; v < ID_CTS_NVAR; ++v) op[v] = 0.0;
+          if (free(0, ID_FREE_MASK, k, j, i) >= 0.5) {
+            Real dx = (rlev <= 0) ? brdx(0)*static_cast<Real>(1<<(-rlev))
+                                  : brdx(0)/static_cast<Real>(1<<rlev);
+            Real idx[3] = {1.0/dx, 1.0/dx, 1.0/dx};
+            Real diag[ID_CTS_NVAR];
+            switch (fd) {
+              case 2:
+                CTSOperator<2>(u, free, idx, fd, 0, k, j, i, op, diag);
+                break;
+              case 3:
+                CTSOperator<3>(u, free, idx, fd, 0, k, j, i, op, diag);
+                break;
+              default:
+                CTSOperator<4>(u, free, idx, fd, 0, k, j, i, op, diag);
+                break;
+            }
+          }
+          for (int v = 0; v < ID_CTS_NVAR; ++v) {
+            const std::size_t bidx = BridgeFieldIndex(nvar_, nk, nj, ni, v, k, j, i);
+            const Real rf = driver->composite_bridge_root_rf_[bidx];
+            const Real rlh = driver->composite_bridge_root_rlh_[bidx];
+            const Real ru = driver->composite_bridge_root_ru_[bidx];
+            const Real lhr = op[v];
+            const Real tau = lhr - rlh;
+            const Real before = src(0, v, k, j, i);
+            src(0, v, k, j, i) += lhr;
+            const Real consistency = before - (rf - rlh);
+            const Real old_diff = uold(0, v, k, j, i) - ru;
+            local_stats.ru_sum2 += ru*ru;
+            local_stats.rf_sum2 += rf*rf;
+            local_stats.rlh_sum2 += rlh*rlh;
+            local_stats.lhr_sum2 += lhr*lhr;
+            local_stats.tau_sum2 += tau*tau;
+            local_stats.tau_max = std::max(local_stats.tau_max, std::abs(tau));
+            local_stats.rhs_consistency_sum2 += consistency*consistency;
+            local_stats.rhs_consistency_max =
+                std::max(local_stats.rhs_consistency_max, std::abs(consistency));
+            local_stats.old_mismatch_sum2 += old_diff*old_diff;
+            local_stats.old_mismatch_max =
+                std::max(local_stats.old_mismatch_max, std::abs(old_diff));
+            ++local_stats.old_mismatch_count;
+          }
+        }
+      }
+    }
+    CompositeBridgeStats global_stats = ReduceCompositeBridgeStats(local_stats);
+    if (driver->debug_composite_bridge_ || driver->debug_composite_tau_) {
+      PrintCompositeBridgeRHSStats("root", current_level_, global_stats);
+    }
+    CheckCompositeBridgeOldState("root", current_level_, global_stats);
+    return;
+  }
   if (on_host_) {
     switch (fd) {
       case 2: FASRHSImpl<2>(this, src_[current_level_].h_view, u_[current_level_].h_view,
@@ -2927,6 +3105,8 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   composite_tau_deferred_note_printed_ = false;
   debug_composite_bridge_ =
       pin->GetOrAddBoolean("id_solve", "debug_composite_bridge", false);
+  composite_bridge_rhs_ready_ = false;
+  composite_bridge_rhs_note_printed_ = false;
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -4197,15 +4377,25 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
   if (!composite_fas_) return;
   if (initflag) return;
 
-  // This hook runs after the MeshBlock transfer level is copied into root/octet
-  // storage.  If restrict_from_transfer_level is true the transfer first computes
-  // def=src-L(u); otherwise the transfer-level src already contains the
-  // restricted fine defect from the preceding MeshBlock RestrictPack call.  In
-  // both cases the current legacy bridge only copies R(f_h-L_h) and R(u_h); a
-  // future composite bridge RHS must add L_H(Ru_h) on these same valid
-  // root/octet cells.  The audit below deliberately treats covered/staging cells
-  // as stencil support candidates only, never as independent solved unknowns.
+  // This hook runs after the legacy MeshBlock transfer has populated root/octet
+  // storage and before StoreOldDataOctets()/mgroot_->StoreOldData().  Composite
+  // CTS overwrites that legacy payload with
+  //   u_H   = R(u_h)
+  //   src_H = R(src_h - L_h(u_h))
+  // and lets the later root/octet CalculateFASRHS step add L_H(Ru_h) exactly
+  // once.  This preserves the CTS convention def=src-L(u) and avoids mixing the
+  // legacy average bridge with the composite half-weight bridge.
   (void)restrict_from_transfer_level;
+  if (composite_restriction_ != ID_CTS_RESTRICT_HALF_WEIGHT) {
+    if (global_variable::my_rank == 0) {
+      std::cout << "### FATAL ERROR in IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer"
+                << std::endl
+                << "CTS composite root/octet bridge RHS requires "
+                << "id_solve/composite_restriction=half_weight." << std::endl;
+    }
+    std::exit(EXIT_FAILURE);
+  }
+  composite_bridge_rhs_ready_ = false;
   CompositeBridgeStats root_local;
   CompositeBridgeStats octet_active_local;
   CompositeBridgeStats octet_staging_local;
@@ -4218,12 +4408,40 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
   const int ngh = mgroot_->GetGhostCells();
   const int transfer_level = MeshBlockTransferLevel();
   const int transfer_ncells = mglevels_->GetLevelActiveCells(transfer_level);
+  if (restrict_from_transfer_level) {
+    mglevels_->CalculateDefectPack();
+  }
   mglevels_->SyncDataLevelToHost(transfer_level);
-  if (restrict_from_transfer_level) mglevels_->SyncDefectLevelToHost(transfer_level);
-  else mglevels_->SyncSourceLevelToHost(transfer_level);
+  mglevels_->SyncSourceLevelToHost(transfer_level);
+  if (restrict_from_transfer_level) {
+    mglevels_->SyncDefectLevelToHost(transfer_level);
+  }
   auto mb_u = mglevels_->GetDataLevel_h(transfer_level);
-  auto mb_rhs = restrict_from_transfer_level ? mglevels_->GetDefectLevel_h(transfer_level)
+  auto mb_src = mglevels_->GetSourceLevel_h(transfer_level);
+  auto mb_def = restrict_from_transfer_level ? mglevels_->GetDefectLevel_h(transfer_level)
                                              : mglevels_->GetSourceLevel_h(transfer_level);
+  auto root_u = mgroot_->GetCurrentData_h();
+  auto root_src = mgroot_->GetCurrentSource_h();
+  const int root_nvar = root_u.extent_int(1);
+  const int root_nk = root_u.extent_int(2);
+  const int root_nj = root_u.extent_int(3);
+  const int root_ni = root_u.extent_int(4);
+  composite_bridge_root_rf_.assign(
+      static_cast<std::size_t>(root_nvar)*root_nk*root_nj*root_ni, 0.0);
+  composite_bridge_root_rlh_.assign(composite_bridge_root_rf_.size(), 0.0);
+  composite_bridge_root_ru_.assign(composite_bridge_root_rf_.size(), 0.0);
+  composite_bridge_oct_rf_.assign(nreflevel_, std::vector<Real>());
+  composite_bridge_oct_rlh_.assign(nreflevel_, std::vector<Real>());
+  composite_bridge_oct_ru_.assign(nreflevel_, std::vector<Real>());
+  for (int lev = 0; lev < nreflevel_; ++lev) {
+    composite_bridge_oct_rf_[lev].assign(oct_src_buf_[lev].size(), 0.0);
+    composite_bridge_oct_rlh_[lev].assign(oct_src_buf_[lev].size(), 0.0);
+    composite_bridge_oct_ru_[lev].assign(oct_src_buf_[lev].size(), 0.0);
+  }
+  std::vector<Real> staged_u_payload(static_cast<std::size_t>(nvar_)*nbtotal_, 0.0);
+  std::vector<Real> staged_def_payload(static_cast<std::size_t>(nvar_)*nbtotal_, 0.0);
+  std::vector<Real> staged_rf_payload(static_cast<std::size_t>(nvar_)*nbtotal_, 0.0);
+  std::vector<Real> staged_rlh_payload(static_cast<std::size_t>(nvar_)*nbtotal_, 0.0);
   auto accumulate_staged_blocks = [&]() {
     const int root_level = nrootlevel_ - 1;
     auto root_mask = mgroot_->GetCompositeMaskLevel_h(root_level);
@@ -4235,6 +4453,10 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
       const LogicalLocation &mb_loc = loc[gid];
       CompositeBridgeStats *stats = nullptr;
       CompositeBridgeMissingStats *missing = nullptr;
+      bool dst_is_root = true;
+      int dst_i = 0, dst_j = 0, dst_k = 0;
+      int dst_olev = -1;
+      MGOctet *dst_oct = nullptr;
       bool valid = false;
       bool covered = false;
       bool physical = false;
@@ -4243,15 +4465,19 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
         const int i = static_cast<int>(mb_loc.lx1);
         const int j = static_cast<int>(mb_loc.lx2);
         const int k = static_cast<int>(mb_loc.lx3);
+        dst_i = i + ngh;
+        dst_j = j + ngh;
+        dst_k = k + ngh;
         stats = &root_staged_local;
         missing = &root_staged_missing_local;
-        valid = root_mask(0, COMP_VALID, k + ngh, j + ngh, i + ngh) != 0;
-        covered = root_mask(0, COMP_COVERED, k + ngh, j + ngh, i + ngh) != 0;
+        valid = root_mask(0, COMP_VALID, dst_k, dst_j, dst_i) != 0;
+        covered = root_mask(0, COMP_COVERED, dst_k, dst_j, dst_i) != 0;
         physical = (i == 0 || i == nrbx1_ - 1 ||
                     j == 0 || j == nrbx2_ - 1 ||
                     k == 0 || k == nrbx3_ - 1);
-        interface = root_mask(0, COMP_INTERFACE, k + ngh, j + ngh, i + ngh) != 0;
+        interface = root_mask(0, COMP_INTERFACE, dst_k, dst_j, dst_i) != 0;
       } else {
+        dst_is_root = false;
         LogicalLocation oloc;
         oloc.lx1 = (mb_loc.lx1 >> 1);
         oloc.lx2 = (mb_loc.lx2 >> 1);
@@ -4260,10 +4486,15 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
         const int olev = oloc.level - locrootlevel_;
         const int oid = FindOctetIdOrDie(olev, oloc,
                                          "DiagnosticCompositeBridgeTransfer staging");
-        const MGOctet &oct = octets_[olev][oid];
+        MGOctet &oct = octets_[olev][oid];
         const int oi = (static_cast<int>(mb_loc.lx1) & 1) + ngh;
         const int oj = (static_cast<int>(mb_loc.lx2) & 1) + ngh;
         const int ok = (static_cast<int>(mb_loc.lx3) & 1) + ngh;
+        dst_i = oi;
+        dst_j = oj;
+        dst_k = ok;
+        dst_olev = olev;
+        dst_oct = &oct;
         const int ci = oi - ngh;
         const int cj = oj - ngh;
         const int ck = ok - ngh;
@@ -4293,32 +4524,81 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
       bool ok = true;
       bool cell_used_staging = false;
       bool cell_used_onesided = false;
+      Real ru_values[ID_CTS_NVAR] = {};
+      Real rf_values[ID_CTS_NVAR] = {};
+      Real rdef_values[ID_CTS_NVAR] = {};
       for (int v = 0; v < nvar_; ++v) {
         Real ru = 0.0;
         Real rf = 0.0;
+        Real rdef = 0.0;
         bool u_staging = false;
         bool u_onesided = false;
-        bool f_staging = false;
-        bool f_onesided = false;
+        bool src_staging = false;
+        bool src_onesided = false;
+        bool def_staging = false;
+        bool def_onesided = false;
         const bool u_ok = BridgeRestrictFromTransferBlock(
             mb_u, m, v, mglevels_->GetGhostCells(), transfer_ncells, ru,
             *stats, *missing, physical, interface, u_staging, u_onesided);
-        const bool f_ok = BridgeRestrictFromTransferBlock(
-            mb_rhs, m, v, mglevels_->GetGhostCells(), transfer_ncells, rf,
-            *stats, *missing, physical, interface, f_staging, f_onesided);
-        if (!u_ok || !f_ok) {
+        const bool src_ok = BridgeRestrictFromTransferBlock(
+            mb_src, m, v, mglevels_->GetGhostCells(), transfer_ncells, rf,
+            *stats, *missing, physical, interface, src_staging, src_onesided);
+        const bool def_ok = BridgeRestrictFromTransferBlock(
+            mb_def, m, v, mglevels_->GetGhostCells(), transfer_ncells, rdef,
+            *stats, *missing, physical, interface, def_staging, def_onesided);
+        if (!u_ok || !src_ok || !def_ok) {
           ok = false;
           break;
         }
-        cell_used_staging = cell_used_staging || u_staging || f_staging;
-        cell_used_onesided = cell_used_onesided || u_onesided || f_onesided;
+        ru_values[v] = ru;
+        rf_values[v] = rf;
+        rdef_values[v] = rdef;
+        const Real rlh = rf - rdef;
+        cell_used_staging = cell_used_staging || u_staging || src_staging || def_staging;
+        cell_used_onesided = cell_used_onesided || u_onesided || src_onesided || def_onesided;
         stats->ru_sum2 += ru*ru;
         stats->rf_sum2 += rf*rf;
+        stats->rlh_sum2 += rlh*rlh;
         ++stats->dry_count;
       }
       if (!ok) {
         ++stats->insufficient_valid;
       } else {
+        for (int v = 0; v < nvar_; ++v) {
+          const Real ru = ru_values[v];
+          const Real rf = rf_values[v];
+          const Real rdef = rdef_values[v];
+          const Real rlh = rf - rdef;
+          const std::size_t payload_idx = static_cast<std::size_t>(v)*nbtotal_ + gid;
+          staged_u_payload[payload_idx] = ru;
+          staged_def_payload[payload_idx] = rdef;
+          staged_rf_payload[payload_idx] = rf;
+          staged_rlh_payload[payload_idx] = rlh;
+          if (dst_is_root) {
+            const std::size_t idx =
+                BridgeFieldIndex(root_nvar, root_nk, root_nj, root_ni,
+                                 v, dst_k, dst_j, dst_i);
+            root_u(0, v, dst_k, dst_j, dst_i) = ru;
+            root_src(0, v, dst_k, dst_j, dst_i) = rdef;
+            composite_bridge_root_ru_[idx] = ru;
+            composite_bridge_root_rf_[idx] = rf;
+            composite_bridge_root_rlh_[idx] = rlh;
+          } else {
+            const std::ptrdiff_t oct_offset =
+                dst_oct->src - oct_src_buf_[dst_olev].data();
+            const std::size_t idx = static_cast<std::size_t>(oct_offset)
+                + BridgeFieldIndex(nvar_, dst_oct->nc, dst_oct->nc, dst_oct->nc,
+                                   v, dst_k, dst_j, dst_i);
+            dst_oct->U(v, dst_k, dst_j, dst_i) = ru;
+            dst_oct->Src(v, dst_k, dst_j, dst_i) = rdef;
+            composite_bridge_oct_ru_[dst_olev][idx] = ru;
+            composite_bridge_oct_rf_[dst_olev][idx] = rf;
+            composite_bridge_oct_rlh_[dst_olev][idx] = rlh;
+          }
+          if (saved_block_u_payload_valid_) {
+            saved_block_u_payload_[payload_idx] = ru;
+          }
+        }
         if (cell_used_staging) ++stats->staging_used;
         if (cell_used_onesided) ++stats->onesided;
         else ++stats->half_weight;
@@ -4326,6 +4606,82 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
     }
   };
   accumulate_staged_blocks();
+  auto gather_payload = [&](std::vector<Real> &payload) {
+#if MPI_PARALLEL_ENABLED
+    const int local_nmb = nblist_[global_variable::my_rank];
+    std::vector<Real> send(static_cast<std::size_t>(nvar_)*local_nmb, 0.0);
+    for (int v = 0; v < nvar_; ++v) {
+      for (int m = 0; m < local_nmb; ++m) {
+        send[static_cast<std::size_t>(v)*local_nmb + m] =
+            payload[static_cast<std::size_t>(v)*nbtotal_ +
+                    nslist_[global_variable::my_rank] + m];
+      }
+      MPI_Allgatherv(send.data() + static_cast<std::size_t>(v)*local_nmb,
+                     local_nmb, MPI_ATHENA_REAL,
+                     payload.data() + static_cast<std::size_t>(v)*nbtotal_,
+                     nblist_, nslist_, MPI_ATHENA_REAL, MPI_COMM_WORLD);
+    }
+#else
+    (void)payload;
+#endif
+  };
+  gather_payload(staged_u_payload);
+  gather_payload(staged_def_payload);
+  gather_payload(staged_rf_payload);
+  gather_payload(staged_rlh_payload);
+  {
+    const auto loc = pmy_mesh_->lloc_eachmb;
+    for (int n = 0; n < nbtotal_; ++n) {
+      const int i = static_cast<int>(loc[n].lx1);
+      const int j = static_cast<int>(loc[n].lx2);
+      const int k = static_cast<int>(loc[n].lx3);
+      if (loc[n].level == locrootlevel_) {
+        const int ii = i + ngh;
+        const int jj = j + ngh;
+        const int kk = k + ngh;
+        for (int v = 0; v < nvar_; ++v) {
+          const std::size_t payload_idx = static_cast<std::size_t>(v)*nbtotal_ + n;
+          const std::size_t root_idx =
+              BridgeFieldIndex(root_nvar, root_nk, root_nj, root_ni, v, kk, jj, ii);
+          root_u(0, v, kk, jj, ii) = staged_u_payload[payload_idx];
+          root_src(0, v, kk, jj, ii) = staged_def_payload[payload_idx];
+          composite_bridge_root_ru_[root_idx] = staged_u_payload[payload_idx];
+          composite_bridge_root_rf_[root_idx] = staged_rf_payload[payload_idx];
+          composite_bridge_root_rlh_[root_idx] = staged_rlh_payload[payload_idx];
+          if (saved_block_u_payload_valid_) {
+            saved_block_u_payload_[payload_idx] = staged_u_payload[payload_idx];
+          }
+        }
+      } else {
+        LogicalLocation oloc;
+        oloc.lx1 = (loc[n].lx1 >> 1);
+        oloc.lx2 = (loc[n].lx2 >> 1);
+        oloc.lx3 = (loc[n].lx3 >> 1);
+        oloc.level = loc[n].level - 1;
+        const int olev = oloc.level - locrootlevel_;
+        const int oid = FindOctetIdOrDie(olev, oloc,
+                                         "DiagnosticCompositeBridgeTransfer apply");
+        MGOctet &oct = octets_[olev][oid];
+        const int oi = (i & 1) + ngh;
+        const int oj = (j & 1) + ngh;
+        const int ok = (k & 1) + ngh;
+        const std::ptrdiff_t oct_offset = oct.src - oct_src_buf_[olev].data();
+        for (int v = 0; v < nvar_; ++v) {
+          const std::size_t payload_idx = static_cast<std::size_t>(v)*nbtotal_ + n;
+          const std::size_t oct_idx = static_cast<std::size_t>(oct_offset)
+              + BridgeFieldIndex(nvar_, oct.nc, oct.nc, oct.nc, v, ok, oj, oi);
+          oct.U(v, ok, oj, oi) = staged_u_payload[payload_idx];
+          oct.Src(v, ok, oj, oi) = staged_def_payload[payload_idx];
+          composite_bridge_oct_ru_[olev][oct_idx] = staged_u_payload[payload_idx];
+          composite_bridge_oct_rf_[olev][oct_idx] = staged_rf_payload[payload_idx];
+          composite_bridge_oct_rlh_[olev][oct_idx] = staged_rlh_payload[payload_idx];
+          if (saved_block_u_payload_valid_) {
+            saved_block_u_payload_[payload_idx] = staged_u_payload[payload_idx];
+          }
+        }
+      }
+    }
+  }
   if (global_variable::my_rank == 0) {
     const int root_level = nrootlevel_ - 1;
     auto root_mask = mgroot_->GetCompositeMaskLevel_h(root_level);
@@ -4517,14 +4873,6 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
     PrintCompositeBridgeMissingStats("octet", 0, "meshblock_staging",
                                      octet_staged_missing);
   }
-  static bool bridge_staging_note_printed = false;
-  if (!bridge_staging_note_printed && global_variable::my_rank == 0 &&
-      root_staged.insufficient_valid + octet_staged.insufficient_valid == 0) {
-    std::cout << "CTS composite bridge staging: support_closed=1"
-              << " production_root_octet_rhs=disabled"
-              << " legacy_bridge_math=unchanged" << std::endl;
-    bridge_staging_note_printed = true;
-  }
   if (root_staged.insufficient_valid + octet_staged.insufficient_valid > 0) {
     if (global_variable::my_rank == 0) {
       std::cout << "### FATAL ERROR in IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer"
@@ -4534,6 +4882,13 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
                 << std::endl;
     }
     std::exit(EXIT_FAILURE);
+  }
+  composite_bridge_rhs_ready_ = true;
+  if (!composite_bridge_rhs_note_printed_ && global_variable::my_rank == 0) {
+    std::cout << "CTS composite bridge staging: support_closed=1"
+              << " production_root_octet_rhs=enabled"
+              << " assembly=R_def_plus_later_L_H" << std::endl;
+    composite_bridge_rhs_note_printed_ = true;
   }
 }
 
@@ -4662,25 +5017,88 @@ void IDCTSMultigridDriver::CalculateFASRHSOctet(MGOctet &oct, int rlev) {
   OctetArray u{oct.u, oct.nc};
   OctetArray src{oct.src, oct.nc};
   OctetArray free{oct.coeff, oct.nc};
+  const int lev = rlev - 1;
+  const bool bridge_rhs =
+      composite_fas_ && composite_bridge_rhs_ready_ && lev >= 0 &&
+      lev < static_cast<int>(composite_bridge_oct_rf_.size()) &&
+      !composite_bridge_oct_rf_[lev].empty();
+  const std::ptrdiff_t oct_offset = bridge_rhs
+      ? (oct.src - oct_src_buf_[lev].data()) : 0;
+  CompositeBridgeStats rhs_stats;
   for (int k = ngh; k <= ngh+1; ++k) {
     for (int j = ngh; j <= ngh+1; ++j) {
       for (int i = ngh; i <= ngh+1; ++i) {
+        if (composite_fas_ && oct.Mask(COMP_VALID, k, j, i) == 0) continue;
+        ++rhs_stats.valid_dst;
         Real op[ID_CTS_NVAR], diag[ID_CTS_NVAR];
-        switch (octet_fd_stencil_) {
-          case 2:
-            CTSOperator<2>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
-            break;
-          case 3:
-            CTSOperator<3>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
-            break;
-          default:
-            CTSOperator<4>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
-            break;
+        for (int v = 0; v < ID_CTS_NVAR; ++v) op[v] = 0.0;
+        if (free(0, ID_FREE_MASK, k, j, i) >= 0.5) {
+          switch (octet_fd_stencil_) {
+            case 2:
+              CTSOperator<2>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
+              break;
+            case 3:
+              CTSOperator<3>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
+              break;
+            default:
+              CTSOperator<4>(u, free, idx, octet_fd_stencil_, 0, k, j, i, op, diag);
+              break;
+          }
         }
         for (int v = 0; v < ID_CTS_NVAR; ++v) {
+          if (bridge_rhs) {
+            const std::size_t bidx = static_cast<std::size_t>(oct_offset)
+                + BridgeFieldIndex(nvar_, oct.nc, oct.nc, oct.nc, v, k, j, i);
+            const Real rf = composite_bridge_oct_rf_[lev][bidx];
+            const Real rlh = composite_bridge_oct_rlh_[lev][bidx];
+            const Real ru = composite_bridge_oct_ru_[lev][bidx];
+            const Real lhr = op[v];
+            const Real tau = lhr - rlh;
+            const Real before = src(0, v, k, j, i);
+            const Real consistency = before - (rf - rlh);
+            const Real old_diff = oct.Uold(v, k, j, i) - ru;
+            rhs_stats.ru_sum2 += ru*ru;
+            rhs_stats.rf_sum2 += rf*rf;
+            rhs_stats.rlh_sum2 += rlh*rlh;
+            rhs_stats.lhr_sum2 += lhr*lhr;
+            rhs_stats.tau_sum2 += tau*tau;
+            rhs_stats.tau_max = std::max(rhs_stats.tau_max, std::abs(tau));
+            rhs_stats.rhs_consistency_sum2 += consistency*consistency;
+            rhs_stats.rhs_consistency_max =
+                std::max(rhs_stats.rhs_consistency_max, std::abs(consistency));
+            rhs_stats.old_mismatch_sum2 += old_diff*old_diff;
+            rhs_stats.old_mismatch_max =
+                std::max(rhs_stats.old_mismatch_max, std::abs(old_diff));
+            ++rhs_stats.old_mismatch_count;
+          }
           src(0, v, k, j, i) += op[v];
         }
       }
+    }
+  }
+  if (bridge_rhs) {
+    static const IDCTSMultigridDriver *active_driver = nullptr;
+    static int active_lev = -1;
+    static int active_count = 0;
+    static CompositeBridgeStats level_stats;
+    if (active_driver != this || active_lev != lev || active_count == 0) {
+      active_driver = this;
+      active_lev = lev;
+      active_count = 0;
+      level_stats = CompositeBridgeStats();
+    }
+    AddBridgeStats(level_stats, rhs_stats);
+    ++active_count;
+    if (active_count == noctets_[lev]) {
+      CompositeBridgeStats global_stats = ReduceCompositeBridgeStats(level_stats);
+      if (debug_composite_bridge_ || debug_composite_tau_) {
+        PrintCompositeBridgeRHSStats("octet", lev, global_stats);
+      }
+      CheckCompositeBridgeOldState("octet", lev, global_stats);
+      active_driver = nullptr;
+      active_lev = -1;
+      active_count = 0;
+      level_stats = CompositeBridgeStats();
     }
   }
 }

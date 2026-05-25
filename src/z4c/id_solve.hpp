@@ -139,6 +139,14 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool debug_composite_tau_;
   bool composite_tau_deferred_note_printed_;
   bool debug_composite_bridge_;
+  bool composite_bridge_rhs_ready_;
+  bool composite_bridge_rhs_note_printed_;
+  std::vector<Real> composite_bridge_root_rf_;
+  std::vector<Real> composite_bridge_root_rlh_;
+  std::vector<Real> composite_bridge_root_ru_;
+  std::vector<std::vector<Real>> composite_bridge_oct_rf_;
+  std::vector<std::vector<Real>> composite_bridge_oct_rlh_;
+  std::vector<std::vector<Real>> composite_bridge_oct_ru_;
 
   friend class IDCTSMultigrid;
 };
