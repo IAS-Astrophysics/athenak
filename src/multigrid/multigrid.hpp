@@ -65,6 +65,21 @@ struct OctetNeighborInfo {
   int coarse_id;  // coarser-level neighbor octet ID, or -1 if from root
 };
 
+enum CompositeMaskIndex {
+  COMP_VALID = 0,
+  COMP_RELAX = 1,
+  COMP_COVERED = 2,
+  COMP_INTERFACE = 3,
+  COMP_NMASK = 4
+};
+
+struct CompositeMaskCounts {
+  long long valid = 0;
+  long long relax = 0;
+  long long covered = 0;
+  long long interface = 0;
+};
+
 //----------------------------------------------------------------------------------------
 //! \class MGOctet
 //  \brief structure containing 2x2x2 interior cells (+ ghost) for mesh refinement
@@ -75,27 +90,34 @@ class MGOctet {
  public:
   LogicalLocation loc;
   bool fleaf;
-  int nc, nvar, ncoeff;  // nc = 2 + 2*ngh
+  int nc, nvar, ncoeff, nmask;  // nc = 2 + 2*ngh
   OctetNeighborInfo neighbors[27];
 
   // Raw pointers into contiguous per-level buffers managed by MultigridDriver.
   Real *u, *def, *src, *uold;
   Real *coeff;
+  int *mask;
 
   void Init(int nv, int ngh, int ncf = 0) {
     nc = 2 + 2*ngh;
     nvar = nv;
     ncoeff = ncf;
+    nmask = COMP_NMASK;
     u = def = src = uold = nullptr;
     coeff = nullptr;
+    mask = nullptr;
   }
 
   int size() const { return nvar * nc * nc * nc; }
   int coeff_size() const { return ncoeff * nc * nc * nc; }
+  int mask_size() const { return nmask * nc * nc * nc; }
   void ZeroClearU() { std::memset(u, 0, size() * sizeof(Real)); }
   void ZeroClearSrc() { std::memset(src, 0, size() * sizeof(Real)); }
   void ZeroClearCoeff() {
     if (coeff != nullptr && ncoeff > 0) std::memset(coeff, 0, coeff_size() * sizeof(Real));
+  }
+  void ZeroClearMask() {
+    if (mask != nullptr && nmask > 0) std::memset(mask, 0, mask_size() * sizeof(int));
   }
   void StoreOld() { std::memcpy(uold, u, size() * sizeof(Real)); }
 
@@ -128,6 +150,12 @@ class MGOctet {
   }
   inline const Real& Coeff(int v, int k, int j, int i) const {
     return coeff[((v*nc + k)*nc + j)*nc + i];
+  }
+  inline int& Mask(int q, int k, int j, int i) {
+    return mask[((q*nc + k)*nc + j)*nc + i];
+  }
+  inline const int& Mask(int q, int k, int j, int i) const {
+    return mask[((q*nc + k)*nc + j)*nc + i];
   }
 };
 
@@ -236,6 +264,8 @@ class Multigrid {
   void PrintAll(const DvceArray5D<Real> &data);
   void ClampCurrentCorrectionGhostsToActive();
   Real CalculateDiagnosticDefectRMS(int level);
+  void ClearCompositeMasks();
+  CompositeMaskCounts CountCompositeMasks(int level, bool active_only) const;
 
   // small functions
   int GetCurrentNumberOfCells() { return 1<<current_level_; }
@@ -270,6 +300,14 @@ class Multigrid {
   auto GetCurrentData_h() { return u_[current_level_].h_view; }
   auto GetCurrentSource_h() { return src_[current_level_].h_view; }
   auto GetCurrentOldData_h() { return uold_[current_level_].h_view; }
+  auto GetCompositeMaskLevel(int level) { return comp_mask_[level].d_view; }
+  auto GetCompositeMaskLevel_h(int level) { return comp_mask_[level].h_view; }
+  void ModifyCompositeMaskLevelOnHost(int level) {
+    comp_mask_[level].template modify<HostExeSpace>();
+  }
+  void SyncCompositeMaskLevelToDevice(int level) {
+    comp_mask_[level].template sync<DevExeSpace>();
+  }
   bool OnHost() const { return on_host_; }
 
 
@@ -379,6 +417,7 @@ class Multigrid {
   DualArray1D<Real> block_rdx_;
   DvceArray1D<int> fc_childx_, fc_childy_, fc_childz_;
   DualArray5D<Real> *u_, *def_, *src_, *uold_, *coeff_, *matrix_;
+  DualArray5D<int> *comp_mask_;
   Coordinates *coord_, *ccoord_;
 };
 
@@ -568,8 +607,10 @@ class MultigridDriver {
   // Layout: octet_stride_ consecutive Reals per octet (nvar*nc*nc*nc).
   std::vector<Real> *oct_u_buf_, *oct_def_buf_, *oct_src_buf_, *oct_uold_buf_;
   std::vector<Real> *oct_coeff_buf_;
+  std::vector<int> *oct_mask_buf_;
   int octet_stride_;        // elements per octet = nvar * nc^3
   int octet_coeff_stride_;  // elements per octet = ncoeff * nc^3
+  int octet_mask_stride_;   // elements per octet = COMP_NMASK * nc^3
 
   std::vector<Real> root_u_buf_, root_uold_buf_;
   int root_buf_nc_;

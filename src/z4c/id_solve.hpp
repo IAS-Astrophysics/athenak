@@ -92,6 +92,11 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void ResetSmootherStats();
   void AccumulateSmootherStats(const Real stats[ID_CTS_SMOOTH_NSTAT]);
   void PrintSmootherStats(int iter) const;
+  void ValidateCompositeFASOptions() const;
+  void BuildCompositeMasks();
+  void BuildCompositeMeshBlockMasks();
+  void BuildCompositeRootAndOctetMasks();
+  void PrintCompositeMaskDiagnostics() const;
 
   IDConformalThinSandwich *owner_;
   Real omega_;
@@ -114,6 +119,9 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool solution_applied_;
   bool show_smoother_stats_;
   bool check_octet_coefficients_;
+  bool composite_fas_;
+  bool composite_second_order_only_;
+  bool debug_composite_masks_;
 
   friend class IDCTSMultigrid;
 };

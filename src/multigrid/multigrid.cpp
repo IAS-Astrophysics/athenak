@@ -276,6 +276,7 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost,
   coeff_ = new DualArray5D<Real>[nlevel_];
   matrix_ = new DualArray5D<Real>[nlevel_];
   uold_ = new DualArray5D<Real>[nlevel_];
+  comp_mask_ = new DualArray5D<int>[nlevel_];
 
   for (int l = 0; l < nlevel_; l++) {
     int ll=nlevel_-1-l;
@@ -294,6 +295,7 @@ Multigrid::Multigrid(MultigridDriver *pmd, MeshBlockPack *pmbp, int nghost,
 
     if (!((pmy_pack_ != nullptr) && (l == nlevel_-1)))
       Kokkos::realloc(uold_[l], nmmb_, nvar_, ncz, ncy, ncx);
+    Kokkos::realloc(comp_mask_[l], nmmb_, COMP_NMASK, ncz, ncy, ncx);
 
     ncx=(indcs_.nx1>>(ll+1))+2*ngh_;
     ncy=(indcs_.nx2>>(ll+1))+2*ngh_;
@@ -315,6 +317,7 @@ Multigrid::~Multigrid() {
   delete [] uold_;
   delete [] coeff_;
   delete [] matrix_;
+  delete [] comp_mask_;
   delete [] coord_;
   delete [] ccoord_;
 }
@@ -389,8 +392,46 @@ void Multigrid::ReallocateForAMR() {
     }
     if (l != nlevel_ - 1)
       Kokkos::realloc(uold_[l], nmmb_, nvar_, ncz, ncy, ncx);
+    Kokkos::realloc(comp_mask_[l], nmmb_, COMP_NMASK, ncz, ncy, ncx);
   }
 
+}
+
+void Multigrid::ClearCompositeMasks() {
+  for (int l = 0; l < nlevel_; ++l) {
+    Kokkos::deep_copy(comp_mask_[l].h_view, 0);
+    comp_mask_[l].template modify<HostExeSpace>();
+    comp_mask_[l].template sync<DevExeSpace>();
+  }
+}
+
+CompositeMaskCounts Multigrid::CountCompositeMasks(int level, bool active_only) const {
+  CompositeMaskCounts counts;
+  if (level < 0 || level >= nlevel_) return counts;
+  const auto mask_h = comp_mask_[level].h_view;
+  int il = 0, iu = mask_h.extent_int(4) - 1;
+  int jl = 0, ju = mask_h.extent_int(3) - 1;
+  int kl = 0, ku = mask_h.extent_int(2) - 1;
+  if (active_only) {
+    const int ncells = GetLevelActiveCells(level);
+    il = jl = kl = ngh_;
+    iu = il + ncells - 1;
+    ju = jl + ncells - 1;
+    ku = kl + ncells - 1;
+  }
+  for (int m = 0; m < nmmb_; ++m) {
+    for (int k = kl; k <= ku; ++k) {
+      for (int j = jl; j <= ju; ++j) {
+        for (int i = il; i <= iu; ++i) {
+          counts.valid += mask_h(m, COMP_VALID, k, j, i);
+          counts.relax += mask_h(m, COMP_RELAX, k, j, i);
+          counts.covered += mask_h(m, COMP_COVERED, k, j, i);
+          counts.interface += mask_h(m, COMP_INTERFACE, k, j, i);
+        }
+      }
+    }
+  }
+  return counts;
 }
 
 

@@ -17,6 +17,7 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "mesh/meshblock_pack.hpp"
+#include "mesh/nghbr_index.hpp"
 #include "parameter_input.hpp"
 #include "utils/finite_diff.hpp"
 #include "z4c/tmunu.hpp"
@@ -1167,6 +1168,45 @@ void IDCTSMultigrid::CalculateFASRHSPack() {
   }
 }
 
+void IDCTSMultigridDriver::ValidateCompositeFASOptions() const {
+  if (!composite_fas_) return;
+  auto *mesh = pmy_pack_->pmesh;
+  auto fail = [](const std::string &msg) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl << msg << std::endl;
+    std::exit(EXIT_FAILURE);
+  };
+  if (!mesh->multilevel || mesh->adaptive) {
+    fail("<id_solve>/composite_fas=true currently requires static SMR "
+         "(<mesh_refinement>/refinement=static), not unigrid or adaptive AMR.");
+  }
+  if (nreflevel_ <= 0) {
+    fail("<id_solve>/composite_fas=true requires at least one static refinement "
+         "level (nreflevel_ > 0).");
+  }
+  if (mg_coarse_fd_stencil_ != 2) {
+    fail("<id_solve>/composite_fas=true currently requires "
+         "<id_solve>/mg_coarse_fd_stencil=2.");
+  }
+  if (owner_->pmy_pack_->pz4c->opt.spatial_order != 2) {
+    std::ostringstream msg;
+    msg << "<id_solve>/composite_fas=true currently supports only "
+        << "<z4c>/spatial_order=2. High-order composite FAS is reserved "
+        << "for later milestones; requested spatial_order="
+        << owner_->pmy_pack_->pz4c->opt.spatial_order << ".";
+    fail(msg.str());
+  }
+  if (!composite_second_order_only_) {
+    if (global_variable::my_rank == 0) {
+      std::cout << "### WARNING in IDCTSMultigridDriver::IDCTSMultigridDriver"
+                << std::endl
+                << "<id_solve>/composite_second_order_only=false is parsed, but "
+                << "Commit 1 still restricts composite_fas to second-order SMR."
+                << std::endl;
+    }
+  }
+}
+
 IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
                                            MeshBlockPack *pmbp, ParameterInput *pin)
     : MultigridDriver(pmbp, ID_CTS_NVAR), owner_(owner) {
@@ -1179,6 +1219,11 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
       nreflevel_ = std::max(nreflevel_, lev);
     }
   }
+  composite_fas_ = pin->GetOrAddBoolean("id_solve", "composite_fas", false);
+  composite_second_order_only_ =
+      pin->GetOrAddBoolean("id_solve", "composite_second_order_only", true);
+  debug_composite_masks_ =
+      pin->GetOrAddBoolean("id_solve", "debug_composite_masks", false);
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -1362,6 +1407,7 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
               << "Using CTS coarse MG stencil fd=" << mg_coarse_fd_stencil_
               << " below the finest MeshBlock level." << std::endl;
   }
+  ValidateCompositeFASOptions();
   std::string coarse_prolongation =
       pin->GetOrAddString("id_solve", "coarse_prolongation", "auto");
   if (coarse_prolongation == "auto") {
@@ -1784,6 +1830,324 @@ void IDCTSMultigridDriver::TransferCoefficientsFromBlocksToRoot() {
   }
 }
 
+void IDCTSMultigridDriver::BuildCompositeMasks() {
+  if (!composite_fas_) return;
+  mgroot_->ClearCompositeMasks();
+  mglevels_->ClearCompositeMasks();
+  for (int l = 0; l < nreflevel_; ++l) {
+    for (int o = 0; o < noctets_[l]; ++o) {
+      octets_[l][o].ZeroClearMask();
+    }
+  }
+  BuildCompositeMeshBlockMasks();
+  BuildCompositeRootAndOctetMasks();
+  if (debug_composite_masks_) PrintCompositeMaskDiagnostics();
+}
+
+void IDCTSMultigridDriver::BuildCompositeMeshBlockMasks() {
+  auto nghbr_h = pmy_pack_->pmb->nghbr.h_view;
+  auto mblev_h = pmy_pack_->pmb->mb_lev.h_view;
+  const int nnghbr = pmy_pack_->pmb->nnghbr;
+  const int ngh = mglevels_->GetGhostCells();
+
+  for (int level = 0; level < mglevels_->GetNumberOfLevels(); ++level) {
+    auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+    const int nx = mask.extent_int(4);
+    const int ny = mask.extent_int(3);
+    const int nz = mask.extent_int(2);
+    const int ncells = mglevels_->GetLevelActiveCells(level);
+
+    for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
+      for (int k = 0; k < nz; ++k) {
+        for (int j = 0; j < ny; ++j) {
+          for (int i = 0; i < nx; ++i) {
+            mask(m, COMP_VALID, k, j, i) = 0;
+            mask(m, COMP_RELAX, k, j, i) = 0;
+            mask(m, COMP_COVERED, k, j, i) = 1;
+            mask(m, COMP_INTERFACE, k, j, i) = 0;
+          }
+        }
+      }
+
+      for (int k = ngh; k < ngh + ncells; ++k) {
+        for (int j = ngh; j < ngh + ncells; ++j) {
+          for (int i = ngh; i < ngh + ncells; ++i) {
+            mask(m, COMP_VALID, k, j, i) = 1;
+            mask(m, COMP_RELAX, k, j, i) = 1;
+            mask(m, COMP_COVERED, k, j, i) = 0;
+          }
+        }
+      }
+
+      const int mlev = mblev_h(m);
+      auto has_different_level_neighbor = [&](int ox1, int ox2, int ox3) {
+        for (int f2 = 0; f2 <= 1; ++f2) {
+          for (int f1 = 0; f1 <= 1; ++f1) {
+            const int n = NeighborIndex(ox1, ox2, ox3, f1, f2);
+            if (n < 0 || n >= nnghbr) continue;
+            if (nghbr_h(m, n).gid >= 0 && nghbr_h(m, n).lev != mlev) return true;
+          }
+        }
+        return false;
+      };
+      auto mark_face = [&](int ox1, int ox2, int ox3) {
+        if (!has_different_level_neighbor(ox1, ox2, ox3)) return;
+        const int il = (ox1 < 0) ? ngh : ngh + ncells - 1;
+        const int jl = (ox2 < 0) ? ngh : ngh + ncells - 1;
+        const int kl = (ox3 < 0) ? ngh : ngh + ncells - 1;
+        const int is = (ox1 == 0) ? ngh : il;
+        const int ie = (ox1 == 0) ? ngh + ncells - 1 : il;
+        const int js = (ox2 == 0) ? ngh : jl;
+        const int je = (ox2 == 0) ? ngh + ncells - 1 : jl;
+        const int ks = (ox3 == 0) ? ngh : kl;
+        const int ke = (ox3 == 0) ? ngh + ncells - 1 : kl;
+        for (int k = ks; k <= ke; ++k)
+          for (int j = js; j <= je; ++j)
+            for (int i = is; i <= ie; ++i)
+              if (mask(m, COMP_VALID, k, j, i) != 0)
+                mask(m, COMP_INTERFACE, k, j, i) = 1;
+      };
+      mark_face(-1, 0, 0);
+      mark_face( 1, 0, 0);
+      mark_face(0, -1, 0);
+      mark_face(0,  1, 0);
+      mark_face(0, 0, -1);
+      mark_face(0, 0,  1);
+    }
+    mglevels_->ModifyCompositeMaskLevelOnHost(level);
+    mglevels_->SyncCompositeMaskLevelToDevice(level);
+  }
+}
+
+void IDCTSMultigridDriver::BuildCompositeRootAndOctetMasks() {
+  const int ngh = mgroot_->GetGhostCells();
+  const int root_level = nrootlevel_ - 1;
+  auto root_mask = mgroot_->GetCompositeMaskLevel_h(root_level);
+  const int rnx = root_mask.extent_int(4);
+  const int rny = root_mask.extent_int(3);
+  const int rnz = root_mask.extent_int(2);
+
+  for (int k = 0; k < rnz; ++k) {
+    for (int j = 0; j < rny; ++j) {
+      for (int i = 0; i < rnx; ++i) {
+        root_mask(0, COMP_VALID, k, j, i) = 0;
+        root_mask(0, COMP_RELAX, k, j, i) = 0;
+        root_mask(0, COMP_COVERED, k, j, i) = 1;
+        root_mask(0, COMP_INTERFACE, k, j, i) = 0;
+      }
+    }
+  }
+
+  auto wrap_index = [&](int &idx, int max_idx, BoundaryFace inner, BoundaryFace outer) {
+    if (idx < 0) {
+      if (mg_mesh_bcs_[inner] == BoundaryFlag::periodic) {
+        idx = max_idx - 1;
+        return true;
+      }
+      return false;
+    }
+    if (idx >= max_idx) {
+      if (mg_mesh_bcs_[outer] == BoundaryFlag::periodic) {
+        idx = 0;
+        return true;
+      }
+      return false;
+    }
+    return true;
+  };
+  auto root_covered = [&](int i, int j, int k) {
+    if (!wrap_index(i, nrbx1_, BoundaryFace::inner_x1, BoundaryFace::outer_x1) ||
+        !wrap_index(j, nrbx2_, BoundaryFace::inner_x2, BoundaryFace::outer_x2) ||
+        !wrap_index(k, nrbx3_, BoundaryFace::inner_x3, BoundaryFace::outer_x3)) {
+      return false;
+    }
+    LogicalLocation loc;
+    loc.level = locrootlevel_;
+    loc.lx1 = i;
+    loc.lx2 = j;
+    loc.lx3 = k;
+    return nreflevel_ > 0 && octetmap_[0].find(loc) != octetmap_[0].end();
+  };
+
+  for (int k = 0; k < nrbx3_; ++k) {
+    for (int j = 0; j < nrbx2_; ++j) {
+      for (int i = 0; i < nrbx1_; ++i) {
+        const bool covered = root_covered(i, j, k);
+        root_mask(0, COMP_VALID, k + ngh, j + ngh, i + ngh) = covered ? 0 : 1;
+        root_mask(0, COMP_RELAX, k + ngh, j + ngh, i + ngh) = covered ? 0 : 1;
+        root_mask(0, COMP_COVERED, k + ngh, j + ngh, i + ngh) = covered ? 1 : 0;
+      }
+    }
+  }
+  const int dirs[6][3] = {{-1,0,0},{1,0,0},{0,-1,0},{0,1,0},{0,0,-1},{0,0,1}};
+  for (int k = 0; k < nrbx3_; ++k) {
+    for (int j = 0; j < nrbx2_; ++j) {
+      for (int i = 0; i < nrbx1_; ++i) {
+        if (root_mask(0, COMP_VALID, k + ngh, j + ngh, i + ngh) == 0) continue;
+        for (const auto &dir : dirs) {
+          if (root_covered(i + dir[0], j + dir[1], k + dir[2])) {
+            root_mask(0, COMP_INTERFACE, k + ngh, j + ngh, i + ngh) = 1;
+            break;
+          }
+        }
+      }
+    }
+  }
+  mgroot_->ModifyCompositeMaskLevelOnHost(root_level);
+  mgroot_->SyncCompositeMaskLevelToDevice(root_level);
+
+  for (int l = 0; l < nreflevel_; ++l) {
+    const int maxx = nrbx1_ << (l + 1);
+    const int maxy = nrbx2_ << (l + 1);
+    const int maxz = nrbx3_ << (l + 1);
+    auto child_covered = [&](LogicalLocation loc) {
+      int lx1 = static_cast<int>(loc.lx1);
+      int lx2 = static_cast<int>(loc.lx2);
+      int lx3 = static_cast<int>(loc.lx3);
+      if (!wrap_index(lx1, maxx, BoundaryFace::inner_x1, BoundaryFace::outer_x1) ||
+          !wrap_index(lx2, maxy, BoundaryFace::inner_x2, BoundaryFace::outer_x2) ||
+          !wrap_index(lx3, maxz, BoundaryFace::inner_x3, BoundaryFace::outer_x3)) {
+        return false;
+      }
+      loc.lx1 = lx1;
+      loc.lx2 = lx2;
+      loc.lx3 = lx3;
+      return (l + 1 < nreflevel_) &&
+             (octetmap_[l + 1].find(loc) != octetmap_[l + 1].end());
+    };
+    for (int o = 0; o < noctets_[l]; ++o) {
+      MGOctet &oct = octets_[l][o];
+      for (int k = 0; k < oct.nc; ++k) {
+        for (int j = 0; j < oct.nc; ++j) {
+          for (int i = 0; i < oct.nc; ++i) {
+            oct.Mask(COMP_VALID, k, j, i) = 0;
+            oct.Mask(COMP_RELAX, k, j, i) = 0;
+            oct.Mask(COMP_COVERED, k, j, i) = 1;
+            oct.Mask(COMP_INTERFACE, k, j, i) = 0;
+          }
+        }
+      }
+      for (int ck = 0; ck <= 1; ++ck) {
+        for (int cj = 0; cj <= 1; ++cj) {
+          for (int ci = 0; ci <= 1; ++ci) {
+            LogicalLocation child;
+            child.level = oct.loc.level + 1;
+            child.lx1 = (oct.loc.lx1 << 1) + ci;
+            child.lx2 = (oct.loc.lx2 << 1) + cj;
+            child.lx3 = (oct.loc.lx3 << 1) + ck;
+            const bool covered = child_covered(child);
+            const int i = ngh + ci;
+            const int j = ngh + cj;
+            const int k = ngh + ck;
+            oct.Mask(COMP_VALID, k, j, i) = covered ? 0 : 1;
+            oct.Mask(COMP_RELAX, k, j, i) = covered ? 0 : 1;
+            oct.Mask(COMP_COVERED, k, j, i) = covered ? 1 : 0;
+          }
+        }
+      }
+      for (int ck = 0; ck <= 1; ++ck) {
+        for (int cj = 0; cj <= 1; ++cj) {
+          for (int ci = 0; ci <= 1; ++ci) {
+            const int i = ngh + ci;
+            const int j = ngh + cj;
+            const int k = ngh + ck;
+            if (oct.Mask(COMP_VALID, k, j, i) == 0) continue;
+            for (const auto &dir : dirs) {
+              LogicalLocation nloc;
+              nloc.level = oct.loc.level + 1;
+              nloc.lx1 = (oct.loc.lx1 << 1) + ci + dir[0];
+              nloc.lx2 = (oct.loc.lx2 << 1) + cj + dir[1];
+              nloc.lx3 = (oct.loc.lx3 << 1) + ck + dir[2];
+              if (child_covered(nloc)) {
+                oct.Mask(COMP_INTERFACE, k, j, i) = 1;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void IDCTSMultigridDriver::PrintCompositeMaskDiagnostics() const {
+  auto reduce_counts = [](CompositeMaskCounts local) {
+    CompositeMaskCounts global = local;
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(&local.valid, &global.valid, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local.relax, &global.relax, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local.covered, &global.covered, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&local.interface, &global.interface, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+    return global;
+  };
+  auto print_counts = [](const std::string &prefix, const CompositeMaskCounts &counts) {
+    if (global_variable::my_rank == 0) {
+      std::cout << prefix
+                << " valid=" << counts.valid
+                << " relax=" << counts.relax
+                << " covered=" << counts.covered
+                << " interface=" << counts.interface << std::endl;
+    }
+  };
+
+  for (int level = 0; level < mglevels_->GetNumberOfLevels(); ++level) {
+    CompositeMaskCounts counts = reduce_counts(mglevels_->CountCompositeMasks(level, true));
+    std::ostringstream prefix;
+    prefix << "CTS composite masks: entity=meshblock level=" << level
+           << " transfer=" << (level == MeshBlockTransferLevel() ? 1 : 0)
+           << " blocks=" << nbtotal_ << " region=active";
+    print_counts(prefix.str(), counts);
+  }
+
+  CompositeMaskCounts root_local;
+  if (global_variable::my_rank == 0) {
+    root_local = mgroot_->CountCompositeMasks(nrootlevel_ - 1, true);
+  }
+  CompositeMaskCounts root_counts = reduce_counts(root_local);
+  {
+    std::ostringstream prefix;
+    prefix << "CTS composite masks: entity=root level=" << (nrootlevel_ - 1)
+           << " region=active";
+    print_counts(prefix.str(), root_counts);
+  }
+
+  const int ngh = mgroot_->GetGhostCells();
+  for (int level = 0; level < nreflevel_; ++level) {
+    CompositeMaskCounts active_local;
+    CompositeMaskCounts staging_local;
+    if (global_variable::my_rank == 0) {
+      for (int o = 0; o < noctets_[level]; ++o) {
+        const MGOctet &oct = octets_[level][o];
+        for (int k = 0; k < oct.nc; ++k) {
+          for (int j = 0; j < oct.nc; ++j) {
+            for (int i = 0; i < oct.nc; ++i) {
+              const bool active = (i >= ngh && i <= ngh + 1 &&
+                                   j >= ngh && j <= ngh + 1 &&
+                                   k >= ngh && k <= ngh + 1);
+              CompositeMaskCounts &counts = active ? active_local : staging_local;
+              counts.valid += oct.Mask(COMP_VALID, k, j, i);
+              counts.relax += oct.Mask(COMP_RELAX, k, j, i);
+              counts.covered += oct.Mask(COMP_COVERED, k, j, i);
+              counts.interface += oct.Mask(COMP_INTERFACE, k, j, i);
+            }
+          }
+        }
+      }
+    }
+    CompositeMaskCounts active_counts = reduce_counts(active_local);
+    CompositeMaskCounts staging_counts = reduce_counts(staging_local);
+    std::ostringstream active_prefix;
+    active_prefix << "CTS composite masks: entity=octet level=" << level
+                  << " octets=" << noctets_[level] << " region=active";
+    print_counts(active_prefix.str(), active_counts);
+    std::ostringstream staging_prefix;
+    staging_prefix << "CTS composite masks: entity=octet level=" << level
+                   << " octets=" << noctets_[level] << " region=staging";
+    print_counts(staging_prefix.str(), staging_counts);
+  }
+}
+
 void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   solution_applied_ = false;
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
@@ -1817,6 +2181,7 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   mglevels_->RestrictCoefficients();
 
   SetupMultigrid(dt, false);
+  BuildCompositeMasks();
   TransferCoefficientsFromBlocksToRoot();
 
   auto calculate_defects = [&](Real defects[ID_CTS_NVAR]) {

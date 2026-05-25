@@ -55,7 +55,8 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     octets_(nullptr), octetmap_(nullptr), octetbflag_(nullptr), noctets_(nullptr),
     oct_u_buf_(nullptr), oct_def_buf_(nullptr),
     oct_src_buf_(nullptr), oct_uold_buf_(nullptr), oct_coeff_buf_(nullptr),
-    octet_stride_(0), octet_coeff_stride_(0),
+    oct_mask_buf_(nullptr),
+    octet_stride_(0), octet_coeff_stride_(0), octet_mask_stride_(0),
     root_buf_nc_(0), root_flat_buf_stale_(true),
     root_sync_state_(RootSyncState::SYNCED),
     mask_radius_(-1.0), autompo_(false), nodipole_(false),
@@ -107,6 +108,7 @@ MultigridDriver::MultigridDriver(MeshBlockPack *pmbp, int invar):
     oct_src_buf_  = new std::vector<Real>[maxreflevel_];
     oct_uold_buf_ = new std::vector<Real>[maxreflevel_];
     oct_coeff_buf_ = new std::vector<Real>[maxreflevel_];
+    oct_mask_buf_ = new std::vector<int>[maxreflevel_];
   }
 }
 
@@ -137,6 +139,7 @@ MultigridDriver::~MultigridDriver() {
   delete [] oct_src_buf_;
   delete [] oct_uold_buf_;
   delete [] oct_coeff_buf_;
+  delete [] oct_mask_buf_;
 }
 
 
@@ -346,21 +349,26 @@ void MultigridDriver::InitializeOctets() {
     int nc = 2 + 2*ngh;
     octet_stride_ = nvar_ * nc * nc * nc;
     octet_coeff_stride_ = ncoeff_ * nc * nc * nc;
+    octet_mask_stride_ = COMP_NMASK * nc * nc * nc;
     for (int l = 0; l < nreflevel_; ++l) {
       int noct = noctets_[l];
       std::size_t total = static_cast<std::size_t>(noct) * octet_stride_;
       std::size_t coeff_total = static_cast<std::size_t>(noct) * octet_coeff_stride_;
+      std::size_t mask_total = static_cast<std::size_t>(noct) * octet_mask_stride_;
       oct_u_buf_[l].assign(total, 0.0);
       oct_def_buf_[l].assign(total, 0.0);
       oct_src_buf_[l].assign(total, 0.0);
       oct_uold_buf_[l].assign(total, 0.0);
       oct_coeff_buf_[l].assign(coeff_total, 0.0);
+      oct_mask_buf_[l].assign(mask_total, 0);
       for (int o = 0; o < noct; ++o) {
         std::size_t off = static_cast<std::size_t>(o) * octet_stride_;
         octets_[l][o].u    = oct_u_buf_[l].data()    + off;
         octets_[l][o].def  = oct_def_buf_[l].data()  + off;
         octets_[l][o].src  = oct_src_buf_[l].data()   + off;
         octets_[l][o].uold = oct_uold_buf_[l].data() + off;
+        std::size_t moff = static_cast<std::size_t>(o) * octet_mask_stride_;
+        octets_[l][o].mask = oct_mask_buf_[l].data() + moff;
         if (ncoeff_ > 0) {
           std::size_t coff = static_cast<std::size_t>(o) * octet_coeff_stride_;
           octets_[l][o].coeff = oct_coeff_buf_[l].data() + coff;
