@@ -31,6 +31,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     excision_weight("excision_weight",1,1,1,1) {
   coord_data.bh_excise = false;
   coord_data.smooth_excise = false;
+  coord_data.smooth_excise_puncture_weight = SmoothExcisionPunctureWeight::smoothstep;
   coord_data.punc_flux_rad_factor = 1.0;
   coord_data.smooth_excise_width = 1.0;
   coord_data.smooth_excise_puncture_width_fraction = 1.0;
@@ -116,6 +117,23 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       Real default_smooth_width = fmax(0.25*coord_data.rexcise, 2.0*max_dx);
       coord_data.smooth_excise_width = pin->GetOrAddReal(
           "coord", "smooth_excision_width", default_smooth_width);
+      std::string punc_weight = pin->GetOrAddString(
+          "coord", "smooth_excision_puncture_weight", "smoothstep");
+      if (punc_weight == "smoothstep") {
+        coord_data.smooth_excise_puncture_weight = SmoothExcisionPunctureWeight::smoothstep;
+      } else if (punc_weight == "slow_start") {
+        coord_data.smooth_excise_puncture_weight = SmoothExcisionPunctureWeight::slow_start;
+      } else if (punc_weight == "smoother_start") {
+        coord_data.smooth_excise_puncture_weight = SmoothExcisionPunctureWeight::smoother_start;
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                  << __LINE__ << std::endl
+                  << "Unknown coord/smooth_excision_puncture_weight='"
+                  << punc_weight
+                  << "'. Use 'smoothstep', 'slow_start', or 'smoother_start'."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       coord_data.smooth_excise_puncture_width_fraction = pin->GetOrAddReal(
           "coord", "smooth_excision_puncture_width_fraction", 1.0);
       coord_data.punc_flux_rad_factor = pin->GetOrAddReal(

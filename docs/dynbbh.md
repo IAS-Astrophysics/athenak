@@ -174,6 +174,7 @@ excise = true
 excision_scheme = puncture
 smooth_excision = true
 smooth_excision_sigma_max = 1.0e5
+smooth_excision_puncture_weight = smoothstep
 smooth_excision_puncture_width_fraction = 1.0
 puncture_flux_excision_radius_factor = 1.0
 smooth_excision_temp_ceil = -1.0
@@ -194,12 +195,16 @@ current explicit radius to the horizon radius over
 `excise_shrink_timescale` (default `50 M`) after each run/restart begins.  The
 puncture smooth-excision weight always uses a transition width equal to
 `smooth_excision_puncture_width_fraction * punc_rad`, so the smooth layer
-follows the time-dependent radius.  The default fraction is `1.0`; with this
-default, the puncture smooth weight tapers across the full radius.  A value of
-`0.5` recovers the older behavior where the inner half of the radius is fully
-weighted and the outer half is the transition.  The same updated `punc_rad`
-values feed flux excision, smooth primitive damping, and the smooth magnetic
-damping weights.
+follows the time-dependent radius.  `smooth_excision_puncture_weight` selects
+the radial weight profile.  The default `smoothstep` preserves the traditional
+`s^2(3-2s)` profile.  The `slow_start` profile uses `s^4(5-4s)`, and
+`smoother_start` uses `s^6(7-6s)`; both stay weaker near the excision boundary
+and approach full weight more gradually.
+The default width fraction is `1.0`; with this default, the puncture smooth
+weight tapers across the full radius.  A value of `0.5` recovers the older
+behavior where the inner half of the radius is fully weighted and the outer half
+is the transition.  The same updated `punc_rad` values feed flux excision,
+smooth primitive damping, and the smooth magnetic damping weights.
 Set `puncture_flux_excision_radius_factor > 1` to make the first-order flux
 region larger than the puncture smooth-excision region without changing the
 primitive damping or magnetic damping support.  For example, `1.2` extends the

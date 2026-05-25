@@ -25,6 +25,12 @@ enum class ExcisionScheme {
   puncture
 };
 
+enum class SmoothExcisionPunctureWeight {
+  smoothstep,
+  slow_start,
+  smoother_start
+};
+
 KOKKOS_INLINE_FUNCTION
 Real ExcisionKSRXSpin(const Real x1, const Real x2, const Real x3,
                       const Real ax, const Real ay, const Real az) {
@@ -86,6 +92,7 @@ struct CoordData {
   Real punc_1_rad;
   Real punc_flux_rad_factor;        // puncture flux-excision radius / punc_rad
   bool smooth_excise;              // smoothly drain primitive variables inside horizon
+  SmoothExcisionPunctureWeight smooth_excise_puncture_weight;
   Real smooth_excise_width;        // radial width of drain layer inside geometric masks
   Real smooth_excise_puncture_width_fraction; // puncture smooth width / punc_rad
   Real smooth_excise_lapse_width;  // lapse width of drain layer for lapse masks
