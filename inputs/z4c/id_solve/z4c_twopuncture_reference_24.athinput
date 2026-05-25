@@ -1,0 +1,97 @@
+# TwoPunctures reference input matching the CTT relaxation smoke grid.
+
+<comment>
+problem   = z4c two puncture reference for CTT relaxation comparison
+reference = z4c_two_puncture pgen with the same puncture parameters as z4c_ctt_relax
+
+<job>
+basename  = tp_ref
+
+<mesh>
+nghost    = 2
+nx1       = 24
+x1min     = -8.0
+x1max     = 8.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 24
+x2min     = -8.0
+x2max     = 8.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 24
+x3min     = -8.0
+x3max     = 8.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 24
+nx2       = 24
+nx3       = 24
+
+<time>
+evolution  = dynamic
+integrator = rk3
+cfl_number = 0.1
+nlim       = 0
+tlim       = 1.0
+ndiag      = 1
+
+<z4c>
+spatial_order   = 2
+lapse_harmonic  = 0.0
+lapse_oplog     = 1.0
+shift_eta       = 2.0
+diss            = 0.0
+chi_div_floor   = 1.0e-8
+damp_kappa1     = 0.0
+damp_kappa2     = 0.0
+
+<problem>
+pgen_name = z4c_two_puncture
+verbose = false
+par_b = 3.257
+par_m_plus = 0.483
+par_m_minus = 0.483
+target_M_plus = 0.505
+target_M_minus = 0.505
+par_P_plus1 = 0.0
+par_P_plus2 = -0.133
+par_P_plus3 = 0.0
+par_P_minus1 = 0.0
+par_P_minus2 = 0.133
+par_P_minus3 = 0.0
+par_S_plus1 = 0.0
+par_S_plus2 = 0.0
+par_S_plus3 = 0.0
+par_S_minus1 = 0.0
+par_S_minus2 = 0.0
+par_S_minus3 = 0.0
+center_offset1 = 0.0
+center_offset2 = 0.0
+center_offset3 = 0.0
+give_bare_mass = true
+npoints_A = 30
+npoints_B = 30
+npoints_phi = 16
+Newton_tol = 1e-10
+Newton_maxit = 5
+TP_epsilon = 0.0
+TP_Tiny = 0.0
+TP_Extend_Radius = 0
+adm_tol = 1e-10
+do_residuum_debug_output = false
+do_initial_debug_output = false
+solve_momentum_constraint = false
+initial_lapse_psi_exponent = -2.0
+swap_xz = false
+
+<output1>
+file_type  = tab
+variable   = adm
+dt         = 1.0
+slice_x2   = 1
+slice_x3   = 1

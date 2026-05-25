@@ -1,0 +1,103 @@
+# Static mesh-refined CTT relaxation two-puncture smoke input.
+
+<comment>
+problem   = CTT hyperbolic relaxation two-puncture data with one box refinement
+reference = smooth-box relaxation wave speed profile for AMR/SMR
+
+<job>
+basename  = ctt_relax_smr
+
+<mesh>
+nghost    = 2
+nx1       = 32
+x1min     = -8.0
+x1max     = 8.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 32
+x2min     = -8.0
+x2max     = 8.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 32
+x3min     = -8.0
+x3max     = 8.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<mesh_refinement>
+refinement = static
+
+<refined_region1>
+level = 1
+x1min = -2.0
+x1max = 2.0
+x2min = -2.0
+x2max = 2.0
+x3min = -2.0
+x3max = 2.0
+
+<time>
+evolution  = dynamic
+integrator = rk3
+cfl_number = 0.1
+nlim       = 1
+tlim       = 1.0
+ndiag      = 1
+
+<z4c>
+spatial_order   = 2
+extrap_order    = 2
+lapse_harmonic  = 0.0
+lapse_oplog     = 1.0
+shift_eta       = 2.0
+diss            = 0.0
+chi_div_floor   = 1.0e-8
+damp_kappa1     = 0.0
+damp_kappa2     = 0.0
+
+<id_solve>
+enable           = true
+method           = hyperbolic_relaxation
+formulation      = ctt
+solve_once       = true
+stop_after_solve = true
+skip_initial_output = true
+max_steps        = 20
+tolerance        = 1.0e-8
+history_every    = 5
+relax_cfl        = 0.05
+eta              = 0.0
+wavespeed_scale  = 1.0
+wavespeed_mode   = smooth_box
+reject_worse     = false
+
+<problem>
+pgen_name = z4c_ctt_relax
+par_b = 3.257
+par_m_plus = 0.483
+par_m_minus = 0.483
+target_M_plus = 0.505
+target_M_minus = 0.505
+par_P_plus1 = 0.0
+par_P_plus2 = -0.133
+par_P_plus3 = 0.0
+par_P_minus1 = 0.0
+par_P_minus2 = 0.133
+par_P_minus3 = 0.0
+par_S_plus1 = 0.0
+par_S_plus2 = 0.0
+par_S_plus3 = 0.0
+par_S_minus1 = 0.0
+par_S_minus2 = 0.0
+par_S_minus3 = 0.0
+center_offset1 = 0.0
+center_offset2 = 0.0
+center_offset3 = 0.0

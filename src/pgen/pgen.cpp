@@ -937,20 +937,22 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("z4c_ctt_relax") == 0) {
+    Z4cCTTRelax(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_speck_cart_reader") == 0) {
     Z4cSpeckCartReader(pin, is_restart);
   } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
     SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {
     Diffusion(pin, is_restart);
-  } else if (pgen_fun_name.compare("gravity") == 0) {
-    SelfGravity(pin, is_restart);
-  } else if (pgen_fun_name.compare("binary_gravity") == 0) {
-    BinaryGravity(pin, is_restart);
-  } else if (pgen_fun_name.compare("be_collapse") == 0) {
-    BECollapse(pin, is_restart);
-  } else if (pgen_fun_name.compare("poisson_mg_test") == 0) {
-    PoissonMGTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("gravity") == 0 ||
+             pgen_fun_name.compare("binary_gravity") == 0 ||
+             pgen_fun_name.compare("be_collapse") == 0 ||
+             pgen_fun_name.compare("poisson_mg_test") == 0) {
+    std::cout << "### FATAL ERROR in ProblemGenerator::CallProblemGenerator" << std::endl
+              << "The multigrid gravity problem generator '" << pgen_fun_name
+              << "' was removed on project/collapse_relaxation." << std::endl;
+    std::exit(EXIT_FAILURE);
   // else, name not set on command line or input file, print warning and quit
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

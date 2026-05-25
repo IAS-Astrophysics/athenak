@@ -396,13 +396,10 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
                 << std::endl;
     }
     if (pin->GetOrAddBoolean("poisson_test", "enabled", false)) {
-      if (pmesh->pmb_pack->pgrav == nullptr) {
-        std::cout << "### FATAL ERROR in Driver::Execute" << std::endl
-                  << "<poisson_test>/enabled=true requires the <gravity> module."
-                  << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      pmesh->pmb_pack->pgrav->pmgd->Solve(this, 0);
+      std::cout << "### FATAL ERROR in Driver::Execute" << std::endl
+                << "<poisson_test> was removed with the shared multigrid solver."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
     }
   } else {
     Real elapsed_time = -1.;
@@ -421,16 +418,12 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
         if (pmesh->pmb_pack->pid_solve != nullptr &&
             pmesh->pmb_pack->pid_solve->StopAfterSolveRequested()) {
           if (global_variable::my_rank == 0) {
-            std::cout << "Stopping after native CTS id_solve; hyperbolic Z4c "
+            std::cout << "Stopping after hyperbolic CTT id_solve; Z4c "
                       << "evolution was not advanced." << std::endl;
           }
           nlim = pmesh->ncycle;
           return;
         }
-        // solve gravity at each RK stage so the potential is consistent
-        // with the current density (required for 2nd-order accuracy)
-        if (pmesh->pmb_pack->pgrav != nullptr)
-            {pmesh->pmb_pack->pgrav->pmgd->Solve(this, stage);}
         ExecuteTaskList(pmesh, "stagen", stage);
         ExecuteTaskList(pmesh, "after_stagen", stage);
       }

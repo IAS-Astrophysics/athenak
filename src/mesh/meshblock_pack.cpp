@@ -258,12 +258,9 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // (9) GRAVITY
   // Create gravity physics module.  Create tasklist.
   if (pin->DoesBlockExist("gravity")) {
-    // Gravity module uses Multigrid module
     pgrav = new gravity::Gravity(this, pin);
-    //pgrav->AssembleTasks(tl_map);
     nphysics++;
-  }
-  else {
+  } else {
     pgrav = nullptr;
   } 
   // Check that at least ONE is requested and initialized.
