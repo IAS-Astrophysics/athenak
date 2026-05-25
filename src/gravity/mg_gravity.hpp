@@ -18,6 +18,14 @@ class Coordinates;
 class Multigrid;
 class MultigridDriver;
 
+struct PoissonCompositeMaskCounts {
+  long long solve = 0;
+  long long resid = 0;
+  long long reset = 0;
+  long long stencil = 0;
+  long long covered = 0;
+};
+
 // 7-point Laplacian stencil for Poisson gravity
 struct GravityStencil {
   Real omega_over_diag;
@@ -72,7 +80,20 @@ class MGGravityDriver : public MultigridDriver {
     Real four_pi_G_, omega_;
     bool poisson_test_enabled_;
     bool poisson_test_composite_fas_;
-    bool poisson_test_debug_masks_;
+    bool poisson_test_debug_composite_masks_;
+    bool poisson_test_debug_residual_split_;
+    void BuildPoissonCompositeMasks();
+    void PrintPoissonCompositeMaskDiagnostics() const;
+    void PrintPoissonResidualSplit(const char *label);
+    bool PoissonCellCoveredByFiner(int level, int ix, int iy, int iz) const;
+    bool PoissonCellCoveredAtOrAbove(int level, int ix, int iy, int iz) const;
+    bool PoissonCellNeedsReset(int level, int ix, int iy, int iz) const;
+    PoissonCompositeMaskCounts CountPoissonMeshBlockMasks(int level,
+                                                          bool active_only) const;
+    PoissonCompositeMaskCounts CountPoissonRootMasks(int level,
+                                                     bool active_only) const;
+    PoissonCompositeMaskCounts CountPoissonOctetMasks(int level,
+                                                      bool active_only) const;
 };
 
 #endif // GRAVITY_MG_GRAVITY_HPP_

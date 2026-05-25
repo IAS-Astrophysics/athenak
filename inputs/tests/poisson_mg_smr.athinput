@@ -5,19 +5,19 @@ basename  = poisson_mg_smr
 
 <mesh>
 nghost    = 2
-nx1       = 16
+nx1       = 24
 x1min     = 0.0
 x1max     = 1.0
 ix1_bc    = periodic
 ox1_bc    = periodic
 
-nx2       = 16
+nx2       = 24
 x2min     = 0.0
 x2max     = 1.0
 ix2_bc    = periodic
 ox2_bc    = periodic
 
-nx3       = 16
+nx3       = 24
 x3min     = 0.0
 x3max     = 1.0
 ix3_bc    = periodic
@@ -34,12 +34,12 @@ prolong_primitives = true
 
 <refined_region1>
 level = 1
-x1min = 0.25
-x1max = 0.75
-x2min = 0.25
-x2max = 0.75
-x3min = 0.25
-x3max = 0.75
+x1min = 0.3333333333333333
+x1max = 0.6666666666666667
+x2min = 0.3333333333333333
+x2max = 0.6666666666666667
+x3min = 0.3333333333333333
+x3max = 0.6666666666666667
 
 <time>
 evolution  = static
@@ -72,6 +72,8 @@ composite_fas = true
 manufactured = sin
 debug_residual = true
 debug_masks = true
+debug_composite_masks = true
+debug_residual_split = true
 amplitude = 1.0e-3
 density_offset = 1.0
 waves = 1

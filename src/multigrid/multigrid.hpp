@@ -70,7 +70,11 @@ enum CompositeMaskIndex {
   COMP_RELAX = 1,
   COMP_COVERED = 2,
   COMP_INTERFACE = 3,
-  COMP_NMASK = 4
+  COMP_SOLVE = 4,
+  COMP_RESID = 5,
+  COMP_RESET = 6,
+  COMP_STENCIL = 7,
+  COMP_NMASK = 8
 };
 
 struct CompositeMaskCounts {

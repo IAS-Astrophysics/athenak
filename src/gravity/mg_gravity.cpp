@@ -10,8 +10,11 @@
 
 // C++ headers
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <iostream>
+#include <limits>
 #include <sstream>    // sstream
 #include <stdexcept>  // runtime_error
 #include <string>     // c_str()
@@ -32,6 +35,86 @@
 
 class MeshBlockPack;
 
+namespace {
+
+PoissonCompositeMaskCounts ReducePoissonMaskCounts(
+    const PoissonCompositeMaskCounts &local) {
+  PoissonCompositeMaskCounts global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.solve, &global.solve, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.resid, &global.resid, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.reset, &global.reset, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.stencil, &global.stencil, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.covered, &global.covered, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
+void PrintPoissonMaskCounts(const std::string &prefix,
+                            const PoissonCompositeMaskCounts &counts) {
+  if (global_variable::my_rank != 0) return;
+  std::cout << prefix
+            << " solve=" << counts.solve
+            << " resid=" << counts.resid
+            << " reset=" << counts.reset
+            << " stencil=" << counts.stencil
+            << " covered=" << counts.covered << std::endl;
+}
+
+PoissonCompositeMaskCounts SubtractPoissonMaskCounts(
+    const PoissonCompositeMaskCounts &a, const PoissonCompositeMaskCounts &b) {
+  PoissonCompositeMaskCounts c;
+  c.solve = a.solve - b.solve;
+  c.resid = a.resid - b.resid;
+  c.reset = a.reset - b.reset;
+  c.stencil = a.stencil - b.stencil;
+  c.covered = a.covered - b.covered;
+  return c;
+}
+
+struct PoissonResidualCategory {
+  long long count = 0;
+  Real sum2 = 0.0;
+  Real maxabs = 0.0;
+};
+
+struct PoissonResidualSplit {
+  PoissonResidualCategory solve;
+  PoissonResidualCategory reset;
+  PoissonResidualCategory stencil;
+  PoissonResidualCategory covered;
+  PoissonResidualCategory accepted;
+};
+
+PoissonResidualSplit ReducePoissonResidualSplit(const PoissonResidualSplit &local) {
+  PoissonResidualSplit global = local;
+  auto reduce_category = [](const PoissonResidualCategory &l,
+                            PoissonResidualCategory &g) {
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(&l.count, &g.count, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&l.sum2, &g.sum2, 1, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&l.maxabs, &g.maxabs, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
+  };
+  reduce_category(local.solve, global.solve);
+  reduce_category(local.reset, global.reset);
+  reduce_category(local.stencil, global.stencil);
+  reduce_category(local.covered, global.covered);
+  reduce_category(local.accepted, global.accepted);
+  return global;
+}
+
+void PrintPoissonResidualCategory(const char *name,
+                                  const PoissonResidualCategory &category) {
+  const Real rms = category.count > 0
+      ? std::sqrt(category.sum2/static_cast<Real>(category.count)) : 0.0;
+  std::cout << " " << name << "_count=" << category.count
+            << " " << name << "_rms=" << rms
+            << " " << name << "_max=" << category.maxabs;
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 //! \fn MGGravityDriver::MGGravityDriver(Mesh *pm, ParameterInput *pin)
 //! \brief MGGravityDriver constructor
@@ -44,8 +127,13 @@ MGGravityDriver::MGGravityDriver(MeshBlockPack *pmbp, ParameterInput *pin)
         pin->GetOrAddBoolean("poisson_test", "enabled", false);
     poisson_test_composite_fas_ =
         pin->GetOrAddBoolean("poisson_test", "composite_fas", false);
-    poisson_test_debug_masks_ =
+    bool poisson_test_debug_masks =
         pin->GetOrAddBoolean("poisson_test", "debug_masks", false);
+    poisson_test_debug_composite_masks_ =
+        pin->GetOrAddBoolean("poisson_test", "debug_composite_masks",
+                             poisson_test_debug_masks);
+    poisson_test_debug_residual_split_ =
+        pin->GetOrAddBoolean("poisson_test", "debug_residual_split", false);
     eps_ = pin->GetOrAddReal("gravity", "threshold", -1.0);
     niter_ = pin->GetOrAddInteger("gravity", "niteration", -1);
     npresmooth_ = pin->GetOrAddReal("gravity", "npresmooth", npresmooth_);
@@ -155,6 +243,401 @@ void MGGravityDriver::SetFourPiG(Real four_pi_G) {
   four_pi_G_ = four_pi_G;
 }
 
+bool MGGravityDriver::PoissonCellCoveredByFiner(int level, int ix, int iy, int iz) const {
+  const int nx = pmy_mesh_->mb_indcs.nx1;
+  for (int n = 0; n < nbtotal_; ++n) {
+    const LogicalLocation &loc = pmy_mesh_->lloc_eachmb[n];
+    if (loc.level <= level) continue;
+    const int shift = loc.level - level;
+    const int factor = 1 << shift;
+    const int fx0 = ix*factor, fx1 = (ix + 1)*factor - 1;
+    const int fy0 = iy*factor, fy1 = (iy + 1)*factor - 1;
+    const int fz0 = iz*factor, fz1 = (iz + 1)*factor - 1;
+    const int bx0 = static_cast<int>(loc.lx1)*nx;
+    const int by0 = static_cast<int>(loc.lx2)*nx;
+    const int bz0 = static_cast<int>(loc.lx3)*nx;
+    const int bx1 = bx0 + nx - 1;
+    const int by1 = by0 + nx - 1;
+    const int bz1 = bz0 + nx - 1;
+    if (fx0 <= bx1 && fx1 >= bx0 &&
+        fy0 <= by1 && fy1 >= by0 &&
+        fz0 <= bz1 && fz1 >= bz0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool MGGravityDriver::PoissonCellCoveredAtOrAbove(int level, int ix, int iy, int iz) const {
+  const int nx = pmy_mesh_->mb_indcs.nx1;
+  for (int n = 0; n < nbtotal_; ++n) {
+    const LogicalLocation &loc = pmy_mesh_->lloc_eachmb[n];
+    if (loc.level < level) continue;
+    const int shift = loc.level - level;
+    const int factor = 1 << shift;
+    const int fx0 = ix*factor, fx1 = (ix + 1)*factor - 1;
+    const int fy0 = iy*factor, fy1 = (iy + 1)*factor - 1;
+    const int fz0 = iz*factor, fz1 = (iz + 1)*factor - 1;
+    const int bx0 = static_cast<int>(loc.lx1)*nx;
+    const int by0 = static_cast<int>(loc.lx2)*nx;
+    const int bz0 = static_cast<int>(loc.lx3)*nx;
+    const int bx1 = bx0 + nx - 1;
+    const int by1 = by0 + nx - 1;
+    const int bz1 = bz0 + nx - 1;
+    if (fx0 <= bx1 && fx1 >= bx0 &&
+        fy0 <= by1 && fy1 >= by0 &&
+        fz0 <= bz1 && fz1 >= bz0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool MGGravityDriver::PoissonCellNeedsReset(int level, int ix, int iy, int iz) const {
+  if (level <= pmy_mesh_->root_level) return false;
+  const int nx = pmy_mesh_->mb_indcs.nx1;
+  const int ncellx = nrbx1_*nx*(1 << (level - pmy_mesh_->root_level));
+  const int ncelly = nrbx2_*nx*(1 << (level - pmy_mesh_->root_level));
+  const int ncellz = nrbx3_*nx*(1 << (level - pmy_mesh_->root_level));
+  const std::array<std::array<int, 3>, 6> dirs{{
+      {{-1, 0, 0}}, {{1, 0, 0}}, {{0, -1, 0}},
+      {{0, 1, 0}}, {{0, 0, -1}}, {{0, 0, 1}}}};
+  for (const auto &dir : dirs) {
+    int ni = ix + dir[0];
+    int nj = iy + dir[1];
+    int nk = iz + dir[2];
+    if (ni < 0 || ni >= ncellx || nj < 0 || nj >= ncelly ||
+        nk < 0 || nk >= ncellz) {
+      if (pmy_mesh_->strictly_periodic) {
+        ni = (ni + ncellx) % ncellx;
+        nj = (nj + ncelly) % ncelly;
+        nk = (nk + ncellz) % ncellz;
+      } else {
+        continue;
+      }
+    }
+    if (!PoissonCellCoveredAtOrAbove(level, ni, nj, nk)) return true;
+  }
+  return false;
+}
+
+void MGGravityDriver::BuildPoissonCompositeMasks() {
+  mglevels_->ClearCompositeMasks();
+  mgroot_->ClearCompositeMasks();
+  for (int lev = 0; lev < nreflevel_; ++lev) {
+    for (int o = 0; o < noctets_[lev]; ++o) {
+      octets_[lev][o].ZeroClearMask();
+    }
+  }
+
+  const int nx = pmy_mesh_->mb_indcs.nx1;
+  const int root_level = pmy_mesh_->root_level;
+  const int ngh = mglevels_->GetGhostCells();
+  auto gids = pmy_pack_->pmb->mb_gid.h_view;
+
+  for (int level = 0; level < mglevels_->GetNumberOfLevels(); ++level) {
+    auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+    const int ncells = mglevels_->GetLevelActiveCells(level);
+    const int ll = mglevels_->GetNumberOfLevels() - 1 - level;
+    for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
+      const LogicalLocation &loc = pmy_mesh_->lloc_eachmb[gids(m)];
+      const int cell_level = std::max(root_level, loc.level - ll);
+      const int coord_shift = loc.level - cell_level;
+      for (int k = 0; k < mask.extent_int(2); ++k) {
+        for (int j = 0; j < mask.extent_int(3); ++j) {
+          for (int i = 0; i < mask.extent_int(4); ++i) {
+            const bool active = i >= ngh && i < ngh + ncells &&
+                                j >= ngh && j < ngh + ncells &&
+                                k >= ngh && k < ngh + ncells;
+            if (!active) {
+              mask(m, COMP_STENCIL, k, j, i) = 1;
+              continue;
+            }
+            const int fi = static_cast<int>(loc.lx1)*nx + ((i - ngh) << ll);
+            const int fj = static_cast<int>(loc.lx2)*nx + ((j - ngh) << ll);
+            const int fk = static_cast<int>(loc.lx3)*nx + ((k - ngh) << ll);
+            const int ci = (coord_shift > 0) ? (fi >> coord_shift) : fi;
+            const int cj = (coord_shift > 0) ? (fj >> coord_shift) : fj;
+            const int ck = (coord_shift > 0) ? (fk >> coord_shift) : fk;
+            if (PoissonCellCoveredByFiner(cell_level, ci, cj, ck)) {
+              mask(m, COMP_COVERED, k, j, i) = 1;
+            } else if (PoissonCellNeedsReset(cell_level, ci, cj, ck)) {
+              mask(m, COMP_RESET, k, j, i) = 1;
+              mask(m, COMP_STENCIL, k, j, i) = 1;
+            } else {
+              mask(m, COMP_SOLVE, k, j, i) = 1;
+              mask(m, COMP_RESID, k, j, i) = 1;
+            }
+          }
+        }
+      }
+    }
+    mglevels_->ModifyCompositeMaskLevelOnHost(level);
+    mglevels_->SyncCompositeMaskLevelToDevice(level);
+  }
+
+  for (int level = 0; level < mgroot_->GetNumberOfLevels(); ++level) {
+    auto mask = mgroot_->GetCompositeMaskLevel_h(level);
+    const int ncells = mgroot_->GetLevelActiveCells(level);
+    const int ll = mgroot_->GetNumberOfLevels() - 1 - level;
+    const int cell_level = root_level;
+    for (int k = 0; k < mask.extent_int(2); ++k) {
+      for (int j = 0; j < mask.extent_int(3); ++j) {
+        for (int i = 0; i < mask.extent_int(4); ++i) {
+          const bool active = i >= ngh && i < ngh + ncells &&
+                              j >= ngh && j < ngh + ncells &&
+                              k >= ngh && k < ngh + ncells;
+          if (!active) {
+            mask(0, COMP_STENCIL, k, j, i) = 1;
+            continue;
+          }
+          const int ci = ((i - ngh) << ll);
+          const int cj = ((j - ngh) << ll);
+          const int ck = ((k - ngh) << ll);
+          if (PoissonCellCoveredByFiner(cell_level, ci, cj, ck)) {
+            mask(0, COMP_COVERED, k, j, i) = 1;
+          } else {
+            mask(0, COMP_SOLVE, k, j, i) = 1;
+            mask(0, COMP_RESID, k, j, i) = 1;
+          }
+        }
+      }
+    }
+    mgroot_->ModifyCompositeMaskLevelOnHost(level);
+    mgroot_->SyncCompositeMaskLevelToDevice(level);
+  }
+
+  for (int level = 0; level < nreflevel_; ++level) {
+    const int cell_level = root_level + level + 1;
+    for (int o = 0; o < noctets_[level]; ++o) {
+      MGOctet &oct = octets_[level][o];
+      for (int k = 0; k < oct.nc; ++k) {
+        for (int j = 0; j < oct.nc; ++j) {
+          for (int i = 0; i < oct.nc; ++i) {
+            const bool active = i >= ngh && i <= ngh + 1 &&
+                                j >= ngh && j <= ngh + 1 &&
+                                k >= ngh && k <= ngh + 1;
+            if (!active) {
+              oct.Mask(COMP_STENCIL, k, j, i) = 1;
+              continue;
+            }
+            const int ci = static_cast<int>(oct.loc.lx1)*2 + (i - ngh);
+            const int cj = static_cast<int>(oct.loc.lx2)*2 + (j - ngh);
+            const int ck = static_cast<int>(oct.loc.lx3)*2 + (k - ngh);
+            if (PoissonCellCoveredByFiner(cell_level, ci, cj, ck)) {
+              oct.Mask(COMP_COVERED, k, j, i) = 1;
+            } else if (PoissonCellNeedsReset(cell_level, ci, cj, ck)) {
+              oct.Mask(COMP_RESET, k, j, i) = 1;
+              oct.Mask(COMP_STENCIL, k, j, i) = 1;
+            } else {
+              oct.Mask(COMP_SOLVE, k, j, i) = 1;
+              oct.Mask(COMP_RESID, k, j, i) = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+PoissonCompositeMaskCounts MGGravityDriver::CountPoissonMeshBlockMasks(
+    int level, bool active_only) const {
+  PoissonCompositeMaskCounts counts;
+  auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+  int il = 0, iu = mask.extent_int(4) - 1;
+  int jl = 0, ju = mask.extent_int(3) - 1;
+  int kl = 0, ku = mask.extent_int(2) - 1;
+  if (active_only) {
+    const int ncells = mglevels_->GetLevelActiveCells(level);
+    il = jl = kl = mglevels_->GetGhostCells();
+    iu = il + ncells - 1;
+    ju = jl + ncells - 1;
+    ku = kl + ncells - 1;
+  }
+  for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
+    for (int k = kl; k <= ku; ++k) {
+      for (int j = jl; j <= ju; ++j) {
+        for (int i = il; i <= iu; ++i) {
+          counts.solve += mask(m, COMP_SOLVE, k, j, i);
+          counts.resid += mask(m, COMP_RESID, k, j, i);
+          counts.reset += mask(m, COMP_RESET, k, j, i);
+          counts.stencil += mask(m, COMP_STENCIL, k, j, i);
+          counts.covered += mask(m, COMP_COVERED, k, j, i);
+        }
+      }
+    }
+  }
+  return counts;
+}
+
+PoissonCompositeMaskCounts MGGravityDriver::CountPoissonRootMasks(
+    int level, bool active_only) const {
+  PoissonCompositeMaskCounts counts;
+  if (global_variable::my_rank != 0) return counts;
+  auto mask = mgroot_->GetCompositeMaskLevel_h(level);
+  int il = 0, iu = mask.extent_int(4) - 1;
+  int jl = 0, ju = mask.extent_int(3) - 1;
+  int kl = 0, ku = mask.extent_int(2) - 1;
+  if (active_only) {
+    const int ncells = mgroot_->GetLevelActiveCells(level);
+    il = jl = kl = mgroot_->GetGhostCells();
+    iu = il + ncells - 1;
+    ju = jl + ncells - 1;
+    ku = kl + ncells - 1;
+  }
+  for (int k = kl; k <= ku; ++k) {
+    for (int j = jl; j <= ju; ++j) {
+      for (int i = il; i <= iu; ++i) {
+        counts.solve += mask(0, COMP_SOLVE, k, j, i);
+        counts.resid += mask(0, COMP_RESID, k, j, i);
+        counts.reset += mask(0, COMP_RESET, k, j, i);
+        counts.stencil += mask(0, COMP_STENCIL, k, j, i);
+        counts.covered += mask(0, COMP_COVERED, k, j, i);
+      }
+    }
+  }
+  return counts;
+}
+
+PoissonCompositeMaskCounts MGGravityDriver::CountPoissonOctetMasks(
+    int level, bool active_only) const {
+  PoissonCompositeMaskCounts counts;
+  if (global_variable::my_rank != 0 || level < 0 || level >= nreflevel_) return counts;
+  const int ngh = mgroot_->GetGhostCells();
+  for (int o = 0; o < noctets_[level]; ++o) {
+    const MGOctet &oct = octets_[level][o];
+    for (int k = 0; k < oct.nc; ++k) {
+      for (int j = 0; j < oct.nc; ++j) {
+        for (int i = 0; i < oct.nc; ++i) {
+          const bool active = i >= ngh && i <= ngh + 1 &&
+                              j >= ngh && j <= ngh + 1 &&
+                              k >= ngh && k <= ngh + 1;
+          if (active_only && !active) continue;
+          counts.solve += oct.Mask(COMP_SOLVE, k, j, i);
+          counts.resid += oct.Mask(COMP_RESID, k, j, i);
+          counts.reset += oct.Mask(COMP_RESET, k, j, i);
+          counts.stencil += oct.Mask(COMP_STENCIL, k, j, i);
+          counts.covered += oct.Mask(COMP_COVERED, k, j, i);
+        }
+      }
+    }
+  }
+  return counts;
+}
+
+void MGGravityDriver::PrintPoissonCompositeMaskDiagnostics() const {
+  PoissonCompositeMaskCounts total;
+  auto add_total = [&total](const PoissonCompositeMaskCounts &c) {
+    total.solve += c.solve;
+    total.resid += c.resid;
+    total.reset += c.reset;
+    total.stencil += c.stencil;
+    total.covered += c.covered;
+  };
+  for (int level = 0; level < mglevels_->GetNumberOfLevels(); ++level) {
+    const auto active = ReducePoissonMaskCounts(CountPoissonMeshBlockMasks(level, true));
+    const auto all = ReducePoissonMaskCounts(CountPoissonMeshBlockMasks(level, false));
+    const auto staging = SubtractPoissonMaskCounts(all, active);
+    add_total(active);
+    std::ostringstream prefix;
+    prefix << "Poisson composite masks: entity=meshblock level=" << level
+           << " region=active";
+    PrintPoissonMaskCounts(prefix.str(), active);
+    prefix.str("");
+    prefix << "Poisson composite masks: entity=meshblock level=" << level
+           << " region=staging";
+    PrintPoissonMaskCounts(prefix.str(), staging);
+  }
+  for (int level = 0; level < mgroot_->GetNumberOfLevels(); ++level) {
+    const auto active = ReducePoissonMaskCounts(CountPoissonRootMasks(level, true));
+    const auto all = ReducePoissonMaskCounts(CountPoissonRootMasks(level, false));
+    const auto staging = SubtractPoissonMaskCounts(all, active);
+    add_total(active);
+    std::ostringstream prefix;
+    prefix << "Poisson composite masks: entity=root level=" << level
+           << " region=active";
+    PrintPoissonMaskCounts(prefix.str(), active);
+    prefix.str("");
+    prefix << "Poisson composite masks: entity=root level=" << level
+           << " region=staging";
+    PrintPoissonMaskCounts(prefix.str(), staging);
+  }
+  for (int level = 0; level < nreflevel_; ++level) {
+    const auto active = ReducePoissonMaskCounts(CountPoissonOctetMasks(level, true));
+    const auto all = ReducePoissonMaskCounts(CountPoissonOctetMasks(level, false));
+    const auto staging = SubtractPoissonMaskCounts(all, active);
+    add_total(active);
+    std::ostringstream prefix;
+    prefix << "Poisson composite masks: entity=octet level=" << level
+           << " region=active";
+    PrintPoissonMaskCounts(prefix.str(), active);
+    prefix.str("");
+    prefix << "Poisson composite masks: entity=octet level=" << level
+           << " region=staging";
+    PrintPoissonMaskCounts(prefix.str(), staging);
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "Poisson composite masks: decomposition_check key=solve count="
+              << total.solve << std::endl;
+    std::cout << "Poisson composite masks: decomposition_check key=resid count="
+              << total.resid << std::endl;
+    std::cout << "Poisson composite masks: decomposition_check key=reset count="
+              << total.reset << std::endl;
+    std::cout << "Poisson composite masks: decomposition_check key=stencil count="
+              << total.stencil << std::endl;
+    std::cout << "Poisson composite masks: decomposition_check key=covered count="
+              << total.covered << std::endl;
+  }
+}
+
+void MGGravityDriver::PrintPoissonResidualSplit(const char *label) {
+  const int level = mglevels_->GetNumberOfLevels() - 1;
+  mglevels_->SetCurrentLevel(level);
+  mglevels_->CalculateDefectPack();
+  Kokkos::fence();
+  mglevels_->SyncDefectLevelToHost(level);
+  auto def = mglevels_->GetDefectLevel_h(level);
+  auto mask = mglevels_->GetCompositeMaskLevel_h(level);
+  const int ngh = mglevels_->GetGhostCells();
+  const int ncells = mglevels_->GetLevelActiveCells(level);
+  PoissonResidualSplit local;
+  auto add = [](PoissonResidualCategory &cat, Real value) {
+    const Real av = std::abs(value);
+    ++cat.count;
+    cat.sum2 += value*value;
+    cat.maxabs = std::max(cat.maxabs, av);
+  };
+  for (int m = 0; m < mglevels_->GetNumMeshBlocks(); ++m) {
+    for (int k = ngh; k < ngh + ncells; ++k) {
+      for (int j = ngh; j < ngh + ncells; ++j) {
+        for (int i = ngh; i < ngh + ncells; ++i) {
+          const Real r = def(m, 0, k, j, i);
+          if (mask(m, COMP_RESID, k, j, i) != 0) add(local.accepted, r);
+          if (mask(m, COMP_COVERED, k, j, i) != 0) {
+            add(local.covered, r);
+          } else if (mask(m, COMP_RESET, k, j, i) != 0) {
+            add(local.reset, r);
+          } else if (mask(m, COMP_SOLVE, k, j, i) != 0) {
+            add(local.solve, r);
+          } else if (mask(m, COMP_STENCIL, k, j, i) != 0) {
+            add(local.stencil, r);
+          }
+        }
+      }
+    }
+  }
+  const auto global = ReducePoissonResidualSplit(local);
+  if (global_variable::my_rank == 0) {
+    std::cout << "Poisson residual split: label=" << label;
+    PrintPoissonResidualCategory("solve_interior", global.solve);
+    PrintPoissonResidualCategory("reset_interface", global.reset);
+    PrintPoissonResidualCategory("stencil_only", global.stencil);
+    PrintPoissonResidualCategory("covered", global.covered);
+    PrintPoissonResidualCategory("resid_accepted", global.accepted);
+    std::cout << std::endl;
+  }
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn MGGravity::MGGravity(MultigridDriver *pmd, MeshBlock *pmb)
 //! \brief MGGravity constructor
@@ -196,10 +679,6 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
       std::cout << "Poisson MG test: composite scaffold uses generic "
                 << "Multigrid traversal; invariant masks and AMR boundary "
                 << "contract are pending later stages." << std::endl;
-      if (poisson_test_debug_masks_) {
-        std::cout << "Poisson MG test masks: unavailable in scaffold "
-                  << "valid=0 covered=0 interface=0" << std::endl;
-      }
     }
   }
   {
@@ -230,6 +709,15 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
 
   // Finalize setup (SubtractAverage, level counts) after data is loaded
   SetupMultigrid(dt, false);
+  if (poisson_test_enabled_) {
+    BuildPoissonCompositeMasks();
+    if (poisson_test_debug_composite_masks_) {
+      PrintPoissonCompositeMaskDiagnostics();
+    }
+    if (poisson_test_debug_residual_split_) {
+      PrintPoissonResidualSplit("initial");
+    }
+  }
 
   // Compute multipole coefficients for isolated boundaries
   if (mporder_ > 0) {
@@ -246,6 +734,9 @@ void MGGravityDriver::Solve(Driver *pdriver, int stage, Real dt) {
     SolveMG(pdriver);
 
   Kokkos::fence();
+  if (poisson_test_enabled_ && poisson_test_debug_residual_split_) {
+    PrintPoissonResidualSplit("final");
+  }
 
   if (fshowdef_) {
     auto t_end = std::chrono::high_resolution_clock::now();
