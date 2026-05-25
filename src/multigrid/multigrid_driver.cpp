@@ -1252,6 +1252,8 @@ void MultigridDriver::RestrictOctets() {
   int lev = current_level_ - nrootlevel_;
   int ngh = mgroot_->ngh_;
 
+  DiagnosticRestrictOctets(lev);
+
   if (lev >= 1) { // fine octets to coarser octets
     for (int o = 0; o < noctets_[lev]; ++o) {
       MGOctet &foct = octets_[lev][o];

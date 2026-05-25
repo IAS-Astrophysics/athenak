@@ -68,6 +68,7 @@ class IDCTSMultigrid : public Multigrid {
   void SmoothPack(int color) final;
   void CalculateDefectPack() final;
   void CalculateFASRHSPack() final;
+  void DiagnosticRestrictPack() final;
 
  private:
   void PrepareFrozenView();
@@ -85,6 +86,7 @@ class IDCTSMultigridDriver : public MultigridDriver {
   void SmoothOctet(MGOctet &oct, int rlev, int color) final;
   void CalculateDefectOctet(MGOctet &oct, int rlev) final;
   void CalculateFASRHSOctet(MGOctet &oct, int rlev) final;
+  void DiagnosticRestrictOctets(int lev) final;
   bool SolutionApplied() const { return solution_applied_; }
 
  private:
@@ -125,6 +127,9 @@ class IDCTSMultigridDriver : public MultigridDriver {
   bool debug_composite_masks_;
   bool debug_composite_residual_;
   bool composite_masks_ready_;
+  int composite_restriction_;
+  bool debug_composite_restriction_;
+  bool composite_restriction_self_check_done_;
 
   friend class IDCTSMultigrid;
 };

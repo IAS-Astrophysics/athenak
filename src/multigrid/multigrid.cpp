@@ -910,6 +910,7 @@ void Multigrid::RestrictPack() {
   int ll=nlevel_-current_level_;
   int is, ie, js, je, ks, ke;
   CalculateDefectPack();
+  DiagnosticRestrictPack();
   is=js=ks= ngh_;
   ie = is + (indcs_.nx1>>ll) - 1;
   je = js + (indcs_.nx2>>ll) - 1;

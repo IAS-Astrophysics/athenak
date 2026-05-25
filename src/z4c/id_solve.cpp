@@ -429,6 +429,497 @@ const char *CTSVarName(int n) {
   }
 }
 
+enum CompositeRestrictionMode {
+  ID_CTS_RESTRICT_HALF_WEIGHT = 0,
+  ID_CTS_RESTRICT_AVERAGE = 1
+};
+
+struct CompositeRestrictionStats {
+  long long dst_count = 0;
+  long long valid_child_count = 0;
+  long long invalid_child_count = 0;
+  long long centered_count = 0;
+  long long onesided_xm_count = 0;
+  long long onesided_xp_count = 0;
+  long long onesided_ym_count = 0;
+  long long onesided_yp_count = 0;
+  long long onesided_zm_count = 0;
+  long long onesided_zp_count = 0;
+  long long insufficient_count = 0;
+  long long diff_count = 0;
+  Real diff_sum2 = 0.0;
+  Real diff_max = 0.0;
+};
+
+KOKKOS_INLINE_FUNCTION
+void AddRestrictionStats(CompositeRestrictionStats &dst,
+                         const CompositeRestrictionStats &src) {
+  dst.dst_count += src.dst_count;
+  dst.valid_child_count += src.valid_child_count;
+  dst.invalid_child_count += src.invalid_child_count;
+  dst.centered_count += src.centered_count;
+  dst.onesided_xm_count += src.onesided_xm_count;
+  dst.onesided_xp_count += src.onesided_xp_count;
+  dst.onesided_ym_count += src.onesided_ym_count;
+  dst.onesided_yp_count += src.onesided_yp_count;
+  dst.onesided_zm_count += src.onesided_zm_count;
+  dst.onesided_zp_count += src.onesided_zp_count;
+  dst.insufficient_count += src.insufficient_count;
+  dst.diff_count += src.diff_count;
+  dst.diff_sum2 += src.diff_sum2;
+  if (src.diff_max > dst.diff_max) dst.diff_max = src.diff_max;
+}
+
+template <typename MaskViewType>
+KOKKOS_INLINE_FUNCTION
+bool CompositeSourceValid(const MaskViewType &mask, int m, int k, int j, int i,
+                          int nk, int nj, int ni) {
+  return i >= 0 && i < ni && j >= 0 && j < nj && k >= 0 && k < nk
+      && mask(m, COMP_VALID, k, j, i) != 0;
+}
+
+template <typename ViewType, typename MaskViewType>
+KOKKOS_INLINE_FUNCTION
+bool CompositeSecondDifference(const ViewType &src, const MaskViewType &mask,
+                               int m, int v, int k, int j, int i, int axis,
+                               int nk, int nj, int ni, Real &d2, int &kind) {
+  auto valid_offset = [&](int offset) {
+    const int ii = i + ((axis == 0) ? offset : 0);
+    const int jj = j + ((axis == 1) ? offset : 0);
+    const int kk = k + ((axis == 2) ? offset : 0);
+    return CompositeSourceValid(mask, m, kk, jj, ii, nk, nj, ni);
+  };
+  auto value_offset = [&](int offset) {
+    const int ii = i + ((axis == 0) ? offset : 0);
+    const int jj = j + ((axis == 1) ? offset : 0);
+    const int kk = k + ((axis == 2) ? offset : 0);
+    return src(m, v, kk, jj, ii);
+  };
+
+  if (valid_offset(-1) && valid_offset(1)) {
+    d2 = value_offset(1) - 2.0*value_offset(0) + value_offset(-1);
+    kind = 0;
+    return true;
+  }
+  if (valid_offset(-1) && valid_offset(-2) && valid_offset(-3)) {
+    d2 = 2.0*value_offset(0) - 5.0*value_offset(-1)
+       + 4.0*value_offset(-2) - value_offset(-3);
+    kind = -1;
+    return true;
+  }
+  if (valid_offset(1) && valid_offset(2) && valid_offset(3)) {
+    d2 = 2.0*value_offset(0) - 5.0*value_offset(1)
+       + 4.0*value_offset(2) - value_offset(3);
+    kind = 1;
+    return true;
+  }
+  kind = 2;
+  d2 = 0.0;
+  return false;
+}
+
+KOKKOS_INLINE_FUNCTION
+void CountRestrictionStencilKind(CompositeRestrictionStats &stats, int axis, int kind) {
+  if (kind == 0) {
+    ++stats.centered_count;
+  } else if (axis == 0 && kind < 0) {
+    ++stats.onesided_xm_count;
+  } else if (axis == 0 && kind > 0) {
+    ++stats.onesided_xp_count;
+  } else if (axis == 1 && kind < 0) {
+    ++stats.onesided_ym_count;
+  } else if (axis == 1 && kind > 0) {
+    ++stats.onesided_yp_count;
+  } else if (axis == 2 && kind < 0) {
+    ++stats.onesided_zm_count;
+  } else if (axis == 2 && kind > 0) {
+    ++stats.onesided_zp_count;
+  }
+}
+
+template <typename ViewType, typename MaskViewType>
+CompositeRestrictionStats DiagnoseHalfWeightRestrictionImpl(
+    const ViewType &src, const MaskViewType &mask, int nvar,
+    int i0, int i1, int j0, int j1, int k0, int k1, int ngh, bool half_weight) {
+  using ExeSpace = typename ViewType::execution_space;
+  const int nm = src.extent_int(0);
+  const int nk = src.extent_int(2);
+  const int nj = src.extent_int(3);
+  const int ni = src.extent_int(4);
+  CompositeRestrictionStats stats;
+  Kokkos::parallel_reduce("IDCTS::DiagnoseHalfWeightRestriction",
+    Kokkos::MDRangePolicy<ExeSpace, Kokkos::Rank<5>>(
+        {0, 0, k0, j0, i0}, {nm, nvar, k1 + 1, j1 + 1, i1 + 1}),
+    KOKKOS_LAMBDA(int m, int v, int k, int j, int i,
+                  long long &dst_count, long long &valid_child_count,
+                  long long &invalid_child_count, long long &centered_count,
+                  long long &onesided_xm_count, long long &onesided_xp_count,
+                  long long &onesided_ym_count, long long &onesided_yp_count,
+                  long long &onesided_zm_count, long long &onesided_zp_count,
+                  long long &insufficient_count, long long &diff_count,
+                  Real &diff_sum2, Real &diff_max) {
+      ++dst_count;
+      const int fk = 2*k - ngh;
+      const int fj = 2*j - ngh;
+      const int fi = 2*i - ngh;
+      Real average = 0.0;
+      for (int dk = 0; dk <= 1; ++dk) {
+        for (int dj = 0; dj <= 1; ++dj) {
+          for (int di = 0; di <= 1; ++di) {
+            average += src(m, v, fk + dk, fj + dj, fi + di);
+          }
+        }
+      }
+      average *= 0.125;
+      if (!half_weight) return;
+
+      Real hw_sum = 0.0;
+      int hw_count = 0;
+      for (int dk = 0; dk <= 1; ++dk) {
+        for (int dj = 0; dj <= 1; ++dj) {
+          for (int di = 0; di <= 1; ++di) {
+            const int ck = fk + dk;
+            const int cj = fj + dj;
+            const int ci = fi + di;
+            if (!CompositeSourceValid(mask, m, ck, cj, ci, nk, nj, ni)) {
+              ++invalid_child_count;
+              continue;
+            }
+            ++valid_child_count;
+            Real d2[3] = {0.0, 0.0, 0.0};
+            int kind[3] = {0, 0, 0};
+            bool ok = true;
+            for (int axis = 0; axis < 3; ++axis) {
+              Real axis_d2 = 0.0;
+              int axis_kind = 2;
+              if (!CompositeSecondDifference(src, mask, m, v, ck, cj, ci, axis,
+                                             nk, nj, ni, axis_d2, axis_kind)) {
+                ok = false;
+                break;
+              }
+              d2[axis] = axis_d2;
+              kind[axis] = axis_kind;
+            }
+            if (!ok) {
+              ++insufficient_count;
+              continue;
+            }
+            for (int axis = 0; axis < 3; ++axis) {
+              if (kind[axis] == 0) {
+                ++centered_count;
+              } else if (axis == 0 && kind[axis] < 0) {
+                ++onesided_xm_count;
+              } else if (axis == 0 && kind[axis] > 0) {
+                ++onesided_xp_count;
+              } else if (axis == 1 && kind[axis] < 0) {
+                ++onesided_ym_count;
+              } else if (axis == 1 && kind[axis] > 0) {
+                ++onesided_yp_count;
+              } else if (axis == 2 && kind[axis] < 0) {
+                ++onesided_zm_count;
+              } else if (axis == 2 && kind[axis] > 0) {
+                ++onesided_zp_count;
+              }
+            }
+            hw_sum += src(m, v, ck, cj, ci) + (d2[0] + d2[1] + d2[2])/12.0;
+            ++hw_count;
+          }
+        }
+      }
+      if (hw_count > 0) {
+        const Real hw_average = hw_sum/static_cast<Real>(hw_count);
+        const Real diff = hw_average - average;
+        const Real abs_diff = std::abs(diff);
+        diff_sum2 += diff*diff;
+        ++diff_count;
+        if (abs_diff > diff_max) diff_max = abs_diff;
+      }
+    },
+    Kokkos::Sum<long long>(stats.dst_count),
+    Kokkos::Sum<long long>(stats.valid_child_count),
+    Kokkos::Sum<long long>(stats.invalid_child_count),
+    Kokkos::Sum<long long>(stats.centered_count),
+    Kokkos::Sum<long long>(stats.onesided_xm_count),
+    Kokkos::Sum<long long>(stats.onesided_xp_count),
+    Kokkos::Sum<long long>(stats.onesided_ym_count),
+    Kokkos::Sum<long long>(stats.onesided_yp_count),
+    Kokkos::Sum<long long>(stats.onesided_zm_count),
+    Kokkos::Sum<long long>(stats.onesided_zp_count),
+    Kokkos::Sum<long long>(stats.insufficient_count),
+    Kokkos::Sum<long long>(stats.diff_count),
+    Kokkos::Sum<Real>(stats.diff_sum2),
+    Kokkos::Max<Real>(stats.diff_max));
+  if (!half_weight || stats.diff_count == 0) stats.diff_max = 0.0;
+  return stats;
+}
+
+CompositeRestrictionStats ReduceCompositeRestrictionStats(
+    const CompositeRestrictionStats &local) {
+  CompositeRestrictionStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.dst_count, &global.dst_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.valid_child_count, &global.valid_child_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.invalid_child_count, &global.invalid_child_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.centered_count, &global.centered_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_xm_count, &global.onesided_xm_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_xp_count, &global.onesided_xp_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_ym_count, &global.onesided_ym_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_yp_count, &global.onesided_yp_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_zm_count, &global.onesided_zm_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_zp_count, &global.onesided_zp_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.insufficient_count, &global.insufficient_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.diff_count, &global.diff_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.diff_sum2, &global.diff_sum2, 1, MPI_ATHENA_REAL,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.diff_max, &global.diff_max, 1, MPI_ATHENA_REAL,
+                MPI_MAX, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
+void PrintCompositeRestrictionStats(const char *entity, int level, const char *field,
+                                    int mode, const CompositeRestrictionStats &stats) {
+  if (global_variable::my_rank != 0) return;
+  const Real diff_rms = (stats.diff_count > 0)
+      ? std::sqrt(stats.diff_sum2/static_cast<Real>(stats.diff_count)) : 0.0;
+  std::cout << "CTS composite restriction: entity=" << entity
+            << " level=" << level
+            << " field=" << field
+            << " mode=" << ((mode == ID_CTS_RESTRICT_HALF_WEIGHT) ? "half_weight" : "average")
+            << " dst_count=" << stats.dst_count
+            << " valid_children=" << stats.valid_child_count
+            << " invalid_children=" << stats.invalid_child_count
+            << " centered=" << stats.centered_count
+            << " onesided_xm=" << stats.onesided_xm_count
+            << " onesided_xp=" << stats.onesided_xp_count
+            << " onesided_ym=" << stats.onesided_ym_count
+            << " onesided_yp=" << stats.onesided_yp_count
+            << " onesided_zm=" << stats.onesided_zm_count
+            << " onesided_zp=" << stats.onesided_zp_count
+            << " insufficient=" << stats.insufficient_count
+            << " avg_diff_max=" << stats.diff_max
+            << " avg_diff_rms=" << diff_rms << std::endl;
+}
+
+Real CompositeRestrictionPolynomial(int i, int j, int k) {
+  return 3.0*i*i + 5.0*j*j + 7.0*k*k + 11.0*i - 13.0*j + 17.0*k + 19.0;
+}
+
+void FatalCompositeRestrictionSelfCheck(const std::string &msg) {
+  std::cout << "### FATAL ERROR in CTS composite restriction self-check" << std::endl
+            << msg << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+void CheckCloseCompositeRestriction(Real got, Real expected, Real tol,
+                                    const std::string &label) {
+  if (std::abs(got - expected) > tol) {
+    std::ostringstream msg;
+    msg << label << " expected " << expected << " but got " << got;
+    FatalCompositeRestrictionSelfCheck(msg.str());
+  }
+}
+
+void RunCompositeRestrictionSelfCheck() {
+  constexpr int n = 8;
+  constexpr int ngh = 0;
+  HostArray5D<Real> src("cts_restrict_self_src", 1, 1, n, n, n);
+  HostArray5D<int> mask("cts_restrict_self_mask", 1, COMP_NMASK, n, n, n);
+  auto set_all_valid = [&]() {
+    for (int k = 0; k < n; ++k) {
+      for (int j = 0; j < n; ++j) {
+        for (int i = 0; i < n; ++i) {
+          mask(0, COMP_VALID, k, j, i) = 1;
+          mask(0, COMP_RELAX, k, j, i) = 1;
+          mask(0, COMP_COVERED, k, j, i) = 0;
+          mask(0, COMP_INTERFACE, k, j, i) = 0;
+        }
+      }
+    }
+  };
+
+  set_all_valid();
+  for (int k = 0; k < n; ++k)
+    for (int j = 0; j < n; ++j)
+      for (int i = 0; i < n; ++i)
+        src(0, 0, k, j, i) = 4.0;
+  CompositeRestrictionStats constant =
+      DiagnoseHalfWeightRestrictionImpl(src, mask, 1, 0, 3, 0, 3, 0, 3, ngh, true);
+  CheckCloseCompositeRestriction(constant.diff_max, 0.0, 1.0e-14, "constant diff");
+
+  for (int k = 0; k < n; ++k)
+    for (int j = 0; j < n; ++j)
+      for (int i = 0; i < n; ++i)
+        src(0, 0, k, j, i) = 2.0*i - 3.0*j + 5.0*k + 7.0;
+  CompositeRestrictionStats linear =
+      DiagnoseHalfWeightRestrictionImpl(src, mask, 1, 0, 3, 0, 3, 0, 3, ngh, true);
+  CheckCloseCompositeRestriction(linear.diff_max, 0.0, 1.0e-14, "linear diff");
+
+  for (int k = 0; k < n; ++k)
+    for (int j = 0; j < n; ++j)
+      for (int i = 0; i < n; ++i)
+        src(0, 0, k, j, i) = CompositeRestrictionPolynomial(i, j, k);
+  CompositeRestrictionStats quadratic =
+      DiagnoseHalfWeightRestrictionImpl(src, mask, 1, 0, 3, 0, 3, 0, 3, ngh, true);
+  CheckCloseCompositeRestriction(quadratic.diff_max, 2.5, 1.0e-12,
+                                 "quadratic half-weight correction");
+
+  Real d2 = 0.0;
+  int kind = 2;
+  if (!CompositeSecondDifference(src, mask, 0, 0, 4, 4, 4, 0, n, n, n, d2, kind) ||
+      kind != 0) {
+    FatalCompositeRestrictionSelfCheck("centered x second difference was not selected");
+  }
+  CheckCloseCompositeRestriction(d2, 6.0, 1.0e-12, "centered Dxx");
+  if (!CompositeSecondDifference(src, mask, 0, 0, 4, 4, 4, 1, n, n, n, d2, kind) ||
+      kind != 0) {
+    FatalCompositeRestrictionSelfCheck("centered y second difference was not selected");
+  }
+  CheckCloseCompositeRestriction(d2, 10.0, 1.0e-12, "centered Dyy");
+  if (!CompositeSecondDifference(src, mask, 0, 0, 4, 4, 4, 2, n, n, n, d2, kind) ||
+      kind != 0) {
+    FatalCompositeRestrictionSelfCheck("centered z second difference was not selected");
+  }
+  CheckCloseCompositeRestriction(d2, 14.0, 1.0e-12, "centered Dzz");
+
+  set_all_valid();
+  mask(0, COMP_VALID, 4, 4, 1) = 0;
+  if (!CompositeSecondDifference(src, mask, 0, 0, 4, 4, 2, 0, n, n, n, d2, kind) ||
+      kind != 1) {
+    FatalCompositeRestrictionSelfCheck("plus-side one-sided x stencil was not selected");
+  }
+  CheckCloseCompositeRestriction(d2, 6.0, 1.0e-12, "plus one-sided Dxx");
+
+  set_all_valid();
+  mask(0, COMP_VALID, 4, 4, 6) = 0;
+  if (!CompositeSecondDifference(src, mask, 0, 0, 4, 4, 5, 0, n, n, n, d2, kind) ||
+      kind != -1) {
+    FatalCompositeRestrictionSelfCheck("minus-side one-sided x stencil was not selected");
+  }
+  CheckCloseCompositeRestriction(d2, 6.0, 1.0e-12, "minus one-sided Dxx");
+}
+
+const Real &OctetRestrictionValue(const MGOctet &oct, int field, int v,
+                                  int k, int j, int i) {
+  return (field == 0) ? oct.U(v, k, j, i) : oct.Def(v, k, j, i);
+}
+
+bool OctetSourceValid(const MGOctet &oct, int k, int j, int i) {
+  return i >= 0 && i < oct.nc && j >= 0 && j < oct.nc && k >= 0 && k < oct.nc
+      && oct.Mask(COMP_VALID, k, j, i) != 0;
+}
+
+bool OctetSecondDifference(const MGOctet &oct, int field, int v, int k, int j,
+                           int i, int axis, Real &d2, int &kind) {
+  auto valid_offset = [&](int offset) {
+    const int ii = i + ((axis == 0) ? offset : 0);
+    const int jj = j + ((axis == 1) ? offset : 0);
+    const int kk = k + ((axis == 2) ? offset : 0);
+    return OctetSourceValid(oct, kk, jj, ii);
+  };
+  auto value_offset = [&](int offset) -> Real {
+    const int ii = i + ((axis == 0) ? offset : 0);
+    const int jj = j + ((axis == 1) ? offset : 0);
+    const int kk = k + ((axis == 2) ? offset : 0);
+    return OctetRestrictionValue(oct, field, v, kk, jj, ii);
+  };
+  if (valid_offset(-1) && valid_offset(1)) {
+    d2 = value_offset(1) - 2.0*value_offset(0) + value_offset(-1);
+    kind = 0;
+    return true;
+  }
+  if (valid_offset(-1) && valid_offset(-2) && valid_offset(-3)) {
+    d2 = 2.0*value_offset(0) - 5.0*value_offset(-1)
+       + 4.0*value_offset(-2) - value_offset(-3);
+    kind = -1;
+    return true;
+  }
+  if (valid_offset(1) && valid_offset(2) && valid_offset(3)) {
+    d2 = 2.0*value_offset(0) - 5.0*value_offset(1)
+       + 4.0*value_offset(2) - value_offset(3);
+    kind = 1;
+    return true;
+  }
+  d2 = 0.0;
+  kind = 2;
+  return false;
+}
+
+CompositeRestrictionStats DiagnoseHalfWeightRestrictionOctet(const MGOctet &oct,
+                                                             int nvar, int ngh,
+                                                             int field,
+                                                             bool half_weight) {
+  CompositeRestrictionStats stats;
+  for (int v = 0; v < nvar; ++v) {
+    ++stats.dst_count;
+    Real average = 0.0;
+    for (int dk = 0; dk <= 1; ++dk)
+      for (int dj = 0; dj <= 1; ++dj)
+        for (int di = 0; di <= 1; ++di)
+          average += OctetRestrictionValue(oct, field, v, ngh + dk, ngh + dj, ngh + di);
+    average *= 0.125;
+    if (!half_weight) continue;
+
+    Real hw_sum = 0.0;
+    int hw_count = 0;
+    for (int dk = 0; dk <= 1; ++dk) {
+      for (int dj = 0; dj <= 1; ++dj) {
+        for (int di = 0; di <= 1; ++di) {
+          const int ck = ngh + dk;
+          const int cj = ngh + dj;
+          const int ci = ngh + di;
+          if (!OctetSourceValid(oct, ck, cj, ci)) {
+            ++stats.invalid_child_count;
+            continue;
+          }
+          ++stats.valid_child_count;
+          Real d2[3] = {0.0, 0.0, 0.0};
+          int kind[3] = {0, 0, 0};
+          bool ok = true;
+          for (int axis = 0; axis < 3; ++axis) {
+            if (!OctetSecondDifference(oct, field, v, ck, cj, ci, axis,
+                                       d2[axis], kind[axis])) {
+              ok = false;
+              break;
+            }
+          }
+          if (!ok) {
+            ++stats.insufficient_count;
+            continue;
+          }
+          for (int axis = 0; axis < 3; ++axis) {
+            CountRestrictionStencilKind(stats, axis, kind[axis]);
+          }
+          hw_sum += OctetRestrictionValue(oct, field, v, ck, cj, ci)
+                  + (d2[0] + d2[1] + d2[2])/12.0;
+          ++hw_count;
+        }
+      }
+    }
+    if (hw_count > 0) {
+      const Real hw_average = hw_sum/static_cast<Real>(hw_count);
+      const Real diff = hw_average - average;
+      const Real abs_diff = std::abs(diff);
+      stats.diff_sum2 += diff*diff;
+      ++stats.diff_count;
+      if (abs_diff > stats.diff_max) stats.diff_max = abs_diff;
+    }
+  }
+  return stats;
+}
+
 template <typename UView>
 struct LocalUpdatedUView {
   UView u;
@@ -1457,6 +1948,72 @@ void IDCTSMultigrid::CalculateDefectPack() {
   }
 }
 
+void IDCTSMultigrid::DiagnosticRestrictPack() {
+  auto *driver = static_cast<IDCTSMultigridDriver*>(pmy_driver_);
+  if (!driver->composite_fas_ || !driver->debug_composite_restriction_) return;
+  if (!driver->composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigrid::DiagnosticRestrictPack"
+              << std::endl
+              << "Composite restriction diagnostics requested before masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!driver->composite_restriction_self_check_done_) {
+    RunCompositeRestrictionSelfCheck();
+    driver->composite_restriction_self_check_done_ = true;
+    if (global_variable::my_rank == 0) {
+      std::cout << "CTS composite restriction self-check: passed" << std::endl;
+    }
+  }
+
+  // Commit 1 only builds meaningful root bridge masks on the finest root level.
+  if (pmy_pack_ == nullptr && current_level_ != nlevel_ - 1) return;
+
+  const int ll = nlevel_ - current_level_;
+  const int is = ngh_;
+  const int js = ngh_;
+  const int ks = ngh_;
+  const int ie = is + (indcs_.nx1 >> ll) - 1;
+  const int je = js + (indcs_.nx2 >> ll) - 1;
+  const int ke = ks + (indcs_.nx3 >> ll) - 1;
+  if (ie < is || je < js || ke < ks) return;
+
+  const bool half_weight =
+      (driver->composite_restriction_ == ID_CTS_RESTRICT_HALF_WEIGHT);
+  const char *entity = (pmy_pack_ == nullptr) ? "root" : "meshblock";
+  const bool compute_on_this_rank =
+      (pmy_pack_ != nullptr || global_variable::my_rank == 0);
+
+  CompositeRestrictionStats local_u;
+  CompositeRestrictionStats local_def;
+  if (!compute_on_this_rank) {
+    // Root grids are replicated; only rank 0 contributes root diagnostic counts.
+  } else if (on_host_) {
+    auto mask = comp_mask_[current_level_].h_view;
+    local_u = DiagnoseHalfWeightRestrictionImpl(u_[current_level_].h_view, mask,
+                                                nvar_, is, ie, js, je, ks, ke,
+                                                ngh_, half_weight);
+    local_def = DiagnoseHalfWeightRestrictionImpl(def_[current_level_].h_view, mask,
+                                                  nvar_, is, ie, js, je, ks, ke,
+                                                  ngh_, half_weight);
+  } else {
+    auto mask = comp_mask_[current_level_].d_view;
+    local_u = DiagnoseHalfWeightRestrictionImpl(u_[current_level_].d_view, mask,
+                                                nvar_, is, ie, js, je, ks, ke,
+                                                ngh_, half_weight);
+    local_def = DiagnoseHalfWeightRestrictionImpl(def_[current_level_].d_view, mask,
+                                                  nvar_, is, ie, js, je, ks, ke,
+                                                  ngh_, half_weight);
+  }
+
+  CompositeRestrictionStats global_u = ReduceCompositeRestrictionStats(local_u);
+  CompositeRestrictionStats global_def = ReduceCompositeRestrictionStats(local_def);
+  PrintCompositeRestrictionStats(entity, current_level_, "u",
+                                 driver->composite_restriction_, global_u);
+  PrintCompositeRestrictionStats(entity, current_level_, "def",
+                                 driver->composite_restriction_, global_def);
+}
+
 void IDCTSMultigrid::CalculateFASRHSPack() {
   auto *driver = static_cast<IDCTSMultigridDriver*>(pmy_driver_);
   int ll = nlevel_ - 1 - current_level_;
@@ -1552,6 +2109,22 @@ IDCTSMultigridDriver::IDCTSMultigridDriver(IDConformalThinSandwich *owner,
   debug_composite_residual_ =
       pin->GetOrAddBoolean("id_solve", "debug_composite_residual", false);
   composite_masks_ready_ = false;
+  std::string composite_restriction =
+      pin->GetOrAddString("id_solve", "composite_restriction", "half_weight");
+  if (composite_restriction == "half_weight") {
+    composite_restriction_ = ID_CTS_RESTRICT_HALF_WEIGHT;
+  } else if (composite_restriction == "average") {
+    composite_restriction_ = ID_CTS_RESTRICT_AVERAGE;
+  } else {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::IDCTSMultigridDriver"
+              << std::endl
+              << "id_solve/composite_restriction must be half_weight or average."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  debug_composite_restriction_ =
+      pin->GetOrAddBoolean("id_solve", "debug_composite_restriction", false);
+  composite_restriction_self_check_done_ = false;
   omega_ = pin->GetOrAddReal("id_solve", "omega", 1.0);
   default_smooth_omega_ = omega_;
   active_smooth_omega_ = omega_;
@@ -2769,6 +3342,46 @@ void IDCTSMultigridDriver::Solve(Driver *pdriver, int stage, Real dt) {
   mglevels_->RetrieveResult(owner_->u_cts, 0, indcs.ng);
   owner_->ApplySolution();
   solution_applied_ = true;
+}
+
+void IDCTSMultigridDriver::DiagnosticRestrictOctets(int lev) {
+  if (!composite_fas_ || !debug_composite_restriction_) return;
+  if (lev < 0 || lev >= nreflevel_) return;
+  if (!composite_masks_ready_) {
+    std::cout << "### FATAL ERROR in IDCTSMultigridDriver::DiagnosticRestrictOctets"
+              << std::endl
+              << "Composite restriction diagnostics requested before masks were built."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!composite_restriction_self_check_done_) {
+    RunCompositeRestrictionSelfCheck();
+    composite_restriction_self_check_done_ = true;
+    if (global_variable::my_rank == 0) {
+      std::cout << "CTS composite restriction self-check: passed" << std::endl;
+    }
+  }
+
+  CompositeRestrictionStats local_u;
+  CompositeRestrictionStats local_def;
+  const bool half_weight = (composite_restriction_ == ID_CTS_RESTRICT_HALF_WEIGHT);
+  const int ngh = mgroot_->GetGhostCells();
+  if (global_variable::my_rank == 0 && lev >= 0 && lev < nreflevel_) {
+    for (int o = 0; o < noctets_[lev]; ++o) {
+      MGOctet &oct = octets_[lev][o];
+      CalculateDefectOctet(oct, lev + 1);
+      CompositeRestrictionStats u_stats =
+          DiagnoseHalfWeightRestrictionOctet(oct, nvar_, ngh, 0, half_weight);
+      CompositeRestrictionStats def_stats =
+          DiagnoseHalfWeightRestrictionOctet(oct, nvar_, ngh, 1, half_weight);
+      AddRestrictionStats(local_u, u_stats);
+      AddRestrictionStats(local_def, def_stats);
+    }
+  }
+  CompositeRestrictionStats global_u = ReduceCompositeRestrictionStats(local_u);
+  CompositeRestrictionStats global_def = ReduceCompositeRestrictionStats(local_def);
+  PrintCompositeRestrictionStats("octet", lev, "u", composite_restriction_, global_u);
+  PrintCompositeRestrictionStats("octet", lev, "def", composite_restriction_, global_def);
 }
 
 void IDCTSMultigridDriver::SmoothOctet(MGOctet &oct, int rlev, int color) {

@@ -250,6 +250,7 @@ class Multigrid {
   virtual void SmoothPack(int color) = 0;
   virtual void CalculateDefectPack() = 0;
   virtual void CalculateFASRHSPack() = 0;
+  virtual void DiagnosticRestrictPack() {}
   void ComputeCorrection();
   void CalculateMatrixPack(Real dt);
   void SetFromRootGrid(bool folddata);
@@ -476,6 +477,7 @@ class MultigridDriver {
   virtual void SmoothOctet(MGOctet &oct, int rlev, int color) = 0;
   virtual void CalculateDefectOctet(MGOctet &oct, int rlev) = 0;
   virtual void CalculateFASRHSOctet(MGOctet &oct, int rlev) = 0;
+  virtual void DiagnosticRestrictOctets(int lev) {}
   virtual void ProlongateOctetBoundariesFluxCons(MGOctet &oct,
        std::vector<Real> &cbuf, const std::vector<bool> &ncoarse);
 
