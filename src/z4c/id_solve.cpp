@@ -466,16 +466,34 @@ struct CompositeTauStats {
 struct CompositeBridgeStats {
   long long valid_dst = 0;
   long long staging_skipped = 0;
+  long long staging_used = 0;
   long long covered_skipped = 0;
   long long half_weight = 0;
   long long onesided = 0;
+  long long centered_count = 0;
+  long long onesided_xm_count = 0;
+  long long onesided_xp_count = 0;
+  long long onesided_ym_count = 0;
+  long long onesided_yp_count = 0;
+  long long onesided_zm_count = 0;
+  long long onesided_zp_count = 0;
   long long fallback = 0;
   long long insufficient_valid = 0;
   long long physical_boundary = 0;
   long long refinement_interface = 0;
+  long long diff_count = 0;
+  Real diff_sum2 = 0.0;
+  Real diff_max = 0.0;
+  long long dry_count = 0;
+  Real ru_sum2 = 0.0;
+  Real rf_sum2 = 0.0;
   Real old_mismatch_sum2 = 0.0;
   Real old_mismatch_max = 0.0;
   long long old_mismatch_count = 0;
+};
+
+struct CompositeBridgeMissingStats {
+  long long count[ID_CTS_NVAR][3][2][3] = {};
 };
 
 KOKKOS_INLINE_FUNCTION
@@ -872,11 +890,27 @@ CompositeBridgeStats ReduceCompositeBridgeStats(const CompositeBridgeStats &loca
                 MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.staging_skipped, &global.staging_skipped, 1, MPI_LONG_LONG,
                 MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.staging_used, &global.staging_used, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.covered_skipped, &global.covered_skipped, 1, MPI_LONG_LONG,
                 MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.half_weight, &global.half_weight, 1, MPI_LONG_LONG,
                 MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.onesided, &global.onesided, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.centered_count, &global.centered_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_xm_count, &global.onesided_xm_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_xp_count, &global.onesided_xp_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_ym_count, &global.onesided_ym_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_yp_count, &global.onesided_yp_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_zm_count, &global.onesided_zm_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.onesided_zp_count, &global.onesided_zp_count, 1, MPI_LONG_LONG,
                 MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.fallback, &global.fallback, 1, MPI_LONG_LONG,
                 MPI_SUM, MPI_COMM_WORLD);
@@ -886,12 +920,34 @@ CompositeBridgeStats ReduceCompositeBridgeStats(const CompositeBridgeStats &loca
                 MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.refinement_interface, &global.refinement_interface, 1,
                 MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.diff_count, &global.diff_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.diff_sum2, &global.diff_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.diff_max, &global.diff_max, 1,
+                MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.dry_count, &global.dry_count, 1, MPI_LONG_LONG,
+                MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.ru_sum2, &global.ru_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(&local.rf_sum2, &global.rf_sum2, 1,
+                MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.old_mismatch_sum2, &global.old_mismatch_sum2, 1,
                 MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(&local.old_mismatch_max, &global.old_mismatch_max, 1,
                 MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(&local.old_mismatch_count, &global.old_mismatch_count, 1,
                 MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
+#endif
+  return global;
+}
+
+CompositeBridgeMissingStats ReduceCompositeBridgeMissingStats(
+    const CompositeBridgeMissingStats &local) {
+  CompositeBridgeMissingStats global = local;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(&local.count[0][0][0][0], &global.count[0][0][0][0],
+                ID_CTS_NVAR*3*2*3, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD);
 #endif
   return global;
 }
@@ -949,44 +1005,195 @@ void PrintCompositeBridgeStats(const char *entity, int level, const char *region
   if (global_variable::my_rank != 0) return;
   const Real old_rms = (stats.old_mismatch_count > 0)
       ? std::sqrt(stats.old_mismatch_sum2/static_cast<Real>(stats.old_mismatch_count)) : 0.0;
+  const Real diff_rms = (stats.diff_count > 0)
+      ? std::sqrt(stats.diff_sum2/static_cast<Real>(stats.diff_count)) : 0.0;
+  const Real dry_denom = (stats.dry_count > 0) ? static_cast<Real>(stats.dry_count) : 1.0;
+  const Real ru = std::sqrt(stats.ru_sum2/dry_denom);
+  const Real rf = std::sqrt(stats.rf_sum2/dry_denom);
   std::cout << "CTS composite bridge:"
             << " entity=" << entity
             << " level=" << level
             << " region=" << region
             << " valid_dst=" << stats.valid_dst
             << " staging_skipped=" << stats.staging_skipped
+            << " staging_used=" << stats.staging_used
             << " covered_skipped=" << stats.covered_skipped
             << " half_weight=" << stats.half_weight
             << " onesided=" << stats.onesided
+            << " centered=" << stats.centered_count
+            << " onesided_xm=" << stats.onesided_xm_count
+            << " onesided_xp=" << stats.onesided_xp_count
+            << " onesided_ym=" << stats.onesided_ym_count
+            << " onesided_yp=" << stats.onesided_yp_count
+            << " onesided_zm=" << stats.onesided_zm_count
+            << " onesided_zp=" << stats.onesided_zp_count
             << " fallback=" << stats.fallback
             << " insufficient_valid=" << stats.insufficient_valid
             << " physical_boundary=" << stats.physical_boundary
             << " refinement_interface=" << stats.refinement_interface
-            << " ||R_f||=0 ||L_H_Ru||=0 ||R_L_h||=0 ||tau||=0"
+            << " avg_diff_max=" << stats.diff_max
+            << " avg_diff_rms=" << diff_rms
+            << " ||R_u||=" << ru
+            << " ||R_f||=" << rf
+            << " ||L_H_Ru||=0 ||R_L_h||=0 ||tau||=0"
             << " tau_max=0 tau_rms=0"
             << " old_state_mismatch_max=" << stats.old_mismatch_max
             << " old_state_mismatch_rms=" << old_rms << std::endl;
 }
 
+void PrintCompositeBridgeMissingStats(const char *entity, int level, const char *region,
+                                      const CompositeBridgeMissingStats &stats) {
+  if (global_variable::my_rank != 0) return;
+  const char *axis_name[3] = {"x", "y", "z"};
+  const char *side_name[2] = {"minus", "plus"};
+  for (int v = 0; v < ID_CTS_NVAR; ++v) {
+    for (int axis = 0; axis < 3; ++axis) {
+      for (int side = 0; side < 2; ++side) {
+        const long long physical = stats.count[v][axis][side][0];
+        const long long refinement = stats.count[v][axis][side][1];
+        const long long meshblock = stats.count[v][axis][side][2];
+        if (physical + refinement + meshblock == 0) continue;
+        std::cout << "CTS composite bridge missing:"
+                  << " entity=" << entity
+                  << " level=" << level
+                  << " region=" << region
+                  << " variable=" << CTSVarName(v)
+                  << " axis=" << axis_name[axis]
+                  << " side=" << side_name[side]
+                  << " physical_boundary=" << physical
+                  << " refinement_interface=" << refinement
+                  << " meshblock_boundary=" << meshblock << std::endl;
+      }
+    }
+  }
+}
+
 template <typename ValidFn>
-bool CompositeBridgeAxisSupported(const ValidFn &valid, int i, int j, int k, int axis,
-                                  bool &used_onesided) {
+int CompositeBridgeAxisKind(const ValidFn &valid, int i, int j, int k, int axis) {
   auto at = [&](int off) {
     const int ii = i + ((axis == 0) ? off : 0);
     const int jj = j + ((axis == 1) ? off : 0);
     const int kk = k + ((axis == 2) ? off : 0);
     return valid(ii, jj, kk);
   };
-  if (at(-1) && at(1)) return true;
-  if (at(-1) && at(-2) && at(-3)) {
-    used_onesided = true;
-    return true;
+  if (at(-1) && at(1)) return 0;
+  if (at(-1) && at(-2) && at(-3)) return -1;
+  if (at(1) && at(2) && at(3)) return 1;
+  return 2;
+}
+
+template <typename ValidFn>
+void AccumulateBridgeMissing(CompositeBridgeMissingStats &stats, const ValidFn &valid,
+                             int nvar, int var, int i, int j, int k, int axis,
+                             bool physical, bool interface, bool meshblock_boundary) {
+  auto at = [&](int off) {
+    const int ii = i + ((axis == 0) ? off : 0);
+    const int jj = j + ((axis == 1) ? off : 0);
+    const int kk = k + ((axis == 2) ? off : 0);
+    return valid(ii, jj, kk);
+  };
+  const bool centered = at(-1) && at(1);
+  const bool minus_one_sided = at(-1) && at(-2) && at(-3);
+  const bool plus_one_sided = at(1) && at(2) && at(3);
+  if (centered || minus_one_sided || plus_one_sided) return;
+  int kind = physical ? 0 : (interface ? 1 : 2);
+  if (meshblock_boundary && !physical && !interface) kind = 2;
+  const int v0 = (var >= 0) ? var : 0;
+  const int v1 = (var >= 0) ? var + 1 : std::min(nvar, static_cast<int>(ID_CTS_NVAR));
+  for (int v = v0; v < v1; ++v) {
+    if (!minus_one_sided) ++stats.count[v][axis][0][kind];
+    if (!plus_one_sided) ++stats.count[v][axis][1][kind];
   }
-  if (at(1) && at(2) && at(3)) {
-    used_onesided = true;
-    return true;
+}
+
+void CountBridgeStencilKind(CompositeBridgeStats &stats, int axis, int kind) {
+  if (kind == 0) {
+    ++stats.centered_count;
+  } else if (axis == 0 && kind < 0) {
+    ++stats.onesided_xm_count;
+  } else if (axis == 0 && kind > 0) {
+    ++stats.onesided_xp_count;
+  } else if (axis == 1 && kind < 0) {
+    ++stats.onesided_ym_count;
+  } else if (axis == 1 && kind > 0) {
+    ++stats.onesided_yp_count;
+  } else if (axis == 2 && kind < 0) {
+    ++stats.onesided_zm_count;
+  } else if (axis == 2 && kind > 0) {
+    ++stats.onesided_zp_count;
   }
-  return false;
+}
+
+template <typename ViewType>
+bool BridgeRestrictFromTransferBlock(const ViewType &src, int m, int v, int ngh,
+                                     int ncells, Real &restricted,
+                                     CompositeBridgeStats &stats,
+                                     CompositeBridgeMissingStats &missing,
+                                     bool physical, bool interface,
+                                     bool &used_staging, bool &used_onesided) {
+  const int nk = src.extent_int(2);
+  const int nj = src.extent_int(3);
+  const int ni = src.extent_int(4);
+  auto in_bounds = [&](int i, int j, int k) {
+    return i >= 0 && i < ni && j >= 0 && j < nj && k >= 0 && k < nk;
+  };
+  auto value = [&](int i, int j, int k) {
+    return src(m, v, k, j, i);
+  };
+  auto staged = [&](int i, int j, int k) {
+    return i < ngh || i >= ngh + ncells ||
+           j < ngh || j >= ngh + ncells ||
+           k < ngh || k >= ngh + ncells;
+  };
+
+  Real average = 0.0;
+  Real hw_sum = 0.0;
+  int hw_count = 0;
+  used_staging = false;
+  used_onesided = false;
+  for (int k = ngh; k < ngh + ncells; ++k) {
+    for (int j = ngh; j < ngh + ncells; ++j) {
+      for (int i = ngh; i < ngh + ncells; ++i) {
+        average += value(i, j, k);
+        Real d2[3] = {0.0, 0.0, 0.0};
+        for (int axis = 0; axis < 3; ++axis) {
+          const int kind = CompositeBridgeAxisKind(in_bounds, i, j, k, axis);
+          if (kind == 2) {
+            AccumulateBridgeMissing(missing, in_bounds, ID_CTS_NVAR, v, i, j, k, axis,
+                                    physical, interface, false);
+            return false;
+          }
+          CountBridgeStencilKind(stats, axis, kind);
+          used_onesided = used_onesided || (kind != 0);
+          auto at = [&](int off) {
+            const int ii = i + ((axis == 0) ? off : 0);
+            const int jj = j + ((axis == 1) ? off : 0);
+            const int kk = k + ((axis == 2) ? off : 0);
+            used_staging = used_staging || staged(ii, jj, kk);
+            return value(ii, jj, kk);
+          };
+          if (kind == 0) {
+            d2[axis] = at(1) - 2.0*at(0) + at(-1);
+          } else if (kind < 0) {
+            d2[axis] = 2.0*at(0) - 5.0*at(-1) + 4.0*at(-2) - at(-3);
+          } else {
+            d2[axis] = 2.0*at(0) - 5.0*at(1) + 4.0*at(2) - at(3);
+          }
+        }
+        hw_sum += value(i, j, k) + (d2[0] + d2[1] + d2[2])/12.0;
+        ++hw_count;
+      }
+    }
+  }
+  const Real denom = static_cast<Real>(ncells*ncells*ncells);
+  average /= denom;
+  restricted = hw_sum/static_cast<Real>(hw_count);
+  const Real diff = restricted - average;
+  const Real abs_diff = std::abs(diff);
+  stats.diff_sum2 += diff*diff;
+  ++stats.diff_count;
+  if (abs_diff > stats.diff_max) stats.diff_max = abs_diff;
+  return true;
 }
 
 Real CompositeRestrictionPolynomial(int i, int j, int k) {
@@ -4002,7 +4209,123 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
   CompositeBridgeStats root_local;
   CompositeBridgeStats octet_active_local;
   CompositeBridgeStats octet_staging_local;
+  CompositeBridgeStats root_staged_local;
+  CompositeBridgeStats octet_staged_local;
+  CompositeBridgeMissingStats root_missing_local;
+  CompositeBridgeMissingStats octet_active_missing_local;
+  CompositeBridgeMissingStats root_staged_missing_local;
+  CompositeBridgeMissingStats octet_staged_missing_local;
   const int ngh = mgroot_->GetGhostCells();
+  const int transfer_level = MeshBlockTransferLevel();
+  const int transfer_ncells = mglevels_->GetLevelActiveCells(transfer_level);
+  mglevels_->SyncDataLevelToHost(transfer_level);
+  if (restrict_from_transfer_level) mglevels_->SyncDefectLevelToHost(transfer_level);
+  else mglevels_->SyncSourceLevelToHost(transfer_level);
+  auto mb_u = mglevels_->GetDataLevel_h(transfer_level);
+  auto mb_rhs = restrict_from_transfer_level ? mglevels_->GetDefectLevel_h(transfer_level)
+                                             : mglevels_->GetSourceLevel_h(transfer_level);
+  auto accumulate_staged_blocks = [&]() {
+    const int root_level = nrootlevel_ - 1;
+    auto root_mask = mgroot_->GetCompositeMaskLevel_h(root_level);
+    const int local_nmb = mglevels_->GetNumMeshBlocks();
+    const int padding = nslist_[global_variable::my_rank];
+    const auto loc = pmy_mesh_->lloc_eachmb;
+    for (int m = 0; m < local_nmb; ++m) {
+      const int gid = m + padding;
+      const LogicalLocation &mb_loc = loc[gid];
+      CompositeBridgeStats *stats = nullptr;
+      CompositeBridgeMissingStats *missing = nullptr;
+      bool valid = false;
+      bool covered = false;
+      bool physical = false;
+      bool interface = false;
+      if (mb_loc.level == locrootlevel_) {
+        const int i = static_cast<int>(mb_loc.lx1);
+        const int j = static_cast<int>(mb_loc.lx2);
+        const int k = static_cast<int>(mb_loc.lx3);
+        stats = &root_staged_local;
+        missing = &root_staged_missing_local;
+        valid = root_mask(0, COMP_VALID, k + ngh, j + ngh, i + ngh) != 0;
+        covered = root_mask(0, COMP_COVERED, k + ngh, j + ngh, i + ngh) != 0;
+        physical = (i == 0 || i == nrbx1_ - 1 ||
+                    j == 0 || j == nrbx2_ - 1 ||
+                    k == 0 || k == nrbx3_ - 1);
+        interface = root_mask(0, COMP_INTERFACE, k + ngh, j + ngh, i + ngh) != 0;
+      } else {
+        LogicalLocation oloc;
+        oloc.lx1 = (mb_loc.lx1 >> 1);
+        oloc.lx2 = (mb_loc.lx2 >> 1);
+        oloc.lx3 = (mb_loc.lx3 >> 1);
+        oloc.level = mb_loc.level - 1;
+        const int olev = oloc.level - locrootlevel_;
+        const int oid = FindOctetIdOrDie(olev, oloc,
+                                         "DiagnosticCompositeBridgeTransfer staging");
+        const MGOctet &oct = octets_[olev][oid];
+        const int oi = (static_cast<int>(mb_loc.lx1) & 1) + ngh;
+        const int oj = (static_cast<int>(mb_loc.lx2) & 1) + ngh;
+        const int ok = (static_cast<int>(mb_loc.lx3) & 1) + ngh;
+        const int ci = oi - ngh;
+        const int cj = oj - ngh;
+        const int ck = ok - ngh;
+        const int maxlx1 = nrbx1_ << olev;
+        const int maxlx2 = nrbx2_ << olev;
+        const int maxlx3 = nrbx3_ << olev;
+        stats = &octet_staged_local;
+        missing = &octet_staged_missing_local;
+        valid = oct.Mask(COMP_VALID, ok, oj, oi) != 0;
+        covered = oct.Mask(COMP_COVERED, ok, oj, oi) != 0;
+        physical = ((oct.loc.lx1 == 0 && ci == 0) ||
+                    (oct.loc.lx1 == maxlx1 - 1 && ci == 1) ||
+                    (oct.loc.lx2 == 0 && cj == 0) ||
+                    (oct.loc.lx2 == maxlx2 - 1 && cj == 1) ||
+                    (oct.loc.lx3 == 0 && ck == 0) ||
+                    (oct.loc.lx3 == maxlx3 - 1 && ck == 1));
+        interface = oct.Mask(COMP_INTERFACE, ok, oj, oi) != 0;
+      }
+      if (!valid) {
+        if (covered) ++stats->covered_skipped;
+        else ++stats->staging_skipped;
+        continue;
+      }
+      ++stats->valid_dst;
+      if (physical) ++stats->physical_boundary;
+      if (interface) ++stats->refinement_interface;
+      bool ok = true;
+      bool cell_used_staging = false;
+      bool cell_used_onesided = false;
+      for (int v = 0; v < nvar_; ++v) {
+        Real ru = 0.0;
+        Real rf = 0.0;
+        bool u_staging = false;
+        bool u_onesided = false;
+        bool f_staging = false;
+        bool f_onesided = false;
+        const bool u_ok = BridgeRestrictFromTransferBlock(
+            mb_u, m, v, mglevels_->GetGhostCells(), transfer_ncells, ru,
+            *stats, *missing, physical, interface, u_staging, u_onesided);
+        const bool f_ok = BridgeRestrictFromTransferBlock(
+            mb_rhs, m, v, mglevels_->GetGhostCells(), transfer_ncells, rf,
+            *stats, *missing, physical, interface, f_staging, f_onesided);
+        if (!u_ok || !f_ok) {
+          ok = false;
+          break;
+        }
+        cell_used_staging = cell_used_staging || u_staging || f_staging;
+        cell_used_onesided = cell_used_onesided || u_onesided || f_onesided;
+        stats->ru_sum2 += ru*ru;
+        stats->rf_sum2 += rf*rf;
+        ++stats->dry_count;
+      }
+      if (!ok) {
+        ++stats->insufficient_valid;
+      } else {
+        if (cell_used_staging) ++stats->staging_used;
+        if (cell_used_onesided) ++stats->onesided;
+        else ++stats->half_weight;
+      }
+    }
+  };
+  accumulate_staged_blocks();
   if (global_variable::my_rank == 0) {
     const int root_level = nrootlevel_ - 1;
     auto root_mask = mgroot_->GetCompositeMaskLevel_h(root_level);
@@ -4037,24 +4360,30 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
           const int kk = k + ngh;
           const bool valid = root_mask(0, COMP_VALID, kk, jj, ii) != 0;
           const bool covered = root_mask(0, COMP_COVERED, kk, jj, ii) != 0;
-          bool used_onesided = false;
           auto valid_root = [&](int ai, int aj, int ak) {
             return ai >= 0 && ai < nrbx1_ && aj >= 0 && aj < nrbx2_ &&
                    ak >= 0 && ak < nrbx3_ &&
                    root_mask(0, COMP_VALID, ak + ngh, aj + ngh, ai + ngh) != 0;
           };
-          bool supported = true;
-          for (int axis = 0; axis < 3; ++axis) {
-            if (!CompositeBridgeAxisSupported(valid_root, i, j, k, axis,
-                                              used_onesided)) {
-              supported = false;
-              break;
-            }
-          }
           const bool physical = (i == 0 || i == nrbx1_ - 1 ||
                                  j == 0 || j == nrbx2_ - 1 ||
                                  k == 0 || k == nrbx3_ - 1);
           const bool interface = root_mask(0, COMP_INTERFACE, kk, jj, ii) != 0;
+          bool used_onesided = false;
+          bool supported = true;
+          if (valid) {
+            for (int axis = 0; axis < 3; ++axis) {
+              const int kind = CompositeBridgeAxisKind(valid_root, i, j, k, axis);
+              if (kind == 2) {
+                AccumulateBridgeMissing(root_missing_local, valid_root, nvar_, -1,
+                                        i, j, k, axis, physical, interface, false);
+                supported = false;
+                continue;
+              }
+              used_onesided = used_onesided || (kind != 0);
+              CountBridgeStencilKind(root_local, axis, kind);
+            }
+          }
           classify_cell(root_local, valid, covered, physical, interface,
                         supported, used_onesided, true);
         }
@@ -4082,15 +4411,6 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
                                                     : octet_staging_local;
               const bool valid = oct.Mask(COMP_VALID, k, j, i) != 0;
               const bool covered = oct.Mask(COMP_COVERED, k, j, i) != 0;
-              bool used_onesided = false;
-              bool supported = true;
-              for (int axis = 0; axis < 3; ++axis) {
-                if (!CompositeBridgeAxisSupported(valid_oct, i, j, k, axis,
-                                                  used_onesided)) {
-                  supported = false;
-                  break;
-                }
-              }
               const int ci = i - ngh;
               const int cj = j - ngh;
               const int ck = k - ngh;
@@ -4102,6 +4422,21 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
                              (oct.loc.lx3 == 0 && ck == 0) ||
                              (oct.loc.lx3 == maxlx3 - 1 && ck == 1));
               const bool interface = oct.Mask(COMP_INTERFACE, k, j, i) != 0;
+              bool used_onesided = false;
+              bool supported = true;
+              if (active && valid) {
+                for (int axis = 0; axis < 3; ++axis) {
+                  const int kind = CompositeBridgeAxisKind(valid_oct, i, j, k, axis);
+                  if (kind == 2) {
+                    AccumulateBridgeMissing(octet_active_missing_local, valid_oct, nvar_, -1,
+                                            i, j, k, axis, physical, interface, true);
+                    supported = false;
+                    continue;
+                  }
+                  used_onesided = used_onesided || (kind != 0);
+                  CountBridgeStencilKind(stats, axis, kind);
+                }
+              }
               classify_cell(stats, valid, covered, physical, interface,
                             supported, used_onesided, active);
             }
@@ -4159,12 +4494,38 @@ void IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer(
   CompositeBridgeStats root = ReduceCompositeBridgeStats(root_local);
   CompositeBridgeStats octet_active = ReduceCompositeBridgeStats(octet_active_local);
   CompositeBridgeStats octet_staging = ReduceCompositeBridgeStats(octet_staging_local);
+  CompositeBridgeStats root_staged = ReduceCompositeBridgeStats(root_staged_local);
+  CompositeBridgeStats octet_staged = ReduceCompositeBridgeStats(octet_staged_local);
+  CompositeBridgeMissingStats root_missing =
+      ReduceCompositeBridgeMissingStats(root_missing_local);
+  CompositeBridgeMissingStats octet_active_missing =
+      ReduceCompositeBridgeMissingStats(octet_active_missing_local);
+  CompositeBridgeMissingStats root_staged_missing =
+      ReduceCompositeBridgeMissingStats(root_staged_missing_local);
+  CompositeBridgeMissingStats octet_staged_missing =
+      ReduceCompositeBridgeMissingStats(octet_staged_missing_local);
   if (debug_composite_bridge_ || debug_composite_tau_) {
     PrintCompositeBridgeStats("root", nrootlevel_ - 1, "active", root);
     PrintCompositeBridgeStats("octet", 0, "active", octet_active);
     PrintCompositeBridgeStats("octet", 0, "staging", octet_staging);
+    PrintCompositeBridgeStats("root", nrootlevel_ - 1, "meshblock_staging", root_staged);
+    PrintCompositeBridgeStats("octet", 0, "meshblock_staging", octet_staged);
+    PrintCompositeBridgeMissingStats("root", nrootlevel_ - 1, "active", root_missing);
+    PrintCompositeBridgeMissingStats("octet", 0, "active", octet_active_missing);
+    PrintCompositeBridgeMissingStats("root", nrootlevel_ - 1, "meshblock_staging",
+                                     root_staged_missing);
+    PrintCompositeBridgeMissingStats("octet", 0, "meshblock_staging",
+                                     octet_staged_missing);
   }
-  if (root.insufficient_valid + octet_active.insufficient_valid > 0) {
+  static bool bridge_staging_note_printed = false;
+  if (!bridge_staging_note_printed && global_variable::my_rank == 0 &&
+      root_staged.insufficient_valid + octet_staged.insufficient_valid == 0) {
+    std::cout << "CTS composite bridge staging: support_closed=1"
+              << " production_root_octet_rhs=disabled"
+              << " legacy_bridge_math=unchanged" << std::endl;
+    bridge_staging_note_printed = true;
+  }
+  if (root_staged.insufficient_valid + octet_staged.insufficient_valid > 0) {
     if (global_variable::my_rank == 0) {
       std::cout << "### FATAL ERROR in IDCTSMultigridDriver::DiagnosticCompositeBridgeTransfer"
                 << std::endl

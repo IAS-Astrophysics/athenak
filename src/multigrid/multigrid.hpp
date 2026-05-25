@@ -302,6 +302,18 @@ class Multigrid {
   auto GetCurrentData_h() { return u_[current_level_].h_view; }
   auto GetCurrentSource_h() { return src_[current_level_].h_view; }
   auto GetCurrentOldData_h() { return uold_[current_level_].h_view; }
+  auto GetDataLevel_h(int level) { return u_[level].h_view; }
+  auto GetSourceLevel_h(int level) { return src_[level].h_view; }
+  auto GetDefectLevel_h(int level) { return def_[level].h_view; }
+  void SyncDataLevelToHost(int level) {
+    Kokkos::deep_copy(u_[level].h_view, u_[level].d_view);
+  }
+  void SyncSourceLevelToHost(int level) {
+    Kokkos::deep_copy(src_[level].h_view, src_[level].d_view);
+  }
+  void SyncDefectLevelToHost(int level) {
+    Kokkos::deep_copy(def_[level].h_view, def_[level].d_view);
+  }
   auto GetCompositeMaskLevel(int level) { return comp_mask_[level].d_view; }
   auto GetCompositeMaskLevel_h(int level) { return comp_mask_[level].h_view; }
   void ModifyCompositeMaskLevelOnHost(int level) {
