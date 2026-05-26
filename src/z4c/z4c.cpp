@@ -309,4 +309,5 @@ Z4c::~Z4c() {
   delete pbval_u;
   delete pamr;
 }
+
 } // namespace z4c
