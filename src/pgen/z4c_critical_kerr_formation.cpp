@@ -39,6 +39,7 @@ struct CriticalKerrOptions {
   Real helicity = 1.0;
   Real ingoing_sign = 1.0;
   Real lapse = 1.0;
+  std::string constraint_formulation = "cts";
   Real center[3] = {0.0, 0.0, 0.0};
   Real radial_coeff[kMaxRadialModes] = {1.0, 0.0, 0.0, 0.0,
                                         0.0, 0.0, 0.0, 0.0};
@@ -76,6 +77,71 @@ void Inverse3(const Real g[3][3], const Real det, Real gi[3][3]) {
   gi[2][0] = gi[0][2];
   gi[2][1] = gi[1][2];
   gi[2][2] =  (g[0][0]*g[1][1] - g[0][1]*g[1][0])*inv_det;
+}
+
+KOKKOS_INLINE_FUNCTION
+void JacobiRotateSym3(Real a[3][3], Real v[3][3], const int p, const int q) {
+  const Real apq = a[p][q];
+  if (fabs(apq) < 1.0e-14) return;
+  const Real tau = (a[q][q] - a[p][p])/(2.0*apq);
+  const Real sign_tau = tau >= 0.0 ? 1.0 : -1.0;
+  const Real t = sign_tau/(fabs(tau) + Kokkos::sqrt(1.0 + tau*tau));
+  const Real c = 1.0/Kokkos::sqrt(1.0 + t*t);
+  const Real s = t*c;
+  const Real app = a[p][p];
+  const Real aqq = a[q][q];
+  a[p][p] = app - t*apq;
+  a[q][q] = aqq + t*apq;
+  a[p][q] = 0.0;
+  a[q][p] = 0.0;
+  for (int r = 0; r < 3; ++r) {
+    if (r == p || r == q) continue;
+    const Real arp = a[r][p];
+    const Real arq = a[r][q];
+    a[r][p] = c*arp - s*arq;
+    a[p][r] = a[r][p];
+    a[r][q] = s*arp + c*arq;
+    a[q][r] = a[r][q];
+  }
+  for (int r = 0; r < 3; ++r) {
+    const Real vrp = v[r][p];
+    const Real vrq = v[r][q];
+    v[r][p] = c*vrp - s*vrq;
+    v[r][q] = s*vrp + c*vrq;
+  }
+}
+
+KOKKOS_INLINE_FUNCTION
+void UnitDetExpSym3(const Real h[3][3], Real gbar[3][3]) {
+  Real a[3][3];
+  Real v[3][3];
+  for (int r = 0; r < 3; ++r) {
+    for (int c = 0; c < 3; ++c) {
+      a[r][c] = 0.5*(h[r][c] + h[c][r]);
+      v[r][c] = (r == c) ? 1.0 : 0.0;
+    }
+  }
+  for (int sweep = 0; sweep < 12; ++sweep) {
+    JacobiRotateSym3(a, v, 0, 1);
+    JacobiRotateSym3(a, v, 0, 2);
+    JacobiRotateSym3(a, v, 1, 2);
+  }
+  Real q[3][3];
+  for (int r = 0; r < 3; ++r) {
+    for (int c = 0; c < 3; ++c) {
+      q[r][c] = 0.0;
+      for (int e = 0; e < 3; ++e) {
+        q[r][c] += Kokkos::exp(a[e][e])*v[r][e]*v[c][e];
+      }
+    }
+  }
+  const Real det = fmax(Det3(q), static_cast<Real>(1.0e-300));
+  const Real det_scale = Kokkos::pow(det, -1.0/3.0);
+  for (int r = 0; r < 3; ++r) {
+    for (int c = 0; c < 3; ++c) {
+      gbar[r][c] = det_scale*0.5*(q[r][c] + q[c][r]);
+    }
+  }
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -156,7 +222,12 @@ CriticalKerrOptions ReadOptions(ParameterInput *pin) {
   opt.phase = pin->GetOrAddReal("problem", "phase", opt.phase);
   opt.helicity = pin->GetOrAddReal("problem", "helicity", opt.helicity);
   opt.ingoing_sign = pin->GetOrAddReal("problem", "ingoing_sign", opt.ingoing_sign);
-  opt.lapse = pin->GetOrAddReal("problem", "initial_lapse", opt.lapse);
+  opt.lapse = pin->DoesParameterExist("problem", "conformal_lapse") ?
+      pin->GetReal("problem", "conformal_lapse") :
+      pin->GetOrAddReal("problem", "initial_lapse", opt.lapse);
+  opt.constraint_formulation =
+      pin->GetOrAddString("problem", "constraint_formulation",
+                          opt.constraint_formulation);
   opt.center[0] = pin->GetOrAddReal("problem", "center_x", opt.center[0]);
   opt.center[1] = pin->GetOrAddReal("problem", "center_y", opt.center[1]);
   opt.center[2] = pin->GetOrAddReal("problem", "center_z", opt.center[2]);
@@ -171,12 +242,23 @@ CriticalKerrOptions ReadOptions(ParameterInput *pin) {
   }
 
   if (opt.ell != 2 || opt.emm != 2 || !(opt.support_radius > 0.0) ||
-      opt.bump_steepness < 0.0 || !(opt.lapse > 0.0)) {
+      opt.bump_steepness < 0.0 || !(opt.lapse > 0.0) ||
+      fabs(fabs(opt.helicity) - 1.0) > 1.0e-14) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
               << __LINE__ << std::endl
               << "z4c_critical_kerr_formation currently implements the regular "
               << "solid-harmonic ell=m=2 seed only, with support_radius>0, "
-              << "bump_steepness>=0, and initial_lapse>0." << std::endl;
+              << "bump_steepness>=0, conformal_lapse>0, and helicity=+/-1."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (opt.constraint_formulation != "cts") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+              << __LINE__ << std::endl
+              << "z4c_critical_kerr_formation supports only "
+              << "<problem>/constraint_formulation=cts. The compact "
+              << "gravitational-wave conformal metric ansatz is not "
+              << "Bowen-York CTT data." << std::endl;
     std::exit(EXIT_FAILURE);
   }
   return opt;
@@ -232,7 +314,7 @@ void FillCriticalKerrFreeDataADM(MeshBlockPack *pmbp, const CriticalKerrOptions 
                               {0.0, 0.0, 0.0}};
 
     Real h[3][3];
-    Real udot_cov[3][3];
+    Real hdot[3][3];
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         const Real y_e = solid_c*pol_e[a][b];
@@ -241,25 +323,36 @@ void FillCriticalKerrFreeDataADM(MeshBlockPack *pmbp, const CriticalKerrOptions 
         const Real dt_tensor =
             -opt.omega*sin_phase*y_e + opt.helicity*opt.omega*cos_phase*y_b;
         h[a][b] = f*tensor;
-        udot_cov[a][b] = opt.ingoing_sign*(df_dr*tensor + f*dt_tensor);
+        hdot[a][b] = opt.ingoing_sign*(df_dr*tensor + f*dt_tensor);
       }
     }
 
-    Real q[3][3];
-    for (int a = 0; a < 3; ++a) {
-      for (int b = 0; b < 3; ++b) {
-        Real h2 = 0.0;
-        for (int c = 0; c < 3; ++c) h2 += h[a][c]*h[c][b];
-        q[a][b] = (a == b ? 1.0 : 0.0) + h[a][b] + 0.5*h2;
-      }
-    }
-
-    const Real q_det = Det3(q);
-    const Real det_scale = q_det > 0.0 ? Kokkos::pow(q_det, -1.0/3.0) : 1.0;
     Real gbar[3][3];
+    UnitDetExpSym3(h, gbar);
+
+    Real max_hdot = 0.0;
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
-        gbar[a][b] = det_scale*q[a][b];
+        max_hdot = fmax(max_hdot, fabs(hdot[a][b]));
+      }
+    }
+    const Real eps = 1.0e-6/fmax(static_cast<Real>(1.0), max_hdot);
+    Real h_plus[3][3];
+    Real h_minus[3][3];
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        h_plus[a][b] = h[a][b] + eps*hdot[a][b];
+        h_minus[a][b] = h[a][b] - eps*hdot[a][b];
+      }
+    }
+    Real gbar_plus[3][3];
+    Real gbar_minus[3][3];
+    UnitDetExpSym3(h_plus, gbar_plus);
+    UnitDetExpSym3(h_minus, gbar_minus);
+    Real udot_cov[3][3];
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        udot_cov[a][b] = (gbar_plus[a][b] - gbar_minus[a][b])/(2.0*eps);
       }
     }
 
@@ -280,9 +373,7 @@ void FillCriticalKerrFreeDataADM(MeshBlockPack *pmbp, const CriticalKerrOptions 
     for (int a = 0; a < 3; ++a) {
       for (int b = a; b < 3; ++b) {
         adm_vars.g_dd(m, a, b, k, j, i) = gbar[a][b];
-        // The native CTS BuildFreeData computes ubar^ij_TF = 2 alpha Ahat^ij
-        // from this seed K_ij when beta=0, so K_ij = 0.5 ubar_ij.
-        adm_vars.vK_dd(m, a, b, k, j, i) = 0.5*udot_cov[a][b];
+        adm_vars.vK_dd(m, a, b, k, j, i) = udot_cov[a][b];
       }
       adm_vars.beta_u(m, a, k, j, i) = 0.0;
     }
@@ -313,6 +404,25 @@ void ConvertADMToZ4cAndConstraints(MeshBlockPack *pmbp, ParameterInput *pin,
                 << std::endl;
       std::exit(EXIT_FAILURE);
   }
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  const int is = indcs.is;
+  const int ie = indcs.ie;
+  const int js = indcs.js;
+  const int je = indcs.je;
+  const int ks = indcs.ks;
+  const int ke = indcs.ke;
+  const int nmb = pmbp->nmb_thispack;
+  auto &adm_vars = pmbp->padm->adm;
+  auto &z4c_vars = pmbp->pz4c->z4c;
+  par_for("critical_kerr_sync_gauge", DevExeSpace(), 0, nmb - 1,
+          ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    z4c_vars.alpha(m,k,j,i) = adm_vars.alpha(m,k,j,i);
+    for (int a = 0; a < 3; ++a) {
+      z4c_vars.beta_u(m,a,k,j,i) = adm_vars.beta_u(m,a,k,j,i);
+      z4c_vars.vB_d(m,a,k,j,i) = 0.0;
+    }
+  });
   pmbp->pz4c->Z4cToADM(pmbp);
 }
 
@@ -330,15 +440,32 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (!pmy_mesh_->three_d) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+              << __LINE__ << std::endl
+              << "z4c_critical_kerr_formation is a 3D helical free-data "
+              << "construction and requires a 3D mesh." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   const CriticalKerrOptions options = ReadOptions(pin);
+  std::string id_formulation = pin->GetOrAddString("id_solve", "formulation", "cts");
+  if (id_formulation == "ctt") id_formulation = "ctt_bowen_york";
+  if (id_formulation != options.constraint_formulation) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+              << __LINE__ << std::endl
+              << "<problem>/constraint_formulation=" << options.constraint_formulation
+              << " does not match <id_solve>/formulation=" << id_formulation
+              << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   FillCriticalKerrFreeDataADM(pmbp, options);
   if (options.use_precollapsed_lapse) {
     pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
   }
   ConvertADMToZ4cAndConstraints(pmbp, pin, pmbp->pz4c->opt.fd_stencil);
 
-  std::cout << "Initialized critical Kerr conformal CTS free data. "
+  std::cout << "Initialized AthenaK-native critical Kerr CTS free data. "
             << "Native <id_solve> will solve the constraints before Z4c evolution."
             << std::endl;
 }

@@ -418,7 +418,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
         if (pmesh->pmb_pack->pid_solve != nullptr &&
             pmesh->pmb_pack->pid_solve->StopAfterSolveRequested()) {
           if (global_variable::my_rank == 0) {
-            std::cout << "Stopping after hyperbolic CTT id_solve; Z4c "
+            std::cout << "Stopping after hyperbolic id_solve; Z4c "
                       << "evolution was not advanced." << std::endl;
           }
           nlim = pmesh->ncycle;

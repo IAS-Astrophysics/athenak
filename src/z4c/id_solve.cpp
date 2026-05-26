@@ -45,6 +45,23 @@ int SymIdx(int a, int b) {
   return 5;
 }
 
+IDConstraintFormulation ParseIDFormulation(const std::string &raw,
+                                           std::string *canonical) {
+  if (raw == "ctt" || raw == "ctt_bowen_york" || raw == "bowen_york") {
+    if (canonical != nullptr) *canonical = "ctt_bowen_york";
+    return IDConstraintFormulation::CTTBowenYork;
+  }
+  if (raw == "cts") {
+    if (canonical != nullptr) *canonical = "cts";
+    return IDConstraintFormulation::CTS;
+  }
+  std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+            << "Unsupported <id_solve>/formulation='" << raw
+            << "'. Supported values are ctt_bowen_york, ctt, and cts."
+            << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
 // SYCL/PVC portability: take centre, momentum, spin as scalar arguments rather
 // than as small captured arrays.  Some SYCL+icpx revisions on Aurora reject
 // passing fixed-size Real[3] arrays from a KOKKOS_LAMBDA into an inlined
@@ -55,7 +72,7 @@ void AddBowenYorkAhat(Real xx, Real yy, Real zz,
                       Real xp0, Real xp1, Real xp2,
                       Real p0, Real p1, Real p2,
                       Real s0, Real s1, Real s2,
-                      Real a[3][3]) {
+                      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &a) {
   Real rx = xx - xp0;
   Real ry = yy - xp1;
   Real rz = zz - xp2;
@@ -70,17 +87,20 @@ void AddBowenYorkAhat(Real xx, Real yy, Real zz,
   Real sxn0 = s1*nz - s2*ny;
   Real sxn1 = s2*nx - s0*nz;
   Real sxn2 = s0*ny - s1*nx;
-  Real n_arr[3]   = {nx, ny, nz};
-  Real p_arr[3]   = {p0, p1, p2};
-  Real sxn_arr[3] = {sxn0, sxn1, sxn2};
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> n_arr;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> p_arr;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> sxn_arr;
+  n_arr(0) = nx; n_arr(1) = ny; n_arr(2) = nz;
+  p_arr(0) = p0; p_arr(1) = p1; p_arr(2) = p2;
+  sxn_arr(0) = sxn0; sxn_arr(1) = sxn1; sxn_arr(2) = sxn2;
   Real inv_r2  = 1.0/r2_safe;
   Real inv_r3  = inv_r2/r;
   for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
+    for (int j = i; j < 3; ++j) {
       Real delta = (i == j) ? 1.0 : 0.0;
-      a[i][j] += 1.5*inv_r2*
-          (p_arr[i]*n_arr[j] + p_arr[j]*n_arr[i] - (delta - n_arr[i]*n_arr[j])*pdotn);
-      a[i][j] += 3.0*inv_r3*(n_arr[i]*sxn_arr[j] + n_arr[j]*sxn_arr[i]);
+      a(i,j) += 1.5*inv_r2*
+          (p_arr(i)*n_arr(j) + p_arr(j)*n_arr(i) - (delta - n_arr(i)*n_arr(j))*pdotn);
+      a(i,j) += 3.0*inv_r3*(n_arr(i)*sxn_arr(j) + n_arr(j)*sxn_arr(i));
     }
   }
 }
@@ -103,6 +123,305 @@ Real HamiltonianResidual(const IDConformalThinSandwich::RelaxVars &relax,
   Real psi4 = psi2*psi2;
   Real psi7 = psi4*psi2*psi;
   return lap + 0.125*free.ahat2(m,k,j,i)/psi7;
+}
+
+KOKKOS_INLINE_FUNCTION
+void MetricInverse(const IDConformalThinSandwich::FreeVars &free,
+                   int m, int k, int j, int i,
+                   AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &g_uu) {
+  Real det = adm::SpatialDet(free.cts_g_dd(m,0,0,k,j,i),
+                             free.cts_g_dd(m,0,1,k,j,i),
+                             free.cts_g_dd(m,0,2,k,j,i),
+                             free.cts_g_dd(m,1,1,k,j,i),
+                             free.cts_g_dd(m,1,2,k,j,i),
+                             free.cts_g_dd(m,2,2,k,j,i));
+  Real det_safe = (fabs(det) < static_cast<Real>(1.0e-30)) ?
+                  ((det < 0.0) ? static_cast<Real>(-1.0e-30)
+                               : static_cast<Real>(1.0e-30)) : det;
+  Real detinv = 1.0/det_safe;
+  adm::SpatialInv(detinv,
+                  free.cts_g_dd(m,0,0,k,j,i),
+                  free.cts_g_dd(m,0,1,k,j,i),
+                  free.cts_g_dd(m,0,2,k,j,i),
+                  free.cts_g_dd(m,1,1,k,j,i),
+                  free.cts_g_dd(m,1,2,k,j,i),
+                  free.cts_g_dd(m,2,2,k,j,i),
+                  &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                  &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+}
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+void Christoffel(const IDConformalThinSandwich::FreeVars &free,
+                 const Real idx[3], int m, int k, int j, int i,
+                 AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> &gamma) {
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+  MetricInverse(free, m, k, j, i, g_uu);
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg;
+  for (int c = 0; c < 3; ++c) {
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        dg(c,a,b) = Dx<NGHOST>(c, idx, free.cts_g_dd, m, a, b, k, j, i);
+      }
+    }
+  }
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      for (int c = 0; c < 3; ++c) {
+        gamma(c,a,b) = 0.0;
+        for (int d = 0; d < 3; ++d) {
+          gamma(c,a,b) += 0.5*g_uu(c,d)*
+              (dg(a,b,d) + dg(b,a,d) - dg(d,a,b));
+        }
+      }
+    }
+  }
+}
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+Real RicciScalar(const IDConformalThinSandwich::FreeVars &free,
+                 const Real idx[3], int m, int k, int j, int i) {
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+  MetricInverse(free, m, k, j, i, g_uu);
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg;
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> gamma_d;
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> gamma_u;
+  AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg;
+  for (int c = 0; c < 3; ++c)
+    for (int a = 0; a < 3; ++a)
+      for (int b = a; b < 3; ++b)
+        dg(c,a,b) = Dx<NGHOST>(c, idx, free.cts_g_dd, m, a, b, k, j, i);
+  for (int a = 0; a < 3; ++a)
+    for (int b = a; b < 3; ++b)
+      for (int c = 0; c < 3; ++c)
+        for (int d = c; d < 3; ++d)
+          ddg(a,b,c,d) = (a == b)
+              ? Dxx<NGHOST>(a, idx, free.cts_g_dd, m, c, d, k, j, i)
+              : Dxy<NGHOST>(a, b, idx, free.cts_g_dd, m, c, d, k, j, i);
+  for (int c = 0; c < 3; ++c)
+    for (int a = 0; a < 3; ++a)
+      for (int b = 0; b < 3; ++b) {
+        gamma_d(c,a,b) = 0.5*(dg(a,b,c) + dg(b,a,c) - dg(c,a,b));
+        gamma_u(c,a,b) = 0.0;
+        for (int d = 0; d < 3; ++d) gamma_u(c,a,b) += g_uu(c,d)*gamma_d(d,a,b);
+      }
+  Real R = 0.0;
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      Real R_ab = 0.0;
+      for (int c = 0; c < 3; ++c) {
+        for (int d = 0; d < 3; ++d) {
+          for (int e = 0; e < 3; ++e) {
+            R_ab += g_uu(c,d)*gamma_u(e,a,c)*gamma_d(e,b,d);
+            R_ab -= g_uu(c,d)*gamma_u(e,a,b)*gamma_d(e,c,d);
+          }
+          R_ab += 0.5*g_uu(c,d)*
+              (-ddg(c,d,a,b) - ddg(a,b,c,d) +
+                ddg(a,c,b,d) + ddg(b,c,a,d));
+        }
+      }
+      R += g_uu(a,b)*R_ab;
+    }
+  }
+  return R;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real TotalBeta(const IDConformalThinSandwich::RelaxVars &relax,
+               const IDConformalThinSandwich::FreeVars &free,
+               int a, int m, int k, int j, int i) {
+  return free.cts_base_beta_u(m,a,k,j,i) + relax.corr(m,a+1,k,j,i);
+}
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+void AhatUUAt(const IDConformalThinSandwich::RelaxVars &relax,
+              const IDConformalThinSandwich::FreeVars &free,
+              const Real idx[3], int m, int k, int j, int i,
+              AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> &ahat) {
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> gamma;
+  MetricInverse(free, m, k, j, i, g_uu);
+  Christoffel<NGHOST>(free, idx, m, k, j, i, gamma);
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> beta;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta;
+  for (int a = 0; a < 3; ++a) {
+    beta(a) = TotalBeta(relax, free, a, m, k, j, i);
+    for (int d = 0; d < 3; ++d) {
+      dbeta(d,a) = Dx<NGHOST>(d, idx, free.cts_base_beta_u, m, a, k, j, i) +
+                    Dx<NGHOST>(d, idx, relax.corr, m, a+1, k, j, i);
+    }
+  }
+  Real div_beta = 0.0;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> covd_beta;
+  for (int d = 0; d < 3; ++d) {
+    for (int a = 0; a < 3; ++a) {
+      covd_beta(d,a) = dbeta(d,a);
+      for (int e = 0; e < 3; ++e) covd_beta(d,a) += gamma(a,d,e)*beta(e);
+    }
+    div_beta += covd_beta(d,d);
+  }
+  Real alpha = fmax(free.cts_alpha(m,k,j,i), static_cast<Real>(1.0e-12));
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) {
+      Real Daup_b = 0.0;
+      Real Dbup_a = 0.0;
+      for (int c = 0; c < 3; ++c) {
+        Daup_b += g_uu(a,c)*covd_beta(c,b);
+        Dbup_a += g_uu(b,c)*covd_beta(c,a);
+      }
+      Real Lbeta = Daup_b + Dbup_a - (2.0/3.0)*g_uu(a,b)*div_beta;
+      ahat(a,b) = (Lbeta - free.cts_udot_uu(m,a,b,k,j,i))/(2.0*alpha);
+    }
+  }
+}
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+Real D2Beta(const IDConformalThinSandwich::RelaxVars &relax,
+            const IDConformalThinSandwich::FreeVars &free,
+            const Real idx[3], int dir0, int dir1, int a,
+            int m, int k, int j, int i) {
+  Real out = 0.0;
+  if (dir0 == dir1) {
+    out = Dxx<NGHOST>(dir0, idx, free.cts_base_beta_u, m, a, k, j, i) +
+          Dxx<NGHOST>(dir0, idx, relax.corr, m, a+1, k, j, i);
+  } else {
+    out = Dxy<NGHOST>(dir0, dir1, idx, free.cts_base_beta_u, m, a, k, j, i) +
+          Dxy<NGHOST>(dir0, dir1, idx, relax.corr, m, a+1, k, j, i);
+  }
+  return out;
+}
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+Real D2Metric(const IDConformalThinSandwich::FreeVars &free,
+              const Real idx[3], int dir0, int dir1, int a, int b,
+              int m, int k, int j, int i) {
+  return (dir0 == dir1)
+      ? Dxx<NGHOST>(dir0, idx, free.cts_g_dd, m, a, b, k, j, i)
+      : Dxy<NGHOST>(dir0, dir1, idx, free.cts_g_dd, m, a, b, k, j, i);
+}
+
+template <int NGHOST>
+KOKKOS_INLINE_FUNCTION
+Real PartialDivergenceAhatUU(const IDConformalThinSandwich::RelaxVars &relax,
+                             const IDConformalThinSandwich::FreeVars &free,
+                             const Real idx[3], int a,
+                             int m, int k, int j, int i) {
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> gamma;
+  MetricInverse(free, m, k, j, i, g_uu);
+  Christoffel<NGHOST>(free, idx, m, k, j, i, gamma);
+
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> beta;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta;
+  AthenaPointTensor<Real, TensorSymm::ISYM2, 3, 3> d2beta;
+  for (int c = 0; c < 3; ++c) {
+    beta(c) = TotalBeta(relax, free, c, m, k, j, i);
+    for (int d = 0; d < 3; ++d) {
+      dbeta(d,c) = Dx<NGHOST>(d, idx, free.cts_base_beta_u, m, c, k, j, i) +
+                    Dx<NGHOST>(d, idx, relax.corr, m, c+1, k, j, i);
+      for (int e = d; e < 3; ++e) {
+        d2beta(d,e,c) = D2Beta<NGHOST>(relax, free, idx, d, e, c,
+                                         m, k, j, i);
+      }
+    }
+  }
+
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg;
+  AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> d2g;
+  for (int d = 0; d < 3; ++d) {
+    for (int p = 0; p < 3; ++p) {
+      for (int q = p; q < 3; ++q) {
+        dg(d,p,q) = Dx<NGHOST>(d, idx, free.cts_g_dd, m, p, q, k, j, i);
+        for (int e = d; e < 3; ++e) {
+          d2g(d,e,p,q) = D2Metric<NGHOST>(free, idx, d, e, p, q,
+                                             m, k, j, i);
+        }
+      }
+    }
+  }
+
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_uu;
+  for (int d = 0; d < 3; ++d) {
+    for (int p = 0; p < 3; ++p) {
+      for (int q = p; q < 3; ++q) {
+        dg_uu(d,p,q) = 0.0;
+        for (int r = 0; r < 3; ++r)
+          for (int s = 0; s < 3; ++s)
+            dg_uu(d,p,q) -= g_uu(p,r)*g_uu(q,s)*dg(d,r,s);
+      }
+    }
+  }
+
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 4> dgamma;
+  for (int d = 0; d < 3; ++d) {
+    for (int up = 0; up < 3; ++up) {
+      for (int p = 0; p < 3; ++p) {
+        for (int q = 0; q < 3; ++q) {
+          dgamma(d,up,p,q) = 0.0;
+          for (int r = 0; r < 3; ++r) {
+            Real s0 = dg(p,q,r) + dg(q,p,r) - dg(r,p,q);
+            Real ds0 = d2g(d,p,q,r) + d2g(d,q,p,r)
+                     - d2g(d,r,p,q);
+            dgamma(d,up,p,q) +=
+                0.5*(dg_uu(d,up,r)*s0 + g_uu(up,r)*ds0);
+          }
+        }
+      }
+    }
+  }
+
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> covd_beta;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 3> dcovd_beta;
+  for (int d = 0; d < 3; ++d) {
+    for (int c = 0; c < 3; ++c) {
+      covd_beta(d,c) = dbeta(d,c);
+      for (int e = 0; e < 3; ++e) {
+        covd_beta(d,c) += gamma(c,d,e)*beta(e);
+      }
+      for (int b = 0; b < 3; ++b) {
+        dcovd_beta(b,d,c) = d2beta(b,d,c);
+        for (int e = 0; e < 3; ++e) {
+          dcovd_beta(b,d,c) += dgamma(b,c,d,e)*beta(e)
+                               + gamma(c,d,e)*dbeta(b,e);
+        }
+      }
+    }
+  }
+
+  Real div_beta = 0.0;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> ddiv_beta;
+  ddiv_beta.ZeroClear();
+  for (int d = 0; d < 3; ++d) {
+    div_beta += covd_beta(d,d);
+    for (int b = 0; b < 3; ++b) ddiv_beta(b) += dcovd_beta(b,d,d);
+  }
+
+  Real alpha = fmax(free.cts_alpha(m,k,j,i), static_cast<Real>(1.0e-12));
+  Real inv_two_alpha = 0.5/alpha;
+  Real divA = 0.0;
+  for (int b = 0; b < 3; ++b) {
+    Real s_ab = -free.cts_udot_uu(m,a,b,k,j,i);
+    Real ds_ab = -Dx<NGHOST>(b, idx, free.cts_udot_uu, m, a, b, k, j, i);
+    for (int c = 0; c < 3; ++c) {
+      s_ab += g_uu(a,c)*covd_beta(c,b)
+            + g_uu(b,c)*covd_beta(c,a);
+      ds_ab += dg_uu(b,a,c)*covd_beta(c,b)
+             + g_uu(a,c)*dcovd_beta(b,c,b)
+             + dg_uu(b,b,c)*covd_beta(c,a)
+             + g_uu(b,c)*dcovd_beta(b,c,a);
+    }
+    s_ab -= (2.0/3.0)*g_uu(a,b)*div_beta;
+    ds_ab -= (2.0/3.0)*(dg_uu(b,a,b)*div_beta
+                       + g_uu(a,b)*ddiv_beta(b));
+    Real dalpha = Dx<NGHOST>(b, idx, free.cts_alpha, m, k, j, i);
+    divA += inv_two_alpha*ds_ab
+          - inv_two_alpha*s_ab*dalpha/alpha;
+  }
+  return divA;
 }
 
 template <typename ViewType>
@@ -239,23 +558,39 @@ RegionSize MeshBlockRegion(const Mesh *pmesh, int gid) {
 IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
                                                  ParameterInput *pin)
     : pmy_pack_(pmbp), pbval_relax_(nullptr), enabled_(true), solved_(false),
-      history_file_(nullptr) {
+      history_file_(nullptr), formulation_(IDConstraintFormulation::CTTBowenYork),
+      formulation_name_("ctt_bowen_york"), nactive_vars_(1) {
   enabled_ = pin->GetOrAddBoolean("id_solve", "enable", true);
   std::string method = pin->GetOrAddString("id_solve", "method", "hyperbolic_relaxation");
   std::string formulation = pin->GetOrAddString("id_solve", "formulation", "ctt");
-  if (method != "hyperbolic_relaxation" || formulation != "ctt") {
+  if (method != "hyperbolic_relaxation") {
     std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
-              << "This branch supports only <id_solve>/method=hyperbolic_relaxation "
-              << "and formulation=ctt." << std::endl;
+              << "This branch supports only <id_solve>/method=hyperbolic_relaxation."
+              << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  formulation_ = ParseIDFormulation(formulation, &formulation_name_);
+  if (pin->DoesParameterExist("problem", "constraint_formulation")) {
+    std::string pgen_formulation_name;
+    (void) ParseIDFormulation(pin->GetString("problem", "constraint_formulation"),
+                              &pgen_formulation_name);
+    if (pgen_formulation_name != formulation_name_) {
+      std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+                << "<problem>/constraint_formulation=" << pgen_formulation_name
+                << " does not match <id_solve>/formulation="
+                << formulation_name_ << "." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  nactive_vars_ = (formulation_ == IDConstraintFormulation::CTS) ? 4 : 1;
 
   solve_once_ = pin->GetOrAddBoolean("id_solve", "solve_once", true);
   run_on_restart_ = pin->GetOrAddBoolean("id_solve", "run_on_restart", false);
   stop_after_solve_ = pin->GetOrAddBoolean("id_solve", "stop_after_solve", false);
   skip_initial_output_ = pin->GetOrAddBoolean("id_solve", "skip_initial_output",
                                               stop_after_solve_);
-  reject_worse_ = pin->GetOrAddBoolean("id_solve", "reject_worse", true);
+  abort_on_reject_ = pin->GetOrAddBoolean("id_solve", "abort_on_reject",
+                                          formulation_ == IDConstraintFormulation::CTS);
   stop_on_growth_ = pin->GetOrAddBoolean("id_solve", "stop_on_growth", true);
   growth_window_ = std::max(1, pin->GetOrAddInteger("id_solve", "growth_window", 10));
   growth_start_iter_ = std::max(0, pin->GetOrAddInteger("id_solve", "growth_start_iter",
@@ -264,21 +599,57 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
   history_every_ = std::max(1, pin->GetOrAddInteger("id_solve", "history_every", 10));
   tolerance_ = pin->GetOrAddReal("id_solve", "tolerance", 1.0e-8);
   growth_tolerance_ = pin->GetOrAddReal("id_solve", "growth_tolerance", 0.01);
-  relax_cfl_ = pin->GetOrAddReal("id_solve", "relax_cfl", 0.7);
+  Real default_relax_cfl = (formulation_ == IDConstraintFormulation::CTS) ? 0.01 : 0.7;
+  relax_cfl_ = pin->GetOrAddReal("id_solve", "relax_cfl", default_relax_cfl);
+  if (!(relax_cfl_ > 0.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/relax_cfl must be positive." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   eta_ = pin->GetOrAddReal("id_solve", "eta", 12.5);
-  Real raw_diss = pin->GetOrAddReal("id_solve", "diss", pmbp->pz4c->opt.diss);
-  int fd_stencil = pmbp->pz4c->opt.fd_stencil;
-  diss_ = raw_diss*std::pow(2.0, -2.0*fd_stencil)*
-          ((fd_stencil % 2 == 0) ? -1.0 : 1.0);
+  if (eta_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta must be non-negative." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  damping_stability_limit_ =
+      pin->GetOrAddReal("id_solve", "damping_stability_limit", 2.0);
+  if (!(damping_stability_limit_ > 0.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/damping_stability_limit must be positive."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::string damping_form =
+      pin->GetOrAddString("id_solve", "damping_form", "nrpy");
+  if (damping_form == "paper") {
+    damp_velocity_ = true;
+  } else if (damping_form == "nrpy") {
+    damp_velocity_ = false;
+  } else {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "Supported <id_solve>/damping_form values are paper and nrpy."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   std::string block = "problem";
   Real b = pin->GetOrAddReal(block, "par_b", 1.0);
   bare_mass_[0] = pin->GetOrAddReal(block, "par_m_plus", 1.0);
   bare_mass_[1] = pin->GetOrAddReal(block, "par_m_minus", 1.0);
-  Real default_excision_radius = 0.5*std::min(bare_mass_[0], bare_mass_[1]);
+  Real default_excision_radius = (formulation_ == IDConstraintFormulation::CTS) ?
+                                 0.0 : 0.5*std::min(bare_mass_[0], bare_mass_[1]);
   residual_excision_radius_ = pin->GetOrAddReal("id_solve", "residual_excision_radius",
                                                 default_excision_radius);
   wavespeed_scale_ = pin->GetOrAddReal("id_solve", "wavespeed_scale", 1.0);
-  wavespeed_mode_ = pin->GetOrAddString("id_solve", "wavespeed_mode", "smooth_box");
+  if (!(wavespeed_scale_ > 0.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/wavespeed_scale must be positive." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::string default_wavespeed_mode =
+      (formulation_ == IDConstraintFormulation::CTS) ? "local_dx" : "smooth_box";
+  wavespeed_mode_ = pin->GetOrAddString("id_solve", "wavespeed_mode",
+                                        default_wavespeed_mode);
   if (wavespeed_mode_ != "local_dx" && wavespeed_mode_ != "smooth_box") {
     std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
               << "Supported <id_solve>/wavespeed_mode values are local_dx and "
@@ -323,14 +694,33 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
     Kokkos::realloc(coarse_u_relax, nmb, ID_RELAX_NVAR, nccells3, nccells2, nccells1);
   }
 
-  relax_.u.InitWithShallowSlice(u_relax, ID_RELAX_U);
-  relax_.v.InitWithShallowSlice(u_relax, ID_RELAX_V);
-  rhs_.u.InitWithShallowSlice(u_rhs, ID_RELAX_U);
-  rhs_.v.InitWithShallowSlice(u_rhs, ID_RELAX_V);
+  relax_.u.InitWithShallowSlice(u_relax, ID_RELAX_DPSI);
+  relax_.v.InitWithShallowSlice(u_relax, ID_RELAX_VDPSI);
+  relax_.corr.InitWithShallowSlice(u_relax, ID_RELAX_DPSI, ID_RELAX_BETAZ);
+  relax_.vel.InitWithShallowSlice(u_relax, ID_RELAX_VDPSI, ID_RELAX_VBETAZ);
+  rhs_.u.InitWithShallowSlice(u_rhs, ID_RELAX_DPSI);
+  rhs_.v.InitWithShallowSlice(u_rhs, ID_RELAX_VDPSI);
+  rhs_.corr.InitWithShallowSlice(u_rhs, ID_RELAX_DPSI, ID_RELAX_BETAZ);
+  rhs_.vel.InitWithShallowSlice(u_rhs, ID_RELAX_VDPSI, ID_RELAX_VBETAZ);
   free_.psi_singular.InitWithShallowSlice(u_free, ID_RELAX_PSI_SINGULAR);
   free_.ahat2.InitWithShallowSlice(u_free, ID_RELAX_AHAT2);
-  free_.residual.InitWithShallowSlice(u_free, ID_RELAX_RESIDUAL);
+  free_.residual.InitWithShallowSlice(u_free, ID_RELAX_RESIDUAL_PSI);
+  free_.residual_u.InitWithShallowSlice(u_free, ID_RELAX_RESIDUAL_PSI,
+                                        ID_RELAX_RESIDUAL_BETAZ);
   free_.wavespeed.InitWithShallowSlice(u_free, ID_RELAX_WAVESPEED);
+  free_.cts_g_dd.InitWithShallowSlice(u_free, ID_RELAX_CTS_GXX,
+                                      ID_RELAX_CTS_GZZ);
+  free_.cts_udot_uu.InitWithShallowSlice(u_free, ID_RELAX_CTS_UDOTXX,
+                                         ID_RELAX_CTS_UDOTZZ);
+  free_.cts_ahat_uu.InitWithShallowSlice(u_free, ID_RELAX_CTS_AHATXX,
+                                         ID_RELAX_CTS_AHATZZ);
+  free_.cts_alpha.InitWithShallowSlice(u_free, ID_RELAX_CTS_ALPHA);
+  free_.cts_K.InitWithShallowSlice(u_free, ID_RELAX_CTS_K);
+  free_.cts_DK_u.InitWithShallowSlice(u_free, ID_RELAX_CTS_DKX,
+                                      ID_RELAX_CTS_DKZ);
+  free_.cts_base_psi.InitWithShallowSlice(u_free, ID_RELAX_CTS_BASE_PSI);
+  free_.cts_base_beta_u.InitWithShallowSlice(u_free, ID_RELAX_CTS_BASE_BETAX,
+                                             ID_RELAX_CTS_BASE_BETAZ);
 
   pbval_relax_ = new MeshBoundaryValuesCC(pmbp, pin, true);
   pbval_relax_->InitializeBuffers(ID_RELAX_NVAR);
@@ -363,7 +753,8 @@ TaskStatus IDConformalThinSandwich::SolveTask(Driver *pdriver, int stage) {
 // ClearRecv, ClearSend, CopyU, CalcRHS, ExpRKUpdate, RestrictU, SendU, RecvU,
 // ApplyPhysicalBCs, Prolongate} but acting on (u_relax, u_relax_tmp, u_rhs,
 // coarse_u_relax) and with Z4c::CalcRHS replaced by the hyperbolic-relaxation
-// RHS (Eq. 21 of NRPyElliptic, arXiv:2111.02424):
+// RHS (Eq. 21 of NRPyElliptic, arXiv:2111.02424, or the velocity-damped
+// paper form selected by <id_solve>/damping_form):
 //     d/dt u = v - eta*u,
 //     d/dt v = c^2 * Hamiltonian_residual(u).
 // Inter-block exchange and AMR restriction/prolongation are the same
@@ -439,14 +830,24 @@ TaskStatus IDConformalThinSandwich::CalcRHS(Driver *pdrive, int stage) {
   auto &rhs = u_rhs;
   auto free = free_;
   Real eta = eta_;
+  int nactive = nactive_vars_;
+  bool damp_velocity = damp_velocity_;
   par_for("IDCTT::CalcRHS", DevExeSpace(),
-          0, nmb1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+          0, nmb1, 0, ID_RELAX_NVAR-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     Real c   = free.wavespeed(m,k,j,i);
-    Real u_t = u0(m, ID_RELAX_U, k,j,i);
-    Real v_t = u0(m, ID_RELAX_V, k,j,i);
-    rhs(m, ID_RELAX_U, k,j,i) = v_t - eta*u_t;
-    rhs(m, ID_RELAX_V, k,j,i) = c*c*free.residual(m,k,j,i);
+    if (n < nactive) {
+      Real u_t = u0(m, n, k,j,i);
+      Real v_t = u0(m, ID_RELAX_VDPSI + n, k,j,i);
+      rhs(m, n, k,j,i) = damp_velocity ? v_t : v_t - eta*u_t;
+    } else if (n >= ID_RELAX_VDPSI && n < ID_RELAX_VDPSI + nactive) {
+      int q = n - ID_RELAX_VDPSI;
+      Real residual_drive = c*c*free.residual_u(m,q,k,j,i);
+      rhs(m, n, k,j,i) =
+          damp_velocity ? residual_drive - eta*u0(m,n,k,j,i) : residual_drive;
+    } else {
+      rhs(m, n, k,j,i) = 0.0;
+    }
   });
   ApplyKODissipation<NGHOST>();
   ApplySommerfeldRHS();
@@ -455,7 +856,8 @@ TaskStatus IDConformalThinSandwich::CalcRHS(Driver *pdrive, int stage) {
 
 template <int NGHOST>
 void IDConformalThinSandwich::ApplyKODissipation() {
-  if (diss_ == 0.0) return;
+  Real diss = pmy_pack_->pz4c->diss;
+  if (diss == 0.0) return;
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
   auto &size = pmy_pack_->pmb->mb_size;
   int is = indcs.is, ie = indcs.ie;
@@ -464,7 +866,6 @@ void IDConformalThinSandwich::ApplyKODissipation() {
   int nmb1 = pmy_pack_->nmb_thispack - 1;
   auto &u0 = u_relax;
   auto &rhs = u_rhs;
-  Real diss = diss_;
   par_for("IDCTT::KODissipation", DevExeSpace(),
           0, nmb1, 0, ID_RELAX_NVAR-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
@@ -765,7 +1166,18 @@ TaskStatus IDConformalThinSandwich::Prolongate(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
-void IDConformalThinSandwich::BuildCTTFreeData() {
+void IDConformalThinSandwich::BuildFreeData() {
+  if (formulation_ == IDConstraintFormulation::CTS) {
+    int fd = pmy_pack_->pz4c->opt.fd_stencil;
+    if (fd == 2) BuildCTSFreeData<2>();
+    else if (fd == 3) BuildCTSFreeData<3>();
+    else BuildCTSFreeData<4>();
+  } else {
+    BuildCTTBowenYorkFreeData();
+  }
+}
+
+void IDConformalThinSandwich::BuildCTTBowenYorkFreeData() {
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
   auto &size = pmy_pack_->pmb->mb_size;
   int isg = indcs.is - indcs.ng, ieg = indcs.ie + indcs.ng;
@@ -784,7 +1196,7 @@ void IDConformalThinSandwich::BuildCTTFreeData() {
   Real s0_0 = spin_[0][0], s0_1 = spin_[0][1], s0_2 = spin_[0][2];
   Real s1_0 = spin_[1][0], s1_1 = spin_[1][1], s1_2 = spin_[1][2];
 
-  par_for("IDCTT::BuildFreeData", DevExeSpace(), 0, nmb-1, ksg, keg, jsg, jeg, isg, ieg,
+  par_for("IDCTT/BY::BuildFreeData", DevExeSpace(), 0, nmb-1, ksg, keg, jsg, jeg, isg, ieg,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real xx = CellCenterX(i - indcs.is, indcs.nx1, size.d_view(m).x1min,
                           size.d_view(m).x1max);
@@ -797,18 +1209,91 @@ void IDConformalThinSandwich::BuildCTTFreeData() {
     Real r1 = sqrt(fmax(SQR(xx - x1_0) + SQR(yy - x1_1) + SQR(zz - x1_2),
                         static_cast<Real>(1.0e-24)));
     free.psi_singular(m,k,j,i) = 1.0 + 0.5*m0/r0 + 0.5*m1/r1;
-    Real a[3][3];
-    for (int q = 0; q < 3; ++q)
-      for (int r = 0; r < 3; ++r) a[q][r] = 0.0;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> a;
+    a.ZeroClear();
     AddBowenYorkAhat(xx, yy, zz, x0_0, x0_1, x0_2,
                      p0_0, p0_1, p0_2, s0_0, s0_1, s0_2, a);
     AddBowenYorkAhat(xx, yy, zz, x1_0, x1_1, x1_2,
                      p1_0, p1_1, p1_2, s1_0, s1_1, s1_2, a);
     Real ahat2 = 0.0;
     for (int q = 0; q < 3; ++q)
-      for (int r = 0; r < 3; ++r) ahat2 += a[q][r]*a[q][r];
+      for (int r = 0; r < 3; ++r) ahat2 += a(q,r)*a(q,r);
     free.ahat2(m,k,j,i) = ahat2;
     free.residual(m,k,j,i) = 0.0;
+    for (int q = 0; q < 4; ++q) free.residual_u(m,q,k,j,i) = 0.0;
+    for (int q = 0; q < 3; ++q)
+      for (int r = q; r < 3; ++r) free.cts_ahat_uu(m,q,r,k,j,i) = 0.0;
+  });
+}
+
+template <int NGHOST>
+void IDConformalThinSandwich::BuildCTSFreeData() {
+  auto &indcs = pmy_pack_->pmesh->mb_indcs;
+  auto &size = pmy_pack_->pmb->mb_size;
+  (void) size;
+  int isg = indcs.is - indcs.ng, ieg = indcs.ie + indcs.ng;
+  int jsg = indcs.js - indcs.ng, jeg = indcs.je + indcs.ng;
+  int ksg = indcs.ks - indcs.ng, keg = indcs.ke + indcs.ng;
+  int nmb = pmy_pack_->nmb_thispack;
+  auto free = free_;
+  auto &admvars = pmy_pack_->padm->adm;
+
+  par_for("IDCTS::BuildFreeData", DevExeSpace(), 0, nmb-1,
+          ksg, keg, jsg, jeg, isg, ieg,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g;
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        g(a,b) = admvars.g_dd(m,a,b,k,j,i);
+        free.cts_g_dd(m,a,b,k,j,i) = g(a,b);
+      }
+    }
+    Real det = adm::SpatialDet(g(0,0), g(0,1), g(0,2), g(1,1), g(1,2), g(2,2));
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> gi;
+    Real det_safe = (fabs(det) < static_cast<Real>(1.0e-30)) ?
+                    ((det < 0.0) ? static_cast<Real>(-1.0e-30)
+                                 : static_cast<Real>(1.0e-30)) : det;
+    adm::SpatialInv(1.0/det_safe,
+                    g(0,0), g(0,1), g(0,2), g(1,1), g(1,2), g(2,2),
+                    &gi(0,0), &gi(0,1), &gi(0,2),
+                    &gi(1,1), &gi(1,2), &gi(2,2));
+
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> udot_cov;
+    Real tr = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        udot_cov(a,b) = admvars.vK_dd(m,a,b,k,j,i);
+        tr += gi(a,b)*udot_cov(a,b);
+      }
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        udot_cov(a,b) -= (1.0/3.0)*g(a,b)*tr;
+      }
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        Real raised = 0.0;
+        for (int c = 0; c < 3; ++c)
+          for (int d = 0; d < 3; ++d) raised += gi(a,c)*gi(b,d)*udot_cov(c,d);
+        free.cts_udot_uu(m,a,b,k,j,i) = raised;
+      }
+    }
+    free.cts_alpha(m,k,j,i) = fmax(admvars.alpha(m,k,j,i), static_cast<Real>(1.0e-12));
+    free.cts_K(m,k,j,i) = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      free.cts_DK_u(m,a,k,j,i) = 0.0;
+      free.cts_base_beta_u(m,a,k,j,i) = admvars.beta_u(m,a,k,j,i);
+    }
+    for (int q = 0; q < 4; ++q) free.residual_u(m,q,k,j,i) = 0.0;
+    free.cts_base_psi(m,k,j,i) =
+        Kokkos::pow(fmax(admvars.psi4(m,k,j,i), static_cast<Real>(1.0e-40)),
+                    static_cast<Real>(0.25));
+    free.psi_singular(m,k,j,i) = free.cts_base_psi(m,k,j,i);
+    free.ahat2(m,k,j,i) = 0.0;
+    free.residual(m,k,j,i) = 0.0;
+    for (int a = 0; a < 3; ++a)
+      for (int b = a; b < 3; ++b) free.cts_ahat_uu(m,a,b,k,j,i) = 0.0;
   });
 }
 
@@ -896,7 +1381,8 @@ void IDConformalThinSandwich::BuildWaveSpeedProfile(Real dx_min) {
   });
 
   if (global_variable::my_rank == 0) {
-    std::cout << "ID CTT relaxation wave speed mode = " << wavespeed_mode_
+    std::cout << "ID " << formulation_name_ << " relaxation wave speed mode = "
+              << wavespeed_mode_
               << ", levels = " << max_phys_level + 1 << ", radii:";
     for (int lev = 0; lev <= max_phys_level; ++lev) {
       std::cout << " L" << lev << "=" << radii[lev];
@@ -907,6 +1393,15 @@ void IDConformalThinSandwich::BuildWaveSpeedProfile(Real dx_min) {
 
 template <int NGHOST>
 void IDConformalThinSandwich::ComputeResidual() {
+  if (formulation_ == IDConstraintFormulation::CTS) {
+    ComputeCTSResidual<NGHOST>();
+  } else {
+    ComputeCTTBowenYorkResidual<NGHOST>();
+  }
+}
+
+template <int NGHOST>
+void IDConformalThinSandwich::ComputeCTTBowenYorkResidual() {
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
   auto &size = pmy_pack_->pmb->mb_size;
   // Restrict the residual evaluation to the interior cells.  Earlier code
@@ -931,6 +1426,94 @@ void IDConformalThinSandwich::ComputeResidual() {
     free.residual(m,k,j,i) = HamiltonianResidual<NGHOST>(relax, free,
                                                          idx0, idx1, idx2,
                                                          m, k, j, i);
+    free.residual_u(m,0,k,j,i) = free.residual(m,k,j,i);
+    free.residual_u(m,1,k,j,i) = 0.0;
+    free.residual_u(m,2,k,j,i) = 0.0;
+    free.residual_u(m,3,k,j,i) = 0.0;
+  });
+}
+
+template <int NGHOST>
+void IDConformalThinSandwich::ComputeCTSResidual() {
+  auto &indcs = pmy_pack_->pmesh->mb_indcs;
+  auto &size = pmy_pack_->pmb->mb_size;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmy_pack_->nmb_thispack;
+  auto relax = relax_;
+  auto free = free_;
+  par_for("IDCTS::ComputeResidual", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real idx[3] = {1.0/size.d_view(m).dx1,
+                   1.0/size.d_view(m).dx2,
+                   1.0/size.d_view(m).dx3};
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> gamma;
+    MetricInverse(free, m, k, j, i, g_uu);
+    Christoffel<NGHOST>(free, idx, m, k, j, i, gamma);
+
+    Real psi = fmax(free.cts_base_psi(m,k,j,i) + relax.corr(m,0,k,j,i),
+                    kPsiFloor);
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dpsi;
+    for (int a = 0; a < 3; ++a) {
+      dpsi(a) = Dx<NGHOST>(a, idx, relax.corr, m, 0, k, j, i);
+    }
+    Real lap = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        Real dd = (a == b) ? Dxx<NGHOST>(a, idx, relax.corr, m, 0, k, j, i)
+                           : Dxy<NGHOST>(a, b, idx, relax.corr, m, 0, k, j, i);
+        for (int c = 0; c < 3; ++c) dd -= gamma(c,a,b)*dpsi(c);
+        lap += g_uu(a,b)*dd;
+      }
+    }
+
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ahat;
+    AhatUUAt<NGHOST>(relax, free, idx, m, k, j, i, ahat);
+    Real ahat2 = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        free.cts_ahat_uu(m,a,b,k,j,i) = ahat(a,b);
+      }
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = 0; b < 3; ++b) {
+        Real ahat_dd = 0.0;
+        for (int c = 0; c < 3; ++c)
+          for (int d = 0; d < 3; ++d)
+            ahat_dd += free.cts_g_dd(m,a,c,k,j,i)*free.cts_g_dd(m,b,d,k,j,i)*
+                        free.cts_ahat_uu(m,c,d,k,j,i);
+        ahat2 += ahat_dd*free.cts_ahat_uu(m,a,b,k,j,i);
+      }
+    }
+    free.ahat2(m,k,j,i) = ahat2;
+    Real psi2 = psi*psi;
+    Real psi4 = psi2*psi2;
+    Real psi5 = psi4*psi;
+    Real psi6 = psi4*psi2;
+    Real psi7 = psi6*psi;
+    Real K = free.cts_K(m,k,j,i);
+    Real R = RicciScalar<NGHOST>(free, idx, m, k, j, i);
+    Real ham = lap - 0.125*R*psi + 0.125*ahat2/psi7
+             - (1.0/12.0)*K*K*psi5;
+    free.residual_u(m,0,k,j,i) = ham;
+
+    for (int a = 0; a < 3; ++a) {
+      Real divA = PartialDivergenceAhatUU<NGHOST>(relax, free, idx, a,
+                                                  m, k, j, i);
+      for (int b = 0; b < 3; ++b) {
+        for (int c = 0; c < 3; ++c) {
+          divA += gamma(a,b,c)*free.cts_ahat_uu(m,c,b,k,j,i);
+          divA += gamma(b,b,c)*free.cts_ahat_uu(m,a,c,k,j,i);
+        }
+      }
+      free.residual_u(m,a+1,k,j,i) =
+          2.0*divA - (4.0/3.0)*psi6*free.cts_DK_u(m,a,k,j,i);
+    }
+    Real r2 = 0.0;
+    for (int q = 0; q < 4; ++q) r2 += free.residual_u(m,q,k,j,i)*free.residual_u(m,q,k,j,i);
+    free.residual(m,k,j,i) = sqrt(r2);
   });
 }
 
@@ -1019,6 +1602,7 @@ IDConformalThinSandwich::ReduceDiagnostics(Real initial_residual_l2,
   auto free = free_;
   auto u = u_relax;
   auto &size = pmy_pack_->pmb->mb_size;
+  int nactive = nactive_vars_;
   Real x0_0 = pos_[0][0], x0_1 = pos_[0][1], x0_2 = pos_[0][2];
   Real x1_0 = pos_[1][0], x1_1 = pos_[1][1], x1_2 = pos_[1][2];
   Real rex2 = residual_excision_radius_*residual_excision_radius_;
@@ -1040,11 +1624,25 @@ IDConformalThinSandwich::ReduceDiagnostics(Real initial_residual_l2,
       i += is;
 
       Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-      Real r = free.residual(m,k,j,i);
-      Real uu = u(m, ID_RELAX_U, k,j,i);
-      Real vv = u(m, ID_RELAX_V, k,j,i);
-      Real ar = fabs(r);
-      Real av = fabs(vv);
+      Real res_cell2 = 0.0;
+      bool all_finite = true;
+      for (int q = 0; q < nactive; ++q) {
+        Real rq = free.residual_u(m,q,k,j,i);
+        res_cell2 += rq*rq;
+        all_finite = all_finite && IsFiniteReal(rq);
+      }
+      Real ar = sqrt(res_cell2);
+      Real uu2 = 0.0;
+      Real vv2 = 0.0;
+      Real av = 0.0;
+      for (int q = 0; q < nactive; ++q) {
+        Real uq = u(m, q, k,j,i);
+        Real vq = u(m, ID_RELAX_VDPSI + q, k,j,i);
+        uu2 += uq*uq;
+        vv2 += vq*vq;
+        av = fmax(av, fabs(vq));
+        all_finite = all_finite && IsFiniteReal(uq) && IsFiniteReal(vq);
+      }
       Real x = CellCenterX(i - is, nx1, size.d_view(m).x1min,
                            size.d_view(m).x1max);
       Real y = CellCenterX(j - js, nx2, size.d_view(m).x2min,
@@ -1055,21 +1653,20 @@ IDConformalThinSandwich::ReduceDiagnostics(Real initial_residual_l2,
       Real r1_2 = SQR(x - x1_0) + SQR(y - x1_1) + SQR(z - x1_2);
       bool keep = (rex2 <= 0.0) || (r0_2 > rex2 && r1_2 > rex2);
 
-      lres2 += vol*r*r;
-      lu2 += vol*uu*uu;
-      lv2 += vol*vv*vv;
+      lres2 += vol*res_cell2;
+      lu2 += vol*uu2;
+      lv2 += vol*vv2;
       lvol += vol;
       lncell += 1.0;
       lmaxres = fmax(lmaxres, ar);
       if (keep) {
-        lres2_excised += vol*r*r;
+        lres2_excised += vol*res_cell2;
         lvol_excised += vol;
         lncell_excised += 1.0;
         lmaxres_excised = fmax(lmaxres_excised, ar);
       }
       lmaxv = fmax(lmaxv, av);
-      lfinite = fmin(lfinite,
-                     (IsFiniteReal(r) && IsFiniteReal(uu) && IsFiniteReal(vv)) ?
+      lfinite = fmin(lfinite, all_finite ?
                      static_cast<Real>(1.0) : static_cast<Real>(0.0));
     },
     Kokkos::Sum<Real>(res2), Kokkos::Sum<Real>(res2_excised),
@@ -1111,7 +1708,7 @@ IDConformalThinSandwich::ReduceDiagnostics(Real initial_residual_l2,
 }
 
 void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
-  BuildCTTFreeData();
+  BuildFreeData();
   Kokkos::deep_copy(u_relax, 0.0);
   // Pre-step boundary exchange so the very first ComputeResidual<NGHOST>()
   // sees correctly-filled ghost cells of the (zero) initial guess.
@@ -1136,12 +1733,30 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
   MPI_Allreduce(MPI_IN_PLACE, &dx_min, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
 #endif
   // Cache dtau on the class so ExpRKUpdate() picks it up at every stage.
-  dtau_ = relax_cfl_*dx_min/std::max(wavespeed_scale_, static_cast<Real>(1.0e-12));
+  // The wave CFL alone is not sufficient when eta is large: the damping
+  // term is integrated explicitly by the same RK scheme, so eta*dtau must
+  // also remain on the stable real-axis part of the RK stability region.
+  Real wave_dtau = relax_cfl_*dx_min/std::max(wavespeed_scale_,
+                                             static_cast<Real>(1.0e-12));
+  dtau_ = wave_dtau;
+  if (eta_ > 0.0) {
+    Real damp_dtau = damping_stability_limit_/eta_;
+    if (dtau_ > damp_dtau) {
+      dtau_ = damp_dtau;
+      if (global_variable::my_rank == 0) {
+        std::cout << "ID " << formulation_name_
+                  << " relaxation damping stability limited dtau from "
+                  << wave_dtau << " to " << dtau_
+                  << " because eta*dtau would exceed "
+                  << damping_stability_limit_ << "." << std::endl;
+      }
+    }
+  }
   Real dtau = dtau_;
   (void) dtau;
   BuildWaveSpeedProfile(dx_min);
   if (global_variable::my_rank == 0) {
-    std::cout << "ID CTT residual excision radius = "
+    std::cout << "ID " << formulation_name_ << " residual excision radius = "
               << residual_excision_radius_ << std::endl;
   }
 
@@ -1192,7 +1807,8 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
       if (global_variable::my_rank == 0) {
         std::cout << "### FATAL ERROR in IDConformalThinSandwich::SolveRelaxation"
                   << std::endl
-                  << "Non-finite CTT relaxation diagnostics at iter " << iter
+                  << "Non-finite " << formulation_name_
+                  << " relaxation diagnostics at iter " << iter
                   << ": residual_l2 = " << diag.residual_l2
                   << ", residual_max = " << diag.residual_max
                   << ", v_max = " << diag.v_max << std::endl;
@@ -1202,7 +1818,7 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
     if (iter % history_every_ == 0 || iter == 0 || diag.residual_l2 <= tolerance_) {
       RecordHistory(iter, static_cast<Real>(iter)*dtau_, diag);
       if (global_variable::my_rank == 0) {
-        std::cout << "ID CTT relaxation iter " << iter
+        std::cout << "ID " << formulation_name_ << " relaxation iter " << iter
                   << ": residual_l2 = " << diag.residual_l2
                   << ", residual_rel_l2 = " << diag.residual_rel_l2
                   << ", residual_excised_l2 = " << diag.residual_excised_l2
@@ -1246,7 +1862,7 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
       if (stop_on_growth_ && iter >= growth_start_iter_ &&
           all_growing && excised_growing) {
         if (global_variable::my_rank == 0) {
-          std::cout << "ID CTT relaxation stopping at iter " << iter
+          std::cout << "ID " << formulation_name_ << " relaxation stopping at iter " << iter
                     << " because both " << growth_window_
                     << "-step mean residuals grew. all: best = "
                     << best_smoothed_all << " at iter " << best_smoothed_all_iter
@@ -1287,16 +1903,27 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
     }
   }
 
-  if (reject_worse_) {
-    if (fd == 2) ComputeResidual<2>();
-    else if (fd == 3) ComputeResidual<3>();
-    else ComputeResidual<4>();
-    auto final_diag = ReduceDiagnostics(initial, initial_excised);
-    if (!std::isfinite(final_diag.residual_l2) || final_diag.residual_l2 > initial) {
+  if (fd == 2) ComputeResidual<2>();
+  else if (fd == 3) ComputeResidual<3>();
+  else ComputeResidual<4>();
+  auto final_diag = ReduceDiagnostics(initial, initial_excised);
+  if (!std::isfinite(final_diag.residual_l2) || final_diag.residual_l2 > initial) {
+    if (abort_on_reject_) {
+      if (global_variable::my_rank == 0) {
+        std::cout << "### FATAL ERROR in IDConformalThinSandwich::SolveRelaxation"
+                  << std::endl
+                  << "Rejecting " << formulation_name_
+                  << " relaxation result because the residual did not "
+                  << "decrease; abort_on_reject=true prevents silently "
+                  << "continuing with the unsolved seed data." << std::endl;
+      }
+      std::exit(EXIT_FAILURE);
+    } else {
       if (global_variable::my_rank == 0) {
         std::cout << "### WARNING in IDConformalThinSandwich::SolveRelaxation"
                   << std::endl
-                  << "Rejecting CTT relaxation result because the residual did not "
+                  << "Rejecting " << formulation_name_
+                  << " relaxation result because the residual did not "
                   << "decrease." << std::endl;
       }
       Kokkos::deep_copy(u_relax, 0.0);
@@ -1306,6 +1933,14 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
 }
 
 void IDConformalThinSandwich::ApplySolution() {
+  if (formulation_ == IDConstraintFormulation::CTS) {
+    ApplyCTSSolution();
+  } else {
+    ApplyCTTBowenYorkSolution();
+  }
+}
+
+void IDConformalThinSandwich::ApplyCTTBowenYorkSolution() {
   auto &indcs = pmy_pack_->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -1322,7 +1957,7 @@ void IDConformalThinSandwich::ApplySolution() {
   Real s1_0 = spin_[1][0], s1_1 = spin_[1][1], s1_2 = spin_[1][2];
   auto &size = pmy_pack_->pmb->mb_size;
 
-  par_for("IDCTT::ApplySolution", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  par_for("IDCTT/BY::ApplySolution", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real xx = CellCenterX(i - indcs.is, indcs.nx1, size.d_view(m).x1min,
                           size.d_view(m).x1max);
@@ -1343,9 +1978,8 @@ void IDConformalThinSandwich::ApplySolution() {
       }
     }
 
-    Real ahat[3][3];
-    for (int a = 0; a < 3; ++a)
-      for (int b = 0; b < 3; ++b) ahat[a][b] = 0.0;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ahat;
+    ahat.ZeroClear();
     AddBowenYorkAhat(xx, yy, zz, x0_0, x0_1, x0_2,
                      p0_0, p0_1, p0_2, s0_0, s0_1, s0_2, ahat);
     AddBowenYorkAhat(xx, yy, zz, x1_0, x1_1, x1_2,
@@ -1353,13 +1987,92 @@ void IDConformalThinSandwich::ApplySolution() {
     Real invpsi2 = 1.0/psi2;
     for (int a = 0; a < 3; ++a)
       for (int b = a; b < 3; ++b)
-        admvars.vK_dd(m,a,b,k,j,i) = invpsi2*ahat[a][b];
+        admvars.vK_dd(m,a,b,k,j,i) = invpsi2*ahat(a,b);
   });
 
   int fd = pmy_pack_->pz4c->opt.fd_stencil;
   if (fd == 2) pmy_pack_->pz4c->ADMToZ4c<2>(pmy_pack_, nullptr);
   else if (fd == 3) pmy_pack_->pz4c->ADMToZ4c<3>(pmy_pack_, nullptr);
   else pmy_pack_->pz4c->ADMToZ4c<4>(pmy_pack_, nullptr);
+  auto &z4cvars = pmy_pack_->pz4c->z4c;
+  par_for("IDCTT/BY::SyncGaugeToZ4c", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    z4cvars.alpha(m,k,j,i) = admvars.alpha(m,k,j,i);
+    for (int a = 0; a < 3; ++a) {
+      z4cvars.beta_u(m,a,k,j,i) = admvars.beta_u(m,a,k,j,i);
+      z4cvars.vB_d(m,a,k,j,i) = 0.0;
+    }
+  });
+  pmy_pack_->pz4c->Z4cToADM(pmy_pack_);
+}
+
+void IDConformalThinSandwich::ApplyCTSSolution() {
+  auto &indcs = pmy_pack_->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmy_pack_->nmb_thispack;
+  auto rel = relax_;
+  auto free = free_;
+  auto &admvars = pmy_pack_->padm->adm;
+  int fd = pmy_pack_->pz4c->opt.fd_stencil;
+
+  if (fd == 2) ComputeCTSResidual<2>();
+  else if (fd == 3) ComputeCTSResidual<3>();
+  else ComputeCTSResidual<4>();
+
+  par_for("IDCTS::ApplySolution", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real psi = fmax(free.cts_base_psi(m,k,j,i) + rel.corr(m,0,k,j,i),
+                    static_cast<Real>(1.0e-10));
+    Real psi2 = psi*psi;
+    Real psi4 = psi2*psi2;
+    Real psi6 = psi4*psi2;
+    Real detg = adm::SpatialDet(free.cts_g_dd(m,0,0,k,j,i),
+                                free.cts_g_dd(m,0,1,k,j,i),
+                                free.cts_g_dd(m,0,2,k,j,i),
+                                free.cts_g_dd(m,1,1,k,j,i),
+                                free.cts_g_dd(m,1,2,k,j,i),
+                                free.cts_g_dd(m,2,2,k,j,i));
+    admvars.psi4(m,k,j,i) = psi4*Kokkos::pow(fmax(fabs(detg), static_cast<Real>(1.0e-30)),
+                                             static_cast<Real>(1.0/3.0));
+    admvars.alpha(m,k,j,i) = psi6*free.cts_alpha(m,k,j,i);
+    for (int a = 0; a < 3; ++a) {
+      admvars.beta_u(m,a,k,j,i) = free.cts_base_beta_u(m,a,k,j,i) + rel.corr(m,a+1,k,j,i);
+    }
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        admvars.g_dd(m,a,b,k,j,i) = psi4*free.cts_g_dd(m,a,b,k,j,i);
+      }
+    }
+
+    Real invpsi2 = 1.0/psi2;
+    Real K = free.cts_K(m,k,j,i);
+    for (int a = 0; a < 3; ++a) {
+      for (int b = a; b < 3; ++b) {
+        Real ahat_dd = 0.0;
+        for (int c = 0; c < 3; ++c)
+          for (int d = 0; d < 3; ++d)
+            ahat_dd += free.cts_g_dd(m,a,c,k,j,i)*free.cts_g_dd(m,b,d,k,j,i)*
+                        free.cts_ahat_uu(m,c,d,k,j,i);
+        admvars.vK_dd(m,a,b,k,j,i) =
+            invpsi2*ahat_dd + (1.0/3.0)*admvars.g_dd(m,a,b,k,j,i)*K;
+      }
+    }
+  });
+
+  if (fd == 2) pmy_pack_->pz4c->ADMToZ4c<2>(pmy_pack_, nullptr);
+  else if (fd == 3) pmy_pack_->pz4c->ADMToZ4c<3>(pmy_pack_, nullptr);
+  else pmy_pack_->pz4c->ADMToZ4c<4>(pmy_pack_, nullptr);
+  auto &z4cvars = pmy_pack_->pz4c->z4c;
+  par_for("IDCTS::SyncGaugeToZ4c", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    z4cvars.alpha(m,k,j,i) = admvars.alpha(m,k,j,i);
+    for (int a = 0; a < 3; ++a) {
+      z4cvars.beta_u(m,a,k,j,i) = admvars.beta_u(m,a,k,j,i);
+      z4cvars.vB_d(m,a,k,j,i) = 0.0;
+    }
+  });
   pmy_pack_->pz4c->Z4cToADM(pmy_pack_);
 }
 
@@ -1392,6 +2105,15 @@ void IDConformalThinSandwich::RecomputeConstraintsAfterSolve() {
 template void IDConformalThinSandwich::ComputeResidual<2>();
 template void IDConformalThinSandwich::ComputeResidual<3>();
 template void IDConformalThinSandwich::ComputeResidual<4>();
+template void IDConformalThinSandwich::ComputeCTTBowenYorkResidual<2>();
+template void IDConformalThinSandwich::ComputeCTTBowenYorkResidual<3>();
+template void IDConformalThinSandwich::ComputeCTTBowenYorkResidual<4>();
+template void IDConformalThinSandwich::ComputeCTSResidual<2>();
+template void IDConformalThinSandwich::ComputeCTSResidual<3>();
+template void IDConformalThinSandwich::ComputeCTSResidual<4>();
+template void IDConformalThinSandwich::BuildCTSFreeData<2>();
+template void IDConformalThinSandwich::BuildCTSFreeData<3>();
+template void IDConformalThinSandwich::BuildCTSFreeData<4>();
 template TaskStatus IDConformalThinSandwich::CalcRHS<2>(Driver*, int);
 template TaskStatus IDConformalThinSandwich::CalcRHS<3>(Driver*, int);
 template TaskStatus IDConformalThinSandwich::CalcRHS<4>(Driver*, int);

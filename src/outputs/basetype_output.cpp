@@ -26,6 +26,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/id_solve.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "gravity/gravity.hpp"
@@ -199,6 +200,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << "Output of gravity potential requested in <output> block '"
        << out_params.block_name << "' but gravity object not constructed."
        << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar>=176) && (ivar<182) && (pm->pmb_pack->pid_solve == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of id_solve variable requested in <output> block '"
+       << out_params.block_name << "' but no <id_solve> object has been constructed."
+       << std::endl << "Input file is likely missing an <id_solve> block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -645,6 +653,46 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     // gravity potential
     if (variable.compare("grav_phi") == 0) {
       outvars.emplace_back("grav_phi",0,&(pm->pmb_pack->pgrav->phi));
+    }
+
+    if (variable.compare("id_residual_psi") == 0 ||
+        variable.compare("id_residual") == 0) {
+      outvars.emplace_back("id_residual_psi", z4c::ID_RELAX_RESIDUAL_PSI,
+                           &(pm->pmb_pack->pid_solve->u_free));
+    }
+    if (variable.compare("id_residual_betax") == 0 ||
+        variable.compare("id_residual") == 0) {
+      outvars.emplace_back("id_residual_betax", z4c::ID_RELAX_RESIDUAL_BETAX,
+                           &(pm->pmb_pack->pid_solve->u_free));
+    }
+    if (variable.compare("id_residual_betay") == 0 ||
+        variable.compare("id_residual") == 0) {
+      outvars.emplace_back("id_residual_betay", z4c::ID_RELAX_RESIDUAL_BETAY,
+                           &(pm->pmb_pack->pid_solve->u_free));
+    }
+    if (variable.compare("id_residual_betaz") == 0 ||
+        variable.compare("id_residual") == 0) {
+      outvars.emplace_back("id_residual_betaz", z4c::ID_RELAX_RESIDUAL_BETAZ,
+                           &(pm->pmb_pack->pid_solve->u_free));
+    }
+
+    if (variable.compare("id_relax") == 0) {
+      outvars.emplace_back("id_dpsi", z4c::ID_RELAX_DPSI,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_betax", z4c::ID_RELAX_BETAX,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_betay", z4c::ID_RELAX_BETAY,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_betaz", z4c::ID_RELAX_BETAZ,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_vdpsi", z4c::ID_RELAX_VDPSI,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_vbetax", z4c::ID_RELAX_VBETAX,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_vbetay", z4c::ID_RELAX_VBETAY,
+                           &(pm->pmb_pack->pid_solve->u_relax));
+      outvars.emplace_back("id_vbetaz", z4c::ID_RELAX_VBETAZ,
+                           &(pm->pmb_pack->pid_solve->u_relax));
     }
 
     // ADM variables, excluding gauge

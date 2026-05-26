@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 176
+#define NOUTPUT_CHOICES 182
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -115,7 +115,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "torque",
 
   // Gravity (175)
-  "grav_phi"
+  "grav_phi",
+
+  // id_solve relaxation diagnostics (176-181)
+  "id_residual_psi", "id_residual_betax", "id_residual_betay", "id_residual_betaz",
+  "id_residual", "id_relax"
 };
 
 

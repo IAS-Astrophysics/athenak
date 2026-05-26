@@ -16,17 +16,58 @@ class ParameterInput;
 namespace z4c {
 
 enum IDRelaxVar {
-  ID_RELAX_U,
-  ID_RELAX_V,
+  ID_RELAX_DPSI,
+  ID_RELAX_BETAX,
+  ID_RELAX_BETAY,
+  ID_RELAX_BETAZ,
+  ID_RELAX_VDPSI,
+  ID_RELAX_VBETAX,
+  ID_RELAX_VBETAY,
+  ID_RELAX_VBETAZ,
   ID_RELAX_NVAR
 };
 
 enum IDRelaxFreeVar {
   ID_RELAX_PSI_SINGULAR,
   ID_RELAX_AHAT2,
-  ID_RELAX_RESIDUAL,
+  ID_RELAX_RESIDUAL_PSI,
+  ID_RELAX_RESIDUAL_BETAX,
+  ID_RELAX_RESIDUAL_BETAY,
+  ID_RELAX_RESIDUAL_BETAZ,
   ID_RELAX_WAVESPEED,
+  ID_RELAX_CTS_GXX,
+  ID_RELAX_CTS_GXY,
+  ID_RELAX_CTS_GXZ,
+  ID_RELAX_CTS_GYY,
+  ID_RELAX_CTS_GYZ,
+  ID_RELAX_CTS_GZZ,
+  ID_RELAX_CTS_UDOTXX,
+  ID_RELAX_CTS_UDOTXY,
+  ID_RELAX_CTS_UDOTXZ,
+  ID_RELAX_CTS_UDOTYY,
+  ID_RELAX_CTS_UDOTYZ,
+  ID_RELAX_CTS_UDOTZZ,
+  ID_RELAX_CTS_AHATXX,
+  ID_RELAX_CTS_AHATXY,
+  ID_RELAX_CTS_AHATXZ,
+  ID_RELAX_CTS_AHATYY,
+  ID_RELAX_CTS_AHATYZ,
+  ID_RELAX_CTS_AHATZZ,
+  ID_RELAX_CTS_ALPHA,
+  ID_RELAX_CTS_K,
+  ID_RELAX_CTS_DKX,
+  ID_RELAX_CTS_DKY,
+  ID_RELAX_CTS_DKZ,
+  ID_RELAX_CTS_BASE_PSI,
+  ID_RELAX_CTS_BASE_BETAX,
+  ID_RELAX_CTS_BASE_BETAY,
+  ID_RELAX_CTS_BASE_BETAZ,
   ID_RELAX_NFREE
+};
+
+enum class IDConstraintFormulation {
+  CTTBowenYork,
+  CTS
 };
 
 class IDConformalThinSandwich {
@@ -34,13 +75,24 @@ class IDConformalThinSandwich {
   struct RelaxVars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> u;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> v;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> corr;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vel;
   };
 
   struct FreeVars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> psi_singular;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> ahat2;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> residual;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> residual_u;
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> wavespeed;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> cts_g_dd;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> cts_udot_uu;
+    AthenaTensor<Real, TensorSymm::SYM2, 3, 2> cts_ahat_uu;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> cts_alpha;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> cts_K;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> cts_DK_u;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 0> cts_base_psi;
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> cts_base_beta_u;
   };
 
   struct Diagnostics {
@@ -87,8 +139,9 @@ class IDConformalThinSandwich {
   bool run_on_restart_;
   bool stop_after_solve_;
   bool skip_initial_output_;
-  bool reject_worse_;
+  bool abort_on_reject_;
   bool stop_on_growth_;
+  bool damp_velocity_;
   int growth_window_;
   int growth_start_iter_;
   int max_steps_;
@@ -97,7 +150,7 @@ class IDConformalThinSandwich {
   Real growth_tolerance_;
   Real relax_cfl_;
   Real eta_;
-  Real diss_;
+  Real damping_stability_limit_;
   Real residual_excision_radius_;
   Real wavespeed_scale_;
   Real wavespeed_center_[3];
@@ -116,10 +169,18 @@ class IDConformalThinSandwich {
   Real spin_[2][3];
   FILE *history_file_;
   std::string history_name_;
+  IDConstraintFormulation formulation_;
+  std::string formulation_name_;
+  int nactive_vars_;
 
-  void BuildCTTFreeData();
+  void BuildFreeData();
+  void BuildCTTBowenYorkFreeData();
+  template <int NGHOST>
+  void BuildCTSFreeData();
   void BuildWaveSpeedProfile(Real dx_min);
   void ApplySolution();
+  void ApplyCTTBowenYorkSolution();
+  void ApplyCTSSolution();
   void SolveRelaxation(Driver *pdriver);
   void RefreshZ4cBoundariesAfterSolve(Driver *pdriver);
   void RecomputeConstraintsAfterSolve();
@@ -158,6 +219,10 @@ class IDConformalThinSandwich {
   // interior cell.
   template <int NGHOST>
   void ComputeResidual();
+  template <int NGHOST>
+  void ComputeCTTBowenYorkResidual();
+  template <int NGHOST>
+  void ComputeCTSResidual();
 };
 
 } // namespace z4c
