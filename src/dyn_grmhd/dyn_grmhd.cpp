@@ -512,7 +512,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
   auto &eos_ = eos.ps.GetEOS();
   //auto &tmunu = pmy_pack->ptmunu->tmunu;
 
-  // fetch flag for smooth excision and 
+  // fetch flag for smooth excision and
   // excision mask, and target values
   bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
   auto &floor = pmy_pack->pcoord->excision_floor;
@@ -656,10 +656,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       }
     }
 
-    if (smoothing) {
-      rhs(m, IEN, k, j, i) -= dt*vol*floor(m,k,j,i)*(tau - tau_ex)/tdamp;
-    }
-
     // Assemble momentum RHS
     for (int a = 0; a < 3; a++) {
       for (int b = 0; b < 3; b++) {
@@ -669,18 +665,15 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
         rhs(m, IM1+a, k, j, i) += dt*vol*S_d[b]*dbeta_du[a][b];
       }
       rhs(m, IM1+a, k, j, i) -= dt*vol*E*dalpha_d[a];
-      if (smoothing) {
-        rhs(m, IM1+a, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[a])/tdamp;
-      }
     }
 
-    // Assemble density RHS
+    // Assemble damping source terms
     if (smoothing) {
       rhs(m, IDN, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise))/tdamp;
-    }
-
-    // Assemble electron fraction RHS
-    if (smoothing) {
+      rhs(m, IM1, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[0])/tdamp;
+      rhs(m, IM2, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[1])/tdamp;
+      rhs(m, IM3, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[2])/tdamp;
+      rhs(m, IEN, k, j, i) -= dt*vol*floor(m,k,j,i)*(tau - tau_ex)/tdamp;
       for (int s = 0; s < nscal; s++) {
         rhs(m, IYF+s, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise)*prim_pt[PYF+s])/tdamp;
       }

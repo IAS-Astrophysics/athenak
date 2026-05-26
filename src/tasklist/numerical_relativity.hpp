@@ -63,6 +63,7 @@ enum TaskName {
   Z4c_CalcRHS,
   Z4c_SomBC,
   Z4c_ExplRK,
+  Z4c_ChiFloor,
   Z4c_SendU,
   Z4c_RestU,
   Z4c_RecvU,

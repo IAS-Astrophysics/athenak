@@ -61,7 +61,13 @@ void Z4c::QueueZ4cTasks() {
                  {Z4c_CalcRHS});
   pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run,
                  {Z4c_SomBC},{MHD_EField});
-  pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
+  if (pmy_pack->pz4c->opt.floor_chi) {
+    pnr->QueueTask(&Z4c::Z4cFloorChi, this, Z4c_ChiFloor, "Z4c_ChiFloor", Task_Run,
+                   {Z4c_ExplRK});
+    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ChiFloor});
+  } else {
+    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
+  }
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
   pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, {Z4c_RecvU});
@@ -260,7 +266,7 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
 
 TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
-//    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+    pbval_u->FillCoarseInBndryCC(u0, coarse_u0, true);
     pbval_u->ProlongateCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;
@@ -330,6 +336,32 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
       cce_dump_last_output_time = time_32;
     }
   }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c:Z4cFloorChi
+//! \brief Floor chi, to prevent negative propagation.
+TaskStatus Z4c::Z4cFloorChi(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+
+  int nmb = pmy_pack->nmb_thispack;
+
+  auto &z4c = pmy_pack->pz4c->z4c;
+  auto &opt = pmy_pack->pz4c->opt;
+
+  par_for("z4c_floor_chi",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real chi = z4c.chi(m,k,j,i);
+
+    if (!Kokkos::isfinite(chi) || chi < opt.chi_min_floor) {
+      z4c.chi(m,k,j,i) = opt.chi_min_floor;
+    }
+  });
+
   return TaskStatus::complete;
 }
 
