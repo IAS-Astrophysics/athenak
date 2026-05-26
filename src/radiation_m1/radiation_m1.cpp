@@ -127,7 +127,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
     nurates_params.use_iso = pin->GetOrAddBoolean("bns_nurates", "use_iso", true);
     nurates_params.use_inelastic_scatt =
-        pin->GetOrAddBoolean("bns_nurates", "use_inelastic_scatt", true);
+        pin->GetOrAddBoolean("bns_nurates", "use_inelastic_scatt", false);
     nurates_params.use_WM_ab = pin->GetOrAddBoolean("bns_nurates", "use_WM_ab", true);
     nurates_params.use_WM_sc = pin->GetOrAddBoolean("bns_nurates", "use_WM_sc", true);
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
