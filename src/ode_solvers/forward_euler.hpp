@@ -20,7 +20,7 @@ struct FESettings {
   unsigned int fe_n_subcycle_max;
   /// CFL number for the subcycles
   Real fe_cfl;
-  /// The minimum y value of the ODEs allowed
+  /// floor for calculating subcycling timestep
   Real fe_yfloor;
 };
 
@@ -58,7 +58,7 @@ class ForwardEuler {
   /// A small number approximately equal to
   /// 1024*std::numeric_limits<float>::min()
   static constexpr Real small = 1e-35;
-  /// The floor for chemical abundances
+  /// floor for calculating subcycling timestep
   const Real fe_yfloor;
   /// The CFL number for the forward euler subcycling. Lowering this has no
   /// impact on the solution for the H2 network
@@ -108,7 +108,7 @@ class ForwardEuler {
         // calculate chemistry timescale
         dt_subcycle = Kokkos::reduction_identity<Real>::min();
         for (int s_idx = 0; s_idx < ode_system.neqs; s_idx++) {
-          // put floor in species abundance
+          // put floor in y for computing the timestep
           Real const yf = Kokkos::max(ode_system.y(s_idx), fe_yfloor);
 
           // Compute the value to reduce
