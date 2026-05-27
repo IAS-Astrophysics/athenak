@@ -89,10 +89,12 @@ class H2Network {
   }
 
   /*!
-   * \brief Updates `f` using the values in `y`
+   * \brief Evaluate the internal energy equation
+   * 
+   * \return Real The result of evaluating the internal energy equation
    */
   KOKKOS_FUNCTION
-  void evaluate_function() {
+  Real E_dot() {
     // ----- Internal energy equation -----
     static constexpr Real x_He = 0.1;
     static constexpr Real x_e = 0.0;
@@ -103,12 +105,21 @@ class H2Network {
     const Real E_ergs = y(IIE) * units_energy_density_cgs / n_H;
     const Real T = E_ergs / Thermo::CvCold(x_H2, x_He, x_e);
     if (T < T_floor) {
-      f(IIE) = 0;
+      return 0;
     } else {
       const Real dEdt = -Thermo::alpha_GD_ * n_H * Kokkos::sqrt(T) * T;
       // convert to code units
-      f(IIE) = (dEdt * n_H / units_energy_density_cgs);
+      return (dEdt * n_H / units_energy_density_cgs);
     }
+  }
+
+  /*!
+   * \brief Updates `f` using the values in `y`
+   */
+  KOKKOS_FUNCTION
+  void evaluate_function() {
+    // ----- Internal energy equation -----
+    f(IIE) = E_dot();
 
     // ----- Abundance equations -----
     // cr = cosmic ray, gr = dust grain
