@@ -102,19 +102,19 @@ class ForwardEuler {
       // Evaluate the ODEs
       ode_system.evaluate_function();
 
-      // Compute the chemistry time scale
+      // Compute the subcycle timestep
       Real dt_subcycle;
       {
-        // calculate chemistry timescale
+        // loop through the ODE and evaluated values to find the timestep
         dt_subcycle = Kokkos::reduction_identity<Real>::min();
-        for (int s_idx = 0; s_idx < ode_system.neqs; s_idx++) {
+        for (int i = 0; i < ode_system.neqs; i++) {
           // put floor in y for computing the timestep
-          Real const yf = Kokkos::max(ode_system.y(s_idx), fe_yfloor);
+          Real const yf = Kokkos::max(ode_system.y(i), fe_yfloor);
 
           // Compute the value to reduce
           // NOLINTNEXTLINE(build/include_what_you_use)
           dt_subcycle = Kokkos::min(
-              dt_subcycle, Kokkos::abs(yf / (ode_system.f(s_idx) + small)));
+              dt_subcycle, Kokkos::abs(yf / (ode_system.f(i) + small)));
         }
         dt_subcycle = fe_cfl * dt_subcycle;
 
@@ -126,8 +126,8 @@ class ForwardEuler {
 
       // Advance one subcycle
       {
-        for (int s_idx = 0; s_idx < ode_system.neqs; s_idx++) {
-          ode_system.y(s_idx) += ode_system.f(s_idx) * dt_subcycle;
+        for (int i = 0; i < ode_system.neqs; i++) {
+          ode_system.y(i) += ode_system.f(i) * dt_subcycle;
         }
       }
 
