@@ -55,7 +55,6 @@ formulation      = cts
 solve_once       = true
 max_steps        = 40
 relax_cfl        = 0.05
-eta              = 12.5
 stop_after_solve = false
 history_every    = 1
 

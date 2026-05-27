@@ -595,6 +595,10 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
   growth_window_ = std::max(1, pin->GetOrAddInteger("id_solve", "growth_window", 10));
   growth_start_iter_ = std::max(0, pin->GetOrAddInteger("id_solve", "growth_start_iter",
                                                         2*growth_window_));
+  eta_control_max_scans_ =
+      std::max(1, pin->GetOrAddInteger("id_solve", "eta_control_max_scans", 3));
+  eta_control_trigger_count_ =
+      std::max(1, pin->GetOrAddInteger("id_solve", "eta_control_trigger_count", 2));
   max_steps_ = pin->GetOrAddInteger("id_solve", "max_steps", 2000);
   history_every_ = std::max(1, pin->GetOrAddInteger("id_solve", "history_every", 10));
   tolerance_ = pin->GetOrAddReal("id_solve", "tolerance", 1.0e-8);
@@ -606,12 +610,133 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
               << "<id_solve>/relax_cfl must be positive." << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  eta_ = pin->GetOrAddReal("id_solve", "eta", 12.5);
+  eta_auto_ = !pin->DoesParameterExist("id_solve", "eta");
+  eta_ = eta_auto_ ? static_cast<Real>(0.0) : pin->GetReal("id_solve", "eta");
   if (eta_ < 0.0) {
+    eta_auto_ = true;
+    eta_ = 0.0;
+  }
+  if (!eta_auto_ && eta_ < 0.0) {
     std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
               << "<id_solve>/eta must be non-negative." << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  eta_schedule_ = pin->GetOrAddString("id_solve", "eta_schedule", "constant");
+  eta_initial_auto_ = !pin->DoesParameterExist("id_solve", "eta_initial");
+  eta_final_auto_ = !pin->DoesParameterExist("id_solve", "eta_final");
+  eta_initial_ = pin->GetOrAddReal("id_solve", "eta_initial", -1.0);
+  eta_final_ = pin->GetOrAddReal("id_solve", "eta_final", -1.0);
+  eta_decay_tau_ = pin->GetOrAddReal("id_solve", "eta_decay_tau", -1.0);
+  eta_period_tau_ = pin->GetOrAddReal("id_solve", "eta_period_tau", -1.0);
+  eta_control_sweep_tau_ =
+      pin->GetOrAddReal("id_solve", "eta_control_sweep_tau", -1.0);
+  eta_control_tau_ = pin->GetOrAddReal("id_solve", "eta_control_tau", -1.0);
+  eta_control_rate_fraction_ =
+      pin->GetOrAddReal("id_solve", "eta_control_rate_fraction", 0.25);
+  eta_control_power_ = pin->GetOrAddReal("id_solve", "eta_control_power", 2.0);
+  eta_control_smooth_alpha_ =
+      pin->GetOrAddReal("id_solve", "eta_control_smooth_alpha", 0.25);
+  eta_control_curvature_target_ =
+      pin->GetOrAddReal("id_solve", "eta_control_curvature_target", 0.25);
+  eta_control_velocity_safeguard_ =
+      pin->GetOrAddBoolean("id_solve", "eta_control_velocity_safeguard", false);
+  eta_control_velocity_threshold_ =
+      pin->GetOrAddReal("id_solve", "eta_control_velocity_threshold", 0.0);
+  eta_control_velocity_width_ =
+      pin->GetOrAddReal("id_solve", "eta_control_velocity_width", -1.0);
+  eta_control_curvature_tol_ =
+      pin->GetOrAddReal("id_solve", "eta_control_curvature_tol", 0.0);
+  eta_long_wavelength_fraction_ =
+      pin->GetOrAddReal("id_solve", "eta_long_wavelength_fraction", 1.0);
+  if (eta_schedule_ != "constant" && eta_schedule_ != "exp_decay" &&
+      eta_schedule_ != "periodic_sine" && eta_schedule_ != "adaptive_curvature" &&
+      eta_schedule_ != "adaptive_rate" && eta_schedule_ != "adaptive_slope" &&
+      eta_schedule_ != "adaptive_probe" && eta_schedule_ != "adaptive_hill" &&
+      eta_schedule_ != "adaptive_scan") {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "Supported <id_solve>/eta_schedule values are constant "
+              << "exp_decay, periodic_sine, adaptive_curvature, and "
+              << "adaptive_rate, adaptive_slope, adaptive_probe, adaptive_hill, "
+              << "and adaptive_scan."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!eta_initial_auto_ && eta_initial_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_initial must be non-negative." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!eta_final_auto_ && eta_final_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_final must be non-negative." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_decay_tau_ == 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_decay_tau must be positive, or negative "
+              << "for the default." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_period_tau_ == 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_period_tau must be positive, or negative "
+              << "for the default." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_control_sweep_tau_ == 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_sweep_tau must be positive, or "
+              << "negative for the default." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_control_tau_ == 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_tau must be positive, or negative "
+              << "for the default." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!(eta_control_rate_fraction_ > 0.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_rate_fraction must be positive."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!(eta_control_power_ > 0.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_power must be positive." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!(eta_control_smooth_alpha_ > 0.0 && eta_control_smooth_alpha_ <= 1.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_smooth_alpha must be in (0, 1]."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_control_curvature_target_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_curvature_target must be non-negative."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_control_velocity_width_ == 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_velocity_width must be positive, or "
+              << "negative for the default." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eta_control_curvature_tol_ < 0.0) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_control_curvature_tol must be non-negative."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (!(eta_long_wavelength_fraction_ > 0.0)) {
+    std::cout << "### FATAL ERROR in IDConformalThinSandwich" << std::endl
+              << "<id_solve>/eta_long_wavelength_fraction must be positive."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  eta_current_ = eta_;
   damping_stability_limit_ =
       pin->GetOrAddReal("id_solve", "damping_stability_limit", 2.0);
   if (!(damping_stability_limit_ > 0.0)) {
@@ -621,7 +746,7 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
     std::exit(EXIT_FAILURE);
   }
   std::string damping_form =
-      pin->GetOrAddString("id_solve", "damping_form", "nrpy");
+      pin->GetOrAddString("id_solve", "damping_form", "paper");
   if (damping_form == "paper") {
     damp_velocity_ = true;
   } else if (damping_form == "nrpy") {
@@ -646,8 +771,7 @@ IDConformalThinSandwich::IDConformalThinSandwich(MeshBlockPack *pmbp,
               << "<id_solve>/wavespeed_scale must be positive." << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  std::string default_wavespeed_mode =
-      (formulation_ == IDConstraintFormulation::CTS) ? "local_dx" : "smooth_box";
+  std::string default_wavespeed_mode = "smooth_box";
   wavespeed_mode_ = pin->GetOrAddString("id_solve", "wavespeed_mode",
                                         default_wavespeed_mode);
   if (wavespeed_mode_ != "local_dx" && wavespeed_mode_ != "smooth_box") {
@@ -753,8 +877,12 @@ TaskStatus IDConformalThinSandwich::SolveTask(Driver *pdriver, int stage) {
 // ClearRecv, ClearSend, CopyU, CalcRHS, ExpRKUpdate, RestrictU, SendU, RecvU,
 // ApplyPhysicalBCs, Prolongate} but acting on (u_relax, u_relax_tmp, u_rhs,
 // coarse_u_relax) and with Z4c::CalcRHS replaced by the hyperbolic-relaxation
-// RHS (Eq. 21 of NRPyElliptic, arXiv:2111.02424, or the velocity-damped
-// paper form selected by <id_solve>/damping_form):
+// RHS for the velocity-damped paper form, or Eq. 21 of NRPyElliptic
+// (arXiv:2111.02424), selected by <id_solve>/damping_form.
+// Paper:
+//     d/dt u = v,
+//     d/dt v = c^2 * Hamiltonian_residual(u) - eta*v.
+// NRPy:
 //     d/dt u = v - eta*u,
 //     d/dt v = c^2 * Hamiltonian_residual(u).
 // Inter-block exchange and AMR restriction/prolongation are the same
@@ -829,7 +957,7 @@ TaskStatus IDConformalThinSandwich::CalcRHS(Driver *pdrive, int stage) {
   auto &u0 = u_relax;
   auto &rhs = u_rhs;
   auto free = free_;
-  Real eta = eta_;
+  Real eta = eta_current_;
   int nactive = nactive_vars_;
   bool damp_velocity = damp_velocity_;
   par_for("IDCTT::CalcRHS", DevExeSpace(),
@@ -1391,6 +1519,56 @@ void IDConformalThinSandwich::BuildWaveSpeedProfile(Real dx_min) {
   }
 }
 
+Real IDConformalThinSandwich::EstimateDefaultEta(Real dx_min) const {
+  int fd = pmy_pack_->pz4c->opt.fd_stencil;
+  Real max_symbol_1d = 4.0;
+  if (fd == 3) {
+    max_symbol_1d = static_cast<Real>(16.0/3.0);
+  } else if (fd >= 4) {
+    max_symbol_1d = static_cast<Real>(272.0/45.0);
+  }
+  Real principal_factor =
+      (formulation_ == IDConstraintFormulation::CTS) ? static_cast<Real>(4.0/3.0)
+                                                     : static_cast<Real>(1.0);
+  Real c_over_dx = wavespeed_scale_/std::max(dx_min, static_cast<Real>(1.0e-30));
+  return static_cast<Real>(2.0)*std::sqrt(principal_factor*max_symbol_1d)*
+         c_over_dx;
+}
+
+Real IDConformalThinSandwich::EstimateBoxEta() const {
+  return EstimateEtaForLength(EstimateBoxLength());
+}
+
+Real IDConformalThinSandwich::EstimateBoxLength() const {
+  const RegionSize &ms = pmy_pack_->pmesh->mesh_size;
+  Real lx = ms.x1max - ms.x1min;
+  Real ly = ms.x2max - ms.x2min;
+  Real lz = ms.x3max - ms.x3min;
+  return std::max(lx, std::max(ly, lz));
+}
+
+Real IDConformalThinSandwich::EstimateEtaForLength(Real length) const {
+  Real principal_factor =
+      (formulation_ == IDConstraintFormulation::CTS) ? static_cast<Real>(4.0/3.0)
+                                                     : static_cast<Real>(1.0);
+  return static_cast<Real>(4.0)*wavespeed_scale_*std::sqrt(principal_factor)*
+         kPi/std::max(length, static_cast<Real>(1.0e-30));
+}
+
+Real IDConformalThinSandwich::EtaAtTau(Real tau) const {
+  if (eta_schedule_ == "exp_decay") {
+    Real decay_tau = std::max(eta_decay_tau_, static_cast<Real>(1.0e-30));
+    return eta_final_ + (eta_initial_ - eta_final_)*std::exp(-tau/decay_tau);
+  }
+  if (eta_schedule_ == "periodic_sine") {
+    Real period = std::max(eta_period_tau_, static_cast<Real>(1.0e-30));
+    Real eta_mid = static_cast<Real>(0.5)*(eta_initial_ + eta_final_);
+    Real eta_amp = static_cast<Real>(0.5)*std::fabs(eta_final_ - eta_initial_);
+    return eta_mid - eta_amp*std::cos(static_cast<Real>(2.0)*kPi*tau/period);
+  }
+  return eta_;
+}
+
 template <int NGHOST>
 void IDConformalThinSandwich::ComputeResidual() {
   if (formulation_ == IDConstraintFormulation::CTS) {
@@ -1521,7 +1699,7 @@ void IDConformalThinSandwich::OpenHistory() {
   if (history_file_ != nullptr || global_variable::my_rank != 0) return;
   history_file_ = std::fopen(history_name_.c_str(), "w");
   if (history_file_ != nullptr) {
-    std::fprintf(history_file_, "# iter tau dtau residual_l2 residual_rel_l2 "
+    std::fprintf(history_file_, "# iter tau dtau eta residual_l2 residual_rel_l2 "
                                "residual_max residual_excised_l2 "
                                "residual_excised_rel_l2 residual_excised_max "
                                "u_l2 v_l2 v_max volume excised_volume ncell "
@@ -1535,9 +1713,10 @@ void IDConformalThinSandwich::RecordHistory(int iter, Real tau,
   OpenHistory();
   if (history_file_ == nullptr) return;
   std::fprintf(history_file_,
-               "%d %.16e %.16e %.16e %.16e %.16e %.16e %.16e %.16e "
+               "%d %.16e %.16e %.16e %.16e %.16e %.16e %.16e %.16e %.16e "
                "%.16e %.16e %.16e %.16e %.16e %.16e %.16e %.16e %.16e\n",
                iter, static_cast<double>(tau), static_cast<double>(dtau_),
+               static_cast<double>(eta_current_),
                static_cast<double>(diag.residual_l2),
                static_cast<double>(diag.residual_rel_l2),
                static_cast<double>(diag.residual_max),
@@ -1732,15 +1911,59 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
 #if MPI_PARALLEL_ENABLED
   MPI_Allreduce(MPI_IN_PLACE, &dx_min, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
 #endif
+  BuildWaveSpeedProfile(dx_min);
+  if (eta_auto_) {
+    eta_ = EstimateDefaultEta(dx_min);
+    if (global_variable::my_rank == 0) {
+      std::cout << "ID " << formulation_name_
+                << " relaxation auto eta = " << eta_
+                << " from the smooth wave-speed envelope and discrete "
+                << "finite-difference symbol." << std::endl;
+    }
+  }
+  Real wave_dtau = relax_cfl_*dx_min/std::max(wavespeed_scale_,
+                                             static_cast<Real>(1.0e-12));
+  if (eta_schedule_ == "exp_decay") {
+    if (eta_initial_auto_) eta_initial_ = eta_;
+    if (eta_final_auto_) eta_final_ = EstimateBoxEta();
+  } else if (eta_schedule_ == "periodic_sine" ||
+             eta_schedule_ == "adaptive_curvature" ||
+             eta_schedule_ == "adaptive_slope" ||
+             eta_schedule_ == "adaptive_probe" ||
+             eta_schedule_ == "adaptive_hill" ||
+             eta_schedule_ == "adaptive_scan") {
+    Real long_length = eta_long_wavelength_fraction_*EstimateBoxLength();
+    Real eta_long = EstimateEtaForLength(long_length);
+    Real eta_nyquist = EstimateDefaultEta(dx_min);
+    if (eta_initial_auto_) eta_initial_ = std::min(eta_long, eta_nyquist);
+    if (eta_final_auto_) eta_final_ = std::max(eta_long, eta_nyquist);
+  } else if (eta_schedule_ == "adaptive_rate") {
+    Real long_length = eta_long_wavelength_fraction_*EstimateBoxLength();
+    Real eta_long = EstimateEtaForLength(long_length);
+    Real eta_nyquist = EstimateDefaultEta(dx_min);
+    Real eta_stability_half = static_cast<Real>(0.5)*damping_stability_limit_/
+        std::max(wave_dtau, std::numeric_limits<Real>::min());
+    if (eta_initial_auto_) eta_initial_ = std::min(eta_long, eta_nyquist);
+    if (eta_final_auto_) eta_final_ = eta_stability_half;
+  } else {
+    eta_initial_ = eta_;
+    eta_final_ = eta_;
+  }
+
   // Cache dtau on the class so ExpRKUpdate() picks it up at every stage.
   // The wave CFL alone is not sufficient when eta is large: the damping
   // term is integrated explicitly by the same RK scheme, so eta*dtau must
   // also remain on the stable real-axis part of the RK stability region.
-  Real wave_dtau = relax_cfl_*dx_min/std::max(wavespeed_scale_,
-                                             static_cast<Real>(1.0e-12));
   dtau_ = wave_dtau;
-  if (eta_ > 0.0) {
-    Real damp_dtau = damping_stability_limit_/eta_;
+  Real eta_stability = eta_;
+  if (eta_schedule_ == "exp_decay" || eta_schedule_ == "periodic_sine" ||
+      eta_schedule_ == "adaptive_curvature" || eta_schedule_ == "adaptive_rate" ||
+      eta_schedule_ == "adaptive_slope" || eta_schedule_ == "adaptive_probe" ||
+      eta_schedule_ == "adaptive_hill" || eta_schedule_ == "adaptive_scan") {
+    eta_stability = std::max(eta_initial_, eta_final_);
+  }
+  if (eta_stability > 0.0) {
+    Real damp_dtau = damping_stability_limit_/eta_stability;
     if (dtau_ > damp_dtau) {
       dtau_ = damp_dtau;
       if (global_variable::my_rank == 0) {
@@ -1752,10 +1975,120 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
       }
     }
   }
+  if (eta_schedule_ == "exp_decay" && eta_decay_tau_ < 0.0) {
+    eta_decay_tau_ = static_cast<Real>(0.25)*static_cast<Real>(max_steps_)*dtau_;
+  }
+  if (eta_schedule_ == "periodic_sine" && eta_period_tau_ < 0.0) {
+    eta_period_tau_ = static_cast<Real>(20.0)*dtau_;
+  }
+  if ((eta_schedule_ == "adaptive_curvature" || eta_schedule_ == "adaptive_probe") &&
+      eta_control_sweep_tau_ < 0.0) {
+    eta_control_sweep_tau_ = static_cast<Real>(10.0)*dtau_;
+  }
+  if (eta_schedule_ == "adaptive_scan" && eta_control_sweep_tau_ < 0.0) {
+    eta_control_sweep_tau_ = static_cast<Real>(40.0)*dtau_;
+  }
+  if ((eta_schedule_ == "adaptive_rate" || eta_schedule_ == "adaptive_slope" ||
+       eta_schedule_ == "adaptive_probe" || eta_schedule_ == "adaptive_hill" ||
+       eta_schedule_ == "adaptive_scan") &&
+      eta_control_tau_ < 0.0) {
+    eta_control_tau_ = static_cast<Real>(8.0)*dtau_;
+  }
+  if (eta_control_velocity_width_ < 0.0) {
+    eta_control_velocity_width_ =
+        static_cast<Real>(0.1)/std::max(dtau_, std::numeric_limits<Real>::min());
+  }
+  if (eta_schedule_ == "adaptive_slope" || eta_schedule_ == "adaptive_probe" ||
+      eta_schedule_ == "adaptive_hill") {
+    eta_current_ = static_cast<Real>(0.5)*(std::min(eta_initial_, eta_final_) +
+                                           std::max(eta_initial_, eta_final_));
+  } else if (eta_schedule_ == "adaptive_scan") {
+    eta_current_ = std::min(eta_initial_, eta_final_);
+  } else {
+    eta_current_ = (eta_schedule_ == "adaptive_curvature" ||
+                    eta_schedule_ == "adaptive_rate") ?
+                   std::min(eta_initial_, eta_final_) : EtaAtTau(0.0);
+  }
   Real dtau = dtau_;
   (void) dtau;
-  BuildWaveSpeedProfile(dx_min);
   if (global_variable::my_rank == 0) {
+    if (eta_schedule_ == "exp_decay") {
+      std::cout << "ID " << formulation_name_
+                << " relaxation eta schedule = exp_decay, eta_initial = "
+                << eta_initial_ << ", eta_final = " << eta_final_
+                << ", eta_decay_tau = " << eta_decay_tau_ << std::endl;
+    } else if (eta_schedule_ == "periodic_sine") {
+      std::cout << "ID " << formulation_name_
+                << " relaxation eta schedule = periodic_sine, eta_min = "
+                << std::min(eta_initial_, eta_final_)
+                << ", eta_max = " << std::max(eta_initial_, eta_final_)
+                << ", eta_period_tau = " << eta_period_tau_
+                << ", eta_max source = Nyquist critical damping, long wavelength = "
+                << eta_long_wavelength_fraction_ << " box lengths."
+                << std::endl;
+    } else if (eta_schedule_ == "adaptive_curvature") {
+      std::cout << "ID " << formulation_name_
+                << " relaxation eta schedule = adaptive_curvature, eta_min = "
+                << std::min(eta_initial_, eta_final_)
+                << ", eta_max = " << std::max(eta_initial_, eta_final_)
+                << ", eta_control_sweep_tau = " << eta_control_sweep_tau_
+                << ", eta_control_curvature_tol = "
+                << eta_control_curvature_tol_
+                << ", eta_max source = Nyquist critical damping, long wavelength = "
+                << eta_long_wavelength_fraction_ << " box lengths."
+                << std::endl;
+    } else if (eta_schedule_ == "adaptive_rate") {
+      std::cout << "ID " << formulation_name_
+                << " relaxation eta schedule = adaptive_rate, eta_min = "
+                << std::min(eta_initial_, eta_final_)
+                << ", eta_max = " << std::max(eta_initial_, eta_final_)
+                << ", eta_control_tau = " << eta_control_tau_
+                << ", eta_control_rate_fraction = "
+                << eta_control_rate_fraction_
+                << ", eta_control_power = " << eta_control_power_
+                << ", eta_control_velocity_safeguard = "
+                << (eta_control_velocity_safeguard_ ? "true" : "false")
+                << ", eta_control_velocity_threshold = "
+                << eta_control_velocity_threshold_
+                << ", eta_control_velocity_width = "
+                << eta_control_velocity_width_
+                << ", eta_max source = half explicit damping stability ceiling, "
+                << "long wavelength = "
+                << eta_long_wavelength_fraction_ << " box lengths."
+                << std::endl;
+    } else if (eta_schedule_ == "adaptive_slope" ||
+               eta_schedule_ == "adaptive_probe" ||
+               eta_schedule_ == "adaptive_hill") {
+      std::cout << "ID " << formulation_name_
+                << " relaxation eta schedule = " << eta_schedule_
+                << ", eta_min = " << std::min(eta_initial_, eta_final_)
+                << ", eta_max = " << std::max(eta_initial_, eta_final_)
+                << ", eta_control_tau = " << eta_control_tau_
+                << ", eta_control_sweep_tau = " << eta_control_sweep_tau_
+                << ", eta_control_rate_fraction = "
+                << eta_control_rate_fraction_
+                << ", eta_control_power = " << eta_control_power_
+                << ", eta_max source = Nyquist critical damping, long wavelength = "
+                << eta_long_wavelength_fraction_ << " box lengths."
+                << std::endl;
+    } else if (eta_schedule_ == "adaptive_scan") {
+      std::cout << "ID " << formulation_name_
+                << " relaxation eta schedule = adaptive_scan, eta_min = "
+                << std::min(eta_initial_, eta_final_)
+                << ", eta_max = " << std::max(eta_initial_, eta_final_)
+                << ", eta_control_tau = " << eta_control_tau_
+                << ", eta_control_sweep_tau = " << eta_control_sweep_tau_
+                << ", eta_control_smooth_alpha = "
+                << eta_control_smooth_alpha_
+                << ", eta_control_curvature_target = "
+                << eta_control_curvature_target_
+                << ", eta_control_trigger_count = "
+                << eta_control_trigger_count_
+                << ", eta_control_max_scans = " << eta_control_max_scans_
+                << ", eta_max source = Nyquist critical damping, long wavelength = "
+                << eta_long_wavelength_fraction_ << " box lengths."
+                << std::endl;
+    }
     std::cout << "ID " << formulation_name_ << " residual excision radius = "
               << residual_excision_radius_ << std::endl;
   }
@@ -1775,6 +2108,69 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
   all_window.reserve(static_cast<std::size_t>(growth_window_));
   excised_window.reserve(static_cast<std::size_t>(growth_window_));
   int fd = pmy_pack_->pz4c->opt.fd_stencil;
+  bool adaptive_curvature_eta = (eta_schedule_ == "adaptive_curvature");
+  bool adaptive_rate_eta = (eta_schedule_ == "adaptive_rate");
+  bool adaptive_slope_eta = (eta_schedule_ == "adaptive_slope");
+  bool adaptive_probe_eta = (eta_schedule_ == "adaptive_probe");
+  bool adaptive_hill_eta = (eta_schedule_ == "adaptive_hill");
+  bool adaptive_scan_eta = (eta_schedule_ == "adaptive_scan");
+  bool adaptive_reversible_eta =
+      adaptive_slope_eta || adaptive_probe_eta || adaptive_hill_eta;
+  Real eta_control_min = std::min(eta_initial_, eta_final_);
+  Real eta_control_max = std::max(eta_initial_, eta_final_);
+  Real eta_control_range = eta_control_max - eta_control_min;
+  Real eta_control_direction = 0.0;
+  Real eta_residual_nm2 = 0.0;
+  Real eta_residual_nm1 = 0.0;
+  Real eta_curvature_prev = 0.0;
+  bool eta_have_residual_nm2 = false;
+  bool eta_have_curvature_prev = false;
+  Real eta_rate_residual_prev = 0.0;
+  Real eta_rate_v_prev = 0.0;
+  Real eta_rate_best = 0.0;
+  bool eta_rate_have_prev = false;
+  Real eta_opt_residual_prev = 0.0;
+  Real eta_opt_q_prev = 0.0;
+  Real eta_opt_eta_prev = eta_current_;
+  Real eta_opt_center = static_cast<Real>(0.5)*(eta_control_min + eta_control_max);
+  Real eta_opt_direction = 1.0;
+  bool eta_opt_have_residual = false;
+  bool eta_opt_have_q = false;
+  Real eta_scan_log_res_nm2 = 0.0;
+  Real eta_scan_log_res_nm1 = 0.0;
+  Real eta_scan_d1 = 0.0;
+  Real eta_scan_d2 = 0.0;
+  bool eta_scan_have_nm1 = false;
+  bool eta_scan_have_nm2 = false;
+  bool eta_scan_smooth_init = false;
+  bool eta_scan_increase = false;
+  bool eta_scan_stop = false;
+  int eta_scan_trigger_count = 0;
+  int eta_scan_count = 0;
+  auto zero_relax_velocities = [&]() {
+    auto &indcs = pmy_pack_->pmesh->mb_indcs;
+    int is = indcs.is, ie = indcs.ie;
+    int js = indcs.js, je = indcs.je;
+    int ks = indcs.ks, ke = indcs.ke;
+    int nmb1 = pmy_pack_->nmb_thispack - 1;
+    int nactive = nactive_vars_;
+    auto &u0 = u_relax;
+    auto &u1 = u_relax_tmp;
+    par_for("IDCTT::ZeroRelaxVelocities", DevExeSpace(),
+            0, nmb1, 0, nactive-1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int q, int k, int j, int i) {
+      u0(m, ID_RELAX_VDPSI + q, k,j,i) = 0.0;
+      u1(m, ID_RELAX_VDPSI + q, k,j,i) = 0.0;
+    });
+  };
+  auto reset_eta_scan_history = [&]() {
+    eta_scan_have_nm1 = false;
+    eta_scan_have_nm2 = false;
+    eta_scan_smooth_init = false;
+    eta_scan_increase = false;
+    eta_scan_trigger_count = 0;
+    eta_current_ = eta_control_min;
+  };
 
   // Drive the relaxation pseudo-time integration the same way Driver::Execute
   // drives the Z4c evolution: for each pseudo-step, run stages 1..nexp_stages
@@ -1784,6 +2180,11 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
   // (u_relax, u_relax_tmp, u_rhs, coarse_u_relax) arrays managed here.
   int const nstages = pdriver->nexp_stages;
   for (int iter = 0; iter <= max_steps_; ++iter) {
+    Real tau = static_cast<Real>(iter)*dtau_;
+    if (!adaptive_curvature_eta && !adaptive_rate_eta && !adaptive_reversible_eta &&
+        !adaptive_scan_eta) {
+      eta_current_ = EtaAtTau(tau);
+    }
     // Convergence diagnostic: the per-iteration residual_l2 reported here
     // is the residual_l2 *at the start* of iteration iter (i.e. after
     // iter-1 pseudo-steps have completed).
@@ -1802,7 +2203,9 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
     Real excised_metric = (diag.excised_ncell > 0.0) ? diag.residual_excised_l2
                                                      : diag.residual_l2;
     bool diag_finite = (diag.finite >= 0.5) && std::isfinite(diag.residual_l2) &&
-                       std::isfinite(diag.residual_max) && std::isfinite(diag.v_max);
+                       std::isfinite(diag.residual_max) &&
+                       std::isfinite(diag.u_l2) && std::isfinite(diag.v_l2) &&
+                       std::isfinite(diag.v_max);
     if (!diag_finite) {
       if (global_variable::my_rank == 0) {
         std::cout << "### FATAL ERROR in IDConformalThinSandwich::SolveRelaxation"
@@ -1811,19 +2214,256 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
                   << " relaxation diagnostics at iter " << iter
                   << ": residual_l2 = " << diag.residual_l2
                   << ", residual_max = " << diag.residual_max
+                  << ", u_l2 = " << diag.u_l2
+                  << ", v_l2 = " << diag.v_l2
                   << ", v_max = " << diag.v_max << std::endl;
       }
       std::exit(EXIT_FAILURE);
     }
+    if (adaptive_curvature_eta && eta_control_range > 0.0) {
+      Real curvature = 0.0;
+      bool curvature_hit = false;
+      if (eta_have_residual_nm2) {
+        curvature = (diag.residual_l2 -
+                     static_cast<Real>(2.0)*eta_residual_nm1 +
+                     eta_residual_nm2)/(dtau_*dtau_);
+        if (eta_have_curvature_prev) {
+          Real curvature_scale =
+              std::max(std::max(std::fabs(curvature),
+                                std::fabs(eta_curvature_prev)),
+                       std::numeric_limits<Real>::min());
+          curvature_hit = (curvature*eta_curvature_prev <= 0.0) ||
+                          (std::fabs(curvature) <=
+                           eta_control_curvature_tol_*curvature_scale);
+        }
+        eta_curvature_prev = curvature;
+        eta_have_curvature_prev = true;
+      }
+      if (eta_control_direction == 0.0 && curvature_hit) {
+        eta_control_direction = 1.0;
+      }
+      if (eta_control_direction != 0.0) {
+        Real control_rate = eta_control_range/
+            std::max(eta_control_sweep_tau_, std::numeric_limits<Real>::min());
+        eta_current_ += eta_control_direction*control_rate*dtau_;
+        if (eta_current_ >= eta_control_max) {
+          eta_current_ = eta_control_max;
+          eta_control_direction = -1.0;
+        } else if (eta_current_ <= eta_control_min) {
+          eta_current_ = eta_control_min;
+          eta_control_direction = 0.0;
+          eta_have_curvature_prev = false;
+        }
+      }
+      eta_residual_nm2 = eta_residual_nm1;
+      eta_residual_nm1 = diag.residual_l2;
+      if (iter >= 1) eta_have_residual_nm2 = true;
+    }
     if (iter % history_every_ == 0 || iter == 0 || diag.residual_l2 <= tolerance_) {
-      RecordHistory(iter, static_cast<Real>(iter)*dtau_, diag);
+      RecordHistory(iter, tau, diag);
       if (global_variable::my_rank == 0) {
         std::cout << "ID " << formulation_name_ << " relaxation iter " << iter
                   << ": residual_l2 = " << diag.residual_l2
                   << ", residual_rel_l2 = " << diag.residual_rel_l2
                   << ", residual_excised_l2 = " << diag.residual_excised_l2
                   << ", residual_max = " << diag.residual_max
+                  << ", eta = " << eta_current_
+                  << ", v_l2 = " << diag.v_l2
                   << ", max_v = " << diag.v_max << std::endl;
+      }
+    }
+    if (adaptive_rate_eta && eta_control_range > 0.0) {
+      if (eta_rate_have_prev) {
+        Real residual_floor = std::numeric_limits<Real>::min();
+        Real v_floor = std::numeric_limits<Real>::min();
+        Real q_r = -std::log(std::max(diag.residual_l2, residual_floor)/
+                             std::max(eta_rate_residual_prev, residual_floor))/dtau_;
+        Real q_v = std::log(std::max(diag.v_l2, v_floor)/
+                            std::max(eta_rate_v_prev, v_floor))/dtau_;
+        Real q_r_pos = std::max(q_r, static_cast<Real>(0.0));
+        eta_rate_best = std::max(eta_rate_best, q_r_pos);
+        Real q_ref = eta_control_rate_fraction_*eta_rate_best +
+                     std::numeric_limits<Real>::min();
+        Real ratio = q_r_pos/q_ref;
+        Real residual_switch =
+            static_cast<Real>(1.0)/(static_cast<Real>(1.0) +
+                                    std::pow(ratio, eta_control_power_));
+        Real velocity_switch = 0.0;
+        if (eta_control_velocity_safeguard_) {
+          Real arg = -(q_v - eta_control_velocity_threshold_)/
+                     eta_control_velocity_width_;
+          arg = std::max(static_cast<Real>(-60.0),
+                         std::min(static_cast<Real>(60.0), arg));
+          velocity_switch =
+              static_cast<Real>(1.0)/(static_cast<Real>(1.0) + std::exp(arg));
+        }
+        Real eta_target = eta_control_min +
+            eta_control_range*std::max(residual_switch, velocity_switch);
+        Real response = std::min(static_cast<Real>(1.0),
+            dtau_/std::max(eta_control_tau_, std::numeric_limits<Real>::min()));
+        eta_current_ += response*(eta_target - eta_current_);
+        eta_current_ = std::max(eta_control_min,
+                                std::min(eta_control_max, eta_current_));
+      }
+      eta_rate_residual_prev = diag.residual_l2;
+      eta_rate_v_prev = diag.v_l2;
+      eta_rate_have_prev = true;
+    }
+    if (adaptive_reversible_eta && eta_control_range > 0.0) {
+      Real eta_used = eta_current_;
+      if (eta_opt_have_residual) {
+        Real residual_floor = std::numeric_limits<Real>::min();
+        Real q_r = -std::log(std::max(diag.residual_l2, residual_floor)/
+                             std::max(eta_opt_residual_prev, residual_floor))/dtau_;
+        Real q_scale = std::max(std::fabs(q_r), std::fabs(eta_opt_q_prev));
+        q_scale = std::max(q_scale, static_cast<Real>(1.0e-12)/
+                                    std::max(dtau_, std::numeric_limits<Real>::min()));
+        Real response = std::min(static_cast<Real>(1.0),
+            dtau_/std::max(eta_control_tau_, std::numeric_limits<Real>::min()));
+        Real step_limit = response*eta_control_range;
+        Real eta_next = eta_current_;
+        auto clamp_unit = [](Real x) {
+          return std::max(static_cast<Real>(-1.0),
+                          std::min(static_cast<Real>(1.0), x));
+        };
+        if (adaptive_slope_eta) {
+          if (eta_opt_have_q) {
+            Real deta = eta_used - eta_opt_eta_prev;
+            if (std::fabs(deta) > static_cast<Real>(1.0e-12)*eta_control_range) {
+              Real slope = (q_r - eta_opt_q_prev)/deta;
+              eta_next = eta_current_ +
+                         step_limit*clamp_unit(slope*eta_control_range/q_scale);
+            } else {
+              eta_next = eta_current_ +
+                         eta_opt_direction*static_cast<Real>(0.25)*step_limit;
+            }
+          } else {
+            eta_next = eta_current_ + eta_opt_direction*step_limit;
+          }
+        } else if (adaptive_probe_eta) {
+          constexpr Real two_pi = static_cast<Real>(6.2831853071795864769);
+          Real sweep_tau = std::max(eta_control_sweep_tau_,
+                                    std::numeric_limits<Real>::min());
+          Real phase = two_pi*tau/sweep_tau;
+          Real probe = std::sin(phase);
+          if (eta_opt_have_q) {
+            eta_opt_center += step_limit*
+                clamp_unit((q_r - eta_opt_q_prev)*probe/q_scale);
+          }
+          Real amp_fraction =
+              std::min(static_cast<Real>(0.45),
+                       std::max(static_cast<Real>(0.0), eta_control_rate_fraction_));
+          Real amplitude = amp_fraction*eta_control_range;
+          eta_opt_center = std::max(eta_control_min + amplitude,
+              std::min(eta_control_max - amplitude, eta_opt_center));
+          Real next_phase = two_pi*(tau + dtau_)/sweep_tau;
+          eta_next = eta_opt_center + amplitude*std::sin(next_phase);
+        } else if (adaptive_hill_eta) {
+          if (eta_opt_have_q && q_r < eta_opt_q_prev) {
+            eta_opt_direction = -eta_opt_direction;
+          }
+          eta_next = eta_current_ + eta_opt_direction*step_limit;
+        }
+        if (eta_next >= eta_control_max) {
+          eta_next = eta_control_max;
+          if (adaptive_hill_eta || adaptive_slope_eta) eta_opt_direction = -1.0;
+        } else if (eta_next <= eta_control_min) {
+          eta_next = eta_control_min;
+          if (adaptive_hill_eta || adaptive_slope_eta) eta_opt_direction = 1.0;
+        }
+        eta_current_ = eta_next;
+        eta_opt_q_prev = q_r;
+        eta_opt_eta_prev = eta_used;
+        eta_opt_have_q = true;
+      }
+      eta_opt_residual_prev = diag.residual_l2;
+      eta_opt_have_residual = true;
+    }
+    if (adaptive_scan_eta && eta_control_range > 0.0) {
+      Real residual_floor = std::numeric_limits<Real>::min();
+      Real y = std::log(std::max(diag.residual_l2, residual_floor));
+      bool reset_scan_history = false;
+      if (eta_scan_have_nm2) {
+        Real d1 = (y - eta_scan_log_res_nm1)/dtau_;
+        Real d2 = (y - static_cast<Real>(2.0)*eta_scan_log_res_nm1 +
+                   eta_scan_log_res_nm2)/(dtau_*dtau_);
+        if (eta_scan_smooth_init) {
+          eta_scan_d1 += eta_control_smooth_alpha_*(d1 - eta_scan_d1);
+          eta_scan_d2 += eta_control_smooth_alpha_*(d2 - eta_scan_d2);
+        } else {
+          eta_scan_d1 = d1;
+          eta_scan_d2 = d2;
+          eta_scan_smooth_init = true;
+        }
+        Real curvature_scale = std::max(std::fabs(eta_scan_d2),
+            std::fabs(eta_scan_d1)/
+            std::max(eta_control_tau_, std::numeric_limits<Real>::min()));
+        curvature_scale =
+            std::max(curvature_scale, std::numeric_limits<Real>::min());
+        Real curvature_tol = eta_control_curvature_tol_*curvature_scale;
+        if (!eta_scan_increase) {
+          eta_current_ = eta_control_min;
+          if (eta_scan_d2 >= -curvature_tol) {
+            ++eta_scan_trigger_count;
+          } else {
+            eta_scan_trigger_count = 0;
+          }
+          if (eta_scan_trigger_count >= eta_control_trigger_count_) {
+            eta_scan_increase = true;
+            eta_scan_trigger_count = 0;
+            if (global_variable::my_rank == 0) {
+              std::cout << "ID " << formulation_name_
+                        << " adaptive_scan curvature trigger at iter " << iter
+                        << "; zeroing v before eta scan." << std::endl;
+            }
+            zero_relax_velocities();
+          }
+        }
+        if (eta_scan_increase) {
+          Real target = -eta_control_curvature_target_*std::fabs(eta_scan_d1)/
+              std::max(eta_control_tau_, std::numeric_limits<Real>::min());
+          Real width = std::max(std::fabs(target),
+              static_cast<Real>(0.1)*std::fabs(eta_scan_d1)/
+              std::max(eta_control_tau_, std::numeric_limits<Real>::min()));
+          width = std::max(width, std::numeric_limits<Real>::min());
+          Real drive = (eta_scan_d2 - target)/width;
+          Real fraction = std::max(static_cast<Real>(0.0),
+              std::min(static_cast<Real>(1.0), drive));
+          Real sweep_tau = std::max(eta_control_sweep_tau_,
+                                    std::numeric_limits<Real>::min());
+          eta_current_ += eta_control_range*dtau_*fraction/sweep_tau;
+          if (eta_current_ >= eta_control_max) {
+            eta_current_ = eta_control_max;
+            ++eta_scan_count;
+            if (global_variable::my_rank == 0) {
+              std::cout << "ID " << formulation_name_
+                        << " adaptive_scan reached eta_max at iter " << iter
+                        << " after scan " << eta_scan_count
+                        << "; resetting eta to eta_min and zeroing v."
+                        << std::endl;
+            }
+            zero_relax_velocities();
+            reset_scan_history = true;
+            if (eta_scan_count >= eta_control_max_scans_) {
+              eta_scan_stop = true;
+            } else {
+              reset_eta_scan_history();
+            }
+          }
+        }
+      } else {
+        eta_current_ = eta_control_min;
+      }
+      if (reset_scan_history) {
+        reset_eta_scan_history();
+      }
+      if (!eta_scan_stop) {
+        if (eta_scan_have_nm1) {
+          eta_scan_log_res_nm2 = eta_scan_log_res_nm1;
+          eta_scan_have_nm2 = true;
+        }
+        eta_scan_log_res_nm1 = y;
+        eta_scan_have_nm1 = true;
       }
     }
     Real combined_metric = fmax(diag.residual_rel_l2,
@@ -1832,6 +2472,35 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
       best_combined_metric = combined_metric;
       best_iter = iter;
       Kokkos::deep_copy(DevExeSpace(), u_relax_best, u_relax);
+    }
+    if (adaptive_scan_eta && eta_scan_increase && !eta_scan_stop &&
+        iter > best_iter &&
+        combined_metric > best_combined_metric*(1.0 + growth_tolerance_)) {
+      ++eta_scan_count;
+      if (global_variable::my_rank == 0) {
+        std::cout << "ID " << formulation_name_
+                  << " adaptive_scan restarting at iter " << iter
+                  << " because the residual grew beyond the trust region after scan "
+                  << eta_scan_count
+                  << ". Restoring best raw state from iter " << best_iter
+                  << " and zeroing v." << std::endl;
+      }
+      Kokkos::deep_copy(DevExeSpace(), u_relax, u_relax_best);
+      zero_relax_velocities();
+      reset_eta_scan_history();
+      if (eta_scan_count >= eta_control_max_scans_) eta_scan_stop = true;
+    }
+    if (eta_scan_stop) {
+      if (global_variable::my_rank == 0) {
+        std::cout << "ID " << formulation_name_
+                  << " adaptive_scan stopping after "
+                  << eta_control_max_scans_
+                  << " completed eta scans. Restoring best raw state from iter "
+                  << best_iter << " with combined relative residual = "
+                  << best_combined_metric << "." << std::endl;
+      }
+      Kokkos::deep_copy(DevExeSpace(), u_relax, u_relax_best);
+      break;
     }
 
     all_window.push_back(all_metric);
@@ -1859,7 +2528,7 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
           best_smoothed_all*(1.0 + growth_tolerance_);
       bool excised_growing = smoothed_excised >
           best_smoothed_excised*(1.0 + growth_tolerance_);
-      if (stop_on_growth_ && iter >= growth_start_iter_ &&
+      if (stop_on_growth_ && !adaptive_scan_eta && iter >= growth_start_iter_ &&
           all_growing && excised_growing) {
         if (global_variable::my_rank == 0) {
           std::cout << "ID " << formulation_name_ << " relaxation stopping at iter " << iter
@@ -1901,6 +2570,16 @@ void IDConformalThinSandwich::SolveRelaxation(Driver *pdriver) {
       ApplyPhysicalBCs(pdriver, stage);
       Prolongate(pdriver, stage);
     }
+  }
+
+  if (adaptive_scan_eta) {
+    if (global_variable::my_rank == 0) {
+      std::cout << "ID " << formulation_name_
+                << " adaptive_scan finished; restoring best raw state from iter "
+                << best_iter << " with combined relative residual = "
+                << best_combined_metric << "." << std::endl;
+    }
+    Kokkos::deep_copy(DevExeSpace(), u_relax, u_relax_best);
   }
 
   if (fd == 2) ComputeResidual<2>();

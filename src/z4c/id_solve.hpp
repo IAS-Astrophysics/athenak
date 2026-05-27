@@ -142,19 +142,41 @@ class IDConformalThinSandwich {
   bool abort_on_reject_;
   bool stop_on_growth_;
   bool damp_velocity_;
+  bool eta_auto_;
+  bool eta_initial_auto_;
+  bool eta_final_auto_;
   int growth_window_;
   int growth_start_iter_;
+  int eta_control_max_scans_;
+  int eta_control_trigger_count_;
   int max_steps_;
   int history_every_;
   Real tolerance_;
   Real growth_tolerance_;
   Real relax_cfl_;
   Real eta_;
+  Real eta_current_;
+  Real eta_initial_;
+  Real eta_final_;
+  Real eta_decay_tau_;
+  Real eta_period_tau_;
+  Real eta_control_sweep_tau_;
+  Real eta_control_tau_;
+  Real eta_control_rate_fraction_;
+  Real eta_control_power_;
+  Real eta_control_smooth_alpha_;
+  Real eta_control_curvature_target_;
+  Real eta_control_velocity_threshold_;
+  Real eta_control_velocity_width_;
+  Real eta_control_curvature_tol_;
+  Real eta_long_wavelength_fraction_;
+  bool eta_control_velocity_safeguard_;
   Real damping_stability_limit_;
   Real residual_excision_radius_;
   Real wavespeed_scale_;
   Real wavespeed_center_[3];
   std::string wavespeed_mode_;
+  std::string eta_schedule_;
   // Pseudo-time step used by ExpRKUpdate(); set by SolveRelaxation() each
   // iteration before the per-stage loop runs.  We use the same gam0/gam1/
   // beta/delta low-storage coefficients as the Driver-level explicit
@@ -178,6 +200,11 @@ class IDConformalThinSandwich {
   template <int NGHOST>
   void BuildCTSFreeData();
   void BuildWaveSpeedProfile(Real dx_min);
+  Real EstimateDefaultEta(Real dx_min) const;
+  Real EstimateBoxEta() const;
+  Real EstimateEtaForLength(Real length) const;
+  Real EstimateBoxLength() const;
+  Real EtaAtTau(Real tau) const;
   void ApplySolution();
   void ApplyCTTBowenYorkSolution();
   void ApplyCTSSolution();

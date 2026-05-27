@@ -34,12 +34,26 @@ This is an AthenaK-native free-data construction followed by the native
 positive by a local symmetric matrix exponential and determinant normalization
 before the CTS solve applies the conformal factor and shift.
 
-The relaxation controls follow the NRPyElliptic hyperbolic-relaxation form
-`du/dtau = v - eta*u`, `dv/dtau = c^2 R`.  For uniform meshes
-`wavespeed_mode=local_dx` gives a constant relaxation wave speed and
-`relax_cfl` is the usual wave CFL.  Large damping also constrains the explicit
-RK step through `eta*dtau`; if necessary the solver caps `dtau` using
-`damping_stability_limit` and reports the effective value.
+The relaxation controls default to the paper-style hyperbolic-relaxation form
+`du/dtau = v`, `dv/dtau = c^2 R - eta*v`, where the auxiliary variable is the
+pseudo-time velocity and its L2 norm is a direct steady-state diagnostic.  The
+NRPyElliptic form remains available with `<id_solve>/damping_form=nrpy`.  For
+uniform meshes
+the default smooth-box wave speed is constant and the default damping is
+estimated from the high-frequency characteristic scale of the selected Z4c
+finite-difference operator.  On refined meshes this uses the same smooth speed
+envelope that avoids discontinuous relaxation speeds across refinement
+boundaries, so the default tracks the effective maximum `c/dx` rather than the
+box-crossing time.  `relax_cfl` is the usual wave CFL.  Large damping also
+constrains the explicit RK step through `eta*dtau`; if necessary the solver caps
+`dtau` using `damping_stability_limit` and reports the effective value.
+The optional `eta_schedule=adaptive_rate` controller starts from the box-scale
+damping estimate, monitors the residual log-decay rate, and relaxes `eta`
+toward a high damping cap when convergence slows relative to the best decay
+rate seen so far.  If `eta_final` is not specified, the adaptive-rate cap is
+half the explicit damping stability ceiling; set `eta_final` to override it.
+`eta_schedule=adaptive_curvature` is also available as a simpler
+curvature-trigger prototype.
 
 AthenaK uses Cartesian meshblocks for these runs.  Domain size, resolution,
 boundary conditions, and any refinement are therefore controlled by the usual
