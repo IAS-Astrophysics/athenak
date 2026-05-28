@@ -55,9 +55,9 @@ class H2Network {
 
   // ----- Species indices within the ODE system ------
   enum {
-    IH2, // H_2
-    IH,  // H
-    IIE  // internal energy, must be last
+    IH2,  // H_2
+    IH,   // H
+    IIE   // internal energy, must be last
   };
 
   // ----- Names, used for output, must be the same order as the enum -----
@@ -147,8 +147,50 @@ class H2Network {
     } else {
       const Real dEdt = HeatingTerm(T) - CoolingTerm(T);
       // convert to code units
-      return (dEdt * n_H / units_energy_density_cgs);
+      return units_time_cgs * (dEdt * n_H / units_energy_density_cgs);
     }
+  }
+
+  KOKKOS_FUNCTION
+  auto CreationRates() {
+    RegisterArray<Real, neqs - 1> creation_rates;
+
+    // cr = cosmic ray, gr = dust grain
+    const Real rate_cr = k_cr * y(IH2);
+    const Real rate_gr = k_gr * n_H * y(IH);
+
+    // H_2 equation
+    creation_rates(IH2) = rate_gr;
+    // H equation
+    creation_rates(IH) = 2 * rate_cr;
+
+    // convert to code units
+    for (size_t i = 0; i < neqs - 1; i++) {
+      creation_rates(i) *= units_time_cgs;
+    }
+
+    return creation_rates;
+  }
+
+  KOKKOS_FUNCTION
+  auto DestructionRates() {
+    RegisterArray<Real, neqs - 1> destruction_rates;
+
+    // cr = cosmic ray, gr = dust grain
+    const Real rate_cr = k_cr * y(IH2);
+    const Real rate_gr = k_gr * n_H * y(IH);
+
+    // H_2 equation
+    destruction_rates(IH2) = rate_cr;
+    // H equation
+    destruction_rates(IH) = 2 * rate_gr;
+
+    // convert to code units
+    for (size_t i = 0; i < neqs - 1; i++) {
+      destruction_rates(i) *= units_time_cgs;
+    }
+
+    return destruction_rates;
   }
 
   /*!
@@ -159,19 +201,13 @@ class H2Network {
     // ----- Internal energy equation -----
     f(IIE) = Edot();
 
-    // ----- Abundance equations -----
-    // cr = cosmic ray, gr = dust grain
-    const Real rate_cr = k_cr * y(IH2);
-    const Real rate_gr = k_gr * n_H * y(IH);
+    // ----- Creation & Destruction Rates -----
+    auto creation_rates = CreationRates();
+    auto destruction_rates = DestructionRates();
 
-    // H_2 equation
-    f(IH2) = rate_gr - rate_cr;
-    // H equation
-    f(IH) = 2 * (rate_cr - rate_gr);
-
-    // ----- Convert all back to code units -----
-    for (size_t i = 0; i < neqs; i++) {
-      f(i) *= units_time_cgs;
+    // Compute the changes
+    for (size_t i = 0; i < neqs - 1; i++) {
+      f(i) = (creation_rates(i) - destruction_rates(i));
     }
   }
 };
