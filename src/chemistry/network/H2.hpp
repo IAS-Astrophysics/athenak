@@ -89,25 +89,63 @@ class H2Network {
   }
 
   /*!
-   * \brief Evaluate the internal energy equation
-   * 
-   * \return Real The result of evaluating the internal energy equation
+   * \brief Compute the temperature in the cell
+   *
+   * \return Real The temperature in the cell
    */
   KOKKOS_FUNCTION
-  Real E_dot() {
-    // ----- Internal energy equation -----
+  Real Temperature() {
+    // Constants needed for computing temperature
     static constexpr Real x_He = 0.1;
     static constexpr Real x_e = 0.0;
     const Real x_H2 = (const_cv) ? 0.0 : y(IH2);
 
-    static constexpr Real T_floor = 1.;  // temperature floor for cooling
     // energy per hydrogen atom
     const Real E_ergs = y(IIE) * units_energy_density_cgs / n_H;
-    const Real T = E_ergs / Thermo::CvCold(x_H2, x_He, x_e);
+
+    // Temperature
+    return E_ergs / Thermo::CvCold(x_H2, x_He, x_e);
+  }
+
+  /*!
+   * \brief Compute the cooling term from the temperature
+   *
+   * \param T The temperature in the cell
+   * \return Real The cooling term, i.e. how much the energy decreases. Note
+   * that this is a positive value so the energy update should look like `E =
+   * HeatingTerm() - CoolingTerm();`
+   */
+  KOKKOS_FUNCTION
+  Real CoolingTerm(Real const& T) {
+    return Thermo::alpha_GD_ * n_H * Kokkos::sqrt(T) * T;
+  }
+
+  /*!
+   * \brief Compute the heating term from the temperature. It's just zero for
+   * the H2 network and this function exists for API consistency across
+   * networks.
+   *
+   * \param T The temperature in the cell
+   * \return Real The heating term, i.e. how much the energy increases. The
+   * energy update should look like `E = HeatingTerm() - CoolingTerm();`
+   */
+  KOKKOS_FUNCTION
+  Real HeatingTerm(Real const& T) { return 0.0; }
+
+  /*!
+   * \brief Evaluate the internal energy equation
+   *
+   * \return Real The result of evaluating the internal energy equation
+   */
+  KOKKOS_FUNCTION
+  Real Edot() {
+    const Real T = Temperature();
+
+    static constexpr Real T_floor = 1.0;  // temperature floor for cooling
     if (T < T_floor) {
       return 0;
     } else {
-      const Real dEdt = -Thermo::alpha_GD_ * n_H * Kokkos::sqrt(T) * T;
+      const Real dEdt = HeatingTerm(T) - CoolingTerm(T);
       // convert to code units
       return (dEdt * n_H / units_energy_density_cgs);
     }
@@ -119,7 +157,7 @@ class H2Network {
   KOKKOS_FUNCTION
   void evaluate_function() {
     // ----- Internal energy equation -----
-    f(IIE) = E_dot();
+    f(IIE) = Edot();
 
     // ----- Abundance equations -----
     // cr = cosmic ray, gr = dust grain
