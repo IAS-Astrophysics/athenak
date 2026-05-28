@@ -9,6 +9,9 @@ build*/
 *.hst
 *.rst
 
+# staging scan outputs
+staging_manifests/
+
 # Mac OS metadata
 .DS_Store
 .vscode
