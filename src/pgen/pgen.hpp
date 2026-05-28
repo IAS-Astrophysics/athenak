@@ -75,7 +75,6 @@ class ProblemGenerator {
   void RadiationBeam(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
-  void Diffusion(ParameterInput *pin, const bool restart);
   void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
   void RadiationM1BrentTest(ParameterInput *pin, const bool restart);
   void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);

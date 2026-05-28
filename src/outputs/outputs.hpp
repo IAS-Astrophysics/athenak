@@ -100,12 +100,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Particles (151-152)
   "prtcl_all", "prtcl_d",
 
-  // radiation M1 (153-163)
+  // radiation M1 (153-162)
   "rad_m1_N", "rad_m1_E", "rad_m1_F", "rad_m1_chi", "rad_m1_eta_0", "rad_m1_abs_0",
   "rad_m1_eta_1", "rad_m1_abs_1", "rad_m1_scat_1", "rad_m1_vel",
-  "prtcl_all", "prtcl_d",
 
-  // Spherical radius (153)
+  // Spherical radius (163)
   "r_sph",
 };
 
