@@ -123,17 +123,18 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
                            energy_density_cgs);
 
         // ------ Load cell values ------
-        // Internal energy
-        chem_net.y(Network_t::IIE) = w0(mb_idx, IEN, k, j, i);
-
         // Chemistry scalars. The loop is based off of the chemical
         // network's number of equations since that's known at compile time,
-        // enabling more loop optimizations
+        // enabling more loop optimizations. The minus 1 is because internal
+        // energy occupies the last slot in the array
         int grid_idx = species_start_idx;
-        for (int s_idx = 1; s_idx < Network_t::neqs; s_idx++) {
+        for (int s_idx = 0; s_idx < Network_t::neqs - 1; s_idx++) {
           chem_net.y(s_idx) = w0(mb_idx, grid_idx, k, j, i);
           grid_idx += 1;
         }
+
+        // Load internal energy
+        chem_net.y(Network_t::IIE) = w0(mb_idx, IEN, k, j, i);
 
         // ------ Solve the ODEs ------
         ODE_Solver_t ode_solver(ode_settings, chem_net, t_start, dt);
@@ -145,22 +146,22 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
         }
 
         // ------ Write cell values back out ------
-        // Internal energy
-        w0(mb_idx, IEN, k, j, i) = chem_net.y(Network_t::IIE);
-
         // Chemistry scalars
         grid_idx = species_start_idx;
-        for (int s_idx = 1; s_idx < Network_t::neqs; s_idx++) {
+        for (int s_idx = 0; s_idx < Network_t::neqs - 1; s_idx++) {
           w0(mb_idx, grid_idx, k, j, i) = chem_net.y(s_idx);
           grid_idx += 1;
         }
+
+        // Write internal energy
+        w0(mb_idx, IEN, k, j, i) = chem_net.y(Network_t::IIE);
       });
 
   // Get the failure flag and check for failure
   bool chemisty_ode_failure_h;
   Kokkos::deep_copy(chemisty_ode_failure_h, chemisty_ode_failure);
   if (chemisty_ode_failure_h) {
-    std::cerr << "The ODE solver failed to converge." << std::endl;
+    std::cerr << "The chemistry ODE solver failed to converge." << std::endl;
   }
 }
 

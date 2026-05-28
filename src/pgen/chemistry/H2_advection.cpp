@@ -60,8 +60,7 @@ void ProblemGenerator::H2Advection(ParameterInput* pin, const bool restart) {
   const Real gaussian_std = pin->GetOrAddReal("problem", "gaussian_std", 0.1);
 
   // Assign values
-  const int chem_start =
-      pmbp->pchemistry->get_chemistry_scalars_first_idx() - 1;
+  const int chem_start = pmbp->pchemistry->get_chemistry_scalars_first_idx();
   par_for(
       "pgen_H2_hydro", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js,
       je, is, ie, KOKKOS_LAMBDA(int m, int k, int j, int i) {

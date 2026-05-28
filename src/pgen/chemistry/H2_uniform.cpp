@@ -55,8 +55,7 @@ void ProblemGenerator::H2Uniform(ParameterInput* pin, const bool restart) {
   const Real init_H2 = pin->GetReal("problem", "init_H2");
 
   // Assign values
-  const int chem_start =
-      pmbp->pchemistry->get_chemistry_scalars_first_idx() - 1;
+  const int chem_start = pmbp->pchemistry->get_chemistry_scalars_first_idx();
   par_for(
       "pgen_H2_hydro", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js,
       je, is, ie, KOKKOS_LAMBDA(int m, int k, int j, int i) {

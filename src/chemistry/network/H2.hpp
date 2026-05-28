@@ -55,9 +55,9 @@ class H2Network {
 
   // ----- Species indices within the ODE system ------
   enum {
-    IIE = 0,  // internal energy
-    IH2 = 1,  // H_2
-    IH = 2    // H
+    IH2, // H_2
+    IH,  // H
+    IIE  // internal energy, must be last
   };
 
   // ----- Names, used for output, must be the same order as the enum -----
