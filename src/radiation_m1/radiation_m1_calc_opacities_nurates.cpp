@@ -285,16 +285,19 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
 
               Real temperature_trap{}, Y_e_trap[3]{};
-              bool res = eos.GetBetaEquilibriumTrapped(
+              bool ok = eos.GetBetaEquilibriumTrapped(
                   nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_guess);
 
-              if (res) {
+              if (!ok) {
                 // trying to recompute weak equilibrium neglecting current
                 // neutrino data
                 Real e_zero = eos.GetEnergy(nb, T, Y_part);
-                bool res = eos.GetBetaEquilibriumTrapped(
+                ok = eos.GetBetaEquilibriumTrapped(
                     nb, e_zero, Y_part, temperature_trap, &Y_e_trap[0], T,
                     Y_part);
+                if (!ok) {
+                   Kokkos::printf("WARNING: Failed to find the weak equilibrium\n");
+                }
               }
 
               Real mu_b_eq = eos.GetBaryonChemicalPotential(
