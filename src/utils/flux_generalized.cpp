@@ -191,7 +191,7 @@ void TorusFluxes_General(HistoryData *pdata,
         g_dd_1d[4] = g_surf_d(p,4);
         g_dd_1d[5] = g_surf_d(p,5);
 
-        // det(gamma)  (use ADM helper; minimal change requested)
+        // det(gamma)
         Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
                                     g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
         if (detg <= 0.0) return;
@@ -288,9 +288,9 @@ void TorusFluxes_General(HistoryData *pdata,
           W * (v_u[2] - beta_u[2]/alp)
         };
         const Real mass_flux_vec[3] = {
-          rho * u_u[0],
-          rho * u_u[1],
-          rho * u_u[2]
+          alp * rho * u_u[0],
+          alp * rho * u_u[1],
+          alp * rho * u_u[2]
         };
 
         // Negative sign for inward accretion convention
@@ -339,7 +339,7 @@ void TorusFluxes_General(HistoryData *pdata,
         update.pdot_y_em    += d_pdot_em[1];
         update.pdot_z_em    += d_pdot_em[2];
 
-        // --- G. Angular-momentum fluxes (MINIMAL FIX)
+        // --- G. Angular-momentum fluxes ---
         // Angular momentum density uses J_a = ε_{aℓm} x^ℓ S_m (covariant S_m).
         // Therefore flux through surface is
         //   Ldot_a = ∮ ε_{aℓm} x^ℓ (F^j{}_m dΣ_j)
@@ -353,7 +353,7 @@ void TorusFluxes_General(HistoryData *pdata,
           const Real A_fluid_d[3] = { d_pdot_fluid[0], d_pdot_fluid[1], d_pdot_fluid[2] };
           const Real A_em_d[3]    = { d_pdot_em[0],    d_pdot_em[1],    d_pdot_em[2]    };
 
-          // Ldot = r × A  (same convention as your angular_momentum density block)
+          // Ldot = r × A
           update.ldot_x_fluid += (y * A_fluid_d[2] - z * A_fluid_d[1]);
           update.ldot_y_fluid += (z * A_fluid_d[0] - x * A_fluid_d[2]);
           update.ldot_z_fluid += (x * A_fluid_d[1] - y * A_fluid_d[0]);

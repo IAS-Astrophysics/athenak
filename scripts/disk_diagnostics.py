@@ -682,14 +682,11 @@ def valencia_shell_diagnostics(
     )
     b_cov = np.einsum("...ab,...b->...a", gcov, b_con)
 
-    # Match flux_generalized.cpp: \dot M = - \int rho u^i dS_i, where dS_i is
-    # the covariant shell element. The unit-normal projection is kept for local
-    # shell diagnostics, while mdot_surface carries the fully integrated
-    # covector element.
+    # Match flux_generalized.cpp: coordinate-time Valencia mass flux.
     ur_coord = np.einsum("...i,...i->...", u_con[..., 1:], unit_normal_cov)
     vr_euler = np.einsum("...i,...i->...", v_u, unit_normal_cov)
-    mdot_density = -rho * ur_coord
-    mdot_surface = -rho * np.einsum("...i,...i->...", u_con[..., 1:], d_sigma_cov)
+    mdot_density = -alpha * rho * ur_coord
+    mdot_surface = -alpha * rho * np.einsum("...i,...i->...", u_con[..., 1:], d_sigma_cov)
 
     br_coord = np.einsum("...i,...i->...", b_con[..., 1:], unit_normal_cov)
     x_aligned = pts_aligned[..., 0]

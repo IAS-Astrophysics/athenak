@@ -136,7 +136,7 @@ class PrimitiveSolverHydro {
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN))/mb);
     ps.GetEOSMutable().SetTemperatureFloor(pin->GetOrAddReal(block, "tfloor", (FLT_MIN)));
     ps.GetEOSMutable().SetAggressiveFlooring(pin->GetOrAddBoolean(block,
-                       "aggressive_floor", true));
+                       "aggressive_floor", false));
     ps.GetEOSMutable().SetThreshold(pin->GetOrAddReal(block, "dthreshold", 1.0));
     ps.tol = pin->GetOrAddReal(block, "c2p_tol", 1e-15);
     ps.GetRootSolverMutable().iterations = pin->GetOrAddInteger(block, "c2p_iter", 50);
