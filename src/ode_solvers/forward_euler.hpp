@@ -87,7 +87,7 @@ class ForwardEuler {
     unsigned int fe_n_subcycle_max =
         pin->GetOrAddInteger(module, "fe_n_subcycle_max", 1e5);
     Real fe_cfl = pin->GetOrAddReal(module, "fe_cfl", 0.1);
-    Real fe_yfloor = pin->GetOrAddReal(module, "fe_yfloor", 1.e-3);
+    Real fe_yfloor = pin->GetOrAddReal(module, "fe_yfloor", 1.e-12);
 
     return FESettings{fe_n_subcycle_max, fe_cfl, fe_yfloor};
   }
