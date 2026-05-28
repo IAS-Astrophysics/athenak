@@ -139,6 +139,7 @@ class ForwardEuler {
       // trigger a failure
       if (icount > fe_n_subcycle_max) {
         failed = true;
+        break;
       }
     }
   }
