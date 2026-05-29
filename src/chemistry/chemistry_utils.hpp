@@ -19,7 +19,7 @@ namespace chemistry {
  * \tparam N The size of each array
  */
 template <std::size_t N>
-struct CDRates {
+struct CDRates_t {
   RegisterArray<Real, N> creation, destruction;
 };
 

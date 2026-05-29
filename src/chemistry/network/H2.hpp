@@ -164,46 +164,38 @@ class H2Network {
     }
   }
 
+  /*!
+   * \brief Compute the creation and destruction rates. These are used like
+   * `f(i) = rate.creation(i) - y(i) * rate.destruction(i);`
+   *
+   * \return CDRates_t A struct containing the creation and destruction rate
+   * arrays.
+   */
   KOKKOS_FUNCTION
-  auto CreationRates() {
-    RegisterArray<Real, neqs - 1> creation_rates;
-
-    // cr = cosmic ray, gr = dust grain
-    const Real rate_cr = k_cr * y(IH2);
-    const Real rate_gr = k_gr * n_H * y(IH);
-
-    // H_2 equation
-    creation_rates(IH2) = rate_gr;
-    // H equation
-    creation_rates(IH) = 2 * rate_cr;
-
-    // convert to code units
-    for (size_t i = 0; i < neqs - 1; i++) {
-      creation_rates(i) *= units_time_cgs;
-    }
-
-    return creation_rates;
-  }
-
-  KOKKOS_FUNCTION
-  auto DestructionRates() {
-    RegisterArray<Real, neqs - 1> destruction_rates;
+  CDRates_t<neqs - 1> CDRates() {
+    CDRates_t<neqs - 1> rates;
 
     // cr = cosmic ray, gr = dust grain
     const Real rate_cr = k_cr;
     const Real rate_gr = k_gr * n_H;
 
     // H_2 equation
-    destruction_rates(IH2) = rate_cr;
+    rates.creation(IH2) = rate_gr * y(IH);
     // H equation
-    destruction_rates(IH) = 2 * rate_gr;
+    rates.creation(IH) = 2 * rate_cr * y(IH2);
+
+    // H_2 equation
+    rates.destruction(IH2) = rate_cr;
+    // H equation
+    rates.destruction(IH) = 2 * rate_gr;
 
     // convert to code units
     for (size_t i = 0; i < neqs - 1; i++) {
-      destruction_rates(i) *= units_time_cgs;
+      rates.creation(i) *= units_time_cgs;
+      rates.destruction(i) *= units_time_cgs;
     }
 
-    return destruction_rates;
+    return rates;
   }
 
   /*!
@@ -215,12 +207,11 @@ class H2Network {
     f(IIE) = Edot();
 
     // ----- Creation & Destruction Rates -----
-    auto creation_rates = CreationRates();
-    auto destruction_rates = DestructionRates();
+    const auto rates = CDRates();
 
     // Compute the changes
     for (size_t i = 0; i < neqs - 1; i++) {
-      f(i) = (creation_rates(i) - y(i) * destruction_rates(i));
+      f(i) = rates.creation(i) - y(i) * rates.destruction(i);
     }
   }
 };
