@@ -58,12 +58,12 @@ mu          = 1.4                     # mean molecular weight
 <chemistry>
 network    = H2            # Chemistry network to be used
 ode_solver = forward_euler # ODE solver to be used
+h2_constant_cv = true
 
 <problem>
 pgen_name   = H2_advection  # problem generator name
 n_H         = 100          # initial density, in units of number density of hydrogen atoms
 vx_kms      = 0.2          # initial x-velocity, in km/s
-h2_constant_cv = true
 
 <output1>
 file_type   = tab       # Tabular data dump
