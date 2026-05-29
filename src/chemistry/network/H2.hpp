@@ -29,6 +29,8 @@ namespace chemistry {
 struct H2Settings {
   /// If C_v should be held constant
   bool const_cv;
+  /// If we're using an isothermal equation of state
+  bool isothermal;
 };
 
 class H2Network {
@@ -41,13 +43,17 @@ class H2Network {
       : n_H(density * density_cgs / (mu * hydrogen_mass_cgs)),
         units_time_cgs(units_time_cgs),
         units_energy_density_cgs(units_energy_density_cgs),
-        const_cv(settings.const_cv) {}
+        const_cv(settings.const_cv),
+        isothermal(settings.isothermal) {}
 
   // ----- Number of equations -----
   static constexpr int neqs = 3;
 
   // ----- If Cv is const or not -----
   const bool const_cv;
+
+  /// If the network is using an isothermal equation of state
+  const bool isothermal;
 
   // ----- Arrays to store ODE state -----
   RegisterArray<Real, neqs> y;  // The current state
@@ -85,7 +91,9 @@ class H2Network {
    * \return H2Settings The settings for the H2 network
    */
   static H2Settings GetSettings(ParameterInput* pin) {
-    return H2Settings{pin->GetOrAddBoolean("chemistry", "h2_constant_cv", false)};
+    return H2Settings{
+        pin->GetOrAddBoolean("chemistry", "h2_constant_cv", false),
+        pin->GetOrAddBoolean("chemistry", "h2_isothermal", false)};
   }
 
   /*!
@@ -139,6 +147,10 @@ class H2Network {
    */
   KOKKOS_FUNCTION
   Real Edot() {
+    if (isothermal) {
+      return 0.0;
+    }
+
     const Real T = Temperature();
 
     static constexpr Real T_floor = 1.0;  // temperature floor for cooling
