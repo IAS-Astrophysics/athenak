@@ -283,8 +283,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   // CO tracker and the magnetic field seed, we need to specify the
   // component gravitational masses (where M2 is the heavier star as
   // in Lorene).
-  double M1 = pin->GetReal("problem", "M1");
-  double M2 = pin->GetReal("problem", "M2");
+  double M1 = pin->GetOrAddReal("problem", "M1", 1.35);
+  double M2 = pin->GetOrAddReal("problem", "M2", 1.35);
   double center_m = - (M2 / (M1 + M2)) * sep;
   double center_p = + (M1 / (M1 + M2)) * sep;
 
