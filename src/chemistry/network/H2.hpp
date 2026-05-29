@@ -9,6 +9,7 @@
 //  \brief The implementation for the struct for the H2 chemistry network
 
 #include "athena.hpp"
+#include "chemistry/chemistry_utils.hpp"
 #include "chemistry/thermo/thermo.hpp"
 #include "utils/register_array.hpp"
 
@@ -189,8 +190,8 @@ class H2Network {
     RegisterArray<Real, neqs - 1> destruction_rates;
 
     // cr = cosmic ray, gr = dust grain
-    const Real rate_cr = k_cr * y(IH2);
-    const Real rate_gr = k_gr * n_H * y(IH);
+    const Real rate_cr = k_cr;
+    const Real rate_gr = k_gr * n_H;
 
     // H_2 equation
     destruction_rates(IH2) = rate_cr;
@@ -219,7 +220,7 @@ class H2Network {
 
     // Compute the changes
     for (size_t i = 0; i < neqs - 1; i++) {
-      f(i) = (creation_rates(i) - destruction_rates(i));
+      f(i) = (creation_rates(i) - y(i) * destruction_rates(i));
     }
   }
 };
