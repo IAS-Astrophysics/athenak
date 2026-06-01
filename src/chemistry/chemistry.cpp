@@ -99,12 +99,13 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
   // For reporting if the ODE solver doesn't converge
   DvceArray0D<bool> chemisty_ode_failure("chemisty_ode_failure", false);
 
-  // ----- Get the unit conversions we'll need -----
+  // ----- Get the unit conversions and constants we'll need -----
   Real const time_cgs = pmy_pack->punit->time_cgs();
   Real const energy_density_cgs = pmy_pack->punit->pressure_cgs();
   Real const density_cgs = pmy_pack->punit->density_cgs();
-  Real const mu = pmy_pack->punit->mu();  // mean molecular weight
   Real const hydrogen_mass_cgs = pmy_pack->punit->hydrogen_mass_cgs;
+  Real const mu = pmy_pack->punit->mu();  // mean molecular weight
+  Real const gamma = pmy_pack->phydro->peos->eos_data.gamma;
 
   // ----- Get all the loop limits and generate the parallel policy ------
   // NOLINTNEXTLINE(whitespace/braces)
@@ -119,7 +120,7 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
                     const int& i) {
         // Create the chemisty object
         Network_t chem_net(network_settings, w0(mb_idx, IDN, k, j, i),
-                           density_cgs, mu, hydrogen_mass_cgs, time_cgs,
+                           density_cgs, mu, gamma, hydrogen_mass_cgs, time_cgs,
                            energy_density_cgs);
 
         // ------ Load cell values ------

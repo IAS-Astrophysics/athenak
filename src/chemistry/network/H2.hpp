@@ -38,10 +38,11 @@ class H2Network {
  public:
   KOKKOS_FUNCTION H2Network(H2Settings const settings, Real const density,
                             Real const density_cgs, Real const mu,
-                            Real const hydrogen_mass_cgs,
+                            Real const gamma, Real const hydrogen_mass_cgs,
                             Real const units_time_cgs,
                             Real const units_energy_density_cgs)
       : n_H(density * density_cgs / (mu * hydrogen_mass_cgs)),
+        gamma(gamma),
         units_time_cgs(units_time_cgs),
         units_energy_density_cgs(units_energy_density_cgs),
         const_cv(settings.const_cv),
@@ -73,6 +74,7 @@ class H2Network {
 
   // ----- cell values -----
   Real const n_H;  // The number density of hydrogen
+  Real const gamma;
 
   // ----- unit conversion factors -----
   Real const units_time_cgs;
@@ -113,7 +115,7 @@ class H2Network {
     const Real E_ergs = y(IIE) * units_energy_density_cgs / n_H;
 
     // Temperature
-    return E_ergs / Thermo::CvCold(x_H2, x_He, x_e);
+    return E_ergs / Thermo::CvCold(x_H2, x_He, x_e, gamma);
   }
 
   /*!

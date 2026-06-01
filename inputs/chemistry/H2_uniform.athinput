@@ -59,7 +59,6 @@ mu          = 1.4                     # mean molecular weight
 network    = H2            # Chemistry network to be used
 ode_solver = forward_euler # ODE solver to be used
 h2_constant_cv = true
-h2_isothermal = true
 
 <problem>
 pgen_name   = H2_uniform   # problem generator name

@@ -31,11 +31,21 @@ struct Thermo {
   //! xH2, xe = nH2 or ne / nH
   //! xHe_total = xHeI + xHeII = 0.1 for solar value.
   //! Return: specific heat per H atom.
+
+  /*!
+   * \brief This computes the specific heat (C_v) of a cold gas, i.e. assuming
+   * that H2 rotational and vibrational levels not excited.
+   *
+   * xH2, xe = nH2 or ne / nH
+   * xHe_total = xHeI + xHeII = 0.1 for solar value.
+   *
+   * \return Real specific heat per H atom.
+   */
   KOKKOS_FUNCTION static Real CvCold(const Real xH2, const Real xHe_total,
-                                     const Real xe) {
+                                     const Real xe, const Real gamma) {
     const Real xH20 = (xH2 > 0.5) ? 0.5 : xH2;
-    return 1.5 * units::Units::k_boltzmann_cgs *
-           ((1. - 2. * xH20) + xH20 + xHe_total + xe);
+    return units::Units::k_boltzmann_cgs *
+           ((1. - 2. * xH20) + xH20 + xHe_total + xe) / (gamma - 1.0);
   }
 };
 }  // namespace chemistry
