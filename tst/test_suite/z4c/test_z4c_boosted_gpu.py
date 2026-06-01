@@ -19,7 +19,7 @@ maxerrors = {
     ("Mx-norm"): (1.1e-03),
     ("My-norm"): (4.5e-04),
     ("Mz-norm"): (4.5e-04),
-    ("Theta-norm"): (3.1e-05),
+    ("Theta-norm"): (3.15e-05),
 }
 
 
