@@ -5,9 +5,10 @@
 //========================================================================================
 //! \file coordinates.cpp
 //! \brief
+#include <float.h> // FLT_MIN
+
 #include <iostream> // cout
 #include <string>
-#include <float.h> // FLT_MIN
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"

@@ -35,8 +35,8 @@ void SWSphericalHarm(Real * ylmR, Real * ylmI, int l, int m, int s,
                      Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
-  k1 = Kokkos::Max(0, m-s);
-  k2 = Kokkos::Min(l+m,l-s);
+  k1 = Kokkos::max(0, m-s);
+  k2 = Kokkos::min(l+m,l-s);
 
   for (k = k1; k<=k2; ++k) {
     wignerd += Kokkos::pow((-1),k)*Kokkos::pow(Kokkos::cos(theta/2.0),2*l+m-s-2*k)
@@ -56,8 +56,8 @@ void SphericalHarm(Real *ylmR, Real *ylmI, int l, int m, Real theta, Real phi) {
   Real wignerd = 0.0;
   int k1, k2;
 
-  k1 = Kokkos::Max(0, m);
-  k2 = Kokkos::Min(l + m, l);
+  k1 = Kokkos::max(0, m);
+  k2 = Kokkos::min(l + m, l);
 
   for (int k = k1; k <= k2; ++k) {
     wignerd += Kokkos::pow(-1.0, k)

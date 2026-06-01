@@ -9,12 +9,14 @@
 
 #include <cstdio>
 #include <math.h> // NAN
+#include <unistd.h>
+
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
 #include <string>
 #include <limits>
-#include <unistd.h>
+#include <algorithm>
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -517,7 +519,8 @@ void FastFlow::MetricDerivatives(Real time) {
   par_for("FastFlow_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     // Grid spacing
-    Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2, 1.0 / size.d_view(m).dx3};
+    Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2,
+                  1.0 / size.d_view(m).dx3};
 
     // x-derivative
     dg_(m,D1S11,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
@@ -676,7 +679,7 @@ void FastFlow::FastFlowLoop() {
                    "              Sz             S\n");
   }
 
-  for (int k = 0; k < flow_iterations; k++){
+  for (int k = 0; k < flow_iterations; k++) {
     fastflow_iter = k;
 
     // Step 1: Compute radius r = a_lm Y_lm.
@@ -933,7 +936,7 @@ void FastFlow::RadiiFromSphericalHarmonics() {
   Kokkos::parallel_reduce("FastFlow_sphradii",
   Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
   KOKKOS_LAMBDA(const int &p, Real &lmin) {
-    lmin = Kokkos::Min(lmin, rr_(p));
+    lmin = Kokkos::min(lmin, rr_(p));
   }, Kokkos::Min<Real>(rr_min));
 }
 
@@ -1177,7 +1180,7 @@ void FastFlow::SurfaceIntegrals() {
         for (int b = 0; b < NDIM; ++b) {
           dFdidj(a,b) = drdidj(a,b);
 
-          for (int l = 0;l <= lmax_; l++) {
+          for (int l = 0; l <= lmax_; l++) {
             dFdidj(a,b) -= a0_.d_view(l)*(dthetadidj(a,b) * dY0dth_.d_view(p,l)
                             + dthetadi(a) * dthetadi(b) * dY0dth2_.d_view(p,l));
 

@@ -33,8 +33,7 @@ IndAndWghts<NGHOST> IndicesAndWeights(
   const DualArray1D<RegionSize> &size,
   Real rcoords[3],
   int nmb
-)
-{
+) {
   IndAndWghts<NGHOST> result;
 
   // **INTERPOLATION INDICES**
@@ -53,9 +52,12 @@ IndAndWghts<NGHOST> IndicesAndWeights(
       && (rcoords[2] >= mb.x3min && rcoords[2] < mb.x3max)) {
       result.point_exist = true;
       result.ii0 = m;
-      result.ii1 = static_cast<int>(Kokkos::floor((rcoords[0] - (mb.x1min + mb.dx1 / 2.0)) / mb.dx1));
-      result.ii2 = static_cast<int>(Kokkos::floor((rcoords[1] - (mb.x2min + mb.dx2 / 2.0)) / mb.dx2));
-      result.ii3 = static_cast<int>(Kokkos::floor((rcoords[2] - (mb.x3min + mb.dx3 / 2.0)) / mb.dx3));
+      result.ii1 = static_cast<int>(Kokkos::floor((rcoords[0]
+                    - (mb.x1min + mb.dx1 / 2.0)) / mb.dx1));
+      result.ii2 = static_cast<int>(Kokkos::floor((rcoords[1]
+                    - (mb.x2min + mb.dx2 / 2.0)) / mb.dx2));
+      result.ii3 = static_cast<int>(Kokkos::floor((rcoords[2]
+                    - (mb.x3min + mb.dx3 / 2.0)) / mb.dx3));
 
       break;
     }
@@ -78,17 +80,23 @@ IndAndWghts<NGHOST> IndicesAndWeights(
       result.wght2[i] = 1.;
       result.wght3[i] = 1.;
 
-      Real x1vpi1 = CellCenterX(result.ii1 - NGHOST + i + 1, indcs.nx1, mb0.x1min, mb0.x1max);
-      Real x2vpi1 = CellCenterX(result.ii2 - NGHOST + i + 1, indcs.nx2, mb0.x2min, mb0.x2max);
-      Real x3vpi1 = CellCenterX(result.ii3 - NGHOST + i + 1, indcs.nx3, mb0.x3min, mb0.x3max);
+      Real x1vpi1 = CellCenterX(result.ii1 - NGHOST + i + 1,
+                                indcs.nx1, mb0.x1min, mb0.x1max);
+      Real x2vpi1 = CellCenterX(result.ii2 - NGHOST + i + 1,
+                                indcs.nx2, mb0.x2min, mb0.x2max);
+      Real x3vpi1 = CellCenterX(result.ii3 - NGHOST + i + 1,
+                                indcs.nx3, mb0.x3min, mb0.x3max);
 
       for (int j = 0; j < 2 * NGHOST; ++j) {
         if (j != i) {
-          Real x1vpj1 = CellCenterX(result.ii1 - NGHOST + j + 1, indcs.nx1, mb0.x1min, mb0.x1max);
+          Real x1vpj1 = CellCenterX(result.ii1 - NGHOST + j + 1, indcs.nx1,
+                                    mb0.x1min, mb0.x1max);
           result.wght1[i] *= (rcoords[0] - x1vpj1) / (x1vpi1 - x1vpj1);
-          Real x2vpj1 = CellCenterX(result.ii2 - NGHOST + j + 1, indcs.nx2, mb0.x2min, mb0.x2max);
+          Real x2vpj1 = CellCenterX(result.ii2 - NGHOST + j + 1, indcs.nx2,
+                                    mb0.x2min, mb0.x2max);
           result.wght2[i] *= (rcoords[1] - x2vpj1) / (x2vpi1 - x2vpj1);
-          Real x3vpj1 = CellCenterX(result.ii3 - NGHOST + j + 1, indcs.nx3, mb0.x3min, mb0.x3max);
+          Real x3vpj1 = CellCenterX(result.ii3 - NGHOST + j + 1, indcs.nx3,
+                                    mb0.x3min, mb0.x3max);
           result.wght3[i] *= (rcoords[2] - x3vpj1) / (x3vpi1 - x3vpj1);
         }
       }
@@ -105,8 +113,7 @@ Real InterpolateLagrange(
   int var,
   const RegionIndcs &indcs,
   IndAndWghts<NGHOST> indcs_wghts
-)
-{
+) {
   Real ival = 0.;
   int is = indcs.is;
   int js = indcs.js;

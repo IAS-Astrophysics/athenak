@@ -6,8 +6,8 @@
 //! \file fastflow.hpp
 //! \brief Basic functionality for the FastFlow class.
 
-#ifndef Z4C_FASTFLOW_HPP
-#define Z4C_FASTFLOW_HPP
+#ifndef Z4C_FASTFLOW_HPP_
+#define Z4C_FASTFLOW_HPP_
 
 #include <string>
 #include <cstdio>
