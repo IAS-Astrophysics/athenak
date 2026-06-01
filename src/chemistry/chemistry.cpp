@@ -31,6 +31,7 @@ Chemistry::Chemistry(MeshBlockPack* ppack, ParameterInput* pin)
       is_hydro_enabled(pin->DoesBlockExist("hydro")),
       is_mhd_enabled(pin->DoesBlockExist("mhd")),
       nscalars_chemistry(SetupGetNumChemistryScalars(ppack, pin, -1, false)),
+      mu_H(pin->GetOrAddReal("chemistry", "mu_H", 1.4)),
       chemistry_scalars_first_idx(ComputeChemistryScalarsStartIndex()),
       my_pin(pin) {
   // Verify that units are enables
@@ -104,8 +105,8 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
   Real const energy_density_cgs = pmy_pack->punit->pressure_cgs();
   Real const density_cgs = pmy_pack->punit->density_cgs();
   Real const hydrogen_mass_cgs = pmy_pack->punit->hydrogen_mass_cgs;
-  Real const mu = pmy_pack->punit->mu();  // mean molecular weight
   Real const gamma = pmy_pack->phydro->peos->eos_data.gamma;
+  Real const mu_H_local = mu_H;
 
   // ----- Get all the loop limits and generate the parallel policy ------
   // NOLINTNEXTLINE(whitespace/braces)
@@ -120,8 +121,8 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
                     const int& i) {
         // Create the chemisty object
         Network_t chem_net(network_settings, w0(mb_idx, IDN, k, j, i),
-                           density_cgs, mu, gamma, hydrogen_mass_cgs, time_cgs,
-                           energy_density_cgs);
+                           density_cgs, mu_H_local, gamma, hydrogen_mass_cgs,
+                           time_cgs, energy_density_cgs);
 
         // ------ Load cell values ------
         // Chemistry scalars. The loop is based off of the chemical

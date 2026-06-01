@@ -37,11 +37,11 @@ struct H2Settings {
 class H2Network {
  public:
   KOKKOS_FUNCTION H2Network(H2Settings const settings, Real const density,
-                            Real const density_cgs, Real const mu,
+                            Real const density_cgs, Real const mu_H,
                             Real const gamma, Real const hydrogen_mass_cgs,
                             Real const units_time_cgs,
                             Real const units_energy_density_cgs)
-      : n_H(density * density_cgs / (mu * hydrogen_mass_cgs)),
+      : n_H(density * density_cgs / (mu_H * hydrogen_mass_cgs)),
         gamma(gamma),
         units_time_cgs(units_time_cgs),
         units_energy_density_cgs(units_energy_density_cgs),

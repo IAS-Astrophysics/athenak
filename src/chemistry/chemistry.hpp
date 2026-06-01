@@ -47,6 +47,9 @@ class Chemistry {
   // The number of passive scalars used in the chemistry module
   int const nscalars_chemistry;
 
+  // Mean molecular weight per hydrogen atom
+  Real const mu_H;
+
   // ================
   // Member Functions
   // ================

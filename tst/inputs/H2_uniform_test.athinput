@@ -53,7 +53,7 @@ iso_sound_speed = 0.6               # isothermal sound speed
 length_cgs  = 3.0856775809623245e+18  # length is 1 pc
 mass_cgs    = 6.195900228622575e+31   # number density is 1 cm^-3
 time_cgs    = 3.15576e+13             # time is 1 Myr
-mu          = 1.4                     # mean molecular weight
+mu          = 1.27                    # mean molecular weight
 
 <chemistry>
 network    = H2            # Chemistry network to be used
