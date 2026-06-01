@@ -9,8 +9,9 @@
 #ifndef Z4C_FASTFLOW_HPP_
 #define Z4C_FASTFLOW_HPP_
 
-#include <string>
 #include <cstdio>
+
+#include <string>
 #include <vector>
 
 #include "athena.hpp"
