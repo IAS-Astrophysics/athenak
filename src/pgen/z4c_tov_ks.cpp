@@ -331,8 +331,13 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
       if (excision_project_state_l) {
         mhd_u0(m,n,k,j,i) = BlendFiniteToTarget(mhd_u0(m,n,k,j,i), target, ramp);
         mhd_u1(m,n,k,j,i) = BlendFiniteToTarget(mhd_u1(m,n,k,j,i), target, ramp);
-      } else if (!(isfinite(mhd_u0(m,n,k,j,i)))) {
-        mhd_u0(m,n,k,j,i) = target;
+      } else {
+        if (!(isfinite(mhd_u0(m,n,k,j,i)))) {
+          mhd_u0(m,n,k,j,i) = target;
+        }
+        if (!(isfinite(mhd_u1(m,n,k,j,i)))) {
+          mhd_u1(m,n,k,j,i) = target;
+        }
       }
     });
   }
