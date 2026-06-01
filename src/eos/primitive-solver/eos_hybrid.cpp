@@ -132,21 +132,21 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
         Real log2_e_in   = host_table(ECLOGE,in);
         Real log2_e_inp1 = host_table(ECLOGE,in+1);
         Real pow_e = Kokkos::fabs(log2_e_inp1-log2_e_in);
- 
+
         Real log2_p_in   = host_table(ECLOGP,in);
         Real log2_p_inp1 = host_table(ECLOGP,in+1);
         Real pow_p = Kokkos::fabs(log2_p_inp1-log2_p_in);
- 
+
         Real k0 =  3.696e-3; // Exact number rounded up
         Real k1 = -9.709e-3; // Exact number rounded down
 
         Real fac_e = (1-k0)*Kokkos::exp2(pow_e*k1); // N.B. not exp2_
         Real fac_p = (1-k0)*Kokkos::exp2(pow_p*k1);
 
-        Real e_over_n_min = fac_e*Kokkos::min(exp2_(log2_e_in)/nb, 
+        Real e_over_n_min = fac_e*Kokkos::min(exp2_(log2_e_in)/nb,
                                              exp2_(log2_e_inp1)/exp2_(host_log_nb(in+1)));
 
-        Real p_over_n_min = fac_p*Kokkos::min(exp2_(log2_p_in)/nb, 
+        Real p_over_n_min = fac_p*Kokkos::min(exp2_(log2_p_in)/nb,
                                              exp2_(log2_p_inp1)/exp2_(host_log_nb(in+1)));
 
         m_min_h = Kokkos::min(m_min_h,e_over_n_min+p_over_n_min);
