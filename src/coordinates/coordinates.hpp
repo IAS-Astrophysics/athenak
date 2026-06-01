@@ -43,7 +43,7 @@ struct CoordData {
   Real flux_excise_r;              // reduce to first-order inside this radius
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
-  bool smooth_excision;            // flag to specify smooth excision (fastflow)
+  bool smooth_excision = false;    // flag to specify smooth excision (fastflow)
   Real horizon_factor;             // factor to muliply the horizon factor by (fastflow)
   Real tdamp;                      // damping time (needed for smooth excision)
 };
