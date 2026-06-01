@@ -35,8 +35,8 @@ void SWSphericalHarm(Real * ylmR, Real * ylmI, int l, int m, int s,
                      Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
-  k1 = Kokkos::max(0, m-s);
-  k2 = Kokkos::min(l+m,l-s);
+  k1 = Kokkos::Max(0, m-s);
+  k2 = Kokkos::Min(l+m,l-s);
 
   for (k = k1; k<=k2; ++k) {
     wignerd += Kokkos::pow((-1),k)*Kokkos::pow(Kokkos::cos(theta/2.0),2*l+m-s-2*k)
@@ -56,8 +56,8 @@ void SphericalHarm(Real *ylmR, Real *ylmI, int l, int m, Real theta, Real phi) {
   Real wignerd = 0.0;
   int k1, k2;
 
-  k1 = Kokkos::max(0, m);
-  k2 = Kokkos::min(l + m, l);
+  k1 = Kokkos::Max(0, m);
+  k2 = Kokkos::Min(l + m, l);
 
   for (int k = k1; k <= k2; ++k) {
     wignerd += Kokkos::pow(-1.0, k)
@@ -78,8 +78,8 @@ void SphericalHarm(Real *ylmR, Real *ylmI, int l, int m, Real theta, Real phi) {
 // Calculate first derivatives of spherical harmonics using Wigner-d matrix notation
 KOKKOS_INLINE_FUNCTION
 void SphericalHarmFirstDerivs(Real *YlmR, Real *YlmI, Real *YlmRdth, Real *YlmIdth,
-                         Real *YlmRdphi, Real *YlmIdphi, int l, int m, Real theta, Real phi) {
-
+                         Real *YlmRdphi, Real *YlmIdphi, int l, int m, Real theta,
+                         Real phi) {
   SphericalHarm(YlmR, YlmI, l, m, theta, phi);
 
   // Phi first derivative
@@ -113,9 +113,10 @@ KOKKOS_INLINE_FUNCTION
 void SphericalHarmSecondDerivs(Real *YlmR, Real *YlmI, Real *YlmRdth, Real *YlmIdth,
                                Real *YlmRdphi, Real *YlmIdphi, Real *YlmRdth2,
                                Real *YlmIdth2, Real *YlmRdphi2, Real *YlmIdphi2,
-                               Real *YlmRdthdphi, Real *YlmIdthdphi, int l, int m, Real theta, Real phi) {
-
-  SphericalHarmFirstDerivs(YlmR, YlmI, YlmRdth, YlmIdth, YlmRdphi, YlmIdphi, l, m, theta, phi);
+                               Real *YlmRdthdphi, Real *YlmIdthdphi, int l, int m,
+                               Real theta, Real phi) {
+  SphericalHarmFirstDerivs(YlmR, YlmI, YlmRdth, YlmIdth, YlmRdphi,
+                           YlmIdphi, l, m, theta, phi);
 
   // Phi second derivative
   *YlmRdphi2 = -Kokkos::pow(m, 2) * (*YlmR);
@@ -129,16 +130,17 @@ void SphericalHarmSecondDerivs(Real *YlmR, Real *YlmI, Real *YlmRdth, Real *YlmI
   Real sin_theta = Kokkos::sin(theta);
   Real cot_theta = Kokkos::cos(theta) / sin_theta;
 
-  *YlmRdth2 = -l * (l+1) * (*YlmR) - cot_theta * (*YlmRdth) + Kokkos::pow(m, 2)/Kokkos::pow(sin_theta, 2) * (*YlmR);
-  *YlmIdth2 = -l * (l+1) * (*YlmI) - cot_theta * (*YlmIdth) + Kokkos::pow(m, 2)/Kokkos::pow(sin_theta, 2) * (*YlmI);
+  *YlmRdth2 = -l * (l+1) * (*YlmR) - cot_theta * (*YlmRdth) +
+                Kokkos::pow(m, 2)/Kokkos::pow(sin_theta, 2) * (*YlmR);
+  *YlmIdth2 = -l * (l+1) * (*YlmI) - cot_theta * (*YlmIdth) +
+                Kokkos::pow(m, 2)/Kokkos::pow(sin_theta, 2) * (*YlmI);
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn int lmindex(const int l, const int m, const lm)
 //! \brief Multipolar single index (l,m) -> index
 KOKKOS_INLINE_FUNCTION
-int lmindex(const int l, const int m, const int lm)
-{
+int lmindex(const int l, const int m, const int lm) {
   return l * (lm + 1) + m;
 }
 

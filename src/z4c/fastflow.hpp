@@ -6,10 +6,11 @@
 //! \file fastflow.hpp
 //! \brief Basic functionality for the FastFlow class.
 
-#ifndef FASTFLOW_HPP
-#define FASTFLOW_HPP
+#ifndef Z4C_FASTFLOW_HPP
+#define Z4C_FASTFLOW_HPP
 
 #include <string>
+#include <cstdio>
 #include <vector>
 
 #include "athena.hpp"
@@ -28,7 +29,7 @@ class ParameterInput;
 //! \class FastFlow
 //! \brief Apparent Horizon Finder class based on fast-flow algorithm
 class FastFlow {
-public:
+ public:
   // Constructor for FastFlow object
   FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n);
 
@@ -78,7 +79,7 @@ public:
   Real start_time;
   Real stop_time;
 
-private:
+ private:
   int npunct; // Number of punctures
   int lmax1; // lmax + 1
   int lmpoints; // lmax * lmax
@@ -117,7 +118,8 @@ private:
     iSx, iSy, iSz,
     invar
   };
-  Real integrals[invar]; // Array of surface integrals
+  static constexpr int kInvar = 7;
+  Real integrals[kInvar]; // Array of surface integrals
 
   // Indexes of horizon quantities
   enum{
@@ -131,7 +133,8 @@ private:
     hminradius,
     hnvar
   };
-  Real ah_prop[hnvar]; // Array of horizon quantities
+  static constexpr int kHnvar = 11;
+  Real ah_prop[kHnvar]; // Array of horizon quantities
 
   // 5D Device array for the metric derivatives
   DvceArray5D<Real> dg;
@@ -172,4 +175,4 @@ private:
   bool PuncAreClose();
 };
 
-#endif
+#endif  // Z4C_FASTFLOW_HPP_

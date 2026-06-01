@@ -64,9 +64,11 @@ void Z4c::QueueZ4cTasks() {
   if (pmy_pack->pz4c->opt.floor_chi) {
     pnr->QueueTask(&Z4c::Z4cFloorChi, this, Z4c_ChiFloor, "Z4c_ChiFloor", Task_Run,
                    {Z4c_ExplRK});
-    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ChiFloor});
+    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU",
+                   Task_Run, {Z4c_ChiFloor});
   } else {
-    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
+    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU",
+                   Task_Run, {Z4c_ExplRK});
   }
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
@@ -82,8 +84,10 @@ void Z4c::QueueZ4cTasks() {
   }
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
-  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_Run, {Z4c_Z4c2ADM});
-  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_FastFlow, "Z4c_FastFlow", Task_Run, {Z4c_PT});
+  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT",
+                 Task_Run, {Z4c_Z4c2ADM});
+  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_FastFlow, "Z4c_FastFlow",
+                 Task_Run, {Z4c_PT});
 
   // End task list
   pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End);

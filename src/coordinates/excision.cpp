@@ -213,11 +213,11 @@ void Coordinates::UpdateExcisionMasks() {
 
     // fill horizon arrays on host
     for (int h = 0; h < hsize; ++h) {
-      hcenter.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->center[0];       // center x-coord.
-      hcenter.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1];       // center y-coord.
-      hcenter.h_view(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2];       // center z-coord.
-      hradius.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min;          // minimum radius
-      hfound.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found;         // found/not found horizon
+      hcenter.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->center[0]; // center x-coord.
+      hcenter.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1]; // center y-coord.
+      hcenter.h_view(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2]; // center z-coord.
+      hradius.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min; // minimum radius
+      hfound.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found; // found/not found
     }
 
     // sync to device
@@ -228,7 +228,7 @@ void Coordinates::UpdateExcisionMasks() {
     hfound.template modify<HostMemSpace>();
     hfound.template sync<DevExeSpace>();
 
-    par_for("set_excision_horizon", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    par_for("set_excision_horizon", DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       // Set MB specifics
       Real &x1min = size.d_view(m).x1min;

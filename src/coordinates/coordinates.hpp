@@ -39,12 +39,12 @@ struct CoordData {
   Real rexcise;                    // excision radius (SKS)
   Real dexcise;                    // rest-mass density inside excised region
   Real pexcise;                    // pressure inside excised region
-  Real texcise;                    // temperature inside excised region (needed for smooth exc.)
+  Real texcise;                    // temperature inside excised region (for smooth exc.)
   Real flux_excise_r;              // reduce to first-order inside this radius
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
-  bool smooth_excision;            // flag to specify smooth excision (used with fastflow)
-  Real horizon_factor;             // factor to muliply the horizon factor by (used with fastflow)
+  bool smooth_excision;            // flag to specify smooth excision (fastflow)
+  Real horizon_factor;             // factor to muliply the horizon factor by (fastflow)
   Real tdamp;                      // damping time (needed for smooth excision)
 };
 

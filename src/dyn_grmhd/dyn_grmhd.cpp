@@ -675,7 +675,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       rhs(m, IM3, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[2])/tdamp;
       rhs(m, IEN, k, j, i) -= dt*vol*floor(m,k,j,i)*(tau - tau_ex)/tdamp;
       for (int s = 0; s < nscal; s++) {
-        rhs(m, IYF+s, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise)*prim_pt[PYF+s])/tdamp;
+        rhs(m, IYF+s, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise)*prim_pt[PYF+s])
+                                      /tdamp;
       }
     }
   });
