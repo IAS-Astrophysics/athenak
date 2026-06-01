@@ -11,12 +11,12 @@
 #include <math.h> // NAN
 #include <unistd.h>
 
+#include <algorithm>
 #include <stdexcept>
 #include <sstream>
 #include <iostream>
 #include <string>
 #include <limits>
-#include <algorithm>
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -1450,10 +1450,10 @@ void FastFlow::ComputeSphericalHarmonics() {
 
   // Sync the spherical harmonics to Host.
   // (OS): Although there is a lot to sync, this
-  //				is okay, since the function is only called
-  //				once, when the constructor is instantiated.
-  //				This will come in handy to speed up the rest
-  //				of the code.
+  //       is okay, since the function is only called
+  //       once, when the constructor is instantiated.
+  //       This will come in handy to speed up the rest
+  //       of the code.
   // **SCALARS**
   Y0.template modify<DevExeSpace>();
   Y0.template sync<HostMemSpace>();
