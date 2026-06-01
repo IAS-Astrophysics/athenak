@@ -149,7 +149,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
         Real p_over_n_min = fac_p*Kokkos::min(exp2_(log2_p_in)/nb,
                                              exp2_(log2_p_inp1)/exp2_(host_log_nb(in+1)));
 
-        m_min_h = Kokkos::min(m_min_h,e_over_n_min+p_over_n_min);
+        m_min_h = Kokkos::fmin(m_min_h,e_over_n_min+p_over_n_min);
       }
     }
 
