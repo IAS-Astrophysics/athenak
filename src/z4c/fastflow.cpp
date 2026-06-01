@@ -7,16 +7,16 @@
 //! \brief Implementation of the apparent horizon finder class
 //!        based on the fast-flow algorithm of Gundlach:1997us and Alcubierre:1998rq
 
-#include <cstdio>
 #include <math.h> // NAN
 #include <unistd.h>
 
 #include <algorithm>
-#include <stdexcept>
-#include <sstream>
-#include <iostream>
-#include <string>
+#include <cstdio>
 #include <limits>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
