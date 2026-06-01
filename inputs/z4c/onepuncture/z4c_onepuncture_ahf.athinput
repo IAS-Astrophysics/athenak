@@ -75,8 +75,6 @@ chi_div_floor   = 1e-05
 damp_kappa1     = 0.02
 damp_kappa2     = 0.0
 
-store_metric_drvts = false
-
 # Compact object tracker
 nco = 1
 co_0_type = BH
@@ -90,6 +88,8 @@ tracker_mode = ode
 # Number of punctures and horizons
 npunct = 1
 num_horizons = 1
+
+store_metric_drvts = false
 
 # Grid points
 ntheta = 10	# nphi = 2*ntheta 

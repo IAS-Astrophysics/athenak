@@ -85,7 +85,6 @@ damp_kappa2     = 0.0
 # Slow start lapse
 ssl_damping_time = 20
 ssl_damping_amp = 0.6
-store_metric_drvts = false
 
 # Compact object tracker
 nco = 2
@@ -103,6 +102,8 @@ tracker_mode = ode
 # Number of punctures and horizons
 npunct = 2
 num_horizons = 2
+
+store_metric_drvts = false
 
 # Grid points
 ntheta = 10	# nphi = 2*ntheta
