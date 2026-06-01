@@ -205,7 +205,7 @@ void Coordinates::UpdateExcisionMasks() {
     auto &flux = excision_flux;
 
     // set up arrays to hold horizon information
-    Real &horizon_factor = coord_data.horizon_factor; 
+    Real &horizon_factor = coord_data.horizon_factor;
     int hsize = pmy_pack->pz4c->pfastflow.size();
     DualArray2D<Real> hcenter("hcenter", hsize, 3);
     DualArray2D<Real> hradius("hradius", hsize, 1);
@@ -257,7 +257,7 @@ void Coordinates::UpdateExcisionMasks() {
       }
 
       floor(m,k,j,i) = excise;
-      flux(m,k,j,i) = excise; 
+      flux(m,k,j,i) = excise;
     });
   }
 }

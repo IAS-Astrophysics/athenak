@@ -38,7 +38,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
 
-	Real time = pmy_pack->pmesh->time;
+  Real time = pmy_pack->pmesh->time;
 
   bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
   Tmunu::Tmunu_vars tmunu;
