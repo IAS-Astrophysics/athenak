@@ -1010,19 +1010,25 @@ void FastFlow::SurfaceIntegrals() {
 
   int dgmap[3][3][3] = {
     // Derivative in x1.
-    {{D1S11, D1S12, D1S13},
+    {
+     {D1S11, D1S12, D1S13},
      {D1S12, D1S22, D1S23},
-     {D1S13, D1S23, D1S33}},
+     {D1S13, D1S23, D1S33}
+    },
 
      // Derivative in x2.
-    {{D2S11, D2S12, D2S13},
+    {
+     {D2S11, D2S12, D2S13},
      {D2S12, D2S22, D2S23},
-     {D2S13, D2S23, D2S33}},
+     {D2S13, D2S23, D2S33}
+    },
 
      // Derivative in x3.
-    {{D3S11, D3S12, D3S13},
+    {
+     {D3S11, D3S12, D3S13},
      {D3S12, D3S22, D3S23},
-     {D3S13, D3S23, D3S33}},
+     {D3S13, D3S23, D3S33}
+    }
   };
 
   // Loop over surface points
