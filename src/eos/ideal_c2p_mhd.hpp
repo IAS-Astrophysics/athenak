@@ -24,7 +24,6 @@ void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
   const Real &dfloor_ = eos.dfloor;
   Real efloor = eos.pfloor/(eos.gamma - 1.0);
   Real tfloor = eos.tfloor;
-  Real sfloor = eos.sfloor;
   Real gm1 = eos.gamma - 1.0;
 
   // apply density floor, without changing momentum or energy
@@ -56,6 +55,7 @@ void SingleC2P_IdealMHD(MHDCons1D &u, const EOS_Data &eos,
     tfloor_used =true;
   }
   // apply entropy floor
+  Real sfloor = eos.EntropyFloorLocal(w.d);
   Real spe_over_eps = gm1/pow(w.d, gm1);
   Real spe = spe_over_eps*w.e*di;
   if (spe <= sfloor) {
@@ -111,7 +111,8 @@ Real Equation44(const Real mu, const Real b2, const Real rpar, const Real r, con
   Real const wd = u_d/w;                           // (34)
   Real eps = w*(qbar - mu*rbar) + z2/(w+1.);
   Real const gm1 = eos.gamma - 1.0;
-  Real epsmin = fmax(eos.pfloor/(wd*gm1), eos.sfloor*pow(wd, gm1)/gm1);
+  Real epsmin = fmax(eos.pfloor/(wd*gm1),
+                     eos.EntropyFloorLocal(wd)*pow(wd, gm1)/gm1);
   eps = fmax(eps, epsmin);
   Real const h = 1.0 + eos.gamma*eps;              // (43)
   return mu - 1./(h/w + rbar*mu);                  // (45)
@@ -263,7 +264,8 @@ void SingleC2P_IdealSRMHD(MHDCons1D &u, const EOS_Data &eos, Real s2, Real b2, R
 
   // compute specific internal energy density then apply floors
   Real eps = lor*(qbar - mu*rbar) + z2/(lor + 1.0);
-  Real epsmin = fmax(eos.pfloor/(dens*gm1), eos.sfloor*pow(dens, gm1)/gm1);
+  Real epsmin = fmax(eos.pfloor/(dens*gm1),
+                     eos.EntropyFloorLocal(dens)*pow(dens, gm1)/gm1);
   if (eps <= epsmin) {
     eps = epsmin;
     efloor_used = true;

@@ -7,6 +7,7 @@
 //! \brief implements constructor and some fns for EquationOfState abstract base class
 
 #include <float.h>
+#include <iostream>
 #include <string>
 
 #include "athena.hpp"
@@ -23,6 +24,21 @@ EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInp
   eos_data.pfloor = pin->GetOrAddReal(bk,"pfloor",(FLT_MIN));
   eos_data.tfloor = pin->GetOrAddReal(bk,"tfloor",(FLT_MIN));
   eos_data.sfloor = pin->GetOrAddReal(bk,"sfloor",(FLT_MIN));
+  eos_data.sfloor1 = pin->GetOrAddReal(bk,"sfloor1",eos_data.sfloor);
+  eos_data.sfloor2 = pin->GetOrAddReal(bk,"sfloor2",eos_data.sfloor);
+  eos_data.rho1 = pin->GetOrAddReal(bk,"rho1",eos_data.dfloor);
+  eos_data.rho2 = pin->GetOrAddReal(bk,"rho2",2.0*eos_data.dfloor);
+
+  if (!(eos_data.dfloor > 0.0) || !(eos_data.sfloor > 0.0) ||
+      !(eos_data.sfloor1 > 0.0) || !(eos_data.sfloor2 > 0.0) ||
+      !(eos_data.rho1 > 0.0) || !(eos_data.rho2 > 0.0) ||
+      eos_data.rho1 == eos_data.rho2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<" << bk << "> EOS floors require dfloor, sfloor, "
+              << "sfloor1, sfloor2, rho1, and rho2 > 0 with rho1 != rho2"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------

@@ -30,7 +30,22 @@ struct EOS_Data {
   bool is_ideal;     // flag to denote ideal gas EOS
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real dfloor, pfloor, tfloor, sfloor;  // density, pressure, temperature, entropy floors
+  Real sfloor1, sfloor2, rho1, rho2;    // density-dependent entropy floor controls
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
+
+  KOKKOS_INLINE_FUNCTION
+  Real EntropyFloorLocal(const Real dens) const {
+    if (sfloor1 == sfloor2) {
+      return fmax(sfloor, sfloor1);
+    }
+    const Real rhomin = fmin(rho1, rho2);
+    const Real rhomax = fmax(rho1, rho2);
+    const Real rho = fmin(fmax(dens, rhomin), rhomax);
+    const Real slope = ((log10(sfloor2) - log10(sfloor1))/
+                        (log10(rho2) - log10(rho1)));
+    const Real log_sfloor = log10(sfloor1) + (log10(rho) - log10(rho1))*slope;
+    return fmax(sfloor, pow(10.0, log_sfloor));
+  }
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.
