@@ -69,8 +69,8 @@ class H2Network {
   };
 
   // ----- Names, used for output, must be the same order as the enum -----
-  static constexpr std::array<std::string_view, neqs> species_names = {"H2",
-                                                                       "H"};
+  static constexpr std::array<std::string_view, neqs - 1> species_names = {"H2",
+                                                                           "H"};
 
   // ----- cell values -----
   Real const n_H;  // The number density of hydrogen
