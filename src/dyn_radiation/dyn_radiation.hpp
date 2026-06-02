@@ -210,6 +210,12 @@ class DynRadiation {
   bool is_compton_enabled;  // flag to enable/disable compton
   int source_max_iter;      // nonlinear radiation-matter coupling iterations
   Real source_tolerance;    // relative gas-temperature convergence tolerance
+  bool correct_radsrc_velocity; // optional radiation-dominated velocity correction
+  bool correct_radsrc_opacity;  // optional opacity-density correction
+  Real dfloor_opacity;      // density floor used by opacity correction
+  Real dens_trunc_max;      // maximum density truncation scale
+  Real tau_truncation;      // optical-depth truncation parameter
+  Real sigmoid_residual;    // residual of smooth opacity-density transition
 
   // dyn_radiation source term (i.e., beam)
   SourceTerms *psrc = nullptr;
