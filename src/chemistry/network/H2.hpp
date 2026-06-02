@@ -14,6 +14,13 @@
 #include "utils/register_array.hpp"
 
 namespace chemistry {
+struct H2Settings {
+  /// If C_v should be held constant
+  bool const_cv;
+  /// If we're using an isothermal equation of state
+  bool isothermal;
+};
+
 /*!
  * \brief The class for the H2 network. This also serves as a template for other
  * chemistry networks.
@@ -27,13 +34,6 @@ namespace chemistry {
  *     result of evaluating the equations respectively.
  *   - An `evaluate_function` method that computes `f` from `y`
  */
-struct H2Settings {
-  /// If C_v should be held constant
-  bool const_cv;
-  /// If we're using an isothermal equation of state
-  bool isothermal;
-};
-
 class H2Network {
  public:
   KOKKOS_FUNCTION H2Network(H2Settings const settings, Real const density,
