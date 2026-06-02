@@ -76,6 +76,7 @@ TaskStatus MHD::CT(Driver *pdriver, int stage) {
     }
   });
 
+  if (!CheckFiniteFaceB("CT", pdriver, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 } // namespace mhd

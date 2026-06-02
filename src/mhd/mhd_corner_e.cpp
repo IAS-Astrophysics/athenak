@@ -8,7 +8,10 @@
 //  Also includes contributions to electric field from "source terms" such as the
 //  shearing box.
 
+#include <iostream>
+
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "diffusion/resistivity.hpp"
@@ -17,6 +20,60 @@
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
+
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+bool FiniteEMF(const Real v) {
+  return ((v == v) && (v <= static_cast<Real>(1.0e300)) &&
+          (v >= static_cast<Real>(-1.0e300)));
+}
+
+KOKKOS_INLINE_FUNCTION
+Real FiniteAverage4(const Real a, const Real b, const Real c, const Real d, int &count) {
+  Real sum = 0.0;
+  count = 0;
+  if (FiniteEMF(a)) {
+    sum += a;
+    ++count;
+  }
+  if (FiniteEMF(b)) {
+    sum += b;
+    ++count;
+  }
+  if (FiniteEMF(c)) {
+    sum += c;
+    ++count;
+  }
+  if (FiniteEMF(d)) {
+    sum += d;
+    ++count;
+  }
+  return (count > 0) ? (sum/static_cast<Real>(count)) : 0.0;
+}
+
+KOKKOS_INLINE_FUNCTION
+Real RepairEdgeEMF(const Real edge, const Real a, const Real b, const Real c, const Real d,
+                   const int component, const int m, const int k, const int j, const int i,
+                   const DvceArray1D<int> &counts, const DvceArray2D<int> &first_locs) {
+  if (FiniteEMF(edge)) return edge;
+
+  int finite_count = 0;
+  const Real fallback = FiniteAverage4(a, b, c, d, finite_count);
+  const int old_count = Kokkos::atomic_fetch_add(&counts(component), 1);
+  if (old_count == 0) {
+    first_locs(component, 0) = m;
+    first_locs(component, 1) = k;
+    first_locs(component, 2) = j;
+    first_locs(component, 3) = i;
+  }
+  if (finite_count == 0) {
+    Kokkos::atomic_add(&counts(component + 3), 1);
+  }
+  return fallback;
+}
+
+} // namespace
 
 namespace mhd {
 //----------------------------------------------------------------------------------------
@@ -204,6 +261,9 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
   // Use GS07 algorithm to compute all three of E1, E2, and E3
 
   if (pmy_pack->pmesh->three_d) {
+    if (!CheckFiniteDensityFlux("CornerE pre-SG07", pdriver, stage)) return TaskStatus::fail;
+    if (!CheckFiniteFaceEMF("CornerE pre-SG07", pdriver, stage)) return TaskStatus::fail;
+
     // Compute cell-centered electric fields
     // E1=-(v X B)=VzBy-VyBz
     // E2=-(v X B)=VxBz-VzBx
@@ -317,6 +377,10 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       });
     }
 
+    if (!CheckFiniteCellEMF("CornerE cell-centered", pdriver, stage)) {
+      return TaskStatus::fail;
+    }
+
     // capture class variables for the kernels
     auto e1 = efld.x1e;
     auto e2 = efld.x2e;
@@ -330,6 +394,10 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
     auto flx1 = uflx.x1f;
     auto flx2 = uflx.x2f;
     auto flx3 = uflx.x3f;
+    DvceArray1D<int> emf_fallback_counts("corner_emf_fallback_counts", 6);
+    DvceArray2D<int> emf_fallback_first_locs("corner_emf_fallback_first_locs", 3, 4);
+    Kokkos::deep_copy(DevExeSpace(), emf_fallback_counts, 0);
+    Kokkos::deep_copy(DevExeSpace(), emf_fallback_first_locs, -1);
 
     // Integrate E1, E2, E3 to corners
     //  Note e1[is:ie,  js:je+1,ks:ke+1]
@@ -359,8 +427,12 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e1_r2 = e1x2_(m,k  ,j,i) - e1cc_(m,k  ,j  ,i);
       }
-      e1(m,k,j,i) = 0.25*(e1_l3 + e1_r3 + e1_l2 + e1_r2 +
+      Real e1_edge = 0.25*(e1_l3 + e1_r3 + e1_l2 + e1_r2 +
                 e1x2_(m,k-1,j,i) + e1x2_(m,k,j,i) + e1x3_(m,k,j-1,i) + e1x3_(m,k,j,i));
+      e1(m,k,j,i) = RepairEdgeEMF(e1_edge, e1x2_(m,k-1,j,i), e1x2_(m,k,j,i),
+                                   e1x3_(m,k,j-1,i), e1x3_(m,k,j,i),
+                                   0, m, k, j, i, emf_fallback_counts,
+                                   emf_fallback_first_locs);
 
       // integrate E2 to corner using SG07
       Real e2_l3, e2_r3, e2_l1, e2_r1;
@@ -384,8 +456,12 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e2_r1 = e2x1_(m,k  ,j,i) - e2cc_(m,k  ,j,i  );
       }
-      e2(m,k,j,i) = 0.25*(e2_l3 + e2_r3 + e2_l1 + e2_r1 +
+      Real e2_edge = 0.25*(e2_l3 + e2_r3 + e2_l1 + e2_r1 +
                 e2x3_(m,k,j,i-1) + e2x3_(m,k,j,i) + e2x1_(m,k-1,j,i) + e2x1_(m,k,j,i));
+      e2(m,k,j,i) = RepairEdgeEMF(e2_edge, e2x3_(m,k,j,i-1), e2x3_(m,k,j,i),
+                                   e2x1_(m,k-1,j,i), e2x1_(m,k,j,i),
+                                   1, m, k, j, i, emf_fallback_counts,
+                                   emf_fallback_first_locs);
 
       // integrate E3 to corner using SG07
       Real e3_l2, e3_r2, e3_l1, e3_r1;
@@ -409,9 +485,49 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e3_r1 = e3x1_(m,k,j  ,i) - e3cc_(m,k,j  ,i  );
       }
-      e3(m,k,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
+      Real e3_edge = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
                 e3x2_(m,k,j,i-1) + e3x2_(m,k,j,i) + e3x1_(m,k,j-1,i) + e3x1_(m,k,j,i));
+      e3(m,k,j,i) = RepairEdgeEMF(e3_edge, e3x2_(m,k,j,i-1), e3x2_(m,k,j,i),
+                                   e3x1_(m,k,j-1,i), e3x1_(m,k,j,i),
+                                   2, m, k, j, i, emf_fallback_counts,
+                                   emf_fallback_first_locs);
     });
+
+    auto h_emf_fallback_counts = Kokkos::create_mirror_view(emf_fallback_counts);
+    auto h_emf_fallback_first_locs = Kokkos::create_mirror_view(emf_fallback_first_locs);
+    Kokkos::deep_copy(h_emf_fallback_counts, emf_fallback_counts);
+    Kokkos::deep_copy(h_emf_fallback_first_locs, emf_fallback_first_locs);
+    const int e1_count = h_emf_fallback_counts(0);
+    const int e2_count = h_emf_fallback_counts(1);
+    const int e3_count = h_emf_fallback_counts(2);
+    const int e1_zero = h_emf_fallback_counts(3);
+    const int e2_zero = h_emf_fallback_counts(4);
+    const int e3_zero = h_emf_fallback_counts(5);
+    if ((e1_count + e2_count + e3_count) > 0) {
+      std::cout << "MHD CornerE finite-EMF fallback on rank " << global_variable::my_rank
+                << " stage=" << stage
+                << " time=" << pmy_pack->pmesh->time
+                << " cycle=" << pmy_pack->pmesh->ncycle
+                << " e1_count=" << e1_count
+                << " e2_count=" << e2_count
+                << " e3_count=" << e3_count
+                << " e1_zero_fallback=" << e1_zero
+                << " e2_zero_fallback=" << e2_zero
+                << " e3_zero_fallback=" << e3_zero
+                << " e1_first_mkji=(" << h_emf_fallback_first_locs(0, 0)
+                << "," << h_emf_fallback_first_locs(0, 1)
+                << "," << h_emf_fallback_first_locs(0, 2)
+                << "," << h_emf_fallback_first_locs(0, 3) << ")"
+                << " e2_first_mkji=(" << h_emf_fallback_first_locs(1, 0)
+                << "," << h_emf_fallback_first_locs(1, 1)
+                << "," << h_emf_fallback_first_locs(1, 2)
+                << "," << h_emf_fallback_first_locs(1, 3) << ")"
+                << " e3_first_mkji=(" << h_emf_fallback_first_locs(2, 0)
+                << "," << h_emf_fallback_first_locs(2, 1)
+                << "," << h_emf_fallback_first_locs(2, 2)
+                << "," << h_emf_fallback_first_locs(2, 3) << ")"
+                << std::endl;
+    }
   }
 
   // Add resistive electric field (if needed)
@@ -422,6 +538,7 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
     // TODO(@user): Add more resistive effects here
   }
 
+  if (!CheckFiniteCornerE("CornerE edge", pdriver, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 } // namespace mhd

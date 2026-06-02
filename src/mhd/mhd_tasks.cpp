@@ -215,6 +215,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     }
   }
 
+  if (!CheckFiniteDensityFlux("Fluxes/FOFC", pdrive, stage)) return TaskStatus::fail;
+  if (!CheckFiniteFaceEMF("Fluxes/FOFC", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -385,6 +387,7 @@ TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
       pmy_pack->pmesh->pgen->user_efield_func != nullptr) {
     (pmy_pack->pmesh->pgen->user_efield_func)(pmy_pack->pmesh, efld);
   }
+  if (!CheckFiniteEdgeE("EFieldSrc", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -409,6 +412,8 @@ TaskStatus MHD::SendE(Driver *pdrive, int stage) {
 TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   tstat = pbval_b->RecvAndUnpackFluxFC(efld);
+  if (tstat == TaskStatus::complete &&
+      !CheckFiniteEdgeE("RecvE", pdrive, stage)) return TaskStatus::fail;
   return tstat;
 }
 
@@ -439,6 +444,8 @@ TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
     if ((stage == pdrive->nexp_stages) &&
         (pmy_pack->pmesh->three_d || porb_b->shearing_box_r_phi)) {
       tstat = porb_b->RecvAndUnpackFC(b0, recon_method);
+      if (tstat == TaskStatus::complete &&
+          !CheckFiniteFaceB("RecvB_OA", pdrive, stage)) return TaskStatus::fail;
     }
   }
   return tstat;
@@ -459,6 +466,8 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvB(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
+  if (tstat == TaskStatus::complete &&
+      !CheckFiniteFaceB("RecvB", pdrive, stage)) return TaskStatus::fail;
   return tstat;
 }
 
@@ -488,6 +497,8 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
     // only execute when (3D OR 2d_r_phi)
     if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
       tstat = psbox_b->RecvAndUnpackFC(b0);
+      if (tstat == TaskStatus::complete &&
+          !CheckFiniteFaceB("RecvB_Shr", pdrive, stage)) return TaskStatus::fail;
     }
   }
   return tstat;
@@ -510,6 +521,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
   }
 
+  if (!CheckFiniteFaceB("ApplyPhysicalBCs", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -532,6 +544,7 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
       pbval_b->ProlongateFC(b0, coarse_b0);
     }
   }
+  if (!CheckFiniteFaceB("Prolongate", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -678,6 +691,7 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictFC(b0, coarse_b0);
   }
+  if (!CheckFiniteFaceB("RestrictB", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 

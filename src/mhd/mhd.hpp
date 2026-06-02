@@ -187,6 +187,13 @@ class MHD {
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
 
+  bool CheckFiniteFaceB(const char *label, Driver *d, int stage);
+  bool CheckFiniteEdgeE(const char *label, Driver *d, int stage);
+  bool CheckFiniteFaceEMF(const char *label, Driver *d, int stage);
+  bool CheckFiniteCellEMF(const char *label, Driver *d, int stage);
+  bool CheckFiniteDensityFlux(const char *label, Driver *d, int stage);
+  bool CheckFiniteCornerE(const char *label, Driver *d, int stage);
+
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>
   void CalculateFluxes(Driver *d, int stage);
