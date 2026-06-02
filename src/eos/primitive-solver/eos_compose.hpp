@@ -171,13 +171,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Calculate the proton fraction
   KOKKOS_INLINE_FUNCTION Real ProtonFraction(Real n, Real T, Real *Y) const {
     assert (m_initialized);
-    return eval_at_nty(ECYP, n, T, Y[0]);
+    return fmax(0.0, eval_at_nty(ECYP, n, T, Y[0]));
   }
 
   /// Calculate the neutron fraction
   KOKKOS_INLINE_FUNCTION Real NeutronFraction(Real n, Real T, Real *Y) const {
     assert (m_initialized);
-    return eval_at_nty(ECYN, n, T, Y[0]);
+    return fmax(0.0, eval_at_nty(ECYN, n, T, Y[0]));
   }
 
   /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
