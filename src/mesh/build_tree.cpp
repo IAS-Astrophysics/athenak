@@ -6,6 +6,7 @@
 //! \file build_tree.cpp
 //! \brief Functions to build MeshBlockTreee, both for new runs and restarts
 
+#include <algorithm>
 #include <iostream>
 #include <cinttypes>
 #include <limits> // numeric_limits<>
@@ -374,7 +375,101 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   std::memcpy(&dt, &(headerdata[hdos]), sizeof(Real));
   hdos += sizeof(Real);
   std::memcpy(&ncycle, &(headerdata[hdos]), sizeof(int));
+
+  auto ValidRestartHeader = [&]() {
+    return (mesh_indcs.nx1 > 0 && mesh_indcs.nx2 > 0 && mesh_indcs.nx3 > 0 &&
+            mb_indcs.nx1 > 0 && mb_indcs.nx2 > 0 && mb_indcs.nx3 > 0 &&
+            (mesh_indcs.nx1 % mb_indcs.nx1) == 0 &&
+            (mesh_indcs.nx2 % mb_indcs.nx2) == 0 &&
+            (mesh_indcs.nx3 % mb_indcs.nx3) == 0);
+  };
+
+  if (!ValidRestartHeader()) {
+    // Restart files written before RegionSize::idx1/idx2/idx3 was removed contain
+    // three extra Real values between RegionSize and RegionIndcs.  Reinterpret the
+    // already-read bytes with that legacy layout and move the file pointer to the
+    // actual start of the logical-location list.
+    struct LegacyRegionSize {
+      Real x1min, x2min, x3min;
+      Real x1max, x2max, x3max;
+      Real dx1, dx2, dx3;
+      Real idx1, idx2, idx3;
+    };
+    const IOWrapperSizeT legacy_headersize = 3*sizeof(int) + 2*sizeof(Real)
+      + sizeof(LegacyRegionSize) + 2*sizeof(RegionIndcs);
+    char *legacy_headerdata = new char[legacy_headersize];
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      resfile.Seek(headeroffset, single_file_per_rank);
+      IOWrapperSizeT read_size = resfile.Read_bytes(legacy_headerdata, 1, legacy_headersize,
+                                                    single_file_per_rank);
+      if (read_size != legacy_headersize) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Legacy header size read from restart file is incorrect, "
+                  << "expected " << legacy_headersize << ", got " << read_size << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+#if MPI_PARALLEL_ENABLED
+    if (!single_file_per_rank) {
+      int mpi_err = MPI_Bcast(legacy_headerdata, legacy_headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
+      if (mpi_err != MPI_SUCCESS) {
+        char error_string[1024];
+        int length_of_error_string;
+        MPI_Error_string(mpi_err, error_string, &length_of_error_string);
+        std::cout << "MPI_Bcast failed with error: " << error_string << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+#endif
+
+    hdos = 0;
+    std::memcpy(&nmb_total, &(legacy_headerdata[hdos]), sizeof(int));
+    hdos += sizeof(int);
+    std::memcpy(&root_level, &(legacy_headerdata[hdos]), sizeof(int));
+    hdos += sizeof(int);
+    LegacyRegionSize legacy_mesh_size;
+    std::memcpy(&legacy_mesh_size, &(legacy_headerdata[hdos]), sizeof(LegacyRegionSize));
+    hdos += sizeof(LegacyRegionSize);
+    mesh_size.x1min = legacy_mesh_size.x1min;
+    mesh_size.x2min = legacy_mesh_size.x2min;
+    mesh_size.x3min = legacy_mesh_size.x3min;
+    mesh_size.x1max = legacy_mesh_size.x1max;
+    mesh_size.x2max = legacy_mesh_size.x2max;
+    mesh_size.x3max = legacy_mesh_size.x3max;
+    mesh_size.dx1 = legacy_mesh_size.dx1;
+    mesh_size.dx2 = legacy_mesh_size.dx2;
+    mesh_size.dx3 = legacy_mesh_size.dx3;
+    std::memcpy(&mesh_indcs, &(legacy_headerdata[hdos]), sizeof(RegionIndcs));
+    hdos += sizeof(RegionIndcs);
+    std::memcpy(&mb_indcs, &(legacy_headerdata[hdos]), sizeof(RegionIndcs));
+    hdos += sizeof(RegionIndcs);
+    std::memcpy(&time, &(legacy_headerdata[hdos]), sizeof(Real));
+    hdos += sizeof(Real);
+    std::memcpy(&dt, &(legacy_headerdata[hdos]), sizeof(Real));
+    hdos += sizeof(Real);
+    std::memcpy(&ncycle, &(legacy_headerdata[hdos]), sizeof(int));
+    delete [] legacy_headerdata;
+
+    mesh_indcs.cnx1 = mesh_indcs.nx1/2;
+    mesh_indcs.cnx2 = std::max(1, mesh_indcs.nx2/2);
+    mesh_indcs.cnx3 = std::max(1, mesh_indcs.nx3/2);
+    mesh_indcs.cis = mesh_indcs.ng;
+    mesh_indcs.cie = mesh_indcs.cis + mesh_indcs.cnx1 - 1;
+    mesh_indcs.cjs = (mesh_indcs.nx2 > 1) ? mesh_indcs.ng : 0;
+    mesh_indcs.cje = mesh_indcs.cjs + mesh_indcs.cnx2 - 1;
+    mesh_indcs.cks = (mesh_indcs.nx3 > 1) ? mesh_indcs.ng : 0;
+    mesh_indcs.cke = mesh_indcs.cks + mesh_indcs.cnx3 - 1;
+  }
   delete [] headerdata;
+
+  if (!ValidRestartHeader()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Restart header mesh dimensions are invalid: "
+              << "mesh=(" << mesh_indcs.nx1 << "," << mesh_indcs.nx2 << ","
+              << mesh_indcs.nx3 << "), meshblock=(" << mb_indcs.nx1 << ","
+              << mb_indcs.nx2 << "," << mb_indcs.nx3 << ")" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // calculate the number of MeshBlocks at root level in each dir
   nmb_rootx1 = mesh_indcs.nx1/mb_indcs.nx1;
