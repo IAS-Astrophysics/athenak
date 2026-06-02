@@ -128,29 +128,27 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
     int it = 0; // T = T_min is a safe assumption for the minimum enthalpy
     for (int in = 0; in < m_nn-1; ++in) {
       Real const nb = exp2_(host_log_nb(in));
-      for (int iy = 0; iy < m_ny-1; ++iy) {
-        Real log2_e_in   = host_table(ECLOGE,in);
-        Real log2_e_inp1 = host_table(ECLOGE,in+1);
-        Real pow_e = Kokkos::fabs(log2_e_inp1-log2_e_in);
+      Real log2_e_in   = host_table(ECLOGE,in);
+      Real log2_e_inp1 = host_table(ECLOGE,in+1);
+      Real pow_e = Kokkos::fabs(log2_e_inp1-log2_e_in);
+      
+      Real log2_p_in   = host_table(ECLOGP,in);
+      Real log2_p_inp1 = host_table(ECLOGP,in+1);
+      Real pow_p = Kokkos::fabs(log2_p_inp1-log2_p_in);
+      
+      Real k0 =  3.696e-3; // Exact number rounded up
+      Real k1 = -9.709e-3; // Exact number rounded down
 
-        Real log2_p_in   = host_table(ECLOGP,in);
-        Real log2_p_inp1 = host_table(ECLOGP,in+1);
-        Real pow_p = Kokkos::fabs(log2_p_inp1-log2_p_in);
+      Real fac_e = (1-k0)*Kokkos::exp2(pow_e*k1); // N.B. not exp2_
+      Real fac_p = (1-k0)*Kokkos::exp2(pow_p*k1);
 
-        Real k0 =  3.696e-3; // Exact number rounded up
-        Real k1 = -9.709e-3; // Exact number rounded down
+      Real e_over_n_min = fac_e*Kokkos::min(exp2_(log2_e_in)/nb, 
+                                            exp2_(log2_e_inp1)/exp2_(host_log_nb(in+1)));
 
-        Real fac_e = (1-k0)*Kokkos::exp2(pow_e*k1); // N.B. not exp2_
-        Real fac_p = (1-k0)*Kokkos::exp2(pow_p*k1);
+      Real p_over_n_min = fac_p*Kokkos::min(exp2_(log2_p_in)/nb, 
+                                            exp2_(log2_p_inp1)/exp2_(host_log_nb(in+1)));
 
-        Real e_over_n_min = fac_e*Kokkos::fmin(exp2_(log2_e_in)/nb,
-                                             exp2_(log2_e_inp1)/exp2_(host_log_nb(in+1)));
-
-        Real p_over_n_min = fac_p*Kokkos::fmin(exp2_(log2_p_in)/nb,
-                                             exp2_(log2_p_inp1)/exp2_(host_log_nb(in+1)));
-
-        m_min_h = Kokkos::fmin(m_min_h,e_over_n_min+p_over_n_min);
-      }
+      m_min_h = Kokkos::min(m_min_h,e_over_n_min+p_over_n_min);
     }
 
     if (m_min_h <= 0.0) {
