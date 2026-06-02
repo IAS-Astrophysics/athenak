@@ -60,6 +60,30 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   are_units_enabled = pin->DoesBlockExist("units");
 
+  // Optional source-coupling stabilizations are default-off.
+  correct_radsrc_velocity = pin->GetOrAddBoolean("radiation","correct_radsrc_velocity",false);
+  correct_radsrc_opacity = pin->GetOrAddBoolean("radiation","correct_radsrc_opacity",false);
+  dfloor_opacity = pin->GetOrAddReal("radiation","dfloor_opacity",1.0e-100);
+  dens_trunc_max = pin->GetOrAddReal("radiation","dens_trunc_max",1.0e100);
+  tau_truncation = pin->GetOrAddReal("radiation","tau_truncation",1.0e-100);
+  sigmoid_residual = pin->GetOrAddReal("radiation","sigmoid_residual",1.0e-2);
+  Real density_floor = FLT_MIN;
+  if (is_hydro_enabled) {
+    density_floor = pin->GetOrAddReal("hydro","dfloor",(FLT_MIN));
+  } else if (is_mhd_enabled) {
+    density_floor = pin->GetOrAddReal("mhd","dfloor",(FLT_MIN));
+  }
+  if (!(dfloor_opacity > 0.0) || !(dens_trunc_max >= density_floor) ||
+      !(tau_truncation >= 0.0) ||
+      !(sigmoid_residual > 0.0 && sigmoid_residual < 1.0/3.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<radiation> source correction parameters require "
+              << "dfloor_opacity > 0, dens_trunc_max >= fluid dfloor, "
+              << "tau_truncation >= 0, and 0 < sigmoid_residual < 1/3"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Enable radiation source term (radiation+(M)HD) by default if hydro or mhd enabled
   // Otherwise, disable radiation source term.  The former can be overriden by
   // specification in the input file.

@@ -104,6 +104,12 @@ class Radiation {
   Real kappa_p;             // Planck - Rosseland mean coefficient
   bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
   bool is_compton_enabled;  // flag to enable/disable compton
+  bool correct_radsrc_velocity; // optional radiation-dominated velocity correction
+  bool correct_radsrc_opacity;  // optional opacity-density correction
+  Real dfloor_opacity;      // density floor used by opacity correction
+  Real dens_trunc_max;      // maximum density truncation scale
+  Real tau_truncation;      // optical-depth truncation parameter
+  Real sigmoid_residual;    // residual of smooth opacity-density transition
 
   // radiation source term (i.e., beam)
   SourceTerms *psrc = nullptr;
