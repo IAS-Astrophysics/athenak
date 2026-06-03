@@ -73,6 +73,8 @@ class ProblemGenerator {
   void RadiationBeam(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
+  void H2Advection(ParameterInput* pin, const bool restart);
+  void H2Uniform(ParameterInput* pin, const bool restart);
 
   // Generic error output function (using difference u0-u1)
   void OutputErrors(ParameterInput *pin, Mesh *pm);

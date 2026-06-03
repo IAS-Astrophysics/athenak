@@ -21,6 +21,7 @@
 #include "shearing_box/orbital_advection.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
+#include "chemistry/chemistry.hpp"
 
 namespace hydro {
 //----------------------------------------------------------------------------------------
@@ -71,6 +72,11 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
+
+  // Add more passive scalars to be used for chemistry
+  if (pin->DoesBlockExist("chemistry")) {
+    nscalars += chemistry::Chemistry::SetupGetNumChemistryScalars(ppack, pin, nscalars);
+  }
 
   // Viscosity (if requested in input file)
   if (pin->DoesParameterExist("hydro","viscosity")) {
