@@ -602,8 +602,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->ClearRecv(this, -1);
     (void) pz4c->RecvU(this, 0);
     (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-    (void) pz4c->Prolongate(this, 0);
+    (void) pz4c->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pz4c->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
