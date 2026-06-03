@@ -75,6 +75,8 @@ void ComputeUcBcFromPrimitive(const Real uu1, const Real uu2, const Real uu3,
 
 void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int nmb = pm->pmb_pack->nmb_thispack;
+  nmb = std::max((nmb), (pm->pmb_pack->pmesh->nmb_maxperrank));
+
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
