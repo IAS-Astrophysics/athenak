@@ -132,6 +132,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", true);
     nurates_params.use_kirchhoff_law =
         pin->GetOrAddBoolean("bns_nurates", "use_kirchhoff_law", true);
+    nurates_params.use_nonthermal_separated =
+        pin->GetOrAddBoolean("bns_nurates", "use_nonthermal_separated", true);
     nurates_params.use_NN_medium_corr =
         pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
     nurates_params.neglect_blocking =
