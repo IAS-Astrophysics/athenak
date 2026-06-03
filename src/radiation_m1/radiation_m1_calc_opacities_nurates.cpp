@@ -263,7 +263,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // function for neutrinos assuming neutrino tapping or at fixed
             // temperature and Ye
             tau =
-                Kokkos::min(
+                Kokkos::fmin(
                     Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
                               Kokkos::sqrt(abs_1_loc[1] *
                                            (abs_1_loc[1] + scat_1_loc[1]))) *
@@ -382,9 +382,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 corr_fac = 1.0;
               }
               corr_fac *= corr_fac;
-              corr_fac = Kokkos::max(
+              corr_fac = Kokkos::fmax(
                   1.0 / nurates_params_.opacity_corr_fac_max,
-                  Kokkos::min(corr_fac, nurates_params_.opacity_corr_fac_max));
+                  Kokkos::fmin(corr_fac, nurates_params_.opacity_corr_fac_max));
             }
 
             scat_1_(m, nuidx, k, j, i) *= corr_fac;

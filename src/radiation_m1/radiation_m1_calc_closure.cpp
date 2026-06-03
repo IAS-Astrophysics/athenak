@@ -146,7 +146,7 @@ TaskStatus RadiationM1::FloorAndCalcClosure(Driver* pdrive, int stage) {
             if (nspecies_ > 1) {
               Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
               u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) =
-                  Kokkos::max<Real>(N, params_.rad_N_floor);
+                  Kokkos::fmax(N, params_.rad_N_floor);
             }
             Real chi{};
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> Ptemp_dd{};

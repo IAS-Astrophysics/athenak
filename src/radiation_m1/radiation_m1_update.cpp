@@ -423,7 +423,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               apply_floor(g_uu, Estar, Fstar_d, params_);
               Real Nstar{};
               if (nspecies_ > 1) {
-                Nstar = Kokkos::max<Real>(
+                Nstar = Kokkos::fmax(
                     u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
                         beta_dt * rEFN[nuidx][M1_N_IDX],
                     params_.rad_N_floor);
@@ -566,17 +566,17 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                   u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
                   beta_dt * rEFN[nuidx][M1_E_IDX];
               if (DrEFN[nuidx][M1_E_IDX] < 0) {
-                theta = Kokkos::min<Real>(-params_.source_limiter *
-                                              Kokkos::max<Real>(Estar, 0.0) /
+                theta = Kokkos::fmin(-params_.source_limiter *
+                                              Kokkos::fmax(Estar, 0.0) /
                                               DrEFN[nuidx][M1_E_IDX],
-                                          theta);
+                                     theta);
               }
               DTau_sum -= DrEFN[nuidx][M1_E_IDX];
             }
             if (DTau_sum < 0) {
-              theta = Kokkos::min(-params_.source_limiter *
-                                      Kokkos::max<Real>(tau, 0.0) / DTau_sum,
-                                  theta);
+              theta = Kokkos::fmin(-params_.source_limiter *
+                                      Kokkos::fmax(tau, 0.0) / DTau_sum,
+                                   theta);
             }
 
             if (nspecies_ > 1) {
@@ -586,28 +586,28 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                     u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
                     beta_dt * rEFN[nuidx][M1_N_IDX];
                 if (DrEFN[nuidx][M1_N_IDX] < 0) {
-                  theta = Kokkos::min(-params_.source_limiter *
-                                          Kokkos::max<Real>(Nstar, 0.0) /
+                  theta = Kokkos::fmin(-params_.source_limiter *
+                                          Kokkos::fmax(Nstar, 0.0) /
                                           DrEFN[nuidx][M1_N_IDX],
-                                      theta);
+                                       theta);
                 }
                 DDxp_sum += DDxp[nuidx];
               }
               const Real DYe = DDxp_sum / dens;
               if (DYe > 0) {
-                theta = Kokkos::min<Real>(
+                theta = Kokkos::fmin(
                     params_.source_limiter *
-                        Kokkos::max<Real>(params_.source_Ye_max - Y_e, 0.0) /
+                        Kokkos::fmax(params_.source_Ye_max - Y_e, 0.0) /
                         DYe,
                     theta);
               } else if (DYe < 0) {
-                theta = Kokkos::min<Real>(
+                theta = Kokkos::fmin(
                     params_.source_limiter *
-                        Kokkos::min(params_.source_Ye_min - Y_e, 0.0) / DYe,
+                        Kokkos::fmin(params_.source_Ye_min - Y_e, 0.0) / DYe,
                     theta);
               }
             }
-            theta = Kokkos::max<Real>(0.0, theta);
+            theta = Kokkos::fmax(0.0, theta);
           }  //  if (params_.theta_limiter && params_.source_limiter >= 0)
         } else {
           theta = 0.0;
@@ -640,7 +640,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
                       beta_dt * rEFN[nuidx][M1_N_IDX] +
                       theta * DrEFN[nuidx][M1_N_IDX];
-            Nf = Kokkos::max<Real>(Nf, params_.rad_N_floor);
+            Nf = Kokkos::fmax(Nf, params_.rad_N_floor);
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }
 
