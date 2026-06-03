@@ -26,17 +26,17 @@ Real RestrictInterpolation(const int m, const int v, const int fk, const int fj,
   // interpolated value at new grid point
   Real ivals = 0;
 
-  bool offseti = (fi < nx1/2+NGHOST);
-  bool offsetj = (fj < nx2/2+NGHOST);
-  bool offsetk = (fk < nx3/2+NGHOST);
+  bool offseti = (fi<nx1/2+NGHOST);
+  bool offsetj = (fj<nx2/2+NGHOST);
+  bool offsetk = (fk<nx3/2+NGHOST);
 
-  if (NGHOST == 2) {
+  if (NGHOST ==2) {
     int refi = (offseti) ? fi : fi-1;
     int refj = (offsetj) ? fj : fj-1;
     int refk = (offsetk) ? fk : fk-1;
-    for (int ii = 0; ii < NGHOST+1; ii++) {
-      for (int jj = 0; jj < NGHOST+1; jj++) {
-        for (int kk = 0; kk < NGHOST+1; kk++) {
+    for (int ii=0; ii<NGHOST+1; ii++) {
+      for (int jj=0; jj<NGHOST+1; jj++) {
+        for (int kk=0; kk<NGHOST+1; kk++) {
           int wghti = (offseti) ? ii : NGHOST-ii;
           int wghtj = (offsetj) ? jj : NGHOST-jj;
           int wghtk = (offsetk) ? kk : NGHOST-kk;
@@ -49,38 +49,38 @@ Real RestrictInterpolation(const int m, const int v, const int fk, const int fj,
     }
   }
 
-  if (NGHOST == 4) {
+  if (NGHOST ==4) {
     int refi = (offseti) ? fi-1 : fi-2;
     int refj = (offsetj) ? fj-1 : fj-2;
     int refk = (offsetk) ? fk-1 : fk-2;
 
     // edge cases
-    refi = (fi <= NGHOST) ? refi+1 : refi;
-    refj = (fj <= NGHOST) ? refj+1 : refj;
-    refk = (fk <= NGHOST) ? refk+1 : refk;
+    refi = (fi==NGHOST) ? refi+1 : refi;
+    refj = (fj==NGHOST) ? refj+1 : refj;
+    refk = (fk==NGHOST) ? refk+1 : refk;
 
-    refi = (fi >= NGHOST+nx1-2) ? refi-1 : refi;
-    refj = (fj >= NGHOST+nx2-2) ? refj-1 : refj;
-    refk = (fk >= NGHOST+nx3-2) ? refk-1 : refk;
+    refi = (fi==NGHOST+nx1-2) ? refi-1 : refi;
+    refj = (fj==NGHOST+nx2-2) ? refj-1 : refj;
+    refk = (fk==NGHOST+nx3-2) ? refk-1 : refk;
 
-    for (int ii = 0; ii < NGHOST+1; ii++) {
-      for (int jj = 0; jj < NGHOST+1; jj++) {
-        for (int kk = 0; kk < NGHOST+1; kk++) {
+    for (int ii=0; ii<NGHOST+1; ii++) {
+      for (int jj=0; jj<NGHOST+1; jj++) {
+        for (int kk=0; kk<NGHOST+1; kk++) {
           int wghti = (offseti) ? ii : NGHOST-ii;
           int wghtj = (offsetj) ? jj : NGHOST-jj;
           int wghtk = (offsetk) ? kk : NGHOST-kk;
           Real iwght = 1;
-          if (fi <= NGHOST || fi >= NGHOST+nx1-2) {
+          if (fi==NGHOST || fi==NGHOST+nx1-2) {
             iwght *= restrict_4th_edge.d_view(wghti);
           } else {
             iwght *= restrict_4th.d_view(wghti);
           }
-          if (fj <= NGHOST || fj >= NGHOST+nx2-2) {
+          if (fj==NGHOST || fj==NGHOST+nx2-2) {
             iwght *= restrict_4th_edge.d_view(wghtj);
           } else {
             iwght *= restrict_4th.d_view(wghtj);
           }
-          if (fk <= NGHOST || fk >= NGHOST+nx3-2) {
+          if (fk==NGHOST || fk==NGHOST+nx3-2) {
             iwght *= restrict_4th_edge.d_view(wghtk);
           } else {
             iwght *= restrict_4th.d_view(wghtk);
