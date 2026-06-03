@@ -79,7 +79,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   }
 
   Real beta[2] = {0.5, 1.};
-  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
+  Real dt_ = pmy_pack->pmesh->dt;
+  Real beta_dt = (beta[stage - 1]) * dt_;
 
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
@@ -266,7 +267,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                     Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
                               Kokkos::sqrt(abs_1_loc[1] *
                                            (abs_1_loc[1] + scat_1_loc[1]))) *
-                  beta_dt;
+                  dt_;
 
             // compute neutrino black body function assuming trapped neutrinos
             if (nurates_params_.opacity_tau_trap >= 0 &&

@@ -171,13 +171,19 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Calculate the proton fraction
   KOKKOS_INLINE_FUNCTION Real ProtonFraction(Real n, Real T, Real *Y) const {
     assert (m_initialized);
-    return fmax(0.0, eval_at_nty(ECYP, n, T, Y[0]));
+    // Use ternary instead of fmax: on IEEE-compliant hardware (Intel SYCL),
+    // fmax(0, NaN) = NaN, so a NaN from the table lookup would propagate.
+    Real yp = eval_at_nty(ECYP, n, T, Y[0]);
+    return (yp > 0.0) ? yp : 0.0;
   }
 
   /// Calculate the neutron fraction
   KOKKOS_INLINE_FUNCTION Real NeutronFraction(Real n, Real T, Real *Y) const {
     assert (m_initialized);
-    return fmax(0.0, eval_at_nty(ECYN, n, T, Y[0]));
+    // Use ternary instead of fmax: on IEEE-compliant hardware (Intel SYCL),
+    // fmax(0, NaN) = NaN, so a NaN from the table lookup would propagate.
+    Real yn = eval_at_nty(ECYN, n, T, Y[0]);
+    return (yn > 0.0) ? yn : 0.0;
   }
 
   /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
@@ -588,8 +594,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         }
 
         // tabBoundsFlag = enforceTableBounds(rho, x1_tmp[0], x1_tmp[1]);
-        x1_tmp[0] = fmin(fmax(x1_tmp[0],min_T),max_T);
-        x1_tmp[1] = fmin(fmax(x1_tmp[1],min_Y[0]),max_Y[0]);
+        // Use ternary instead of fmin/fmax: on IEEE-compliant hardware
+        // (Intel SYCL), fmax(NaN, x) = NaN, so a NaN iterate would not be
+        // clamped back to table bounds and would poison subsequent iterations.
+        x1_tmp[0] = (x1_tmp[0] > min_T) ? x1_tmp[0] : min_T;
+        x1_tmp[0] = (x1_tmp[0] < max_T) ? x1_tmp[0] : max_T;
+        x1_tmp[1] = (x1_tmp[1] > min_Y[0]) ? x1_tmp[1] : min_Y[0];
+        x1_tmp[1] = (x1_tmp[1] < max_Y[0]) ? x1_tmp[1] : max_Y[0];
 
         // assign the new point
         x1[0] = x1_tmp[0];
@@ -693,22 +704,28 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real Y1[MAX_SPECIES] = {0.0};
     Real Y2[MAX_SPECIES] = {0.0};
 
-    Y1[0] = fmax(Y[0] - Ye_delta, min_Y[0]);
+    // Use ternary instead of fmax/fmin: on IEEE-compliant hardware (Intel
+    // SYCL), fmax(NaN, x) = NaN, so NaN inputs would propagate through.
+    Real Ye_lo = Y[0] - Ye_delta;
+    Y1[0] = (Ye_lo > min_Y[0]) ? Ye_lo : min_Y[0];
     Real mu_l1 = ElectronLeptonChemicalPotential(n, T, Y1);
     Real e1 = Energy(n, T, Y1);
-    
-    Y2[0] = fmin(Y[0] + Ye_delta, max_Y[0]);
+
+    Real Ye_hi = Y[0] + Ye_delta;
+    Y2[0] = (Ye_hi < max_Y[0]) ? Ye_hi : max_Y[0];
     Real mu_l2 = ElectronLeptonChemicalPotential(n, T, Y2);
     Real e2 = Energy(n, T, Y2);
 
     Real dmu_l_dYe = (mu_l2-mu_l1)/(Y2[0] - Y1[0]);
     de_dYe         = (e2-e1)/(Y2[0] - Y1[0]);
 
-    Real T1 = fmax(T - T_delta, min_T);
+    Real T_lo = T - T_delta;
+    Real T1 = (T_lo > min_T) ? T_lo : min_T;
     mu_l1 = ElectronLeptonChemicalPotential(n, T1, Y);
     e1 = Energy(n, T1, Y);
 
-    Real T2 = fmin(T + T_delta, max_T);
+    Real T_hi = T + T_delta;
+    Real T2 = (T_hi < max_T) ? T_hi : max_T;
     mu_l2 = ElectronLeptonChemicalPotential(n, T2, Y);
     e2 = Energy(n, T2, Y);
 
