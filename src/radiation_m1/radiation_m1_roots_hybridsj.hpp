@@ -414,7 +414,7 @@ KOKKOS_INLINE_FUNCTION MathSignal HybridsjIterate(Functor &&fdf,
     state.ncsuc++;
 
     if (ratio >= p5 || state.ncsuc > 1) {
-      state.delta = Kokkos::max<Real>(state.delta, pnorm / p5);
+      state.delta = Kokkos::fmax(state.delta, pnorm / p5);
     }
     if (Kokkos::fabs(ratio - 1) <= p1) {
       state.delta = pnorm / p5;

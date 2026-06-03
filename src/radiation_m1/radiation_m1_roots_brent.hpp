@@ -147,7 +147,7 @@ KOKKOS_INLINE_FUNCTION MathSignal BrentIterate(Functor &&f, Real &x_lower,
     }
 
     if (2 * p <
-        Kokkos::min(3 * m * q - Kokkos::fabs(tol * q), Kokkos::fabs(e * q))) {
+        Kokkos::fmin(3 * m * q - Kokkos::fabs(tol * q), Kokkos::fabs(e * q))) {
       e = d;
       d = p / q;
     } else {
@@ -218,7 +218,7 @@ MathSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
   }
 
   if ((x_lower > 0.0 && x_upper > 0.0) || (x_lower < 0.0 && x_upper < 0.0)) {
-    min_abs = Kokkos::min(abs_lower, abs_upper);
+    min_abs = Kokkos::fmin(abs_lower, abs_upper);
   } else {
     min_abs = 0;
   }

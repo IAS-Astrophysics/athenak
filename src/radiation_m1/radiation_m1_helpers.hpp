@@ -21,7 +21,7 @@ namespace radiationm1 {
 //  \brief double minmod
 KOKKOS_INLINE_FUNCTION
 Real minmod2(Real rl, Real rp, Real th) {
-  return Kokkos::min(1.0, Kokkos::min(th * rl, th * rp));
+  return Kokkos::fmin(1.0, Kokkos::fmin(th * rl, th * rp));
 }
 
 //----------------------------------------------------------------------------------------
@@ -121,7 +121,7 @@ Real flux_factor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu,
                  const Real &J, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d,
                  const Real &rad_E_floor) {
   const Real xi = (J > rad_E_floor ? tensor_dot(g_uu, H_d, H_d) / (J*J) : 0);
-  return Kokkos::max(0.0, Kokkos::min(xi, 1.0));
+  return Kokkos::fmax(0.0, Kokkos::fmin(xi, 1.0));
 }
 
 //----------------------------------------------------------------------------------------
@@ -149,7 +149,7 @@ Real compute_Gamma(const Real &W,
                    const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
                    const RadiationM1Params &params) {
   if (E > params.rad_E_floor && J > params.rad_E_floor) {
-    const Real f_dot_v = Kokkos::min(tensor_dot(F_d, v_u) / E, 1 - params.rad_eps);
+    const Real f_dot_v = Kokkos::fmin(tensor_dot(F_d, v_u) / E, 1 - params.rad_eps);
     return W * (E / J) * (1 - f_dot_v);
   }
   return 1;
@@ -302,7 +302,7 @@ KOKKOS_INLINE_FUNCTION
 void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu, Real &E,
                  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
                  const RadiationM1Params &params) {
-  E = Kokkos::max(params.rad_E_floor, E);
+  E = Kokkos::fmax(params.rad_E_floor, E);
 
   const Real F2 = tensor_dot(g_uu, F_d, F_d);
   const Real lim = E * E * (1 - params.rad_eps);

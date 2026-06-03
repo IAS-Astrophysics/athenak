@@ -141,7 +141,7 @@ void CalcFlux(const int m, const int k, const int j, const int i, const int nuid
   const Real clam[2] = {
       adm.alpha(m, k, j, i) * Kokkos::sqrt(gamma_uu(dir - 1, dir - 1)) - beta_u(dir),
       adm.alpha(m, k, j, i) * Kokkos::sqrt(gamma_uu(dir - 1, dir - 1)) + beta_u(dir)};
-  const Real clight = Kokkos::max(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
+  const Real clight = Kokkos::fmax(Kokkos::abs(clam[0]), Kokkos::abs(clam[1]));
   cmax = clight;
 }
 
@@ -192,14 +192,14 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
 
         Real flux_jp12_lo[5]{};
         Real flux_jp12_ho[5]{};
-        Real cmax_jp12 = Kokkos::max(cmax_j, cmax_jp1);
+        Real cmax_jp12 = Kokkos::fmax(cmax_j, cmax_jp1);
 
         Real kappa_ave = 0;
         if (params_.matter_sources) {
           kappa_ave = 0.5 * (abs_1_(m, nuidx, k, j, i - 1) + abs_1_(m, nuidx, k, j, i) +
                              scat_1_(m, nuidx, k, j, i - 1) + scat_1_(m, nuidx, k, j, i));
         }
-        Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+        Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
         for (int momidx = 0; momidx < nvars_; ++momidx) {
           const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j, i - 2);
@@ -256,7 +256,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
-          Real cmax_jp12 = Kokkos::max(cmax_j, cmax_jp1);
+          Real cmax_jp12 = Kokkos::fmax(cmax_j, cmax_jp1);
 
           Real kappa_ave = 0;
           if (params_.matter_sources) {
@@ -264,7 +264,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                 0.5 * (abs_1_(m, nuidx, k, j - 1, i) + abs_1_(m, nuidx, k, j, i) +
                        scat_1_(m, nuidx, k, j - 1, i) + scat_1_(m, nuidx, k, j, i));
           }
-          Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+          Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
           for (int momidx = 0; momidx < nvars_; ++momidx) {
             const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 2, i);
@@ -322,7 +322,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
 
           Real flux_jp12_lo[5]{};
           Real flux_jp12_ho[5]{};
-          Real cmax_jp12 = Kokkos::max(cmax_j, cmax_jp1);
+          Real cmax_jp12 = Kokkos::fmax(cmax_j, cmax_jp1);
 
           Real kappa_ave = 0;
           if (params_.matter_sources) {
@@ -330,7 +330,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                 0.5 * (abs_1_(m, nuidx, k - 1, j, i) + abs_1_(m, nuidx, k, j, i) +
                        scat_1_(m, nuidx, k - 1, j, i) + scat_1_(m, nuidx, k, j, i));
           }
-          Real A_jp12 = Kokkos::min(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+          Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
 
           for (int momidx = 0; momidx < nvars_; ++momidx) {
             const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 2, j, i);

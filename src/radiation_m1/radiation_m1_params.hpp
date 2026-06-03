@@ -62,8 +62,6 @@ struct RadiationM1Params {
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
   int closure_maxiter;       // maximum number of iterations in closure root finder
-  Real inv_closure_epsilon;  // precision with which to find inverse closure
-  int inv_closure_maxiter;  // maximum number of iterations in inverse closure root finder
 
   Real minmod_theta;    // value of theta for minmod limiter
   Real rad_E_floor;     // radiation energy density floor

@@ -23,7 +23,7 @@ KOKKOS_INLINE_FUNCTION
 MathSignal prepare_closure(const BrentFunctor &BrentFunc, const Real q[4],
                            SrcParams &src_params, const RadiationM1Params &m1_params,
                            const RadiationM1Closure &closure_type) {
-  src_params.E = Kokkos::max(q[0], 0.);
+  src_params.E = Kokkos::fmax(q[0], 0.);
   if (src_params.E < 0) {
     return LinalgEbadfunc;
   }

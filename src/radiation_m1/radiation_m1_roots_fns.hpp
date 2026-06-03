@@ -86,7 +86,7 @@ KOKKOS_INLINE_FUNCTION void source_jacobian(
   const Real hatfupy = F_u(2) * inormF;
   const Real hatfupz = F_u(3) * inormF;
   const Real e = qpre[0];
-  const Real eonormF = Kokkos::min<Real>(e * inormF, 1.0);  // with factor dthin
+  const Real eonormF = Kokkos::fmin(e * inormF, 1.0);  // with factor dthin
 
   // drvts of J
   Real JdE =
