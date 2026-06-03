@@ -254,6 +254,13 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           assert(Kokkos::isfinite(scat_1_loc[2]));
           assert(Kokkos::isfinite(scat_1_loc[3]));
 
+          for (int s = 0; s < nspecies_; ++s) {
+            eta_0_loc[s] = (eta_0_loc[s] > 0) ? eta_0_loc[s] : 0;
+            eta_1_loc[s] = (eta_1_loc[s] > 0) ? eta_1_loc[s] : 0;
+            abs_0_loc[s] = (abs_0_loc[s] > 0) ? abs_0_loc[s] : 0;
+            abs_1_loc[s] = (abs_1_loc[s] > 0) ? abs_1_loc[s] : 0;
+          }
+
           Real tau{}, nudens_0_trap[4]{}, nudens_1_trap[4]{},
               nudens_0_thin[4]{}, nudens_1_thin[4]{};
 
