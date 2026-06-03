@@ -47,8 +47,8 @@ Real fac(int n) {
 void swsh(Real * ylmR, Real * ylmI, int l, int m, Real theta, Real phi) {
   Real wignerd = 0;
   int k1,k2,k;
-  k1 = Kokkos::max(0, m-2);
-  k2 = Kokkos::min(l+m,l-2);
+  k1 = (m-2 > 0) ? m-2 : 0;
+  k2 = (l+m < l-2) ? l+m : l-2;
   for (k = k1; k<k2+1; ++k) {
     wignerd += pow((-1),k)*sqrt(fac(l+m)*fac(l-m)*fac(l+2)*fac(l-2))
       *pow(Kokkos::cos(theta/2.0),2*l+m-2-2*k)*pow(Kokkos::sin(theta/2.0),2*k+2-m)
