@@ -1,9 +1,15 @@
 # Goal Prompt: Fix Zero-Feedback Symmetry Breaking
 
-Goal: Fix the symmetry breaking in the AthenaK TOV/Z4c
+Use this prompt as the complete Goal Mode objective.
+
+Primary goal: Fix the symmetry breaking in the AthenaK TOV/Z4c
 `schwarzschild_zero_feedback_smr_dense` discriminator first. The working
 hypothesis is that fixing this case will also fix the full coupled solver, but
 that must be verified, not assumed.
+
+The goal is not to broadly improve diagnostics. The goal is to identify and fix
+the first code path that makes the zero-feedback run lose reflection symmetry,
+then rerun the full coupled case to test whether the same fix resolves it.
 
 Repository:
 
@@ -76,6 +82,41 @@ feedback and should be the smallest decisive coupled reproducer.
   `analysis/tde_star_profile/aurora/sector_isolation_run_record.md` as new
   evidence is produced.
 - Commit coherent checkpoints: diagnostics, candidate fixes, run-record updates.
+
+## Goal Mode Operating Loop
+
+Work in short, evidence-driven iterations:
+
+1. Inspect the current repo state and the latest run record.
+2. Build or run only the smallest diagnostic needed to answer the next
+   localization question.
+3. Submit at most one Aurora job at a time.
+4. While an Aurora job is queued or running, conserve tokens:
+   - sleep or use the monitor script at roughly 10 minute intervals,
+   - do not repeatedly inspect unchanged queue state,
+   - when a job completes, inspect logs and postprocessed metrics before
+     deciding the next action.
+5. Update the run record after each decisive result.
+6. Commit coherent checkpoints separately:
+   - prompt/docs,
+   - diagnostic instrumentation,
+   - candidate solver fix,
+   - run-record updates.
+
+If the current worktree contains partial diagnostic edits, inspect them before
+continuing. Either finish and commit them if they are useful, or remove only
+those generated scratch edits after confirming they are unrelated. Do not revert
+user changes or unrelated dirty files.
+
+Prefer a narrow diagnosis over a speculative fix. The first successful
+iteration should answer where the zero-feedback path first diverges:
+
+- primitive state before x3 reconstruction,
+- ghost/refinement communication,
+- ADM/metric values consumed by GRMHD,
+- reconstructed x3 left/right states,
+- Riemann solve / flux computation,
+- task ordering or stale data.
 
 ## Existing Useful Infrastructure
 
@@ -251,6 +292,26 @@ Work backward from `dyngrflux_x3`:
 Do not jump to broad refactors. Add the narrowest diagnostic necessary, run the
 smallest meaningful case, inspect, and then decide the next edit.
 
+Use this decision tree:
+
+- If cell-centered primitive states are already asymmetric before x3
+  reconstruction, inspect the preceding MHD update, boundary refresh,
+  prolongation/restriction, and ghost exchange.
+- If primitive states are symmetric but ghost-zone values are asymmetric,
+  inspect mesh refinement and boundary communication for MHD primitive or
+  conserved variables.
+- If primitives and ghosts are symmetric but ADM/metric values at the exact
+  GRMHD consumption points are asymmetric, inspect Z4c-to-ADM conversion,
+  face metric construction, data synchronization, and task ordering.
+- If primitives and ADM are symmetric but reconstructed x3 left/right states
+  are asymmetric, inspect x3 reconstruction stencils, indexing, and face-state
+  pairing across the mirror pair.
+- If reconstructed states and ADM are symmetric but x3 fluxes are asymmetric,
+  inspect the Riemann solver, floor application, determinant/normalization, and
+  any branch that could differ between mirror partners.
+- If the zero-feedback case is fixed, rerun the full coupled infall before
+  claiming the full solver is fixed.
+
 ### 5. Candidate Fix Policy
 
 Only implement a fix after identifying the first asymmetric data boundary.
@@ -308,6 +369,19 @@ Use the monitor script for queued jobs:
 ```bash
 analysis/tde_star_profile/aurora/monitor_symmetry_job.sh JOB_ID CASE_NAME
 ```
+
+If manual polling is needed to conserve token usage, use a loop with a long
+sleep interval, for example:
+
+```bash
+while qstat JOB_ID >/dev/null 2>&1; do
+  date
+  qstat JOB_ID
+  sleep 600
+done
+```
+
+Then inspect the run directory, logs, metrics CSV/JSON, and generated plots.
 
 ### 7. Deliverables
 
