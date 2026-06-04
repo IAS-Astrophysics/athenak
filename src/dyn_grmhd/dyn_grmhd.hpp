@@ -92,7 +92,8 @@ class DynGRMHD {
                                                int js, int je, int ks, int ke) = 0;
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                             const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
+                             const Real dt, DvceArray5D<Real> &u0, int nghost,
+                             int stage) = 0;
 
   // DynGRMHD policies
   DynGRMHD_RSolver rsolver_method;
@@ -146,11 +147,11 @@ class DynGRMHDPS : public DynGRMHD {
                                                int js, int je, int ks, int ke);
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                             const Real dt, DvceArray5D<Real> &u0, int nghost);
+                             const Real dt, DvceArray5D<Real> &u0, int nghost, int stage);
 
   template<int NGHOST>
   void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
-                        const Real dt, DvceArray5D<Real> &u0);
+                        const Real dt, DvceArray5D<Real> &u0, int stage);
 };
 
 // Factory function for generating DynGRMHD based on parameter input.

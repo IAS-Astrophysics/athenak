@@ -46,6 +46,12 @@ bool C2PDebugEnabled() {
   return enabled;
 }
 
+bool CoordSrcDebugEnabled() {
+  static bool enabled = (std::getenv("ATHENA_COORDSRC_DEBUG") != nullptr ||
+                         std::getenv("ATHENA_SYM_DEBUG") != nullptr);
+  return enabled;
+}
+
 Real EnvReal(const char *name, Real default_value) {
   const char *value = std::getenv(name);
   return (value == nullptr) ? default_value : static_cast<Real>(std::atof(value));
@@ -530,13 +536,13 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrimBC(int is, int ie, int js, int
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTerms(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
-    const Real dt, DvceArray5D<Real> &rhs, int nghost) {
+    const Real dt, DvceArray5D<Real> &rhs, int nghost, int stage) {
   switch (nghost) {
-    case 2: AddCoordTermsEOS<2>(prim, bcc, dt, rhs);
+    case 2: AddCoordTermsEOS<2>(prim, bcc, dt, rhs, stage);
             break;
-    case 3: AddCoordTermsEOS<3>(prim, bcc, dt, rhs);
+    case 3: AddCoordTermsEOS<3>(prim, bcc, dt, rhs, stage);
             break;
-    case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs);
+    case 4: AddCoordTermsEOS<4>(prim, bcc, dt, rhs, stage);
             break;
   }
 }
@@ -698,7 +704,7 @@ TaskStatus DynGRMHD::UpdateExcisionMasks(Driver *pdrive, int stage) {
 template<class EOSPolicy, class ErrorPolicy> template<int NGHOST>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real> &prim,
     const DvceArray5D<Real> &bcc,
-    const Real dt, DvceArray5D<Real> &rhs) {
+    const Real dt, DvceArray5D<Real> &rhs, int stage) {
   if (fixed_evolution) {
     return;
   }
@@ -717,6 +723,66 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
   int &nhyd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
 
+  constexpr int ncoord_diag = 66;
+  bool do_coord_src_debug = false;
+  int dbg_m[2] = {-1, -1};
+  int dbg_i[2] = {-1, -1};
+  int dbg_j[2] = {-1, -1};
+  int dbg_k[2] = {-1, -1};
+  Real dbg_x[2] = {0.0, 0.0};
+  Real dbg_y[2] = {0.0, 0.0};
+  Real dbg_z[2] = {0.0, 0.0};
+  DvceArray2D<Real> coord_diag;
+  if (CoordSrcDebugEnabled()) {
+    Mesh *pm = pmy_pack->pmesh;
+    const int cycle = pm->ncycle;
+    const int target_cycle = EnvInt("ATHENA_COORDSRC_DEBUG_CYCLE", -1);
+    if ((target_cycle >= 0 && cycle == target_cycle) ||
+        (target_cycle < 0 && (cycle < 3 || cycle == 80 || cycle == 160))) {
+      const int target_stage = EnvInt("ATHENA_COORDSRC_DEBUG_STAGE", -1);
+      if (target_stage < 0 || stage == target_stage) {
+        auto &gid_size = pmy_pack->pmb->mb_size;
+        const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
+        const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+        for (int side = 0; side < 2; ++side) {
+          const bool below = (side == 0);
+          Real best_abs_y = std::numeric_limits<Real>::max();
+          for (int m = 0; m < pmy_pack->nmb_thispack; ++m) {
+            const auto &mb = gid_size.h_view(m);
+            const bool x_inside = (x_target >= mb.x1min) && (x_target < mb.x1max);
+            const bool z_inside = (z_target >= mb.x3min) && (z_target < mb.x3max);
+            if (!(x_inside && z_inside)) continue;
+
+            int i = is + static_cast<int>(std::floor((x_target - mb.x1min)/mb.dx1));
+            i = std::max(is, std::min(ie, i));
+            int k = ks + static_cast<int>(std::floor((z_target - mb.x3min)/mb.dx3));
+            k = std::max(ks, std::min(ke, k));
+
+            for (int jj = js; jj <= je; ++jj) {
+              const Real y = mb.x2min + (static_cast<Real>(jj - js) + 0.5)*mb.dx2;
+              if (((below && y < 0.0) || (!below && y > 0.0)) &&
+                  std::abs(y) < best_abs_y) {
+                best_abs_y = std::abs(y);
+                dbg_m[side] = m;
+                dbg_i[side] = i;
+                dbg_j[side] = jj;
+                dbg_k[side] = k;
+                dbg_x[side] = mb.x1min + (static_cast<Real>(i - is) + 0.5)*mb.dx1;
+                dbg_y[side] = y;
+                dbg_z[side] = mb.x3min + (static_cast<Real>(k - ks) + 0.5)*mb.dx3;
+              }
+            }
+          }
+        }
+        do_coord_src_debug = (dbg_m[0] >= 0 || dbg_m[1] >= 0);
+      }
+    }
+  }
+  if (do_coord_src_debug) {
+    coord_diag = DvceArray2D<Real>("coord-src-debug", 2, ncoord_diag);
+    Kokkos::deep_copy(coord_diag, std::numeric_limits<Real>::quiet_NaN());
+  }
+
   const Real mb = eos.ps.GetEOS().GetBaryonMass();
   const int imap[3][3] = {
     {S11, S12, S13},
@@ -734,8 +800,31 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     ndim = 3;
   }
 
+  const int dbg_m0 = dbg_m[0];
+  const int dbg_i0 = dbg_i[0];
+  const int dbg_j0 = dbg_j[0];
+  const int dbg_k0 = dbg_k[0];
+  const int dbg_m1 = dbg_m[1];
+  const int dbg_i1 = dbg_i[1];
+  const int dbg_j1 = dbg_j[1];
+  const int dbg_k1 = dbg_k[1];
+
   par_for("coord_src", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    int debug_side = -1;
+    if (do_coord_src_debug) {
+      if (m == dbg_m0 && i == dbg_i0 && j == dbg_j0 && k == dbg_k0) {
+        debug_side = 0;
+      } else if (m == dbg_m1 && i == dbg_i1 && j == dbg_j1 && k == dbg_k1) {
+        debug_side = 1;
+      }
+    }
+    const Real pre_rho = (debug_side >= 0) ? rhs(m, IDN, k, j, i) : 0.0;
+    const Real pre_momx = (debug_side >= 0) ? rhs(m, IM1, k, j, i) : 0.0;
+    const Real pre_momy = (debug_side >= 0) ? rhs(m, IM2, k, j, i) : 0.0;
+    const Real pre_momz = (debug_side >= 0) ? rhs(m, IM3, k, j, i) : 0.0;
+    const Real pre_tau = (debug_side >= 0) ? rhs(m, IEN, k, j, i) : 0.0;
+
     // Extract the metric and coordinate quantities.
     Real g3d[NSPMETRIC] = {adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
                            adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
@@ -832,11 +921,22 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       }
     }
 
+    Real src_tau_k = 0.0;
+    Real src_tau_alpha = 0.0;
+    Real src_mom_geom[3] = {0.0};
+    Real src_mom_beta[3] = {0.0};
+    Real src_mom_alpha[3] = {0.0};
+
     // Assemble energy RHS
     for (int a = 0; a < 3; a++) {
       for (int b = 0; b < 3; b++) {
-        rhs(m, IEN, k, j, i) += dt*vol*(alpha*adm.vK_dd(m, a, b, k, j, i)*S_uu[a][b] -
-            g3u[imap[a][b]] * S_d[a]*dalpha_d[b]);
+        rhs(m, IEN, k, j, i) += dt*vol*(
+            alpha*adm.vK_dd(m, a, b, k, j, i)*S_uu[a][b] -
+            g3u[imap[a][b]]*S_d[a]*dalpha_d[b]);
+        if (debug_side >= 0) {
+          src_tau_k += dt*vol*alpha*adm.vK_dd(m, a, b, k, j, i)*S_uu[a][b];
+          src_tau_alpha += -dt*vol*g3u[imap[a][b]]*S_d[a]*dalpha_d[b];
+        }
       }
     }
 
@@ -844,13 +944,167 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     for (int a = 0; a < 3; a++) {
       for (int b = 0; b < 3; b++) {
         for (int c = 0; c < 3; c++) {
-          rhs(m,IM1+a, k, j, i) += 0.5*dt*alpha*vol*S_uu[b][c]*dg_ddd[a][b][c];
+          const Real geom_src = 0.5*dt*alpha*vol*S_uu[b][c]*dg_ddd[a][b][c];
+          rhs(m,IM1+a, k, j, i) += geom_src;
+          if (debug_side >= 0) src_mom_geom[a] += geom_src;
         }
-        rhs(m, IM1+a, k, j, i) += dt*vol*S_d[b]*dbeta_du[a][b];
+        const Real beta_src = dt*vol*S_d[b]*dbeta_du[a][b];
+        rhs(m, IM1+a, k, j, i) += beta_src;
+        if (debug_side >= 0) src_mom_beta[a] += beta_src;
       }
-      rhs(m, IM1+a, k, j, i) -= dt*vol*E*dalpha_d[a];
+      const Real alpha_src = -dt*vol*E*dalpha_d[a];
+      rhs(m, IM1+a, k, j, i) += alpha_src;
+      if (debug_side >= 0) src_mom_alpha[a] += alpha_src;
+    }
+
+    if (debug_side >= 0) {
+      coord_diag(debug_side, 0) = pre_rho;
+      coord_diag(debug_side, 1) = pre_momx;
+      coord_diag(debug_side, 2) = pre_momy;
+      coord_diag(debug_side, 3) = pre_momz;
+      coord_diag(debug_side, 4) = pre_tau;
+      coord_diag(debug_side, 5) = 0.0;
+      coord_diag(debug_side, 6) = src_mom_geom[0] + src_mom_beta[0] + src_mom_alpha[0];
+      coord_diag(debug_side, 7) = src_mom_geom[1] + src_mom_beta[1] + src_mom_alpha[1];
+      coord_diag(debug_side, 8) = src_mom_geom[2] + src_mom_beta[2] + src_mom_alpha[2];
+      coord_diag(debug_side, 9) = src_tau_k + src_tau_alpha;
+      coord_diag(debug_side, 10) = rhs(m, IDN, k, j, i);
+      coord_diag(debug_side, 11) = rhs(m, IM1, k, j, i);
+      coord_diag(debug_side, 12) = rhs(m, IM2, k, j, i);
+      coord_diag(debug_side, 13) = rhs(m, IM3, k, j, i);
+      coord_diag(debug_side, 14) = rhs(m, IEN, k, j, i);
+      coord_diag(debug_side, 15) = alpha;
+      coord_diag(debug_side, 16) = beta_u[0];
+      coord_diag(debug_side, 17) = beta_u[1];
+      coord_diag(debug_side, 18) = beta_u[2];
+      coord_diag(debug_side, 19) = detg;
+      coord_diag(debug_side, 20) = vol;
+      coord_diag(debug_side, 21) = dalpha_d[0];
+      coord_diag(debug_side, 22) = dalpha_d[1];
+      coord_diag(debug_side, 23) = dalpha_d[2];
+      for (int dir = 0; dir < 3; ++dir) {
+        for (int comp = 0; comp < 3; ++comp) {
+          coord_diag(debug_side, 24 + 3*dir + comp) = dbeta_du[dir][comp];
+        }
+      }
+      for (int dir = 0; dir < 3; ++dir) {
+        coord_diag(debug_side, 33 + 6*dir + 0) = dg_ddd[dir][0][0];
+        coord_diag(debug_side, 33 + 6*dir + 1) = dg_ddd[dir][0][1];
+        coord_diag(debug_side, 33 + 6*dir + 2) = dg_ddd[dir][0][2];
+        coord_diag(debug_side, 33 + 6*dir + 3) = dg_ddd[dir][1][1];
+        coord_diag(debug_side, 33 + 6*dir + 4) = dg_ddd[dir][1][2];
+        coord_diag(debug_side, 33 + 6*dir + 5) = dg_ddd[dir][2][2];
+      }
+      coord_diag(debug_side, 51) = E;
+      coord_diag(debug_side, 52) = S_d[0];
+      coord_diag(debug_side, 53) = S_d[1];
+      coord_diag(debug_side, 54) = S_d[2];
+      coord_diag(debug_side, 55) = src_mom_geom[0];
+      coord_diag(debug_side, 56) = src_mom_beta[0];
+      coord_diag(debug_side, 57) = src_mom_alpha[0];
+      coord_diag(debug_side, 58) = src_mom_geom[1];
+      coord_diag(debug_side, 59) = src_mom_beta[1];
+      coord_diag(debug_side, 60) = src_mom_alpha[1];
+      coord_diag(debug_side, 61) = src_mom_geom[2];
+      coord_diag(debug_side, 62) = src_mom_beta[2];
+      coord_diag(debug_side, 63) = src_mom_alpha[2];
+      coord_diag(debug_side, 64) = src_tau_k;
+      coord_diag(debug_side, 65) = src_tau_alpha;
     }
   });
+
+  if (do_coord_src_debug) {
+    Kokkos::fence();
+    auto hdiag = Kokkos::create_mirror_view(coord_diag);
+    Kokkos::deep_copy(hdiag, coord_diag);
+    auto &gid = pmy_pack->pmb->mb_gid;
+    auto &lev = pmy_pack->pmb->mb_lev;
+    for (int side = 0; side < 2; ++side) {
+      if (dbg_m[side] < 0) continue;
+      std::cout << std::setprecision(17)
+                << "COORDSRCDBG label=DynGRMHD_AddCoordTerms"
+                << " rank=" << global_variable::my_rank
+                << " gid=" << gid.h_view(dbg_m[side])
+                << " level=" << lev.h_view(dbg_m[side])
+                << " side=" << (side == 0 ? "below" : "above")
+                << " cycle=" << pmy_pack->pmesh->ncycle
+                << " time=" << pmy_pack->pmesh->time
+                << " stage=" << stage
+                << " i=" << dbg_i[side]
+                << " j=" << dbg_j[side]
+                << " k=" << dbg_k[side]
+                << " x=" << dbg_x[side]
+                << " y=" << dbg_y[side]
+                << " z=" << dbg_z[side]
+                << " pre_rho=" << hdiag(side, 0)
+                << " pre_momx=" << hdiag(side, 1)
+                << " pre_momy=" << hdiag(side, 2)
+                << " pre_momz=" << hdiag(side, 3)
+                << " pre_tau=" << hdiag(side, 4)
+                << " src_rho=" << hdiag(side, 5)
+                << " src_momx=" << hdiag(side, 6)
+                << " src_momy=" << hdiag(side, 7)
+                << " src_momz=" << hdiag(side, 8)
+                << " src_tau=" << hdiag(side, 9)
+                << " post_rho=" << hdiag(side, 10)
+                << " post_momx=" << hdiag(side, 11)
+                << " post_momy=" << hdiag(side, 12)
+                << " post_momz=" << hdiag(side, 13)
+                << " post_tau=" << hdiag(side, 14)
+                << " alpha=" << hdiag(side, 15)
+                << " beta_x=" << hdiag(side, 16)
+                << " beta_y=" << hdiag(side, 17)
+                << " beta_z=" << hdiag(side, 18)
+                << " detg=" << hdiag(side, 19)
+                << " sdetg=" << hdiag(side, 20)
+                << " dalpha_x=" << hdiag(side, 21)
+                << " dalpha_y=" << hdiag(side, 22)
+                << " dalpha_z=" << hdiag(side, 23)
+                << " dbeta_dx_bx=" << hdiag(side, 24)
+                << " dbeta_dx_by=" << hdiag(side, 25)
+                << " dbeta_dx_bz=" << hdiag(side, 26)
+                << " dbeta_dy_bx=" << hdiag(side, 27)
+                << " dbeta_dy_by=" << hdiag(side, 28)
+                << " dbeta_dy_bz=" << hdiag(side, 29)
+                << " dbeta_dz_bx=" << hdiag(side, 30)
+                << " dbeta_dz_by=" << hdiag(side, 31)
+                << " dbeta_dz_bz=" << hdiag(side, 32)
+                << " dg_dx_gxx=" << hdiag(side, 33)
+                << " dg_dx_gxy=" << hdiag(side, 34)
+                << " dg_dx_gxz=" << hdiag(side, 35)
+                << " dg_dx_gyy=" << hdiag(side, 36)
+                << " dg_dx_gyz=" << hdiag(side, 37)
+                << " dg_dx_gzz=" << hdiag(side, 38)
+                << " dg_dy_gxx=" << hdiag(side, 39)
+                << " dg_dy_gxy=" << hdiag(side, 40)
+                << " dg_dy_gxz=" << hdiag(side, 41)
+                << " dg_dy_gyy=" << hdiag(side, 42)
+                << " dg_dy_gyz=" << hdiag(side, 43)
+                << " dg_dy_gzz=" << hdiag(side, 44)
+                << " dg_dz_gxx=" << hdiag(side, 45)
+                << " dg_dz_gxy=" << hdiag(side, 46)
+                << " dg_dz_gxz=" << hdiag(side, 47)
+                << " dg_dz_gyy=" << hdiag(side, 48)
+                << " dg_dz_gyz=" << hdiag(side, 49)
+                << " dg_dz_gzz=" << hdiag(side, 50)
+                << " E=" << hdiag(side, 51)
+                << " Sx=" << hdiag(side, 52)
+                << " Sy=" << hdiag(side, 53)
+                << " Sz=" << hdiag(side, 54)
+                << " src_momx_geom=" << hdiag(side, 55)
+                << " src_momx_beta=" << hdiag(side, 56)
+                << " src_momx_alpha=" << hdiag(side, 57)
+                << " src_momy_geom=" << hdiag(side, 58)
+                << " src_momy_beta=" << hdiag(side, 59)
+                << " src_momy_alpha=" << hdiag(side, 60)
+                << " src_momz_geom=" << hdiag(side, 61)
+                << " src_momz_beta=" << hdiag(side, 62)
+                << " src_momz_alpha=" << hdiag(side, 63)
+                << " src_tau_k=" << hdiag(side, 64)
+                << " src_tau_alpha=" << hdiag(side, 65)
+                << std::endl;
+    }
+  }
 }
 
 // Instantiated templates
@@ -870,15 +1124,15 @@ template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
 template \
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<2>( \
       const DvceArray5D<Real> &prim, \
-      const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs); \
+      const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs, int stage); \
 template \
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<3>( \
       const DvceArray5D<Real> &prim, \
-      const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs); \
+      const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs, int stage); \
 template \
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS<4>( \
       const DvceArray5D<Real> &prim, \
-      const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs);
+      const DvceArray5D<Real> &bcc, const Real dt, DvceArray5D<Real> &rhs, int stage);
 
 INSTANTIATE_COORD_TERMS(Primitive::IdealGas, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);

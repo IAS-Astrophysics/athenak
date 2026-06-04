@@ -78,11 +78,13 @@ used by `ATHENA_FLUX_DEBUG`.
 | `schwarzschild_zero_feedback_x3debug_c19` | `8522976` | Complete; diagnostic built from commit `69bdf213` and enabled with `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=19`. The run reproduces the prior zero-feedback break: high-density (`rho > 1e-8`) final density Linf abs `3.421155270189047e-8`, local-relative Linf `1.974173482905793e-3`, peak-relative Linf `3.5737975125244427e-4`, L2 peak-relative `8.150517976511866e-5` in `xy` and the same values in `xz`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_x3debug_c19` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_x3debug_c19` |
 | `schwarzschild_zero_feedback_cycle0_debug_n1` | `8523001` | Complete; enabled `ATHENA_SYM_DEBUG=1`, `ATHENA_FLUX_DEBUG=1`, `ATHENA_SYM_X_TARGET=20.03125`, `ATHENA_SYM_Z_TARGET=0.0`, and `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=0` with `time/nlim=1`. The first high-density density break appears after one full cycle: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6` at `x=20.03125`, mirror `y=+-0.03125`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_cycle0_debug_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_cycle0_debug_n1` |
 | `schwarzschild_zero_feedback_c2pdebug_c0_n1` | `8523033` | Complete; built from commit `254a131e` and enabled `ATHENA_C2P_DEBUG=1`, `ATHENA_C2P_DEBUG_CYCLE=0`, `ATHENA_SYM_X_TARGET=20.03125`, and `ATHENA_SYM_Z_TARGET=0.0` with `time/nlim=1`. The final high-density density metric matches the cycle-0 debug run: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_c2pdebug_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_c2pdebug_c0_n1` |
+| `schwarzschild_zero_feedback_rkvars_c0_n1` | `8523062` | Complete; built from commit `628cecc2` and enabled expanded `ATHENA_SYM_DEBUG`, `ATHENA_FLUX_DEBUG`, and `ATHENA_C2P_DEBUG` at cycle 0 with `time/nlim=1`. The final high-density density metric again matches the one-cycle break: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. The first nonzero conserved-variable asymmetry at the target appears after stage-1 `MHD_SrcTerms`, not in flux/RK. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_rkvars_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_rkvars_c0_n1` |
 
 Diagnostic stdout:
 
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_x3dbg.o8522976`
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_c2pdbg.o8523033`
+- `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_rkvars.o8523062`
 
 Key cycle-19 result at `x=20.03125`, `y=+-0.03125`, `zface=0`:
 
@@ -154,6 +156,28 @@ divergence or dynamic-coordinate source terms. The next diagnostic must expand
 `SYMDBG`, `FLUXDBG`, and `RKDBG` from density-only logging to all core MHD
 variables so stage-1 `MHD_RKUpdate` and `MHD_SrcTerms` can be separated.
 
+Cycle-0 conserved-variable result:
+
+- Stage-1 `DynGRMHD_CalcFluxes`, `MHD_RecvFlux`, `MHD_RKUpdate`, and `RKDBG`
+  flux divergence are exactly parity-symmetric at the target for `rho`,
+  `momx`, parity-adjusted `momy`, `momz`, and `tau`.
+- Stage-1 `MHD_RKUpdate` leaves the target pair symmetric in the core
+  conserved variables.
+- Stage-1 `MHD_SrcTerms` introduces the first nonzero conserved asymmetry:
+  `momx_u` differs by `2.09709683795105968e-9`, parity-adjusted `momy_u` by
+  `-2.67772438672822527e-12`, parity-adjusted `momz_u` by
+  `2.67772438672822527e-12`, and `tau_u` by
+  `-2.03922646536067729e-10`; `rho_u` remains symmetric.
+- Stage-1 `MHD_RecvU`, `MHD_Prolongate`, and C2P then carry the source-term
+  asymmetry forward, and stage 2 propagates it into conserved density.
+
+Interpretation update: the first breaking task is dynamic GRMHD coordinate
+source terms, specifically `DynGRMHDPS::AddCoordTermsEOS`, rather than
+flux/RK, x3 reconstruction/Riemann, C2P, or matter feedback. The next probe is
+the env-gated `COORDSRCDBG` diagnostic inside `DynGRMHD_AddCoordTerms`, targeted
+to cycle 0/stage 1, to split the source into geometry, shift-gradient,
+lapse-gradient, and energy-source subcomponents.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
@@ -167,8 +191,10 @@ Current best classification: the necessary path is not matter feedback into Z4c.
 The break is isolated to the fluid evolution running in the coupled Z4c/ADM
 context. The cycle-19 x3 diagnostic shows the sampled ADM values are symmetric
 at the GRMHD consumption point, while primitive and reconstructed fluid states
-are already asymmetric before x3 reconstruction/Riemann. Current best remaining
-classes are the stage-1 dynamic GRMHD flux-divergence path, dynamic-coordinate
-source terms, or fine-boundary communication affecting conserved momentum and
-energy before the stage-1 C2P task. Cell-centered ADM values at the C2P target
-pair were symmetric in the first C2P diagnostic.
+are already asymmetric before x3 reconstruction/Riemann. The cycle-0
+conserved-variable diagnostic further excludes the stage-1 flux/RK path at the
+target and localizes the first conserved asymmetry to dynamic GRMHD coordinate
+source terms. Cell-centered ADM values at the C2P target pair were symmetric in
+the first C2P diagnostic; the remaining question is whether
+`DynGRMHDPS::AddCoordTermsEOS` is receiving asymmetric derivative/source inputs
+or applying a parity/sign/index error in its source assembly.

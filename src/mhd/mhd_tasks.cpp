@@ -519,7 +519,8 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
       !pmy_pack->pcoord->is_dynamical_relativistic) {
     pmy_pack->pcoord->CoordSrcTerms(w0, bcc0, peos->eos_data, beta_dt, u0);
   } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
-    pmy_pack->pdyngr->AddCoordTerms(w0, bcc0, beta_dt, u0, pmy_pack->pmesh->mb_indcs.ng);
+    pmy_pack->pdyngr->AddCoordTerms(w0, bcc0, beta_dt, u0,
+                                    pmy_pack->pmesh->mb_indcs.ng, stage);
   }
 
   // Add user source terms
