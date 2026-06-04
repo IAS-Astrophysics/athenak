@@ -25,6 +25,7 @@
 #include "z4c/z4c.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
+#include "coordinates/coordinates.hpp"
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
@@ -533,6 +534,15 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
   auto &eos_ = eos.ps.GetEOS();
   //auto &tmunu = pmy_pack->ptmunu->tmunu;
 
+  // fetch flag for smooth excision and
+  // excision mask, and target values
+  bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
+  auto &floor = pmy_pack->pcoord->excision_floor;
+  Real &dexcise = pmy_pack->pcoord->coord_data.dexcise;
+  Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
+  Real &texcise = pmy_pack->pcoord->coord_data.texcise;
+  Real &tdamp = pmy_pack->pcoord->coord_data.tdamp;
+
   int &nhyd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
 
@@ -626,6 +636,15 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     Real E = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
     //Real E = tmunu.E(m,k,j,i);
 
+    // D = rho*W and tau = E-D are needed for the smooth damping terms
+    // inside excised regions, if existing.
+    Real D = prim(m, IDN, k, j, i) * W;
+    Real tau = E - D;
+
+    // Compute the excised value for the energy.
+    Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
+                  + Bsq - pexcise - 0.5*bsq - dexcise;
+
     Real S_d[3] = {0.0};
     for (int a = 0; a < 3; a++) {
       //S_d[a] = tmunu.S_d(m,a,k,j,i);
@@ -668,6 +687,19 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
         rhs(m, IM1+a, k, j, i) += dt*vol*S_d[b]*dbeta_du[a][b];
       }
       rhs(m, IM1+a, k, j, i) -= dt*vol*E*dalpha_d[a];
+    }
+
+    // Assemble damping source terms
+    if (smoothing) {
+      rhs(m, IDN, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise))/tdamp;
+      rhs(m, IM1, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[0])/tdamp;
+      rhs(m, IM2, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[1])/tdamp;
+      rhs(m, IM3, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[2])/tdamp;
+      rhs(m, IEN, k, j, i) -= dt*vol*floor(m,k,j,i)*(tau - tau_ex)/tdamp;
+      for (int s = 0; s < nscal; s++) {
+        rhs(m, IYF+s, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise)*prim_pt[PYF+s])
+                                      /tdamp;
+      }
     }
   });
 }
