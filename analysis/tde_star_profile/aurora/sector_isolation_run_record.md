@@ -243,13 +243,40 @@ symmetry break. The next validation gate is the longer dense
 `schwarzschild_zero_feedback_smr_dense` run with the same fix, followed by the
 full coupled infall run if zero-feedback stays at the Minkowski/SMR baseline.
 
+Dense zero-feedback candidate-fix result:
+
+- Job `8523138` ran
+  `schwarzschild_zero_feedback_smr_dense_fix` with the fixed Aurora GPU
+  executable and the zero-feedback Schwarzschild SMR dense deck.
+- Stdout is archived at
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_fix_dense.o8523138`.
+- Metrics and plots are in
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_smr_dense_fix`.
+- At cycle 20/time `0.25`, for `rho > 1e-8`, both `xy` and `xz` report
+  exactly zero density asymmetry: `mhd_dens` L2 abs `0`, Linf abs `0`,
+  L2/Linf local-relative `0`, and L2/Linf peak-relative `0`.
+- At the same final time and mask, `velx`, `vely`, and `velz` are also
+  exactly symmetric in both checked planes.
+- The worst high-density velocity differences over the whole dense run are
+  roundoff-level: `xy` `vely` reaches Linf abs
+  `5.684341886080802e-14` at cycle 5/time `0.0625`, with peak-relative Linf
+  `1.4534097392461075e-10`; other velocity components stay at or below
+  `1.4210854715202004e-14`.
+
+Interpretation update: the ADM cache fix eliminates the zero-feedback
+Schwarzschild SMR dense symmetry break through the previous failure horizon.
+The old fixed-executable comparator was `mhd_dens` Linf abs `~3.42e-8`,
+peak-relative Linf `~3.57e-4`, and local-relative Linf `~1.97e-3` at cycle 20.
+The remaining decisive validation is the full coupled infall run using the same
+fixed ADM cache.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
 - Spacetime-only / zero-matter Z4c: no macroscopic break in the prior Stage B runs.
 - Minkowski static baselines: uniform is exactly symmetric; SMR has zero density asymmetry and only tiny velocity differences, plus a refinement-only `z4c_Theta` baseline.
 - Full coupled Schwarzschild infall: reproduces coherent MHD density/velocity symmetry growth.
-- Coupled infall with `Tmunu` feedback disabled: reproduces the MHD break nearly identically while Z4c/ADM fields remain symmetric to small absolute error.
+- Coupled infall with `Tmunu` feedback disabled: fixed by the ADM cache change; dense cycle-20 high-density density metrics are exactly zero in both checked planes.
 - Fixed-fluid matter-source-to-Z4c cases, with retained and refreshed `Tmunu`: do not reproduce the MHD break.
 
 Current best classification: the necessary path is not matter feedback into Z4c.
