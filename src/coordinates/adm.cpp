@@ -14,7 +14,6 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "mesh/meshblock_pack.hpp"
-#include "z4c/z4c.hpp"
 
 namespace adm {
 char const * const ADM::ADM_names[ADM::nadm] = {
@@ -38,17 +37,11 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
-  if (pmy_pack->pz4c == nullptr) {
-    Kokkos::realloc(u_adm, nmb, nadm, ncells3, ncells2, ncells1);
-    adm.alpha.InitWithShallowSlice(u_adm, I_ADM_ALPHA);
-    adm.beta_u.InitWithShallowSlice(u_adm, I_ADM_BETAX, I_ADM_BETAZ);
-  } else {
-    // Lapse and shift are stored in the Z4c class
-    z4c::Z4c * pz4c = pmy_pack->pz4c;
-    Kokkos::realloc(u_adm, nmb, nadm - 4, ncells3, ncells2, ncells1);
-    adm.alpha.InitWithShallowSlice(pz4c->u0, pz4c->I_Z4C_ALPHA);
-    adm.beta_u.InitWithShallowSlice(pz4c->u0, pz4c->I_Z4C_BETAX, pz4c->I_Z4C_BETAZ);
-  }
+  // Keep all ADM quantities in one stable cache.  When Z4c is active, u0 may
+  // hold residual/RK stage state, while GRMHD source terms need full ADM data.
+  Kokkos::realloc(u_adm, nmb, nadm, ncells3, ncells2, ncells1);
+  adm.alpha.InitWithShallowSlice(u_adm, I_ADM_ALPHA);
+  adm.beta_u.InitWithShallowSlice(u_adm, I_ADM_BETAX, I_ADM_BETAZ);
   adm.psi4.InitWithShallowSlice(u_adm, I_ADM_PSI4);
   adm.g_dd.InitWithShallowSlice(u_adm, I_ADM_GXX, I_ADM_GZZ);
   adm.vK_dd.InitWithShallowSlice(u_adm, I_ADM_KXX, I_ADM_KZZ);
