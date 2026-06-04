@@ -150,6 +150,12 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   zero_tmunu_feedback = pin->GetOrAddBoolean("mhd", "zero_tmunu_feedback", false);
   refresh_tmunu_when_fixed =
       pin->GetOrAddBoolean("mhd", "refresh_tmunu_when_fixed", false);
+  dyngr_x3_debug = pin->GetOrAddBoolean("mhd", "dyngr_x3_debug", false);
+  dyngr_x3_debug_x = pin->GetOrAddReal("mhd", "dyngr_x3_debug_x", 20.03125);
+  dyngr_x3_debug_y_abs = pin->GetOrAddReal("mhd", "dyngr_x3_debug_y_abs", 0.03125);
+  dyngr_x3_debug_z_face = pin->GetOrAddReal("mhd", "dyngr_x3_debug_z_face", 0.0);
+  dyngr_x3_debug_cycle = pin->GetOrAddInteger("mhd", "dyngr_x3_debug_cycle", -1);
+  dyngr_x3_debug_stage = pin->GetOrAddInteger("mhd", "dyngr_x3_debug_stage", -1);
 
   // allocate memory for temperature
   {

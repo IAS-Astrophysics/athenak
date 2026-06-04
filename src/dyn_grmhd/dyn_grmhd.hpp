@@ -111,6 +111,12 @@ class DynGRMHD {
   bool fixed_evolution;     // Disable mhd evolution
   bool zero_tmunu_feedback;  // Diagnostic: disable matter feedback into Z4c
   bool refresh_tmunu_when_fixed; // Diagnostic: refresh fixed-fluid Tmunu each stage
+  bool dyngr_x3_debug;      // Diagnostic: dump x3 GRMHD reconstruction/ADM inputs
+  Real dyngr_x3_debug_x;
+  Real dyngr_x3_debug_y_abs;
+  Real dyngr_x3_debug_z_face;
+  int dyngr_x3_debug_cycle;
+  int dyngr_x3_debug_stage;
 };
 
 template<class EOSPolicy, class ErrorPolicy>

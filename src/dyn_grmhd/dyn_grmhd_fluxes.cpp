@@ -6,11 +6,16 @@
 //! \file dyngr_fluxes.cpp
 //  \brief Calculate 3D fluxes for hydro
 
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 //#include <stdio.h>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "dyn_grmhd.hpp"
 #include "dyn_grmhd_util.hpp"
@@ -30,6 +35,136 @@
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
+namespace {
+
+constexpr int kX3DebugSides = 2;
+constexpr int kX3DebugIndexCount = 4;
+constexpr int kX3DebugCoordCount = 3;
+constexpr int kX3DebugValueCount = 43;
+
+enum X3DebugIndex {
+  X3DBG_M = 0,
+  X3DBG_I = 1,
+  X3DBG_J = 2,
+  X3DBG_K = 3,
+};
+
+enum X3DebugValue {
+  X3DBG_FOUND = 0,
+  X3DBG_CC_KM1_RHO,
+  X3DBG_CC_KM1_PRS,
+  X3DBG_CC_KM1_VX,
+  X3DBG_CC_KM1_VY,
+  X3DBG_CC_KM1_VZ,
+  X3DBG_CC_K_RHO,
+  X3DBG_CC_K_PRS,
+  X3DBG_CC_K_VX,
+  X3DBG_CC_K_VY,
+  X3DBG_CC_K_VZ,
+  X3DBG_WL_RHO,
+  X3DBG_WL_PRS,
+  X3DBG_WL_VX,
+  X3DBG_WL_VY,
+  X3DBG_WL_VZ,
+  X3DBG_WR_RHO,
+  X3DBG_WR_PRS,
+  X3DBG_WR_VX,
+  X3DBG_WR_VY,
+  X3DBG_WR_VZ,
+  X3DBG_BL_X,
+  X3DBG_BL_Y,
+  X3DBG_BL_Z,
+  X3DBG_BR_X,
+  X3DBG_BR_Y,
+  X3DBG_BR_Z,
+  X3DBG_BZ_FACE,
+  X3DBG_ALPHA,
+  X3DBG_BETA_X,
+  X3DBG_BETA_Y,
+  X3DBG_BETA_Z,
+  X3DBG_GXX,
+  X3DBG_GXY,
+  X3DBG_GXZ,
+  X3DBG_GYY,
+  X3DBG_GYZ,
+  X3DBG_GZZ,
+  X3DBG_DETG,
+  X3DBG_FLUX_RHO,
+  X3DBG_E23,
+  X3DBG_E13,
+  X3DBG_LEVEL,
+};
+
+const char *X3DebugSideName(int side) {
+  return (side == 0) ? "minus_y" : "plus_y";
+}
+
+const char *X3DebugValueName(int value) {
+  switch (value) {
+    case X3DBG_CC_KM1_RHO: return "cc_km1_rho";
+    case X3DBG_CC_KM1_PRS: return "cc_km1_prs";
+    case X3DBG_CC_KM1_VX: return "cc_km1_vx";
+    case X3DBG_CC_KM1_VY: return "cc_km1_vy";
+    case X3DBG_CC_KM1_VZ: return "cc_km1_vz";
+    case X3DBG_CC_K_RHO: return "cc_k_rho";
+    case X3DBG_CC_K_PRS: return "cc_k_prs";
+    case X3DBG_CC_K_VX: return "cc_k_vx";
+    case X3DBG_CC_K_VY: return "cc_k_vy";
+    case X3DBG_CC_K_VZ: return "cc_k_vz";
+    case X3DBG_WL_RHO: return "wl_rho";
+    case X3DBG_WL_PRS: return "wl_prs";
+    case X3DBG_WL_VX: return "wl_vx";
+    case X3DBG_WL_VY: return "wl_vy";
+    case X3DBG_WL_VZ: return "wl_vz";
+    case X3DBG_WR_RHO: return "wr_rho";
+    case X3DBG_WR_PRS: return "wr_prs";
+    case X3DBG_WR_VX: return "wr_vx";
+    case X3DBG_WR_VY: return "wr_vy";
+    case X3DBG_WR_VZ: return "wr_vz";
+    case X3DBG_BL_X: return "bl_x";
+    case X3DBG_BL_Y: return "bl_y";
+    case X3DBG_BL_Z: return "bl_z";
+    case X3DBG_BR_X: return "br_x";
+    case X3DBG_BR_Y: return "br_y";
+    case X3DBG_BR_Z: return "br_z";
+    case X3DBG_BZ_FACE: return "bz_face";
+    case X3DBG_ALPHA: return "alpha";
+    case X3DBG_BETA_X: return "beta_x";
+    case X3DBG_BETA_Y: return "beta_y";
+    case X3DBG_BETA_Z: return "beta_z";
+    case X3DBG_GXX: return "gxx";
+    case X3DBG_GXY: return "gxy";
+    case X3DBG_GXZ: return "gxz";
+    case X3DBG_GYY: return "gyy";
+    case X3DBG_GYZ: return "gyz";
+    case X3DBG_GZZ: return "gzz";
+    case X3DBG_DETG: return "detg";
+    case X3DBG_FLUX_RHO: return "flux_rho";
+    case X3DBG_E23: return "e23";
+    case X3DBG_E13: return "e13";
+    default: return "";
+  }
+}
+
+int X3DebugYParity(int value) {
+  switch (value) {
+    case X3DBG_CC_KM1_VY:
+    case X3DBG_CC_K_VY:
+    case X3DBG_WL_VY:
+    case X3DBG_WR_VY:
+    case X3DBG_BL_Y:
+    case X3DBG_BR_Y:
+    case X3DBG_BETA_Y:
+    case X3DBG_GXY:
+    case X3DBG_GYZ:
+      return -1;
+    default:
+      return 1;
+  }
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::CalcFluxes
 //! \brief Calls reconstruction and Riemann solver functions to compute hydro fluxes
@@ -285,9 +420,109 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     auto &bz_   = pmy_pack->pmhd->b0.x3f;
     auto &e23_  = pmy_pack->pmhd->e2x3;
     auto &e13_  = pmy_pack->pmhd->e1x3;
+    auto &lev_  = pmy_pack->pmb->mb_lev;
 
     kl = ks-1, ku = ke+1;
     if (use_fofc) { kl = ks-2, ku = ke+2; }
+
+    Mesh *pm = pmy_pack->pmesh;
+    const int debug_cycle = pm->ncycle;
+    const bool x3_debug_active =
+        dyngr_x3_debug &&
+        (dyngr_x3_debug_cycle < 0 || dyngr_x3_debug_cycle == debug_cycle) &&
+        (dyngr_x3_debug_stage < 0 || dyngr_x3_debug_stage == stage);
+    DvceArray2D<int> x3_debug_idx;
+    DvceArray2D<Real> x3_debug_vals;
+    HostArray2D<int> x3_debug_idx_h("dyngr-x3-debug-idx-h",
+                                    kX3DebugSides, kX3DebugIndexCount);
+    HostArray2D<Real> x3_debug_coord_h("dyngr-x3-debug-coord-h",
+                                       kX3DebugSides, kX3DebugCoordCount);
+    if (x3_debug_active) {
+      x3_debug_idx = DvceArray2D<int>("dyngr-x3-debug-idx",
+                                      kX3DebugSides, kX3DebugIndexCount);
+      x3_debug_vals = DvceArray2D<Real>("dyngr-x3-debug-vals",
+                                        kX3DebugSides, kX3DebugValueCount);
+      for (int side = 0; side < kX3DebugSides; ++side) {
+        for (int n = 0; n < kX3DebugIndexCount; ++n) {
+          x3_debug_idx_h(side, n) = -1;
+        }
+        for (int n = 0; n < kX3DebugCoordCount; ++n) {
+          x3_debug_coord_h(side, n) = 0.0;
+        }
+      }
+
+      auto &gid = pmy_pack->pmb->mb_gid;
+      const Real x_target = dyngr_x3_debug_x;
+      const Real y_abs = std::abs(dyngr_x3_debug_y_abs);
+      const Real z_face_target = dyngr_x3_debug_z_face;
+      Real best_score[kX3DebugSides];
+      int best_level[kX3DebugSides];
+      for (int side = 0; side < kX3DebugSides; ++side) {
+        best_score[side] = std::numeric_limits<Real>::max();
+        best_level[side] = std::numeric_limits<int>::min();
+      }
+      for (int m = 0; m < pmy_pack->nmb_thispack; ++m) {
+        const auto &mb = size_.h_view(m);
+        const int level = lev_.h_view(m);
+        const bool x_inside = (x_target >= mb.x1min) && (x_target < mb.x1max);
+        const bool z_inside = (z_face_target >= mb.x3min) && (z_face_target <= mb.x3max);
+        if (!(x_inside && z_inside)) continue;
+
+        int i = is + static_cast<int>(std::floor((x_target - mb.x1min)/mb.dx1));
+        i = std::max(is, std::min(ie, i));
+        int kface = ks + static_cast<int>(std::llround((z_face_target - mb.x3min)/mb.dx3));
+        kface = std::max(ks, std::min(ke + 1, kface));
+        if (!(kface > kl && kface <= ku)) continue;
+        const Real x = mb.x1min + (static_cast<Real>(i - is) + 0.5)*mb.dx1;
+        const Real zface = mb.x3min + static_cast<Real>(kface - ks)*mb.dx3;
+
+        for (int side = 0; side < kX3DebugSides; ++side) {
+          const Real y_target = (side == 0) ? -y_abs : y_abs;
+          const bool y_inside = (y_target >= mb.x2min) && (y_target < mb.x2max);
+          if (!y_inside) continue;
+          int j = js + static_cast<int>(std::floor((y_target - mb.x2min)/mb.dx2));
+          j = std::max(js, std::min(je, j));
+          const Real y = mb.x2min + (static_cast<Real>(j - js) + 0.5)*mb.dx2;
+          const Real score = std::abs(x - x_target) + std::abs(y - y_target) +
+                             std::abs(zface - z_face_target);
+          if (level > best_level[side] ||
+              (level == best_level[side] && score < best_score[side])) {
+            best_level[side] = level;
+            best_score[side] = score;
+            x3_debug_idx_h(side, X3DBG_M) = m;
+            x3_debug_idx_h(side, X3DBG_I) = i;
+            x3_debug_idx_h(side, X3DBG_J) = j;
+            x3_debug_idx_h(side, X3DBG_K) = kface;
+            x3_debug_coord_h(side, 0) = x;
+            x3_debug_coord_h(side, 1) = y;
+            x3_debug_coord_h(side, 2) = zface;
+          }
+        }
+      }
+      Kokkos::deep_copy(x3_debug_idx, x3_debug_idx_h);
+      Kokkos::deep_copy(x3_debug_vals, std::numeric_limits<Real>::quiet_NaN());
+      for (int side = 0; side < kX3DebugSides; ++side) {
+        const int m = x3_debug_idx_h(side, X3DBG_M);
+        if (m >= 0) {
+          std::cout << std::setprecision(17)
+                    << "DYNGRX3TARGET rank=" << global_variable::my_rank
+                    << " gid=" << gid.h_view(m)
+                    << " level=" << lev_.h_view(m)
+                    << " side=" << X3DebugSideName(side)
+                    << " cycle=" << debug_cycle
+                    << " time=" << pm->time
+                    << " stage=" << stage
+                    << " m=" << m
+                    << " i=" << x3_debug_idx_h(side, X3DBG_I)
+                    << " j=" << x3_debug_idx_h(side, X3DBG_J)
+                    << " kface=" << x3_debug_idx_h(side, X3DBG_K)
+                    << " x=" << x3_debug_coord_h(side, 0)
+                    << " y=" << x3_debug_coord_h(side, 1)
+                    << " zface=" << x3_debug_coord_h(side, 2)
+                    << std::endl;
+        }
+      }
+    }
 
     par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -366,6 +601,70 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         }
         member.team_barrier();
 
+        if (x3_debug_active) {
+          for (int side = 0; side < kX3DebugSides; ++side) {
+            const int dbg_m = x3_debug_idx(side, X3DBG_M);
+            const int dbg_i = x3_debug_idx(side, X3DBG_I);
+            const int dbg_j = x3_debug_idx(side, X3DBG_J);
+            const int dbg_k = x3_debug_idx(side, X3DBG_K);
+            if (m == dbg_m && j == dbg_j && k == dbg_k) {
+              par_for_inner(member, dbg_i, dbg_i, [&](const int i) {
+                Real g3d[NSPMETRIC];
+                Real beta_u[3];
+                Real alpha;
+                adm::Face3Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha,
+                                 g3d, beta_u, alpha);
+                const Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
+                                                  g3d[S22], g3d[S23], g3d[S33]);
+                x3_debug_vals(side, X3DBG_FOUND) = 1.0;
+                x3_debug_vals(side, X3DBG_CC_KM1_RHO) = w0_(m, IDN, k-1, j, i);
+                x3_debug_vals(side, X3DBG_CC_KM1_PRS) = w0_(m, IPR, k-1, j, i);
+                x3_debug_vals(side, X3DBG_CC_KM1_VX) = w0_(m, IVX, k-1, j, i);
+                x3_debug_vals(side, X3DBG_CC_KM1_VY) = w0_(m, IVY, k-1, j, i);
+                x3_debug_vals(side, X3DBG_CC_KM1_VZ) = w0_(m, IVZ, k-1, j, i);
+                x3_debug_vals(side, X3DBG_CC_K_RHO) = w0_(m, IDN, k, j, i);
+                x3_debug_vals(side, X3DBG_CC_K_PRS) = w0_(m, IPR, k, j, i);
+                x3_debug_vals(side, X3DBG_CC_K_VX) = w0_(m, IVX, k, j, i);
+                x3_debug_vals(side, X3DBG_CC_K_VY) = w0_(m, IVY, k, j, i);
+                x3_debug_vals(side, X3DBG_CC_K_VZ) = w0_(m, IVZ, k, j, i);
+                x3_debug_vals(side, X3DBG_WL_RHO) = wl(IDN, i);
+                x3_debug_vals(side, X3DBG_WL_PRS) = wl(IPR, i);
+                x3_debug_vals(side, X3DBG_WL_VX) = wl(IVX, i);
+                x3_debug_vals(side, X3DBG_WL_VY) = wl(IVY, i);
+                x3_debug_vals(side, X3DBG_WL_VZ) = wl(IVZ, i);
+                x3_debug_vals(side, X3DBG_WR_RHO) = wr(IDN, i);
+                x3_debug_vals(side, X3DBG_WR_PRS) = wr(IPR, i);
+                x3_debug_vals(side, X3DBG_WR_VX) = wr(IVX, i);
+                x3_debug_vals(side, X3DBG_WR_VY) = wr(IVY, i);
+                x3_debug_vals(side, X3DBG_WR_VZ) = wr(IVZ, i);
+                x3_debug_vals(side, X3DBG_BL_X) = bl(IBX, i);
+                x3_debug_vals(side, X3DBG_BL_Y) = bl(IBY, i);
+                x3_debug_vals(side, X3DBG_BL_Z) = bl(IBZ, i);
+                x3_debug_vals(side, X3DBG_BR_X) = br(IBX, i);
+                x3_debug_vals(side, X3DBG_BR_Y) = br(IBY, i);
+                x3_debug_vals(side, X3DBG_BR_Z) = br(IBZ, i);
+                x3_debug_vals(side, X3DBG_BZ_FACE) = bz(m, k, j, i);
+                x3_debug_vals(side, X3DBG_ALPHA) = alpha;
+                x3_debug_vals(side, X3DBG_BETA_X) = beta_u[0];
+                x3_debug_vals(side, X3DBG_BETA_Y) = beta_u[1];
+                x3_debug_vals(side, X3DBG_BETA_Z) = beta_u[2];
+                x3_debug_vals(side, X3DBG_GXX) = g3d[S11];
+                x3_debug_vals(side, X3DBG_GXY) = g3d[S12];
+                x3_debug_vals(side, X3DBG_GXZ) = g3d[S13];
+                x3_debug_vals(side, X3DBG_GYY) = g3d[S22];
+                x3_debug_vals(side, X3DBG_GYZ) = g3d[S23];
+                x3_debug_vals(side, X3DBG_GZZ) = g3d[S33];
+                x3_debug_vals(side, X3DBG_DETG) = detg;
+                x3_debug_vals(side, X3DBG_FLUX_RHO) = flx3(m, IDN, k, j, i);
+                x3_debug_vals(side, X3DBG_E23) = e23(m, k, j, i);
+                x3_debug_vals(side, X3DBG_E13) = e13(m, k, j, i);
+                x3_debug_vals(side, X3DBG_LEVEL) = static_cast<Real>(lev_.d_view(m));
+              });
+            }
+          }
+        }
+        member.team_barrier();
+
         // Calculate fluxes of scalars (if any)
         if (nvars > nhyd) {
           for (int n=nhyd; n<nvars; ++n) {
@@ -381,6 +680,113 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       } // end of loop over j
       member.team_barrier();
     });
+
+    if (x3_debug_active) {
+      Kokkos::fence();
+      auto x3_debug_vals_h = Kokkos::create_mirror_view(x3_debug_vals);
+      Kokkos::deep_copy(x3_debug_vals_h, x3_debug_vals);
+      auto &gid = pmy_pack->pmb->mb_gid;
+      for (int side = 0; side < kX3DebugSides; ++side) {
+        const int m = x3_debug_idx_h(side, X3DBG_M);
+        if (m < 0) continue;
+        std::cout << std::setprecision(17)
+                  << "DYNGRX3DBG rank=" << global_variable::my_rank
+                  << " gid=" << gid.h_view(m)
+                  << " level=" << x3_debug_vals_h(side, X3DBG_LEVEL)
+                  << " side=" << X3DebugSideName(side)
+                  << " cycle=" << debug_cycle
+                  << " time=" << pm->time
+                  << " stage=" << stage
+                  << " m=" << m
+                  << " i=" << x3_debug_idx_h(side, X3DBG_I)
+                  << " j=" << x3_debug_idx_h(side, X3DBG_J)
+                  << " kface=" << x3_debug_idx_h(side, X3DBG_K)
+                  << " x=" << x3_debug_coord_h(side, 0)
+                  << " y=" << x3_debug_coord_h(side, 1)
+                  << " zface=" << x3_debug_coord_h(side, 2)
+                  << " found=" << x3_debug_vals_h(side, X3DBG_FOUND)
+                  << " cc_km1_rho=" << x3_debug_vals_h(side, X3DBG_CC_KM1_RHO)
+                  << " cc_km1_prs=" << x3_debug_vals_h(side, X3DBG_CC_KM1_PRS)
+                  << " cc_km1_vx=" << x3_debug_vals_h(side, X3DBG_CC_KM1_VX)
+                  << " cc_km1_vy=" << x3_debug_vals_h(side, X3DBG_CC_KM1_VY)
+                  << " cc_km1_vz=" << x3_debug_vals_h(side, X3DBG_CC_KM1_VZ)
+                  << " cc_k_rho=" << x3_debug_vals_h(side, X3DBG_CC_K_RHO)
+                  << " cc_k_prs=" << x3_debug_vals_h(side, X3DBG_CC_K_PRS)
+                  << " cc_k_vx=" << x3_debug_vals_h(side, X3DBG_CC_K_VX)
+                  << " cc_k_vy=" << x3_debug_vals_h(side, X3DBG_CC_K_VY)
+                  << " cc_k_vz=" << x3_debug_vals_h(side, X3DBG_CC_K_VZ)
+                  << " wl_rho=" << x3_debug_vals_h(side, X3DBG_WL_RHO)
+                  << " wl_prs=" << x3_debug_vals_h(side, X3DBG_WL_PRS)
+                  << " wl_vx=" << x3_debug_vals_h(side, X3DBG_WL_VX)
+                  << " wl_vy=" << x3_debug_vals_h(side, X3DBG_WL_VY)
+                  << " wl_vz=" << x3_debug_vals_h(side, X3DBG_WL_VZ)
+                  << " wr_rho=" << x3_debug_vals_h(side, X3DBG_WR_RHO)
+                  << " wr_prs=" << x3_debug_vals_h(side, X3DBG_WR_PRS)
+                  << " wr_vx=" << x3_debug_vals_h(side, X3DBG_WR_VX)
+                  << " wr_vy=" << x3_debug_vals_h(side, X3DBG_WR_VY)
+                  << " wr_vz=" << x3_debug_vals_h(side, X3DBG_WR_VZ)
+                  << " bl_x=" << x3_debug_vals_h(side, X3DBG_BL_X)
+                  << " bl_y=" << x3_debug_vals_h(side, X3DBG_BL_Y)
+                  << " bl_z=" << x3_debug_vals_h(side, X3DBG_BL_Z)
+                  << " br_x=" << x3_debug_vals_h(side, X3DBG_BR_X)
+                  << " br_y=" << x3_debug_vals_h(side, X3DBG_BR_Y)
+                  << " br_z=" << x3_debug_vals_h(side, X3DBG_BR_Z)
+                  << " bz_face=" << x3_debug_vals_h(side, X3DBG_BZ_FACE)
+                  << " alpha=" << x3_debug_vals_h(side, X3DBG_ALPHA)
+                  << " beta_x=" << x3_debug_vals_h(side, X3DBG_BETA_X)
+                  << " beta_y=" << x3_debug_vals_h(side, X3DBG_BETA_Y)
+                  << " beta_z=" << x3_debug_vals_h(side, X3DBG_BETA_Z)
+                  << " gxx=" << x3_debug_vals_h(side, X3DBG_GXX)
+                  << " gxy=" << x3_debug_vals_h(side, X3DBG_GXY)
+                  << " gxz=" << x3_debug_vals_h(side, X3DBG_GXZ)
+                  << " gyy=" << x3_debug_vals_h(side, X3DBG_GYY)
+                  << " gyz=" << x3_debug_vals_h(side, X3DBG_GYZ)
+                  << " gzz=" << x3_debug_vals_h(side, X3DBG_GZZ)
+                  << " detg=" << x3_debug_vals_h(side, X3DBG_DETG)
+                  << " flux_rho=" << x3_debug_vals_h(side, X3DBG_FLUX_RHO)
+                  << " e23=" << x3_debug_vals_h(side, X3DBG_E23)
+                  << " e13=" << x3_debug_vals_h(side, X3DBG_E13)
+                  << std::endl;
+      }
+      const int minus_m = x3_debug_idx_h(0, X3DBG_M);
+      const int plus_m = x3_debug_idx_h(1, X3DBG_M);
+      const bool have_pair =
+          minus_m >= 0 && plus_m >= 0 &&
+          x3_debug_vals_h(0, X3DBG_FOUND) == 1.0 &&
+          x3_debug_vals_h(1, X3DBG_FOUND) == 1.0;
+      if (have_pair) {
+        for (int value = X3DBG_CC_KM1_RHO; value <= X3DBG_E13; ++value) {
+          const char *name = X3DebugValueName(value);
+          if (name[0] == '\0') continue;
+          const Real minus_value = x3_debug_vals_h(0, value);
+          const Real plus_value = x3_debug_vals_h(1, value);
+          const int parity = X3DebugYParity(value);
+          const Real parity_diff = minus_value - static_cast<Real>(parity)*plus_value;
+          const Real abs_diff = std::abs(parity_diff);
+          const Real local_scale = std::max(std::abs(minus_value), std::abs(plus_value));
+          const Real local_rel =
+              (local_scale > 0.0) ? abs_diff/local_scale :
+              (abs_diff == 0.0 ? 0.0 : std::numeric_limits<Real>::infinity());
+          std::cout << std::setprecision(17)
+                    << "DYNGRX3PAIR rank=" << global_variable::my_rank
+                    << " cycle=" << debug_cycle
+                    << " time=" << pm->time
+                    << " stage=" << stage
+                    << " field=" << name
+                    << " parity_y=" << parity
+                    << " minus=" << minus_value
+                    << " plus=" << plus_value
+                    << " parity_diff=" << parity_diff
+                    << " abs_diff=" << abs_diff
+                    << " local_rel=" << local_rel
+                    << " x=" << x3_debug_coord_h(0, 0)
+                    << " minus_y=" << x3_debug_coord_h(0, 1)
+                    << " plus_y=" << x3_debug_coord_h(1, 1)
+                    << " zface=" << x3_debug_coord_h(0, 2)
+                    << std::endl;
+        }
+      }
+    }
   }
 
   // Call FOFC if necessary

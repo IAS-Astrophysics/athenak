@@ -96,6 +96,12 @@ dthreshold = 1.0
 gamma_max = 10.0
 fofc = false
 zero_tmunu_feedback = true
+dyngr_x3_debug = false
+dyngr_x3_debug_x = 20.03125
+dyngr_x3_debug_y_abs = 0.03125
+dyngr_x3_debug_z_face = 0.0
+dyngr_x3_debug_cycle = -1
+dyngr_x3_debug_stage = -1
 
 <adm>
 
