@@ -270,12 +270,43 @@ peak-relative Linf `~3.57e-4`, and local-relative Linf `~1.97e-3` at cycle 20.
 The remaining decisive validation is the full coupled infall run using the same
 fixed ADM cache.
 
+Dense full-coupled candidate-fix result:
+
+- Job `8523154` ran `schwarzschild_infall_smr_dense_fix` with the fixed Aurora
+  GPU executable and the full coupled Schwarzschild SMR dense infall deck.
+- Stdout is archived at
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_full_fix_dense.o8523154`.
+- Metrics and plots are in
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_infall_smr_dense_fix`.
+- At cycle 20/time `0.25`, for `rho > 1e-8`, both `xy` and `xz` report
+  exactly zero `mhd_dens`, `velx`, `vely`, and `velz` asymmetry: L2 abs `0`,
+  Linf abs `0`, L2/Linf local-relative `0`, and L2/Linf peak-relative `0`.
+- Worst high-density MHD differences over the full run remain at roundoff
+  scale. In `xy`, `vely` reaches Linf abs `2.842170943040401e-14` at
+  cycle 11/time `0.1375` with peak-relative Linf
+  `2.552621412313068e-11`; `velz` stays below
+  `8.881784197001252e-16`. In `xz`, `velz` reaches Linf abs
+  `2.842170943040401e-14` at cycle 19/time `0.2375` with peak-relative Linf
+  `2.226612917641617e-11`; `vely` stays below
+  `1.1102230246251565e-16`.
+- Final Z4c/ADM differences remain small in absolute terms. At cycle 20,
+  largest final Z4c all-mask Linf abs values are `7.275957614183426e-12` in
+  `xy` (`z4c_Gamy`/`z4c_Gamz`) and `9.094947017729282e-13` in `xz`
+  (`z4c_Gamy`/`z4c_Theta`). The largest final ADM all-mask Linf abs value in
+  both planes is `1.1368683772161603e-13` in `adm_Kyz`.
+
+Interpretation update: the same ADM cache fix that eliminates the
+zero-feedback break also eliminates the dense full-coupled Schwarzschild SMR
+MHD asymmetry through cycle 20/time `0.25`. This supports the hypothesis that
+the full-solver failure was downstream of the zero-feedback ADM-to-GRMHD
+lapse/shift aliasing bug, rather than matter feedback into Z4c.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
 - Spacetime-only / zero-matter Z4c: no macroscopic break in the prior Stage B runs.
 - Minkowski static baselines: uniform is exactly symmetric; SMR has zero density asymmetry and only tiny velocity differences, plus a refinement-only `z4c_Theta` baseline.
-- Full coupled Schwarzschild infall: reproduces coherent MHD density/velocity symmetry growth.
+- Full coupled Schwarzschild infall: fixed by the ADM cache change; dense cycle-20 high-density density and velocity metrics are exactly zero in both checked planes.
 - Coupled infall with `Tmunu` feedback disabled: fixed by the ADM cache change; dense cycle-20 high-density density metrics are exactly zero in both checked planes.
 - Fixed-fluid matter-source-to-Z4c cases, with retained and refreshed `Tmunu`: do not reproduce the MHD break.
 
