@@ -12,6 +12,7 @@
 //!   - z-component of current density Jz  [non-relativistic]
 //!   - magnitude of current density J^2  [non-relativistic]
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
@@ -649,7 +650,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for |v| and |B|
   if (name.compare("mhd_v_B_moments") == 0) {
     int n_moments = 8;
-    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -677,7 +678,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for v_i and B_i
   if (name.compare("mhd_vi_Bi_moments") == 0) {
     int n_moments = 24;
-    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -721,7 +722,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for |v|
   if (name.compare("hydro_v_moments") == 0) {
     int n_moments = 4;
-    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_v_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -740,7 +741,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for v_i and B_i
   if (name.compare("hydro_vi_moments") == 0) {
     int n_moments = 12;
-    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -801,6 +802,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // calculate | j x B | / B^2
       dv(m,i_dv,k,j,i) = sqrt(jxB1*jxB1 + jxB2*jxB2 + jxB3*jxB3) / B_mag_sq;
     });
+    i_dv += 1; // increment derived variable index
   }
 
   // magnitude of curv_perp = |(j x B / B^2) - b_hat dot nabla b_hat|
@@ -973,8 +975,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                             *(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i))
                       + 0.25*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
                             *(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
-                      + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i))
-                            *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i)))
+                      + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i))
+                            *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i)))
                       / dx_squared;
       // 2 = < (B_j d_j B_i)(B_k d_k B_i) >
       Real bdb1 = bcc(m,IBX,k,j,i)*(b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i))
