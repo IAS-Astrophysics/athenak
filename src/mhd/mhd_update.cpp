@@ -9,6 +9,7 @@
 //! and partial time update of flux divergence. Source terms are added in the
 //! MHDSrcTerms() function.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
@@ -35,6 +36,21 @@ bool FluxSymmetryDebugEnabled() {
 Real EnvReal(const char *name, Real default_value) {
   const char *value = std::getenv(name);
   return (value == nullptr) ? default_value : static_cast<Real>(std::atof(value));
+}
+
+int CoreMHDVarCount(int nmhd) {
+  return std::min(nmhd, IEN + 1);
+}
+
+const char *CoreMHDVarName(int n) {
+  switch (n) {
+    case IDN: return "rho";
+    case IM1: return "momx";
+    case IM2: return "momy";
+    case IM3: return "momz";
+    case IEN: return "tau";
+    default: return "var";
+  }
 }
 
 } // namespace
@@ -123,6 +139,7 @@ void MHD::SymmetryRKDebugProbe(const char *label, Driver *pdriver, int stage, Re
   const bool three_d = pm->three_d;
   const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
   const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+  const int ncore = CoreMHDVarCount(nmhd);
 
   for (int side = 0; side < 2; ++side) {
     const bool below = (side == 0);
@@ -163,7 +180,7 @@ void MHD::SymmetryRKDebugProbe(const char *label, Driver *pdriver, int stage, Re
     }
     if (best_m < 0) continue;
 
-    DvceArray1D<Real> diag("rk-symmetry-debug", 7);
+    DvceArray1D<Real> diag("rk-symmetry-debug", 35);
     auto u0_ = u0;
     auto u1_ = u1;
     auto flx1 = uflx.x1f;
@@ -174,49 +191,62 @@ void MHD::SymmetryRKDebugProbe(const char *label, Driver *pdriver, int stage, Re
     const int i = best_i;
     const int j = best_j;
     const int k = best_k;
+    const int nvars = ncore;
     Kokkos::parallel_for("mhd_rk_symmetry_debug",
                          Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
                          KOKKOS_LAMBDA(const int) {
-      const Real dfx1 = (flx1(m,IDN,k,j,i+1) - flx1(m,IDN,k,j,i))/mbsize.d_view(m).dx1;
-      const Real dfx2 = multi_d ?
-          (flx2(m,IDN,k,j+1,i) - flx2(m,IDN,k,j,i))/mbsize.d_view(m).dx2 : 0.0;
-      const Real dfx3 = three_d ?
-          (flx3(m,IDN,k+1,j,i) - flx3(m,IDN,k,j,i))/mbsize.d_view(m).dx3 : 0.0;
-      diag(0) = dfx1;
-      diag(1) = dfx2;
-      diag(2) = dfx3;
-      diag(3) = dfx1 + dfx2 + dfx3;
-      diag(4) = u1_(m,IDN,k,j,i);
-      diag(5) = u0_(m,IDN,k,j,i);
-      diag(6) = -beta_dt*(dfx1 + dfx2 + dfx3);
+      for (int n = 0; n < 5; ++n) {
+        if (n < nvars) {
+          const Real dfx1 =
+              (flx1(m,n,k,j,i+1) - flx1(m,n,k,j,i))/mbsize.d_view(m).dx1;
+          const Real dfx2 = multi_d ?
+              (flx2(m,n,k,j+1,i) - flx2(m,n,k,j,i))/mbsize.d_view(m).dx2 : 0.0;
+          const Real dfx3 = three_d ?
+              (flx3(m,n,k+1,j,i) - flx3(m,n,k,j,i))/mbsize.d_view(m).dx3 : 0.0;
+          diag(7*n + 0) = dfx1;
+          diag(7*n + 1) = dfx2;
+          diag(7*n + 2) = dfx3;
+          diag(7*n + 3) = dfx1 + dfx2 + dfx3;
+          diag(7*n + 4) = u1_(m,n,k,j,i);
+          diag(7*n + 5) = u0_(m,n,k,j,i);
+          diag(7*n + 6) = -beta_dt*(dfx1 + dfx2 + dfx3);
+        } else {
+          for (int q = 0; q < 7; ++q) {
+            diag(7*n + q) = 0.0;
+          }
+        }
+      }
     });
     Kokkos::fence();
     auto hdiag = Kokkos::create_mirror_view(diag);
     Kokkos::deep_copy(hdiag, diag);
 
-    std::cout << std::setprecision(17)
-              << "RKDBG label=" << label
-              << " rank=" << global_variable::my_rank
-              << " gid=" << gid.h_view(m)
-              << " level=" << lev.h_view(m)
-              << " side=" << (below ? "below" : "above")
-              << " cycle=" << cycle
-              << " time=" << pm->time
-              << " stage=" << stage
-              << " i=" << i
-              << " j=" << j
-              << " k=" << k
-              << " x=" << best_x
-              << " y=" << best_y
-              << " z=" << best_z
-              << " dF1dx1=" << hdiag(0)
-              << " dF2dx2=" << hdiag(1)
-              << " dF3dx3=" << hdiag(2)
-              << " divf=" << hdiag(3)
-              << " u_saved=" << hdiag(4)
-              << " u_new=" << hdiag(5)
-              << " flux_delta=" << hdiag(6)
-              << std::endl;
+    for (int n = 0; n < ncore; ++n) {
+      std::cout << std::setprecision(17)
+                << "RKDBG label=" << label
+                << " var=" << CoreMHDVarName(n)
+                << " rank=" << global_variable::my_rank
+                << " gid=" << gid.h_view(m)
+                << " level=" << lev.h_view(m)
+                << " side=" << (below ? "below" : "above")
+                << " cycle=" << cycle
+                << " time=" << pm->time
+                << " stage=" << stage
+                << " i=" << i
+                << " j=" << j
+                << " k=" << k
+                << " x=" << best_x
+                << " y=" << best_y
+                << " z=" << best_z
+                << " dF1dx1=" << hdiag(7*n + 0)
+                << " dF2dx2=" << hdiag(7*n + 1)
+                << " dF3dx3=" << hdiag(7*n + 2)
+                << " divf=" << hdiag(7*n + 3)
+                << " u_saved=" << hdiag(7*n + 4)
+                << " u_new=" << hdiag(7*n + 5)
+                << " flux_delta=" << hdiag(7*n + 6)
+                << std::endl;
+    }
   }
 }
 } // namespace mhd

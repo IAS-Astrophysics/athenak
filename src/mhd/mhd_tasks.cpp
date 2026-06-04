@@ -6,6 +6,7 @@
 //! \file mhd_tasks.cpp
 //! \brief functions that control MHD tasks stored in tasklists in MeshBlockPack
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
@@ -45,6 +46,21 @@ Real EnvReal(const char *name, Real default_value) {
   return (value == nullptr) ? default_value : static_cast<Real>(std::atof(value));
 }
 
+int CoreMHDVarCount(int nmhd) {
+  return std::min(nmhd, IEN + 1);
+}
+
+const char *CoreMHDVarName(int n) {
+  switch (n) {
+    case IDN: return "rho";
+    case IM1: return "momx";
+    case IM2: return "momy";
+    case IM3: return "momz";
+    case IEN: return "tau";
+    default: return "var";
+  }
+}
+
 } // namespace
 
 void MHD::SymmetryDebugProbe(const char *label, Driver *pdrive, int stage) {
@@ -60,6 +76,7 @@ void MHD::SymmetryDebugProbe(const char *label, Driver *pdrive, int stage) {
   auto &gid = pmy_pack->pmb->mb_gid;
   const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
   const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+  const int ncore = CoreMHDVarCount(nmhd);
 
   for (int m = 0; m < pmy_pack->nmb_thispack; ++m) {
     const auto &mb = size.h_view(m);
@@ -88,16 +105,23 @@ void MHD::SymmetryDebugProbe(const char *label, Driver *pdrive, int stage) {
       if (j < 0) continue;
       const int jf = below ? std::min(j + 1, indcs.je + 1) : j;
 
-      DvceArray1D<Real> diag("symmetry-debug", 3);
+      DvceArray1D<Real> diag("symmetry-debug", 15);
       auto w = w0;
       auto u = u0;
       auto f = uflx.x2f;
+      const int nvars = ncore;
       Kokkos::parallel_for("mhd_symmetry_debug",
                            Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
                            KOKKOS_LAMBDA(const int) {
         diag(0) = w(m, IDN, k, j, i);
-        diag(1) = u(m, IDN, k, j, i);
-        diag(2) = f(m, IDN, k, jf, i);
+        diag(1) = w(m, IVX, k, j, i);
+        diag(2) = w(m, IVY, k, j, i);
+        diag(3) = w(m, IVZ, k, j, i);
+        diag(4) = (nvars > IEN) ? w(m, IPR, k, j, i) : 0.0;
+        for (int n = 0; n < 5; ++n) {
+          diag(5 + n) = (n < nvars) ? u(m, n, k, j, i) : 0.0;
+          diag(10 + n) = (n < nvars) ? f(m, n, k, jf, i) : 0.0;
+        }
       });
       Kokkos::fence();
       auto hdiag = Kokkos::create_mirror_view(diag);
@@ -118,8 +142,20 @@ void MHD::SymmetryDebugProbe(const char *label, Driver *pdrive, int stage) {
                 << " y=" << (mb.x2min + (static_cast<Real>(j - indcs.js) + 0.5)*mb.dx2)
                 << " z=" << (mb.x3min + (static_cast<Real>(k - indcs.ks) + 0.5)*mb.dx3)
                 << " rho_w=" << hdiag(0)
-                << " rho_u=" << hdiag(1)
-                << " x2_mass_flux=" << hdiag(2)
+                << " vx_w=" << hdiag(1)
+                << " vy_w=" << hdiag(2)
+                << " vz_w=" << hdiag(3)
+                << " press_w=" << hdiag(4)
+                << " rho_u=" << hdiag(5)
+                << " momx_u=" << hdiag(6)
+                << " momy_u=" << hdiag(7)
+                << " momz_u=" << hdiag(8)
+                << " tau_u=" << hdiag(9)
+                << " x2_rho_flux=" << hdiag(10)
+                << " x2_momx_flux=" << hdiag(11)
+                << " x2_momy_flux=" << hdiag(12)
+                << " x2_momz_flux=" << hdiag(13)
+                << " x2_tau_flux=" << hdiag(14)
                 << std::endl;
     }
   }
@@ -140,6 +176,7 @@ void MHD::SymmetryFluxDebugProbe(const char *label, Driver *pdrive, int stage) {
   auto &lev = pmy_pack->pmb->mb_lev;
   const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
   const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+  const int ncore = CoreMHDVarCount(nmhd);
 
   for (int side = 0; side < 2; ++side) {
     const bool below = (side == 0);
@@ -180,7 +217,7 @@ void MHD::SymmetryFluxDebugProbe(const char *label, Driver *pdrive, int stage) {
     }
     if (best_m < 0) continue;
 
-    DvceArray1D<Real> diag("flux-symmetry-debug", 6);
+    DvceArray1D<Real> diag("flux-symmetry-debug", 30);
     auto flx1 = uflx.x1f;
     auto flx2 = uflx.x2f;
     auto flx3 = uflx.x3f;
@@ -190,42 +227,54 @@ void MHD::SymmetryFluxDebugProbe(const char *label, Driver *pdrive, int stage) {
     const int i = best_i;
     const int j = best_j;
     const int k = best_k;
+    const int nvars = ncore;
     Kokkos::parallel_for("mhd_flux_symmetry_debug",
                          Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
                          KOKKOS_LAMBDA(const int) {
-      diag(0) = flx1(m, IDN, k, j, i);
-      diag(1) = flx1(m, IDN, k, j, i+1);
-      diag(2) = multi_d ? flx2(m, IDN, k, j, i) : 0.0;
-      diag(3) = multi_d ? flx2(m, IDN, k, j+1, i) : 0.0;
-      diag(4) = three_d ? flx3(m, IDN, k, j, i) : 0.0;
-      diag(5) = three_d ? flx3(m, IDN, k+1, j, i) : 0.0;
+      for (int n = 0; n < 5; ++n) {
+        if (n < nvars) {
+          diag(6*n + 0) = flx1(m, n, k, j, i);
+          diag(6*n + 1) = flx1(m, n, k, j, i+1);
+          diag(6*n + 2) = multi_d ? flx2(m, n, k, j, i) : 0.0;
+          diag(6*n + 3) = multi_d ? flx2(m, n, k, j+1, i) : 0.0;
+          diag(6*n + 4) = three_d ? flx3(m, n, k, j, i) : 0.0;
+          diag(6*n + 5) = three_d ? flx3(m, n, k+1, j, i) : 0.0;
+        } else {
+          for (int q = 0; q < 6; ++q) {
+            diag(6*n + q) = 0.0;
+          }
+        }
+      }
     });
     Kokkos::fence();
     auto hdiag = Kokkos::create_mirror_view(diag);
     Kokkos::deep_copy(hdiag, diag);
 
-    std::cout << std::setprecision(17)
-              << "FLUXDBG label=" << label
-              << " rank=" << global_variable::my_rank
-              << " gid=" << gid.h_view(m)
-              << " level=" << lev.h_view(m)
-              << " side=" << (below ? "below" : "above")
-              << " cycle=" << cycle
-              << " time=" << pm->time
-              << " stage=" << stage
-              << " i=" << i
-              << " j=" << j
-              << " k=" << k
-              << " x=" << best_x
-              << " y=" << best_y
-              << " z=" << best_z
-              << " x1_flux_lo=" << hdiag(0)
-              << " x1_flux_hi=" << hdiag(1)
-              << " x2_flux_lo=" << hdiag(2)
-              << " x2_flux_hi=" << hdiag(3)
-              << " x3_flux_lo=" << hdiag(4)
-              << " x3_flux_hi=" << hdiag(5)
-              << std::endl;
+    for (int n = 0; n < ncore; ++n) {
+      std::cout << std::setprecision(17)
+                << "FLUXDBG label=" << label
+                << " var=" << CoreMHDVarName(n)
+                << " rank=" << global_variable::my_rank
+                << " gid=" << gid.h_view(m)
+                << " level=" << lev.h_view(m)
+                << " side=" << (below ? "below" : "above")
+                << " cycle=" << cycle
+                << " time=" << pm->time
+                << " stage=" << stage
+                << " i=" << i
+                << " j=" << j
+                << " k=" << k
+                << " x=" << best_x
+                << " y=" << best_y
+                << " z=" << best_z
+                << " x1_flux_lo=" << hdiag(6*n + 0)
+                << " x1_flux_hi=" << hdiag(6*n + 1)
+                << " x2_flux_lo=" << hdiag(6*n + 2)
+                << " x2_flux_hi=" << hdiag(6*n + 3)
+                << " x3_flux_lo=" << hdiag(6*n + 4)
+                << " x3_flux_hi=" << hdiag(6*n + 5)
+                << std::endl;
+    }
   }
 }
 

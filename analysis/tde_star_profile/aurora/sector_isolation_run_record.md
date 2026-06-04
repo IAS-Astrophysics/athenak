@@ -77,10 +77,12 @@ used by `ATHENA_FLUX_DEBUG`.
 | --- | --- | --- | --- | --- |
 | `schwarzschild_zero_feedback_x3debug_c19` | `8522976` | Complete; diagnostic built from commit `69bdf213` and enabled with `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=19`. The run reproduces the prior zero-feedback break: high-density (`rho > 1e-8`) final density Linf abs `3.421155270189047e-8`, local-relative Linf `1.974173482905793e-3`, peak-relative Linf `3.5737975125244427e-4`, L2 peak-relative `8.150517976511866e-5` in `xy` and the same values in `xz`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_x3debug_c19` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_x3debug_c19` |
 | `schwarzschild_zero_feedback_cycle0_debug_n1` | `8523001` | Complete; enabled `ATHENA_SYM_DEBUG=1`, `ATHENA_FLUX_DEBUG=1`, `ATHENA_SYM_X_TARGET=20.03125`, `ATHENA_SYM_Z_TARGET=0.0`, and `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=0` with `time/nlim=1`. The first high-density density break appears after one full cycle: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6` at `x=20.03125`, mirror `y=+-0.03125`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_cycle0_debug_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_cycle0_debug_n1` |
+| `schwarzschild_zero_feedback_c2pdebug_c0_n1` | `8523033` | Complete; built from commit `254a131e` and enabled `ATHENA_C2P_DEBUG=1`, `ATHENA_C2P_DEBUG_CYCLE=0`, `ATHENA_SYM_X_TARGET=20.03125`, and `ATHENA_SYM_Z_TARGET=0.0` with `time/nlim=1`. The final high-density density metric matches the cycle-0 debug run: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_c2pdebug_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_c2pdebug_c0_n1` |
 
 Diagnostic stdout:
 
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_x3dbg.o8522976`
+- `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_c2pdbg.o8523033`
 
 Key cycle-19 result at `x=20.03125`, `y=+-0.03125`, `zface=0`:
 
@@ -129,6 +131,29 @@ non-final RK stages, so the next decisive diagnostic must instrument the
 dynamic `DynGRMHDPS::ConToPrim` task directly before and after the EOS
 conversion.
 
+Cycle-0 C2P result:
+
+- Stage 0 C2P is exactly symmetric in conserved density, momenta, energy,
+  primitives, and cell-centered ADM quantities at the target pair.
+- Stage 1 C2P input has symmetric conserved density and symmetric
+  cell-centered ADM determinant/metric values, but conserved momentum and
+  energy are already asymmetric: `momx_u` differs by
+  `2.09709683795105968e-9` (local relative `1.997031e-4`), `momy_u` and
+  `momz_u` differ by `2.67772438672822527e-12` in parity-adjusted comparison,
+  and `tau_u` differs by `2.03922646536067729e-10`.
+- Stage 1 C2P converts those already-asymmetric momentum/energy inputs into a
+  primitive density difference of `1.97733922145020349e-10` while conserved
+  density remains exactly symmetric.
+- Stage 2 then carries the primitive asymmetry forward and the RK update
+  propagates it into conserved density.
+
+Interpretation update: C2P is the first observed place where density becomes
+asymmetric, but it is not the first source. The upstream source is a
+stage-1 update to conserved momentum and energy, most likely either GRMHD flux
+divergence or dynamic-coordinate source terms. The next diagnostic must expand
+`SYMDBG`, `FLUXDBG`, and `RKDBG` from density-only logging to all core MHD
+variables so stage-1 `MHD_RKUpdate` and `MHD_SrcTerms` can be separated.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
@@ -143,9 +168,7 @@ The break is isolated to the fluid evolution running in the coupled Z4c/ADM
 context. The cycle-19 x3 diagnostic shows the sampled ADM values are symmetric
 at the GRMHD consumption point, while primitive and reconstructed fluid states
 are already asymmetric before x3 reconstruction/Riemann. Current best remaining
-classes are the dynamic conserved-to-primitive conversion inputs, especially
-cell-centered ADM determinant/metric values, primitive-solver/floor adjustment,
-or fine-boundary C2P/primitive refresh context. The next decisive probe should
-instrument cycle 0/1 directly around `DynGRMHDPS::ConToPrim` and include
-conserved variables, primitives, cell-centered ADM inputs, and whether the
-conversion changes conserved density.
+classes are the stage-1 dynamic GRMHD flux-divergence path, dynamic-coordinate
+source terms, or fine-boundary communication affecting conserved momentum and
+energy before the stage-1 C2P task. Cell-centered ADM values at the C2P target
+pair were symmetric in the first C2P diagnostic.
