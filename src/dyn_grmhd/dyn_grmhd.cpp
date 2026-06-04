@@ -7,12 +7,14 @@
 //! \brief implementation of functions for DynGRMHD and DynGRMHDPS controlling the task
 //! list
 
-#include <math.h>
-
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -36,6 +38,190 @@
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
+namespace {
+
+bool C2PDebugEnabled() {
+  static bool enabled = (std::getenv("ATHENA_C2P_DEBUG") != nullptr ||
+                         std::getenv("ATHENA_SYM_DEBUG") != nullptr);
+  return enabled;
+}
+
+Real EnvReal(const char *name, Real default_value) {
+  const char *value = std::getenv(name);
+  return (value == nullptr) ? default_value : static_cast<Real>(std::atof(value));
+}
+
+int EnvInt(const char *name, int default_value) {
+  const char *value = std::getenv(name);
+  return (value == nullptr) ? default_value : std::atoi(value);
+}
+
+void C2PDebugProbe(MeshBlockPack *ppack, const char *label, Driver *pdrive, int stage) {
+  if (!C2PDebugEnabled()) return;
+  if (pdrive == nullptr || ppack == nullptr || ppack->pmhd == nullptr ||
+      ppack->padm == nullptr) {
+    return;
+  }
+
+  Mesh *pm = ppack->pmesh;
+  const int cycle = pm->ncycle;
+  const int target_cycle = EnvInt("ATHENA_C2P_DEBUG_CYCLE", -1);
+  if (target_cycle >= 0) {
+    if (cycle != target_cycle) return;
+  } else if (!(cycle < 3 || cycle == 80 || cycle == 160)) {
+    return;
+  }
+  const int target_stage = EnvInt("ATHENA_C2P_DEBUG_STAGE", -1);
+  if (target_stage >= 0 && stage != target_stage) return;
+
+  auto &indcs = pm->mb_indcs;
+  auto &size = ppack->pmb->mb_size;
+  auto &gid = ppack->pmb->mb_gid;
+  auto &lev = ppack->pmb->mb_lev;
+  const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
+  const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+
+  for (int m = 0; m < ppack->nmb_thispack; ++m) {
+    const auto &mb = size.h_view(m);
+    const bool x_inside = (x_target >= mb.x1min) && (x_target < mb.x1max);
+    const bool z_inside = (z_target >= mb.x3min) && (z_target < mb.x3max);
+    if (!(x_inside && z_inside)) continue;
+
+    int i = indcs.is + static_cast<int>(std::floor((x_target - mb.x1min)/mb.dx1));
+    i = std::max(indcs.is, std::min(indcs.ie, i));
+    int k = indcs.ks + static_cast<int>(std::floor((z_target - mb.x3min)/mb.dx3));
+    k = std::max(indcs.ks, std::min(indcs.ke, k));
+
+    for (int side = 0; side < 2; ++side) {
+      const bool below = (side == 0);
+      int j = -1;
+      Real best_abs_y = std::numeric_limits<Real>::max();
+      for (int jj = indcs.js; jj <= indcs.je; ++jj) {
+        const Real y = mb.x2min + (static_cast<Real>(jj - indcs.js) + 0.5)*mb.dx2;
+        if ((below && y < 0.0) || (!below && y > 0.0)) {
+          if (std::abs(y) < best_abs_y) {
+            best_abs_y = std::abs(y);
+            j = jj;
+          }
+        }
+      }
+      if (j < 0) continue;
+
+      constexpr int ndiag = 36;
+      DvceArray1D<Real> diag("dyngr-c2p-debug", ndiag);
+      auto u = ppack->pmhd->u0;
+      auto w = ppack->pmhd->w0;
+      auto bcc = ppack->pmhd->bcc0;
+      auto bfc = ppack->pmhd->b0;
+      auto adm = ppack->padm->adm;
+      Kokkos::parallel_for("dyngr_c2p_debug", Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
+      KOKKOS_LAMBDA(const int) {
+        const Real gxx = adm.g_dd(m, 0, 0, k, j, i);
+        const Real gxy = adm.g_dd(m, 0, 1, k, j, i);
+        const Real gxz = adm.g_dd(m, 0, 2, k, j, i);
+        const Real gyy = adm.g_dd(m, 1, 1, k, j, i);
+        const Real gyz = adm.g_dd(m, 1, 2, k, j, i);
+        const Real gzz = adm.g_dd(m, 2, 2, k, j, i);
+        const Real detg = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+        const Real sdetg = sqrt(detg);
+        diag(0) = u(m, IDN, k, j, i);
+        diag(1) = u(m, IM1, k, j, i);
+        diag(2) = u(m, IM2, k, j, i);
+        diag(3) = u(m, IM3, k, j, i);
+        diag(4) = u(m, IEN, k, j, i);
+        diag(5) = w(m, IDN, k, j, i);
+        diag(6) = w(m, IVX, k, j, i);
+        diag(7) = w(m, IVY, k, j, i);
+        diag(8) = w(m, IVZ, k, j, i);
+        diag(9) = w(m, IPR, k, j, i);
+        diag(10) = bcc(m, IBX, k, j, i);
+        diag(11) = bcc(m, IBY, k, j, i);
+        diag(12) = bcc(m, IBZ, k, j, i);
+        diag(13) = bfc.x1f(m, k, j, i);
+        diag(14) = bfc.x1f(m, k, j, i + 1);
+        diag(15) = bfc.x2f(m, k, j, i);
+        diag(16) = bfc.x2f(m, k, j + 1, i);
+        diag(17) = bfc.x3f(m, k, j, i);
+        diag(18) = bfc.x3f(m, k + 1, j, i);
+        diag(19) = adm.alpha(m, k, j, i);
+        diag(20) = adm.beta_u(m, 0, k, j, i);
+        diag(21) = adm.beta_u(m, 1, k, j, i);
+        diag(22) = adm.beta_u(m, 2, k, j, i);
+        diag(23) = gxx;
+        diag(24) = gxy;
+        diag(25) = gxz;
+        diag(26) = gyy;
+        diag(27) = gyz;
+        diag(28) = gzz;
+        diag(29) = detg;
+        diag(30) = sdetg;
+        diag(31) = u(m, IDN, k, j, i)/sdetg;
+        diag(32) = u(m, IM1, k, j, i)/sdetg;
+        diag(33) = u(m, IM2, k, j, i)/sdetg;
+        diag(34) = u(m, IM3, k, j, i)/sdetg;
+        diag(35) = u(m, IEN, k, j, i)/sdetg;
+      });
+      Kokkos::fence();
+      auto hdiag = Kokkos::create_mirror_view(diag);
+      Kokkos::deep_copy(hdiag, diag);
+
+      std::cout << std::setprecision(17)
+                << "C2PDBG label=" << label
+                << " rank=" << global_variable::my_rank
+                << " gid=" << gid.h_view(m)
+                << " level=" << lev.h_view(m)
+                << " side=" << (below ? "below" : "above")
+                << " cycle=" << cycle
+                << " time=" << pm->time
+                << " stage=" << stage
+                << " i=" << i
+                << " j=" << j
+                << " k=" << k
+                << " x=" << (mb.x1min + (static_cast<Real>(i - indcs.is) + 0.5)*mb.dx1)
+                << " y=" << (mb.x2min + (static_cast<Real>(j - indcs.js) + 0.5)*mb.dx2)
+                << " z=" << (mb.x3min + (static_cast<Real>(k - indcs.ks) + 0.5)*mb.dx3)
+                << " rho_u=" << hdiag(0)
+                << " momx_u=" << hdiag(1)
+                << " momy_u=" << hdiag(2)
+                << " momz_u=" << hdiag(3)
+                << " tau_u=" << hdiag(4)
+                << " rho_w=" << hdiag(5)
+                << " vx_w=" << hdiag(6)
+                << " vy_w=" << hdiag(7)
+                << " vz_w=" << hdiag(8)
+                << " press_w=" << hdiag(9)
+                << " bccx=" << hdiag(10)
+                << " bccy=" << hdiag(11)
+                << " bccz=" << hdiag(12)
+                << " bfcx_lo=" << hdiag(13)
+                << " bfcx_hi=" << hdiag(14)
+                << " bfcy_lo=" << hdiag(15)
+                << " bfcy_hi=" << hdiag(16)
+                << " bfcz_lo=" << hdiag(17)
+                << " bfcz_hi=" << hdiag(18)
+                << " alpha=" << hdiag(19)
+                << " beta_x=" << hdiag(20)
+                << " beta_y=" << hdiag(21)
+                << " beta_z=" << hdiag(22)
+                << " gxx=" << hdiag(23)
+                << " gxy=" << hdiag(24)
+                << " gxz=" << hdiag(25)
+                << " gyy=" << hdiag(26)
+                << " gyz=" << hdiag(27)
+                << " gzz=" << hdiag(28)
+                << " detg=" << hdiag(29)
+                << " sdetg=" << hdiag(30)
+                << " rho_u_over_sdetg=" << hdiag(31)
+                << " momx_u_over_sdetg=" << hdiag(32)
+                << " momy_u_over_sdetg=" << hdiag(33)
+                << " momz_u_over_sdetg=" << hdiag(34)
+                << " tau_u_over_sdetg=" << hdiag(35)
+                << std::endl;
+    }
+  }
+}
+
+} // namespace
 
 // A dumb template function containing the switch statement needed to select an EOS.
 template<class ErrorPolicy>
@@ -318,8 +504,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+  C2PDebugProbe(pmy_pack, "DynGRMHD_C2P_Before", pdrive, stage);
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
                  pmy_pack->pmhd->w0, temperature, 0, n1m1, 0, n2m1, 0, n3m1, false);
+  C2PDebugProbe(pmy_pack, "DynGRMHD_C2P_After", pdrive, stage);
   return TaskStatus::complete;
 }
 
