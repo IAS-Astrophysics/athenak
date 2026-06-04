@@ -76,6 +76,7 @@ used by `ATHENA_FLUX_DEBUG`.
 | Case | Job | Status | Run directory | Metric directory |
 | --- | --- | --- | --- | --- |
 | `schwarzschild_zero_feedback_x3debug_c19` | `8522976` | Complete; diagnostic built from commit `69bdf213` and enabled with `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=19`. The run reproduces the prior zero-feedback break: high-density (`rho > 1e-8`) final density Linf abs `3.421155270189047e-8`, local-relative Linf `1.974173482905793e-3`, peak-relative Linf `3.5737975125244427e-4`, L2 peak-relative `8.150517976511866e-5` in `xy` and the same values in `xz`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_x3debug_c19` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_x3debug_c19` |
+| `schwarzschild_zero_feedback_cycle0_debug_n1` | `8523001` | Complete; enabled `ATHENA_SYM_DEBUG=1`, `ATHENA_FLUX_DEBUG=1`, `ATHENA_SYM_X_TARGET=20.03125`, `ATHENA_SYM_Z_TARGET=0.0`, and `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=0` with `time/nlim=1`. The first high-density density break appears after one full cycle: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6` at `x=20.03125`, mirror `y=+-0.03125`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_cycle0_debug_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_cycle0_debug_n1` |
 
 Diagnostic stdout:
 
@@ -108,6 +109,26 @@ whether the first nonzero density asymmetry appears in flux computation,
 flux correction, RK update, source terms, conservative-variable communication,
 prolongation, or the subsequent conserved-to-primitive conversion.
 
+Cycle-0/one-step result:
+
+- Stage 0 and stage 1 are symmetric at the target through `MHD_RecvFlux`,
+  `MHD_RKUpdate`, `MHD_SrcTerms`, `MHD_RecvU`, and `MHD_Prolongate`.
+- At the start of stage 2, `MHD_RecvFlux` sees primitive density already
+  asymmetric while conserved density is still symmetric:
+  `rho_w` differs by `1.97733922145020349e-10` (local relative
+  `2.195557e-6`), but `rho_u` differs by zero.
+- The stage-2 RK update then propagates the primitive-state asymmetry into
+  conserved density: `rho_u` differs by `5.61108990217509818e-11`.
+- Stage-2 `DynGRMHD_CalcFluxes` and `RKDebug` flux differences are therefore
+  downstream of asymmetric primitives entering stage 2, not the first source.
+
+Interpretation update: the first observed break at the target is in the
+primitive refresh between stage-1 `MHD_Prolongate` and the start of stage 2.
+The existing `MHD_AfterC2P` probe only runs inside `MHD_Newdt`, which skips
+non-final RK stages, so the next decisive diagnostic must instrument the
+dynamic `DynGRMHDPS::ConToPrim` task directly before and after the EOS
+conversion.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
@@ -122,8 +143,9 @@ The break is isolated to the fluid evolution running in the coupled Z4c/ADM
 context. The cycle-19 x3 diagnostic shows the sampled ADM values are symmetric
 at the GRMHD consumption point, while primitive and reconstructed fluid states
 are already asymmetric before x3 reconstruction/Riemann. Current best remaining
-classes are dynamic MHD update/source terms, fluid ghost/boundary/refinement
-communication, or task ordering feeding the primitive state used by x3
-reconstruction. The next decisive probe should instrument cycle 0/1 around
-`MHD_RecvFlux`, `MHD_RKUpdate`, `MHD_SrcTerms`, `MHD_RecvU`,
-`MHD_Prolongate`, and `MHD_AfterC2P`.
+classes are the dynamic conserved-to-primitive conversion inputs, especially
+cell-centered ADM determinant/metric values, primitive-solver/floor adjustment,
+or fine-boundary C2P/primitive refresh context. The next decisive probe should
+instrument cycle 0/1 directly around `DynGRMHDPS::ConToPrim` and include
+conserved variables, primitives, cell-centered ADM inputs, and whether the
+conversion changes conserved density.
