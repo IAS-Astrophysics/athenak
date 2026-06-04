@@ -59,3 +59,9 @@ If a coupled-control case breaks, add the next probe at the ADM fields consumed
 by `DynGRMHD_CalcFluxes`, immediately before x3 reconstruction, then instrument
 x3 left/right reconstructed primitive and metric states at the same target cells
 used by `ATHENA_FLUX_DEBUG`.
+
+## Dense Matrix Submissions
+
+| Case | Job | Status | Run directory | Metric directory |
+| --- | --- | --- | --- | --- |
+| `minkowski_static_uniform_dense` | `8522794` | Queued on 2026-06-04 behind existing debug job `8522786` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/minkowski_static_uniform_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_uniform_dense` |
