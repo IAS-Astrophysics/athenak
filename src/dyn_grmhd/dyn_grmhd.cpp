@@ -147,6 +147,9 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
 
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
+  zero_tmunu_feedback = pin->GetOrAddBoolean("mhd", "zero_tmunu_feedback", false);
+  refresh_tmunu_when_fixed =
+      pin->GetOrAddBoolean("mhd", "refresh_tmunu_when_fixed", false);
 
   // allocate memory for temperature
   {
@@ -409,7 +412,13 @@ TaskStatus DynGRMHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 //! \brief Add the perfect fluid contribution to the stress-energy tensor. This is assumed
 //!  to be the first contribution, so it sets the values rather than adding.
 TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
-  if (fixed_evolution) {
+  if (zero_tmunu_feedback) {
+    if (pmy_pack->ptmunu != nullptr) {
+      Kokkos::deep_copy(DevExeSpace(), pmy_pack->ptmunu->u_tmunu, 0.0);
+    }
+    return TaskStatus::complete;
+  }
+  if (fixed_evolution && !refresh_tmunu_when_fixed) {
     return TaskStatus::complete;
   }
   auto &indcs = pmy_pack->pmesh->mb_indcs;

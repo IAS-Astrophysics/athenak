@@ -109,6 +109,8 @@ class DynGRMHD {
   bool enforce_maximum;     // enforce local maximum principle during FOFC
   Real dmp_M;               // threshold multiplier for discrete maximum principle.
   bool fixed_evolution;     // Disable mhd evolution
+  bool zero_tmunu_feedback;  // Diagnostic: disable matter feedback into Z4c
+  bool refresh_tmunu_when_fixed; // Diagnostic: refresh fixed-fluid Tmunu each stage
 };
 
 template<class EOSPolicy, class ErrorPolicy>

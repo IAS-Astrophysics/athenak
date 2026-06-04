@@ -17,7 +17,7 @@ RUN_ROOT="${RUN_ROOT:-${PROJECT_ROOT}/runs}"
 POST_ROOT="${POST_ROOT:-${PROJECT_ROOT}/post}"
 BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
 ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
-POST_SCRIPT="${POST_SCRIPT:-${REPO_DIR}/analysis/tde_star_profile/aurora/plot_xy_mhd_shape.py}"
+POST_SCRIPT="${POST_SCRIPT:-${REPO_DIR}/analysis/tde_star_profile/aurora/z4c_bg_validation_metrics.py}"
 CASE_NAME="${CASE_NAME:?CASE_NAME must be provided with qsub -v}"
 INPUT_DECK="${INPUT_DECK:?INPUT_DECK must be provided with qsub -v}"
 RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
@@ -78,12 +78,10 @@ if [[ "${POSTPROCESS}" == "1" ]]; then
     # Provides the project Python environment with matplotlib and analysis deps.
     source "${HOME}/athenak_env"
   fi
-  read -r -a PLOT_EXTRA_ARGV <<< "${PLOT_EXTRA_ARGS:-}"
+  read -r -a POST_EXTRA_ARGV <<< "${POST_EXTRA_ARGS:-}"
   python3 "${POST_SCRIPT}" \
-    --input-dir "${RUN_DIR}" \
+    --run-dir "${RUN_DIR}" \
     --case "${CASE_NAME}" \
     --output-root "${POST_ROOT}" \
-    --quantity dens \
-    --log10 \
-    "${PLOT_EXTRA_ARGV[@]}"
+    "${POST_EXTRA_ARGV[@]}"
 fi
