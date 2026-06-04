@@ -403,31 +403,21 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
               abs_0_(m, nuidx, k, j, i) *= corr_fac;
-              abs_1_(m, nuidx, k, j, i) *= corr_fac;
-              // Only override the directly-computed emissivity when abs is
-              // non-zero (i.e. n > THRESHOLD_N). Below threshold, kappa_0_a
-              // is undefined and Kirchhoff would silently zero out eta_0_.
               eta_0_(m, nuidx, k, j, i) =
                   (abs_0_(m, nuidx, k, j, i) > 0)
                       ? abs_0_(m, nuidx, k, j, i) * my_nudens_0
                       : eta_0_(m, nuidx, k, j, i);
-              // Energy emissivity: apply Kirchhoff (forced relaxation to the
-              // trapped/equilibrium black body) ONLY to the thermal part of the
-              // absorption. The non-thermal inelastic-scattering (NEPS)
-              // contribution keeps its directly-computed emissivity, so that
-              // inelastically-scattered neutrinos are not spuriously thermalized
-              // (which would overestimate the heating). When
-              // use_nonthermal_separated is off, abs_1_non_th_loc and
-              // eta_1_non_th_loc are zero and this reduces exactly to the
-              // standard Kirchhoff override.
-              Real const abs_1_non_th = abs_1_non_th_loc[nuidx] * corr_fac;
-              Real const abs_1_th = abs_1_(m, nuidx, k, j, i) - abs_1_non_th;
-              Real const eta_1_th_kirch =
-                  (abs_1_th > 0)
-                      ? abs_1_th * my_nudens_1
-                      : (eta_1_(m, nuidx, k, j, i) - eta_1_non_th_loc[nuidx]);
+              // Energy absorption: apply the non-LTE correction (kappa ~ E^2)
+              // only to the thermal part.
+              Real const abs_1_th_corr =
+                  Kokkos::fmax(abs_1_(m, nuidx, k, j, i) - abs_1_non_th_loc[nuidx], 0.0)
+                  * corr_fac;
+              abs_1_(m, nuidx, k, j, i) = abs_1_th_corr + abs_1_non_th_loc[nuidx];
+              // Energy emissivity: apply Kirchhoff ONLY to the thermal part.
               eta_1_(m, nuidx, k, j, i) =
-                  eta_1_th_kirch + eta_1_non_th_loc[nuidx];
+                  (abs_1_th_corr > 0)
+                      ? abs_1_th_corr * my_nudens_1 + eta_1_non_th_loc[nuidx]
+                      : eta_1_(m, nuidx, k, j, i);
             } else {
               if (nuidx == 0 || nuidx == 1) {
                 eta_0_(m, nuidx, k, j, i) *= corr_fac;
