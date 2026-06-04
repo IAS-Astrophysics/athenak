@@ -64,4 +64,4 @@ used by `ATHENA_FLUX_DEBUG`.
 
 | Case | Job | Status | Run directory | Metric directory |
 | --- | --- | --- | --- | --- |
-| `minkowski_static_uniform_dense` | `8522794` | Queued on 2026-06-04 behind existing debug job `8522786` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/minkowski_static_uniform_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_uniform_dense` |
+| `minkowski_static_uniform_dense` | `8522794` | Complete; MHD `dens`, `velx`, `vely`, and `velz` are exactly symmetric in the `all`, `rho > 1e-12`, and `rho > 1e-10` masks. The `rho > 1e-8` mask has no valid central-window pairs. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/minkowski_static_uniform_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_uniform_dense` |
