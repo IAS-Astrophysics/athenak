@@ -74,6 +74,7 @@ class ProblemGenerator {
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
   void Z4cTovKerrSchild(ParameterInput *pin, const bool restart);
+  void TOVFrozenKerrSchild(ParameterInput *pin, const bool restart);
 
   // Generic error output function (using difference u0-u1)
   void OutputErrors(ParameterInput *pin, Mesh *pm);

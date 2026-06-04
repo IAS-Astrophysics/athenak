@@ -6,6 +6,10 @@
 //! \file mhd_tasks.cpp
 //! \brief functions that control MHD tasks stored in tasklists in MeshBlockPack
 
+#include <cmath>
+#include <cstdlib>
+#include <iomanip>
+#include <limits>
 #include <map>
 #include <memory>
 #include <string>
@@ -29,6 +33,202 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 
 namespace mhd {
+namespace {
+
+bool SymmetryDebugEnabled() {
+  static bool enabled = (std::getenv("ATHENA_SYM_DEBUG") != nullptr);
+  return enabled;
+}
+
+Real EnvReal(const char *name, Real default_value) {
+  const char *value = std::getenv(name);
+  return (value == nullptr) ? default_value : static_cast<Real>(std::atof(value));
+}
+
+} // namespace
+
+void MHD::SymmetryDebugProbe(const char *label, Driver *pdrive, int stage) {
+  if (!SymmetryDebugEnabled()) return;
+  if (pdrive == nullptr) return;
+
+  Mesh *pm = pmy_pack->pmesh;
+  const int cycle = pm->ncycle;
+  if (!(cycle < 3 || cycle == 80 || cycle == 160)) return;
+
+  auto &indcs = pm->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &gid = pmy_pack->pmb->mb_gid;
+  const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
+  const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+
+  for (int m = 0; m < pmy_pack->nmb_thispack; ++m) {
+    const auto &mb = size.h_view(m);
+    const bool x_inside = (x_target >= mb.x1min) && (x_target < mb.x1max);
+    const bool z_inside = (z_target >= mb.x3min) && (z_target < mb.x3max);
+    if (!(x_inside && z_inside)) continue;
+
+    int i = indcs.is + static_cast<int>(std::floor((x_target - mb.x1min)/mb.dx1));
+    i = std::max(indcs.is, std::min(indcs.ie, i));
+    int k = indcs.ks + static_cast<int>(std::floor((z_target - mb.x3min)/mb.dx3));
+    k = std::max(indcs.ks, std::min(indcs.ke, k));
+
+    for (int side = 0; side < 2; ++side) {
+      const bool below = (side == 0);
+      int j = -1;
+      Real best_abs_y = std::numeric_limits<Real>::max();
+      for (int jj = indcs.js; jj <= indcs.je; ++jj) {
+        const Real y = mb.x2min + (static_cast<Real>(jj - indcs.js) + 0.5)*mb.dx2;
+        if ((below && y < 0.0) || (!below && y > 0.0)) {
+          if (std::abs(y) < best_abs_y) {
+            best_abs_y = std::abs(y);
+            j = jj;
+          }
+        }
+      }
+      if (j < 0) continue;
+      const int jf = below ? std::min(j + 1, indcs.je + 1) : j;
+
+      DvceArray1D<Real> diag("symmetry-debug", 3);
+      auto w = w0;
+      auto u = u0;
+      auto f = uflx.x2f;
+      Kokkos::parallel_for("mhd_symmetry_debug",
+                           Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
+                           KOKKOS_LAMBDA(const int) {
+        diag(0) = w(m, IDN, k, j, i);
+        diag(1) = u(m, IDN, k, j, i);
+        diag(2) = f(m, IDN, k, jf, i);
+      });
+      Kokkos::fence();
+      auto hdiag = Kokkos::create_mirror_view(diag);
+      Kokkos::deep_copy(hdiag, diag);
+
+      std::cout << std::setprecision(17)
+                << "SYMDBG label=" << label
+                << " rank=" << global_variable::my_rank
+                << " gid=" << gid.h_view(m)
+                << " side=" << (below ? "below" : "above")
+                << " cycle=" << cycle
+                << " time=" << pm->time
+                << " stage=" << stage
+                << " i=" << i
+                << " j=" << j
+                << " k=" << k
+                << " x=" << (mb.x1min + (static_cast<Real>(i - indcs.is) + 0.5)*mb.dx1)
+                << " y=" << (mb.x2min + (static_cast<Real>(j - indcs.js) + 0.5)*mb.dx2)
+                << " z=" << (mb.x3min + (static_cast<Real>(k - indcs.ks) + 0.5)*mb.dx3)
+                << " rho_w=" << hdiag(0)
+                << " rho_u=" << hdiag(1)
+                << " x2_mass_flux=" << hdiag(2)
+                << std::endl;
+    }
+  }
+}
+
+void MHD::SymmetryFluxDebugProbe(const char *label, Driver *pdrive, int stage) {
+  if (!SymmetryDebugEnabled() && std::getenv("ATHENA_FLUX_DEBUG") == nullptr) return;
+  if (pdrive == nullptr) return;
+  if (!(pmy_pack->pmesh->multi_d)) return;
+
+  Mesh *pm = pmy_pack->pmesh;
+  const int cycle = pm->ncycle;
+  if (!(cycle < 3 || cycle == 80 || cycle == 160)) return;
+
+  auto &indcs = pm->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &gid = pmy_pack->pmb->mb_gid;
+  auto &lev = pmy_pack->pmb->mb_lev;
+  const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
+  const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+
+  for (int side = 0; side < 2; ++side) {
+    const bool below = (side == 0);
+    int best_m = -1;
+    int best_i = -1;
+    int best_j = -1;
+    int best_k = -1;
+    Real best_abs_y = std::numeric_limits<Real>::max();
+    Real best_x = 0.0;
+    Real best_y = 0.0;
+    Real best_z = 0.0;
+
+    for (int m = 0; m < pmy_pack->nmb_thispack; ++m) {
+      const auto &mb = size.h_view(m);
+      const bool x_inside = (x_target >= mb.x1min) && (x_target < mb.x1max);
+      const bool z_inside = (z_target >= mb.x3min) && (z_target < mb.x3max);
+      if (!(x_inside && z_inside)) continue;
+
+      int i = indcs.is + static_cast<int>(std::floor((x_target - mb.x1min)/mb.dx1));
+      i = std::max(indcs.is, std::min(indcs.ie, i));
+      int k = indcs.ks + static_cast<int>(std::floor((z_target - mb.x3min)/mb.dx3));
+      k = std::max(indcs.ks, std::min(indcs.ke, k));
+
+      for (int jj = indcs.js; jj <= indcs.je; ++jj) {
+        const Real y = mb.x2min + (static_cast<Real>(jj - indcs.js) + 0.5)*mb.dx2;
+        if (((below && y < 0.0) || (!below && y > 0.0)) &&
+            (std::abs(y) < best_abs_y)) {
+          best_abs_y = std::abs(y);
+          best_m = m;
+          best_i = i;
+          best_j = jj;
+          best_k = k;
+          best_x = mb.x1min + (static_cast<Real>(i - indcs.is) + 0.5)*mb.dx1;
+          best_y = y;
+          best_z = mb.x3min + (static_cast<Real>(k - indcs.ks) + 0.5)*mb.dx3;
+        }
+      }
+    }
+    if (best_m < 0) continue;
+
+    DvceArray1D<Real> diag("flux-symmetry-debug", 6);
+    auto flx1 = uflx.x1f;
+    auto flx2 = uflx.x2f;
+    auto flx3 = uflx.x3f;
+    const bool multi_d = pm->multi_d;
+    const bool three_d = pm->three_d;
+    const int m = best_m;
+    const int i = best_i;
+    const int j = best_j;
+    const int k = best_k;
+    Kokkos::parallel_for("mhd_flux_symmetry_debug",
+                         Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
+                         KOKKOS_LAMBDA(const int) {
+      diag(0) = flx1(m, IDN, k, j, i);
+      diag(1) = flx1(m, IDN, k, j, i+1);
+      diag(2) = multi_d ? flx2(m, IDN, k, j, i) : 0.0;
+      diag(3) = multi_d ? flx2(m, IDN, k, j+1, i) : 0.0;
+      diag(4) = three_d ? flx3(m, IDN, k, j, i) : 0.0;
+      diag(5) = three_d ? flx3(m, IDN, k+1, j, i) : 0.0;
+    });
+    Kokkos::fence();
+    auto hdiag = Kokkos::create_mirror_view(diag);
+    Kokkos::deep_copy(hdiag, diag);
+
+    std::cout << std::setprecision(17)
+              << "FLUXDBG label=" << label
+              << " rank=" << global_variable::my_rank
+              << " gid=" << gid.h_view(m)
+              << " level=" << lev.h_view(m)
+              << " side=" << (below ? "below" : "above")
+              << " cycle=" << cycle
+              << " time=" << pm->time
+              << " stage=" << stage
+              << " i=" << i
+              << " j=" << j
+              << " k=" << k
+              << " x=" << best_x
+              << " y=" << best_y
+              << " z=" << best_z
+              << " x1_flux_lo=" << hdiag(0)
+              << " x1_flux_hi=" << hdiag(1)
+              << " x2_flux_lo=" << hdiag(2)
+              << " x2_flux_hi=" << hdiag(3)
+              << " x3_flux_lo=" << hdiag(4)
+              << " x3_flux_hi=" << hdiag(5)
+              << std::endl;
+  }
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void MHD::AssembleMHDTasks
 //! \brief Adds mhd tasks to appropriate task lists used by time integrators.
@@ -243,6 +443,10 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {
     tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
   }
+  if (tstat == TaskStatus::complete) {
+    SymmetryDebugProbe("MHD_RecvFlux", pdrive, stage);
+    SymmetryFluxDebugProbe("MHD_RecvFlux", pdrive, stage);
+  }
   return tstat;
 }
 
@@ -274,6 +478,7 @@ TaskStatus MHD::MHDSrcTerms(Driver *pdrive, int stage) {
     (pmy_pack->pmesh->pgen->user_srcs_func)(pmy_pack->pmesh, beta_dt);
   }
 
+  SymmetryDebugProbe("MHD_SrcTerms", pdrive, stage);
   return TaskStatus::complete;
 }
 
@@ -336,6 +541,7 @@ TaskStatus MHD::SendU(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvU(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_u->RecvAndUnpackCC(u0, coarse_u0);
+  if (tstat == TaskStatus::complete) SymmetryDebugProbe("MHD_RecvU", pdrive, stage);
   return tstat;
 }
 
@@ -528,6 +734,7 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
       pbval_b->ProlongateFC(b0, coarse_b0);
     }
   }
+  SymmetryDebugProbe("MHD_Prolongate", pdrive, stage);
   return TaskStatus::complete;
 }
 

@@ -24,6 +24,28 @@
 #include <mpi.h>
 #endif
 
+#if MPI_PARALLEL_ENABLED
+namespace {
+
+void CheckAMRBufferBounds(const char *label, DualArray1D<AMRBuffer> &buffers,
+                          int nbuffers, int data_extent) {
+  for (int n = 0; n < nbuffers; ++n) {
+    const int offset = buffers.h_view(n).offset;
+    const int count = buffers.h_view(n).cnt;
+    if (offset < 0 || count < 0 || offset + count > data_extent) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "AMR " << label << " buffer exceeds fixed data buffer on rank "
+                << global_variable::my_rank << ": buffer=" << n
+                << " offset=" << offset << " count=" << count
+                << " extent=" << data_extent << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+}
+
+} // namespace
+#endif
+
 //----------------------------------------------------------------------------------------
 //! \fn void Mesh::LoadBalance(double *clist, int *rlist, int *slist, int *nlist, int nb)
 //! \brief Calculate distribution of MeshBlocks across ranks based on input cost list
@@ -260,6 +282,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     }
   }
   // Sync dual array, reallocate receive data array
+  CheckAMRBufferBounds("recv", recvbuf, rb_idx, recv_data.extent_int(0));
   recvbuf.template modify<HostMemSpace>();
   recvbuf.template sync<DevExeSpace>();
 /***
@@ -520,6 +543,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     }
   }
   // Sync dual array, reallocate send data array
+  CheckAMRBufferBounds("send", sendbuf, sb_idx, send_data.extent_int(0));
   sendbuf.template modify<HostMemSpace>();
   sendbuf.template sync<DevExeSpace>();
 /***

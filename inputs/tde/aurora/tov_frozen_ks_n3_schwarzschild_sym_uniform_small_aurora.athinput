@@ -1,0 +1,99 @@
+# Small uniform-grid TOV-fluid-on-frozen-Schwarzschild-ADM symmetry discriminator.
+
+<job>
+basename = tov_frozen_ks_n3_schwarzschild_sym_uniform_small_aurora
+
+<mesh>
+nghost = 4
+nx1 = 128
+x1min = -16.0
+x1max = 48.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 64
+x2min = -16.0
+x2max = 16.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 64
+x3min = -16.0
+x3max = 16.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = 8
+tlim = 0.2
+ndiag = 1
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+dynamic = true
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<problem>
+pgen_name = tov_frozen_ks
+user_hist = true
+
+star_center_x1 = 20.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = -0.1
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+amr_rho_slope_refine = true
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 1.0e-14
+amr_star_refine = false
+
+<output1>
+file_type = hst
+dcycle = 1
+data_format = %20.15e
+
+<output2>
+file_type = bin
+variable = mhd_w_bcc
+id = xy_mhd
+dcycle = 1
+slice_x3 = 0.0
+
+<output3>
+file_type = log
+dcycle = 1

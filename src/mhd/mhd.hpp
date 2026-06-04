@@ -186,6 +186,9 @@ class MHD {
   // ...in "after_stagen_tl" task list
   TaskStatus ClearSend(Driver *d, int stage);
   TaskStatus ClearRecv(Driver *d, int stage);  // also in Driver::Initialize
+  void SymmetryDebugProbe(const char *label, Driver *d, int stage);
+  void SymmetryFluxDebugProbe(const char *label, Driver *d, int stage);
+  void SymmetryRKDebugProbe(const char *label, Driver *d, int stage, Real beta_dt);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>

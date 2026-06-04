@@ -178,6 +178,15 @@ add_executable(
         z4c/cce/cce.cpp
 )
 
+# built-in diagnostic problem generators outside pgen/tests/
+if (${PROBLEM} STREQUAL "built_in_pgens")
+  target_sources(athena
+      PRIVATE
+          pgen/z4c_tov_ks.cpp
+          pgen/tov_frozen_ks.cpp
+  )
+endif()
+
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
 # pgen/ directory (not including .cpp extension)

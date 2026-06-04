@@ -193,6 +193,11 @@ void Z4c::UpdateBackgroundState(Real time) {
     Kokkos::deep_copy(DevExeSpace(), u_bg, 0.0);
     return;
   }
+  if (SetZ4cBackground != nullptr) {
+    SetZ4cBackground(pmy_pack, time);
+    EnforceAlgConstrOn(bg);
+    return;
+  }
   switch (pmy_pack->pmesh->mb_indcs.ng) {
     case 2:
       ADMToZ4cImpl<2>(pmy_pack, adm_bg, bg, opt);

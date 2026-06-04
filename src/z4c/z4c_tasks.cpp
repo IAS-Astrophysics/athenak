@@ -267,7 +267,7 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
 
 TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
-//    pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+    pbval_u->FillCoarseInBndryCC(u0, coarse_u0, true);
     pbval_u->ProlongateCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;

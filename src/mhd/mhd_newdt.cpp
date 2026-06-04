@@ -30,6 +30,7 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   if (stage != (pdriver->nexp_stages)) {
     return TaskStatus::complete; // only execute last stage
   }
+  SymmetryDebugProbe("MHD_AfterC2P", pdriver, stage);
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, nx1 = indcs.nx1;

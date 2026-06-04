@@ -25,6 +25,7 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "mhd/mhd.hpp"
+#include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "utils/tov/tov.hpp"
@@ -37,6 +38,8 @@ namespace {
 Real bh_spin = 0.0;
 Real bh_mass = 1.0;
 bool use_minkowski_background = false;
+bool force_minkowski_metric = false;
+bool use_direct_z4c_background = true;
 Real bh_center_x1 = 0.0;
 Real bh_center_x2 = 0.0;
 Real bh_center_x3 = 0.0;
@@ -73,14 +76,20 @@ Real excision_freeze_radius = 0.0;
 Real excision_ramp_radius = 0.0;
 Real excision_atmo_density = 0.0;
 Real excision_atmo_energy = 0.0;
+bool amr_rho_slope_refine = true;
 Real amr_rho_slope_threshold = 0.5;
 Real amr_rho_min = 0.0;
 Real amr_bh_exclusion_radius = 0.0;
 bool amr_star_refine = false;
 Real amr_star_refine_radius = 0.0;
+Real amr_star_refine_radius_factor = 0.0;
+Real amr_star_derefine_radius = 0.0;
+Real amr_star_derefine_radius_factor = 0.0;
 int amr_star_refine_level = -1;
+bool zero_tmunu = false;
 
 void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm);
+void ResetToMinkowskiMetric(Mesh *pm);
 
 KOKKOS_INLINE_FUNCTION
 Real KerrSchildRadius(Real x, Real y, Real z, Real a) {
@@ -270,6 +279,9 @@ inline void ConfigureCircularGeodesicOrbit(const tov::TOVStar &tov_star) {
 }
 
 void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
+  if (force_minkowski_metric) {
+    ResetToMinkowskiMetric(pm);
+  }
   if (excision_damp_rate <= 0.0 && !excision_project_state) {
     return;
   }
@@ -437,6 +449,27 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[1] = alpha_min;
 }
 
+bool TouchesGlobalBoundary(const RegionSize &mb_size, const RegionSize &mesh_size,
+                           bool multi_d, bool three_d) {
+  const Real x1scale = fmax(fabs(mesh_size.x1min), fabs(mesh_size.x1max));
+  const Real x2scale = fmax(fabs(mesh_size.x2min), fabs(mesh_size.x2max));
+  const Real x3scale = fmax(fabs(mesh_size.x3min), fabs(mesh_size.x3max));
+  const Real scale = fmax(1.0, fmax(x1scale, fmax(x2scale, x3scale)));
+  const Real tol = 64.0*std::numeric_limits<Real>::epsilon()*scale;
+
+  bool touches =
+      (mb_size.x1min <= mesh_size.x1min + tol || mb_size.x1max >= mesh_size.x1max - tol);
+  if (multi_d) {
+    touches = touches ||
+        (mb_size.x2min <= mesh_size.x2min + tol || mb_size.x2max >= mesh_size.x2max - tol);
+  }
+  if (three_d) {
+    touches = touches ||
+        (mb_size.x3min <= mesh_size.x3min + tol || mb_size.x3max >= mesh_size.x3max - tol);
+  }
+  return touches;
+}
+
 void RefinementCondition(MeshBlockPack *pmbp) {
   if (pmbp->pmhd == nullptr) {
     pmbp->pz4c->pamr->Refine(pmbp);
@@ -459,6 +492,7 @@ void RefinementCondition(MeshBlockPack *pmbp) {
   const Real rho_slope_threshold_l = amr_rho_slope_threshold;
   const Real rho_min_l = amr_rho_min;
   const Real bh_exclusion_radius_l = amr_bh_exclusion_radius;
+  const bool rho_slope_refine_l = amr_rho_slope_refine;
   const Real bh_center_x1_l = bh_center_x1;
   const Real bh_center_x2_l = bh_center_x2;
   const Real bh_center_x3_l = bh_center_x3;
@@ -476,6 +510,20 @@ void RefinementCondition(MeshBlockPack *pmbp) {
     Real cy = 0.5*(x2min + x2max);
     Real cz = 0.5*(x3min + x3max);
     Real r_ks = KerrSchildRadius(cx, cy, cz, bh_spin_l);
+
+    int &flag = refine_flag.d_view(m + mbs);
+    if (bh_exclusion_radius_l > 0.0 && r_ks < bh_exclusion_radius_l) {
+      if (flag == 0) {
+        flag = -1;
+      }
+      return;
+    }
+    if (!rho_slope_refine_l) {
+      if (flag == 0) {
+        flag = -1;
+      }
+      return;
+    }
 
     Real team_dqmax = 0.0;
     Kokkos::parallel_reduce(Kokkos::TeamThreadRange(tmember, nkji),
@@ -500,13 +548,6 @@ void RefinementCondition(MeshBlockPack *pmbp) {
       dqmax = fmax(0.5*sqrt(d2)/denom, dqmax);
     }, Kokkos::Max<Real>(team_dqmax));
 
-    int &flag = refine_flag.d_view(m + mbs);
-    if (bh_exclusion_radius_l > 0.0 && r_ks < bh_exclusion_radius_l) {
-      if (flag == 0) {
-        flag = -1;
-      }
-      return;
-    }
     if (team_dqmax > rho_slope_threshold_l) {
       flag = 1;
     } else if (flag == 0) {
@@ -520,36 +561,37 @@ void RefinementCondition(MeshBlockPack *pmbp) {
     const Real time = pmbp->pmesh->time;
     Real xstar, ystar, zstar;
     StarCenterAtTime(time, xstar, ystar, zstar);
-    const Real rstar2 = SQR(amr_star_refine_radius);
+    const Real refine_radius2 = SQR(amr_star_refine_radius);
+    const Real keep_radius = fmax(amr_star_refine_radius, amr_star_derefine_radius);
+    const Real keep_radius2 = SQR(keep_radius);
     for (int m = 0; m < nmb; ++m) {
       const int level = pmbp->pmesh->lloc_eachmb[m + mbs].level - pmbp->pmesh->root_level;
       const auto &mb_size = size.h_view(m);
-      const bool contains =
-          (xstar >= mb_size.x1min && xstar <= mb_size.x1max) &&
-          (ystar >= mb_size.x2min && ystar <= mb_size.x2max) &&
-          (zstar >= mb_size.x3min && zstar <= mb_size.x3max);
-      const Real d2[8] = {
-          SQR(mb_size.x1min - xstar) + SQR(mb_size.x2min - ystar) + SQR(mb_size.x3min - zstar),
-          SQR(mb_size.x1max - xstar) + SQR(mb_size.x2min - ystar) + SQR(mb_size.x3min - zstar),
-          SQR(mb_size.x1min - xstar) + SQR(mb_size.x2max - ystar) + SQR(mb_size.x3min - zstar),
-          SQR(mb_size.x1max - xstar) + SQR(mb_size.x2max - ystar) + SQR(mb_size.x3min - zstar),
-          SQR(mb_size.x1min - xstar) + SQR(mb_size.x2min - ystar) + SQR(mb_size.x3max - zstar),
-          SQR(mb_size.x1max - xstar) + SQR(mb_size.x2min - ystar) + SQR(mb_size.x3max - zstar),
-          SQR(mb_size.x1min - xstar) + SQR(mb_size.x2max - ystar) + SQR(mb_size.x3max - zstar),
-          SQR(mb_size.x1max - xstar) + SQR(mb_size.x2max - ystar) + SQR(mb_size.x3max - zstar),
-      };
-      const Real dmin2 = *std::min_element(&d2[0], &d2[8]);
-      if (contains || dmin2 < rstar2) {
-        if (level < amr_star_refine_level) {
-          refine_flag.h_view(m + mbs) = 1;
-        } else if (level == amr_star_refine_level && refine_flag.h_view(m + mbs) == -1) {
-          refine_flag.h_view(m + mbs) = 0;
-        }
+      const Real closest_x = std::max(mb_size.x1min, std::min(xstar, mb_size.x1max));
+      const Real closest_y = std::max(mb_size.x2min, std::min(ystar, mb_size.x2max));
+      const Real closest_z = std::max(mb_size.x3min, std::min(zstar, mb_size.x3max));
+      const Real dmin2 =
+          SQR(closest_x - xstar) + SQR(closest_y - ystar) + SQR(closest_z - zstar);
+      if (dmin2 < refine_radius2 && level < amr_star_refine_level) {
+        refine_flag.h_view(m + mbs) = 1;
+      } else if (dmin2 < keep_radius2 &&
+                 level == amr_star_refine_level && refine_flag.h_view(m + mbs) == -1) {
+        refine_flag.h_view(m + mbs) = 0;
       }
     }
     refine_flag.template modify<HostMemSpace>();
     refine_flag.template sync<DevExeSpace>();
   }
+
+  const auto &mesh_size = pmbp->pmesh->mesh_size;
+  for (int m = 0; m < nmb; ++m) {
+    if (refine_flag.h_view(m + mbs) > 0 &&
+        TouchesGlobalBoundary(size.h_view(m), mesh_size, multi_d, three_d)) {
+      refine_flag.h_view(m + mbs) = 0;
+    }
+  }
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
 }
 
 template <typename ADMState>
@@ -646,6 +688,171 @@ void SetADMBackgroundKerrSchild(MeshBlockPack *pmbp, Real /*time*/) {
   } else {
     FillKerrSchildADM(pmbp, pmbp->pz4c->adm_bg);
   }
+}
+
+void SetZ4cBackgroundKerrSchild(MeshBlockPack *pmbp, Real /*time*/) {
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  auto *pz4c = pmbp->pz4c;
+  int isg = indcs.is - indcs.ng;
+  int ieg = indcs.ie + indcs.ng;
+  int jsg = indcs.js - indcs.ng;
+  int jeg = indcs.je + indcs.ng;
+  int ksg = indcs.ks - indcs.ng;
+  int keg = indcs.ke + indcs.ng;
+  const bool use_minkowski_background_l = use_minkowski_background;
+  const Real bh_center_x1_l = bh_center_x1;
+  const Real bh_center_x2_l = bh_center_x2;
+  const Real bh_center_x3_l = bh_center_x3;
+  const Real bh_spin_l = bh_spin;
+  const Real excision_freeze_radius_l = excision_freeze_radius;
+  const bool excision_project_state_l = excision_project_state;
+  const Real chi_psi_power_l = pz4c->opt.chi_psi_power;
+  auto &bg = pz4c->bg;
+
+  par_for("z4c_tov_ks_background_z4c", DevExeSpace(), 0, pmbp->nmb_thispack - 1,
+          ksg, keg, jsg, jeg, isg, ieg,
+          KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    bg.chi(m,k,j,i) = 1.0;
+    bg.vKhat(m,k,j,i) = 0.0;
+    bg.vTheta(m,k,j,i) = 0.0;
+    bg.alpha(m,k,j,i) = 1.0;
+    for (int a = 0; a < 3; ++a) {
+      bg.vGam_u(m,a,k,j,i) = 0.0;
+      bg.beta_u(m,a,k,j,i) = 0.0;
+      bg.vB_d(m,a,k,j,i) = 0.0;
+      for (int b = a; b < 3; ++b) {
+        bg.g_dd(m,a,b,k,j,i) = (a == b) ? 1.0 : 0.0;
+        bg.vA_dd(m,a,b,k,j,i) = 0.0;
+      }
+    }
+    if (use_minkowski_background_l) {
+      return;
+    }
+
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+
+    Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1_l;
+    Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2_l;
+    Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3_l;
+    Real rad = sqrt(SQR(x) + SQR(y) + SQR(z));
+    Real r_ks = KerrSchildRadius(x, y, z, bh_spin_l);
+    if (excision_project_state_l && r_ks < excision_freeze_radius_l) {
+      Real scale = excision_freeze_radius_l/fmax(rad, 1.0e-12);
+      x = (rad > 1.0e-12) ? x*scale : excision_freeze_radius_l;
+      y = (rad > 1.0e-12) ? y*scale : 0.0;
+      z = (rad > 1.0e-12) ? z*scale : 0.0;
+    }
+
+    Real alpha, psi4;
+    Real beta_u[3];
+    Real g_dd[3][3];
+    Real K_dd[3][3];
+    ComputeADMDecomposition(
+        x, y, z, false, bh_spin_l,
+        &alpha, &beta_u[0], &beta_u[1], &beta_u[2], &psi4,
+        &g_dd[0][0], &g_dd[0][1], &g_dd[0][2], &g_dd[1][1], &g_dd[1][2],
+        &g_dd[2][2], &K_dd[0][0], &K_dd[0][1], &K_dd[0][2], &K_dd[1][1],
+        &K_dd[1][2], &K_dd[2][2]);
+    g_dd[1][0] = g_dd[0][1];
+    g_dd[2][0] = g_dd[0][2];
+    g_dd[2][1] = g_dd[1][2];
+    K_dd[1][0] = K_dd[0][1];
+    K_dd[2][0] = K_dd[0][2];
+    K_dd[2][1] = K_dd[1][2];
+
+    Real detg = adm::SpatialDet(g_dd[0][0], g_dd[0][1], g_dd[0][2],
+                                g_dd[1][1], g_dd[1][2], g_dd[2][2]);
+    Real oopsi4 = pow(detg, -1.0/3.0);
+    bg.chi(m,k,j,i) = pow(detg, (1.0/12.0)*chi_psi_power_l);
+    bg.alpha(m,k,j,i) = alpha;
+    for (int a = 0; a < 3; ++a) {
+      bg.beta_u(m,a,k,j,i) = beta_u[a];
+    }
+
+    Real g_uu[3][3];
+    adm::SpatialInv(1.0/detg, g_dd[0][0], g_dd[0][1], g_dd[0][2],
+                    g_dd[1][1], g_dd[1][2], g_dd[2][2],
+                    &g_uu[0][0], &g_uu[0][1], &g_uu[0][2],
+                    &g_uu[1][1], &g_uu[1][2], &g_uu[2][2]);
+    g_uu[1][0] = g_uu[0][1];
+    g_uu[2][0] = g_uu[0][2];
+    g_uu[2][1] = g_uu[1][2];
+
+    Real Kt_dd[3][3];
+    Real Khat = 0.0;
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b) {
+      Kt_dd[a][b] = oopsi4*K_dd[a][b];
+      Khat += psi4*g_uu[a][b]*Kt_dd[a][b];
+    }
+    bg.vKhat(m,k,j,i) = Khat;
+
+    for (int a = 0; a < 3; ++a)
+    for (int b = a; b < 3; ++b) {
+      bg.g_dd(m,a,b,k,j,i) = oopsi4*g_dd[a][b];
+      bg.vA_dd(m,a,b,k,j,i) =
+          Kt_dd[a][b] - (1.0/3.0)*Khat*bg.g_dd(m,a,b,k,j,i);
+    }
+
+    Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4];
+    ComputeMetricDerivatives(x, y, z, false, bh_spin_l, dg_dx1, dg_dx2, dg_dx3);
+    Real dg_ddd[3][3][3];
+    for (int a = 0; a < 3; ++a)
+    for (int b = 0; b < 3; ++b) {
+      dg_ddd[0][a][b] = dg_dx1[a+1][b+1];
+      dg_ddd[1][a][b] = dg_dx2[a+1][b+1];
+      dg_ddd[2][a][b] = dg_dx3[a+1][b+1];
+    }
+
+    Real dpsi4_d[3];
+    Real dginv_ddd[3][3][3];
+    for (int c = 0; c < 3; ++c) {
+      Real dlogdet = 0.0;
+      for (int a = 0; a < 3; ++a)
+      for (int b = 0; b < 3; ++b) {
+        dlogdet += g_uu[a][b]*dg_ddd[c][a][b];
+      }
+      dpsi4_d[c] = (1.0/3.0)*psi4*dlogdet;
+
+      for (int a = 0; a < 3; ++a)
+      for (int b = 0; b < 3; ++b) {
+        dginv_ddd[c][a][b] = 0.0;
+        for (int p = 0; p < 3; ++p)
+        for (int q = 0; q < 3; ++q) {
+          dginv_ddd[c][a][b] -= g_uu[a][p]*g_uu[b][q]*dg_ddd[c][p][q];
+        }
+      }
+    }
+
+    for (int a = 0; a < 3; ++a) {
+      Real vgam = 0.0;
+      for (int b = 0; b < 3; ++b) {
+        vgam -= dpsi4_d[b]*g_uu[b][a] + psi4*dginv_ddd[b][b][a];
+      }
+      bg.vGam_u(m,a,k,j,i) = vgam;
+    }
+  });
+}
+
+void ResetToMinkowskiMetric(Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp == nullptr || pmbp->padm == nullptr || pmbp->pz4c == nullptr) {
+    return;
+  }
+
+  FillFlatADM(pmbp, pmbp->padm->adm);
+  pmbp->pz4c->UpdateBackgroundState(pm->time);
+  Kokkos::deep_copy(DevExeSpace(), pmbp->pz4c->u0, 0.0);
+  Kokkos::deep_copy(DevExeSpace(), pmbp->pz4c->u1, 0.0);
+  Kokkos::deep_copy(DevExeSpace(), pmbp->pz4c->u_rhs, 0.0);
+  pmbp->pz4c->ReconstructFullState();
+  pmbp->pz4c->Z4cToADM(pmbp);
 }
 
 template <class TOVEOS>
@@ -1235,6 +1442,26 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
   TOVEOS eos{pin};
   auto tov_star = tov::TOVStar::ConstructTOV(pin, eos);
   ConfigureCircularGeodesicOrbit(tov_star);
+  if (amr_star_refine_radius_factor > 0.0) {
+    const Real stellar_radius = star_isotropic ? tov_star.R_edge_iso : tov_star.R_edge;
+    amr_star_refine_radius = amr_star_refine_radius_factor*stellar_radius;
+    if (global_variable::my_rank == 0) {
+      std::cout << "Star-centered AMR radius: " << amr_star_refine_radius
+                << " (" << amr_star_refine_radius_factor
+                << " x " << (star_isotropic ? "isotropic" : "Schwarzschild")
+                << " stellar radius)" << std::endl;
+    }
+  }
+  if (amr_star_derefine_radius_factor > 0.0) {
+    const Real stellar_radius = star_isotropic ? tov_star.R_edge_iso : tov_star.R_edge;
+    amr_star_derefine_radius = amr_star_derefine_radius_factor*stellar_radius;
+    if (global_variable::my_rank == 0) {
+      std::cout << "Star-centered AMR derefine radius: " << amr_star_derefine_radius
+                << " (" << amr_star_derefine_radius_factor
+                << " x " << (star_isotropic ? "isotropic" : "Schwarzschild")
+                << " stellar radius)" << std::endl;
+    }
+  }
 
   FillTOVPrimitivesAndADM(pin, pmy_mesh, eos, tov_star);
 
@@ -1257,6 +1484,8 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
 
   auto *pz4c = pmbp->pz4c;
   pz4c->SetADMBackground = &SetADMBackgroundKerrSchild;
+  pz4c->SetZ4cBackground =
+      use_direct_z4c_background ? &SetZ4cBackgroundKerrSchild : nullptr;
   pz4c->UpdateBackgroundState(pmy_mesh->time);
   pz4c->ReconstructFullState();
   pz4c->EnforceAlgConstrOn(pz4c->full);
@@ -1264,6 +1493,9 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
   pz4c->PrescribeGaugeResidual();
   ApplyInnerExcision(pmy_mesh, 0.0, false);
   pz4c->Z4cToADM(pmbp);
+  if (force_minkowski_metric) {
+    ResetToMinkowskiMetric(pmy_mesh);
+  }
 
   InitializeDipoleMagneticField(pin, pmy_mesh, eos, tov_star);
 
@@ -1273,6 +1505,12 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
   pmbp->pdyngr->PrimToConInit(0, n1 - 1, 0, n2 - 1, 0, n3 - 1);
   ApplyInnerExcision(pmy_mesh, 0.0);
+  if (zero_tmunu) {
+    Kokkos::deep_copy(DevExeSpace(), pmbp->ptmunu->u_tmunu, 0.0);
+    if (global_variable::my_rank == 0) {
+      std::cout << "z4c_tov_ks diagnostic: zeroed Tmunu source terms." << std::endl;
+    }
+  }
 
   switch (indcs.ng) {
     case 2:
@@ -1385,6 +1623,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   bh_horizon_radius = use_minkowski_background ?
       0.0 : 1.0 + sqrt(fmax(0.0, 1.0 - SQR(bh_spin)));
+  force_minkowski_metric =
+      pin->GetOrAddBoolean("problem", "force_minkowski_metric", false);
+  if (force_minkowski_metric && !use_minkowski_background) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "force_minkowski_metric requires bh_mass = 0 "
+              << "and <coord>/minkowski = true." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  use_direct_z4c_background =
+      pin->GetOrAddBoolean("problem", "use_direct_z4c_background", true);
   excision_damp_rate = pin->GetOrAddReal("problem", "excision_damp_rate", 50.0);
   excision_project_state = pin->GetOrAddBoolean("problem", "excision_project_state", true);
   excision_freeze_radius =
@@ -1406,6 +1654,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   excision_atmo_density = pin->GetOrAddReal("problem", "excision_atmo_density", dfloor);
   excision_atmo_energy =
       pin->GetOrAddReal("problem", "excision_atmo_energy", pfloor/fmax(gamma - 1.0, 1.0e-12));
+  amr_rho_slope_refine = pin->GetOrAddBoolean("problem", "amr_rho_slope_refine", true);
   amr_rho_slope_threshold =
       pin->GetOrAddReal("problem", "amr_rho_slope_threshold", 0.5);
   amr_rho_min = pin->GetOrAddReal("problem", "amr_rho_min", 100.0*dfloor);
@@ -1414,11 +1663,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                         use_minkowski_background ? 0.0 : 4.0*bh_horizon_radius);
   amr_star_refine = pin->GetOrAddBoolean("problem", "amr_star_refine", false);
   amr_star_refine_radius = pin->GetOrAddReal("problem", "amr_star_refine_radius", 0.0);
+  amr_star_refine_radius_factor =
+      pin->GetOrAddReal("problem", "amr_star_refine_radius_factor", 0.0);
+  amr_star_derefine_radius =
+      pin->GetOrAddReal("problem", "amr_star_derefine_radius", 0.0);
+  amr_star_derefine_radius_factor =
+      pin->GetOrAddReal("problem", "amr_star_derefine_radius_factor", 0.0);
   amr_star_refine_level = pin->GetOrAddInteger("problem", "amr_star_refine_level", -1);
+  zero_tmunu = pin->GetOrAddBoolean("problem", "zero_tmunu", false);
   user_srcs = true;
   user_srcs_func = &ApplyInnerExcision;
   user_ref_func = &RefinementCondition;
   pmbp->pz4c->SetADMBackground = &SetADMBackgroundKerrSchild;
+  pmbp->pz4c->SetZ4cBackground =
+      use_direct_z4c_background ? &SetZ4cBackgroundKerrSchild : nullptr;
 
   if (restart) {
     pmbp->pz4c->UpdateBackgroundState(pmy_mesh_->time);
@@ -1445,4 +1703,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << std::endl << "Unsupported EOS policy for z4c_tov_ks" << std::endl;
     exit(EXIT_FAILURE);
   }
+}
+
+void ProblemGenerator::Z4cTovKerrSchild(ParameterInput *pin, const bool restart) {
+  UserProblem(pin, restart);
 }

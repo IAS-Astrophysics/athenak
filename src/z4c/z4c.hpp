@@ -133,7 +133,9 @@ class Z4c {
   Z4c_vars rhs;
 
   using SetADMBackgroundFnPtr = void (*)(MeshBlockPack *pmbp, Real time);
+  using SetZ4cBackgroundFnPtr = void (*)(MeshBlockPack *pmbp, Real time);
   SetADMBackgroundFnPtr SetADMBackground = nullptr;
+  SetZ4cBackgroundFnPtr SetZ4cBackground = nullptr;
   bool use_analytic_background = false;
 
   // aliases for the constraints

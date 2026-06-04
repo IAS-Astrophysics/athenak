@@ -955,6 +955,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cLinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_tov_ks") == 0) {
     Z4cTovKerrSchild(pin, is_restart);
+  } else if (pgen_fun_name.compare("tov_frozen_ks") == 0) {
+    TOVFrozenKerrSchild(pin, is_restart);
   } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
     SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {

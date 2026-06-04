@@ -388,6 +388,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     FOFC<rsolver_method_>(pdriver, stage);
   }
 
+  pmy_pack->pmhd->SymmetryFluxDebugProbe("DynGRMHD_CalcFluxes", pdriver, stage);
+
   return TaskStatus::complete;
 }
 

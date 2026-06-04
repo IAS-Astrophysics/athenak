@@ -8,13 +8,172 @@
 //! fine/coarse boundaries for the flux correction step.
 
 #include <cstdlib>
+#include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
+
+namespace {
+
+bool FluxCorrectionDebugEnabled() {
+  static bool enabled = (std::getenv("ATHENA_FLUX_DEBUG") != nullptr) ||
+                        (std::getenv("ATHENA_SYM_DEBUG") != nullptr);
+  return enabled;
+}
+
+Real EnvReal(const char *name, Real default_value) {
+  const char *value = std::getenv(name);
+  return (value == nullptr) ? default_value : static_cast<Real>(std::atof(value));
+}
+
+void ReportCCFluxCorrectionDebug(const char *label, MeshBlockPack *pmy_pack,
+                                 MeshBoundaryBuffer *sendbuf,
+                                 MeshBoundaryBuffer *recvbuf,
+                                 DvceFaceFld5D<Real> &flx,
+                                 const bool after_pack) {
+  if (!FluxCorrectionDebugEnabled()) return;
+
+  Mesh *pm = pmy_pack->pmesh;
+  const int cycle = pm->ncycle;
+  if (!(cycle < 3 || cycle == 80 || cycle == 160)) return;
+
+  Kokkos::fence();
+  auto &indcs = pm->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
+  auto &gid = pmy_pack->pmb->mb_gid;
+  auto &lev = pmy_pack->pmb->mb_lev;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  const int my_rank = global_variable::my_rank;
+  const int nmb = pmy_pack->nmb_thispack;
+  const int nnghbr = pmy_pack->pmb->nnghbr;
+  const Real x_target = EnvReal("ATHENA_SYM_X_TARGET", 20.0);
+  const Real z_target = EnvReal("ATHENA_SYM_Z_TARGET", 0.0);
+
+  for (int m = 0; m < nmb; ++m) {
+    const auto &mb = size.h_view(m);
+    const bool x_inside = (x_target >= mb.x1min) && (x_target < mb.x1max);
+    const bool z_inside = (z_target >= mb.x3min) && (z_target < mb.x3max);
+    if (!(x_inside && z_inside)) continue;
+
+    for (int n = 8; n < std::min(16, nnghbr); ++n) {
+      const auto &nbr = nghbr.h_view(m,n);
+      if (nbr.gid < 0) continue;
+      const bool level_match = after_pack ? (nbr.lev < lev.h_view(m)) :
+                                          (nbr.lev > lev.h_view(m));
+      if (!level_match) continue;
+
+      MeshBoundaryBuffer &buf = after_pack ? sendbuf[n] : recvbuf[n];
+      int il = buf.iflux_coar[0].bis;
+      int iu = buf.iflux_coar[0].bie;
+      int jl = buf.iflux_coar[0].bjs;
+      int kl = buf.iflux_coar[0].bks;
+      int ku = buf.iflux_coar[0].bke;
+      const int ni = iu - il + 1;
+      const int nk = ku - kl + 1;
+      if (ni <= 0 || nk <= 0) continue;
+
+      int best_i = il;
+      int best_k = kl;
+      Real best_dist = std::numeric_limits<Real>::max();
+      for (int i = il; i <= iu; ++i) {
+        const int fi = after_pack ? (2*i - indcs.cis) : i;
+        const Real x = after_pack ?
+            mb.x1min + (static_cast<Real>(fi - indcs.is) + 1.0)*mb.dx1 :
+            mb.x1min + (static_cast<Real>(i - indcs.is) + 0.5)*mb.dx1;
+        for (int k = kl; k <= ku; ++k) {
+          const int fk = after_pack ? (2*k - indcs.cks) : k;
+          const Real z = after_pack ?
+              mb.x3min + (static_cast<Real>(fk - indcs.ks) + 1.0)*mb.dx3 :
+              mb.x3min + (static_cast<Real>(k - indcs.ks) + 0.5)*mb.dx3;
+          const Real dist = std::abs(x - x_target) + std::abs(z - z_target);
+          if (dist < best_dist) {
+            best_dist = dist;
+            best_i = i;
+            best_k = k;
+          }
+        }
+      }
+
+      DvceArray1D<Real> diag("cc-flux-correction-debug", 1);
+      const int i = best_i;
+      const int k = best_k;
+      if (after_pack) {
+        const int fi = 2*i - indcs.cis;
+        const int fj = 2*jl - indcs.cjs;
+        const int fk = 2*k - indcs.cks;
+        const bool two_d = pm->two_d;
+        auto flx2 = flx.x2f;
+        Kokkos::parallel_for("cc_flux_pack_debug",
+                             Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
+                             KOKKOS_LAMBDA(const int) {
+          if (two_d) {
+            diag(0) = 0.5*(flx2(m,IDN,0,fj,fi) + flx2(m,IDN,0,fj,fi+1));
+          } else {
+            diag(0) = 0.25*(flx2(m,IDN,fk  ,fj,fi) + flx2(m,IDN,fk  ,fj,fi+1) +
+                            flx2(m,IDN,fk+1,fj,fi) + flx2(m,IDN,fk+1,fj,fi+1));
+          }
+        });
+      } else {
+        auto flx2 = flx.x2f;
+        Kokkos::parallel_for("cc_flux_unpack_debug",
+                             Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
+                             KOKKOS_LAMBDA(const int) {
+          diag(0) = flx2(m,IDN,k,jl,i);
+        });
+      }
+      Kokkos::fence();
+      auto hdiag = Kokkos::create_mirror_view(diag);
+      Kokkos::deep_copy(hdiag, diag);
+
+      Real buffer_value = 0.0;
+      bool have_buffer = false;
+      if (after_pack && nbr.rank == my_rank) {
+        const int dm = nbr.gid - gid.h_view(0);
+        const int dn = nbr.dest;
+        auto hbuf = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),
+                                                        recvbuf[dn].flux);
+        buffer_value = hbuf(dm, (i-il + ni*(k-kl)));
+        have_buffer = true;
+      } else {
+        auto hbuf = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),
+                                                        buf.flux);
+        buffer_value = hbuf(m, (i-il + ni*(k-kl)));
+        have_buffer = true;
+      }
+
+      const int face_j = after_pack ? (2*jl - indcs.cjs) : jl;
+      const Real yface = mb.x2min + static_cast<Real>(face_j - indcs.js)*mb.dx2;
+      std::cout << std::setprecision(17)
+                << "CCFLUXDBG label=" << label
+                << " rank=" << my_rank
+                << " gid=" << gid.h_view(m)
+                << " level=" << lev.h_view(m)
+                << " neighbor=" << n
+                << " neighbor_gid=" << nbr.gid
+                << " neighbor_rank=" << nbr.rank
+                << " neighbor_level=" << nbr.lev
+                << " cycle=" << cycle
+                << " time=" << pm->time
+                << " i=" << i
+                << " jface=" << face_j
+                << " k=" << k
+                << " yface=" << yface
+                << " flux_value=" << hdiag(0)
+                << " buffer_value=" << (have_buffer ? buffer_value : 0.0)
+                << " buffer_kind=" << (after_pack && nbr.rank == my_rank ? "recv-local" :
+                                       (after_pack ? "send-mpi" : "recv"))
+                << std::endl;
+    }
+  }
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBoundaryValuesCC::PackAndSendFlux()
@@ -152,6 +311,8 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
     tmember.team_barrier();
   });  // end par_for_outer
 
+  ReportCCFluxCorrectionDebug("PackAndSendFluxCC", pmy_pack, sendbuf, recvbuf, flx, true);
+
 #if MPI_PARALLEL_ENABLED
   // Send boundary buffer to neighboring MeshBlocks using MPI
   // Sends only occur to neighbors on FACES at a COARSER level
@@ -234,6 +395,7 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
   }
   // exit if recv boundary buffer communications have not completed
   if (bflag) {return TaskStatus::incomplete;}
+  Kokkos::fence();
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack
@@ -291,6 +453,8 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
     }  // end if-neighbor-exists block
     tmember.team_barrier();
   });  // end par_for_outer
+
+  ReportCCFluxCorrectionDebug("RecvAndUnpackFluxCC", pmy_pack, sendbuf, recvbuf, flx, false);
 
   return TaskStatus::complete;
 }

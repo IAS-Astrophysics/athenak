@@ -13,6 +13,7 @@
 #include <iomanip>    // std::setprecision()
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "mesh/nghbr_index.hpp"
@@ -64,6 +65,57 @@ int MaxNeighborLevelAtOffset(const int m, const int ox1, const int ox2, const in
   return max_lev;
 }
 
+bool BoundaryRaceDebugEnabled() {
+  static bool enabled = (std::getenv("ATHENA_BVAL_RACE_DEBUG") != nullptr);
+  return enabled;
+}
+
+void ReportWriteCounts(const char *label, const DvceArray5D<int> &write_count) {
+  const int nmb = write_count.extent_int(0);
+  const int nvar = write_count.extent_int(1);
+  const int nk = write_count.extent_int(2);
+  const int nj = write_count.extent_int(3);
+  const int ni = write_count.extent_int(4);
+  const int total = nmb*nvar*nk*nj*ni;
+
+  int max_count = 0;
+  Kokkos::parallel_reduce(
+      "bval_max_write_count", Kokkos::RangePolicy<>(DevExeSpace(), 0, total),
+      KOKKOS_LAMBDA(const int idx, int &local_max) {
+    int tmp = idx;
+    const int i = tmp % ni; tmp /= ni;
+    const int j = tmp % nj; tmp /= nj;
+    const int k = tmp % nk; tmp /= nk;
+    const int v = tmp % nvar; tmp /= nvar;
+    const int m = tmp;
+    const int count = write_count(m,v,k,j,i);
+    local_max = (count > local_max) ? count : local_max;
+  }, Kokkos::Max<int>(max_count));
+
+  int conflict_count = 0;
+  Kokkos::parallel_reduce(
+      "bval_conflict_write_count", Kokkos::RangePolicy<>(DevExeSpace(), 0, total),
+      KOKKOS_LAMBDA(const int idx, int &local_count) {
+    int tmp = idx;
+    const int i = tmp % ni; tmp /= ni;
+    const int j = tmp % nj; tmp /= nj;
+    const int k = tmp % nk; tmp /= nk;
+    const int v = tmp % nvar; tmp /= nvar;
+    const int m = tmp;
+    if (write_count(m,v,k,j,i) > 1) {
+      local_count += 1;
+    }
+  }, conflict_count);
+
+  if (max_count > 1) {
+    std::cout << "BVALRACE label=" << label
+              << " rank=" << global_variable::my_rank
+              << " max_write_count=" << max_count
+              << " conflict_cells=" << conflict_count
+              << std::endl;
+  }
+}
+
 }  // namespace
 //----------------------------------------------------------------------------------------
 //! \fn void FillCoarseInBndryCC()
@@ -93,6 +145,12 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
   auto& restrict_2nd = pmy_pack->pmesh->pmr->weights.restrict_2nd;
   auto& restrict_4th = pmy_pack->pmesh->pmr->weights.restrict_4th;
   auto& restrict_4th_edge = pmy_pack->pmesh->pmr->weights.restrict_4th_edge;
+  const bool debug_writes = BoundaryRaceDebugEnabled();
+  DvceArray5D<int> write_count("bval_cc_fill_count", ca.extent_int(0), ca.extent_int(1),
+                               ca.extent_int(2), ca.extent_int(3), ca.extent_int(4));
+  if (debug_writes) {
+    Kokkos::deep_copy(DevExeSpace(), write_count, 0);
+  }
 
   // Restrict data into coarse array in any boundary filled with data from the same
   // level.  This ensures data in the coarse array at corners where one direction is a
@@ -103,6 +161,7 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
     auto &cis = indcs.cis;
     auto &cjs = indcs.cjs;
     auto &cks = indcs.cks;
+    auto wc = write_count;
     // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
     Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
     Kokkos::parallel_for("ProlCCSame", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -140,6 +199,10 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
           int finej = (j - indcs.cjs)*2 + indcs.js;
           int finek = (k - indcs.cks)*2 + indcs.ks;
 
+          if (debug_writes) {
+            Kokkos::atomic_add(&wc(m,v,k,j,i), 1);
+          }
+
           // restrict in 2D
           if (!(three_d)) {
             ca(m,v,kl,j,i) = 0.25*(a(m,v,kl,finej  ,finei) + a(m,v,kl,finej  ,finei+1)
@@ -153,6 +216,17 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
                 + a(m,v,finek+1,finej,  finei) + a(m,v,finek+1,finej,  finei+1)
                 + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
             } else {
+              const bool interior_pair =
+                  (finei >= indcs.is) && (finei + 1 <= indcs.ie) &&
+                  (finej >= indcs.js) && (finej + 1 <= indcs.je) &&
+                  (finek >= indcs.ks) && (finek + 1 <= indcs.ke);
+              if (!interior_pair) {
+                ca(m,v,k,j,i) = 0.125*(
+                    a(m,v,finek  ,finej  ,finei) + a(m,v,finek  ,finej  ,finei+1)
+                  + a(m,v,finek  ,finej+1,finei) + a(m,v,finek  ,finej+1,finei+1)
+                  + a(m,v,finek+1,finej,  finei) + a(m,v,finek+1,finej,  finei+1)
+                  + a(m,v,finek+1,finej+1,finei) + a(m,v,finek+1,finej+1,finei+1));
+              } else {
                 switch (indcs.ng) {
                   case 2: ca(m,v,k,j,i) = RestrictInterpolation<2>(m,v,finek,finej,finei,
                               nx1,nx2,nx3,a,restrict_2nd,restrict_4th,restrict_4th_edge);
@@ -161,12 +235,16 @@ void MeshBoundaryValuesCC::FillCoarseInBndryCC(DvceArray5D<Real> &a,
                               nx1,nx2,nx3,a,restrict_2nd,restrict_4th,restrict_4th_edge);
                           break;
                 }
+              }
             }
           }
         });
       }
       tmember.team_barrier();
     });
+  }
+  if (debug_writes) {
+    ReportWriteCounts("FillCoarseInBndryCC", write_count);
   }
   return;
 }
@@ -198,8 +276,15 @@ void MeshBoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
   auto &nx3 = indcs.nx3;
   auto& prolong_2nd = pmy_pack->pmesh->pmr->weights.prolong_2nd;
   auto& prolong_4th = pmy_pack->pmesh->pmr->weights.prolong_4th;
+  const bool debug_writes = BoundaryRaceDebugEnabled();
+  DvceArray5D<int> write_count("bval_cc_prolong_count", a.extent_int(0), a.extent_int(1),
+                               a.extent_int(2), a.extent_int(3), a.extent_int(4));
+  if (debug_writes) {
+    Kokkos::deep_copy(DevExeSpace(), write_count, 0);
+  }
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
+  auto wc = write_count;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
   Kokkos::parallel_for("ProlCC", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int m = (tmember.league_rank())/(nnghbr*nvar);
@@ -234,6 +319,17 @@ void MeshBoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
         int fi = (i - indcs.cis)*2 + indcs.is;
         int fj = (j - indcs.cjs)*2 + indcs.js;
         int fk = (k - indcs.cks)*2 + indcs.ks;
+        if (debug_writes) {
+          const int nkf = three_d ? 2 : 1;
+          const int njf = multi_d ? 2 : 1;
+          for (int dk = 0; dk < nkf; ++dk) {
+            for (int dj = 0; dj < njf; ++dj) {
+              for (int di = 0; di < 2; ++di) {
+                Kokkos::atomic_add(&wc(m,v,fk+dk,fj+dj,fi+di), 1);
+              }
+            }
+          }
+        }
         // call inlined prolongation operator for CC variables
         if (!is_z4c) {
           ProlongCC(m,v,k,j,i,fk,fj,fi,multi_d,three_d,ca,a);
@@ -251,6 +347,9 @@ void MeshBoundaryValuesCC::ProlongateCC(DvceArray5D<Real> &a, DvceArray5D<Real> 
     }
     tmember.team_barrier();
   });
+  if (debug_writes) {
+    ReportWriteCounts("ProlongateCC", write_count);
+  }
   return;
 }
 

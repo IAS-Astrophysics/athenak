@@ -1,0 +1,89 @@
+#!/bin/bash -l
+#PBS -A MHDTidal
+#PBS -N z4c_tov_ks_validation
+#PBS -l select=1
+#PBS -l walltime=00:30:00
+#PBS -l filesystems=home:flare
+#PBS -k doe
+#PBS -l place=scatter
+#PBS -q debug
+#PBS -j oe
+
+set -euo pipefail
+
+REPO_DIR="${REPO_DIR:-/home/hzhu/athenak_tde}"
+PROJECT_ROOT="${PROJECT_ROOT:-/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation}"
+RUN_ROOT="${RUN_ROOT:-${PROJECT_ROOT}/runs}"
+POST_ROOT="${POST_ROOT:-${PROJECT_ROOT}/post}"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
+ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
+POST_SCRIPT="${POST_SCRIPT:-${REPO_DIR}/analysis/tde_star_profile/aurora/plot_xy_mhd_shape.py}"
+CASE_NAME="${CASE_NAME:?CASE_NAME must be provided with qsub -v}"
+INPUT_DECK="${INPUT_DECK:?INPUT_DECK must be provided with qsub -v}"
+RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
+POSTPROCESS="${POSTPROCESS:-1}"
+ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:19:00}"
+
+if type module >/dev/null 2>&1; then
+  module reset >/dev/null 2>&1 || true
+  module load oneapi >/dev/null 2>&1 || module load oneapi/release >/dev/null 2>&1 || true
+fi
+
+export MPICH_GPU_SUPPORT_ENABLED="${MPICH_GPU_SUPPORT_ENABLED:-1}"
+export SYCL_DEVICE_FILTER="${SYCL_DEVICE_FILTER:-level_zero:gpu}"
+export ONEAPI_DEVICE_SELECTOR="${ONEAPI_DEVICE_SELECTOR:-level_zero:gpu}"
+export ZE_FLAT_DEVICE_HIERARCHY="${ZE_FLAT_DEVICE_HIERARCHY:-COMPOSITE}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+
+CPU_BIND="${CPU_BIND:-list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100}"
+
+NNODES="$(wc -l < "${PBS_NODEFILE}")"
+NTOTRANKS="$((NNODES * RANKS_PER_NODE))"
+RUN_DIR="${RUN_ROOT}/${CASE_NAME}"
+POST_DIR="${POST_ROOT}/${CASE_NAME}"
+
+if [[ -d "${RUN_DIR}" ]]; then
+  shopt -s nullglob dotglob
+  existing_run_contents=("${RUN_DIR}"/*)
+  shopt -u nullglob dotglob
+  if (( ${#existing_run_contents[@]} > 0 )); then
+    mv "${RUN_DIR}" "${RUN_DIR}.previous_${PBS_JOBID%%.*}"
+  fi
+fi
+mkdir -p "${RUN_DIR}" "${POST_DIR}"
+cp "${INPUT_DECK}" "${RUN_DIR}/"
+
+echo "CASE_NAME=${CASE_NAME}"
+echo "INPUT_DECK=${INPUT_DECK}"
+echo "RUN_DIR=${RUN_DIR}"
+echo "POST_DIR=${POST_DIR}"
+echo "ATHENA_EXE=${ATHENA_EXE}"
+echo "NNODES=${NNODES}"
+echo "RANKS_PER_NODE=${RANKS_PER_NODE}"
+echo "NTOTRANKS=${NTOTRANKS}"
+echo "SYCL_DEVICE_FILTER=${SYCL_DEVICE_FILTER}"
+echo "ONEAPI_DEVICE_SELECTOR=${ONEAPI_DEVICE_SELECTOR}"
+echo "ZE_FLAT_DEVICE_HIERARCHY=${ZE_FLAT_DEVICE_HIERARCHY}"
+
+cd "${RUN_DIR}"
+read -r -a ATHENA_EXTRA_ARGV <<< "${ATHENA_EXTRA_ARGS:-}"
+
+mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+  gpu_tile_compact.sh "${ATHENA_EXE}" \
+  -i "${INPUT_DECK}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
+  "${ATHENA_EXTRA_ARGV[@]}"
+
+if [[ "${POSTPROCESS}" == "1" ]]; then
+  if [[ -f "${HOME}/athenak_env" ]]; then
+    # Provides the project Python environment with matplotlib and analysis deps.
+    source "${HOME}/athenak_env"
+  fi
+  read -r -a PLOT_EXTRA_ARGV <<< "${PLOT_EXTRA_ARGS:-}"
+  python3 "${POST_SCRIPT}" \
+    --input-dir "${RUN_DIR}" \
+    --case "${CASE_NAME}" \
+    --output-root "${POST_ROOT}" \
+    --quantity dens \
+    --log10 \
+    "${PLOT_EXTRA_ARGV[@]}"
+fi
