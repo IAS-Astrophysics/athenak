@@ -79,12 +79,14 @@ used by `ATHENA_FLUX_DEBUG`.
 | `schwarzschild_zero_feedback_cycle0_debug_n1` | `8523001` | Complete; enabled `ATHENA_SYM_DEBUG=1`, `ATHENA_FLUX_DEBUG=1`, `ATHENA_SYM_X_TARGET=20.03125`, `ATHENA_SYM_Z_TARGET=0.0`, and `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=0` with `time/nlim=1`. The first high-density density break appears after one full cycle: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6` at `x=20.03125`, mirror `y=+-0.03125`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_cycle0_debug_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_cycle0_debug_n1` |
 | `schwarzschild_zero_feedback_c2pdebug_c0_n1` | `8523033` | Complete; built from commit `254a131e` and enabled `ATHENA_C2P_DEBUG=1`, `ATHENA_C2P_DEBUG_CYCLE=0`, `ATHENA_SYM_X_TARGET=20.03125`, and `ATHENA_SYM_Z_TARGET=0.0` with `time/nlim=1`. The final high-density density metric matches the cycle-0 debug run: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_c2pdebug_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_c2pdebug_c0_n1` |
 | `schwarzschild_zero_feedback_rkvars_c0_n1` | `8523062` | Complete; built from commit `628cecc2` and enabled expanded `ATHENA_SYM_DEBUG`, `ATHENA_FLUX_DEBUG`, and `ATHENA_C2P_DEBUG` at cycle 0 with `time/nlim=1`. The final high-density density metric again matches the one-cycle break: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. The first nonzero conserved-variable asymmetry at the target appears after stage-1 `MHD_SrcTerms`, not in flux/RK. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_rkvars_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_rkvars_c0_n1` |
+| `schwarzschild_zero_feedback_coordsrc_c0_n1` | `8523105` | Complete; built from commit `a9499420` and enabled `ATHENA_COORDSRC_DEBUG=1`, `ATHENA_COORDSRC_DEBUG_CYCLE=0`, `ATHENA_COORDSRC_DEBUG_STAGE=1`, `ATHENA_C2P_DEBUG=1`, `ATHENA_SYM_X_TARGET=20.03125`, and `ATHENA_SYM_Z_TARGET=0.0` with `time/nlim=1`. The final high-density density metric again matches the one-cycle break: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. `COORDSRCDBG` shows the high-density mirror pair has symmetric pre-source conserved variables, but the below-side source sees `alpha=0` and `beta=(0,0,0)` with zero lapse/shift derivatives and therefore adds zero momentum/energy source, while the above side sees the expected full lapse/shift and adds the nonzero source. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_coordsrc_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_coordsrc_c0_n1` |
 
 Diagnostic stdout:
 
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_x3dbg.o8522976`
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_c2pdbg.o8523033`
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_rkvars.o8523062`
+- `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_coordsrc.o8523105`
 
 Key cycle-19 result at `x=20.03125`, `y=+-0.03125`, `zface=0`:
 
@@ -178,6 +180,39 @@ the env-gated `COORDSRCDBG` diagnostic inside `DynGRMHD_AddCoordTerms`, targeted
 to cycle 0/stage 1, to split the source into geometry, shift-gradient,
 lapse-gradient, and energy-source subcomponents.
 
+Cycle-0 coordinate-source result:
+
+- The one-cycle high-density density break is reproduced again: Linf abs
+  `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`,
+  peak-relative Linf `2.6777820876067915e-6`.
+- At the high-density target pair (`x=20.03125`, `z=0.03125`,
+  `y=+-0.03125`), the stage-1 pre-source conserved variables are parity
+  symmetric: `pre_rho=9.4981435955234346e-05`,
+  `pre_momx=-1.0498977562073042e-05`, parity-adjusted
+  `pre_momy=+-1.4737333629859224e-09`, `pre_momz=-1.4737333629859224e-09`,
+  and `pre_tau=5.2656730781440339e-07`.
+- The above-side source (`rank=10`, `gid=232`) receives full lapse/shift:
+  `alpha=0.95353031364429219`, `beta_x=0.09077972002248523`,
+  `beta_y=0.00014162202811620161`, `beta_z=0.00014162202811620161`. It adds
+  `src_momx=-2.0970968379518207e-09`,
+  `src_momy=-2.6777243867284305e-12`,
+  `src_momz=-2.6777243867284305e-12`, and
+  `src_tau=2.039226465360487e-10`.
+- The below-side source (`rank=8`, `gid=194`) receives `alpha=0` and
+  `beta_x=beta_y=beta_z=0`; the lapse/shift derivatives are also zero. It
+  therefore adds `src_momx=src_momy=src_momz=src_tau=0`, while the cached
+  metric determinant and metric derivatives are nonzero and parity-consistent.
+
+Interpretation update: the coordinate source formula is not the first suspect.
+The break is caused by `DynGRMHDPS::AddCoordTermsEOS` consuming zero/stale ADM
+lapse/shift data on only part of the mirror pair. Since `adm.g_dd`,
+`adm.vK_dd`, and `adm.psi4` are cached in `ADM::u_adm`, while
+`adm.alpha`/`adm.beta_u` currently alias `pz4c->u0` when Z4c is present, the
+most likely root is that MHD coordinate sources are reading Z4c residual/RK
+stage storage instead of a stable reconstructed-full ADM cache. A focused fix
+should make the ADM cache own lapse and shift as well, or otherwise enforce a
+single stable full-ADM data path for GRMHD source/flux consumption.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
@@ -194,7 +229,10 @@ at the GRMHD consumption point, while primitive and reconstructed fluid states
 are already asymmetric before x3 reconstruction/Riemann. The cycle-0
 conserved-variable diagnostic further excludes the stage-1 flux/RK path at the
 target and localizes the first conserved asymmetry to dynamic GRMHD coordinate
-source terms. Cell-centered ADM values at the C2P target pair were symmetric in
-the first C2P diagnostic; the remaining question is whether
-`DynGRMHDPS::AddCoordTermsEOS` is receiving asymmetric derivative/source inputs
-or applying a parity/sign/index error in its source assembly.
+source terms. The coordinate-source diagnostic shows the source inputs are not
+geometrically asymmetric; instead, one side of the high-density mirror pair
+receives zero lapse/shift from `adm.alpha`/`adm.beta_u`, while the other side
+receives the expected full ADM values. Current best classification:
+coupled ADM-to-GRMHD data path, specifically stale or unstable lapse/shift
+storage exposed to GRMHD coordinate source terms through the Z4c-backed ADM
+aliasing path.

@@ -17,6 +17,67 @@ Repository:
 /home/hzhu/athenak_tde
 ```
 
+## Latest Critical Result
+
+The zero-feedback break has now been localized past fluxes, RK, C2P, and the
+coordinate-source formula itself.
+
+Latest decisive run:
+
+```text
+case: schwarzschild_zero_feedback_coordsrc_c0_n1
+job: 8523105
+run dir: /lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_coordsrc_c0_n1
+post dir: /lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_coordsrc_c0_n1
+stdout: /lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_coordsrc.o8523105
+```
+
+It reproduced the same one-cycle high-density density break:
+
+```text
+time = 0.0125
+rho > 1e-8 density Linf abs = 2.473825588822365e-10
+rho > 1e-8 density Linf local-rel = 6.328741409524629e-6
+rho > 1e-8 density Linf peak-rel = 2.6777820876067915e-6
+max pair: x=20.03125, mirror_a=-0.03125, mirror_b=0.03125
+```
+
+At cycle 0/stage 1, `COORDSRCDBG` showed that the high-density mirror pair
+entered `DynGRMHDPS::AddCoordTermsEOS` with parity-symmetric conserved inputs,
+but the below-side source received zero lapse and shift:
+
+```text
+above: alpha=0.95353031364429219
+above: beta=(0.09077972002248523, 0.00014162202811620161, 0.00014162202811620161)
+above: src_momx=-2.0970968379518207e-09
+above: src_tau=2.039226465360487e-10
+
+below: alpha=0
+below: beta=(0, 0, 0)
+below: src_momx=0
+below: src_tau=0
+```
+
+The below-side cached metric determinant and metric derivatives are nonzero and
+parity-consistent, so this is not a simple all-ADM-cache failure. It points
+specifically at how `adm.alpha` and `adm.beta_u` are stored or exposed to GRMHD
+when Z4c is present.
+
+The strongest current hypothesis is:
+
+```text
+ADM::adm.alpha and ADM::adm.beta_u alias pz4c->u0 when Z4c is present.
+During the coupled RK task graph, pz4c->u0 can contain residual/stage storage
+or can be modified by Z4c tasks while GRMHD source terms read it. The rest of
+ADM, including g_ij, K_ij, psi4, is cached in ADM::u_adm and stays valid.
+GRMHD coordinate sources therefore sometimes consume zero/stale lapse and shift
+on a rank/block-dependent subset of the mesh.
+```
+
+The first candidate fix should make GRMHD consume a stable full-ADM cache for
+lapse and shift as well as metric/K/psi4. Do not assume this fixes the full
+coupled solver until the full coupled case is rerun.
+
 ## Current Evidence
 
 The dense discriminator matrix is complete and recorded in:
@@ -55,12 +116,12 @@ Current classification:
 - The necessary path is not matter feedback into Z4c.
 - The break is isolated to fluid evolution running in the coupled Z4c/ADM
   context.
-- Most likely classes are:
-  - ADM-to-GRMHD data path,
-  - dynamic x3 reconstruction / Riemann inputs,
-  - fluid ghost or boundary/refinement communication feeding x3 fluxes,
-  - coupled task ordering or stale/unsynchronized ADM/primitive data consumed
-    by `DynGRMHD_CalcFluxes`.
+- The first breaking task is dynamic GRMHD coordinate source terms, not x3
+  reconstruction/Riemann, flux correction, RK update, C2P, or matter feedback.
+- The immediate data defect is zero/stale lapse and shift entering
+  `DynGRMHDPS::AddCoordTermsEOS` on one side of the mirror pair.
+- Current best class: coupled ADM-to-GRMHD data path, specifically unstable
+  Z4c-backed lapse/shift aliasing or task-order exposure of Z4c `u0`.
 
 The first target is the zero-feedback case because it breaks without matter
 feedback and should be the smallest decisive coupled reproducer.
@@ -88,8 +149,8 @@ feedback and should be the smallest decisive coupled reproducer.
 Work in short, evidence-driven iterations:
 
 1. Inspect the current repo state and the latest run record.
-2. Build or run only the smallest diagnostic needed to answer the next
-   localization question.
+2. Make the smallest edit needed to test the stable ADM lapse/shift-cache
+   hypothesis.
 3. Submit at most one Aurora job at a time.
 4. While an Aurora job is queued or running, conserve tokens:
    - sleep or use the monitor script at roughly 10 minute intervals,
@@ -108,15 +169,9 @@ continuing. Either finish and commit them if they are useful, or remove only
 those generated scratch edits after confirming they are unrelated. Do not revert
 user changes or unrelated dirty files.
 
-Prefer a narrow diagnosis over a speculative fix. The first successful
-iteration should answer where the zero-feedback path first diverges:
-
-- primitive state before x3 reconstruction,
-- ghost/refinement communication,
-- ADM/metric values consumed by GRMHD,
-- reconstructed x3 left/right states,
-- Riemann solve / flux computation,
-- task ordering or stale data.
+Prefer a narrow fix over a broad refactor. The first successful iteration
+should prove whether stable ADM-owned lapse/shift storage removes the
+cycle-0/stage-1 coordinate-source break in the zero-feedback case.
 
 ## Existing Useful Infrastructure
 
@@ -223,117 +278,99 @@ Baseline comparison:
 - Compare against `minkowski_static_smr_dense`.
 - Treat the zero-feedback density growth as the bug to fix.
 
-### 3. Localize Before Fixing
+### 3. Confirm the Code-Level Hazard
 
-The next decisive probe should be immediately before x3 reconstruction/Riemann
-input inside `DynGRMHD_CalcFluxes`.
+Before editing, inspect the exact current code path and confirm the hazard is
+still present:
 
-Add the smallest input/env-gated diagnostics needed to compare parity pairs at
-the same physical mirror locations where the slice metrics show the final
-break, around:
-
-```text
-x ~= 20.03125
-y/z ~= +/-0.03125 for density max
+```bash
+rg -n "adm\\.alpha|adm\\.beta_u|u_adm|pz4c->u0|Z4cToADM|MHD_AddSrc|Z4c_Z4c2ADM" \
+  src/coordinates/adm.cpp \
+  src/z4c/z4c_adm.cpp \
+  src/dyn_grmhd/dyn_grmhd.cpp \
+  src/mhd/mhd_tasks.cpp \
+  src/z4c/z4c_tasks.cpp
 ```
 
-Start with the existing `ATHENA_FLUX_DEBUG` target machinery if possible.
+Expected current behavior:
 
-Probe these quantities before x3 reconstruction / Riemann solve:
+- In `src/coordinates/adm.cpp`, when `pmy_pack->pz4c != nullptr`,
+  `ADM::u_adm` is allocated with `nadm - 4`.
+- In that same branch, `adm.alpha` and `adm.beta_u` are shallow slices of
+  `pz4c->u0`.
+- `adm.psi4`, `adm.g_dd`, and `adm.vK_dd` are shallow slices of `ADM::u_adm`.
+- `src/z4c/z4c_adm.cpp` reconstructs full Z4c state and writes through
+  `Z4cToADMImpl(pmbp, pz4c.full, pmbp->padm->adm, pz4c.opt)`.
+- Because `padm->adm.alpha` and `padm->adm.beta_u` alias `pz4c->u0`,
+  `Z4cToADMImpl` writes full lapse/shift back into Z4c solution storage rather
+  than into the stable ADM cache.
+- `MHD_AddSrc` depends on `MHD_ExplRK`, not on a fresh stable
+  `Z4c_Z4c2ADM` cache. This makes `AddCoordTermsEOS` vulnerable to whatever
+  value is currently exposed through `pz4c->u0`.
 
-- Primitive cell states:
-  - `dens`
-  - pressure/internal energy if available
-  - `velx`, `vely`, `velz` with correct parity
-  - magnetic fields if active / available
-- Face/reconstructed x3 inputs:
-  - left/right primitive states at the face
-  - left/right B fields
-  - x3 face mass flux inputs
-- ADM / metric fields consumed by GRMHD at those exact target points:
-  - lapse
-  - shift
-  - spatial metric
-  - extrinsic curvature
-  - determinant / derived quantities used by flux calculation
-- Ghost-zone values near the target mirror pair.
-- Values before and after boundary communication if the first probe suggests
-  ghost/refinement data are implicated.
+If this code shape has changed, stop and reassess before applying the fix.
 
-For every printed pair, report:
+### 4. Implement the Smallest Candidate Fix
 
-- coordinates,
-- meshblock/rank/level,
-- side of mirror pair,
-- parity-adjusted difference,
-- absolute difference,
-- local relative difference,
-- peak-relative difference when meaningful.
+Preferred first fix:
 
-Keep output volume limited:
+```text
+Make ADM::u_adm always allocate all ADM fields, including lapse and shift, and
+make adm.alpha / adm.beta_u always shallow-slice ADM::u_adm.
+```
 
-- Require an env var or input flag.
-- Restrict to one or a few target pairs.
-- Print only selected cycles/stages unless debugging requires more.
+Rationale:
 
-### 4. Isolate the First Asymmetric Data Path
+- GRMHD should consume one stable ADM cache for all ADM quantities.
+- `Z4cToADMImpl` already writes alpha, beta, psi4, metric, and K through the
+  abstract `adm_state`; after the fix, all of those writes land in `ADM::u_adm`.
+- This matches how `g_ij`, `K_ij`, and `psi4` already behave.
+- It avoids depending on Z4c `u0` being in a full-state form at every point in
+  the coupled task graph.
 
-Work backward from `dyngrflux_x3`:
+Expected edit in `src/coordinates/adm.cpp`:
 
-1. Are primitive cell-centered states symmetric before reconstruction?
-2. Are ghost cells symmetric before reconstruction?
-3. Are ADM/metric fields symmetric at the actual GRMHD consumption points?
-4. Are reconstructed left/right x3 states symmetric after parity adjustment?
-5. Does the Riemann solve receive symmetric inputs but produce asymmetric flux?
-6. Does asymmetry appear before or after boundary communication / prolongation /
-   restriction?
-7. Does the same issue occur in the full coupled infall, or only zero-feedback?
+- Remove the special `pmy_pack->pz4c != nullptr` storage branch for alpha/beta.
+- Allocate `u_adm` with `nadm` regardless of whether Z4c exists.
+- Initialize `adm.alpha` from `u_adm, I_ADM_ALPHA`.
+- Initialize `adm.beta_u` from `u_adm, I_ADM_BETAX, I_ADM_BETAZ`.
+- Leave `adm.psi4`, `adm.g_dd`, and `adm.vK_dd` as slices of `u_adm`.
+- Add one concise comment explaining that the ADM cache owns lapse/shift even
+  for Z4c so GRMHD does not read Z4c residual/RK stage storage.
 
-Do not jump to broad refactors. Add the narrowest diagnostic necessary, run the
-smallest meaningful case, inspect, and then decide the next edit.
+Do not make broader changes initially:
 
-Use this decision tree:
+- Do not change `NGHOST`.
+- Do not add parity-enforcement or symmetrization.
+- Do not rewrite task ordering unless the stable-ADM-cache fix fails.
+- Do not remove the existing env-gated diagnostics until the fix is validated.
 
-- If cell-centered primitive states are already asymmetric before x3
-  reconstruction, inspect the preceding MHD update, boundary refresh,
-  prolongation/restriction, and ghost exchange.
-- If primitive states are symmetric but ghost-zone values are asymmetric,
-  inspect mesh refinement and boundary communication for MHD primitive or
-  conserved variables.
-- If primitives and ghosts are symmetric but ADM/metric values at the exact
-  GRMHD consumption points are asymmetric, inspect Z4c-to-ADM conversion,
-  face metric construction, data synchronization, and task ordering.
-- If primitives and ADM are symmetric but reconstructed x3 left/right states
-  are asymmetric, inspect x3 reconstruction stencils, indexing, and face-state
-  pairing across the mirror pair.
-- If reconstructed states and ADM are symmetric but x3 fluxes are asymmetric,
-  inspect the Riemann solver, floor application, determinant/normalization, and
-  any branch that could differ between mirror partners.
-- If the zero-feedback case is fixed, rerun the full coupled infall before
-  claiming the full solver is fixed.
+After editing, inspect all uses of `I_ADM_ALPHA`, `I_ADM_BETAX`,
+`I_ADM_BETAY`, `I_ADM_BETAZ`, and `u_adm` to make sure the larger allocation
+does not require output or restart metadata adjustments:
 
-### 5. Candidate Fix Policy
+```bash
+rg -n "I_ADM_ALPHA|I_ADM_BETA|adm_alpha|adm_bet|u_adm" src analysis inputs
+```
 
-Only implement a fix after identifying the first asymmetric data boundary.
+### 5. If the Preferred Fix Fails
 
-Acceptable candidate fix classes include:
+If the one-cycle zero-feedback job still shows zero lapse/shift on one side,
+do not start broad refactoring. Use the existing `COORDSRCDBG` evidence to
+choose the next narrow probe:
 
-- Correct parity handling for vector/tensor components in a coupled boundary,
-  prolongation, restriction, or metric data path.
-- Correct stale or unsynchronized ADM data used by GRMHD flux calculation.
-- Correct ordering between Z4c ADM production and GRMHD flux consumption.
-- Correct coordinate/face-center selection for x3 metric/ADM states.
-- Correct x3 reconstruction input indexing or face-state pairing across
-  mirrored cells.
-
-Avoid:
-
-- Changing `NGHOST`.
-- Masking the metric by symmetrizing output-only data.
-- Adding global parity-enforcement as a substitute for fixing the broken path.
-- Fixing only the metric script while the solver remains asymmetric.
-- Treating atmosphere-relative noise as the bug unless the high-density masks
-  also show the same effect.
+- If `ADM::u_adm` has full lapse/shift before `MHD_AddSrc` but
+  `AddCoordTermsEOS` sees zeros, inspect shallow-slice initialization and
+  view lifetime.
+- If `ADM::u_adm` itself has zeros before `MHD_AddSrc`, inspect
+  `Z4c::Z4cToADM`, `Z4c::ReconstructFullState`, and task ordering around
+  `Z4c_Z4c2ADM`.
+- If the one-cycle zero-feedback case passes but the longer zero-feedback case
+  fails later, rerun `COORDSRCDBG` at the first failing cycle/stage and compare
+  the first nonzero metric time.
+- If zero-feedback passes but full coupled still fails, rerun the same
+  cycle-0/stage-1 probes on the full coupled deck before touching matter-source
+  code.
 
 ### 6. Verification Gates
 
@@ -341,18 +378,33 @@ After any candidate fix:
 
 1. Build locally and run input parsing smoke tests.
 2. Rebuild the Aurora GPU executable if source changes affect it.
-3. Rerun `schwarzschild_zero_feedback_smr_dense` first.
-4. The fix is successful only if high-density density asymmetry in zero-feedback
+3. Rerun a one-cycle zero-feedback coordinate-source diagnostic first, using
+   the same target and env vars as job `8523105`.
+4. The one-cycle gate passes only if:
+   - both high-density mirror partners see nonzero, parity-correct lapse/shift,
+   - coordinate source increments are parity-correct and nonzero on both sides,
+   - the one-cycle high-density density break drops from the old Linf abs
+     `2.473825588822365e-10` to the SMR/Minkowski baseline or roundoff scale.
+5. Then rerun `schwarzschild_zero_feedback_smr_dense`.
+6. The fix is successful only if high-density density asymmetry in zero-feedback
    no longer grows above the SMR Minkowski baseline. Specifically compare final
    and time-history metrics against the old broken values:
    - old density high-density Linf abs `~3.42e-8`,
    - old Linf peak-relative `~3.57e-4`,
    - old Linf local-relative `~1.97e-3`.
-5. Then rerun `schwarzschild_infall_smr_dense`.
-6. The full solver is considered fixed only if the same high-density density
+7. Then rerun `schwarzschild_infall_smr_dense`.
+8. The full solver is considered fixed only if the same high-density density
    and velocity asymmetry no longer grows above baseline.
-7. Also rerun or spot-check `minkowski_static_smr_dense` if the fix touches
+9. Also rerun or spot-check `minkowski_static_smr_dense` if the fix touches
    shared MHD boundary/reconstruction/ADM consumption code.
+
+One-cycle fixed-job template:
+
+```bash
+qsub -N z4c_zero_fb_coordsrc_fix \
+  -v "CASE_NAME=schwarzschild_zero_feedback_coordsrc_fix_c0_n1,INPUT_DECK=/home/hzhu/athenak_tde/inputs/tde/aurora/z4c_tov_ks_schwarzschild_infall_zero_feedback_smr_dense_aurora.athinput,ATHENA_WALLTIME=00:09:00,ATHENA_EXTRA_ARGS=time/nlim=1 time/tlim=0.025,ATHENA_COORDSRC_DEBUG=1,ATHENA_COORDSRC_DEBUG_CYCLE=0,ATHENA_COORDSRC_DEBUG_STAGE=1,ATHENA_C2P_DEBUG=1,ATHENA_C2P_DEBUG_CYCLE=0,ATHENA_SYM_X_TARGET=20.03125,ATHENA_SYM_Z_TARGET=0.0" \
+  analysis/tde_star_profile/aurora/submit_aurora_case.pbs
+```
 
 Use the metrics script:
 
@@ -393,6 +445,7 @@ Produce and commit:
 3. The actual solver fix, if found.
 4. Local smoke-test results.
 5. Aurora run IDs and metric/plot paths for:
+   - fixed one-cycle zero-feedback coordinate-source diagnostic,
    - fixed `schwarzschild_zero_feedback_smr_dense`,
    - follow-up `schwarzschild_infall_smr_dense`,
    - any baseline rerun needed by the touched code path.
