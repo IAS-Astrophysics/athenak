@@ -71,6 +71,43 @@ used by `ATHENA_FLUX_DEBUG`.
 | `schwarzschild_fixed_mhd_tmunu_smr_dense` | `8522867` | Complete; frozen MHD remains exactly symmetric in the high-density masks. Z4c/ADM source-path asymmetry stays at absolute roundoff scale: largest Z4c all-mask Linf abs is `2.33e-10` (`Azz/Ayy`), `Gamz` max Linf abs `5.82e-11`, `Theta` max Linf abs `3.64e-12`; largest ADM all-mask Linf abs is `1.82e-12`. This does not reproduce the MHD density break and further points away from matter-source-to-Z4c as the main source. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_fixed_mhd_tmunu_smr_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_fixed_mhd_tmunu_smr_dense` |
 | `schwarzschild_fixed_mhd_refresh_tmunu_smr_dense` | `8522883` | Complete; refreshing `Tmunu` from fixed primitives also keeps frozen MHD exactly symmetric. Z4c/ADM asymmetry remains at absolute roundoff scale, similar to the retained-source fixed-fluid case: largest Z4c all-mask Linf abs is `2.33e-10`, `Theta` max Linf abs `7.28e-12`; largest ADM all-mask Linf abs is `1.46e-11` (`Kxz`). This does not reproduce the MHD density break. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_fixed_mhd_refresh_tmunu_smr_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_fixed_mhd_refresh_tmunu_smr_dense` |
 
+## Zero-Feedback X3 Diagnostic
+
+| Case | Job | Status | Run directory | Metric directory |
+| --- | --- | --- | --- | --- |
+| `schwarzschild_zero_feedback_x3debug_c19` | `8522976` | Complete; diagnostic built from commit `69bdf213` and enabled with `mhd/dyngr_x3_debug=true mhd/dyngr_x3_debug_cycle=19`. The run reproduces the prior zero-feedback break: high-density (`rho > 1e-8`) final density Linf abs `3.421155270189047e-8`, local-relative Linf `1.974173482905793e-3`, peak-relative Linf `3.5737975125244427e-4`, L2 peak-relative `8.150517976511866e-5` in `xy` and the same values in `xz`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_x3debug_c19` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_x3debug_c19` |
+
+Diagnostic stdout:
+
+- `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_x3dbg.o8522976`
+
+Key cycle-19 result at `x=20.03125`, `y=+-0.03125`, `zface=0`:
+
+- ADM/metric inputs consumed by GRMHD are symmetric at the sampled x3 face:
+  `alpha`, `beta_x`, parity-adjusted `beta_y`, `gxx`, parity-adjusted `gxy`,
+  and `detg` differ only at roundoff (`0` to `~6e-16`; `gxy` local relative
+  `~4e-13`).
+- Primitive cell states are already asymmetric before x3 reconstruction:
+  stage 1 `cc_km1_rho`/`cc_k_rho` parity-adjusted differences are
+  `3.102e-8` with local relative `5.049e-4`; stage 2 differences grow to
+  `3.415e-8` with local relative `5.717e-4`.
+- Reconstructed x3 states inherit the asymmetry:
+  stage 1 `wl_rho`/`wr_rho` differences are `7.808e-9` with local relative
+  `1.155e-4`; stage 2 differences are `8.611e-9` with local relative
+  `1.311e-4`.
+- The sampled x3 mass flux has opposite sign across the y mirror pair
+  (`-2.40e-11` versus `+2.40e-11` at stage 1; `-2.71e-11` versus `+2.71e-11`
+  at stage 2). Since the primitive states are already asymmetric, this is not
+  yet evidence that the Riemann solver is the first source.
+
+Interpretation: the late-time zero-feedback break is upstream of x3
+reconstruction/Riemann and not caused by asymmetric ADM values at the GRMHD
+flux-consumption point. The next discriminator should target cycle 0/1 with
+`ATHENA_SYM_DEBUG`/`ATHENA_FLUX_DEBUG` and the x3 probe enabled to identify
+whether the first nonzero density asymmetry appears in flux computation,
+flux correction, RK update, source terms, conservative-variable communication,
+prolongation, or the subsequent conserved-to-primitive conversion.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
@@ -82,9 +119,11 @@ used by `ATHENA_FLUX_DEBUG`.
 
 Current best classification: the necessary path is not matter feedback into Z4c.
 The break is isolated to the fluid evolution running in the coupled Z4c/ADM
-context, most likely the ADM-to-GRMHD data path, dynamic x3 reconstruction/flux
-inputs, or coupled boundary/refinement/task-order communication feeding those
-inputs. The next decisive probe should compare parity pairs for the ADM fields
-actually consumed by `DynGRMHD_CalcFluxes` immediately before x3 reconstruction,
-then dump the x3 left/right primitive and metric states at the same target
-locations used by `ATHENA_FLUX_DEBUG`.
+context. The cycle-19 x3 diagnostic shows the sampled ADM values are symmetric
+at the GRMHD consumption point, while primitive and reconstructed fluid states
+are already asymmetric before x3 reconstruction/Riemann. Current best remaining
+classes are dynamic MHD update/source terms, fluid ghost/boundary/refinement
+communication, or task ordering feeding the primitive state used by x3
+reconstruction. The next decisive probe should instrument cycle 0/1 around
+`MHD_RecvFlux`, `MHD_RKUpdate`, `MHD_SrcTerms`, `MHD_RecvU`,
+`MHD_Prolongate`, and `MHD_AfterC2P`.
