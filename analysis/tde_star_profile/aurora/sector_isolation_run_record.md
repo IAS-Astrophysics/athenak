@@ -80,6 +80,7 @@ used by `ATHENA_FLUX_DEBUG`.
 | `schwarzschild_zero_feedback_c2pdebug_c0_n1` | `8523033` | Complete; built from commit `254a131e` and enabled `ATHENA_C2P_DEBUG=1`, `ATHENA_C2P_DEBUG_CYCLE=0`, `ATHENA_SYM_X_TARGET=20.03125`, and `ATHENA_SYM_Z_TARGET=0.0` with `time/nlim=1`. The final high-density density metric matches the cycle-0 debug run: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_c2pdebug_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_c2pdebug_c0_n1` |
 | `schwarzschild_zero_feedback_rkvars_c0_n1` | `8523062` | Complete; built from commit `628cecc2` and enabled expanded `ATHENA_SYM_DEBUG`, `ATHENA_FLUX_DEBUG`, and `ATHENA_C2P_DEBUG` at cycle 0 with `time/nlim=1`. The final high-density density metric again matches the one-cycle break: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. The first nonzero conserved-variable asymmetry at the target appears after stage-1 `MHD_SrcTerms`, not in flux/RK. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_rkvars_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_rkvars_c0_n1` |
 | `schwarzschild_zero_feedback_coordsrc_c0_n1` | `8523105` | Complete; built from commit `a9499420` and enabled `ATHENA_COORDSRC_DEBUG=1`, `ATHENA_COORDSRC_DEBUG_CYCLE=0`, `ATHENA_COORDSRC_DEBUG_STAGE=1`, `ATHENA_C2P_DEBUG=1`, `ATHENA_SYM_X_TARGET=20.03125`, and `ATHENA_SYM_Z_TARGET=0.0` with `time/nlim=1`. The final high-density density metric again matches the one-cycle break: Linf abs `2.473825588822365e-10`, local-relative Linf `6.328741409524629e-6`, peak-relative Linf `2.6777820876067915e-6`. `COORDSRCDBG` shows the high-density mirror pair has symmetric pre-source conserved variables, but the below-side source sees `alpha=0` and `beta=(0,0,0)` with zero lapse/shift derivatives and therefore adds zero momentum/energy source, while the above side sees the expected full lapse/shift and adds the nonzero source. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_coordsrc_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_coordsrc_c0_n1` |
+| `schwarzschild_zero_feedback_coordsrc_fix_c0_n1` | `8523135` | Complete; built from candidate fix commit `553a15c5`, which makes `ADM::u_adm` own lapse/shift instead of aliasing Z4c `u0`. Local build and tiny coordinate-source smoke passed before submission. The one-cycle high-density (`rho > 1e-8`) density asymmetry is eliminated in both `xy` and `xz`: L2 abs `0`, Linf abs `0`, L2/Linf local-relative `0`, and L2/Linf peak-relative `0` at cycle 1/time `0.0125`. `COORDSRCDBG` confirms both high-density mirror partners now receive full parity-correct lapse/shift and add parity-correct nonzero source increments. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_coordsrc_fix_c0_n1` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_coordsrc_fix_c0_n1` |
 
 Diagnostic stdout:
 
@@ -87,6 +88,7 @@ Diagnostic stdout:
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_c2pdbg.o8523033`
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_rkvars.o8523062`
 - `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_coordsrc.o8523105`
+- `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_zero_fb_coordsrc_fix.o8523135`
 
 Key cycle-19 result at `x=20.03125`, `y=+-0.03125`, `zface=0`:
 
@@ -212,6 +214,34 @@ most likely root is that MHD coordinate sources are reading Z4c residual/RK
 stage storage instead of a stable reconstructed-full ADM cache. A focused fix
 should make the ADM cache own lapse and shift as well, or otherwise enforce a
 single stable full-ADM data path for GRMHD source/flux consumption.
+
+One-cycle candidate-fix result:
+
+- Commit `553a15c5` changes `ADM::ADM` so `ADM::u_adm` always allocates all
+  `nadm` fields and `adm.alpha`/`adm.beta_u` always shallow-slice that cache,
+  rather than aliasing `pz4c->u0` when Z4c is present.
+- Local validation passed:
+  `cmake --build build_sector_builtin --target athena -j 8`, followed by the
+  tiny coordinate-source smoke with `ATHENA_COORDSRC_DEBUG=1`.
+- The Aurora GPU executable rebuilt successfully at
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/build/aurora-intel-gpu-z4c_tov_ks/src/athena`.
+- Job `8523135` with `time/nlim=1` eliminates the one-cycle high-density
+  density break: for `mhd_dens`, `rho > 1e-8`, cycle 1/time `0.0125`, both
+  `xy` and `xz` report L2 abs `0`, Linf abs `0`, L2/Linf local-relative `0`,
+  and L2/Linf peak-relative `0`.
+- At the high-density target pair, both sides now receive
+  `alpha=0.95353031364429219` and parity-correct
+  `beta=(0.09077972002248523, +/-0.00014162202811620161,
+  0.00014162202811620161)`. The source increments are also parity-correct:
+  `src_momx=-2.0970968379518207e-09`, `src_momy=+-2.6777243867e-12`,
+  `src_momz=-2.6777243867284305e-12`, and
+  `src_tau=2.039226465360487e-10`.
+
+Interpretation update: the stale Z4c-backed ADM lapse/shift aliasing path is
+confirmed as the cause of the cycle-0/stage-1 zero-feedback coordinate-source
+symmetry break. The next validation gate is the longer dense
+`schwarzschild_zero_feedback_smr_dense` run with the same fix, followed by the
+full coupled infall run if zero-feedback stays at the Minkowski/SMR baseline.
 
 ## Dense Matrix Classification
 
