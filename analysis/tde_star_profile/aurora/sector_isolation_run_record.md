@@ -66,6 +66,7 @@ used by `ATHENA_FLUX_DEBUG`.
 | --- | --- | --- | --- | --- |
 | `minkowski_static_uniform_dense` | `8522794` | Complete; MHD `dens`, `velx`, `vely`, and `velz` are exactly symmetric in the `all`, `rho > 1e-12`, and `rho > 1e-10` masks. The `rho > 1e-8` mask has no valid central-window pairs. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/minkowski_static_uniform_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_uniform_dense` |
 | `minkowski_static_smr_dense` | `8522837` | Complete; MHD density is exactly symmetric in all masks. High-density (`rho > 1e-8`) velocity differences are small: max Linf abs `1.14e-11` (`velx`), `1.36e-11` (`vely`), `5.91e-12` (`velz`), with max Linf peak-relative `2.09e-6`. ADM checked fields remain symmetric. Z4c has a refinement-only baseline: `z4c_Theta` max Linf abs `1.44e-5`, max Linf peak-relative `1.0`, and `z4c_Gamy/Gamz` max Linf abs about `1e-10`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/minkowski_static_smr_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_smr_dense` |
+| `minkowski_static_smr_dense_fix` | `8523172` | Complete; post-fix regression spot-check matches the SMR baseline class. MHD density remains exactly symmetric in the high-density (`rho > 1e-8`) mask through cycle 20/time `0.25`. High-density velocity differences are small and comparable to the pre-fix baseline: final/worst Linf abs `1.14e-11` (`velx`), `1.36e-11` (`vely`), and `5.91e-12` (`velz`), with max Linf peak-relative `2.09e-6`. The known refinement/static-star Z4c/ADM baseline remains: `z4c_Theta` final Linf abs `1.44e-5`, `adm_Kxx/Kyy/Kzz` final Linf abs `7.18e-6`. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/minkowski_static_smr_dense_fix` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_smr_dense_fix` |
 | `schwarzschild_infall_smr_dense` | `8522851` | Complete; reproduced a coherent coupled-infall MHD symmetry break above the Minkowski baselines. High-density (`rho > 1e-8`) density asymmetry grows monotonically from zero to cycle 20/time `0.25` in both `xy` and `xz`: max Linf abs `3.40e-8`, Linf local-relative `1.97e-3`, Linf peak-relative `3.55e-4`, L2 peak-relative `8.14e-5`. High-density velocity max Linf abs at final time is `4.07e-4` (`velx`), `8.20e-6` (`vely` in `xy` / `velz` in `xz`), and `4.21e-7` (`velz` in `xy` / `vely` in `xz`). | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_infall_smr_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_infall_smr_dense` |
 | `schwarzschild_zero_feedback_smr_dense` | `8522863` | Complete; disabling matter feedback does not remove the MHD break. High-density (`rho > 1e-8`) density asymmetry at cycle 20/time `0.25` is nearly identical to the full coupled infall in both `xy` and `xz`: max Linf abs `3.42e-8`, Linf local-relative `1.97e-3`, Linf peak-relative `3.57e-4`, L2 peak-relative `8.15e-5`. High-density velocity asymmetry also matches the full coupled run. Z4c/ADM mirror differences stay small: `z4c_Theta` max Linf abs `1.46e-11`, `z4c_Gamy/Gamz` max Linf abs `2.91e-11`/`5.82e-11`, checked ADM fields zero. This points away from matter-feedback-to-Z4c as the necessary trigger and toward the ADM-to-GRMHD / x3 reconstruction path or coupled communication/task-order context. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_zero_feedback_smr_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_zero_feedback_smr_dense` |
 | `schwarzschild_fixed_mhd_tmunu_smr_dense` | `8522867` | Complete; frozen MHD remains exactly symmetric in the high-density masks. Z4c/ADM source-path asymmetry stays at absolute roundoff scale: largest Z4c all-mask Linf abs is `2.33e-10` (`Azz/Ayy`), `Gamz` max Linf abs `5.82e-11`, `Theta` max Linf abs `3.64e-12`; largest ADM all-mask Linf abs is `1.82e-12`. This does not reproduce the MHD density break and further points away from matter-source-to-Z4c as the main source. | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/schwarzschild_fixed_mhd_tmunu_smr_dense` | `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/schwarzschild_fixed_mhd_tmunu_smr_dense` |
@@ -301,11 +302,34 @@ MHD asymmetry through cycle 20/time `0.25`. This supports the hypothesis that
 the full-solver failure was downstream of the zero-feedback ADM-to-GRMHD
 lapse/shift aliasing bug, rather than matter feedback into Z4c.
 
+Minkowski post-fix baseline spot-check:
+
+- Job `8523172` reran `minkowski_static_smr_dense_fix` because the fix touches
+  shared ADM data consumed by GRMHD.
+- Stdout is archived at
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/submit/z4c_minkowski_fix_dense.o8523172`.
+- Metrics and plots are in
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/minkowski_static_smr_dense_fix`.
+- At cycle 20/time `0.25`, high-density (`rho > 1e-8`) MHD density remains
+  exactly symmetric in both `xy` and `xz`.
+- The small high-density velocity differences match the established SMR static
+  baseline: final/worst Linf abs is `1.1368683772161603e-11` for `velx`,
+  `1.3642420526593924e-11` for `vely`, and
+  `5.9117155615240335e-12` for `velz`; the largest velocity peak-relative Linf
+  is `2.0940192073106397e-6`.
+- The known refinement/static-star spacetime baseline is still present:
+  final `xy` `z4c_Theta` Linf abs `1.4356025531014893e-5`, and final `xy`
+  `adm_Kxx/Kyy/Kzz` Linf abs `7.1780009420763236e-6`. The `xz` plane remains
+  exactly symmetric for the checked ADM/Z4c fields.
+
+Interpretation update: the ADM cache fix does not regress the static
+Minkowski SMR baseline used to define acceptable dense-slice symmetry drift.
+
 ## Dense Matrix Classification
 
 - Fluid-only on frozen analytic Schwarzschild ADM: no break in the prior Stage A runs.
 - Spacetime-only / zero-matter Z4c: no macroscopic break in the prior Stage B runs.
-- Minkowski static baselines: uniform is exactly symmetric; SMR has zero density asymmetry and only tiny velocity differences, plus a refinement-only `z4c_Theta` baseline.
+- Minkowski static baselines: uniform is exactly symmetric; SMR has zero density asymmetry and only tiny velocity differences, plus a refinement-only `z4c_Theta`/extrinsic-curvature baseline. The post-fix SMR spot-check matches this baseline.
 - Full coupled Schwarzschild infall: fixed by the ADM cache change; dense cycle-20 high-density density and velocity metrics are exactly zero in both checked planes.
 - Coupled infall with `Tmunu` feedback disabled: fixed by the ADM cache change; dense cycle-20 high-density density metrics are exactly zero in both checked planes.
 - Fixed-fluid matter-source-to-Z4c cases, with retained and refreshed `Tmunu`: do not reproduce the MHD break.
