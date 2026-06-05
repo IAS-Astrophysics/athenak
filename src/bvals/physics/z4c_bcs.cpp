@@ -70,8 +70,8 @@ Real Extrapolate<4>(DvceArray5D<Real> u, const int m, const int n,
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void MeshBoundaryValues::Z4cBCs()
-// \brief Apply physical boundary conditions for all Z4c variables on the fine array at
+//! \fn void MeshBoundaryValues::Z4cBCs()
+//! \brief Apply physical boundary conditions for all Z4c variables on the fine array at
 //  faces of the MB which are at the edge of the computational domain. This is applied
 //  *after* prolongation (see Z4c::Prolongate / Z4c::ApplyPhysicalBCs), so that the
 //  corner ghost zones between a coarse neighbor and a physical boundary -- which are
@@ -106,8 +106,8 @@ void MeshBoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void MeshBoundaryValues::Z4cBCsCoarse()
-// \brief Apply physical boundary conditions for all Z4c variables on the coarse array.
+//! \fn void MeshBoundaryValues::Z4cBCsCoarse()
+//! \brief Apply physical boundary conditions for all Z4c variables on the coarse array.
 //  This must be done *before* prolongation so that the prolongation stencil has valid
 //  data in the coarse ghost zones that sit at a physical boundary.
 void MeshBoundaryValues::Z4cBCsCoarse(MeshBlockPack *ppack, DualArray2D<Real> u_in,
