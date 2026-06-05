@@ -621,8 +621,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) phydro->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
     (void) phydro->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
     (void) phydro->RecvU_Shr(this, 0);
-    (void) phydro->ApplyPhysicalBCs(this, 0);
-    (void) phydro->Prolongate(this, 0);
+    (void) phydro->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) phydro->ApplyPhysicalBCs(this, 0); // fine grid BCs
     (void) phydro->ConToPrim(this, 0);
   }
 
@@ -646,8 +646,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr, SendB_Shr
     (void) pmhd->RecvU_Shr(this, 0);
     (void) pmhd->RecvB_Shr(this, 0);
-    (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->Prolongate(this, 0);
+    (void) pmhd->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pmhd->ApplyPhysicalBCs(this, 0); // fine grid BCs
     if (pdyngr == nullptr) {
       (void) pmhd->ConToPrim(this, 0);
     } else {
