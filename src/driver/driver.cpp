@@ -668,8 +668,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->ClearSend(this, -1);
     (void) prad->ClearRecv(this, -1);
     (void) prad->RecvI(this, 0);
-    (void) prad->ApplyPhysicalBCs(this, 0);
-    (void) prad->Prolongate(this, 0);
+    (void) prad->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) prad->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   // Initialize radiation M1: ghost zones and intensity (everywhere)

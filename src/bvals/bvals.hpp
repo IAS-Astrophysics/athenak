@@ -142,6 +142,7 @@ class MeshBoundaryValues {
   static void HydroBCsCoarse(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> coarse_u0);
   static void BFieldBCsCoarse(MeshBlockPack *pp, DualArray2D<Real> bin, DvceFaceFld4D<Real> coarse_b0);
   static void RadiationBCs(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> i0);
+  static void RadiationBCsCoarse(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> coarse_i0);
   static void RadiationM1BCs(MeshBlockPack *pp,DualArray2D<Real> iin,DvceArray5D<Real> i0,
                              DvceArray5D<Real> coarse_i0);
   static void Z4cBCs(MeshBlockPack *pp, DualArray2D<Real> uin, DvceArray5D<Real> u0);
