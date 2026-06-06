@@ -658,3 +658,30 @@ IOWrapperSizeT IOWrapper::GetPosition(bool single_file_per_rank) {
   return pos;
 #endif
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn IOWrapperSizeT IOWrapper::GetSize(bool single_file_per_rank)
+//  \brief wrapper for {MPI_File_get_size} versus ftell/seek-to-end
+
+IOWrapperSizeT IOWrapper::GetSize(bool single_file_per_rank) {
+#if MPI_PARALLEL_ENABLED
+  if (!single_file_per_rank) {
+    MPI_Offset size;
+    MPI_File_get_size(fh_, &size);
+    return size;
+  } else {
+    FILE *fh = reinterpret_cast<FILE*>(fh_);
+    int64_t pos = ftell(fh);
+    std::fseek(fh, 0, SEEK_END);
+    int64_t size = ftell(fh);
+    std::fseek(fh, pos, SEEK_SET);
+    return size;
+  }
+#else
+  int64_t pos = ftell(fh_);
+  std::fseek(fh_, 0, SEEK_END);
+  int64_t size = ftell(fh_);
+  std::fseek(fh_, pos, SEEK_SET);
+  return size;
+#endif
+}

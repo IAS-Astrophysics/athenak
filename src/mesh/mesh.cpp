@@ -26,6 +26,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
@@ -620,6 +621,9 @@ void Mesh::NewTimeStep(const Real tlim) {
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
+  }
+  if (pmb_pack->pdynrad != nullptr) {
+    dt = std::min(dt, (cfl_no)*(pmb_pack->pdynrad->dtnew) );
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {

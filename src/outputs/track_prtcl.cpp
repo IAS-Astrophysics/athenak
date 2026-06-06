@@ -14,8 +14,10 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -48,34 +50,40 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
   int npart = pm->nprtcl_thisrank;
   auto &pr = pm->pmb_pack->ppart->prtcl_rdata;
   auto &pi = pm->pmb_pack->ppart->prtcl_idata;
-  int counter=0;
-  int *pcounter = &counter;
+  DvceArray1D<int> counter("tracked_particle_counter", 1);
+  Kokkos::deep_copy(counter, 0);
+  auto tracked_prtcl_d = tracked_prtcl.d_view;
+  int ntrack_thisrank_ = ntrack_thisrank;
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
-    if (pi(PTAG,p) < ntrack) {
-      int index = Kokkos::atomic_fetch_add(pcounter,1);
-      tracked_prtcl.d_view(index).tag = pi(PTAG,p);
-      tracked_prtcl.d_view(index).x   = pr(IPX,p);
-      tracked_prtcl.d_view(index).y   = pr(IPY,p);
-      tracked_prtcl.d_view(index).z   = pr(IPZ,p);
-      tracked_prtcl.d_view(index).vx  = pr(IPVX,p);
-      tracked_prtcl.d_view(index).vy  = pr(IPVY,p);
-      tracked_prtcl.d_view(index).vz  = pr(IPVZ,p);
+    if ((pi(PTAG,p) >= 0) && (pi(PTAG,p) < ntrack)) {
+      int index = Kokkos::atomic_fetch_add(&counter(0), 1);
+      if (index < ntrack_thisrank_) {
+        tracked_prtcl_d(index).tag = pi(PTAG,p);
+        tracked_prtcl_d(index).x   = pr(IPX,p);
+        tracked_prtcl_d(index).y   = pr(IPY,p);
+        tracked_prtcl_d(index).z   = pr(IPZ,p);
+        tracked_prtcl_d(index).vx  = pr(IPVX,p);
+        tracked_prtcl_d(index).vy  = pr(IPVY,p);
+        tracked_prtcl_d(index).vz  = pr(IPVZ,p);
+      }
     }
   });
-  npout = counter;
+  auto counter_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), counter);
+  npout = std::min(counter_h(0), ntrack_thisrank);
   // share number of tracked particles to be output across all ranks
   npout_eachrank[global_variable::my_rank] = npout;
 #if MPI_PARALLEL_ENABLED
   MPI_Allgather(&npout, 1, MPI_INT, npout_eachrank.data(), 1, MPI_INT, MPI_COMM_WORLD);
 #endif
-  tracked_prtcl.resize(npout);
   // sync tracked particle device array with host
   tracked_prtcl.template modify<DevExeSpace>();
   tracked_prtcl.template sync<HostMemSpace>();
 
   // copy host view into host outpart array
   Kokkos::realloc(outpart, npout);
-  Kokkos::deep_copy(outpart, tracked_prtcl.h_view);
+  for (int p=0; p<npout; ++p) {
+    outpart(p) = tracked_prtcl.h_view(p);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -84,84 +92,91 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
 //! With MPI, all particles are written to the same file.
 
 void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  int big_end = IsBigEndian(); // =1 on big endian machine
-
   // create filename: "trk/file_basename".trk
   std::string fname;
   fname.assign("trk/");
   fname.append(out_params.file_basename);
   fname.append(".trk");
 
-  // Root process opens/creates file and appends string
+  std::sort(outpart.data(), outpart.data() + npout,
+            [](const TrackedParticleData &a, const TrackedParticleData &b) {
+              return a.tag < b.tag;
+            });
+  std::vector<int> local_tags(npout);
+  std::vector<float> local_data(6*npout);
+  for (int p=0; p<npout; ++p) {
+    local_tags[p] = outpart(p).tag;
+    local_data[ 6*p   ] = static_cast<float>(outpart(p).x);
+    local_data[(6*p)+1] = static_cast<float>(outpart(p).y);
+    local_data[(6*p)+2] = static_cast<float>(outpart(p).z);
+    local_data[(6*p)+3] = static_cast<float>(outpart(p).vx);
+    local_data[(6*p)+4] = static_cast<float>(outpart(p).vy);
+    local_data[(6*p)+5] = static_cast<float>(outpart(p).vz);
+  }
+
+  std::vector<int> all_tags;
+  std::vector<float> all_data;
+#if MPI_PARALLEL_ENABLED
+  std::vector<int> tag_displs(global_variable::nranks);
+  std::vector<int> data_counts(global_variable::nranks);
+  std::vector<int> data_displs(global_variable::nranks);
+  int total_npout = 0;
+  for (int n=0; n<global_variable::nranks; ++n) {
+    tag_displs[n] = total_npout;
+    data_counts[n] = 6*npout_eachrank[n];
+    data_displs[n] = 6*total_npout;
+    total_npout += npout_eachrank[n];
+  }
   if (global_variable::my_rank == 0) {
+    all_tags.resize(total_npout);
+    all_data.resize(6*total_npout);
+  }
+  MPI_Gatherv(local_tags.empty() ? nullptr : local_tags.data(), npout, MPI_INT,
+              all_tags.empty() ? nullptr : all_tags.data(), npout_eachrank.data(),
+              tag_displs.data(), MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(local_data.empty() ? nullptr : local_data.data(), 6*npout, MPI_FLOAT,
+              all_data.empty() ? nullptr : all_data.data(), data_counts.data(),
+              data_displs.data(), MPI_FLOAT, 0, MPI_COMM_WORLD);
+#else
+  all_tags = std::move(local_tags);
+  all_data = std::move(local_data);
+#endif
+
+  if (global_variable::my_rank == 0) {
+    std::vector<float> tag_ordered_data(6*ntrack,
+                                        std::numeric_limits<float>::quiet_NaN());
+    for (std::size_t p=0; p<all_tags.size(); ++p) {
+      int tag = all_tags[p];
+      if (tag < 0 || tag >= ntrack) {
+        continue;
+      }
+      for (int n=0; n<6; ++n) {
+        tag_ordered_data[6*tag + n] = all_data[6*p + n];
+      }
+    }
+
+    FILE *pfile;
+    if ((pfile = std::fopen(fname.c_str(),"a")) == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Output file '" << fname << "' could not be opened"
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
     std::stringstream msg;
     msg << std::endl << "# AthenaK tracked particle data at time= " << pm->time
         << "  nranks= " << global_variable::nranks
         << "  cycle=" << pm->ncycle
         << "  ntracked_prtcls=" << ntrack << std::endl;
-    FILE *pfile;
-    if ((pfile = std::fopen(fname.c_str(),"a")) == nullptr) {
+    std::fprintf(pfile,"%s \n",msg.str().c_str());
+    if (std::fwrite(tag_ordered_data.data(), sizeof(float),
+                    tag_ordered_data.size(), pfile) != tag_ordered_data.size()) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-        << std::endl << "Output file '" << fname << "' could not be opened" <<std::endl;
+                << std::endl << "particle data not written correctly to tracked particle "
+                << "file" << std::endl;
       exit(EXIT_FAILURE);
     }
-    std::fprintf(pfile,"%s \n",msg.str().c_str());
     std::fclose(pfile);
   }
-
-  // Now all ranks open file and append data
-  IOWrapper partfile;
-  partfile.Open(fname.c_str(), IOWrapper::FileMode::append);
-  std::size_t header_offset = partfile.GetPosition();
-//  std::size_t header_offset = 0;
-
-  // allocate 1D vector of floats used to convert and output particle data
-  float *data = new float[6*npout];
-  // Loop over particles, load positions into data[]
-  for (int p=0; p<npout; ++p) {
-    data[ 6*p   ] = static_cast<float>(outpart(p).x);
-    data[(6*p)+1] = static_cast<float>(outpart(p).y);
-    data[(6*p)+2] = static_cast<float>(outpart(p).z);
-    data[(6*p)+3] = static_cast<float>(outpart(p).vx);
-    data[(6*p)+4] = static_cast<float>(outpart(p).vy);
-    data[(6*p)+5] = static_cast<float>(outpart(p).vz);
-  }
-  // calculate local data offset
-  std::vector<int> rank_offset(global_variable::nranks, 0);
-  int npout_min = pm->nprtcl_eachrank[0];
-  for (int n=1; n<global_variable::nranks; ++n) {
-    rank_offset[n] = rank_offset[n-1] + npout_eachrank[n-1];
-    npout_min = std::min(npout_min, npout_eachrank[n]);
-  }
-
-  // Write tracked particle data collectively over minimum shared number of prtcls
-  for (int p=0; p<npout_min; ++p) {
-    // offset computed assuming tags run 0...(ntrack-1) sequentially
-    std::size_t myoffset = header_offset + 6*outpart(p).tag;
-    // Write particle positions collectively for minimum number of particles across ranks
-    if (partfile.Write_any_type_at_all(&(data[0]),6,myoffset,"float") != 6) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "particle data not written correctly to tracked particle file"
-          << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-  // Write particle positions individually for remaining particles on each rank
-  for (int p=npout_min; p<npout; ++p) {
-    // offset computed assuming tags run 0...(ntrack-1) sequentially
-    std::size_t myoffset = header_offset + 6*outpart(p).tag;
-    // Write particle positions collectively for minimum number of particles across ranks
-    if (partfile.Write_any_type_at(&(data[0]),6,myoffset,"float") != 6) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "particle data not written correctly to tracked particle file"
-          << std::endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  // close the output file and clean up
-  partfile.Close();
-  delete[] data;
 
   // increment counters
   if (out_params.last_time < 0.0) {

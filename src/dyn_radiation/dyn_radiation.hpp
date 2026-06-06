@@ -1,0 +1,310 @@
+#ifndef DYN_RADIATION_DYN_RADIATION_HPP_
+#define DYN_RADIATION_DYN_RADIATION_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file dyn_radiation.hpp
+//  \brief definitions for Radiation class
+
+#include <map>
+#include <memory>
+#include <string>
+
+#include "athena.hpp"
+#include "parameter_input.hpp"
+#include "tasklist/task_list.hpp"
+#include "bvals/bvals.hpp"
+
+// forward declarations
+class EquationOfState;
+class Coordinates;
+class SourceTerms;
+class GeodesicGrid;
+class Driver;
+
+//----------------------------------------------------------------------------------------
+//! \struct DynRadiationTaskIDs
+//  \brief container to hold TaskIDs of all dyn_radiation tasks
+
+struct DynRadiationTaskIDs {
+  TaskID rad_irecv;
+  TaskID mhd_irecv;
+  TaskID hyd_irecv;
+  TaskID copyu;
+  TaskID rad_geom;
+  TaskID rad_flux;
+  TaskID mhd_flux;
+  TaskID hyd_flux;
+  TaskID rad_sendf;
+  TaskID mhd_sendf;
+  TaskID hyd_sendf;
+  TaskID rad_recvf;
+  TaskID mhd_recvf;
+  TaskID hyd_recvf;
+  TaskID rad_rkupdt;
+  TaskID mhd_rkupdt;
+  TaskID hyd_rkupdt;
+  TaskID rad_src;
+  TaskID mhd_src;
+  TaskID hyd_src;
+  TaskID rad_coupl;
+  TaskID rad_resti;
+  TaskID hyd_restu;
+  TaskID mhd_restu;
+  TaskID rad_sendi;
+  TaskID mhd_sendu;
+  TaskID hyd_sendu;
+  TaskID rad_recvi;
+  TaskID mhd_recvu;
+  TaskID hyd_recvu;
+  TaskID mhd_efld;
+  TaskID mhd_sende;
+  TaskID mhd_recve;
+  TaskID mhd_ct;
+  TaskID mhd_restb;
+  TaskID mhd_sendb;
+  TaskID mhd_recvb;
+  TaskID bcs;
+  TaskID rad_prol;
+  TaskID rad_newdt;
+  TaskID mhd_prol;
+  TaskID hyd_prol;
+  TaskID mhd_c2p;
+  TaskID hyd_c2p;
+  TaskID rad_csend;
+  TaskID mhd_csend;
+  TaskID hyd_csend;
+  TaskID rad_crecv;
+  TaskID mhd_crecv;
+  TaskID hyd_crecv;
+};
+
+namespace dyn_radiation {
+
+// The transport and coupling updates can create small negative angular bins near
+// sharp features.  Redistribute the negative weighted angular energy over the
+// positive bins in the same cell, preserving the cell-integrated radiation
+// energy whenever that integral is nonnegative.
+template<typename IView, typename SolidAngles>
+KOKKOS_INLINE_FUNCTION
+void ConservativeAngularFloor(IView i0, SolidAngles solid_angles,
+                              const int m, const int k, const int j, const int i,
+                              const int nang1) {
+  Real positive = 0.0;
+  Real deficit = 0.0;
+  for (int n=0; n<=nang1; ++n) {
+    const Real value = i0(m,n,k,j,i);
+    if (!(Kokkos::isfinite(value))) {
+      i0(m,n,k,j,i) = 0.0;
+      continue;
+    }
+    const Real weighted_i = value*solid_angles.d_view(n);
+    if (value < 0.0) {
+      deficit -= weighted_i;
+    } else {
+      positive += weighted_i;
+    }
+  }
+  if (deficit <= 0.0) { return; }
+
+  if (positive > deficit) {
+    const Real scale = (positive - deficit)/positive;
+    for (int n=0; n<=nang1; ++n) {
+      if (i0(m,n,k,j,i) > 0.0) {
+        i0(m,n,k,j,i) *= scale;
+      } else {
+        i0(m,n,k,j,i) = 0.0;
+      }
+    }
+  } else {
+    for (int n=0; n<=nang1; ++n) {
+      i0(m,n,k,j,i) = 0.0;
+    }
+  }
+}
+
+template<typename IView, typename SolidAngles, typename TetradView,
+         typename TetradCovView, typename NhView>
+KOKKOS_INLINE_FUNCTION
+void ConservativePrimitiveAngularFloor(IView i0, SolidAngles solid_angles,
+                                       TetradView tet_c, TetradCovView tetcov_c,
+                                       NhView nh_c,
+                                       const int m, const int k, const int j, const int i,
+                                       const int nang1) {
+  Real positive = 0.0;
+  Real deficit = 0.0;
+  for (int n=0; n<=nang1; ++n) {
+    Real n_0 = 0.0;
+    for (int d=0; d<4; ++d) {
+      n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+    }
+    const Real norm = tet_c(m,0,0,k,j,i)*n_0;
+    if (!(Kokkos::isfinite(norm)) || norm == 0.0) {
+      i0(m,n,k,j,i) = 0.0;
+      continue;
+    }
+    const Real intensity = i0(m,n,k,j,i)/norm;
+    if (!(Kokkos::isfinite(intensity))) {
+      i0(m,n,k,j,i) = 0.0;
+      continue;
+    }
+    const Real weighted_i = intensity*solid_angles.d_view(n);
+    if (intensity < 0.0) {
+      deficit -= weighted_i;
+    } else {
+      positive += weighted_i;
+    }
+  }
+  if (deficit <= 0.0) { return; }
+
+  if (positive > deficit) {
+    const Real scale = (positive - deficit)/positive;
+    for (int n=0; n<=nang1; ++n) {
+      Real n_0 = 0.0;
+      for (int d=0; d<4; ++d) {
+        n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+      }
+      const Real norm = tet_c(m,0,0,k,j,i)*n_0;
+      if (!(Kokkos::isfinite(norm)) || norm == 0.0) {
+        i0(m,n,k,j,i) = 0.0;
+        continue;
+      }
+      const Real intensity = i0(m,n,k,j,i)/norm;
+      if (!(Kokkos::isfinite(intensity)) || intensity <= 0.0) {
+        i0(m,n,k,j,i) = 0.0;
+      } else {
+        i0(m,n,k,j,i) = norm*intensity*scale;
+      }
+    }
+  } else {
+    for (int n=0; n<=nang1; ++n) {
+      i0(m,n,k,j,i) = 0.0;
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \class DynRadiation
+
+class DynRadiation {
+ public:
+  DynRadiation(MeshBlockPack *ppack, ParameterInput *pin);
+  ~DynRadiation();
+
+  // flags to denote hydro/mhd is enabled or units enabled
+  bool is_hydro_enabled;
+  bool is_mhd_enabled;
+  bool are_units_enabled;
+
+  // Radiation coupling term parameters
+  bool rad_source;          // flag to enable/disable dyn_radiation source term
+  bool fixed_fluid;         // flag to enable/disable fluid integration
+  bool affect_fluid;        // flag to enable/disable feedback of rad field on fluid
+  Real arad;                // dyn_radiation constant
+  Real kappa_a;             // constant Rosseland mean absoprtion coefficient
+  Real kappa_s;             // constant scattering coefficient
+  Real kappa_p;             // Planck - Rosseland mean coefficient
+  bool power_opacity;       // flag to enable Kramer's law opacity for kappa_a
+  bool is_compton_enabled;  // flag to enable/disable compton
+  int source_max_iter;      // nonlinear radiation-matter coupling iterations
+  Real source_tolerance;    // relative gas-temperature convergence tolerance
+  bool correct_radsrc_velocity; // optional radiation-dominated velocity correction
+  bool correct_radsrc_opacity;  // optional opacity-density correction
+  Real dfloor_opacity;      // density floor used by opacity correction
+  Real dens_trunc_max;      // maximum density truncation scale
+  Real tau_truncation;      // optical-depth truncation parameter
+  Real sigmoid_residual;    // residual of smooth opacity-density transition
+
+  // dyn_radiation source term (i.e., beam)
+  SourceTerms *psrc = nullptr;
+
+  // Angular mesh
+  bool use_adm_geometry;             // use ADM fields instead of analytic CKS geometry
+  bool adm_metric_source;            // include ADM lapse/K geometric energy source
+  bool angular_frame_initialized;     // nh_c/nh_f have been initialized from prgeo
+  bool rotate_geo;                    // rotate geodesic mesh
+  bool angular_fluxes;                // flag to enable/disable angular fluxes
+  Real n_0_floor;                     // floor on n_0
+  GeodesicGrid *prgeo = nullptr;      // pointer to dyn_radiation angular mesh
+
+  // Tetrad arrays and functions
+  DualArray2D<Real> nh_c;             // normal vector computed at face center
+  DualArray3D<Real> nh_f;             // normal vector computed at face edges
+  DvceArray6D<Real> tet_c;            // tetrad components at cell centers
+  DvceArray6D<Real> tetcov_c;         // covariant tetrad components at cell centers
+  DvceArray5D<Real> tet_d1_x1f;       // tetrad components (subset) at x1f
+  DvceArray5D<Real> tet_d2_x2f;       // tetrad components (subset) at x2f
+  DvceArray5D<Real> tet_d3_x3f;       // tetrad components (subset) at x3f
+  DvceArray4D<Real> sqrt_detg_c;      // sqrt(det gamma_ij) at cell centers
+  DvceArray4D<Real> sqrt_detg_x1f;    // sqrt(det gamma_ij) at x1 faces
+  DvceArray4D<Real> sqrt_detg_x2f;    // sqrt(det gamma_ij) at x2 faces
+  DvceArray4D<Real> sqrt_detg_x3f;    // sqrt(det gamma_ij) at x3 faces
+  DvceArray4D<Real> adm_alpha_c;       // cached ADM lapse at cell centers
+  DvceArray5D<Real> adm_beta_u_c;      // cached ADM shift at cell centers
+  DvceArray6D<Real> adm_g_dd_c;        // cached ADM spatial metric at cell centers
+  DvceArray6D<Real> adm_g_uu_c;        // cached ADM inverse spatial metric at cell centers
+  DvceArray6D<Real> adm_K_dd_c;        // cached ADM extrinsic curvature at cell centers
+  DvceArray6D<Real> adm_cotriad_c;     // cached ADM spatial co-triad e^a_i
+  DvceArray5D<Real> adm_grad_alpha_c;  // cached spatial derivatives of lapse
+  DvceArray5D<Real> adm_grad_beta_u_c; // cached spatial derivatives of shift
+  DvceArray5D<Real> adm_grad_g_dd_c;   // cached spatial derivatives of gamma_ij
+  DvceArray5D<Real> adm_grad_g_uu_c;   // cached spatial derivatives of gamma^ij
+  DvceArray5D<Real> adm_grad_cotriad_c;// cached spatial derivatives of co-triad
+  DvceArray5D<Real> adm_dt_cotriad_c;  // cached coordinate-time derivative of co-triad
+  DvceArray6D<Real> na;               // n^a
+  DvceArray6D<Real> norm_to_tet;      // used in transform b/w normal frame and tet frame
+  void SetOrthonormalTetrad();
+
+  // intensity arrays
+  DvceArray5D<Real> i0;         // intensities
+  DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
+
+  // Boundary communication buffers and functions for i
+  MeshBoundaryValuesCC *pbval_i;
+
+  // following only used for time-evolving flow
+  DvceArray5D<Real> i1;         // intensity at intermediate step
+  DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
+  DvceArray5D<Real> divfa;      // angular flux divergence
+  Real dtnew;
+
+  // reconstruction method
+  ReconstructionMethod recon_method;
+
+  // container to hold names of TaskIDs
+  DynRadiationTaskIDs id;
+
+  // functions...
+  void AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  void QueueDynRadiationTasks();
+  void PrepareADMGeometry();
+  TaskStatus PrepareGeometryTask(Driver *d, int stage);
+  // ...in "before_stagen_tl" task list
+  TaskStatus InitRecv(Driver *d, int stage);
+  // ...in "stagen_tl" task list
+  TaskStatus CopyCons(Driver *d, int stage);
+  TaskStatus CalculateFluxes(Driver *d, int stage);
+  TaskStatus SendFlux(Driver *d, int stage);
+  TaskStatus RecvFlux(Driver *d, int stage);
+  TaskStatus RKUpdate(Driver *d, int stage);
+  TaskStatus RadSrcTerms(Driver *d, int stage);
+  TaskStatus RadFluidCoupling(Driver *d, int stage);
+  TaskStatus AddTmunu(Driver *d, int stage);
+  TaskStatus RestrictI(Driver *d, int stage);
+  TaskStatus SendI(Driver *d, int stage);
+  TaskStatus RecvI(Driver *d, int stage);
+  TaskStatus ApplyPhysicalBCs(Driver* pdrive, int stage);
+  TaskStatus Prolongate(Driver* pdrive, int stage);
+  TaskStatus NewTimeStep(Driver *d, int stage);
+  // ...in "after_stagen_tl" task list
+  TaskStatus ClearSend(Driver *d, int stage);
+  TaskStatus ClearRecv(Driver *d, int stage);
+
+ private:
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Radiation
+};
+
+} // namespace dyn_radiation
+#endif // DYN_RADIATION_DYN_RADIATION_HPP_

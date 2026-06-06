@@ -30,6 +30,7 @@
 #include "diffusion/current_density.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "particles/particles.hpp"
 #include "utils/flux_generalized.hpp"
 #include "units/units.hpp"
 #include "srcterms/ismcooling.hpp"
@@ -222,7 +223,6 @@ struct bbh_pgen {
 
   Real dexcise, pexcise;                      // excision parameters
   Real arad;                                  // radiation constant
-  Real restart_seed_erad_fraction;            // multiplier for old GRMHD restart rad seed
   Real r_edge, r_peak, l, rho_max;            // fixed torus parameters
   Real l_peak;                                // fixed torus parameters
   Real c_param;                               // calculated chakrabarti parameter
@@ -537,32 +537,60 @@ KOKKOS_INLINE_FUNCTION
 Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
 Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3);
-
-void InitializeDynBBHRestartDynRadiation(Mesh *pm);
 } // namespace
 
 //----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::ShockTube_()
-//! \brief Problem Generator for the shock tube (Riemann problem) tests
+//! \fn ProblemGenerator::DynBBHBeam()
+//! \brief DynBBH ADM radiation beam/coupling smoke test
 
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-
+void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_general_relativistic &&
       !pmbp->pcoord->is_dynamical_relativistic) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "BBH problem can only be run when GR defined in <coord> block"
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "dynbbh_beam requires GR coordinates or ADM metric fields"
               << std::endl;
-    exit(EXIT_FAILURE);
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->padm == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh_beam requires an <adm> block" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->prad != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh_beam uses ADM metric data and requires "
+              << "<dyn_radiation>, not legacy <radiation>." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->pdynrad == nullptr || !(pmbp->pdynrad->use_adm_geometry)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh_beam requires <dyn_radiation> geometry='adm'"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh_beam is a Valencia GRMHD radiation-coupling "
+              << "smoke pgen and requires <mhd> with <adm>." << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
-  bbh.spin = 0.0;
+  auto read_real_alias = [pin](const char *primary, const char *alias,
+                              const Real fallback) {
+    if (pin->DoesParameterExist("problem", primary)) {
+      return pin->GetReal("problem", primary);
+    }
+    return pin->GetOrAddReal("problem", alias, fallback);
+  };
 
-  bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
+  bbh.spin = 0.0;
+  bbh.sep = pin->GetOrAddReal("problem", "sep", 4.0);
   bbh.om = std::pow(bbh.sep, -1.5);
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
-  bbh.a1 = pin->GetOrAddReal("problem", "a1", 0.0);
-  bbh.a2 = pin->GetOrAddReal("problem", "a2", 0.0);
+  bbh.a1 = read_real_alias("a1", "spin_a1", 0.0);
+  bbh.a2 = read_real_alias("a2", "spin_a2", 0.0);
   bbh.th_a1 = pin->GetOrAddReal("problem", "th_a1", 0.0) * (M_PI/180.0);
   bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0) * (M_PI/180.0);
   bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0) * (M_PI/180.0);
@@ -572,111 +600,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       "problem", "spin_ramp_timescale", 50.0);
   bbh.spin_ramp_start_time = pin->GetOrAddReal(
       "problem", "spin_ramp_start_time", pmbp->pmesh->time);
-  bbh.d = pin->GetOrAddReal("problem", "duniform", 1.0);
-  bbh.gamma_adi = pin->GetOrAddReal("problem", "gamma_adi", 1.6666666);
-  if (!SpinMagnitudeWithinExtremality(bbh.a1) ||
-      !SpinMagnitudeWithinExtremality(bbh.a2)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "Dimensionless spin magnitudes problem/a1 and problem/a2 "
-              << "must satisfy 0 <= chi <= 1"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (bbh.spin_ramp && (!(bbh.spin_ramp_timescale > 0.0) ||
-                        !std::isfinite(bbh.spin_ramp_start_time))) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "problem/spin_ramp requires positive spin_ramp_timescale "
-              << "and finite spin_ramp_start_time" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  bbh.d = 1.0;
+  bbh.gamma_adi = pmbp->pmhd->peos->eos_data.gamma;
   bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.01);
   bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.01);
-  bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-4);
+  bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1.0e-4);
   bbh.metric_fd_step = pin->GetOrAddReal("problem", "metric_fd_step", metric_fd_step);
-  if (!(bbh.metric_fd_step > 0.0)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "problem/metric_fd_step must be positive" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  std::string metric_derivative = pin->GetOrAddString(
-      "problem", "metric_derivative", "ad");
-  if (metric_derivative == "ad") {
-    bbh.metric_derivative_method = MetricDerivativeMethod::ad;
-  } else if (metric_derivative == "finite_difference" || metric_derivative == "fd") {
-    bbh.metric_derivative_method = MetricDerivativeMethod::finite_difference;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "Unknown problem/metric_derivative='" << metric_derivative
-              << "'. Use 'ad' or 'finite_difference'." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.2);
-  bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.);
-  int tracker_reflevel = pin->GetOrAddInteger("problem", "tracker_reflevel", -1);
-  bbh_ref.tracker_radius[0] = pin->GetOrAddReal("problem", "tracker_1_rad",
-                                                bbh.radius_thr);
-  bbh_ref.tracker_radius[1] = pin->GetOrAddReal("problem", "tracker_2_rad",
-                                                bbh.radius_thr);
-  bbh_ref.tracker_reflevel[0] = pin->GetOrAddInteger(
-      "problem", "tracker_1_reflevel", tracker_reflevel);
-  bbh_ref.tracker_reflevel[1] = pin->GetOrAddInteger(
-      "problem", "tracker_2_reflevel", tracker_reflevel);
-  if (!(bbh_ref.tracker_radius[0] > 0.0) || !(bbh_ref.tracker_radius[1] > 0.0) ||
-      bbh_ref.tracker_reflevel[0] < -1 || bbh_ref.tracker_reflevel[1] < -1) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "tracker radii must be positive and tracker reflevels must be >= -1"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (user_srcs) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "dynbbh cooling is selected with problem/cooling_source; "
-              << "use cooling_source=ism instead of problem/user_srcs=true"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (pin->DoesParameterExist("problem", "thin_disk_cooling")) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "problem/thin_disk_cooling is deprecated for dynbbh; use "
-              << "problem/cooling_source=thin_disk instead" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  std::string cooling_source = pin->GetOrAddString(
-      "problem", "cooling_source", "none");
-  if (cooling_source == "none") {
-    bbh.cooling_source = CoolingSource::none;
-  } else if (cooling_source == "ism") {
-    bbh.cooling_source = CoolingSource::ism;
-  } else if (cooling_source == "thin_disk") {
-    bbh.cooling_source = CoolingSource::thin_disk;
-  } else {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "Unknown problem/cooling_source='" << cooling_source
-              << "'. Use 'none', 'ism', or 'thin_disk'." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  bbh.smooth_b_damping = pin->GetOrAddBoolean(
-      "coord", "smooth_excision_b_damping", false);
-  bbh.smooth_b_damping_eta = pin->GetOrAddReal(
-      "coord", "smooth_excision_b_damping_eta", 0.0);
-  bbh.smooth_b_damping_cfl = pin->GetOrAddReal(
-      "coord", "smooth_excision_b_damping_cfl", 0.25);
-  if (bbh.smooth_b_damping &&
-      (!(bbh.smooth_b_damping_eta > 0.0) || bbh.smooth_b_damping_cfl < 0.0)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "smooth_excision_b_damping requires positive eta and "
-              << "non-negative cfl cap" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 2.0);
+  bbh.smooth_b_damping = false;
+  bbh.smooth_b_damping_eta = 0.0;
+  bbh.smooth_b_damping_cfl = 0.0;
   bbh.require_resolved_horizon = pin->GetOrAddBoolean(
       "coord", "require_resolved_horizon", false);
   bbh.puncture_excise_rad1 = pin->GetOrAddReal("coord", "excise_1_rad", -1.0);
@@ -690,1031 +624,211 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.puncture_excise_shrink_timescale = pin->GetOrAddReal(
       "coord", "excise_shrink_timescale", 50.0);
   bbh.puncture_excise_shrink_start_time = pmbp->pmesh->time;
-  if (bbh.puncture_excise_shrink_to_horizon &&
-      !(bbh.puncture_excise_shrink_timescale > 0.0)) {
+  bbh.cooling_source = CoolingSource::none;
+  bbh.thin_cooling_h_over_r = 0.0;
+  bbh.thin_cooling_timescale_orbits = 0.0;
+  bbh.thin_cooling_cfl = 0.0;
+  bbh.thin_cooling_r_inner = 0.0;
+  bbh.thin_cooling_r_outer = 0.0;
+  bbh.psi = 0.0;
+  bbh.sin_psi = 0.0;
+  bbh.cos_psi = 1.0;
+
+  if (!SpinMagnitudeWithinExtremality(bbh.a1) ||
+      !SpinMagnitudeWithinExtremality(bbh.a2)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "excise_shrink_to_horizon requires positive "
-              << "coord/excise_shrink_timescale" << std::endl;
+              << std::endl << "dynbbh_beam spin magnitudes must satisfy 0 <= chi <= 1"
+              << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  bbh.thin_cooling_h_over_r = pin->GetOrAddReal(
-      "problem", "thin_cooling_h_over_r", 0.03);
-  bbh.thin_cooling_timescale_orbits = pin->GetOrAddReal(
-      "problem", "thin_cooling_timescale_orbits", 1.0);
-  bbh.thin_cooling_cfl = pin->GetOrAddReal("problem", "thin_cooling_cfl", 0.5);
-  bbh.thin_cooling_r_inner = pin->GetOrAddReal(
-      "problem", "thin_cooling_r_inner", 0.0);
-  bbh.thin_cooling_r_outer = pin->GetOrAddReal(
-      "problem", "thin_cooling_r_outer", std::numeric_limits<Real>::max());
-  if (bbh.cooling_source == CoolingSource::thin_disk &&
-      (!(bbh.thin_cooling_h_over_r > 0.0) ||
-       !(bbh.thin_cooling_timescale_orbits > 0.0) ||
-       bbh.thin_cooling_cfl < 0.0 ||
-       bbh.thin_cooling_r_inner < 0.0 ||
-       !(bbh.thin_cooling_r_outer > bbh.thin_cooling_r_inner))) {
+  if (!(bbh.metric_fd_step > 0.0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "cooling_source=thin_disk requires positive thin_cooling_h_over_r "
-              << "and thin_cooling_timescale_orbits, non-negative "
-              << "thin_cooling_cfl and thin_cooling_r_inner, and "
-              << "thin_cooling_r_outer > thin_cooling_r_inner" << std::endl;
+              << std::endl << "problem/metric_fd_step must be positive" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  std::string metric_derivative = pin->GetOrAddString(
+      "problem", "metric_derivative", "ad");
+  if (metric_derivative == "ad") {
+    bbh.metric_derivative_method = MetricDerivativeMethod::ad;
+  } else if (metric_derivative == "finite_difference" || metric_derivative == "fd") {
+    bbh.metric_derivative_method = MetricDerivativeMethod::finite_difference;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unknown problem/metric_derivative='" << metric_derivative
+              << "'. Use 'ad' or 'finite_difference'." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   bbh.use_traj_table = pin->GetOrAddBoolean("problem", "use_traj_table", false);
   std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
-  if (bbh.use_traj_table && bbh.spin_ramp) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "problem/spin_ramp only applies to the analytic circular "
-              << "orbit path; encode time-dependent spins in traj_file when "
-              << "use_traj_table=true" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
   if (bbh.use_traj_table) {
     if (traj_file.empty()) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "use_traj_table=true requires traj_file" << std::endl;
+                << std::endl << "use_traj_table=true requires traj_file" << std::endl;
       std::exit(EXIT_FAILURE);
     }
     LoadTrajectoryTable(traj_file);
-    Real tlim = pin->GetReal("time", "tlim");
-    Real tfinal = bbh_table.t.back();
-    Real tol = 64.0*std::numeric_limits<Real>::epsilon()*
-               std::max({1.0, std::abs(tlim), std::abs(tfinal)});
-    if (tlim > tfinal + tol) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "time/tlim=" << tlim
-                << " exceeds final trajectory-table time=" << tfinal
-                << " from traj_file='" << traj_file << "'" << std::endl
-                << "Extend the trajectory table or reduce time/tlim." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
   }
 
-  auto &coord_data = pmbp->pcoord->coord_data;
-  if (coord_data.bh_excise && coord_data.excision_scheme == ExcisionScheme::puncture) {
-    Real finest_dx = LocalFinestMeshSpacing(pmbp);
-    Real min_horizon = MinDynBBHHorizonRadius();
-    if (finest_dx > min_horizon) {
-      if (bbh.require_resolved_horizon) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl
-                  << "puncture excision is under-resolved: finest active dx=" << finest_dx
-                  << " exceeds minimum horizon radius=" << min_horizon << std::endl
-                  << "Refine the mesh or set coord/require_resolved_horizon=false."
-                  << std::endl;
-        std::exit(EXIT_FAILURE);
-      } else if (global_variable::my_rank == 0) {
-        std::cout << "WARNING: puncture excision is under-resolved: finest active dx="
-                  << finest_dx
-                  << " exceeds minimum horizon radius=" << min_horizon << std::endl;
-      }
-    }
-    bbh_traj_state traj0 = find_traj_state(0.0);
-    Real m1 = traj0.q[M1T];
-    Real m2 = traj0.q[M2T];
-    Real rH1 = HorizonRadiusFromMassAndChi(m1, traj0.q[AX1], traj0.q[AY1],
-                                           traj0.q[AZ1]);
-    Real rH2 = HorizonRadiusFromMassAndChi(m2, traj0.q[AX2], traj0.q[AY2],
-                                           traj0.q[AZ2]);
-    Real r0 = SmoothExcisionRadiusToHorizon(
-        bbh.puncture_excise_rad1, rH1, 0.0, bbh.puncture_excise_shrink_timescale,
-        bbh.puncture_excise_to_horizon, bbh.puncture_excise_shrink_to_horizon);
-    Real r1 = SmoothExcisionRadiusToHorizon(
-        bbh.puncture_excise_rad2, rH2, 0.0, bbh.puncture_excise_shrink_timescale,
-        bbh.puncture_excise_to_horizon, bbh.puncture_excise_shrink_to_horizon);
-    if (bbh.puncture_excise_cap_to_horizon &&
-        !bbh.puncture_excise_to_horizon &&
-        !bbh.puncture_excise_shrink_to_horizon) {
-      r0 = std::min(r0, rH1);
-      r1 = std::min(r1, rH2);
-    }
-    CheckPunctureExcisionResolution(pmbp, traj0, r0, r1, "initialization");
+  pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
+  pmbp->padm->SetADMVariables(pmbp);
+  if (pmbp->pcoord->coord_data.bh_excise) {
+    pmbp->pcoord->UpdateExcisionMasks();
   }
+  pmbp->pdynrad->PrepareADMGeometry();
 
-  for (int nr = 0; nr < 16; ++nr) {
-    std::string name = "radius_" + std::to_string(nr) + "_rad";
-    if (pin->DoesParameterExist("problem", name)) {
-      bbh_ref.radius.push_back(pin->GetReal("problem", name));
-      bbh_ref.reflevel.push_back(pin->GetOrAddInteger(
-          "problem", "radius_" + std::to_string(nr) + "_reflevel", -1));
-    } else {
-      break;
-    }
-  }
+  if (restart) return;
 
-  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "none");
-  if (amr_cond == "alpha_min") {
-    std::cout << "Using Lapse-Based Refinement" << std::endl;
-    bbh_ref.AlphaMin = true;
-  } else if (amr_cond == "tracker") {
-    std::cout << "Using Tracker-Based Refinement" << std::endl;
-    bbh_ref.Tracker = true;
-  }
-
-  user_ref_func = Refine;
-  user_hist_func = TorusHistory;
-  if (bbh.cooling_source == CoolingSource::ism &&
-      (pmbp->pmhd == nullptr || pmbp->padm == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "ISM cooling currently requires MHD and ADM variables"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (bbh.cooling_source == CoolingSource::thin_disk &&
-      (pmbp->pmhd == nullptr || pmbp->padm == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl
-              << "cooling_source=thin_disk currently requires MHD and ADM variables"
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (pmbp->pmhd != nullptr &&
-      bbh.cooling_source != CoolingSource::none) {
-    user_srcs = true;
-    user_srcs_func = AddDynBBHUserSources;
-  }
-  if (bbh.smooth_b_damping) {
-    if (pmbp->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "smooth_excision_b_damping requires MHD" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    auto &coord_data = pmbp->pcoord->coord_data;
-    if (!coord_data.bh_excise || !coord_data.smooth_excise ||
-        coord_data.excision_scheme != ExcisionScheme::puncture) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "smooth_excision_b_damping requires coord/excise=true, "
-                << "coord/smooth_excision=true, and "
-                << "coord/excision_scheme=puncture" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    user_efield = true;
-    user_efield_func = AddSmoothExcisionMagneticDamping;
-  }
-
-  if (pmbp->padm != nullptr) {
-    pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
-  }
-  if (pmbp->prad != nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "dynbbh uses ADM background data and is incompatible "
-              << "with legacy <radiation>; use <dyn_radiation> instead." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if (pmbp->pdynrad != nullptr) {
-    if (pmbp->padm == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "dynbbh <dyn_radiation> requires ADM variables."
-                << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    if (!(pmbp->pdynrad->use_adm_geometry)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "dynbbh <dyn_radiation> requires geometry='adm'."
-                << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    if (pmbp->pdynrad->are_units_enabled) {
-      bbh.arad = (pmbp->punit->rad_constant_cgs*
-                  SQR(SQR(pmbp->punit->temperature_cgs()))/
-                  pmbp->punit->pressure_cgs());
-    } else {
-      bbh.arad = pin->GetReal("dyn_radiation","arad");
-    }
-    if (!(bbh.arad > 0.0) || !std::isfinite(bbh.arad)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "dynbbh <dyn_radiation> requires a positive finite "
-                << "radiation constant." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    bbh.restart_seed_erad_fraction =
-        pin->GetOrAddReal("dyn_radiation", "restart_seed_erad_fraction", 1.0);
-    if (!(bbh.restart_seed_erad_fraction >= 0.0) ||
-        !std::isfinite(bbh.restart_seed_erad_fraction)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "dynbbh <dyn_radiation>/restart_seed_erad_fraction "
-                << "must be finite and non-negative." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    pmbp->padm->SetADMVariables(pmbp);
-    pmbp->pdynrad->PrepareADMGeometry();
-    if (restart_missing_dynrad_i0) {
-      if (pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "dynbbh restart activation of <dyn_radiation> "
-                  << "requires Valencia GRMHD." << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      post_restart_primitive_init_func = InitializeDynBBHRestartDynRadiation;
-    }
-  }
-  if (pmbp->ppart != nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "circumbinary dynbbh does not initialize particles; "
-              << "use pgen_name=dynbbh_beam for the radiation beam particle test."
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  // Flux diagnostics setup
-  // Resolution of surface grids
-  const int ntheta = pin->GetOrAddInteger("problem", "flux_ntheta", 64);
-  const int nphi = pin->GetOrAddInteger("problem", "flux_nphi", 128);
-  // Setup Radius of surface grids
-  const Real r_surf_inner = pin->GetOrAddReal("problem", "flux_rsurf_inner", 10.0);
-  const Real dr_surf = pin->GetOrAddReal("problem", "flux_dr_surf", 5.0);
-  const Real r_surf_outer = pin->GetOrAddReal("problem", "flux_rsurf_outer", 20.0);
-  // Create surfaces at three different radii and store them in the class member
-  // This avoids the crash-on-exit from using a static variable.
-  for (Real r_surf = r_surf_inner; r_surf <= r_surf_outer; r_surf += dr_surf) {
-    auto r_func = [=](Real th, Real ph){ return r_surf; };
-    this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
-        pmbp, ntheta, nphi, r_func, "R" + std::to_string(static_cast<int>(r_surf))));
-  }
-
-  // Horizon 1
-  bool do_h1 = pin->GetOrAddBoolean("problem", "flux_horizon1", false);
-  if (do_h1) {
-    Real r_h1 = pin->GetOrAddReal("problem", "flux_radius1", 1);
-    // Initialize centered at 0,0,0; will be moved in TorusHistory
-    this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
-        pmbp, ntheta, nphi,
-        [=](Real th, Real ph){ return r_h1; },
-        "H1"));
-  }
-
-  // Horizon 2
-  bool do_h2 = pin->GetOrAddBoolean("problem", "flux_horizon2", false);
-  if (do_h2) {
-    Real r_h2 = pin->GetOrAddReal("problem", "flux_radius2", 1);
-    // Initialize centered at 0,0,0; will be moved in TorusHistory
-    this->surface_grids.push_back(std::make_unique<SphericalSurfaceGrid>(
-        pmbp, ntheta, nphi,
-        [=](Real th, Real ph){ return r_h2; },
-        "H2"));
-  }
-
-  const bool is_radiation_enabled = (pmbp->pdynrad != nullptr);
-
-  // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+  const int nmb = pmbp->nmb_thispack;
   auto &size = pmbp->pmb->mb_size;
-  int nmb = pmbp->nmb_thispack;
-  //auto bbh_ = bbh;
-  auto &coord = pmbp->pcoord->coord_data;
-  bool use_dyngr = (pmbp->pdyngr != nullptr);
-
-
-  // copied form torus PG, needs to be rewritten?
-
-  // return if restart
-  if (restart) return;
-
-  // Select either Hydro or MHD
-  DvceArray5D<Real> u0_, w0_;
-  if (pmbp->phydro != nullptr) {
-    u0_ = pmbp->phydro->u0;
-    w0_ = pmbp->phydro->w0;
-  } else if (pmbp->pmhd != nullptr) {
-    u0_ = pmbp->pmhd->u0;
-    w0_ = pmbp->pmhd->w0;
-  }
-
-  // Extract radiation parameters if enabled
-  int nangles_;
-  DualArray2D<Real> nh_c_;
-  DvceArray6D<Real> norm_to_tet_;
-  DvceArray4D<Real> sqrt_detg_c_;
-  DvceArray5D<Real> i0_;
-  if (is_radiation_enabled) {
-    nangles_ = pmbp->pdynrad->prgeo->nangles;
-    nh_c_ = pmbp->pdynrad->nh_c;
-    norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
-    sqrt_detg_c_ = pmbp->pdynrad->sqrt_detg_c;
-    i0_ = pmbp->pdynrad->i0;
-  }
-
-  // Get ideal gas EOS data
-  if (pmbp->phydro != nullptr) {
-    bbh.gamma_adi = pmbp->phydro->peos->eos_data.gamma;
-  } else if (pmbp->pmhd != nullptr) {
-    bbh.gamma_adi = pmbp->pmhd->peos->eos_data.gamma;
-  }
-  Real gm1 = bbh.gamma_adi - 1.0;
-
-  // global parameters
-  bbh.rho_min = pin->GetReal("problem", "rho_min");
-  bbh.rho_pow = pin->GetReal("problem", "rho_pow");
-  bbh.pgas_min = pin->GetReal("problem", "pgas_min");
-  bbh.pgas_pow = pin->GetReal("problem", "pgas_pow");
-  bbh.psi = pin->GetOrAddReal("problem", "tilt_angle", 0.0) * (M_PI/180.0);
-  bbh.sin_psi = sin(bbh.psi);
-  bbh.cos_psi = cos(bbh.psi);
-  bbh.rho_max = pin->GetReal("problem", "rho_max");
-  bbh.r_edge = pin->GetReal("problem", "r_edge");
-  bbh.r_peak = pin->GetReal("problem", "r_peak");
-  bbh.n_param = pin->GetOrAddReal("problem", "n_param",0.0);
-
-  // local parameters
-  Real pert_amp = pin->GetOrAddReal("problem", "pert_amp", 0.0);
-
-  // excision parameters
-  bbh.dexcise = coord.dexcise;
-  bbh.pexcise = coord.pexcise;
-
-  // Compute angular momentum and prepare constants describing primitives
-  CalculateCN(bbh, &bbh.c_param, &bbh.n_param);
-  bbh.l_peak = CalculateL(bbh, bbh.r_peak, 1.0);
-  // Common to both tori:
-  bbh.log_h_edge = LogHAux(bbh, bbh.r_edge, 1.0);
-  bbh.log_h_peak = LogHAux(bbh, bbh.r_peak, 1.0) - bbh.log_h_edge;
-  bbh.ptot_over_rho_peak = gm1/bbh.gamma_adi * (exp(bbh.log_h_peak)-1.0);
-  bbh.rho_peak = pow(bbh.ptot_over_rho_peak, 1.0/gm1) / bbh.rho_max;
-
-  // find "outer edge" of torus (first place log_h > 0)
-  Real ra = bbh.r_peak;
-  Real rb = 2. * ra;
-  Real log_h_trial = LogHAux(bbh, rb, 1.) - bbh.log_h_edge;
-  for (int iter=0; iter<10000; ++iter) {
-    if (log_h_trial <= 0) {
-      break;
-    }
-    rb *= 2.;
-    log_h_trial = LogHAux(bbh, rb, 1.) - bbh.log_h_edge;
-  }
-  for (int iter=0; iter<10000; ++iter) {
-    if (fabs(ra - rb) < 1.e-3) {
-      break;
-    }
-    Real r_trial = (ra + rb) / 2.;
-    if (LogHAux(bbh, r_trial, 1.) > bbh.log_h_edge) {
-      ra = r_trial;
-    } else {
-      rb = r_trial;
-    }
-  }
-  bbh.r_outer_edge = ra;
-  std::cout << "Found torus outer edge: " << bbh.r_outer_edge << std::endl;
-
-  // initialize primitive variables for new run ---------------------------------------
-
-  auto trs = bbh;
-  Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
-  Real ptotmax = std::numeric_limits<float>::min();
-  const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
-  const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
-  const int nji  = indcs.nx2*indcs.nx1;
-
-  bbh_traj_state traj0 = find_traj_state(0.0);
-
-  Kokkos::parallel_reduce("pgen_torus1", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &max_ptot) {
-    // compute m,k,j,i indices of thread and call function
-    int m = (idx)/nkji;
-    int k = (idx - m*nkji)/nji;
-    int j = (idx - m*nkji - k*nji)/indcs.nx1;
-    int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
-    k += ks;
-    j += js;
-
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
-    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-    Real &dx1 = size.d_view(m).dx1;
-    Real &dx2 = size.d_view(m).dx2;
-    Real &dx3 = size.d_view(m).dx3;
-
-    // Extract metric and inverse -- presumably should get actual metric?????
-    Real glower[4][4], gupper[4][4];
-    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
-
-    // Calculate Boyer-Lindquist coordinates of cell
-    Real r, theta, phi;
-    GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
-    Real sin_theta = sin(theta);
-    Real cos_theta = cos(theta);
-    Real sin_phi = sin(phi);
-    Real cos_phi = cos(phi);
-
-    // Account for tilt
-    Real sin_vartheta;
-    if (trs.psi != 0.0) {
-      Real x = sin_theta * cos_phi;
-      Real y = sin_theta * sin_phi;
-      Real z = cos_theta;
-      Real varx = trs.cos_psi * x - trs.sin_psi * z;
-      Real vary = y;
-      sin_vartheta = sqrt(SQR(varx) + SQR(vary));
-    } else {
-      sin_vartheta = fabs(sin_theta);
-    }
-
-    // Determine if we are in the torus
-    Real log_h;
-    bool in_torus = false;
-    if (r >= trs.r_edge) {
-      log_h = LogHAux(trs, r, sin_vartheta)- trs.log_h_edge;  // (FM 3.6)
-      if (log_h >= 0.0) {
-        in_torus = true;
-      }
-    }
-
-    // Calculate background primitives -- to be consistent with the excision algorithm,
-    // we have to recalculate r; we try to avoid excising cells within the horizon which
-    // might have a corner sticking out of the horizon.
-    Real r_excise, theta_excise, phi_excise;
-    GetBoyerLindquistCoordinates(trs, x1v + copysign(0.5*dx1,x1v),
-                                      x2v + copysign(0.5*dx2,x2v),
-                                      x3v + copysign(0.5*dx3,x3v), &r_excise,
-                                      &theta_excise, &phi_excise);
-    Real rho_bg, pgas_bg;
-    if (r_excise > 1.0) {
-      rho_bg = trs.rho_min * pow(r, trs.rho_pow);
-      pgas_bg = trs.pgas_min * pow(r, trs.pgas_pow);
-    } else {
-      rho_bg = trs.dexcise;
-      pgas_bg = trs.pexcise;
-    }
-
-    Real rho = rho_bg;
-    Real pgas = pgas_bg;
-    Real uu1 = 0.0;
-    Real uu2 = 0.0;
-    Real uu3 = 0.0;
-    Real urad = 0.0;
-
-    Real perturbation = 0.0;
-    // Overwrite primitives inside torus
-    if (in_torus) {
-      // Calculate perturbation
-      auto rand_gen = rand_pool64.get_state(); // get random number state this thread
-      perturbation = 2.0*pert_amp*(rand_gen.frand() - 0.5);
-      rand_pool64.free_state(rand_gen);        // free state for use by other threads
-
-      // Calculate thermodynamic variables
-      Real ptot_over_rho = gm1/trs.gamma_adi * (exp(log_h) - 1.0);
-      rho = pow(ptot_over_rho, 1.0/gm1) / trs.rho_peak;
-      Real temp = ptot_over_rho;
-      if (is_radiation_enabled) temp = CalculateT(trs, rho, ptot_over_rho);
-      pgas = temp * rho;
-
-      // Calculate radiation variables (if radiation enabled)
-      if (is_radiation_enabled) urad = trs.arad * SQR(SQR(temp));
-
-      // Calculate velocities in Boyer-Lindquist coordinates
-      Real u0_bl, u1_bl, u2_bl, u3_bl;
-      CalculateVelocityInTiltedTorus(trs, r, theta, phi,
-                                     &u0_bl, &u1_bl, &u2_bl, &u3_bl);
-
-      // Transform to preferred coordinates
-      Real u0, u1, u2, u3;
-      TransformVector(trs, u0_bl, 0.0, u2_bl, u3_bl,
-                      x1v, x2v, x3v, &u0, &u1, &u2, &u3);
-
-      Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
-
-      uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
-      uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
-      uu3 = u3 - gupper[0][3]/gupper[0][0] * u0;
-    }
-
-    // Set primitive values, including random perturbations to pressure
-    w0_(m,IDN,k,j,i) = fmax(rho, rho_bg);
-    if (!use_dyngr) {
-      w0_(m,IEN,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation) / gm1;
-    } else {
-      w0_(m,IPR,k,j,i) = fmax(pgas, pgas_bg) * (1.0 + perturbation);
-    }
-    w0_(m,IVX,k,j,i) = uu1;
-    w0_(m,IVY,k,j,i) = uu2;
-    w0_(m,IVZ,k,j,i) = uu3;
-
-    // Set coordinate frame intensity (if radiation enabled)
-    if (is_radiation_enabled) {
-      Real q = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2 + 2.0*glower[1][3]*uu1*uu3
-             + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
-             + glower[3][3]*uu3*uu3;
-      Real uu0 = sqrt(1.0 + q);
-      Real u_tet_[4];
-      u_tet_[0] = (norm_to_tet_(m,0,0,k,j,i)*uu0 + norm_to_tet_(m,0,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,0,2,k,j,i)*uu2 + norm_to_tet_(m,0,3,k,j,i)*uu3);
-      u_tet_[1] = (norm_to_tet_(m,1,0,k,j,i)*uu0 + norm_to_tet_(m,1,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,1,2,k,j,i)*uu2 + norm_to_tet_(m,1,3,k,j,i)*uu3);
-      u_tet_[2] = (norm_to_tet_(m,2,0,k,j,i)*uu0 + norm_to_tet_(m,2,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,2,2,k,j,i)*uu2 + norm_to_tet_(m,2,3,k,j,i)*uu3);
-      u_tet_[3] = (norm_to_tet_(m,3,0,k,j,i)*uu0 + norm_to_tet_(m,3,1,k,j,i)*uu1 +
-                   norm_to_tet_(m,3,2,k,j,i)*uu2 + norm_to_tet_(m,3,3,k,j,i)*uu3);
-
-      // Go through each angle
-      for (int n=0; n<nangles_; ++n) {
-        // Calculate direction in fluid frame
-        Real un_t = (u_tet_[1]*nh_c_.d_view(n,1) + u_tet_[2]*nh_c_.d_view(n,2) +
-                     u_tet_[3]*nh_c_.d_view(n,3));
-        Real n0_f = u_tet_[0]*nh_c_.d_view(n,0) - un_t;
-
-        // Calculate intensity in tetrad frame
-        i0_(m,n,k,j,i) =
-            sqrt_detg_c_(m,k,j,i)*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
-      }
-    }
-    // Compute total pressure (equal to gas pressure in non-radiating runs)
-    Real ptot;
-    if (!use_dyngr) {
-      ptot = gm1*w0_(m,IEN,k,j,i);
-    } else {
-      ptot = w0_(m,IPR,k,j,i);
-    }
-    if (is_radiation_enabled) ptot += urad/3.0;
-    max_ptot = fmax(ptot, max_ptot);
-  }, Kokkos::Max<Real>(ptotmax));
-
-  // Initialize ADM variables -------------------------------
-  if (pmbp->padm != nullptr) {
-    pmbp->padm->SetADMVariables(pmbp);
-    if (pmbp->pcoord->coord_data.bh_excise) {
-      pmbp->pcoord->UpdateExcisionMasks();
-    }
-    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
-  }
-
-  // initialize magnetic fields ---------------------------------------
-
-  if (pmbp->pmhd != nullptr) {
-    // parse some more parameters from input
-    bbh.potential_beta_min = pin->GetOrAddReal("problem", "potential_beta_min", 100.0);
-    bbh.potential_cutoff   = pin->GetOrAddReal("problem", "potential_cutoff", 0.2);
-
-    bbh.is_vertical_field = pin->GetOrAddBoolean("problem", "vertical_field", false);
-
-    bbh.potential_falloff  = pin->GetOrAddReal("problem", "potential_falloff", 0.0);
-    bbh.potential_r_pow    = pin->GetOrAddReal("problem", "potential_r_pow", 0.0);
-    bbh.potential_rho_pow  = pin->GetOrAddReal("problem", "potential_rho_pow", 1.0);
-
-    // compute vector potential over all faces
-    int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    DvceArray4D<Real> a1, a2, a3;
-    Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
-    Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
-    Kokkos::realloc(a3, nmb,ncells3,ncells2,ncells1);
-
-    auto &nghbr = pmbp->pmb->nghbr;
-    auto &mblev = pmbp->pmb->mb_lev;
-    auto trs = bbh;
-
-    par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      int nx1 = indcs.nx1;
-      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
-      Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      int nx2 = indcs.nx2;
-      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
-      Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      int nx3 = indcs.nx3;
-      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
-      Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
-
-      Real dx1 = size.d_view(m).dx1;
-      Real dx2 = size.d_view(m).dx2;
-      Real dx3 = size.d_view(m).dx3;
-
-      a1(m,k,j,i) = A1(trs, x1v, x2f, x3f);
-      a2(m,k,j,i) = A2(trs, x1f, x2v, x3f);
-      a3(m,k,j,i) = A3(trs, x1f, x2f, x3v);
-
-      // When neighboring MeshBock is at finer level, compute vector potential as sum of
-      // values at fine grid resolution.  This guarantees flux on shared fine/coarse
-      // faces is identical.
-
-      // Correct A1 at x2-faces, x3-faces, and x2x3-edges
-      if ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,28).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,29).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,30).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,31).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,40).lev > mblev.d_view(m) && j==js && k==ks) ||
-          (nghbr.d_view(m,41).lev > mblev.d_view(m) && j==js && k==ks) ||
-          (nghbr.d_view(m,42).lev > mblev.d_view(m) && j==je+1 && k==ks) ||
-          (nghbr.d_view(m,43).lev > mblev.d_view(m) && j==je+1 && k==ks) ||
-          (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
-          (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
-          (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
-          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
-        Real xl = x1v + 0.25*dx1;
-        Real xr = x1v - 0.25*dx1;
-        a1(m,k,j,i) = 0.5*(A1(trs, xl,x2f,x3f) + A1(trs, xr,x2f,x3f));
-      }
-
-      // Correct A2 at x1-faces, x3-faces, and x1x3-edges
-      if ((nghbr.d_view(m,0 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,1 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,2 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,3 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,4 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
-          (nghbr.d_view(m,28).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,29).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,30).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,31).lev > mblev.d_view(m) && k==ke+1) ||
-          (nghbr.d_view(m,32).lev > mblev.d_view(m) && i==is && k==ks) ||
-          (nghbr.d_view(m,33).lev > mblev.d_view(m) && i==is && k==ks) ||
-          (nghbr.d_view(m,34).lev > mblev.d_view(m) && i==ie+1 && k==ks) ||
-          (nghbr.d_view(m,35).lev > mblev.d_view(m) && i==ie+1 && k==ks) ||
-          (nghbr.d_view(m,36).lev > mblev.d_view(m) && i==is && k==ke+1) ||
-          (nghbr.d_view(m,37).lev > mblev.d_view(m) && i==is && k==ke+1) ||
-          (nghbr.d_view(m,38).lev > mblev.d_view(m) && i==ie+1 && k==ke+1) ||
-          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
-        Real xl = x2v + 0.25*dx2;
-        Real xr = x2v - 0.25*dx2;
-        a2(m,k,j,i) = 0.5*(A2(trs, x1f,xl,x3f) + A2(trs, x1f,xr,x3f));
-      }
-
-      // Correct A3 at x1-faces, x2-faces, and x1x2-edges
-      if ((nghbr.d_view(m,0 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,1 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,2 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,3 ).lev > mblev.d_view(m) && i==is) ||
-          (nghbr.d_view(m,4 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
-          (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,16).lev > mblev.d_view(m) && i==is && j==js) ||
-          (nghbr.d_view(m,17).lev > mblev.d_view(m) && i==is && j==js) ||
-          (nghbr.d_view(m,18).lev > mblev.d_view(m) && i==ie+1 && j==js) ||
-          (nghbr.d_view(m,19).lev > mblev.d_view(m) && i==ie+1 && j==js) ||
-          (nghbr.d_view(m,20).lev > mblev.d_view(m) && i==is && j==je+1) ||
-          (nghbr.d_view(m,21).lev > mblev.d_view(m) && i==is && j==je+1) ||
-          (nghbr.d_view(m,22).lev > mblev.d_view(m) && i==ie+1 && j==je+1) ||
-          (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
-        Real xl = x3v + 0.25*dx3;
-        Real xr = x3v - 0.25*dx3;
-        a3(m,k,j,i) = 0.5*(A3(trs, x1f,x2f,xl) + A3(trs, x1f,x2f,xr));
-      }
-    });
-
-    auto &b0 = pmbp->pmhd->b0;
-    par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // Compute face-centered fields from curl(A).
-      Real dx1 = size.d_view(m).dx1;
-      Real dx2 = size.d_view(m).dx2;
-      Real dx3 = size.d_view(m).dx3;
-
-      b0.x1f(m,k,j,i) = ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
-                         (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
-      b0.x2f(m,k,j,i) = ((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
-                         (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
-      b0.x3f(m,k,j,i) = ((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
-                         (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
-
-      // Include extra face-component at edge of block in each direction
-      if (i==ie) {
-        b0.x1f(m,k,j,i+1) = ((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
-                             (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
-      }
-      if (j==je) {
-        b0.x2f(m,k,j+1,i) = ((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
-                             (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
-      }
-      if (k==ke) {
-        b0.x3f(m,k+1,j,i) = ((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
-                             (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
-      }
-    });
-
-    // Compute cell-centered fields
-    auto &bcc_ = pmbp->pmhd->bcc0;
-    par_for("pgen_bcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // cell-centered fields are simple linear average of face-centered fields
-      Real& w_bx = bcc_(m,IBX,k,j,i);
-      Real& w_by = bcc_(m,IBY,k,j,i);
-      Real& w_bz = bcc_(m,IBZ,k,j,i);
-      w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
-      w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
-      w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
-    });
-
-
-    // find maximum bsq
-    Real bsqmax = std::numeric_limits<float>::min();
-    Real bsqmax_intorus = std::numeric_limits<float>::min();
-    const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
-    const int nkji = indcs.nx3*indcs.nx2*indcs.nx1;
-    const int nji  = indcs.nx2*indcs.nx1;
-    Kokkos::parallel_reduce("torus_beta", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &max_bsq, Real &max_bsq_intorus) {
-      // compute m,k,j,i indices of thread and call function
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/indcs.nx1;
-      int i = (idx - m*nkji - k*nji - j*indcs.nx1) + is;
-      k += ks;
-      j += js;
-
-      // Extract metric components
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-      Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
-
-      // Calculate Boyer-Lindquist coordinates of cell
-      Real r, theta, phi;
-      GetBoyerLindquistCoordinates(trs, x1v, x2v, x3v, &r, &theta, &phi);
-      Real sin_theta = sin(theta);
-      Real cos_theta = cos(theta);
-      Real sin_phi = sin(phi);
-      Real cos_phi = cos(phi);
-
-      // Account for tilt
-      Real sin_vartheta;
-      if (trs.psi != 0.0) {
-        Real x = sin_theta * cos_phi;
-        Real y = sin_theta * sin_phi;
-        Real z = cos_theta;
-        Real varx = trs.cos_psi * x - trs.sin_psi * z;
-        Real vary = y;
-        sin_vartheta = sqrt(SQR(varx) + SQR(vary));
-      } else {
-	sin_vartheta = fabs(sin_theta);
-      }
-
-      // Determine if we are in the torus
-      Real log_h;
-      bool in_torus = false;
-      if (r >= trs.r_edge) {
-        log_h = LogHAux(trs, r, sin_vartheta) - trs.log_h_edge;  // (FM 3.6)
-        if (log_h >= 0.0) {
-          in_torus = true;
-        }
-      }
-
-      // Extract primitive velocity, magnetic field B^i, and gas pressure
-      Real &wvx = w0_(m,IVX,k,j,i);
-      Real &wvy = w0_(m,IVY,k,j,i);
-      Real &wvz = w0_(m,IVZ,k,j,i);
-      Real &wbx = bcc_(m,IBX,k,j,i);
-      Real &wby = bcc_(m,IBY,k,j,i);
-      Real &wbz = bcc_(m,IBZ,k,j,i);
-
-      // Calculate 4-velocity (exploiting symmetry of metric)
-      Real q = glower[1][1]*wvx*wvx +2.0*glower[1][2]*wvx*wvy +2.0*glower[1][3]*wvx*wvz
-             + glower[2][2]*wvy*wvy +2.0*glower[2][3]*wvy*wvz
-             + glower[3][3]*wvz*wvz;
-      Real alpha = sqrt(-1.0/gupper[0][0]);
-      Real lor = sqrt(1.0 + q);
-      Real u0 = lor / alpha;
-      Real u1 = wvx - alpha * lor * gupper[0][1];
-      Real u2 = wvy - alpha * lor * gupper[0][2];
-      Real u3 = wvz - alpha * lor * gupper[0][3];
-
-      // lower vector indices
-      Real u_1 = glower[1][0]*u0 + glower[1][1]*u1 + glower[1][2]*u2 + glower[1][3]*u3;
-      Real u_2 = glower[2][0]*u0 + glower[2][1]*u1 + glower[2][2]*u2 + glower[2][3]*u3;
-      Real u_3 = glower[3][0]*u0 + glower[3][1]*u1 + glower[3][2]*u2 + glower[3][3]*u3;
-
-      // Calculate 4-magnetic field
-      Real b0 = u_1*wbx + u_2*wby + u_3*wbz;
-      Real b1 = (wbx + b0 * u1) / u0;
-      Real b2 = (wby + b0 * u2) / u0;
-      Real b3 = (wbz + b0 * u3) / u0;
-
-      // lower vector indices and compute bsq
-      Real b_0 = glower[0][0]*b0 + glower[0][1]*b1 + glower[0][2]*b2 + glower[0][3]*b3;
-      Real b_1 = glower[1][0]*b0 + glower[1][1]*b1 + glower[1][2]*b2 + glower[1][3]*b3;
-      Real b_2 = glower[2][0]*b0 + glower[2][1]*b1 + glower[2][2]*b2 + glower[2][3]*b3;
-      Real b_3 = glower[3][0]*b0 + glower[3][1]*b1 + glower[3][2]*b2 + glower[3][3]*b3;
-      Real bsq = b0*b_0 + b1*b_1 + b2*b_2 + b3*b_3;
-
-      max_bsq = fmax(bsq, max_bsq);
-      if (in_torus) {
-        max_bsq_intorus = fmax(bsq, max_bsq_intorus);
-      }
-    }, Kokkos::Max<Real>(bsqmax), Kokkos::Max<Real>(bsqmax_intorus));
-
-
-#if MPI_PARALLEL_ENABLED
-    // get maximum value of gas pressure and bsq over all MPI ranks
-    MPI_Allreduce(MPI_IN_PLACE, &ptotmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, &bsqmax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, &bsqmax_intorus, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-#endif
-
-    // Apply renormalization of magnetic field
-    Real bnorm = sqrt((ptotmax/(0.5*bsqmax))/trs.potential_beta_min);
-    // Since vertical field extends beyond torus, normalize based on values in torus
-    if (trs.is_vertical_field) {
-      bnorm = sqrt((ptotmax/(0.5*bsqmax_intorus))/trs.potential_beta_min);
-    }
-
-    par_for("pgen_normb0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      b0.x1f(m,k,j,i) *= bnorm;
-      b0.x2f(m,k,j,i) *= bnorm;
-      b0.x3f(m,k,j,i) *= bnorm;
-      if (i==ie) { b0.x1f(m,k,j,i+1) *= bnorm; }
-      if (j==je) { b0.x2f(m,k,j+1,i) *= bnorm; }
-      if (k==ke) { b0.x3f(m,k+1,j,i) *= bnorm; }
-    });
-
-    // Recompute cell-centered magnetic field
-    par_for("pgen_normbcc", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      // cell-centered fields are simple linear average of face-centered fields
-      Real& w_bx = bcc_(m,IBX,k,j,i);
-      Real& w_by = bcc_(m,IBY,k,j,i);
-      Real& w_bz = bcc_(m,IBZ,k,j,i);
-      w_bx = 0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
-      w_by = 0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
-      w_bz = 0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
-    });
-  }
-
-  // Convert primitives to conserved
-  if (pmbp->padm == nullptr) {
-    if (pmbp->phydro != nullptr) {
-      pmbp->phydro->peos->PrimToCons(w0_, u0_, is, ie, js, je, ks, ke);
-    } else if (pmbp->pmhd != nullptr) {
-      auto &bcc0_ = pmbp->pmhd->bcc0;
-      pmbp->pmhd->peos->PrimToCons(w0_, bcc0_, u0_, is, ie, js, je, ks, ke);
-    }
-  } else {
-    //pmbp->pdyngr->PrimToConInit(0, (n1-1), 0, (n2-1), 0, (n3-1));
-    pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
-  }
-  return;
-}
-
-namespace {
-
-void InitializeDynBBHRestartDynRadiation(Mesh *pm) {
-  MeshBlockPack *pmbp = pm->pmb_pack;
-  if (pmbp->pdynrad == nullptr || pmbp->pmhd == nullptr ||
-      pmbp->pdyngr == nullptr || pmbp->padm == nullptr) {
+  const Real rho0 = read_real_alias("rho", "rho_min", 1.0e-10);
+  const Real pgas0 = read_real_alias("pgas", "pgas_min", 1.0e-12);
+  if (!(rho0 > 0.0) || !(pgas0 > 0.0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "dynbbh restart radiation initialization requires "
-              << "<dyn_radiation>, MHD, Valencia GRMHD, and ADM variables."
-              << std::endl;
+              << std::endl << "dynbbh_beam requires positive rho/pgas" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  pmbp->padm->SetADMVariables(pmbp);
-  pmbp->pdynrad->PrepareADMGeometry();
-  if (pmbp->pcoord->coord_data.bh_excise) {
-    pmbp->pcoord->UpdateExcisionMasks();
-  }
-
-  if (pmbp->nmb_thispack == 0) { return; }
-
-  auto &indcs = pm->mb_indcs;
-  int &is = indcs.is, &ie = indcs.ie;
-  int &js = indcs.js, &je = indcs.je;
-  int &ks = indcs.ks, &ke = indcs.ke;
-  int nmb1 = pmbp->nmb_thispack - 1;
-  int nang1 = pmbp->pdynrad->prgeo->nangles - 1;
-
   auto &w0 = pmbp->pmhd->w0;
-  auto &i0 = pmbp->pdynrad->i0;
-  auto &nh_c = pmbp->pdynrad->nh_c;
-  auto &norm_to_tet = pmbp->pdynrad->norm_to_tet;
-  auto &sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
-  auto &adm_g_dd_c = pmbp->pdynrad->adm_g_dd_c;
-  const bool use_excise = pmbp->pcoord->coord_data.bh_excise;
-  auto &excision_floor = pmbp->pcoord->excision_floor;
-
-  const Real density_floor = 10.0*pmbp->pmhd->peos->eos_data.dfloor;
-  const Real pressure_floor = pmbp->pmhd->peos->eos_data.pfloor;
-  const Real arad = bbh.arad;
-  const Real seed_erad_fraction = bbh.restart_seed_erad_fraction;
-
-  par_for("dynbbh_restart_dynrad_i0", DevExeSpace(), 0,nmb1,0,nang1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-    Real intensity = 0.0;
-    bool seed_radiation = true;
-    if (use_excise && excision_floor(m,k,j,i)) {
-      seed_radiation = false;
-    }
-
-    const Real rho = w0(m,IDN,k,j,i);
-    const Real pgas = w0(m,IPR,k,j,i);
-    if (!(rho > density_floor) || !(pgas > pressure_floor) ||
-        !(Kokkos::isfinite(rho)) || !(Kokkos::isfinite(pgas))) {
-      seed_radiation = false;
-    }
-
-    if (seed_radiation) {
-      const Real uu1 = w0(m,IVX,k,j,i);
-      const Real uu2 = w0(m,IVY,k,j,i);
-      const Real uu3 = w0(m,IVZ,k,j,i);
-      const Real q = (adm_g_dd_c(m,0,0,k,j,i)*uu1*uu1 +
-                      2.0*adm_g_dd_c(m,0,1,k,j,i)*uu1*uu2 +
-                      2.0*adm_g_dd_c(m,0,2,k,j,i)*uu1*uu3 +
-                      adm_g_dd_c(m,1,1,k,j,i)*uu2*uu2 +
-                      2.0*adm_g_dd_c(m,1,2,k,j,i)*uu2*uu3 +
-                      adm_g_dd_c(m,2,2,k,j,i)*uu3*uu3);
-      if (Kokkos::isfinite(q) && 1.0 + q > 0.0) {
-        const Real uu0 = sqrt(1.0 + q);
-        Real u_tet[4];
-        u_tet[0] = (norm_to_tet(m,0,0,k,j,i)*uu0 +
-                    norm_to_tet(m,0,1,k,j,i)*uu1 +
-                    norm_to_tet(m,0,2,k,j,i)*uu2 +
-                    norm_to_tet(m,0,3,k,j,i)*uu3);
-        u_tet[1] = (norm_to_tet(m,1,0,k,j,i)*uu0 +
-                    norm_to_tet(m,1,1,k,j,i)*uu1 +
-                    norm_to_tet(m,1,2,k,j,i)*uu2 +
-                    norm_to_tet(m,1,3,k,j,i)*uu3);
-        u_tet[2] = (norm_to_tet(m,2,0,k,j,i)*uu0 +
-                    norm_to_tet(m,2,1,k,j,i)*uu1 +
-                    norm_to_tet(m,2,2,k,j,i)*uu2 +
-                    norm_to_tet(m,2,3,k,j,i)*uu3);
-        u_tet[3] = (norm_to_tet(m,3,0,k,j,i)*uu0 +
-                    norm_to_tet(m,3,1,k,j,i)*uu1 +
-                    norm_to_tet(m,3,2,k,j,i)*uu2 +
-                    norm_to_tet(m,3,3,k,j,i)*uu3);
-
-        const Real un_t = (u_tet[1]*nh_c.d_view(n,1) +
-                           u_tet[2]*nh_c.d_view(n,2) +
-                           u_tet[3]*nh_c.d_view(n,3));
-        const Real n0_f = u_tet[0]*nh_c.d_view(n,0) - un_t;
-        const Real temp = pgas/rho;
-        const Real urad = seed_erad_fraction*arad*SQR(SQR(temp));
-        if (Kokkos::isfinite(n0_f) && n0_f != 0.0 &&
-            Kokkos::isfinite(urad) && urad >= 0.0) {
-          intensity = sqrt_detg_c(m,k,j,i)*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
-          if (!(Kokkos::isfinite(intensity)) || intensity < 0.0) {
-            intensity = 0.0;
-          }
-        }
-      }
-    }
-
-    i0(m,n,k,j,i) = intensity;
+  par_for("dynbbh_beam_prims", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    w0(m,IDN,k,j,i) = rho0;
+    w0(m,IPR,k,j,i) = pgas0;
+    w0(m,IVX,k,j,i) = 0.0;
+    w0(m,IVY,k,j,i) = 0.0;
+    w0(m,IVZ,k,j,i) = 0.0;
   });
-  Kokkos::fence();
+
+  Kokkos::deep_copy(pmbp->pmhd->bcc0, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->b0.x1f, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->b0.x2f, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->b0.x3f, 0.0);
+  Kokkos::deep_copy(pmbp->pdynrad->i0, 0.0);
+  pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+
+  bool init_beam_particles = pin->GetOrAddBoolean("problem", "init_beam_edge_particles",
+                                                  false);
+  if (init_beam_particles) {
+    if (pmbp->ppart == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "init_beam_edge_particles=true requires a <particles> block"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
+    std::string beam_block = pin->DoesBlockExist("rad_srcterms") ? "rad_srcterms" : "problem";
+    Real p1 = pin->GetOrAddReal(beam_block, "pos_1", 0.0);
+    Real p2 = pin->GetOrAddReal(beam_block, "pos_2", 0.0);
+    Real p3 = pin->GetOrAddReal(beam_block, "pos_3", 0.0);
+    Real d1 = pin->GetOrAddReal(beam_block, "dir_1", 1.0);
+    Real d2 = pin->GetOrAddReal(beam_block, "dir_2", 0.0);
+    Real d3 = pin->GetOrAddReal(beam_block, "dir_3", 0.0);
+    Real spread = pin->GetOrAddReal(beam_block, "spread", 10.0) * (M_PI/180.0);
+    Real dnorm = std::sqrt(SQR(d1) + SQR(d2) + SQR(d3));
+    if (!(dnorm > 0.0)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "beam direction must be nonzero" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    d1 /= dnorm; d2 /= dnorm; d3 /= dnorm;
+
+    Real refx = 0.0;
+    Real refy = (std::abs(d3) < 0.9) ? 0.0 : 1.0;
+    Real refz = (std::abs(d3) < 0.9) ? 1.0 : 0.0;
+    Real e1x = d2*refz - d3*refy;
+    Real e1y = d3*refx - d1*refz;
+    Real e1z = d1*refy - d2*refx;
+    Real e1n = std::sqrt(SQR(e1x) + SQR(e1y) + SQR(e1z));
+    e1x /= e1n; e1y /= e1n; e1z /= e1n;
+    Real e2x = d2*e1z - d3*e1y;
+    Real e2y = d3*e1x - d1*e1z;
+    Real e2z = d1*e1y - d2*e1x;
+
+    bool owns_beam_source = false;
+    for (int m=0; m<nmb; ++m) {
+      bool inside = (p1 >= size.h_view(m).x1min && p1 <= size.h_view(m).x1max);
+      inside = inside && (p2 >= size.h_view(m).x2min && p2 <= size.h_view(m).x2max);
+      inside = inside && (p3 >= size.h_view(m).x3min && p3 <= size.h_view(m).x3max);
+      owns_beam_source = owns_beam_source || inside;
+    }
+    if (!owns_beam_source) {
+      pmbp->ppart->nprtcl_thispack = 0;
+      Kokkos::resize(pmbp->ppart->prtcl_rdata, pmbp->ppart->nrdata, 0);
+      Kokkos::resize(pmbp->ppart->prtcl_idata, pmbp->ppart->nidata, 0);
+    }
+    pmbp->pmesh->nprtcl_thisrank = pmbp->ppart->nprtcl_thispack;
+#if MPI_PARALLEL_ENABLED
+    MPI_Allgather(&(pmbp->pmesh->nprtcl_thisrank), 1, MPI_INT,
+                  pmbp->pmesh->nprtcl_eachrank, 1, MPI_INT, MPI_COMM_WORLD);
+#else
+    pmbp->pmesh->nprtcl_eachrank[0] = pmbp->pmesh->nprtcl_thisrank;
+#endif
+    pmbp->pmesh->nprtcl_total = 0;
+    for (int n=0; n<global_variable::nranks; ++n) {
+      pmbp->pmesh->nprtcl_total += pmbp->pmesh->nprtcl_eachrank[n];
+    }
+    pmbp->ppart->CreateParticleTags(pin);
+
+    auto &pr = pmbp->ppart->prtcl_rdata;
+    auto &pi = pmbp->ppart->prtcl_idata;
+    int npart = pmbp->ppart->nprtcl_thispack;
+    auto &adm = pmbp->padm->adm;
+    int gids = pmbp->gids;
+    if (npart > 0) {
+      par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart-1,
+      KOKKOS_LAMBDA(const int p) {
+        int msel = -1;
+        for (int m=0; m<nmb; ++m) {
+          bool inside = (p1 >= size.d_view(m).x1min && p1 <= size.d_view(m).x1max);
+          inside = inside && (p2 >= size.d_view(m).x2min && p2 <= size.d_view(m).x2max);
+          inside = inside && (p3 >= size.d_view(m).x3min && p3 <= size.d_view(m).x3max);
+          if (inside) msel = m;
+        }
+        if (msel < 0) return;
+
+        pi(PGID,p) = gids + msel;
+        pr(IPX,p) = p1;
+        pr(IPY,p) = p2;
+        pr(IPZ,p) = p3;
+
+        Real phi = 2.0*M_PI*(static_cast<Real>(p) + 0.5)/static_cast<Real>(npart);
+        Real st = sin(0.5*spread);
+        Real ct = cos(0.5*spread);
+        Real sx = ct*d1 + st*(cos(phi)*e1x + sin(phi)*e2x);
+        Real sy = ct*d2 + st*(cos(phi)*e1y + sin(phi)*e2y);
+        Real sz = ct*d3 + st*(cos(phi)*e1z + sin(phi)*e2z);
+
+        int i = static_cast<int>((p1 - size.d_view(msel).x1min)/size.d_view(msel).dx1) + is;
+        int j = static_cast<int>((p2 - size.d_view(msel).x2min)/size.d_view(msel).dx2) + js;
+        int k = static_cast<int>((p3 - size.d_view(msel).x3min)/size.d_view(msel).dx3) + ks;
+        i = (i < is) ? is : ((i > ie) ? ie : i);
+        j = (j < js) ? js : ((j > je) ? je : j);
+        k = (k < ks) ? ks : ((k > ke) ? ke : k);
+
+        pr(IPVX,p) = adm.g_dd(msel,0,0,k,j,i)*sx
+                   + adm.g_dd(msel,0,1,k,j,i)*sy
+                   + adm.g_dd(msel,0,2,k,j,i)*sz;
+        pr(IPVY,p) = adm.g_dd(msel,0,1,k,j,i)*sx
+                   + adm.g_dd(msel,1,1,k,j,i)*sy
+                   + adm.g_dd(msel,1,2,k,j,i)*sz;
+        pr(IPVZ,p) = adm.g_dd(msel,0,2,k,j,i)*sx
+                   + adm.g_dd(msel,1,2,k,j,i)*sy
+                   + adm.g_dd(msel,2,2,k,j,i)*sz;
+      });
+    }
+  }
 }
+
+void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  DynBBHBeam(pin, restart);
+}
+
+namespace {
 
 template <typename ADMVars>
 KOKKOS_INLINE_FUNCTION

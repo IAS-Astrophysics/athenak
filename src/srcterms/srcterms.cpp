@@ -23,6 +23,7 @@
 #include "mesh/mesh.hpp"
 //#include "mhd/mhd.hpp"
 #include "parameter_input.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
 #include "units/units.hpp"
@@ -226,7 +227,31 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = (pmy_pack->nmb_thispack-1);
-  int nang1 = (pmy_pack->prad->prgeo->nangles-1);
+  int nang1 = -1;
+
+  const bool use_dyn_radiation = (pmy_pack->pdynrad != nullptr);
+  const bool use_adm_radiation =
+      use_dyn_radiation && pmy_pack->pdynrad->use_adm_geometry;
+  DualArray2D<Real> nh_c_;
+  DvceArray6D<Real> tet_c_, tetcov_c_;
+  DvceArray4D<Real> sqrt_detg_c_;
+  if (pmy_pack->prad != nullptr) {
+    nang1 = (pmy_pack->prad->prgeo->nangles-1);
+    nh_c_ = pmy_pack->prad->nh_c;
+    tet_c_ = pmy_pack->prad->tet_c;
+    tetcov_c_ = pmy_pack->prad->tetcov_c;
+  } else if (pmy_pack->pdynrad != nullptr) {
+    nang1 = (pmy_pack->pdynrad->prgeo->nangles-1);
+    nh_c_ = pmy_pack->pdynrad->nh_c;
+    tet_c_ = pmy_pack->pdynrad->tet_c;
+    tetcov_c_ = pmy_pack->pdynrad->tetcov_c;
+    sqrt_detg_c_ = pmy_pack->pdynrad->sqrt_detg_c;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Radiation beam source requested, but no radiation "
+              << "solver has been constructed." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
@@ -241,9 +266,6 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   Real &width_ = width;
   Real &spread_ = spread;
 
-  auto &tc = pmy_pack->prad->tetcov_c;
-  auto &nh_c_ = pmy_pack->prad->nh_c;
-  auto &tet_c_ = pmy_pack->prad->tet_c;
   par_for("rad_beam",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -259,11 +281,20 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real glower[4][4], gupper[4][4];
-    ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
-    Real dgx[4][4], dgy[4][4], dgz[4][4];
-    ComputeMetricDerivatives(x1v,x2v,x3v,flat,spin,dgx,dgy,dgz);
-    Real e[4][4], e_cov[4][4], omega[4][4][4];
-    ComputeTetrad(x1v,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
+    if (use_adm_radiation) {
+      for (int mu=0; mu<4; ++mu) {
+        for (int nu=0; nu<4; ++nu) {
+          glower[mu][nu] = 0.0;
+          for (int a=0; a<4; ++a) {
+            const Real eta = (a == 0) ? -1.0 : 1.0;
+            glower[mu][nu] +=
+                eta*tetcov_c_(m,a,mu,k,j,i)*tetcov_c_(m,a,nu,k,j,i);
+          }
+        }
+      }
+    } else {
+      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+    }
 
     // Calculate proper distance to beam origin and minimum angle between directions
     Real dx1 = x1v - p1;
@@ -304,10 +335,18 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
                + nh_c_.d_view(n,2) * dtc2
                + nh_c_.d_view(n,3) * dtc3);
       if ((dx_sq < SQR(width_/2.0)) && (mu > mu_min)) {
-        Real n0 = tet_c_(m,0,0,k,j,i);
-        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
-                 + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-        i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
+        Real conserved_norm = 0.0;
+        if (use_adm_radiation) {
+          conserved_norm = sqrt_detg_c_(m,k,j,i);
+        } else {
+          const Real n0 = tet_c_(m,0,0,k,j,i);
+          Real n_0 = 0.0;
+          for (int d=0; d<4; ++d) {
+            n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);
+          }
+          conserved_norm = n0*n_0;
+        }
+        i0(m,n,k,j,i) += conserved_norm*dii_dt_*bdt;
       }
     }
   });

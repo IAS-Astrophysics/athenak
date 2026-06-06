@@ -28,6 +28,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "utils/finite_diff.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
@@ -1013,19 +1014,35 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     Kokkos::realloc(derived_var, nmb, mom_var_size, n3, n2, n1);
     auto dv = derived_var;
 
-    // Coordinates
-    auto &coord = pm->pmb_pack->pcoord->coord_data;
-    bool &flat = coord.is_minkowski;
-    Real &spin = coord.bh_spin;
-
     // Radiation
-    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
-    auto nh_c_ = pm->pmb_pack->prad->nh_c;
-    auto tet_c_ = pm->pmb_pack->prad->tet_c;
-    auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
-    auto solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
-    auto i0_ = pm->pmb_pack->prad->i0;
-    auto norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+    int nang1 = -1;
+    bool use_adm_radiation = false;
+    DualArray2D<Real> nh_c_;
+    DvceArray6D<Real> tet_c_;
+    DvceArray6D<Real> tetcov_c_;
+    DualArray1D<Real> solid_angles_;
+    DvceArray5D<Real> i0_;
+    DvceArray6D<Real> norm_to_tet_;
+    DvceArray4D<Real> sqrt_detg_c_;
+    if (pm->pmb_pack->prad != nullptr) {
+      nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+      nh_c_ = pm->pmb_pack->prad->nh_c;
+      tet_c_ = pm->pmb_pack->prad->tet_c;
+      tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
+      solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
+      i0_ = pm->pmb_pack->prad->i0;
+      norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+    } else {
+      nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
+      use_adm_radiation = pm->pmb_pack->pdynrad->use_adm_geometry;
+      nh_c_ = pm->pmb_pack->pdynrad->nh_c;
+      tet_c_ = pm->pmb_pack->pdynrad->tet_c;
+      tetcov_c_ = pm->pmb_pack->pdynrad->tetcov_c;
+      solid_angles_ = pm->pmb_pack->pdynrad->prgeo->solid_angles;
+      i0_ = pm->pmb_pack->pdynrad->i0;
+      norm_to_tet_ = pm->pmb_pack->pdynrad->norm_to_tet;
+      sqrt_detg_c_ = pm->pmb_pack->pdynrad->sqrt_detg_c;
+    }
 
     // Select either Hydro or MHD (if fluid enabled)
     DvceArray5D<Real> w0_;
@@ -1037,24 +1054,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("moments",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      // Extract components of metric
-      Real glower[4][4], gupper[4][4];
-      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      Real glower[4][4];
+      for (int mu=0; mu<4; ++mu) {
+        for (int nu=0; nu<4; ++nu) {
+          glower[mu][nu] = 0.0;
+          for (int a=0; a<4; ++a) {
+            Real eta = (a == 0) ? -1.0 : 1.0;
+            glower[mu][nu] += eta*tetcov_c_(m,a,mu,k,j,i)*tetcov_c_(m,a,nu,k,j,i);
+          }
+        }
+      }
 
       // coordinate component n^0
       Real n0 = tet_c_(m,0,0,k,j,i);
+      Real intensity_norm = use_adm_radiation ? sqrt_detg_c_(m,k,j,i) : n0;
 
       // set coordinate frame components
       for (int n1=0, n12=0; n1<4; ++n1) {
@@ -1067,8 +1080,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
               nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
               n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
             }
-            dv(m,n12,k,j,i) += (nmun1*nmun2*(i0_(m,n,k,j,i)/(n0*n_0))*
-                                solid_angles_.d_view(n));
+            Real intensity = i0_(m,n,k,j,i)/intensity_norm;
+            if (!(use_adm_radiation)) { intensity /= n_0; }
+            dv(m,n12,k,j,i) += nmun1*nmun2*intensity*solid_angles_.d_view(n);
           }
         }
       }
