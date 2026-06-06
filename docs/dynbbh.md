@@ -239,6 +239,37 @@ existing velocity ceiling before converting back.
 For the smooth-excision equations and constrained-transport discussion, see
 `docs/smooth_excision_procedure.tex` and the compiled PDF.
 
+## Staged Zoom Workflow
+
+`scripts/setup_dynbbh_stage.py` has two modes.  The default `single` mode keeps
+the original one-case helper behavior.  The `zoom-survey` mode creates a
+restart-to-restart workflow for a SANE/MAD/BONDI bundle:
+
+```bash
+python scripts/setup_dynbbh_stage.py \
+  --workflow zoom-survey \
+  --base-dir /home/hzhu/scratch3/<fresh-workdir> \
+  --exe /home/hzhu/athenak/build_cb/src/athena \
+  --case-source SANE=/path/to/SANE_stage1.par,/path/to/SANE/rst/rank_00000000/torus.NNNNN.rst \
+  --case-source MAD=/path/to/MAD_stage1.par,/path/to/MAD/rst/rank_00000000/torus.NNNNN.rst \
+  --case-source BONDI=/path/to/BONDI_stage1.par,/path/to/BONDI/rst/rank_00000000/torus.NNNNN.rst
+```
+
+The setup verifies that each single-file-per-rank restart is complete for the
+requested rank count, copies all rank files into the stage-2 run directories,
+and reads the actual mesh time from the binary restart header.  Stage 2 keeps
+both holes at zero spin, starts from the current smooth-excision radius of
+`4M`, and sets `coord/excise_shrink_to_horizon=true` for one orbit.  The
+generated debug-scaling PBS bundles SANE, MAD, and BONDI with 22 nodes each
+and `-t 00:50:00`.
+
+After the horizon-zero-spin runs have produced clean restarts, the generated
+stage-3 PBS runs the spin survey: `chi=-0.7`, `0`, `+0.7`, and `+0.9` for each
+SANE/MAD/BONDI case.  The nonzero-spin cases use `problem/spin_ramp=true`;
+their launch scripts override `problem/spin_ramp_start_time` from the actual
+restart they select, avoiding stale timestamps from restart headers.  The
+stage-3 PBS is sized for 12 concurrent 22-node runs on the prod queue.
+
 ## Cooling Source Terms
 
 `dynbbh` can apply one of two optically thin/source-term cooling models.  Select
