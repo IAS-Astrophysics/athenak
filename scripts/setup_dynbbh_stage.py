@@ -100,6 +100,16 @@ def find_output_block(text, file_type):
     return None
 
 
+def find_output_block_with_key(text, key, value):
+    key_pat = re.compile(
+        rf"(?m)^\s*{re.escape(key)}\s*=\s*{re.escape(value)}(?:\s|#|$)"
+    )
+    for block, start, end in iter_blocks(text):
+        if block.startswith("output") and key_pat.search(text[start:end]):
+            return block
+    return None
+
+
 def set_restart_output_policy(text, restart_dt):
     block = find_output_block(text, "rst")
     if block is None:
@@ -108,6 +118,20 @@ def set_restart_output_policy(text, restart_dt):
     text = set_param(text, block, "dt", format_real(restart_dt))
     text = set_param(text, block, "single_file_per_rank", "true")
     return strip_output_runtime_counters(text)
+
+
+def set_zoom_output_cadence(text, *, restart_dt, angular_momentum_dt, slice_dt):
+    text = set_restart_output_policy(text, restart_dt)
+    block = find_output_block_with_key(text, "variable", "angular_momentum")
+    if block is None:
+        raise SystemExit("no angular_momentum output block found")
+    text = set_param(text, block, "dt", format_real(angular_momentum_dt))
+    for slice_id in ("slice_x1", "slice_x2", "slice_x3"):
+        block = find_output_block_with_key(text, "id", slice_id)
+        if block is None:
+            raise SystemExit(f"no {slice_id} output block found")
+        text = set_param(text, block, "dt", format_real(slice_dt))
+    return text
 
 
 def strip_output_runtime_counters(text):
@@ -580,7 +604,8 @@ fi
 
 
 def apply_common_zoom_updates(text, *, root, case, stage, source_restart,
-                              source_state, tlim, restart_dt):
+                              source_state, tlim, restart_dt,
+                              angular_momentum_dt, slice_dt):
     updates = {
         ("comment", "zoom_workflow_root"): str(root),
         ("comment", "zoom_case"): case,
@@ -593,16 +618,19 @@ def apply_common_zoom_updates(text, *, root, case, stage, source_restart,
     }
     for (block, key), value in updates.items():
         text = set_param(text, block, key, value)
-    return set_restart_output_policy(text, restart_dt)
+    return set_zoom_output_cadence(
+        text, restart_dt=restart_dt, angular_momentum_dt=angular_momentum_dt,
+        slice_dt=slice_dt)
 
 
 def stage2_horizon_text(text, *, root, case, source_restart, source_state,
-                        orbit_duration, restart_dt):
+                        orbit_duration, restart_dt, angular_momentum_dt, slice_dt):
     tlim = source_state["time"] + orbit_duration
     text = apply_common_zoom_updates(
         text, root=root, case=case, stage="stage2_horizon_zero_spin",
         source_restart=source_restart, source_state=source_state, tlim=tlim,
-        restart_dt=restart_dt)
+        restart_dt=restart_dt, angular_momentum_dt=angular_momentum_dt,
+        slice_dt=slice_dt)
     updates = {
         ("job", "restart_file"): str(source_restart),
         ("coord", "excise_1_rad"): "4.0",
@@ -627,12 +655,14 @@ def stage2_horizon_text(text, *, root, case, source_restart, source_state,
 
 def stage3_spin_text(text, *, root, case, spin_name, spin_mag, theta_deg,
                      alignment, source_restart_root, source_state, expected_start_time,
-                     orbit_duration, spin_orbits, restart_dt):
+                     orbit_duration, spin_orbits, restart_dt,
+                     angular_momentum_dt, slice_dt):
     tlim = expected_start_time + spin_orbits * orbit_duration
     text = apply_common_zoom_updates(
         text, root=root, case=case, stage=f"stage3_{spin_name}_{alignment}",
         source_restart=source_restart_root, source_state=source_state, tlim=tlim,
-        restart_dt=restart_dt)
+        restart_dt=restart_dt, angular_momentum_dt=angular_momentum_dt,
+        slice_dt=slice_dt)
     spin_ramp = spin_mag > 0.0
     updates = {
         ("comment", "zoom_spin_case"): spin_name,
@@ -720,7 +750,9 @@ def setup_zoom_survey(args):
         text, stage2_tlim = stage2_horizon_text(
             template_text, root=root, case=case, source_restart=stage2_rank0,
             source_state=state, orbit_duration=args.orbit_duration,
-            restart_dt=args.restart_dt)
+            restart_dt=args.restart_dt,
+            angular_momentum_dt=args.angular_momentum_dt,
+            slice_dt=args.slice_dt)
         text = apply_overrides(text, args.set)
         stage2_input.write_text(text)
         stage2_launch = stage2_run / "launch.sh"
@@ -748,7 +780,9 @@ def setup_zoom_survey(args):
                 source_restart_root=stage2_rst, source_state=state,
                 expected_start_time=stage2_tlim,
                 orbit_duration=args.orbit_duration, spin_orbits=args.spin_orbits,
-                restart_dt=args.restart_dt)
+                restart_dt=args.restart_dt,
+                angular_momentum_dt=args.angular_momentum_dt,
+                slice_dt=args.slice_dt)
             spin_text = apply_overrides(spin_text, args.set)
             spin_input.write_text(spin_text)
             spin_launch = spin_run / "launch.sh"
@@ -852,7 +886,9 @@ def main():
     )
     parser.add_argument("--orbit-duration", type=float, default=ORBIT_DURATION)
     parser.add_argument("--spin-orbits", type=float, default=1.0)
-    parser.add_argument("--restart-dt", type=float, default=50.0)
+    parser.add_argument("--restart-dt", type=float, default=1000.0)
+    parser.add_argument("--angular-momentum-dt", type=float, default=50.0)
+    parser.add_argument("--slice-dt", type=float, default=25.0)
     parser.add_argument("--nodes-per-run", type=int, default=DEFAULT_NODES_PER_RUN)
     parser.add_argument("--stage2-queue", default="debug-scaling")
     parser.add_argument("--stage2-walltime", default="01:00:00")

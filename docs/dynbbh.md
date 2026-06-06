@@ -262,6 +262,9 @@ both holes at zero spin, starts from the current smooth-excision radius of
 `4M`, and sets `coord/excise_shrink_to_horizon=true` for one orbit.  The
 generated debug-scaling PBS bundles SANE, MAD, and BONDI with 22 nodes each
 and `-t 00:50:00`.
+By default, generated zoom inputs use `dt=1000` for single-file-per-rank
+restarts, `dt=50` for angular-momentum output, and `dt=25` for each
+`slice_x1`, `slice_x2`, and `slice_x3` output.
 
 After the horizon-zero-spin runs have produced clean restarts, the generated
 stage-3 PBS runs the spin survey: `chi=-0.7`, `0`, `+0.7`, and `+0.9` for each
