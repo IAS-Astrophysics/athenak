@@ -267,11 +267,17 @@ restarts, `dt=50` for angular-momentum output, and `dt=25` for each
 `slice_x1`, `slice_x2`, and `slice_x3` output.
 
 After the horizon-zero-spin runs have produced clean restarts, the generated
-stage-3 PBS runs the spin survey: `chi=-0.7`, `0`, `+0.7`, and `+0.9` for each
-SANE/MAD/BONDI case.  The nonzero-spin cases use `problem/spin_ramp=true`;
-their launch scripts override `problem/spin_ramp_start_time` from the actual
-restart they select, avoiding stale timestamps from restart headers.  The
-stage-3 PBS is sized for 12 concurrent 22-node runs on the prod queue.
+stage-3 PBS runs the spin survey: `chi=-0.7`, `0`, `+0.7`, and a tilted
+`chi=0.7` case for each SANE/MAD/BONDI case.  In the tilted case, BH1 is
+30 degrees above the orbital plane (`th_a1=60`) and BH2 is aligned with the
+orbital angular momentum (`th_a2=0`).  The nonzero-spin cases use
+`problem/spin_ramp=true`; their launch scripts override
+`problem/spin_ramp_start_time` from the actual restart they select, avoiding
+stale timestamps from restart headers.  The stage-3 inputs default to forty
+post-horizon orbits so short integration tests are wall-clock limited rather
+than physics-time limited, and the PBS is sized for 12 concurrent 22-node runs
+on the prod queue with two 50-minute application segments inside one two-hour
+allocation.
 
 ## Cooling Source Terms
 

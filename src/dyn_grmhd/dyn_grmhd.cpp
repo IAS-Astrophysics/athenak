@@ -202,15 +202,19 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
                  Task_Run, {MHD_Flux});
   pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux",
                  Task_Run, {MHD_SendFlux});
+  pnr->QueueTask(&MHD::RepairNonFiniteFluxes, pmhd, MHD_RepairFlux,
+                 "MHD_RepairFlux", Task_Run, {MHD_RecvFlux});
   if (pz4c != nullptr) {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
-                   {MHD_RecvFlux, MHD_SetTmunu});
+                   {MHD_RepairFlux, MHD_SetTmunu});
   } else {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
-                   {MHD_RecvFlux});
+                   {MHD_RepairFlux});
   }
+  pnr->QueueTask(&MHD::RepairNonFiniteConserved, pmhd, MHD_RepairCons,
+                 "MHD_RepairCons", Task_Run, {MHD_ExplRK});
   pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, MHD_AddSrc, "MHD_AddSrc", Task_Run,
-                 {MHD_ExplRK});
+                 {MHD_RepairCons});
   pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run,
                  {MHD_AddSrc}, {Rad_Couple});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});

@@ -191,6 +191,14 @@ def finite_or_nan(value):
     return value if math.isfinite(value) else math.nan
 
 
+def set_log_if_positive(ax, values):
+    vals = []
+    for series in values:
+        vals.extend(finite_or_nan(v) for v in series)
+    if any(math.isfinite(v) and v > 0.0 for v in vals):
+        ax.set_yscale("log")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Measure and plot BH-centroid and sink-radius diagnostics from AthenaK slice_x3 binaries."
@@ -291,7 +299,10 @@ def main():
     axes[0].plot(times - t0, [r["bh2_point_sigma"] for r in rows], "s-", label="BH2 point")
     axes[0].plot(times - t0, [r["bh1_avg_sigma"] for r in rows], "o--", label="BH1 avg")
     axes[0].plot(times - t0, [r["bh2_avg_sigma"] for r in rows], "s--", label="BH2 avg")
-    axes[0].set_yscale("log")
+    set_log_if_positive(axes[0], ([r["bh1_point_sigma"] for r in rows],
+                                  [r["bh2_point_sigma"] for r in rows],
+                                  [r["bh1_avg_sigma"] for r in rows],
+                                  [r["bh2_avg_sigma"] for r in rows]))
     axes[0].set_ylabel(r"$\sigma = B^2/\rho$")
     axes[0].legend(loc="best")
     axes[0].grid(True, alpha=0.3)
@@ -300,7 +311,10 @@ def main():
     axes[1].plot(times - t0, [r["bh2_point_b_sq"] for r in rows], "s-", label="BH2 point")
     axes[1].plot(times - t0, [r["bh1_avg_b_sq"] for r in rows], "o--", label="BH1 avg")
     axes[1].plot(times - t0, [r["bh2_avg_b_sq"] for r in rows], "s--", label="BH2 avg")
-    axes[1].set_yscale("log")
+    set_log_if_positive(axes[1], ([r["bh1_point_b_sq"] for r in rows],
+                                  [r["bh2_point_b_sq"] for r in rows],
+                                  [r["bh1_avg_b_sq"] for r in rows],
+                                  [r["bh2_avg_b_sq"] for r in rows]))
     axes[1].set_ylabel(r"$B^2$")
     axes[1].grid(True, alpha=0.3)
 
@@ -308,7 +322,10 @@ def main():
     axes[2].plot(times - t0, [r["bh2_point_rho"] for r in rows], "s-", label="BH2 point")
     axes[2].plot(times - t0, [r["bh1_avg_rho"] for r in rows], "o--", label="BH1 avg")
     axes[2].plot(times - t0, [r["bh2_avg_rho"] for r in rows], "s--", label="BH2 avg")
-    axes[2].set_yscale("log")
+    set_log_if_positive(axes[2], ([r["bh1_point_rho"] for r in rows],
+                                  [r["bh2_point_rho"] for r in rows],
+                                  [r["bh1_avg_rho"] for r in rows],
+                                  [r["bh2_avg_rho"] for r in rows]))
     axes[2].set_ylabel(r"$\rho$")
     axes[2].grid(True, alpha=0.3)
 
@@ -316,7 +333,10 @@ def main():
     axes[3].plot(times - t0, [r["bh2_point_press"] for r in rows], "s-", label="BH2 point")
     axes[3].plot(times - t0, [r["bh1_avg_press"] for r in rows], "o--", label="BH1 avg")
     axes[3].plot(times - t0, [r["bh2_avg_press"] for r in rows], "s--", label="BH2 avg")
-    axes[3].set_yscale("log")
+    set_log_if_positive(axes[3], ([r["bh1_point_press"] for r in rows],
+                                  [r["bh2_point_press"] for r in rows],
+                                  [r["bh1_avg_press"] for r in rows],
+                                  [r["bh2_avg_press"] for r in rows]))
     axes[3].set_xlabel(r"$t - t_0$ (M)")
     axes[3].set_ylabel(r"$p$")
     axes[3].grid(True, alpha=0.3)
@@ -331,11 +351,14 @@ def main():
         axes[0].plot(times - t0, [r[f"{bh}_avg_temp"] for r in rows], marker + "--", label=bh.upper())
         axes[1].plot(times - t0, [r[f"{bh}_avg_b_mag"] for r in rows], marker + "--", label=bh.upper())
         axes[2].plot(times - t0, [r[f"{bh}_avg_beta"] for r in rows], marker + "--", label=bh.upper())
-    axes[0].set_yscale("log")
+    set_log_if_positive(axes[0], ([r["bh1_avg_temp"] for r in rows],
+                                  [r["bh2_avg_temp"] for r in rows]))
     axes[0].set_ylabel("avg temperature")
-    axes[1].set_yscale("log")
+    set_log_if_positive(axes[1], ([r["bh1_avg_b_mag"] for r in rows],
+                                  [r["bh2_avg_b_mag"] for r in rows]))
     axes[1].set_ylabel(r"avg $|B|$")
-    axes[2].set_yscale("log")
+    set_log_if_positive(axes[2], ([r["bh1_avg_beta"] for r in rows],
+                                  [r["bh2_avg_beta"] for r in rows]))
     axes[2].set_ylabel(r"avg $\beta$")
     axes[2].set_xlabel(r"$t - t_0$ (M)")
     for ax in axes:
@@ -402,7 +425,9 @@ def main():
                  "s--", label="BH2 sink avg")
     if math.isfinite(TEMP_ABS_LIMIT):
         axes[0].axhline(TEMP_ABS_LIMIT, color="r", linestyle=":", label="absolute limit")
-    axes[0].set_yscale("log")
+    set_log_if_positive(axes[0], ([finite_or_nan(r["global_temperature_finite_max"]) for r in rows],
+                                  [finite_or_nan(r["bh1_avg_temp"]) for r in rows],
+                                  [finite_or_nan(r["bh2_avg_temp"]) for r in rows]))
     axes[0].set_ylabel("temperature")
     axes[0].grid(True, alpha=0.3)
     axes[0].legend(loc="best")

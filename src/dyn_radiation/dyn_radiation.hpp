@@ -43,9 +43,11 @@ struct DynRadiationTaskIDs {
   TaskID rad_recvf;
   TaskID mhd_recvf;
   TaskID hyd_recvf;
+  TaskID mhd_repairf;
   TaskID rad_rkupdt;
   TaskID mhd_rkupdt;
   TaskID hyd_rkupdt;
+  TaskID mhd_repairu;
   TaskID rad_src;
   TaskID mhd_src;
   TaskID hyd_src;

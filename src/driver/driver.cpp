@@ -591,6 +591,12 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     }
   }
 
+  auto pre_restart_conserved_init_func = pm->pgen->pre_restart_conserved_init_func;
+  if (pre_restart_conserved_init_func != nullptr) {
+    pre_restart_conserved_init_func(pm);
+    pm->pgen->pre_restart_conserved_init_func = nullptr;
+  }
+
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
   // includes communications for shearing box boundaries
   hydro::Hydro *phydro = pm->pmb_pack->phydro;

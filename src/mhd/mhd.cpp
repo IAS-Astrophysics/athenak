@@ -177,6 +177,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (evolution_t.compare("stationary") != 0) {
     // determine if FOFC is enabled
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+    repair_nonfinite_fluxes = pin->GetOrAddBoolean("mhd","repair_nonfinite_fluxes",false);
+    repair_nonfinite_face_emfs = pin->GetOrAddBoolean("mhd",
+                                                      "repair_nonfinite_face_emfs",false);
+    repair_nonfinite_conserved = pin->GetOrAddBoolean("mhd",
+                                                      "repair_nonfinite_conserved",false);
+    repair_nonfinite_fluxes_verbose = pin->GetOrAddBoolean("mhd",
+        "repair_nonfinite_fluxes_verbose",true);
 
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");

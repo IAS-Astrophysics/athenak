@@ -51,7 +51,9 @@ struct MHDTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
+  TaskID repairf;
   TaskID rkupdt;
+  TaskID repairu;
   TaskID srctrms;
   TaskID sendu_oa;
   TaskID recvu_oa;
@@ -143,6 +145,12 @@ class MHD {
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
 
+  // guarded repair for non-finite flux/EMF data in unstable restarts
+  bool repair_nonfinite_fluxes = false;
+  bool repair_nonfinite_face_emfs = false;
+  bool repair_nonfinite_conserved = false;
+  bool repair_nonfinite_fluxes_verbose = true;
+
   // container to hold names of TaskIDs
   MHDTaskIDs id;
 
@@ -158,7 +166,9 @@ class MHD {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
+  TaskStatus RepairNonFiniteFluxes(Driver *d, int stage);
   TaskStatus RKUpdate(Driver *d, int stage);
+  TaskStatus RepairNonFiniteConserved(Driver *d, int stage);
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);
@@ -193,6 +203,8 @@ class MHD {
   bool CheckFiniteCellEMF(const char *label, Driver *d, int stage);
   bool CheckFiniteDensityFlux(const char *label, Driver *d, int stage);
   bool CheckFiniteCornerE(const char *label, Driver *d, int stage);
+  void RepairNonFiniteFluxArrays(const char *label, Driver *d, int stage);
+  void RepairNonFiniteFaceEMFs(const char *label, Driver *d, int stage);
 
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>

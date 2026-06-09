@@ -23,6 +23,7 @@ using UserEFieldFnPtr = void (*)(Mesh* pm, DvceEdgeFld4D<Real> &efld);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 using PostRestartPrimitiveInitFnPtr = void (*)(Mesh *pm);
+using PreRestartConservedInitFnPtr = void (*)(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -61,6 +62,7 @@ class ProblemGenerator {
   UserEFieldFnPtr user_efield_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
+  PreRestartConservedInitFnPtr pre_restart_conserved_init_func=nullptr;
   PostRestartPrimitiveInitFnPtr post_restart_primitive_init_func=nullptr;
 
   // true when an old restart was read without the active dyn_radiation i0 block

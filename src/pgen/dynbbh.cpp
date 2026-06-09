@@ -199,6 +199,12 @@ struct bbh_pgen {
   Real radius_thr;
   Real smooth_b_damping_eta;
   Real smooth_b_damping_cfl;
+  Real restart_precondition_radius;
+  Real restart_precondition_rho_floor;
+  Real restart_precondition_temp_floor;
+  Real restart_precondition_temp_ceil;
+  Real restart_precondition_sigma_max;
+  Real restart_precondition_velocity_max;
   Real puncture_excise_rad1;
   Real puncture_excise_rad2;
   Real puncture_excise_shrink_timescale;
@@ -211,6 +217,8 @@ struct bbh_pgen {
   bool use_traj_table;
   bool spin_ramp;
   bool smooth_b_damping;
+  bool restart_precondition_mhd;
+  bool restart_precondition_verbose;
   bool puncture_excise_cap_to_horizon;
   bool puncture_excise_to_horizon;
   bool puncture_excise_shrink_to_horizon;
@@ -432,6 +440,9 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt);
 void AddThinDiskCooling(Mesh *pm, const Real bdt);
 void AddDynBBHUserSources(Mesh *pm, const Real bdt);
 void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
+void InitializeDynBBHPreRestart(Mesh *pm);
+void InitializeDynBBHPostRestart(Mesh *pm);
+void PreconditionDynBBHRestartMHD(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn void TorusHistory(HistoryData *pdata, Mesh *pm)
@@ -677,6 +688,60 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "non-negative cfl cap" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  bbh.restart_precondition_mhd = pin->GetOrAddBoolean(
+      "problem", "restart_precondition_mhd", false);
+  bbh.restart_precondition_radius = pin->GetOrAddReal(
+      "problem", "restart_precondition_radius", 0.0);
+  bbh.restart_precondition_rho_floor = pin->GetOrAddReal(
+      "problem", "restart_precondition_rho_floor", 0.0);
+  bbh.restart_precondition_temp_floor = pin->GetOrAddReal(
+      "problem", "restart_precondition_temp_floor", 0.0);
+  bbh.restart_precondition_temp_ceil = pin->GetOrAddReal(
+      "problem", "restart_precondition_temp_ceil", 0.0);
+  bbh.restart_precondition_sigma_max = pin->GetOrAddReal(
+      "problem", "restart_precondition_sigma_max", 0.0);
+  bbh.restart_precondition_velocity_max = pin->GetOrAddReal(
+      "problem", "restart_precondition_velocity_max", 0.0);
+  bbh.restart_precondition_verbose = pin->GetOrAddBoolean(
+      "problem", "restart_precondition_verbose", true);
+  if (bbh.restart_precondition_mhd) {
+    if (!(bbh.restart_precondition_radius > 0.0) ||
+        !(bbh.restart_precondition_rho_floor > 0.0) ||
+        bbh.restart_precondition_temp_floor < 0.0 ||
+        bbh.restart_precondition_temp_ceil < 0.0 ||
+        bbh.restart_precondition_sigma_max < 0.0 ||
+        bbh.restart_precondition_velocity_max < 0.0 ||
+        !std::isfinite(bbh.restart_precondition_radius) ||
+        !std::isfinite(bbh.restart_precondition_rho_floor) ||
+        !std::isfinite(bbh.restart_precondition_temp_floor) ||
+        !std::isfinite(bbh.restart_precondition_temp_ceil) ||
+        !std::isfinite(bbh.restart_precondition_sigma_max) ||
+        !std::isfinite(bbh.restart_precondition_velocity_max)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "problem/restart_precondition_mhd requires positive finite "
+                << "restart_precondition_radius and restart_precondition_rho_floor, "
+                << "and non-negative finite temperature/sigma/velocity controls"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (bbh.restart_precondition_temp_ceil > 0.0 &&
+        bbh.restart_precondition_temp_floor > bbh.restart_precondition_temp_ceil) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "restart_precondition_temp_floor must not exceed "
+                << "restart_precondition_temp_ceil" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (restart && (pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr ||
+                    pmbp->padm == nullptr)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "problem/restart_precondition_mhd requires MHD, Valencia GRMHD, "
+                << "and ADM variables on restart" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
   bbh.require_resolved_horizon = pin->GetOrAddBoolean(
       "coord", "require_resolved_horizon", false);
   bbh.puncture_excise_rad1 = pin->GetOrAddReal("coord", "excise_1_rad", -1.0);
@@ -912,7 +977,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                   << "requires Valencia GRMHD." << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      post_restart_primitive_init_func = InitializeDynBBHRestartDynRadiation;
     }
   }
   if (pmbp->ppart != nullptr) {
@@ -921,6 +985,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "use pgen_name=dynbbh_beam for the radiation beam particle test."
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  if (restart && bbh.restart_precondition_mhd) {
+    pre_restart_conserved_init_func = InitializeDynBBHPreRestart;
+  }
+  if (restart && restart_missing_dynrad_i0) {
+    post_restart_primitive_init_func = InitializeDynBBHPostRestart;
   }
 
   // Flux diagnostics setup
@@ -1609,6 +1679,258 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 namespace {
+
+void InitializeDynBBHPreRestart(Mesh *pm) {
+  if (bbh.restart_precondition_mhd) {
+    PreconditionDynBBHRestartMHD(pm);
+  }
+}
+
+void InitializeDynBBHPostRestart(Mesh *pm) {
+  if (pm->pgen->restart_missing_dynrad_i0) {
+    InitializeDynBBHRestartDynRadiation(pm);
+  }
+}
+
+void PreconditionDynBBHRestartMHD(Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr || pmbp->padm == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh restart preconditioning requires MHD, "
+              << "Valencia GRMHD, and ADM variables." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  pmbp->padm->SetADMVariables(pmbp);
+  if (pmbp->pcoord->coord_data.bh_excise) {
+    pmbp->pcoord->UpdateExcisionMasks();
+  }
+  if (pmbp->nmb_thispack == 0) return;
+
+  auto &indcs = pm->mb_indcs;
+  int &is = indcs.is;
+  int &ie = indcs.ie;
+  int &js = indcs.js;
+  int &je = indcs.je;
+  int &ks = indcs.ks;
+  int &ke = indcs.ke;
+  int nmb1 = pmbp->nmb_thispack - 1;
+
+  auto &u0 = pmbp->pmhd->u0;
+  auto &w0 = pmbp->pmhd->w0;
+  auto &b0 = pmbp->pmhd->b0;
+  auto &bcc0 = pmbp->pmhd->bcc0;
+  auto &adm = pmbp->padm->adm;
+  auto &size = pmbp->pmb->mb_size;
+  auto eos_data = pmbp->pmhd->peos->eos_data;
+  int &nmhd = pmbp->pmhd->nmhd;
+  int &nscal = pmbp->pmhd->nscalars;
+  const Real radius = bbh.restart_precondition_radius;
+  const Real rho_floor = bbh.restart_precondition_rho_floor;
+  const Real temp_floor = bbh.restart_precondition_temp_floor;
+  const Real temp_ceil = bbh.restart_precondition_temp_ceil;
+  const Real sigma_max = bbh.restart_precondition_sigma_max;
+  const Real velocity_max = bbh.restart_precondition_velocity_max;
+  if (!(eos_data.is_ideal)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh restart preconditioning currently supports "
+              << "only ideal-gas MHD, because it replaces masked Valencia "
+              << "conserved cells directly." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  DvceArray1D<int> counts("dynbbh_restart_precondition_counts", 10);
+  Kokkos::deep_copy(DevExeSpace(), counts, 0);
+
+  par_for("dynbbh_restart_precondition_mhd", DevExeSpace(),
+          0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real &x1min = size.d_view(m).x1min;
+    Real &x1max = size.d_view(m).x1max;
+    Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+    Real &x2min = size.d_view(m).x2min;
+    Real &x2max = size.d_view(m).x2max;
+    Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+    Real &x3min = size.d_view(m).x3min;
+    Real &x3max = size.d_view(m).x3max;
+    Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+    const Real old_d = u0(m,IDN,k,j,i);
+    const Real old_m1 = u0(m,IM1,k,j,i);
+    const Real old_m2 = u0(m,IM2,k,j,i);
+    const Real old_m3 = u0(m,IM3,k,j,i);
+    const Real old_e = u0(m,IEN,k,j,i);
+    const bool old_cons_finite =
+        Kokkos::isfinite(old_d) && Kokkos::isfinite(old_m1) &&
+        Kokkos::isfinite(old_m2) && Kokkos::isfinite(old_m3) &&
+        Kokkos::isfinite(old_e);
+    const Real r = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
+    const bool inside_radius = Kokkos::isfinite(r) && r <= radius;
+    if (!(inside_radius) && old_cons_finite) return;
+    Kokkos::atomic_add(&counts(0), 1);
+    if (inside_radius) {
+      Kokkos::atomic_add(&counts(8), 1);
+    } else {
+      Kokkos::atomic_add(&counts(9), 1);
+    }
+    if (!old_cons_finite) {
+      Kokkos::atomic_add(&counts(5), 1);
+    }
+
+    Real bx_l = b0.x1f(m,k,j,i);
+    Real bx_r = b0.x1f(m,k,j,i+1);
+    Real by_l = b0.x2f(m,k,j,i);
+    Real by_r = b0.x2f(m,k,j+1,i);
+    Real bz_l = b0.x3f(m,k,j,i);
+    Real bz_r = b0.x3f(m,k+1,j,i);
+    int bbad = 0;
+    Real bx;
+    if (Kokkos::isfinite(bx_l) && Kokkos::isfinite(bx_r)) {
+      bx = 0.5*(bx_l + bx_r);
+    } else if (Kokkos::isfinite(bx_l)) {
+      bx = bx_l;
+      bbad = 1;
+    } else if (Kokkos::isfinite(bx_r)) {
+      bx = bx_r;
+      bbad = 1;
+    } else {
+      bx = 0.0;
+      bbad = 1;
+    }
+    Real by;
+    if (Kokkos::isfinite(by_l) && Kokkos::isfinite(by_r)) {
+      by = 0.5*(by_l + by_r);
+    } else if (Kokkos::isfinite(by_l)) {
+      by = by_l;
+      bbad = 1;
+    } else if (Kokkos::isfinite(by_r)) {
+      by = by_r;
+      bbad = 1;
+    } else {
+      by = 0.0;
+      bbad = 1;
+    }
+    Real bz;
+    if (Kokkos::isfinite(bz_l) && Kokkos::isfinite(bz_r)) {
+      bz = 0.5*(bz_l + bz_r);
+    } else if (Kokkos::isfinite(bz_l)) {
+      bz = bz_l;
+      bbad = 1;
+    } else if (Kokkos::isfinite(bz_r)) {
+      bz = bz_r;
+      bbad = 1;
+    } else {
+      bz = 0.0;
+      bbad = 1;
+    }
+    if (bbad != 0) {
+      Kokkos::atomic_add(&counts(7), 1);
+    }
+    bcc0(m,IBX,k,j,i) = bx;
+    bcc0(m,IBY,k,j,i) = by;
+    bcc0(m,IBZ,k,j,i) = bz;
+
+    const Real detg =
+        adm.g_dd(m,0,0,k,j,i) *
+            (adm.g_dd(m,1,1,k,j,i)*adm.g_dd(m,2,2,k,j,i) -
+             SQR(adm.g_dd(m,1,2,k,j,i))) -
+        adm.g_dd(m,0,1,k,j,i) *
+            (adm.g_dd(m,0,1,k,j,i)*adm.g_dd(m,2,2,k,j,i) -
+             adm.g_dd(m,0,2,k,j,i)*adm.g_dd(m,1,2,k,j,i)) +
+        adm.g_dd(m,0,2,k,j,i) *
+            (adm.g_dd(m,0,1,k,j,i)*adm.g_dd(m,1,2,k,j,i) -
+             adm.g_dd(m,0,2,k,j,i)*adm.g_dd(m,1,1,k,j,i));
+    if (!(detg > 0.0) || !(Kokkos::isfinite(detg))) {
+      Kokkos::atomic_add(&counts(5), 1);
+      return;
+    }
+    const Real sdetg = sqrt(detg);
+    const Real isdetg = 1.0/sdetg;
+    const Real bxu = bx*isdetg;
+    const Real byu = by*isdetg;
+    const Real bzu = bz*isdetg;
+    const Real b2 =
+        adm.g_dd(m,0,0,k,j,i)*SQR(bxu) +
+        adm.g_dd(m,1,1,k,j,i)*SQR(byu) +
+        adm.g_dd(m,2,2,k,j,i)*SQR(bzu) +
+        2.0*adm.g_dd(m,0,1,k,j,i)*bxu*byu +
+        2.0*adm.g_dd(m,0,2,k,j,i)*bxu*bzu +
+        2.0*adm.g_dd(m,1,2,k,j,i)*byu*bzu;
+
+    Real dtarget = rho_floor;
+    if (!(inside_radius) && Kokkos::isfinite(old_d) && old_d > 0.0) {
+      const Real old_rho = old_d*isdetg;
+      if (Kokkos::isfinite(old_rho) && old_rho > dtarget) {
+        dtarget = old_rho;
+      }
+    }
+    if (sigma_max > 0.0 && Kokkos::isfinite(b2) && b2 > 0.0) {
+      const Real dsigma = b2/sigma_max;
+      if (dsigma > dtarget) {
+        dtarget = dsigma;
+        Kokkos::atomic_add(&counts(6), 1);
+      }
+    }
+
+    Real press = (temp_floor > 0.0) ? dtarget*temp_floor : eos_data.pfloor;
+    if (!(Kokkos::isfinite(press)) || !(press > 0.0)) {
+      press = eos_data.pfloor;
+    }
+    if (temp_ceil > 0.0 && press > dtarget*temp_ceil) {
+      press = dtarget*temp_ceil;
+      Kokkos::atomic_add(&counts(3), 1);
+    }
+    Kokkos::atomic_add(&counts(1), 1);
+    Kokkos::atomic_add(&counts(2), 1);
+    Kokkos::atomic_add(&counts(4), 1);
+
+    const Real eint = press/(eos_data.gamma - 1.0);
+    u0(m,IDN,k,j,i) = dtarget*sdetg;
+    u0(m,IM1,k,j,i) = 0.0;
+    u0(m,IM2,k,j,i) = 0.0;
+    u0(m,IM3,k,j,i) = 0.0;
+    u0(m,IEN,k,j,i) = (eint + 0.5*b2)*sdetg;
+    for (int n=0; n<nscal; ++n) {
+      u0(m,nmhd+n,k,j,i) = 0.0;
+    }
+
+    w0(m,IDN,k,j,i) = dtarget;
+    w0(m,IPR,k,j,i) = press;
+    w0(m,IVX,k,j,i) = 0.0;
+    w0(m,IVY,k,j,i) = 0.0;
+    w0(m,IVZ,k,j,i) = 0.0;
+  });
+  DevExeSpace().fence();
+
+  if (bbh.restart_precondition_verbose) {
+    auto h_counts = Kokkos::create_mirror_view(counts);
+    Kokkos::deep_copy(h_counts, counts);
+    if (h_counts(1) > 0 || h_counts(2) > 0 || h_counts(3) > 0 ||
+        h_counts(4) > 0 || h_counts(5) > 0 || h_counts(7) > 0) {
+      std::cout << "dynbbh restart MHD precondition on rank "
+                << global_variable::my_rank
+                << " repaired=" << h_counts(0)
+                << " conserved_replaced=" << h_counts(1)
+                << " pressure_set=" << h_counts(2)
+                << " pressure_ceiled=" << h_counts(3)
+                << " velocity_reset=" << h_counts(4)
+                << " nonfinite_conserved_old=" << h_counts(5)
+                << " sigma_density_targets=" << h_counts(6)
+                << " nonfinite_face_b=" << h_counts(7)
+                << " radius_replacements=" << h_counts(8)
+                << " nonfinite_only_replacements=" << h_counts(9)
+                << " radius=" << radius
+                << " rho_floor=" << rho_floor
+                << " temp_floor=" << temp_floor
+                << " temp_ceil=" << temp_ceil
+                << " sigma_max=" << sigma_max
+                << " velocity_max=" << velocity_max
+                << std::endl;
+    }
+  }
+}
 
 void InitializeDynBBHRestartDynRadiation(Mesh *pm) {
   MeshBlockPack *pmbp = pm->pmb_pack;

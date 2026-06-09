@@ -261,6 +261,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
   // Use GS07 algorithm to compute all three of E1, E2, and E3
 
   if (pmy_pack->pmesh->three_d) {
+    RepairNonFiniteFluxArrays("CornerE pre-SG07", pdriver, stage);
+    RepairNonFiniteFaceEMFs("CornerE pre-SG07", pdriver, stage);
     if (!CheckFiniteDensityFlux("CornerE pre-SG07", pdriver, stage)) return TaskStatus::fail;
     if (!CheckFiniteFaceEMF("CornerE pre-SG07", pdriver, stage)) return TaskStatus::fail;
 

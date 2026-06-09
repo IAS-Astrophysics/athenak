@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot AthenaK binary slice_x3 files centered on the binary."""
+"""Plot AthenaK binary slice files centered on the binary."""
 
 import argparse
 import math
@@ -43,6 +43,13 @@ def bh_positions(time, sep, q):
     return (r1 * c, r1 * s), (-r2 * c, -r2 * s)
 
 
+def slice_array(arr):
+    arr = np.squeeze(np.asarray(arr))
+    if arr.ndim != 2:
+        raise ValueError(f"expected a 2D slice after squeezing, got shape {arr.shape}")
+    return arr
+
+
 def block_arrays(data, field):
     if field == "beta":
         out = []
@@ -52,18 +59,66 @@ def block_arrays(data, field):
             data["mb_data"]["bcc2"],
             data["mb_data"]["bcc3"],
         ):
-            b2 = np.asarray(bx)[0] ** 2 + np.asarray(by)[0] ** 2 + np.asarray(bz)[0] ** 2
-            out.append(2.0 * np.asarray(p)[0] / np.maximum(b2, 1.0e-300))
+            b2 = slice_array(bx) ** 2 + slice_array(by) ** 2 + slice_array(bz) ** 2
+            out.append(2.0 * slice_array(p) / np.maximum(b2, 1.0e-300))
         return out
     source = "dens" if field == "rho" else field
-    return [np.asarray(arr)[0] for arr in data["mb_data"][source]]
+    return [slice_array(arr) for arr in data["mb_data"][source]]
 
 
-def finite_range(arrays, geometries, extent, default):
+def plane_info(slice_id):
+    if slice_id == "slice_x3":
+        return {
+            "label": "xy",
+            "xidx": (0, 1),
+            "yidx": (2, 3),
+            "xlabel": "x (M)",
+            "ylabel": "y (M)",
+            "out_suffix": "centered_xy",
+            "mark_bh": True,
+        }
+    if slice_id == "slice_x2":
+        return {
+            "label": "xz",
+            "xidx": (0, 1),
+            "yidx": (4, 5),
+            "xlabel": "x (M)",
+            "ylabel": "z (M)",
+            "out_suffix": "centered_xz",
+            "mark_bh": False,
+        }
+    if slice_id == "slice_x1":
+        return {
+            "label": "yz",
+            "xidx": (2, 3),
+            "yidx": (4, 5),
+            "xlabel": "y (M)",
+            "ylabel": "z (M)",
+            "out_suffix": "centered_yz",
+            "mark_bh": False,
+        }
+    raise ValueError(f"unknown slice id {slice_id}")
+
+
+def infer_slice_id(path):
+    for slice_id in ("slice_x1", "slice_x2", "slice_x3"):
+        if slice_id in path.name:
+            return slice_id
+    raise ValueError(f"could not infer slice id from {path}")
+
+
+def geom_extent(geom, info):
+    geom = list(map(float, geom))
+    x0, x1 = geom[info["xidx"][0]], geom[info["xidx"][1]]
+    y0, y1 = geom[info["yidx"][0]], geom[info["yidx"][1]]
+    return x0, x1, y0, y1
+
+
+def finite_range(arrays, geometries, extent, default, info):
     xmin, xmax, ymin, ymax = extent
     vals = []
     for geom, arr in zip(geometries, arrays):
-        x0, x1, y0, y1, _z0, _z1 = map(float, geom)
+        x0, x1, y0, y1 = geom_extent(geom, info)
         if x1 < xmin or x0 > xmax or y1 < ymin or y0 > ymax:
             continue
         arr = np.asarray(arr)
@@ -97,6 +152,8 @@ def plot_one(args):
     data = bin_convert.read_binary(str(path))
     time = float(data["time"])
     cycle = int(data["cycle"])
+    slice_id = infer_slice_id(path)
+    info = plane_info(slice_id)
     pos1, pos2 = bh_positions(time, sep, q)
 
     fields = [
@@ -112,12 +169,12 @@ def plot_one(args):
     for ax, (field, title, cmap, default_range) in zip(axes, fields):
         arrays = block_arrays(data, field)
         if field == "rho" and auto_density:
-            vmin, vmax = finite_range(arrays, data["mb_geometry"], extent, default_range)
+            vmin, vmax = finite_range(arrays, data["mb_geometry"], extent, default_range, info)
         else:
             vmin, vmax = default_range
         image = None
         for geom, arr in zip(data["mb_geometry"], arrays):
-            x0, x1, y0, y1, _z0, _z1 = map(float, geom)
+            x0, x1, y0, y1 = geom_extent(geom, info)
             if x1 < xmin or x0 > xmax or y1 < ymin or y0 > ymax:
                 continue
             masked = np.ma.masked_invalid(np.asarray(arr))
@@ -133,21 +190,21 @@ def plot_one(args):
         if image is not None:
             cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
             cbar.ax.tick_params(labelsize=8)
-        if circle_radius > 0.0:
+        if circle_radius > 0.0 and info["mark_bh"]:
             for xh, yh in (pos1, pos2):
                 ax.add_patch(plt.Circle((xh, yh), circle_radius, fill=False,
                                         edgecolor="red", linewidth=1.3))
-        if mark_holes:
+        if mark_holes and info["mark_bh"]:
             ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], "wo", ms=4, mec="k", mew=0.7)
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_title(title)
-        ax.set_xlabel("x (M)")
+        ax.set_xlabel(info["xlabel"])
         ax.grid(alpha=0.15)
-    axes[0].set_ylabel("y (M)")
-    fig.suptitle(f"{path.stem}  time={time:.1f}  cycle={cycle}")
+    axes[0].set_ylabel(info["ylabel"])
+    fig.suptitle(f"{path.stem}  {info['label']}  time={time:.1f}  cycle={cycle}")
     outdir.mkdir(parents=True, exist_ok=True)
-    out = outdir / f"{path.stem}.centered_xy.png"
+    out = outdir / f"{path.stem}.{info['out_suffix']}.png"
     fig.savefig(out, dpi=140)
     plt.close(fig)
     return str(out)
@@ -165,11 +222,16 @@ def main():
                         help="draw red empty circles of this radius; negative uses excise_1_rad")
     parser.add_argument("--auto-density", action="store_true",
                         help="autoscale density using positive finite values in the plotted viewport")
+    parser.add_argument("--plane", choices=("x1", "x2", "x3", "all"), default="x3",
+                        help="slice plane to plot: x1=yz, x2=xz, x3=xy")
     args = parser.parse_args()
 
-    files = sorted((args.run_dir / "bin").glob("torus.slice_x3.*.bin"))[:: max(args.stride, 1)]
+    slice_ids = ["slice_x1", "slice_x2", "slice_x3"] if args.plane == "all" else [f"slice_{args.plane}"]
+    files = []
+    for slice_id in slice_ids:
+        files.extend(sorted((args.run_dir / "bin").glob(f"torus.{slice_id}.*.bin"))[:: max(args.stride, 1)])
     if not files:
-        raise SystemExit(f"No torus.slice_x3.*.bin files found in {args.run_dir / 'bin'}")
+        raise SystemExit(f"No requested slice .bin files found in {args.run_dir / 'bin'}")
     parfile = args.run_dir / "parfile.par"
     sep = read_par_value(parfile, "sep", 25.0)
     q = read_par_value(parfile, "q", 1.0)
