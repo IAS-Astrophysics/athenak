@@ -1,0 +1,89 @@
+#!/bin/bash -l
+#PBS -A MHDTidal
+#PBS -N z4c_tov_ks_chain
+#PBS -l select=2
+#PBS -l walltime=01:00:00
+#PBS -l filesystems=home:flare
+#PBS -k doe
+#PBS -l place=scatter
+#PBS -q debug
+#PBS -j oe
+
+# Restart-chain variant of submit_aurora_case.pbs: never archives the run
+# directory; restarts from the latest rst file when one exists, otherwise
+# starts fresh from INPUT_DECK.
+
+set -euo pipefail
+
+REPO_DIR="${REPO_DIR:-/home/hzhu/athenak_tde}"
+PROJECT_ROOT="${PROJECT_ROOT:-/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation}"
+RUN_ROOT="${RUN_ROOT:-${PROJECT_ROOT}/runs}"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
+ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
+CASE_NAME="${CASE_NAME:?CASE_NAME must be provided with qsub -v}"
+INPUT_DECK="${INPUT_DECK:?INPUT_DECK must be provided with qsub -v}"
+RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
+ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:54:00}"
+KEEP_RST="${KEEP_RST:-3}"
+
+if type module >/dev/null 2>&1; then
+  module reset >/dev/null 2>&1 || true
+  module load oneapi >/dev/null 2>&1 || module load oneapi/release >/dev/null 2>&1 || true
+fi
+
+export MPICH_GPU_SUPPORT_ENABLED="${MPICH_GPU_SUPPORT_ENABLED:-1}"
+export SYCL_DEVICE_FILTER="${SYCL_DEVICE_FILTER:-level_zero:gpu}"
+export ONEAPI_DEVICE_SELECTOR="${ONEAPI_DEVICE_SELECTOR:-level_zero:gpu}"
+export ZE_FLAT_DEVICE_HIERARCHY="${ZE_FLAT_DEVICE_HIERARCHY:-COMPOSITE}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+
+CPU_BIND="${CPU_BIND:-list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100}"
+
+NNODES="$(wc -l < "${PBS_NODEFILE}")"
+NTOTRANKS="$((NNODES * RANKS_PER_NODE))"
+RUN_DIR="${RUN_ROOT}/${CASE_NAME}"
+
+mkdir -p "${RUN_DIR}"
+cp -f "${INPUT_DECK}" "${RUN_DIR}/"
+
+# Prune old restart files, keeping the most recent KEEP_RST.
+if [[ -d "${RUN_DIR}/rst" ]]; then
+  mapfile -t rst_all < <(ls -v "${RUN_DIR}/rst"/*.rst 2>/dev/null || true)
+  nrst=${#rst_all[@]}
+  if (( nrst > KEEP_RST )); then
+    for ((idx = 0; idx < nrst - KEEP_RST; ++idx)); do
+      rm -f "${rst_all[idx]}"
+    done
+  fi
+fi
+
+LATEST_RST=""
+if [[ -d "${RUN_DIR}/rst" ]]; then
+  LATEST_RST="$(ls -v "${RUN_DIR}/rst"/*.rst 2>/dev/null | tail -n 1 || true)"
+fi
+
+echo "CASE_NAME=${CASE_NAME}"
+echo "RUN_DIR=${RUN_DIR}"
+echo "NNODES=${NNODES} NTOTRANKS=${NTOTRANKS}"
+if [[ -n "${LATEST_RST}" ]]; then
+  echo "CHAIN_MODE=restart LATEST_RST=${LATEST_RST}"
+else
+  echo "CHAIN_MODE=fresh INPUT_DECK=${INPUT_DECK}"
+fi
+
+cd "${RUN_DIR}"
+read -r -a ATHENA_EXTRA_ARGV <<< "${ATHENA_EXTRA_ARGS:-}"
+
+if [[ -n "${LATEST_RST}" ]]; then
+  mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+    gpu_tile_compact.sh "${ATHENA_EXE}" \
+    -r "${LATEST_RST}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
+    "${ATHENA_EXTRA_ARGV[@]}"
+else
+  mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+    gpu_tile_compact.sh "${ATHENA_EXE}" \
+    -i "${INPUT_DECK}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
+    "${ATHENA_EXTRA_ARGV[@]}"
+fi
+
+echo "CHAIN_JOB_DONE"

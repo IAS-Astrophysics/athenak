@@ -14,6 +14,10 @@
 #include <string>
 #include <type_traits>
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
@@ -89,6 +93,14 @@ Real amr_star_refine_radius_factor = 0.0;
 Real amr_star_derefine_radius = 0.0;
 Real amr_star_derefine_radius_factor = 0.0;
 int amr_star_refine_level = -1;
+// Track the star center via the global MHD density maximum instead of the
+// ballistic StarCenterAtTime estimate (needed for accelerating infall orbits).
+bool amr_star_track_rhomax = false;
+Real amr_star_track_rho_floor = 1.0e-10;
+bool star_track_valid = false;
+Real star_track_x1 = 0.0;
+Real star_track_x2 = 0.0;
+Real star_track_x3 = 0.0;
 bool pure_background = false;
 bool zero_tmunu = false;
 bool metric_diag_history = false;
@@ -751,10 +763,83 @@ bool TouchesGlobalBoundary(const RegionSize &mb_size, const RegionSize &mesh_siz
   return touches;
 }
 
+// Locate the global MHD density maximum and use it as the tracked star center.
+// Prints a STAR_TRACK line on rank 0 for external monitoring of the infall.
+void UpdateStarTrackRhoMax(MeshBlockPack *pmbp) {
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  const int is = indcs.is, nx1 = indcs.nx1;
+  const int js = indcs.js, nx2 = indcs.nx2;
+  const int ks = indcs.ks, nx3 = indcs.nx3;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+  const int nmkji = pmbp->nmb_thispack*nkji;
+  auto &w0 = pmbp->pmhd->w0;
+
+  using maxloc_t = Kokkos::MaxLoc<Real, int>;
+  maxloc_t::value_type rho_loc;
+  Kokkos::parallel_reduce(
+      "TovKsStarTrack", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, maxloc_t::value_type &lmax) {
+        int m = idx / nkji;
+        int k = (idx - m*nkji)/nji + ks;
+        int j = ((idx/nx1) % nx2) + js;
+        int i = (idx % nx1) + is;
+        Real v = w0(m,IDN,k,j,i);
+        if (v > lmax.val) { lmax.val = v; lmax.loc = idx; }
+      }, maxloc_t(rho_loc));
+
+  Real my_val = (rho_loc.loc >= 0) ? rho_loc.val : -1.0;
+  int owner_rank = 0;
+#if MPI_PARALLEL_ENABLED
+  struct { double val; int rank; } in, out;
+  in.val = static_cast<double>(my_val);
+  in.rank = global_variable::my_rank;
+  MPI_Allreduce(&in, &out, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
+  owner_rank = out.rank;
+#endif
+  Real pos[4] = {0.0, 0.0, 0.0, -1.0};
+  if (global_variable::my_rank == owner_rank && rho_loc.loc >= 0) {
+    const int idx = rho_loc.loc;
+    const int m = idx / nkji;
+    const int k = (idx - m*nkji)/nji + ks;
+    const int j = ((idx/nx1) % nx2) + js;
+    const int i = (idx % nx1) + is;
+    auto &msize = pmbp->pmb->mb_size.h_view(m);
+    pos[0] = CellCenterX(i - is, nx1, msize.x1min, msize.x1max);
+    pos[1] = CellCenterX(j - js, nx2, msize.x2min, msize.x2max);
+    pos[2] = CellCenterX(k - ks, nx3, msize.x3min, msize.x3max);
+    pos[3] = rho_loc.val;
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Bcast(pos, 4, MPI_ATHENA_REAL, owner_rank, MPI_COMM_WORLD);
+#endif
+  if (pos[3] >= amr_star_track_rho_floor) {
+    star_track_x1 = pos[0];
+    star_track_x2 = pos[1];
+    star_track_x3 = pos[2];
+    star_track_valid = true;
+  }
+  if (global_variable::my_rank == 0) {
+    const Real rx = star_track_x1 - bh_center_x1;
+    const Real ry = star_track_x2 - bh_center_x2;
+    const Real rz = star_track_x3 - bh_center_x3;
+    std::cout << "STAR_TRACK time=" << pmbp->pmesh->time
+              << " x=" << star_track_x1 << " y=" << star_track_x2
+              << " z=" << star_track_x3
+              << " r_bh=" << std::sqrt(rx*rx + ry*ry + rz*rz)
+              << " rho_max=" << pos[3]
+              << " valid=" << star_track_valid << std::endl;
+  }
+}
+
 void RefinementCondition(MeshBlockPack *pmbp) {
   if (pmbp->pmhd == nullptr) {
     pmbp->pz4c->pamr->Refine(pmbp);
     return;
+  }
+
+  if (amr_star_track_rhomax) {
+    UpdateStarTrackRhoMax(pmbp);
   }
 
   auto &refine_flag = pmbp->pmesh->pmr->refine_flag;
@@ -842,6 +927,11 @@ void RefinementCondition(MeshBlockPack *pmbp) {
     const Real time = pmbp->pmesh->time;
     Real xstar, ystar, zstar;
     StarCenterAtTime(time, xstar, ystar, zstar);
+    if (amr_star_track_rhomax && star_track_valid) {
+      xstar = star_track_x1;
+      ystar = star_track_x2;
+      zstar = star_track_x3;
+    }
     const Real refine_radius2 = SQR(amr_star_refine_radius);
     const Real keep_radius = fmax(amr_star_refine_radius, amr_star_derefine_radius);
     const Real keep_radius2 = SQR(keep_radius);
@@ -2087,6 +2177,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   amr_star_derefine_radius_factor =
       pin->GetOrAddReal("problem", "amr_star_derefine_radius_factor", 0.0);
   amr_star_refine_level = pin->GetOrAddInteger("problem", "amr_star_refine_level", -1);
+  amr_star_track_rhomax =
+      pin->GetOrAddBoolean("problem", "amr_star_track_rhomax", false);
+  amr_star_track_rho_floor =
+      pin->GetOrAddReal("problem", "amr_star_track_rho_floor", 1.0e-10);
   zero_tmunu = pin->GetOrAddBoolean("problem", "zero_tmunu", false);
   pure_background = pin->GetOrAddBoolean("problem", "pure_background", false);
   metric_diag_history =
