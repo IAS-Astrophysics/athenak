@@ -109,7 +109,7 @@ def plot_histories(run_dir: Path, plot_dir: Path) -> None:
         ],
         "lapse_source_trends.png": [
             "src-full", "src-bg", "src-res",
-            "aK-full", "aK-bg", "Khat-res",
+            "src-adapt", "aK-bg", "Khat-res",
         ],
         "z4c_constraint_trends.png": [
             "C-norm2", "H-norm2", "M-norm2", "Z-norm2", "Theta-norm",
@@ -161,7 +161,7 @@ def main() -> None:
         default=(
             "rho-max,alpha-min,alpha-max,chi-min,detg-min,Kdd-max,Add-max,"
             "Theta-max,Khat-max,bad-metric,alpha-res,beta-res,B-res,Gam-res,"
-            "src-full,src-bg,src-res,aK-full,aK-bg,Khat-res,"
+            "src-full,src-bg,src-res,src-adapt,aK-bg,Khat-res,"
             "C-norm2,H-norm2,M-norm2,Theta-norm,mass,1-mom,2-mom,3-mom,tot-E"
         ),
     )

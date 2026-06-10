@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <memory>    // make_unique, unique_ptr
 #include <vector>    // vector
@@ -165,6 +166,26 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
   opt.lapse_oplog = pin->GetOrAddReal("z4c", "lapse_oplog", 2.0);
   opt.lapse_advect = pin->GetOrAddReal("z4c", "lapse_advect", 1.0);
+  const std::string residual_gauge =
+      pin->GetOrAddString("z4c", "residual_gauge", "standard_subtract");
+  if (residual_gauge == "standard_subtract" ||
+      residual_gauge == "direct_subtract" ||
+      residual_gauge == "standard") {
+    opt.residual_gauge_mode = residual_gauge_standard_subtract;
+  } else if (residual_gauge == "background_adapted" ||
+             residual_gauge == "background_adapted_lapse") {
+    opt.residual_gauge_mode = residual_gauge_background_adapted;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unknown <z4c>/residual_gauge = "
+              << residual_gauge << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  opt.residual_lapse_f = pin->GetOrAddReal("z4c", "residual_lapse_f", 1.0);
+  opt.residual_lapse_damping =
+      pin->GetOrAddReal("z4c", "residual_lapse_damping", 0.0);
+  opt.residual_shift_damping =
+      pin->GetOrAddReal("z4c", "residual_shift_damping", 0.0);
   opt.slow_start_lapse = pin->GetOrAddBoolean("z4c", "slow_start_lapse", false);
   opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
   opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);

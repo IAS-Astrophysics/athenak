@@ -89,6 +89,7 @@ Real amr_star_refine_radius_factor = 0.0;
 Real amr_star_derefine_radius = 0.0;
 Real amr_star_derefine_radius_factor = 0.0;
 int amr_star_refine_level = -1;
+bool pure_background = false;
 bool zero_tmunu = false;
 bool metric_diag_history = false;
 
@@ -422,7 +423,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     pdata->label[14] = "src-full";
     pdata->label[15] = "src-bg";
     pdata->label[16] = "src-res";
-    pdata->label[17] = "aK-full";
+    pdata->label[17] = "src-adapt";
     pdata->label[18] = "aK-bg";
     pdata->label[19] = "Khat-res";
   }
@@ -446,6 +447,9 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   const Real lapse_oplog_l = pm->pmb_pack->pz4c->opt.lapse_oplog;
   const Real lapse_harmonicf_l = pm->pmb_pack->pz4c->opt.lapse_harmonicf;
   const Real lapse_harmonic_l = pm->pmb_pack->pz4c->opt.lapse_harmonic;
+  const Real residual_lapse_f_l = pm->pmb_pack->pz4c->opt.residual_lapse_f;
+  const Real residual_lapse_damping_l =
+      pm->pmb_pack->pz4c->opt.residual_lapse_damping;
 
   Real rho_max = -std::numeric_limits<Real>::max();
   Real alpha_min = std::numeric_limits<Real>::max();
@@ -470,7 +474,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   Real lapse_src_full_abs_max = 0.0;
   Real lapse_src_bg_abs_max = 0.0;
   Real lapse_src_res_abs_max = 0.0;
-  Real alpha_k_full_abs_max = 0.0;
+  Real lapse_src_adapt_abs_max = 0.0;
   Real alpha_k_bg_abs_max = 0.0;
   Real khat_res_abs_max = 0.0;
   Kokkos::parallel_reduce(
@@ -487,7 +491,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
                     Real &gam_res_abs_max_local, Real &lapse_src_full_abs_max_local,
                     Real &lapse_src_bg_abs_max_local,
                     Real &lapse_src_res_abs_max_local,
-                    Real &alpha_k_full_abs_max_local,
+                    Real &lapse_src_adapt_abs_max_local,
                     Real &alpha_k_bg_abs_max_local,
                     Real &khat_res_abs_max_local) {
         int m = idx/nkji;
@@ -528,7 +532,9 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
                             lapse_harmonic_l*alpha_bg;
           const Real lapse_src_full = -f_full*alpha_full*khat_full;
           const Real lapse_src_bg = -f_bg*alpha_bg*khat_bg;
-          const Real alpha_k_full = alpha_full*khat_full;
+          const Real lapse_src_adapt =
+              -residual_lapse_f_l*f_bg*alpha_bg*khat_res -
+              residual_lapse_damping_l*z4c_res.alpha(m,k,j,i);
           const Real alpha_k_bg = alpha_bg*khat_bg;
           lapse_src_full_abs_max_local =
               fmax(lapse_src_full_abs_max_local, fabs(lapse_src_full));
@@ -536,8 +542,8 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
               fmax(lapse_src_bg_abs_max_local, fabs(lapse_src_bg));
           lapse_src_res_abs_max_local =
               fmax(lapse_src_res_abs_max_local, fabs(lapse_src_full - lapse_src_bg));
-          alpha_k_full_abs_max_local =
-              fmax(alpha_k_full_abs_max_local, fabs(alpha_k_full));
+          lapse_src_adapt_abs_max_local =
+              fmax(lapse_src_adapt_abs_max_local, fabs(lapse_src_adapt));
           alpha_k_bg_abs_max_local =
               fmax(alpha_k_bg_abs_max_local, fabs(alpha_k_bg));
           khat_res_abs_max_local = fmax(khat_res_abs_max_local, fabs(khat_res));
@@ -588,7 +594,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
       Kokkos::Max<Real>(lapse_src_full_abs_max),
       Kokkos::Max<Real>(lapse_src_bg_abs_max),
       Kokkos::Max<Real>(lapse_src_res_abs_max),
-      Kokkos::Max<Real>(alpha_k_full_abs_max),
+      Kokkos::Max<Real>(lapse_src_adapt_abs_max),
       Kokkos::Max<Real>(alpha_k_bg_abs_max),
       Kokkos::Max<Real>(khat_res_abs_max));
 
@@ -625,7 +631,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
                  MPI_MAX, 0, MPI_COMM_WORLD);
       MPI_Reduce(MPI_IN_PLACE, &lapse_src_res_abs_max, 1, MPI_ATHENA_REAL,
                  MPI_MAX, 0, MPI_COMM_WORLD);
-      MPI_Reduce(MPI_IN_PLACE, &alpha_k_full_abs_max, 1, MPI_ATHENA_REAL,
+      MPI_Reduce(MPI_IN_PLACE, &lapse_src_adapt_abs_max, 1, MPI_ATHENA_REAL,
                  MPI_MAX, 0, MPI_COMM_WORLD);
       MPI_Reduce(MPI_IN_PLACE, &alpha_k_bg_abs_max, 1, MPI_ATHENA_REAL,
                  MPI_MAX, 0, MPI_COMM_WORLD);
@@ -664,7 +670,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
                  MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
       MPI_Reduce(&lapse_src_res_abs_max, &lapse_src_res_abs_max, 1,
                  MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
-      MPI_Reduce(&alpha_k_full_abs_max, &alpha_k_full_abs_max, 1,
+      MPI_Reduce(&lapse_src_adapt_abs_max, &lapse_src_adapt_abs_max, 1,
                  MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
       MPI_Reduce(&alpha_k_bg_abs_max, &alpha_k_bg_abs_max, 1,
                  MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -694,7 +700,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     lapse_src_full_abs_max = 0.0;
     lapse_src_bg_abs_max = 0.0;
     lapse_src_res_abs_max = 0.0;
-    alpha_k_full_abs_max = 0.0;
+    lapse_src_adapt_abs_max = 0.0;
     alpha_k_bg_abs_max = 0.0;
     khat_res_abs_max = 0.0;
   }
@@ -718,7 +724,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     pdata->hdata[14] = lapse_src_full_abs_max;
     pdata->hdata[15] = lapse_src_bg_abs_max;
     pdata->hdata[16] = lapse_src_res_abs_max;
-    pdata->hdata[17] = alpha_k_full_abs_max;
+    pdata->hdata[17] = lapse_src_adapt_abs_max;
     pdata->hdata[18] = alpha_k_bg_abs_max;
     pdata->hdata[19] = khat_res_abs_max;
   }
@@ -1463,6 +1469,87 @@ void ZeroMagneticFields(MeshBlockPack *pmbp) {
   Kokkos::deep_copy(DevExeSpace(), pmbp->pmhd->bcc0, 0.0);
 }
 
+void FillAtmospherePrimitives(ParameterInput *pin, Mesh *pmy_mesh) {
+  MeshBlockPack *pmbp = pmy_mesh->pmb_pack;
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &w0 = pmbp->pmhd->w0;
+  int isg = indcs.is - indcs.ng;
+  int ieg = indcs.ie + indcs.ng;
+  int jsg = indcs.js - indcs.ng;
+  int jeg = indcs.je + indcs.ng;
+  int ksg = indcs.ks - indcs.ng;
+  int keg = indcs.ke + indcs.ng;
+  int nvars = pmbp->pmhd->nmhd + pmbp->pmhd->nscalars;
+  const Real dfloor = pin->GetOrAddReal("mhd", "dfloor", 1.0e-16);
+  const Real pfloor = pin->GetOrAddReal("mhd", "pfloor", 1.0e-22);
+
+  par_for("z4c_tov_ks_atmosphere", DevExeSpace(), 0, pmbp->nmb_thispack - 1,
+          0, nvars - 1, ksg, keg, jsg, jeg, isg, ieg,
+          KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    Real value = 0.0;
+    if (n == IDN) {
+      value = dfloor;
+    } else if (n == IPR) {
+      value = pfloor;
+    }
+    w0(m,n,k,j,i) = value;
+  });
+}
+
+void SetupPureBackground(ParameterInput *pin, Mesh *pmy_mesh) {
+  MeshBlockPack *pmbp = pmy_mesh->pmb_pack;
+  auto *pz4c = pmbp->pz4c;
+  auto &indcs = pmy_mesh->mb_indcs;
+
+  FillAtmospherePrimitives(pin, pmy_mesh);
+  if (use_minkowski_background) {
+    FillFlatADM(pmbp, pmbp->padm->adm);
+  } else {
+    FillKerrSchildADM(pmbp, pmbp->padm->adm);
+  }
+
+  pz4c->SetADMBackground = &SetADMBackgroundKerrSchild;
+  pz4c->SetZ4cBackground =
+      use_direct_z4c_background ? &SetZ4cBackgroundKerrSchild : nullptr;
+  pz4c->UpdateBackgroundState(pmy_mesh->time);
+  Kokkos::deep_copy(DevExeSpace(), pz4c->u0, 0.0);
+  Kokkos::deep_copy(DevExeSpace(), pz4c->u1, 0.0);
+  Kokkos::deep_copy(DevExeSpace(), pz4c->u_rhs, 0.0);
+  pz4c->ReconstructFullState();
+  pz4c->EnforceAlgConstrOn(pz4c->full);
+  pz4c->RecastResidualState();
+  pz4c->PrescribeGaugeResidual();
+  pz4c->ReconstructFullState();
+  pz4c->Z4cToADM(pmbp);
+
+  ZeroMagneticFields(pmbp);
+  int ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+  pmbp->pdyngr->PrimToConInit(0, n1 - 1, 0, n2 - 1, 0, n3 - 1);
+  ApplyInnerExcision(pmy_mesh, 0.0);
+  if (zero_tmunu) {
+    Kokkos::deep_copy(DevExeSpace(), pmbp->ptmunu->u_tmunu, 0.0);
+  }
+
+  switch (indcs.ng) {
+    case 2:
+      pz4c->ADMConstraints<2>(pmbp);
+      break;
+    case 3:
+      pz4c->ADMConstraints<3>(pmbp);
+      break;
+    case 4:
+      pz4c->ADMConstraints<4>(pmbp);
+      break;
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "z4c_tov_ks diagnostic: initialized pure analytic background."
+              << std::endl;
+  }
+}
+
 template <class TOVEOS>
 KOKKOS_INLINE_FUNCTION
 Real MagneticPressureProfile(const TOVEOS &eos, const tov::TOVStar &tov_star,
@@ -2001,6 +2088,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pin->GetOrAddReal("problem", "amr_star_derefine_radius_factor", 0.0);
   amr_star_refine_level = pin->GetOrAddInteger("problem", "amr_star_refine_level", -1);
   zero_tmunu = pin->GetOrAddBoolean("problem", "zero_tmunu", false);
+  pure_background = pin->GetOrAddBoolean("problem", "pure_background", false);
   metric_diag_history =
       pin->GetOrAddBoolean("problem", "metric_diag_history", false) ||
       std::getenv("ATHENA_METRIC_DIAG_HISTORY") != nullptr;
@@ -2020,6 +2108,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     ApplyInnerExcision(pmy_mesh_, 0.0, false);
     pmbp->pz4c->Z4cToADM(pmbp);
     ApplyInnerExcision(pmy_mesh_, 0.0);
+    return;
+  }
+
+  if (pure_background) {
+    SetupPureBackground(pin, pmy_mesh_);
     return;
   }
 

@@ -60,23 +60,26 @@ Also search for all current residual gauge options, including:
 
 ## First Step: Repo Hygiene, Commit, and Push
 
-Before implementing anything new:
+Before implementing anything new or submitting any jobs, first restore a deliberate tracked-file baseline:
 
 1. Run `git status --short`.
-2. Inspect all modified tracked files with `git diff` and determine which changes are relevant to the previous symmetry/residual-gauge debugging.
-3. Inspect untracked files and classify them as useful source/deck/log artifacts, generated outputs, or disposable crash/temp files.
-4. Do not delete or revert unrelated user/Cursor changes. If unrelated tracked changes are present, leave them untouched and explicitly document that they were not included in the cleanup commit.
-5. Clean up only files that are clearly disposable, such as stale core files or failed temporary artifacts. Do not remove run logs, scripts, inputs, or analysis files unless they are demonstrably obsolete and unrelated.
-6. Stage only the relevant tracked-file changes and useful new files needed to preserve the current debugging state.
-7. Commit the staged cleanup/debugging baseline before starting the background-adapted gauge implementation. Use a clear commit message, for example:
+2. Inspect every modified tracked file with `git diff` and determine whether each change is relevant to the previous symmetry/residual-gauge debugging.
+3. For tracked-file changes, either:
+   - stage and commit the relevant changes needed to preserve the current debugging state, or
+   - clean/revert only changes that are confirmed to be disposable and not user work.
+4. Inspect untracked files and classify them as useful source/deck/log artifacts, generated outputs, or disposable crash/temp files.
+5. Do not delete or revert unrelated user/Cursor changes. If unrelated tracked changes are present, leave them untouched and explicitly document that they were not included in the cleanup commit.
+6. Clean up only files that are clearly disposable, such as stale core files or failed temporary artifacts. Do not remove run logs, scripts, inputs, or analysis files unless they are demonstrably obsolete and unrelated.
+7. Stage only the relevant tracked-file changes and useful new files needed to preserve the current debugging state.
+8. Commit the staged cleanup/debugging baseline before starting the background-adapted gauge implementation. Use a clear commit message, for example:
 
 ```text
 Record residual gauge debugging diagnostics
 ```
 
-8. Push the commit to the configured remote branch. If the branch has no upstream, set the upstream explicitly after confirming the target remote/branch from `git remote -v` and `git branch --show-current`.
-9. After pushing, run `git status --short` again and document any remaining untracked or unrelated dirty-tree files in the new run log.
-10. Only proceed with implementing the background-adapted residual gauge after the relevant tracked-file state has been committed and pushed.
+9. Push the commit to the configured remote branch. If the branch has no upstream, set the upstream explicitly after confirming the target remote/branch from `git remote -v` and `git branch --show-current`.
+10. After pushing, run `git status --short` again and document any remaining untracked or unrelated dirty-tree files in the new run log.
+11. Only proceed with implementing the background-adapted residual gauge after the relevant tracked-file state has been committed or intentionally cleaned, and the resulting baseline commit has been pushed.
 
 ## Mathematical Target
 

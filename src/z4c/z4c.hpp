@@ -142,6 +142,9 @@ class Z4c {
   bool evolve_shift_residual = false;
   bool preserve_lapse_residual = false;
 
+  static constexpr int residual_gauge_standard_subtract = 0;
+  static constexpr int residual_gauge_background_adapted = 1;
+
   // aliases for the constraints
   struct Constraint_vars {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> C;         // Z constraint monitor
@@ -177,6 +180,10 @@ class Z4c {
     Real lapse_harmonicf;
     Real lapse_harmonic;
     Real lapse_advect;
+    int residual_gauge_mode;
+    Real residual_lapse_f;
+    Real residual_lapse_damping;
+    Real residual_shift_damping;
     // slow start lapse condition
     bool slow_start_lapse;
     Real ssl_damping_amp;

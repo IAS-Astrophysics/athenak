@@ -499,6 +499,44 @@ void BuildStandardPointwiseRHS(const State &state, const Z4c::Options &opt,
   }
 }
 
+template <int NGHOST, typename ResState, typename BgState>
+KOKKOS_INLINE_FUNCTION
+void BuildBackgroundAdaptedResidualGaugeRHS(
+    const ResState &res, const BgState &bg, const Z4c::Options &opt,
+    Real time, Real dx1, Real dx2, Real dx3,
+    const int m, const int k, const int j, const int i, PointRHS &out) {
+  out.ZeroClear();
+
+  Real idx[] = {1.0/dx1, 1.0/dx2, 1.0/dx3};
+  Real Lalpha_res_bg = 0.0;
+  for (int a = 0; a < 3; ++a) {
+    Lalpha_res_bg += Lx<NGHOST>(a, idx, bg.beta_u, res.alpha, m, a, k, j, i);
+  }
+
+  const Real alpha_bg = bg.alpha(m,k,j,i);
+  const Real f_bg = opt.lapse_oplog * opt.lapse_harmonicf +
+                    opt.lapse_harmonic * alpha_bg;
+  out.alpha = opt.lapse_advect * Lalpha_res_bg -
+              opt.residual_lapse_f * f_bg * alpha_bg * res.vKhat(m,k,j,i) -
+              opt.residual_lapse_damping * res.alpha(m,k,j,i);
+
+  const Real shift_driver =
+      (1.0 - opt.sss_damping_amp * exp(-0.5 * pow(time / opt.sss_damping_time, 2))) *
+      opt.shift_ggamma;
+  for (int a = 0; a < 3; ++a) {
+    Real Lbeta_res_bg = 0.0;
+    for (int b = 0; b < 3; ++b) {
+      Lbeta_res_bg += Lx<NGHOST>(b, idx, bg.beta_u, res.beta_u, m, b, a, k, j, i);
+    }
+    out.beta_u(a) =
+        (shift_driver + opt.shift_alpha2ggamma * SQR(alpha_bg)) *
+            res.vGam_u(m,a,k,j,i) +
+        opt.shift_advect * Lbeta_res_bg -
+        (opt.shift_eta + opt.residual_shift_damping) * res.beta_u(m,a,k,j,i);
+    out.vB_d(a) = 0.0;
+  }
+}
+
 } // namespace
 
 template <int NGHOST>
@@ -525,6 +563,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   const bool evolve_lapse_residual = pz4c->evolve_lapse_residual;
   const bool evolve_shift_residual = pz4c->evolve_shift_residual;
   const bool evolve_any_gauge_residual = evolve_lapse_residual || evolve_shift_residual;
+  const bool background_adapted_residual_gauge =
+      opt.residual_gauge_mode == Z4c::residual_gauge_background_adapted;
   if (use_analytic_background) {
     pz4c->PrescribeGaugeResidual();
     pz4c->UpdateBackgroundState(time);
@@ -600,16 +640,26 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
       PointRHS rhs_full_gauge;
       PointRHS rhs_bg_gauge;
+      PointRHS rhs_adapted_gauge;
       if (evolve_any_gauge_residual) {
-        BuildStandardPointwiseRHS(
-            full, opt, tmunu, false, kappa1_eff, time,
-            m, k, j, i, geo_full, rhs_full_gauge);
-        BuildStandardPointwiseRHS(
-            bg, opt, tmunu, false, kappa1_eff, time,
-            m, k, j, i, geo_bg, rhs_bg_gauge);
+        if (background_adapted_residual_gauge) {
+          BuildBackgroundAdaptedResidualGaugeRHS<NGHOST>(
+              z4c, bg, opt, time,
+              size.d_view(m).dx1, size.d_view(m).dx2, size.d_view(m).dx3,
+              m, k, j, i, rhs_adapted_gauge);
+        } else {
+          BuildStandardPointwiseRHS(
+              full, opt, tmunu, false, kappa1_eff, time,
+              m, k, j, i, geo_full, rhs_full_gauge);
+          BuildStandardPointwiseRHS(
+              bg, opt, tmunu, false, kappa1_eff, time,
+              m, k, j, i, geo_bg, rhs_bg_gauge);
+        }
       }
       if (evolve_lapse_residual) {
-        rhs.alpha(m,k,j,i) = rhs_full_gauge.alpha - rhs_bg_gauge.alpha;
+        rhs.alpha(m,k,j,i) = background_adapted_residual_gauge
+            ? rhs_adapted_gauge.alpha
+            : rhs_full_gauge.alpha - rhs_bg_gauge.alpha;
       } else {
         rhs.alpha(m,k,j,i) = 0.0;
       }
@@ -633,8 +683,12 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
           }
         }
         if (evolve_shift_residual) {
-          rhs.beta_u(m,a,k,j,i) = rhs_full_gauge.beta_u(a) - rhs_bg_gauge.beta_u(a);
-          rhs.vB_d(m,a,k,j,i) = rhs_full_gauge.vB_d(a) - rhs_bg_gauge.vB_d(a);
+          rhs.beta_u(m,a,k,j,i) = background_adapted_residual_gauge
+              ? rhs_adapted_gauge.beta_u(a)
+              : rhs_full_gauge.beta_u(a) - rhs_bg_gauge.beta_u(a);
+          rhs.vB_d(m,a,k,j,i) = background_adapted_residual_gauge
+              ? rhs_adapted_gauge.vB_d(a)
+              : rhs_full_gauge.vB_d(a) - rhs_bg_gauge.vB_d(a);
         } else {
           rhs.beta_u(m,a,k,j,i) = 0.0;
           rhs.vB_d(m,a,k,j,i) = 0.0;
