@@ -240,3 +240,95 @@ passed. Executable:
   no lapse advection + moving AMR wake) is required for the instability.
 - Status:
   - `2026-06-10T14:22:42Z`: submitted.
+  - `2026-06-10T14:26:41Z`: started running.
+  - `2026-06-10T15:25Z`: failure captured past the boosted failure time; job
+    cancelled with `qdel` after first nonfinite diagnostics.
+- Commit: `c0c07510`, tree clean (untracked handoff note only).
+- Run dir:
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/runs/z4c_tov_ks_n3_schwarzschild_bgadapt_lapse_noadvect_noboost_rhsdbg_hi2n_1h`
+- Post dir:
+  `/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation/post/z4c_tov_ks_n3_schwarzschild_bgadapt_lapse_noadvect_noboost_rhsdbg_hi2n_1h`
+  (`residual_gauge_history_summary.csv`, `residual_gauge_plots/`,
+  `pbs/bgadapt_noboost.o8534419`)
+
+### Result
+
+- The static-star case fails too, just later:
+  - term diagnostics: all categories finite at `t = 4.550`; first nonfinite at
+    `t = 4.600` (`nonfinite_rhs = 8830`), fully nonfinite by `t = 4.650`.
+  - history: `user.hst` last finite `t = 4.60`, first bad `t = 4.70`;
+    `z4c.user.hst` last finite `t = 4.50` (`C-norm2 = 3.76e+05`).
+  - last finite extremes: `alpha-max = 2.68`, `detg-min = -0.25`,
+    `Khat-res = 618`, `Gam-res = 847`.
+- The initial-data seed is far smaller without boost: at cycle 0 the
+  diagnostics show discrete `R_full ~ 3.3e-3` at the star (vs `-2.04` boosted)
+  and the cycle-0 |rhs Khat_res| max is `1.4e-5` (vs `1.5e-2` boosted). The
+  `t = 0` C-norm2 is the same (0.104, dominated by a dispersing transient).
+- Same dominant terms and same growth rate as the boosted case: `Khat_dda`
+  (with `Gam_DA`, `A_ric`, `A_tr` at factor ~0.5-0.7) grows from `2.2e-3` at
+  `t = 1.5` to `1.4e+04` at `t = 4.55`, e-folding ~0.2; C-norm2 e-folding
+  ~0.12 (squared norm).
+- Same location: argmax of `Khat_res` stays at the (now static) star, level 8,
+  again preferentially in first-interior-cell layers of level-8 meshblocks
+  (x = 38.41, 39.21, 38.93 with faces at multiples of 0.4).
+- Conclusion of the discriminator: star motion is NOT required. The boost only
+  sets the seed amplitude (failure moves from `t ~ 3.15` to `t ~ 4.6`,
+  consistent with the measured e-folding time and the ~1e3-smaller seed). The
+  exponential mode is intrinsic to the residual-gauge-coupled evolution of
+  the star region.
+
+## Assessment
+
+1. Likely source. The blow-up is an exponentially growing (e-folding ~0.2 in
+   amplitude), grid-scale (zone-to-zone sign-flipping), star-localized mode of
+   the coupled residual lapse + residual geometry system. The dominant RHS
+   coupling chain is `alpha_res -> Khat_res` through the lapse second
+   covariant derivative (`Khat_dda`) and back through the 1+log-type source,
+   with `Gam_res`/`A_res` fed by `DA_u` (contains `dKhat`) and the
+   Ricci/lapse-second-derivative terms. It is present for every evolving
+   residual-lapse variant tried (standard subtract with/without advection,
+   with/without shift evolution, kappa1 in {0, 0.2}, background-adapted) and
+   absent whenever the residual lapse is frozen (sourceoff, frozengauge),
+   in which case constraints decay.
+2. Classification update (per the handoff taxonomy):
+   - lapse residual gauge source: NOT the specific source term (removing
+     `Khat_bg*alpha_res` changed nothing); but the lapse residual evolution is
+     the required ingredient.
+   - residual geometry RHS: the amplifier, through the
+     `DDalpha`/`DA_u`/Ricci derivative loop; algebraic, damping and advection
+     terms are subdominant by >= 1.5 orders.
+   - constraint damping / background subtraction: ruled out. The audit found
+     exact pairwise full-minus-background subtraction; the BH region stays
+     quiescent in every location diagnostic; kappa terms are zero/ineffective.
+   - matter coupling: ruled out as the driver (matter terms stay at the
+     1e-3 level throughout; the hotspot sits in floored atmosphere cells).
+     Matter only maintains the star-shaped residual on which the mode grows.
+   - AMR/communication/refinement-boundary effects: implicated as the seed
+     and spatial imprint, not the amplifier: maxima repeatedly sit in the
+     first interior cell layer of level-8 meshblocks near the star, and the
+     boosted initial data adds an O(1) local discrete-R defect (`R_full ~ -2`
+     at dx = 0.0125) that sets the initial amplitude.
+   - formulation-level instability: the most consistent overall reading. The
+     residual evolution is algebraically equivalent to full Z4c with this
+     gauge (1+log f=2 with `lapse_advect` 0 or 1, shift frozen at Kerr-Schild
+     or gamma-driver from zero, `kappa1` ~ 0) around a weakly-gravitating star
+     on a fine grid; the coupled lapse-geometry subsystem grows at the grid
+     scale despite KO = 0.5 (KO contributions are only ~5% of the dominant
+     term, so allowed dissipation cannot stabilize it).
+3. Recommended next fix/probe. Two small, decisive follow-ups:
+   - Plain-full-evolution control: run the identical hi2n deck with
+     `use_analytic_background = false` (full Z4c state, same gauge
+     parameters). If it also blows at the star, the bug hunt moves entirely
+     to the gauge/parameter choice (e.g. precollapsed/slow-start lapse,
+     advection + gamma-driver shift, kappa1 ~ 0.02/M scaled), and the residual
+     machinery is exonerated end-to-end. If it survives, the difference must
+     be in the residual-specific paths (ghost/AMR handling of `u0` vs
+     reconstructed `full`), to be audited next.
+   - Residual-lapse damping scan only as mitigation once the above is known:
+     measured growth rate is ~5 in code units, so `residual_lapse_damping`
+     would need to be O(5) to win; small values (0.05-0.1) are predicted to be
+     ineffective - consistent with the handoff instruction not to use damping
+     as a substitute for isolation.
+4. Practical interim mitigation for production-style runs: keep
+   `evolve_lapse_residual = false` (frozen/prescribed residual lapse), which
+   is stable to at least `t ~ 5` with decaying constraints in all controls.
