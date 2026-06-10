@@ -439,3 +439,42 @@ frozen-gauge / Minkowski long-term instability (light-speed modes, e-fold
   gamma-driver shift `shift_Gamma=1`, `shift_advect=1`, `shift_eta=2`,
   full residual gauge evolution; rk2 went NaN by t = 4.855) with only
   `integrator = rk3`, `cfl_number = 0.3`, and rhs-term diagnostics added.
+
+### Result of full-gauge validation (job 8534667, debug-scaling): stable
+
+- Same deck as `resgauge_full_hi2n` (full residual gauge: 1+log lapse with
+  advection, gamma-driver shift `shift_Gamma=1`, `shift_advect=1`,
+  `shift_eta=2`) changed only to `integrator = rk3`, `cfl_number = 0.3`.
+- Reached `t = 5.224` at the 55-min walltime cap, finite everywhere,
+  `bad-metric = 0`, `nonfinite_u0 = 0` throughout. The rk2 original was NaN
+  by `t = 4.855` with exponentially growing constraints well before that.
+- `Khat_dda` max flat at ~1.5e-3 for the whole run (no growth trend).
+- Constraints decaying monotonically: C = 4.1e-5, H = 3.5e-5, M = 6.5e-6,
+  Theta-norm = 2.1e-6 at t = 5.22.
+- Residual gauge sector bounded and tiny: max `alpha_res` = 9.5e-6,
+  `beta_res` = 3.5e-6, `Khat_res` = 1.6e-6.
+
+### Final recommendation
+
+For all star-on-Kerr-Schild (and Minkowski) residual-Z4c runs:
+
+- `integrator = rk3` (SSPRK3). Mandatory: rk2's stability region excludes
+  the imaginary axis, so the centered-FD Z4c wave system is weakly unstable
+  under rk2 at any KO <= 0.5, fastest in the superluminal 1+log gauge sector
+  (e-fold ~0.15-0.2 at hi2n resolution), slowest but still unstable for
+  light-speed modes (e-fold ~2.7 -> the "long-term" frozen-gauge/Minkowski
+  failures). rk4 is not currently usable with coupled MHD (`MHD::CopyCons`
+  lacks the rk4 register update).
+- `cfl_number <= 0.3` with rk3 (verified linearly stable including KO with
+  margin; 0.35 is the analyzed edge).
+- KO `diss` = 0.3-0.5 now only needs to control nonlinear steepening; it is
+  no longer fighting the integrator.
+- No gauge freezing, residual-lapse damping, or kappa tuning is required:
+  the full production gauge (1+log + advection + gamma-driver shift) is
+  stable with decaying constraints once the integrator is fixed.
+
+Open follow-ups (not blockers): (a) extend a full-gauge rk3 run past the
+debug-queue horizon (t >> 5, e.g. restart chain or production queue) to
+confirm there is no slower secular drift; (b) optionally implement the rk4
+register update in `MHD::CopyCons`/`RKUpdate` if 4th-order time accuracy is
+ever needed.
