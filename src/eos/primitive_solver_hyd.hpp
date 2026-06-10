@@ -127,6 +127,8 @@ class PrimitiveSolverHydro {
   MeshBlockPack* pmy_pack;
   unsigned int nerrs;
   unsigned int errcap;
+  Real temp_ceiling;
+  Real temp_ceiling_density_max;
 
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
@@ -149,6 +151,22 @@ class PrimitiveSolverHydro {
 
     // Set maximum B^2/D
     ps.GetEOSMutable().SetMaximumMagnetization(pin->GetOrAddReal(block, "max_bsq", 1e6));
+
+    temp_ceiling = pin->GetOrAddReal(block, "temp_ceiling", -1.0);
+    temp_ceiling_density_max = pin->GetOrAddReal(block, "temp_ceiling_density_max", -1.0);
+    if (temp_ceiling == 0.0 || temp_ceiling_density_max == 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << block << "/temp_ceiling and temp_ceiling_density_max "
+                << "must be positive, or omitted/negative to disable the cap"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (temp_ceiling > 0.0 && temp_ceiling_density_max < 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << block << "/temp_ceiling requires positive "
+                << "temp_ceiling_density_max" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
 
     for (int n = 0; n < ps.GetEOS().GetNSpecies(); n++) {
       std::stringstream spec_name;
@@ -369,6 +387,8 @@ class PrimitiveSolverHydro {
     const int rank = global_variable::my_rank;
     const int nerrs_ = nerrs;
     const int errcap_ = errcap;
+    const Real temp_ceiling_ = temp_ceiling;
+    const Real temp_ceiling_density_max_ = temp_ceiling_density_max;
 
     Real mb = eos_.GetBaryonMass();
 
@@ -383,9 +403,9 @@ class PrimitiveSolverHydro {
 
     // FIXME(JMF): We can short-circuit the primitive solve if FOFC is already enabled
     // due to a maximum principle violation.
-    int count_errs=0;
+    unsigned long long count_all=0;
     Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, int &sumerrs) {
+    KOKKOS_LAMBDA(const int &idx, unsigned long long &sumcounts) {
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
       int j = (idx - m*nkji - k*nji)/ni;
@@ -624,10 +644,27 @@ class PrimitiveSolverHydro {
         }
       }
 
+      if (!floors_only && result.error == Primitive::Error::SUCCESS &&
+          temp_ceiling_ > 0.0 && temp_ceiling_density_max_ > 0.0 &&
+          prim_pt[PRH]*mb <= temp_ceiling_density_max_ &&
+          prim_pt[PTM] > temp_ceiling_ &&
+          isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]) && isfinite(prim_pt[PTM])) {
+        Real pceil = eos_.GetPressure(prim_pt[PRH], temp_ceiling_, &prim_pt[PYF]);
+        if (pceil > 0.0 && isfinite(pceil)) {
+          prim_pt[PPR] = pceil;
+          prim_pt[PTM] = temp_ceiling_;
+          result.cons_adjusted = true;
+          ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+          sumcounts += (1ULL << 32);
+        }
+      }
+
       if (result.error != Primitive::Error::SUCCESS && floors_only) {
         fofc_(m,k,j,i) = true;
       } else if (!floors_only) {
+        int sumerrs = static_cast<int>(sumcounts & 0xffffffffULL);
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
+          sumcounts++;
           sumerrs++;
           // Find out where the point went bad and report a bunch of information about it.
           Kokkos::printf("An error occurred during the primitive solve: %s\n"
@@ -722,13 +759,17 @@ class PrimitiveSolverHydro {
           }
         }
       }
-    }, Kokkos::Sum<int>(count_errs));
+    }, Kokkos::Sum<unsigned long long>(count_all));
+
+    int count_errs = static_cast<int>(count_all & 0xffffffffULL);
+    int count_tceil = static_cast<int>(count_all >> 32);
 
     if (floors_only) {
       ps.GetEOSMutable().SetPrimitiveFloorFailure(prim_failure);
       ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
     } else {
       nerrs += count_errs;
+      pmy_pack->pmesh->ecounter.neos_tceil += count_tceil;
     }
   }
 

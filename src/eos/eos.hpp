@@ -31,6 +31,8 @@ struct EOS_Data {
   bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real dfloor, pfloor, tfloor, sfloor;  // density, pressure, temperature, entropy floors
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
+  Real temp_ceiling; // optional temperature ceiling for low-density GRMHD cells
+  Real temp_ceiling_density_max; // density gate for optional temperature ceiling
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.

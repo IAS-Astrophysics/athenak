@@ -89,9 +89,10 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   const int nkji = (ku - kl + 1)*nji;
   const int nmkji = nmb*nkji;
 
-  int nfloord_=0, nfloore_=0, nceilv_=0, nfail_=0, maxit_=0;
+  int nfloord_=0, nfloore_=0, nceilt_=0, nceilv_=0, nfail_=0, maxit_=0;
   Kokkos::parallel_reduce("grmhd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &sumv, int &sumf, int &max_it) {
+  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &sumt, int &sumv,
+                int &sumf, int &max_it) {
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/ni;
@@ -138,6 +139,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false;
+    bool temp_ceiling_used=false;
     bool vceiling_used=false, c2p_failure=false;
     int iter_used=0;
     Real excise_weight = 0.0;
@@ -292,6 +294,17 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         }
         smooth_applied = true;
       }
+      if (eos.temp_ceiling > 0.0 && !only_testfloors &&
+          w.d <= eos.temp_ceiling_density_max && Kokkos::isfinite(w.d) &&
+          Kokkos::isfinite(w.e) && w.d > 0.0 && w.e > 0.0) {
+        Real eceil = eos.temp_ceiling*w.d/gm1;
+        Real efloor = eos.pfloor/gm1;
+        eceil = fmax(eceil, efloor);
+        if (w.e > eceil) {
+          w.e = eceil;
+          temp_ceiling_used = true;
+        }
+      }
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
@@ -303,6 +316,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     } else {
       if (dfloor_used) {sumd++;}
       if (efloor_used) {sume++;}
+      if (temp_ceiling_used) {sumt++;}
       if (vceiling_used) {sumv++;}
       if (c2p_failure) {sumf++;}
       max_it = (iter_used > max_it) ? iter_used : max_it;
@@ -320,8 +334,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBZ,k,j,i) = u.bz;
 
       // reset conserved variables if floor, ceiling, failure, or excision encountered
-      if (dfloor_used || efloor_used || vceiling_used || c2p_failure || excised ||
-          smooth_applied) {
+      if (dfloor_used || efloor_used || temp_ceiling_used || vceiling_used ||
+          c2p_failure || excised || smooth_applied) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;
@@ -347,7 +361,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
       }
     }
-  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_),
+     Kokkos::Sum<int>(nceilt_), Kokkos::Sum<int>(nceilv_),
      Kokkos::Sum<int>(nfail_), Kokkos::Max<int>(maxit_));
 
   // store appropriate counters
@@ -356,6 +371,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
     pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.neos_tceil  += nceilt_;
     pmy_pack->pmesh->ecounter.neos_vceil  += nceilv_;
     pmy_pack->pmesh->ecounter.neos_fail   += nfail_;
     pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;

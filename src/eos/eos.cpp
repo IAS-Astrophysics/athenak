@@ -7,6 +7,8 @@
 //! \brief implements constructor and some fns for EquationOfState abstract base class
 
 #include <float.h>
+#include <cstdlib>
+#include <iostream>
 #include <string>
 
 #include "athena.hpp"
@@ -23,6 +25,23 @@ EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInp
   eos_data.pfloor = pin->GetOrAddReal(bk,"pfloor",(FLT_MIN));
   eos_data.tfloor = pin->GetOrAddReal(bk,"tfloor",(FLT_MIN));
   eos_data.sfloor = pin->GetOrAddReal(bk,"sfloor",(FLT_MIN));
+  eos_data.temp_ceiling = pin->GetOrAddReal(bk,"temp_ceiling",(-1.0));
+  eos_data.temp_ceiling_density_max = pin->GetOrAddReal(
+      bk,"temp_ceiling_density_max",(-1.0));
+  if (eos_data.temp_ceiling == 0.0 || eos_data.temp_ceiling_density_max == 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << bk << "/temp_ceiling and temp_ceiling_density_max must be positive, "
+              << "or negative to disable" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eos_data.temp_ceiling > 0.0 && eos_data.temp_ceiling_density_max < 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << bk << "/temp_ceiling requires positive temp_ceiling_density_max"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
