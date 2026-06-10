@@ -332,3 +332,82 @@ passed. Executable:
 4. Practical interim mitigation for production-style runs: keep
    `evolve_lapse_residual = false` (frozen/prescribed residual lapse), which
    is stable to at least `t ~ 5` with decaying constraints in all controls.
+
+## Root cause identified: RK2 weak instability for centered-FD wave systems
+
+Date: 2026-06-10 (follow-up session)
+
+New input from the user: freezing the residual gauge to zero also shows a
+long-term instability, even on a Minkowski background. This rules out gauge
+freezing as a mitigation and motivated a re-examination of the *time
+integrator* rather than the spatial formulation.
+
+### Hypothesis
+
+All failing decks use `integrator = rk2`. Two-stage second-order RK has a
+stability region that excludes the imaginary axis: for a purely oscillatory
+semi-discrete mode with eigenvalue `i*omega`, the amplification per step is
+`|1 + i*omega*dt - (omega*dt)^2/2| = sqrt(1 + (omega*dt)^4/4) > 1`, i.e. a
+weak instability with growth ~ `(omega*dt)^4/8` per step. Centered finite
+differences (no upwinding) make every Z4c wave mode purely oscillatory, so
+*all* modes grow secularly unless Kreiss-Oliger dissipation beats the RK2
+growth at every wavenumber. The 1+log gauge modes travel at
+`sqrt(2*alpha) ~ 1.4` (faster than the light-speed geometry modes), so their
+RK2 growth at fixed CFL is `(sqrt(2))^4 = 4x` stronger -- exactly the
+gauge-sector (`Khat_dda`) dominance observed in the term diagnostics.
+
+### Quantitative von Neumann check (code's exact operators)
+
+Setup: 6th-order centered `Dxx` (NGHOST=4), KO `Diss` = 8th difference with
+coefficient `sigma/256/dx` (sigma = `<z4c>/diss`), dx = 0.0125 (level-8 cells
+at the star), dt = 2.5e-3 (CFL 0.2), lapse-K wave subsystem
+`d/dt alpha = -2 alpha Khat`, `d/dt Khat = -D^2 alpha`. Max growth rate over
+all wavenumbers (3D worst case = diagonal modes, factor-3 Laplacian/KO sums):
+
+| config | max growth rate | e-fold time |
+| --- | ---: | ---: |
+| RK2, sigma=0.5, gauge modes (c^2 = 2 alpha), 3D | +6.50 | 0.154 |
+| RK2, sigma=0.5, gauge modes, 1D | +0.21 | 4.8 |
+| RK2, sigma=0.5, light modes (c^2 = 1), 3D | +0.37 | 2.7 |
+| RK2, sigma=0.0, light modes, 1D | +2.90 | 0.35 |
+| RK3 (SSPRK3), sigma=0.3-0.5, all modes, any dim | <= 0 | stable |
+| RK3, CFL up to 0.35 with KO included | <= 0 | stable |
+
+Agreement with every observation:
+
+1. Measured blow-up e-fold ~ 0.2 in `Khat_dda` == predicted RK2 gauge-mode
+   growth (0.15-0.21 between 1D and 3D mode orientations).
+2. Frozen-gauge controls (no gauge modes) still grow on the slow light-mode
+   rate (e-fold ~ 2.7) -> the user-reported *long-term* instability of the
+   frozen-gauge setup, even in Minkowski.
+3. Grid-scale (zone-to-zone) unstable structure: peak RK2 growth sits at
+   theta/pi ~ 0.35-0.5, i.e. 2-3 cells/wavelength.
+4. Located at the star: that is where AMR level-8 cells, meshblock faces and
+   the boosted initial-data defect inject high-k seed amplitude. The mode is
+   not about the star physics; the star only seeds it.
+5. Independent confirmation from the earlier `gnc` Minkowski scan:
+   `rk2 diss=0.0` fails at t = 0.5 (predicted e-fold 0.35);
+   `rk2 cfl=0.3` fails immediately (exceeds even the dissipated envelope);
+   `rk2 diss=0.5` survives 7.9 (frozen gauge -> only slow light modes);
+   `rk3 cfl=0.2 diss=0.3` clean.
+
+KO cannot fix RK2 here: the growth peaks at intermediate wavenumbers where
+the 8th-order KO symbol `(2 sin(theta/2))^8` is already small, while the
+allowed dissipation budget (diss <= 0.5) is capped. SSPRK3 contains the
+imaginary axis out to sqrt(3), so all centered-FD wave modes are *linearly
+stable* with any KO >= 0; KO then only needs to handle nonlinear steepening.
+RK4 would also work but `MHD::CopyCons` lacks the RK4 register update
+(documented in the gnc scan notes), so RK3 is the supported fix for coupled
+MHD + Z4c.
+
+### Decisive run
+
+- Deck: `inputs/tde/aurora/z4c_tov_ks_n3_schwarzschild_bgadapt_lapse_noadvect_rk3cfl030_rhsdbg_hi2n_aurora.athinput`
+  -- identical to the failing boosted `rhsdbg` deck except
+  `integrator = rk3` and `cfl_number = 0.3` (verified linearly stable with
+  margin; CFL 0.3 keeps wall-cost per sim-time equal to the rk2 baseline so
+  the 1h debug window reaches decisively past the t = 3.15 rk2 failure).
+- Job: `8534529` (2 nodes, debug, 55 min Athena walltime).
+- Success criteria: finite past t = 3.2 (ideally ~ 4.5+), `Z4C_RHS_TERM_MAX`
+  `Khat_dda` bounded (no exponential trend), constraint norms decaying,
+  `bad-metric = 0`.
