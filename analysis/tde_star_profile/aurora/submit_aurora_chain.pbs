@@ -22,8 +22,11 @@ BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
 ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
 CASE_NAME="${CASE_NAME:?CASE_NAME must be provided with qsub -v}"
 INPUT_DECK="${INPUT_DECK:?INPUT_DECK must be provided with qsub -v}"
+# 44-min internal limit inside a 60-min PBS window: the ~29 GB final restart
+# dump takes O(10 min) on Lustre, and PBS killing the job mid-write corrupts
+# the rst file (seen on job 8534910/8535181).
 RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
-ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:54:00}"
+ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:44:00}"
 KEEP_RST="${KEEP_RST:-3}"
 
 if type module >/dev/null 2>&1; then

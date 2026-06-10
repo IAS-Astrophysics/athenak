@@ -31,15 +31,23 @@ job_state() {
 }
 
 submit_next() {
+  # Guard against duplicate submissions (e.g. transient qstat failures).
+  local existing
+  existing=$(qstat -u hzhu 2>/dev/null | awk -v jn="${JOB_NAME}" \
+             '$4 ~ jn && ($10 == "Q" || $10 == "R" || $10 == "H") {print $1}' | head -n 1)
+  if [[ -n "${existing}" ]]; then
+    current_job="${existing%%.*}"
+    echo "CHAIN_INFO adopting existing job ${existing}"
+    return 0
+  fi
+  # rst dt=2.0 override: periodic 29 GB dumps every 0.5 M cost ~10 min of
+  # wall each; the Finalize dump still captures the end state of every job.
+  local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK},ATHENA_EXTRA_ARGS=output3/dt=2.0"
   local out
-  out=$(qsub -N ${JOB_NAME} \
-        -v CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK} \
-        -q debug "${PBS_SCRIPT}" 2>&1)
+  out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" -q debug "${PBS_SCRIPT}" 2>&1)
   if [[ "${out}" != *aurora* ]]; then
     echo "CHAIN_INFO debug queue rejected (${out}); trying debug-scaling"
-    out=$(qsub -N ${JOB_NAME} \
-          -v CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK} \
-          -q debug-scaling "${PBS_SCRIPT}" 2>&1)
+    out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" -q debug-scaling "${PBS_SCRIPT}" 2>&1)
   fi
   if [[ "${out}" == *aurora* ]]; then
     current_job="${out%%.*}"

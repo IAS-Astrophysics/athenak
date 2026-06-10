@@ -190,4 +190,4 @@ dcycle = 100
 
 <output3>
 file_type = rst
-dt = 0.5
+dt = 2.0
