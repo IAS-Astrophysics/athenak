@@ -2,18 +2,20 @@
 #PBS -A MHDTidal
 #PBS -N z4c_tov_ks_chain
 #PBS -l select=2
-#PBS -l walltime=01:00:00
+#PBS -l walltime=06:00:00
 #PBS -l filesystems=home:flare
 #PBS -k doe
 #PBS -l place=scatter
-#PBS -q debug
+#PBS -q capacity
 #PBS -j oe
 
-# Restart-chain variant of submit_aurora_case.pbs: never archives the run
-# directory; restarts from the latest rst file when one exists, otherwise
-# starts fresh from INPUT_DECK.
+# Long-window restart-chain job: inside one PBS allocation, relaunch Athena
+# from the newest restart file every ATHENA_WALLTIME (default 50 min).  The
+# periodic mpiexec relaunch works around memory fragmentation on the Intel
+# GPUs, which otherwise degrades performance over multi-hour runs.
+# Starts fresh from INPUT_DECK only when no restart file exists yet.
 
-set -euo pipefail
+set -uo pipefail
 
 REPO_DIR="${REPO_DIR:-/home/hzhu/athenak_tde}"
 PROJECT_ROOT="${PROJECT_ROOT:-/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation}"
@@ -22,12 +24,14 @@ BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
 ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
 CASE_NAME="${CASE_NAME:?CASE_NAME must be provided with qsub -v}"
 INPUT_DECK="${INPUT_DECK:?INPUT_DECK must be provided with qsub -v}"
-# 44-min internal limit inside a 60-min PBS window: the ~29 GB final restart
-# dump takes O(10 min) on Lustre, and PBS killing the job mid-write corrupts
-# the rst file (seen on job 8534910/8535181).
 RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
-ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:44:00}"
+ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:50:00}"
 KEEP_RST="${KEEP_RST:-3}"
+# Stop the inner loop when less than this many seconds remain in the PBS
+# window: one ATHENA_WALLTIME segment plus margin for the final rst dump
+# (striped, ~1-2 min) and the restart read at segment start.
+ITER_NEED_S="${ITER_NEED_S:-3900}"
+T_STOP="${T_STOP:-74.5}"
 
 if type module >/dev/null 2>&1; then
   module reset >/dev/null 2>&1 || true
@@ -49,8 +53,27 @@ RUN_DIR="${RUN_ROOT}/${CASE_NAME}"
 mkdir -p "${RUN_DIR}"
 cp -f "${INPUT_DECK}" "${RUN_DIR}/"
 
-# Prune old restart files, keeping the most recent KEEP_RST.
-if [[ -d "${RUN_DIR}/rst" ]]; then
+JOB_START_S=$(date +%s)
+WALL_S=$(qstat -f "${PBS_JOBID}" 2>/dev/null \
+         | awk -F'= ' '/Resource_List.walltime/{print $2}' \
+         | awk -F: '{print $1*3600 + $2*60 + $3}')
+[[ -z "${WALL_S}" ]] && WALL_S=21600
+DEADLINE_S=$((JOB_START_S + WALL_S))
+
+echo "CASE_NAME=${CASE_NAME}"
+echo "RUN_DIR=${RUN_DIR}"
+echo "NNODES=${NNODES} NTOTRANKS=${NTOTRANKS} WALL_S=${WALL_S}"
+echo "SEGMENT_WALLTIME=${ATHENA_WALLTIME} ITER_NEED_S=${ITER_NEED_S}"
+
+cd "${RUN_DIR}"
+read -r -a ATHENA_EXTRA_ARGV <<< "${ATHENA_EXTRA_ARGS:-}"
+
+latest_rst() {
+  ls -v "${RUN_DIR}/rst"/*.rst 2>/dev/null | tail -n 1 || true
+}
+
+prune_rst() {
+  local rst_all nrst idx
   mapfile -t rst_all < <(ls -v "${RUN_DIR}/rst"/*.rst 2>/dev/null || true)
   nrst=${#rst_all[@]}
   if (( nrst > KEEP_RST )); then
@@ -58,35 +81,69 @@ if [[ -d "${RUN_DIR}/rst" ]]; then
       rm -f "${rst_all[idx]}"
     done
   fi
-fi
+}
 
-LATEST_RST=""
-if [[ -d "${RUN_DIR}/rst" ]]; then
-  LATEST_RST="$(ls -v "${RUN_DIR}/rst"/*.rst 2>/dev/null | tail -n 1 || true)"
-fi
+sim_time_reached() {
+  # Last time in the z4c history file, empty if unavailable.
+  local zhst
+  zhst=$(ls "${RUN_DIR}"/*.z4c.user.hst 2>/dev/null | head -n 1)
+  [[ -n "${zhst}" && -f "${zhst}" ]] || return
+  tail -n 1 "${zhst}" | awk '{print $1+0}'
+}
 
-echo "CASE_NAME=${CASE_NAME}"
-echo "RUN_DIR=${RUN_DIR}"
-echo "NNODES=${NNODES} NTOTRANKS=${NTOTRANKS}"
-if [[ -n "${LATEST_RST}" ]]; then
-  echo "CHAIN_MODE=restart LATEST_RST=${LATEST_RST}"
-else
-  echo "CHAIN_MODE=fresh INPUT_DECK=${INPUT_DECK}"
-fi
+nonfinite_seen() {
+  local zhst
+  zhst=$(ls "${RUN_DIR}"/*.z4c.user.hst 2>/dev/null | head -n 1)
+  [[ -n "${zhst}" && -f "${zhst}" ]] || return 1
+  tail -n 1 "${zhst}" | grep -qiE "nan|inf"
+}
 
-cd "${RUN_DIR}"
-read -r -a ATHENA_EXTRA_ARGV <<< "${ATHENA_EXTRA_ARGS:-}"
+seg=0
+while true; do
+  now_s=$(date +%s)
+  if (( now_s + ITER_NEED_S >= DEADLINE_S )); then
+    echo "SEGMENT_BUDGET_EXHAUSTED remaining=$((DEADLINE_S - now_s))s"
+    break
+  fi
+  if nonfinite_seen; then
+    echo "SEGMENT_NONFINITE_DETECTED"
+    break
+  fi
+  t_now=$(sim_time_reached)
+  if [[ -n "${t_now}" ]] && awk -v t="${t_now}" -v ts="${T_STOP}" 'BEGIN{exit !(t>=ts)}'; then
+    echo "SEGMENT_TSTOP_REACHED t=${t_now}"
+    break
+  fi
 
-if [[ -n "${LATEST_RST}" ]]; then
-  mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
-    gpu_tile_compact.sh "${ATHENA_EXE}" \
-    -r "${LATEST_RST}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
-    "${ATHENA_EXTRA_ARGV[@]}"
-else
-  mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
-    gpu_tile_compact.sh "${ATHENA_EXE}" \
-    -i "${INPUT_DECK}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
-    "${ATHENA_EXTRA_ARGV[@]}"
-fi
+  prune_rst
+  RST_BEFORE=$(latest_rst)
+  seg=$((seg + 1))
+  if [[ -n "${RST_BEFORE}" ]]; then
+    echo "SEGMENT_START n=${seg} mode=restart rst=${RST_BEFORE} t=$(date +%H:%M:%S)"
+    mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+      gpu_tile_compact.sh "${ATHENA_EXE}" \
+      -r "${RST_BEFORE}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
+      "${ATHENA_EXTRA_ARGV[@]}"
+    rc=$?
+  else
+    echo "SEGMENT_START n=${seg} mode=fresh deck=${INPUT_DECK} t=$(date +%H:%M:%S)"
+    mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+      gpu_tile_compact.sh "${ATHENA_EXE}" \
+      -i "${INPUT_DECK}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
+      "${ATHENA_EXTRA_ARGV[@]}"
+    rc=$?
+  fi
+  echo "SEGMENT_END n=${seg} rc=${rc} t=$(date +%H:%M:%S)"
 
-echo "CHAIN_JOB_DONE"
+  if (( rc != 0 )); then
+    echo "SEGMENT_ABORT athena exited nonzero"
+    break
+  fi
+  RST_AFTER=$(latest_rst)
+  if [[ -z "${RST_AFTER}" || "${RST_AFTER}" == "${RST_BEFORE}" ]]; then
+    echo "SEGMENT_ABORT no new restart file produced"
+    break
+  fi
+done
+
+echo "CHAIN_JOB_DONE segments=${seg}"

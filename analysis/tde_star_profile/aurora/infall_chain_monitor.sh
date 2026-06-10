@@ -43,11 +43,21 @@ submit_next() {
   # rst dt=2.0 override: periodic 29 GB dumps every 0.5 M cost ~10 min of
   # wall each; the Finalize dump still captures the end state of every job.
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK},ATHENA_EXTRA_ARGS=output3/dt=2.0"
+  # Prefer long capacity-queue windows (Athena is relaunched every ~50 min
+  # inside the job to avoid Intel GPU memory fragmentation); fall back to
+  # 1-hour debug-queue windows if capacity rejects the submission.
   local out
-  out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" -q debug "${PBS_SCRIPT}" 2>&1)
+  out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" \
+        -q capacity -l walltime=06:00:00 "${PBS_SCRIPT}" 2>&1)
+  if [[ "${out}" != *aurora* ]]; then
+    echo "CHAIN_INFO capacity queue rejected (${out}); trying debug"
+    out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" \
+          -q debug -l walltime=01:00:00 "${PBS_SCRIPT}" 2>&1)
+  fi
   if [[ "${out}" != *aurora* ]]; then
     echo "CHAIN_INFO debug queue rejected (${out}); trying debug-scaling"
-    out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" -q debug-scaling "${PBS_SCRIPT}" 2>&1)
+    out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" \
+          -q debug-scaling -l walltime=01:00:00 "${PBS_SCRIPT}" 2>&1)
   fi
   if [[ "${out}" == *aurora* ]]; then
     current_job="${out%%.*}"
