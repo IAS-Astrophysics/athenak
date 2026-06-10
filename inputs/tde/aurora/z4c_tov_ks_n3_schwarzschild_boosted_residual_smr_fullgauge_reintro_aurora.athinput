@@ -1,0 +1,187 @@
+# Schwarzschild reintroduction residual-Z4c case: fixed SMR, star far from BH.
+
+<job>
+basename = z4c_tov_ks_n3_schwarzschild_boosted_residual_smr_fullgauge_reintro_aurora
+
+<mesh>
+nghost = 4
+nx1 = 128
+x1min = -12.8
+x1max = 25.6
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 128
+x2min = -12.8
+x2max = 25.6
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 128
+x3min = -12.8
+x3max = 25.6
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = static
+num_levels = 4
+refinement_interval = 2
+max_nmb_per_rank = 512
+
+<refined_region1>
+level = 1
+x1min = 1.6
+x1max = 14.4
+x2min = -6.4
+x2max = 6.4
+x3min = -6.4
+x3max = 6.4
+
+<refined_region2>
+level = 2
+x1min = 4.8
+x1max = 11.2
+x2min = -3.2
+x2max = 3.2
+x3min = -3.2
+x3max = 3.2
+
+<refined_region3>
+level = 3
+x1min = 6.4
+x1max = 9.6
+x2min = -1.6
+x2max = 1.6
+x3min = -1.6
+x3max = 1.6
+
+<refined_region4>
+level = 1
+x1min = -3.2
+x1max = 3.2
+x2min = -3.2
+x2max = 3.2
+x3min = -3.2
+x3max = 3.2
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 4.0
+ndiag = 20
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+minkowski = false
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = true
+evolve_shift_residual = true
+diss = 0.5
+damp_kappa1 = 0.2
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 1.0
+shift_Gamma = 1.0
+shift_advect = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+force_minkowski_metric = false
+star_center_x1 = 8.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = -0.1
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+excision_damp_rate = 50.0
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+amr_rho_slope_refine = false
+amr_bh_exclusion_radius = 8.0
+amr_bh_refine_radius = 2.4
+amr_bh_derefine_radius = 3.2
+amr_bh_refine_level = 1
+amr_star_refine = false
+amr_star_refine_radius_factor = 0.0
+amr_star_derefine_radius_factor = 0.0
+amr_star_refine_level = 0
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.05
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 20
+
+<output3>
+file_type = bin
+variable = con
+id = xy_con
+dt = 0.1
+slice_x3 = 0.0
+
+<output4>
+file_type = bin
+variable = con
+id = xz_con
+dt = 0.1
+slice_x2 = 0.0
+
+<output5>
+file_type = bin
+variable = con
+id = yz_con
+dt = 0.1
+slice_x1 = 8.0

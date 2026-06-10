@@ -97,7 +97,7 @@ def read_slice(path: Path, quantities: List[str]) -> dict:
     return reader(str(path), quantities=quantities)
 
 
-def read_meshblock_bounds(path: Path) -> np.ndarray:
+def read_meshblock_bounds(path: Path, axis_name: str) -> np.ndarray:
     bin_convert = load_bin_convert()
     reader = (
         bin_convert.read_all_ranks_binary
@@ -108,6 +108,8 @@ def read_meshblock_bounds(path: Path) -> np.ndarray:
     geometry = np.asarray(filedata["mb_geometry"])
     if geometry.size == 0:
         return np.empty((0, 4))
+    if axis_name == "z":
+        return geometry[:, [0, 1, 4, 5]]
     return geometry[:, [0, 1, 2, 3]]
 
 
@@ -125,7 +127,16 @@ def as_xy(data: dict, quantity: str) -> np.ndarray:
     return arr
 
 
-def load_quantity(path: Path, quantity: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def choose_second_coordinate(data: dict, field: np.ndarray) -> Tuple[np.ndarray, str]:
+    n_second = field.shape[0]
+    candidates = [("y", np.asarray(data["x2v"])), ("z", np.asarray(data["x3v"]))]
+    for axis_name, coord in candidates:
+        if coord.size == n_second:
+            return coord, axis_name
+    return candidates[0][1], candidates[0][0]
+
+
+def load_quantity(path: Path, quantity: str) -> Tuple[np.ndarray, np.ndarray, str, np.ndarray, np.ndarray]:
     if quantity == "bmag":
         data = read_slice(path, ["dens", "bcc1", "bcc2", "bcc3"])
         field = np.sqrt(as_xy(data, "bcc1")**2 + as_xy(data, "bcc2")**2 + as_xy(data, "bcc3")**2)
@@ -134,7 +145,8 @@ def load_quantity(path: Path, quantity: str) -> Tuple[np.ndarray, np.ndarray, np
         data = read_slice(path, quantities)
         field = as_xy(data, quantity)
     dens = as_xy(data, "dens")
-    return np.asarray(data["x1v"]), np.asarray(data["x2v"]), field, dens
+    second_coord, axis_name = choose_second_coordinate(data, field)
+    return np.asarray(data["x1v"]), second_coord, axis_name, field, dens
 
 
 def display_field(field: np.ndarray, use_log10: bool, floor: float) -> np.ndarray:
@@ -365,13 +377,14 @@ def plot_one(
     zoom_half_width: float,
     dpi: int,
 ) -> None:
-    x, y, field, dens = load_quantity(path, quantity)
+    x, y, axis_name, field, dens = load_quantity(path, quantity)
     z = display_field(field, use_log10, floor)
     dens_for_center = np.nan_to_num(dens, nan=-np.inf, posinf=-np.inf, neginf=-np.inf)
     max_j, max_i = np.unravel_index(np.argmax(dens_for_center), dens_for_center.shape)
     x_peak = float(x[max_i])
     y_peak = float(y[max_j])
-    symmetry_debug_metrics(path, x, y, dens, x_peak, y_peak)
+    if axis_name == "y":
+        symmetry_debug_metrics(path, x, y, dens, x_peak, y_peak)
     label = f"log10({quantity})" if use_log10 else quantity
 
     plot_vmin = plot_vmax = None
@@ -384,12 +397,12 @@ def plot_one(
         ax.plot([x_peak], [y_peak], marker="+", color="white", markersize=10, mew=1.5)
         ax.set_title(title)
         ax.set_xlabel("x")
-        ax.set_ylabel("y")
+        ax.set_ylabel(axis_name)
         ax.set_aspect("equal")
         fig.colorbar(mesh, ax=ax, label=label, shrink=0.9)
 
     if show_mesh:
-        overlay_meshblocks(axes[0], read_meshblock_bounds(path))
+        overlay_meshblocks(axes[0], read_meshblock_bounds(path, axis_name))
 
     axes[1].set_xlim(x_peak - zoom_half_width, x_peak + zoom_half_width)
     axes[1].set_ylim(y_peak - zoom_half_width, y_peak + zoom_half_width)

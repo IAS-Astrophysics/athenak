@@ -137,6 +137,10 @@ class Z4c {
   SetADMBackgroundFnPtr SetADMBackground = nullptr;
   SetZ4cBackgroundFnPtr SetZ4cBackground = nullptr;
   bool use_analytic_background = false;
+  bool evolve_gauge_residual = false;
+  bool evolve_lapse_residual = false;
+  bool evolve_shift_residual = false;
+  bool preserve_lapse_residual = false;
 
   // aliases for the constraints
   struct Constraint_vars {
@@ -214,6 +218,10 @@ class Z4c {
     Real kappa_roll_start_time;
     Real roll_window;
     Real target_kappa1;
+
+    // Input-gated debug reductions for instability localization.
+    bool debug_reductions;
+    int debug_reduction_stride;
   };
   Options opt;
   Real diss;              // Dissipation parameter
@@ -290,6 +298,8 @@ class Z4c {
   void RecastResidualState();
   void PrescribeGaugeResidual();
   void EnforceAlgConstrOn(Z4c_vars &state);
+  void DebugDumpState(const char *label, DvceArray5D<Real> &u, bool full_state,
+                      Real time, int stage);
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;

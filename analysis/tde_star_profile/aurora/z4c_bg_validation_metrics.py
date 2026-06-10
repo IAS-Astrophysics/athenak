@@ -19,11 +19,13 @@ MASK_THRESHOLDS = (1.0e-12, 1.0e-10, 1.0e-8)
 TINY = 1.0e-100
 
 MHD_PARITY_Y = {
-    "dens": 1, "eint": 1, "velx": 1, "vely": -1, "velz": 1,
+    "dens": 1, "eint": 1, "press": 1, "temperature": 1,
+    "velx": 1, "vely": -1, "velz": 1,
     "bcc1": 1, "bcc2": -1, "bcc3": 1,
 }
 MHD_PARITY_Z = {
-    "dens": 1, "eint": 1, "velx": 1, "vely": 1, "velz": -1,
+    "dens": 1, "eint": 1, "press": 1, "temperature": 1,
+    "velx": 1, "vely": 1, "velz": -1,
     "bcc1": 1, "bcc2": 1, "bcc3": -1,
 }
 Z4C_PARITY_Y = {
@@ -411,7 +413,7 @@ def plot_norms(out_dir: Path, rows: List[Dict[str, object]]) -> None:
         row for row in rows
         if row["mask"] in ("all", "rho_gt_1e-10")
         and row["quantity"] in (
-            "dens", "eint", "velx", "vely", "velz",
+            "dens", "eint", "press", "temperature", "velx", "vely", "velz",
             "z4c_chi", "z4c_Gamy", "z4c_Gamz", "z4c_alpha",
             "adm_gxx", "adm_gxy", "adm_gxz", "adm_psi4",
         )
@@ -481,7 +483,10 @@ def plot_difference_slices(out_dir: Path, outputs: List[Dict[str, object]]) -> N
             continue
         quantities = list(output["quantities"].keys())
         if kind == "mhd":
-            quantities = [q for q in ("dens", "eint", "velx", "vely", "velz") if q in quantities]
+            quantities = [
+                q for q in ("dens", "eint", "press", "temperature", "velx", "vely", "velz")
+                if q in quantities
+            ]
         elif kind == "z4c":
             quantities = [q for q in ("z4c_chi", "z4c_Gamy", "z4c_Gamz", "z4c_alpha") if q in quantities]
         elif kind == "adm":

@@ -1,0 +1,242 @@
+# Two-node high-resolution Schwarzschild residual-gauge debug case.
+# Full moving-puncture residual gauge (1+log lapse WITH advection + Gamma-driver
+# shift, both evolved) with constraint damping turned ON (damp_kappa1 = 0.2) to
+# test whether the exponential Hamiltonian/momentum constraint growth (NaN at
+# t~3.5 with damp_kappa1=0) is an undamped Z4c constraint instability.
+# Gauge sector matches resgauge_full_hi2n (the longest-surviving evolving gauge);
+# only damp_kappa1 differs.  Dense con-variable bin slices (xy/xz/yz) are written
+# so the growth can be localized in space (star surface vs refinement-box edges
+# vs outer boundary).  This version uses a coarser root grid plus one extra AMR
+# level to keep the star resolution fixed while moving the boundary farther out.
+
+<job>
+basename = z4c_tov_ks_n3_schwarzschild_resgauge_full_prodgrid_level4_static_smr_shiftonly_ablation_aurora
+
+# Root grid coarsened to dx=0.2 (was 0.1) and the domain enlarged so the outer
+# Sommerfeld/outflow boundary is far from the star (was only 8 units past it):
+#   x1 in [-25.6, 96]  -> star at x=40 is 56 units from the +x boundary
+#   x2,x3 in [-12.8, 12.8] (was +-8)
+# One extra AMR level (num_levels 4 -> 5) keeps the star at the SAME finest
+# resolution dx=0.2/2^4 = 0.0125 as resgauge_full_hi2n.  Background subtraction
+# (use_direct_z4c_background) cancels the background truncation error.  A
+# separate BH AMR floor below keeps the excision neighborhood from derefining all
+# the way to the root if desired.  Net result: far boundary at much lower block
+# count than the previous 3531-block setup.
+<mesh>
+nghost = 4
+nx1 = 608
+x1min = -25.6
+x1max = 96.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 128
+x2min = -12.8
+x2max = 12.8
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 128
+x3min = -12.8
+x3max = 12.8
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = static
+num_levels = 5
+refinement_interval = 2
+max_nmb_per_rank = 128
+
+<amr_criterion0>
+method = user
+
+# Tight nested boxes around the star at (40,0,0).  Each level adds a one-block
+# buffer ring; the level-4 box (dx=0.0125) just encloses the star + its 1.5x AMR
+# sphere.
+<refined_region1>
+level = 1
+x1min = 33.6
+x1max = 46.4
+x2min = -6.4
+x2max = 6.4
+x3min = -6.4
+x3max = 6.4
+
+<refined_region2>
+level = 2
+x1min = 36.8
+x1max = 43.2
+x2min = -3.2
+x2max = 3.2
+x3min = -3.2
+x3max = 3.2
+
+<refined_region3>
+level = 3
+x1min = 38.4
+x1max = 41.6
+x2min = -1.6
+x2max = 1.6
+x3min = -1.6
+x3max = 1.6
+
+<refined_region4>
+level = 4
+x1min = 39.2
+x1max = 40.8
+x2min = -0.8
+x2max = 0.8
+x3min = -0.8
+x3max = 0.8
+
+# Initial BH/excision floor.  The adaptive amr_bh_* settings below keep this
+# minimum level from derefining away; this block just makes the resolution present
+# from t=0 rather than waiting for the first refinement pass.
+<refined_region5>
+level = 1
+x1min = -3.2
+x1max = 3.2
+x2min = -3.2
+x2max = 3.2
+x3min = -3.2
+x3max = 3.2
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 4.0
+ndiag = 20
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = false
+evolve_shift_residual = true
+diss = 0.5
+damp_kappa1 = 0.2
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 0.0
+shift_Gamma = 1.0
+shift_advect = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+
+star_center_x1 = 40.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = -0.1
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+excision_damp_rate = 50.0
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+# Widen the excision ramp so it spans ~3 cells at the coarser root dx=0.2
+# (default 1.7->1.9 would be a single cell here -> a near-step that can excite
+# the gauge fields).  Smoother ramp = less spurious excitation near the BH.
+excision_freeze_radius = 1.3
+excision_ramp_radius = 1.9
+amr_rho_slope_refine = false
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 1.0e-14
+amr_bh_exclusion_radius = 8.0
+# Optional BH/excision minimum-resolution floor.  With root dx=0.2, level 1 gives
+# dx=0.1 around r_ks < 2.4 and keeps the widened excision ramp resolved without
+# letting matter-density AMR refine the whole BH-exclusion region.  Set level=-1
+# or radius=0 to disable; set level=2 for dx=0.05 if excision contamination is
+# suspected and the extra blocks are acceptable.
+amr_bh_refine_radius = 2.4
+amr_bh_derefine_radius = 3.2
+amr_bh_refine_level = 1
+amr_star_refine = false
+amr_star_refine_radius_factor = 1.5
+amr_star_derefine_radius_factor = 2.0
+amr_star_refine_level = 4
+
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.1
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 20
+
+# Dense Z4c constraint slices (con_C, con_H, con_M, con_Z, con_Mx, con_My,
+# con_Mz) to localize where the constraint violation grows.
+<output3>
+file_type = bin
+variable = con
+id = xy_con
+dt = 0.1
+slice_x3 = 0.0
+
+<output4>
+file_type = bin
+variable = con
+id = xz_con
+dt = 0.1
+slice_x2 = 0.0
+
+<output5>
+file_type = bin
+variable = con
+id = yz_con
+dt = 0.1
+slice_x1 = 40.0

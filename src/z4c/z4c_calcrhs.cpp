@@ -522,6 +522,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   Real time = pmy_pack->pmesh->time;
   bool use_analytic_background =
       pz4c->use_analytic_background && pz4c->SetADMBackground != nullptr;
+  const bool evolve_lapse_residual = pz4c->evolve_lapse_residual;
+  const bool evolve_shift_residual = pz4c->evolve_shift_residual;
+  const bool evolve_any_gauge_residual = evolve_lapse_residual || evolve_shift_residual;
   if (use_analytic_background) {
     pz4c->PrescribeGaugeResidual();
     pz4c->UpdateBackgroundState(time);
@@ -594,7 +597,22 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         rhs.vTheta(m,k,j,i) -= 8.0 * M_PI * alpha_full * tmunu.E(m,k,j,i);
       }
       rhs.vTheta(m,k,j,i) *= opt.use_z4c;
-      rhs.alpha(m,k,j,i) = 0.0;
+
+      PointRHS rhs_full_gauge;
+      PointRHS rhs_bg_gauge;
+      if (evolve_any_gauge_residual) {
+        BuildStandardPointwiseRHS(
+            full, opt, tmunu, false, kappa1_eff, time,
+            m, k, j, i, geo_full, rhs_full_gauge);
+        BuildStandardPointwiseRHS(
+            bg, opt, tmunu, false, kappa1_eff, time,
+            m, k, j, i, geo_bg, rhs_bg_gauge);
+      }
+      if (evolve_lapse_residual) {
+        rhs.alpha(m,k,j,i) = rhs_full_gauge.alpha - rhs_bg_gauge.alpha;
+      } else {
+        rhs.alpha(m,k,j,i) = 0.0;
+      }
 
       for (int a = 0; a < 3; ++a) {
         rhs.vGam_u(m,a,k,j,i) =
@@ -614,8 +632,13 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                                      geo_full.g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
           }
         }
-        rhs.beta_u(m,a,k,j,i) = 0.0;
-        rhs.vB_d(m,a,k,j,i) = 0.0;
+        if (evolve_shift_residual) {
+          rhs.beta_u(m,a,k,j,i) = rhs_full_gauge.beta_u(a) - rhs_bg_gauge.beta_u(a);
+          rhs.vB_d(m,a,k,j,i) = rhs_full_gauge.vB_d(a) - rhs_bg_gauge.vB_d(a);
+        } else {
+          rhs.beta_u(m,a,k,j,i) = 0.0;
+          rhs.vB_d(m,a,k,j,i) = 0.0;
+        }
       }
       for (int a = 0; a < 3; ++a)
       for (int b = a; b < 3; ++b) {
@@ -684,6 +707,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       u_rhs(m,n,k,j,i) += Diss<NGHOST>(a, idx, u0, m, n, k, j, i)*diss;
     }
   });
+  pz4c->DebugDumpState("post_rhs", u_rhs, false, time, stage);
 
   return TaskStatus::complete;
 }

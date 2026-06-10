@@ -1,0 +1,162 @@
+#!/bin/bash -l
+#PBS -A MHDTidal
+#PBS -N z4c_restart_chain
+#PBS -l select=64
+#PBS -l walltime=01:00:00
+#PBS -l filesystems=home:flare
+#PBS -k doe
+#PBS -l place=scatter
+#PBS -q debug-scaling
+#PBS -j oe
+
+set -euo pipefail
+
+REPO_DIR="${REPO_DIR:-/home/hzhu/athenak_tde}"
+PROJECT_ROOT="${PROJECT_ROOT:-/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation}"
+RUN_ROOT="${RUN_ROOT:-${PROJECT_ROOT}/runs}"
+SUBMIT_DIR="${SUBMIT_DIR:-${PROJECT_ROOT}/submit}"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
+ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
+PBS_SCRIPT="${PBS_SCRIPT:-${REPO_DIR}/analysis/tde_star_profile/aurora/restart_until_tlim.pbs}"
+
+CASE_NAME="${CASE_NAME:?CASE_NAME must be provided}"
+RUN_DIR="${RUN_DIR:-${RUN_ROOT}/${CASE_NAME}}"
+TARGET_TLIM="${TARGET_TLIM:-200.0}"
+RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
+ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:50:00}"
+QUEUE="${QUEUE:-debug-scaling}"
+SELECT_RESOURCE="${SELECT_RESOURCE:-64}"
+PBS_WALLTIME="${PBS_WALLTIME:-01:00:00}"
+JOB_NAME="${JOB_NAME:-z4c_headon_r200}"
+RESUBMIT="${RESUBMIT:-1}"
+
+if type module >/dev/null 2>&1; then
+  module reset >/dev/null 2>&1 || true
+  module load oneapi >/dev/null 2>&1 || module load oneapi/release >/dev/null 2>&1 || true
+fi
+
+export MPICH_GPU_SUPPORT_ENABLED="${MPICH_GPU_SUPPORT_ENABLED:-1}"
+export SYCL_DEVICE_FILTER="${SYCL_DEVICE_FILTER:-level_zero:gpu}"
+export ONEAPI_DEVICE_SELECTOR="${ONEAPI_DEVICE_SELECTOR:-level_zero:gpu}"
+export ZE_FLAT_DEVICE_HIERARCHY="${ZE_FLAT_DEVICE_HIERARCHY:-COMPOSITE}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+
+CPU_BIND="${CPU_BIND:-list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100}"
+
+NNODES="$(wc -l < "${PBS_NODEFILE}")"
+NTOTRANKS="$((NNODES * RANKS_PER_NODE))"
+
+latest_time() {
+  python3 - "$RUN_DIR" <<'PY'
+from pathlib import Path
+import math
+import sys
+
+run_dir = Path(sys.argv[1])
+times = []
+for path in run_dir.glob("*.hst"):
+    if path.name.endswith(".z4c.user.hst"):
+        continue
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as stream:
+            for line in stream:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                try:
+                    value = float(stripped.split()[0])
+                except Exception:
+                    continue
+                if math.isfinite(value):
+                    times.append(value)
+    except FileNotFoundError:
+        pass
+print(max(times) if times else 0.0)
+PY
+}
+
+latest_restart_template() {
+  find "${RUN_DIR}/rst/rank_00000000" -maxdepth 1 -type f -name '*.rst' | sort | tail -n 1
+}
+
+mkdir -p "${SUBMIT_DIR}"
+
+CURRENT_TIME="$(latest_time)"
+RESTART_TEMPLATE="$(latest_restart_template)"
+
+echo "CASE_NAME=${CASE_NAME}"
+echo "RUN_DIR=${RUN_DIR}"
+echo "TARGET_TLIM=${TARGET_TLIM}"
+echo "CURRENT_TIME=${CURRENT_TIME}"
+echo "RESTART_TEMPLATE=${RESTART_TEMPLATE}"
+echo "ATHENA_EXE=${ATHENA_EXE}"
+echo "NNODES=${NNODES}"
+echo "RANKS_PER_NODE=${RANKS_PER_NODE}"
+echo "NTOTRANKS=${NTOTRANKS}"
+
+if python3 - "$CURRENT_TIME" "$TARGET_TLIM" <<'PY'
+import sys
+current = float(sys.argv[1])
+target = float(sys.argv[2])
+sys.exit(0 if current < target else 10)
+PY
+then
+  :
+else
+  status=$?
+  if [[ "${status}" != "10" ]]; then
+    exit "${status}"
+  fi
+  echo "Target time already reached; no restart segment needed."
+  exit 0
+fi
+
+if [[ -z "${RESTART_TEMPLATE}" || ! -f "${RESTART_TEMPLATE}" ]]; then
+  echo "No restart file found under ${RUN_DIR}/rst/rank_00000000" >&2
+  exit 1
+fi
+
+cd "${RUN_DIR}"
+
+mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+  gpu_tile_compact.sh "${ATHENA_EXE}" \
+  -r "${RESTART_TEMPLATE}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
+  "time/tlim=${TARGET_TLIM}"
+
+AFTER_TIME="$(latest_time)"
+echo "AFTER_TIME=${AFTER_TIME}"
+
+if python3 - "$AFTER_TIME" "$TARGET_TLIM" <<'PY'
+import sys
+current = float(sys.argv[1])
+target = float(sys.argv[2])
+sys.exit(0 if current < target else 10)
+PY
+then
+  :
+else
+  status=$?
+  if [[ "${status}" != "10" ]]; then
+    exit "${status}"
+  fi
+  echo "Reached target time ${TARGET_TLIM}; chain complete."
+  exit 0
+fi
+
+if [[ "${RESUBMIT}" != "1" ]]; then
+  echo "RESUBMIT=${RESUBMIT}; stopping after this segment at t=${AFTER_TIME}."
+  exit 0
+fi
+
+vars="CASE_NAME=${CASE_NAME},RUN_DIR=${RUN_DIR},REPO_DIR=${REPO_DIR},PROJECT_ROOT=${PROJECT_ROOT},RUN_ROOT=${RUN_ROOT},SUBMIT_DIR=${SUBMIT_DIR},BUILD_DIR=${BUILD_DIR},ATHENA_EXE=${ATHENA_EXE},PBS_SCRIPT=${PBS_SCRIPT},TARGET_TLIM=${TARGET_TLIM},RANKS_PER_NODE=${RANKS_PER_NODE},ATHENA_WALLTIME=${ATHENA_WALLTIME},QUEUE=${QUEUE},SELECT_RESOURCE=${SELECT_RESOURCE},PBS_WALLTIME=${PBS_WALLTIME},JOB_NAME=${JOB_NAME},RESUBMIT=${RESUBMIT}"
+
+cd "${SUBMIT_DIR}"
+qsub -A MHDTidal \
+  -N "${JOB_NAME}" \
+  -q "${QUEUE}" \
+  -l "select=${SELECT_RESOURCE}" \
+  -l "walltime=${PBS_WALLTIME}" \
+  -l "filesystems=home:flare" \
+  -l "place=scatter" \
+  -v "${vars}" \
+  "${PBS_SCRIPT}"

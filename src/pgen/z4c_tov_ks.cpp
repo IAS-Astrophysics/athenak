@@ -80,6 +80,9 @@ bool amr_rho_slope_refine = true;
 Real amr_rho_slope_threshold = 0.5;
 Real amr_rho_min = 0.0;
 Real amr_bh_exclusion_radius = 0.0;
+Real amr_bh_refine_radius = 0.0;
+Real amr_bh_derefine_radius = 0.0;
+int amr_bh_refine_level = -1;
 bool amr_star_refine = false;
 Real amr_star_refine_radius = 0.0;
 Real amr_star_refine_radius_factor = 0.0;
@@ -87,6 +90,7 @@ Real amr_star_derefine_radius = 0.0;
 Real amr_star_derefine_radius_factor = 0.0;
 int amr_star_refine_level = -1;
 bool zero_tmunu = false;
+bool metric_diag_history = false;
 
 void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm);
 void ResetToMinkowskiMetric(Mesh *pm);
@@ -399,12 +403,35 @@ void ApplyInnerExcision(Mesh *pm, Real bdt) {
 }
 
 void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = 2;
+  pdata->nhist = metric_diag_history ? 20 : 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
+  if (metric_diag_history) {
+    pdata->label[2] = "alpha-max";
+    pdata->label[3] = "chi-min";
+    pdata->label[4] = "chi-max";
+    pdata->label[5] = "detg-min";
+    pdata->label[6] = "detg-max";
+    pdata->label[7] = "Theta-max";
+    pdata->label[8] = "Khat-max";
+    pdata->label[9] = "bad-metric";
+    pdata->label[10] = "alpha-res";
+    pdata->label[11] = "beta-res";
+    pdata->label[12] = "B-res";
+    pdata->label[13] = "Gam-res";
+    pdata->label[14] = "src-full";
+    pdata->label[15] = "src-bg";
+    pdata->label[16] = "src-res";
+    pdata->label[17] = "aK-full";
+    pdata->label[18] = "aK-bg";
+    pdata->label[19] = "Khat-res";
+  }
 
   auto &w0 = pm->pmb_pack->pmhd->w0;
   auto &adm = pm->pmb_pack->padm->adm;
+  auto &z4c_res = pm->pmb_pack->pz4c->z4c;
+  auto &z4c_full = pm->pmb_pack->pz4c->full;
+  auto &z4c_bg = pm->pmb_pack->pz4c->bg;
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int is = indcs.is;
   int js = indcs.js;
@@ -415,12 +442,54 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   int nmkji = pm->pmb_pack->nmb_thispack*nx3*nx2*nx1;
   int nkji = nx3*nx2*nx1;
   int nji = nx2*nx1;
+  const bool metric_diag_history_l = metric_diag_history;
+  const Real lapse_oplog_l = pm->pmb_pack->pz4c->opt.lapse_oplog;
+  const Real lapse_harmonicf_l = pm->pmb_pack->pz4c->opt.lapse_harmonicf;
+  const Real lapse_harmonic_l = pm->pmb_pack->pz4c->opt.lapse_harmonic;
 
   Real rho_max = -std::numeric_limits<Real>::max();
   Real alpha_min = std::numeric_limits<Real>::max();
+  Real alpha_max = -std::numeric_limits<Real>::max();
+  Real chi_min = std::numeric_limits<Real>::max();
+  Real chi_max = -std::numeric_limits<Real>::max();
+  Real gbar_det_min = std::numeric_limits<Real>::max();
+  Real gbar_det_max = -std::numeric_limits<Real>::max();
+  Real psi4_min = std::numeric_limits<Real>::max();
+  Real psi4_max = -std::numeric_limits<Real>::max();
+  Real adm_det_min = std::numeric_limits<Real>::max();
+  Real adm_det_max = -std::numeric_limits<Real>::max();
+  Real kdd_abs_max = 0.0;
+  Real add_abs_max = 0.0;
+  Real theta_abs_max = 0.0;
+  Real khat_abs_max = 0.0;
+  Real bad_metric_count = 0.0;
+  Real alpha_res_abs_max = 0.0;
+  Real beta_res_abs_max = 0.0;
+  Real b_res_abs_max = 0.0;
+  Real gam_res_abs_max = 0.0;
+  Real lapse_src_full_abs_max = 0.0;
+  Real lapse_src_bg_abs_max = 0.0;
+  Real lapse_src_res_abs_max = 0.0;
+  Real alpha_k_full_abs_max = 0.0;
+  Real alpha_k_bg_abs_max = 0.0;
+  Real khat_res_abs_max = 0.0;
   Kokkos::parallel_reduce(
       "TOVKerrSchildHistory", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-      KOKKOS_LAMBDA(const int &idx, Real &rho_local, Real &alpha_local) {
+      KOKKOS_LAMBDA(const int &idx, Real &rho_local, Real &alpha_min_local,
+                    Real &alpha_max_local, Real &chi_min_local, Real &chi_max_local,
+                    Real &gbar_det_min_local, Real &gbar_det_max_local,
+                    Real &psi4_min_local, Real &psi4_max_local,
+                    Real &adm_det_min_local, Real &adm_det_max_local,
+                    Real &kdd_abs_max_local, Real &add_abs_max_local,
+                    Real &theta_abs_max_local, Real &khat_abs_max_local,
+                    Real &bad_metric_count_local, Real &alpha_res_abs_max_local,
+                    Real &beta_res_abs_max_local, Real &b_res_abs_max_local,
+                    Real &gam_res_abs_max_local, Real &lapse_src_full_abs_max_local,
+                    Real &lapse_src_bg_abs_max_local,
+                    Real &lapse_src_res_abs_max_local,
+                    Real &alpha_k_full_abs_max_local,
+                    Real &alpha_k_bg_abs_max_local,
+                    Real &khat_res_abs_max_local) {
         int m = idx/nkji;
         int k = (idx - m*nkji)/nji;
         int j = (idx - m*nkji - k*nji)/nx1;
@@ -429,24 +498,230 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
         j += js;
 
         rho_local = fmax(rho_local, w0(m, IDN, k, j, i));
-        alpha_local = fmin(alpha_local, adm.alpha(m, k, j, i));
+        alpha_min_local = fmin(alpha_min_local, adm.alpha(m, k, j, i));
+        if (metric_diag_history_l) {
+          const Real alpha = adm.alpha(m, k, j, i);
+          const Real chi = z4c_full.chi(m,k,j,i);
+          const Real gbar_det = adm::SpatialDet(z4c_full.g_dd(m,0,0,k,j,i),
+                                                z4c_full.g_dd(m,0,1,k,j,i),
+                                                z4c_full.g_dd(m,0,2,k,j,i),
+                                                z4c_full.g_dd(m,1,1,k,j,i),
+                                                z4c_full.g_dd(m,1,2,k,j,i),
+                                                z4c_full.g_dd(m,2,2,k,j,i));
+          const Real psi4 = adm.psi4(m,k,j,i);
+          const Real adm_det = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i),
+                                               adm.g_dd(m,0,1,k,j,i),
+                                               adm.g_dd(m,0,2,k,j,i),
+                                               adm.g_dd(m,1,1,k,j,i),
+                                               adm.g_dd(m,1,2,k,j,i),
+                                               adm.g_dd(m,2,2,k,j,i));
+          Real kdd_abs = 0.0;
+          Real add_abs = 0.0;
+          const Real alpha_full = z4c_full.alpha(m,k,j,i);
+          const Real alpha_bg = z4c_bg.alpha(m,k,j,i);
+          const Real khat_full = z4c_full.vKhat(m,k,j,i);
+          const Real khat_bg = z4c_bg.vKhat(m,k,j,i);
+          const Real khat_res = z4c_res.vKhat(m,k,j,i);
+          const Real f_full = lapse_oplog_l*lapse_harmonicf_l +
+                              lapse_harmonic_l*alpha_full;
+          const Real f_bg = lapse_oplog_l*lapse_harmonicf_l +
+                            lapse_harmonic_l*alpha_bg;
+          const Real lapse_src_full = -f_full*alpha_full*khat_full;
+          const Real lapse_src_bg = -f_bg*alpha_bg*khat_bg;
+          const Real alpha_k_full = alpha_full*khat_full;
+          const Real alpha_k_bg = alpha_bg*khat_bg;
+          lapse_src_full_abs_max_local =
+              fmax(lapse_src_full_abs_max_local, fabs(lapse_src_full));
+          lapse_src_bg_abs_max_local =
+              fmax(lapse_src_bg_abs_max_local, fabs(lapse_src_bg));
+          lapse_src_res_abs_max_local =
+              fmax(lapse_src_res_abs_max_local, fabs(lapse_src_full - lapse_src_bg));
+          alpha_k_full_abs_max_local =
+              fmax(alpha_k_full_abs_max_local, fabs(alpha_k_full));
+          alpha_k_bg_abs_max_local =
+              fmax(alpha_k_bg_abs_max_local, fabs(alpha_k_bg));
+          khat_res_abs_max_local = fmax(khat_res_abs_max_local, fabs(khat_res));
+          alpha_res_abs_max_local =
+              fmax(alpha_res_abs_max_local, fabs(z4c_res.alpha(m,k,j,i)));
+          for (int a = 0; a < 3; ++a) {
+            beta_res_abs_max_local = fmax(beta_res_abs_max_local,
+                                          fabs(z4c_res.beta_u(m,a,k,j,i)));
+            b_res_abs_max_local =
+                fmax(b_res_abs_max_local, fabs(z4c_res.vB_d(m,a,k,j,i)));
+            gam_res_abs_max_local =
+                fmax(gam_res_abs_max_local, fabs(z4c_res.vGam_u(m,a,k,j,i)));
+            for (int b = a; b < 3; ++b) {
+              kdd_abs = fmax(kdd_abs, fabs(adm.vK_dd(m,a,b,k,j,i)));
+              add_abs = fmax(add_abs, fabs(z4c_full.vA_dd(m,a,b,k,j,i)));
+            }
+          }
+          const bool bad_metric = !(isfinite(alpha) && isfinite(chi) && isfinite(gbar_det) &&
+                                    isfinite(psi4) && isfinite(adm_det)) ||
+                                  alpha <= 0.0 || chi <= 0.0 ||
+                                  gbar_det <= 0.0 || psi4 <= 0.0 || adm_det <= 0.0;
+          alpha_max_local = fmax(alpha_max_local, alpha);
+          chi_min_local = fmin(chi_min_local, chi);
+          chi_max_local = fmax(chi_max_local, chi);
+          gbar_det_min_local = fmin(gbar_det_min_local, gbar_det);
+          gbar_det_max_local = fmax(gbar_det_max_local, gbar_det);
+          psi4_min_local = fmin(psi4_min_local, psi4);
+          psi4_max_local = fmax(psi4_max_local, psi4);
+          adm_det_min_local = fmin(adm_det_min_local, adm_det);
+          adm_det_max_local = fmax(adm_det_max_local, adm_det);
+          kdd_abs_max_local = fmax(kdd_abs_max_local, kdd_abs);
+          add_abs_max_local = fmax(add_abs_max_local, add_abs);
+          theta_abs_max_local = fmax(theta_abs_max_local, fabs(z4c_full.vTheta(m,k,j,i)));
+          khat_abs_max_local = fmax(khat_abs_max_local, fabs(z4c_full.vKhat(m,k,j,i)));
+          bad_metric_count_local += bad_metric ? 1.0 : 0.0;
+        }
       },
-      Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+      Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min),
+      Kokkos::Max<Real>(alpha_max), Kokkos::Min<Real>(chi_min),
+      Kokkos::Max<Real>(chi_max), Kokkos::Min<Real>(gbar_det_min),
+      Kokkos::Max<Real>(gbar_det_max), Kokkos::Min<Real>(psi4_min),
+      Kokkos::Max<Real>(psi4_max), Kokkos::Min<Real>(adm_det_min),
+      Kokkos::Max<Real>(adm_det_max), Kokkos::Max<Real>(kdd_abs_max),
+      Kokkos::Max<Real>(add_abs_max), Kokkos::Max<Real>(theta_abs_max),
+      Kokkos::Max<Real>(khat_abs_max), Kokkos::Sum<Real>(bad_metric_count),
+      Kokkos::Max<Real>(alpha_res_abs_max), Kokkos::Max<Real>(beta_res_abs_max),
+      Kokkos::Max<Real>(b_res_abs_max), Kokkos::Max<Real>(gam_res_abs_max),
+      Kokkos::Max<Real>(lapse_src_full_abs_max),
+      Kokkos::Max<Real>(lapse_src_bg_abs_max),
+      Kokkos::Max<Real>(lapse_src_res_abs_max),
+      Kokkos::Max<Real>(alpha_k_full_abs_max),
+      Kokkos::Max<Real>(alpha_k_bg_abs_max),
+      Kokkos::Max<Real>(khat_res_abs_max));
 
 #if MPI_PARALLEL_ENABLED
   if (global_variable::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    if (metric_diag_history) {
+      MPI_Reduce(MPI_IN_PLACE, &alpha_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &chi_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &chi_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &gbar_det_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &gbar_det_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &psi4_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &psi4_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &adm_det_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &adm_det_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &kdd_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &add_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &theta_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &khat_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &bad_metric_count, 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &alpha_res_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX,
+                 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &beta_res_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX,
+                 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &b_res_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX,
+                 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &gam_res_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX,
+                 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &lapse_src_full_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &lapse_src_bg_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &lapse_src_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &alpha_k_full_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &alpha_k_bg_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &khat_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+    }
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    if (metric_diag_history) {
+      MPI_Reduce(&alpha_max, &alpha_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&chi_min, &chi_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&chi_max, &chi_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&gbar_det_min, &gbar_det_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&gbar_det_max, &gbar_det_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&psi4_min, &psi4_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&psi4_max, &psi4_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&adm_det_min, &adm_det_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&adm_det_max, &adm_det_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&kdd_abs_max, &kdd_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&add_abs_max, &add_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&theta_abs_max, &theta_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&khat_abs_max, &khat_abs_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&bad_metric_count, &bad_metric_count, 1, MPI_ATHENA_REAL, MPI_SUM, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&alpha_res_abs_max, &alpha_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&beta_res_abs_max, &beta_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&b_res_abs_max, &b_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&gam_res_abs_max, &gam_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&lapse_src_full_abs_max, &lapse_src_full_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&lapse_src_bg_abs_max, &lapse_src_bg_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&lapse_src_res_abs_max, &lapse_src_res_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&alpha_k_full_abs_max, &alpha_k_full_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&alpha_k_bg_abs_max, &alpha_k_bg_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&khat_res_abs_max, &khat_res_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    }
     rho_max = 0.0;
     alpha_min = 0.0;
+    alpha_max = 0.0;
+    chi_min = 0.0;
+    chi_max = 0.0;
+    gbar_det_min = 0.0;
+    gbar_det_max = 0.0;
+    psi4_min = 0.0;
+    psi4_max = 0.0;
+    adm_det_min = 0.0;
+    adm_det_max = 0.0;
+    kdd_abs_max = 0.0;
+    add_abs_max = 0.0;
+    theta_abs_max = 0.0;
+    khat_abs_max = 0.0;
+    bad_metric_count = 0.0;
+    alpha_res_abs_max = 0.0;
+    beta_res_abs_max = 0.0;
+    b_res_abs_max = 0.0;
+    gam_res_abs_max = 0.0;
+    lapse_src_full_abs_max = 0.0;
+    lapse_src_bg_abs_max = 0.0;
+    lapse_src_res_abs_max = 0.0;
+    alpha_k_full_abs_max = 0.0;
+    alpha_k_bg_abs_max = 0.0;
+    khat_res_abs_max = 0.0;
   }
 #endif
 
   pdata->hdata[0] = rho_max;
   pdata->hdata[1] = alpha_min;
+  if (metric_diag_history) {
+    pdata->hdata[2] = alpha_max;
+    pdata->hdata[3] = chi_min;
+    pdata->hdata[4] = chi_max;
+    pdata->hdata[5] = adm_det_min;
+    pdata->hdata[6] = adm_det_max;
+    pdata->hdata[7] = theta_abs_max;
+    pdata->hdata[8] = khat_abs_max;
+    pdata->hdata[9] = bad_metric_count;
+    pdata->hdata[10] = alpha_res_abs_max;
+    pdata->hdata[11] = beta_res_abs_max;
+    pdata->hdata[12] = b_res_abs_max;
+    pdata->hdata[13] = gam_res_abs_max;
+    pdata->hdata[14] = lapse_src_full_abs_max;
+    pdata->hdata[15] = lapse_src_bg_abs_max;
+    pdata->hdata[16] = lapse_src_res_abs_max;
+    pdata->hdata[17] = alpha_k_full_abs_max;
+    pdata->hdata[18] = alpha_k_bg_abs_max;
+    pdata->hdata[19] = khat_res_abs_max;
+  }
 }
 
 bool TouchesGlobalBoundary(const RegionSize &mb_size, const RegionSize &mesh_size,
@@ -576,6 +851,33 @@ void RefinementCondition(MeshBlockPack *pmbp) {
         refine_flag.h_view(m + mbs) = 1;
       } else if (dmin2 < keep_radius2 &&
                  level == amr_star_refine_level && refine_flag.h_view(m + mbs) == -1) {
+        refine_flag.h_view(m + mbs) = 0;
+      }
+    }
+    refine_flag.template modify<HostMemSpace>();
+    refine_flag.template sync<DevExeSpace>();
+  }
+
+  if (amr_bh_refine_radius > 0.0 && amr_bh_refine_level >= 0) {
+    const Real refine_radius2 = SQR(amr_bh_refine_radius);
+    const Real keep_radius = fmax(amr_bh_refine_radius, amr_bh_derefine_radius);
+    const Real keep_radius2 = SQR(keep_radius);
+    for (int m = 0; m < nmb; ++m) {
+      const int level = pmbp->pmesh->lloc_eachmb[m + mbs].level - pmbp->pmesh->root_level;
+      const auto &mb_size = size.h_view(m);
+      const Real closest_x =
+          std::max(mb_size.x1min, std::min(bh_center_x1, mb_size.x1max));
+      const Real closest_y =
+          std::max(mb_size.x2min, std::min(bh_center_x2, mb_size.x2max));
+      const Real closest_z =
+          std::max(mb_size.x3min, std::min(bh_center_x3, mb_size.x3max));
+      const Real dmin2 = SQR(closest_x - bh_center_x1) +
+                         SQR(closest_y - bh_center_x2) +
+                         SQR(closest_z - bh_center_x3);
+      if (dmin2 < refine_radius2 && level < amr_bh_refine_level) {
+        refine_flag.h_view(m + mbs) = 1;
+      } else if (dmin2 < keep_radius2 &&
+                 level == amr_bh_refine_level && refine_flag.h_view(m + mbs) == -1) {
         refine_flag.h_view(m + mbs) = 0;
       }
     }
@@ -1135,12 +1437,17 @@ void ConvertADMToResidualOnBackground(MeshBlockPack *pmbp, ParameterInput *pin) 
   auto &u0 = pz4c->u0;
   auto &u_full = pz4c->u_full;
   auto &u_bg = pz4c->u_bg;
+  const bool evolve_lapse_residual = pz4c->evolve_lapse_residual;
+  const bool evolve_shift_residual = pz4c->evolve_shift_residual;
+  const bool preserve_lapse_residual = pz4c->preserve_lapse_residual;
 
   par_for("z4c_tov_ks_residual", DevExeSpace(), 0, nmb - 1, 0, nz4c - 1,
           ksg, keg, jsg, jeg, isg, ieg,
           KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     u0(m,n,k,j,i) = u_full(m,n,k,j,i) - u_bg(m,n,k,j,i);
-    if (n == ialpha || (n >= ibetax && n <= ibetaz) || (n >= ibx && n <= ibz)) {
+    if (((!evolve_lapse_residual && !preserve_lapse_residual) && n == ialpha) ||
+        (!evolve_shift_residual &&
+         ((n >= ibetax && n <= ibetaz) || (n >= ibx && n <= ibz)))) {
       u0(m,n,k,j,i) = 0.0;
     }
   });
@@ -1466,20 +1773,38 @@ void SetupTOVKerrSchild(ParameterInput *pin, Mesh *pmy_mesh) {
   FillTOVPrimitivesAndADM(pin, pmy_mesh, eos, tov_star);
 
   auto &indcs = pmy_mesh->mb_indcs;
-  switch (indcs.ng) {
-    case 2:
-      ConvertADMToResidualOnBackground<2>(pmbp, pin);
-      break;
-    case 3:
-      ConvertADMToResidualOnBackground<3>(pmbp, pin);
-      break;
-    case 4:
-      ConvertADMToResidualOnBackground<4>(pmbp, pin);
-      break;
-    default:
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Unsupported nghost for z4c_tov_ks" << std::endl;
-      std::exit(EXIT_FAILURE);
+  if (pmbp->pz4c->use_analytic_background) {
+    switch (indcs.ng) {
+      case 2:
+        ConvertADMToResidualOnBackground<2>(pmbp, pin);
+        break;
+      case 3:
+        ConvertADMToResidualOnBackground<3>(pmbp, pin);
+        break;
+      case 4:
+        ConvertADMToResidualOnBackground<4>(pmbp, pin);
+        break;
+      default:
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Unsupported nghost for z4c_tov_ks" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+  } else {
+    switch (indcs.ng) {
+      case 2:
+        pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
+        break;
+      case 3:
+        pmbp->pz4c->ADMToZ4c<3>(pmbp, pin);
+        break;
+      case 4:
+        pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
+        break;
+      default:
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Unsupported nghost for z4c_tov_ks" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
   }
 
   auto *pz4c = pmbp->pz4c;
@@ -1536,16 +1861,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << std::endl;
     exit(EXIT_FAILURE);
   }
-  if (!pmbp->pz4c->use_analytic_background) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "z4c_tov_ks requires <z4c>/use_analytic_background = true"
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
   user_hist_func = &TOVKerrSchildHistory;
 
   bh_mass = pin->GetOrAddReal("problem", "bh_mass", 1.0);
   use_minkowski_background = fabs(bh_mass) <= 1.0e-12;
+  if (!pmbp->pz4c->use_analytic_background && !use_minkowski_background) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "z4c_tov_ks requires <z4c>/use_analytic_background = true "
+              << "for non-Minkowski backgrounds." << std::endl;
+    exit(EXIT_FAILURE);
+  }
   const bool coord_minkowski = pin->GetOrAddBoolean("coord", "minkowski", false);
   if (!use_minkowski_background && fabs(bh_mass - 1.0) > 1.0e-12) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -1661,6 +1987,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   amr_bh_exclusion_radius =
       pin->GetOrAddReal("problem", "amr_bh_exclusion_radius",
                         use_minkowski_background ? 0.0 : 4.0*bh_horizon_radius);
+  amr_bh_refine_radius = pin->GetOrAddReal("problem", "amr_bh_refine_radius", 0.0);
+  amr_bh_derefine_radius =
+      pin->GetOrAddReal("problem", "amr_bh_derefine_radius", amr_bh_refine_radius);
+  amr_bh_refine_level = pin->GetOrAddInteger("problem", "amr_bh_refine_level", -1);
   amr_star_refine = pin->GetOrAddBoolean("problem", "amr_star_refine", false);
   amr_star_refine_radius = pin->GetOrAddReal("problem", "amr_star_refine_radius", 0.0);
   amr_star_refine_radius_factor =
@@ -1671,6 +2001,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pin->GetOrAddReal("problem", "amr_star_derefine_radius_factor", 0.0);
   amr_star_refine_level = pin->GetOrAddInteger("problem", "amr_star_refine_level", -1);
   zero_tmunu = pin->GetOrAddBoolean("problem", "zero_tmunu", false);
+  metric_diag_history =
+      pin->GetOrAddBoolean("problem", "metric_diag_history", false) ||
+      std::getenv("ATHENA_METRIC_DIAG_HISTORY") != nullptr;
   user_srcs = true;
   user_srcs_func = &ApplyInnerExcision;
   user_ref_func = &RefinementCondition;

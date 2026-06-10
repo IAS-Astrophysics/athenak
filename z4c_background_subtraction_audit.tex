@@ -1,0 +1,818 @@
+\documentclass[11pt]{article}
+
+% ============================================================================
+%  Audit report: background-subtracted Z4c implementation in AthenaK (src/z4c)
+%  Branch audited: project/bg_subtract
+% ============================================================================
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{bm}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+
+\definecolor{codebg}{gray}{0.96}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  framerule=0pt,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  language=C++,
+  keywordstyle=\color{blue!60!black},
+  commentstyle=\color{green!40!black},
+  showstringspaces=false
+}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\Lie}{\mathcal{L}}
+\newcommand{\dtb}{(\partial_t-\Lie_\beta)}
+\newcommand{\gt}{\tilde\gamma}
+\newcommand{\At}{\tilde A}
+\newcommand{\Gamt}{\tilde\Gamma}
+\newcommand{\bg}[1]{#1_{0}}
+\newcommand{\res}[1]{#1_{\mathrm s}}
+
+% --- field shorthands ---
+\newcommand{\Fop}{\mathcal{F}}            % continuum RHS operator
+\newcommand{\Fnum}{\Fop^{h}}              % discrete RHS operator
+\newcommand{\half}{\tfrac12}
+\newcommand{\third}{\tfrac13}
+
+\title{\bfseries Audit of the Background--Subtracted Z4c Implementation in
+AthenaK\\[2pt]
+\large \file{src/z4c} on branch \file{project/bg\_subtract}}
+\author{Code audit report}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report audits the background--subtracted (residual) Z4c evolution
+implemented in \file{src/z4c} of the \file{project/bg\_subtract} branch of
+AthenaK, against (i) the full Z4c equations on \file{origin/main}, (ii) the
+BSSN background--subtraction method of Lam, Shibata \& Kiuchi
+(arXiv:2212.10891; hereafter \textbf{LSK22}), and (iii) the AthenaK Z4c method
+paper of Zhu \emph{et al.} (arXiv:2409.10383; hereafter \textbf{Z24}). The
+central design property---that the residual right--hand side (RHS) is the
+\emph{discrete} difference $\Fnum(\text{full})-\Fnum(\text{background})$, so
+that a vanishing residual produces an exactly vanishing RHS to round--off and
+the leading truncation error of the (static) background does \emph{not} act as
+a source on the residual---is implemented correctly and consistently across
+the constraint/evolution sector, the gauge sector, the algebraic--constraint
+projection, the Kreiss--Oliger dissipation, the Sommerfeld boundary, and the
+AMR prolongation/restriction. The gauge sector is a genuine
+\emph{background--adapted} $1+\log$/$\Gamma$--driver that retains the
+$1+\log$ principal symbol. We document the term--by--term verification, the
+data flow, and a ranked list of residual robustness concerns. We emphasise that
+the Kerr--Schild background is an \emph{exact and stable} fixed point of the
+residual gauge flow (the moving--puncture damping channels still act on the
+residual), so this is not a stability defect; the one genuine trade--off versus
+LSK22's $K_0=0$ trumpet is interior regularity---Kerr--Schild is horizon
+penetrating and reaches the singularity, so an inner freeze/excision layer is
+required where a trumpet would be regular and excision--free.
+\end{abstract}
+
+\tableofcontents
+
+% ===========================================================================
+\section{Scope, method, and notation}
+% ===========================================================================
+
+\paragraph{What was audited.} The diff of \file{src/z4c} between
+\file{project/bg\_subtract} and \file{origin/main} (merge base
+\code{6ae35f4}). The substantive changes are in
+\file{z4c\_calcrhs.cpp} (RHS, $+1118/-845$ effective rewrite),
+\file{z4c.cpp} (state containers and background/residual transforms),
+\file{z4c.hpp} (data structures and flags),
+\file{z4c\_adm.cpp} (ADM$\leftrightarrow$Z4c and constraints on the full
+state), \file{z4c\_tasks.cpp} (task ordering), and \file{z4c\_amr.cpp}
+(refinement on the reconstructed full state). The driving problem generator is
+\file{src/pgen/z4c\_tov\_ks.cpp} (TOV star as a residual on an analytic
+Kerr--Schild background). Representative input:
+\file{inputs/tde/aurora/z4c\_tov\_ks\_n3\_schwarzschild\_resgauge\_full\_2n\_aurora.athinput}.
+
+\paragraph{Z4c continuum system.} We use the Z4c equations as in Z24 (which
+adopts the GR--Athena++ form, Daszuta \emph{et al.} 2021, Eqs.~8--13, and the
+Bona--Mass\'o\,$+\,\Gamma$--driver gauge, their Eq.~22). The evolved fields are
+\begin{equation}
+  \bm{u}=\bigl(\chi,\ \gt_{ij},\ \hat K,\ \At_{ij},\ \Gamt^{i},\ \Theta,\
+  \alpha,\ \beta^{i},\ B^{i}\bigr),
+  \label{eq:fields}
+\end{equation}
+with $\chi=(\det\gamma)^{\,p/12}$, $p\equiv\code{chi\_psi\_power}$
+(default $p=-4$, so $\chi=\psi^{-2}$), $\gt_{ij}$ the unit--determinant
+conformal metric, $\hat K=K-2\Theta$, and $\At_{ij}$ the conformal trace-free
+extrinsic curvature. Schematically the evolution system is
+\begin{equation}
+  \partial_t \bm{u} = \Fop(\bm{u}),
+  \label{eq:dtuF}
+\end{equation}
+which is LSK22 Eq.~(18). The concrete components, in the form actually coded
+(see \S\ref{sec:standard}), are
+\begin{align}
+  \dtb\chi   &= \tfrac{p}{6}\,\chi\,(\alpha \hat K - \partial_k\beta^k),
+    \label{eq:chi}\\
+  \dtb\gt_{ij} &= -2\alpha\At_{ij}, \label{eq:g}\\
+  \dtb\hat K &= -D^iD_i\alpha + \alpha\!\left(\At_{ij}\At^{ij}+\third\hat K^2\right)
+        + \alpha\kappa_1(1-\kappa_2)\Theta + 4\pi\alpha(S+E),
+    \label{eq:Khat}\\
+  \dtb\At_{ij} &= \chi^{-4/p}\!\left[-D_iD_j\alpha+\alpha(R_{ij}+R^\phi_{ij})\right]^{\mathrm{TF}}
+        + \alpha(\hat K\At_{ij}-2\At_{ik}\At^k{}_j)
+        - 8\pi\alpha\!\left[\chi^{-4/p}S_{ij}\right]^{\mathrm{TF}},
+    \label{eq:A}\\
+  \dtb\Theta &= \alpha\!\left[\half\hat{\mathcal H} - (2+\kappa_2)\kappa_1\Theta\right]
+        - 8\pi\alpha E,
+    \label{eq:Theta}\\
+  \dtb\Gamt^i &= 2\alpha\,\mathcal{D}^i
+        - 2\At^{ij}\partial_j\alpha
+        - 2\alpha\kappa_1(\Gamt^i-\Gamma^i_{(\gt)})
+        - 16\pi\alpha\,\gt^{ij}S_j,
+    \label{eq:Gam}
+\end{align}
+where $[\cdot]^{\mathrm{TF}}$ is the trace-free part, $\hat{\mathcal H}=R+\tfrac23\hat
+K^2-\At_{ij}\At^{ij}$, $\mathcal D^i$ collects the $\At$/$\hat K$/$\Theta$
+divergence terms, and the matter sources $(E,S_i,S_{ij},S=\gamma^{ij}S_{ij})$
+come from the stress tensor. The gauge sector is
+\begin{align}
+  \partial_t\alpha &= \code{lapse\_advect}\,\beta^k\partial_k\alpha
+       - f\,\alpha\,\hat K, \qquad
+       f=\code{lapse\_oplog}\cdot\code{lapse\_harmonicf}+\code{lapse\_harmonic}\,\alpha,
+    \label{eq:lapse}\\
+  \partial_t\beta^i &= \code{shift\_Gamma}\,\Gamt^i
+       + \code{shift\_advect}\,\beta^k\partial_k\beta^i
+       - \code{shift\_eta}\,\beta^i + (\dots),
+    \label{eq:shift}
+\end{align}
+which with the default parameters ($f=2$, $\code{shift\_Gamma}=1$,
+$\code{shift\_eta}=2$) is the standard $1+\log$ slicing and (first--order)
+$\Gamma$--driver of moving--puncture evolutions. Equations
+\eqref{eq:lapse}--\eqref{eq:shift} are the analogue of LSK22 Eqs.~(8)--(10)
+and Z24's Eq.~22 reference.
+
+% ===========================================================================
+\section{The continuum background--subtraction formulation}
+% ===========================================================================
+
+Following LSK22 (Eqs.~11--19) every evolved field is split into a
+\emph{static analytic background} $\bg{\bm u}$ and a \emph{residual}
+$\res{\bm u}$,
+\begin{equation}
+  \bm u = \bg{\bm u} + \res{\bm u}, \qquad \partial_t \bg{\bm u}=0,
+  \label{eq:split}
+\end{equation}
+and the residual is evolved with the \emph{difference} of the RHS operator,
+\begin{equation}
+  \boxed{\ \partial_t \res{\bm u}
+     = \Fop(\bg{\bm u}+\res{\bm u}) - \Fop(\bg{\bm u})\ }
+  \label{eq:residualRHS}
+\end{equation}
+which is exactly LSK22 Eq.~(19). Two facts make this useful:
+\begin{enumerate}[leftmargin=1.6em,itemsep=2pt]
+\item \textbf{Continuum consistency.} If $\bg{\bm u}$ solves
+$\Fop(\bg{\bm u})=0$ (a stationary solution of the \emph{evolution + gauge}
+system), then \eqref{eq:residualRHS} reduces to $\partial_t\res{\bm
+u}=\Fop(\bg{\bm u}+\res{\bm u})$, i.e.\ the residual carries the full nonlinear
+dynamics with no spurious source.
+\item \textbf{Discrete truncation cancellation (the key point).} The crucial
+implementation requirement, emphasised in LSK22 immediately after their
+Eq.~(19), is that \emph{the same discrete operator} $\Fnum$ be applied to both
+arguments:
+\begin{equation}
+  \partial_t \res{\bm u}
+     = \Fnum(\bg{\bm u}+\res{\bm u}) - \Fnum(\bg{\bm u}).
+  \label{eq:residualRHSdiscrete}
+\end{equation}
+Because $\Fnum(\bg{\bm u})\neq 0$ numerically (it is the truncation error of
+finite--differencing the smooth background), subtracting it removes the
+$O(\res{\bm u}^0)$ background truncation error from the residual RHS. In
+particular, if $\res{\bm u}\equiv 0$ then the two arguments are bitwise
+identical and \eqref{eq:residualRHSdiscrete} is \emph{exactly} zero to
+round--off: the static background truncation error never sources the residual.
+\end{enumerate}
+
+The remainder of this report verifies that \eqref{eq:residualRHSdiscrete} is
+what the code computes, with one stencil, for \emph{every} field and every
+auxiliary operation.
+
+% ===========================================================================
+\section{Code architecture and data flow}
+% ===========================================================================
+
+\subsection{State containers}
+\file{z4c.hpp} (lines 80--133) declares four \code{Z4c\_vars} aliases over four
+allocations, all of size \code{nz4c}:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+alias & allocation & meaning \\
+\midrule
+\code{z4c} & \code{u0} & evolved variable; in bg mode this holds the \emph{residual} $\res{\bm u}$\\
+\code{bg}  & \code{u\_bg} & analytic background $\bg{\bm u}$ (recomputed each evaluation)\\
+\code{full}& \code{u\_full} & reconstructed full state $\bg{\bm u}+\res{\bm u}$\\
+\code{rhs} & \code{u\_rhs} & RHS storage $\partial_t\res{\bm u}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+There is also a separate ADM background \code{adm\_bg} (\code{u\_adm\_bg}, 17
+slots) used as the staging area for the analytic ADM background. The control
+flags are (\file{z4c.cpp} 183--192):
+\code{use\_analytic\_background}, \code{evolve\_gauge\_residual},
+\code{evolve\_lapse\_residual}, \code{evolve\_shift\_residual},
+\code{preserve\_lapse\_residual}. The function pointers
+\code{SetADMBackground} and \code{SetZ4cBackground} are installed by the pgen.
+
+\subsection{Transforms (\file{z4c.cpp})}
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+\item \code{ReconstructFullState()} (373--411): $\code{full}=\code{bg}+\code{z4c}$
+field by field over the \emph{full} index range including ghosts
+(\code{isg..ieg}). Lapse and shift residuals are added only if their evolve
+(or, for the lapse, \code{preserve}) flag is set; otherwise the full gauge
+equals the background gauge.
+\item \code{RecastResidualState()} (413--452): the inverse,
+$\code{z4c}=\code{full}-\code{bg}$, with the same gating.
+\item \code{PrescribeGaugeResidual()} (454--484): zeroes $\res\alpha$,
+$\res\beta^i$, $\res B^i$ when their residuals are not being evolved.
+\item \code{UpdateBackgroundState()} (\file{z4c\_adm.cpp} 190--213): calls
+\code{SetADMBackground} (fills \code{adm\_bg}), then either the closed--form
+\code{SetZ4cBackground} (preferred) or the FD \code{ADMToZ4cImpl} fallback to
+fill \code{bg}, and finishes with \code{EnforceAlgConstrOn(bg)}.
+\end{itemize}
+
+\subsection{Task ordering (\file{z4c\_tasks.cpp})}
+The per--stage pipeline is
+\code{CopyU}\,$\to$\,\code{CalcRHS}\,$\to$\,\code{Z4cBoundaryRHS}\,$\to$\,
+\code{ExpRKUpdate}\,$\to$\,\code{RestrictU}\,$\to$\,\code{SendU/RecvU}\,$\to$\,
+\code{ApplyPhysicalBCs}\,$\to$\,\code{Prolongate}\,$\to$\,\code{EnforceAlgConstr}\,$\to$\,
+\code{ConvertZ4cToADM}. Two consequences matter for this audit:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+\item All communication/refinement operators act on \code{u0}, i.e.\ on the
+\emph{residual}. This is the desired behaviour (\S\ref{sec:amr}).
+\item \code{EnforceAlgConstr} (194--204) reconstructs the full state,
+projects the algebraic constraints \emph{on the full state}, and recasts the
+residual (\S\ref{sec:alg}). \code{ConvertZ4cToADM} sets the ADM variables from
+the full state, so matter, constraints, Weyl, and trackers all see the
+physical metric.
+\end{itemize}
+
+% ===========================================================================
+\section{The standard (non--background) RHS is unchanged}
+\label{sec:standard}
+% ===========================================================================
+
+The main--branch monolithic kernel was refactored into two device functions in
+\file{z4c\_calcrhs.cpp}:
+\code{ComputeGeometryData} (127--398), which builds all derivatives, the
+inverse metric, Christoffels, $R_{ij}$, $R^\phi_{ij}$, $D_iD_j\alpha$,
+$\At$--contractions, $\mathcal D^i$, and the Lie/advection terms from a
+templated \code{State}; and \code{BuildStandardPointwiseRHS} (400--500), which
+assembles \eqref{eq:chi}--\eqref{eq:shift}. I verified line by line that
+\code{BuildStandardPointwiseRHS} reproduces the \file{origin/main} kernel:
+e.g.\ $\hat K$ (calcrhs 409--416 vs.\ main 482--489), $\chi$ (418--419 vs.\
+490--491), $\Theta$ (421--427 vs.\ 492--499), $\Gamt^i$ (429--440 vs.\
+501--513), $\gt_{ij}/\At_{ij}$ (442--459 vs.\ 516--532), lapse (461--464 vs.\
+534--537), shift (483--499 vs.\ 540--551). The non--background path
+(calcrhs 674--693) simply copies \code{BuildStandardPointwiseRHS(z4c,\dots)}
+into \code{rhs}, so with \code{use\_analytic\_background=false} the branch is
+numerically identical to \file{main} except for two \emph{additive} new gauge
+options that default off (\code{slow\_start\_lapse}, \code{telegraph\_lapse},
+\code{sss\_damping}) and the optional Gaussian rolling of $\kappa_1$
+(\code{roll\_kappa}, calcrhs 540--549). \textbf{Conclusion:} the refactor is
+behaviour--preserving for the full--field code.
+
+% ===========================================================================
+\section{Verification of the residual RHS, term by term}
+\label{sec:rhs}
+% ===========================================================================
+
+With \code{use\_analytic\_background=true}, \code{CalcRHS} first refreshes the
+background and reconstructs the full state (calcrhs 528--532),
+\begin{lstlisting}
+if (use_analytic_background) {
+  pz4c->PrescribeGaugeResidual();
+  pz4c->UpdateBackgroundState(time);
+  pz4c->ReconstructFullState();
+}
+\end{lstlisting}
+then, inside the point loop, computes \emph{two} geometry structures with the
+\emph{same} \code{ComputeGeometryData<NGHOST>} stencil---one from
+\code{full}, one from \code{bg} (calcrhs 556--567):
+\begin{lstlisting}
+ComputeGeometryData<NGHOST>(full, ..., geo_full);   // matter ON
+ComputeGeometryData<NGHOST>(bg,   ..., geo_bg);      // matter OFF
+\end{lstlisting}
+The residual RHS is then assembled as the explicit difference. The mapping to
+\eqref{eq:residualRHSdiscrete} is exact for every field:
+
+{\small
+\begin{longtable}{p{0.10\linewidth} p{0.50\linewidth} p{0.30\linewidth}}
+\toprule
+field & coded residual RHS $=\Fnum(\text{full})-\Fnum(\text{bg})$ & lines \\
+\midrule
+$\hat K$ &
+$-(D^2\alpha|_f-D^2\alpha|_b)
+ +\bigl(\alpha_f(\At\At+\third\hat K^2)_f-\alpha_b(\cdots)_b\bigr)
+ +(\Lie\hat K|_f-\Lie\hat K|_b)
+ +\kappa_1(1{-}\kappa_2)(\alpha_f\Theta_f-\alpha_b\Theta_b)$;
+ matter $+4\pi\alpha_f(S_f+E)$ added to full only &
+571--582 \\
+\addlinespace
+$\chi$ &
+$(\Lie\chi|_f-\Lie\chi|_b)-\tfrac{p}{6}(\chi_f\alpha_f\hat K_f-\chi_b\alpha_b\hat K_b)$ &
+584--588 \\
+\addlinespace
+$\Theta$ &
+$(\Lie\Theta|_f-\Lie\Theta|_b)+\half(\alpha_f\hat{\mathcal H}_f-\alpha_b\hat{\mathcal H}_b)
+ -(2{+}\kappa_2)\kappa_1(\alpha_f\Theta_f-\alpha_b\Theta_b)$;
+ matter $-8\pi\alpha_f E$ to full only; $\times\,\code{use\_z4c}$ &
+590--599 \\
+\addlinespace
+$\Gamt^i$ &
+$2(\alpha_f\mathcal D^i_f-\alpha_b\mathcal D^i_b)+(\Lie\Gamt^i|_f-\Lie\Gamt^i|_b)
+ -2\kappa_1(\alpha_f(\Gamt^i{-}\Gamma^i)_f-\alpha_b(\Gamt^i{-}\Gamma^i)_b)
+ -2(\At^{ij}\partial_j\alpha|_f-|_b)$; matter to full only &
+617--634 \\
+\addlinespace
+$\gt_{ij}$ &
+$-2(\alpha_f\At_{ij,f}-\alpha_b\At_{ij,b})+(\Lie\gt_{ij}|_f-\Lie\gt_{ij}|_b)$ &
+645--648 \\
+\addlinespace
+$\At_{ij}$ &
+$\chi_f^{-4/p}[-D_iD_j\alpha+\alpha R]_f-\chi_b^{-4/p}[\cdots]_b
+ -\third(\gt_{ij,f}[-D^2\alpha+\alpha R]_f-\gt_{ij,b}[\cdots]_b)
+ +(\alpha_f(\hat K\At-2\At\At)_f-\alpha_b(\cdots)_b)+(\Lie\At|_f-\Lie\At|_b)$;
+ matter to full only &
+650--673 \\
+\addlinespace
+$\alpha$ &
+$\code{rhs\_full\_gauge.alpha}-\code{rhs\_bg\_gauge.alpha}$ (else $0$) &
+611--615 \\
+\addlinespace
+$\beta^i,B^i$ &
+$\code{rhs\_full\_gauge.beta}-\code{rhs\_bg\_gauge.beta}$ (else $0$) &
+635--641 \\
+\bottomrule
+\end{longtable}
+}
+
+\noindent For the gauge fields the difference is formed by calling
+\code{BuildStandardPointwiseRHS} twice---once on \code{(full,geo\_full)} and
+once on \code{(bg,geo\_bg)}---and subtracting (calcrhs 601--610). Thus the
+gauge sector also realises \eqref{eq:residualRHSdiscrete} exactly.
+
+\subsection{The zero--residual property holds}
+Set $\res{\bm u}=0$. Then \code{ReconstructFullState} gives
+$\code{full}\equiv\code{bg}$ bitwise. \code{ComputeGeometryData} is a pure
+function of its \code{State}, so $\code{geo\_full}\equiv\code{geo\_bg}$ bitwise,
+including every floored quantity (\code{chi\_guarded} uses the \emph{same}
+\code{chi\_div\_floor} for both, calcrhs 276; \code{oopsi4} likewise). Every
+table entry above is then a difference of identical numbers and evaluates to
+$0$ to round--off. \textbf{This is the property the user asked about: no
+truncation error of the (static) background propagates into the residual
+evolution.} It holds because
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=1pt]
+\item full and background geometry use one and the same discrete operator
+(\code{ComputeGeometryData<NGHOST>}); there is no place where the background
+is differenced at a different order or replaced by an analytic time
+derivative;
+\item the algebraic projection, dissipation, Sommerfeld BC, and AMR transfer
+all act on the residual and inherit the same property (\S\S\ref{sec:alg}--\ref{sec:amr});
+\item the matter source is added to the full evaluation only, which is correct
+\emph{provided the background is vacuum} (\S\ref{sec:matter}).
+\end{enumerate}
+
+Away from $\res{\bm u}=0$, expanding \eqref{eq:residualRHSdiscrete} gives
+$\partial_t\res{\bm u} = D\Fnum(\bg{\bm u})\!\cdot\!\res{\bm u} +
+O(\res{\bm u}^2)$: the background truncation error enters only through the
+\emph{coefficients} of the linearised operator (at $O(\res{\bm u}^1)$ and
+higher), never as an additive $O(\res{\bm u}^0)$ source. Because Z4c is
+quasilinear, the principal symbol of $D\Fnum(\bg{\bm u})$ equals that of the
+full Z4c system linearised about $\bg{\bm u}$; strong hyperbolicity is
+therefore inherited from the standard scheme (see \S\ref{sec:gauge} for the
+gauge sector).
+
+% ===========================================================================
+\section{Background construction and its accuracy}
+\label{sec:bgconstruct}
+% ===========================================================================
+
+\subsection{Closed--form Z4c background (preferred path)}
+For the TOV/Kerr--Schild problem the pgen installs both
+\code{SetADMBackground = SetADMBackgroundKerrSchild} and (when
+\code{use\_direct\_z4c\_background=true}, the default)
+\code{SetZ4cBackground = SetZ4cBackgroundKerrSchild}
+(\file{z4c\_tov\_ks.cpp} 1688--1690). The latter (882--1038) fills
+\emph{every} Z4c background field analytically, including the conformal
+connection $\bg{\Gamt}^i$, which it computes from the closed--form metric
+derivatives \code{ComputeMetricDerivatives}
+\begin{equation}
+  \bg{\Gamt}^i = -\partial_j\bigl(\psi^{4}\,\gt^{ij}\bigr)\Big|_{\text{analytic}}
+  = -\bigl(\partial_j\psi^4\,\gt^{ij} + \psi^4\,\partial_j\gt^{ij}\bigr),
+  \label{eq:Gambg}
+\end{equation}
+(z4c\_tov\_ks 1000--1036). This is important: it means $\bg{\Gamt}^i$ carries
+\emph{no} grid--dependent truncation error and is identical on coarse and fine
+AMR levels, which removes a resolution--dependent inconsistency that would
+otherwise appear at refinement boundaries (\S\ref{sec:amr}).
+
+\subsection{FD fallback}
+If \code{use\_direct\_z4c\_background=false}, \code{UpdateBackgroundState}
+falls back to \code{ADMToZ4cImpl} (\file{z4c\_adm.cpp} 107--116), which
+computes $\bg{\Gamt}^i=-\partial_j\bg{\gt}^{ij}$ by finite differences. The
+zero--residual cancellation of \S\ref{sec:rhs} \emph{still holds} (both
+\code{geo\_full} and \code{geo\_bg} use the same stencil), but now
+$\bg{\Gamt}^i$ itself is resolution dependent, so the background sampled on a
+fine grid differs from the prolongation of the coarse--grid background at
+$O(h^{\,n})$. \textbf{Recommendation:} keep
+\code{use\_direct\_z4c\_background=true} for AMR runs (\S\ref{sec:robust}, R3).
+
+\subsection{Algebraic consistency of the background}
+\code{SetZ4cBackgroundKerrSchild} builds $\bg{\gt}_{ij}=(\det g)^{-1/3}g_{ij}$
+and $\bg\chi=(\det g)^{p/12}$ so that $\det\bg{\gt}=1$ analytically, and
+\code{UpdateBackgroundState} additionally applies
+\code{EnforceAlgConstrOn(bg)} (\file{z4c\_adm.cpp} 198/212). Thus the
+background satisfies the same algebraic constraints as the evolved state,
+which is required for the projection in \S\ref{sec:alg} to leave a zero
+residual invariant.
+
+% ===========================================================================
+\section{Gauge sector: is it a background--adapted $1+\log$?}
+\label{sec:gauge}
+% ===========================================================================
+
+\subsection{What the code evolves}
+With \code{evolve\_lapse\_residual = evolve\_shift\_residual = true} (the
+production setting, see the sample deck, lines 113--123:
+\code{lapse\_oplog=2}, \code{lapse\_harmonic=0}, \code{shift\_Gamma=1},
+\code{shift\_advect=1}, \code{shift\_eta=2}), the residual lapse and shift obey
+\begin{align}
+  \partial_t\res\alpha
+    &= \Bigl[\code{adv}\,\beta_f^k\partial_k\alpha_f - f_f\,\alpha_f\hat K_f\Bigr]
+     - \Bigl[\code{adv}\,\beta_b^k\partial_k\alpha_b - f_b\,\alpha_b\hat K_b\Bigr],
+    \label{eq:lapseres}\\
+  \partial_t\res\beta^i
+    &= \Bigl[\code{sG}\,\Gamt_f^i+\code{adv}\,\beta_f^k\partial_k\beta_f^i-\eta\beta_f^i\Bigr]
+     - \Bigl[\code{sG}\,\Gamt_b^i+\code{adv}\,\beta_b^k\partial_k\beta_b^i-\eta\beta_b^i\Bigr].
+    \label{eq:shiftres}
+\end{align}
+These are precisely \eqref{eq:residualRHSdiscrete} applied to
+\eqref{eq:lapse}--\eqref{eq:shift}. By construction $\res\alpha=\res\beta^i=0$
+is a fixed point: the background slicing/shift is stationary under the residual
+gauge flow. This \emph{is} a background--adapted $1+\log$/$\Gamma$--driver,
+matching the philosophy of LSK22 (their gauge Eqs.~8--10 enter the split
+exactly as the geometric sector does).
+
+\subsection{Principal symbol is preserved}
+Because $\bg{\bm u}$ is time independent, subtracting the bracketed background
+terms in \eqref{eq:lapseres}--\eqref{eq:shiftres} removes only
+spatially--varying source/coefficient pieces; the highest derivative acting on
+the \emph{residual} is unchanged from standard $1+\log$/$\Gamma$--driver,
+namely the advection $\code{adv}\,\beta_f^k\partial_k(\cdot)$ and the
+$\alpha\hat K$ / $\Gamt^i$ couplings. Hence the residual gauge subsystem has
+the same principal symbol as the moving--puncture gauge and remains strongly
+hyperbolic. The lapse advection in \eqref{eq:lapseres} uses $\beta_f$ for the
+full term and $\beta_b$ for the background term; when the shift residual is off
+($\beta_f=\beta_b=\bg\beta$) it reduces to advection of $\res\alpha$ by the
+background shift, which is the consistent linearisation.
+
+\subsection{The background is a fixed point; the only real difference from LSK22
+is interior regularity}
+\label{sec:gaugecaveat}
+It is worth stating clearly what is, and what is \emph{not}, a concern here,
+because it is easy to overstate the difference from LSK22.
+
+\paragraph{The background \emph{is} an exact fixed point (no caveat).}
+Equations \eqref{eq:lapseres}--\eqref{eq:shiftres} are, by construction,
+$\partial_t\res\alpha=F_\alpha(\bg{\bm u}+\res{\bm u})-F_\alpha(\bg{\bm u})$ and
+likewise for the shift, so $\res\alpha=\res\beta^i=0$ is an \emph{exact} fixed
+point of the residual gauge flow at any resolution. This is the intended
+behaviour and is correct.
+
+\paragraph{The fixed point is stable; the moving--puncture damping still acts.}
+Linearising \eqref{eq:lapseres} about $\res{\bm u}=0$ gives, schematically,
+\begin{equation}
+  \partial_t\res\alpha = \code{adv}\,\bg\beta^k\partial_k\res\alpha
+     \;-\; f_0\,\bg\alpha\,\res{\hat K}
+     \;-\; \underbrace{f_0\,\bg{\hat K}\,\res\alpha}_{\text{reaction}}
+     \;+\;(\text{lower order}),
+  \label{eq:lapselin}
+\end{equation}
+and the shift retains its $-\eta\,\res\beta^i$ damping and the constraint
+damping $\kappa_1$ from the geometric sector. The principal part is identical to
+standard $1+\log$/$\Gamma$--driver (\S\ref{sec:gauge}), so well--posedness and
+strong hyperbolicity are unchanged; the \emph{new} terms (those proportional to
+$\bg{\hat K}$, $\partial\bg\beta$, $\bg{\Gamt}^i$) are subprincipal. For
+(non--extremal) Kerr--Schild $\bg{\hat K}>0$ outside the horizon, so the
+reaction term in \eqref{eq:lapselin} is \emph{damping}, not growing. There is
+thus no evidence that using Kerr--Schild instead of a trumpet introduces a new
+gauge instability: the same damping channels ($\eta$, $\kappa_1$, the
+$1+\log$ reaction) act on the residual.
+
+\paragraph{What genuinely differs from LSK22.} LSK22 deliberately use a $K_0=0$
+\emph{trumpet} puncture (their Eqs.~20--24), which is a continuum fixed point of
+the puncture gauge, $\Fop(\bg{\bm u})=0$. Two consequences follow that are
+worth keeping in mind, but neither is a stability problem:
+\begin{enumerate}[leftmargin=1.6em,itemsep=2pt]
+\item \emph{Clean vs.\ modified subtraction.} For the geometric/constraint
+sector Kerr--Schild is a vacuum solution, so $\Fop_{\rm cont}(\bg{\bm u})=0$ and
+the discrete subtraction removes \emph{only} truncation error---exactly as in
+LSK22. For the \emph{gauge} sector $\Fop_{\rm cont}(\bg{\bm u})\neq0$, so the
+subtraction additionally removes a nonzero continuum term, i.e.\ it turns
+$1+\log$ into the background--adapted condition
+$\partial_t\alpha=[1{+}\log](\alpha)-[1{+}\log](\bg\alpha)$ whose stationary
+slice is Kerr--Schild rather than the trumpet. This is the deliberate
+``background--adapted'' design, not a defect; the only practical implication is
+that the reconstructed full field is \emph{not} a literal $1+\log$ evolution, so
+gauge--dependent cross--comparisons with a standard moving--puncture run are not
+apples--to--apples.
+\item \emph{Interior regularity (the one tangible trade--off).} The trumpet
+slice has a finite throat ($R=3M/2$ for Schwarzschild) and is regular over the
+whole hypersurface, which is what makes moving--puncture evolutions
+excision--free. Kerr--Schild is horizon penetrating and the slice reaches the
+physical singularity at $r=0$, where the analytic background and its derivatives
+diverge; the linearised operator $D\Fnum(\bg{\bm u})$ then has divergent
+coefficients in the interior. The code handles this by (i) freezing the
+background inside \code{excision\_freeze\_radius} (\file{z4c\_tov\_ks.cpp}
+942--947) and (ii) ramping the residual RHS/state to zero inside
+$\sim0.85\,r_{\rm hor}$ via \code{ApplyInnerExcision} (362--395). So an interior
+excision/damping layer is \emph{required} for a Kerr--Schild background, whereas
+a trumpet background would not need one. This is the substantive, and only,
+robustness item; see R1 in \S\ref{sec:robust}.
+\end{enumerate}
+
+% ===========================================================================
+\section{Auxiliary operations}
+% ===========================================================================
+
+\subsection{Algebraic constraints projected on the full state}
+\label{sec:alg}
+\code{EnforceAlgConstr} (\file{z4c\_tasks.cpp} 194--204) does
+\code{ReconstructFullState}\,$\to$\,\code{EnforceAlgConstrOn(full)}\,$\to$\,
+\code{RecastResidualState}. The unit--determinant and trace--free projections
+(\file{z4c.cpp} 331--357) are \emph{nonlinear}, so they must be applied to the
+physical conformal metric $\gt_{ij}=\bg{\gt}_{ij}+\res{\gt}_{ij}$, not to the
+residual---which the code does correctly. Since the background is itself
+algebraically constrained (\S\ref{sec:bgconstruct}), $\res{\bm u}=0\Rightarrow
+\code{full}=\code{bg}$ already satisfies the constraints, the projection is the
+identity, and the recast leaves $\res{\bm u}=0$. \textbf{Correct.}
+
+\subsection{Kreiss--Oliger dissipation acts on the residual}
+\label{sec:diss}
+The dissipation loop (\file{z4c\_calcrhs.cpp} 702--709) adds
+$\code{diss}\cdot\mathrm{Diss}(\code{u0})$ to \code{u\_rhs} for all
+\code{nz4c} fields, where \code{u0} is the residual. This is the right choice:
+dissipating the \emph{full} field would inject the smooth background's
+high--wavenumber truncation content into the evolution, whereas dissipating the
+residual vanishes when $\res{\bm u}=0$ and only smooths genuine residual
+features. \textbf{Correct and beneficial.} One minor inconsistency: if
+\code{preserve\_lapse\_residual=true} while \code{evolve\_lapse\_residual=false},
+then $\partial_t\res\alpha$ from \code{CalcRHS} is $0$ (calcrhs 614) but the
+dissipation still adds $\code{diss}\cdot\mathrm{Diss}(\res\alpha)$, so a
+``preserved'' lapse residual slowly diffuses rather than being held fixed
+(R4).
+
+\subsection{Sommerfeld boundary on the residual}
+\label{sec:sbc}
+\code{Z4cBoundaryRHS}/\code{Z4cSommerfeld} (\file{z4c\_Sbc.cpp}) overwrite the
+outflow--boundary RHS of $\hat K,\Theta,\Gamt^i,\At_{ij}$ with the standard
+radiative form $\partial_t u = -v\,(s^k\partial_k u + u/r)$ using the
+\code{z4c} alias (the \emph{residual}). For the residual this is the correct
+asymptotic condition: the residual $\to 0$ at large $r$ where the background is
+asymptotically flat, so $u_{\rm asympt}=0$ and the constant--coefficient
+speeds ($v=1$, and $v=\sqrt2$ for $\hat K$) apply. When $\res{\bm u}=0$ the
+Sommerfeld RHS is $0$, consistent with the zero--residual property.
+\textbf{Correct.} Caveat: the speeds assume near--flatness at the boundary; for
+boxes whose outer faces sit at moderate $r$ (e.g.\ the $-16$ face in the sample
+deck) there is a small mismatch, common to all Z4c outflow BCs and not
+specific to background subtraction (R5).
+
+\subsection{AMR refinement and transfer on the residual}
+\label{sec:amr}
+Communication (\code{SendU/RecvU}), restriction (\code{RestrictU}), and
+prolongation (\code{Prolongate}) all operate on \code{u0} = residual. Because
+the residual is the smooth physical perturbation (the steep Kerr--Schild
+gradients live in the analytic background, which is regenerated on every
+level), interpolation/restriction error is dramatically smaller than it would
+be for the full field---this is one of the main benefits of the method and is
+consistent with Z24's higher--order CC prolongation/restriction. The
+$\chi$/$d\chi$ AMR criteria were correctly updated to refine on the
+\emph{reconstructed full} conformal factor (\file{z4c\_amr.cpp}: \code{Refine}
+reconstructs the full state when the method is \code{Chi}/\code{dChi};
+\code{RefineChiMin}/\code{RefineDchiMax} read \code{u\_full}), so the BH is
+tracked by the full $\chi$ rather than by the residual. \textbf{Correct.}
+
+\subsection{Matter coupling and the vacuum--background assumption}
+\label{sec:matter}
+The matter sources $4\pi\alpha(S+E)$, $-8\pi\alpha E$, $-16\pi\alpha\gt^{ij}S_j$,
+$-8\pi\alpha[\chi^{-4/p}S_{ij}]^{\rm TF}$ are added to the \emph{full}
+evaluation only (calcrhs 579--581, 596--598, 630--633, 667--672). This is
+correct \emph{iff the analytic background carries no matter}, which is the case
+here: the background is the vacuum (Kerr--Schild or Minkowski) black--hole
+spacetime, and the TOV star is the matter that sources the residual
+(\file{z4c\_tov\_ks.cpp}; the BH background is built by
+\code{ComputeADMDecomposition}/\code{FillFlatADM} with $K^{\rm
+matter}_{ij}=0$ and no stress tensor). \textbf{Correct for the intended use.}
+\emph{Hazard:} if a future background ever includes its own matter (e.g.\ using
+an equilibrium TOV \emph{as the background}), the source would be double
+counted and $\res{\bm u}=0$ would no longer be a fixed point; one would then
+have to subtract the background matter source as well. See R2.
+
+\subsection{Initial data and restart}
+\code{ConvertADMToResidualOnBackground} (\file{z4c\_tov\_ks.cpp} 1307--1349)
+constructs the full Z4c state by ADM$\to$Z4c, builds a flat reference, forms
+the difference, then the setup (1687--1697) regenerates the analytic
+Kerr--Schild background, reconstructs full $=$ bg $+$ residual, projects the
+algebraic constraints on the full state, and recasts the residual---so the
+stored residual is finally defined with respect to the same analytic
+background used during evolution. The restart branch (1886--1896) repeats the
+background regeneration / reconstruction / recast, so a restart is consistent
+with a continued run. \textbf{Correct.}
+
+% ===========================================================================
+\section{Robustness assessment (ranked)}
+\label{sec:robust}
+% ===========================================================================
+
+\newcommand{\sev}[1]{\textbf{[#1]}}
+
+\begin{description}[leftmargin=2.2em,style=unboxed,itemsep=4pt]
+
+\item[R1 \sev{Design trade--off / Low--Medium}] \emph{Interior regularity:
+Kerr--Schild reaches the singularity, so an interior excision/damping layer is
+required.} \emph{This is \textbf{not} a statement that the background fails to be
+a fixed point---it is one, exactly and stably} (\S\ref{sec:gaugecaveat}). The
+real difference from LSK22 is that their $K_0=0$ trumpet has a finite throat and
+is regular over the whole slice (hence excision--free), whereas the
+Kerr--Schild background is horizon penetrating and diverges at $r=0$, so the
+linearised operator has divergent interior coefficients. The code copes by
+freezing the background inside \code{excision\_freeze\_radius} and ramping the
+residual RHS/state to zero inside $\sim0.85\,r_{\rm hor}$
+(\code{ApplyInnerExcision}, \file{z4c\_tov\_ks.cpp} 362--395, 942--947); this
+layer is load--bearing for Kerr--Schild and its parameters should be treated as
+part of the scheme. A secondary, benign point: because the gauge subtraction
+removes a nonzero \emph{continuum} term, the reconstructed full field obeys a
+background--adapted $1+\log$ (stationary at Kerr--Schild) rather than literal
+$1+\log$, so gauge--dependent comparisons to standard moving--puncture runs are
+not apples--to--apples. \textbf{Mitigations:} (i) if a fully interior--regular,
+excision--free setup is wanted, use a $K_0=0$ trumpet background as in LSK22;
+(ii) verify robustness of the excision parameters in a convergence test and
+monitor the already--exposed gauge residuals (\code{alpha-res}, \code{beta-res},
+\code{B-res}, \code{Gam-res}; \file{z4c\_tov\_ks.cpp} 421--424).
+
+\item[R2 \sev{By design / Cosmetic}] \emph{Matter source assumes a vacuum
+background.} In the intended use the matter (the TOV star, and any accreting
+gas) is \emph{always} part of the perturbation and the analytic background is
+always a vacuum black hole, so the vacuum--background assumption holds by
+construction and this item never fires. The only un--addressed case is a
+\emph{deliberate} future change that puts matter into the background itself
+(e.g.\ using an equilibrium TOV as the background), which would double--count
+the source (\S\ref{sec:matter}); there is currently no guard against that
+misuse. \textbf{Optional mitigation (defensive only):} add an assertion that the
+background stress tensor vanishes, so the method cannot be silently misused.
+
+\item[R3 \sev{Accuracy / Low--Medium}] \emph{FD background connection under
+AMR.} Only one background field, the conformal connection $\bg{\Gamt}^i$,
+is defined through a \emph{spatial derivative} ($\bg{\Gamt}^i=-\partial_j
+\bg{\gt}^{ij}$); all the others are pointwise evaluations of the analytic
+solution and are therefore resolution independent. With
+\code{use\_direct\_z4c\_background=false}, $\bg{\Gamt}^i$ is finite--differenced
+on the grid, so its value carries the stencil truncation $O(h^n)$ and
+\emph{differs between coarse and fine levels at the same physical point}. Two
+consequences follow: (a) the stored residual $\res{\Gamt}^i=\Gamt^i_{\rm
+full}-\bg{\Gamt}^i$ is no longer a purely smooth physical field---it absorbs the
+grid--dependent background truncation, partly defeating the smoothness that
+makes residual prolongation/restriction accurate (\S\ref{sec:amr}); and (b) at a
+refinement boundary the residual is defined relative to one level's
+$\bg{\Gamt}^i$ but reconstructed against another's, so
+$\code{full}=\res{}+\bg{}$ picks up an $O(h^n_{\rm coarse})-O(h^n_{\rm fine})$
+mismatch exactly the kind of background truncation the method is meant to
+cancel. With the default closed--form path \eqref{eq:Gambg}, $\bg{\Gamt}^i$ is
+analytic and bit--for--bit identical on every level, so neither effect occurs.
+\textbf{Mitigation:} keep \code{use\_direct\_z4c\_background=true} (the default)
+for all multilevel runs; if the FD fallback is ever required, recompute
+$\bg{\Gamt}^i$ from the same analytic derivatives on every level.
+
+\item[R4 \sev{Bug / Low}] \emph{Dissipation of a ``preserved'' lapse residual.}
+With \code{preserve\_lapse\_residual=true} and
+\code{evolve\_lapse\_residual=false}, $\res\alpha$ has zero analytic RHS but
+still receives K--O dissipation (\S\ref{sec:diss}), so it is not actually held
+fixed. \textbf{Mitigation:} skip the dissipation contribution for non--evolved
+gauge components, or zero \code{u\_rhs} for those slots after the dissipation
+loop.
+
+\item[R5 \sev{Pre--existing / Low}] \emph{Telegraph--lapse auxiliary
+$B$ is gated on the shift flag.} In the residual path, $\res B^i$ (used only
+for \code{telegraph\_lapse}) is updated inside the
+\code{if (evolve\_shift\_residual)} block (calcrhs 635--641), so a
+telegraph lapse with shift residual disabled would not evolve its heat--flux
+variable. Niche (telegraph lapse is off by default), but the gating is on the
+wrong flag. \textbf{Mitigation:} gate $\res B^i$ on the lapse flag (or on
+\code{telegraph\_lapse}).
+
+\item[R6 \sev{Latent / Low}] \emph{Sub--stage time for time--dependent
+backgrounds.} \code{CalcRHS} evaluates the background at
+\code{pmesh->time} (calcrhs 522), i.e.\ the step--start time, for every RK
+substage. For the current \emph{static} Kerr--Schild background this is exact
+(and the pgen forces the BH to the origin, 1785--1792). For any future
+time--dependent background it would introduce an $O(\Delta t)$ phase error that
+the residual must absorb, partially defeating the subtraction.
+\textbf{Mitigation:} pass the substage time if/when a moving background is
+enabled.
+
+\item[R7 \sev{Performance / Cosmetic}] \emph{Redundant background work.}
+\code{UpdateBackgroundState}\,+\,\code{ReconstructFullState} run in
+\code{CalcRHS}, again in \code{EnforceAlgConstr}, and again in
+\code{ConvertZ4cToADM}/\code{ADMConstraints\_}/AMR within a single stage; and
+\code{BuildStandardPointwiseRHS} is evaluated in full for the background even
+though only its gauge outputs are used (calcrhs 607--609). Harmless (the
+background is idempotent) but wasteful. \textbf{Mitigation:} cache the
+background per (time, stage); compute only the gauge components for the
+background.
+
+\end{description}
+
+\subsection*{Things that are explicitly correct}
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+\item Residual RHS $=\Fnum(\text{full})-\Fnum(\text{bg})$ for \emph{every}
+field, with one shared stencil $\Rightarrow$ exact zero--residual property and
+no additive background--truncation source (\S\ref{sec:rhs}).
+\item Floors (\code{chi\_div\_floor}, \code{chi\_min\_floor}) and \code{oopsi4}
+are identical between full and background, so they do not break the
+cancellation.
+\item Algebraic constraints projected on the \emph{full} state, then recast
+(\S\ref{sec:alg}).
+\item K--O dissipation, Sommerfeld BC, and AMR transfer all act on the
+residual (\S\S\ref{sec:diss}--\ref{sec:amr}).
+\item Closed--form analytic background including $\bg{\Gamt}^i$, removing
+resolution dependence of the background (\S\ref{sec:bgconstruct}).
+\item Background--adapted gauge retains the $1+\log$/$\Gamma$--driver principal
+symbol (strong hyperbolicity inherited) (\S\ref{sec:gauge}).
+\item Non--background code path is numerically identical to \file{origin/main}
+(\S\ref{sec:standard}).
+\item Constraints/Weyl/ADM/matter all see the reconstructed full physical
+metric (\S\ref{sec:standard} task ordering).
+\end{itemize}
+
+% ===========================================================================
+\section{Recommendations}
+% ===========================================================================
+\begin{enumerate}[leftmargin=1.6em,itemsep=2pt]
+\item \textbf{Decide the background philosophy (R1).} The Kerr--Schild
+background is an exact, stable fixed point of the residual gauge, so this is not
+a correctness issue. The only tangible trade--off is interior regularity: if an
+excision--free, interior--regular setup is desired, adopt a $K_0=0$ trumpet
+background (LSK22 Eqs.~20--25); otherwise keep Kerr--Schild but treat the inner
+freeze/excision layer as a load--bearing part of the scheme and verify its
+parameter robustness (and gauge--residual stationarity) in convergence tests.
+\item \textbf{Add a vacuum--background assertion (R2)} (or generalise the
+matter subtraction) so the method cannot be silently misused with a
+matter--bearing background.
+\item \textbf{Keep \code{use\_direct\_z4c\_background=true} for AMR (R3)}; if
+the FD fallback must be used, recompute $\bg{\Gamt}^i$ consistently across
+levels.
+\item \textbf{Fix the gauge--gating issues (R4, R5)} so that non--evolved /
+preserved gauge components are neither dissipated nor mis--gated.
+\item \textbf{Numerical zero--residual test.} Run with
+\code{zero\_tmunu=true} (already supported, 1710--1715) and a pure background:
+verify $\|\partial_t\res{\bm u}\|$ stays at round--off and is independent of
+resolution---this directly certifies \eqref{eq:residualRHSdiscrete} and the
+absence of background--truncation leakage.
+\item \textbf{Convergence of the residual} at fixed physical perturbation to
+confirm the expected order and that the subtraction does not degrade it.
+\end{enumerate}
+
+% ===========================================================================
+\section{Summary}
+% ===========================================================================
+The background--subtracted Z4c in \file{src/z4c} faithfully implements LSK22
+Eq.~(19), $\partial_t\res{\bm u}=\Fnum(\bg{\bm u}+\res{\bm u})-\Fnum(\bg{\bm
+u})$, on top of the Z24/GR--Athena++ Z4c system. The subtraction is performed
+field by field with a single shared finite--difference operator, so the
+zero--residual property holds to round--off and the static background's
+truncation error does not source the residual; the algebraic projection,
+dissipation, boundary, AMR, and matter coupling are all consistent with this.
+The gauge is a genuine background--adapted $1+\log$/$\Gamma$--driver that keeps
+the standard principal symbol, and the Kerr--Schild background is an exact,
+stable fixed point of the residual gauge flow (the moving--puncture damping
+channels still act on the residual). The only real design trade--off is that
+Kerr--Schild is horizon penetrating and reaches the singularity, so an interior
+freeze/excision layer is required where a $K_0=0$ trumpet would be regular
+(R1)---a deliberate choice, not a stability defect. The remaining items
+(R2--R7) are latent hazards, a minor dissipation/gating bug, and performance
+redundancies.
+
+\end{document}

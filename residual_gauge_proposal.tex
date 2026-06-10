@@ -1,0 +1,365 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\title{Residual Gauge Evolution for Background-Subtracted Z4c}
+\author{AthenaK TDE Debugging Note}
+\date{\today}
+
+\newcommand{\ubg}{u_{\mathrm{bg}}}
+\newcommand{\ures}{u_{\mathrm{res}}}
+\newcommand{\ufull}{u_{\mathrm{full}}}
+\newcommand{\abg}{\alpha_{\mathrm{bg}}}
+\newcommand{\ares}{\alpha_{\mathrm{res}}}
+\newcommand{\afull}{\alpha_{\mathrm{full}}}
+\newcommand{\bbg}{\beta^i_{\mathrm{bg}}}
+\newcommand{\bres}{\beta^i_{\mathrm{res}}}
+\newcommand{\bfull}{\beta^i_{\mathrm{full}}}
+\newcommand{\rhs}{\mathcal{R}}
+\newcommand{\gaugea}{\mathcal{G}_{\alpha}}
+\newcommand{\gaugeb}{\mathcal{G}_{\beta^i}}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+
+The goal of the background-subtracted Z4c system is to evolve a compact
+secondary object on top of an analytically known primary black-hole background
+without allowing truncation error from the primary background to dominate the
+secondary's self-gravity.  The current debugging question is whether the
+gauge variables, especially lapse and shift, can be treated in a way that is
+both internally consistent and stable.
+
+The immediate concern is the following.  If the background lapse and shift are
+prescribed analytically, but the star or secondary black hole requires a
+different local gauge, does a local residual gauge evolution effectively
+``change the background'' and spoil the subtraction?  The answer proposed here
+is no, provided the background remains a fixed reference state and the gauge
+equations are written for the residual variables in a background-subtracted
+form.  The residual gauge then changes only the full evolved spacetime, not
+the analytic background used for subtraction.
+
+\section{Residual Variables}
+
+Let the Z4c evolved variables be denoted schematically by \(u\).  The split is
+\begin{equation}
+  \ufull(x,t) = \ubg(x,t) + \ures(x,t).
+\end{equation}
+Here \(\ubg\) is a prescribed analytic reference solution, for example
+Kerr-Schild Schwarzschild in the black-hole rest frame.  It is not evolved
+numerically.  It is recomputed from analytic formulae or otherwise prescribed
+by the background callback.  The residual \(\ures\) is the only dynamical
+quantity stored and updated by the residual formulation.
+
+The residual evolution should be
+\begin{equation}
+  \partial_t \ures
+  =
+  \rhs[\ufull] - \rhs[\ubg],
+  \label{eq:residual-main}
+\end{equation}
+with \(\ufull=\ubg+\ures\).  Equation~\eqref{eq:residual-main} is an exact
+change of variables, not a linearization.  It retains nonlinear cross terms
+between the background and the residual because \(\rhs[\ufull]\) is evaluated
+on the full state.
+
+For a large mass ratio this is especially useful: the primary background can
+be large while the secondary field may be small over most of the domain.
+Near the secondary, however, the residual may be order unity.  The method is
+still internally consistent there; it is then best understood as a reference
+metric formulation rather than a perturbative formulation.
+
+\section{Gauge Variables}
+
+The lapse and shift are split in the same way:
+\begin{align}
+  \afull &= \abg + \ares, \\
+  \bfull &= \bbg + \bres.
+\end{align}
+The background gauge variables \(\abg,\bbg\) are the analytic lapse and shift
+of the prescribed background.  They must not be modified locally by the
+secondary object.
+
+There are three useful gauge modes:
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Pure prescribed background gauge.}
+  Set \(\ares=0\) and \(\bres=0\), or preserve only selected initial residuals.
+  This makes the full gauge equal to the background gauge except for any
+  explicitly preserved residual components.
+
+  \item \textbf{Background-subtracted dynamic residual gauge.}
+  Evolve the residual lapse and shift using the difference between the full
+  gauge RHS and the background gauge RHS.
+
+  \item \textbf{Target-damped residual gauge.}
+  Evolve a background-subtracted dynamic residual gauge, but add damping
+  toward a prescribed residual target, usually for startup only.
+\end{enumerate}
+
+\section{Background-Subtracted Dynamic Gauge}
+
+Let the ordinary full-spacetime gauge equations be written schematically as
+\begin{align}
+  \partial_t \alpha &= \gaugea[u,\alpha,\beta^i], \\
+  \partial_t \beta^i &= \gaugeb[u,\alpha,\beta^i].
+\end{align}
+For example, \(\gaugea\) may represent a 1+log-like lapse condition and
+\(\gaugeb\) may represent a Gamma-driver-like shift condition.
+
+The residual gauge evolution should be
+\begin{align}
+  \partial_t \ares
+  &=
+  \gaugea[\ufull,\afull,\bfull]
+  -
+  \gaugea[\ubg,\abg,\bbg],
+  \label{eq:alpha-residual-gauge}
+  \\
+  \partial_t \bres
+  &=
+  \gaugeb[\ufull,\afull,\bfull]
+  -
+  \gaugeb[\ubg,\abg,\bbg].
+  \label{eq:beta-residual-gauge}
+\end{align}
+This is the gauge analogue of Eq.~\eqref{eq:residual-main}.  The pure
+background state is an exact fixed point of the residual system: if
+\(\ures=\ares=\bres=0\), then the residual RHS vanishes even if the analytic
+background is not a stationary solution of the ordinary full gauge condition.
+
+This point is essential.  A Kerr-Schild Schwarzschild background is not
+generally stationary under a generic moving-puncture 1+log/Gamma-driver gauge.
+If one evolved the full gauge equation directly on top of the background,
+large gauge motion of the primary black hole would be injected into the
+residual fields.  Equations~\eqref{eq:alpha-residual-gauge} and
+\eqref{eq:beta-residual-gauge} subtract that background gauge motion.
+
+\section{Why This Does Not Feed Back Into the Background}
+
+The background is not a separately evolved physical component.  It is a fixed
+reference field.  Local residual gauge evolution changes the full spacetime:
+\begin{equation}
+  (\ufull,\afull,\bfull)
+  =
+  (\ubg+\ures,\abg+\ares,\bbg+\bres).
+\end{equation}
+It does not change
+\begin{equation}
+  (\ubg,\abg,\bbg).
+\end{equation}
+
+Nonlinear feedback from the local gauge choice is still present, but it appears
+in the residual variables through \(\rhs[\ufull]-\rhs[\ubg]\).  That is the
+correct place for it.  What would be inconsistent is evaluating the background
+subtraction using the full local gauge, for example
+\begin{equation}
+  \rhs[\ubg,\afull,\bfull],
+\end{equation}
+or damping the analytic background variables toward a star- or secondary-BH
+gauge.  Those choices would force the reference background to obey a local
+gauge prescription that is not its analytic solution.
+
+The consistency rule is therefore:
+\begin{quote}
+The background callback always returns the pure analytic background in its
+own analytic gauge.  All local gauge differences belong to the residual state.
+\end{quote}
+
+\section{Target-Damped Residual Gauge}
+
+For robustness one may add a target damping term:
+\begin{align}
+  \partial_t \ares
+  &=
+  \gaugea[\ufull,\afull,\bfull]
+  -
+  \gaugea[\ubg,\abg,\bbg]
+  -
+  \eta_{\alpha}(t,x)\left(\ares-\ares^{\mathrm{tar}}\right),
+  \label{eq:target-alpha}
+  \\
+  \partial_t \bres
+  &=
+  \gaugeb[\ufull,\afull,\bfull]
+  -
+  \gaugeb[\ubg,\abg,\bbg]
+  -
+  \eta_{\beta}(t,x)\left(\bres-\beta_{\mathrm{res}}^{i,\mathrm{tar}}\right).
+  \label{eq:target-beta}
+\end{align}
+The target fields should be residual targets, not background modifications:
+\begin{align}
+  \ares^{\mathrm{tar}}(x,t) &=
+  w(t,x)\left(\alpha_{\mathrm{TOV/boost}}(x,t)
+  - \abg(x,t)\right),\\
+  \beta_{\mathrm{res}}^{i,\mathrm{tar}}(x,t) &=
+  w(t,x)\left(\beta^i_{\mathrm{TOV/boost}}(x,t)
+  - \bbg(x,t)\right).
+\end{align}
+For a star, the target may be the analytic static or boosted TOV gauge used in
+the initial data.  For a secondary black hole, a target should probably be used
+only as a startup driver, because a permanently prescribed secondary-BH gauge
+may fight the nonlinear two-body geometry.
+
+A simple time ramp is
+\begin{equation}
+  w(t) = \exp\left[-\left(t/\tau\right)^p\right],
+\end{equation}
+with \(\tau \sim 50M\) and \(p=2\) or \(4\).  A compact spatial window around
+the secondary can also be used if the target should act only where the
+secondary gauge is meaningful.
+
+The target-damped scheme remains a gauge prescription.  It is not a physical
+source term, provided it vanishes for the pure background case and is applied
+only to residual gauge variables.
+
+\section{Relation to Current AthenaK Options}
+
+The current code already contains the main ingredients:
+\begin{itemize}
+  \item \verb|use_analytic_background = true| selects the residual/background
+  path.
+  \item \verb|evolve_gauge_residual = false| prescribes gauge residual RHS
+  to zero.  In that mode the full lapse and shift are the analytic background
+  values unless residual components are preserved.
+  \item \verb|preserve_lapse_residual = true| keeps the initial lapse residual
+  while still prescribing its RHS to zero.  This is a static residual-gauge
+  target for the lapse.
+  \item \verb|evolve_gauge_residual = true| is intended to compute the full
+  gauge RHS and subtract the background gauge RHS.
+\end{itemize}
+
+The debugging evidence so far suggests that pinning the full lapse to the
+background value can be too crude for a self-gravitating TOV star.  In the
+short static-Minkowski discriminator, preserving the initial TOV lapse residual
+substantially reduced early metric drift: \(\det\gamma_{\min}\) stayed close
+to unity and the growth of \(K\)-related diagnostics was strongly suppressed.
+
+For a boosted star, the shift residual may also be relevant.  The pgen appears
+to construct a boosted lab-frame lapse and shift for the initial star.  If
+\verb|evolve_gauge_residual = false| and only the lapse residual is preserved,
+then the boosted-star shift residual is still discarded.  A natural extension
+is therefore a controlled \verb|preserve_shift_residual| or
+\verb|target_shift_residual| option.
+
+\section{Recommended Test Matrix}
+
+For the current Schwarzschild radial-infall problem, the recommended order is:
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Preserve lapse residual only.}
+  Run with
+  \begin{verbatim}
+  <z4c>
+  evolve_gauge_residual = false
+  preserve_lapse_residual = true
+  diss = 0.5  # or 0.6 as a stability-margin check
+  damp_kappa1 = 0.0
+  \end{verbatim}
+  Compare the first non-finite time and the growth of Z4c constraints against
+  the previous Schwarzschild run, which first became non-finite near \(t=80M\).
+
+  \item \textbf{Pure dynamic residual gauge.}
+  Run with
+  \begin{verbatim}
+  <z4c>
+  evolve_gauge_residual = true
+  preserve_lapse_residual = false
+  \end{verbatim}
+  This tests whether the background-subtracted 1+log/Gamma-driver path is
+  already stable without target damping.
+
+  \item \textbf{Target-damped lapse residual.}
+  Add a damping term of the form Eq.~\eqref{eq:target-alpha}, with the initial
+  TOV or boosted-TOV lapse residual as the target.  First try no spatial
+  window, then a secondary-centered window if needed.
+
+  \item \textbf{Target-damped shift residual.}
+  If the boosted-star runs remain unstable, add the analogous shift target.
+  This is especially relevant because a boosted star has a nonzero local
+  shift in the lab-frame initial data.
+
+  \item \textbf{Dissipation and damping margin checks.}
+  Only after the gauge-path discriminator is clear, vary KO dissipation and
+  constraint damping.  Dissipation may delay a gauge-driven crash, but it
+  should not be treated as the primary fix if the underlying lapse/shift
+  prescription is inconsistent with the self-gravitating secondary.
+\end{enumerate}
+
+\section{Diagnostics}
+
+Each run should record:
+\begin{itemize}
+  \item first non-finite time in \verb|mhd.hst| and \verb|z4c.user.hst|;
+  \item constraint norms \(C,H,M,Z,\Theta\) versus time;
+  \item \(\rho_{\max}\), mass, and star tracker location versus time;
+  \item \(\alpha_{\min}\), \(\alpha_{\max}\), and \(\max |\beta^i|\);
+  \item metric health diagnostics such as \(\det\gamma_{\min}\),
+  \(\chi_{\min}\), \(K\)-related maxima, and bad-metric counts;
+  \item y-reflection and z-reflection symmetry norms on dense slices, with
+  high-density masks.
+\end{itemize}
+
+A useful failure classification is:
+\begin{quote}
+If Z4c constraints grow rapidly while density remains finite, and MHD becomes
+non-finite only after the Z4c diagnostics blow up, the leading failure mode is
+residual spacetime/gauge instability rather than primary fluid dispersal.
+\end{quote}
+
+\section{Applicability to a Secondary Black Hole}
+
+The residual formulation can be internally consistent for a secondary black
+hole as well as for a star.  There is no formal small-residual assumption in
+Eq.~\eqref{eq:residual-main}.  However, the practical demands are higher:
+\begin{itemize}
+  \item the secondary horizon scale must be resolved by AMR;
+  \item the residual near the secondary can be order unity;
+  \item the gauge must avoid lapse collapse, shift pathologies, and poor
+  horizon treatment;
+  \item the initial data may contain significant constraint violation if it is
+  only a superposition rather than a solved binary-BH data set.
+\end{itemize}
+
+For a secondary black hole, a startup target for lapse and shift can help avoid
+an abrupt gauge shock, but a permanent analytic target is risky.  A better
+strategy is to ramp the target away and let a background-subtracted residual
+moving-puncture gauge control the secondary.
+
+\section{Implementation Checklist}
+
+The safest implementation sequence is:
+\begin{enumerate}[label=\arabic*.]
+  \item Confirm that background state construction always writes pure analytic
+  background lapse and shift.
+  \item Confirm that full-state reconstruction uses
+  \(\afull=\abg+\ares\) and \(\bfull=\bbg+\bres\).
+  \item Confirm that gauge RHS subtraction evaluates
+  \(\gaugea[\ufull]-\gaugea[\ubg]\) and
+  \(\gaugeb[\ufull]-\gaugeb[\ubg]\) with the same derivative operators.
+  \item Add optional residual target damping only to residual gauge RHS.
+  \item Keep KO dissipation acting on residual fields, not on the reconstructed
+  full state.
+  \item Verify pure-background tests: with no star or secondary, residuals
+  should remain at roundoff under the chosen gauge path.
+  \item Verify static TOV on Minkowski before boosted Schwarzschild infall.
+\end{enumerate}
+
+\section{Summary}
+
+Prescribing the analytic background lapse and shift is consistent only if they
+remain properties of the fixed reference background.  Local gauge changes
+required by the secondary must be carried by residual lapse and shift
+variables.  A background-subtracted residual gauge evolution provides a
+mathematically consistent way to let the secondary gauge adjust while keeping
+the primary background subtraction clean.  Target damping of the residual
+gauge can be used as a startup stabilizer, but it should be introduced as a
+residual gauge prescription rather than as any modification of the analytic
+background.
+
+\end{document}

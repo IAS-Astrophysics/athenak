@@ -1,0 +1,145 @@
+# Gauge-ladder residual-Z4c case: boosted n=3 TOV star, larger uniform Minkowski box.
+
+<job>
+basename = z4c_tov_ks_n3_minkowski_boosted_residual_uniform_shiftonly_aurora
+
+<mesh>
+nghost = 4
+nx1 = 256
+x1min = -4.8
+x1max = 4.8
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 256
+x2min = -4.8
+x2max = 4.8
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 256
+x3min = -4.8
+x3max = 4.8
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 4.0
+ndiag = 20
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+minkowski = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = false
+evolve_shift_residual = true
+diss = 0.5
+damp_kappa1 = 0.2
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 0.0
+shift_Gamma = 1.0
+shift_advect = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = false
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+bh_mass = 0.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+force_minkowski_metric = false
+star_center_x1 = 1.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = -0.1
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+excision_damp_rate = 0.0
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+amr_rho_slope_refine = false
+amr_bh_exclusion_radius = 0.0
+amr_bh_refine_radius = 0.0
+amr_bh_derefine_radius = 0.0
+amr_bh_refine_level = -1
+amr_star_refine = false
+amr_star_refine_radius_factor = 0.0
+amr_star_derefine_radius_factor = 0.0
+amr_star_refine_level = 0
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.05
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 20
+
+<output3>
+file_type = bin
+variable = con
+id = xy_con
+dt = 0.1
+slice_x3 = 0.0
+
+<output4>
+file_type = bin
+variable = con
+id = xz_con
+dt = 0.1
+slice_x2 = 0.0
+
+<output5>
+file_type = bin
+variable = con
+id = yz_con
+dt = 0.1
+slice_x1 = 1.0

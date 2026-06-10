@@ -1,0 +1,176 @@
+# Aurora n=3 polytrope relaxation: static TOV star evolved with residual Z4c
+# self-gravity on a Minkowski analytic background in Gaussian-normal gauge.
+# This is the dissipative self-gravitating control with a hard level-3
+# star-centered AMR floor. Density-gradient AMR remains enabled, but the
+# smooth stellar core is not allowed to derefine below the requested finest
+# resolution. KO dissipation is intentionally retained.
+
+<job>
+basename = z4c_tov_ks_n3_minkowski_static_selfgrav_starfloor_amr_64c_diss030_kappa010_aurora
+
+<mesh>
+nghost = 4
+nx1 = 320
+x1min = -16.0
+x1max = 16.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 320
+x2min = -16.0
+x2max = 16.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 320
+x3min = -16.0
+x3max = 16.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 4
+refinement_interval = 2
+max_nmb_per_rank = 64
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 1
+x1min = -3.0
+x1max = 3.0
+x2min = -3.0
+x2max = 3.0
+x3min = -3.0
+x3max = 3.0
+
+<refined_region2>
+level = 2
+x1min = -2.0
+x1max = 2.0
+x2min = -2.0
+x2max = 2.0
+x3min = -2.0
+x3max = 2.0
+
+<refined_region3>
+level = 3
+x1min = -1.5
+x1max = 1.5
+x2min = -1.5
+x2max = 1.5
+x3min = -1.5
+x3max = 1.5
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 50.0
+ndiag = 100
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+minkowski = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = false
+diss = 0.3
+damp_kappa1 = 0.1
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+shift_Gamma = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = false
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+
+bh_mass = 0.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+force_minkowski_metric = false
+
+star_center_x1 = 0.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = 0.0
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+excision_damp_rate = 0.0
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+amr_rho_slope_refine = true
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 1.0e-14
+amr_bh_exclusion_radius = 0.0
+amr_star_refine = true
+amr_star_refine_radius_factor = 1.5
+amr_star_derefine_radius_factor = 2.0
+amr_star_refine_level = 3
+
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.5
+data_format = %20.15e
+
+<output2>
+file_type = bin
+variable = mhd_w_bcc
+id = mhd_w_bcc
+dt = 5.0
+
+<output3>
+file_type = log
+dcycle = 100
+
+<output4>
+file_type = rst
+dt = 10.0
+single_file_per_rank = true

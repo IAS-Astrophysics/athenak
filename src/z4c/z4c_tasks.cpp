@@ -197,8 +197,11 @@ TaskStatus Z4c::EnforceAlgConstr(Driver *pdrive, int stage) {
       UpdateBackgroundState(pmy_pack->pmesh->time);
     }
     ReconstructFullState();
+    DebugDumpState("pre_alg_full", u_full, true, pmy_pack->pmesh->time, stage);
     EnforceAlgConstrOn(full);
+    DebugDumpState("post_alg_full", u_full, true, pmy_pack->pmesh->time, stage);
     RecastResidualState();
+    DebugDumpState("post_recast_residual", u0, false, pmy_pack->pmesh->time, stage);
   }
   return TaskStatus::complete;
 }
@@ -256,6 +259,7 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0, true);
+    DebugDumpState("post_restrict_residual", u0, false, pmy_pack->pmesh->time, stage);
   }
   return TaskStatus::complete;
 }
@@ -269,6 +273,7 @@ TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0, true);
     pbval_u->ProlongateCC(u0, coarse_u0, true);
+    DebugDumpState("post_prolong_residual", u0, false, pmy_pack->pmesh->time, stage);
   }
   return TaskStatus::complete;
 }
