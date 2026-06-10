@@ -121,6 +121,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &mbsize = pmy_pack->pmb->mb_size;
   auto &nvars_ = nvars;
   auto &nspecies_ = nspecies;
+  auto &radiation_mask_ = radiation_mask;
 
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
@@ -156,6 +157,22 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   par_for(
       "radiation_m1_update", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        // Excised cells: keep radiation fields pinned at zero and skip the flux
+        // divergence, geometric, and matter-source updates (mirrors THC's
+        // thc_M1_calc_update mask handling).
+        if (radiation_mask_(m, k, j, i)) {
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = 0;
+            if (nspecies_ > 1) {
+              u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = 0;
+            }
+          }
+          return;
+        }
+
         // [A] Compute gr quantities: metric, shift, extrinsic curvature, etc.
         Real garr_dd[16];
         Real garr_uu[16];

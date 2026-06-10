@@ -20,6 +20,8 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_helpers.hpp"
+#include "radiation_m1/radiation_m1_macro.hpp"
 #include "tasklist/task_list.hpp"
 
 namespace radiationm1 {
@@ -53,8 +55,10 @@ void RadiationM1::AssembleRadiationM1Tasks(
 
   // assemble "stagen" task list
   id.M1_copyu = tl["opsplit_stagen"]->AddTask(&RadiationM1::CopyCons, this, none, "RadiationM1::CopyU");
+  id.M1_setmask =
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::SetMask, this, id.M1_copyu, "RadiationM1::SetMask");
   id.M1_closure =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::FloorAndCalcClosure, this, id.M1_copyu, "RadiationM1::FloorAndCalcClosure");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::FloorAndCalcClosure, this, id.M1_setmask, "RadiationM1::FloorAndCalcClosure");
 
   // decide what type of opacities to compute
   if (!params.matter_sources) {
@@ -126,6 +130,62 @@ TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
   }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void RadiationM1::SetMask
+//! \brief Sets the radiation excision mask from the coordinate (horizon/lapse/fixed)
+//! excision mask and zeroes the radiation fields in masked cells. Mirrors THC's
+//! THC_M1_SetMask, which derives thc_m1_mask from the matter (hydro) excision mask.
+//! Runs each stage before the closure so that closure/opacities/Tmunu/update (all of
+//! which already honor radiation_mask) see an up-to-date mask, and so that fluxes
+//! across the excision boundary are reconstructed from zeroed states.
+TaskStatus RadiationM1::SetMask(Driver *pdrive, int stage) {
+  // If BH excision is disabled, the coordinate masks are not allocated and
+  // radiation_mask remains all-false (set at construction); nothing to do.
+  if (!pmy_pack->pcoord->coord_data.bh_excise) {
+    return TaskStatus::complete;
+  }
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie;
+  int &js = indcs.js, &je = indcs.je;
+  int &ks = indcs.ks, &ke = indcs.ke;
+  int nmb1 = pmy_pack->nmb_thispack - 1;
+
+  // index limits including ghosts (match closure coverage so reconstruction near
+  // the excision boundary uses zeroed states)
+  int isg = is - indcs.ng;
+  int ieg = ie + indcs.ng;
+  int jsg = (indcs.nx2 > 1) ? js - indcs.ng : js;
+  int jeg = (indcs.nx2 > 1) ? je + indcs.ng : je;
+  int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
+  int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
+
+  auto &u0_ = u0;
+  auto &mask_ = radiation_mask;
+  auto &excision_ = pmy_pack->pcoord->excision_floor;
+  auto &nvars_ = nvars;
+  auto &nspecies_ = nspecies;
+
+  par_for(
+      "radiation_m1_setmask", DevExeSpace(), 0, nmb1, ksg, keg, jsg, jeg, isg, ieg,
+      KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+        bool excise = excision_(m, k, j, i);
+        mask_(m, k, j, i) = excise;
+        if (excise) {
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = 0;
+            u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = 0;
+            if (nspecies_ > 1) {
+              u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = 0;
+            }
+          }
+        }
+      });
   return TaskStatus::complete;
 }
 

@@ -260,7 +260,7 @@ SrcSignal source_update(
       BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d, n_u, gamma_ud, u_d,
       u_u, v_d, v_u, proj_ud, W, Eold, Fold_d, Estar, Fstar_d, eta, kabs, kscat,
       chi, Enew, Fnew_d, m1_params, closure_type);
-  if (ierr != SrcOk && closure_type != Eddington) {
+  if (ierr != SrcOk && ierr != SrcThin && closure_type != Eddington) {
     ierr = source_update_ll(BrentFunc, HybridsjFunc, cdt, alp, g_dd, g_uu, n_d,
                             n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud, W, Eold,
                             Fold_d, Estar, Fstar_d, eta, kabs, kscat, chi, Enew,
