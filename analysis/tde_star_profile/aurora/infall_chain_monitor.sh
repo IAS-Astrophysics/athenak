@@ -61,8 +61,15 @@ submit_next() {
 }
 
 latest_star_track() {
-  # Latest STAR_TRACK line across chain job stdout files.
-  ls -t ${REPO_DIR}/${JOB_NAME}.o* 2>/dev/null | head -n 3 | xargs -r grep -h "STAR_TRACK" 2>/dev/null | tail -n 1
+  # Last STAR_TRACK line of the newest stdout file that has one.
+  local f line
+  for f in $(ls -t ${REPO_DIR}/${JOB_NAME}.o* 2>/dev/null | head -n 3); do
+    line=$(grep -h "STAR_TRACK" "${f}" 2>/dev/null | tail -n 1)
+    if [[ -n "${line}" ]]; then
+      echo "${line}"
+      return
+    fi
+  done
 }
 
 check_stop() {
