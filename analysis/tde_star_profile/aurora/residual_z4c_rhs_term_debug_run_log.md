@@ -411,3 +411,31 @@ MHD + Z4c.
 - Success criteria: finite past t = 3.2 (ideally ~ 4.5+), `Z4C_RHS_TERM_MAX`
   `Khat_dda` bounded (no exponential trend), constraint norms decaying,
   `bad-metric = 0`.
+
+### Result of decisive run (job 8534529): RK3 fixes the instability
+
+- Reached `t = 5.2425` at the 55-min walltime cap, finite everywhere
+  (`nonfinite_u0 = 0`, `bad-metric = 0`). The identical deck with rk2 went
+  nonfinite at `t = 3.15`.
+- `Khat_dda` max: decayed from 5.0e-3 (t=0) to ~1.5e-3 by t = 1.5 and stayed
+  flat through t = 5.2 (rk2: exponential growth with e-fold ~0.2 from t ~ 2).
+- Constraints monotonically decaying: C-norm 4.0e-4 (t~2.2) -> 7.3e-5 (4.2)
+  -> 4.4e-5 (5.24); H = 3.7e-5, M = 7.0e-6, Theta-norm = 2.3e-6 at the end.
+- `Khat_res` max 2.3e-6, `alpha_res` max 9.5e-6 at t = 5.24: the residual
+  gauge sector is quiet and bounded.
+
+Conclusion: the explosive star-region instability of the residual-gauge
+evolution was the RK2 weak (imaginary-axis) instability of the centered-FD
+Z4c wave system, strongest in the superluminal 1+log gauge sector. With
+SSPRK3 (`integrator = rk3`, CFL up to ~0.3 verified) the same deck is stable
+with decaying constraints. This also predicts the cure for the slow
+frozen-gauge / Minkowski long-term instability (light-speed modes, e-fold
+~2.7 under rk2).
+
+### Validation run: full production gauge with rk3
+
+- Deck: `inputs/tde/aurora/z4c_tov_ks_n3_schwarzschild_resgauge_full_rk3cfl030_hi2n_aurora.athinput`
+  = the previously failing `resgauge_full_hi2n` deck (1+log + advection,
+  gamma-driver shift `shift_Gamma=1`, `shift_advect=1`, `shift_eta=2`,
+  full residual gauge evolution; rk2 went NaN by t = 4.855) with only
+  `integrator = rk3`, `cfl_number = 0.3`, and rhs-term diagnostics added.
