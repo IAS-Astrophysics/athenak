@@ -1,0 +1,181 @@
+# Two-node high-resolution Schwarzschild residual-gauge debug case.
+# This keeps the failed AMR64 run's base dx=0.1, finest dx=0.0125, and
+# star location x=40, but shrinks the transverse/left domain for debug-queue
+# feasibility.
+
+<job>
+basename = z4c_tov_ks_n3_schwarzschild_bgadapt_lapse_noadvect_noboost_rhsdbg_hi2n_aurora
+
+<mesh>
+nghost = 4
+nx1 = 640
+x1min = -16.0
+x1max = 48.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 160
+x2min = -8.0
+x2max = 8.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 160
+x3min = -8.0
+x3max = 8.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 4
+refinement_interval = 2
+max_nmb_per_rank = 192
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 1
+x1min = -5.0
+x1max = 5.0
+x2min = -5.0
+x2max = 5.0
+x3min = -5.0
+x3max = 5.0
+
+<refined_region2>
+level = 1
+x1min = 32.0
+x1max = 42.0
+x2min = -3.0
+x2max = 3.0
+x3min = -3.0
+x3max = 3.0
+
+<refined_region3>
+level = 2
+x1min = 33.0
+x1max = 42.0
+x2min = -2.0
+x2max = 2.0
+x3min = -2.0
+x3max = 2.0
+
+<refined_region4>
+level = 3
+x1min = 34.0
+x1max = 42.0
+x2min = -1.5
+x2max = 1.5
+x3min = -1.5
+x3max = 1.5
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = -1
+tlim = 8.0
+ndiag = 20
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = true
+evolve_shift_residual = false
+residual_gauge = background_adapted
+residual_lapse_f = 1.0
+residual_lapse_damping = 0.0
+residual_shift_damping = 0.0
+diss = 0.5
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 0.0
+shift_Gamma = 0.0
+shift_advect = 0.0
+shift_eta = 0.0
+history_excise_ks_horizon = true
+rhs_term_debug = true
+rhs_term_debug_stride = 20
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+
+star_center_x1 = 40.0
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = 0.0
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+excision_damp_rate = 50.0
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+amr_rho_slope_refine = true
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 1.0e-14
+amr_bh_exclusion_radius = 8.0
+amr_star_refine = true
+amr_star_refine_radius_factor = 1.5
+amr_star_derefine_radius_factor = 2.0
+amr_star_refine_level = 3
+
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.1
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 20
