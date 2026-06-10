@@ -229,6 +229,9 @@ class Z4c {
     // Input-gated debug reductions for instability localization.
     bool debug_reductions;
     int debug_reduction_stride;
+    // Input-gated term-by-term residual RHS diagnostics (analytic background only).
+    bool rhs_term_debug;
+    int rhs_term_debug_stride;
   };
   Options opt;
   Real diss;              // Dissipation parameter

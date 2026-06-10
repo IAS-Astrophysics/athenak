@@ -8,17 +8,21 @@
 
 #include <math.h>
 
-//#include <algorithm>
-//#include <cinttypes>
+#include <algorithm>
 #include <iostream>
-//#include <limits>
+#include <sstream>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/tmunu.hpp"
 #include "coordinates/cell_locations.hpp"
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
 
 namespace z4c {
 
@@ -537,7 +541,464 @@ void BuildBackgroundAdaptedResidualGaugeRHS(
   }
 }
 
+// ====================================================================================
+// Input-gated term-by-term residual RHS diagnostics (<z4c>/rhs_term_debug).
+// Decomposes the residual (full-minus-background) Z4c RHS into named term
+// categories, reports domain-wide max |contribution| per category, and prints a
+// full local breakdown at the argmax of |rhs Khat_res|, |Khat_res|, |Gam_res|,
+// and |Theta_res|.
+
+// Term slots for geometry-based residual RHS contributions.
+enum ResTermIndex {
+  T_KH_DDA,   // Khat: -(DDalpha_full - DDalpha_bg)
+  T_KH_ALG,   // Khat: alpha(AA + K^2/3) full-bg
+  T_KH_ADV,   // Khat: advection L_beta Khat full-bg
+  T_KH_DAMP,  // Khat: kappa1 Theta damping full-bg
+  T_KH_MAT,   // Khat: matter 4 pi alpha (S+E)
+  T_TH_ADV,   // Theta: advection full-bg
+  T_TH_HT,    // Theta: 0.5 alpha Ht full-bg
+  T_TH_DAMP,  // Theta: kappa1 damping full-bg
+  T_TH_MAT,   // Theta: matter -8 pi alpha E
+  T_CH_ADV,   // chi: advection + div(beta) term full-bg
+  T_CH_SRC,   // chi: -(1/6) chi_psi_power chi alpha K full-bg
+  T_GM_DA,    // Gam: 2 alpha DA_u full-bg (max comp)
+  T_GM_ADAL,  // Gam: -2 A^{ab} d_b alpha full-bg (max comp)
+  T_GM_ADV,   // Gam: advection/shift-derivative terms full-bg (max comp)
+  T_GM_DAMP,  // Gam: -2 kappa1 alpha (Gam - Gamma) full-bg (max comp)
+  T_GM_MAT,   // Gam: matter -16 pi alpha g^{ab} S_b (max comp)
+  T_G_A,      // g: -2 alpha A_ab full-bg (max comp)
+  T_G_ADV,    // g: Lie/shift terms full-bg (max comp)
+  T_A_RIC,    // A: oopsi4(-DDalpha_ab + alpha(R_ab+Rphi_ab)) full-bg (max comp)
+  T_A_TR,     // A: -(1/3) g_ab (-DDalpha + alpha R) full-bg (max comp)
+  T_A_ALG,    // A: alpha(K A_ab - 2 AA_ab) full-bg (max comp)
+  T_A_ADV,    // A: Lie/shift terms full-bg (max comp)
+  T_A_MAT,    // A: matter term (max comp)
+  NTERM_GEO
+};
+
+static char const * const ResTermNames[NTERM_GEO] = {
+  "Khat_dda", "Khat_alg", "Khat_adv", "Khat_damp", "Khat_mat",
+  "Theta_adv", "Theta_Ht", "Theta_damp", "Theta_mat",
+  "chi_adv", "chi_src",
+  "Gam_DA", "Gam_Adal", "Gam_adv", "Gam_damp", "Gam_mat",
+  "g_A", "g_adv",
+  "A_ric", "A_tr", "A_alg", "A_adv", "A_mat",
+};
+
+template <typename FullState, typename BgState>
+KOKKOS_INLINE_FUNCTION
+void ComputeResidualTerms(const FullState &full, const BgState &bg,
+                          const GeometryData &gf, const GeometryData &gb,
+                          const Z4c::Options &opt,
+                          const Tmunu::Tmunu_vars &tmunu, bool include_matter,
+                          Real kappa1_eff,
+                          const int m, const int k, const int j, const int i,
+                          Real terms[NTERM_GEO]) {
+  const Real af = full.alpha(m,k,j,i);
+  const Real ab = bg.alpha(m,k,j,i);
+
+  terms[T_KH_DDA] = -(gf.Ddalpha - gb.Ddalpha);
+  terms[T_KH_ALG] = af * (gf.AA + (1.0/3.0) * SQR(gf.K)) -
+                    ab * (gb.AA + (1.0/3.0) * SQR(gb.K));
+  terms[T_KH_ADV] = gf.LKhat - gb.LKhat;
+  terms[T_KH_DAMP] = kappa1_eff * (1.0 - opt.damp_kappa2) *
+                     (af * full.vTheta(m,k,j,i) - ab * bg.vTheta(m,k,j,i));
+  terms[T_KH_MAT] = include_matter
+      ? 4.0 * M_PI * af * (gf.S + tmunu.E(m,k,j,i)) : 0.0;
+
+  terms[T_TH_ADV] = gf.LTheta - gb.LTheta;
+  terms[T_TH_HT] = 0.5 * (af * gf.Ht - ab * gb.Ht);
+  terms[T_TH_DAMP] = -(2.0 + opt.damp_kappa2) * kappa1_eff *
+                     (af * full.vTheta(m,k,j,i) - ab * bg.vTheta(m,k,j,i));
+  terms[T_TH_MAT] = include_matter
+      ? -8.0 * M_PI * af * tmunu.E(m,k,j,i) : 0.0;
+
+  terms[T_CH_ADV] = gf.Lchi - gb.Lchi;
+  terms[T_CH_SRC] = -(1.0/6.0) * opt.chi_psi_power *
+                    (gf.chi_guarded * af * gf.K - gb.chi_guarded * ab * gb.K);
+
+  terms[T_GM_DA] = 0.0;
+  terms[T_GM_ADAL] = 0.0;
+  terms[T_GM_ADV] = 0.0;
+  terms[T_GM_DAMP] = 0.0;
+  terms[T_GM_MAT] = 0.0;
+  for (int a = 0; a < 3; ++a) {
+    terms[T_GM_DA] = fmax(terms[T_GM_DA],
+        fabs(2.0 * (af * gf.DA_u(a) - ab * gb.DA_u(a))));
+    terms[T_GM_ADV] = fmax(terms[T_GM_ADV], fabs(gf.LGam_u(a) - gb.LGam_u(a)));
+    terms[T_GM_DAMP] = fmax(terms[T_GM_DAMP],
+        fabs(2.0 * kappa1_eff *
+             (af * (full.vGam_u(m,a,k,j,i) - gf.Gamma_u(a)) -
+              ab * (bg.vGam_u(m,a,k,j,i) - gb.Gamma_u(a)))));
+    Real adal = 0.0;
+    Real gmat = 0.0;
+    for (int b = 0; b < 3; ++b) {
+      adal -= 2.0 * (gf.A_uu(a,b) * gf.dalpha_d(b) - gb.A_uu(a,b) * gb.dalpha_d(b));
+      if (include_matter) {
+        gmat -= 16.0 * M_PI * af * gf.g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+      }
+    }
+    terms[T_GM_ADAL] = fmax(terms[T_GM_ADAL], fabs(adal));
+    terms[T_GM_MAT] = fmax(terms[T_GM_MAT], fabs(gmat));
+  }
+
+  terms[T_G_A] = 0.0;
+  terms[T_G_ADV] = 0.0;
+  terms[T_A_RIC] = 0.0;
+  terms[T_A_TR] = 0.0;
+  terms[T_A_ALG] = 0.0;
+  terms[T_A_ADV] = 0.0;
+  terms[T_A_MAT] = 0.0;
+  for (int a = 0; a < 3; ++a)
+  for (int b = a; b < 3; ++b) {
+    terms[T_G_A] = fmax(terms[T_G_A],
+        fabs(-2.0 * (af * full.vA_dd(m,a,b,k,j,i) - ab * bg.vA_dd(m,a,b,k,j,i))));
+    terms[T_G_ADV] = fmax(terms[T_G_ADV], fabs(gf.Lg_dd(a,b) - gb.Lg_dd(a,b)));
+    terms[T_A_RIC] = fmax(terms[T_A_RIC],
+        fabs(gf.oopsi4 * (-gf.Ddalpha_dd(a,b) +
+                          af * (gf.R_dd(a,b) + gf.Rphi_dd(a,b))) -
+             gb.oopsi4 * (-gb.Ddalpha_dd(a,b) +
+                          ab * (gb.R_dd(a,b) + gb.Rphi_dd(a,b)))));
+    terms[T_A_TR] = fmax(terms[T_A_TR],
+        fabs(-(1.0/3.0) *
+             (full.g_dd(m,a,b,k,j,i) * (-gf.Ddalpha + af * gf.R) -
+              bg.g_dd(m,a,b,k,j,i) * (-gb.Ddalpha + ab * gb.R))));
+    terms[T_A_ALG] = fmax(terms[T_A_ALG],
+        fabs(af * (gf.K * full.vA_dd(m,a,b,k,j,i) - 2.0 * gf.AA_dd(a,b)) -
+             ab * (gb.K * bg.vA_dd(m,a,b,k,j,i) - 2.0 * gb.AA_dd(a,b))));
+    terms[T_A_ADV] = fmax(terms[T_A_ADV], fabs(gf.LA_dd(a,b) - gb.LA_dd(a,b)));
+    if (include_matter) {
+      terms[T_A_MAT] = fmax(terms[T_A_MAT],
+          fabs(-8.0 * M_PI * af *
+               (gf.oopsi4 * tmunu.S_dd(m,a,b,k,j,i) -
+                (1.0/3.0) * gf.S * full.g_dd(m,a,b,k,j,i))));
+    }
+  }
+}
+
 } // namespace
+
+template <int NGHOST>
+static void ResidualRHSTermDebug(MeshBlockPack *pmy_pack, Z4c *pz4c,
+                                 Real kappa1_eff, Real time, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  auto &size = pmy_pack->pmb->mb_size;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int nx1 = indcs.nx1;
+  int nx2 = indcs.nx2;
+  int nx3 = indcs.nx3;
+  int nmb = pmy_pack->nmb_thispack;
+  int nmkji = nmb * nx3 * nx2 * nx1;
+  int nkji = nx3 * nx2 * nx1;
+  int nji = nx2 * nx1;
+
+  auto &full = pz4c->full;
+  auto &bg = pz4c->bg;
+  auto &res = pz4c->z4c;
+  auto &rhs = pz4c->rhs;
+  auto &opt = pz4c->opt;
+  auto &u0 = pz4c->u0;
+  auto &u_rhs = pz4c->u_rhs;
+  const Real diss = pz4c->diss;
+  const int ncycle = pmy_pack->pmesh->ncycle;
+
+  bool is_vacuum = (pmy_pack->ptmunu == nullptr);
+  Tmunu::Tmunu_vars tmunu;
+  if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
+  const bool include_matter = !is_vacuum;
+
+  // -----------------------------------------------------------------------------
+  // (1) Domain-wide max |contribution| per geometry-based term category.
+  DvceArray1D<Real> term_max_d("z4c_res_term_max", NTERM_GEO);
+  Kokkos::deep_copy(term_max_d, 0.0);
+  Kokkos::parallel_for(
+      "Z4cResTermMax", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx) {
+        int m = idx / nkji;
+        int k = (idx - m * nkji) / nji;
+        int j = (idx - m * nkji - k * nji) / nx1;
+        int i = idx - m * nkji - k * nji - j * nx1 + is;
+        k += ks;
+        j += js;
+        GeometryData gf, gb;
+        ComputeGeometryData<NGHOST>(full, opt, tmunu, include_matter,
+            size.d_view(m).dx1, size.d_view(m).dx2, size.d_view(m).dx3,
+            m, k, j, i, gf);
+        ComputeGeometryData<NGHOST>(bg, opt, tmunu, false,
+            size.d_view(m).dx1, size.d_view(m).dx2, size.d_view(m).dx3,
+            m, k, j, i, gb);
+        Real terms[NTERM_GEO];
+        ComputeResidualTerms(full, bg, gf, gb, opt, tmunu, include_matter,
+                             kappa1_eff, m, k, j, i, terms);
+        for (int n = 0; n < NTERM_GEO; ++n) {
+          Kokkos::atomic_max(&term_max_d(n), fabs(terms[n]));
+        }
+      });
+  auto term_max_h = Kokkos::create_mirror_view(term_max_d);
+  Kokkos::deep_copy(term_max_h, term_max_d);
+  Real term_max[NTERM_GEO];
+  for (int n = 0; n < NTERM_GEO; ++n) { term_max[n] = term_max_h(n); }
+
+  // (2) KO dissipation max |contribution| per field group and nonfinite counts.
+  Real ko_alpha = 0.0, ko_khat = 0.0, ko_theta = 0.0, ko_chi = 0.0;
+  Real ko_gam = 0.0, ko_g = 0.0, ko_a = 0.0;
+  Real nonfinite_rhs = 0.0, nonfinite_u0 = 0.0;
+  Kokkos::parallel_reduce(
+      "Z4cResKOMax", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &m_alpha, Real &m_khat, Real &m_theta,
+                    Real &m_chi, Real &m_gam, Real &m_g, Real &m_a,
+                    Real &bad_rhs, Real &bad_u0) {
+        int m = idx / nkji;
+        int k = (idx - m * nkji) / nji;
+        int j = (idx - m * nkji - k * nji) / nx1;
+        int i = idx - m * nkji - k * nji - j * nx1 + is;
+        k += ks;
+        j += js;
+        Real idx1[] = {1.0/size.d_view(m).dx1, 1.0/size.d_view(m).dx2,
+                       1.0/size.d_view(m).dx3};
+        for (int n = 0; n < Z4c::nz4c; ++n) {
+          Real ko = 0.0;
+          for (int a = 0; a < 3; ++a) {
+            ko += Diss<NGHOST>(a, idx1, u0, m, n, k, j, i) * diss;
+          }
+          ko = fabs(ko);
+          if (n == Z4c::I_Z4C_ALPHA) {
+            m_alpha = fmax(m_alpha, ko);
+          } else if (n == Z4c::I_Z4C_KHAT) {
+            m_khat = fmax(m_khat, ko);
+          } else if (n == Z4c::I_Z4C_THETA) {
+            m_theta = fmax(m_theta, ko);
+          } else if (n == Z4c::I_Z4C_CHI) {
+            m_chi = fmax(m_chi, ko);
+          } else if (n >= Z4c::I_Z4C_GAMX && n <= Z4c::I_Z4C_GAMZ) {
+            m_gam = fmax(m_gam, ko);
+          } else if (n >= Z4c::I_Z4C_GXX && n <= Z4c::I_Z4C_GZZ) {
+            m_g = fmax(m_g, ko);
+          } else if (n >= Z4c::I_Z4C_AXX && n <= Z4c::I_Z4C_AZZ) {
+            m_a = fmax(m_a, ko);
+          }
+          if (!isfinite(u_rhs(m,n,k,j,i))) { bad_rhs += 1.0; }
+          if (!isfinite(u0(m,n,k,j,i))) { bad_u0 += 1.0; }
+        }
+      },
+      Kokkos::Max<Real>(ko_alpha), Kokkos::Max<Real>(ko_khat),
+      Kokkos::Max<Real>(ko_theta), Kokkos::Max<Real>(ko_chi),
+      Kokkos::Max<Real>(ko_gam), Kokkos::Max<Real>(ko_g),
+      Kokkos::Max<Real>(ko_a), Kokkos::Sum<Real>(nonfinite_rhs),
+      Kokkos::Sum<Real>(nonfinite_u0));
+
+#if MPI_PARALLEL_ENABLED
+  {
+    Real buf[NTERM_GEO + 7];
+    for (int n = 0; n < NTERM_GEO; ++n) { buf[n] = term_max[n]; }
+    buf[NTERM_GEO + 0] = ko_alpha;
+    buf[NTERM_GEO + 1] = ko_khat;
+    buf[NTERM_GEO + 2] = ko_theta;
+    buf[NTERM_GEO + 3] = ko_chi;
+    buf[NTERM_GEO + 4] = ko_gam;
+    buf[NTERM_GEO + 5] = ko_g;
+    buf[NTERM_GEO + 6] = ko_a;
+    MPI_Allreduce(MPI_IN_PLACE, buf, NTERM_GEO + 7, MPI_ATHENA_REAL, MPI_MAX,
+                  MPI_COMM_WORLD);
+    Real cnt[2] = {nonfinite_rhs, nonfinite_u0};
+    MPI_Allreduce(MPI_IN_PLACE, cnt, 2, MPI_ATHENA_REAL, MPI_SUM, MPI_COMM_WORLD);
+    for (int n = 0; n < NTERM_GEO; ++n) { term_max[n] = buf[n]; }
+    ko_alpha = buf[NTERM_GEO + 0];
+    ko_khat = buf[NTERM_GEO + 1];
+    ko_theta = buf[NTERM_GEO + 2];
+    ko_chi = buf[NTERM_GEO + 3];
+    ko_gam = buf[NTERM_GEO + 4];
+    ko_g = buf[NTERM_GEO + 5];
+    ko_a = buf[NTERM_GEO + 6];
+    nonfinite_rhs = cnt[0];
+    nonfinite_u0 = cnt[1];
+  }
+#endif
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Z4C_RHS_TERM_MAX cycle=" << ncycle << " time=" << time
+              << " stage=" << stage;
+    for (int n = 0; n < NTERM_GEO; ++n) {
+      std::cout << " " << ResTermNames[n] << "=" << term_max[n];
+    }
+    std::cout << " KO_alpha=" << ko_alpha << " KO_Khat=" << ko_khat
+              << " KO_Theta=" << ko_theta << " KO_chi=" << ko_chi
+              << " KO_Gam=" << ko_gam << " KO_g=" << ko_g << " KO_A=" << ko_a
+              << " nonfinite_rhs=" << nonfinite_rhs
+              << " nonfinite_u0=" << nonfinite_u0 << std::endl;
+  }
+
+  // -----------------------------------------------------------------------------
+  // (3) First-bad-location diagnostics: argmax of key residual quantities with a
+  // full local term breakdown at each location.
+  using maxloc_t = Kokkos::MaxLoc<Real, int>;
+  constexpr int nfields = 4;
+  const char *field_names[nfields] = {"rhs_Khat_res", "Khat_res", "Gam_res",
+                                      "Theta_res"};
+  maxloc_t::value_type field_loc[nfields];
+
+  Kokkos::parallel_reduce(
+      "Z4cResLocRhsKhat", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, maxloc_t::value_type &lmax) {
+        int m = idx / nkji;
+        int k = (idx - m * nkji) / nji + ks;
+        int j = ((idx / nx1) % nx2) + js;
+        int i = (idx % nx1) + is;
+        Real v = fabs(rhs.vKhat(m,k,j,i));
+        if (v > lmax.val) { lmax.val = v; lmax.loc = idx; }
+      }, maxloc_t(field_loc[0]));
+  Kokkos::parallel_reduce(
+      "Z4cResLocKhat", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, maxloc_t::value_type &lmax) {
+        int m = idx / nkji;
+        int k = (idx - m * nkji) / nji + ks;
+        int j = ((idx / nx1) % nx2) + js;
+        int i = (idx % nx1) + is;
+        Real v = fabs(res.vKhat(m,k,j,i));
+        if (v > lmax.val) { lmax.val = v; lmax.loc = idx; }
+      }, maxloc_t(field_loc[1]));
+  Kokkos::parallel_reduce(
+      "Z4cResLocGam", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, maxloc_t::value_type &lmax) {
+        int m = idx / nkji;
+        int k = (idx - m * nkji) / nji + ks;
+        int j = ((idx / nx1) % nx2) + js;
+        int i = (idx % nx1) + is;
+        Real v = 0.0;
+        for (int a = 0; a < 3; ++a) { v = fmax(v, fabs(res.vGam_u(m,a,k,j,i))); }
+        if (v > lmax.val) { lmax.val = v; lmax.loc = idx; }
+      }, maxloc_t(field_loc[2]));
+  Kokkos::parallel_reduce(
+      "Z4cResLocTheta", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, maxloc_t::value_type &lmax) {
+        int m = idx / nkji;
+        int k = (idx - m * nkji) / nji + ks;
+        int j = ((idx / nx1) % nx2) + js;
+        int i = (idx % nx1) + is;
+        Real v = fabs(res.vTheta(m,k,j,i));
+        if (v > lmax.val) { lmax.val = v; lmax.loc = idx; }
+      }, maxloc_t(field_loc[3]));
+
+  constexpr int NBUF = NTERM_GEO + 24;
+  DvceArray1D<Real> dbuf("z4c_res_term_dbuf", NBUF);
+  auto hbuf = Kokkos::create_mirror_view(dbuf);
+
+  for (int f = 0; f < nfields; ++f) {
+    Real my_val = (field_loc[f].loc >= 0) ? field_loc[f].val : -1.0;
+    int print_rank = 0;
+#if MPI_PARALLEL_ENABLED
+    struct { double val; int rank; } in, out;
+    in.val = my_val;
+    in.rank = global_variable::my_rank;
+    MPI_Allreduce(&in, &out, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
+    print_rank = out.rank;
+#endif
+    if (global_variable::my_rank != print_rank || field_loc[f].loc < 0) {
+      continue;
+    }
+    const int idx = field_loc[f].loc;
+    const int m = idx / nkji;
+    const int k = (idx - m * nkji) / nji + ks;
+    const int j = ((idx / nx1) % nx2) + js;
+    const int i = (idx % nx1) + is;
+
+    Kokkos::parallel_for(
+        "Z4cResTermPoint", Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
+        KOKKOS_LAMBDA(const int) {
+          GeometryData gf, gb;
+          ComputeGeometryData<NGHOST>(full, opt, tmunu, include_matter,
+              size.d_view(m).dx1, size.d_view(m).dx2, size.d_view(m).dx3,
+              m, k, j, i, gf);
+          ComputeGeometryData<NGHOST>(bg, opt, tmunu, false,
+              size.d_view(m).dx1, size.d_view(m).dx2, size.d_view(m).dx3,
+              m, k, j, i, gb);
+          Real terms[NTERM_GEO];
+          ComputeResidualTerms(full, bg, gf, gb, opt, tmunu, include_matter,
+                               kappa1_eff, m, k, j, i, terms);
+          for (int n = 0; n < NTERM_GEO; ++n) { dbuf(n) = terms[n]; }
+          int n = NTERM_GEO;
+          dbuf(n++) = rhs.vKhat(m,k,j,i);
+          dbuf(n++) = rhs.vTheta(m,k,j,i);
+          dbuf(n++) = rhs.alpha(m,k,j,i);
+          dbuf(n++) = rhs.chi(m,k,j,i);
+          dbuf(n++) = full.alpha(m,k,j,i);
+          dbuf(n++) = bg.alpha(m,k,j,i);
+          dbuf(n++) = res.alpha(m,k,j,i);
+          dbuf(n++) = full.vKhat(m,k,j,i);
+          dbuf(n++) = bg.vKhat(m,k,j,i);
+          dbuf(n++) = res.vKhat(m,k,j,i);
+          dbuf(n++) = full.vTheta(m,k,j,i);
+          dbuf(n++) = res.vTheta(m,k,j,i);
+          dbuf(n++) = full.chi(m,k,j,i);
+          dbuf(n++) = res.chi(m,k,j,i);
+          dbuf(n++) = gf.detg;
+          dbuf(n++) = gb.detg;
+          Real gam_res = 0.0;
+          for (int a = 0; a < 3; ++a) {
+            gam_res = fmax(gam_res, fabs(res.vGam_u(m,a,k,j,i)));
+          }
+          dbuf(n++) = gam_res;
+          dbuf(n++) = gf.AA;
+          dbuf(n++) = gb.AA;
+          dbuf(n++) = gf.K;
+          dbuf(n++) = gb.K;
+          dbuf(n++) = gf.R;
+          dbuf(n++) = gb.R;
+          dbuf(n++) = include_matter ? tmunu.E(m,k,j,i) : 0.0;
+        });
+    Kokkos::deep_copy(hbuf, dbuf);
+
+    auto &msize = pmy_pack->pmb->mb_size.h_view(m);
+    Real x = CellCenterX(i - is, nx1, msize.x1min, msize.x1max);
+    Real y = CellCenterX(j - js, nx2, msize.x2min, msize.x2max);
+    Real z = CellCenterX(k - ks, nx3, msize.x3min, msize.x3max);
+    Real r_bh = sqrt(SQR(x - opt.history_excise_ks_x1) +
+                     SQR(y - opt.history_excise_ks_x2) +
+                     SQR(z - opt.history_excise_ks_x3));
+    int gid = pmy_pack->pmb->mb_gid.h_view(m);
+    int lev = pmy_pack->pmb->mb_lev.h_view(m);
+
+    std::ostringstream oss;
+    oss << "Z4C_RHS_TERM_LOC cycle=" << ncycle << " time=" << time
+        << " stage=" << stage << " field=" << field_names[f]
+        << " val=" << field_loc[f].val
+        << " rank=" << global_variable::my_rank
+        << " gid=" << gid << " level=" << lev
+        << " x=" << x << " y=" << y << " z=" << z << " r_bh=" << r_bh
+        << " mb_x1=[" << msize.x1min << "," << msize.x1max << "]"
+        << " mb_x2=[" << msize.x2min << "," << msize.x2max << "]"
+        << " mb_x3=[" << msize.x3min << "," << msize.x3max << "]";
+    for (int n = 0; n < NTERM_GEO; ++n) {
+      oss << " " << ResTermNames[n] << "=" << hbuf(n);
+    }
+    int n = NTERM_GEO;
+    oss << " rhs_Khat=" << hbuf(n++);
+    oss << " rhs_Theta=" << hbuf(n++);
+    oss << " rhs_alpha=" << hbuf(n++);
+    oss << " rhs_chi=" << hbuf(n++);
+    oss << " alpha_full=" << hbuf(n++);
+    oss << " alpha_bg=" << hbuf(n++);
+    oss << " alpha_res=" << hbuf(n++);
+    oss << " Khat_full=" << hbuf(n++);
+    oss << " Khat_bg=" << hbuf(n++);
+    oss << " Khat_res=" << hbuf(n++);
+    oss << " Theta_full=" << hbuf(n++);
+    oss << " Theta_res=" << hbuf(n++);
+    oss << " chi_full=" << hbuf(n++);
+    oss << " chi_res=" << hbuf(n++);
+    oss << " detg_full=" << hbuf(n++);
+    oss << " detg_bg=" << hbuf(n++);
+    oss << " Gam_res=" << hbuf(n++);
+    oss << " AA_full=" << hbuf(n++);
+    oss << " AA_bg=" << hbuf(n++);
+    oss << " K_full=" << hbuf(n++);
+    oss << " K_bg=" << hbuf(n++);
+    oss << " R_full=" << hbuf(n++);
+    oss << " R_bg=" << hbuf(n++);
+    oss << " tmunu_E=" << hbuf(n++);
+    std::cout << oss.str() << std::endl;
+  }
+}
 
 template <int NGHOST>
 //! \fn void Z4c::CalcRHS(Driver *pdriver, int stage)
@@ -761,6 +1222,11 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       u_rhs(m,n,k,j,i) += Diss<NGHOST>(a, idx, u0, m, n, k, j, i)*diss;
     }
   });
+  if (opt.rhs_term_debug && use_analytic_background && stage == 1 &&
+      (pmy_pack->pmesh->ncycle %
+       std::max(1, opt.rhs_term_debug_stride)) == 0) {
+    ResidualRHSTermDebug<NGHOST>(pmy_pack, pz4c, kappa1_eff, time, stage);
+  }
   pz4c->DebugDumpState("post_rhs", u_rhs, false, time, stage);
 
   return TaskStatus::complete;

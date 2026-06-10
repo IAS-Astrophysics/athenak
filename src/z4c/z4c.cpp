@@ -257,6 +257,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.target_kappa1 = pin->GetOrAddReal("z4c", "target_kappa1", 0.0);
   opt.debug_reductions = pin->GetOrAddBoolean("z4c", "debug_reductions", false);
   opt.debug_reduction_stride = pin->GetOrAddInteger("z4c", "debug_reduction_stride", 1);
+  opt.rhs_term_debug = pin->GetOrAddBoolean("z4c", "rhs_term_debug", false);
+  opt.rhs_term_debug_stride = pin->GetOrAddInteger("z4c", "rhs_term_debug_stride", 20);
 
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
   Kokkos::deep_copy(DevExeSpace(), u_bg, 0.0);
