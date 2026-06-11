@@ -48,6 +48,8 @@ Real bh_center_x1 = 0.0;
 Real bh_center_x2 = 0.0;
 Real bh_center_x3 = 0.0;
 Real bh_horizon_radius = 1.0;
+Real outer_sponge_width = 2.0;
+Real outer_sponge_rate = 5.0;
 Real star_center_x1 = 8.0;
 Real star_center_x2 = 0.0;
 Real star_center_x3 = 0.0;
@@ -401,6 +403,22 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
   auto &z4c_u1 = pmbp->pz4c->u1;
   auto &z4c_rhs = pmbp->pz4c->u_rhs;
   int nz4c = pmbp->pz4c->nz4c;
+  // Outer absorbing sponge: the z4c "outflow" BC is polynomial extrapolation
+  // of the residual, which supports boundary-fed growing modes (observed as
+  // a fixed exterior |H| hotspot in the outermost cell layer at z = z_max,
+  // e-folding in ~0.55 M and dominating the constraint norms; also the
+  // likely cause of the long-term frozen-gauge Minkowski instability).
+  // Relax the residual toward the analytic background within
+  // outer_sponge_width of any outer face, with rate rising smootherstep
+  // from 0 to outer_sponge_rate at the boundary.
+  const Real osp_width = outer_sponge_width;
+  const Real osp_rate = outer_sponge_rate;
+  const Real mesh_x1min = pm->mesh_size.x1min;
+  const Real mesh_x1max = pm->mesh_size.x1max;
+  const Real mesh_x2min = pm->mesh_size.x2min;
+  const Real mesh_x2max = pm->mesh_size.x2max;
+  const Real mesh_x3min = pm->mesh_size.x3min;
+  const Real mesh_x3max = pm->mesh_size.x3max;
   par_for("z4c_tov_ks_inner_excision_z4c", DevExeSpace(), 0, nmb - 1, 0, nz4c - 1,
           ks, ke, js, je, is, ie,
           KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
@@ -411,14 +429,36 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
 
-    Real x = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max) - bh_center_x1_l;
-    Real y = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max) - bh_center_x2_l;
-    Real z = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max) - bh_center_x3_l;
+    Real xr = CellCenterX(i - indcs.is, indcs.nx1, x1min, x1max);
+    Real yr = CellCenterX(j - indcs.js, indcs.nx2, x2min, x2max);
+    Real zr = CellCenterX(k - indcs.ks, indcs.nx3, x3min, x3max);
+    Real x = xr - bh_center_x1_l;
+    Real y = yr - bh_center_x2_l;
+    Real z = zr - bh_center_x3_l;
+
+    Real sigma_out = 0.0;
+    if (osp_rate > 0.0 && osp_width > 0.0) {
+      Real dbdy = fmin(fmin(xr - mesh_x1min, mesh_x1max - xr),
+                  fmin(fmin(yr - mesh_x2min, mesh_x2max - yr),
+                       fmin(zr - mesh_x3min, mesh_x3max - zr)));
+      Real s = 1.0 - dbdy/osp_width;
+      if (s > 0.0) {
+        s = fmin(s, 1.0);
+        sigma_out = osp_rate*s*s*s*(s*(6.0*s - 15.0) + 10.0);
+      }
+    }
+
     Real ramp = InnerExcisionRamp(x, y, z, bh_spin_l, excision_freeze_radius_l,
                                   excision_ramp_radius_l);
-    if (ramp >= 1.0 && isfinite(z4c_rhs(m,n,k,j,i)) && isfinite(z4c_u0(m,n,k,j,i)) &&
-        isfinite(z4c_u1(m,n,k,j,i))) {
+    if (ramp >= 1.0 && sigma_out <= 0.0 && isfinite(z4c_rhs(m,n,k,j,i)) &&
+        isfinite(z4c_u0(m,n,k,j,i)) && isfinite(z4c_u1(m,n,k,j,i))) {
       return;
+    }
+    if (sigma_out > 0.0) {
+      Real rhs_here = z4c_rhs(m,n,k,j,i);
+      Real u0_here = z4c_u0(m,n,k,j,i);
+      z4c_rhs(m,n,k,j,i) = (isfinite(rhs_here) && isfinite(u0_here)) ?
+                            rhs_here - sigma_out*u0_here : 0.0;
     }
     if (excision_damp_rate_l > 0.0) {
       // Sponge layer: keep the full RHS -- crucially including the KO
@@ -2210,6 +2250,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pin->GetOrAddReal("problem", "excision_freeze_radius", default_freeze);
   excision_ramp_radius =
       pin->GetOrAddReal("problem", "excision_ramp_radius", default_ramp);
+  outer_sponge_width = pin->GetOrAddReal("problem", "outer_sponge_width", 2.0);
+  outer_sponge_rate = pin->GetOrAddReal("problem", "outer_sponge_rate", 5.0);
+  if (global_variable::my_rank == 0) {
+    std::cout << "OUTER_SPONGE width=" << outer_sponge_width
+              << " rate=" << outer_sponge_rate << std::endl;
+  }
   if (excision_freeze_radius < 0.0 || excision_ramp_radius < excision_freeze_radius ||
       excision_ramp_radius > bh_horizon_radius) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
