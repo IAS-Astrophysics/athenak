@@ -478,3 +478,42 @@ debug-queue horizon (t >> 5, e.g. restart chain or production queue) to
 confirm there is no slower secular drift; (b) optionally implement the rk4
 register update in `MHD::CopyCons`/`RKUpdate` if 4th-order time accuracy is
 ever needed.
+
+## Excision algorithm rework (2026-06-11, deployed for chain link 15+)
+
+The 20M-infall chain exposed a secular constraint-growth source at the BH
+excision ramp (rhs-term diagnostics: argmax pinned at r_bh = 1.84, inside
+the old ramp zone 1.7-1.9). Root cause: the state projection
+`u *= ramp` was applied every substep over the whole transition annulus,
+forcing the residual toward zero while the star's physical field grows at
+the BH; the resulting edge inconsistency leaks through the horizon via the
+superluminal 1+log gauge cone (speed sqrt(2*alpha/(1+2H)) - beta^r > 0
+outside r ~ 1.08 M, even inside the horizon).
+
+Changes (src/pgen/z4c_tov_ks.cpp, src/outputs/history.cpp):
+
+1. **Projection confined to the all-ingoing zone.** The hard state
+   projection (u0 = u1 = 0, i.e. exact Kerr-Schild background) now applies
+   only where ramp == 0 (r < excision_freeze_radius). In the transition
+   annulus the state evolves freely under the ramped/damped RHS; junk is
+   advected inward (all light cones ingoing inside the horizon) and KO-
+   damped. This keeps the interior pinned (no interior physical
+   instability) without the secular Dirichlet mismatch at the ramp edge.
+2. **Characteristic-based default placement** (spin-aware, for future
+   high-spin runs): `AllIngoingExcisionRadius(M, a)` scans the equatorial
+   Kerr-Schild gauge cone lambda_+ = -beta^r + sqrt(2*alpha*gamma^rr) and
+   returns the largest radius where it is ingoing (~1.08 M for a=0).
+   Defaults: freeze = 0.95*r_allin, ramp = freeze + max(8*dx_BH, 0.2 M),
+   capped at 0.98*r_+. Startup prints EXCISION_SETUP (incl. the buffer in
+   BH-level cells) and warns when the horizon buffer is < 8 cells (the
+   high-spin regime: raise amr_bh_refine_level).
+3. **Interior constraint norms in the z4c history**: columns C-int2,
+   H-int2, M-int2, Theta-int2 accumulate over the excised cells
+   (chi/KS-horizon mask complement), so interior junk is monitored
+   separately from the exterior solution. Monitor status line now prints
+   Cint/Hint (and the Theta column index was fixed: it is col 10, not 7).
+
+Chain overrides keep freeze=1.0/ramp=1.4 (slightly deeper freeze and wider
+ramp than the new defaults; horizon buffer 0.6 M = 24 cells at level 6).
+Link 14 (old binary, deeper radii only) already shows C-norm topping out at
+~6.9e-4 and easing to 6.7e-4 by t = 47.8. Link 15+ runs the new binary.

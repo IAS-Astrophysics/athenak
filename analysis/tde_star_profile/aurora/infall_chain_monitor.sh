@@ -55,6 +55,11 @@ submit_next() {
   #   leaks out through the horizon (superluminal 1+log modes + stencils).
   #   Fix: bury the excision deeper (freeze=1.0, ramp=1.4), leaving a
   #   ~24-cell KO-damped buffer inside the horizon.
+  #   Link 15+: rebuilt binary -- the transition annulus (freeze<r<ramp) no
+  #   longer projects the state toward zero each substep (RHS damping only);
+  #   hard projection is confined to r<freeze where even the superluminal
+  #   1+log gauge cone is ingoing.  Interior constraint norms (C-int2 etc.)
+  #   appended to the z4c hst for monitoring the excised region.
   # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
   # reliably carry space-containing values).
   local extra="output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0"
@@ -139,13 +144,17 @@ print_status() {
   zhst=$(ls ${RUN_DIR}/*.z4c.user.hst 2>/dev/null | head -n 1)
   [[ -n "${zhst}" && -f "${zhst}" ]] && lastz=$(tail -n 1 "${zhst}")
   track=$(latest_star_track)
-  local t="" C="" H="" M="" Th=""
+  local t="" C="" H="" M="" Th="" Ci="" Hi=""
   if [[ -n "${lastz}" && "${lastz}" != \#* ]]; then
     t=$(echo "${lastz}" | awk '{print $1+0}')
     C=$(echo "${lastz}" | awk '{print $3+0}')
     H=$(echo "${lastz}" | awk '{print $4+0}')
     M=$(echo "${lastz}" | awk '{print $5+0}')
-    Th=$(echo "${lastz}" | awk '{print $7+0}')
+    Th=$(echo "${lastz}" | awk '{print $10+0}')
+    # Interior (excised-region) norms: appended cols 12-15 once the
+    # transition-projection binary is in use; 0 on older rows.
+    Ci=$(echo "${lastz}" | awk '{print $12+0}')
+    Hi=$(echo "${lastz}" | awk '{print $13+0}')
   fi
   local rbh="" rho=""
   if [[ -n "${track}" ]]; then
@@ -154,7 +163,7 @@ print_status() {
   fi
   local st=""
   [[ -n "${current_job}" ]] && st=$(job_state "${current_job}")
-  echo "CHAIN_STATUS $(date +%H:%M) job=${current_job:-none}(${st:--}) njobs=${njobs} t=${t:-?} C=${C:-?} H=${H:-?} M=${M:-?} Theta=${Th:-?} r_bh=${rbh:-?} rho_max=${rho:-?}"
+  echo "CHAIN_STATUS $(date +%H:%M) job=${current_job:-none}(${st:--}) njobs=${njobs} t=${t:-?} C=${C:-?} H=${H:-?} M=${M:-?} Theta=${Th:-?} Cint=${Ci:-?} Hint=${Hi:-?} r_bh=${rbh:-?} rho_max=${rho:-?}"
 }
 
 echo "CHAIN_BEGIN case=${CASE_NAME} run_dir=${RUN_DIR}"

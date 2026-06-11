@@ -126,6 +126,32 @@ Real SmootherStep(Real q) {
   return q*q*q*(10.0 + q*(-15.0 + 6.0*q));
 }
 
+// Largest Kerr-Schild radius (equatorial estimate) at which *all* outgoing
+// characteristic cones point inward, including the superluminal 1+log gauge
+// cone (speed sqrt(2 alpha) relative to normal observers).  Junk created
+// inside this radius cannot propagate out of the excision region, so the
+// residual state may be safely projected there.  For Kerr-Schild on the
+// equator H = M/r and gamma^ll = 1/(1+2H) along the ingoing null direction:
+//   lambda_+ = -beta^l + sqrt(2 alpha gamma^ll),
+//   beta^l = 2H/(1+2H), alpha = 1/sqrt(1+2H).
+inline Real AllIngoingExcisionRadius(Real mass, Real spin) {
+  const Real r_hor = mass*(1.0 + std::sqrt(std::fmax(0.0, 1.0 - SQR(spin))));
+  Real r_allin = 0.0;
+  const int nscan = 2000;
+  for (int n = nscan; n >= 1; --n) {
+    const Real r = r_hor*static_cast<Real>(n)/static_cast<Real>(nscan);
+    const Real h = mass/r;  // equatorial Kerr-Schild scalar
+    const Real alpha = 1.0/std::sqrt(1.0 + 2.0*h);
+    const Real beta_l = 2.0*h/(1.0 + 2.0*h);
+    const Real c_gauge = std::sqrt(2.0*alpha/(1.0 + 2.0*h));
+    if (-beta_l + c_gauge < 0.0) {
+      r_allin = r;
+      break;
+    }
+  }
+  return r_allin;
+}
+
 KOKKOS_INLINE_FUNCTION
 Real InnerExcisionRamp(Real x, Real y, Real z, Real spin, Real freeze_radius,
                        Real ramp_radius) {
@@ -403,10 +429,20 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
                             ramp*z4c_rhs(m,n,k,j,i) : 0.0;
     }
     if (excision_project_state_l) {
-      z4c_u0(m,n,k,j,i) = isfinite(z4c_u0(m,n,k,j,i)) ?
-                           ramp*z4c_u0(m,n,k,j,i) : 0.0;
-      z4c_u1(m,n,k,j,i) = isfinite(z4c_u1(m,n,k,j,i)) ?
-                           ramp*z4c_u1(m,n,k,j,i) : 0.0;
+      // Project the state only in the deep freeze zone (ramp == 0), where all
+      // characteristic cones -- including the superluminal 1+log gauge cone --
+      // point inward, so the projection mismatch cannot escape.  In the
+      // transition annulus the state evolves freely under the damped RHS:
+      // forcing it toward zero there fights the physical field of approaching
+      // matter and sources a secularly growing constraint violation that
+      // leaks through the horizon (seen in the 20M-infall run at t ~ 40).
+      if (ramp <= 0.0) {
+        z4c_u0(m,n,k,j,i) = 0.0;
+        z4c_u1(m,n,k,j,i) = 0.0;
+      } else {
+        if (!isfinite(z4c_u0(m,n,k,j,i))) { z4c_u0(m,n,k,j,i) = 0.0; }
+        if (!isfinite(z4c_u1(m,n,k,j,i))) { z4c_u1(m,n,k,j,i) = 0.0; }
+      }
     }
   });
 }
@@ -2138,18 +2174,50 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pin->GetOrAddBoolean("problem", "use_direct_z4c_background", true);
   excision_damp_rate = pin->GetOrAddReal("problem", "excision_damp_rate", 50.0);
   excision_project_state = pin->GetOrAddBoolean("problem", "excision_project_state", true);
+  // Characteristic-based default placement: freeze (state projection) only
+  // where even the superluminal 1+log gauge cone points inward, and end the
+  // RHS-damping ramp with a resolution-aware buffer below the horizon so
+  // FD stencils and Kreiss-Oliger support never straddle ramp edge and
+  // horizon in one reach.  Both radii remain overridable from the input.
+  Real default_freeze = 0.0;
+  Real default_ramp = 0.0;
+  Real dx_bh_est = 0.0;
+  if (!use_minkowski_background) {
+    const Real r_allin = AllIngoingExcisionRadius(bh_mass, bh_spin);
+    const Real dx_base =
+        (pin->GetReal("mesh", "x1max") - pin->GetReal("mesh", "x1min"))/
+        pin->GetInteger("mesh", "nx1");
+    const int bh_level =
+        std::max(0, pin->GetOrAddInteger("problem", "amr_bh_refine_level", -1));
+    dx_bh_est = dx_base/std::pow(2.0, bh_level);
+    const Real ramp_width = std::fmax(8.0*dx_bh_est, 0.2*bh_mass);
+    default_freeze = 0.95*r_allin;
+    default_ramp = std::fmin(default_freeze + ramp_width, 0.98*bh_horizon_radius);
+  }
   excision_freeze_radius =
-      pin->GetOrAddReal("problem", "excision_freeze_radius",
-                        use_minkowski_background ? 0.0 : 0.85*bh_horizon_radius);
+      pin->GetOrAddReal("problem", "excision_freeze_radius", default_freeze);
   excision_ramp_radius =
-      pin->GetOrAddReal("problem", "excision_ramp_radius",
-                        use_minkowski_background ? 0.0 : 0.95*bh_horizon_radius);
+      pin->GetOrAddReal("problem", "excision_ramp_radius", default_ramp);
   if (excision_freeze_radius < 0.0 || excision_ramp_radius < excision_freeze_radius ||
       excision_ramp_radius > bh_horizon_radius) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "z4c_tov_ks requires 0 <= excision_freeze_radius <= "
               << "excision_ramp_radius <= Kerr-Schild horizon radius." << std::endl;
     exit(EXIT_FAILURE);
+  }
+  if (!use_minkowski_background && global_variable::my_rank == 0) {
+    const Real buffer = bh_horizon_radius - excision_ramp_radius;
+    std::cout << "EXCISION_SETUP freeze=" << excision_freeze_radius
+              << " ramp=" << excision_ramp_radius
+              << " horizon=" << bh_horizon_radius
+              << " allingoing=" << AllIngoingExcisionRadius(bh_mass, bh_spin)
+              << " buffer_cells=" << (dx_bh_est > 0.0 ? buffer/dx_bh_est : 0.0)
+              << std::endl;
+    if (dx_bh_est > 0.0 && buffer < 8.0*dx_bh_est) {
+      std::cout << "### WARNING: horizon-to-ramp buffer is thinner than 8 cells "
+                << "at the BH refinement level; raise amr_bh_refine_level "
+                << "(required for high spin, where r_+ shrinks)." << std::endl;
+    }
   }
   Real dfloor = pin->GetOrAddReal("mhd", "dfloor", 1.0e-16);
   Real pfloor = pin->GetOrAddReal("mhd", "pfloor", 1.0e-22);

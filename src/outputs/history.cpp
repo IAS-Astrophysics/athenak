@@ -170,7 +170,10 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
 
 void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   // set number of and names of history variables for z4c
-  pdata->nhist = 9;
+  // Columns 9-12 hold the complementary norms over the *excised* region
+  // (chi and/or Kerr-Schild horizon mask), so interior constraint junk can
+  // be monitored separately from the exterior solution.
+  pdata->nhist = 13;
   pdata->label[0] = "C-norm2";
   pdata->label[1] = "H-norm2";
   pdata->label[2] = "M-norm2";
@@ -180,6 +183,10 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[6] = "Mz-norm2";
   pdata->label[7] = "Theta-norm2";
   pdata->label[8] = "Volume";
+  pdata->label[9] = "C-int2";
+  pdata->label[10] = "H-int2";
+  pdata->label[11] = "M-int2";
+  pdata->label[12] = "Theta-int2";
 
   // capture class variabels for kernel
   auto &u0_ = pm->pmb_pack->pz4c->u_full;
@@ -237,7 +244,11 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
     }
 
     // Excise the punctures based on chi, and optionally the KS horizon.
+    // Excluded cells accumulate into the complementary interior norms.
     array_sum::GlobalSum hvars;
+    for (int n=0; n<13; ++n) {
+      hvars.the_array[n] = 0;
+    }
     if (include_cell) {
       hvars.the_array[0] = vol*u_con_(m,0,k,j,i); // ||C||^2 (comes already squared)
       hvars.the_array[1] = vol*SQR(u_con_(m,1,k,j,i)); //||H||^2
@@ -249,15 +260,10 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
       hvars.the_array[7] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // ||Theta||^2
       hvars.the_array[8] = vol;
     } else {
-      hvars.the_array[0] = 0;
-      hvars.the_array[1] = 0;
-      hvars.the_array[2] = 0;
-      hvars.the_array[3] = 0;
-      hvars.the_array[4] = 0;
-      hvars.the_array[5] = 0;
-      hvars.the_array[6] = 0;
-      hvars.the_array[7] = 0;
-      hvars.the_array[8] = 0;
+      hvars.the_array[9]  = vol*u_con_(m,0,k,j,i);              // interior ||C||^2
+      hvars.the_array[10] = vol*SQR(u_con_(m,1,k,j,i));         // interior ||H||^2
+      hvars.the_array[11] = vol*u_con_(m,2,k,j,i);              // interior ||M||^2
+      hvars.the_array[12] = vol*SQR(u0_(m,I_Z4c_Theta_,k,j,i)); // interior ||Theta||^2
     }
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
