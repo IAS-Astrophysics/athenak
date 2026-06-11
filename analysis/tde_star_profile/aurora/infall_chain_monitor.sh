@@ -45,8 +45,15 @@ submit_next() {
   # 1-hour 2-node windows backfill quickly; each runs a single 44-min Athena
   # segment (validated margin for the final rst dump), and the per-job
   # mpiexec relaunch avoids Intel GPU memory fragmentation buildup.
+  # damp_kappa1=0.1 enabled from t~32 (link 10): constraint norms grew
+  # exponentially (e-fold ~2.2 M by t=29) with the debugging holdover
+  # kappa1=0, consistent with undamped violations injected at AMR
+  # boundaries as the star moves; gauge residuals stayed flat.
+  # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
+  # reliably carry space-containing values).
+  local extra="output3/dt=2.0:z4c/damp_kappa1=0.1:z4c/damp_kappa2=0.0"
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK}"
-  qsub_v+=",ATHENA_EXTRA_ARGS=output3/dt=2.0,ATHENA_WALLTIME=00:44:00,ITER_NEED_S=3000"
+  qsub_v+=",ATHENA_EXTRA_ARGS=${extra},ATHENA_WALLTIME=00:44:00,ITER_NEED_S=3000"
   local out
   out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" \
         -q capacity -l walltime=01:00:00 "${PBS_SCRIPT}" 2>&1)

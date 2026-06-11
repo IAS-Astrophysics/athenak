@@ -66,7 +66,10 @@ echo "NNODES=${NNODES} NTOTRANKS=${NTOTRANKS} WALL_S=${WALL_S}"
 echo "SEGMENT_WALLTIME=${ATHENA_WALLTIME} ITER_NEED_S=${ITER_NEED_S}"
 
 cd "${RUN_DIR}"
-read -r -a ATHENA_EXTRA_ARGV <<< "${ATHENA_EXTRA_ARGS:-}"
+# ATHENA_EXTRA_ARGS may be colon-separated (qsub -v cannot reliably carry
+# space-containing values); convert to space-separated before splitting.
+read -r -a ATHENA_EXTRA_ARGV <<< "${ATHENA_EXTRA_ARGS//:/ }"
+echo "ATHENA_EXTRA_ARGV=${ATHENA_EXTRA_ARGV[*]:-}"
 
 latest_rst() {
   ls -v "${RUN_DIR}/rst"/*.rst 2>/dev/null | tail -n 1 || true
