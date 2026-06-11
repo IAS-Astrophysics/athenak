@@ -47,13 +47,19 @@ submit_next() {
   # mpiexec relaunch avoids Intel GPU memory fragmentation buildup.
   # Constraint-growth mitigation history:
   #   kappa1=0 (links 1-9): exponential growth, e-fold shortening to ~1.4 M.
-  #   kappa1=0.1 (link 10, t=32.8-37.3): slowed to e-fold ~3.3 M, still
-  #   growing -> escalate to kappa1=0.5 and turn on rhs-term diagnostics
-  #   to localize the source if growth persists.
+  #   kappa1=0.1 (link 10): slowed to e-fold ~3.3 M, still growing.
+  #   kappa1=0.5 (link 12): M-norm flattened; H/Theta still grew. rhs-term
+  #   diagnostics localized the source to the BH excision ramp (r=1.84,
+  #   ramp zone 1.7-1.9): projecting the residual to zero fights the
+  #   star's growing physical field at the BH, and the edge inconsistency
+  #   leaks out through the horizon (superluminal 1+log modes + stencils).
+  #   Fix: bury the excision deeper (freeze=1.0, ramp=1.4), leaving a
+  #   ~24-cell KO-damped buffer inside the horizon.
   # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
   # reliably carry space-containing values).
   local extra="output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0"
   extra+=":z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400"
+  extra+=":problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4"
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK}"
   qsub_v+=",ATHENA_EXTRA_ARGS=${extra},ATHENA_WALLTIME=00:44:00,ITER_NEED_S=3000"
   local out
