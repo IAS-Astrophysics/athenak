@@ -517,3 +517,33 @@ Chain overrides keep freeze=1.0/ramp=1.4 (slightly deeper freeze and wider
 ramp than the new defaults; horizon buffer 0.6 M = 24 cells at level 6).
 Link 14 (old binary, deeper radii only) already shows C-norm topping out at
 ~6.9e-4 and easing to 6.7e-4 by t = 47.8. Link 15+ runs the new binary.
+
+## Sponge layer + decisive A/B excision test (2026-06-11, links 15-18)
+
+Link 15 (annulus free, RHS ramp-scaled) still grew: e-fold ~1.2 M, argmaxes
+at the freeze edge (r ~ 1.0-1.04). Hypothesis: ramp-scaling the whole RHS
+also suppresses KO at the freeze edge and FD stencils carry the undamped
+edge modes upstream. Fix (link 17): proper sponge -- full RHS (physics+KO)
+through the annulus plus explicit relaxation -sigma(r)*u, sigma smootherstep
+0 -> 50/M from ramp to freeze edge (sigma*dt ~ 0.19, RK3-stable). Commit
+b1652c6d. Contaminated links 15-16 rolled back; link 17 re-ran t=50 -> 53.4
+from the same 00027.rst.
+
+**Decisive result**: exterior C-norm trajectory of link 17 (sponge) is
+identical to link 15 (annulus-free) to 4 significant digits at every
+sampled time, while the interior norms differ (6th digit, growing) --
+i.e. the two schemes evolve the horizon interior differently but the
+exterior does not care. The excision is causally clean (leak below the
+1e-4 relative level); the exterior C/H growth is NOT an excision artifact.
+
+Reinterpretation: the growth (e-fold ~1.2 M, shortening as the star falls;
+H-dominated with M, Theta small/slaved) is truncation error of the
+steepening near-BH infall field: classic under-resolution signature, not
+an unstable mode. The earlier r=1.84 hotspot was interior dynamics, fixed
+location only because the old projection pinned it there.
+
+Action for link 18+: problem/amr_bh_refine_level 2 -> 3 (dx/2 in the BH
+zone where the star is about to arrive; star enters amr_bh_refine_radius=3
+within ~2 M). dt halves -> ~1.6 M per 44-min segment, ~5-6 segments to
+plunge (star at r_bh = 5.16, v ~ 0.35 and accelerating). KEEP_RST raised
+3 -> 6. Sponge retained (cleaner interior, validated for high spin).

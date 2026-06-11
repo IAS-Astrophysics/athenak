@@ -60,13 +60,22 @@ submit_next() {
   #   hard projection is confined to r<freeze where even the superluminal
   #   1+log gauge cone is ingoing.  Interior constraint norms (C-int2 etc.)
   #   appended to the z4c hst for monitoring the excised region.
-  # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
-  # reliably carry space-containing values).
+  #   Link 17: sponge layer (full RHS + KO in annulus, smooth relaxation to
+  #   background).  A/B vs link 15 from identical t=50 restart: exterior
+  #   trajectory bit-identical while interior differs -> excision causally
+  #   clean; the exterior C/H growth (e-fold ~1.2 M) is truncation error of
+  #   the steepening infall field, NOT an excision leak.
+  #   Link 18+: raise BH-zone AMR by one level (dx/2 where star meets BH)
+  #   to attack the truncation source for the plunge; dt halves, ~1.6 M per
+  #   44-min segment.
   local extra="output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0"
   extra+=":z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400"
   extra+=":problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4"
+  extra+=":problem/amr_bh_refine_level=3"
+  # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
+  # reliably carry space-containing values).
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK}"
-  qsub_v+=",ATHENA_EXTRA_ARGS=${extra},ATHENA_WALLTIME=00:44:00,ITER_NEED_S=3000"
+  qsub_v+=",ATHENA_EXTRA_ARGS=${extra},ATHENA_WALLTIME=00:44:00,ITER_NEED_S=3000,KEEP_RST=6"
   local out
   out=$(qsub -N ${JOB_NAME} -v "${qsub_v}" \
         -q capacity -l walltime=01:00:00 "${PBS_SCRIPT}" 2>&1)
