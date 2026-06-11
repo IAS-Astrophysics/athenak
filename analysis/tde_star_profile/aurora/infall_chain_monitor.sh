@@ -45,13 +45,15 @@ submit_next() {
   # 1-hour 2-node windows backfill quickly; each runs a single 44-min Athena
   # segment (validated margin for the final rst dump), and the per-job
   # mpiexec relaunch avoids Intel GPU memory fragmentation buildup.
-  # damp_kappa1=0.1 enabled from t~32 (link 10): constraint norms grew
-  # exponentially (e-fold ~2.2 M by t=29) with the debugging holdover
-  # kappa1=0, consistent with undamped violations injected at AMR
-  # boundaries as the star moves; gauge residuals stayed flat.
+  # Constraint-growth mitigation history:
+  #   kappa1=0 (links 1-9): exponential growth, e-fold shortening to ~1.4 M.
+  #   kappa1=0.1 (link 10, t=32.8-37.3): slowed to e-fold ~3.3 M, still
+  #   growing -> escalate to kappa1=0.5 and turn on rhs-term diagnostics
+  #   to localize the source if growth persists.
   # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
   # reliably carry space-containing values).
-  local extra="output3/dt=2.0:z4c/damp_kappa1=0.1:z4c/damp_kappa2=0.0"
+  local extra="output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0"
+  extra+=":z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400"
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK}"
   qsub_v+=",ATHENA_EXTRA_ARGS=${extra},ATHENA_WALLTIME=00:44:00,ITER_NEED_S=3000"
   local out
