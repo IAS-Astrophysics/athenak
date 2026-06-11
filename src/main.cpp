@@ -62,6 +62,7 @@ int main(int argc, char *argv[]) {
   bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
+  bool varg_flag = false;  // set to true if -v        argument is on cmdline
   bool  res_flag = false;  // set to true if -r <file> argument is on cmdline
   Real wtlim = 0;
 
@@ -132,6 +133,7 @@ int main(int argc, char *argv[]) {
         case 'h':
         case 'm':
         case 'n':
+        case 'v':
           break;
         default:
           if ((i+1 >= argc) // no argument after option
@@ -168,6 +170,9 @@ int main(int argc, char *argv[]) {
         case 'm':
           marg_flag = true;
           break;
+        case 'v':
+          varg_flag = true;
+          break;
         case 't':                      // -t <hh:mm:ss>
           int wth, wtm, wts;
           std::sscanf(argv[++i], "%d:%d:%d", &wth, &wtm, &wts);
@@ -194,6 +199,7 @@ int main(int argc, char *argv[]) {
             std::cout << "  -n              parse input file and quit\n";
             std::cout << "  -c              show configuration and quit\n";
             std::cout << "  -m              output mesh structure and quit\n";
+            std::cout << "  -v              validate input parameters and quit\n";
             std::cout << "  -t hh:mm:ss     wall time limit for final output\n";
             std::cout << "  -h              this help\n";
             ShowConfig();
@@ -291,6 +297,24 @@ int main(int argc, char *argv[]) {
   // on this rank.  Latter cannot be performed in Mesh constructor since it requires
   // pointer to Mesh.
 
+  // When validating (-v), collapse the root grid to a single MeshBlock and disable mesh
+  // refinement.  The Mesh, problem generator and physics classes are still fully
+  // constructed -- exercising every parameter read, the initial-data reader and the EOS
+  // table -- but on one small block instead of the full (possibly refined) grid.  Mesh
+  // refinement parameters are not read in this mode (see CheckUnusedParameters below).
+  if (varg_flag) {
+    pinput->SetInteger("mesh", "nx1",
+                       pinput->GetOrAddInteger("meshblock","nx1",
+                                               pinput->GetInteger("mesh","nx1")));
+    pinput->SetInteger("mesh", "nx2",
+                       pinput->GetOrAddInteger("meshblock","nx2",
+                                               pinput->GetInteger("mesh","nx2")));
+    pinput->SetInteger("mesh", "nx3",
+                       pinput->GetOrAddInteger("meshblock","nx3",
+                                               pinput->GetInteger("mesh","nx3")));
+    pinput->SetString("mesh_refinement", "refinement", "none");
+  }
+
   Mesh* pmesh = new Mesh(pinput);
   if (!res_flag) {
     pmesh->BuildTreeFromScratch(pinput);
@@ -336,7 +360,23 @@ int main(int argc, char *argv[]) {
   Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   Outputs* pout = new Outputs(pinput, pmesh);
 
+  // All classes that read parameters have now been constructed.  Warn (on rank 0) about
+  // any input parameters that were never used, which are usually typos in optional
+  // parameters that would otherwise be silently ignored.
+  pinput->CheckUnusedParameters(std::cerr, varg_flag);
 
+  // If code was run with -v option, input validation is complete; clean up and quit.
+  if (varg_flag) {
+    delete pout;
+    delete pdriver;
+    delete pmesh;
+    delete pinput;
+    Kokkos::finalize();
+#if MPI_PARALLEL_ENABLED
+    MPI_Finalize();
+#endif
+    return(0);
+  }
 
   //--- Step 7. --------------------------------------------------------------------------
   // Execute Driver.
