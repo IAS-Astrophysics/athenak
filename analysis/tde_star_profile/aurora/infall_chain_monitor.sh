@@ -65,16 +65,20 @@ submit_next() {
   #   trajectory bit-identical while interior differs -> excision causally
   #   clean; the exterior C/H growth (e-fold ~1.2 M) is truncation error of
   #   the steepening infall field, NOT an excision leak.
-  #   Link 18+: raise BH-zone AMR by one level (dx/2 where star meets BH)
-  #   to attack the truncation source for the plunge; dt halves, ~1.6 M per
-  #   44-min segment.
+  #   Link 18-20: BH-zone AMR level 3 -- no effect on the growth (and 3.5x
+  #   cost): the source was never near the BH.  Z4C_EXT_HMAX localized it
+  #   to the outermost cell layer at the z=z_max outflow boundary (fixed
+  #   hotspot, e-fold ~0.55 M): extrapolation BCs on the z4c residual feed
+  #   a boundary growing mode (same mechanism as the long-term frozen-gauge
+  #   Minkowski failures).  Fix: outer absorbing sponge (width 2.0, rate
+  #   5.0/M) relaxing the residual to the background at all outer faces.
+  #   Link 21+: rolled back to the clean t=50 rst (00027, level-2 BH zone),
+  #   BH refine level back to 2 (full pace ~3.3 M/segment).
   local extra="output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0"
   extra+=":z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400"
   extra+=":problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4"
-  # Level-3 BH zone needs more blocks than the deck's 192/rank cap
-  # (216+ at restart, growing as the star sinks; 24 ranks x 320 x 32^3
-  # blocks ~ 17 GB/tile, well within PVC 64 GB).
-  extra+=":problem/amr_bh_refine_level=3:mesh_refinement/max_nmb_per_rank=320"
+  # Keep block-count headroom for AMR (harmless; 320/rank fits PVC HBM).
+  extra+=":mesh_refinement/max_nmb_per_rank=320"
   # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
   # reliably carry space-containing values).
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK}"
