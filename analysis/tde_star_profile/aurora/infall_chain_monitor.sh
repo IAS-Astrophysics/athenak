@@ -71,7 +71,10 @@ submit_next() {
   local extra="output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0"
   extra+=":z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400"
   extra+=":problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4"
-  extra+=":problem/amr_bh_refine_level=3"
+  # Level-3 BH zone needs more blocks than the deck's 192/rank cap
+  # (216+ at restart, growing as the star sinks; 24 ranks x 320 x 32^3
+  # blocks ~ 17 GB/tile, well within PVC 64 GB).
+  extra+=":problem/amr_bh_refine_level=3:mesh_refinement/max_nmb_per_rank=320"
   # Colon-separated; the PBS script converts ':' to spaces (qsub -v cannot
   # reliably carry space-containing values).
   local qsub_v="CASE_NAME=${CASE_NAME},INPUT_DECK=${INPUT_DECK}"
