@@ -138,9 +138,16 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     HydPrim1D w;
+    HydPrim1D w_prev;
+    w_prev.d  = prim(m,IDN,k,j,i);
+    w_prev.vx = prim(m,IVX,k,j,i);
+    w_prev.vy = prim(m,IVY,k,j,i);
+    w_prev.vz = prim(m,IVZ,k,j,i);
+    w_prev.e  = prim(m,IEN,k,j,i);
     bool dfloor_used=false, efloor_used=false;
     bool temp_ceiling_used=false;
     bool vceiling_used=false, c2p_failure=false;
+    bool c2p_previous_state_used=false;
     int iter_used=0;
     Real excise_weight = 0.0;
     bool smooth_applied = false;
@@ -174,6 +181,25 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // (inline function in ideal_c2p_mhd.hpp file)
       SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
                            dfloor_used, efloor_used, c2p_failure, iter_used);
+      if (c2p_failure && !only_testfloors && eos.c2p_failure_use_previous_state &&
+          w_prev.d <= eos.c2p_failure_previous_state_density_max &&
+          w_prev.d > 0.0 && w_prev.e > 0.0 &&
+          Kokkos::isfinite(w_prev.d) && Kokkos::isfinite(w_prev.e) &&
+          Kokkos::isfinite(w_prev.vx) && Kokkos::isfinite(w_prev.vy) &&
+          Kokkos::isfinite(w_prev.vz)) {
+        w = w_prev;
+        if (w.d < eos.dfloor) {
+          w.d = eos.dfloor;
+          dfloor_used = true;
+        }
+        Real efloor = eos.pfloor/gm1;
+        if (w.e < efloor) {
+          w.e = efloor;
+          efloor_used = true;
+        }
+        c2p_failure = false;
+        c2p_previous_state_used = true;
+      }
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -318,7 +344,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       if (efloor_used) {sume++;}
       if (temp_ceiling_used) {sumt++;}
       if (vceiling_used) {sumv++;}
-      if (c2p_failure) {sumf++;}
+      if (c2p_failure || c2p_previous_state_used) {sumf++;}
       max_it = (iter_used > max_it) ? iter_used : max_it;
 
       // store primitive state in 3D array
@@ -335,7 +361,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
 
       // reset conserved variables if floor, ceiling, failure, or excision encountered
       if (dfloor_used || efloor_used || temp_ceiling_used || vceiling_used ||
-          c2p_failure || excised || smooth_applied) {
+          c2p_failure || c2p_previous_state_used || excised || smooth_applied) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;

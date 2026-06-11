@@ -129,6 +129,8 @@ class PrimitiveSolverHydro {
   unsigned int errcap;
   Real temp_ceiling;
   Real temp_ceiling_density_max;
+  bool c2p_failure_use_previous_state;
+  Real c2p_failure_previous_state_density_max;
 
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
@@ -154,6 +156,10 @@ class PrimitiveSolverHydro {
 
     temp_ceiling = pin->GetOrAddReal(block, "temp_ceiling", -1.0);
     temp_ceiling_density_max = pin->GetOrAddReal(block, "temp_ceiling_density_max", -1.0);
+    c2p_failure_use_previous_state = pin->GetOrAddBoolean(
+        block, "c2p_failure_use_previous_state", false);
+    c2p_failure_previous_state_density_max = pin->GetOrAddReal(
+        block, "c2p_failure_previous_state_density_max", -1.0);
     if (temp_ceiling == 0.0 || temp_ceiling_density_max == 0.0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << block << "/temp_ceiling and temp_ceiling_density_max "
@@ -165,6 +171,13 @@ class PrimitiveSolverHydro {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << block << "/temp_ceiling requires positive "
                 << "temp_ceiling_density_max" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (c2p_failure_use_previous_state &&
+        c2p_failure_previous_state_density_max <= 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << block << "/c2p_failure_use_previous_state requires positive "
+                << "c2p_failure_previous_state_density_max" << std::endl;
       std::exit(EXIT_FAILURE);
     }
 
@@ -389,6 +402,9 @@ class PrimitiveSolverHydro {
     const int errcap_ = errcap;
     const Real temp_ceiling_ = temp_ceiling;
     const Real temp_ceiling_density_max_ = temp_ceiling_density_max;
+    const bool c2p_failure_use_previous_state_ = c2p_failure_use_previous_state;
+    const Real c2p_failure_previous_state_density_max_ =
+        c2p_failure_previous_state_density_max;
 
     Real mb = eos_.GetBaryonMass();
 
@@ -480,6 +496,15 @@ class PrimitiveSolverHydro {
       // If we're in an excised region, set the primitives to some default value.
       Primitive::SolverResult result;
       Real excise_weight = (excise && smooth_excise_) ? excision_weight_(m,k,j,i) : 0.0;
+      Real prim_prev[NPRIM];
+      prim_prev[PRH] = prim(m, IDN, k, j, i)/mb;
+      prim_prev[PVX] = prim(m, IVX, k, j, i);
+      prim_prev[PVY] = prim(m, IVY, k, j, i);
+      prim_prev[PVZ] = prim(m, IVZ, k, j, i);
+      prim_prev[PPR] = prim(m, IPR, k, j, i);
+      for (int n = 0; n < nscal; n++) {
+        prim_prev[PYF + n] = prim(m, nhyd + n, k, j, i);
+      }
       if (excise) {
         if (excision_floor_(m,k,j,i) && !smooth_excise_) {
           prim_pt[PRH] = dexcise_/mb;
@@ -507,6 +532,58 @@ class PrimitiveSolverHydro {
         }
       } else {
         result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+      }
+      bool c2p_failed = (result.error == Primitive::Error::BRACKETING_FAILED ||
+                         result.error == Primitive::Error::NO_SOLUTION ||
+                         result.error == Primitive::Error::RHO_TOO_SMALL ||
+                         result.error == Primitive::Error::RHO_TOO_BIG);
+      if (!floors_only && c2p_failed &&
+          c2p_failure_use_previous_state_ &&
+          prim_prev[PRH]*mb <= c2p_failure_previous_state_density_max_ &&
+          prim_prev[PRH] > 0.0 && prim_prev[PPR] > 0.0 &&
+          isfinite(prim_prev[PRH]) && isfinite(prim_prev[PPR]) &&
+          isfinite(prim_prev[PVX]) && isfinite(prim_prev[PVY]) &&
+          isfinite(prim_prev[PVZ])) {
+        prim_pt[PRH] = prim_prev[PRH];
+        prim_pt[PVX] = prim_prev[PVX];
+        prim_pt[PVY] = prim_prev[PVY];
+        prim_pt[PVZ] = prim_prev[PVZ];
+        prim_pt[PPR] = prim_prev[PPR];
+        prim_pt[PRH] = fmax(prim_pt[PRH], eos_.GetDensityFloor());
+        for (int n = 0; n < nscal; n++) {
+          prim_pt[PYF + n] = isfinite(prim_prev[PYF + n]) ? prim_prev[PYF + n] :
+                              eos_.GetSpeciesAtmosphere(n);
+        }
+        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
+                                                &prim_pt[PYF]);
+        if (!(prim_pt[PTM] > 0.0) || !isfinite(prim_pt[PTM]) ||
+            prim_pt[PTM] < eos_.GetTemperatureFloor()) {
+          prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], eos_.GetTemperatureFloor(),
+                                          &prim_pt[PYF]);
+          prim_pt[PTM] = eos_.GetTemperatureFloor();
+        }
+        Real u2 = g3d[S11]*SQR(prim_pt[PVX]) + g3d[S22]*SQR(prim_pt[PVY]) +
+                  g3d[S33]*SQR(prim_pt[PVZ]) + 2.0*g3d[S12]*prim_pt[PVX]*prim_pt[PVY] +
+                  2.0*g3d[S13]*prim_pt[PVX]*prim_pt[PVZ] +
+                  2.0*g3d[S23]*prim_pt[PVY]*prim_pt[PVZ];
+        if (!(u2 >= 0.0) || !isfinite(u2)) {
+          prim_pt[PVX] = prim_pt[PVY] = prim_pt[PVZ] = 0.0;
+          u2 = 0.0;
+        }
+        Real target_vmax2 = fmin(SQR(eos_.GetMaxVelocity()), 1.0 - 1.0e-12);
+        Real target_umax2 = target_vmax2/fmax(1.0 - target_vmax2, 1.0e-300);
+        if (u2 > target_umax2) {
+          Real factor = sqrt(target_umax2/u2);
+          prim_pt[PVX] *= factor;
+          prim_pt[PVY] *= factor;
+          prim_pt[PVZ] *= factor;
+        }
+        result.error = Primitive::Error::SUCCESS;
+        result.iterations = 0;
+        result.cons_floor = false;
+        result.prim_floor = false;
+        result.cons_adjusted = true;
+        ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
       }
 
       if (!floors_only && smooth_excise_ && excise_weight > 0.0) {

@@ -33,6 +33,8 @@ struct EOS_Data {
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
   Real temp_ceiling; // optional temperature ceiling for low-density GRMHD cells
   Real temp_ceiling_density_max; // density gate for optional temperature ceiling
+  bool c2p_failure_use_previous_state; // fallback to previous primitive state on C2P failure
+  Real c2p_failure_previous_state_density_max; // density gate for previous-state fallback
 
   // IDEAL GAS PRESSURE: converts primitive variable (either internal energy density e
   // or temperature e/d) into pressure.

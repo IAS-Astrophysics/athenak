@@ -28,6 +28,10 @@ EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInp
   eos_data.temp_ceiling = pin->GetOrAddReal(bk,"temp_ceiling",(-1.0));
   eos_data.temp_ceiling_density_max = pin->GetOrAddReal(
       bk,"temp_ceiling_density_max",(-1.0));
+  eos_data.c2p_failure_use_previous_state = pin->GetOrAddBoolean(
+      bk,"c2p_failure_use_previous_state",false);
+  eos_data.c2p_failure_previous_state_density_max = pin->GetOrAddReal(
+      bk,"c2p_failure_previous_state_density_max",(-1.0));
   if (eos_data.temp_ceiling == 0.0 || eos_data.temp_ceiling_density_max == 0.0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
@@ -40,6 +44,14 @@ EquationOfState::EquationOfState(std::string bk, MeshBlockPack* pp, ParameterInp
               << std::endl
               << bk << "/temp_ceiling requires positive temp_ceiling_density_max"
               << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (eos_data.c2p_failure_use_previous_state &&
+      eos_data.c2p_failure_previous_state_density_max <= 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << bk << "/c2p_failure_use_previous_state requires positive "
+              << "c2p_failure_previous_state_density_max" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 }
