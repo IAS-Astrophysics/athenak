@@ -421,21 +421,33 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
       return;
     }
     if (excision_damp_rate_l > 0.0) {
-      Real damp = fmax(0.0, 1.0 - bdt*excision_damp_rate_l*(1.0 - ramp));
-      z4c_rhs(m,n,k,j,i) = isfinite(z4c_rhs(m,n,k,j,i)) ?
-                            damp*ramp*z4c_rhs(m,n,k,j,i) : 0.0;
+      // Sponge layer: keep the full RHS -- crucially including the KO
+      // dissipation -- active through the transition annulus, and relax the
+      // residual toward zero (pure background) at a rate that rises smoothly
+      // from 0 at the ramp edge to excision_damp_rate at the freeze edge.
+      // Scaling the entire RHS by ramp (old scheme) suppressed KO near the
+      // freeze edge while FD stencils, which have no numerical causality,
+      // carried the undamped edge modes upstream past the all-ingoing
+      // radius: exterior constraints e-folded in ~1.2 M in the infall run.
+      // Explicit-RK stability of the relaxation needs sigma*dt <~ 2.5
+      // (sigma = 50, dt = 3.75e-3 -> 0.19, comfortable).
+      if (ramp <= 0.0) {
+        z4c_rhs(m,n,k,j,i) = 0.0;
+      } else {
+        Real sigma = excision_damp_rate_l*(1.0 - ramp);
+        Real rhs_full = z4c_rhs(m,n,k,j,i);
+        Real u0_here = z4c_u0(m,n,k,j,i);
+        z4c_rhs(m,n,k,j,i) = (isfinite(rhs_full) && isfinite(u0_here)) ?
+                              rhs_full - sigma*u0_here : 0.0;
+      }
     } else {
       z4c_rhs(m,n,k,j,i) = isfinite(z4c_rhs(m,n,k,j,i)) ?
                             ramp*z4c_rhs(m,n,k,j,i) : 0.0;
     }
     if (excision_project_state_l) {
-      // Project the state only in the deep freeze zone (ramp == 0), where all
-      // characteristic cones -- including the superluminal 1+log gauge cone --
-      // point inward, so the projection mismatch cannot escape.  In the
-      // transition annulus the state evolves freely under the damped RHS:
-      // forcing it toward zero there fights the physical field of approaching
-      // matter and sources a secularly growing constraint violation that
-      // leaks through the horizon (seen in the 20M-infall run at t ~ 40).
+      // Hard projection only in the deep freeze zone (ramp == 0), where all
+      // characteristic cones -- including the superluminal 1+log gauge cone
+      // -- point inward.  The annulus is handled by the sponge above.
       if (ramp <= 0.0) {
         z4c_u0(m,n,k,j,i) = 0.0;
         z4c_u1(m,n,k,j,i) = 0.0;
