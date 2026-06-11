@@ -14,6 +14,10 @@
 #include <sstream>
 #include <string>
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
@@ -278,6 +282,58 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
   // store data into hdata array
   for (int n=0; n<pdata->nhist; ++n) {
     pdata->hdata[n] = sum_this_mb.the_array[n];
+  }
+
+  // Localize the largest |H| outside the excised region: prints the position
+  // of the dominant exterior Hamiltonian-constraint violation so growth in
+  // the norms can be attributed (star surface vs horizon vs AMR boundaries).
+  if (excise_ks_horizon) {
+    using maxloc_t = Kokkos::MaxLoc<Real, int>;
+    maxloc_t::value_type h_loc;
+    Kokkos::parallel_reduce("HistHmaxLoc",
+        Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int &idx, maxloc_t::value_type &lmax) {
+      int m = (idx)/nkji;
+      int k = (idx - m*nkji)/nji;
+      int j = (idx - m*nkji - k*nji)/nx1;
+      int i = (idx - m*nkji - k*nji - j*nx1) + is;
+      k += ks;
+      j += js;
+      Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      Real rks = HistoryKerrSchildRadius(x1v - excise_ks_x1, x2v - excise_ks_x2,
+                                         x3v - excise_ks_x3, excise_ks_spin);
+      if (rks > excise_ks_radius && z4c.chi(m,k,j,i) >= opt.excise_chi) {
+        Real v = fabs(u_con_(m,1,k,j,i));
+        if (v > lmax.val) { lmax.val = v; lmax.loc = idx; }
+      }
+    }, maxloc_t(h_loc));
+
+    int owner_rank = 0;
+#if MPI_PARALLEL_ENABLED
+    struct { double val; int rank; } in, out;
+    in.val = (h_loc.loc >= 0) ? static_cast<double>(h_loc.val) : -1.0;
+    in.rank = global_variable::my_rank;
+    MPI_Allreduce(&in, &out, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
+    owner_rank = out.rank;
+#endif
+    if (global_variable::my_rank == owner_rank && h_loc.loc >= 0) {
+      const int idx = h_loc.loc;
+      const int m = idx/nkji;
+      const int k = (idx - m*nkji)/nji + ks;
+      const int j = (idx - m*nkji - (k-ks)*nji)/nx1 + js;
+      const int i = (idx - m*nkji - (k-ks)*nji - (j-js)*nx1) + is;
+      auto &msize = pm->pmb_pack->pmb->mb_size.h_view(m);
+      Real xh = CellCenterX(i-is, nx1, msize.x1min, msize.x1max);
+      Real yh = CellCenterX(j-js, nx2, msize.x2min, msize.x2max);
+      Real zh = CellCenterX(k-ks, nx3, msize.x3min, msize.x3max);
+      Real rbh = HistoryKerrSchildRadius(xh - excise_ks_x1, yh - excise_ks_x2,
+                                         zh - excise_ks_x3, excise_ks_spin);
+      std::cout << "Z4C_EXT_HMAX time=" << pm->time << " H=" << h_loc.val
+                << " x=" << xh << " y=" << yh << " z=" << zh
+                << " r_bh=" << rbh << std::endl;
+    }
   }
 
   return;
