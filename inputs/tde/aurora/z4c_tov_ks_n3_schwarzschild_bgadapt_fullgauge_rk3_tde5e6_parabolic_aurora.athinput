@@ -15,20 +15,20 @@ basename = z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_tde5e6_parabolic_au
 <mesh>
 nghost = 4
 nx1 = 320
-x1min = -51.2
-x1max = 51.2
+x1min = -101.4
+x1max = 101.4
 ix1_bc = outflow
 ox1_bc = outflow
 
-nx2 = 256
-x2min = -25.6
-x2max = 56.32
+nx2 = 320
+x2min = -101.4
+x2max = 101.4
 ix2_bc = outflow
 ox2_bc = outflow
 
 nx3 = 64
-x3min = -10.24
-x3max = 10.24
+x3min = -20.28
+x3max = 20.28
 ix3_bc = outflow
 ox3_bc = outflow
 
@@ -39,7 +39,7 @@ nx3 = 64
 
 <mesh_refinement>
 refinement = adaptive
-num_levels = 8
+num_levels = 9
 refinement_interval = 2
 max_nmb_per_rank = 320
 
@@ -65,7 +65,7 @@ x3min = -3.84
 x3max = 3.84
 
 <refined_region3>
-level = 1
+level = 2
 x1min = 28.16
 x1max = 36.16
 x2min = -4.0
@@ -74,7 +74,7 @@ x3min = -4.0
 x3max = 4.0
 
 <refined_region4>
-level = 2
+level = 3
 x1min = 30.16
 x1max = 34.16
 x2min = -2.0
@@ -83,7 +83,7 @@ x3min = -2.0
 x3max = 2.0
 
 <refined_region5>
-level = 3
+level = 4
 x1min = 31.16
 x1max = 33.16
 x2min = -1.0
@@ -92,7 +92,7 @@ x3min = -1.0
 x3max = 1.0
 
 <refined_region6>
-level = 4
+level = 5
 x1min = 31.66
 x1max = 32.78
 x2min = -0.56
@@ -101,7 +101,7 @@ x3min = -0.56
 x3max = 0.56
 
 <refined_region7>
-level = 5
+level = 6
 x1min = 31.86
 x1max = 32.58
 x2min = -0.36
@@ -110,7 +110,7 @@ x3min = -0.36
 x3max = 0.36
 
 <refined_region8>
-level = 6
+level = 7
 x1min = 31.98
 x1max = 32.42
 x2min = -0.24
@@ -119,7 +119,7 @@ x3min = -0.24
 x3max = 0.24
 
 <refined_region9>
-level = 7
+level = 8
 x1min = 32.04
 x1max = 32.32
 x2min = -0.18
@@ -141,14 +141,14 @@ eos = ideal
 dyn_eos = ideal
 dyn_error = reset_floor
 reconstruct = wenoz
-rsolver = llf
-fofc_method = llf
+rsolver = hlle
+fofc_method = hlle
 gamma = 1.3333333333333333
 dfloor = 1.0e-16
 pfloor = 1.0e-22
 dthreshold = 1.0
 gamma_max = 10.0
-fofc = false
+fofc = true
 
 <adm>
 
@@ -221,7 +221,7 @@ amr_bh_refine_level = 2
 amr_star_refine = true
 amr_star_refine_radius = 0.142
 amr_star_derefine_radius = 0.190
-amr_star_refine_level = 7
+amr_star_refine_level = 8
 amr_star_track_rhomax = true
 amr_star_track_rho_floor = 1.0e-10
 
