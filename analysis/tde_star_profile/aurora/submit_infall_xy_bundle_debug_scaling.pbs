@@ -25,7 +25,7 @@ DECK_A="${DECK_A:-${REPO_DIR}/inputs/tde/aurora/z4c_tov_ks_n3_schwarzschild_bgad
 CASE_B="${CASE_B:-z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_y10_xy}"
 DECK_B="${DECK_B:-${REPO_DIR}/inputs/tde/aurora/z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_y10_xy_aurora.athinput}"
 
-EXTRA_ARGS="${EXTRA_ARGS:-output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0:z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400:problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4:mesh_refinement/max_nmb_per_rank=320}"
+EXTRA_ARGS="${EXTRA_ARGS:-output3/dt=10.0:z4c/damp_kappa1=0.1:z4c/damp_kappa2=0.0:z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400:problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4:mesh_refinement/max_nmb_per_rank=320}"
 read -r -a ATHENA_EXTRA_ARGV <<< "${EXTRA_ARGS//:/ }"
 
 if type module >/dev/null 2>&1; then

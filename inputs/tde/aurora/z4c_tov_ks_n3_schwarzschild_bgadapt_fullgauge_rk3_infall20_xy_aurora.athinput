@@ -192,11 +192,11 @@ dcycle = 100
 
 <output3>
 file_type = rst
-dt = 2.0
+dt = 10.0
 
 <output4>
 file_type = bin
 variable = mhd_w_bcc
 id = xy_mhd
-dt = 2.0
+dt = 1.0
 slice_x3 = 0.0
