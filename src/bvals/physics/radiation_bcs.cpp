@@ -43,7 +43,8 @@ void MeshBoundaryValues::RadiationBCs(MeshBlockPack *ppack, DualArray2D<Real> i_
 
 //----------------------------------------------------------------------------------------
 //! \fn void BoundaryValues::RadiationBCsCoarse()
-//! \brief Apply physical boundary conditions for all Radiation variables on the coarse array.
+//! \brief Apply physical boundary conditions for all Radiation variables on the
+//  coarse array.
 //  This must be done *before* prolongation so that the prolongation stencil has valid
 //  data in the coarse ghost zones that sit at a physical boundary.
 void MeshBoundaryValues::RadiationBCsCoarse(MeshBlockPack *ppack, DualArray2D<Real> i_in,
