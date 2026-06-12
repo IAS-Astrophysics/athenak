@@ -56,8 +56,10 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     if (coord_data.bh_excise) {
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
-      coord_data.dexcise = pin->GetOrAddReal("coord","dexcise",(FLT_MIN));
+      coord_data.dexcise = pin->GetReal("coord","dexcise");
+      coord_data.texcise = pin->GetReal("coord","texcise");
       coord_data.pexcise = pin->GetOrAddReal("coord","pexcise",(FLT_MIN));
+
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
@@ -79,7 +81,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
                                                               false);
             coord_data.horizon_factor = pin->GetOrAddReal("coord","horizon_factor",1.0);
             if (coord_data.smooth_excision) {
-              coord_data.texcise = pin->GetReal("coord","texcise");
               coord_data.tdamp = pin->GetOrAddReal("coord","tdamp",1.0);
             }
           } else {

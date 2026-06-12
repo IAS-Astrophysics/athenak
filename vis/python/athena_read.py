@@ -765,6 +765,23 @@ def athdf(filename, raw=False, data=None, quantities=None, dtype=None, level=Non
     return data
 
 
+# Read z4c.horizon_summary_%d.txt files.
+def horizon(filename):
+    # Find the headers.
+    with open(filename) as f:
+        header_line = f.readline().strip()
+
+    headers = re.findall(r'\d+:([^\s]+)', header_line)
+
+    # Read the data with numpy.
+    data = np.loadtxt(filename, comments='#')
+
+    # Create a dictionary.
+    data_dict = {name: data[:, i] for i, name in enumerate(headers)}
+
+    return data_dict
+
+
 # General exception class for these functions
 class AthenaError(RuntimeError):
     pass

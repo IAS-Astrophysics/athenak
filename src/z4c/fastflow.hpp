@@ -17,7 +17,6 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
-#include "eos/primitive-solver/ps_types.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "z4c_macros.hpp"
 
@@ -26,6 +25,14 @@ class Mesh;
 class MeshBlock;
 class MeshBlockPack;
 class ParameterInput;
+
+// Enum variables for extrinsic curvature and
+// the metric derivatives.
+enum ExtrinsicCurvatureIndex {K11=0, K12=1, K13=2, K22=3, K23=4, K33=5, NEXCURV=6};
+enum SpatialMetricDrvsIndex {D1S11=0, D1S12=1, D1S13=2, D1S22=3, D1S23=4, D1S33=5,
+                            D2S11=6, D2S12=7, D2S13=8, D2S22=9, D2S23=10, D2S33=11,
+                            D3S11=12, D3S12=13, D3S13=14, D3S22=15, D3S23=16, D3S33=17,
+                            NDRVSSPMETRIC=18};
 
 //! \class FastFlow
 //! \brief Apparent Horizon Finder class based on fast-flow algorithm
