@@ -14,7 +14,7 @@ JOB_NAME="${JOB_NAME:-infallxy32}"
 POLL_S="${POLL_S:-600}"
 MAX_JOBS="${MAX_JOBS:-20}"
 T_STOP="${T_STOP:-74.5}"
-MAX_CONSTRAINT="${MAX_CONSTRAINT:-100.0}"
+MAX_EXT_CONSTRAINT="${MAX_EXT_CONSTRAINT:-1.0}"
 
 current_job=""
 njobs=0
@@ -51,13 +51,12 @@ case_status() {
     return 1
   fi
   last=$(tail -n 1 "${hst}")
-  awk -v maxc="${MAX_CONSTRAINT}" -v tstop="${T_STOP}" '
+  awk -v maxc="${MAX_EXT_CONSTRAINT}" -v tstop="${T_STOP}" '
     BEGIN { ok = 1 }
     {
       t = $1 + 0;
-      vals[1] = $3 + 0; vals[2] = $4 + 0; vals[3] = $5 + 0;
-      vals[4] = $10 + 0; vals[5] = $12 + 0; vals[6] = $13 + 0;
-      for (i = 1; i <= 6; ++i) {
+      vals[1] = $3 + 0; vals[2] = $4 + 0; vals[3] = $5 + 0; vals[4] = $10 + 0;
+      for (i = 1; i <= 4; ++i) {
         v = vals[i]; if (v < 0) v = -v;
         if (v > maxc) ok = 0;
       }
