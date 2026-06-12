@@ -1,0 +1,149 @@
+#!/bin/bash -l
+#PBS -A MHDTidal
+#PBS -N infallxy32
+#PBS -l select=32
+#PBS -l walltime=01:00:00
+#PBS -l filesystems=home:flare
+#PBS -l place=scatter
+#PBS -q debug-scaling
+#PBS -j oe
+
+set -uo pipefail
+
+REPO_DIR="${REPO_DIR:-/home/hzhu/athenak_tde}"
+PROJECT_ROOT="${PROJECT_ROOT:-/lus/flare/projects/MHDTidal/hzhu/tde_n3_validation}"
+RUN_ROOT="${RUN_ROOT:-${PROJECT_ROOT}/runs}"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build/aurora-intel-gpu-z4c_tov_ks}"
+ATHENA_EXE="${ATHENA_EXE:-${BUILD_DIR}/src/athena}"
+RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
+ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:50:00}"
+T_STOP="${T_STOP:-74.5}"
+KEEP_RST="${KEEP_RST:-6}"
+
+CASE_A="${CASE_A:-z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_xy}"
+DECK_A="${DECK_A:-${REPO_DIR}/inputs/tde/aurora/z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_xy_aurora.athinput}"
+CASE_B="${CASE_B:-z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_y10_xy}"
+DECK_B="${DECK_B:-${REPO_DIR}/inputs/tde/aurora/z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_y10_xy_aurora.athinput}"
+
+EXTRA_ARGS="${EXTRA_ARGS:-output3/dt=2.0:z4c/damp_kappa1=0.5:z4c/damp_kappa2=0.0:z4c/rhs_term_debug=true:z4c/rhs_term_debug_stride=400:problem/excision_freeze_radius=1.0:problem/excision_ramp_radius=1.4:mesh_refinement/max_nmb_per_rank=320}"
+read -r -a ATHENA_EXTRA_ARGV <<< "${EXTRA_ARGS//:/ }"
+
+if type module >/dev/null 2>&1; then
+  module reset >/dev/null 2>&1 || true
+  module load oneapi >/dev/null 2>&1 || module load oneapi/release >/dev/null 2>&1 || true
+fi
+
+export MPICH_GPU_SUPPORT_ENABLED="${MPICH_GPU_SUPPORT_ENABLED:-1}"
+export SYCL_DEVICE_FILTER="${SYCL_DEVICE_FILTER:-level_zero:gpu}"
+export ONEAPI_DEVICE_SELECTOR="${ONEAPI_DEVICE_SELECTOR:-level_zero:gpu}"
+export ZE_FLAT_DEVICE_HIERARCHY="${ZE_FLAT_DEVICE_HIERARCHY:-COMPOSITE}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
+
+CPU_BIND="${CPU_BIND:-list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100}"
+
+mapfile -t nodes < "${PBS_NODEFILE}"
+nnodes=${#nodes[@]}
+if (( nnodes != 32 )); then
+  echo "BUNDLE_ABORT expected 32 nodes in PBS_NODEFILE, got ${nnodes}"
+  exit 2
+fi
+
+HOST_A="${PBS_O_WORKDIR:-${REPO_DIR}}/infallxy_${PBS_JOBID%%.*}_case_a.hosts"
+HOST_B="${PBS_O_WORKDIR:-${REPO_DIR}}/infallxy_${PBS_JOBID%%.*}_case_b.hosts"
+printf "%s\n" "${nodes[@]:0:16}" > "${HOST_A}"
+printf "%s\n" "${nodes[@]:16:16}" > "${HOST_B}"
+
+latest_rst() {
+  local run_dir="$1"
+  ls -v "${run_dir}/rst"/*.rst 2>/dev/null | tail -n 1 || true
+}
+
+prune_rst() {
+  local run_dir="$1"
+  local rst_all nrst idx
+  mapfile -t rst_all < <(ls -v "${run_dir}/rst"/*.rst 2>/dev/null || true)
+  nrst=${#rst_all[@]}
+  if (( nrst > KEEP_RST )); then
+    for ((idx = 0; idx < nrst - KEEP_RST; ++idx)); do
+      rm -f "${rst_all[idx]}"
+    done
+  fi
+}
+
+sim_time_reached() {
+  local run_dir="$1"
+  local zhst
+  zhst=$(ls "${run_dir}"/*.z4c.user.hst 2>/dev/null | head -n 1)
+  [[ -n "${zhst}" && -f "${zhst}" ]] || return
+  tail -n 1 "${zhst}" | awk '{print $1+0}'
+}
+
+run_case() {
+  local label="$1"
+  local case_name="$2"
+  local input_deck="$3"
+  local hostfile="$4"
+  local run_dir="${RUN_ROOT}/${case_name}"
+  local nranks=$((16 * RANKS_PER_NODE))
+  local t_now rst_before rst_after rc
+
+  mkdir -p "${run_dir}"
+  cp -f "${input_deck}" "${run_dir}/"
+  cd "${run_dir}" || exit 2
+
+  echo "CASE_${label}_BEGIN case=${case_name} run_dir=${run_dir} hostfile=${hostfile}"
+  echo "CASE_${label}_RANKS nodes=16 ranks=${nranks} walltime=${ATHENA_WALLTIME}"
+  echo "CASE_${label}_EXTRA ${ATHENA_EXTRA_ARGV[*]:-}"
+
+  t_now=$(sim_time_reached "${run_dir}")
+  if [[ -n "${t_now}" ]] && awk -v t="${t_now}" -v ts="${T_STOP}" 'BEGIN{exit !(t>=ts)}'; then
+    echo "CASE_${label}_TSTOP_REACHED t=${t_now}"
+    return 0
+  fi
+
+  prune_rst "${run_dir}"
+  rst_before=$(latest_rst "${run_dir}")
+  if [[ -n "${rst_before}" ]]; then
+    echo "CASE_${label}_SEGMENT_START mode=restart rst=${rst_before} t=$(date +%H:%M:%S)"
+    mpiexec --hostfile "${hostfile}" -n "${nranks}" -ppn "${RANKS_PER_NODE}" \
+      --cpu-bind "${CPU_BIND}" gpu_tile_compact.sh "${ATHENA_EXE}" \
+      -r "${rst_before}" -d "${run_dir}" -t "${ATHENA_WALLTIME}" \
+      "${ATHENA_EXTRA_ARGV[@]}"
+    rc=$?
+  else
+    echo "CASE_${label}_SEGMENT_START mode=fresh deck=${input_deck} t=$(date +%H:%M:%S)"
+    mpiexec --hostfile "${hostfile}" -n "${nranks}" -ppn "${RANKS_PER_NODE}" \
+      --cpu-bind "${CPU_BIND}" gpu_tile_compact.sh "${ATHENA_EXE}" \
+      -i "${input_deck}" -d "${run_dir}" -t "${ATHENA_WALLTIME}" \
+      "${ATHENA_EXTRA_ARGV[@]}"
+    rc=$?
+  fi
+
+  echo "CASE_${label}_SEGMENT_END rc=${rc} t=$(date +%H:%M:%S)"
+  if (( rc != 0 )); then
+    echo "CASE_${label}_ABORT athena exited nonzero"
+    return "${rc}"
+  fi
+  rst_after=$(latest_rst "${run_dir}")
+  if [[ -z "${rst_after}" || "${rst_after}" == "${rst_before}" ]]; then
+    echo "CASE_${label}_ABORT no new restart file produced"
+    return 3
+  fi
+  echo "CASE_${label}_DONE rst=${rst_after}"
+}
+
+echo "BUNDLE_BEGIN job=${PBS_JOBID} nodes=${nnodes} walltime=${ATHENA_WALLTIME}"
+run_case A "${CASE_A}" "${DECK_A}" "${HOST_A}" > "${RUN_ROOT}/${CASE_A}/bundle_${PBS_JOBID%%.*}.log" 2>&1 &
+pid_a=$!
+run_case B "${CASE_B}" "${DECK_B}" "${HOST_B}" > "${RUN_ROOT}/${CASE_B}/bundle_${PBS_JOBID%%.*}.log" 2>&1 &
+pid_b=$!
+
+wait "${pid_a}"
+rc_a=$?
+wait "${pid_b}"
+rc_b=$?
+
+echo "BUNDLE_DONE rc_a=${rc_a} rc_b=${rc_b}"
+if (( rc_a != 0 || rc_b != 0 )); then
+  exit 1
+fi
