@@ -288,15 +288,16 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // fluid frame number densities for nue, anue, numu, anumu, nutau,
               // anutau factor of 1/2 appears because we evolve mu and tau
               // species together
-              Real n_nu[6] = {rnnu[0],      rnnu[1],      rnnu[2] / 2.,
-                              rnnu[3] / 2., rnnu[2] / 2., rnnu[3] / 2.};
+              Real n_nu[6] = {nudens_0[0],      nudens_0[1],      nudens_0[2] / 2.,
+                              nudens_0[3] / 2., nudens_0[2] / 2., nudens_0[3] / 2.};
               Real Y_part[3] = {Y, 0., 0.};  // only ye is used
 
               Real Y_lep[3]{};
               eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
               Real Y_guess[3] = {Y_lep[0], Y_lep[1], Y_lep[2]};
 
-              Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
+              Real e = eos.GetEnergy(nb, T, Y_part) +
+                       nudens_1[0] + nudens_1[1] + nudens_1[2] + nudens_1[3];
 
               Real temperature_trap{}, Y_e_trap[3]{};
               bool ok = eos.GetBetaEquilibriumTrapped(
