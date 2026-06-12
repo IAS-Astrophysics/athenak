@@ -1,0 +1,202 @@
+# Long radial-infall run: TOV star at 20 M separation falling into a
+# Schwarzschild Kerr-Schild black hole, boosted inward at 0.1c.
+# Background-adapted residual gauge (1+log lapse + gamma-driver shift),
+# SSPRK3 integrator (RK2 is weakly unstable for the centered-FD Z4c wave
+# system; see residual_z4c_rhs_term_debug_run_log.md).
+# Designed for 2-node Aurora debug jobs chained via restarts.
+
+<job>
+basename = z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_infall20_y10_xy_aurora
+
+<mesh>
+nghost = 4
+nx1 = 480
+x1min = -16.0
+x1max = 32.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 320
+x2min = -16.0
+x2max = 16.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 160
+x3min = -8.0
+x3max = 8.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 4
+refinement_interval = 2
+max_nmb_per_rank = 192
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 1
+x1min = -5.0
+x1max = 5.0
+x2min = -5.0
+x2max = 5.0
+x3min = -5.0
+x3max = 5.0
+
+<refined_region2>
+level = 1
+x1min = 16.0
+x1max = 24.0
+x2min = 7.0
+x2max = 13.0
+x3min = -3.0
+x3max = 3.0
+
+<refined_region3>
+level = 2
+x1min = 17.5
+x1max = 22.5
+x2min = 8.0
+x2max = 12.0
+x3min = -2.0
+x3max = 2.0
+
+<refined_region4>
+level = 3
+x1min = 18.5
+x1max = 21.5
+x2min = 8.8
+x2max = 11.2
+x3min = -1.2
+x3max = 1.2
+
+<time>
+evolution = dynamic
+integrator = rk3
+cfl_number = 0.3
+nlim = -1
+tlim = 75.0
+ndiag = 20
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = true
+evolve_shift_residual = true
+residual_gauge = background_adapted
+residual_lapse_f = 1.0
+residual_lapse_damping = 0.0
+residual_shift_damping = 0.0
+diss = 0.5
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 1.0
+shift_Gamma = 1.0
+shift_advect = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+rhs_term_debug = false
+rhs_term_debug_stride = 200
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+
+star_center_x1 = 20.0
+star_center_x2 = 10.0
+star_center_x3 = 0.0
+star_boost_x = -0.1
+star_boost_y = 0.0
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 1.236298759450e-04
+kappa = 3.639390619285e-05
+npoints = 200000
+dr = 1.0e-5
+rho_cut = 1.0e-16
+excision_damp_rate = 50.0
+excision_freeze_radius = 1.0
+excision_ramp_radius = 1.4
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+
+amr_rho_slope_refine = true
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 1.0e-10
+amr_bh_exclusion_radius = 3.0
+amr_bh_refine_radius = 3.0
+amr_bh_derefine_radius = 4.0
+amr_bh_refine_level = 2
+amr_star_refine = true
+amr_star_refine_radius = 0.71
+amr_star_derefine_radius = 0.95
+amr_star_refine_level = 3
+amr_star_track_rhomax = true
+amr_star_track_rho_floor = 1.0e-10
+
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.1
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 100
+
+<output3>
+file_type = rst
+dt = 2.0
+
+<output4>
+file_type = bin
+variable = mhd_w_bcc
+id = xy_mhd
+dt = 2.0
+slice_x3 = 0.0
