@@ -65,15 +65,6 @@ x3min = -3.84
 x3max = 3.84
 
 <refined_region3>
-level = 3
-x1min = -2.56
-x1max = 2.56
-x2min = -2.56
-x2max = 2.56
-x3min = -2.56
-x3max = 2.56
-
-<refined_region4>
 level = 1
 x1min = 28.16
 x1max = 36.16
@@ -82,7 +73,7 @@ x2max = 4.0
 x3min = -4.0
 x3max = 4.0
 
-<refined_region5>
+<refined_region4>
 level = 2
 x1min = 30.16
 x1max = 34.16
@@ -91,7 +82,7 @@ x2max = 2.0
 x3min = -2.0
 x3max = 2.0
 
-<refined_region6>
+<refined_region5>
 level = 3
 x1min = 31.16
 x1max = 33.16
@@ -100,7 +91,7 @@ x2max = 1.0
 x3min = -1.0
 x3max = 1.0
 
-<refined_region7>
+<refined_region6>
 level = 4
 x1min = 31.66
 x1max = 32.78
@@ -109,7 +100,7 @@ x2max = 0.56
 x3min = -0.56
 x3max = 0.56
 
-<refined_region8>
+<refined_region7>
 level = 5
 x1min = 31.86
 x1max = 32.58
@@ -118,7 +109,7 @@ x2max = 0.36
 x3min = -0.36
 x3max = 0.36
 
-<refined_region9>
+<refined_region8>
 level = 6
 x1min = 31.98
 x1max = 32.42
@@ -127,7 +118,7 @@ x2max = 0.24
 x3min = -0.24
 x3max = 0.24
 
-<refined_region10>
+<refined_region9>
 level = 7
 x1min = 32.04
 x1max = 32.32
@@ -226,7 +217,7 @@ amr_rho_min = 2.5e-9
 amr_bh_exclusion_radius = 3.0
 amr_bh_refine_radius = 3.0
 amr_bh_derefine_radius = 4.0
-amr_bh_refine_level = 3
+amr_bh_refine_level = 2
 amr_star_refine = true
 amr_star_refine_radius = 0.142
 amr_star_derefine_radius = 0.190
