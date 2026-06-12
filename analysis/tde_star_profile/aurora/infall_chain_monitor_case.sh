@@ -21,6 +21,9 @@ PBS_WALLTIME="${PBS_WALLTIME:-06:00:00}"
 ITER_NEED_S="${ITER_NEED_S:-3000}"
 KEEP_RST="${KEEP_RST:-6}"
 RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
+QUEUE="${QUEUE:-capacity}"
+PROJECT="${PROJECT:-MHDTidal}"
+SELECT_NODES="${SELECT_NODES:-2}"
 
 njobs=0
 current_job=""
@@ -54,7 +57,7 @@ submit_next() {
 
   local out
   out=$(qsub -N "${JOB_NAME}" -v "${qsub_v}" \
-        -q capacity -A MHDTidal -l select=2 -l walltime="${PBS_WALLTIME}" \
+        -q "${QUEUE}" -A "${PROJECT}" -l select="${SELECT_NODES}" -l walltime="${PBS_WALLTIME}" \
         "${PBS_SCRIPT}" 2>&1)
   if [[ "${out}" == *aurora* ]]; then
     current_job="${out%%.*}"

@@ -1,0 +1,270 @@
+# Parabolic TDE setup: 1 Msun n=3 TOV star around a 5e6 Msun
+# Schwarzschild black hole. Code units set M_BH=1, so M_star=2e-7.
+# The TOV model is the previous 1e6:1 solar-mass star scaled by 1/5:
+#   R_star = 0.0942122, M_star ~= 2e-7.
+# Simple tidal radius r_t = R_star (M_BH/M_star)^(1/3) = 16.1100595883.
+# The star starts at r0 = 2 r_t = 32.2201191767 on +x.
+# The boost is the local static-frame velocity of an E=1 Schwarzschild
+# geodesic with pericenter r_p=r_t at r0:
+#   v_r = -0.1698143307, v_phi = +0.1823077341.
+# Coordinate-time estimate r0 -> r_t is 142.36458, so tlim=284.72916.
+
+<job>
+basename = z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_tde5e6_parabolic_aurora
+
+<mesh>
+nghost = 4
+nx1 = 320
+x1min = -51.2
+x1max = 51.2
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 256
+x2min = -25.6
+x2max = 56.32
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 32
+x3min = -5.12
+x3max = 5.12
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<mesh_refinement>
+refinement = adaptive
+num_levels = 8
+refinement_interval = 2
+max_nmb_per_rank = 320
+
+<amr_criterion0>
+method = user
+
+<refined_region1>
+level = 1
+x1min = -5.12
+x1max = 5.12
+x2min = -5.12
+x2max = 5.12
+x3min = -5.12
+x3max = 5.12
+
+<refined_region2>
+level = 2
+x1min = -3.84
+x1max = 3.84
+x2min = -3.84
+x2max = 3.84
+x3min = -3.84
+x3max = 3.84
+
+<refined_region3>
+level = 3
+x1min = -3.20
+x1max = 3.20
+x2min = -3.20
+x2max = 3.20
+x3min = -3.20
+x3max = 3.20
+
+<refined_region4>
+level = 4
+x1min = -2.56
+x1max = 2.56
+x2min = -2.56
+x2max = 2.56
+x3min = -2.56
+x3max = 2.56
+
+<refined_region5>
+level = 1
+x1min = 28.16
+x1max = 36.16
+x2min = -4.0
+x2max = 4.0
+x3min = -4.0
+x3max = 4.0
+
+<refined_region6>
+level = 2
+x1min = 30.16
+x1max = 34.16
+x2min = -2.0
+x2max = 2.0
+x3min = -2.0
+x3max = 2.0
+
+<refined_region7>
+level = 3
+x1min = 31.16
+x1max = 33.16
+x2min = -1.0
+x2max = 1.0
+x3min = -1.0
+x3max = 1.0
+
+<refined_region8>
+level = 4
+x1min = 31.66
+x1max = 32.78
+x2min = -0.56
+x2max = 0.56
+x3min = -0.56
+x3max = 0.56
+
+<refined_region9>
+level = 5
+x1min = 31.86
+x1max = 32.58
+x2min = -0.36
+x2max = 0.36
+x3min = -0.36
+x3max = 0.36
+
+<refined_region10>
+level = 6
+x1min = 31.98
+x1max = 32.42
+x2min = -0.24
+x2max = 0.24
+x3min = -0.24
+x3max = 0.24
+
+<refined_region11>
+level = 7
+x1min = 32.04
+x1max = 32.32
+x2min = -0.18
+x2max = 0.18
+x3min = -0.18
+x3max = 0.18
+
+<time>
+evolution = dynamic
+integrator = rk3
+cfl_number = 0.3
+nlim = -1
+tlim = 284.7291594418413
+ndiag = 20
+
+<mhd>
+evolution = dynamic
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = true
+evolve_shift_residual = true
+residual_gauge = background_adapted
+residual_lapse_f = 1.0
+residual_lapse_damping = 0.0
+residual_shift_damping = 0.0
+diss = 0.5
+damp_kappa1 = 0.1
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 1.0
+shift_Gamma = 1.0
+shift_advect = 1.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+rhs_term_debug = false
+rhs_term_debug_stride = 400
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+
+star_center_x1 = 32.22011917669886
+star_center_x2 = 0.0
+star_center_x3 = 0.0
+star_boost_x = -0.1698143306774879
+star_boost_y = 0.1823077341448928
+star_boost_z = 0.0
+isotropic = true
+
+rhoc = 3.090746898625e-03
+kappa = 1.244654083907632e-05
+npoints = 200000
+dr = 2.0e-6
+rho_cut = 1.0e-16
+excision_damp_rate = 50.0
+excision_freeze_radius = 1.0
+excision_ramp_radius = 1.4
+excision_atmo_density = 1.0e-16
+excision_atmo_energy = 1.0e-22
+
+amr_rho_slope_refine = true
+amr_rho_slope_threshold = 0.25
+amr_rho_min = 2.5e-9
+amr_bh_exclusion_radius = 3.0
+amr_bh_refine_radius = 3.0
+amr_bh_derefine_radius = 4.0
+amr_bh_refine_level = 4
+amr_star_refine = true
+amr_star_refine_radius = 0.142
+amr_star_derefine_radius = 0.190
+amr_star_refine_level = 7
+amr_star_track_rhomax = true
+amr_star_track_rho_floor = 1.0e-10
+
+b_norm = 0.0
+pcut = 0.04
+use_pcut_rel = true
+magindex = 1.0
+
+<output1>
+file_type = hst
+dt = 0.1
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 100
+
+<output3>
+file_type = rst
+dt = 10.0
+single_file_per_rank = true
+
+<output4>
+file_type = bin
+variable = mhd_w_bcc
+id = xy_mhd
+dt = 1.0
+slice_x3 = 0.0
