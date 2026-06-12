@@ -57,8 +57,11 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
-      coord_data.texcise = pin->GetReal("coord","texcise");
-      coord_data.pexcise = pin->GetOrAddReal("coord","pexcise",(FLT_MIN));
+      if (is_dynamical_relativistic) {
+        coord_data.texcise = pin->GetReal("coord", "texcise");
+      } else {
+        coord_data.pexcise = pin->GetReal("coord", "pexcise");
+      }
 
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
