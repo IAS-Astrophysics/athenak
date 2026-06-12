@@ -15,7 +15,8 @@
 #include "eos/eos.hpp"
 
 void BCHelperHydro(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0,
-                    int is, int ie, int js, int je, int ks, int ke, int n1, int n2, int n3);
+                    int is, int ie, int js, int je, int ks, int ke, int n1, int n2,
+                    int n3);
 
 //----------------------------------------------------------------------------------------
 //! \fn void BoundaryValues::HydroBCs()

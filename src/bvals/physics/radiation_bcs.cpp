@@ -17,11 +17,12 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
 
 //----------------------------------------------------------------------------------------
 //! \fn void BoundaryValues::RadiationBCs()
-//! \brief Apply physical boundary conditions for all Radiation variables on the fine array at
-//  faces of the MB which are at the edge of the computational domain. This is applied
-//  *after* prolongation (see Radiation::Prolongate / Radiation::ApplyPhysicalBCs), so that the
-//  corner ghost zones between a coarse neighbor and a physical boundary -- which are
-//  filled by extrapolation from the coarse/fine interface ghosts -- read valid data.
+//! \brief Apply physical boundary conditions for all Radiation variables on the fine
+//         array at faces of the MB which are at the edge of the computational domain.
+//         This is applied *after* prolongation (see Radiation::Prolongate /
+//         Radiation::ApplyPhysicalBCs), so that the corner ghost zones between a
+//         coarse neighbor and a physical boundary -- which are filled by extrapolation
+//         from the coarse/fine interface ghosts -- read valid data.
 void MeshBoundaryValues::RadiationBCs(MeshBlockPack *ppack, DualArray2D<Real> i_in,
                                       DvceArray5D<Real> i0) {
   auto &indcs = ppack->pmesh->mb_indcs;
