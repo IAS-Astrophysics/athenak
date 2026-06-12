@@ -63,8 +63,10 @@ void Z4c::QueueZ4cTasks() {
   pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
-  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_RecvU});
-  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, {Z4c_Prolong});
+  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run,
+                 {Z4c_RecvU});
+  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run,
+                 {Z4c_Prolong});
   pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
                  {Z4c_BCS});
   pnr->QueueTask(&Z4c::ConvertZ4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM",
@@ -264,10 +266,10 @@ TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
       pbval_u->Z4cBCsCoarse(pmy_pack, pbval_u->u_in, coarse_u0);
     }
 
-    // Note: FillCoarseInBndryCC is intentionally not called here. For Z4c the coarse-array
-    // data in same-level boundary regions (including edges and corners) is communicated
-    // directly via the isame_z4c buffers in Send/RecvU, so restricting it again would be
-    // redundant.
+    // Note: FillCoarseInBndryCC is intentionally not called here. For Z4c the
+    // coarse-array data in same-level boundary regions (including edges and
+    // corners) is communicated directly via the isame_z4c buffers in
+    // Send/RecvU, so restricting it again would be redundant.
 
     // Step 2: prolongate fine ghost zones from the coarse array.
     pbval_u->ProlongateCC(u0, coarse_u0, true);
