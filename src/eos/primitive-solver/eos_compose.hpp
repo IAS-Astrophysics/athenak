@@ -92,7 +92,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (m_initialized);
     if (n < min_n) {
       return min_T;
-    } else if (e <= MinimumEnergy(n, Y)) {
+    } else if (e <= 0.0) {
       return min_T;
     }
     Real log_e = log2_(e);
