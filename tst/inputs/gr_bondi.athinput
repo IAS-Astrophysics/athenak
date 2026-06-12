@@ -49,6 +49,7 @@ a           = 0.0        # black hole spin a (0 <= a/M < 1)
 excise      = true       # excise r_ks <= 1.0
 dexcise     = 1.0e-8     # density inside excision
 pexcise     = 0.333e-12  # pressure inside excision
+texcise     = 1.0e-10    # temperature inside excision
 
 <time>
 evolution  = dynamic  # dynamic/kinematic/static
