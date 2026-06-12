@@ -5,6 +5,8 @@
 //========================================================================================
 //! \file coordinates.cpp
 //! \brief
+#include <float.h> // FLT_MIN
+
 #include <iostream> // cout
 #include <string>
 
@@ -55,7 +57,12 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
-      coord_data.pexcise = pin->GetReal("coord","pexcise");
+      if (is_dynamical_relativistic) {
+        coord_data.texcise = pin->GetReal("coord", "texcise");
+      } else {
+        coord_data.pexcise = pin->GetReal("coord", "pexcise");
+      }
+
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
@@ -70,6 +77,21 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("lapse") == 0) {
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
+        } else if (emethod.compare("horizon") == 0) {
+          if (pin->DoesBlockExist("fastflow")) {
+            coord_data.excision_scheme = ExcisionScheme::horizon;
+            coord_data.smooth_excision = pin->GetOrAddBoolean("coord","smooth_excision",
+                                                              false);
+            coord_data.horizon_factor = pin->GetOrAddReal("coord","horizon_factor",1.0);
+            if (coord_data.smooth_excision) {
+              coord_data.tdamp = pin->GetOrAddReal("coord","tdamp",1.0);
+            }
+          } else {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                    << __LINE__ << std::endl
+                    << "Horizon excision needs <fastflow> block!" << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
