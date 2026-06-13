@@ -146,7 +146,7 @@ def finite_range(arrays, geometries, extent, default, info):
 
 def plot_one(args):
     (path_s, outdir_s, parfile_s, width, sep, q, mark_holes, circle_radius,
-     auto_density, density_vmin, density_vmax) = args
+     auto_density, ranges) = args
     path = Path(path_s)
     outdir = Path(outdir_s)
     parfile = Path(parfile_s)
@@ -169,8 +169,8 @@ def plot_one(args):
 
     for ax, (field, title, cmap, default_range) in zip(axes, fields):
         arrays = block_arrays(data, field)
-        if field == "rho" and density_vmin is not None and density_vmax is not None:
-            vmin, vmax = density_vmin, density_vmax
+        if field in ranges:
+            vmin, vmax = ranges[field]
         elif field == "rho" and auto_density:
             vmin, vmax = finite_range(arrays, data["mb_geometry"], extent, default_range, info)
         else:
@@ -229,6 +229,14 @@ def main():
                         help="fixed density colorbar lower bound")
     parser.add_argument("--density-vmax", type=float, default=None,
                         help="fixed density colorbar upper bound")
+    parser.add_argument("--temperature-vmin", type=float, default=None,
+                        help="fixed temperature colorbar lower bound")
+    parser.add_argument("--temperature-vmax", type=float, default=None,
+                        help="fixed temperature colorbar upper bound")
+    parser.add_argument("--beta-vmin", type=float, default=None,
+                        help="fixed plasma beta colorbar lower bound")
+    parser.add_argument("--beta-vmax", type=float, default=None,
+                        help="fixed plasma beta colorbar upper bound")
     parser.add_argument("--plane", choices=("x1", "x2", "x3", "all"), default="x3",
                         help="slice plane to plot: x1=yz, x2=xz, x3=xy")
     args = parser.parse_args()
@@ -246,15 +254,19 @@ def main():
     if circle_radius < 0.0:
         circle_radius = read_par_value(parfile, "sink_radius",
                         read_par_value(parfile, "excise_1_rad", 4.0))
-    if (args.density_vmin is None) != (args.density_vmax is None):
-        raise SystemExit("--density-vmin and --density-vmax must be provided together")
-    if args.density_vmin is not None and (
-            args.density_vmin <= 0.0 or args.density_vmax <= args.density_vmin):
-        raise SystemExit("--density-vmin must be positive and less than --density-vmax")
+    ranges = {}
+    for field, label in (("rho", "density"), ("temperature", "temperature"), ("beta", "beta")):
+        vmin = getattr(args, f"{label}_vmin")
+        vmax = getattr(args, f"{label}_vmax")
+        if (vmin is None) != (vmax is None):
+            raise SystemExit(f"--{label}-vmin and --{label}-vmax must be provided together")
+        if vmin is not None:
+            if vmin <= 0.0 or vmax <= vmin:
+                raise SystemExit(f"--{label}-vmin must be positive and less than --{label}-vmax")
+            ranges[field] = (vmin, vmax)
     tasks = [
         (str(path), str(args.out_dir), str(parfile), args.width, sep, q,
-         args.mark_holes, circle_radius, args.auto_density,
-         args.density_vmin, args.density_vmax)
+         args.mark_holes, circle_radius, args.auto_density, ranges)
         for path in files
     ]
     if args.nproc > 1:
