@@ -3158,40 +3158,17 @@ void RefineTracker(MeshBlockPack *pmbp) {
     Real &x3min = size.h_view(m).x3min;
     Real &x3max = size.h_view(m).x3max;
 
-    Real d2_bh1[8] = {
-      SQR(x1min - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1min - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1min - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3max - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3max - x3_BH1),
-      SQR(x1min - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3max - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3max - x3_BH1),
-    };
+    Real dx1_bh1 = std::max(std::max(x1min - x1_BH1, 0.0), x1_BH1 - x1max);
+    Real dx2_bh1 = std::max(std::max(x2min - x2_BH1, 0.0), x2_BH1 - x2max);
+    Real dx3_bh1 = std::max(std::max(x3min - x3_BH1, 0.0), x3_BH1 - x3max);
+    Real dx1_bh2 = std::max(std::max(x1min - x1_BH2, 0.0), x1_BH2 - x1max);
+    Real dx2_bh2 = std::max(std::max(x2min - x2_BH2, 0.0), x2_BH2 - x2max);
+    Real dx3_bh2 = std::max(std::max(x3min - x3_BH2, 0.0), x3_BH2 - x3max);
+    Real dmin2_bh1 = SQR(dx1_bh1) + SQR(dx2_bh1) + SQR(dx3_bh1);
+    Real dmin2_bh2 = SQR(dx1_bh2) + SQR(dx2_bh2) + SQR(dx3_bh2);
 
-    Real d2_bh2[8] = {
-      SQR(x1min - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1min - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1min - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3max - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3max - x3_BH2),
-      SQR(x1min - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3max - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3max - x3_BH2),
-    };
-    Real dmin2_bh1 = *std::min_element(&d2_bh1[0], &d2_bh1[8]);
-    Real dmin2_bh2 = *std::min_element(&d2_bh2[0], &d2_bh2[8]);
-    bool iscontained_bh1 =
-      (x1_BH1 >= x1min && x1_BH1 <= x1max) &&
-      (x2_BH1 >= x2min && x2_BH1 <= x2max) &&
-      (x3_BH1 >= x3min && x3_BH1 <= x3max);
-    bool iscontained_bh2 =
-      (x1_BH2 >= x1min && x1_BH2 <= x1max) &&
-      (x2_BH2 >= x2min && x2_BH2 <= x2max) &&
-      (x3_BH2 >= x3min && x3_BH2 <= x3max);
-
-    bool in_tracker1 = dmin2_bh1 < SQR(tracker_radius1) || iscontained_bh1;
-    bool in_tracker2 = dmin2_bh2 < SQR(tracker_radius2) || iscontained_bh2;
+    bool in_tracker1 = dmin2_bh1 < SQR(tracker_radius1);
+    bool in_tracker2 = dmin2_bh2 < SQR(tracker_radius2);
     bool unlimited = (in_tracker1 && tracker_reflevel1 < 0) ||
                      (in_tracker2 && tracker_reflevel2 < 0);
     int target_level = -1;
