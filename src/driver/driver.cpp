@@ -684,8 +684,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pradm1->RecvU(this, 0);
     (void) pradm1->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
     (void) pradm1->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
-    (void) pradm1->ApplyPhysicalBCs(this, 0);
-    (void) pradm1->Prolongate(this, 0);
+    (void) pradm1->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pradm1->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   return;

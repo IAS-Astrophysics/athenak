@@ -86,11 +86,11 @@ void RadiationM1::AssembleRadiationM1Tasks(
       tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.M1_rkupdt, "RadiationM1::RestrictU");
   id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu, "RadiationM1::SendU");
   id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu, "RadiationM1::RecvU");
+  id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_recvu, "RadiationM1::Prolongate");
   id.M1_bcs =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::ApplyPhysicalBCs, this, id.M1_recvu, "RadiationM1::ApplyPhysicalBCs");
-  id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_bcs, "RadiationM1::Prolongate");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::ApplyPhysicalBCs, this, id.M1_prol, "RadiationM1::ApplyPhysicalBCs");
   id.M1_newdt =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::NewTimeStep, this, id.M1_prol, "RadiationM1::NewTimeStep");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::NewTimeStep, this, id.M1_bcs, "RadiationM1::NewTimeStep");
 
   // assemble "after_stagen" task list
   id.M1_csend = tl["opsplit_after_stagen"]->AddTask(&RadiationM1::ClearSend, this, none, "RadiationM1::ClearSend");
@@ -253,7 +253,7 @@ TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
   // physical BCs
-  pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0, coarse_u0);
+  pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0);
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
@@ -269,6 +269,14 @@ TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 TaskStatus RadiationM1::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+
+    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
+    //         reads valid data in coarse ghost zones that sit at a physical boundary.
+    if (!(pmy_pack->pmesh->strictly_periodic)) {
+      pbval_u->RadiationM1BCsCoarse(pmy_pack, pbval_u->u_in, coarse_u0);
+    }
+
+    // Step 2: prolongate fine ghost zones from the coarse array.
     pbval_u->ProlongateCC(u0, coarse_u0);
   }
   return TaskStatus::complete;

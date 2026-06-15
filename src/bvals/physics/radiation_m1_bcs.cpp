@@ -365,15 +365,15 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBoundaryValues::RadiationM1BCs()
-//! \brief Apply physical boundary conditions for radiation at faces of MB which
-//! are at the edge of the computational domain. When multilevel (AMR/SMR),
-//! also applies BCs to coarse_i0 so that the ProlongCC stencil never reads
-//! uninitialized coarse ghost-zone values at physical boundaries.
+//! \brief Apply physical boundary conditions for all RadiationM1 variables on the fine
+//  array at faces of the MB which are at the edge of the computational domain. This is
+//  applied *after* prolongation (see RadiationM1::Prolongate / RadiationM1::ApplyPhysicalBCs),
+//  so that the corner ghost zones between a coarse neighbor and a physical boundary --
+//  which are filled by prolongation from the coarse/fine interface ghosts -- read valid data.
 
 void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
                                         DualArray2D<Real> i_in,
-                                        DvceArray5D<Real> i0,
-                                        DvceArray5D<Real> coarse_i0) {
+                                        DvceArray5D<Real> i0) {
   auto &indcs = ppack->pmesh->mb_indcs;
   int &ng = indcs.ng;
 
@@ -383,13 +383,24 @@ void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
 
   ApplyRadM1BCsToArray(ppack, i_in, i0, n1, n2, n3,
                        indcs.is, indcs.ie, indcs.js, indcs.je, indcs.ks, indcs.ke);
+}
 
-  if (ppack->pmesh->multilevel) {
-    int cn1 = indcs.cnx1 + 2*ng;
-    int cn2 = (indcs.cnx2 > 1) ? (indcs.cnx2 + 2*ng) : 1;
-    int cn3 = (indcs.cnx3 > 1) ? (indcs.cnx3 + 2*ng) : 1;
+//----------------------------------------------------------------------------------------
+//! \fn void MeshBoundaryValues::RadiationM1BCsCoarse()
+//! \brief Apply physical boundary conditions for all RadiationM1 variables on the coarse
+//  array. This must be done *before* prolongation so that the prolongation stencil has
+//  valid data in the coarse ghost zones that sit at a physical boundary.
 
-    ApplyRadM1BCsToArray(ppack, i_in, coarse_i0, cn1, cn2, cn3,
-                         indcs.cis, indcs.cie, indcs.cjs, indcs.cje, indcs.cks, indcs.cke);
-  }
+void MeshBoundaryValues::RadiationM1BCsCoarse(MeshBlockPack *ppack,
+                                              DualArray2D<Real> i_in,
+                                              DvceArray5D<Real> coarse_i0) {
+  auto &indcs = ppack->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+
+  int cn1 = indcs.cnx1 + 2*ng;
+  int cn2 = (indcs.cnx2 > 1) ? (indcs.cnx2 + 2*ng) : 1;
+  int cn3 = (indcs.cnx3 > 1) ? (indcs.cnx3 + 2*ng) : 1;
+
+  ApplyRadM1BCsToArray(ppack, i_in, coarse_i0, cn1, cn2, cn3,
+                       indcs.cis, indcs.cie, indcs.cjs, indcs.cje, indcs.cks, indcs.cke);
 }
