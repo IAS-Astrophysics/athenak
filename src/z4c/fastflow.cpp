@@ -91,7 +91,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   root = pin->GetOrAddInteger("fastflow", "mpi_root", 0);
   merger_distance = pin->GetOrAddReal("fastflow", "merger_distance", 0.1);
-  use_stored_metric_drvts = pin->GetBoolean("fastflow", "store_metric_drvts");
+  use_stored_metric_drvts = pin->GetOrAddBoolean("fastflow", "store_metric_drvts", false);
 
   // Initial guess
   initial_radius = pin->GetOrAddReal("fastflow", "initial_radius_" + n_str, 1.0);
@@ -172,9 +172,12 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(K_interp, (NEXCURV), nangles);
   Kokkos::realloc(dg_interp, (NDRVSSPMETRIC), nangles);
 
-  // Allocate memory for the array holding the metric derivatives
+  // The number of meshblocks on this rank (nmb_thispack) can change at runtime
+  // with adaptive mesh refinement and load balancing (e.g. a boosted puncture
+  // dragging the refined region across ranks). To prevent this allocate more
+  // memory based in the max. nmb. of MBs per rank from startup.
   auto &indcs = pmbp->pmesh->mb_indcs;
-  int nmb = pmbp->nmb_thispack;
+  int nmb = std::max((pmbp->nmb_thispack), (pmbp->pmesh->nmb_maxperrank));
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = indcs.nx2 + 2 * (indcs.ng);
   int ncells3 = indcs.nx3 + 2 * (indcs.ng);
@@ -243,7 +246,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       exit(EXIT_FAILURE);
     }
     if (new_file) {
-      fprintf(pofile_summary, "# 1:iter 2:time 3:mass 4:Sx 5:Sy 6:Sz 7:S 8:area"
+      fprintf(pofile_summary, "# 1:iter 2:time 3:mass 4:Sx 5:Sy 6:Sz 7:S 8:area "
                                "9:hrms 10:hmean 11:meanradius 12:minradius\n");
       fflush(pofile_summary);
     }

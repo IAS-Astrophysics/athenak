@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file elliptica_bns.cpp
-//  \brief Initial data reader for binary neutron star data with Elliptica
+// !\file elliptica.cpp
+// !\brief Initial data reader for binary neutron star data with Elliptica
 
 #include <math.h>
 #include <stdio.h>

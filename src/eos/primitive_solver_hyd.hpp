@@ -322,6 +322,7 @@ class PrimitiveSolverHydro {
     auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
     auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
     auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+    auto &texcise_ = pmy_pack->pcoord->coord_data.texcise;
 
     auto &adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
@@ -432,14 +433,13 @@ class PrimitiveSolverHydro {
             prim_pt[PVX] = 0.0;
             prim_pt[PVY] = 0.0;
             prim_pt[PVZ] = 0.0;
-            prim_pt[PPR] = pexcise_;
+            prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]);
             for (int n = 0; n < nscal; n++) {
               // FIXME: Particle abundances should probably be set to a
               // default inside an excised region.
               prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
             }
-            prim_pt[PTM] =
-              eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+            prim_pt[PTM] = texcise_;
             result.error = Primitive::Error::SUCCESS;
             result.iterations = 0;
             result.cons_floor = false;

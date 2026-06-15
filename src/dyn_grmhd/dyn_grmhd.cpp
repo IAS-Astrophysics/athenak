@@ -539,7 +539,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
   bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
   auto &floor = pmy_pack->pcoord->excision_floor;
   Real &dexcise = pmy_pack->pcoord->coord_data.dexcise;
-  Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
+  // Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
   Real &texcise = pmy_pack->pcoord->coord_data.texcise;
   Real &tdamp = pmy_pack->pcoord->coord_data.tdamp;
 
@@ -642,8 +642,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     Real tau = E - D;
 
     // Compute the excised value for the energy.
-    Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
-                  + Bsq - pexcise - 0.5*bsq - dexcise;
+    // Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
+    //               + Bsq - pexcise - 0.5*bsq - dexcise;
+    Real tau_ex = eos_.GetEnergy(dexcise/mb, texcise, &prim_pt[PYF]) + 0.5*Bsq - dexcise;
 
     Real S_d[3] = {0.0};
     for (int a = 0; a < 3; a++) {
