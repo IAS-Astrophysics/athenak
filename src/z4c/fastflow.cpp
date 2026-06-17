@@ -99,6 +99,11 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   expand_guess = pin->GetOrAddReal("fastflow", "expand_guess", 1.0);
 
+  // If surface was found prior to checkpoint, read it as warm-up guess
+  last_a0 = pin->GetOrAddReal("fastflow", "last_a0_" + n_str, -1.0);
+  ah_found = pin->GetOrAddBoolean("fastflow", "ah_found_a0_" + n_str, false);
+  time_first_found = pin->GetOrAddReal("fastflow", "time_first_found_" + n_str, -1.0);
+
   // Center
   center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
   center[1] = pin->GetOrAddReal("fastflow", "center_y_" + n_str, 0.0);
