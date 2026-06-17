@@ -668,8 +668,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       // Compute the excised value for the energy.
       // Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
       //               + Bsq - pexcise - 0.5*bsq - dexcise;
-      Real tau_ex = eos_.GetEnergy(dexcise/mb, texcise, &prim_pt[PYF]) + 0.5*Bsq - dexcise;
-      
+      Real tau_ex = eos_.GetEnergy(dexcise/mb, texcise, &prim_pt[PYF])
+                                    + 0.5*Bsq - dexcise;
+
       rhs(m, IDN, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise))/tdamp;
       rhs(m, IM1, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[0])/tdamp;
       rhs(m, IM2, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[1])/tdamp;
