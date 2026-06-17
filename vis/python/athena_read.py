@@ -775,7 +775,8 @@ def horizon(filename):
 
     # Read the data with numpy.
     data = np.loadtxt(filename, comments='#')
-
+    data = np.atleast_2d(data)
+		
     # Create a dictionary.
     data_dict = {name: data[:, i] for i, name in enumerate(headers)}
 
