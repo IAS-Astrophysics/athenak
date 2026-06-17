@@ -67,9 +67,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     if (pm->multilevel && global_variable::my_rank == 0) {
       std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
                 << "User-defined boundary conditions are combined with SMR/AMR. User BCs "
-                << "are only applied to the fine arrays, not the coarse arrays read during "
-                << "prolongation. Avoid refining at user-boundary faces, otherwise "
-                << "prolongation may read unfilled coarse ghost zones (e.g. C2P failures)."
+                << "are only applied to the fine arrays, not the coarse arrays used "
+                << "for prolongation. Avoid refining at user-boundary faces, otherwise "
+                << "prolongation may read unfilled coarse ghost zones (e.g. C2P fail.)."
                 << std::endl;
     }
   }
@@ -645,9 +645,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     if (pm->multilevel && global_variable::my_rank == 0) {
       std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
                 << "User-defined boundary conditions are combined with SMR/AMR. User BCs "
-                << "are only applied to the fine arrays, not the coarse arrays read during "
-                << "prolongation. Avoid refining at user-boundary faces, otherwise "
-                << "prolongation may read unfilled coarse ghost zones (e.g. C2P failures)."
+                << "are only applied to the fine arrays, not the coarse arrays used "
+                << "for prolongation. Avoid refining at user-boundary faces, otherwise "
+                << "prolongation may read unfilled coarse ghost zones (e.g. C2P fail.)."
                 << std::endl;
     }
   }
