@@ -481,7 +481,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real lthi = m_log_t[ihi];
     Real ltlo = m_log_t[ilo];
 
-    Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
+    //Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
+    Real lt = (ltlo*fhi - lthi*flo)/(fhi - flo);
     return exp2_(lt);
   }
 
