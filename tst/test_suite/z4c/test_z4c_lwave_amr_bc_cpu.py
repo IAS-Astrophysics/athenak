@@ -2,7 +2,7 @@
 Regression test for the fine/coarse boundary fix on the Z4c side.
 
 A Z4c linear wave is run on a domain with OUTFLOW boundaries and AMR, so a fine/coarse
-boundary coincides with a physical boundary. This test checks the L-infty norm, which 
+boundary coincides with a physical boundary. This test checks the L-infty norm, which
 should stay below a certain threshold with the boundary fix on.
 """
 
