@@ -8,6 +8,7 @@ min_max criterion refines the wave crest, dragging a fine/coarse boundary onto t
 
 import os
 
+import pytest
 import test_suite.testutils as testutils
 
 EOS_FAIL_TOL = 0   # max per-cycle hard C2P failures allowed
@@ -31,13 +32,15 @@ def test_mhd_lwave_amr_boundary():
     """Run the GR-MHD outflow+AMR linear wave and assert no boundary C2P trouble."""
     try:
         testutils.run("inputs/lwave_mhd_bc.athinput", [])
-        assert os.path.exists(_LOG), f"event-counter log {_LOG} not produced"
+        if not os.path.exists(_LOG):
+            pytest.fail(f"event-counter log {_LOG} not produced")
         eos_fail_max = _parse_event_log(_LOG)
-        assert eos_fail_max <= EOS_FAIL_TOL, (
-            f"GR-MHD C2P failures at the refined outflow boundary: max eos_fail="
-            f"{eos_fail_max} (tol {EOS_FAIL_TOL}). The coarse-array physical-BC fix in "
-            f"MHD::Prolongate is likely missing or broken."
-        )
+        if eos_fail_max > EOS_FAIL_TOL:
+            pytest.fail(
+                f"GR-MHD C2P failures at the refined outflow boundary: max eos_fail="
+                f"{eos_fail_max} (tol {EOS_FAIL_TOL}). The coarse-array physical-BC fix "
+                f"in MHD::Prolongate is likely missing or broken."
+            )
     finally:
         if os.path.exists(_LOG):
             os.remove(_LOG)

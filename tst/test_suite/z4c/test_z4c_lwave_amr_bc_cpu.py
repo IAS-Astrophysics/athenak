@@ -8,6 +8,7 @@ should stay below a certain threshold with the boundary fix on.
 
 import os
 
+import pytest
 import test_suite.testutils as testutils
 import athena_read
 
@@ -20,13 +21,15 @@ def test_z4c_lwave_amr_boundary():
     """Run the Z4c outflow+AMR linear wave and assert the L-infty error stays small."""
     try:
         testutils.run("inputs/lwave_z4c_bc.athinput", [])
-        assert os.path.exists(_ERRS), f"error file {_ERRS} not produced"
+        if not os.path.exists(_ERRS):
+            pytest.fail(f"error file {_ERRS} not produced")
         data = athena_read.error_dat(_ERRS)
         linf = data[0][_LINF_COL]
-        assert linf < LINF_TOL, (
-            f"Z4c linear-wave L-infty error={linf:g} exceeds tol {LINF_TOL:g} "
-            f"(no-fix reference ~1e-9). The coarse-array physical-BC fix in "
-            f"Z4c::Prolongate is likely missing or broken."
-        )
+        if linf >= LINF_TOL:
+            pytest.fail(
+                f"Z4c linear-wave L-infty error={linf:g} exceeds tol {LINF_TOL:g} "
+                f"(no-fix reference ~1e-9). The coarse-array physical-BC fix in "
+                f"Z4c::Prolongate is likely missing or broken."
+            )
     finally:
         testutils.cleanup()
