@@ -60,6 +60,19 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
                 << "by SetProblemData()." << std::endl;
       exit(EXIT_FAILURE);
     }
+    // Warn: user BCs are applied to the fine arrays only. The coarse-array path used by
+    // prolongation is not filled by user BCs (see UserBoundaryFnPtr in pgen.hpp), so a
+    // fine/coarse boundary that coincides with a physical (user) boundary can
+    // prolongate from unfilled coarse ghosts and trigger C2P failures etc.
+    // Keep refinement away from user-boundary faces.
+    if (pm->multilevel && global_variable::my_rank == 0) {
+      std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "User-defined boundary conditions are combined with SMR/AMR. User BCs "
+                << "are only applied to the fine arrays, not the coarse arrays used "
+                << "for prolongation. Avoid refining at user-boundary faces, otherwise "
+                << "prolongation may read unfilled coarse ghost zones (e.g. C2P fail.)."
+                << std::endl;
+    }
   }
   // Check that user defined srcterms were enrolled if needed
   if (user_srcs) {
@@ -674,6 +687,16 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                 << std::endl << "User BCs specified in <mesh> block, but not enrolled "
                 << "during restart by SetProblemData()." << std::endl;
       exit(EXIT_FAILURE);
+    }
+    // See note in the non-restart constructor: user BCs only fill the fine arrays, so
+    // refinement at user-boundary faces can prolongate from unfilled coarse ghost zones.
+    if (pm->multilevel && global_variable::my_rank == 0) {
+      std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "User-defined boundary conditions are combined with SMR/AMR. User BCs "
+                << "are only applied to the fine arrays, not the coarse arrays used "
+                << "for prolongation. Avoid refining at user-boundary faces, otherwise "
+                << "prolongation may read unfilled coarse ghost zones (e.g. C2P fail.)."
+                << std::endl;
     }
   }
   // Check that user defined srcterms were enrolled if needed
