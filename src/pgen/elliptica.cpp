@@ -776,7 +776,7 @@ void EllipticaSystemHistory(HistoryData *pdata, Mesh *pm) {
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
     rho_max = 0.;
     alpha_min = 0.;
   }

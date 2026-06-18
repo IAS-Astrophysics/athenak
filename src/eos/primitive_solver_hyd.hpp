@@ -433,12 +433,12 @@ class PrimitiveSolverHydro {
             prim_pt[PVX] = 0.0;
             prim_pt[PVY] = 0.0;
             prim_pt[PVZ] = 0.0;
-            prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]);
             for (int n = 0; n < nscal; n++) {
               // FIXME: Particle abundances should probably be set to a
               // default inside an excised region.
               prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
             }
+            prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]);
             prim_pt[PTM] = texcise_;
             result.error = Primitive::Error::SUCCESS;
             result.iterations = 0;

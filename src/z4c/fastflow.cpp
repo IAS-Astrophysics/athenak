@@ -91,13 +91,19 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   root = pin->GetOrAddInteger("fastflow", "mpi_root", 0);
   merger_distance = pin->GetOrAddReal("fastflow", "merger_distance", 0.1);
-  use_stored_metric_drvts = pin->GetOrAddBoolean("fastflow", "store_metric_drvts", false);
+  // use_stored_metric_drvts = pin->GetOrAddBoolean("fastflow",
+  //                                  "store_metric_drvts", false);
 
   // Initial guess
   initial_radius = pin->GetOrAddReal("fastflow", "initial_radius_" + n_str, 1.0);
   rr_min = -1.0;
 
   expand_guess = pin->GetOrAddReal("fastflow", "expand_guess", 1.0);
+
+  // If surface was found prior to checkpoint, read it as warm-up guess
+  last_a0 = pin->GetOrAddReal("fastflow", "last_a0_" + n_str, -1.0);
+  ah_found = pin->GetOrAddBoolean("fastflow", "ah_found_a0_" + n_str, false);
+  time_first_found = pin->GetOrAddReal("fastflow", "time_first_found_" + n_str, -1.0);
 
   // Center
   center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
@@ -505,7 +511,7 @@ void FastFlow::InitialGuess() {
 template <int NGHOST>
 void FastFlow::MetricDerivatives(Real time) {
   // Check whether derivatives have to be computed
-  if (use_stored_metric_drvts) return;
+  // if (use_stored_metric_drvts) return;
   if((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
 
