@@ -80,12 +80,7 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("horizon") == 0) {
           if (pin->DoesBlockExist("fastflow")) {
             coord_data.excision_scheme = ExcisionScheme::horizon;
-            coord_data.smooth_excision = pin->GetOrAddBoolean("coord","smooth_excision",
-                                                              false);
             coord_data.horizon_factor = pin->GetOrAddReal("coord","horizon_factor",1.0);
-            if (coord_data.smooth_excision) {
-              coord_data.tdamp = pin->GetOrAddReal("coord","tdamp",1.0);
-            }
           } else {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
@@ -98,6 +93,11 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
                     << "Unknown excision method: " << emethod << std::endl;
           std::exit(EXIT_FAILURE);
         }
+
+        // Smooth excision.
+        coord_data.smooth_excision = pin->GetOrAddBoolean("coord","smooth_excision",
+                                                              false);
+        coord_data.tdamp = pin->GetOrAddReal("coord","tdamp",1.0);
       }
 
       // boolean masks allocation

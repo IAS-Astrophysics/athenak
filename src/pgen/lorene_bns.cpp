@@ -112,7 +112,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
 
   // Enable ye if the EOS supports it.
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+  // Read only if nscalars > 0.
+  const bool use_ye = tov::UsesYe<TOVEOS>;
+  const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
   if (global_variable::my_rank == 0) {
     std::cout << "Allocated coordinates of size " << width << std::endl;
@@ -248,8 +250,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
     // If the electron fraction is available, find it in the 1D EOS.
     if constexpr (use_ye) {
-      host_w0(m, IYF, k, j, i) = eos.template
-                                  GetYeFromRho<tov::LocationTag::Host>(rho);
+      if (read_ye) {
+        host_w0(m, IYF, k, j, i) = eos.template
+                                    GetYeFromRho<tov::LocationTag::Host>(rho);
+      }
     }
 
     // Before we store the velocity, we need to make sure it's physical and
