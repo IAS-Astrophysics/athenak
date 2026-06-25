@@ -13,7 +13,6 @@ import time
 import pytest
 import logging
 import sys
-import math
 
 sys.path.insert(0, "../vis/python")
 import athena_read  # noqa: E402
