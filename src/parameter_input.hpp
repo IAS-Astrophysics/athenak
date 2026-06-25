@@ -37,6 +37,7 @@ struct InputLine {
   std::string param_name;
   std::string param_value;   // value of the parameter is stored as a string!
   std::string param_comment;
+  bool accessed = false;     // set true once the code reads this parameter
 };
 
 //----------------------------------------------------------------------------------------
@@ -79,6 +80,7 @@ class ParameterInput {
   void LoadFromFile(IOWrapper &input, bool single_file_per_rank=false);
   void ModifyFromCmdline(int argc, char *argv[]);
   void ParameterDump(std::ostream& os);
+  void CheckUnusedParameters(std::ostream& os, bool skip_refinement = false);
   bool DoesBlockExist(std::string name);
   bool DoesParameterExist(std::string block, std::string name);
   int  GetInteger(std::string block, std::string name);
@@ -101,7 +103,8 @@ class ParameterInput {
   InputBlock* GetPtrToBlock(std::string name);
   void ParseLine(std::string line, std::string &name, std::string &val,
                  std::string &comment);
-  void AddParameter(InputBlock *pib, std::string name, std::string val, std::string comm);
+  void AddParameter(InputBlock *pib, std::string name, std::string val, std::string comm,
+                    bool from_code = false);
 
 #if OPENMP_PARALLEL_ENABLED
   // lock to implement OpenMP thread safety
