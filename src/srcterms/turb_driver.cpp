@@ -440,7 +440,7 @@ TaskStatus TurbulenceDriver::InitializeModes(Driver *pdrive, int stage) {
               yssc_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0 : RanGaussianSt(&(rstate));
               ysss_.h_view(nmode) = (nkx==0 || nky==0) ? 0.0 : RanGaussianSt(&(rstate));
 
-              // imcompressibility
+              // incompressibility
               zccc_.h_view(nmode) =  ikz*( kx*xscs_.h_view(nmode)+ky*ycss_.h_view(nmode));
               zccs_.h_view(nmode) = -ikz*( kx*xscc_.h_view(nmode)+ky*ycsc_.h_view(nmode));
               zcsc_.h_view(nmode) =  ikz*( kx*xsss_.h_view(nmode)-ky*yccs_.h_view(nmode));

@@ -236,6 +236,7 @@ TaskStatus ParticlesBoundaryValues::CountSendsAndRecvs() {
   // Share tuples using MPI derived data type for tuple of 3*int
   MPI_Datatype mpi_ituple;
   MPI_Type_contiguous(3, MPI_INT, &mpi_ituple);
+  MPI_Type_commit(&mpi_ituple);
   MPI_Allgatherv(MPI_IN_PLACE, nsends_eachrank[global_variable::my_rank],
                    mpi_ituple, sends_allranks.data(), nsends_eachrank.data(),
                    nsends_displ.data(), mpi_ituple, mpi_comm_part);

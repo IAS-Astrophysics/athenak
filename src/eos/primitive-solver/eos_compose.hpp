@@ -92,7 +92,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (m_initialized);
     if (n < min_n) {
       return min_T;
-    } else if (e <= MinimumEnergy(n, Y)) {
+    } else if (e <= 0.0) {
       return min_T;
     }
     Real log_e = log2_(e);
@@ -481,7 +481,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real lthi = m_log_t[ihi];
     Real ltlo = m_log_t[ilo];
 
-    Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
+    //Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
+    Real lt = (ltlo*fhi - lthi*flo)/(fhi - flo);
     return exp2_(lt);
   }
 
@@ -743,7 +744,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   // Minimum enthalpy per baryon
   Real m_min_h;
 
-  // bool to protect against access of uninitialised table and prevent repeated reading
+  // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
   bool m_initialized;
 

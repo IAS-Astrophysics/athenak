@@ -21,13 +21,16 @@ class MeshBlockPack;
 class SphericalGrid: public GeodesicGrid {
  public:
     // Creates a geodesic grid with refinement level nlev and radius rad
-    SphericalGrid(MeshBlockPack *pmy_pack, int nlev, Real rad);
+    SphericalGrid(MeshBlockPack *pmy_pack, int nlev, Real rad, int ninterp = -1);
     ~SphericalGrid();
 
     Real radius;  // const radius for SphericalGrid
+    int ninterp;  // number of interpolation points along each dimension
     DualArray2D<Real> interp_coord;  // Cartesian coordinates for grid points
     DualArray2D<Real> interp_vals;   // container for data interpolated to sphere
-    void InterpolateToSphere(int nvars, DvceArray5D<Real> &val);  // interpolate to sphere
+    void InterpolateToSphere(int nvars, DvceArray5D<Real>& val);  // interpolate to sphere
+    // interpolate a range of variables to a sphere
+    void InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val);
 
  private:
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro

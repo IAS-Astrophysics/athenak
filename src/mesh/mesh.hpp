@@ -137,7 +137,7 @@ class Mesh {
   // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
   int *nprtcl_eachrank;    // number of particles on each rank
 
-  Real time, dt, dtold, cfl_no;
+  Real time, dt, dtold, dt_last_completed, cfl_no;
   int ncycle;
   EventCounters ecounter;
 

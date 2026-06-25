@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file build_tree.cpp
-//! \brief Functions to build MeshBlockTreee, both for new runs and restarts
+//! \brief Functions to build MeshBlock, both for new runs and restarts
 
 #include <iostream>
 #include <cinttypes>

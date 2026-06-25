@@ -53,7 +53,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     e3_cc("e3_cc",1,1,1,1),
     utest("utest",1,1,1,1,1),
     bcctest("bcctest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1) {
+    fofc("fofc",1,1,1,1),
+    fofc_scal("fofc_scal",1,1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -63,6 +64,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (eqn_of_state.compare("ideal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic) {
       peos = new IdealSRMHD(ppack, pin);
+    } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
+      // DynGRMHD uses PrimitiveSolver instead, so use a no-op here.
+      peos = new NoOpDynGRMHD(ppack, pin);
     } else if (pmy_pack->pcoord->is_general_relativistic) {
       peos = new IdealGRMHD(ppack, pin);
     } else {
@@ -338,6 +342,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         Kokkos::realloc(utest,   nmb, nvars, ncells3, ncells2, ncells1);
         Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
         Kokkos::deep_copy(fofc, false);
+        if (nscalars > 0) {
+          Kokkos::realloc(fofc_scal,    nmb, nscalars, ncells3, ncells2, ncells1);
+          Kokkos::deep_copy(fofc_scal, false);
+        }
       }
     }
   }
@@ -347,13 +355,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 MHD::~MHD() {
-  delete peos;
-  delete pbval_u;
+  if (psbox_b != nullptr) {delete psbox_b;}
+  if (psbox_u != nullptr) {delete psbox_u;}
+  if (porb_b != nullptr) {delete porb_b;}
+  if (porb_u != nullptr) {delete porb_u;}
   delete pbval_b;
-  if (pvisc != nullptr) {delete pvisc;}
-  if (presist!= nullptr) {delete presist;}
-  if (pcond != nullptr) {delete pcond;}
+  delete pbval_u;
   if (psrc!= nullptr) {delete psrc;}
+  if (pcond != nullptr) {delete pcond;}
+  if (presist!= nullptr) {delete presist;}
+  if (pvisc != nullptr) {delete pvisc;}
+  delete peos;
 }
 
 //----------------------------------------------------------------------------------------

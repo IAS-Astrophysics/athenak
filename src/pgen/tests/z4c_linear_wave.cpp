@@ -28,7 +28,7 @@
 
 // function to compute errors in solution at end of run
 void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm);
-void LinearWaveRefinementCondition(MeshBlockPack* pmbp);
+static void RefinementCondition(MeshBlockPack* pmbp);
 
 namespace {
 // global variable to control computation of initial conditions versus errors
@@ -41,7 +41,7 @@ bool set_initial_conditions = true;
 
 void ProblemGenerator::Z4cLinearWave(ParameterInput *pin, const bool restart) {
   pgen_final_func = Z4cLinearWaveErrors;
-  user_ref_func  = LinearWaveRefinementCondition;
+  user_ref_func  = RefinementCondition;
 
   if (restart)
     return;
@@ -301,10 +301,10 @@ void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void LinearWaveRefinementCondition()
+//! \fn void RefinementCondition()
 //! Implements custom AMR refinement condition for linear gravitational waves
 
-void LinearWaveRefinementCondition(MeshBlockPack* pmbp) {
+void RefinementCondition(MeshBlockPack* pmbp) {
   auto &refine_flag = pmbp->pmesh->pmr->refine_flag;
   int I_Z4C_GXY  = pmbp->pz4c->I_Z4C_GXY;
   int nmb           = pmbp->nmb_thispack;

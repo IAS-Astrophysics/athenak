@@ -32,7 +32,7 @@ namespace Primitive {
 #define MAX_PIECES 7
 
 class PiecewisePolytrope : public EOSPolicyInterface {
- private:
+ protected:
   /// Number of polytropes in the EOS
   int n_pieces;
 

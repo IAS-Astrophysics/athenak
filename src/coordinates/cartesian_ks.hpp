@@ -100,7 +100,7 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
 
 //----------------------------------------------------------------------------------------
 //! \fn void ComputeADMDecomposition
-//! \brief computes ADM quantitiese in Cartesian Kerr-Schild coordinates
+//! \brief computes ADM quantities in Cartesian Kerr-Schild coordinates
 
 // QUESTION: doesn't this assume bh_mass to be 1?
 KOKKOS_INLINE_FUNCTION
@@ -270,7 +270,7 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
 
 //----------------------------------------------------------------------------------------
 //! \fn void ComputeMetricDerivatives
-//! \brief computes derivates of metric in Cartesian Kerr-Schild coordinates, which are
+//! \brief computes derivatives of metric in Cartesian Kerr-Schild coordinates, which are
 //!  used to compute the coordinate source terms in the equations of motion.
 
 KOKKOS_INLINE_FUNCTION

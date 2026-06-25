@@ -54,13 +54,14 @@ def run_command(command: List[str], text: bool = False) -> bool:
     with open(LOG_FILE_PATH, "a") as log_file:
         output, errors = process.communicate()
         log_file.write(output)
+        log_file.write(errors)
 
     if process.returncode != 0:
         logging.error(f"Command failed with return code {process.returncode}")
     return process.returncode == 0
 
 
-def cmake(flags: List[str] = [], **kwargs) -> bool:
+def cmake(flags: List[str] = None, **kwargs) -> bool:
     """
     Runs the CMake command to configure the build system.
 
@@ -74,9 +75,11 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     Raises:
         RuntimeError: If the CMake command fails.
     """
+    if flags is None:
+        flags = []
+
     original_dir = os.getcwd()
     try:
-        os.makedirs(os.path.join(ATHENAK_PATH, "build"), exist_ok=True)
         os.chdir(ATHENAK_PATH)
         logging.info(f"Configuring CMake in {os.getcwd()}")
 
@@ -114,7 +117,7 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     return True
 
 
-def run(inputfile: str, flags=[], **kwargs) -> bool:
+def run(inputfile: str, flags=None, **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary.
 
@@ -129,6 +132,9 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
     Raises:
         AssertionError: If the test case execution fails.
     """
+    if flags is None:
+        flags = []
+
     command = ["./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags}")
@@ -137,9 +143,8 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
 
 
 def mpi_run(
-    inputfile: str, flags=[], 
-               threads: int = min(16, 2 ** math.floor(math.log2(os.cpu_count())) ),
-               **kwargs) -> bool:
+    inputfile: str, flags=None, threads: int = min(16, os.cpu_count()), **kwargs
+) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
 
@@ -147,7 +152,7 @@ def mpi_run(
         inputfile (str): The path to the test case input file.
         flags (list): Additional flags to pass to the AthenaK binary.
         threads (int): Number of threads to use for MPI execution (default: smallest
-            of (16) or (smallest power of two less than or equal to num of cores)).
+            of (16) or (num of cores)).
         **kwargs: Additional keyword arguments for `run_command`.
 
     Returns:
@@ -156,6 +161,10 @@ def mpi_run(
     Raises:
         AssertionError: If the test case execution fails.
     """
+
+    if flags is None:
+        flags = []
+
     command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(
