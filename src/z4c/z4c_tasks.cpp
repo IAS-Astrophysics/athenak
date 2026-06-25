@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/fastflow.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
@@ -60,7 +61,15 @@ void Z4c::QueueZ4cTasks() {
                  {Z4c_CalcRHS});
   pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run,
                  {Z4c_SomBC},{MHD_EField});
-  pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
+  if (pmy_pack->pz4c->opt.floor_chi) {
+    pnr->QueueTask(&Z4c::Z4cFloorChi, this, Z4c_ChiFloor, "Z4c_ChiFloor", Task_Run,
+                   {Z4c_ExplRK});
+    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU",
+                   Task_Run, {Z4c_ChiFloor});
+  } else {
+    pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU",
+                   Task_Run, {Z4c_ExplRK});
+  }
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
   pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run,
@@ -73,10 +82,14 @@ void Z4c::QueueZ4cTasks() {
                  Task_Run, {Z4c_AlgC});
   if (pmy_pack->pdyngr != nullptr) {
     pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
-                   {Z4c_Z4c2ADM});
+                   {Z4c_Z4c2ADM}, {Z4c_FastFlow});
   }
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
+  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT",
+                 Task_Run, {Z4c_Z4c2ADM});
+  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_FastFlow, "Z4c_FastFlow",
+                 Task_Run, {Z4c_PT});
 
   // End task list
   pnr->QueueTask(&Z4c::ClearSend, this, Z4c_ClearS, "Z4c_ClearS", Task_End);
@@ -98,8 +111,7 @@ void Z4c::QueueZ4cTasks() {
                  {Z4c_ClearSW});
   pnr->QueueTask(&Z4c::CalcWaveForm, this, Z4c_Wave, "Z4c_Wave", Task_End,
                  {Z4c_ClearRW});
-  pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT", Task_End, {Z4c_Wave});
-  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_PT});
+  pnr->QueueTask(&Z4c::CCEDump, this, Z4c_CCE, "CCEDump", Task_End, {Z4c_Wave});
   pnr->QueueTask(&Z4c::DumpHorizons, this, Z4c_DumpHorizon, "Z4c_DumpHorizon",
                 Task_End, {Z4c_CCE});
 }
@@ -308,6 +320,25 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
+TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
+  Real time = pmy_pack->pmesh->time;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  if (stage == pdrive->nexp_stages) {
+    for (auto & pahf : pfastflow) {
+      switch (indcs.ng) {
+        case 2: pahf->MetricDerivatives<2>(time); break;
+        case 3: pahf->MetricDerivatives<3>(time); break;
+        case 4: pahf->MetricDerivatives<4>(time); break;
+      }
+    }
+    for (auto & pahf : pfastflow) {
+      pahf->Find(stage, time);
+      pahf->Write(stage, time);
+    }
+  }
+  return TaskStatus::complete;
+}
+
 //----------------------------------------------------------------------------------------
 // ! \fn TaskList CCEDump
 // ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
@@ -324,6 +355,32 @@ TaskStatus Z4c::CCEDump(Driver *pdrive, int stage) {
       cce_dump_last_output_time = time_32;
     }
   }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Z4c:Z4cFloorChi
+//! \brief Floor chi, to prevent negative propagation.
+TaskStatus Z4c::Z4cFloorChi(Driver *pdrive, int stage) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is; int &ie = indcs.ie;
+  int &js = indcs.js; int &je = indcs.je;
+  int &ks = indcs.ks; int &ke = indcs.ke;
+
+  int nmb = pmy_pack->nmb_thispack;
+
+  auto &z4c = pmy_pack->pz4c->z4c;
+  auto &opt = pmy_pack->pz4c->opt;
+
+  par_for("z4c_floor_chi",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real chi = z4c.chi(m,k,j,i);
+
+    if (!Kokkos::isfinite(chi) || chi < opt.chi_min_floor) {
+      z4c.chi(m,k,j,i) = opt.chi_min_floor;
+    }
+  });
+
   return TaskStatus::complete;
 }
 

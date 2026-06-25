@@ -1,7 +1,7 @@
 """
-Boosted puncture test for Z4c.
+Boosted puncture test for Z4c with horizon finder enabled.
 Evolves a boosted puncture for 200 time steps and checks all contraints are satisfied
-to within error tolerances
+to within error tolerances.
 """
 
 # Modules
@@ -20,6 +20,7 @@ maxerrors = {
     ("My-norm"): (4.5e-04),
     ("Mz-norm"): (4.5e-04),
     ("Theta-norm"): (3.1e-05),
+    ("RMS-horizon"): (3.0e-02),
 }
 
 
@@ -38,6 +39,7 @@ def test_run():
         assert results, "Z4c boosted puncture test run failed."
         # Check constraints in the history file
         data = athena_read.hst("boosted.z4c.user.hst")
+        horizon = athena_read.horizon("boosted.horizon_summary_0.txt")
         cnorm = data["C-norm2"][3]
         hnorm = data["H-norm2"][3]
         mnorm = data["M-norm2"][3]
@@ -46,6 +48,7 @@ def test_run():
         mynorm = data["My-norm2"][3]
         mznorm = data["Mz-norm2"][3]
         tnorm = data["Theta-norm"][3]
+        hrms = horizon["hrms"][-1]
         if cnorm > maxerrors["C-norm"]:
             pytest.fail(
                 f"C-norm error too large, error: {cnorm:g} "
@@ -85,6 +88,11 @@ def test_run():
             pytest.fail(
                 f"Theta-norm error too large, error: {tnorm:g} "
                 f"threshold: {maxerrors['Theta-norm']:g}"
+            )
+        if hrms > maxerrors["RMS-horizon"]:
+            pytest.fail(
+                f"RMS of horizon too large, error: {hrms:g} "
+                f"threshold: {maxerrors['RMS-horizon']:g}"
             )
 
     finally:

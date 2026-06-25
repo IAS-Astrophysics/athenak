@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file elliptica_bns.cpp
-//  \brief Initial data reader for binary neutron star data with Elliptica
+// !\file elliptica.cpp
+// !\brief Initial data reader for binary neutron star data with Elliptica
 
 #include <math.h>
 #include <stdio.h>
@@ -35,8 +35,8 @@
 #include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 
-void EllipticaBinaryHistory(HistoryData *pdata, Mesh *pm);
-void EllipticaBinaryRefinementCondition(MeshBlockPack *pmbp);
+void EllipticaSystemHistory(HistoryData *pdata, Mesh *pm);
+void EllipticaSystemRefinementCondition(MeshBlockPack *pmbp);
 
 // Prototypes for magnetic vector potential
 KOKKOS_INLINE_FUNCTION
@@ -45,10 +45,10 @@ KOKKOS_INLINE_FUNCTION
 static Real A2(Real x, Real y, Real z, Real I_0, Real r_0);
 
 //----------------------------------------------------------------------------------------
-//! \fn SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_)
+//! \fn SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_)
 //! \brief Setup of the BHNS/BNS binary with Elliptica
 template<class TOVEOS>
-void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
+void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs         = pmy_mesh_->mb_indcs;
   auto &size          = pmbp->pmb->mb_size;
@@ -74,9 +74,47 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   Elliptica_ID_Reader_T *idr =
     elliptica_id_reader_init(fname.c_str(), "generic");
 
+  // Determine binary type and read
+  // binary separation for different systems
+  Real sep;
+  bool BHNS, BNS, SNS;
+  if (std::strcmp(idr->system,"BH_NS_binary_initial_data") == 0) {
+    sep = idr->get_param_dbl("BHNS_separation",idr);
+    BNS = false; BHNS = true; SNS = false;
+  } else if (std::strcmp(idr->system,"NS_NS_binary_initial_data") == 0) {
+    sep = idr->get_param_dbl("NSNS_separation",idr);
+    BNS = true; BHNS = false; SNS = false;
+  } else if (std::strcmp(idr->system,"Single_NS_initial_data") == 0) {
+    sep = 0.0; BNS = false; BHNS = false; SNS = true;
+  } else {
+    sep = 0.0; BNS = false; BHNS = false; SNS = false;
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "Separation = " << sep << std::endl;
+  }
+
+  // Set initial data table if used
   if (tab_path != "__na__") {
-    idr->set_param("NS1_EoS_table_path", tab_path.c_str(), idr);
-    idr->set_param("NS2_EoS_table_path", tab_path.c_str(), idr);
+    if (BNS) {
+      idr->set_param("NS1_EoS_table_path", tab_path.c_str(), idr);
+      idr->set_param("NS2_EoS_table_path", tab_path.c_str(), idr);
+    } else if (BHNS || SNS) {
+      idr->set_param("NS_EoS_table_path", tab_path.c_str(), idr);
+    } else {
+      idr->set_param("NS_EoS_table_path", "", idr);
+    }
+  }
+
+  // Check if the CompactObjectTracker is enabled, otherwise abort.
+  if (BHNS || BNS) {
+    if (pmbp->pz4c->ptracker.size() < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "There are two compact objects on the grid "
+              << "but only " << pmbp->pz4c->ptracker.size()
+              << " tracker(s) is(are) set!" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
 
   // Fields to interpolate
@@ -97,8 +135,9 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   int ncells2 = indcs.nx2 + 2 * (indcs.ng);
   int ncells3 = indcs.nx3 + 2 * (indcs.ng);
   int nmb     = pmbp->nmb_thispack;
-
-  int width = nmb * ncells1 * ncells2 * ncells3;
+  int width   = nmb * ncells1 * ncells2 * ncells3;
+  int n123    = ncells3 * ncells2 * ncells1;
+  int n12     = ncells2 * ncells1;
 
   Real *x_coords = new Real[width];
   Real *y_coords = new Real[width];
@@ -108,48 +147,45 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
 
   // Enable electron fraction if the EOS supports it.
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+  // Read only if nscalars > 0.
+  const bool use_ye = tov::UsesYe<TOVEOS>;
+  const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
   if (global_variable::my_rank == 0) {
     std::cout << "Allocated coordinates of size " << width << std::endl;
   }
 
-  // Populate coordinates for Elliptica
-  // TODO(JMF): Replace with a Kokkos loop on
-  // Kokkos::DefaultHostExecutionSpace() to improve performance.
-  int idx = 0;
-  for (int m = 0; m < nmb; m++) {
-    Real &x1min = size.h_view(m).x1min;
-    Real &x1max = size.h_view(m).x1max;
-    int nx1     = indcs.nx1;
+  // Populate coordinates for Elliptica.
+  Kokkos::parallel_for("pgen_coordinates",
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
+    // Decompose the flattened index.
+    int m   = idx / (n123);
+    int rem = idx - m * (n123);
+    int k   = rem / (n12);
+    rem    -= k * (n12);
+    int j   = rem / ncells1;
+    int i   = rem % ncells1;
 
-    Real &x2min = size.h_view(m).x2min;
-    Real &x2max = size.h_view(m).x2max;
-    int nx2     = indcs.nx2;
+    Real x = CellCenterX(i - is, indcs.nx1,
+                          size.h_view(m).x1min, size.h_view(m).x1max);
+    Real y = CellCenterX(j - js, indcs.nx2,
+                          size.h_view(m).x2min, size.h_view(m).x2max);
+    Real z = CellCenterX(k - ks, indcs.nx3,
+                          size.h_view(m).x3min, size.h_view(m).x3max);
 
-    Real &x3min = size.h_view(m).x3min;
-    Real &x3max = size.h_view(m).x3max;
-    int nx3     = indcs.nx3;
+    x_coords[idx] = x;
+    y_coords[idx] = y;
+    z_coords[idx] = z;
+  });
+  Kokkos::fence();
 
-    for (int k = 0; k < ncells3; k++) {
-      Real z = CellCenterX(k - ks, nx3, x3min, x3max);
-      for (int j = 0; j < ncells2; j++) {
-        Real y = CellCenterX(j - js, nx2, x2min, x2max);
-        for (int i = 0; i < ncells1; i++) {
-          Real x = CellCenterX(i - is, nx1, x1min, x1max);
-
-          x_coords[idx] = x;
-          y_coords[idx] = y;
-          z_coords[idx] = z;
-
-          // Increment flat index
-          idx++;
-        }
-      }
-    }
+  if (BHNS) {
+    idr->set_param("BH_filler_method","ChebTn_Ylm_perfect_s2",idr);
   }
-
-  idr->set_param("ADM_B1I_form", "zero", idr);
+  if (BHNS || BNS) {
+    idr->set_param("ADM_B1I_form", "zero", idr);
+  }
 
   // Interpolate the data
   idr->npoints  = width;
@@ -174,15 +210,11 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   // Capture variables for kernel; note that when Z4c is enabled, the gauge
   // variables are part of the Z4c class.
   auto &u_adm = pmbp->padm->u_adm;
-  auto &adm   = pmbp->padm->adm;
   auto &w0    = pmbp->pmhd->w0;
   auto &u_z4c = pmbp->pz4c->u0;
   // Because Elliptica only operates on the CPU, we can't construct the data on
   // the GPU. Instead, we create a mirror guaranteed to be on the CPU, populate
   // the data there, then move it back to the GPU.
-  // TODO(JMF): This needs to be tested on CPUs to ensure that it functions
-  // properly; In theory, create_mirror_view shouldn't copy the data unless it's
-  // in a different memory space.
   HostArray5D<Real>::HostMirror host_u_adm = create_mirror_view(u_adm);
   HostArray5D<Real>::HostMirror host_w0    = create_mirror_view(w0);
   HostArray5D<Real>::HostMirror host_u_z4c = create_mirror_view(u_z4c);
@@ -230,107 +262,103 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::cout << "Label indices saved." << std::endl;
   }
 
-  // TODO(JMF): Replace with a Kokkos loop on
-  // Kokkos::DefaultHostExecutionSpace() to improve performance.
-  idx = 0;
-  for (int m = 0; m < nmb; m++) {
-    for (int k = 0; k < ncells3; k++) {
-      for (int j = 0; j < ncells2; j++) {
-        for (int i = 0; i < ncells1; i++) {
-          // Extract metric quantities
-          host_adm.alpha(m, k, j, i)     = idr->field[i_alpha][idx];
-          host_adm.beta_u(m, 0, k, j, i) = idr->field[i_betax][idx];
-          host_adm.beta_u(m, 1, k, j, i) = idr->field[i_betay][idx];
-          host_adm.beta_u(m, 2, k, j, i) = idr->field[i_betaz][idx];
+  // Check if initial shift shall be set to zero.
+  bool shift_zero = pin->GetOrAddBoolean("z4c", "shift_zero", false);
 
-          Real g3d[NSPMETRIC];
-          host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = idr->field[i_gxx][idx];
-          host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = idr->field[i_gxy][idx];
-          host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = idr->field[i_gxz][idx];
-          host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = idr->field[i_gyy][idx];
-          host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = idr->field[i_gyz][idx];
-          host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = idr->field[i_gzz][idx];
+  Kokkos::parallel_for("pgen_fields",
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
+    // Decompose the flattened index.
+    int m   = idx / (n123);
+    int rem = idx - m * (n123);
+    int k   = rem / (n12);
+    rem    -= k * (n12);
+    int j   = rem / ncells1;
+    int i   = rem % ncells1;
 
-          host_adm.vK_dd(m, 0, 0, k, j, i) = idr->field[i_Kxx][idx];
-          host_adm.vK_dd(m, 0, 1, k, j, i) = idr->field[i_Kxy][idx];
-          host_adm.vK_dd(m, 0, 2, k, j, i) = idr->field[i_Kxz][idx];
-          host_adm.vK_dd(m, 1, 1, k, j, i) = idr->field[i_Kyy][idx];
-          host_adm.vK_dd(m, 1, 2, k, j, i) = idr->field[i_Kyz][idx];
-          host_adm.vK_dd(m, 2, 2, k, j, i) = idr->field[i_Kzz][idx];
+    // Extract metric quantities
+    host_adm.alpha(m, k, j, i)       = idr->field[i_alpha][idx];
 
-          // Extract hydro quantities
-          // Note that Elliptica does not necessarily use the same baryon rest-mass as
-          // AthenaK. The most reasonable thing to do, then, is to extract the total
-          // energy density, which is invariant, and use that with the 1D EOS.
-          Real egas = idr->field[i_rho][idx] * (1.0 + idr->field[i_eps][idx]);
-          Real &rho = host_w0(m, IDN, k, j, i);
-          rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
-          Real vu[3] = {idr->field[i_vx][idx],
-                        idr->field[i_vy][idx],
-                        idr->field[i_vz][idx]};
+    if (shift_zero) {
+      host_adm.beta_u(m, 0, k, j, i) = 0.0;
+      host_adm.beta_u(m, 1, k, j, i) = 0.0;
+      host_adm.beta_u(m, 2, k, j, i) = 0.0;
+    } else {
+      host_adm.beta_u(m, 0, k, j, i) = idr->field[i_betax][idx];
+      host_adm.beta_u(m, 1, k, j, i) = idr->field[i_betay][idx];
+      host_adm.beta_u(m, 2, k, j, i) = idr->field[i_betaz][idx];
+    }
 
-          // Check for garbage values thrown in by Elliptica.
-          if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
-            rho = 0.0;
-            host_w0(m, IPR, k, j, i) = 0.0;
-            vu[0] = 0.0;
-            vu[1] = 0.0;
-            vu[2] = 0.0;
-          }
+    Real g3d[NSPMETRIC];
+    host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = idr->field[i_gxx][idx];
+    host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = idr->field[i_gxy][idx];
+    host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = idr->field[i_gxz][idx];
+    host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = idr->field[i_gyy][idx];
+    host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = idr->field[i_gyz][idx];
+    host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = idr->field[i_gzz][idx];
 
-          host_w0(m, IPR, k, j, i) = eos.template
-                                      GetPFromRho<tov::LocationTag::Host>(rho);
+    host_adm.vK_dd(m, 0, 0, k, j, i) = idr->field[i_Kxx][idx];
+    host_adm.vK_dd(m, 0, 1, k, j, i) = idr->field[i_Kxy][idx];
+    host_adm.vK_dd(m, 0, 2, k, j, i) = idr->field[i_Kxz][idx];
+    host_adm.vK_dd(m, 1, 1, k, j, i) = idr->field[i_Kyy][idx];
+    host_adm.vK_dd(m, 1, 2, k, j, i) = idr->field[i_Kyz][idx];
+    host_adm.vK_dd(m, 2, 2, k, j, i) = idr->field[i_Kzz][idx];
 
-          // If the electron fraction is available, find it in the 1D EOS.
-          if constexpr (use_ye) {
-            host_w0(m, IYF, k, j, i) = eos.template
-                                       GetYeFromRho<tov::LocationTag::Host>(rho);
-          }
+    // Extract hydro quantities
+    // Note that Elliptica does not necessarily use the same baryon rest-mass as
+    // AthenaK. The most reasonable thing to do, then, is to extract the total
+    // energy density, which is invariant, and use that with the 1D EOS.
+    Real egas = idr->field[i_rho][idx] * (1.0 + idr->field[i_eps][idx]);
+    Real &rho = host_w0(m, IDN, k, j, i);
+    rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
+    Real vu[3] = {idr->field[i_vx][idx],
+                  idr->field[i_vy][idx],
+                  idr->field[i_vz][idx]};
 
-          // Before we store the velocity, we need to make sure it's physical
-          // and calculate the Lorentz factor. If the velocity is superluminal,
-          // we make a last-ditch attempt to salvage the solution by rescaling
-          // it to vsq = 1.0 - 1e-15
-          Real vsq = Primitive::SquareVector(vu, g3d);
-          if (1.0 - vsq <= 0) {
-            std::cout << "The velocity is superluminal!" << std::endl
-                      << "Attempting to adjust..." << std::endl;
-            Real fac = sqrt((1.0 - 1e-15) / vsq);
-            vu[0] *= fac;
-            vu[1] *= fac;
-            vu[2] *= fac;
-            vsq = 1.0 - 1.0e-15;
-          }
-          Real W = sqrt(1.0 / (1.0 - vsq));
+    // Check for garbage values thrown in by Elliptica.
+    if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
+      rho = 0.0;
+      host_w0(m, IPR, k, j, i) = 0.0;
+      vu[0] = 0.0;
+      vu[1] = 0.0;
+      vu[2] = 0.0;
+    }
 
-          host_w0(m, IVX, k, j, i) = W * vu[0];
-          host_w0(m, IVY, k, j, i) = W * vu[1];
-          host_w0(m, IVZ, k, j, i) = W * vu[2];
+    host_w0(m, IPR, k, j, i) = eos.template
+                                GetPFromRho<tov::LocationTag::Host>(rho);
 
-          idx++;
-        }
+    // If the electron fraction is available, find it in the 1D EOS.
+    if constexpr (use_ye) {
+      if (read_ye) {
+        host_w0(m, IYF, k, j, i) = eos.template
+                                    GetYeFromRho<tov::LocationTag::Host>(rho);
       }
     }
-  }
+
+    // Before we store the velocity, we need to make sure it's physical
+    // and calculate the Lorentz factor. If the velocity is superluminal,
+    // we make a last-ditch attempt to salvage the solution by rescaling
+    // it to vsq = 1.0 - 1e-15
+    Real vsq = Primitive::SquareVector(vu, g3d);
+    if (1.0 - vsq <= 0) {
+      std::cout << "The velocity is superluminal!" << std::endl
+                << "Attempting to adjust..." << std::endl;
+      Real fac = sqrt((1.0 - 1e-15) / vsq);
+      vu[0] *= fac;
+      vu[1] *= fac;
+      vu[2] *= fac;
+      vsq = 1.0 - 1.0e-15;
+    }
+    Real W = sqrt(1.0 / (1.0 - vsq));
+
+    host_w0(m, IVX, k, j, i) = W * vu[0];
+    host_w0(m, IVY, k, j, i) = W * vu[1];
+    host_w0(m, IVZ, k, j, i) = W * vu[2];
+  });
+  Kokkos::fence();
 
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;
-  }
-
-  // Binary separation for different systems
-  Real sep;
-  bool BHNS, BNS;
-  if (std::strcmp(idr->system,"BH_NS_binary_initial_data") == 0) {
-    sep = idr->get_param_dbl("BHNS_separation",idr);
-    BNS = false; BHNS = true;
-  } else if (std::strcmp(idr->system,"NS_NS_binary_initial_data") == 0) {
-    sep = idr->get_param_dbl("NSNS_separation",idr);
-    BNS = true; BHNS = false;
-  } else {
-    sep = 0.0; BNS = false; BHNS = false;
-  }
-  if (global_variable::my_rank == 0) {
-    std::cout << "Separation = " << sep << std::endl;
   }
 
   // NS position for the computation of vector potential for BHNS.
@@ -451,21 +479,21 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
-    int nx1 = indcs.nx1;
-    Real x1v = CellCenterX(i - is, nx1, x1min, x1max);
-    Real x1f   = LeftEdgeX(i - is, nx1, x1min, x1max);
+    int nx1     = indcs.nx1;
+    Real x1v    = CellCenterX(i - is, nx1, x1min, x1max);
+    Real x1f    = LeftEdgeX(i - is, nx1, x1min, x1max);
 
     Real &x2min = size.d_view(m).x2min;
     Real &x2max = size.d_view(m).x2max;
-    int nx2 = indcs.nx2;
-    Real x2v = CellCenterX(j - js, nx2, x2min, x2max);
-    Real x2f   = LeftEdgeX(j - js, nx2, x2min, x2max);
+    int nx2     = indcs.nx2;
+    Real x2v    = CellCenterX(j - js, nx2, x2min, x2max);
+    Real x2f    = LeftEdgeX(j - js, nx2, x2min, x2max);
 
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
-    int nx3 = indcs.nx3;
-    Real x3v = CellCenterX(k - ks, nx3, x3min, x3max);
-    Real x3f   = LeftEdgeX(k - ks, nx3, x3min, x3max);
+    int nx3     = indcs.nx3;
+    Real x3v    = CellCenterX(k - ks, nx3, x3min, x3max);
+    Real x3f    = LeftEdgeX(k - ks, nx3, x3min, x3max);
 
     Real dx1 = size.d_view(m).dx1;
     Real dx2 = size.d_view(m).dx2;
@@ -488,6 +516,10 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
         a2(m,k,j,i) = A2(x1f, x2v + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
         a3(m,k,j,i) = 0.0;
       }
+    } else if (SNS) {
+      a1(m,k,j,i) = A1(x1v, x2f, x3f, I_0, r_0);
+      a2(m,k,j,i) = A2(x1f, x2v, x3f, I_0, r_0);
+      a3(m,k,j,i) = 0.0;
     } else {
       a1(m,k,j,i) = 0.0;
       a2(m,k,j,i) = 0.0;
@@ -539,6 +571,9 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
           a1(m,k,j,i) = 0.5*(A1(xl, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
                              A1(xr, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
         }
+      } else if (SNS) {
+        a1(m,k,j,i) = 0.5*(A1(xl, x2f, x3f, I_0, r_0) +
+                           A1(xr, x2f, x3f, I_0, r_0));
       } else {
         a1(m,k,j,i) = 0.0;
       }
@@ -585,6 +620,9 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
           a2(m,k,j,i) = 0.5*(A2(x1f, xl + 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
                              A2(x1f, xr + 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
         }
+      } else if (SNS) {
+        a2(m,k,j,i) = 0.5*(A2(x1f, xl, x3f, I_0, r_0) +
+                           A2(x1f, xr, x3f, I_0, r_0));
       } else {
         a2(m,k,j,i) = 0.0;
       }
@@ -643,30 +681,30 @@ void SetupBinary(ParameterInput *pin, Mesh* pmy_mesh_) {
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem()
-//! \brief Problem Generator for Binary with Elliptica
+//! \brief Problem Generator for Single/Binary with Elliptica
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->pdyngr == nullptr || pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl
-              << "Binary data requires <mhd> and <z4c> blocks." << std::endl;
+              << "Single/Binary data requires <mhd> and <z4c> blocks." << std::endl;
     exit(EXIT_FAILURE);
   }
 
-  user_hist_func = &EllipticaBinaryHistory;
-  user_ref_func = &EllipticaBinaryRefinementCondition;
+  user_hist_func = &EllipticaSystemHistory;
+  user_ref_func = &EllipticaSystemRefinementCondition;
 
   if (restart) return;
 
   // Select the correct EOS template based on the EOS we need.
   if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_ideal) {
-    SetupBinary<tov::PolytropeEOS>(pin, pmy_mesh_);
+    SetupSystem<tov::PolytropeEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
-    SetupBinary<tov::TabulatedEOS>(pin, pmy_mesh_);
+    SetupSystem<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
-    SetupBinary<tov::TabulatedEOS>(pin, pmy_mesh_);
+    SetupSystem<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
-    SetupBinary<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
+    SetupSystem<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Unknown EOS requested for Elliptica problem" << std::endl;
@@ -674,7 +712,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   auto &indcs = pmy_mesh_->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
   int &ng = indcs.ng;
   int ncells1 = indcs.nx1 + 2*ng;
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
@@ -698,9 +735,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 // History function
-void EllipticaBinaryHistory(HistoryData *pdata, Mesh *pm) {
+void EllipticaSystemHistory(HistoryData *pdata, Mesh *pm) {
   // Select the number of outputs and create labels for them.
-  int &nmhd       = pm->pmb_pack->pmhd->nmhd;
   pdata->nhist    = 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
@@ -744,7 +780,7 @@ void EllipticaBinaryHistory(HistoryData *pdata, Mesh *pm) {
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
-    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
     rho_max = 0.;
     alpha_min = 0.;
   }
@@ -755,7 +791,7 @@ void EllipticaBinaryHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[1] = alpha_min;
 }
 
-void EllipticaBinaryRefinementCondition(MeshBlockPack *pmbp) {
+void EllipticaSystemRefinementCondition(MeshBlockPack *pmbp) {
   pmbp->pz4c->pamr->Refine(pmbp);
 }
 
