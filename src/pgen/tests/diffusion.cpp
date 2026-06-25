@@ -120,7 +120,7 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
     }
     Real gm1 = eos.gamma - 1.0;
     auto &nu_iso = pmbp->phydro->pvisc->nu_iso;
-    auto &kappa_iso = pmbp->phydro->pcond->kappa_iso;
+    auto &alpha_iso = pmbp->phydro->pcond->alpha_iso;
 
     // compute solution in u1 register. For initial conditions, set u1 -> u0.
     auto &u1 = (set_initial_conditions)? pmbp->phydro->u0 : pmbp->phydro->u1;
@@ -141,8 +141,8 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
       }
       Real p0 = 1.0/eos.gamma;
       if (ctest) {
-        p0 = (amp_/sqrt(1.0 + 4.0*kappa_iso*time))*
-              exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*kappa_iso*time));
+        p0 = (amp_/sqrt(1.0 + 4.0*alpha_iso*time))*
+              exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*alpha_iso*time));
       }
       u1(m,IDN,k,j,i) = 1,0;
       u1(m,IM1,k,j,i) = 0.0;
@@ -188,7 +188,7 @@ void GaussianProfileBCs(Mesh *pm) {
   EOS_Data &eos = pm->pmb_pack->phydro->peos->eos_data;
   Real gm1 = eos.gamma - 1.0;
   auto &nu_iso = pm->pmb_pack->phydro->pvisc->nu_iso;
-  auto &kappa_iso = pm->pmb_pack->phydro->pcond->kappa_iso;
+  auto &alpha_iso = pm->pmb_pack->phydro->pcond->alpha_iso;
   auto &u0 = pm->pmb_pack->phydro->u0;
 
   // capture variables for the kernel
@@ -213,8 +213,8 @@ void GaussianProfileBCs(Mesh *pm) {
         }
         Real p0 = 1.0/eos.gamma;
         if (ctest) {
-          p0 = (amp_/sqrt(1.0 + 4.0*kappa_iso*time))*
-                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*kappa_iso*time));
+          p0 = (amp_/sqrt(1.0 + 4.0*alpha_iso*time))*
+                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*alpha_iso*time));
         }
         u0(m,IDN,k,j,is-i-1) = 1,0;
         u0(m,IM1,k,j,is-i-1) = 0.0;
@@ -230,8 +230,8 @@ void GaussianProfileBCs(Mesh *pm) {
         }
         p0 = 1.0/eos.gamma;
         if (ctest) {
-          p0 = (amp_/sqrt(1.0 + 4.0*kappa_iso*time))*
-                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*kappa_iso*time));
+          p0 = (amp_/sqrt(1.0 + 4.0*alpha_iso*time))*
+                exp(-1.0*SQR(x1v-x10_)/(1.0 + 4.0*alpha_iso*time));
         }
         u0(m,IDN,k,j,ie+i+1) = 1,0;
         u0(m,IM1,k,j,ie+i+1) = 0.0;

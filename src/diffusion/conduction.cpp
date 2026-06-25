@@ -58,29 +58,19 @@ Real TempDepKappa(Real temp, Real limit) {
 // Note first argument passes string ("hydro" or "mhd") denoting in wihch class this
 // object is being constructed, and therefore which <block> in the input file from which
 // the parameters are read.
-// Note that the coefficient of thermal conduction, kappa, corresponds to conductivity,
-// not diffusivity. This is different from the coefficient used in Athena++.
+// Note that the coefficients of thermal conduction, alpha_iso, etc., correspond to
+// diffusivities. The conductivity is kappa = (dens)*alpha, and the energy flux
+// q = -kappa * (dT/dx) = - alpha * d * *dT/dx)
 
 Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
-  // Read parameters for isotropic thermal conduction (if any)
-  if (pin->DoesParameterExist(block,"isotropic_conduction")) {
-    iso_cond_type = pin->GetString(block,"isotropic_conduction");
-    // Check for valid type
-    if ((iso_cond_type.compare("constant") != 0) &&
-        (iso_cond_type.compare("spitzer") != 0) &&
-        (iso_cond_type.compare("spitzer_limited") != 0)) {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "Invalid choice for isotropic thermal conduction type" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    // constant conductivity
-    if (iso_cond_type.compare("constant") == 0) {
-      kappa_iso = pin->GetReal(block,"kappa_iso");
-    }
-    kappa_iso_limit = pin->GetOrAddReal(block,"kappa_iso_limit",
-                      static_cast<Real>(std::numeric_limits<float>::max()));
-  }
+  // Read parameters for thermal diffusivity (if any)
+  alpha_iso = pin->GetOrAddReal(block,"alpha_iso", 0.0);
+  alpha_aniso = pin->GetOrAddReal(block,"alpha_aniso", 0.0);
+  alpha_spitzer = pin->GetOrAddBoolean(block,"alpha_spitzer", false);
+  // Limit on thermal heat flux (saturated conduction)
+  q_limit = pin->GetOrAddReal(block,"q_limit",
+                     static_cast<Real>(std::numeric_limits<float>::max()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -96,22 +86,25 @@ Conduction::~Conduction() {
 
 void Conduction::AddHeatFluxes(const DvceArray5D<Real> &w0, const EOS_Data &eos,
     DvceFaceFld5D<Real> &flx) {
-  if (iso_cond_type.compare("constant") == 0) {
-    AddIsotropicHeatFluxConstCond(w0, eos, flx);
-  } else if ((iso_cond_type.compare("spitzer") == 0) ||
-             (iso_cond_type.compare("spitzer_limited") == 0)) {
-    AddIsotropicHeatFluxSpitzerCond(w0, eos, flx);
+  if (alpha_iso != 0) {
+    AddHeatFluxIso(w0, eos, flx);
+  }
+  if (alpha_aniso != 0) {
+    AddHeatFluxAniso(w0, eos, flx);
+  }
+  if (alpha_spitzer) {
+    AddHeatFluxSpitzer(w0, eos, flx);
   }
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AddIsotropicHeatFluxConstCond()
+//! \fn void AddHeatFluxIso()
 //! \brief Adds isotropic heat flux computed using constant conductivity to face-centered
 //! fluxes of conserved variables
 
-void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
-    const EOS_Data &eos, DvceFaceFld5D<Real> &flx) {
+void Conduction::AddHeatFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -119,15 +112,17 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   int nmb1 = pmy_pack->nmb_thispack - 1;
   auto size = pmy_pack->pmb->mb_size;
   Real gm1 = eos.gamma-1.0;
-  Real &kappa_ = kappa_iso;
+  Real &alpha_ = alpha_iso;
 
   // fluxes in x1-direction
   auto &flx1 = flx.x1f;
   par_for("conduct1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k,j,i-1)/w0(m,IDN,k,j,i-1))
-              * gm1 / size.d_view(m).dx1;
-    flx1(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    Real tempr = w0(m,IEN,k,j,i  )/w0(m,IDN,k,j,i  );
+    Real templ = w0(m,IEN,k,j,i-1)/w0(m,IDN,k,j,i-1);
+    Real dtempdx = (tempr - templ) * gm1 / size.d_view(m).dx1;
+    Real densf = 0.5*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
+    flx1(m,IEN,k,j,i) -= alpha_ * densf * dtempdx;
   });
   if (pmy_pack->pmesh->one_d) {return;}
 
@@ -135,9 +130,11 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   auto &flx2 = flx.x2f;
   par_for("conduct2",DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k,j-1,i)/w0(m,IDN,k,j-1,i))
-                * gm1 / size.d_view(m).dx2;
-    flx2(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    Real tempr = w0(m,IEN,k,j  ,i)/w0(m,IDN,k,j  ,i);
+    Real templ = w0(m,IEN,k,j-1,i)/w0(m,IDN,k,j-1,i);
+    Real dtempdx = (tempr - templ) * gm1 / size.d_view(m).dx2;
+    Real densf = 0.5*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
+    flx2(m,IEN,k,j,i) -= alpha_ * densf * dtempdx;
   });
   if (pmy_pack->pmesh->two_d) {return;}
 
@@ -145,10 +142,21 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
   auto &flx3 = flx.x3f;
   par_for("conduct3",DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-    Real dtempdx = (w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i) - w0(m,IEN,k-1,j,i)/w0(m,IDN,k-1,j,i))
-                * gm1 / size.d_view(m).dx3;
-    flx3(m,IEN,k,j,i) -= kappa_ * dtempdx;
+    Real tempr = w0(m,IEN,k  ,j,i)/w0(m,IDN,k  ,j,i);
+    Real templ = w0(m,IEN,k-1,j,i)/w0(m,IDN,k-1,j,i);
+    Real dtempdx = (tempr - templ) * gm1 / size.d_view(m).dx3;
+    Real densf = 0.5*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
+    flx3(m,IEN,k,j,i) -= alpha_ * densf * dtempdx;
   });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddHeatFluxAniso()
+//! \brief Current a no-op function, to be added later
+
+void Conduction::AddHeatFluxAniso(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
   return;
 }
 
@@ -157,8 +165,8 @@ void Conduction::AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w0,
 //! \brief Adds heat flux to face-centered fluxes of conserved variables with
 //! temperature-dependent conductivity
 
-void Conduction::AddIsotropicHeatFluxSpitzerCond(const DvceArray5D<Real> &w0,
-    const EOS_Data &eos, DvceFaceFld5D<Real> &flx) {
+void Conduction::AddHeatFluxSpitzer(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+   DvceFaceFld5D<Real> &flx) {
 /*
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
@@ -319,19 +327,10 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
 //  }
 
   // set flag for Spitzer conductivity
-  bool spitzer = false;
-  if ((iso_cond_type.compare("spitzer") == 0) ||
-      (iso_cond_type.compare("spitzer_limited") == 0)) {
-    spitzer = true;
-  }
-  Real limit_ = kappa_iso_limit;
-  Real temp_unit=0.0, kappa_unit=0.0;
-
-  if (spitzer) {
-    Real temp_unit = pmy_pack->punit->temperature_cgs();
-    Real kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
+  bool spitzer_ = alpha_spitzer;
+  Real temp_unit = pmy_pack->punit->temperature_cgs();
+  Real kappa_unit = pmy_pack->punit->pressure_cgs()*pmy_pack->punit->velocity_cgs()*
                       pmy_pack->punit->length_cgs()/pmy_pack->punit->temperature_cgs();
-  }
 
   // capture variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -346,7 +345,7 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   auto &three_d = pmy_pack->pmesh->three_d;
   auto &size = pmy_pack->pmb->mb_size;
   Real gm1 = eos_data.gamma-1.0;
-  Real kappa0 = kappa_iso;
+  Real alpha0 = alpha_iso;
 
   // find smallest timestep for thermal conduction in each cell
   // Note loop over all cells needed even for constant conductivity
@@ -360,18 +359,18 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
     k += ks;
     j += js;
 
-    Real kappa_ = kappa0;
-    if (spitzer) {
-      Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
-      kappa_ = TempDepKappa(temp*temp_unit, limit_)/kappa_unit;
-    }
+    Real alpha_ = alpha0;
+//    if (spitzer_) {
+//      Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+//      kappa_ = TempDepKappa(temp*temp_unit, limit_)/kappa_unit;
+//    }
 
-    min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+    min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/alpha_*w0_(m,IDN,k,j,i)/gm1);
     if (multi_d) {
-      min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/alpha_*w0_(m,IDN,k,j,i)/gm1);
     }
     if (three_d) {
-      min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/kappa_*w0_(m,IDN,k,j,i)/gm1);
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/alpha_*w0_(m,IDN,k,j,i)/gm1);
     }
   }, Kokkos::Min<Real>(dtnew));
   dtnew *= fac;

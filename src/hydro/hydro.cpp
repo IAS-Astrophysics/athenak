@@ -80,7 +80,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Thermal conduction (if requested in input file)
-  if (pin->DoesParameterExist("hydro","isotropic_conduction")) {
+  if (pin->DoesParameterExist("hydro","alpha_iso") ||
+      pin->DoesParameterExist("hydro","alpha_aniso") ||
+      pin->DoesParameterExist("hydro","alpha_spitzer")) {
     if (peos->eos_data.is_ideal) {
       pcond = new Conduction("hydro", ppack, pin);
     } else {

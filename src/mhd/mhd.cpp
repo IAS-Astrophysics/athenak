@@ -111,7 +111,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","isotropic_conduction")) {
+  if (pin->DoesParameterExist("mhd","alpha_iso") ||
+      pin->DoesParameterExist("mhd","alpha_aniso") ||
+      pin->DoesParameterExist("mhd","alpha_spitzer")) {
     if (peos->eos_data.is_ideal) {
       pcond = new Conduction("mhd", ppack, pin);
     } else {
