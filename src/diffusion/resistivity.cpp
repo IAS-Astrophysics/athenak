@@ -26,7 +26,7 @@ Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
   // Read parameters for Ohmic resistivity (if any)
   if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
-    iso_resist_type = pin->GetString("mhd","ohmic_resisitivity");
+    iso_resist_type = pin->GetString("mhd","ohmic_resistivity");
     // Check for valid type
     if (iso_resist_type.compare("constant") != 0) {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
