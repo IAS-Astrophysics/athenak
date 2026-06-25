@@ -24,6 +24,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
@@ -58,6 +59,16 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
+  // Check if the CompactObjectTracker is enabled, otherwise abort.
+  if (pmbp->pz4c->ptracker.size() < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "There are two compact objects on the grid "
+            << "but only " << pmbp->pz4c->ptracker.size()
+            << " tracker(s) is(are) set!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Conversion constants to translate between Lorene and AthenaK
   const Real c_light  = Lorene::Unites::c_si;      // speed of light [m/s]
   const Real nuc_dens = Lorene::Unites::rhonuc_si; // Nuclear density [kg/m^3]
@@ -85,12 +96,13 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real r_0 = pin->GetOrAddReal("problem", "r_0_current", 5.0);
   Real I_0 = 4*r_0*b_max/(23.0*M_PI);
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
-  int ncells3 = indcs.nx3 + 2*(indcs.ng);
-  int nmb = pmbp->nmb_thispack;
-
-  int width = nmb*ncells1*ncells2*ncells3;
+  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
+  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
+  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
+  int nmb     = pmbp->nmb_thispack;
+  int width   = nmb * ncells1 * ncells2 * ncells3;
+  int n123    = ncells3 * ncells2 * ncells1;
+  int n12     = ncells2 * ncells1;
 
   Real *x_coords = new Real[width];
   Real *y_coords = new Real[width];
@@ -100,44 +112,38 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
 
   // Enable ye if the EOS supports it.
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+  // Read only if nscalars > 0.
+  const bool use_ye = tov::UsesYe<TOVEOS>;
+  const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
   if (global_variable::my_rank == 0) {
     std::cout << "Allocated coordinates of size " << width << std::endl;
   }
 
-  // Populate coordinates for LORENE
-  int idx = 0;
-  for (int m = 0; m < nmb; m++) {
-    Real &x1min = size.h_view(m).x1min;
-    Real &x1max = size.h_view(m).x1max;
-    int nx1 = indcs.nx1;
+  // Populate coordinates for LORENE.
+  Kokkos::parallel_for("pgen_coordinates",
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
+    // Decompose the flattened index.
+    int m   = idx / (n123);
+    int rem = idx - m * (n123);
+    int k   = rem / (n12);
+    rem    -= k * (n12);
+    int j   = rem / ncells1;
+    int i   = rem % ncells1;
 
-    Real &x2min = size.h_view(m).x2min;
-    Real &x2max = size.h_view(m).x2max;
-    int nx2 = indcs.nx2;
+    Real x = CellCenterX(i - is, indcs.nx1,
+                          size.h_view(m).x1min, size.h_view(m).x1max);
+    Real y = CellCenterX(j - js, indcs.nx2,
+                          size.h_view(m).x2min, size.h_view(m).x2max);
+    Real z = CellCenterX(k - ks, indcs.nx3,
+                          size.h_view(m).x3min, size.h_view(m).x3max);
 
-    Real &x3min = size.h_view(m).x3min;
-    Real &x3max = size.h_view(m).x3max;
-    int nx3 = indcs.nx3;
-
-    for (int k = 0; k < ncells3; k++) {
-      Real z = CellCenterX(k - ks, nx3, x3min, x3max);
-      for (int j = 0; j < ncells2; j++) {
-        Real y = CellCenterX(j - js, nx2, x2min, x2max);
-        for (int i = 0; i < ncells1; i++) {
-          Real x = CellCenterX(i - is, nx1, x1min, x1max);
-
-          x_coords[idx] = coord_unit*x;
-          y_coords[idx] = coord_unit*y;
-          z_coords[idx] = coord_unit*z;
-
-          // Increment flat index
-          idx++;
-        }
-      }
-    }
-  }
+    x_coords[idx] = coord_unit * x;
+    y_coords[idx] = coord_unit * y;
+    z_coords[idx] = coord_unit * z;
+  });
+  Kokkos::fence();
 
   // Interpolate the data
   if (global_variable::my_rank == 0) {
@@ -187,86 +193,90 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   // Copy the interpolated data into the mirrored views.
-  idx = 0;
-  for (int m = 0; m < nmb; m++) {
-    for (int k = 0; k < ncells3; k++) {
-      for (int j = 0; j < ncells2; j++) {
-        for (int i = 0; i < ncells1; i++) {
-          // Extract metric quantities
-          host_adm.alpha(m, k, j, i) = bns->nnn[idx];
-          host_adm.beta_u(m, 0, k, j, i) = -bns->beta_x[idx];
-          host_adm.beta_u(m, 1, k, j, i) = -bns->beta_y[idx];
-          host_adm.beta_u(m, 2, k, j, i) = -bns->beta_z[idx];
+  Kokkos::parallel_for("pgen_fields",
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
+    // Decompose the flattened index.
+    int m   = idx / (n123);
+    int rem = idx - m * (n123);
+    int k   = rem / (n12);
+    rem    -= k * (n12);
+    int j   = rem / ncells1;
+    int i   = rem % ncells1;
 
-          Real g3d[NSPMETRIC];
-          host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = bns->g_xx[idx];
-          host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = bns->g_xy[idx];
-          host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = bns->g_xz[idx];
-          host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = bns->g_yy[idx];
-          host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = bns->g_yz[idx];
-          host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = bns->g_zz[idx];
+    // Extract metric quantities
+    host_adm.alpha(m, k, j, i) = bns->nnn[idx];
+    host_adm.beta_u(m, 0, k, j, i) = -bns->beta_x[idx];
+    host_adm.beta_u(m, 1, k, j, i) = -bns->beta_y[idx];
+    host_adm.beta_u(m, 2, k, j, i) = -bns->beta_z[idx];
 
-          host_adm.vK_dd(m, 0, 0, k, j, i) = coord_unit * bns->k_xx[idx];
-          host_adm.vK_dd(m, 0, 1, k, j, i) = coord_unit * bns->k_xy[idx];
-          host_adm.vK_dd(m, 0, 2, k, j, i) = coord_unit * bns->k_xz[idx];
-          host_adm.vK_dd(m, 1, 1, k, j, i) = coord_unit * bns->k_yy[idx];
-          host_adm.vK_dd(m, 1, 2, k, j, i) = coord_unit * bns->k_yz[idx];
-          host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
+    Real g3d[NSPMETRIC];
+    host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = bns->g_xx[idx];
+    host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = bns->g_xy[idx];
+    host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = bns->g_xz[idx];
+    host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = bns->g_yy[idx];
+    host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = bns->g_yz[idx];
+    host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = bns->g_zz[idx];
 
-          // Extract hydro quantities
-          // Note that Lorene does not necessarily use the same baryon rest-mass as
-          // AthenaK. The most reasonable thing to do, then, is to extract the total
-          // energy density, which is invariant, and use that with the 1D EOS.
-          Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
-          Real& rho = host_w0(m, IDN, k, j, i);
-          rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
-          Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
-                        bns->u_euler_y[idx] / vel_unit,
-                        bns->u_euler_z[idx] / vel_unit};
+    host_adm.vK_dd(m, 0, 0, k, j, i) = coord_unit * bns->k_xx[idx];
+    host_adm.vK_dd(m, 0, 1, k, j, i) = coord_unit * bns->k_xy[idx];
+    host_adm.vK_dd(m, 0, 2, k, j, i) = coord_unit * bns->k_xz[idx];
+    host_adm.vK_dd(m, 1, 1, k, j, i) = coord_unit * bns->k_yy[idx];
+    host_adm.vK_dd(m, 1, 2, k, j, i) = coord_unit * bns->k_yz[idx];
+    host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
 
-          // Check for garbage values thrown in by Lorene.
-          if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
-            rho = 0.0;
-            host_w0(m, IPR, k, j, i) = 0.0;
-            vu[0] = 0.0;
-            vu[1] = 0.0;
-            vu[2] = 0.0;
-          }
+    // Extract hydro quantities
+    // Note that Lorene does not necessarily use the same baryon rest-mass as
+    // AthenaK. The most reasonable thing to do, then, is to extract the total
+    // energy density, which is invariant, and use that with the 1D EOS.
+    Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
+    Real& rho = host_w0(m, IDN, k, j, i);
+    rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
+    Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
+                  bns->u_euler_y[idx] / vel_unit,
+                  bns->u_euler_z[idx] / vel_unit};
 
-          host_w0(m, IPR, k, j, i) = eos.template
-                                     GetPFromRho<tov::LocationTag::Host>(rho);
+    // Check for garbage values thrown in by Lorene.
+    if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
+      rho = 0.0;
+      host_w0(m, IPR, k, j, i) = 0.0;
+      vu[0] = 0.0;
+      vu[1] = 0.0;
+      vu[2] = 0.0;
+    }
 
-          // If the electron fraction is available, find it in the 1D EOS.
-          if constexpr (use_ye) {
-            host_w0(m, IYF, k, j, i) = eos.template
-                                       GetYeFromRho<tov::LocationTag::Host>(rho);
-          }
+    host_w0(m, IPR, k, j, i) = eos.template
+                                GetPFromRho<tov::LocationTag::Host>(rho);
 
-          // Before we store the velocity, we need to make sure it's physical and
-          // calculate the Lorentz factor. If the velocity is superluminal, we make a
-          // last-ditch attempt to salvage the solution by rescaling it to
-          // vsq = 1.0 - 1e-15
-          Real vsq = Primitive::SquareVector(vu, g3d);
-          if (1.0 - vsq <= 0) {
-            std::cout << "The velocity is superluminal!" << std::endl
-                      << "Attempting to adjust..." << std::endl;
-            Real fac = Kokkos::sqrt((1.0 - 1e-15)/vsq);
-            vu[0] *= fac;
-            vu[1] *= fac;
-            vu[2] *= fac;
-            vsq = 1.0 - 1.0e-15;
-          }
-          Real W = Kokkos::sqrt(1.0 / (1.0 - vsq));
-
-          host_w0(m, IVX, k, j, i) = W*vu[0];
-          host_w0(m, IVY, k, j, i) = W*vu[1];
-          host_w0(m, IVZ, k, j, i) = W*vu[2];
-
-          idx++;
-        }
+    // If the electron fraction is available, find it in the 1D EOS.
+    if constexpr (use_ye) {
+      if (read_ye) {
+        host_w0(m, IYF, k, j, i) = eos.template
+                                    GetYeFromRho<tov::LocationTag::Host>(rho);
       }
     }
-  }
+
+    // Before we store the velocity, we need to make sure it's physical and
+    // calculate the Lorentz factor. If the velocity is superluminal, we make a
+    // last-ditch attempt to salvage the solution by rescaling it to
+    // vsq = 1.0 - 1e-15
+    Real vsq = Primitive::SquareVector(vu, g3d);
+    if (1.0 - vsq <= 0) {
+      std::cout << "The velocity is superluminal!" << std::endl
+                << "Attempting to adjust..." << std::endl;
+      Real fac = Kokkos::sqrt((1.0 - 1e-15)/vsq);
+      vu[0] *= fac;
+      vu[1] *= fac;
+      vu[2] *= fac;
+      vsq = 1.0 - 1.0e-15;
+    }
+    Real W = Kokkos::sqrt(1.0 / (1.0 - vsq));
+
+    host_w0(m, IVX, k, j, i) = W*vu[0];
+    host_w0(m, IVY, k, j, i) = W*vu[1];
+    host_w0(m, IVZ, k, j, i) = W*vu[2];
+  });
+  Kokkos::fence();
 
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;
@@ -275,6 +285,31 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real sep = bns->dist/coord_unit;
   if (global_variable::my_rank == 0) {
     std::cout << "sep = " << sep << std::endl;
+  }
+
+  // For unequal-mass binaries, the COM is shifted, such that it
+  // lies at the grid origin. To get the correct positions for the
+  // CO tracker and the magnetic field seed, we need to specify the
+  // component gravitational masses (where M2 is the heavier star as
+  // in Lorene).
+  double M1 = pin->GetReal("problem", "M1");
+  double M2 = pin->GetReal("problem", "M2");
+  double center_m = - (M2 / (M1 + M2)) * sep;
+  double center_p = + (M1 / (M1 + M2)) * sep;
+
+  Real NS1_COM_pos[3] = {center_m, 0.0, 0.0};
+  Real NS2_COM_pos[3] = {center_p, 0.0, 0.0};
+  pmbp->pz4c->ptracker[0]->SetPos(NS1_COM_pos);
+  pmbp->pz4c->ptracker[1]->SetPos(NS2_COM_pos);
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Adjusted CompactObjectTracker position by COM." << std::endl;
+    std::cout << "NS1: cx = " << pmbp->pz4c->ptracker[0]->GetPos(0)
+              << ", cy = " << pmbp->pz4c->ptracker[0]->GetPos(1)
+              << ", cz = " << pmbp->pz4c->ptracker[0]->GetPos(2) << std::endl;
+    std::cout << "NS2: cx = " << pmbp->pz4c->ptracker[1]->GetPos(0)
+              << ", cy = " << pmbp->pz4c->ptracker[1]->GetPos(1)
+              << ", cz = " << pmbp->pz4c->ptracker[1]->GetPos(2) << std::endl;
   }
 
   // Cleanup
@@ -328,10 +363,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    a1(m,k,j,i) = A1(x1v - 0.5*sep, x2f, x3f, I_0, r_0) +
-                  A1(x1v + 0.5*sep, x2f, x3f, I_0, r_0);
-    a2(m,k,j,i) = A2(x1f - 0.5*sep, x2v, x3f, I_0, r_0) +
-                  A2(x1f + 0.5*sep, x2v, x3f, I_0, r_0);
+    a1(m,k,j,i) = A1(x1v - center_m, x2f, x3f, I_0, r_0) +
+                  A1(x1v - center_p, x2f, x3f, I_0, r_0);
+    a2(m,k,j,i) = A2(x1f - center_m, x2v, x3f, I_0, r_0) +
+                  A2(x1f - center_p, x2v, x3f, I_0, r_0);
     a3(m,k,j,i) = 0.0;
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
@@ -365,10 +400,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
-      a1(m,k,j,i) = 0.5*((A1(xl-0.5*sep, x2f, x3f, I_0, r_0) +
-                         A1(xl+0.5*sep, x2f, x3f, I_0, r_0)) +
-                         (A1(xr-0.5*sep, x2f, x3f, I_0, r_0) +
-                         A1(xr+0.5*sep, x2f, x3f, I_0, r_0)));
+      a1(m,k,j,i) = 0.5*((A1(xl - center_m, x2f, x3f, I_0, r_0) +
+                          A1(xl - center_p, x2f, x3f, I_0, r_0)) +
+                         (A1(xr - center_m, x2f, x3f, I_0, r_0) +
+                          A1(xr - center_p, x2f, x3f, I_0, r_0)));
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -398,10 +433,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
-      a2(m,k,j,i) = 0.5*((A2(x1f-0.5*sep, xl, x3f, I_0, r_0) +
-                         A2(x1f+0.5*sep, xl, x3f, I_0, r_0)) +
-                         (A2(x1f-0.5*sep, xr, x3f, I_0, r_0) +
-                         A2(x1f+0.5*sep, xr, x3f, I_0, r_0)));
+      a2(m,k,j,i) = 0.5*((A2(x1f - center_m, xl, x3f, I_0, r_0) +
+                          A2(x1f - center_p, xl, x3f, I_0, r_0)) +
+                         (A2(x1f - center_m, xr, x3f, I_0, r_0) +
+                          A2(x1f - center_p, xr, x3f, I_0, r_0)));
     }
   });
 
