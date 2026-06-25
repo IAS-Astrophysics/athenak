@@ -97,7 +97,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","isotropic_viscosity")) {
+  if (pin->DoesParameterExist("mhd","nu_iso") ||
+      pin->DoesParameterExist("mhd","nu_aniso")) {
     pvisc = new Viscosity("mhd", ppack, pin);
   } else {
     pvisc = nullptr;
