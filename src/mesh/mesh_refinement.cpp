@@ -91,8 +91,8 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for AMR
   MPI_Comm_dup(MPI_COMM_WORLD, &amr_comm);
-/***/
-  // allocate fixed-length send/recv data buffers as work around on Aurora
+  // allocate fixed-length send/recv data buffers as work around on Aurora and other
+  // machines where frequent reallocation of Kokkos:Views causes memory issues
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
   if (pm->pmb_pack->phydro != nullptr) {
@@ -115,7 +115,6 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   int ndata = nmb*(ncc_tosend + nfc_tosend)*(indcs.nx1)*(indcs.nx2)*(indcs.nx3);
   Kokkos::realloc(recv_data, ndata);
   Kokkos::realloc(send_data, ndata);
-/***/
 #endif
 }
 
