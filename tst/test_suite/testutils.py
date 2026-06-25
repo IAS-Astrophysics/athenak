@@ -60,7 +60,7 @@ def run_command(command: List[str], text: bool = False) -> bool:
     return process.returncode == 0
 
 
-def cmake(flags: List[str] = [], **kwargs) -> bool:
+def cmake(flags: List[str] = None, **kwargs) -> bool:
     """
     Runs the CMake command to configure the build system.
 
@@ -74,6 +74,9 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     Raises:
         RuntimeError: If the CMake command fails.
     """
+    if flags is None:
+        flags = []
+
     original_dir = os.getcwd()
     try:
         os.chdir(ATHENAK_PATH)
@@ -113,7 +116,7 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     return True
 
 
-def run(inputfile: str, flags=[], **kwargs) -> bool:
+def run(inputfile: str, flags=None, **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary.
 
@@ -128,6 +131,9 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
     Raises:
         AssertionError: If the test case execution fails.
     """
+    if flags is None:
+        flags = []
+
     command = ["./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags}")
@@ -136,7 +142,7 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
 
 
 def mpi_run(
-    inputfile: str, flags=[], threads: int = min(16, os.cpu_count()), **kwargs
+    inputfile: str, flags=None, threads: int = min(16, os.cpu_count()), **kwargs
 ) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
@@ -153,6 +159,10 @@ def mpi_run(
     Raises:
         AssertionError: If the test case execution fails.
     """
+
+    if flags is None:
+        flags = []
+
     command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(
