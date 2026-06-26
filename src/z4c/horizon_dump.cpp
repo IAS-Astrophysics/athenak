@@ -265,11 +265,11 @@ void HorizonDump::ETK_setup_parfile() {
             "readBHaHdata::recent_ah_radius_max_filename = \"ah_radius_max_BH_1.txt\"\n");
 
   //if(commondata->time == 0) {
-    fprintf(etk_parfile,
-            "AHFinderDirect::initial_guess_method[1]"
-            "                = \"coordinate sphere\"\n"
-            "AHFinderDirect::initial_guess__coord_sphere__radius[1] = %e\n",
-            r_guess);
+  fprintf(etk_parfile,
+          "AHFinderDirect::initial_guess_method[1]"
+          "                = \"coordinate sphere\"\n"
+          "AHFinderDirect::initial_guess__coord_sphere__radius[1] = %e\n",
+          r_guess);
   /*} else {
     if(BH==LESSMASSIVE_BH_PREMERGER)
       fprintf(etk_parfile,

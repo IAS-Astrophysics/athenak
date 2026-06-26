@@ -361,7 +361,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // Calculate linear wave perturbations in hydro
     Real rem[5][5], ev[5];
-    Real lambda, delta_rho, delta_pgas, delta_v[4];
+    Real lambda, delta_v[4];
+    Real delta_rho = 0.0, delta_pgas = 0.0;
     if (relativistic) {
       // Calculate background 4-vectors
       Real u[4];
@@ -482,7 +483,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // Calculate linear wave perturbations in MHD
     Real rem[7][7], ev[7];
-    Real lambda, delta_rho, delta_pgas,u[4],delta_u[4],delta_b[4];
+    Real lambda, u[4],delta_u[4],delta_b[4];
+    Real delta_rho = 0.0, delta_pgas = 0.0;
     if (relativistic) {
       // Calculate background 4-vectors
       Real v_sq = SQR(lwv.vx_0) + SQR(lwv.vy_0) + SQR(lwv.vz_0);

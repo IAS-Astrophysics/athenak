@@ -250,7 +250,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     if (v==0) {
       // B3 located at x1-cell centers
       x1 = CellCenterX(i-is, nx1, x1min, x1max);
-    } else if (v==1) {
+    } else {
       // B1 located at x1-cell faces
       x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
     }

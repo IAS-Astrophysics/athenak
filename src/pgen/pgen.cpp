@@ -134,7 +134,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // root process reads z4c last_output_time and tracker data
   if (pz4c != nullptr) {
-    Real last_output_time;
+    Real last_output_time = 0.0;
     if (global_variable::my_rank == 0 || single_file_per_rank) {
       if (resfile.Read_Reals(&last_output_time, 1,single_file_per_rank) != 1) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

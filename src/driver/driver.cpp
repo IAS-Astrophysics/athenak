@@ -544,7 +544,7 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //! slightly below the wall clock time while others determine that it's time to quit.
 
 Real Driver::UpdateWallClock() {
-  Real tnow;
+  Real tnow = 0.0;
   if (global_variable::my_rank == 0) {
     tnow = pwall_clock_->seconds();
   }
