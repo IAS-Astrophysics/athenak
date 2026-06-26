@@ -564,13 +564,13 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     for (int a = 0; a < ndim; a++) {
       dalpha_d[a] = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
     }
-    Real dbeta_du[3][3] = {0.};
+    Real dbeta_du[3][3] = {};
     for (int a = 0; a < 3; a++) {
       for (int b = 0; b < ndim; b++) {
         dbeta_du[b][a] = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
       }
     }
-    Real dg_ddd[3][3][3] = {0.};
+    Real dg_ddd[3][3][3] = {};
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < ndim; ++c) {

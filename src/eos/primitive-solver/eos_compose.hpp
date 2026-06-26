@@ -505,8 +505,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     // initialize the iteration variables
     int n_iter = 0;
-    Real J[2][2] = {0.0};
-    Real invJ[2][2] = {0.0};
+    Real J[2][2] = {};
+    Real invJ[2][2] = {};
     Real dx1[2] = {0.0};
     Real dxa[2] = {0.0};
     Real norm[2] = {0.0};
