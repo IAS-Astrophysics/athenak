@@ -119,8 +119,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
 }
 
 DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
-    pmy_pack(pp),
-    temperature("temperature",1,1,1,1,1) {
+    temperature("temperature",1,1,1,1,1),
+    pmy_pack(pp) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;

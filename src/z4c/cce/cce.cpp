@@ -38,9 +38,9 @@
 namespace z4c {
 
 CCE::CCE(Mesh *const pm, ParameterInput *const pin, int index):
+  index(index),
   pm(pm),
-  pin(pin),
-  index(index) {
+  pin(pin) {
   // pointer to meshblockpack
   pmbp = pm->pmb_pack;
 

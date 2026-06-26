@@ -29,7 +29,6 @@
 // constructor, initializes data structures and parameters
 
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp),
   force("force",1,1,1,1,1),
   force_tmp("force_tmp",1,1,1,1,1),
   xccc("xccc",1),xccs("xccs",1),xcsc("xcsc",1),xcss("xcss",1),
@@ -40,7 +39,8 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   zscc("zscc",1),zscs("zscs",1),zssc("zssc",1),zsss("zsss",1),
   kx_mode("kx_mode",1),ky_mode("ky_mode",1),kz_mode("kz_mode",1),
   xcos("xcos",1,1,1),xsin("xsin",1,1,1),ycos("ycos",1,1,1),
-  ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1) {
+  ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1),
+  pmy_pack(pp) {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;

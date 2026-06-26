@@ -51,8 +51,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Constructor
   EOSCompOSE() :
       m_log_nb("log nb",1),
-      m_log_t("log T",1),
       m_yq("yq",1),
+      m_log_t("log T",1),
       m_table("EoS table",1,1,1,1) {
     n_species = 1;
     eos_units = MakeNuclear();
