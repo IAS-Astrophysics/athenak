@@ -217,14 +217,17 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real eta_0_loc[4]{}, eta_1_loc[4]{};
           Real abs_0_loc[4]{}, abs_1_loc[4]{};
           Real scat_0_loc[4]{}, scat_1_loc[4]{};
-          // non-thermal (inelastic scattering / NEPS) energy emissivity and
-          // absorption; non-zero only when use_nonthermal_separated is set
+          // non-thermal (inelastic scattering / NEPS) emissivity and absorption,
+          // both ENERGY (..._1_...) and NUMBER (..._0_...) channels; non-zero only
+          // when use_nonthermal_separated is set
           Real eta_1_non_th_loc[4]{}, abs_1_non_th_loc[4]{};
+          Real eta_0_non_th_loc[4]{}, abs_0_non_th_loc[4]{};
 
           // Note: everything sent and received are in code units
           bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0, nudens_1, chi_loc,
                       eta_0_loc, eta_1_loc, abs_0_loc, abs_1_loc, scat_0_loc,
                       scat_1_loc, eta_1_non_th_loc, abs_1_non_th_loc,
+                      eta_0_non_th_loc, abs_0_non_th_loc,
                       nurates_params_, code_units, eos_units,
                       nurates_units);
 
@@ -265,6 +268,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             abs_1_loc[nuidx] = (abs_1_loc[nuidx] > 0) ? abs_1_loc[nuidx] : 0;
             eta_1_non_th_loc[nuidx] = (eta_1_non_th_loc[nuidx] > 0) ? eta_1_non_th_loc[nuidx] : 0;
             abs_1_non_th_loc[nuidx] = (abs_1_non_th_loc[nuidx] > 0) ? abs_1_non_th_loc[nuidx] : 0;
+            eta_0_non_th_loc[nuidx] = (eta_0_non_th_loc[nuidx] > 0) ? eta_0_non_th_loc[nuidx] : 0;
+            abs_0_non_th_loc[nuidx] = (abs_0_non_th_loc[nuidx] > 0) ? abs_0_non_th_loc[nuidx] : 0;
           }
 
           Real tau{}, nudens_0_trap[4]{}, nudens_1_trap[4]{},
@@ -388,9 +393,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             }
 
             // Correction factor for absorption opacities for non-LTE effects
-            // (kappa ~ E_nu^2)
+            // (kappa ~ E_nu^2). This is a charged-current effect, so it is only
+            // applied to nu_e (nuidx 0) and nubar_e (nuidx 1). Heavy-lepton
+            // neutrinos (nuidx 2,3) have no CC absorption, so corr_fac stays 1
+            // for them (matches THC, which guards this with is==0||is==1 and
+            // avoids the spurious ~3x inflation of the heavy-lepton luminosity).
             corr_fac = 1.0;
-            if (nurates_params_.use_equilibrium_distribution) {
+            if (nurates_params_.use_equilibrium_distribution &&
+                (nuidx == 0 || nuidx == 1)) {
               corr_fac = (J[nuidx] / rnnu[nuidx]) * (my_nudens_0 / my_nudens_1);
               if (!Kokkos::isfinite(corr_fac)) {
                 corr_fac = 1.0;
@@ -405,10 +415,17 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
-              abs_0_(m, nuidx, k, j, i) *= corr_fac;
+              // Number absorption: apply the non-LTE correction only to the THERMAL
+              // part; keep the non-thermal (NEPS) number absorption as computed.
+              Real const abs_0_th_corr =
+                  Kokkos::fmax(abs_0_(m, nuidx, k, j, i) - abs_0_non_th_loc[nuidx], 0.0)
+                  * corr_fac;
+              abs_0_(m, nuidx, k, j, i) = abs_0_th_corr + abs_0_non_th_loc[nuidx];
+              // Number emissivity: apply Kirchhoff ONLY to the thermal part; the
+              // non-thermal (NEPS) number emission is kept out of thermalization.
               eta_0_(m, nuidx, k, j, i) =
-                  (abs_0_(m, nuidx, k, j, i) > 0)
-                      ? abs_0_(m, nuidx, k, j, i) * my_nudens_0
+                  (abs_0_th_corr > 0)
+                      ? abs_0_th_corr * my_nudens_0 + eta_0_non_th_loc[nuidx]
                       : eta_0_(m, nuidx, k, j, i);
               // Energy absorption: apply the non-LTE correction (kappa ~ E^2)
               // only to the thermal part.
