@@ -259,6 +259,8 @@ def test_error_convergence(
     mpi=False,
 ):
     RUN = mpi_run if mpi else run
+    l1_rms_l = 0.0
+    l1_rms_r = 0.0
     for wv in _wave:
         try:
             for res in _res:

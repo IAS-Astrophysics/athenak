@@ -44,6 +44,10 @@ def arguments(iv, rv, fv, wv, res, soe, name):
     ]
 
 
+"""
+Uses test_error_convergence() function in testutils.py, written for linear wave
+convergence problems. Runs By/Bz tests using _mode as wave flag.
+"""
 def test_run():
     """Run the 1D resistive-diffusion convergence test for By and Bz."""
     testutils.test_error_convergence(
@@ -57,6 +61,4 @@ def test_run():
         "diff",
         "none",
         "mhd",
-        left_wave="By",
-        right_wave="Bz",
     )

@@ -74,6 +74,4 @@ def test_run():
         "diff",
         "none",
         "mhd",
-        left_wave="xy",
-        right_wave="zx",
     )
