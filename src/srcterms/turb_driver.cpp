@@ -283,7 +283,7 @@ void TurbulenceDriver::Initialize() {
 void TurbulenceDriver::IncludeInitializeModesTask(std::shared_ptr<TaskList> tl,
                                                   TaskID start) {
   auto id_init = tl->AddTask(&TurbulenceDriver::InitializeModes, this, start);
-  auto id_add = tl->AddTask(&TurbulenceDriver::AddForcing, this, id_init);
+  tl->AddTask(&TurbulenceDriver::AddForcing, this, id_init);
   return;
 }
 
@@ -297,16 +297,16 @@ void TurbulenceDriver::IncludeAddForcingTask(std::shared_ptr<TaskList> tl, TaskI
   // These must be inserted after update task, but before send_u
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
-      auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                              pmy_pack->phydro->id.flux, pmy_pack->phydro->id.rkupdt);
+      tl->InsertTask(&TurbulenceDriver::AddForcing, this,
+                     pmy_pack->phydro->id.flux, pmy_pack->phydro->id.rkupdt);
     }
     if (pmy_pack->pmhd != nullptr) {
-      auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                              pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.rkupdt);
+      tl->InsertTask(&TurbulenceDriver::AddForcing, this,
+                     pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.rkupdt);
     }
   } else {
-    auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                            pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_rkupdt);
+    tl->InsertTask(&TurbulenceDriver::AddForcing, this,
+                   pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_rkupdt);
   }
 
   return;
@@ -1081,11 +1081,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
 
         Real dens = u_out.d;
 
-        auto &w = u;
-
-        Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
-        Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
-
         u0(m,IDN,k,j,i) = dens;  // *uA_0*(1.-beta*betaA);
 
         // Does not require knowledge of v
@@ -1124,11 +1119,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
         Real sz = u_out.mz;
 
         Real dens = u_out.d;
-
-        auto &w = u;
-
-        Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
-        Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
 
         u0(m,IDN,k,j,i) = dens;  //*uA_0*(1.-beta*betaA);
 

@@ -549,8 +549,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
                            adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                            adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)};
     const Real& alpha = adm.alpha(m, k, j, i);
-    Real beta_u[3] = {adm.beta_u(m,0,k,j,i),
-                      adm.beta_u(m,1,k,j,i), adm.beta_u(m,2,k,j,i)};
     Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
                                 g3d[S22], g3d[S23], g3d[S33]);
     Real vol = sqrt(detg);

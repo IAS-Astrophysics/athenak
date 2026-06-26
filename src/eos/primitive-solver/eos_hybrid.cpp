@@ -125,7 +125,6 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
     m_min_h = std::numeric_limits<Real>::max();
     // New form of bound based on properties of NQT functions and their
     // departure from 'true' log behaviour
-    int it = 0; // T = T_min is a safe assumption for the minimum enthalpy
     for (int in = 0; in < m_nn-1; ++in) {
       Real const nb = exp2_(host_log_nb(in));
       Real log2_e_in   = host_table(ECLOGE,in);
