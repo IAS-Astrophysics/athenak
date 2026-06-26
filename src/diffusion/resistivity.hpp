@@ -24,7 +24,6 @@ class Resistivity {
 
   // data
   Real dtnew;
-  std::string iso_resist_type;  // only "constant" implemented
   Real eta_ohm;
 
   // functions to add resistive E-Field and energy flux

@@ -105,7 +105,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Resistivity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
+  if (pin->DoesParameterExist("mhd","eta_ohm")) {
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;

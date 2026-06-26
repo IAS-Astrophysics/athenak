@@ -229,7 +229,7 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
     }
     if (pmbp->pmhd->presist == nullptr) {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Resistivity (mhd/ohmic_resistivity) not defined in MHD input block"
+              << "Resistivity (mhd/eta_ohm) not defined in MHD input block"
               << std::endl;
       exit(EXIT_FAILURE);
     }

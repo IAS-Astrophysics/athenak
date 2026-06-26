@@ -25,17 +25,7 @@
 Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
   // Read parameters for Ohmic resistivity (if any)
-  if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
-    iso_resist_type = pin->GetString("mhd","ohmic_resistivity");
-    // Check for valid type
-    if (iso_resist_type.compare("constant") != 0) {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "Invalid choice for Ohmic resistivity type" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    // constant resistivity
-    eta_ohm = pin->GetReal("mhd","eta_ohm");
-  }
+  eta_ohm = pin->GetOrAddReal("mhd","eta_ohm",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -51,7 +41,9 @@ Resistivity::~Resistivity() {
 
 void Resistivity::AddResistiveEMFs(const DvceFaceFld4D<Real> &b0,
     DvceEdgeFld4D<Real> &efld) {
-  AddEMFConstantResist(b0, efld);
+  if (eta_ohm != 0.0) {
+    AddEMFConstantResist(b0, efld);
+  }
   return;
 }
 
@@ -63,7 +55,9 @@ void Resistivity::AddResistiveEMFs(const DvceFaceFld4D<Real> &b0,
 
 void Resistivity::AddResistiveFluxes(const DvceFaceFld4D<Real> &b0,
     DvceFaceFld5D<Real> &flx) {
-  AddFluxConstantResist(b0, flx);
+  if (eta_ohm != 0.0) {
+    AddFluxConstantResist(b0, flx);
+  }
   return;
 }
 

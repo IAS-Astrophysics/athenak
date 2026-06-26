@@ -48,7 +48,6 @@ eos               = ideal    # EOS type
 reconstruct       = wenoz    # spatial reconstruction method
 rsolver           = advect   # Riemann-solver (kinematic MHD uses advect)
 gamma             = 1.66666666667   # gamma = C_p/C_v
-ohmic_resistivity = constant # constant Ohmic resistivity
 eta_ohm           = 0.25     # Ohmic resistivity (set by resistivity tests)
 
 <units>
