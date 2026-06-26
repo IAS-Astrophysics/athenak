@@ -1,5 +1,9 @@
 # build directories
 build*/
+__pycache__
+
+# Temporary testing files
+tst/test_log.txt
 
 # Athena output files
 *.tab

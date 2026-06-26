@@ -103,21 +103,21 @@ class PrimitiveSolver {
       //const Real rbarsq = rsq*xsq + (mux + muxsq)*rbsq;
       const Real rbarsq = x*(rsq*x + mu*(x + 1.0)*rbsq);
       //const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*(bsq*rsq - rbsq);
-      const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*fma(bsq, rsq, -rbsq);
+      const Real qbar = q - 0.5*bsq - 0.5*musq*xsq*Kokkos::fma(bsq, rsq, -rbsq);
       const Real mb = peos->GetBaryonMass();
 
       // Now we can estimate the velocity.
       //const Real v_max = peos->GetMaxVelocity();
       const Real h_min = peos->GetMinimumEnthalpy();
-      const Real vsq_max = fmin(rsq/(h_min*h_min + rsq),
+      const Real vsq_max = Kokkos::fmin(rsq/(h_min*h_min + rsq),
                                     peos->GetMaxVelocity()*peos->GetMaxVelocity());
-      const Real vhatsq = fmin(musq*rbarsq, vsq_max);
+      const Real vhatsq = Kokkos::fmin(musq*rbarsq, vsq_max);
 
       // Using the velocity estimate, predict the Lorentz factor.
       // NOTE: for extreme velocities, this alternative form of W may be more accurate:
       // Wsq = 1/(eps*(2 - eps)) = 1/(eps*(1 + v)), where eps = 1 - v.
       //const Real What = 1.0/std::sqrt(1.0 - vhatsq);
-      const Real iWhat = sqrt(1.0 - vhatsq);
+      const Real iWhat = Kokkos::sqrt(1.0 - vhatsq);
 
       // Now estimate the number density.
       Real rhohat = D*iWhat;
@@ -127,25 +127,22 @@ class PrimitiveSolver {
       // Estimate the energy density.
       Real eoverD = qbar - mu*rbarsq + 1.0;
       Real ehat = D*eoverD;
-      peos->ApplyEnergyLimits(ehat, nhat, Y);
-      //eoverD = ehat/D;
 
       // Now we can get an estimate of the temperature, and from that, the pressure and
       // enthalpy.
       Real That = peos->GetTemperatureFromE(nhat, ehat, Y);
-      //peos->ApplyTemperatureLimits(That);
-      //ehat = peos->GetEnergy(nhat, That, Y);
+      peos->ApplyTemperatureLimits(That);
+      ehat = peos->GetEnergy(nhat, That, Y);
       Real Phat = peos->GetPressure(nhat, That, Y);
-      //Real hhat = peos->GetEnthalpy(nhat, That, Y);
       Real hhat = (ehat + Phat)/(mb*nhat);
 
       // Now we can get two different estimates for nu = h/W.
       Real nu_a = hhat*iWhat;
       //Real ahat = Phat / ehat;
-      Real nu_b = eoverD + Phat/D;
+      Real nu_b = (D*eoverD + Phat)/D;
       //Real nu_b = (1.0 + ahat)*eoverD;
       //Real nu_b = (1.0 + ahat)*eoverD;
-      Real nuhat = fmax(nu_a, nu_b);
+      Real nuhat = Kokkos::fmax(nu_a, nu_b);
 
       // Finally, we can get an estimate for muhat.
       Real muhat = 1.0/(nuhat + mu*rbarsq);

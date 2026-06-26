@@ -59,6 +59,16 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
 
+  // Check if the CompactObjectTracker is enabled, otherwise abort.
+  if (pmbp->pz4c->ptracker.size() < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "There are two compact objects on the grid "
+            << "but only " << pmbp->pz4c->ptracker.size()
+            << " tracker(s) is(are) set!" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   // Conversion constants to translate between Lorene and AthenaK
   const Real c_light  = Lorene::Unites::c_si;      // speed of light [m/s]
   const Real nuc_dens = Lorene::Unites::rhonuc_si; // Nuclear density [kg/m^3]
@@ -86,12 +96,13 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real r_0 = pin->GetOrAddReal("problem", "r_0_current", 5.0);
   Real I_0 = 4*r_0*b_max/(23.0*M_PI);
 
-  int ncells1 = indcs.nx1 + 2*(indcs.ng);
-  int ncells2 = indcs.nx2 + 2*(indcs.ng);
-  int ncells3 = indcs.nx3 + 2*(indcs.ng);
-  int nmb = pmbp->nmb_thispack;
-
-  int width = nmb*ncells1*ncells2*ncells3;
+  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
+  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
+  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
+  int nmb     = pmbp->nmb_thispack;
+  int width   = nmb * ncells1 * ncells2 * ncells3;
+  int n123    = ncells3 * ncells2 * ncells1;
+  int n12     = ncells2 * ncells1;
 
   Real *x_coords = new Real[width];
   Real *y_coords = new Real[width];
@@ -101,44 +112,38 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
 
   // Enable ye if the EOS supports it.
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+  // Read only if nscalars > 0.
+  const bool use_ye = tov::UsesYe<TOVEOS>;
+  const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
   if (global_variable::my_rank == 0) {
     std::cout << "Allocated coordinates of size " << width << std::endl;
   }
 
-  // Populate coordinates for LORENE
-  int idx = 0;
-  for (int m = 0; m < nmb; m++) {
-    Real &x1min = size.h_view(m).x1min;
-    Real &x1max = size.h_view(m).x1max;
-    int nx1 = indcs.nx1;
+  // Populate coordinates for LORENE.
+  Kokkos::parallel_for("pgen_coordinates",
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
+    // Decompose the flattened index.
+    int m   = idx / (n123);
+    int rem = idx - m * (n123);
+    int k   = rem / (n12);
+    rem    -= k * (n12);
+    int j   = rem / ncells1;
+    int i   = rem % ncells1;
 
-    Real &x2min = size.h_view(m).x2min;
-    Real &x2max = size.h_view(m).x2max;
-    int nx2 = indcs.nx2;
+    Real x = CellCenterX(i - is, indcs.nx1,
+                          size.h_view(m).x1min, size.h_view(m).x1max);
+    Real y = CellCenterX(j - js, indcs.nx2,
+                          size.h_view(m).x2min, size.h_view(m).x2max);
+    Real z = CellCenterX(k - ks, indcs.nx3,
+                          size.h_view(m).x3min, size.h_view(m).x3max);
 
-    Real &x3min = size.h_view(m).x3min;
-    Real &x3max = size.h_view(m).x3max;
-    int nx3 = indcs.nx3;
-
-    for (int k = 0; k < ncells3; k++) {
-      Real z = CellCenterX(k - ks, nx3, x3min, x3max);
-      for (int j = 0; j < ncells2; j++) {
-        Real y = CellCenterX(j - js, nx2, x2min, x2max);
-        for (int i = 0; i < ncells1; i++) {
-          Real x = CellCenterX(i - is, nx1, x1min, x1max);
-
-          x_coords[idx] = coord_unit*x;
-          y_coords[idx] = coord_unit*y;
-          z_coords[idx] = coord_unit*z;
-
-          // Increment flat index
-          idx++;
-        }
-      }
-    }
-  }
+    x_coords[idx] = coord_unit * x;
+    y_coords[idx] = coord_unit * y;
+    z_coords[idx] = coord_unit * z;
+  });
+  Kokkos::fence();
 
   // Interpolate the data
   if (global_variable::my_rank == 0) {
@@ -188,86 +193,90 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   // Copy the interpolated data into the mirrored views.
-  idx = 0;
-  for (int m = 0; m < nmb; m++) {
-    for (int k = 0; k < ncells3; k++) {
-      for (int j = 0; j < ncells2; j++) {
-        for (int i = 0; i < ncells1; i++) {
-          // Extract metric quantities
-          host_adm.alpha(m, k, j, i) = bns->nnn[idx];
-          host_adm.beta_u(m, 0, k, j, i) = -bns->beta_x[idx];
-          host_adm.beta_u(m, 1, k, j, i) = -bns->beta_y[idx];
-          host_adm.beta_u(m, 2, k, j, i) = -bns->beta_z[idx];
+  Kokkos::parallel_for("pgen_fields",
+  Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
+  [&](const int idx) {
+    // Decompose the flattened index.
+    int m   = idx / (n123);
+    int rem = idx - m * (n123);
+    int k   = rem / (n12);
+    rem    -= k * (n12);
+    int j   = rem / ncells1;
+    int i   = rem % ncells1;
 
-          Real g3d[NSPMETRIC];
-          host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = bns->g_xx[idx];
-          host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = bns->g_xy[idx];
-          host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = bns->g_xz[idx];
-          host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = bns->g_yy[idx];
-          host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = bns->g_yz[idx];
-          host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = bns->g_zz[idx];
+    // Extract metric quantities
+    host_adm.alpha(m, k, j, i) = bns->nnn[idx];
+    host_adm.beta_u(m, 0, k, j, i) = -bns->beta_x[idx];
+    host_adm.beta_u(m, 1, k, j, i) = -bns->beta_y[idx];
+    host_adm.beta_u(m, 2, k, j, i) = -bns->beta_z[idx];
 
-          host_adm.vK_dd(m, 0, 0, k, j, i) = coord_unit * bns->k_xx[idx];
-          host_adm.vK_dd(m, 0, 1, k, j, i) = coord_unit * bns->k_xy[idx];
-          host_adm.vK_dd(m, 0, 2, k, j, i) = coord_unit * bns->k_xz[idx];
-          host_adm.vK_dd(m, 1, 1, k, j, i) = coord_unit * bns->k_yy[idx];
-          host_adm.vK_dd(m, 1, 2, k, j, i) = coord_unit * bns->k_yz[idx];
-          host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
+    Real g3d[NSPMETRIC];
+    host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = bns->g_xx[idx];
+    host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = bns->g_xy[idx];
+    host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = bns->g_xz[idx];
+    host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = bns->g_yy[idx];
+    host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = bns->g_yz[idx];
+    host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = bns->g_zz[idx];
 
-          // Extract hydro quantities
-          // Note that Lorene does not necessarily use the same baryon rest-mass as
-          // AthenaK. The most reasonable thing to do, then, is to extract the total
-          // energy density, which is invariant, and use that with the 1D EOS.
-          Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
-          Real& rho = host_w0(m, IDN, k, j, i);
-          rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
-          Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
-                        bns->u_euler_y[idx] / vel_unit,
-                        bns->u_euler_z[idx] / vel_unit};
+    host_adm.vK_dd(m, 0, 0, k, j, i) = coord_unit * bns->k_xx[idx];
+    host_adm.vK_dd(m, 0, 1, k, j, i) = coord_unit * bns->k_xy[idx];
+    host_adm.vK_dd(m, 0, 2, k, j, i) = coord_unit * bns->k_xz[idx];
+    host_adm.vK_dd(m, 1, 1, k, j, i) = coord_unit * bns->k_yy[idx];
+    host_adm.vK_dd(m, 1, 2, k, j, i) = coord_unit * bns->k_yz[idx];
+    host_adm.vK_dd(m, 2, 2, k, j, i) = coord_unit * bns->k_zz[idx];
 
-          // Check for garbage values thrown in by Lorene.
-          if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
-            rho = 0.0;
-            host_w0(m, IPR, k, j, i) = 0.0;
-            vu[0] = 0.0;
-            vu[1] = 0.0;
-            vu[2] = 0.0;
-          }
+    // Extract hydro quantities
+    // Note that Lorene does not necessarily use the same baryon rest-mass as
+    // AthenaK. The most reasonable thing to do, then, is to extract the total
+    // energy density, which is invariant, and use that with the 1D EOS.
+    Real egas = bns->nbar[idx]*(1.0 + bns->ener_spec[idx] / ener_unit)/rho_unit;
+    Real& rho = host_w0(m, IDN, k, j, i);
+    rho = eos.template GetRhoFromE<tov::LocationTag::Host>(egas);
+    Real vu[3] = {bns->u_euler_x[idx] / vel_unit,
+                  bns->u_euler_y[idx] / vel_unit,
+                  bns->u_euler_z[idx] / vel_unit};
 
-          host_w0(m, IPR, k, j, i) = eos.template
-                                     GetPFromRho<tov::LocationTag::Host>(rho);
+    // Check for garbage values thrown in by Lorene.
+    if (rho <= rho_cut || !Kokkos::isfinite(rho)) {
+      rho = 0.0;
+      host_w0(m, IPR, k, j, i) = 0.0;
+      vu[0] = 0.0;
+      vu[1] = 0.0;
+      vu[2] = 0.0;
+    }
 
-          // If the electron fraction is available, find it in the 1D EOS.
-          if constexpr (use_ye) {
-            host_w0(m, IYF, k, j, i) = eos.template
-                                       GetYeFromRho<tov::LocationTag::Host>(rho);
-          }
+    host_w0(m, IPR, k, j, i) = eos.template
+                                GetPFromRho<tov::LocationTag::Host>(rho);
 
-          // Before we store the velocity, we need to make sure it's physical and
-          // calculate the Lorentz factor. If the velocity is superluminal, we make a
-          // last-ditch attempt to salvage the solution by rescaling it to
-          // vsq = 1.0 - 1e-15
-          Real vsq = Primitive::SquareVector(vu, g3d);
-          if (1.0 - vsq <= 0) {
-            std::cout << "The velocity is superluminal!" << std::endl
-                      << "Attempting to adjust..." << std::endl;
-            Real fac = Kokkos::sqrt((1.0 - 1e-15)/vsq);
-            vu[0] *= fac;
-            vu[1] *= fac;
-            vu[2] *= fac;
-            vsq = 1.0 - 1.0e-15;
-          }
-          Real W = Kokkos::sqrt(1.0 / (1.0 - vsq));
-
-          host_w0(m, IVX, k, j, i) = W*vu[0];
-          host_w0(m, IVY, k, j, i) = W*vu[1];
-          host_w0(m, IVZ, k, j, i) = W*vu[2];
-
-          idx++;
-        }
+    // If the electron fraction is available, find it in the 1D EOS.
+    if constexpr (use_ye) {
+      if (read_ye) {
+        host_w0(m, IYF, k, j, i) = eos.template
+                                    GetYeFromRho<tov::LocationTag::Host>(rho);
       }
     }
-  }
+
+    // Before we store the velocity, we need to make sure it's physical and
+    // calculate the Lorentz factor. If the velocity is superluminal, we make a
+    // last-ditch attempt to salvage the solution by rescaling it to
+    // vsq = 1.0 - 1e-15
+    Real vsq = Primitive::SquareVector(vu, g3d);
+    if (1.0 - vsq <= 0) {
+      std::cout << "The velocity is superluminal!" << std::endl
+                << "Attempting to adjust..." << std::endl;
+      Real fac = Kokkos::sqrt((1.0 - 1e-15)/vsq);
+      vu[0] *= fac;
+      vu[1] *= fac;
+      vu[2] *= fac;
+      vsq = 1.0 - 1.0e-15;
+    }
+    Real W = Kokkos::sqrt(1.0 / (1.0 - vsq));
+
+    host_w0(m, IVX, k, j, i) = W*vu[0];
+    host_w0(m, IVY, k, j, i) = W*vu[1];
+    host_w0(m, IVZ, k, j, i) = W*vu[2];
+  });
+  Kokkos::fence();
 
   if (global_variable::my_rank == 0) {
     std::cout << "Host mirrors filled." << std::endl;

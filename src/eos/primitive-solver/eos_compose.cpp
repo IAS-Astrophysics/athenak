@@ -193,19 +193,61 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     m_initialized = true;
 
     m_min_h = std::numeric_limits<Real>::max();
-    // Compute minimum enthalpy
-    for (int in = 0; in < m_nn; ++in) {
+    // New form of bound based on properties of NQT functions and their
+    // departure from 'true' log behaviour
+    int it = 0; // T = T_min is a safe assumption for the minimum enthalpy
+    for (int in = 0; in < m_nn-1; ++in) {
       Real const nb = exp2_(host_log_nb(in));
-      for (int iy = 0; iy < m_ny; ++iy) {
-        for (int it = 0; it < m_nt; ++it) {
-          // This would use GPU memory, and we are currently on the CPU, so Enthalpy is
-          // hardcoded
-          Real e = exp2_(host_table(ECLOGE,in,iy,it));
-          Real p = exp2_(host_table(ECLOGP,in,iy,it));
-          Real h = (e + p) / nb;
-          m_min_h = fmin(m_min_h, h);
-        }
+      for (int iy = 0; iy < m_ny-1; ++iy) {
+        Real min_log2_e_in = Kokkos::fmin(host_table(ECLOGE,in,iy,it),
+                                          host_table(ECLOGE,in,iy+1,it));
+        Real max_log2_e_in = Kokkos::fmax(host_table(ECLOGE,in,iy,it),
+                                          host_table(ECLOGE,in,iy+1,it));
+
+        Real min_log2_e_inp1 = Kokkos::fmin(host_table(ECLOGE,in+1,iy,it),
+                                            host_table(ECLOGE,in+1,iy+1,it));
+        Real max_log2_e_inp1 = Kokkos::fmax(host_table(ECLOGE,in+1,iy,it),
+                                            host_table(ECLOGE,in+1,iy+1,it));
+
+        Real pow_e = Kokkos::fmax(
+                     Kokkos::fmax(Kokkos::fabs(min_log2_e_inp1-min_log2_e_in),
+                                  Kokkos::fabs(max_log2_e_inp1-min_log2_e_in)),
+                     Kokkos::fmax(Kokkos::fabs(min_log2_e_inp1-max_log2_e_in),
+                                  Kokkos::fabs(max_log2_e_inp1-max_log2_e_in)));
+
+        Real min_log2_p_in = Kokkos::fmin(host_table(ECLOGP,in,iy,it),
+                                          host_table(ECLOGP,in,iy+1,it));
+        Real max_log2_p_in = Kokkos::fmax(host_table(ECLOGP,in,iy,it),
+                                          host_table(ECLOGP,in,iy+1,it));
+
+        Real min_log2_p_inp1 = Kokkos::fmin(host_table(ECLOGP,in+1,iy,it),
+                                            host_table(ECLOGP,in+1,iy+1,it));
+        Real max_log2_p_inp1 = Kokkos::fmax(host_table(ECLOGP,in+1,iy,it),
+                                            host_table(ECLOGP,in+1,iy+1,it));
+
+        Real pow_p = Kokkos::fmax(
+                     Kokkos::fmax(Kokkos::fabs(min_log2_p_inp1-min_log2_p_in),
+                                  Kokkos::fabs(max_log2_p_inp1-min_log2_p_in)),
+                     Kokkos::fmax(Kokkos::fabs(min_log2_p_inp1-max_log2_p_in),
+                                  Kokkos::fabs(max_log2_p_inp1-max_log2_p_in)));
+
+        Real k0 =  3.696e-3; // Exact number rounded up
+        Real k1 = -9.709e-3; // Exact number rounded down
+
+        Real fac_e = (1-k0)*Kokkos::exp2(pow_e*k1); // N.B. not exp2_
+        Real fac_p = (1-k0)*Kokkos::exp2(pow_p*k1);
+
+        Real e_over_n_min = fac_e*Kokkos::fmin(exp2_(min_log2_e_in)/nb,
+                                         exp2_(min_log2_e_inp1)/exp2_(host_log_nb(in+1)));
+
+        Real p_over_n_min = fac_p*Kokkos::fmin(exp2_(min_log2_p_in)/nb,
+                                         exp2_(min_log2_p_inp1)/exp2_(host_log_nb(in+1)));
+
+        m_min_h = Kokkos::fmin(m_min_h,e_over_n_min+p_over_n_min);
       }
+    }
+    if (m_min_h <= 0.0) {
+      Kokkos::abort("There was a problem computing the minimum enthalpy in the table!");
     }
   } // if (m_initialized==false)
 }
