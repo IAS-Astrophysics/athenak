@@ -109,7 +109,7 @@ class MeshBlockPack;
 class MeshBoundaryValues {
  public:
   MeshBoundaryValues(MeshBlockPack *ppack, ParameterInput *pin, bool z4c);
-  ~MeshBoundaryValues();
+  virtual ~MeshBoundaryValues();
 
   // data for all 56 buffers in most general 3D case. Not all elements used in most cases.
   // However each MeshBoundaryBuffer is lightweight, so the convenience of fixed array
