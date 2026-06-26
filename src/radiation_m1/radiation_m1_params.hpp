@@ -43,10 +43,19 @@ enum RadiationM1SrcUpdate {
 };
 
 //----------------------------------------------------------------------------------------
+//! \enum RadiationM1ClosureSolver
+//  \brief rootfinder used to determine the Minerbo closure
+enum RadiationM1ClosureSolver {
+  ClosureBrent,   // safeguarded Brent-Dekker (default)
+  ClosureNewton,  // pure Newton-Raphson with analytic derivative + aberration guess
+};
+
+//----------------------------------------------------------------------------------------
 //! \struct RadiationM1Params
 //  \brief parameters for the Grey M1 class
 struct RadiationM1Params {
   RadiationM1Closure closure_type;      // choice of closure
+  RadiationM1ClosureSolver closure_solver;  // rootfinder for the closure
   RadiationM1OpacityType opacity_type;  // choice of opacity library
   RadiationM1SrcUpdate src_update;      // choice of source update
 
@@ -60,6 +69,8 @@ struct RadiationM1Params {
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
   int closure_maxiter;       // maximum number of iterations in closure root finder
+  bool closure_newton_bracket;  // safeguard the Newton closure with a [0,1] bracket
+                                // (rtsafe); false = pure Newton
 
   Real minmod_theta;    // value of theta for minmod limiter
   Real rad_E_floor;     // radiation energy density floor

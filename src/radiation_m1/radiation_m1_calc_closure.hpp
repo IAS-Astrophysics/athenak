@@ -38,6 +38,26 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     return;
   }
   if (closure_type == Minerbo) {
+    // Newton-Raphson rootfinder (opt-in via closure_solver = newton).
+    // Seeded with the relativistic-aberration guess xi0 = |F - v E| / E.
+    if (m1_params.closure_solver == ClosureNewton) {
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hg_d{};
+      for (int a = 0; a < 4; ++a) {
+        Hg_d(a) = F_d(a) - v_d(a) * E;
+      }
+      const Real xi0 =
+          (E > m1_params.rad_E_floor)
+              ? Kokkos::fmin(1.0, Kokkos::sqrt(Kokkos::fmax(0.0,
+                                     tensor_dot(g_uu, Hg_d, Hg_d))) / E)
+              : 0.5;
+      const Real xi = NewtonClosure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
+                                    F_d, m1_params, xi0);
+      chi = closure_fun(xi, closure_type);
+      apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi, P_dd,
+                    m1_params);
+      return;
+    }
+
     Real x_lo = 0.0;
     Real x_md = 0.5;
     Real x_hi = 1.0;
