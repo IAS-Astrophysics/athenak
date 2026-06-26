@@ -8,6 +8,7 @@
 //! Mesh variables.
 //! Prolongation of FC variables  occurs in ProlongateFC() function called from task list
 
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -18,6 +19,28 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
+
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+bool IsActiveFCFace(const int v, const int k, const int j, const int i,
+                    const RegionIndcs &indcs) {
+  if (v == 0) {
+    return (i >= indcs.is) && (i <= indcs.ie + 1) &&
+           (j >= indcs.js) && (j <= indcs.je) &&
+           (k >= indcs.ks) && (k <= indcs.ke);
+  } else if (v == 1) {
+    return (i >= indcs.is) && (i <= indcs.ie) &&
+           (j >= indcs.js) && (j <= indcs.je + 1) &&
+           (k >= indcs.ks) && (k <= indcs.ke);
+  } else {
+    return (i >= indcs.is) && (i <= indcs.ie) &&
+           (j >= indcs.js) && (j <= indcs.je) &&
+           (k >= indcs.ks) && (k <= indcs.ke + 1);
+  }
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
@@ -239,6 +262,7 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
@@ -326,6 +350,15 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             int i = (idx - k*nji - j*ni) + il;
             k += kl;
             j += jl;
+            if (IsActiveFCFace(v, k, j, i, indcs)) {
+#ifdef ATHENAK_DEBUG_FC_AMR_OWNERSHIP
+              Kokkos::printf("FC AMR ownership blocked recv m=%d n=%d v=%d "
+                             "kji=(%d,%d,%d) nlev=%d mlev=%d\n",
+                             m, n, v, k, j, i, nghbr.d_view(m,n).lev,
+                             mblev.d_view(m));
+#endif
+              return;
+            }
             if (v==0) {
               b.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             } else if (v==1) {
