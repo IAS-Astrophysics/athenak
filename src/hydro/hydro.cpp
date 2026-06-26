@@ -90,7 +90,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     }
     naux = 1;
     dual_energy_idx = nhydro + nscalars;
-    dual_energy_needs_init = true;
     dual_energy_eta1 = pin->GetOrAddReal("hydro", "dual_energy_eta1", 1.0e-3);
     dual_energy_eta2 = pin->GetOrAddReal("hydro", "dual_energy_eta2", 1.0e-4);
   }

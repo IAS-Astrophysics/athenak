@@ -733,11 +733,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // call problem generator again to re-initialize data, fn ptrs, as needed
   // second argument true since this IS a restart
   CallProblemGenerator(pin, true);
-  if (phydro != nullptr && phydro->use_dual_energy && !hydro_restart_missing_dual) {
-    phydro->dual_energy_needs_init = false;
+  if (phydro != nullptr && phydro->use_dual_energy) {
+    phydro->dual_energy_needs_init = hydro_restart_missing_dual;
   }
-  if (pmhd != nullptr && pmhd->use_dual_energy && !mhd_restart_missing_dual) {
-    pmhd->dual_energy_needs_init = false;
+  if (pmhd != nullptr && pmhd->use_dual_energy) {
+    pmhd->dual_energy_needs_init = mhd_restart_missing_dual;
   }
 
   // Check that user defined BCs were enrolled if needed

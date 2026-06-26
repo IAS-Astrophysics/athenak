@@ -115,7 +115,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     }
     naux = 1;
     dual_energy_idx = nmhd + nscalars;
-    dual_energy_needs_init = true;
     dual_energy_eta1 = pin->GetOrAddReal("mhd", "dual_energy_eta1", 1.0e-3);
     dual_energy_eta2 = pin->GetOrAddReal("mhd", "dual_energy_eta2", 1.0e-4);
   }

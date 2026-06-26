@@ -213,8 +213,9 @@ void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &co
       cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
     }
     if (use_dual) {
-      cons(m,dual_idx,k,j,i) = fmax(prim(m,dual_idx,k,j,i),
-                                    HydroInternalEnergyFloor(eos, u.d));
+      const Real eint_aux = fmax(w.e, HydroInternalEnergyFloor(eos, u.d));
+      cons(m,dual_idx,k,j,i) = eint_aux;
+      prim(m,dual_idx,k,j,i) = eint_aux;
     }
   });
 
