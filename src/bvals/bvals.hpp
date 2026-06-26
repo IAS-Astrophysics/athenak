@@ -85,7 +85,7 @@ struct MeshBoundaryBuffer {
 
   // function to allocate memory for buffers for variables and their fluxes
   // Must only be called after BufferIndcs above are initialized
-  void AllocateBuffers(int nmb, int nvars, bool is_z4c) {
+  void AllocateBuffers(int nmb, int nvars, int nflx, bool is_z4c) {
     // With Z4c, buffers may contain BOTH same and coarse data
     if (is_z4c) {
       int nmax = std::max(isame_z4c_ndat, std::max(icoar_ndat, ifine_ndat) );
@@ -95,7 +95,7 @@ struct MeshBoundaryBuffer {
       Kokkos::realloc(vars, nmb, (nvars*nmax));
     }
     int nmax = std::max(iflxs_ndat, iflxc_ndat);
-    Kokkos::realloc(flux, nmb, (nvars*nmax));
+    Kokkos::realloc(flux, nmb, (nflx*nmax));
   }
 };
 
@@ -127,7 +127,7 @@ class MeshBoundaryValues {
   //functions
   virtual void InitSendIndices(MeshBoundaryBuffer &buf,int x,int y,int z,int a,int b)=0;
   virtual void InitRecvIndices(MeshBoundaryBuffer &buf,int x,int y,int z,int a,int b)=0;
-  void InitializeBuffers(const int nvar);
+  void InitializeBuffers(const int nvar, const int nflx=-1);
 
   TaskStatus InitRecv(const int nvar);
   virtual TaskStatus InitFluxRecv(const int nvar)=0;
@@ -167,8 +167,10 @@ class MeshBoundaryValuesCC : public MeshBoundaryValues {
   TaskStatus PackAndSendCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   TaskStatus RecvAndUnpackCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca);
   // functions to communicate fluxes of CC data
-  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx);
-  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx);
+  TaskStatus PackAndSendFluxCC(DvceFaceFld5D<Real> &flx,
+                               DvceFaceFld5D<Real> *extra_flx = nullptr);
+  TaskStatus RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx,
+                                 DvceFaceFld5D<Real> *extra_flx = nullptr);
 
   // functions to prolongate conserved and primitive CC variables
   void FillCoarseInBndryCC(DvceArray5D<Real> &a, DvceArray5D<Real> &ca,

@@ -11,6 +11,23 @@
 #include "eos/eos.hpp"
 #include "eos/ideal_c2p_hyd.hpp"
 
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+Real HydroInternalEnergyFloor(const EOS_Data &eos, const Real dens) {
+  Real eint_floor = eos.pfloor/(eos.gamma - 1.0);
+  if (eos.tfloor > 0.0) {
+    eint_floor = fmax(eint_floor, dens*eos.tfloor/(eos.gamma - 1.0));
+  }
+  if (eos.sfloor > 0.0) {
+    eint_floor = fmax(eint_floor, dens*eos.sfloor*pow(dens, eos.gamma - 1.0)/
+                                  (eos.gamma - 1.0));
+  }
+  return eint_floor;
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // ctor: also calls EOS base class constructor
 
@@ -34,6 +51,9 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
                             const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
+  int dual_idx = pmy_pack->phydro->dual_energy_idx;
+  bool use_dual = pmy_pack->phydro->use_dual_energy;
+  const Real dual_eta1 = pmy_pack->phydro->dual_energy_eta1;
   int &nmb = pmy_pack->nmb_thispack;
   auto &eos = eos_data;
   auto &fofc_ = pmy_pack->phydro->fofc;
@@ -65,7 +85,39 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     // (inline function in ideal_c2p_hyd.hpp file)
     HydPrim1D w;
     bool dfloor_used=false, efloor_used=false, tfloor_used=false;
-    SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+    Real eint_aux_out = 0.0;
+    if (!use_dual) {
+      SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+    } else {
+      if (u.d < eos.dfloor) {
+        u.d = eos.dfloor;
+        dfloor_used = true;
+      }
+      w.d = u.d;
+      const Real di = 1.0/u.d;
+      w.vx = di*u.mx;
+      w.vy = di*u.my;
+      w.vz = di*u.mz;
+      const Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
+      const Real eint_cons = u.e - e_k;
+      Real eint_aux = cons(m, dual_idx, k, j, i);
+
+      const Real eint_floor = HydroInternalEnergyFloor(eos, w.d);
+      if (eint_aux < eint_floor) {
+        eint_aux = eint_floor;
+        efloor_used = true;
+      }
+      const bool use_cons_e =
+          (eint_cons > 0.0) &&
+          ((dual_eta1 <= 0.0) || (eint_cons > dual_eta1*fmax(u.e, 1.0e-18)));
+      w.e = use_cons_e ? eint_cons : eint_aux;
+      if (w.e < eint_floor) {
+        w.e = eint_floor;
+        efloor_used = true;
+      }
+      u.e = w.e + e_k;
+      eint_aux_out = eint_aux;
+    }
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
@@ -101,6 +153,10 @@ void IdealHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         }
         prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
       }
+      if (use_dual) {
+        cons(m,dual_idx,k,j,i) = eint_aux_out;
+        prim(m,dual_idx,k,j,i) = eint_aux_out;
+      }
     }
   }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nfloort_));
 
@@ -126,7 +182,10 @@ void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &co
                             const int kl, const int ku) {
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
+  int dual_idx = pmy_pack->phydro->dual_energy_idx;
+  bool use_dual = pmy_pack->phydro->use_dual_energy;
   int &nmb = pmy_pack->nmb_thispack;
+  auto &eos = eos_data;
 
   par_for("hyd_p2c", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -152,6 +211,10 @@ void IdealHydro::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &co
     // convert scalars (if any)
     for (int n=nhyd; n<(nhyd+nscal); ++n) {
       cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
+    }
+    if (use_dual) {
+      cons(m,dual_idx,k,j,i) = fmax(prim(m,dual_idx,k,j,i),
+                                    HydroInternalEnergyFloor(eos, u.d));
     }
   });
 

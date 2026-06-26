@@ -39,6 +39,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     u1("cons1",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    dual_vf("dual_vf",1,1,1,1,1),
+    dual_etot_max("dual_etot_max",1,1,1,1),
     efld("efld",1,1,1,1),
     wsaved("wsaved",1,1,1,1,1),
     bccsaved("bccsaved",1,1,1,1,1),
@@ -95,6 +97,29 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
+  use_dual_energy = pin->GetOrAddBoolean("mhd", "dual_energy", false);
+  if (use_dual_energy) {
+    if (!peos->eos_data.is_ideal || nmhd != 5) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<mhd>/dual_energy requires a non-isothermal ideal gas EOS"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (pmy_pack->pcoord->is_special_relativistic ||
+        pmy_pack->pcoord->is_general_relativistic ||
+        pmy_pack->pcoord->is_dynamical_relativistic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<mhd>/dual_energy is implemented only for Newtonian MHD"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    naux = 1;
+    dual_energy_idx = nmhd + nscalars;
+    dual_energy_needs_init = true;
+    dual_energy_eta1 = pin->GetOrAddReal("mhd", "dual_energy_eta1", 1.0e-3);
+    dual_energy_eta2 = pin->GetOrAddReal("mhd", "dual_energy_eta2", 1.0e-4);
+  }
+  nvars = nmhd + nscalars + naux;
 
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","viscosity")) {
@@ -123,9 +148,26 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     psrc = new SourceTerms("mhd_srcterms", ppack, pin);
   }
 
+  if (use_dual_energy) {
+    if (pvisc != nullptr || presist != nullptr || pcond != nullptr || psrc != nullptr ||
+        pin->DoesBlockExist("shearing_box")) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<mhd>/dual_energy is not implemented with viscosity, "
+                << "resistivity, thermal conduction, MHD source terms, or shearing box"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
+  if (use_dual_energy && evolution_t.compare("dynamic") != 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<mhd>/dual_energy only supports dynamic evolution"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // allocate memory for conserved and primitive variables
   // With AMR, maximum size of Views are limited by total device memory through an input
@@ -135,8 +177,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(u0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-    Kokkos::realloc(w0,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+    Kokkos::realloc(u0,   nmb, nvars, ncells3, ncells2, ncells1);
+    Kokkos::realloc(w0,   nmb, nvars, ncells3, ncells2, ncells1);
+    if (use_dual_energy) {
+      Kokkos::realloc(dual_etot_max, nmb, ncells3, ncells2, ncells1);
+    }
 
     // allocate memory for face-centered and cell-centered magnetic fields
     Kokkos::realloc(bcc0,   nmb, 3, ncells3, ncells2, ncells1);
@@ -151,8 +196,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     int n_ccells1 = indcs.cnx1 + 2*(indcs.ng);
     int n_ccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int n_ccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(coarse_u0, nmb, (nmhd+nscalars), n_ccells3, n_ccells2, n_ccells1);
-    Kokkos::realloc(coarse_w0, nmb, (nmhd+nscalars), n_ccells3, n_ccells2, n_ccells1);
+    Kokkos::realloc(coarse_u0, nmb, nvars, n_ccells3, n_ccells2, n_ccells1);
+    Kokkos::realloc(coarse_w0, nmb, nvars, n_ccells3, n_ccells2, n_ccells1);
     Kokkos::realloc(coarse_b0.x1f, nmb, n_ccells3, n_ccells2, n_ccells1+1);
     Kokkos::realloc(coarse_b0.x2f, nmb, n_ccells3, n_ccells2+1, n_ccells1);
     Kokkos::realloc(coarse_b0.x3f, nmb, n_ccells3+1, n_ccells2, n_ccells1);
@@ -160,15 +205,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // allocate boundary buffers for conserved (cell-centered) and face-centered variables
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
-  pbval_u->InitializeBuffers((nmhd+nscalars));
+  pbval_u->InitializeBuffers(nvars, nvars + (use_dual_energy ? 1 : 0));
   pbval_b = new MeshBoundaryValuesFC(ppack, pin);
   pbval_b->InitializeBuffers(3);
 
   // Orbital advection and shearing box BCs (if requested in input file)
   if (pin->DoesBlockExist("shearing_box")) {
-    porb_u = new OrbitalAdvectionCC(ppack, pin, (nmhd+nscalars));
+    porb_u = new OrbitalAdvectionCC(ppack, pin, nvars);
     porb_b = new OrbitalAdvectionFC(ppack, pin);
-    psbox_u = new ShearingBoxCC(ppack, pin, (nmhd+nscalars));
+    psbox_u = new ShearingBoxCC(ppack, pin, nvars);
     psbox_b = new ShearingBoxFC(ppack, pin);
   } else {
     porb_u = nullptr;
@@ -181,6 +226,12 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (evolution_t.compare("stationary") != 0) {
     // determine if FOFC is enabled
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+    if (use_dual_energy && use_fofc) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<mhd>/dual_energy is not implemented with FOFC"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
 
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
@@ -311,15 +362,20 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells1 = indcs.nx1 + 2*(indcs.ng);
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-      Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(u1,     nmb, nvars, ncells3, ncells2, ncells1);
       Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
       Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);
       Kokkos::realloc(b1.x3f, nmb, ncells3+1, ncells2, ncells1);
 
       // allocate fluxes, electric fields
-      Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1+1);
-      Kokkos::realloc(uflx.x2f, nmb, (nmhd+nscalars), ncells3, ncells2+1, ncells1);
-      Kokkos::realloc(uflx.x3f, nmb, (nmhd+nscalars), ncells3+1, ncells2, ncells1);
+      Kokkos::realloc(uflx.x1f, nmb, nvars, ncells3, ncells2, ncells1+1);
+      Kokkos::realloc(uflx.x2f, nmb, nvars, ncells3, ncells2+1, ncells1);
+      Kokkos::realloc(uflx.x3f, nmb, nvars, ncells3+1, ncells2, ncells1);
+      if (use_dual_energy) {
+        Kokkos::realloc(dual_vf.x1f, nmb, 1, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(dual_vf.x2f, nmb, 1, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(dual_vf.x3f, nmb, 1, ncells3+1, ncells2, ncells1);
+      }
       Kokkos::realloc(efld.x1e, nmb, ncells3+1, ncells2+1, ncells1);
       Kokkos::realloc(efld.x2e, nmb, ncells3+1, ncells2, ncells1+1);
       Kokkos::realloc(efld.x3e, nmb, ncells3, ncells2+1, ncells1+1);
@@ -379,7 +435,7 @@ void MHD::SetSaveWBcc() {
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
 
   // allocated saved arrays for time derivatives
-  Kokkos::realloc(wsaved,   nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+  Kokkos::realloc(wsaved,   nmb, nvars, ncells3, ncells2, ncells1);
   Kokkos::realloc(bccsaved, nmb, 3,               ncells3, ncells2, ncells1);
 
   wbcc_saved = true;

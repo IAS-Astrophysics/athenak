@@ -26,11 +26,18 @@
 //! MeshBlocks. Buffer data are then sent (via MPI) or copied directly for periodic or
 //! block boundaries.
 
-TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
+TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx,
+                                                   DvceFaceFld5D<Real> *extra_flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
-  int nvar = flx.x1f.extent_int(1);  // TODO(@user): 2nd idx from L of in arr must be NVAR
+  const int nvar_base = flx.x1f.extent_int(1);
+  const bool use_extra = (extra_flx != nullptr);
+  const int nvar_extra = use_extra ? extra_flx->x1f.extent_int(1) : 0;
+  int nvar = nvar_base + nvar_extra;
+  auto extra_x1f = use_extra ? extra_flx->x1f : flx.x1f;
+  auto extra_x2f = use_extra ? extra_flx->x2f : flx.x2f;
+  auto extra_x3f = use_extra ? extra_flx->x3f : flx.x3f;
 
   auto &cis = pmy_pack->pmesh->mb_indcs.cis;
   auto &cjs = pmy_pack->pmesh->mb_indcs.cjs;
@@ -85,12 +92,26 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           int fk = 2*k - cks;
           Real rflx;
           if (one_d) {
-            rflx = flx.x1f(m,v,0,0,fi);
+            rflx = (v < nvar_base) ? flx.x1f(m,v,0,0,fi) :
+                extra_x1f(m,v - nvar_base,0,0,fi);
           } else if (two_d) {
-            rflx = 0.5*(flx.x1f(m,v,0,fj,fi) + flx.x1f(m,v,0,fj+1,fi));
+            if (v < nvar_base) {
+              rflx = 0.5*(flx.x1f(m,v,0,fj,fi) + flx.x1f(m,v,0,fj+1,fi));
+            } else {
+              const int ve = v - nvar_base;
+              rflx = 0.5*(extra_x1f(m,ve,0,fj,fi) + extra_x1f(m,ve,0,fj+1,fi));
+            }
           } else {
-            rflx = 0.25*(flx.x1f(m,v,fk  ,fj,fi) + flx.x1f(m,v,fk  ,fj+1,fi) +
-                         flx.x1f(m,v,fk+1,fj,fi) + flx.x1f(m,v,fk+1,fj+1,fi));
+            if (v < nvar_base) {
+              rflx = 0.25*(flx.x1f(m,v,fk  ,fj,fi) + flx.x1f(m,v,fk  ,fj+1,fi) +
+                           flx.x1f(m,v,fk+1,fj,fi) + flx.x1f(m,v,fk+1,fj+1,fi));
+            } else {
+              const int ve = v - nvar_base;
+              rflx = 0.25*(extra_x1f(m,ve,fk  ,fj,fi) +
+                           extra_x1f(m,ve,fk  ,fj+1,fi) +
+                           extra_x1f(m,ve,fk+1,fj,fi) +
+                           extra_x1f(m,ve,fk+1,fj+1,fi));
+            }
           }
           // copy directly into recv buffer if MeshBlocks on same rank
           if (nghbr.d_view(m,n).rank == my_rank) {
@@ -113,10 +134,23 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           int fk = 2*k - cks;
           Real rflx;
           if (two_d) {
-            rflx = 0.5*(flx.x2f(m,v,0,fj,fi) + flx.x2f(m,v,0,fj,fi+1));
+            if (v < nvar_base) {
+              rflx = 0.5*(flx.x2f(m,v,0,fj,fi) + flx.x2f(m,v,0,fj,fi+1));
+            } else {
+              const int ve = v - nvar_base;
+              rflx = 0.5*(extra_x2f(m,ve,0,fj,fi) + extra_x2f(m,ve,0,fj,fi+1));
+            }
           } else {
-            rflx = 0.25*(flx.x2f(m,v,fk  ,fj,fi) + flx.x2f(m,v,fk  ,fj,fi+1) +
-                         flx.x2f(m,v,fk+1,fj,fi) + flx.x2f(m,v,fk+1,fj,fi+1));
+            if (v < nvar_base) {
+              rflx = 0.25*(flx.x2f(m,v,fk  ,fj,fi) + flx.x2f(m,v,fk  ,fj,fi+1) +
+                           flx.x2f(m,v,fk+1,fj,fi) + flx.x2f(m,v,fk+1,fj,fi+1));
+            } else {
+              const int ve = v - nvar_base;
+              rflx = 0.25*(extra_x2f(m,ve,fk  ,fj,fi) +
+                           extra_x2f(m,ve,fk  ,fj,fi+1) +
+                           extra_x2f(m,ve,fk+1,fj,fi) +
+                           extra_x2f(m,ve,fk+1,fj,fi+1));
+            }
           }
           // copy directly into recv buffer if MeshBlocks on same rank
           if (nghbr.d_view(m,n).rank == my_rank) {
@@ -137,8 +171,17 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           j += jl;
           int fi = 2*i - cis;
           int fj = 2*j - cjs;
-          Real rflx = 0.25*(flx.x3f(m,v,fk,fj  ,fi) + flx.x3f(m,v,fk,fj  ,fi+1) +
-                            flx.x3f(m,v,fk,fj+1,fi) + flx.x3f(m,v,fk,fj+1,fi+1));
+          Real rflx;
+          if (v < nvar_base) {
+            rflx = 0.25*(flx.x3f(m,v,fk,fj  ,fi) + flx.x3f(m,v,fk,fj  ,fi+1) +
+                         flx.x3f(m,v,fk,fj+1,fi) + flx.x3f(m,v,fk,fj+1,fi+1));
+          } else {
+            const int ve = v - nvar_base;
+            rflx = 0.25*(extra_x3f(m,ve,fk,fj  ,fi) +
+                         extra_x3f(m,ve,fk,fj  ,fi+1) +
+                         extra_x3f(m,ve,fk,fj+1,fi) +
+                         extra_x3f(m,ve,fk,fj+1,fi+1));
+          }
           // copy directly into recv buffer if MeshBlocks on same rank
           if (nghbr.d_view(m,n).rank == my_rank) {
             rbuf[dn].flux(dm, (i-il + ni*(j-jl + nj*v)) ) = rflx;
@@ -196,7 +239,8 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
 //! \fn void RecvBuffers()
 //! \brief Unpack boundary buffers for flux correction of CC variables.
 
-TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
+TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx,
+                                                     DvceFaceFld5D<Real> *extra_flx) {
   // create local references for variables in kernel
   int nmb = pmy_pack->nmb_thispack;
   int nnghbr = pmy_pack->pmb->nnghbr;
@@ -238,7 +282,13 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
 
   //----- STEP 2: buffers have all completed, so unpack
 
-  int nvar = flx.x1f.extent_int(1); // TODO(@user): 2nd idx from L of in arr must be NVAR
+  const int nvar_base = flx.x1f.extent_int(1);
+  const bool use_extra = (extra_flx != nullptr);
+  const int nvar_extra = use_extra ? extra_flx->x1f.extent_int(1) : 0;
+  int nvar = nvar_base + nvar_extra;
+  auto extra_x1f = use_extra ? extra_flx->x1f : flx.x1f;
+  auto extra_x2f = use_extra ? extra_flx->x2f : flx.x2f;
+  auto extra_x3f = use_extra ? extra_flx->x3f : flx.x3f;
 
   // Outer loop over (# of MeshBlocks)*(# of neighbors)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
@@ -269,7 +319,12 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
           k += kl;
-          flx.x1f(m,v,k,j,il) = rbuf[n].flux(m,(j-jl + nj*(k-kl + nk*v)));
+          const Real rval = rbuf[n].flux(m,(j-jl + nj*(k-kl + nk*v)));
+          if (v < nvar_base) {
+            flx.x1f(m,v,k,j,il) = rval;
+          } else {
+            extra_x1f(m,v - nvar_base,k,j,il) = rval;
+          }
         });
       // x2faces
       } else if (n<16) {
@@ -277,7 +332,12 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           int k = idx / ni;
           int i = (idx - k * ni) + il;
           k += kl;
-          flx.x2f(m,v,k,jl,i) = rbuf[n].flux(m,(i-il + ni*(k-kl + nk*v)));
+          const Real rval = rbuf[n].flux(m,(i-il + ni*(k-kl + nk*v)));
+          if (v < nvar_base) {
+            flx.x2f(m,v,k,jl,i) = rval;
+          } else {
+            extra_x2f(m,v - nvar_base,k,jl,i) = rval;
+          }
         });
       // x3faces
       } else if ((n>=24) && (n<32)) {
@@ -285,7 +345,12 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           int j = idx / ni;
           int i = (idx - j * ni) + il;
           j += jl;
-          flx.x3f(m,v,kl,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*v)));
+          const Real rval = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*v)));
+          if (v < nvar_base) {
+            flx.x3f(m,v,kl,j,i) = rval;
+          } else {
+            extra_x3f(m,v - nvar_base,kl,j,i) = rval;
+          }
         });
       }
     }  // end if-neighbor-exists block

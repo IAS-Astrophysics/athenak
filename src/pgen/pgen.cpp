@@ -118,10 +118,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0;
   if (phydro != nullptr) {
-    nhydro = phydro->nhydro + phydro->nscalars;
+    nhydro = phydro->nvars;
   }
   if (pmhd != nullptr) {
-    nmhd = pmhd->nmhd + pmhd->nscalars;
+    nmhd = pmhd->nvars;
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
@@ -247,6 +247,64 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
 
+  int nhydro_file = nhydro;
+  int nmhd_file = nmhd;
+  bool hydro_restart_missing_dual = false;
+  bool hydro_restart_extra_dual = false;
+  bool mhd_restart_missing_dual = false;
+  bool mhd_restart_extra_dual = false;
+
+  if (data_size_ != data_size) {
+    const IOWrapperSizeT cc_cell_bytes = nout1*nout2*nout3*sizeof(Real);
+    IOWrapperSizeT fixed_data_size = data_size_;
+    if (phydro != nullptr) fixed_data_size -= cc_cell_bytes*nhydro;
+    if (pmhd != nullptr) fixed_data_size -= cc_cell_bytes*nmhd;
+
+    int hydro_file_options[2] = {nhydro, nhydro};
+    int nhydro_options = 1;
+    if (phydro != nullptr && phydro->use_dual_energy && phydro->naux == 1) {
+      hydro_file_options[1] = nhydro - 1;
+      nhydro_options = 2;
+    } else if (phydro != nullptr && !(phydro->use_dual_energy)) {
+      hydro_file_options[1] = nhydro + 1;
+      nhydro_options = 2;
+    }
+
+    int mhd_file_options[2] = {nmhd, nmhd};
+    int nmhd_options = 1;
+    if (pmhd != nullptr && pmhd->use_dual_energy && pmhd->naux == 1) {
+      mhd_file_options[1] = nmhd - 1;
+      nmhd_options = 2;
+    } else if (pmhd != nullptr && !(pmhd->use_dual_energy)) {
+      mhd_file_options[1] = nmhd + 1;
+      nmhd_options = 2;
+    }
+
+    bool matched_restart_layout = false;
+    for (int ih = 0; ih < nhydro_options && !matched_restart_layout; ++ih) {
+      for (int im = 0; im < nmhd_options && !matched_restart_layout; ++im) {
+        const int nhydro_candidate = (phydro != nullptr) ? hydro_file_options[ih] : 0;
+        const int nmhd_candidate = (pmhd != nullptr) ? mhd_file_options[im] : 0;
+        const IOWrapperSizeT candidate_size =
+            fixed_data_size + cc_cell_bytes*(nhydro_candidate + nmhd_candidate);
+        if (candidate_size != data_size) continue;
+
+        nhydro_file = nhydro_candidate;
+        nmhd_file = nmhd_candidate;
+        hydro_restart_missing_dual =
+            (phydro != nullptr) && phydro->use_dual_energy && (nhydro_file < nhydro);
+        hydro_restart_extra_dual =
+            (phydro != nullptr) && !(phydro->use_dual_energy) && (nhydro_file > nhydro);
+        mhd_restart_missing_dual =
+            (pmhd != nullptr) && pmhd->use_dual_energy && (nmhd_file < nmhd);
+        mhd_restart_extra_dual =
+            (pmhd != nullptr) && !(pmhd->use_dual_energy) && (nmhd_file > nmhd);
+        data_size_ = candidate_size;
+        matched_restart_layout = true;
+      }
+    }
+  }
+
   if (data_size_ != data_size) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
@@ -254,9 +312,28 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
               << std::endl;
     exit(EXIT_FAILURE);
   }
+  if (global_variable::my_rank == 0 || single_file_per_rank) {
+    if (hydro_restart_missing_dual) {
+      std::cout << "Restart has no hydro dual-energy auxiliary data. "
+                << "Initializing it from the restarted conserved energy." << std::endl;
+    }
+    if (hydro_restart_extra_dual) {
+      std::cout << "Restart contains hydro dual-energy auxiliary data, but "
+                << "<hydro>/dual_energy = false. Ignoring restart auxiliary field."
+                << std::endl;
+    }
+    if (mhd_restart_missing_dual) {
+      std::cout << "Restart has no MHD dual-energy auxiliary data. "
+                << "Initializing it from the restarted conserved energy." << std::endl;
+    }
+    if (mhd_restart_extra_dual) {
+      std::cout << "Restart contains MHD dual-energy auxiliary data, but "
+                << "<mhd>/dual_energy = false. Ignoring restart auxiliary field."
+                << std::endl;
+    }
+  }
 
   // read CC data into host array
-  int mygids = pm->gids_eachrank[global_variable::my_rank];
   IOWrapperSizeT offset_myrank = headeroffset;
   if (!single_file_per_rank) {
     offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
@@ -275,7 +352,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
 
   if (phydro != nullptr) {
-    Kokkos::realloc(ccin, nmb, nhydro, nout3, nout2, nout1);
+    Kokkos::realloc(ccin, nmb, nhydro_file, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to read, so read collectively
       if (m < noutmbs_min) {
@@ -308,14 +385,33 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         myoffset += data_size;
       }
     }
-    Kokkos::deep_copy(Kokkos::subview(phydro->u0, std::make_pair(0,nmb), Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
-    offset_myrank += nout1*nout2*nout3*nhydro*sizeof(Real); // hydro u0
+    if (nhydro_file == nhydro) {
+      Kokkos::deep_copy(Kokkos::subview(phydro->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    } else {
+      HostArray5D<Real> ccfull("rst-hydro-full", nmb, nhydro, nout3, nout2, nout1);
+      Kokkos::deep_copy(ccfull, 0.0);
+      const int nhydro_copy = std::min(nhydro, nhydro_file);
+      for (int m=0; m<nmb; ++m) {
+        for (int n=0; n<nhydro_copy; ++n) {
+          for (int k=0; k<nout3; ++k) {
+            for (int j=0; j<nout2; ++j) {
+              for (int i=0; i<nout1; ++i) {
+                ccfull(m,n,k,j,i) = ccin(m,n,k,j,i);
+              }
+            }
+          }
+        }
+      }
+      Kokkos::deep_copy(Kokkos::subview(phydro->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccfull);
+    }
+    offset_myrank += nout1*nout2*nout3*nhydro_file*sizeof(Real); // hydro u0
     myoffset = offset_myrank;
   }
 
   if (pmhd != nullptr) {
-    Kokkos::realloc(ccin, nmb, nmhd, nout3, nout2, nout1);
+    Kokkos::realloc(ccin, nmb, nmhd_file, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to read, so read collectively
       if (m < noutmbs_min) {
@@ -347,9 +443,28 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         myoffset += data_size;
       }
     }
-    Kokkos::deep_copy(Kokkos::subview(pmhd->u0, std::make_pair(0,nmb), Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
-    offset_myrank += nout1*nout2*nout3*nmhd*sizeof(Real);   // mhd u0
+    if (nmhd_file == nmhd) {
+      Kokkos::deep_copy(Kokkos::subview(pmhd->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    } else {
+      HostArray5D<Real> ccfull("rst-mhd-full", nmb, nmhd, nout3, nout2, nout1);
+      Kokkos::deep_copy(ccfull, 0.0);
+      const int nmhd_copy = std::min(nmhd, nmhd_file);
+      for (int m=0; m<nmb; ++m) {
+        for (int n=0; n<nmhd_copy; ++n) {
+          for (int k=0; k<nout3; ++k) {
+            for (int j=0; j<nout2; ++j) {
+              for (int i=0; i<nout1; ++i) {
+                ccfull(m,n,k,j,i) = ccin(m,n,k,j,i);
+              }
+            }
+          }
+        }
+      }
+      Kokkos::deep_copy(Kokkos::subview(pmhd->u0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccfull);
+    }
+    offset_myrank += nout1*nout2*nout3*nmhd_file*sizeof(Real);   // mhd u0
     myoffset = offset_myrank;
 
     Kokkos::realloc(fcin.x1f, nmb, nout3, nout2, nout1+1);
@@ -618,6 +733,12 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // call problem generator again to re-initialize data, fn ptrs, as needed
   // second argument true since this IS a restart
   CallProblemGenerator(pin, true);
+  if (phydro != nullptr && phydro->use_dual_energy && !hydro_restart_missing_dual) {
+    phydro->dual_energy_needs_init = false;
+  }
+  if (pmhd != nullptr && pmhd->use_dual_energy && !mhd_restart_missing_dual) {
+    pmhd->dual_energy_needs_init = false;
+  }
 
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {

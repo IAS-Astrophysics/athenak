@@ -52,6 +52,7 @@ struct MHDTaskIDs {
   TaskID sendf;
   TaskID recvf;
   TaskID rkupdt;
+  TaskID duale;
   TaskID srctrms;
   TaskID sendu_oa;
   TaskID recvu_oa;
@@ -97,6 +98,13 @@ class MHD {
 
   int nmhd;                // number of mhd variables (5/4 for ideal/isothermal EOS)
   int nscalars;            // number of passive scalars
+  int naux = 0;             // number of hidden auxiliary MHD variables
+  int nvars = 0;            // total MHD-carried variables = nmhd+nscalars+naux
+  int dual_energy_idx = -1;
+  bool use_dual_energy = false;
+  bool dual_energy_needs_init = false;
+  Real dual_energy_eta1 = 1.0e-3;
+  Real dual_energy_eta2 = 1.0e-4;
   DvceArray5D<Real> u0;    // conserved variables
   DvceArray5D<Real> w0;    // primitive variables
   DvceFaceFld4D<Real> b0;  // face-centered magnetic fields
@@ -127,6 +135,8 @@ class MHD {
   DvceArray5D<Real> u1;       // conserved variables, second register
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
+  DvceFaceFld5D<Real> dual_vf;  // mass-flux velocity for dual-energy compression
+  DvceArray4D<Real> dual_etot_max;  // local total-energy scale for dual-energy sync
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e3x1, e2x1;
@@ -160,6 +170,7 @@ class MHD {
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
   TaskStatus RKUpdate(Driver *d, int stage);
+  TaskStatus DualEnergyStep(Driver *d, int stage);
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);
   TaskStatus RecvU_OA(Driver *d, int stage);
@@ -191,6 +202,14 @@ class MHD {
   // CalculateFluxes function templated over Riemann Solvers
   template <MHD_RSolver T>
   void CalculateFluxes(Driver *d, int stage);
+
+  // dual-energy formalism
+  void InitializeDualEnergyFieldFromTotal();
+  void ApplyDualEnergyFormalism(const Real dt);
+  void SynchronizeDualEnergyFieldFromTotal();
+  void SynchronizeRestrictedDualEnergyField();
+  void RepairRefinedDualEnergyState(DualArray1D<int> &n2o, DualArray1D<int> &rflag,
+                                    const int new_gids, const int new_nmb_local);
 
   // first-order flux correction
   void FOFC(Driver *d, int stage);

@@ -50,7 +50,8 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.sendf     = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
   id.recvf     = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
   id.rkupdt    = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
-  id.srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
+  id.duale     = tl["stagen"]->AddTask(&MHD::DualEnergyStep, this, id.rkupdt);
+  id.srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.duale);
   id.sendu_oa  = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
   id.recvu_oa  = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.sendu_oa);
   id.restu     = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvu_oa);
@@ -106,7 +107,7 @@ TaskStatus MHD::SaveMHDState(Driver *pdrive, int stage) {
 
 TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
   // post receives for U
-  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  TaskStatus tstat = pbval_u->InitRecv(nvars);
   if (tstat != TaskStatus::complete) return tstat;
   // post receives for B
   tstat = pbval_b->InitRecv(3);
@@ -117,7 +118,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
   if (stage >= 0) {
     // with SMR/AMR, post receives for fluxes of U
     if (pmy_pack->pmesh->multilevel) {
-      tstat = pbval_u->InitFluxRecv(nmhd+nscalars);
+      tstat = pbval_u->InitFluxRecv(nvars + (use_dual_energy ? 1 : 0));
       if (tstat != TaskStatus::complete) return tstat;
     }
     // post receives for fluxes of B, which are used even with uniform grids
@@ -227,7 +228,7 @@ TaskStatus MHD::SendFlux(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // Only execute BoundaryValues function with SMR/SMR
   if (pmy_pack->pmesh->multilevel)  {
-    tstat = pbval_u->PackAndSendFluxCC(uflx);
+    tstat = pbval_u->PackAndSendFluxCC(uflx, use_dual_energy ? &dual_vf : nullptr);
   }
   return tstat;
 }
@@ -241,7 +242,7 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   // Only execute BoundaryValues function with SMR/SMR
   if (pmy_pack->pmesh->multilevel) {
-    tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
+    tstat = pbval_u->RecvAndUnpackFluxCC(uflx, use_dual_energy ? &dual_vf : nullptr);
   }
   return tstat;
 }
@@ -317,6 +318,7 @@ TaskStatus MHD::RestrictU(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/AMR
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictCC(u0, coarse_u0);
+    SynchronizeRestrictedDualEnergyField();
   }
   return TaskStatus::complete;
 }
@@ -541,6 +543,7 @@ TaskStatus MHD::ConToPrim(Driver *pdrive, int stage) {
   int n1m1 = indcs.nx1 + 2*ng - 1;
   int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+  SynchronizeDualEnergyFieldFromTotal();
   peos->ConsToPrim(u0, b0, w0, bcc0, false, 0, n1m1, 0, n2m1, 0, n3m1);
   return TaskStatus::complete;
 }
