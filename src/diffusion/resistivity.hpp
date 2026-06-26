@@ -27,8 +27,11 @@ class Resistivity {
   Real eta_ohm;
 
   // functions to add resistive E-Field and energy flux
-  void OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
-  void OhmicEnergyFlux(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx);
+  void AddResistiveEMFs(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void AddResistiveFluxes(const DvceFaceFld4D<Real> &b0, DvceFaceFld5D<Real> &flx);
+  void AddEMFConstantResist(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void AddFluxConstantResist(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx);
+  void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:
   MeshBlockPack* pmy_pack;
