@@ -46,6 +46,7 @@
 #include "parameter_input.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "utils/tov/tov_utils.hpp"
 #include "utils/tov/tov_polytrope.hpp"
 #include "utils/tov/tov_piecewise_poly.hpp"
@@ -481,6 +482,22 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     case 4:
       pmbp->pz4c->ADMToZ4c<4>(pmbp, pin);
       break;
+  }
+
+  // Place the NS trackers at the data's star centres, overriding the parfile co_*_x
+  // guesses. The fill loop samples FUKA at pt = x - axis (axis = bconfig(COM)), so a
+  // star at FUKA centre xc_i appears on the grid at xc_i + axis. This only runs on a
+  // fresh start; restarts restore the evolved positions from the restart file.
+  if (pmbp->pz4c != nullptr && pmbp->pz4c->ptracker.size() >= 2) {
+    Real ns1_pos[3] = {static_cast<Real>(xc1 + axis), 0.0, 0.0};
+    Real ns2_pos[3] = {static_cast<Real>(xc2 + axis), 0.0, 0.0};
+    pmbp->pz4c->ptracker[0]->SetPos(ns1_pos);
+    pmbp->pz4c->ptracker[1]->SetPos(ns2_pos);
+    if (global_variable::my_rank == 0) {
+      std::cout << "Set NS tracker positions from initial data: NS1 x = "
+                << pmbp->pz4c->ptracker[0]->GetPos(0) << ", NS2 x = "
+                << pmbp->pz4c->ptracker[1]->GetPos(0) << std::endl;
+    }
   }
 }
 
