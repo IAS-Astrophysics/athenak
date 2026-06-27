@@ -245,9 +245,6 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
 #endif
     pmy_part(pp) {
 #if MPI_PARALLEL_ENABLED
-  // Guess that no more than 10% of particles will be communicated to set size of buffer
-  int npart = pmy_part->nprtcl_thispack;
-
   //resize vectors over number of ranks
   nsends_eachrank.resize(global_variable::nranks);
 
