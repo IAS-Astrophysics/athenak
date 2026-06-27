@@ -114,6 +114,23 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   const bool use_ye = tov::UsesYe<TOVEOS>;
   const bool read_ye = pin->GetOrAddInteger("mhd", "nscalars", 0) > 0;
 
+  // FUKA (Margherita) defines the rest-mass density as rho = nb*m_amu using the atomic
+  // mass unit (Margherita_constants::mnuc_MeV), whereas the CompOSE tables define
+  // rho = nb*mn using the neutron mass (the table's "mn" scalar). Recovering nb = rho/mn
+  // from FUKA's density therefore undershoots nb by m_amu/mn (~0.86%), which the con2prim
+  // inversion absorbs as a spurious ~15 MeV initial temperature. When
+  // <problem>/rescale_fuka_density is enabled (only meaningful for the tabulated CompOSE
+  // EOS, which carries a neutron mass), multiply FUKA's density by mn/m_amu so that nb is
+  // recovered consistently with the evolution table.
+  const bool rescale_fuka_density =
+      pin->GetOrAddBoolean("problem", "rescale_fuka_density", false);
+  Real fuka_rho_rescale = 1.0;
+  if constexpr (use_ye) {
+    if (rescale_fuka_density) {
+      fuka_rho_rescale = eos.GetNeutronMass()/Margherita_constants::mnuc_MeV;
+    }
+  }
+
   // =========================================================================
   // Kadath BNS setup (inlined from export_bns.cpp / KadathExportBNS)
   // =========================================================================
@@ -379,6 +396,10 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
         host_w0(m, IPR, k, j, i) = EOS<eos_t, PRESSURE>::get(h_enth);
       }
     }
+
+    // Reconcile FUKA's atomic-mass-unit density with the table's neutron-mass convention
+    // (see fuka_rho_rescale above). No-op (factor 1) when disabled or in vacuum (rho=0).
+    host_w0(m, IDN, k, j, i) *= fuka_rho_rescale;
 
     if constexpr (use_ye) {
       if (read_ye) {

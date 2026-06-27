@@ -38,6 +38,10 @@ class TabulatedEOS {
   bool has_ye = false;
   Real ye_atmosphere;
 
+  // Neutron mass ("mn" scalar from the table), in nuclear units (MeV). The table's
+  // rest-mass density convention is rho = nb*mn.
+  Real mn;
+
   std::string fname;
   size_t m_nn;
 
@@ -75,7 +79,7 @@ class TabulatedEOS {
     // TODO(JMF) Check that table has right fields and dimensions
     auto& table_scalars = table.GetScalars();
     test_field(table_scalars.count("mn") > 0, "mn");
-    Real mb = table_scalars.at("mn");
+    mn = table_scalars.at("mn");
 
     // Get table dimensions
     auto& point_info = table.GetPointInfo();
@@ -92,8 +96,8 @@ class TabulatedEOS {
     test_field(table.HasField("nb"), "nb");
     Real * table_nb = table["nb"];
     for (size_t in = 0; in < m_nn; in++) {
-      //m_log_rho.h_view(in) = log(table_nb[in]*mb*ener_to_geo);
-      m_log_rho.h_view(in) = log(table_nb[in]*mb*
+      //m_log_rho.h_view(in) = log(table_nb[in]*mn*ener_to_geo);
+      m_log_rho.h_view(in) = log(table_nb[in]*mn*
                                  unit_nuc.MassDensityConversion(unit_geo));
     }
     dlrho = m_log_rho.h_view(1)-m_log_rho.h_view(0);
@@ -114,7 +118,7 @@ class TabulatedEOS {
     test_field(table.HasField("Q7"), "Q7");
     Real * table_Q7 = table["Q7"];
     for (size_t in = 0; in < m_nn; in++) {
-      m_log_e.h_view(in) = log(mb*(table_Q7[in] + 1.)*table_nb[in]*
+      m_log_e.h_view(in) = log(mn*(table_Q7[in] + 1.)*table_nb[in]*
                                     unit_nuc.EnergyDensityConversion(unit_geo));
     }
     le_min = m_log_e.h_view(0);
@@ -145,6 +149,12 @@ class TabulatedEOS {
     m_log_e.template sync<DevExeSpace>();
     if (has_ye) {m_ye.template sync<DevExeSpace>();}
   }
+
+  // Neutron mass ("mn" scalar) read from the table, in nuclear units (MeV). Exposed so
+  // that initial-data readers can reconcile the table's rho = nb*mn convention with other
+  // rest-mass-density conventions (e.g. FUKA, which uses the atomic mass unit).
+  KOKKOS_INLINE_FUNCTION
+  Real GetNeutronMass() const { return mn; }
 
   template<LocationTag loc>
   KOKKOS_INLINE_FUNCTION
