@@ -623,6 +623,14 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     myoffset = offset_myrank;
   }
 
+  //--- STEP 5.  Write cyclic zoom restart data if enabled
+  if (pm->pzoom != nullptr && pm->pzoom->write_rst) {
+    // calculate offset of zoom data, i.e. after all previous data
+    IOWrapperSizeT offset_zoom = step1size + step2size + step3size
+                                 + sizeof(IOWrapperSizeT) + data_size*(pm->nmb_total);
+    pm->pzoom->WriteRestartFile(resfile, offset_zoom, single_file_per_rank);
+  }
+
   // close file, clean up
   resfile.Close(single_file_per_rank);
 

@@ -389,6 +389,9 @@ TaskStatus MHD::EField(Driver *pdrive, int stage) {
       psbox_b->SourceTermsFC(b0, efld);
     }
   }
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->SourceTermsFC(efld);
+  }
   return TaskStatus::complete;
 }
 
@@ -508,6 +511,11 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // physical BCs
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
   pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
+
+  // TODO(@mhguo): this is temporary, need to move to a general mask function later
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->ApplyMask();
+  }
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
