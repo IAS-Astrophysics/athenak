@@ -28,3 +28,13 @@ inputs/mhd/magnetosphere_*.athinput
 *~
 *.swp
 Lorene
+
+# Legacy/benchmark magnetosphere inputs kept locally only (archived outside the repo).
+# Production input is inputs/mhd/tilted_magsph.athinput (tracked).
+inputs/mhd/magnetosphere.athinput
+inputs/mhd/magnetosphere2.athinput
+inputs/mhd/magnetosphere3.athinput
+inputs/mhd/magnetospheric_strong_scaling.athinput
+inputs/mhd/magnetospheric_weak_scaling.athinput
+inputs/mhd/magnetospheric_weak_scaling_v2.athinput
+inputs/mhd/magnetospheric_weak_scaling_v3.athinput

@@ -1,16 +1,86 @@
-# AthenaK input file for disc magnetosphere interaction
+# AthenaK input file for TILTED disc-magnetosphere interaction (production).
+# Grid: cand20 (root240 / level-7 isotropic-ball inner refinement).
+#   Finest dx = 0.003125 (32 cells/R*); 7432 meshblocks; domain [-48,48]^3.
+# Default configuration = "Spin+Dipole tilt 45" (both stellar spin and dipole
+#   tilted 45 deg): thetaw = thetab = 0.785398 rad.
+#   -> For the "Dipole-only tilt 45 (aligned spin)" run, set thetaw = 0.0 and
+#      keep thetab = 0.785398 (see <problem> below).
+# See the run-instructions doc for the full Vista launch procedure.
 
 <comment>
 problem   = magnetosphere
 
 <job>
-basename  = magsph      # problem ID: basename of output filenames
+basename  = tilted_magsph   # problem ID: basename of output filenames
+
+<output1>
+file_type   = bin        # Tabular data dump
+#variable   = hydro_u    # variables to be output
+variable    = mhd_u_bcc  # variables to be output
+dt          = 0.628      # time increment between outputs (0.1 T0)
+
+<output2>
+file_type   = hst       # history data dump
+dt          = 0.0314    # time increment between outputs
+
+<output3>
+file_type   = rst
+dt          = 6.28      # restart cadence (1 T0)
+
+<output4>
+file_type = geosph
+variable  = mhd_u_bcc
+radius    = 0.2
+dt        = 0.0628
+nlev      = 40
+ng_interp   = 1
+
+<output5>
+file_type = geosph
+variable  = mhd_u_bcc
+radius    = 0.3
+dt        = 0.0628
+nlev      = 40
+ng_interp   = 1
+
+<output6>
+file_type = geosph
+variable  = mhd_u_bcc
+radius    = 0.4
+dt        = 0.0628
+nlev      = 40
+ng_interp   = 1
+
+<output7>
+file_type        = sphshell
+variable         = mhd_cart_to_sph
+dt               = 1.0
+nr               = 128
+rmin             = 0.3
+rmax             = 16.0
+log_spacing      = true
+nlev             = 40
+surface_integral = true
+ng_interp = 1
+
+<output8>
+file_type   = azavg
+variable    = mhd_cart_to_sph
+dt          = 1.0
+nr          = 128
+ntheta      = 256
+nphi        = 128
+rmin        = 0.3
+rmax        = 10.0
+log_spacing = true
+ng_interp   = 0
+uniform_theta = true
 
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
-nlim        = 1000       # cycle limit
-tlim        = 1e10       # time limit (benchmark: terminate on cycle limit)
+nlim        = -1         # cycle limit (-1 = run to time limit)
+tlim        = 188.5      # time limit = 30 T0 (T0 = 2*pi/Omega0 = 6.2832)
 integrator  = rk2        # time integration algorithm
 
 <mesh>
@@ -61,21 +131,103 @@ x3max= 0.39
 level= 5
 
 <refined_region3>
-x1min=-1.9
-x1max= 1.9
-x2min=-1.9
-x2max= 1.9
+x1min=-1.5
+x1max= 1.5
+x2min=-1.5
+x2max= 1.5
 x3min=-0.19
 x3max= 0.19
 level= 6
 
 <refined_region4>
-x1min=-0.9
-x1max= 0.9
-x2min=-0.9
-x2max= 0.9
-x3min=-0.09
-x3max= 0.09
+x1min=-0.5
+x1max= 0.5
+x2min=-0.5
+x2max= 0.5
+x3min=-0.5
+x3max= 0.5
+level= 7
+
+
+<refined_region5>
+x1min=-0.5
+x1max= 0.5
+x2min=-0.5
+x2max= 0.5
+x3min=-0.6125
+x3max= 0.6125
+level= 7
+
+<refined_region6>
+x1min=-0.5
+x1max= 0.5
+x2min=-0.6125
+x2max= 0.6125
+x3min=-0.5
+x3max= 0.5
+level= 7
+
+<refined_region7>
+x1min=-0.6125
+x1max= 0.6125
+x2min=-0.5
+x2max= 0.5
+x3min=-0.5
+x3max= 0.5
+level= 7
+
+<refined_region8>
+x1min=-0.25
+x1max= 0.25
+x2min=-0.25
+x2max= 0.25
+x3min=-0.75
+x3max= 0.75
+level= 7
+
+<refined_region9>
+x1min=-0.25
+x1max= 0.25
+x2min=-0.75
+x2max= 0.75
+x3min=-0.25
+x3max= 0.25
+level= 7
+
+<refined_region10>
+x1min=-0.25
+x1max= 0.25
+x2min=-0.25
+x2max= 0.25
+x3min=-0.75
+x3max= 0.75
+level= 7
+
+<refined_region11>
+x1min=-0.25
+x1max= 0.25
+x2min=-0.75
+x2max= 0.75
+x3min=-0.25
+x3max= 0.25
+level= 7
+
+<refined_region12>
+x1min=-0.75
+x1max= 0.75
+x2min=-0.25
+x2max= 0.25
+x3min=-0.25
+x3max= 0.25
+level= 7
+
+<refined_region13>
+x1min=-0.75
+x1max= 0.75
+x2min=-0.25
+x2max= 0.25
+x3min=-0.25
+x3max= 0.25
 level= 7
 
 <mhd>
@@ -91,14 +243,6 @@ nscalars    = 0        # FOFC diagnostic passive scalar (temporary)
 # Region-based reconstruction switch: use alternate method (plm or dc) inside a region
 recon_region        = sphere  # none, box, or sphere
 recon_region_method = plm     # method inside region: plm or dc
-# For recon_region = box (problem coordinates):
-# recon_region_x1min = -1.0
-# recon_region_x1max =  1.0
-# recon_region_x2min = -1.0
-# recon_region_x2max =  1.0
-# recon_region_x3min = -1.0
-# recon_region_x3max =  1.0
-# For recon_region = sphere (problem coordinates):
  recon_region_x1_center = 0.0
  recon_region_x2_center = 0.0
  recon_region_x3_center = 0.0
@@ -117,9 +261,9 @@ user_hist        = false   # Switch the user history function on
 # --- Stellar parameters ---
 gm0     = 1.0             # GM for the central star
 rstar   = 0.1             # radius of the star
-origid  = 2.8             # angular velocity of star
-thetaw  = 0.0             # tilt of stellar rotation axis (counterclockwise rot about y-axis)
-thetab  = 0.0             # tilt of stellar dipole axis (counterclockwise rot about y-axis)
+origid  = 2.8             # angular velocity of star (spinning)
+thetaw  = 0.785398        # tilt of stellar rotation axis [rad] (45 deg; set 0.0 for aligned-spin run)
+thetab  = 0.785398        # tilt of stellar dipole axis  [rad] (45 deg)
 mm      = -0.0178         # magnetic moment -0.0089
 denstar = 1e5             # central stellar density
 mag_option = 1            # field definition: Zhaohuan [1] or smoothed [2]
@@ -151,7 +295,7 @@ ghost_vr_frac   = 0.0      # minimum inward radial velocity as fraction of free-
 
 # --- Sponge layer ---
 sponge_width = 0.02        # thickness of sponge zone outside rfix (0 = disabled)
-sponge_tau   = 0.1         # sponge relaxation timescale in units of t_ff(rfix) 
+sponge_tau   = 0.1         # sponge relaxation timescale in units of t_ff(rfix)
 
 # --- Density floors ---
 rho_floor1        = 1e-6   # radial density floor normalisation 1
