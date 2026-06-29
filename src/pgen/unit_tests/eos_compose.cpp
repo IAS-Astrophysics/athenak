@@ -3,7 +3,7 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file eos_compose_test.cpp
+//! \file eos_compose.cpp
 //  \brief Unit test for EOSCompOSE to make sure it works properly.
 
 #include <sstream>
@@ -27,7 +27,11 @@
 template<class LogPolicy>
 void PerformTests(Mesh* pmesh, ParameterInput *pin);
 
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::EOSCompose()
+//! \brief Runs EOS compose unit tests
+
+void ProblemGenerator::EOSCompose(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pdyngr == nullptr) {
@@ -60,6 +64,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   return;
 }
+
+//----------------------------------------------------------------------------------------
+//! \fn void PerformTests()
+//! \brief
 
 template<class LogPolicy>
 void PerformTests(Mesh *pmesh, ParameterInput *pin) {
