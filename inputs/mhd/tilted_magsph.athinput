@@ -54,7 +54,7 @@ ng_interp   = 1
 <output7>
 file_type        = sphshell
 variable         = mhd_cart_to_sph
-dt               = 1.0
+dt               = 0.0628
 nr               = 128
 rmin             = 0.3
 rmax             = 16.0
@@ -79,7 +79,7 @@ uniform_theta = true
 <output9>
 file_type        = sphshell    # disc tilt/warp: shell angular-momentum direction
 variable         = mhd_angmom  # L = r x rho*v per cell -> shell (Lx,Ly,Lz,L^2)
-dt               = 1.0
+dt               = 0.0628
 nr               = 128
 rmin             = 0.3
 rmax             = 16.0
