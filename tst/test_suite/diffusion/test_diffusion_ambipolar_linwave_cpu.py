@@ -7,11 +7,14 @@ exponential decay rate of the (volume-integrated) kinetic energy is measured and
 the analytic AD damping rates from Balsara (1996) (eqs. 17-18): Gamma_fast=0.5132,
 Gamma_Alfven=0.1974, Gamma_slow=0.1283 for eta_ad=0.01, omega_a=100, B0=(1, sqrt2, 0.5).
 
-Each (wave, dimension) is run once at a single resolution N=64 (1D 64, 2D 64x32,
-3D 64x32x32) and the measured damping rate is checked to be within REL_TOL of the analytic
-value. N=64 gives >~20 cells/wavelength, which Bai & Stone (2011) Sec 2.3.2 identify as the
-threshold for accurate AD damping. See results/wave_damping/bai_stone_resolution_study.py for
-the full half/fiducial/double resolution study.
+Each (wave, dimension) is run once at a single resolution N=64 and the measured damping rate
+is checked to be within REL_TOL of the analytic value. N=64 gives >~20 cells/wavelength, which
+Bai & Stone (2011) Sec 2.3.2 identify as the threshold for accurate AD damping.
+
+Only 1D (64) and 2D (64x32) are run here: on a single CPU core the 3D ambipolar runs dominate
+the suite wall-time (~97%), so the 3D cases are covered by the GPU test
+(test_diffusion_ambipolar_linwave_gpu.py) instead. See
+results/wave_damping/bai_stone_resolution_study.py for the full half/fiducial/double study.
 """
 
 import pytest
@@ -142,7 +145,7 @@ def fit_decay_rate_from_ke(hst_file):
 
 
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-@pytest.mark.parametrize("dim", [1, 2, 3])
+@pytest.mark.parametrize("dim", [1, 2])  # 3D covered by the GPU test (dominates CPU wall-time)
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=64."""
     analytic_rate = ANALYTIC_RATES[wave_flag]

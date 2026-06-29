@@ -2,10 +2,14 @@
 Ambipolar diffusion MHD wave damping test (GPU).
 
 Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher single resolution
-N=128 (1D 128, 2D 128x64, 3D 128x64x64) with mesh decomposition tuned for GPU execution.
-N=128 is the paper's "double" grid, where the damping rate matches analytic to <~2.5%, so a
-tighter tolerance is used than on the CPU. Each (wave, dimension) is run once and the measured
-rate is checked to be within REL_TOL of the analytic value.
+N=128 (2D 128x64, 3D 128x64x64) with mesh decomposition tuned for GPU execution. N=128 is the
+paper's "double" grid, where the damping rate matches analytic to <~2.5%, so a tighter
+tolerance is used than on the CPU. Each (wave, dimension) is run once and the measured rate is
+checked to be within REL_TOL of the analytic value.
+
+Only 2D and 3D are run here: a 1D (128-cell) problem badly under-utilizes the GPU and is
+kernel-launch-latency bound (wasteful to run on a GPU), and 1D is already covered by the CPU
+test (test_diffusion_ambipolar_linwave_cpu.py).
 """
 
 import pytest
@@ -130,7 +134,7 @@ def fit_decay_rate_from_ke(hst_file):
 
 
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-@pytest.mark.parametrize("dim", [1, 2, 3])
+@pytest.mark.parametrize("dim", [2, 3])  # 1D covered by the CPU test (GPU-inefficient in 1D)
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=128 (GPU)."""
     analytic_rate = ANALYTIC_RATES[wave_flag]
