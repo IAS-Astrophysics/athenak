@@ -56,7 +56,7 @@ ANALYTIC_RATES = {
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
 RESOLUTION = 64    # single base resolution (1D 64, 2D 64x32, 3D 64x32x32)
-REL_TOL = 0.25     # damping rate within 25% of analytic (N=64 is the fiducial grid in 2D/3D,
+REL_TOL = 0.20     # damping rate within 20% of analytic (N=64 is the fiducial grid in 2D/3D,
                    # where the worst case, slow 3D, is ~17% per Bai & Stone 2011 Sec 2.3.2)
 
 # Domain configurations per dimension
