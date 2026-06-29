@@ -282,9 +282,13 @@ void Resistivity::AddFluxConstantResist(const DvceFaceFld4D<Real> &b,
 //----------------------------------------------------------------------------------------
 //! \fn void Resistivity::NewTimeStep()
 //! \brief Compute new time step for non-ideal MHD (Ohmic + ambipolar).
-//! Ohmic:     dt <= fac * dx^2 / eta_ohm                  (constant diffusivity)
-//! Ambipolar: dt <= fac * dx^2 / (eta_ad * B_max^2)       (diffusivity eta_ad*B^2 varies)
-//! The most restrictive limit over the active terms and all directions is taken.
+//! Ohmic:     dt <= fac * dx^2 / eta_ohm                       (constant diffusivity)
+//! Ambipolar: dt <= fac * dx^2 / (eta_ohm + eta_ad * B^2)      (diffusivity varies in space)
+//! When ambipolar diffusion is active the limit is evaluated PER CELL (each cell pairs its
+//! own dx with its own total diffusivity eta_ohm + eta_ad*B^2, and the global minimum is
+//! taken), matching Athena++ FieldDiffusion::NewDiffusionDt and AthenaK's own spatially-
+//! varying diffusion module Conduction::NewTimeStep. This avoids pairing the global-min dx
+//! with the global-max B^2, which over-restricts dt under mesh refinement.
 
 void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
   // non-ideal MHD timestep on MeshBlock(s) in this pack
@@ -298,55 +302,63 @@ void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
   } else {
     fac = 0.5;
   }
+  auto &multi_d = pmy_pack->pmesh->multi_d;
+  auto &three_d = pmy_pack->pmesh->three_d;
 
-  // Effective diffusivity is the sum of the Ohmic coefficient and the maximum ambipolar
-  // coefficient (eta_ad * B_max^2). Summing is conservative when both terms are active.
-  Real eta_eff = eta_ohm;
-  if (eta_ad != 0.0) {
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int is = indcs.is, ie = indcs.ie;
-    int js = indcs.js, je = indcs.je;
-    int ks = indcs.ks, ke = indcs.ke;
-    int nmb1 = pmy_pack->nmb_thispack - 1;
-    auto &bcc0 = pmy_pack->pmhd->bcc0;
-
-    // Find max B^2 across all cells and meshblocks in this pack
-    Real max_bsq = 0.0;
-    Kokkos::parallel_reduce("amb_maxbsq",
-      Kokkos::RangePolicy<>(DevExeSpace(), 0,
-        (nmb1+1)*(ke-ks+1)*(je-js+1)*(ie-is+1)),
-    KOKKOS_LAMBDA(const int &idx, Real &lmax) {
-      int nx1 = ie - is + 1;
-      int nx2 = je - js + 1;
-      int nx3 = ke - ks + 1;
-      int nkji = nx3*nx2*nx1;
-      int nji = nx2*nx1;
-      int m = idx / nkji;
-      int k = (idx - m*nkji) / nji + ks;
-      int j = (idx - m*nkji - (k-ks)*nji) / nx1 + js;
-      int i = (idx - m*nkji - (k-ks)*nji - (j-js)*nx1) + is;
-      Real bsq = SQR(bcc0(m,IBX,k,j,i)) + SQR(bcc0(m,IBY,k,j,i))
-               + SQR(bcc0(m,IBZ,k,j,i));
-      lmax = fmax(lmax, bsq);
-    }, Kokkos::Max<Real>(max_bsq));
-
-    eta_eff += eta_ad * max_bsq;
-  }
-
-  // If no non-ideal term contributes (e.g. eta_ohm=0 and B~0 everywhere), leave dtnew at
-  // the float max so it does not constrain the global timestep.
-  if (eta_eff <= 0.0) {
+  // Ohmic diffusivity is a CONSTANT coefficient: when no (spatially-varying) ambipolar term
+  // is active, the limit is simply fac*dx^2/eta_ohm and a cheap host loop suffices (matching
+  // Viscosity::NewTimeStep). Keeping this branch separate leaves the eta_ad==0 (AD-off)
+  // behaviour byte-identical to before.
+  if (eta_ad == 0.0) {
+    if (eta_ohm > 0.0) {
+      for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
+        dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_ohm);
+        if (multi_d) {
+          dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/eta_ohm);
+        }
+        if (three_d) {
+          dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/eta_ohm);
+        }
+      }
+    }
     return;
   }
 
-  for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_eff);
-    if (pmy_pack->pmesh->multi_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/eta_eff);
+  // Ambipolar diffusivity eta_ad*B^2 varies in space, so evaluate the limit per cell.
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  auto &bcc0 = pmy_pack->pmhd->bcc0;
+  Real eta_o = eta_ohm;
+  Real eta_a = eta_ad;
+
+  // find smallest dx^2/(eta_ohm + eta_ad*B^2) over all cells, then scale by fac
+  Kokkos::parallel_reduce("resist_newdt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &min_dt) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real eta = eta_o + eta_a*(SQR(bcc0(m,IBX,k,j,i)) + SQR(bcc0(m,IBY,k,j,i))
+                            + SQR(bcc0(m,IBZ,k,j,i)));
+    if (eta > 0.0) {
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/eta);
+      if (multi_d) {
+        min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/eta);
+      }
+      if (three_d) {
+        min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/eta);
+      }
     }
-    if (pmy_pack->pmesh->three_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/eta_eff);
-    }
-  }
+  }, Kokkos::Min<Real>(dtnew));
+  dtnew *= fac;
+
   return;
 }
