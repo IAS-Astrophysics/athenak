@@ -296,7 +296,6 @@ void CoarsenedBinaryOutput::LoadOutputData(Mesh *pm) {
 //   All MeshBlocks are written to the same file.
 
 void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-
   // create filename: "cbin_"+"file_id"+"_"+"coarsening_factor"+"/file_basename"
   // + "." + "file_id" + "." + XXXXX + ".cbin"
   // where XXXXX = 5-digit file_number

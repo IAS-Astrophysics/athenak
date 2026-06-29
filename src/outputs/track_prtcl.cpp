@@ -85,7 +85,6 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
 //! With MPI, all particles are written to the same file.
 
 void TrackedParticleOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-
   // create filename: "trk/file_basename".trk
   std::string fname;
   fname.assign("trk/");
