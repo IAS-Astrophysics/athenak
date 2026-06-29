@@ -66,7 +66,7 @@ ng_interp = 1
 <output8>
 file_type   = azavg
 variable    = mhd_cart_to_sph
-dt          = 1.0
+dt          = 0.0628
 nr          = 128
 ntheta      = 256
 nphi        = 128
