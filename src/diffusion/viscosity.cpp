@@ -23,24 +23,15 @@
 
 //----------------------------------------------------------------------------------------
 // ctor:
-// Note first argument passes string ("hydro" or "mhd") denoting in wihch class this
+// Note first argument passes string ("hydro" or "mhd") denoting in which class this
 // object is being constructed, and therefore which <block> in the input file from which
 // the parameters are read.
 
 Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
-  // Read parameters for isotropic viscosity (if any)
-  if (pin->DoesParameterExist(block,"isotropic_viscosity")) {
-    iso_visc_type = pin->GetString(block,"isotropic_viscosity");
-    // Check for valid type
-    if (iso_visc_type.compare("constant") != 0) {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "Invalid choice for isotropic viscosity type" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    // constant conductivity
-    nu_iso = pin->GetReal(block,"nu_iso");
-  }
+  // Read parameters for viscosity (if any)
+  nu_iso = pin->GetOrAddReal(block,"nu_iso",0.0);
+  nu_aniso = pin->GetOrAddReal(block,"nu_aniso",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -57,16 +48,21 @@ Viscosity::~Viscosity() {
 
 void Viscosity::AddViscousFluxes(const DvceArray5D<Real> &w0, const EOS_Data &eos,
     DvceFaceFld5D<Real> &flx) {
-  AddIsotropicViscousFluxConstVisc(w0, eos, flx);
+  if (nu_iso != 0.0) {
+    AddViscousFluxIso(w0, eos, flx);
+  }
+  if (nu_iso != 0.0) {
+    AddViscousFluxAniso(w0, eos, flx);
+  }
   return;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AddIsoViscousFlux
+//! \fn void AddViscousFluxIso
 //  \brief Adds viscous fluxes to face-centered fluxes of conserved variables
 
-void Viscosity::AddIsotropicViscousFluxConstVisc(const DvceArray5D<Real> &w0,
-    const EOS_Data &eos, DvceFaceFld5D<Real> &flx) {
+void Viscosity::AddViscousFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -76,6 +72,7 @@ void Viscosity::AddIsotropicViscousFluxConstVisc(const DvceArray5D<Real> &w0,
   auto size = pmy_pack->pmb->mb_size;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
+  Real nu_iso_ = nu_iso;
 
   // fluxes in x1-direction
   int scr_level = 0;
@@ -117,7 +114,7 @@ void Viscosity::AddIsotropicViscousFluxConstVisc(const DvceArray5D<Real> &w0,
 
     // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
     par_for_inner(member, is, ie+1, [&](const int i) {
-      Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
+      Real nud = 0.5*nu_iso_*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
       flx1(m,IVX,k,j,i) -= nud*fvx(i);
       flx1(m,IVY,k,j,i) -= nud*fvy(i);
       flx1(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -162,7 +159,7 @@ void Viscosity::AddIsotropicViscousFluxConstVisc(const DvceArray5D<Real> &w0,
 
     // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
     par_for_inner(member, is, ie, [&](const int i) {
-      Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
+      Real nud = 0.5*nu_iso_*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
       flx2(m,IVX,k,j,i) -= nud*fvx(i);
       flx2(m,IVY,k,j,i) -= nud*fvy(i);
       flx2(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -201,7 +198,7 @@ void Viscosity::AddIsotropicViscousFluxConstVisc(const DvceArray5D<Real> &w0,
 
     // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
     par_for_inner(member, is, ie, [&](const int i) {
-      Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
+      Real nud = 0.5*nu_iso_*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
       flx3(m,IVX,k,j,i) -= nud*fvx(i);
       flx3(m,IVY,k,j,i) -= nud*fvy(i);
       flx3(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -213,6 +210,15 @@ void Viscosity::AddIsotropicViscousFluxConstVisc(const DvceArray5D<Real> &w0,
     });
   });
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddViscousFluxAniso
+//  \brief Currently no-op function, to be added later
+
+void Viscosity::AddViscousFluxAniso(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
   return;
 }
 

@@ -22,7 +22,6 @@ class EquationOfState;
 class Coordinates;
 class Viscosity;
 class Resistivity;
-class AmbipolarDiffusion;
 class Conduction;
 class SourceTerms;
 class OrbitalAdvectionCC;
@@ -120,7 +119,6 @@ class MHD {
   // Object(s) for extra physics (viscosity, resistivity, thermal conduction, srcterms)
   Viscosity *pvisc = nullptr;
   Resistivity *presist = nullptr;
-  AmbipolarDiffusion *pambi = nullptr;
   Conduction *pcond = nullptr;
   SourceTerms *psrc = nullptr;
 
@@ -129,7 +127,6 @@ class MHD {
   DvceFaceFld4D<Real> b1;     // face-centered magnetic fields, second register
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
-  DvceEdgeFld4D<Real> jedge;  // edge-centered current density (shared by Ohmic + ambipolar)
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e3x1, e2x1;
   DvceArray4D<Real> e1x2, e3x2;
@@ -143,6 +140,7 @@ class MHD {
 
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
+  DvceArray5D<bool> fofc_scal;  // flag to indicate if FOFC for scalar is needed
   bool use_fofc = false;   // flag to enable FOFC
 
   // container to hold names of TaskIDs
@@ -169,7 +167,6 @@ class MHD {
   TaskStatus RecvU(Driver *d, int stage);
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
-  void CalcCurrentDensity(const DvceFaceFld4D<Real> &b0);
   TaskStatus CornerE(Driver *d, int stage);
   TaskStatus EField(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);

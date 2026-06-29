@@ -101,7 +101,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
     // energy density and flux
-    // NOTE(@pdmullen): there is some subtelty here. We need to find the energy density er
+    // NOTE(@pdmullen): there is some subtlety here. We need to find the energy density er
     // and flux fr in the comoving frame to pass to @c-white's Minerbo function...but the
     // comoving frame t' is a function of comoving position x' because we enforce that
     // the initial condition be defined at coordinate frame t=0.  We also offset t' by

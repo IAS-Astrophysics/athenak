@@ -81,7 +81,7 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
     i0_(m,n,k,j,i) = n0*n_0*fmax((i0_(m,n,k,j,i)/(n0*n_0)), 0.0);
 
     // handle excision
-    // NOTE(@pdmullen): exicision criterion are not finalized.  The below zeroes all
+    // NOTE(@pdmullen): excision criterion are not finalized.  The below zeroes all
     // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
     // is about zero.  This needs future attention.
     if (excise) {

@@ -25,17 +25,20 @@ class Conduction {
 
   // data
   Real dtnew;
-  std::string iso_cond_type; // "constant", "spitzer", or "spitzer_limited"
-  Real kappa_iso;            // isotropic thermal conductivity
-  Real kappa_iso_limit;      // limit to isotropic thermal conductivity
+  Real alpha_iso;       // isotropic thermal diffusivity
+  Real alpha_aniso;     // anisotropic thermal diffusivity
+  bool alpha_spitzer;   // switch to turn on Spitzer conductivity
+  Real q_limit;         // saturated heat flux limit
 
   // functions
   void AddHeatFluxes(const DvceArray5D<Real> &w, const EOS_Data &eos,
                      DvceFaceFld5D<Real> &f);
-  void AddIsotropicHeatFluxConstCond(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                                     DvceFaceFld5D<Real> &f);
-  void AddIsotropicHeatFluxSpitzerCond(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                                       DvceFaceFld5D<Real> &f);
+  void AddHeatFluxIso(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                      DvceFaceFld5D<Real> &f);
+  void AddHeatFluxAniso(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                        DvceFaceFld5D<Real> &f);
+  void AddHeatFluxSpitzer(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                          DvceFaceFld5D<Real> &f);
   void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:

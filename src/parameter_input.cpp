@@ -103,9 +103,10 @@ void ParameterInput::CheckBlockNames() {
     "comment", "job",
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
     "coord", "adm", "shearing_box",
-    "time", "problem", "output",
-    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr",
-    "rad_srcterms", "hydro_srcterms", "mhd_srcterms"
+    "time", "problem", "output", "units",
+    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
+    "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles", "turb_driving",
+    "fastflow"
     };
 
   for (auto it1 = block.begin(); it1 != block.end(); ++it1) {
@@ -337,7 +338,7 @@ void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string 
     for (auto it = pb->line.begin(); it != pb->line.end(); ++it) {
       if (name.compare(it->param_name) == 0) {   // param name already exists
         it->param_value.assign(value);           // replace existing param value
-        it->param_comment.assign(comment);       // replace exisiting param comment
+        it->param_comment.assign(comment);       // replace existing param comment
         if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
         return;
       }

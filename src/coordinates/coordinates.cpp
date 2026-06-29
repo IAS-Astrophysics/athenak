@@ -5,6 +5,8 @@
 //========================================================================================
 //! \file coordinates.cpp
 //! \brief
+#include <float.h> // FLT_MIN
+
 #include <iostream> // cout
 #include <string>
 
@@ -55,7 +57,12 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
-      coord_data.pexcise = pin->GetReal("coord","pexcise");
+      if (is_dynamical_relativistic) {
+        coord_data.texcise = pin->GetReal("coord", "texcise");
+      } else {
+        coord_data.pexcise = pin->GetReal("coord", "pexcise");
+      }
+
       coord_data.flux_excise_r = (pin->DoesBlockExist("radiation")) ?
         1.0+sqrt(1.0-SQR(coord_data.bh_spin)) :
         pin->GetOrAddReal("coord","flux_excise_r",1.0);
@@ -70,12 +77,27 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         } else if (emethod.compare("lapse") == 0) {
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
+        } else if (emethod.compare("horizon") == 0) {
+          if (pin->DoesBlockExist("fastflow")) {
+            coord_data.excision_scheme = ExcisionScheme::horizon;
+            coord_data.horizon_factor = pin->GetOrAddReal("coord","horizon_factor",1.0);
+          } else {
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                    << __LINE__ << std::endl
+                    << "Horizon excision needs <fastflow> block!" << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
                     << "Unknown excision method: " << emethod << std::endl;
           std::exit(EXIT_FAILURE);
         }
+
+        // Smooth excision.
+        coord_data.smooth_excision = pin->GetOrAddBoolean("coord","smooth_excision",
+                                                              false);
+        coord_data.tdamp = pin->GetOrAddReal("coord","tdamp",1.0);
       }
 
       // boolean masks allocation
@@ -162,7 +184,7 @@ void Coordinates::CoordSrcTerms(const DvceArray5D<Real> &prim, const EOS_Data &e
     tt[2][3] = wtot * u2 * u3 + ptot * gupper[2][3];
     tt[3][3] = wtot * u3 * u3 + ptot * gupper[3][3];
 
-    // compute derivates of metric.
+    // compute derivatives of metric.
     Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4];
     ComputeMetricDerivatives(x1v, x2v, x3v, flat, spin, dg_dx1, dg_dx2, dg_dx3);
 
@@ -306,7 +328,7 @@ void Coordinates::CoordSrcTerms(const DvceArray5D<Real> &prim,
     tt[2][3] = wtot * u2 * u3 + ptot * gupper[2][3] - b2 * b3;
     tt[3][3] = wtot * u3 * u3 + ptot * gupper[3][3] - b3 * b3;
 
-    // compute derivates of metric.
+    // compute derivatives of metric.
     Real dg_dx1[4][4], dg_dx2[4][4], dg_dx3[4][4];
     ComputeMetricDerivatives(x1v, x2v, x3v, flat, spin, dg_dx1, dg_dx2, dg_dx3);
 

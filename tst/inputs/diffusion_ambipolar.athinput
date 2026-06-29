@@ -1,0 +1,78 @@
+# AthenaK input file for Gaussian-pulse ambipolar-diffusion tests.
+# A small transverse-B Gaussian pulse rides on a strong uniform guide field (b_guide) in
+# the SAME component, so the total field is essentially single-component: J = curl(B) is
+# perpendicular to B (J.B=0) and |B|^2 ~ b_guide^2.  The ambipolar EMF then reduces to
+# LINEAR diffusion of the pulse with diffusivity D = eta_ad*b_guide^2, giving the same
+# spreading-Gaussian analytic solution as Ohmic diffusion.  Mesh sizes, eta_ad, b_guide,
+# the spread_x1/x2/x3 axes, vel_comp (1->Bx, 2->By, 3->Bz), tlim and job/basename are
+# overridden per test on the command line (see tst/test_suite/diffusion/).  Boundaries use
+# outflow BCs: the pulse is negligible at the (wide) domain edges, where B ~ b_guide.
+
+<comment>
+problem   = Gaussian-pulse ambipolar diffusion
+
+<job>
+basename  = diffusion_ambipolar   # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3          # Number of ghost cells (ambipolar cross-J averaging needs >= 2)
+nx1       = 64         # Number of zones in X1-direction
+x1min     = -6.0       # minimum value of X1
+x1max     = 6.0        # maximum value of X1
+ix1_bc    = outflow    # inner-X1 boundary flag
+ox1_bc    = outflow    # outer-X1 boundary flag
+
+nx2       = 1          # Number of zones in X2-direction
+x2min     = -6.0       # minimum value of X2
+x2max     = 6.0        # maximum value of X2
+ix2_bc    = outflow    # inner-X2 boundary flag
+ox2_bc    = outflow    # outer-X2 boundary flag
+
+nx3       = 1          # Number of zones in X3-direction
+x3min     = -6.0       # minimum value of X3
+x3max     = 6.0        # maximum value of X3
+ix3_bc    = outflow    # inner-X3 boundary flag
+ox3_bc    = outflow    # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 64         # Number of cells in each MeshBlock, X1-dir
+nx2       = 1          # Number of cells in each MeshBlock, X2-dir
+nx3       = 1          # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = kinematic # dynamic/kinematic/static (diffusion tests require kinematic)
+integrator = rk2       # time integration algorithm
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit (no limit if <0)
+tlim       = 1.0       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<mhd>
+eos               = ideal    # EOS type
+reconstruct       = wenoz    # spatial reconstruction method
+rsolver           = advect   # Riemann-solver (kinematic MHD uses advect)
+gamma             = 1.66666666667   # gamma = C_p/C_v
+eta_ad            = 0.25     # ambipolar diffusivity (set by ambipolar tests)
+
+<units>
+# Default (length=mass=time=mu=1) code units.
+length_cgs = 1.0
+mass_cgs   = 1.0
+time_cgs   = 1.0
+mu         = 1.0
+
+<problem>
+pgen_name        = diffusion  # problem generator name
+amp              = 1.0e-6     # amplitude of Gaussian pulse
+x10              = 0.0        # center of Gaussian in x1
+x20              = 0.0        # center of Gaussian in x2
+x30              = 0.0        # center of Gaussian in x3
+conduction_test  = false     # set true to diffuse a temperature pulse
+viscosity_test   = false     # set true to diffuse a velocity pulse
+resistivity_test = false     # set true to diffuse a B pulse via Ohmic diffusion
+ambipolar_test   = true      # set true to diffuse a B pulse via ambipolar diffusion
+b_guide          = 1.0       # uniform guide field in the pulse component (D=eta_ad*b_guide^2)
+spread_x1        = true       # Gaussian varies along x1
+spread_x2        = false      # Gaussian varies along x2
+spread_x3        = false      # Gaussian varies along x3
+vel_comp         = 2          # B component carrying the pulse (1->Bx, 2->By, 3->Bz)

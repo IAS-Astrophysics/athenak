@@ -7,7 +7,11 @@
 //========================================================================================
 //! \file resistivity.hpp
 //  \brief Contains data and functions that implement various non-ideal MHD (resistive)
-//  processes, such as Ohmic diffusion. TODO(@user): add ambipolar diffusion, Hall effect
+//  processes, such as Ohmic diffusion and ambipolar diffusion. TODO(@user): Hall effect.
+//
+//  Non-ideal terms are enabled via the <mhd> input block: a non-zero "eta_ohm" enables
+//  Ohmic resistivity, a non-zero "eta_ad" enables ambipolar diffusion. The presence of
+//  either parameter triggers construction of this class in the MHD constructor.
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -15,7 +19,8 @@
 
 //----------------------------------------------------------------------------------------
 //! \class Resistivity
-//  \brief data and functions that implement various resistive physics
+//  \brief data and functions that implement various non-ideal MHD physics (Ohmic
+//  resistivity and ambipolar diffusion)
 
 class Resistivity {
  public:
@@ -24,20 +29,25 @@ class Resistivity {
 
   // data
   Real dtnew;
-  std::string iso_resist_type;  // only "constant" implemented
-  Real eta_ohm;
+  Real eta_ohm;   // Ohmic resistivity coefficient (0 => Ohmic term off)
+  Real eta_ad;    // ambipolar diffusion coefficient (0 => ambipolar term off)
 
-  // functions to add resistive E-Field and energy flux
-  void AddResistiveEMFs(const DvceEdgeFld4D<Real> &jedge, DvceEdgeFld4D<Real> &efld);
-  void AddResistiveFluxes(const DvceEdgeFld4D<Real> &jedge,
-                          const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx);
-  void AddEMFConstantResist(const DvceEdgeFld4D<Real> &jedge, DvceEdgeFld4D<Real> &efld);
-  void AddFluxConstantResist(const DvceEdgeFld4D<Real> &jedge,
-                             const DvceArray5D<Real> &bcc0, DvceFaceFld5D<Real> &flx);
+  // wrapper functions: add non-ideal E-Field and energy (Poynting) flux. Each dispatches
+  // to the Ohmic and/or ambipolar implementations depending on which coefficients are set.
+  void AddResistiveEMFs(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void AddResistiveFluxes(const DvceFaceFld4D<Real> &b0, DvceFaceFld5D<Real> &flx);
   void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:
   MeshBlockPack* pmy_pack;
+
+  // Ohmic resistivity (constant coefficient): E = eta_ohm * J
+  void AddEMFConstantResist(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void AddFluxConstantResist(const DvceFaceFld4D<Real> &b, DvceFaceFld5D<Real> &flx);
+
+  // Ambipolar diffusion (constant coefficient): E = eta_ad * [B^2 J - (J.B) B].
+  void AddEMFConstantAmbipolar(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
+  void AddFluxConstantAmbipolar(const DvceFaceFld4D<Real> &b0, DvceFaceFld5D<Real> &flx);
 };
 
 #endif // DIFFUSION_RESISTIVITY_HPP_

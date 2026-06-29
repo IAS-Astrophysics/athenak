@@ -20,7 +20,6 @@
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
-#include "diffusion/ambipolar_diffusion.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 #include "bvals/bvals.hpp"
@@ -137,7 +136,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
     }
   }
 
-  // with shearing box boundaries caluclate x2-distance x1-boundaries have sheared and
+  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
   // with MPI post receives for U and B
   if (psbox_u != nullptr) {
     // only execute when (3D OR 2d_r_phi)
@@ -202,14 +201,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
   if (pvisc != nullptr) {
     pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
-  if (presist != nullptr || pambi != nullptr) {
-    CalcCurrentDensity(b0);
-  }
   if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->AddResistiveFluxes(jedge, bcc0, uflx);
-  }
-  if ((pambi != nullptr) && (peos->eos_data.is_ideal)) {
-    pambi->AddAmbipolarFluxes(jedge, b0, bcc0, uflx);
+    presist->AddResistiveFluxes(b0, uflx);
   }
 
   // call FOFC if necessary
@@ -384,16 +377,11 @@ TaskStatus MHD::EField(Driver *pdrive, int stage) {
   // Use CT to compute corner E
   CornerE(pdrive, stage);
 
-  // jedge already populated in Fluxes() via CalcCurrentDensity(b0)
-
   // Add resistive electric field (if needed)
   if (presist != nullptr) {
-    presist->AddResistiveEMFs(jedge, efld);
+    presist->AddResistiveEMFs(b0, efld);
   }
-  // Add ambipolar electric field (if needed)
-  if (pambi != nullptr) {
-    pambi->AddAmbipolarEMFs(jedge, b0, bcc0, efld);
-  }
+  // TODO(@user): Add more resistive effects here
 
   if (psbox_b != nullptr) {
     // only execute when (2D)
@@ -511,7 +499,7 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call funtions that set physical and user BCs
+//! \brief Wrapper task list function to call functions that set physical and user BCs
 
 TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic

@@ -73,14 +73,17 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
   // Viscosity (if requested in input file)
-  if (pin->DoesParameterExist("hydro","isotropic_viscosity")) {
+  if (pin->DoesParameterExist("hydro","nu_iso") ||
+      pin->DoesParameterExist("hydro","nu_aniso")) {
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
   // Thermal conduction (if requested in input file)
-  if (pin->DoesParameterExist("hydro","isotropic_conduction")) {
+  if (pin->DoesParameterExist("hydro","alpha_iso") ||
+      pin->DoesParameterExist("hydro","alpha_aniso") ||
+      pin->DoesParameterExist("hydro","alpha_spitzer")) {
     if (peos->eos_data.is_ideal) {
       pcond = new Conduction("hydro", ppack, pin);
     } else {
@@ -298,11 +301,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 Hydro::~Hydro() {
-  delete peos;
+  if (psbox_u != nullptr) {delete psbox_u;}
+  if (porb_u != nullptr) {delete porb_u;}
   delete pbval_u;
-  if (pvisc != nullptr) {delete pvisc;}
-  if (pcond != nullptr) {delete pcond;}
   if (psrc != nullptr) {delete psrc;}
+  if (pcond != nullptr) {delete pcond;}
+  if (pvisc != nullptr) {delete pvisc;}
+  delete peos;
 }
 
 } // namespace hydro

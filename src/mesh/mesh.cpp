@@ -24,7 +24,6 @@
 #include "z4c/z4c.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
-#include "diffusion/ambipolar_diffusion.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
 #include "particles/particles.hpp"
@@ -53,7 +52,8 @@ Mesh::Mesh(ParameterInput *pin) :
   nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
   nprtcl_total(0),
-  dtold(0.) {
+  dtold(0.),
+  dt_last_completed(0.) {
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -337,15 +337,16 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  delete [] cost_eachmb;
-  delete [] rank_eachmb;
-  delete [] lloc_eachmb;
-  delete [] gids_eachrank;
-  delete [] nmb_eachrank;
-  delete pmb_pack;
+  if (pmb_pack->ppart != nullptr) {delete [] nprtcl_eachrank;}
   if (multilevel) {
     delete pmr;
   }
+  delete pmb_pack;
+  delete [] nmb_eachrank;
+  delete [] gids_eachrank;
+  delete [] lloc_eachmb;
+  delete [] rank_eachmb;
+  delete [] cost_eachmb;
 }
 
 //----------------------------------------------------------------------------------------
@@ -601,13 +602,9 @@ void Mesh::NewTimeStep(const Real tlim) {
     if (pmb_pack->pmhd->pvisc != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
     }
-    // resistivity timestep
+    // resistivity timestep (includes ambipolar diffusion, handled within Resistivity)
     if (pmb_pack->pmhd->presist != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
-    }
-    // ambipolar diffusion timestep
-    if (pmb_pack->pmhd->pambi != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pambi->dtnew) );
     }
     // thermal conduction timestep
     if (pmb_pack->pmhd->pcond != nullptr) {

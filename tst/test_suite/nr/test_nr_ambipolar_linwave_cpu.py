@@ -176,10 +176,12 @@ def test_ambipolar_linwave(wave_flag, dim):
 def test_ambipolar_linwave_multiblock(dim):
     """Test ambipolar damping with 2 meshblocks in x1.
 
-    Exercises the cross-J 4-point averaging at internal meshblock boundaries,
-    which requires CalcCurrentDensity to populate jedge in the ghost zones.
-    Only 2D/3D are tested because 1D has no cross-component J averaging.
-    Uses the fast wave (wave_flag=0) at a single resolution.
+    Exercises the cross-J 4-point averaging at internal meshblock boundaries.
+    The ambipolar EMF recomputes J = curl(B) inline from the face fields (b0) via
+    EdgeJ{1,2,3} in Resistivity::AddEMFConstantAmbipolar, reading the b0 ghost zones
+    populated by the boundary exchange, so the cross-J averages are well defined across
+    meshblock boundaries.  Only 2D/3D are tested because 1D has no cross-component J
+    averaging.  Uses the fast wave (wave_flag=0) at a single resolution.
     """
     wave_flag = "0"
     analytic_rate = ANALYTIC_RATES[wave_flag]

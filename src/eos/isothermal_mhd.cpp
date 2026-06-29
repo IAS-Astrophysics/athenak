@@ -20,6 +20,7 @@ IsothermalMHD::IsothermalMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.is_ideal = false;
   eos_data.iso_cs = pin->GetReal("mhd","iso_sound_speed");
   eos_data.gamma = 0.0;
+  eos_data.sigma_max = pin->GetOrAddReal("mhd","sigma_max",(FLT_MAX));  // sigma ceiling
 }
 
 //----------------------------------------------------------------------------------------
@@ -75,6 +76,7 @@ void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real
   int &nmb = pmy_pack->nmb_thispack;
   auto &fofc_ = pmy_pack->pmhd->fofc;
   Real dfloor = eos_data.dfloor;
+  Real sigma_max = eos_data.sigma_max;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -105,9 +107,11 @@ void IsothermalMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real
     u.bz = 0.5*(b.x3f(m,k,j,i) + b.x3f(m,k+1,j,i));
 
     // call c2p function
+    const Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+    const Real dfloor_ = fmax(dfloor, b2/sigma_max);
     HydPrim1D w;
     bool dfloor_used = false;
-    SingleC2P_IsothermalMHD(u, dfloor, w, dfloor_used);
+    SingleC2P_IsothermalMHD(u, dfloor_, w, dfloor_used);
     // update counter, reset conserved if floor was hit
     if (dfloor_used) {
       cons(m,IDN,k,j,i) = u.d;

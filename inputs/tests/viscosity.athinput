@@ -32,7 +32,7 @@ nx2       = 1         # Number of cells in each MeshBlock, X2-dir
 nx3       = 1         # Number of cells in each MeshBlock, X3-dir
 
 <time>
-evolution  = dynamic   # dynamic/kinematic/static
+evolution  = kinematic   # dynamic/kinematic/static
 integrator = rk2       # time integration algorithm
 cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit
@@ -42,7 +42,7 @@ ndiag      = 1         # cycles between diagostic output
 <hydro>
 eos         = ideal    # EOS type
 reconstruct = wenoz    # spatial reconstruction method
-rsolver     = hllc     # Riemann-solver to be used
+rsolver     = advect     # Riemann-solver to be used
 gamma       = 1.66667  # gamma = C_p/C_v
 viscosity   = 1.0     # coefficient of isotropic kinematic viscosity
 

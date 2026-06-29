@@ -34,6 +34,9 @@ void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
                                  const bool only_testfloors,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
+  Kokkos::abort("NoOp hydro ConsToPrim called.\n"
+                "  If using MHD, call MHD version instead.\n"
+                "  If using DynGRMHD, use the functions exposed in DynGRMHD instead.\n");
 }
 
 void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &b,
@@ -41,6 +44,9 @@ void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Re
                                  const bool only_testfloors,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
+  Kokkos::abort("NoOp MHD ConsToPrim called.\n"
+                "  If using hydro, call hydro version instead.\n"
+                "  If using DynGRMHD, use the functions exposed in DynGRMHD instead.\n");
 }
 
 //----------------------------------------------------------------------------------------
@@ -51,9 +57,15 @@ void EquationOfState::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Re
 void EquationOfState::PrimToCons(const DvceArray5D<Real> &prim, DvceArray5D<Real> &cons,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
+  Kokkos::abort("NoOp hydro PrimToCons called.\n"
+                "  If using MHD, call MHD version instead.\n"
+                "  If using DynGRMHD, use the functions exposed in DynGRMHD instead.\n");
 }
 void EquationOfState::PrimToCons(const DvceArray5D<Real> &prim,
                                  const DvceArray5D<Real> &bcc, DvceArray5D<Real> &cons,
                                  const int il, const int iu, const int jl, const int ju,
                                  const int kl, const int ku) {
+  Kokkos::abort("NoOp MHD PrimToCons called.\n"
+                "  If using hydro, call hydro version instead.\n"
+                "  If using DynGRMHD, use the functions exposed in DynGRMHD instead.\n");
 }
