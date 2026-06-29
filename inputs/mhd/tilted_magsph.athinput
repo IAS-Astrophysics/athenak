@@ -76,6 +76,18 @@ log_spacing = true
 ng_interp   = 0
 uniform_theta = true
 
+<output9>
+file_type        = sphshell    # disc tilt/warp: shell angular-momentum direction
+variable         = mhd_angmom  # L = r x rho*v per cell -> shell (Lx,Ly,Lz,L^2)
+dt               = 1.0
+nr               = 128
+rmin             = 0.3
+rmax             = 16.0
+log_spacing      = true
+nlev             = 40
+surface_integral = false       # volume-weighted shell L (matches warp validation)
+ng_interp        = 1
+
 <time>
 evolution   = dynamic
 cfl_number  = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
