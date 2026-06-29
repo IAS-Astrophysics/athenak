@@ -150,7 +150,8 @@ def mpi_run(
     Args:
         inputfile (str): The path to the test case input file.
         flags (list): Additional flags to pass to the AthenaK binary.
-        threads (int): Number of threads to use for MPI execution (default: num of cores).
+        threads (int): Number of threads to use for MPI execution (default: smallest
+            of (16) or (num of cores)).
         **kwargs: Additional keyword arguments for `run_command`.
 
     Returns:

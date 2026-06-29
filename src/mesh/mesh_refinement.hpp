@@ -14,7 +14,7 @@
 //! lid that can be encoded is set by (NUM_BITS_LID) macro.
 //! The convention in Athena++ is lid is for the *receiving* process.
 //! The MPI standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive)
-static int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
+inline int CreateAMR_MPI_Tag(int lid, int ox1, int ox2, int ox3) {
   return (ox1<<(NUM_BITS_LID+2)) | (ox2<<(NUM_BITS_LID+1))| (ox3<<(NUM_BITS_LID)) | lid;
 }
 

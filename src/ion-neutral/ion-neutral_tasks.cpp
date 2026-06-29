@@ -107,10 +107,10 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
   Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
 
   // Solve implicit equations first time (nexp_stage = -1)
-  auto status = ImpRKUpdate(pdrive, -1);
+  ImpRKUpdate(pdrive, -1);
 
   // Solve implicit equations second time (nexp_stage = 0)
-  status = ImpRKUpdate(pdrive, 0);
+  ImpRKUpdate(pdrive, 0);
 
   // update primitive variables for both hydro and MHD
   auto &indcs = pmy_pack->pmesh->mb_indcs;

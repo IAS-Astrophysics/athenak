@@ -8,6 +8,9 @@
 //! Note while restriction functions for CC and FC data are implemented in this file,
 //! prolongation operators are implemented as INLINE functions in prolongation.hpp (and
 //! are used both here for AMR and in the BVals class at fine/coarse boundaries).
+//!
+//! Because refinement cruteria & buffer sizes depend on physics, this constructor
+//! called in main() *after* physics modules are added
 
 #include <cstdint>   // int32_t
 #include <iostream>
@@ -40,21 +43,21 @@
 // called from Mesh::BuildTree (before physics modules are enrolled)
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
-  pmy_mesh(pm),
-  refine_flag("rflag",pm->nmb_total),
-  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
   nmb_created(0),
   nmb_deleted(0),
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
+  prolong_prims(false),
+  refine_flag("rflag",pm->nmb_total),
+  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
 #endif
-  prolong_prims(false) {
+  pmy_mesh(pm) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
@@ -65,14 +68,13 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
-  // allocate arrays for AMR
-  // NOTE: RefinementCriteria object cannot be allocated until Physics modules are defined
-  // This is done in Mesh::AddCoordinatesAndPhysics and not in this constructor
+  // allocate arrays for AMR, add RefinementCriteria object
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
+    pmrc = new RefinementCriteria(pm, pin);
   }
 
   // be sure Views are initialized to zero
@@ -89,6 +91,30 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for AMR
   MPI_Comm_dup(MPI_COMM_WORLD, &amr_comm);
+  // allocate fixed-length send/recv data buffers as work around on Aurora and other
+  // machines where frequent reallocation of Kokkos:Views causes memory issues
+  // count number of cell- and face-centered variables communicated depending on physics
+  int ncc_tosend=0, nfc_tosend=0;
+  if (pm->pmb_pack->phydro != nullptr) {
+    ncc_tosend += (pm->pmb_pack->phydro->nhydro +
+                   pm->pmb_pack->phydro->nscalars);
+  }
+  if (pm->pmb_pack->pmhd != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pmhd->nmhd +
+                   pm->pmb_pack->pmhd->nscalars);
+    nfc_tosend += 1;
+  }
+  if (pm->pmb_pack->prad != nullptr) {
+    ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
+  }
+  if (pm->pmb_pack->pz4c != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
+  }
+  int nmb = std::max((pm->pmb_pack->nmb_thispack), (pm->nmb_maxperrank));
+  auto &indcs = pm->mb_indcs;
+  int ndata = nmb*(ncc_tosend + nfc_tosend)*(indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  Kokkos::realloc(recv_data, ndata);
+  Kokkos::realloc(send_data, ndata);
 #endif
 }
 
@@ -257,7 +283,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
 
   // allocate memory for logical location arrays over total number MBs refined/derefined
-  LogicalLocation *llref, *llderef, *cllderef;
+  LogicalLocation *llref=NULL, *llderef=NULL, *cllderef=NULL;
   if (tnref > 0) {
     llref = new LogicalLocation[tnref];
   }
@@ -345,10 +371,6 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     std::sort(cllderef, &(cllderef[ctnd-1]), Mesh::GreaterLevel);
   }
 
-  if (tnderef >= nleaf) {
-    delete [] llderef;
-  }
-
   // Now the lists of the blocks to be refined and derefined are completed
   // Start tree manipulation.  Note all ranks manipulate entire tree, so each rank has
   // a complete and updated copy of the entire tree.
@@ -366,9 +388,9 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(cllderef[n]);
     bt->Derefine(ndel);
   }
-
   if (tnderef >= nleaf) {
     delete [] cllderef;
+    delete [] llderef;
   }
 
   return;
