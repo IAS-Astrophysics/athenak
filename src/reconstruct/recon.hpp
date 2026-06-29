@@ -21,14 +21,15 @@
 
 //----------------------------------------------------------------------------------------
 //! \fn ReconCellT<recon,ivx>()
-//! \brief Single-variable, single-cell reconstruction with the method selected at COMPILE
-//! TIME.  Reads the stencil of variable `n` centered on cell (m,k,j,i) in direction `ivx`,
-//! and writes ql to face (i+1) and qr to face (i) in the global per-face buffers.  Buffers
-//! are indexed by the GLOBAL cell/face index (m,n,k,j,i); they are sized to the full cell
-//! range (including ghosts) so any face touched by the reconstruction loop is in bounds
-//! (requires nghost >= 2).  The variable index `n` is supplied by the caller (it is a
-//! parallel index of the launching kernel), so this function handles exactly one variable.
-//! Caller loops over the cells whose faces are needed (one extra cell on the normal axis):
+//! \brief Single-variable, single-cell reconstruction with the method selected at
+//! COMPILE TIME.  Reads the stencil of variable `n` centered on cell (m,k,j,i) in
+//! direction `ivx`, and writes ql to face (i+1) and qr to face (i) in the global
+//! per-face buffers.  Buffers are indexed by the GLOBAL cell/face index (m,n,k,j,i);
+//! they are sized to the full cell range (including ghosts) so any face touched by
+//! the reconstruction loop is in bounds (requires nghost >= 2).  The variable index
+//! `n` is supplied by the caller (it is a parallel index of the launching kernel), so
+//! this function handles exactly one variable.  Caller loops over the cells whose
+//! faces are needed (one extra cell on the normal axis):
 //!   ivx=IVX:  i in [is-1, ie+1], (transverse j,k over their active+ghost range)
 //!   ivx=IVY:  j in [js-1, je+1], (transverse i,k over their active+ghost range)
 //!   ivx=IVZ:  k in [ks-1, ke+1], (transverse i,j over their active+ghost range)
@@ -105,11 +106,12 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
 
 //----------------------------------------------------------------------------------------
 //! \fn ReconLaunch<R,ivx>()
-//! \brief Launch the per-cell, per-variable reconstruction kernel with the method R fixed
-//! at COMPILE time, so the recon dispatch happens here (host side) rather than per-cell on
-//! device.  This keeps only the selected method's code in each kernel (instead of inlining
-//! all methods via a runtime switch), avoiding the register/footprint bloat that would
-//! defeat the purpose of templating ReconCellT.  Shared by hydro, MHD, and dyn-GRMHD.
+//! \brief Launch the per-cell, per-variable reconstruction kernel with the method R
+//! fixed at COMPILE time, so the recon dispatch happens here (host side) rather than
+//! per-cell on device.  This keeps only the selected method's code in each kernel
+//! (instead of inlining all methods via a runtime switch), avoiding the
+//! register/footprint bloat that would defeat the purpose of templating ReconCellT.
+//! Shared by hydro, MHD, and dyn-GRMHD.
 //!
 //! Defined as a function template in this header so it has external (vague) linkage in
 //! every translation unit that uses it: nvcc forbids extended __device__ lambdas inside

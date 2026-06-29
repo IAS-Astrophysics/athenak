@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file hlle_mhd.hpp
-//! \brief HLLE Riemann solver for MHD.  Per-face implementation for the split-kernel path.
+//! \brief HLLE Riemann solver for MHD.  Per-face split-kernel implementation.
 
 #include <algorithm>  // max(), min()
 #include <cmath>      // sqrt()

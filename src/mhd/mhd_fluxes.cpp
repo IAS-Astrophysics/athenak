@@ -17,7 +17,8 @@
 //! is chosen at runtime, the solver at compile time via the rsolver template parameter.
 //!
 //! Fluxes are stored in face-centered vector 'uflx', while electric fields are stored in
-//! individual arrays: e2x1,e3x1 on x1-faces; e1x2,e3x2 on x2-faces; e1x3,e2x3 on x3-faces.
+//! individual arrays: e2x1,e3x1 on x1-faces; e1x2,e3x2 on x2-faces;
+//! e1x3,e2x3 on x3-faces.
 //! Because constrained transport needs EMFs at every transverse cell edge, the flux/EMF
 //! kernels run over a transverse range extended by one cell beyond the active domain.
 
