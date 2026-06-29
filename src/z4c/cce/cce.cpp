@@ -37,10 +37,8 @@
 
 namespace z4c {
 
-CCE::CCE(Mesh *const pm, ParameterInput *const pin, int index):
-  pm(pm),
-  pin(pin),
-  index(index) {
+CCE::CCE(Mesh *const pm, ParameterInput *const pin, int indx):
+  index(indx) {
   // pointer to meshblockpack
   pmbp = pm->pmb_pack;
 
@@ -167,11 +165,11 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
     fwrite(&rout, sizeof(Real), 1, cce_file);
     // Write the 4D array to the binary file
     size_t elementsWritten = fwrite(data_real, sizeof(Real), count, cce_file);
-    if (elementsWritten != count) {
+    if (elementsWritten != static_cast<size_t>(count)) {
       perror("Error writing to file");
     }
     elementsWritten = fwrite(data_imag, sizeof(Real), count, cce_file);
-    if (elementsWritten != count) {
+    if (elementsWritten != static_cast<size_t>(count)) {
       perror("Error writing to file");
     }
     // Close the file

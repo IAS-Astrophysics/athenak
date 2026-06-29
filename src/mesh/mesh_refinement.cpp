@@ -40,21 +40,21 @@
 // called from Mesh::BuildTree (before physics modules are enrolled)
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
-  pmy_mesh(pm),
-  refine_flag("rflag",pm->nmb_total),
-  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
   nmb_created(0),
   nmb_deleted(0),
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
+  prolong_prims(false),
+  refine_flag("rflag",pm->nmb_total),
+  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
 #endif
-  prolong_prims(false) {
+  pmy_mesh(pm) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
@@ -257,7 +257,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
 
   // allocate memory for logical location arrays over total number MBs refined/derefined
-  LogicalLocation *llref, *llderef, *cllderef;
+  LogicalLocation *llref=NULL, *llderef=NULL, *cllderef=NULL;
   if (tnref > 0) {
     llref = new LogicalLocation[tnref];
   }
@@ -345,10 +345,6 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     std::sort(cllderef, &(cllderef[ctnd-1]), Mesh::GreaterLevel);
   }
 
-  if (tnderef >= nleaf) {
-    delete [] llderef;
-  }
-
   // Now the lists of the blocks to be refined and derefined are completed
   // Start tree manipulation.  Note all ranks manipulate entire tree, so each rank has
   // a complete and updated copy of the entire tree.
@@ -366,9 +362,9 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(cllderef[n]);
     bt->Derefine(ndel);
   }
-
   if (tnderef >= nleaf) {
     delete [] cllderef;
+    delete [] llderef;
   }
 
   return;

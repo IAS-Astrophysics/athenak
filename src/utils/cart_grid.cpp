@@ -23,10 +23,10 @@
 
 CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
                                     Real extent[3], int numpoints[3], bool is_cheb):
+    interp_vals("interp_vals",1,1,1),
     pmy_pack(pmy_pack),
     interp_indcs("interp_indcs",1,1,1,1),
-    interp_wghts("interp_wghts",1,1,1,1,1),
-    interp_vals("interp_vals",1,1,1) {
+    interp_wghts("interp_wghts",1,1,1,1,1) {
   // initialize parameters for the grid
   // uniform grid or spectral grid
   is_cheby = is_cheb;
