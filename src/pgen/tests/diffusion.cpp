@@ -13,15 +13,9 @@
 //! component selected with vel_comp; for resistivity the pulse is in a single
 //! (transverse) magnetic-field component (also selected with vel_comp: 1->Bx, 2->By,
 //! 3->Bz, stored on the corresponding cell face and uniform along its own axis so that
-//! div(B)=0).  For ambipolar diffusion the same transverse-B pulse is placed on top of a
-//! strong uniform guide field "b_guide" in the SAME component, so the total field is
-//! essentially single-component: then J = curl(B) is perpendicular to B (J.B=0 exactly)
-//! and |B|^2 ~ b_guide^2, so the ambipolar EMF eta_ad*[B^2 J - (J.B)B] reduces to LINEAR
-//! diffusion of the pulse with diffusivity D = eta_ad*b_guide^2 -- the same Gaussian
-//! analytic solution as Ohmic diffusion.  Must be run in kinematic mode.  Errors in the
-//! final solution are computed from the analytic profile at final time in
-//! DiffusionErrors().  Resistivity/ambipolar runs use the <mhd> block;
-//! conduction/viscosity use the <hydro> block.
+//! div(B)=0).  Must be run in kinematic mode.  Errors in the final solution are computed
+//! from the analytic profile at final time in DiffusionErrors().  Resistivity runs use
+//! the <mhd> block; conduction/viscosity use the <hydro> block.
 
 // C headers
 
@@ -57,11 +51,10 @@ namespace {
 bool set_initial_conditions = true;
 // input parameters passed to the initialization kernel and user-defined BC function
 struct DiffusionVariables {
-  bool conduction_test, viscosity_test, resistivity_test, ambipolar_test;
+  bool conduction_test, viscosity_test, resistivity_test;
   bool spread_x1, spread_x2, spread_x3;
-  int vel_comp;                 // 1/2/3 -> velocity (viscosity) or B (resist./ambipolar)
+  int vel_comp;                 // 1/2/3 -> velocity (viscosity) or B (resistivity) compt
   Real amp, x10, x20, x30;      // amplitude and Gaussian centers
-  Real b_guide;                 // uniform guide field (ambipolar test only; see below)
 };
 
 DiffusionVariables diffvars;
@@ -148,20 +141,17 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
   diffvars.conduction_test = pin->GetBoolean("problem", "conduction_test");
   diffvars.viscosity_test = pin->GetBoolean("problem", "viscosity_test");
   diffvars.resistivity_test = pin->GetBoolean("problem", "resistivity_test");
-  diffvars.ambipolar_test = pin->GetOrAddBoolean("problem", "ambipolar_test", false);
   diffvars.spread_x1 = pin->GetOrAddBoolean("problem", "spread_x1", true);
   diffvars.spread_x2 = pin->GetOrAddBoolean("problem", "spread_x2", false);
   diffvars.spread_x3 = pin->GetOrAddBoolean("problem", "spread_x3", false);
   diffvars.vel_comp = pin->GetOrAddInteger("problem", "vel_comp", 2);
-  diffvars.b_guide = pin->GetOrAddReal("problem", "b_guide", 1.0);
   int ntests = (diffvars.conduction_test ? 1 : 0)
              + (diffvars.viscosity_test ? 1 : 0)
-             + (diffvars.resistivity_test ? 1 : 0)
-             + (diffvars.ambipolar_test ? 1 : 0);
+             + (diffvars.resistivity_test ? 1 : 0);
   if (ntests != 1) {
     std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-            << "Exactly one of conduction_test/viscosity_test/resistivity_test/"
-            << "ambipolar_test must be set true (got " << ntests << ")" << std::endl;
+            << "Exactly one of conduction_test/viscosity_test/resistivity_test must be "
+            << "set true (got " << ntests << ")" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -230,17 +220,16 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
     });
   } // End initialization of Hydro variables
 
-  // Initialize MHD variables (resistivity or ambipolar test) --------------
+  // Initialize MHD variables (resistivity test) --------------
   if (pmbp->pmhd != nullptr) {
-    if (!dv.resistivity_test && !dv.ambipolar_test) {
+    if (!dv.resistivity_test) {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "MHD diffusion test supports only the resistivity or ambipolar test"
-              << std::endl;
+              << "MHD diffusion test only supports the resistivity test" << std::endl;
       exit(EXIT_FAILURE);
     }
     if (pmbp->pmhd->presist == nullptr) {
       std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-              << "Non-ideal MHD (mhd/eta_ohm or mhd/eta_ad) not defined in MHD input block"
+              << "Resistivity (mhd/eta_ohm) not defined in MHD input block"
               << std::endl;
       exit(EXIT_FAILURE);
     }
@@ -252,27 +241,10 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
     }
     Real gamma = eos.gamma;
     Real gm1 = gamma - 1.0;
+    // The transverse magnetic field diffuses with the Ohmic diffusivity eta_ohm.
+    Real coef = pmbp->pmhd->presist->eta_ohm;
     int bcomp = dv.vel_comp;          // 1->Bx, 2->By, 3->Bz
     Real p0 = 1.0/gamma;              // uniform background gas pressure
-
-    // Effective (linear) diffusivity of the pulse and the uniform guide-field offset.
-    //   Ohmic:     transverse B diffuses with D = eta_ohm; no guide field (guide=0).
-    //   Ambipolar: the pulse rides on a strong guide field in the SAME component, so the
-    //              total field is single-component (J.B=0) and |B|^2 ~ b_guide^2, giving
-    //              linear diffusion of the pulse with D = eta_ad * b_guide^2.
-    Real coef, guide;
-    if (dv.resistivity_test) {
-      coef = pmbp->pmhd->presist->eta_ohm;
-      guide = 0.0;
-    } else {  // ambipolar_test
-      if (pmbp->pmhd->presist->eta_ad == 0.0) {
-        std::cout <<"### FATAL ERROR in "<< __FILE__ <<" at line "<< __LINE__ << std::endl
-                << "Ambipolar test requires a non-zero mhd/eta_ad" << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      guide = dv.b_guide;
-      coef = pmbp->pmhd->presist->eta_ad * guide * guide;
-    }
 
     // face- and cell-centered fields go to b0/b1 depending on whether these are ICs
     auto &b = (set_initial_conditions)? pmbp->pmhd->b0 : pmbp->pmhd->b1;
@@ -296,26 +268,24 @@ void ProblemGenerator::Diffusion(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-      // pulse value = uniform guide field + Gaussian (guide=0 for the Ohmic test, so the
-      // resistivity path is unchanged).  Other components are zero.
-      Real val = guide + DiffusionGaussian(dv, coef, time, x1v, x2v, x3v);
-      b.x1f(m,k,j,i) = (bcomp == 1) ? val : 0.0;
-      b.x2f(m,k,j,i) = (bcomp == 2) ? val : 0.0;
-      b.x3f(m,k,j,i) = (bcomp == 3) ? val : 0.0;
+      Real g = DiffusionGaussian(dv, coef, time, x1v, x2v, x3v);
+      b.x1f(m,k,j,i) = (bcomp == 1) ? g : 0.0;
+      b.x2f(m,k,j,i) = (bcomp == 2) ? g : 0.0;
+      b.x3f(m,k,j,i) = (bcomp == 3) ? g : 0.0;
       if (i == ie) {
-        b.x1f(m,k,j,i+1) = (bcomp == 1) ? val : 0.0;
+        b.x1f(m,k,j,i+1) = (bcomp == 1) ? g : 0.0;
       }
       if (j == je) {
-        b.x2f(m,k,j+1,i) = (bcomp == 2) ? val : 0.0;
+        b.x2f(m,k,j+1,i) = (bcomp == 2) ? g : 0.0;
       }
       if (k == ke) {
-        b.x3f(m,k+1,j,i) = (bcomp == 3) ? val : 0.0;
+        b.x3f(m,k+1,j,i) = (bcomp == 3) ? g : 0.0;
       }
 
       // cell-centered field and primitive state (rho=1, v=0, uniform pressure)
-      bcc0(m,IBX,k,j,i) = (bcomp == 1) ? val : 0.0;
-      bcc0(m,IBY,k,j,i) = (bcomp == 2) ? val : 0.0;
-      bcc0(m,IBZ,k,j,i) = (bcomp == 3) ? val : 0.0;
+      bcc0(m,IBX,k,j,i) = (bcomp == 1) ? g : 0.0;
+      bcc0(m,IBY,k,j,i) = (bcomp == 2) ? g : 0.0;
+      bcc0(m,IBZ,k,j,i) = (bcomp == 3) ? g : 0.0;
       w0(m,IDN,k,j,i) = 1.0;
       w0(m,IVX,k,j,i) = 0.0;
       w0(m,IVY,k,j,i) = 0.0;

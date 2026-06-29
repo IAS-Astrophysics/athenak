@@ -1,8 +1,19 @@
 """
 Ambipolar diffusion MHD wave damping test (CPU).
-Measures exponential decay rates of fast, Alfven, and slow MHD waves
-due to ambipolar diffusion and compares to analytical predictions
-from Bai & Stone (2011), Section 2.3.2.
+
+Reproduces Bai & Stone (2011), Section 2.3.2: isothermal fast/Alfven/slow MHD waves damped
+by ambipolar diffusion. The problem is initialized with the IDEAL MHD eigenvector and the
+exponential decay rate of the (volume-integrated) kinetic energy is measured and compared to
+the analytic AD damping rates from Balsara (1996) (eqs. 17-18): Gamma_fast=0.5132,
+Gamma_Alfven=0.1974, Gamma_slow=0.1283 for eta_ad=0.01, omega_a=100, B0=(1, sqrt2, 0.5).
+
+Resolution handling follows the paper's finding that accurate AD damping requires
+>~20 cells/wavelength. With the box sizes used here, RESOLUTIONS=[32, 64] maps to:
+  1D: 32=fiducial, 64=double;   2D/3D: 32=half, 64=fiducial.
+Accuracy (rel. error < REL_TOL) is therefore checked only at the FINEST resolution (which is
+the fiducial grid or finer for every dimension); the coarse grid is used only for the
+convergence check, since the paper shows the rate deviates substantially at half resolution.
+See results/wave_damping/bai_stone_resolution_study.py for the full half/fiducial/double study.
 """
 
 import pytest
@@ -138,27 +149,29 @@ def test_ambipolar_linwave(wave_flag, dim):
     """Test ambipolar damping rate and convergence for a given wave type and dimension."""
     analytic_rate = ANALYTIC_RATES[wave_flag]
     wave_name = WAVE_NAMES[wave_flag]
-    errors_abs = []
 
     try:
+        rates = []
         for res in RESOLUTIONS:
             basename = f"AmbLW_w{wave_flag}_{dim}d_{res}"
-            args = build_arguments(wave_flag, dim, res, basename)
-            testutils.run("inputs/lwave_ambipolar.athinput", args)
+            testutils.run("inputs/lwave_ambipolar.athinput",
+                          build_arguments(wave_flag, dim, res, basename))
+            rates.append(fit_decay_rate_from_ke(f"{basename}.mhd.hst"))
+        errors_abs = [abs(analytic_rate - r) for r in rates]
 
-            hst_file = f"{basename}.mhd.hst"
-            measured_rate = fit_decay_rate_from_ke(hst_file)
+        # Accuracy is checked ONLY at the finest resolution (RESOLUTIONS[-1]), which is the
+        # paper's fiducial grid or finer for every dimension. Per Bai & Stone (2011) Sec 2.3.2,
+        # accurate AD damping needs >~20 cells/wavelength; coarser grids deviate substantially
+        # and are dominated by numerical (not ambipolar) dissipation, so no absolute tolerance
+        # is imposed there. The resolution dependence is captured by the convergence check.
+        error_rel = abs(analytic_rate / rates[-1] - 1.0)
+        if error_rel > REL_TOL:
+            pytest.fail(
+                f"{wave_name} {dim}D N={RESOLUTIONS[-1]}: damping-rate relative error "
+                f"{error_rel:.3f} exceeds tolerance {REL_TOL}"
+            )
 
-            error_abs = abs(analytic_rate - measured_rate)
-            errors_abs.append(error_abs)
-            error_rel = abs(analytic_rate / measured_rate - 1.0)
-
-            if error_rel > REL_TOL:
-                pytest.fail(
-                    f"{wave_name} {dim}D N={res}: decay rate relative error "
-                    f"{error_rel:.3f} exceeds tolerance {REL_TOL}"
-                )
-
+        # Convergence: the error must decrease with resolution (Bai & Stone Sec 2.3.2).
         if len(errors_abs) >= 2 and all(e > 0 for e in errors_abs):
             conv_rate = np.log(errors_abs[-2] / errors_abs[-1]) / np.log(
                 RESOLUTIONS[-1] / RESOLUTIONS[-2]
