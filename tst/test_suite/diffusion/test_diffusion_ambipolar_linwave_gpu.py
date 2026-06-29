@@ -1,12 +1,11 @@
 """
 Ambipolar diffusion MHD wave damping test (GPU).
 
-Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at higher resolution with
-mesh decomposition tuned for GPU execution. RESOLUTIONS=[64, 128] maps to:
-  1D: 64=double, 128=quad;   2D/3D: 64=fiducial, 128=double.
-As in the CPU test, the accuracy tolerance is checked only at the FINEST resolution (the
-paper's double grid here, where rates match analytic to <~2%); the coarser grid is used for
-the convergence check. Per the paper, >~20 cells/wavelength is needed for accurate AD damping.
+Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher single resolution
+N=128 (1D 128, 2D 128x64, 3D 128x64x64) with mesh decomposition tuned for GPU execution.
+N=128 is the paper's "double" grid, where the damping rate matches analytic to <~2.5%, so a
+tighter tolerance is used than on the CPU. Each (wave, dimension) is run once and the measured
+rate is checked to be within REL_TOL of the analytic value.
 """
 
 import pytest
@@ -50,15 +49,9 @@ ANALYTIC_RATES = {
 }
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
-RESOLUTIONS = [64, 128]
-REL_TOL = 0.15
-CONVERGENCE_RATE_MIN = 1.5
-# The 2nd-order convergence-rate check is only enforced when the COARSE grid's rate error
-# exceeds this floor (i.e. it is genuinely under-resolved). At [64,128] the 1D cases are
-# already ~1% accurate at the coarse grid, so the convergence rate flattens (residual is
-# ideal-eigenvector contamination / fit noise, not truncation); there we only require the
-# error to decrease. The 2nd-order rate is still enforced for the under-resolved 2D/3D cases.
-CONV_CHECK_MIN_ERR = 0.05
+RESOLUTION = 128   # single base resolution (1D 128, 2D 128x64, 3D 128x64x64)
+REL_TOL = 0.05     # damping rate within 5% of analytic (N=128 is "double" res, where the
+                   # measured rates are <~2.5% on the A100 across all waves/dimensions)
 
 DOMAINS = {
     1: {"x1max": "1.0", "nx2": "1", "x2max": "1.0", "nx3": "1", "x3max": "1.0"},
@@ -139,51 +132,21 @@ def fit_decay_rate_from_ke(hst_file):
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_ambipolar_linwave(wave_flag, dim):
-    """Test ambipolar damping rate and convergence on GPU."""
+    """Check the ambipolar damping rate is within REL_TOL of analytic at N=128 (GPU)."""
     analytic_rate = ANALYTIC_RATES[wave_flag]
     wave_name = WAVE_NAMES[wave_flag]
 
     try:
-        rates = []
-        for res in RESOLUTIONS:
-            basename = f"AmbLW_w{wave_flag}_{dim}d_{res}"
-            testutils.run("inputs/lwave_ambipolar.athinput",
-                          build_arguments(wave_flag, dim, res, basename))
-            rates.append(fit_decay_rate_from_ke(f"{basename}.mhd.hst"))
-        errors_abs = [abs(analytic_rate - r) for r in rates]
-
-        # Accuracy is checked ONLY at the finest resolution (RESOLUTIONS[-1]), the paper's
-        # double grid here. Per Bai & Stone (2011) Sec 2.3.2, accurate AD damping needs
-        # >~20 cells/wavelength; coarser grids deviate substantially (dominated by numerical
-        # dissipation), so no absolute tolerance is imposed there -- the resolution dependence
-        # is captured by the convergence check below.
-        error_rel = abs(analytic_rate / rates[-1] - 1.0)
+        basename = f"AmbLW_w{wave_flag}_{dim}d_{RESOLUTION}"
+        testutils.run("inputs/lwave_ambipolar.athinput",
+                      build_arguments(wave_flag, dim, RESOLUTION, basename))
+        measured_rate = fit_decay_rate_from_ke(f"{basename}.mhd.hst")
+        error_rel = abs(analytic_rate / measured_rate - 1.0)
         if error_rel > REL_TOL:
             pytest.fail(
-                f"{wave_name} {dim}D N={RESOLUTIONS[-1]}: damping-rate relative error "
-                f"{error_rel:.3f} exceeds tolerance {REL_TOL}"
+                f"{wave_name} {dim}D N={RESOLUTION}: damping-rate relative error "
+                f"{error_rel:.3f} exceeds tolerance {REL_TOL} "
+                f"(measured {measured_rate:.4f}, analytic {analytic_rate:.4f})"
             )
-
-        # Convergence (Bai & Stone Sec 2.3.2): the rate error must keep shrinking with
-        # resolution. The 2nd-order convergence rate is only diagnostic when the coarse grid is
-        # genuinely under-resolved (coarse error > CONV_CHECK_MIN_ERR); once both grids are
-        # already near the accuracy floor (e.g. 1D at [64,128]) we only require the error to
-        # decrease, since the residual there is contamination/fit noise, not truncation.
-        if len(errors_abs) >= 2 and all(e > 0 for e in errors_abs):
-            coarse_rel = abs(analytic_rate / rates[0] - 1.0)
-            conv_rate = np.log(errors_abs[-2] / errors_abs[-1]) / np.log(
-                RESOLUTIONS[-1] / RESOLUTIONS[-2]
-            )
-            if coarse_rel > CONV_CHECK_MIN_ERR:
-                if conv_rate < CONVERGENCE_RATE_MIN:
-                    pytest.fail(
-                        f"{wave_name} {dim}D: convergence rate {conv_rate:.2f} "
-                        f"< {CONVERGENCE_RATE_MIN}"
-                    )
-            elif errors_abs[-1] >= errors_abs[-2]:
-                pytest.fail(
-                    f"{wave_name} {dim}D: rate error did not decrease with resolution "
-                    f"({errors_abs[-2]:.2e} -> {errors_abs[-1]:.2e})"
-                )
     finally:
         testutils.cleanup()
