@@ -234,8 +234,8 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       nimp_stages = 4;
       nexp_stages = 3;
       cfl_limit = 1.0;
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
       beta[0] = 1.0;
 
       gam0[1] = 0.25;
