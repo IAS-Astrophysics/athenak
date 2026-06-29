@@ -267,6 +267,7 @@ class ParticlesBoundaryValues {
   std::vector<MPI_Request> rrecv_req, rsend_req;  // vectors of requests for Reals
   std::vector<MPI_Request> irecv_req, isend_req;  // vectors of requests for ints
   MPI_Comm mpi_comm_part;                       // unique MPI communicators for particles
+  MPI_Datatype mpi_ituple;
 #endif
 
   //functions

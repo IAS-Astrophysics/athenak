@@ -254,10 +254,17 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
   // create unique communicator for particles
   MPI_Comm_dup(MPI_COMM_WORLD, &mpi_comm_part);
 #endif
+#if MPI_PARALLEL_ENABLED
+  MPI_Type_contiguous(3, MPI_INT, &mpi_ituple);
+  MPI_Type_commit(&mpi_ituple);
+#endif
 }
 
 //----------------------------------------------------------------------------------------
 // destructor
 
 particles::ParticlesBoundaryValues::~ParticlesBoundaryValues() {
+#if MPI_PARALLEL_ENABLED
+  MPI_Type_free(&mpi_ituple);
+#endif
 }
