@@ -250,8 +250,9 @@ class ParticlesBoundaryValues {
   ParticlesBoundaryValues(particles::Particles *ppart, ParameterInput *pin);
   ~ParticlesBoundaryValues();
 
-  int nprtcl_send, nprtcl_recv;
+  int nprtcl_send, nprtcl_recv, nprtcl_destroy;
   DualArray1D<ParticleLocationData> sendlist;
+  DualArray1D<ParticleLocationData> destroylist;
 
   // Data needed to count number of messages and particles to send between ranks
   int nsends; // number of MPI sends to neighboring ranks on this rank
