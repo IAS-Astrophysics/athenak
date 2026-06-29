@@ -1264,7 +1264,7 @@ void RelMHDPerturbations(LinWaveVariables lwv, Real u[4], Real b[4],
       Real lambda_fl, lambda_sl, lambda_sr, lambda_fr;
       QuarticRoots(coeff_3/coeff_4, coeff_2/coeff_4, coeff_1/coeff_4, coeff_0/coeff_4,
                    &lambda_fl, &lambda_sl, &lambda_sr, &lambda_fr);
-      Real lambda_other_ms;
+      Real lambda_other_ms=0.0;
       if (lwv.wave_flag == 0) {
         lambda = lambda_fl;
         lambda_other_ms = lambda_sl;
