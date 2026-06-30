@@ -111,8 +111,11 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
   }
   int nmb = std::max((pm->pmb_pack->nmb_thispack), (pm->nmb_maxperrank));
-  auto &indcs = pm->mb_indcs;
-  int ndata = nmb*(ncc_tosend + nfc_tosend)*(indcs.nx1)*(indcs.nx2)*(indcs.nx3);
+  // number of cells per MB, including ghost zones
+  int ncells = (pm->mb_indcs.nx1 + 2*pm->mb_indcs.ng);
+  if (pm->multi_d) ncells *= (pm->mb_indcs.nx2 + 2*pm->mb_indcs.ng);
+  if (pm->three_d) ncells *= (pm->mb_indcs.nx3 + 2*pm->mb_indcs.ng);
+  int ndata = nmb*(ncc_tosend + nfc_tosend)*ncells;
   Kokkos::realloc(recv_data, ndata);
   Kokkos::realloc(send_data, ndata);
 #endif
