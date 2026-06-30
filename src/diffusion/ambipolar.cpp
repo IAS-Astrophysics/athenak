@@ -4,12 +4,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file ambipolar.cpp
-//  \brief Ambipolar-diffusion methods of the Resistivity class. Contains the inline
-//  edge-current helpers EdgeJ{1,2,3} and the ambipolar EMF (AddEMFConstantAmbipolar) and
-//  Poynting-flux (AddFluxConstantAmbipolar) kernels. Split out of resistivity.cpp purely for
-//  readability; these remain members of the Resistivity class declared in resistivity.hpp.
-//  (NewTimeStep, which computes the combined Ohmic+ambipolar dt limit, stays in
-//  resistivity.cpp since it is a single method covering both terms.)
+//  \brief Implements ambipolar diffusion methods of the Resistivity class: the inline
+//  edge-current helpers EdgeJ{1,2,3} and the ambipolar EMF and Poynting-flux kernels.
 
 // Athena++ headers
 #include "athena.hpp"
@@ -57,15 +53,13 @@ Real EdgeJ3(const int m, const int k, const int j, const int i,
 
 //----------------------------------------------------------------------------------------
 //! \fn AddEMFConstantAmbipolar()
-//  \brief Adds ambipolar EMF to the corner-centered electric field.
-//    E_amb = eta_ad * [ B^2 * J - (J . B) * B ]
-//  This is the expanded form of eta_A*[J - (J.B)B/B^2] with eta_A = eta_ad*B^2; the
-//  expanded form avoids any division by B^2 (no floor needed). The algorithm follows
-//  Athena++ AmbipolarEMF (field_diffusion/diffusivity.cpp): J = curl(B) at edges, and
-//  the cross-J components are averaged to the target edge (4-pt in 3D, 2-pt across a
-//  degenerate direction in 2D). Here J is recomputed inline from b0 via EdgeJ{1,2,3}();
-//  cell-centered B (bcc0) is obtained from the parent MHD class and used for the
-//  edge-diagonal B interpolation, exactly as the (now-retired) standalone module did.
+//  \brief Adds electric field from ambipolar diffusion to corner-centered electric field
+//    E_amb = eta_ad * [ B^2 J - (J . B) B ]     (eta_A = eta_ad * B^2)
+//  J = curl(B) and B are evaluated at each edge and combined as above. J is recomputed
+//  inline via EdgeJ{1,2,3}(); the cross-J components and B are averaged to the target edge
+//  (4-pt in 3D, 2-pt across a degenerate direction in 2D), with cell-centered B (bcc0)
+//  from the parent MHD class used for the edge-diagonal interpolation. Follows Athena++
+//  AmbipolarEMF (field_diffusion/diffusivity.cpp).
 
 void Resistivity::AddEMFConstantAmbipolar(const DvceFaceFld4D<Real> &b0,
     DvceEdgeFld4D<Real> &efld) {
@@ -245,13 +239,11 @@ void Resistivity::AddEMFConstantAmbipolar(const DvceFaceFld4D<Real> &b0,
 
 //----------------------------------------------------------------------------------------
 //! \fn AddFluxConstantAmbipolar()
-//  \brief Adds the ambipolar Poynting flux to the energy flux.
-//  Since S_AD = E_AD x B and E_AD = eta_ad*(B^2*J - (J.B)*B), the field-parallel part
-//  vanishes in the cross product (B x B = 0), leaving S = eta_ad*B^2*(J x B). The
-//  simplified edge EMF e = eta_ad*B^2*J is formed at each edge using the same B
-//  interpolation stencils as AddEMFConstantAmbipolar, averaged to the face, then crossed
-//  with cell-centered B (bcc0) averaged to the face -- the same "average then multiply"
-//  pattern as the Ohmic Poynting flux. J is recomputed inline via EdgeJ{1,2,3}().
+//  \brief Adds Poynting flux from ambipolar diffusion to energy flux
+//  S_AD = (E_amb X B) = eta_ad*B^2*(J X B)   [the (J.B)B term drops since (J.B)B X B = 0]
+//  The edge EMF eta_ad*B^2*J is formed at each edge with the same B interpolation as
+//  AddEMFConstantAmbipolar, averaged to the face, then crossed with face-averaged
+//  cell-centered B (bcc0). J is recomputed inline via EdgeJ{1,2,3}().
 
 void Resistivity::AddFluxConstantAmbipolar(const DvceFaceFld4D<Real> &b0,
     DvceFaceFld5D<Real> &flx) {
