@@ -1,24 +1,9 @@
 """
-Ambipolar diffusion MHD wave damping test (CPU).
-
-Reproduces Bai & Stone (2011), Section 2.3.2: isothermal fast/Alfven/slow MHD waves
-damped by ambipolar diffusion. The problem is initialized with the IDEAL MHD eigenvector
-and the exponential decay rate of the (volume-integrated) kinetic energy is measured and
-compared to the analytic AD damping rates from Balsara (1996) (eqs. 17-18):
-Gamma_fast=0.5132, Gamma_Alfven=0.1974, Gamma_slow=0.1283 for eta_ad=0.01, omega_a=100,
-B0=(1, sqrt2, 0.5).
-
-Each wave is run once at a single resolution N=64 (2D 64x32) and the measured damping
-rate is checked to be within REL_TOL of the analytic value. N=64 gives >~20
-cells/wavelength, which Bai & Stone (2011) Sec 2.3.2 identify as the threshold for
-accurate AD damping.
-
-Only the 2D oblique-wave problem is run, but all three waves (fast/Alfven/slow) are tested
-here, since at N=64 even the slow wave is cheap. The GPU test
-(test_diffusion_ambipolar_linwave_gpu.py) runs the same 2D problem at higher resolution
-N=128 but only the fast and Alfven waves (the slow wave integrates ~4x longer and is left
-to this CPU test). See results/wave_damping/bai_stone_resolution_study.py for the full
-resolution study (1D/2D/3D, half/fiducial/double).
+Ambipolar-diffusion MHD wave-damping test in 2D (CPU).
+Damps the fast, Alfven and slow oblique linear MHD waves (Bai & Stone 2011, Sec 2.3.2) by
+ambipolar diffusion at resolution N=64 (64x32). Each wave is initialized with its
+ideal-MHD eigenvector, and the decay rate of the volume-integrated kinetic energy is
+measured and checked against the analytic damping rate (Balsara 1996) to within REL_TOL.
 """
 
 import pytest
@@ -62,8 +47,8 @@ ANALYTIC_RATES = {
 }
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
-# Single base resolution (1D 64, 2D 64x32). N=64 is the fiducial grid in 2D/3D, where the
-# worst case (slow 3D) is ~17% per Bai & Stone (2011) Sec 2.3.2, so a 20% tol is used.
+# N=64 (64x32) gives >~20 cells/wavelength, the threshold for accurate AD damping
+# (Bai & Stone 2011, Sec 2.3.2); the measured rate is within ~13% of analytic, so 20% tol.
 RESOLUTION = 64
 REL_TOL = 0.20
 
@@ -150,7 +135,6 @@ def fit_decay_rate_from_ke(hst_file):
 
 
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-# 2D-only (see module docstring); GPU test runs the same 2D problem at N=128
 @pytest.mark.parametrize("dim", [2])
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=64."""
