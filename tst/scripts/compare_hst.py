@@ -26,7 +26,7 @@ def compare_hst_files(file_old, file_new, threshold=1.0e-14):
     keys_old = set(data_old.keys())
     keys_new = set(data_new.keys())
     if keys_old != keys_new:
-        print(f"FAIL: column mismatch")
+        print("FAIL: column mismatch")
         print(f"  old only: {keys_old - keys_new}")
         print(f"  new only: {keys_new - keys_old}")
         return False
