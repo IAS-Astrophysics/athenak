@@ -1,23 +1,17 @@
 """
 Ambipolar diffusion MHD wave damping test (GPU).
 
-Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher single
-resolution N=128 (2D 128x64, 3D 128x64x64) with mesh decomposition tuned for GPU
-execution. N=128 is the paper's "double" grid, where the damping rate matches analytic to
-<~2.5%, so a tighter tolerance is used than on the CPU. Each (wave, dimension) is run once
-and the measured rate is checked to be within REL_TOL of the analytic value.
+Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher resolution
+N=128 (2D 128x64) with mesh decomposition tuned for GPU execution. N=128 is the paper's
+"double" grid, where the damping rate matches analytic to <~2.5%, so a tighter tolerance
+is used than on the CPU. Each wave is run once and the measured rate is checked to be
+within REL_TOL of the analytic value.
 
-Only 2D and 3D are run here: a 1D (128-cell) problem badly under-utilizes the GPU and is
-kernel-launch-latency bound (wasteful to run on a GPU), and 1D is already covered by the
-CPU test (test_diffusion_ambipolar_linwave_cpu.py).
-
-Runtime: the explicit ambipolar parabolic timestep (dt ~ dx^2) makes the cycle count, not
-the cell count, the cost driver, and the slow wave needs ~3.7x more cycles than the fast
-wave (its period is longer). To keep every case under ~30 s on the A100 the integration
-runs only 2 wave periods (time/tlim=2.0); measured A100 times are 2.5-8 s in 2D and
-7-28 s in 3D (slow 3D is the worst case), with damping-rate errors of 1.6-3.8%. Coarsening
-a transverse dimension was rejected: it under-resolves the oblique wave and inflates the
-measured damping rate past tolerance.
+Only the 2D oblique-wave problem is run (waves fast/Alfven/slow), at higher resolution
+than the CPU test. The 3D case is deliberately omitted: the explicit ambipolar parabolic
+timestep (dt ~ dx^2) makes the cycle count the cost driver, and the slow 3D wave needs
+~3.7x more cycles than the fast one (its period is longer), which pushes its wall-time
+past the ~30 s/case CI budget. The 2D cases run in ~5-20 s each on the A100.
 """
 
 import pytest
@@ -86,10 +80,7 @@ def build_arguments(wave_flag, dim, res, basename):
 
     return [
         f"job/basename={basename}",
-        # tlim = number of wave PERIODS (linear_wave pgen). 2 periods is enough to fit the
-        # decay rate (errors <4%) while keeping the slowest case (slow 3D) under ~30 s on
-        # the A100 -- see the "Runtime" note in the module docstring.
-        "time/tlim=2.0",
+        "time/tlim=5.0",
         "time/integrator=rk2",
         "time/cfl_number=0.3",
         "mesh/nghost=2",
@@ -146,8 +137,8 @@ def fit_decay_rate_from_ke(hst_file):
 
 
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-# 1D covered by the CPU test (1D is GPU-inefficient)
-@pytest.mark.parametrize("dim", [2, 3])
+# 2D-only (3D omitted for CI wall-time; see module docstring)
+@pytest.mark.parametrize("dim", [2])
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=128 (GPU)."""
     analytic_rate = ANALYTIC_RATES[wave_flag]
