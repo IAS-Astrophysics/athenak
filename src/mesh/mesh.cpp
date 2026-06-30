@@ -605,7 +605,7 @@ void Mesh::NewTimeStep(const Real tlim) {
     if (pmb_pack->pmhd->pvisc != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
     }
-    // resistivity timestep
+    // resistivity timestep (includes ambipolar diffusion, handled within Resistivity)
     if (pmb_pack->pmhd->presist != nullptr) {
       dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
     }
