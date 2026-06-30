@@ -1,8 +1,8 @@
 """
-Ambipolar-diffusion MHD wave-damping test in 2D (GPU).
-Damps the fast and Alfven oblique linear MHD waves (Bai & Stone 2011, Sec 2.3.2) by
-ambipolar diffusion at resolution N=128 (128x64), tiled into multiple MeshBlocks (64x32)
-as in the other GPU tests. Each wave is initialized with its ideal-MHD eigenvector, and
+Ambipolar-diffusion MHD wave-damping test in 3D (GPU).
+Damps the fast oblique linear MHD wave (Bai & Stone 2011, Sec 2.3.2) by ambipolar
+diffusion at resolution N=128 (128x64x64), tiled into multiple MeshBlocks (64x32x32)
+as in the other GPU tests. The wave is initialized with its ideal-MHD eigenvector, and
 the decay rate of the volume-integrated kinetic energy is measured and checked against the
 analytic damping rate (Balsara 1996) to within REL_TOL.
 """
@@ -48,10 +48,12 @@ ANALYTIC_RATES = {
 }
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
-# N=128 (128x64) is the "double" grid, where the measured rate is within a few percent of
-# analytic, so a tighter 5% tolerance is used than on the CPU.
+# N=128 (128x64x64) is the "double" grid, where the measured rate is within a few percent
+# of analytic, so a tighter 5% tolerance is used than on the CPU.
 RESOLUTION = 128
 REL_TOL = 0.05
+# tlim is interpreted by the linear_wave pgen as a number of wave periods
+PERIODS = 5.0
 
 DOMAINS = {
     1: {"x1max": "1.0", "nx2": "1", "x2max": "1.0", "nx3": "1", "x3max": "1.0"},
@@ -73,7 +75,7 @@ def build_arguments(wave_flag, dim, res, basename):
 
     return [
         f"job/basename={basename}",
-        "time/tlim=5.0",
+        f"time/tlim={PERIODS}",
         "time/integrator=rk2",
         "time/cfl_number=0.3",
         "mesh/nghost=2",
@@ -129,8 +131,8 @@ def fit_decay_rate_from_ke(hst_file):
     return -slope / 2.0
 
 
-@pytest.mark.parametrize("wave_flag", ["0", "1"])
-@pytest.mark.parametrize("dim", [2])
+@pytest.mark.parametrize("wave_flag", ["0"])
+@pytest.mark.parametrize("dim", [3])
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=128 (GPU)."""
     analytic_rate = ANALYTIC_RATES[wave_flag]

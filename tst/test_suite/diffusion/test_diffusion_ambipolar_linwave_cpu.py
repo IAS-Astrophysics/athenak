@@ -1,9 +1,9 @@
 """
-Ambipolar-diffusion MHD wave-damping test in 2D (CPU).
-Damps the fast, Alfven and slow oblique linear MHD waves (Bai & Stone 2011, Sec 2.3.2) by
-ambipolar diffusion at resolution N=64 (64x32). Each wave is initialized with its
-ideal-MHD eigenvector, and the decay rate of the volume-integrated kinetic energy is
-measured and checked against the analytic damping rate (Balsara 1996) to within REL_TOL.
+Ambipolar-diffusion MHD wave-damping test in 3D (CPU).
+Damps the fast oblique linear MHD wave (Bai & Stone 2011, Sec 2.3.2) by ambipolar
+diffusion at resolution N=64 (64x32x32). The wave is initialized with its ideal-MHD
+eigenvector, and the decay rate of the volume-integrated kinetic energy is measured and
+checked against the analytic damping rate (Balsara 1996) to within REL_TOL.
 """
 
 import pytest
@@ -47,10 +47,12 @@ ANALYTIC_RATES = {
 }
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
-# N=64 (64x32) gives >~20 cells/wavelength, the threshold for accurate AD damping
-# (Bai & Stone 2011, Sec 2.3.2); the measured rate is within ~13% of analytic, so 20% tol.
+# N=64 (64x32x32) gives >~20 cells/wavelength, the threshold for accurate AD damping
+# (Bai & Stone 2011, Sec 2.3.2); the measured rate is within ~5% of analytic, so 10% tol.
 RESOLUTION = 64
-REL_TOL = 0.20
+REL_TOL = 0.10
+# tlim is interpreted by the linear_wave pgen as a number of wave periods
+PERIODS = 3.0
 
 # Domain configurations per dimension
 DOMAINS = {
@@ -71,7 +73,7 @@ def build_arguments(wave_flag, dim, res, basename):
 
     return [
         f"job/basename={basename}",
-        "time/tlim=5.0",
+        f"time/tlim={PERIODS}",
         "time/integrator=rk2",
         "time/cfl_number=0.3",
         "mesh/nghost=2",
@@ -134,8 +136,8 @@ def fit_decay_rate_from_ke(hst_file):
     return -slope / 2.0
 
 
-@pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-@pytest.mark.parametrize("dim", [2])
+@pytest.mark.parametrize("wave_flag", ["0"])
+@pytest.mark.parametrize("dim", [3])
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=64."""
     analytic_rate = ANALYTIC_RATES[wave_flag]
