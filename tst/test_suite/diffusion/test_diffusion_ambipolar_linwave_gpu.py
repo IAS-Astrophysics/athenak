@@ -1,10 +1,10 @@
 """
 Ambipolar-diffusion MHD wave-damping test in 2D (GPU).
 Damps the fast and Alfven oblique linear MHD waves (Bai & Stone 2011, Sec 2.3.2) by
-ambipolar diffusion at resolution N=128 (128x64), with a mesh decomposition tuned for GPU
-execution. Each wave is initialized with its ideal-MHD eigenvector, and the decay rate of
-the volume-integrated kinetic energy is measured and checked against the analytic damping
-rate (Balsara 1996) to within REL_TOL.
+ambipolar diffusion at resolution N=128 (128x64), tiled into multiple MeshBlocks (64x32)
+as in the other GPU tests. Each wave is initialized with its ideal-MHD eigenvector, and
+the decay rate of the volume-integrated kinetic energy is measured and checked against the
+analytic damping rate (Balsara 1996) to within REL_TOL.
 """
 
 import pytest
