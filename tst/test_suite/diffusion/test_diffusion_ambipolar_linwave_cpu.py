@@ -1,20 +1,22 @@
 """
 Ambipolar diffusion MHD wave damping test (CPU).
 
-Reproduces Bai & Stone (2011), Section 2.3.2: isothermal fast/Alfven/slow MHD waves damped
-by ambipolar diffusion. The problem is initialized with the IDEAL MHD eigenvector and the
-exponential decay rate of the (volume-integrated) kinetic energy is measured and compared to
-the analytic AD damping rates from Balsara (1996) (eqs. 17-18): Gamma_fast=0.5132,
-Gamma_Alfven=0.1974, Gamma_slow=0.1283 for eta_ad=0.01, omega_a=100, B0=(1, sqrt2, 0.5).
+Reproduces Bai & Stone (2011), Section 2.3.2: isothermal fast/Alfven/slow MHD waves
+damped by ambipolar diffusion. The problem is initialized with the IDEAL MHD eigenvector
+and the exponential decay rate of the (volume-integrated) kinetic energy is measured and
+compared to the analytic AD damping rates from Balsara (1996) (eqs. 17-18):
+Gamma_fast=0.5132, Gamma_Alfven=0.1974, Gamma_slow=0.1283 for eta_ad=0.01, omega_a=100,
+B0=(1, sqrt2, 0.5).
 
-Each (wave, dimension) is run once at a single resolution N=64 and the measured damping rate
-is checked to be within REL_TOL of the analytic value. N=64 gives >~20 cells/wavelength, which
-Bai & Stone (2011) Sec 2.3.2 identify as the threshold for accurate AD damping.
+Each (wave, dimension) is run once at a single resolution N=64 and the measured damping
+rate is checked to be within REL_TOL of the analytic value. N=64 gives >~20
+cells/wavelength, which Bai & Stone (2011) Sec 2.3.2 identify as the threshold for
+accurate AD damping.
 
-Only 1D (64) and 2D (64x32) are run here: on a single CPU core the 3D ambipolar runs dominate
-the suite wall-time (~97%), so the 3D cases are covered by the GPU test
+Only 1D (64) and 2D (64x32) are run here: on a single CPU core the 3D ambipolar runs
+dominate the suite wall-time (~97%), so the 3D cases are covered by the GPU test
 (test_diffusion_ambipolar_linwave_gpu.py) instead. See
-results/wave_damping/bai_stone_resolution_study.py for the full half/fiducial/double study.
+results/wave_damping/bai_stone_resolution_study.py for the full resolution study.
 """
 
 import pytest
@@ -58,9 +60,10 @@ ANALYTIC_RATES = {
 }
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
-RESOLUTION = 64    # single base resolution (1D 64, 2D 64x32, 3D 64x32x32)
-REL_TOL = 0.20     # damping rate within 20% of analytic (N=64 is the fiducial grid in 2D/3D,
-                   # where the worst case, slow 3D, is ~17% per Bai & Stone 2011 Sec 2.3.2)
+# Single base resolution (1D 64, 2D 64x32). N=64 is the fiducial grid in 2D/3D, where the
+# worst case (slow 3D) is ~17% per Bai & Stone (2011) Sec 2.3.2, so a 20% tol is used.
+RESOLUTION = 64
+REL_TOL = 0.20
 
 # Domain configurations per dimension
 DOMAINS = {
@@ -81,36 +84,36 @@ def build_arguments(wave_flag, dim, res, basename):
 
     return [
         f"job/basename={basename}",
-        f"time/tlim=5.0",
-        f"time/integrator=rk2",
-        f"time/cfl_number=0.3",
-        f"mesh/nghost=2",
+        "time/tlim=5.0",
+        "time/integrator=rk2",
+        "time/cfl_number=0.3",
+        "mesh/nghost=2",
         f"mesh/nx1={res}",
-        f"mesh/x1min=0.0",
+        "mesh/x1min=0.0",
         f"mesh/x1max={domain['x1max']}",
         f"mesh/nx2={nx2}",
-        f"mesh/x2min=0.0",
+        "mesh/x2min=0.0",
         f"mesh/x2max={domain['x2max']}",
         f"mesh/nx3={nx3}",
-        f"mesh/x3min=0.0",
+        "mesh/x3min=0.0",
         f"mesh/x3max={domain['x3max']}",
         f"meshblock/nx1={res}",
         f"meshblock/nx2={mb_nx2}",
         f"meshblock/nx3={mb_nx3}",
-        f"mesh_refinement/refinement=none",
-        f"mhd/eos=isothermal",
-        f"mhd/iso_sound_speed=1.0",
-        f"mhd/reconstruct=plm",
-        f"mhd/rsolver=hlld",
+        "mesh_refinement/refinement=none",
+        "mhd/eos=isothermal",
+        "mhd/iso_sound_speed=1.0",
+        "mhd/reconstruct=plm",
+        "mhd/rsolver=hlld",
         f"mhd/eta_ad={_eta_ad}",
-        f"output1/file_type=hst",
-        f"output1/dt=0.05",
-        f"problem/pgen_name=linear_wave",
+        "output1/file_type=hst",
+        "output1/dt=0.05",
+        "problem/pgen_name=linear_wave",
         f"problem/wave_flag={wave_flag}",
-        f"problem/amp=1.0e-4",
-        f"problem/dens=1.0",
-        f"problem/pgas=0.6",
-        f"problem/vx0=0.0",
+        "problem/amp=1.0e-4",
+        "problem/dens=1.0",
+        "problem/pgas=0.6",
+        "problem/vx0=0.0",
         f"problem/bx0={_bx0}",
         f"problem/by0={_by0}",
         f"problem/bz0={_bz0}",
@@ -145,7 +148,8 @@ def fit_decay_rate_from_ke(hst_file):
 
 
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-@pytest.mark.parametrize("dim", [1, 2])  # 3D covered by the GPU test (dominates CPU wall-time)
+# 3D covered by the GPU test (3D dominates CPU wall-time)
+@pytest.mark.parametrize("dim", [1, 2])
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=64."""
     analytic_rate = ANALYTIC_RATES[wave_flag]

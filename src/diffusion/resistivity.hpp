@@ -33,12 +33,12 @@ class Resistivity {
   Real eta_ad;    // ambipolar diffusion coefficient (0 => ambipolar term off)
 
   // wrapper functions: add non-ideal E-Field and energy (Poynting) flux. Each dispatches
-  // to the Ohmic and/or ambipolar implementations depending on which coefficients are set.
+  // to the Ohmic and/or ambipolar implementations depending on which coefficients are on.
   void AddResistiveEMFs(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld);
   void AddResistiveFluxes(const DvceFaceFld4D<Real> &b0, DvceFaceFld5D<Real> &flx);
   void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
-  // Implementation kernels. These MUST be public: each launches Kokkos par_for kernels, and
+  // Implementation kernels. These MUST be public: each launches Kokkos par_for kernels,
   // nvcc forbids an extended __host__ __device__ lambda inside a private/protected member
   // function (the CUDA build fails otherwise; the CPU/Serial build does not catch this).
   // Matches main, where the Ohmic implementations are also public.

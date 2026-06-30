@@ -282,13 +282,13 @@ void Resistivity::AddFluxConstantResist(const DvceFaceFld4D<Real> &b,
 //----------------------------------------------------------------------------------------
 //! \fn void Resistivity::NewTimeStep()
 //! \brief Compute new time step for non-ideal MHD (Ohmic + ambipolar).
-//! Ohmic:     dt <= fac * dx^2 / eta_ohm                       (constant diffusivity)
-//! Ambipolar: dt <= fac * dx^2 / (eta_ohm + eta_ad * B^2)      (diffusivity varies in space)
-//! When ambipolar diffusion is active the limit is evaluated PER CELL (each cell pairs its
-//! own dx with its own total diffusivity eta_ohm + eta_ad*B^2, and the global minimum is
+//! Ohmic:     dt <= fac * dx^2 / eta_ohm                  (constant diffusivity)
+//! Ambipolar: dt <= fac * dx^2 / (eta_ohm + eta_ad * B^2) (diffusivity varies in space)
+//! When ambipolar diffusion is active the limit is evaluated PER CELL (each cell pairs
+//! its own dx with its own total diffusivity eta_ohm + eta_ad*B^2, and the global min is
 //! taken), matching Athena++ FieldDiffusion::NewDiffusionDt and AthenaK's own spatially-
-//! varying diffusion module Conduction::NewTimeStep. This avoids pairing the global-min dx
-//! with the global-max B^2, which over-restricts dt under mesh refinement.
+//! varying module Conduction::NewTimeStep. This avoids pairing the global-min dx with the
+//! global-max B^2, which over-restricts dt under mesh refinement.
 
 void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
   // non-ideal MHD timestep on MeshBlock(s) in this pack
@@ -305,10 +305,10 @@ void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
   auto &multi_d = pmy_pack->pmesh->multi_d;
   auto &three_d = pmy_pack->pmesh->three_d;
 
-  // Ohmic diffusivity is a CONSTANT coefficient: when no (spatially-varying) ambipolar term
-  // is active, the limit is simply fac*dx^2/eta_ohm and a cheap host loop suffices (matching
-  // Viscosity::NewTimeStep). Keeping this branch separate leaves the eta_ad==0 (AD-off)
-  // behaviour byte-identical to before.
+  // Ohmic diffusivity is a CONSTANT coefficient: when no (spatially-varying) ambipolar
+  // term is active, the limit is simply fac*dx^2/eta_ohm and a cheap host loop suffices
+  // (matching Viscosity::NewTimeStep). Keeping this branch separate leaves the eta_ad==0
+  // (AD-off) behaviour byte-identical to before.
   if (eta_ad == 0.0) {
     if (eta_ohm > 0.0) {
       for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {

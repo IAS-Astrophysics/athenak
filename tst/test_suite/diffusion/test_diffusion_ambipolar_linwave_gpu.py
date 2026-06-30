@@ -1,15 +1,15 @@
 """
 Ambipolar diffusion MHD wave damping test (GPU).
 
-Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher single resolution
-N=128 (2D 128x64, 3D 128x64x64) with mesh decomposition tuned for GPU execution. N=128 is the
-paper's "double" grid, where the damping rate matches analytic to <~2.5%, so a tighter
-tolerance is used than on the CPU. Each (wave, dimension) is run once and the measured rate is
-checked to be within REL_TOL of the analytic value.
+Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher single
+resolution N=128 (2D 128x64, 3D 128x64x64) with mesh decomposition tuned for GPU
+execution. N=128 is the paper's "double" grid, where the damping rate matches analytic to
+<~2.5%, so a tighter tolerance is used than on the CPU. Each (wave, dimension) is run once
+and the measured rate is checked to be within REL_TOL of the analytic value.
 
 Only 2D and 3D are run here: a 1D (128-cell) problem badly under-utilizes the GPU and is
-kernel-launch-latency bound (wasteful to run on a GPU), and 1D is already covered by the CPU
-test (test_diffusion_ambipolar_linwave_cpu.py).
+kernel-launch-latency bound (wasteful to run on a GPU), and 1D is already covered by the
+CPU test (test_diffusion_ambipolar_linwave_cpu.py).
 """
 
 import pytest
@@ -53,9 +53,10 @@ ANALYTIC_RATES = {
 }
 WAVE_NAMES = {"0": "fast", "1": "Alfven", "2": "slow"}
 
-RESOLUTION = 128   # single base resolution (1D 128, 2D 128x64, 3D 128x64x64)
-REL_TOL = 0.05     # damping rate within 5% of analytic (N=128 is "double" res, where the
-                   # measured rates are <~2.5% on the A100 across all waves/dimensions)
+# Single base resolution (2D 128x64, 3D 128x64x64). N=128 is the "double" grid, where the
+# measured rates are <~2.5% on the A100 across all waves/dims, so a 5% tolerance is used.
+RESOLUTION = 128
+REL_TOL = 0.05
 
 DOMAINS = {
     1: {"x1max": "1.0", "nx2": "1", "x2max": "1.0", "nx3": "1", "x3max": "1.0"},
@@ -77,36 +78,36 @@ def build_arguments(wave_flag, dim, res, basename):
 
     return [
         f"job/basename={basename}",
-        f"time/tlim=5.0",
-        f"time/integrator=rk2",
-        f"time/cfl_number=0.3",
-        f"mesh/nghost=2",
+        "time/tlim=5.0",
+        "time/integrator=rk2",
+        "time/cfl_number=0.3",
+        "mesh/nghost=2",
         f"mesh/nx1={res}",
-        f"mesh/x1min=0.0",
+        "mesh/x1min=0.0",
         f"mesh/x1max={domain['x1max']}",
         f"mesh/nx2={nx2}",
-        f"mesh/x2min=0.0",
+        "mesh/x2min=0.0",
         f"mesh/x2max={domain['x2max']}",
         f"mesh/nx3={nx3}",
-        f"mesh/x3min=0.0",
+        "mesh/x3min=0.0",
         f"mesh/x3max={domain['x3max']}",
         f"meshblock/nx1={mb_nx1}",
         f"meshblock/nx2={mb_nx2}",
         f"meshblock/nx3={mb_nx3}",
-        f"mesh_refinement/refinement=none",
-        f"mhd/eos=isothermal",
-        f"mhd/iso_sound_speed=1.0",
-        f"mhd/reconstruct=plm",
-        f"mhd/rsolver=hlld",
+        "mesh_refinement/refinement=none",
+        "mhd/eos=isothermal",
+        "mhd/iso_sound_speed=1.0",
+        "mhd/reconstruct=plm",
+        "mhd/rsolver=hlld",
         f"mhd/eta_ad={_eta_ad}",
-        f"output1/file_type=hst",
-        f"output1/dt=0.05",
-        f"problem/pgen_name=linear_wave",
+        "output1/file_type=hst",
+        "output1/dt=0.05",
+        "problem/pgen_name=linear_wave",
         f"problem/wave_flag={wave_flag}",
-        f"problem/amp=1.0e-4",
-        f"problem/dens=1.0",
-        f"problem/pgas=0.6",
-        f"problem/vx0=0.0",
+        "problem/amp=1.0e-4",
+        "problem/dens=1.0",
+        "problem/pgas=0.6",
+        "problem/vx0=0.0",
         f"problem/bx0={_bx0}",
         f"problem/by0={_by0}",
         f"problem/bz0={_bz0}",
@@ -134,7 +135,8 @@ def fit_decay_rate_from_ke(hst_file):
 
 
 @pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
-@pytest.mark.parametrize("dim", [2, 3])  # 1D covered by the CPU test (GPU-inefficient in 1D)
+# 1D covered by the CPU test (1D is GPU-inefficient)
+@pytest.mark.parametrize("dim", [2, 3])
 def test_ambipolar_linwave(wave_flag, dim):
     """Check the ambipolar damping rate is within REL_TOL of analytic at N=128 (GPU)."""
     analytic_rate = ANALYTIC_RATES[wave_flag]

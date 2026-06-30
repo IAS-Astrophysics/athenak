@@ -56,7 +56,7 @@ Real EdgeJ3(const int m, const int k, const int j, const int i,
 //  \brief Adds electric field from ambipolar diffusion to corner-centered electric field
 //    E_amb = eta_ad * [ B^2 J - (J . B) B ]     (eta_A = eta_ad * B^2)
 //  J = curl(B) and B are evaluated at each edge and combined as above. J is recomputed
-//  inline via EdgeJ{1,2,3}(); the cross-J components and B are averaged to the target edge
+//  inline via EdgeJ{1,2,3}(); the cross-J components and B are averaged to the edge
 //  (4-pt in 3D, 2-pt across a degenerate direction in 2D), with cell-centered B (bcc0)
 //  from the parent MHD class used for the edge-diagonal interpolation. Follows Athena++
 //  AmbipolarEMF (field_diffusion/diffusivity.cpp).
