@@ -10,6 +10,14 @@ and the measured rate is checked to be within REL_TOL of the analytic value.
 Only 2D and 3D are run here: a 1D (128-cell) problem badly under-utilizes the GPU and is
 kernel-launch-latency bound (wasteful to run on a GPU), and 1D is already covered by the
 CPU test (test_diffusion_ambipolar_linwave_cpu.py).
+
+Runtime: the explicit ambipolar parabolic timestep (dt ~ dx^2) makes the cycle count, not
+the cell count, the cost driver, and the slow wave needs ~3.7x more cycles than the fast
+wave (its period is longer). To keep every case under ~30 s on the A100 the integration
+runs only 2 wave periods (time/tlim=2.0); measured A100 times are 2.5-8 s in 2D and
+7-28 s in 3D (slow 3D is the worst case), with damping-rate errors of 1.6-3.8%. Coarsening
+a transverse dimension was rejected: it under-resolves the oblique wave and inflates the
+measured damping rate past tolerance.
 """
 
 import pytest
@@ -78,7 +86,10 @@ def build_arguments(wave_flag, dim, res, basename):
 
     return [
         f"job/basename={basename}",
-        "time/tlim=5.0",
+        # tlim = number of wave PERIODS (linear_wave pgen). 2 periods is enough to fit the
+        # decay rate (errors <4%) while keeping the slowest case (slow 3D) under ~30 s on
+        # the A100 -- see the "Runtime" note in the module docstring.
+        "time/tlim=2.0",
         "time/integrator=rk2",
         "time/cfl_number=0.3",
         "mesh/nghost=2",
