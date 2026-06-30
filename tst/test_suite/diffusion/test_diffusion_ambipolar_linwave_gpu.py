@@ -4,14 +4,20 @@ Ambipolar diffusion MHD wave damping test (GPU).
 Same physics as the CPU test (Bai & Stone 2011, Sec 2.3.2) but at a higher resolution
 N=128 (2D 128x64) with mesh decomposition tuned for GPU execution. N=128 is the paper's
 "double" grid, where the damping rate matches analytic to <~2.5%, so a tighter tolerance
-is used than on the CPU. Each wave is run once and the measured rate is checked to be
-within REL_TOL of the analytic value.
+is used than on the CPU. Each wave is run once at the full 5 wave periods and the measured
+rate is checked to be within REL_TOL of the analytic value.
 
-Only the 2D oblique-wave problem is run (waves fast/Alfven/slow), at higher resolution
-than the CPU test. The 3D case is deliberately omitted: the explicit ambipolar parabolic
-timestep (dt ~ dx^2) makes the cycle count the cost driver, and the slow 3D wave needs
-~3.7x more cycles than the fast one (its period is longer), which pushes its wall-time
-past the ~30 s/case CI budget. The 2D cases run in ~5-20 s each on the A100.
+Only the 2D oblique-wave problem is run, and only the FAST and ALFVEN waves. Two cost
+considerations drive this:
+  - 3D is omitted because at N=128 the grid is small enough that each cycle is launch-
+    latency bound on the A100, and 3D simply adds cells/cycles without fitting the
+    ~30 s end-to-end budget.
+  - The SLOW wave is omitted because integration cost scales with the number of cycles,
+    i.e. with the physical time = (periods) x (wavelength / wave_speed). The slow wave's
+    phase speed is ~1/4 of the fast wave's, so at the same period count it integrates ~4x
+    as long (the single most expensive case). Dropping it lets the remaining waves run at
+    the full 5 periods and keeps the whole test under ~30 s (fast ~5 s, Alfven ~10 s on
+    the A100). The slow wave is still exercised by the CPU test at N=64.
 """
 
 import pytest
@@ -136,7 +142,8 @@ def fit_decay_rate_from_ke(hst_file):
     return -slope / 2.0
 
 
-@pytest.mark.parametrize("wave_flag", ["0", "1", "2"])
+# fast + Alfven only (slow wave dropped for CI wall-time; see module docstring)
+@pytest.mark.parametrize("wave_flag", ["0", "1"])
 # 2D-only (3D omitted for CI wall-time; see module docstring)
 @pytest.mark.parametrize("dim", [2])
 def test_ambipolar_linwave(wave_flag, dim):

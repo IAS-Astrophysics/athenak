@@ -13,10 +13,12 @@ rate is checked to be within REL_TOL of the analytic value. N=64 gives >~20
 cells/wavelength, which Bai & Stone (2011) Sec 2.3.2 identify as the threshold for
 accurate AD damping.
 
-Only the 2D oblique-wave problem is run (waves fast/Alfven/slow); the GPU test
+Only the 2D oblique-wave problem is run, but all three waves (fast/Alfven/slow) are tested
+here, since at N=64 even the slow wave is cheap. The GPU test
 (test_diffusion_ambipolar_linwave_gpu.py) runs the same 2D problem at higher resolution
-N=128. See results/wave_damping/bai_stone_resolution_study.py for the full resolution
-study (1D/2D/3D, half/fiducial/double).
+N=128 but only the fast and Alfven waves (the slow wave integrates ~4x longer and is left
+to this CPU test). See results/wave_damping/bai_stone_resolution_study.py for the full
+resolution study (1D/2D/3D, half/fiducial/double).
 """
 
 import pytest
