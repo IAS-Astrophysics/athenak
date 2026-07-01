@@ -99,11 +99,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = (name.compare("hydro_wz") == 0)?
+    auto &w0_ = (pm->pmb_pack->phydro != nullptr)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("temperature", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (w0_(m,IEN,k,j,i+1) / w0_(m,IDN,k,j,i-1));
+      dv(m,i_dv,k,j,i) = (w0_(m,IPR,k,j,i) / w0_(m,IDN,k,j,i));
     });
     i_dv += 1; // increment derived variable index
   }
@@ -123,6 +123,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       if (multi_d) {
         dv(m,i_dv,k,j,i) -=(w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size.d_view(m).dx2;
       }
+      dv(m,i_dv,k,j,i) *= 0.5; // accounts for divide by 2*dx
     });
     i_dv += 1; // increment derived variable index
   }
@@ -149,7 +150,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         w1 -= (w0_(m,IVY,k+1,j,i) - w0_(m,IVY,k-1,j,i))/size.d_view(m).dx3;
         w2 += (w0_(m,IVX,k+1,j,i) - w0_(m,IVX,k-1,j,i))/size.d_view(m).dx3;
       }
-      dv(m,i_dv,k,j,i) = w1*w1 + w2*w2 + w3*w3;
+      dv(m,i_dv,k,j,i) = 0.25*(w1*w1 + w2*w2 + w3*w3); // accounts for divide by 2*dx
     });
     i_dv += 1; // increment derived variable index
   }
@@ -168,6 +169,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       if (multi_d) {
         dv(m,i_dv,k,j,i) -=(bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
       }
+      dv(m,i_dv,k,j,i) *= 0.5; // accounts for divide by 2*dx
     });
     i_dv += 1; // increment derived variable index
   }
@@ -192,7 +194,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
         j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
       }
-      dv(m,i_dv,k,j,i) = j1*j1 + j2*j2 + j3*j3;
+      dv(m,i_dv,k,j,i) = 0.25*(j1*j1 + j2*j2 + j3*j3); // accounts for divide by 2*dx
     });
     i_dv += 1; // increment derived variable index
   }

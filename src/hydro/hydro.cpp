@@ -27,15 +27,15 @@ namespace hydro {
 // constructor, initializes data structures and parameters
 
 Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
     coarse_w0("cprim",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    fofc("fofc",1,1,1,1),
     utest("utest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1) {
+    pmy_pack(ppack) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -73,16 +73,24 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
   // Viscosity (if requested in input file)
-  if (pin->DoesParameterExist("hydro","viscosity")) {
+  if (pin->DoesParameterExist("hydro","nu_iso") ||
+      pin->DoesParameterExist("hydro","nu_aniso")) {
     pvisc = new Viscosity("hydro", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
   // Thermal conduction (if requested in input file)
-  if (pin->DoesParameterExist("hydro","conductivity") ||
-      pin->DoesParameterExist("hydro","tdep_conductivity")) {
-    pcond = new Conduction("hydro", ppack, pin);
+  if (pin->DoesParameterExist("hydro","alpha_iso") ||
+      pin->DoesParameterExist("hydro","alpha_aniso") ||
+      pin->DoesParameterExist("hydro","alpha_spitzer")) {
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("hydro", ppack, pin);
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in hydro requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }

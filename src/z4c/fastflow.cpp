@@ -38,9 +38,7 @@
 //! \fn FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput * pin, int n)
 //! \brief Constructor for FastFlow class.
 FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
-  pmbp(pmbp),
-  pin(pin),
-  Y0("Y0",1,1), Ys("Ys",1,1), Yc("Yc",1,1),
+  Y0("Y0",1,1), Yc("Yc",1,1), Ys("Ys",1,1),
   dY0dth("dY0dth",1,1), dYcdth("dYcdth",1,1),
   dYsdth("dYsdth",1,1), dYcdph("dYcdph",1,1),
   dYsdph("dYsdph",1,1), dY0dth2("dY0dth2",1,1),
@@ -50,7 +48,8 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   a0("a0",1), ac("ac",1), as("as",1),
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
   rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
-  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1) {
+  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1),
+  pmbp(pmbp), pin(pin) {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
 

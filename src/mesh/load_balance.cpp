@@ -128,7 +128,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
   if (nmb_recv == 0) return;  // nothing to do
 
-  // allocate array of recv buffers
+  // allocate array of recv buffer metadata
   Kokkos::realloc(recvbuf, nmb_recv);
   recv_req = new MPI_Request[nmb_recv];
   for (int n=0; n<nmb_recv; ++n) {
@@ -157,7 +157,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
 
   // Step 2. (InitRecvAMR)
-  // loop over new MBs on this rank, initialize recv buffers
+  // loop over new MBs on this rank, initialize recv buffer metadata
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -263,13 +263,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       }
     }
   }
-  // Sync dual array, reallocate receive data array
+  // Sync dual array
   recvbuf.template modify<HostMemSpace>();
   recvbuf.template sync<DevExeSpace>();
-  {
-    int ndata = recvbuf.h_view((nmb_recv-1)).offset + recvbuf.h_view((nmb_recv-1)).cnt;
-    Kokkos::realloc(recv_data, ndata);
-  }
+  // Note: No need to reallocate recv_data buffer as it is fixed length
 
   // Step 3. (InitRecvAMR)
   // loop over new MBs on this rank, post non-blocking recvs
@@ -386,7 +383,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
 
   if (nmb_send == 0) return;  // nothing to do
 
-  // allocate array of send buffers
+  // allocate array of send buffer metadata
   Kokkos::realloc(sendbuf, nmb_send);
   send_req = new MPI_Request[nmb_send];
   for (int n=0; n<nmb_send; ++n) {
@@ -415,7 +412,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   }
 
   // Step 2. (PackAndSendAMR)
-  // loop over old MBs on this rank, initialize send buffers
+  // loop over old MBs on this rank, initialize send buffer metadata
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -523,13 +520,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       }
     }
   }
-  // Sync dual array, reallocate send data array
+  // Sync dual array
   sendbuf.template modify<HostMemSpace>();
   sendbuf.template sync<DevExeSpace>();
-  {
-    int ndata = sendbuf.h_view((nmb_send-1)).offset + sendbuf.h_view((nmb_send-1)).cnt;
-    Kokkos::realloc(send_data, ndata);
-  }
+  // Note: No need to reallocate send_date as it is fixed length
 
   // Step 3. (PackAndSendAMR)
   // Pack data into send buffers in parallel

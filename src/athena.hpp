@@ -54,9 +54,8 @@ using Real = double;
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
 // constants that determine array index of Hydro/MHD variables
-// array indices for conserved: density, momentum, total energy
-enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4,
-                    ITM=4, IPR=4, IYF=5};
+// array indices for conserved: density, momemtum, total energy
+enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, IPR=4, IYF=5};
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2, NMAG=3};
 // array indices for metric matrices in GR
@@ -152,6 +151,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 
 //----------------------------------------------------------------------------------------
 // struct for storing face-centered (area-averaged) variables, e.g. magnetic field
+/* [using old C-style comments to prevent multi-line-comment warning with -Wall]
 //                 ___________
 //                 |x3f[k+1,j,i]
 //                 | \    X    \
@@ -161,6 +161,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 //   x2 x3          \  |    X    |
 //    \ |            \ |         |
 //     \|__x1         \|_________|
+*/
 
 template <typename T>
 struct DvceFaceFld4D {
@@ -194,6 +195,7 @@ struct HostFaceFld4D {
 
 //----------------------------------------------------------------------------------------
 // struct for storing edge-centered (line-averaged) variables, e.g. EMF
+/* [using old C-style comments to prevent multi-line-comment warning with -Wall]
 //             _____________
 //             |\           \
 //             | \           \
@@ -204,6 +206,7 @@ struct HostFaceFld4D {
 //               \ |           |
 //                \|_____*_____|
 //                    x1e[k,j,i]
+*/
 
 template <typename T>
 struct DvceEdgeFld4D {

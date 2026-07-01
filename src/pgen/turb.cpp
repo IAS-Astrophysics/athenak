@@ -318,8 +318,8 @@ void TurbulentHistory(HistoryData *pdata, Mesh *pm) {
            *(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i))
      + 0.25*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
            *(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
-     + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i))
-           *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i)))
+     + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i))
+           *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i)))
        / dx_squared)*vol;
     // 2 = < (B_j d_j B_i)(B_k d_k B_i) >
     Real bdb1 = bcc(m,IBX,k,j,i)*(b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i))
