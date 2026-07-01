@@ -128,8 +128,53 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real gauss_cgs_to_geo = 8.3519664583273e+19;
   Real rho_cut = pin->GetOrAddReal("problem", "rho_cut", 1e-5);
   Real b_max   = pin->GetOrAddReal("problem", "b_max", 1e12) / gauss_cgs_to_geo;
+  std::string bfield_type = pin->GetOrAddString("problem", "bfield_type",
+                                                "current_loop");
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "Selected magnetic field type: " << bfield_type << std::endl;
+  }
+
+  // Current-loop model (external dipole)
   Real r_0     = pin->GetOrAddReal("problem", "r_0_current", 5.0);
   Real I_0     = 4 * r_0 * b_max / (23.0 * M_PI);
+
+  // Pressure-poloidal model (internal dipole)
+  Real p_cut = pin->GetOrAddReal("problem", "pcut", 1e-3);
+  Real ns    = pin->GetOrAddReal("problem", "ns_exp", 2);
+  bool use_internal = (bfield_type == "pressure_poloidal");
+  if (bfield_type != "current_loop" && !use_internal) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Unknown problem/b_field_type '" << bfield_type << "'. "
+              << "Valid options are 'current_loop' and 'pressure_poloidal'."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // Pressure-poloidal model is currently only supported for
+  // mixed binaries.
+  if (bfield_type == "pressure_poloidal" && (BNS || SNS)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Pressure poloidal magnetic field currently only supported for "
+              << "mixed binary systems."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // WARNING: Warn the user to not refine in the interior of the
+  // star if the pressure-poloidal model is used. The face corrections
+  // are only applied to the external dipole.
+  if (bfield_type == "pressure_poloidal" && pmbp->pmesh->multilevel
+      && global_variable::my_rank == 0) {
+    std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Avoid refinement in the interior of the neutron star. Corrections "
+              << "between fine/coarse shared faces are only applied to the external "
+              << "dipole. Usage of the pressure-poloidal field with interior refinement "
+              << "leads to larger div(B) violations."
+              << std::endl;
+  }
 
   int ncells1 = indcs.nx1 + 2 * (indcs.ng);
   int ncells2 = indcs.nx2 + 2 * (indcs.ng);
@@ -466,11 +511,53 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::cout << "Data copied." << std::endl;
   }
 
+  // Compute the maximum gas pressure, if internal dipole
+  // selected.
+  Real pmax = 0.0;
+  if (use_internal) {
+    if (global_variable::my_rank == 0) {
+      std::cout << "Computing the maximum gas pressure..." << std::endl;
+    }
+
+    const int nkji  = indcs.nx3 * indcs.nx2 * indcs.nx1;
+    const int nji   = indcs.nx2 * indcs.nx1;
+    const int nmkji = nmb * nkji;
+
+    Kokkos::parallel_reduce("pgen_pmax",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int idx, Real &mx) {
+      int m = idx / nkji;
+      int k = (idx - m * nkji) / nji;
+      int j = (idx - m * nkji - k * nji) / indcs.nx1;
+      int i = (idx - m * nkji - k * nji - j * indcs.nx1) + is;
+      k += ks;
+      j += js;
+      mx = Kokkos::fmax(mx, w0(m, IPR, k, j, i));
+    }, Kokkos::Max<Real>(pmax));
+    Kokkos::fence();
+
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, &pmax, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
+
+    if (pmax <= 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Maximum pressure is non-positive; cannot build the "
+                << "pressure-weighted poloidal magnetic field seed." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (global_variable::my_rank == 0) {
+      std::cout << "Maximum gas pressure for B-field seed = " << pmax << std::endl;
+    }
+  }
+
   // Compute vector potential over all faces
   DvceArray4D<Real> a1, a2, a3;
   Kokkos::realloc(a1, nmb, ncells3, ncells2, ncells1);
   Kokkos::realloc(a2, nmb, ncells3, ncells2, ncells1);
   Kokkos::realloc(a3, nmb, ncells3, ncells2, ncells1);
+  auto &w0_ = pmbp->pmhd->w0;
 
   auto &nghbr = pmbp->pmb->nghbr;
   auto &mblev = pmbp->pmb->mb_lev;
@@ -507,14 +594,38 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
                     A2(x1f, x2v + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
       a3(m,k,j,i) = 0.0;
     } else if (BHNS) {
-      if (NS_y > 0.0) {
-        a1(m,k,j,i) = A1(x1v, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
-        a2(m,k,j,i) = A2(x1f, x2v - 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
-        a3(m,k,j,i) = 0.0;
-      } else {
-        a1(m,k,j,i) = A1(x1v, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
-        a2(m,k,j,i) = A2(x1f, x2v + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
-        a3(m,k,j,i) = 0.0;
+      if (use_internal) { // internal dipole
+        // Compute the pressure at the x1-edges.
+        Real p_ex = 0.25 * (w0_(m,IPR,k-1,j-1,i) + w0_(m,IPR,k-1,j,i) +
+                            w0_(m,IPR,k,j-1,i) + w0_(m,IPR,k,j,i));
+
+        // Compute the pressure at the x2-edges.
+        Real p_ey = 0.25 * (w0_(m,IPR,k-1,j,i-1) + w0_(m,IPR,k-1,j,i) +
+                            w0_(m,IPR,k,j,i-1) + w0_(m,IPR,k,j,i));
+
+        // Aj = {-y_NS delta_j^x +x_NS delta_j^y}
+        //       x A_b max(P/P_max - pcut, 0)^ns
+        if (NS_y > 0.0) {
+          a1(m,k,j,i) = -(x2f - 0.5 * sep + CM_y_corr) *
+                          Kokkos::pow(Kokkos::fmax(p_ex / pmax - p_cut, 0.0), ns);
+          a2(m,k,j,i) = x1f * Kokkos::pow(Kokkos::fmax(p_ey / pmax - p_cut, 0.0), ns);
+          a3(m,k,j,i) = 0.0;
+        } else {
+          a1(m,k,j,i) = -(x2f + 0.5 * sep + CM_y_corr) *
+                          Kokkos::pow(Kokkos::fmax(p_ex / pmax - p_cut, 0.0), ns);
+          a2(m,k,j,i) = x1f * Kokkos::pow(Kokkos::fmax(p_ey / pmax - p_cut, 0.0), ns);
+          a3(m,k,j,i) = 0.0;
+        }
+      } else { // external dipole
+        if (NS_y > 0.0) {
+          a1(m,k,j,i) = A1(x1v, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
+          a2(m,k,j,i) = A2(x1f, x2v - 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
+          a3(m,k,j,i) = 0.0;
+        } else {
+          a1(m,k,j,i) = A1(x1v, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
+          a2(m,k,j,i) = A2(x1f, x2v + 0.5 * sep + CM_y_corr, x3f, I_0, r_0);
+          a3(m,k,j,i) = 0.0;
+        }
       }
     } else if (SNS) {
       a1(m,k,j,i) = A1(x1v, x2f, x3f, I_0, r_0);
@@ -564,12 +675,14 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
                            (A1(xr, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
                             A1(xr, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0)));
       } else if (BHNS) {
-        if (NS_y > 0.0) {
-          a1(m,k,j,i) = 0.5*(A1(xl, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
-                             A1(xr, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
-        } else {
-          a1(m,k,j,i) = 0.5*(A1(xl, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
-                             A1(xr, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
+        if (!use_internal) {
+          if (NS_y > 0.0) {
+            a1(m,k,j,i) = 0.5*(A1(xl, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                              A1(xr, x2f - 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
+          } else {
+            a1(m,k,j,i) = 0.5*(A1(xl, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                              A1(xr, x2f + 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
+          }
         }
       } else if (SNS) {
         a1(m,k,j,i) = 0.5*(A1(xl, x2f, x3f, I_0, r_0) +
@@ -613,12 +726,14 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
                            (A2(x1f, xr - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
                             A2(x1f, xr + 0.5 * sep + CM_y_corr, x3f, I_0, r_0)));
       } else if (BHNS) {
-        if (NS_y > 0.0) {
-          a2(m,k,j,i) = 0.5*(A2(x1f, xl - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
-                             A2(x1f, xr - 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
-        } else {
-          a2(m,k,j,i) = 0.5*(A2(x1f, xl + 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
-                             A2(x1f, xr + 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
+        if (!use_internal) {
+          if (NS_y > 0.0) {
+            a2(m,k,j,i) = 0.5*(A2(x1f, xl - 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                              A2(x1f, xr - 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
+          } else {
+            a2(m,k,j,i) = 0.5*(A2(x1f, xl + 0.5 * sep + CM_y_corr, x3f, I_0, r_0) +
+                              A2(x1f, xr + 0.5 * sep + CM_y_corr, x3f, I_0, r_0));
+          }
         }
       } else if (SNS) {
         a2(m,k,j,i) = 0.5*(A2(x1f, xl, x3f, I_0, r_0) +
@@ -674,6 +789,87 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   if (global_variable::my_rank == 0) {
     std::cout << "Cell-centered fields calculated." << std::endl;
+  }
+
+  // The pressure-poloidal configuration is built with unit amplitude. Rescale it
+  // so that the maximum comoving field strength b = sqrt(b^mu b_mu) equals b_max.
+  if (use_internal) {
+    auto &adm = pmbp->padm->adm;
+    const int nji = indcs.nx2 * indcs.nx1;
+    const int nkji = indcs.nx3 * indcs.nx2 * indcs.nx1;
+    const int nmkji = nmb * nkji;
+
+    Real bsq_max = 0.0;
+    Kokkos::parallel_reduce("pgen_bsqmax",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+    KOKKOS_LAMBDA(const int idx, Real &max_bsq) {
+      int m = idx / nkji;
+      int k = (idx - m * nkji) / nji;
+      int j = (idx - m * nkji - k * nji) / indcs.nx1;
+      int i = (idx - m * nkji - k * nji - j * indcs.nx1) + is;
+      k += ks;
+      j += js;
+
+      // Inverse volume form (bcc0 holds the densitized field sqrt(gamma) B^i).
+      Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
+                                  adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
+                                  adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i));
+      Real ivol = 1.0 / Kokkos::sqrt(detg);
+
+      // Lower B^i and the Wvel velocity W v^i, and accumulate W^2 v^2 = W^2 - 1.
+      Real B_d[3] = {0.0, 0.0, 0.0};
+      Real v_d[3] = {0.0, 0.0, 0.0};
+      Real W2v2   = 0.0;
+      for (int a = 0; a < 3; ++a) {
+        for (int b = 0; b < 3; ++b) {
+          B_d[a] += bcc0(m,IBX+b,k,j,i) * adm.g_dd(m,a,b,k,j,i) * ivol;
+          v_d[a] += w0_(m,IVX+b,k,j,i) * adm.g_dd(m,a,b,k,j,i);
+          W2v2   += w0_(m,IVX+a,k,j,i) * w0_(m,IVX+b,k,j,i) * adm.g_dd(m,a,b,k,j,i);
+        }
+      }
+      Real iW = 1.0 / Kokkos::sqrt(1.0 + W2v2);   // 1/W
+
+      // Eulerian B^2 and W(B.v) -> comoving b^2 = b^mu b_mu = B^2/W^2 + (B.v)^2.
+      Real Bv = 0.0, Bsq = 0.0;
+      for (int a = 0; a < 3; ++a) {
+        Bv  += bcc0(m,IBX+a,k,j,i) * v_d[a] * ivol;
+        Bsq += bcc0(m,IBX+a,k,j,i) * B_d[a] * ivol;
+      }
+      Real bsq = (Bsq + Bv*Bv) * (iW*iW);
+
+      // Maximum.
+      max_bsq = Kokkos::fmax(max_bsq, bsq);
+    }, Kokkos::Max<Real>(bsq_max));
+
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, &bsq_max, 1, MPI_ATHENA_REAL, MPI_MAX, MPI_COMM_WORLD);
+#endif
+
+    // Norm factor for scaling.
+    Real bnorm = (bsq_max > 0.0) ? (b_max / Kokkos::sqrt(bsq_max)) : 0.0;
+    if (global_variable::my_rank == 0) {
+      std::cout << "Rescaling poloidal seed by " << bnorm
+                << " to reach maximum field strength = " << b_max << std::endl;
+    }
+
+    // Normalize face-centered variables.
+    par_for("pgen_normb0", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      b0.x1f(m,k,j,i) *= bnorm;
+      b0.x2f(m,k,j,i) *= bnorm;
+      b0.x3f(m,k,j,i) *= bnorm;
+      if (i==ie) { b0.x1f(m,k,j,i+1) *= bnorm; }
+      if (j==je) { b0.x2f(m,k,j+1,i) *= bnorm; }
+      if (k==ke) { b0.x3f(m,k+1,j,i) *= bnorm; }
+    });
+
+    // Re-compute cell-centered fields.
+    par_for("pgen_bcc", DevExeSpace(), 0, nmb - 1, ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      bcc0(m,IBX,k,j,i) = 0.5 * (b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1));
+      bcc0(m,IBY,k,j,i) = 0.5 * (b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i));
+      bcc0(m,IBZ,k,j,i) = 0.5 * (b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i));
+    });
   }
 
   return;
