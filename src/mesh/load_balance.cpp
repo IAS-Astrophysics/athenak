@@ -137,12 +137,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro +
-                   pmy_mesh->pmb_pack->phydro->nscalars);
+    ncc_tosend += pmy_mesh->pmb_pack->phydro->nvars;
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd +
-                   pmy_mesh->pmb_pack->pmhd->nscalars);
+    ncc_tosend += pmy_mesh->pmb_pack->pmhd->nvars;
     nfc_tosend += 1;
   }
   if (pmy_mesh->pmb_pack->prad != nullptr) {
@@ -389,12 +387,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // count number of cell- and face-centered variables communicated depending on physics
   int ncc_tosend=0, nfc_tosend=0;
   if (pmy_mesh->pmb_pack->phydro != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->phydro->nhydro +
-                   pmy_mesh->pmb_pack->phydro->nscalars);
+    ncc_tosend += pmy_mesh->pmb_pack->phydro->nvars;
   }
   if (pmy_mesh->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pmhd->nmhd +
-                   pmy_mesh->pmb_pack->pmhd->nscalars);
+    ncc_tosend += pmy_mesh->pmb_pack->pmhd->nvars;
     nfc_tosend += 1;
   }
   if (pmy_mesh->pmb_pack->prad != nullptr) {
@@ -528,11 +524,11 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   int ncc_sent = 0, nfc_sent = 0;
   if (phydro != nullptr) {
     PackAMRBuffersCC(phydro->u0, phydro->coarse_u0, ncc_sent, nfc_sent);
-    ncc_sent += phydro->nhydro + phydro->nscalars;
+    ncc_sent += phydro->nvars;
   }
   if (pmhd != nullptr) {
     PackAMRBuffersCC(pmhd->u0, pmhd->coarse_u0, ncc_sent, nfc_sent);
-    ncc_sent += pmhd->nmhd + pmhd->nscalars;
+    ncc_sent += pmhd->nvars;
     PackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, ncc_sent, nfc_sent);
     nfc_sent += 1;
   }
@@ -818,11 +814,11 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
 
   if (phydro != nullptr) {
     UnpackAMRBuffersCC(phydro->u0, phydro->coarse_u0, ncc_recv, nfc_recv);
-    ncc_recv += phydro->nhydro + phydro->nscalars;
+    ncc_recv += phydro->nvars;
   }
   if (pmhd != nullptr) {
     UnpackAMRBuffersCC(pmhd->u0, pmhd->coarse_u0, ncc_recv, nfc_recv);
-    ncc_recv += pmhd->nmhd + pmhd->nscalars;
+    ncc_recv += pmhd->nvars;
     UnpackAMRBuffersFC(pmhd->b0, pmhd->coarse_b0, ncc_recv, nfc_recv);
     nfc_recv += 1;
   }

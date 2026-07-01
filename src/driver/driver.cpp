@@ -580,6 +580,10 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   // includes communications for shearing box boundaries
   hydro::Hydro *phydro = pm->pmb_pack->phydro;
   if (phydro != nullptr) {
+    if (phydro->use_dual_energy && phydro->dual_energy_needs_init) {
+      phydro->InitializeDualEnergyFieldFromTotal();
+      phydro->dual_energy_needs_init = false;
+    }
     // following functions return a TaskStatus, but it is ignored so cast to (void)
     (void) phydro->RestrictU(this, 0);
     (void) phydro->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
@@ -601,6 +605,10 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
   mhd::MHD *pmhd = pm->pmb_pack->pmhd;
   dyngr::DynGRMHD *pdyngr = pm->pmb_pack->pdyngr;
   if (pmhd != nullptr) {
+    if (pmhd->use_dual_energy && pmhd->dual_energy_needs_init) {
+      pmhd->InitializeDualEnergyFieldFromTotal();
+      pmhd->dual_energy_needs_init = false;
+    }
     (void) pmhd->RestrictU(this, 0);
     (void) pmhd->RestrictB(this, 0);
     (void) pmhd->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
