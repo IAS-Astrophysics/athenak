@@ -8,7 +8,7 @@
 //!
 //! Uses the split-kernel approach: per direction, (1) a per-cell reconstruction kernel
 //! materializes the L/R primitive states (w0) and L/R cell-centered magnetic field (bcc0)
-//! into the global pmhd->wl_split/wr_split and bl_split/br_split buffers, followed by
+//! into the global pmhd->wl3d/wr3d and bl3d/br3d buffers, followed by
 //! (2) a per-face Riemann solve that reads those buffers and writes both the interface
 //! conserved flux and the two area-averaged EMF components.  The fluid arrays live in the
 //! MHD module, so the same split buffers allocated there are reused here.
@@ -87,10 +87,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &adm_   = pmy_pack->padm->adm;
   bool use_fofc = pmy_pack->pmhd->use_fofc;
 
-  auto wl_ = pmy_pack->pmhd->wl_split;
-  auto wr_ = pmy_pack->pmhd->wr_split;
-  auto bl_ = pmy_pack->pmhd->bl_split;
-  auto br_ = pmy_pack->pmhd->br_split;
+  auto wl_ = pmy_pack->pmhd->wl3d;
+  auto wr_ = pmy_pack->pmhd->wr3d;
+  auto bl_ = pmy_pack->pmhd->bl3d;
+  auto br_ = pmy_pack->pmhd->br3d;
 
   // Short-circuit the flux calculation if everything is to be fixed.
   if (fixed_evolution) {

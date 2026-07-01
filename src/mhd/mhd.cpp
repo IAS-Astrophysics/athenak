@@ -45,10 +45,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     e3x2("e3x2",1,1,1,1),
     e2x3("e2x3",1,1,1,1),
     e1x3("e1x3",1,1,1,1),
-    wl_split("wl_split",1,1,1,1,1),
-    wr_split("wr_split",1,1,1,1,1),
-    bl_split("bl_split",1,1,1,1,1),
-    br_split("br_split",1,1,1,1,1),
+    wl3d("wl3d",1,1,1,1,1),
+    wr3d("wr3d",1,1,1,1,1),
+    bl3d("bl3d",1,1,1,1,1),
+    br3d("br3d",1,1,1,1,1),
     wsaved("wsaved",1,1,1,1,1),
     bccsaved("bccsaved",1,1,1,1,1),
     fofc("fofc",1,1,1,1),
@@ -354,10 +354,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       // Indexed by the GLOBAL cell/face index (m,n,k,j,i), so sized to the full
       // cell range (including ghost zones) in every dimension.  bl/br hold the
       // reconstructed cell-centered magnetic field (3 components).
-      Kokkos::realloc(wl_split, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      Kokkos::realloc(wr_split, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      Kokkos::realloc(bl_split, nmb, 3, ncells3, ncells2, ncells1);
-      Kokkos::realloc(br_split, nmb, 3, ncells3, ncells2, ncells1);
+      Kokkos::realloc(wl3d, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(wr3d, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(bl3d, nmb, 3, ncells3, ncells2, ncells1);
+      Kokkos::realloc(br3d, nmb, 3, ncells3, ncells2, ncells1);
 
       // allocate array of flags used with FOFC
       if (use_fofc) {

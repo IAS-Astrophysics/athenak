@@ -9,8 +9,8 @@
 //!
 //! Fluxes are computed with two 1D-RangePolicy kernels per direction: (1) a per-cell
 //! reconstruction kernel that materializes the L/R primitive states (w0) in the global
-//! wl_split/wr_split buffers and the L/R cell-centered magnetic field (bcc0) in the
-//! bl_split/br_split buffers, followed by (2) a per-face Riemann solve that reads those
+//! wl3d/wr3d buffers and the L/R cell-centered magnetic field (bcc0) in the
+//! bl3d/br3d buffers, followed by (2) a per-face Riemann solve that reads those
 //! buffers and writes both the interface flux and the two area-averaged EMF components.
 //! All reconstruction methods (DC/PLM/PPM4/PPMX/WENOZ) and Riemann solvers
 //! (Advect/LLF/HLLE/HLLD and the SR/GR variants) are supported; the reconstruction method
@@ -109,10 +109,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
   auto &coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
   auto &bcc0_ = bcc0;
-  auto wl_ = wl_split;
-  auto wr_ = wr_split;
-  auto bl_ = bl_split;
-  auto br_ = br_split;
+  auto wl_ = wl3d;
+  auto wr_ = wr3d;
+  auto bl_ = bl3d;
+  auto br_ = br3d;
 
   //------------------------------------------------------------------------------------
   // x1 direction

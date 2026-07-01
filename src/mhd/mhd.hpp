@@ -133,8 +133,8 @@ class MHD {
   DvceArray4D<Real> e2x3, e1x3;
   // global per-face L/R buffers for the split-kernel flux path: primitives (nmhd+nscalars
   // components) and reconstructed cell-centered B-field (3 components)
-  DvceArray5D<Real> wl_split, wr_split;
-  DvceArray5D<Real> bl_split, br_split;
+  DvceArray5D<Real> wl3d, wr3d;
+  DvceArray5D<Real> bl3d, br3d;
   Real dtnew;
 
   // following used for time derivatives in computation of jcon

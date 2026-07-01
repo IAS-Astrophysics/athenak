@@ -33,8 +33,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_w0("cprim",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
-    wl_split("wl_split",1,1,1,1,1),
-    wr_split("wr_split",1,1,1,1,1),
+    wl3d("wl3d",1,1,1,1,1),
+    wr3d("wr3d",1,1,1,1,1),
     fofc("fofc",1,1,1,1),
     utest("utest",1,1,1,1,1),
     pmy_pack(ppack) {
@@ -291,8 +291,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       // allocate global per-face L/R buffers for the split-kernel flux path.
       // Indexed by the GLOBAL cell/face index (m,n,k,j,i), so sized to the full
       // cell range (including ghost zones) in every dimension.
-      Kokkos::realloc(wl_split, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
-      Kokkos::realloc(wr_split, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(wl3d, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(wr3d, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     }
   }
 }

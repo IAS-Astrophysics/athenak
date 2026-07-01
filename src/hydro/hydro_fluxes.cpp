@@ -8,7 +8,7 @@
 //!
 //! Fluxes are computed with two 1D-RangePolicy kernels per direction: (1) a per-cell
 //! reconstruction kernel that materializes the L/R primitive states in the global
-//! wl_split/wr_split buffers, followed by (2) a per-face Riemann solve that reads those
+//! wl3d/wr3d buffers, followed by (2) a per-face Riemann solve that reads those
 //! buffers and writes the interface flux.  All reconstruction methods (DC/PLM/PPM4/
 //! PPMX/WENOZ) and non-relativistic Riemann solvers (Advect/LLF/HLLE/HLLC/Roe) are
 //! supported; the reconstruction method is chosen at runtime, the solver at compile time
@@ -104,8 +104,8 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   auto &size_ = pmy_pack->pmb->mb_size;
   auto &coord_ = pmy_pack->pcoord->coord_data;
   auto &w0_ = w0;
-  auto wl_ = wl_split;
-  auto wr_ = wr_split;
+  auto wl_ = wl3d;
+  auto wr_ = wr3d;
 
   //------------------------------------------------------------------------------------
   // x1 direction

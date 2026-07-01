@@ -109,8 +109,8 @@ class Hydro {
   //   wl(m, n, k-ks, j-js, i-is)
   // where for direction d the face-normal axis is face-indexed and the two
   // transverse axes are cell-indexed (origin-shifted by ks/js/is).
-  DvceArray5D<Real> wl_split;
-  DvceArray5D<Real> wr_split;
+  DvceArray5D<Real> wl3d;
+  DvceArray5D<Real> wr3d;
 
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
