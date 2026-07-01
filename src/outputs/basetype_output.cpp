@@ -184,6 +184,16 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
 
   for (const auto& variable : variables) {
+    // First consult the declarative per-module output tables (outputs/*_output.cpp). If
+    // the variable is found there it is fully expanded -- including passive scalars and
+    // dynamical-GR adjustments -- and we skip the legacy if-chain below. Variables not yet
+    // migrated into the tables (rad_*, derived, ADM/Z4c, particles, ...) fall through.
+    VarSpec spec;
+    if (FindVarSpec(variable, pm->pmb_pack, spec)) {
+      BuildOutvars(spec, pm);
+      continue;
+    }
+
     // hydro (lab-frame) density
     if (variable.compare("hydro_u_d") == 0 ||
         variable.compare("hydro_u") == 0 ||
@@ -815,7 +825,22 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
     Kokkos::realloc(outarray, nout_vars, nout_mbs, nout3, nout2, nout1);
   }
 
-  // Calculate derived variables, if required
+  // Compute derived variables registered as function-pointer kernels via the module
+  // tables (outputs/*_output.cpp). Each kernel fills its own slot range in derived_var.
+  if (!derived_kernels.empty()) {
+    int nmb_alloc = std::max(pm->pmb_pack->nmb_thispack,
+                             pm->pmb_pack->pmesh->nmb_maxperrank);
+    auto &dindcs = pm->mb_indcs;
+    int dn1 = dindcs.nx1 + 2*dindcs.ng;
+    int dn2 = (dindcs.nx2 > 1)? (dindcs.nx2 + 2*dindcs.ng) : 1;
+    int dn3 = (dindcs.nx3 > 1)? (dindcs.nx3 + 2*dindcs.ng) : 1;
+    Kokkos::realloc(derived_var, nmb_alloc, out_params.n_derived, dn3, dn2, dn1);
+    for (const auto &k : derived_kernels) {
+      k.compute(derived_var, k.base_slot, pm);
+    }
+  }
+
+  // Calculate derived variables, if required (legacy name-dispatch path)
   if (out_params.contains_derived) {
     ComputeDerivedVariable(out_params.variable, pm);
   }

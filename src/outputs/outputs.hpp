@@ -105,6 +105,7 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 // forward declarations
 class Mesh;
 class ParameterInput;
+class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputParameters
@@ -158,6 +159,67 @@ struct OutputVariableInfo {
   OutputVariableInfo(std::string lab, int indx, DvceArray5D<Real> *ptr) :
     label(lab), data_index(indx), data_ptr(ptr) {}
 };
+
+//----------------------------------------------------------------------------------------
+// Declarative output-variable tables.
+//
+// Each <output> "variable=" choice maps to a VarSpec, which bundles one or more
+// GroupSpecs. A GroupSpec points directly at a physics device array (e.g. &pmhd->u0) and
+// lists the components (FieldSpec) to emit from it. The per-module catalogs live in
+// outputs/<module>_output.cpp; the lookup/expansion machinery lives in
+// outputs/output_vars.cpp. Dynamic or conditional pieces (passive scalars, the
+// dynamical-GR eint->press rename and temperature field) are applied by post-steps and
+// are intentionally NOT encoded in the tables.
+
+//! \brief include condition for a component; only the energy field needs the ideal-EOS gate
+enum class FieldRule {Always, IfIdealEos};
+
+//! \brief kernel that fills derived_var components [base_slot, base_slot+nfields) on all MBs
+using DerivedFn = void (*)(DvceArray5D<Real> &derived_var, int base_slot, Mesh *pm);
+
+//! \struct FieldSpec
+//! \brief one output component: its file-header label and its index in the device array
+struct FieldSpec {
+  const char *label;                   // name written to the output file, e.g. "dens"
+  int index;                           // component index; use VariableIndex/BFieldIndex enums
+                                       //   (for a derived group this is a LOCAL slot 0..n-1)
+  FieldRule rule = FieldRule::Always;  // include condition (default: always emit)
+};
+
+//! \struct GroupSpec
+//! \brief a set of components drawn from a single device array (or computed, if derived)
+struct GroupSpec {
+  DvceArray5D<Real> *array;            // live device array; nullptr for a derived group
+  std::vector<FieldSpec> fields;       // components to emit (may be empty for name-only vars)
+  DerivedFn compute = nullptr;         // set ONLY for a derived group (then array==nullptr)
+  void (*on_select)(Mesh *) = nullptr; // optional one-time setup, e.g. jcon's SetSaveWBcc()
+};
+
+//! \struct VarSpec
+//! \brief one <output> "variable=" choice and the groups it expands to
+struct VarSpec {
+  const char *name;                    // input-file choice, e.g. "mhd_u_bcc"
+  std::vector<GroupSpec> groups;       // empty groups => fields come only from post-steps
+};
+
+//! \struct ModuleOutputTable
+//! \brief registry row: a physics module, an activeness test, and its list builder
+struct ModuleOutputTable {
+  PhysicsModule module;                              // for diagnostics
+  bool (*is_active)(MeshBlockPack *);                // is this module constructed?
+  std::vector<VarSpec> (*get_vars)(MeshBlockPack *); // build list w/ live pointers (if active)
+};
+
+// Per-module list builders (defined in outputs/<module>_output.cpp). Each takes the
+// already-constructed MeshBlockPack so it can store live device-array pointers, and is
+// only called when the corresponding module is active.
+std::vector<VarSpec> HydroOutputVars(MeshBlockPack *pmbp);
+std::vector<VarSpec> MhdOutputVars(MeshBlockPack *pmbp);
+
+// Registry + lookup (defined in outputs/output_vars.cpp).
+const std::vector<ModuleOutputTable> &AllModuleTables();
+//! \brief find `name` among ACTIVE modules; returns true and fills `out` if found
+bool FindVarSpec(const std::string &name, MeshBlockPack *pmbp, VarSpec &out);
 
 //----------------------------------------------------------------------------------------
 //! \struct OutputMeshBlockInfo
@@ -222,6 +284,10 @@ class BaseTypeOutput {
   // function which computes derived output variables like vorticity and current density
   void ComputeDerivedVariable(std::string name, Mesh *pm);
 
+  // expand a VarSpec (from the per-module tables) into outvars, applying passive-scalar
+  // and dynamical-GR post-steps and registering any derived-quantity kernels
+  void BuildOutvars(const VarSpec &spec, Mesh *pm);
+
   // virtual functions may be over-ridden in derived classes
   virtual void LoadOutputData(Mesh *pm);
   virtual void WriteOutputFile(Mesh *pm, ParameterInput *pin) = 0;
@@ -256,6 +322,14 @@ class BaseTypeOutput {
 
   // Following vector will be of length (# output variables)
   std::vector<OutputVariableInfo> outvars;
+
+  // derived-quantity kernels registered from the module tables (function-pointer based).
+  // Each records the kernel and its base slot in derived_var; run in LoadOutputData.
+  struct DerivedKernel {
+    DerivedFn compute;
+    int base_slot;
+  };
+  std::vector<DerivedKernel> derived_kernels;
 };
 
 
