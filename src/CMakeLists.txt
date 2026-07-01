@@ -27,6 +27,9 @@ add_executable(
         bvals/physics/radiation_bcs.cpp
         bvals/physics/z4c_bcs.cpp
 
+        chemistry/chemistry_tasks.cpp
+        chemistry/chemistry.cpp
+
         coordinates/adm.cpp
         coordinates/coordinates.cpp
         coordinates/excision.cpp
@@ -128,6 +131,8 @@ add_executable(
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
+        pgen/chemistry/H2_advection.cpp
+        pgen/chemistry/H2_uniform.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
