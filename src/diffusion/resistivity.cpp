@@ -16,6 +16,7 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
 #include "resistivity.hpp"
 #include "current_density.hpp"
 
@@ -24,8 +25,9 @@
 
 Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
-  // Read parameters for Ohmic resistivity (if any)
+  // Read non-ideal MHD coefficients (if any). A non-zero value enables the term.
   eta_ohm = pin->GetOrAddReal("mhd","eta_ohm",0.0);
+  eta_ad  = pin->GetOrAddReal("mhd","eta_ad",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -36,27 +38,34 @@ Resistivity::~Resistivity() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void AddResistiveEMFs()
-//! \brief Wrapper function that adds electric fields for different types of resistivity
-//! Currently only Ohmic resistivity with constant coefficient is implemented.
+//! \brief Wrapper function that adds non-ideal electric fields to the corner-centered
+//! EMF. Adds the Ohmic contribution if eta_ohm != 0 and the ambipolar contribution if
+//! eta_ad != 0. Both use constant coefficients.
 
 void Resistivity::AddResistiveEMFs(const DvceFaceFld4D<Real> &b0,
     DvceEdgeFld4D<Real> &efld) {
   if (eta_ohm != 0.0) {
     AddEMFConstantResist(b0, efld);
   }
+  if (eta_ad != 0.0) {
+    AddEMFConstantAmbipolar(b0, efld);
+  }
   return;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void AddResistiveFluxes()
-//! \brief Wrapper function that adds energy (Poynting) fluxes for different types of
-//! resistivity.
-//! Currently only Ohmic resistivity with constant coefficient is implemented.
+//! \brief Wrapper function that adds non-ideal energy (Poynting) fluxes to the energy
+//! flux. Adds the Ohmic contribution if eta_ohm != 0 and the ambipolar contribution if
+//! eta_ad != 0. Both use constant coefficients.
 
 void Resistivity::AddResistiveFluxes(const DvceFaceFld4D<Real> &b0,
     DvceFaceFld5D<Real> &flx) {
   if (eta_ohm != 0.0) {
     AddFluxConstantResist(b0, flx);
+  }
+  if (eta_ad != 0.0) {
+    AddFluxConstantAmbipolar(b0, flx);
   }
   return;
 }
@@ -272,10 +281,17 @@ void Resistivity::AddFluxConstantResist(const DvceFaceFld4D<Real> &b,
 
 //----------------------------------------------------------------------------------------
 //! \fn void Resistivity::NewTimeStep()
-//! \brief Compute new time step for resistive MHD
+//! \brief Compute new time step for non-ideal MHD (Ohmic + ambipolar).
+//! Ohmic:     dt <= fac * dx^2 / eta_ohm                  (constant diffusivity)
+//! Ambipolar: dt <= fac * dx^2 / (eta_ohm + eta_ad * B^2) (diffusivity varies in space)
+//! When ambipolar diffusion is active the limit is evaluated PER CELL (each cell pairs
+//! its own dx with its own total diffusivity eta_ohm + eta_ad*B^2, and the global min is
+//! taken), matching Athena++ FieldDiffusion::NewDiffusionDt and AthenaK's own spatially-
+//! varying module Conduction::NewTimeStep. This avoids pairing the global-min dx with the
+//! global-max B^2, which over-restricts dt under mesh refinement.
 
 void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
-  // resistive timestep on MeshBlock(s) in this pack
+  // non-ideal MHD timestep on MeshBlock(s) in this pack
   dtnew = std::numeric_limits<float>::max();
   auto size = pmy_pack->pmb->mb_size;
   Real fac;
@@ -286,14 +302,63 @@ void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
   } else {
     fac = 0.5;
   }
-  for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_ohm);
-    if (pmy_pack->pmesh->multi_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/eta_ohm);
+  auto &multi_d = pmy_pack->pmesh->multi_d;
+  auto &three_d = pmy_pack->pmesh->three_d;
+
+  // Ohmic diffusivity is a CONSTANT coefficient: when no (spatially-varying) ambipolar
+  // term is active, the limit is simply fac*dx^2/eta_ohm and a cheap host loop suffices
+  // (matching Viscosity::NewTimeStep). Keeping this branch separate leaves the eta_ad==0
+  // (AD-off) behaviour byte-identical to before.
+  if (eta_ad == 0.0) {
+    if (eta_ohm > 0.0) {
+      for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
+        dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_ohm);
+        if (multi_d) {
+          dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/eta_ohm);
+        }
+        if (three_d) {
+          dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/eta_ohm);
+        }
+      }
     }
-    if (pmy_pack->pmesh->three_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/eta_ohm);
-    }
+    return;
   }
+
+  // Ambipolar diffusivity eta_ad*B^2 varies in space, so evaluate the limit per cell.
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  auto &bcc0 = pmy_pack->pmhd->bcc0;
+  Real eta_o = eta_ohm;
+  Real eta_a = eta_ad;
+
+  // find smallest dx^2/(eta_ohm + eta_ad*B^2) over all cells, then scale by fac
+  Kokkos::parallel_reduce("resist_newdt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &min_dt) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real eta = eta_o + eta_a*(SQR(bcc0(m,IBX,k,j,i)) + SQR(bcc0(m,IBY,k,j,i))
+                            + SQR(bcc0(m,IBZ,k,j,i)));
+    if (eta > 0.0) {
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/eta);
+      if (multi_d) {
+        min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/eta);
+      }
+      if (three_d) {
+        min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/eta);
+      }
+    }
+  }, Kokkos::Min<Real>(dtnew));
+  dtnew *= fac;
+
   return;
 }

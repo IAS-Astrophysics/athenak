@@ -104,8 +104,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     pvisc = nullptr;
   }
 
-  // Resistivity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","eta_ohm")) {
+  // Resistivity / non-ideal MHD (only constructed if needed). The Resistivity class now
+  // also implements ambipolar diffusion, so it is constructed if either the Ohmic
+  // coefficient (eta_ohm) or the ambipolar coefficient (eta_ad) is supplied in <mhd>.
+  if (pin->DoesParameterExist("mhd","eta_ohm") ||
+      pin->DoesParameterExist("mhd","eta_ad")) {
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;
