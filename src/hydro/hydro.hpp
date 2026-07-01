@@ -99,6 +99,19 @@ class Hydro {
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
   Real dtnew;
 
+  // Global per-face L/R primitive buffers used by the split-kernel flux path
+  // (PLM + LLF|HLLC). Shaped (nmb, nvars, nf3, nf2, nf1) where
+  //   nf1 = nx1+1,
+  //   nf2 = (nx2>1) ? nx2+1 : 1,
+  //   nf3 = (nx3>1) ? nx3+1 : 1.
+  // The buffer is sized to the max active face range across all three directions,
+  // and reused sequentially per direction.  Indexing convention is
+  //   wl(m, n, k-ks, j-js, i-is)
+  // where for direction d the face-normal axis is face-indexed and the two
+  // transverse axes are cell-indexed (origin-shifted by ks/js/is).
+  DvceArray5D<Real> wl3d;
+  DvceArray5D<Real> wr3d;
+
   // following used for FOFC
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   bool use_fofc = false;   // flag to enable FOFC
