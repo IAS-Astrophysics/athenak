@@ -105,36 +105,19 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ReconLaunch<R,ivx>()
-//! \brief Launch the per-cell, per-variable reconstruction kernel with the method R
-//! fixed at COMPILE time, so the recon dispatch happens here (host side) rather than
-//! per-cell on device.  This keeps only the selected method's code in each kernel
-//! (instead of inlining all methods via a runtime switch), avoiding the
-//! register/footprint bloat that would defeat the purpose of templating ReconCellT.
-//! Shared by hydro, MHD, and dyn-GRMHD.
-//!
-//! Defined as a function template in this header so it has external (vague) linkage in
-//! every translation unit that uses it: nvcc forbids extended __device__ lambdas inside
-//! functions with internal linkage (e.g. an anonymous namespace), and a single header
-//! definition keeps it ODR-safe across the solvers.  The variable index `n` is the inner
-//! parallel index, run over [0, nvars-1]; `apply_floors` toggles the PPMX/WENOZ floors
-//! (true for fluid primitives, false for the cell-centered B field).
-template <ReconstructionMethod R, int ivx>
-inline void ReconLaunch(const char *name, int nmb1,
-    int kl, int ku, int jl, int ju, int il, int iu,
-    const EOS_Data &eos, bool apply_floors, int nvars,
-    const DvceArray5D<Real> &q,
-    const DvceArray5D<Real> &ql, const DvceArray5D<Real> &qr) {
-  par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
-    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-      ReconCellT<R, ivx>(eos, apply_floors, m, n, k, j, i, q, ql, qr);
-    });
-}
-
-//----------------------------------------------------------------------------------------
 //! \fn ReconDispatch<ivx>()
 //! \brief Select the (runtime, grid-uniform) reconstruction method on the host and launch
-//! the compile-time reconstruction kernel for it.  Shared by hydro, MHD, and dyn-GRMHD.
+//! the per-cell, per-variable reconstruction kernel with the chosen method fixed at
+//! COMPILE time, so the dispatch happens here (host side) rather than per-cell on device.
+//! Each case keeps only the selected method's code in its kernel (instead of inlining all
+//! methods via a runtime switch), avoiding the register/footprint bloat that would defeat
+//! the purpose of templating ReconCellT.  Shared by hydro, MHD, and dyn-GRMHD.
+//!
+//! The par_for kernels are written directly in this function template, which has external
+//! (vague) linkage: nvcc forbids extended __device__ lambdas inside functions with
+//! internal linkage (e.g. an anonymous namespace).  The variable index `n` is the inner
+//! parallel index, run over [0, nvars-1]; `apply_floors` toggles the PPMX/WENOZ floors
+//! (true for fluid primitives, false for the cell-centered B field).
 template <int ivx>
 inline void ReconDispatch(ReconstructionMethod recon, const char *name, int nmb1,
     int kl, int ku, int jl, int ju, int il, int iu,
@@ -142,24 +125,42 @@ inline void ReconDispatch(ReconstructionMethod recon, const char *name, int nmb1
     const DvceArray5D<Real> &q,
     const DvceArray5D<Real> &ql, const DvceArray5D<Real> &qr) {
   switch (recon) {
-    case ReconstructionMethod::dc:
-      ReconLaunch<ReconstructionMethod::dc,    ivx>(name, nmb1, kl, ku, jl, ju,
-          il, iu, eos, apply_floors, nvars, q, ql, qr); break;
     case ReconstructionMethod::plm:
-      ReconLaunch<ReconstructionMethod::plm,   ivx>(name, nmb1, kl, ku, jl, ju,
-          il, iu, eos, apply_floors, nvars, q, ql, qr); break;
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::plm, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
     case ReconstructionMethod::ppm4:
-      ReconLaunch<ReconstructionMethod::ppm4,  ivx>(name, nmb1, kl, ku, jl, ju,
-          il, iu, eos, apply_floors, nvars, q, ql, qr); break;
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::ppm4, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
     case ReconstructionMethod::ppmx:
-      ReconLaunch<ReconstructionMethod::ppmx,  ivx>(name, nmb1, kl, ku, jl, ju,
-          il, iu, eos, apply_floors, nvars, q, ql, qr); break;
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::ppmx, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
     case ReconstructionMethod::wenoz:
-      ReconLaunch<ReconstructionMethod::wenoz, ivx>(name, nmb1, kl, ku, jl, ju,
-          il, iu, eos, apply_floors, nvars, q, ql, qr); break;
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::wenoz, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
+    case ReconstructionMethod::dc:
     default:
-      ReconLaunch<ReconstructionMethod::dc,    ivx>(name, nmb1, kl, ku, jl, ju,
-          il, iu, eos, apply_floors, nvars, q, ql, qr); break;
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::dc, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
   }
 }
 
