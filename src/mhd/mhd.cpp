@@ -28,7 +28,6 @@ namespace mhd {
 // constructor, initializes data structures and parameters
 
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
@@ -42,21 +41,22 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     dual_vf("dual_vf",1,1,1,1,1),
     dual_etot_max("dual_etot_max",1,1,1,1),
     efld("efld",1,1,1,1),
-    wsaved("wsaved",1,1,1,1,1),
-    bccsaved("bccsaved",1,1,1,1,1),
     e3x1("e3x1",1,1,1,1),
     e2x1("e2x1",1,1,1,1),
     e1x2("e1x2",1,1,1,1),
     e3x2("e3x2",1,1,1,1),
     e2x3("e2x3",1,1,1,1),
     e1x3("e1x3",1,1,1,1),
-    e1_cc("e1_cc",1,1,1,1),
-    e2_cc("e2_cc",1,1,1,1),
-    e3_cc("e3_cc",1,1,1,1),
+    wsaved("wsaved",1,1,1,1,1),
+    bccsaved("bccsaved",1,1,1,1,1),
+    fofc("fofc",1,1,1,1),
+    fofc_scal("fofc_scal",1,1,1,1,1),
     utest("utest",1,1,1,1,1),
     bcctest("bcctest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1),
-    fofc_scal("fofc_scal",1,1,1,1,1) {
+    pmy_pack(ppack),
+    e1_cc("e1_cc",1,1,1,1),
+    e2_cc("e2_cc",1,1,1,1),
+    e3_cc("e3_cc",1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -121,23 +121,34 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nvars = nmhd + nscalars + naux;
 
   // Viscosity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","viscosity")) {
+  if (pin->DoesParameterExist("mhd","nu_iso") ||
+      pin->DoesParameterExist("mhd","nu_aniso")) {
     pvisc = new Viscosity("mhd", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
-  // Resistivity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
+  // Resistivity / non-ideal MHD (only constructed if needed). The Resistivity class now
+  // also implements ambipolar diffusion, so it is constructed if either the Ohmic
+  // coefficient (eta_ohm) or the ambipolar coefficient (eta_ad) is supplied in <mhd>.
+  if (pin->DoesParameterExist("mhd","eta_ohm") ||
+      pin->DoesParameterExist("mhd","eta_ad")) {
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","conductivity") ||
-      pin->DoesParameterExist("mhd","tdep_conductivity")) {
-    pcond = new Conduction("mhd", ppack, pin);
+  if (pin->DoesParameterExist("mhd","alpha_iso") ||
+      pin->DoesParameterExist("mhd","alpha_aniso") ||
+      pin->DoesParameterExist("mhd","alpha_spitzer")) {
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("mhd", ppack, pin);
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }

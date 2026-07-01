@@ -150,7 +150,8 @@ def mpi_run(
     Args:
         inputfile (str): The path to the test case input file.
         flags (list): Additional flags to pass to the AthenaK binary.
-        threads (int): Number of threads to use for MPI execution (default: num of cores).
+        threads (int): Number of threads to use for MPI execution (default: smallest
+            of (16) or (num of cores)).
         **kwargs: Additional keyword arguments for `run_command`.
 
     Returns:
@@ -259,6 +260,8 @@ def test_error_convergence(
     mpi=False,
 ):
     RUN = mpi_run if mpi else run
+    l1_rms_l = 0.0
+    l1_rms_r = 0.0
     for wv in _wave:
         try:
             for res in _res:
