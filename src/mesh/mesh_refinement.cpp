@@ -52,6 +52,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   refinement_interval(5),
   prolong_prims(false),
   refine_flag("rflag",pm->nmb_total),
+  fc_amr_repair("fc_amr_repair",pm->nmb_total),
   ncyc_since_ref("cyc_since_ref",pm->nmb_total),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
