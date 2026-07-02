@@ -851,10 +851,10 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
     UnpackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_recv, nfc_recv);
     ncc_recv += pz4c->nz4c;
   }
-  // Release GPU memory for recv buffers after unpacking is complete, so that on the
-  // next AMR cycle the realloc only needs the new size (not old+new simultaneously),
-  // preventing OOM errors when GPU memory is tight.
-  Kokkos::realloc(recv_data, 1);
+  // recv_data is a fixed-length buffer (allocated once in the MeshRefinement ctor and
+  // reused every AMR cycle), so it must NOT be shrunk here -- doing so leaves it at size
+  // 1 for the next cross-rank migration, which then receives out of bounds. recvbuf is
+  // resized to nmb_recv each cycle in InitRecvAMR, so releasing it here is fine.
   Kokkos::realloc(recvbuf, 1);
 #endif
   return;
@@ -1041,9 +1041,10 @@ void MeshRefinement::ClearSendAMR() {
     std::exit(EXIT_FAILURE);
   }
   delete [] send_req;
-  // Release GPU memory for send buffers so that on the next AMR cycle the realloc only
-  // needs to allocate the new size (not old+new simultaneously), preventing OOM errors.
-  Kokkos::realloc(send_data, 1);
+  // send_data is a fixed-length buffer (allocated once in the MeshRefinement ctor and
+  // reused every AMR cycle), so it must NOT be shrunk here -- doing so leaves it at size
+  // 1 for the next cross-rank migration, which then packs/sends out of bounds. sendbuf is
+  // resized to nmb_send each cycle in PackAndSendAMR, so releasing it here is fine.
   Kokkos::realloc(sendbuf, 1);
 #endif
   return;
