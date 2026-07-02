@@ -453,7 +453,9 @@ class AthenaPointTensor<T, sym, ndim, 3> {
   }
   KOKKOS_INLINE_FUNCTION
   Real & operator()(int const a, int const b, int const c) {
-    if constexpr (sym == TensorSymm::SYM2) {
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_[c + ndim*(b + ndim*a)];
+    } else if constexpr (sym == TensorSymm::SYM2) {
       constexpr int ndof2_ = TensorDOF<TensorSymm::SYM2, ndim, 2>;
       if (c < b) {
         return data_[c*(2*ndim - c + 1)/2 + b - c + ndof2_*a];
@@ -471,7 +473,6 @@ class AthenaPointTensor<T, sym, ndim, 3> {
                     "Undefined symmetry for rank-3 AthenaPointTensor.");
       return data_[0];
     }
-    return data_[c + ndim*(b + ndim*a)];
   }
   KOKKOS_INLINE_FUNCTION
   void ZeroClear() {
