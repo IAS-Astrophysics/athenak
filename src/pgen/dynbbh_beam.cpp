@@ -249,8 +249,34 @@ struct bbh_refine {
   std::vector<int> reflevel;
 };
 
+// Parameters controlling the moving-tetrad "flash" radiation beam source. Unlike the
+// generic (continuous, coordinate-static) <rad_srcterms> BeamSource, this source (a) is a
+// short pulse whose amplitude decays exponentially in time and then turns off completely,
+// and (b) is anchored to one orbiting black hole's equatorial photon ring: the launch
+// point sits at the Cartesian Kerr-Schild ring radius sqrt(r_ph^2+a^2), the beam axis is
+// the ring-tangent null direction, and the angular weights are re-projected against the
+// current (moving) metric/tetrad every substage.  The construction mirrors the validated
+// single-hole rad_kerr_orbit_beam test (src/pgen/tests/rad_beam.cpp).
+// See DynBBHFlashBeamSource().
+struct flash_beam_pgen {
+  bool enabled = false;
+  Real amp = 0.0;          // peak amplitude A0
+  Real tau = 1.0;          // exponential decay timescale of the flash
+  Real t0 = 0.0;           // time the flash turns on
+  Real toff = 0.0;         // time the flash turns off (no injection afterwards)
+  Real width = 0.2;        // spatial Gaussian sigma of the source spot
+  int  src_bh = 1;         // which BH the beam is launched from (1 or 2)
+  Real ring_frac = 1.0;    // launch radius as a fraction of the photon-ring radius
+  Real ring_radius = -1.0; // explicit ring radius override (<=0 -> analytic CKS radius)
+  Real ring_angle = 0.0;   // azimuth (rad) of the launch point on the ring (t=t0 frame)
+  Real sense = -1.0;       // tangent sense: +1 prograde (+phi), -1 retrograde (-phi)
+  Real aim_offset = 0.0;   // extra in-plane rotation (rad) of the tangent beam axis
+  bool corotate = true;    // rigidly co-rotate launch point + aim with the binary
+};
+
 struct bbh_pgen bbh;
 struct bbh_refine bbh_ref;
+struct flash_beam_pgen flash;
 struct bbh_traj_table {
   std::vector<Real> t;
   std::vector<Real> x1, y1, z1, x2, y2, z2;
@@ -431,6 +457,12 @@ void Refine(MeshBlockPack* pmbp);
 void AddValenciaGRCooling(Mesh *pm, const Real bdt);
 void AddThinDiskCooling(Mesh *pm, const Real bdt);
 void AddDynBBHUserSources(Mesh *pm, const Real bdt);
+void DynBBHFlashBeamSource(Mesh *pm, const Real bdt);
+void FlashLaunchGeometry(const Real t, Real pos[3], Real dir[3]);
+Real FlashPhotonRingRadiusCKS(const Real mass, const Real chi, const Real sense);
+void FlashMetricAt(const Real t, const Real x, const Real y, const Real z,
+                   Real g4[NDIM][NDIM]);
+bool FlashCovariantNull(const Real g4[NDIM][NDIM], const Real dir[3], Real k_cov[NDIM]);
 void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
 
 //----------------------------------------------------------------------------------------
@@ -677,6 +709,40 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
   }
   pmbp->pdynrad->PrepareADMGeometry();
 
+  // -----------------------------------------------------------------------------------
+  // Moving-tetrad "flash" beam source (enrolled as the user radiation source term).
+  // Parameters live in a <flash_beam> block. This is the correct source for the orbiting
+  // binary: the generic <rad_srcterms> BeamSource injects continuously at a fixed
+  // coordinate position/direction, so as the binary orbits the launch point drifts off
+  // the (moving) photon ring and the tetrad projection becomes stale.  Here we instead
+  // anchor the launch point/aim to the chosen BH, re-derive them from the current
+  // trajectory every substage, and modulate the amplitude as an exponential flash.
+  flash.enabled = pin->GetOrAddBoolean("problem", "flash_enabled", false);
+  if (flash.enabled) {
+    flash.amp        = pin->GetOrAddReal("problem", "flash_amp", 1.0);
+    flash.tau        = pin->GetOrAddReal("problem", "flash_tau", 0.2);
+    flash.t0         = pin->GetOrAddReal("problem", "flash_t0", 0.0);
+    flash.toff       = pin->GetOrAddReal("problem", "flash_toff", flash.t0 + 6.0*flash.tau);
+    flash.width      = pin->GetOrAddReal("problem", "flash_width", 0.2);
+    flash.src_bh     = pin->GetOrAddInteger("problem", "flash_src_bh", 1);
+    flash.ring_frac  = pin->GetOrAddReal("problem", "flash_ring_frac", 1.0);
+    flash.ring_radius= pin->GetOrAddReal("problem", "flash_ring_radius", -1.0);
+    flash.ring_angle = pin->GetOrAddReal("problem", "flash_ring_angle_deg", 0.0)
+                       *(M_PI/180.0);
+    flash.sense      = (pin->GetOrAddString("problem", "flash_ring_sense",
+                                            "retrograde") == "prograde") ? +1.0 : -1.0;
+    flash.aim_offset = pin->GetOrAddReal("problem", "flash_aim_offset_deg", 0.0)
+                       *(M_PI/180.0);
+    flash.corotate   = pin->GetOrAddBoolean("problem", "flash_corotate", true);
+    if (!(flash.tau > 0.0)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "flash_beam/tau must be positive" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    user_srcs = true;
+    user_srcs_func = DynBBHFlashBeamSource;
+  }
+
   if (restart) return;
 
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -721,46 +787,56 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
       std::exit(EXIT_FAILURE);
     }
 
-    std::string beam_block = pin->DoesBlockExist("rad_srcterms") ? "rad_srcterms" : "problem";
-    Real p1 = pin->GetOrAddReal(beam_block, "pos_1", 0.0);
-    Real p2 = pin->GetOrAddReal(beam_block, "pos_2", 0.0);
-    Real p3 = pin->GetOrAddReal(beam_block, "pos_3", 0.0);
-    Real d1 = pin->GetOrAddReal(beam_block, "dir_1", 1.0);
-    Real d2 = pin->GetOrAddReal(beam_block, "dir_2", 0.0);
-    Real d3 = pin->GetOrAddReal(beam_block, "dir_3", 0.0);
-    Real spread = pin->GetOrAddReal(beam_block, "spread", 10.0) * (M_PI/180.0);
-    Real dnorm = std::sqrt(SQR(d1) + SQR(d2) + SQR(d3));
-    if (!(dnorm > 0.0)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "beam direction must be nonzero" << std::endl;
-      std::exit(EXIT_FAILURE);
+    // Launch point + central aim direction of the edge tracers.  When the flash beam is
+    // active the tracers are seeded at the flash source's launch point/aim (evaluated at
+    // the initial time) so the null-geodesic edges coincide with the emitted radiation.
+    Real p1, p2, p3, d1, d2, d3;
+    Real edge_spread_default = 40.0;
+    if (flash.enabled) {
+      Real pos[3], dir[3];
+      FlashLaunchGeometry(pmbp->pmesh->time, pos, dir);
+      p1 = pos[0]; p2 = pos[1]; p3 = pos[2];
+      d1 = dir[0]; d2 = dir[1]; d3 = dir[2];
+      edge_spread_default = 6.0;
+    } else {
+      std::string beam_block = pin->DoesBlockExist("rad_srcterms") ? "rad_srcterms"
+                                                                   : "problem";
+      p1 = pin->GetOrAddReal(beam_block, "pos_1", 0.0);
+      p2 = pin->GetOrAddReal(beam_block, "pos_2", 0.0);
+      p3 = pin->GetOrAddReal(beam_block, "pos_3", 0.0);
+      d1 = pin->GetOrAddReal(beam_block, "dir_1", 1.0);
+      d2 = pin->GetOrAddReal(beam_block, "dir_2", 0.0);
+      d3 = pin->GetOrAddReal(beam_block, "dir_3", 0.0);
+      Real dnorm = std::sqrt(SQR(d1) + SQR(d2) + SQR(d3));
+      if (!(dnorm > 0.0)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "beam direction must be nonzero" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      d1 /= dnorm; d2 /= dnorm; d3 /= dnorm;
     }
-    d1 /= dnorm; d2 /= dnorm; d3 /= dnorm;
 
-    Real refx = 0.0;
-    Real refy = (std::abs(d3) < 0.9) ? 0.0 : 1.0;
-    Real refz = (std::abs(d3) < 0.9) ? 1.0 : 0.0;
-    Real e1x = d2*refz - d3*refy;
-    Real e1y = d3*refx - d1*refz;
-    Real e1z = d1*refy - d2*refx;
-    Real e1n = std::sqrt(SQR(e1x) + SQR(e1y) + SQR(e1z));
-    e1x /= e1n; e1y /= e1n; e1z /= e1n;
-    Real e2x = d2*e1z - d3*e1y;
-    Real e2y = d3*e1x - d1*e1z;
-    Real e2z = d1*e1y - d2*e1x;
+    // A fixed number of tracers fanned across the beam's angular width, in the orbital
+    // (x-y) plane (aim direction rotated about the z-axis).  The two extreme rays are the
+    // beam edges; the interior rays fill in the fan for visualization.
+    int n_edge = pin->GetOrAddInteger("problem", "n_edge_tracers", 21);
+    if (n_edge < 1) n_edge = 1;
+    Real spread = pin->GetOrAddReal("problem", "edge_spread_deg",
+                                    edge_spread_default)*(M_PI/180.0);
 
-    bool owns_beam_source = false;
+    // Find the (single) local meshblock that contains the launch point, if any.
+    int msel_h = -1;
     for (int m=0; m<nmb; ++m) {
-      bool inside = (p1 >= size.h_view(m).x1min && p1 <= size.h_view(m).x1max);
-      inside = inside && (p2 >= size.h_view(m).x2min && p2 <= size.h_view(m).x2max);
-      inside = inside && (p3 >= size.h_view(m).x3min && p3 <= size.h_view(m).x3max);
-      owns_beam_source = owns_beam_source || inside;
+      bool inside = (p1 >= size.h_view(m).x1min && p1 <= size.h_view(m).x1max) &&
+                    (p2 >= size.h_view(m).x2min && p2 <= size.h_view(m).x2max) &&
+                    (p3 >= size.h_view(m).x3min && p3 <= size.h_view(m).x3max);
+      if (inside) msel_h = m;
     }
-    if (!owns_beam_source) {
-      pmbp->ppart->nprtcl_thispack = 0;
-      Kokkos::resize(pmbp->ppart->prtcl_rdata, pmbp->ppart->nrdata, 0);
-      Kokkos::resize(pmbp->ppart->prtcl_idata, pmbp->ppart->nidata, 0);
-    }
+    int npart_local = (msel_h >= 0) ? n_edge : 0;
+    pmbp->ppart->nprtcl_thispack = npart_local;
+    Kokkos::resize(pmbp->ppart->prtcl_rdata, pmbp->ppart->nrdata, npart_local);
+    Kokkos::resize(pmbp->ppart->prtcl_idata, pmbp->ppart->nidata, npart_local);
+
     pmbp->pmesh->nprtcl_thisrank = pmbp->ppart->nprtcl_thispack;
 #if MPI_PARALLEL_ENABLED
     MPI_Allgather(&(pmbp->pmesh->nprtcl_thisrank), 1, MPI_INT,
@@ -774,51 +850,52 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
     }
     pmbp->ppart->CreateParticleTags(pin);
 
-    auto &pr = pmbp->ppart->prtcl_rdata;
-    auto &pi = pmbp->ppart->prtcl_idata;
-    int npart = pmbp->ppart->nprtcl_thispack;
-    auto &adm = pmbp->padm->adm;
-    int gids = pmbp->gids;
-    if (npart > 0) {
-      par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart-1,
-      KOKKOS_LAMBDA(const int p) {
-        int msel = -1;
-        for (int m=0; m<nmb; ++m) {
-          bool inside = (p1 >= size.d_view(m).x1min && p1 <= size.d_view(m).x1max);
-          inside = inside && (p2 >= size.d_view(m).x2min && p2 <= size.d_view(m).x2max);
-          inside = inside && (p3 >= size.d_view(m).x3min && p3 <= size.d_view(m).x3max);
-          if (inside) msel = m;
+    if (npart_local > 0) {
+      // Seed the covariant momenta on the host from the ANALYTIC metric at the exact
+      // launch point.  Each fan ray has coordinate direction d^i (the beam axis rotated
+      // about z); its time component d^0 comes from the null condition, and the covariant
+      // spatial momentum is k_i = g_{i mu} d^mu = gamma_ij d^j + beta_i d^0.  The
+      // beta_i d^0 (shift) term is essential: the null-geodesic pusher then yields
+      // coordinate velocity dx^i/dt = d^i/d^0, exactly parallel to the radiation beam's
+      // null completion.  (Seeding k_i = gamma_ij d^j alone -- the old approach -- makes
+      // the tracer velocity alpha*dhat - beta, which visibly disagrees with the beam
+      // wherever the shift is significant, i.e. everywhere near the punctures.)
+      Real g4l[NDIM][NDIM];
+      FlashMetricAt(pmbp->pmesh->time, p1, p2, p3, g4l);
+      DualArray2D<Real> kseed("kseed", npart_local, 3);
+      for (int p=0; p<npart_local; ++p) {
+        Real frac = (n_edge > 1)
+                  ? (static_cast<Real>(p)/static_cast<Real>(n_edge - 1) - 0.5) : 0.0;
+        Real psi = frac*spread;
+        Real dirp[3] = {std::cos(psi)*d1 - std::sin(psi)*d2,
+                        std::sin(psi)*d1 + std::cos(psi)*d2, d3};
+        Real k_cov[NDIM];
+        if (!FlashCovariantNull(g4l, dirp, k_cov)) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "edge tracer direction is not null-realizable"
+                    << std::endl;
+          std::exit(EXIT_FAILURE);
         }
-        if (msel < 0) return;
+        kseed.h_view(p,0) = k_cov[1];
+        kseed.h_view(p,1) = k_cov[2];
+        kseed.h_view(p,2) = k_cov[3];
+      }
+      kseed.template modify<HostMemSpace>();
+      kseed.template sync<DevExeSpace>();
 
-        pi(PGID,p) = gids + msel;
+      auto &pr = pmbp->ppart->prtcl_rdata;
+      auto &pi = pmbp->ppart->prtcl_idata;
+      int pgid = pmbp->gids + msel_h;
+      auto kseed_d = kseed.d_view;
+      par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart_local-1,
+      KOKKOS_LAMBDA(const int p) {
+        pi(PGID,p) = pgid;
         pr(IPX,p) = p1;
         pr(IPY,p) = p2;
         pr(IPZ,p) = p3;
-
-        Real phi = 2.0*M_PI*(static_cast<Real>(p) + 0.5)/static_cast<Real>(npart);
-        Real st = sin(0.5*spread);
-        Real ct = cos(0.5*spread);
-        Real sx = ct*d1 + st*(cos(phi)*e1x + sin(phi)*e2x);
-        Real sy = ct*d2 + st*(cos(phi)*e1y + sin(phi)*e2y);
-        Real sz = ct*d3 + st*(cos(phi)*e1z + sin(phi)*e2z);
-
-        int i = static_cast<int>((p1 - size.d_view(msel).x1min)/size.d_view(msel).dx1) + is;
-        int j = static_cast<int>((p2 - size.d_view(msel).x2min)/size.d_view(msel).dx2) + js;
-        int k = static_cast<int>((p3 - size.d_view(msel).x3min)/size.d_view(msel).dx3) + ks;
-        i = (i < is) ? is : ((i > ie) ? ie : i);
-        j = (j < js) ? js : ((j > je) ? je : j);
-        k = (k < ks) ? ks : ((k > ke) ? ke : k);
-
-        pr(IPVX,p) = adm.g_dd(msel,0,0,k,j,i)*sx
-                   + adm.g_dd(msel,0,1,k,j,i)*sy
-                   + adm.g_dd(msel,0,2,k,j,i)*sz;
-        pr(IPVY,p) = adm.g_dd(msel,0,1,k,j,i)*sx
-                   + adm.g_dd(msel,1,1,k,j,i)*sy
-                   + adm.g_dd(msel,1,2,k,j,i)*sz;
-        pr(IPVZ,p) = adm.g_dd(msel,0,2,k,j,i)*sx
-                   + adm.g_dd(msel,1,2,k,j,i)*sy
-                   + adm.g_dd(msel,2,2,k,j,i)*sz;
+        pr(IPVX,p) = kseed_d(p,0);
+        pr(IPVY,p) = kseed_d(p,1);
+        pr(IPVZ,p) = kseed_d(p,2);
       });
     }
   }
@@ -2808,6 +2885,346 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
 	    });
 	  });
 	}
+
+//----------------------------------------------------------------------------------------
+// Flash-beam helpers.  The construction below mirrors the validated single-hole
+// rad_kerr_orbit_beam test (src/pgen/tests/rad_beam.cpp): the launch point sits on the
+// equatorial photon orbit at the Cartesian Kerr-Schild radius sqrt(r_ph^2 + a^2), the
+// beam axis is the ring-tangent coordinate direction null-completed against the actual
+// (superposed, boosted) metric, converted to the Eulerian tetrad frame with the same
+// Cholesky triad used by dyn_radiation, and moment-projected onto <=3 angular-grid
+// directions so the discrete first moment is exactly parallel to the requested ray.
+
+//! \brief Equatorial circular photon-orbit radius in Cartesian Kerr-Schild coordinates
+//! for a hole of mass m and dimensionless spin chi.  sense=+1 selects the prograde
+//! (inner) orbit, sense=-1 the retrograde (outer) orbit; the Boyer-Lindquist radius is
+//! r = 2m(1 + cos((2/3) acos(∓chi))) and the CKS cylindrical radius is sqrt(r^2 + a^2).
+Real FlashPhotonRingRadiusCKS(const Real mass, const Real chi, const Real sense) {
+  const Real arg = fmax(-1.0, fmin(1.0, (sense > 0.0) ? -fabs(chi) : fabs(chi)));
+  const Real r_bl = 2.0*(1.0 + std::cos((2.0/3.0)*std::acos(arg)));
+  return mass*std::sqrt(SQR(r_bl) + SQR(chi));
+}
+
+//! \brief Four-metric (lower indices) of the superposed BBH spacetime at (t,x,y,z).
+void FlashMetricAt(const Real t, const Real x, const Real y, const Real z,
+                   Real g4[NDIM][NDIM]) {
+  Real traj[NTRAJ];
+  find_traj_t(t, traj);
+  SuperposedBBH(t, x, y, z, g4, traj, bbh);
+}
+
+//! \brief Completes coordinate direction dir[3] to a future-pointing null 4-vector and
+//! returns its covariant components k_mu = g_{mu nu} d^nu (with d^0 from the null
+//! condition).  Returns false if the direction is not null-realizable.
+bool FlashCovariantNull(const Real g4[NDIM][NDIM], const Real dir[3], Real k_cov[NDIM]) {
+  const Real ta = g4[0][0];
+  const Real tb = 2.0*(g4[0][1]*dir[0] + g4[0][2]*dir[1] + g4[0][3]*dir[2]);
+  const Real tc = g4[1][1]*dir[0]*dir[0] + 2.0*g4[1][2]*dir[0]*dir[1]
+                + 2.0*g4[1][3]*dir[0]*dir[2] + g4[2][2]*dir[1]*dir[1]
+                + 2.0*g4[2][3]*dir[1]*dir[2] + g4[3][3]*dir[2]*dir[2];
+  const Real disc = tb*tb - 4.0*ta*tc;
+  if (!(disc > 0.0)) return false;
+  const Real d0 = (-tb - std::sqrt(disc))/(2.0*ta);
+  const Real d[NDIM] = {d0, dir[0], dir[1], dir[2]};
+  for (int mu=0; mu<NDIM; ++mu) {
+    k_cov[mu] = 0.0;
+    for (int nu=0; nu<NDIM; ++nu) {
+      k_cov[mu] += g4[mu][nu]*d[nu];
+    }
+  }
+  return true;
+}
+
+//! \brief Converts a coordinate direction at a point of the superposed BBH metric into
+//! Eulerian-tetrad direction cosines ell[3], using the same Cholesky triad construction
+//! as dyn_radiation's tetrad (adapted from CoordinateDirectionToADMTetrad in the
+//! single-hole test, evaluated on the superposed metric instead of a single Kerr hole).
+bool FlashDirectionToTetrad(const Real g4[NDIM][NDIM], const Real dir[3], Real ell[3]) {
+  Real k_cov[NDIM];
+  if (!FlashCovariantNull(g4, dir, k_cov)) return false;
+
+  // ADM decomposition of g4
+  const Real gxx = g4[1][1], gxy = g4[1][2], gxz = g4[1][3];
+  const Real gyy = g4[2][2], gyz = g4[2][3], gzz = g4[3][3];
+  Real detg = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+  Real gu[6];
+  adm::SpatialInv(1.0/detg, gxx, gxy, gxz, gyy, gyz, gzz,
+                  &gu[0], &gu[1], &gu[2], &gu[3], &gu[4], &gu[5]);
+  const Real beta_l[3] = {g4[0][1], g4[0][2], g4[0][3]};
+  const Real beta_u[3] = {gu[0]*beta_l[0] + gu[1]*beta_l[1] + gu[2]*beta_l[2],
+                          gu[1]*beta_l[0] + gu[3]*beta_l[1] + gu[4]*beta_l[2],
+                          gu[2]*beta_l[0] + gu[4]*beta_l[1] + gu[5]*beta_l[2]};
+  const Real beta2 = beta_l[0]*beta_u[0] + beta_l[1]*beta_u[1] + beta_l[2]*beta_u[2];
+  const Real alpha = std::sqrt(fmax(beta2 - g4[0][0], 1.0e-30));
+
+  // Cholesky triad (columns map orthonormal directions to coordinate vectors); this is
+  // BuildADMSpatialTriad from dyn_radiation_tetrad.cpp.
+  constexpr Real mfloor = 1.0e-30;
+  const Real l00 = std::sqrt(fmax(gxx, mfloor));
+  const Real l10 = gxy/l00;
+  const Real l20 = gxz/l00;
+  const Real l11 = std::sqrt(fmax(gyy - SQR(l10), mfloor));
+  const Real l21 = (gyz - l20*l10)/l11;
+  const Real l22 = std::sqrt(fmax(gzz - SQR(l20) - SQR(l21), mfloor));
+  Real triad[3][3];
+  triad[0][0] = 1.0/l00; triad[1][0] = 0.0;      triad[2][0] = 0.0;
+  triad[0][1] = -l10/(l00*l11); triad[1][1] = 1.0/l11; triad[2][1] = 0.0;
+  triad[0][2] = l10*l21/(l00*l11*l22) - l20/(l00*l22);
+  triad[1][2] = -l21/(l11*l22);
+  triad[2][2] = 1.0/l22;
+
+  // photon energy measured by the Eulerian observer
+  const Real e0_mu[NDIM] = {1.0/alpha, -beta_u[0]/alpha, -beta_u[1]/alpha,
+                            -beta_u[2]/alpha};
+  Real energy = 0.0;
+  for (int mu=0; mu<NDIM; ++mu) {
+    energy -= e0_mu[mu]*k_cov[mu];
+  }
+  if (!(energy > 0.0)) return false;
+  for (int a=0; a<3; ++a) {
+    ell[a] = 0.0;
+    for (int i=0; i<3; ++i) {
+      ell[a] += triad[i][a]*k_cov[i+1];
+    }
+    ell[a] /= energy;
+  }
+  return true;
+}
+
+//! \brief Positive angular weights on <=3 grid directions whose first moment is exactly
+//! parallel to the requested tetrad-frame ray (convex-hull moment projection; local
+//! adaptation of SetProjectedAngularWeights from the single-hole test).
+bool FlashProjectedWeights(const DualArray2D<Real> &nh_c, const int nangles,
+                           const Real ell[3], std::vector<Real> &weights) {
+  weights.assign(nangles, 0.0);
+  const Real qn = std::sqrt(SQR(ell[0]) + SQR(ell[1]) + SQR(ell[2]));
+  if (!(qn > 0.0)) return false;
+  const Real qx = ell[0]/qn, qy = ell[1]/qn, qz = ell[2]/qn;
+
+  std::vector<std::pair<Real,int>> ranked;
+  ranked.reserve(nangles);
+  for (int n=0; n<nangles; ++n) {
+    ranked.emplace_back(nh_c.h_view(n,1)*qx + nh_c.h_view(n,2)*qy
+                        + nh_c.h_view(n,3)*qz, n);
+  }
+  std::sort(ranked.begin(), ranked.end(),
+            [](const auto &a, const auto &b) { return a.first > b.first; });
+
+  const int ncand = std::min(nangles, 80);
+  int best[3] = {ranked[0].second, ranked[0].second, ranked[0].second};
+  Real best_lam[3] = {1.0, 0.0, 0.0};
+  Real best_r = -1.0;
+  for (int ia=0; ia<ncand; ++ia) {
+    const int aidx = ranked[ia].second;
+    for (int ib=ia+1; ib<ncand; ++ib) {
+      const int bidx = ranked[ib].second;
+      for (int ic=ib+1; ic<ncand; ++ic) {
+        const int cidx = ranked[ic].second;
+        // solve [na nb nc][lam] = r*q with lam summing to 1 (4x4 gaussian elimination)
+        Real a[4][5] = {
+          {nh_c.h_view(aidx,1), nh_c.h_view(bidx,1), nh_c.h_view(cidx,1), -qx, 0.0},
+          {nh_c.h_view(aidx,2), nh_c.h_view(bidx,2), nh_c.h_view(cidx,2), -qy, 0.0},
+          {nh_c.h_view(aidx,3), nh_c.h_view(bidx,3), nh_c.h_view(cidx,3), -qz, 0.0},
+          {1.0, 1.0, 1.0, 0.0, 1.0},
+        };
+        Real sol[4];
+        bool ok = true;
+        for (int col=0; col<4 && ok; ++col) {
+          int piv = col;
+          Real mx = std::fabs(a[col][col]);
+          for (int r=col+1; r<4; ++r) {
+            if (std::fabs(a[r][col]) > mx) { mx = std::fabs(a[r][col]); piv = r; }
+          }
+          if (mx < 1.0e-14) { ok = false; break; }
+          if (piv != col) {
+            for (int c=col; c<5; ++c) std::swap(a[col][c], a[piv][c]);
+          }
+          const Real inv = 1.0/a[col][col];
+          for (int c=col; c<5; ++c) a[col][c] *= inv;
+          for (int r=0; r<4; ++r) {
+            if (r == col) continue;
+            const Real f = a[r][col];
+            for (int c=col; c<5; ++c) a[r][c] -= f*a[col][c];
+          }
+        }
+        if (!ok) continue;
+        for (int r=0; r<4; ++r) sol[r] = a[r][4];
+        const Real min_lam = std::min(sol[0], std::min(sol[1], sol[2]));
+        const Real r = sol[3];
+        if (min_lam >= -1.0e-10 && r > best_r && r <= 1.0 + 1.0e-10) {
+          best[0] = aidx; best[1] = bidx; best[2] = cidx;
+          best_lam[0] = std::max(sol[0], 0.0);
+          best_lam[1] = std::max(sol[1], 0.0);
+          best_lam[2] = std::max(sol[2], 0.0);
+          best_r = r;
+        }
+      }
+    }
+  }
+  const Real sum_lam = best_lam[0] + best_lam[1] + best_lam[2];
+  if (best_r <= 0.0 || sum_lam <= 0.0) return false;
+  for (int n=0; n<3; ++n) {
+    weights[best[n]] += best_lam[n]/sum_lam;
+  }
+  return true;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FlashLaunchGeometry()
+//! \brief Returns the launch point and (unit, in-plane) ring-tangent coordinate aim
+//! direction of the flash beam at time t.  The launch point sits on the chosen orbiting
+//! hole's equatorial photon orbit at the CKS ring radius (retrograde by default) and
+//! optionally co-rotates rigidly with the binary; the aim is the local tangent in the
+//! chosen orbital sense, optionally rotated by aim_offset.
+
+void FlashLaunchGeometry(const Real t, Real pos[3], Real dir[3]) {
+  Real traj[NTRAJ];
+  find_traj_t(t, traj);
+  Real cx, cy, cz, vx, vy, vz, m_src, chi_src;
+  if (flash.src_bh == 2) {
+    cx = traj[X2]; cy = traj[Y2]; cz = traj[Z2];
+    vx = traj[VX2]; vy = traj[VY2]; vz = traj[VZ2];
+    m_src = traj[M2T];
+    chi_src = std::sqrt(SQR(traj[AX2]) + SQR(traj[AY2]) + SQR(traj[AZ2]));
+  } else {
+    cx = traj[X1]; cy = traj[Y1]; cz = traj[Z1];
+    vx = traj[VX1]; vy = traj[VY1]; vz = traj[VZ1];
+    m_src = traj[M1T];
+    chi_src = std::sqrt(SQR(traj[AX1]) + SQR(traj[AY1]) + SQR(traj[AZ1]));
+  }
+  Real rring = (flash.ring_radius > 0.0)
+             ? flash.ring_radius
+             : FlashPhotonRingRadiusCKS(m_src, chi_src, flash.sense);
+  Real dphi = flash.corotate ? bbh.om*(t - flash.t0) : 0.0;
+  Real ra = flash.ring_angle + dphi;
+  pos[0] = cx + rring*flash.ring_frac*std::cos(ra);
+  pos[1] = cy + rring*flash.ring_frac*std::sin(ra);
+  pos[2] = cz;
+
+  // Ring tangent in the HOLE'S REST FRAME: +phi for prograde (sense=+1), -phi for
+  // retrograde (sense=-1), optionally rotated in-plane by aim_offset.  The hole is a
+  // boosted Kerr-Schild puncture moving at v~0.25c, so a rest-frame tangent must be
+  // aberrated into the global coordinate frame (relativistic velocity addition for
+  // light); without this the launched ray does not load onto the moving hole's ring.
+  Real ta = ra + flash.sense*0.5*M_PI + flash.aim_offset;
+  Real np[3] = {std::cos(ta), std::sin(ta), 0.0};
+  Real v2 = vx*vx + vy*vy + vz*vz;
+  if (v2 > 0.0 && v2 < 1.0) {
+    Real gam = 1.0/std::sqrt(1.0 - v2);
+    Real vdotn = vx*np[0] + vy*np[1] + vz*np[2];
+    Real denom = 1.0 + vdotn;
+    Real fac = 1.0 + (gam/(gam + 1.0))*vdotn;
+    Real nn[3] = {(np[0]/gam + vx*fac)/denom,
+                  (np[1]/gam + vy*fac)/denom,
+                  (np[2]/gam + vz*fac)/denom};
+    Real nl = std::sqrt(SQR(nn[0]) + SQR(nn[1]) + SQR(nn[2]));
+    dir[0] = nn[0]/nl; dir[1] = nn[1]/nl; dir[2] = nn[2]/nl;
+  } else {
+    dir[0] = np[0]; dir[1] = np[1]; dir[2] = np[2];
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynBBHFlashBeamSource()
+//! \brief Custom radiation source term for the orbiting BBH background.  A compact,
+//! exponentially-decaying "flash" of radiation is injected on one BH's equatorial photon
+//! ring, along the local ring-tangent null direction (retrograde by default).  The launch
+//! point, tangent direction, and the moment-projected angular weights are re-derived from
+//! the CURRENT (moving) metric/tetrad every substage, so the source stays locked to the
+//! orbiting photon ring.  After t=toff nothing is injected and the radiation
+//! free-streams.
+//!
+//! This replaces the generic <rad_srcterms> BeamSource, which is wrong here because it
+//! injects continuously at a fixed coordinate position/direction: as the binary orbits,
+//! that launch point drifts off the moving photon ring and never produces a clean pulse.
+
+void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
+  if (!flash.enabled) return;
+  const Real t = pm->time;
+  if (t < flash.t0 || t > flash.toff) return;
+
+  // user_srcs_func is invoked once by the radiation source-term task and once by the MHD
+  // source-term task within the same substage.  (time,bdt) uniquely identifies a substage
+  // (RK stages carry distinct beta*dt), so skip the duplicate call to avoid double
+  // injection.
+  static Real last_t = -1.0e300, last_bdt = -1.0e300;
+  if (t == last_t && bdt == last_bdt) return;
+  last_t = t; last_bdt = bdt;
+
+  const Real amp_t = flash.amp*std::exp(-(t - flash.t0)/flash.tau);
+  if (!(amp_t > 0.0)) return;
+
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pdynrad == nullptr) return;
+  const int nangles = pmbp->pdynrad->prgeo->nangles;
+
+  // Launch geometry and angular weights against the current metric/tetrad (host side).
+  Real pos[3], dir[3];
+  FlashLaunchGeometry(t, pos, dir);
+  Real g4[NDIM][NDIM];
+  FlashMetricAt(t, pos[0], pos[1], pos[2], g4);
+  Real ell[3];
+  if (!FlashDirectionToTetrad(g4, dir, ell)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "flash beam direction is not null-realizable"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  static std::vector<Real> h_weights;
+  if (!FlashProjectedWeights(pmbp->pdynrad->nh_c, nangles, ell, h_weights)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "flash beam angular projection failed" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // heap-allocated and intentionally leaked (like the single-hole test's
+  // kerr_orbit_beam.angular_weights) so the View is never destroyed after
+  // Kokkos::finalize
+  static DvceArray1D<Real> *d_weights_ptr = nullptr;
+  if (d_weights_ptr == nullptr) {
+    d_weights_ptr = new DvceArray1D<Real>();
+  }
+  if (static_cast<int>(d_weights_ptr->extent(0)) != nangles) {
+    Kokkos::realloc(*d_weights_ptr, nangles);
+  }
+  auto h_mirror = Kokkos::create_mirror_view(*d_weights_ptr);
+  for (int n=0; n<nangles; ++n) {
+    h_mirror(n) = h_weights[n];
+  }
+  Kokkos::deep_copy(*d_weights_ptr, h_mirror);
+
+  const Real sxp = pos[0], syp = pos[1], szp = pos[2];
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb1 = pmbp->nmb_thispack - 1;
+  int nang1 = nangles - 1;
+
+  auto i0 = pmbp->pdynrad->i0;
+  auto solid_angles = pmbp->pdynrad->prgeo->solid_angles;
+  auto sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+  auto &size = pmbp->pmb->mb_size;
+  auto &excise = pmbp->pcoord->coord_data.bh_excise;
+  auto &rad_mask = pmbp->pcoord->excision_floor;
+  auto weights = *d_weights_ptr;
+
+  const Real width2 = SQR(flash.width);
+  const Real inject = amp_t*bdt;
+
+  par_for("dynbbh_flash_beam", DevExeSpace(), 0, nmb1, 0, nang1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    if (weights(n) <= 0.0) return;
+    if (excise && rad_mask(m,k,j,i)) return;
+    Real x1v = CellCenterX(i-is, indcs.nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    Real x2v = CellCenterX(j-js, indcs.nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    Real x3v = CellCenterX(k-ks, indcs.nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    Real dist2 = SQR(x1v - sxp) + SQR(x2v - syp) + SQR(x3v - szp);
+    Real spatial = exp(-0.5*dist2/width2);
+    if (spatial < 1.0e-8) return;
+    i0(m,n,k,j,i) += sqrt_detg_c(m,k,j,i)*inject*spatial
+                     *weights(n)/solid_angles.d_view(n);
+  });
+}
 
 void AddDynBBHUserSources(Mesh *pm, const Real bdt) {
   if (bbh.cooling_source == CoolingSource::ism) {

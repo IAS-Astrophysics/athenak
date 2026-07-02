@@ -62,12 +62,13 @@ CrossingBeamData crossing_beams;
 
 struct KerrOrbitBeamData {
   bool enabled = false;
-  Real amp = 1.0;
-  Real sigma = 0.18;
-  Real source_x = 0.0;
-  Real source_y = 0.0;
-  Real source_z = 0.0;
-  DvceArray2D<Real> *angular_weights = nullptr;
+  int nbeams = 1;
+  Real amp[2] = {1.0, 1.0};
+  Real sigma[2] = {0.18, 0.18};
+  Real source_x[2] = {0.0, 0.0};
+  Real source_y[2] = {0.0, 0.0};
+  Real source_z[2] = {0.0, 0.0};
+  DvceArray2D<Real> *angular_weights = nullptr;  // (nbeams, nangles)
 };
 
 KerrOrbitBeamData kerr_orbit_beam;
@@ -421,6 +422,21 @@ void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles, WeightVi
 
 Real CounterrotatingPhotonOrbitRadius(const Real spin) {
   const Real arg = fmax(-1.0, fmin(1.0, -spin));
+  return 2.0*(1.0 + cos((2.0/3.0)*acos(arg)));
+}
+
+// Equatorial prograde (corotating) circular photon-orbit radius in Boyer-Lindquist
+// r for a Kerr hole of spin |spin|; this is the inner of the two equatorial photon
+// orbits and supports a +phi (counterclockwise) bound null ray.
+Real ProgradePhotonOrbitRadius(const Real spin) {
+  const Real arg = fmax(-1.0, fmin(1.0, -fabs(spin)));
+  return 2.0*(1.0 + cos((2.0/3.0)*acos(arg)));
+}
+
+// Equatorial retrograde (counter-rotating) circular photon-orbit radius; the outer
+// orbit, which supports a -phi (clockwise) bound null ray.
+Real RetrogradePhotonOrbitRadius(const Real spin) {
+  const Real arg = fmax(-1.0, fmin(1.0, fabs(spin)));
   return 2.0*(1.0 + cos((2.0/3.0)*acos(arg)));
 }
 
@@ -1036,39 +1052,67 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
   if (flat) {
     throw std::runtime_error("rad_kerr_orbit_beam requires a Kerr-Schild metric");
   }
-  const Real default_r = CounterrotatingPhotonOrbitRadius(spin);
-  const Real orbit_r = pin->GetOrAddReal("problem", "orbit_r", default_r);
-  const Real orbit_R = sqrt(SQR(orbit_r) + SQR(spin));
+  const bool two_beams = pin->GetOrAddBoolean("problem", "two_beams", false);
   const Real source_phi = pin->GetOrAddReal("problem", "source_phi", 0.0);
-  kerr_orbit_beam.enabled = true;
-  kerr_orbit_beam.amp = pin->GetOrAddReal("problem", "beam_amp", 1.0);
-  kerr_orbit_beam.sigma = pin->GetOrAddReal("problem", "beam_sigma", 0.18);
-  kerr_orbit_beam.source_x = orbit_R*cos(source_phi);
-  kerr_orbit_beam.source_y = orbit_R*sin(source_phi);
-  kerr_orbit_beam.source_z = 0.0;
-
-  const Real tangent_x = -sin(source_phi);
-  const Real tangent_y =  cos(source_phi);
-  Real ell[3];
+  const Real amp = pin->GetOrAddReal("problem", "beam_amp", 1.0);
+  const Real sigma = pin->GetOrAddReal("problem", "beam_sigma", 0.18);
   const bool use_adm_geometry = (pmbp->pdynrad != nullptr &&
                                  pmbp->pdynrad->use_adm_geometry);
-  if (use_adm_geometry) {
-    CoordinateDirectionToADMTetrad(kerr_orbit_beam.source_x, kerr_orbit_beam.source_y,
-                                   kerr_orbit_beam.source_z, flat, spin,
-                                   tangent_x, tangent_y, 0.0, ell);
+
+  // Per-beam Boyer-Lindquist orbit radius and spatial tangent sense (+1 for the
+  // prograde +phi ray, -1 for the retrograde -phi ray).  In two-beam mode a
+  // prograde ray is placed on the inner orbit and a retrograde ray on the outer
+  // orbit; otherwise a single beam follows the historical default orbit.
+  Real orbit_r[2];
+  Real sense[2];
+  if (two_beams) {
+    kerr_orbit_beam.nbeams = 2;
+    orbit_r[0] = pin->GetOrAddReal("problem", "orbit_r_pro",
+                                   ProgradePhotonOrbitRadius(spin));
+    orbit_r[1] = pin->GetOrAddReal("problem", "orbit_r_ret",
+                                   RetrogradePhotonOrbitRadius(spin));
+    sense[0] = +1.0;
+    sense[1] = -1.0;
   } else {
-    CoordinateDirectionToTetrad(kerr_orbit_beam.source_x, kerr_orbit_beam.source_y,
-                                kerr_orbit_beam.source_z, flat, spin,
-                                tangent_x, tangent_y, 0.0, ell);
+    kerr_orbit_beam.nbeams = 1;
+    orbit_r[0] = pin->GetOrAddReal("problem", "orbit_r",
+                                   CounterrotatingPhotonOrbitRadius(spin));
+    sense[0] = +1.0;
   }
 
+  kerr_orbit_beam.enabled = true;
   if (kerr_orbit_beam.angular_weights == nullptr) {
     kerr_orbit_beam.angular_weights = new DvceArray2D<Real>();
   }
-  Kokkos::realloc(*(kerr_orbit_beam.angular_weights), 1, nangles);
+  Kokkos::realloc(*(kerr_orbit_beam.angular_weights),
+                  kerr_orbit_beam.nbeams, nangles);
   auto h_weights = Kokkos::create_mirror_view(*(kerr_orbit_beam.angular_weights));
-  SetProjectedAngularWeights(nh_c, h_weights, 0, nangles, ell[0], ell[1], ell[2],
-                             "rad_kerr_orbit_beam");
+
+  for (int b=0; b<kerr_orbit_beam.nbeams; ++b) {
+    const Real orbit_R = sqrt(SQR(orbit_r[b]) + SQR(spin));
+    kerr_orbit_beam.amp[b] = amp;
+    kerr_orbit_beam.sigma[b] = sigma;
+    kerr_orbit_beam.source_x[b] = orbit_R*cos(source_phi);
+    kerr_orbit_beam.source_y[b] = orbit_R*sin(source_phi);
+    kerr_orbit_beam.source_z[b] = 0.0;
+
+    const Real tangent_x = -sense[b]*sin(source_phi);
+    const Real tangent_y =  sense[b]*cos(source_phi);
+    Real ell[3];
+    if (use_adm_geometry) {
+      CoordinateDirectionToADMTetrad(kerr_orbit_beam.source_x[b],
+                                     kerr_orbit_beam.source_y[b],
+                                     kerr_orbit_beam.source_z[b], flat, spin,
+                                     tangent_x, tangent_y, 0.0, ell);
+    } else {
+      CoordinateDirectionToTetrad(kerr_orbit_beam.source_x[b],
+                                  kerr_orbit_beam.source_y[b],
+                                  kerr_orbit_beam.source_z[b], flat, spin,
+                                  tangent_x, tangent_y, 0.0, ell);
+    }
+    SetProjectedAngularWeights(nh_c, h_weights, b, nangles, ell[0], ell[1], ell[2],
+                               "rad_kerr_orbit_beam");
+  }
   Kokkos::deep_copy(*(kerr_orbit_beam.angular_weights), h_weights);
 }
 
@@ -1581,38 +1625,42 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
   auto &excise = pmbp->pcoord->coord_data.bh_excise;
   auto &rad_mask = pmbp->pcoord->excision_floor;
   auto angular_weights = *(kerr_orbit_beam.angular_weights);
-  const Real amp = kerr_orbit_beam.amp;
-  const Real sigma = kerr_orbit_beam.sigma;
-  const Real sx = kerr_orbit_beam.source_x;
-  const Real sy = kerr_orbit_beam.source_y;
-  const Real sz = kerr_orbit_beam.source_z;
 
-  par_for("kerr_orbit_beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-    if (excise && rad_mask(m,k,j,i)) { return; }
+  for (int b=0; b<kerr_orbit_beam.nbeams; ++b) {
+    const int bb = b;
+    const Real amp = kerr_orbit_beam.amp[b];
+    const Real sigma = kerr_orbit_beam.sigma[b];
+    const Real sx = kerr_orbit_beam.source_x[b];
+    const Real sy = kerr_orbit_beam.source_y[b];
+    const Real sz = kerr_orbit_beam.source_z[b];
 
-    const Real x = CellCenterX(i-is, indcs.nx1,
-                               size.d_view(m).x1min, size.d_view(m).x1max);
-    const Real y = CellCenterX(j-js, indcs.nx2,
-                               size.d_view(m).x2min, size.d_view(m).x2max);
-    const Real z = CellCenterX(k-ks, indcs.nx3,
-                               size.d_view(m).x3min, size.d_view(m).x3max);
-    const Real dist2 = SQR(x - sx) + SQR(y - sy) + SQR(z - sz);
-    const Real primitive_source = amp*bdt*exp(-0.5*dist2/SQR(sigma))*
-                                  angular_weights(0,n)/solid_angles.d_view(n);
+    par_for("kerr_orbit_beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      if (excise && rad_mask(m,k,j,i)) { return; }
 
-    Real norm = 1.0;
-    if (use_adm_geometry) {
-      norm = sqrt_detg_c(m,k,j,i);
-    } else {
-      Real n_0 = 0.0;
-      for (int d=0; d<4; ++d) {
-        n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+      const Real x = CellCenterX(i-is, indcs.nx1,
+                                 size.d_view(m).x1min, size.d_view(m).x1max);
+      const Real y = CellCenterX(j-js, indcs.nx2,
+                                 size.d_view(m).x2min, size.d_view(m).x2max);
+      const Real z = CellCenterX(k-ks, indcs.nx3,
+                                 size.d_view(m).x3min, size.d_view(m).x3max);
+      const Real dist2 = SQR(x - sx) + SQR(y - sy) + SQR(z - sz);
+      const Real primitive_source = amp*bdt*exp(-0.5*dist2/SQR(sigma))*
+                                    angular_weights(bb,n)/solid_angles.d_view(n);
+
+      Real norm = 1.0;
+      if (use_adm_geometry) {
+        norm = sqrt_detg_c(m,k,j,i);
+      } else {
+        Real n_0 = 0.0;
+        for (int d=0; d<4; ++d) {
+          n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+        }
+        norm = tet_c(m,0,0,k,j,i)*n_0;
       }
-      norm = tet_c(m,0,0,k,j,i)*n_0;
-    }
-    i0(m,n,k,j,i) += norm*primitive_source;
-  });
+      i0(m,n,k,j,i) += norm*primitive_source;
+    });
+  }
 }
 
 //----------------------------------------------------------------------------------------
