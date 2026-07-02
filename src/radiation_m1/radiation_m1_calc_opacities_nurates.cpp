@@ -399,8 +399,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // for them (matches THC, which guards this with is==0||is==1 and
             // avoids the spurious ~3x inflation of the heavy-lepton luminosity).
             corr_fac = 1.0;
-            if (nurates_params_.use_equilibrium_distribution &&
-                (nuidx == 0 || nuidx == 1)) {
+            if (nurates_params_.use_equilibrium_distribution) {
               corr_fac = (J[nuidx] / rnnu[nuidx]) * (my_nudens_0 / my_nudens_1);
               if (!Kokkos::isfinite(corr_fac)) {
                 corr_fac = 1.0;
@@ -411,7 +410,12 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                   Kokkos::fmin(corr_fac, nurates_params_.opacity_corr_fac_max));
             }
 
+            // Scattering correction is applied to ALL flavors.
             scat_1_(m, nuidx, k, j, i) *= corr_fac;
+
+            // Absorption/emission correction is a charged-current effect: apply
+            // it only to nu_e (0) and nubar_e (1); heavy leptons (2,3) get 1.
+            Real corr_ae = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
 
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
@@ -419,7 +423,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // part; keep the non-thermal (NEPS) number absorption as computed.
               Real const abs_0_th_corr =
                   Kokkos::fmax(abs_0_(m, nuidx, k, j, i) - abs_0_non_th_loc[nuidx], 0.0)
-                  * corr_fac;
+                  * corr_ae;
               abs_0_(m, nuidx, k, j, i) = abs_0_th_corr + abs_0_non_th_loc[nuidx];
               // Number emissivity: apply Kirchhoff ONLY to the thermal part; the
               // non-thermal (NEPS) number emission is kept out of thermalization.
@@ -431,7 +435,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // only to the thermal part.
               Real const abs_1_th_corr =
                   Kokkos::fmax(abs_1_(m, nuidx, k, j, i) - abs_1_non_th_loc[nuidx], 0.0)
-                  * corr_fac;
+                  * corr_ae;
               abs_1_(m, nuidx, k, j, i) = abs_1_th_corr + abs_1_non_th_loc[nuidx];
               // Energy emissivity: apply Kirchhoff ONLY to the thermal part.
               eta_1_(m, nuidx, k, j, i) =
