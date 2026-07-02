@@ -113,6 +113,9 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   if (pm->pmb_pack->prad != nullptr) {
     ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
   }
+  if (pm->pmb_pack->pradm1 != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pradm1->nvarstot);
+  }
   if (pm->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
   }
