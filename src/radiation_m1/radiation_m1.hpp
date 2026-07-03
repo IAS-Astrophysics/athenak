@@ -27,6 +27,10 @@
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif
 
+#if ENABLE_NN_OPACITY
+#include "radiation_m1/radiation_m1_nn_emulator.hpp"
+#endif
+
 namespace radiationm1 {
 
 //----------------------------------------------------------------------------------------
@@ -79,6 +83,11 @@ class RadiationM1 {
   PhotonOpacityParams photon_op_params{};  // params for photon opacities
 #if ENABLE_NURATES
   NuratesParams nurates_params{};  // params for nurates (reactions, quadratures, etc)
+#endif
+#if ENABLE_NN_OPACITY
+  NNOpacityEmulator nn_emulator{};  // NN-based opacity emulator (batched LibTorch)
+  std::string nn_model_path{};      // path to TorchScript .pt file
+  std::string nn_stats_dir{};       // directory with nn2d_*.bin normalisation files
 #endif
 
   DvceArray5D<Real> u0;              // evolved variables
@@ -133,6 +142,10 @@ class RadiationM1 {
   TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy>
   TaskStatus CalcOpacityPhotons_(Driver* pdrive, int stage);
+#if ENABLE_NURATES && ENABLE_NN_OPACITY
+  template <class EOSPolicy, class ErrorPolicy>
+  TaskStatus CalcOpacityNN_(Driver* pdrive, int stage);
+#endif
   template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
 

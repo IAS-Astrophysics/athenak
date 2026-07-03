@@ -35,6 +35,7 @@ option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
 option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
+option(Athena_ENABLE_NN_OPACITY "Replace bns_nurates with batched LibTorch NN emulator" OFF)
 option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
@@ -88,6 +89,17 @@ else()
   set(ENABLE_NURATES 0)
   set(M1_TOTAL_NUM_SPECIES 1)
 endif ()
+
+# set NN opacity macro (true/false; requires ENABLE_NURATES)
+if(Athena_ENABLE_NN_OPACITY AND Athena_ENABLE_NURATES)
+  set(ENABLE_NN_OPACITY 1)
+  message(STATUS "Compiling with NN opacity emulator (LibTorch)")
+else()
+  set(ENABLE_NN_OPACITY 0)
+  if(Athena_ENABLE_NN_OPACITY AND NOT Athena_ENABLE_NURATES)
+    message(WARNING "Athena_ENABLE_NN_OPACITY requires Athena_ENABLE_NURATES; NN opacity disabled.")
+  endif()
+endif()
 
 #set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
@@ -153,6 +165,16 @@ endif()
 # Optionally include bns_nurates headers
 if (ENABLE_NURATES)
   target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bns_nurates/include)
+endif()
+
+# Optionally link LibTorch for the batched NN opacity emulator
+if (ENABLE_NN_OPACITY)
+  # Torch_DIR must point to the share/cmake/Torch dir inside your LibTorch or PyTorch install.
+  # On Perlmutter with the project venv:
+  #   -D Torch_DIR=/global/homes/y/yiqiu/work/venv/lib/python3.13/site-packages/torch/share/cmake/Torch
+  find_package(Torch REQUIRED)
+  target_link_libraries(athena PUBLIC ${TORCH_LIBRARIES})
+  target_compile_options(athena PUBLIC ${TORCH_CXX_FLAGS})
 endif()
 
 if (${PROBLEM} MATCHES "z4c/spectre/*")

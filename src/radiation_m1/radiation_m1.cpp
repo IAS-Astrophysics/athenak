@@ -128,6 +128,13 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 #if ENABLE_NURATES
     params.opacity_type = BnsNurates;
 
+#if ENABLE_NN_OPACITY
+    nn_model_path = pin->GetString("bns_nurates", "nn_model_path");
+    nn_stats_dir  = pin->GetOrAddString("bns_nurates", "nn_stats_dir", "checkpoints");
+    bool nn_use_cuda = pin->GetOrAddBoolean("bns_nurates", "nn_use_cuda", false);
+    nn_emulator.Load(nn_model_path, nn_stats_dir, nn_use_cuda);
+#endif  // ENABLE_NN_OPACITY
+
     nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 6);
     nurates_params.quad_nx_2 = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
     nurates_params.opacity_tau_trap =

@@ -21,6 +21,25 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   }
 
+#if ENABLE_NN_OPACITY
+  // Dispatch to batched NN emulator instead of per-cell quadrature
+  auto *ptest_nqt_nn =
+      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                     Primitive::ResetFloor> *>(
+          pmy_pack->pdyngr);
+  if (ptest_nqt_nn != nullptr) {
+    return CalcOpacityNN_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                          Primitive::ResetFloor>(pdrive, stage);
+  }
+
+  auto *ptest_nlog_nn = dynamic_cast<dyngr::DynGRMHDPS<
+      Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
+      pmy_pack->pdyngr);
+  if (ptest_nlog_nn != nullptr) {
+    return CalcOpacityNN_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                          Primitive::ResetFloor>(pdrive, stage);
+  }
+#else
   // Here we are using dynamic_cast to infer which derived type pdyngr is
   auto *ptest_nqt =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
@@ -38,6 +57,7 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
     return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                                Primitive::ResetFloor>(pdrive, stage);
   }
+#endif  // ENABLE_NN_OPACITY
 
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl;
