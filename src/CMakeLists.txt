@@ -233,6 +233,16 @@ if (ENABLE_NURATES)
     )
 endif()
 
+# add NN opacity emulator (batched LibTorch path, requires ENABLE_NURATES)
+if (ENABLE_NN_OPACITY)
+    target_compile_definitions(athena PUBLIC ENABLE_NN_OPACITY)
+    target_sources(athena
+        PRIVATE
+            radiation_m1/radiation_m1_nn_emulator.cpp
+            radiation_m1/radiation_m1_calc_opacities_nn.cpp
+    )
+endif()
+
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
 # pgen/ directory (not including .cpp extension)
