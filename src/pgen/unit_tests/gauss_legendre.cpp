@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file z4c_one_puncture.cpp
-//  \brief Problem generator for a single puncture placed at the origin of the domain
+//! \file gauss_legendre.cpp
+//  \brief Problem generator for unit tests of Gauss-Legendre integrations
 
 #include <algorithm>
 #include <cmath>
@@ -31,9 +31,11 @@ using s32    = int_least32_t;
 using engine = std::mt19937;
 
 //----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for single puncture
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+//! \fn ProblemGenerator::GaussLegendre()
+//! \brief problem generator for unit tests of Gauss-Legendre integration
+//! Tests that the cross integral of spherical harmonics are delta functions.
+
+void ProblemGenerator::GaussLegendre(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
 

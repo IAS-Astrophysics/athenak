@@ -112,7 +112,6 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
-        pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
         pgen/tests/cshock.cpp
         pgen/tests/diffusion.cpp
@@ -128,6 +127,9 @@ add_executable(
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
+
+        pgen/unit_tests/eos_compose.cpp
+        pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
