@@ -3656,11 +3656,14 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
   auto i0 = pmbp->pdynrad->i0;
   auto solid_angles = pmbp->pdynrad->prgeo->solid_angles;
   auto sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+  auto tetcov_c = pmbp->pdynrad->tetcov_c;
+  auto nh_c = pmbp->pdynrad->nh_c;
   auto &size = pmbp->pmb->mb_size;
   auto &excise = pmbp->pcoord->coord_data.bh_excise;
   auto &rad_mask = pmbp->pcoord->excision_floor;
   auto weights = *d_weights_ptr;
   const bool fm = pmbp->pdynrad->frequency_moments;
+  const bool kw = pmbp->pdynrad->killing_weight;
 
   const Real width2 = SQR(flash.width);
   const Real inject = amp_t*bdt;
@@ -3677,7 +3680,19 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
     if (spatial < 1.0e-8) return;
     const Real dinj = sqrt_detg_c(m,k,j,i)*inject*spatial
                       *weights(n)/solid_angles.d_view(n);
-    i0(m,n,k,j,i) += dinj;
+    Real wgt = 1.0;
+    if (kw) {
+      // Killing-weighted transport: the energy slot stores W = (-n_0) U, the
+      // Killing-energy density of photons injected at unit Eulerian frequency.
+      // Directions with -n_0 <= 0 are unreachable for positive-Killing-energy
+      // photons and receive nothing.
+      Real n_0 = 0.0;
+      for (int d=0; d<4; ++d) {
+        n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+      }
+      wgt = fmax(-n_0, 0.0);
+    }
+    i0(m,n,k,j,i) += wgt*dinj;
     // photon number injected at the reference frequency nu=1
     if (fm) { i0(m,nangles+n,k,j,i) += dinj; }
   });

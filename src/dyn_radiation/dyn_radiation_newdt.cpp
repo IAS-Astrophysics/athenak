@@ -209,7 +209,9 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
   if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
   if (angular_fluxes_) { dtnew = std::min(dtnew, dta); }
-  if (use_adm_geometry && adm_metric_source) { dtnew = std::min(dtnew, dtg); }
+  if (use_adm_geometry && adm_metric_source && !(killing_weight)) {
+    dtnew = std::min(dtnew, dtg);
+  }
 
   // periodically report the cumulative frequency-cap deleted budget
   if (frequency_moments && global_variable::my_rank == 0 &&

@@ -56,7 +56,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
   auto &angular_fluxes_ = angular_fluxes;
   auto &divfa_ = divfa;
   bool use_adm_geometry_ = use_adm_geometry;
-  bool adm_metric_source_ = adm_metric_source;
+  // With killing_weight the evolved variable W = -n_0 U is conserved along geodesics,
+  // so the transport is source-free; red/blueshift lives in the reconstruction weight.
+  bool adm_metric_source_ = adm_metric_source && !(killing_weight);
   auto &solid_angles_ = prgeo->solid_angles;
 
   auto &excise = pmy_pack->pcoord->coord_data.bh_excise;

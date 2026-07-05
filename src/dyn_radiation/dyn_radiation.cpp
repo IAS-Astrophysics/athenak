@@ -213,6 +213,23 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
               << "geometry='adm' and compton=false" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  killing_weight = pin->GetOrAddBoolean("dyn_radiation","killing_weight",false);
+  if (killing_weight && !(frequency_moments)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation> killing_weight=true requires "
+              << "frequency_moments=true" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (killing_weight && rad_source &&
+      (kappa_a > 0.0 || kappa_s > 0.0 || kappa_p > 0.0)) {
+    // The implicit coupling operates on Eulerian intensities; the Killing-weighted
+    // bookkeeping (absorption scales W and N equally, emission adds w*dE) is not
+    // implemented yet.
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation> killing_weight=true does not yet "
+              << "support nonzero opacities" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
   nvars_tot = (frequency_moments ? 2 : 1)*prgeo->nangles;
   Kokkos::realloc(deleted_budget, 2);

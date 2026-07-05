@@ -1598,6 +1598,7 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
   int nang1 = -1;
   bool use_adm_geometry = false;
   bool fm = false;
+  bool kw = false;
   DvceArray5D<Real> i0;
   DualArray2D<Real> nh_c;
   DualArray1D<Real> solid_angles;
@@ -1615,6 +1616,7 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
     nang1 = pmbp->pdynrad->prgeo->nangles - 1;
     use_adm_geometry = pmbp->pdynrad->use_adm_geometry;
     fm = pmbp->pdynrad->frequency_moments;
+    kw = pmbp->pdynrad->killing_weight;
     i0 = pmbp->pdynrad->i0;
     nh_c = pmbp->pdynrad->nh_c;
     solid_angles = pmbp->pdynrad->prgeo->solid_angles;
@@ -1628,6 +1630,7 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
     throw std::runtime_error("rad_kerr_orbit_beam angular weights were not initialized");
   }
   const int nangles_ = nang1 + 1;
+  auto tetcov = tetcov_c;
 
   auto &size = pmbp->pmb->mb_size;
   auto &excise = pmbp->pcoord->coord_data.bh_excise;
@@ -1666,7 +1669,16 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
         }
         norm = tet_c(m,0,0,k,j,i)*n_0;
       }
-      i0(m,n,k,j,i) += norm*primitive_source;
+      Real wgt = 1.0;
+      if (kw) {
+        // Killing-weighted energy slot (see DynBBHFlashBeamSource)
+        Real n_0k = 0.0;
+        for (int d=0; d<4; ++d) {
+          n_0k += tetcov(m,d,0,k,j,i)*nh_c.d_view(n,d);
+        }
+        wgt = fmax(-n_0k, 0.0);
+      }
+      i0(m,n,k,j,i) += wgt*norm*primitive_source;
       // photon number injected at the reference frequency nu=1
       if (fm) { i0(m,nangles_+n,k,j,i) += norm*primitive_source; }
     });

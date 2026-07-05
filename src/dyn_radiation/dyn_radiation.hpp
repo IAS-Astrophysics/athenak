@@ -242,6 +242,15 @@ class DynRadiation {
   // integrator (no memory or performance penalty).
   bool frequency_moments;             // evolve photon number N alongside energy
   Real nu_cap;                        // mean-frequency cap (units of injection freq.)
+  // Killing-weighted transport: the energy slots store the Killing-energy density
+  // W = (alpha - beta.s) U instead of the Eulerian energy U.  In a (quasi-)stationary
+  // metric W is exactly conserved along geodesics, so its transport has NO geometric
+  // source: gravitational red/blueshift is baked into the static per-bin weight
+  // w = -n_0 at injection and at reconstruction (E = W/w, saturated by nu_cap*N and
+  // w >= n_0_floor for the ergosphere cone).  This removes the near-horizon
+  // gain/advection feedback entirely rather than bounding it, keeps W sign-definite
+  // (unlike the HARM n^0 n_0 I variable), and needs no division in the evolution.
+  bool killing_weight;                // evolve Killing-energy density (requires fm)
   int nvars_tot;                      // nangles (E only) or 2*nangles (E then N)
   DvceArray1D<Real> deleted_budget;   // [0]=deleted energy, [1]=deleted number
   GeodesicGrid *prgeo = nullptr;      // pointer to dyn_radiation angular mesh
