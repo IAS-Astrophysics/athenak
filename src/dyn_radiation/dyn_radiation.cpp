@@ -198,8 +198,25 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
   angular_frame_initialized = false;
   rotate_geo = pin->GetOrAddBoolean("dyn_radiation","rotate_geo",true);
   angular_fluxes = pin->GetOrAddBoolean("dyn_radiation","angular_fluxes",true);
+  excision_absorb_flux = pin->GetOrAddBoolean("dyn_radiation",
+                                              "excision_absorb_flux", false);
+  excision_donor_cell = pin->GetOrAddBoolean("dyn_radiation",
+                                             "excision_donor_cell", true);
+  excision_n0_absorb = pin->GetOrAddBoolean("dyn_radiation",
+                                            "excision_n0_absorb", false);
   n_0_floor = pin->GetOrAddReal("dyn_radiation","n_0_floor",0.1);
+  frequency_moments = pin->GetOrAddBoolean("dyn_radiation","frequency_moments",false);
+  nu_cap = pin->GetOrAddReal("dyn_radiation","nu_cap",100.0);
+  if (frequency_moments && (!(use_adm_geometry) || is_compton_enabled)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<dyn_radiation> frequency_moments=true requires "
+              << "geometry='adm' and compton=false" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
+  nvars_tot = (frequency_moments ? 2 : 1)*prgeo->nangles;
+  Kokkos::realloc(deleted_budget, 2);
+  Kokkos::deep_copy(deleted_budget, 0.0);
 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
@@ -247,7 +264,7 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-  Kokkos::realloc(i0,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+  Kokkos::realloc(i0,nmb,nvars_tot,ncells3,ncells2,ncells1);
   }
 
   // allocate memory for conserved variables on coarse mesh
@@ -256,12 +273,12 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     int nccells1 = indcs.cnx1 + 2*(indcs.ng);
     int nccells2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*(indcs.ng)) : 1;
     int nccells3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(coarse_i0,nmb,prgeo->nangles,nccells3,nccells2,nccells1);
+    Kokkos::realloc(coarse_i0,nmb,nvars_tot,nccells3,nccells2,nccells1);
   }
 
   // allocate boundary buffers for conserved (cell-centered) variables
   pbval_i = new MeshBoundaryValuesCC(ppack, pin, false);
-  pbval_i->InitializeBuffers(prgeo->nangles);
+  pbval_i->InitializeBuffers(nvars_tot);
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
@@ -303,12 +320,12 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
     int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
     int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
-    Kokkos::realloc(i1,      nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x1f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x2f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
-    Kokkos::realloc(iflx.x3f,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+    Kokkos::realloc(i1,      nmb,nvars_tot,ncells3,ncells2,ncells1);
+    Kokkos::realloc(iflx.x1f,nmb,nvars_tot,ncells3,ncells2,ncells1);
+    Kokkos::realloc(iflx.x2f,nmb,nvars_tot,ncells3,ncells2,ncells1);
+    Kokkos::realloc(iflx.x3f,nmb,nvars_tot,ncells3,ncells2,ncells1);
     if (angular_fluxes) {
-      Kokkos::realloc(divfa,nmb,prgeo->nangles,ncells3,ncells2,ncells1);
+      Kokkos::realloc(divfa,nmb,nvars_tot,ncells3,ncells2,ncells1);
     }
   }
 }

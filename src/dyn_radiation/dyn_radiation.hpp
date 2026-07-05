@@ -93,13 +93,13 @@ template<typename IView, typename SolidAngles>
 KOKKOS_INLINE_FUNCTION
 void ConservativeAngularFloor(IView i0, SolidAngles solid_angles,
                               const int m, const int k, const int j, const int i,
-                              const int nang1) {
+                              const int nang1, const int offset = 0) {
   Real positive = 0.0;
   Real deficit = 0.0;
   for (int n=0; n<=nang1; ++n) {
-    const Real value = i0(m,n,k,j,i);
+    const Real value = i0(m,offset+n,k,j,i);
     if (!(Kokkos::isfinite(value))) {
-      i0(m,n,k,j,i) = 0.0;
+      i0(m,offset+n,k,j,i) = 0.0;
       continue;
     }
     const Real weighted_i = value*solid_angles.d_view(n);
@@ -114,15 +114,15 @@ void ConservativeAngularFloor(IView i0, SolidAngles solid_angles,
   if (positive > deficit) {
     const Real scale = (positive - deficit)/positive;
     for (int n=0; n<=nang1; ++n) {
-      if (i0(m,n,k,j,i) > 0.0) {
-        i0(m,n,k,j,i) *= scale;
+      if (i0(m,offset+n,k,j,i) > 0.0) {
+        i0(m,offset+n,k,j,i) *= scale;
       } else {
-        i0(m,n,k,j,i) = 0.0;
+        i0(m,offset+n,k,j,i) = 0.0;
       }
     }
   } else {
     for (int n=0; n<=nang1; ++n) {
-      i0(m,n,k,j,i) = 0.0;
+      i0(m,offset+n,k,j,i) = 0.0;
     }
   }
 }
@@ -228,7 +228,22 @@ class DynRadiation {
   bool angular_frame_initialized;     // nh_c/nh_f have been initialized from prgeo
   bool rotate_geo;                    // rotate geodesic mesh
   bool angular_fluxes;                // flag to enable/disable angular fluxes
+  bool excision_absorb_flux;           // remove photons in the wider excision flux mask
+  bool excision_donor_cell;            // force donor-cell reconstruction near flux mask
+  bool excision_n0_absorb;             // absorb bins with |n_0| < n_0_floor (ADM branch)
   Real n_0_floor;                     // floor on n_0
+  // Number-conservative frequency-moment scheme: evolve photon number N per angular
+  // bin alongside the energy variable U=sqrt(gamma)I.  N has no geometric source
+  // (photon number is exactly conserved along geodesics), so total energy is bounded
+  // by nu_cap * N_total and the near-horizon exp(geom*dt) runaway is unrepresentable.
+  // Bins whose mean frequency E/N exceeds nu_cap are removed (the one-group analogue
+  // of blueshifting off the top of a frequency grid); the deleted budget is logged.
+  // When false, arrays and kernels are identical to the original single-moment
+  // integrator (no memory or performance penalty).
+  bool frequency_moments;             // evolve photon number N alongside energy
+  Real nu_cap;                        // mean-frequency cap (units of injection freq.)
+  int nvars_tot;                      // nangles (E only) or 2*nangles (E then N)
+  DvceArray1D<Real> deleted_budget;   // [0]=deleted energy, [1]=deleted number
   GeodesicGrid *prgeo = nullptr;      // pointer to dyn_radiation angular mesh
 
   // Tetrad arrays and functions
@@ -287,6 +302,8 @@ class DynRadiation {
   TaskStatus InitRecv(Driver *d, int stage);
   // ...in "stagen_tl" task list
   TaskStatus CopyCons(Driver *d, int stage);
+  void ApplyExcisionToIntensity(DvceArray5D<Real> &ir);
+  void HealNumberField(DvceArray5D<Real> &ir);
   TaskStatus CalculateFluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);

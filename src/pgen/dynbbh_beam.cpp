@@ -243,8 +243,13 @@ struct bbh_pgen {
 struct bbh_refine {
   bool AlphaMin = false;
   bool Tracker = false;
+  bool BeamCorridor = false;
   Real tracker_radius[2] = {0.0, 0.0};
   int tracker_reflevel[2] = {-1, -1};
+  Real beam_start[3] = {0.0, 0.0, 0.0};
+  Real beam_end[3] = {0.0, 0.0, 0.0};
+  Real beam_radius = 0.0;
+  int beam_reflevel = -1;
   std::vector<Real> radius;
   std::vector<int> reflevel;
 };
@@ -272,6 +277,12 @@ struct flash_beam_pgen {
   Real sense = -1.0;       // tangent sense: +1 prograde (+phi), -1 retrograde (-phi)
   Real aim_offset = 0.0;   // extra in-plane rotation (rad) of the tangent beam axis
   bool corotate = true;    // rigidly co-rotate launch point + aim with the binary
+  bool fixed_launch = false; // launch from a fixed coordinate point/direction
+  Real fixed_pos[3] = {0.0, 0.0, 0.0};
+  Real fixed_dir[3] = {1.0, 0.0, 0.0};
+  Real flux_fraction = -1.0; // <=0: projected <=3 weights; otherwise max-entropy all-angle
+  bool projected_weights = true; // true: exact <=3-bin projection; false: max-entropy
+  bool nearest_weight = false; // true: inject into the nearest single angular bin
 };
 
 struct bbh_pgen bbh;
@@ -412,6 +423,9 @@ void CheckPunctureExcisionResolution(MeshBlockPack *pmbp, const bbh_traj_state &
   Real cells1 = (r1 > 0.0) ? 2.0*r1/std::max(dx1, 1.0e-300) : 0.0;
   if ((cells0 < min_cells_across || cells1 < min_cells_across) &&
       global_variable::my_rank == 0) {
+    static int nwarn = 0;
+    if (nwarn >= 8) return;
+    ++nwarn;
     std::cout << "WARNING: puncture excision radius is under-resolved during "
               << context << ": cells across excision diameter are "
               << "hole1=" << cells0 << " (r=" << r0 << ", dx=" << dx0 << "), "
@@ -734,6 +748,60 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
     flash.aim_offset = pin->GetOrAddReal("problem", "flash_aim_offset_deg", 0.0)
                        *(M_PI/180.0);
     flash.corotate   = pin->GetOrAddBoolean("problem", "flash_corotate", true);
+    std::string launch_mode = pin->GetOrAddString("problem", "flash_launch_mode", "ring");
+    flash.fixed_launch = (launch_mode == "fixed" || launch_mode == "fixed_point");
+    if (!(flash.fixed_launch) && launch_mode != "ring" && launch_mode != "photon_ring") {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Unknown problem/flash_launch_mode='" << launch_mode
+                << "'. Use 'ring' or 'fixed'." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (flash.fixed_launch) {
+      flash.fixed_pos[0] = pin->GetOrAddReal("problem", "flash_pos_1", 16.0);
+      flash.fixed_pos[1] = pin->GetOrAddReal("problem", "flash_pos_2", 0.0);
+      flash.fixed_pos[2] = pin->GetOrAddReal("problem", "flash_pos_3", 0.0);
+      flash.fixed_dir[0] = pin->GetOrAddReal("problem", "flash_dir_1", -1.0);
+      flash.fixed_dir[1] = pin->GetOrAddReal("problem", "flash_dir_2", 0.0);
+      flash.fixed_dir[2] = pin->GetOrAddReal("problem", "flash_dir_3", 0.0);
+      Real dnorm = std::sqrt(SQR(flash.fixed_dir[0]) + SQR(flash.fixed_dir[1]) +
+                             SQR(flash.fixed_dir[2]));
+      if (!(dnorm > 0.0)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "fixed flash direction must be nonzero" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      flash.fixed_dir[0] /= dnorm;
+      flash.fixed_dir[1] /= dnorm;
+      flash.fixed_dir[2] /= dnorm;
+    }
+    flash.flux_fraction = pin->GetOrAddReal("problem", "flash_flux_fraction", -1.0);
+    std::string angular_mode = pin->GetOrAddString("problem", "flash_angular_mode",
+                                                   "auto");
+    flash.nearest_weight = false;
+    if (angular_mode == "auto") {
+      flash.projected_weights = !(flash.flux_fraction > 0.0);
+    } else if (angular_mode == "projected" || angular_mode == "sparse_projected") {
+      flash.projected_weights = true;
+    } else if (angular_mode == "nearest" || angular_mode == "single_bin") {
+      flash.projected_weights = true;
+      flash.nearest_weight = true;
+    } else if (angular_mode == "max_entropy" || angular_mode == "all_angle") {
+      flash.projected_weights = false;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Unknown problem/flash_angular_mode='"
+                << angular_mode
+                << "'. Use 'auto', 'projected', 'nearest', or 'max_entropy'."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (flash.flux_fraction > 0.0 &&
+        !(flash.flux_fraction < 1.0 && std::isfinite(flash.flux_fraction))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "problem/flash_flux_fraction must be in (0,1)"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     if (!(flash.tau > 0.0)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "flash_beam/tau must be positive" << std::endl;
@@ -741,6 +809,62 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
     }
     user_srcs = true;
     user_srcs_func = DynBBHFlashBeamSource;
+  }
+
+  int tracker_reflevel = pin->GetOrAddInteger("problem", "tracker_reflevel", -1);
+  bbh_ref.tracker_radius[0] = pin->GetOrAddReal("problem", "tracker_1_rad",
+                                                2.0*std::max(bbh.puncture_excise_rad1,
+                                                             0.5));
+  bbh_ref.tracker_radius[1] = pin->GetOrAddReal("problem", "tracker_2_rad",
+                                                2.0*std::max(bbh.puncture_excise_rad2,
+                                                             0.5));
+  bbh_ref.tracker_reflevel[0] = pin->GetOrAddInteger(
+      "problem", "tracker_1_reflevel", tracker_reflevel);
+  bbh_ref.tracker_reflevel[1] = pin->GetOrAddInteger(
+      "problem", "tracker_2_reflevel", tracker_reflevel);
+  if (!(bbh_ref.tracker_radius[0] > 0.0) || !(bbh_ref.tracker_radius[1] > 0.0) ||
+      bbh_ref.tracker_reflevel[0] < -1 || bbh_ref.tracker_reflevel[1] < -1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "tracker radii must be positive and tracker reflevels must be >= -1"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  bbh_ref.beam_reflevel = pin->GetOrAddInteger("problem", "beam_corridor_reflevel", -1);
+  bbh_ref.beam_radius = pin->GetOrAddReal("problem", "beam_corridor_radius", 0.0);
+  const Real beam_length = pin->GetOrAddReal("problem", "beam_corridor_length", 32.0);
+  Real beam_start_default[3] = {0.0, 0.0, 0.0};
+  Real beam_end_default[3] = {0.0, 0.0, 0.0};
+  if (flash.fixed_launch) {
+    for (int d=0; d<3; ++d) {
+      beam_start_default[d] = flash.fixed_pos[d];
+      beam_end_default[d] = flash.fixed_pos[d] + beam_length*flash.fixed_dir[d];
+    }
+  }
+  bbh_ref.beam_start[0] = pin->GetOrAddReal("problem", "beam_corridor_x0",
+                                            beam_start_default[0]);
+  bbh_ref.beam_start[1] = pin->GetOrAddReal("problem", "beam_corridor_y0",
+                                            beam_start_default[1]);
+  bbh_ref.beam_start[2] = pin->GetOrAddReal("problem", "beam_corridor_z0",
+                                            beam_start_default[2]);
+  bbh_ref.beam_end[0] = pin->GetOrAddReal("problem", "beam_corridor_x1",
+                                          beam_end_default[0]);
+  bbh_ref.beam_end[1] = pin->GetOrAddReal("problem", "beam_corridor_y1",
+                                          beam_end_default[1]);
+  bbh_ref.beam_end[2] = pin->GetOrAddReal("problem", "beam_corridor_z1",
+                                          beam_end_default[2]);
+  bbh_ref.BeamCorridor = (bbh_ref.beam_reflevel >= 0);
+  if (bbh_ref.BeamCorridor) {
+    const Real seg2 = SQR(bbh_ref.beam_end[0] - bbh_ref.beam_start[0]) +
+                      SQR(bbh_ref.beam_end[1] - bbh_ref.beam_start[1]) +
+                      SQR(bbh_ref.beam_end[2] - bbh_ref.beam_start[2]);
+    if (!(bbh_ref.beam_radius > 0.0) || !(seg2 > 0.0)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "beam corridor needs positive radius and nonzero segment length"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
 
   if (restart) return;
@@ -753,9 +877,16 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
   auto &size = pmbp->pmb->mb_size;
   const Real rho0 = read_real_alias("rho", "rho_min", 1.0e-10);
   const Real pgas0 = read_real_alias("pgas", "pgas_min", 1.0e-12);
+  const Real rad_seed_i0 = pin->GetOrAddReal("problem", "rad_seed_i0", 0.0);
   if (!(rho0 > 0.0) || !(pgas0 > 0.0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "dynbbh_beam requires positive rho/pgas" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (rad_seed_i0 < 0.0 || !std::isfinite(rad_seed_i0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "problem/rad_seed_i0 must be finite and non-negative"
+              << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -774,6 +905,9 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
   Kokkos::deep_copy(pmbp->pmhd->b0.x2f, 0.0);
   Kokkos::deep_copy(pmbp->pmhd->b0.x3f, 0.0);
   Kokkos::deep_copy(pmbp->pdynrad->i0, 0.0);
+  if (rad_seed_i0 > 0.0) {
+    Kokkos::deep_copy(pmbp->pdynrad->i0, rad_seed_i0);
+  }
   pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
 
   bool init_beam_particles = pin->GetOrAddBoolean("problem", "init_beam_edge_particles",
@@ -899,6 +1033,27 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
       });
     }
   }
+
+  for (int nr = 0; nr < 16; ++nr) {
+    std::string name = "radius_" + std::to_string(nr) + "_rad";
+    if (pin->DoesParameterExist("problem", name)) {
+      bbh_ref.radius.push_back(pin->GetReal("problem", name));
+      bbh_ref.reflevel.push_back(pin->GetOrAddInteger(
+          "problem", "radius_" + std::to_string(nr) + "_reflevel", -1));
+    } else {
+      break;
+    }
+  }
+
+  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "none");
+  if (amr_cond == "alpha_min") {
+    std::cout << "Using Lapse-Based Refinement" << std::endl;
+    bbh_ref.AlphaMin = true;
+  } else if (amr_cond == "tracker") {
+    std::cout << "Using Tracker-Based Refinement" << std::endl;
+    bbh_ref.Tracker = true;
+  }
+  user_ref_func = Refine;
 }
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
@@ -2135,6 +2290,69 @@ void RefineRadii(MeshBlockPack *pmbp) {
   refine_flag.template sync<DevExeSpace>();
 }
 
+void RefineBeamCorridor(MeshBlockPack *pmbp) {
+  if (!(bbh_ref.BeamCorridor)) return;
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+
+  const Real ax = bbh_ref.beam_start[0];
+  const Real ay = bbh_ref.beam_start[1];
+  const Real az = bbh_ref.beam_start[2];
+  const Real bx = bbh_ref.beam_end[0];
+  const Real by = bbh_ref.beam_end[1];
+  const Real bz = bbh_ref.beam_end[2];
+  const Real vx = bx - ax;
+  const Real vy = by - ay;
+  const Real vz = bz - az;
+  const Real seg2 = SQR(vx) + SQR(vy) + SQR(vz);
+  const Real seg_len = std::sqrt(seg2);
+  const Real ux = vx/seg_len;
+  const Real uy = vy/seg_len;
+  const Real uz = vz/seg_len;
+  const int target_level = bbh_ref.beam_reflevel;
+
+  for (int m=0; m<nmb; ++m) {
+    const int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+    const Real x1min = size.h_view(m).x1min;
+    const Real x1max = size.h_view(m).x1max;
+    const Real x2min = size.h_view(m).x2min;
+    const Real x2max = size.h_view(m).x2max;
+    const Real x3min = size.h_view(m).x3min;
+    const Real x3max = size.h_view(m).x3max;
+    const Real cx = 0.5*(x1min + x1max);
+    const Real cy = 0.5*(x2min + x2max);
+    const Real cz = 0.5*(x3min + x3max);
+    const Real hx = 0.5*(x1max - x1min);
+    const Real hy = 0.5*(x2max - x2min);
+    const Real hz = 0.5*(x3max - x3min);
+    const Real s_center = (cx - ax)*ux + (cy - ay)*uy + (cz - az)*uz;
+    const Real hpar = std::fabs(ux)*hx + std::fabs(uy)*hy + std::fabs(uz)*hz;
+    if (s_center + hpar < 0.0 || s_center - hpar > seg_len) continue;
+    const Real s = std::max(static_cast<Real>(0.0),
+                            std::min(seg_len, s_center));
+    const Real px = ax + s*ux;
+    const Real py = ay + s*uy;
+    const Real pz = az + s*uz;
+    const Real dperp = std::sqrt(SQR(cx - px) + SQR(cy - py) + SQR(cz - pz));
+    const Real hdiag2 = SQR(hx) + SQR(hy) + SQR(hz);
+    const Real hperp = std::sqrt(std::max(static_cast<Real>(0.0),
+                                          hdiag2 - SQR(hpar)));
+    if (dperp <= bbh_ref.beam_radius + hperp) {
+      if (level < target_level) {
+        refine_flag.h_view(m + mbs) = 1;
+      } else if (level == target_level && refine_flag.h_view(m + mbs) == -1) {
+        refine_flag.h_view(m + mbs) = 0;
+      }
+    }
+  }
+
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+}
+
 // 1: refines, -1: de-refines, 0: does nothing
 void Refine(MeshBlockPack *pmy_pack) {
   if (bbh_ref.AlphaMin) {
@@ -2143,6 +2361,7 @@ void Refine(MeshBlockPack *pmy_pack) {
     RefineTracker(pmy_pack);
   }
   RefineRadii(pmy_pack);
+  RefineBeamCorridor(pmy_pack);
 }
 
 //nere hardcoding zero spin
@@ -3069,6 +3288,219 @@ bool FlashProjectedWeights(const DualArray2D<Real> &nh_c, const int nangles,
   return true;
 }
 
+//! \brief Single-bin angular source for diagnostics.  The coordinate ray is still
+//! converted through the current metric/tetrad each substage; only the final discrete
+//! angular representation is snapped to the nearest geodesic-grid direction.
+bool FlashNearestWeight(const DualArray2D<Real> &nh_c, const int nangles,
+                        const Real ell[3], std::vector<Real> &weights) {
+  weights.assign(nangles, 0.0);
+  const Real qn = std::sqrt(SQR(ell[0]) + SQR(ell[1]) + SQR(ell[2]));
+  if (!(qn > 0.0)) return false;
+  const Real qx = ell[0]/qn, qy = ell[1]/qn, qz = ell[2]/qn;
+  int best = -1;
+  Real best_dot = -2.0;
+  for (int n=0; n<nangles; ++n) {
+    const Real dot = nh_c.h_view(n,1)*qx + nh_c.h_view(n,2)*qy
+                   + nh_c.h_view(n,3)*qz;
+    if (dot > best_dot) {
+      best_dot = dot;
+      best = n;
+    }
+  }
+  if (best < 0) return false;
+  weights[best] = 1.0;
+  return true;
+}
+
+bool FlashSolveLinear3(Real a[3][4], Real x[3]) {
+  for (int col=0; col<3; ++col) {
+    int piv = col;
+    Real mx = std::fabs(a[col][col]);
+    for (int r=col+1; r<3; ++r) {
+      if (std::fabs(a[r][col]) > mx) {
+        mx = std::fabs(a[r][col]);
+        piv = r;
+      }
+    }
+    if (mx < 1.0e-14) return false;
+    if (piv != col) {
+      for (int c=col; c<4; ++c) std::swap(a[col][c], a[piv][c]);
+    }
+    const Real inv = 1.0/a[col][col];
+    for (int c=col; c<4; ++c) a[col][c] *= inv;
+    for (int r=0; r<3; ++r) {
+      if (r == col) continue;
+      const Real f = a[r][col];
+      for (int c=col; c<4; ++c) a[r][c] -= f*a[col][c];
+    }
+  }
+  for (int r=0; r<3; ++r) x[r] = a[r][3];
+  return true;
+}
+
+//! \brief Maximum-entropy all-angle angular weights with a prescribed flux factor.
+//! This is the crossing-beam helper from rad_beam.cpp adapted to the moving BBH tetrad.
+bool FlashAllAngleMomentWeights(const DualArray2D<Real> &nh_c,
+                                const DualArray1D<Real> &solid_angles,
+                                const int nangles, const Real ell[3],
+                                const Real flux_fraction,
+                                std::vector<Real> &weights) {
+  weights.assign(nangles, 0.0);
+  const Real qn = std::sqrt(SQR(ell[0]) + SQR(ell[1]) + SQR(ell[2]));
+  if (!(qn > 0.0)) return false;
+  const Real qx = ell[0]/qn, qy = ell[1]/qn, qz = ell[2]/qn;
+
+  std::vector<std::pair<Real,int>> ranked;
+  ranked.reserve(nangles);
+  for (int n=0; n<nangles; ++n) {
+    ranked.emplace_back(nh_c.h_view(n,1)*qx + nh_c.h_view(n,2)*qy
+                        + nh_c.h_view(n,3)*qz, n);
+  }
+  std::sort(ranked.begin(), ranked.end(),
+            [](const auto &a, const auto &b) { return a.first > b.first; });
+
+  Real best_r = -1.0;
+  const int ncand = std::min(nangles, 80);
+  for (int ia=0; ia<ncand; ++ia) {
+    const int aidx = ranked[ia].second;
+    for (int ib=ia+1; ib<ncand; ++ib) {
+      const int bidx = ranked[ib].second;
+      for (int ic=ib+1; ic<ncand; ++ic) {
+        const int cidx = ranked[ic].second;
+        Real a[4][5] = {
+          {nh_c.h_view(aidx,1), nh_c.h_view(bidx,1), nh_c.h_view(cidx,1), -qx, 0.0},
+          {nh_c.h_view(aidx,2), nh_c.h_view(bidx,2), nh_c.h_view(cidx,2), -qy, 0.0},
+          {nh_c.h_view(aidx,3), nh_c.h_view(bidx,3), nh_c.h_view(cidx,3), -qz, 0.0},
+          {1.0, 1.0, 1.0, 0.0, 1.0},
+        };
+        Real sol[4];
+        bool ok = true;
+        for (int col=0; col<4 && ok; ++col) {
+          int piv = col;
+          Real mx = std::fabs(a[col][col]);
+          for (int r=col+1; r<4; ++r) {
+            if (std::fabs(a[r][col]) > mx) {
+              mx = std::fabs(a[r][col]);
+              piv = r;
+            }
+          }
+          if (mx < 1.0e-14) {
+            ok = false;
+            break;
+          }
+          if (piv != col) {
+            for (int c=col; c<5; ++c) std::swap(a[col][c], a[piv][c]);
+          }
+          const Real inv = 1.0/a[col][col];
+          for (int c=col; c<5; ++c) a[col][c] *= inv;
+          for (int r=0; r<4; ++r) {
+            if (r == col) continue;
+            const Real f = a[r][col];
+            for (int c=col; c<5; ++c) a[r][c] -= f*a[col][c];
+          }
+        }
+        if (!ok) continue;
+        for (int r=0; r<4; ++r) sol[r] = a[r][4];
+        const Real min_lam = std::min(sol[0], std::min(sol[1], sol[2]));
+        const Real r = sol[3];
+        if (min_lam >= -1.0e-10 && r > best_r && r <= 1.0 + 1.0e-10) {
+          best_r = r;
+        }
+      }
+    }
+  }
+  if (!(best_r > 0.0)) return false;
+
+  const Real frac = std::min(static_cast<Real>(0.999999),
+                             std::max(static_cast<Real>(0.0), flux_fraction));
+  const Real target_flux = frac*best_r;
+  const Real target[3] = {target_flux*qx, target_flux*qy, target_flux*qz};
+  Real lambda[3] = {0.0, 0.0, 0.0};
+  bool converged = false;
+  for (int iter=0; iter<80; ++iter) {
+    Real max_arg = -std::numeric_limits<Real>::max();
+    for (int n=0; n<nangles; ++n) {
+      const Real arg = lambda[0]*nh_c.h_view(n,1) +
+                       lambda[1]*nh_c.h_view(n,2) +
+                       lambda[2]*nh_c.h_view(n,3);
+      max_arg = std::max(max_arg, arg);
+    }
+
+    Real z = 0.0;
+    Real moment[3] = {0.0, 0.0, 0.0};
+    Real second[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    for (int n=0; n<nangles; ++n) {
+      const Real prior = solid_angles.h_view(n)/(4.0*M_PI);
+      const Real arg = lambda[0]*nh_c.h_view(n,1) +
+                       lambda[1]*nh_c.h_view(n,2) +
+                       lambda[2]*nh_c.h_view(n,3);
+      const Real unorm = prior*std::exp(arg - max_arg);
+      z += unorm;
+      const Real dir[3] = {nh_c.h_view(n,1), nh_c.h_view(n,2), nh_c.h_view(n,3)};
+      for (int a=0; a<3; ++a) {
+        moment[a] += unorm*dir[a];
+        for (int b=0; b<3; ++b) second[a][b] += unorm*dir[a]*dir[b];
+      }
+    }
+    for (int a=0; a<3; ++a) {
+      moment[a] /= z;
+      for (int b=0; b<3; ++b) second[a][b] /= z;
+    }
+
+    const Real residual[3] = {target[0] - moment[0],
+                              target[1] - moment[1],
+                              target[2] - moment[2]};
+    const Real res_norm = std::sqrt(SQR(residual[0]) + SQR(residual[1]) +
+                                    SQR(residual[2]));
+    if (res_norm < 1.0e-12) {
+      converged = true;
+      break;
+    }
+    Real mat[3][4];
+    for (int a=0; a<3; ++a) {
+      for (int b=0; b<3; ++b) mat[a][b] = second[a][b] - moment[a]*moment[b];
+      mat[a][a] += 1.0e-14;
+      mat[a][3] = residual[a];
+    }
+    Real delta[3];
+    if (!FlashSolveLinear3(mat, delta)) break;
+    Real max_delta = std::max(std::fabs(delta[0]),
+                              std::max(std::fabs(delta[1]), std::fabs(delta[2])));
+    const Real step = (max_delta > 8.0) ? (8.0/max_delta) : 1.0;
+    for (int a=0; a<3; ++a) lambda[a] += step*delta[a];
+  }
+  if (!converged) return false;
+
+  Real max_arg = -std::numeric_limits<Real>::max();
+  for (int n=0; n<nangles; ++n) {
+    const Real arg = lambda[0]*nh_c.h_view(n,1) +
+                     lambda[1]*nh_c.h_view(n,2) +
+                     lambda[2]*nh_c.h_view(n,3);
+    max_arg = std::max(max_arg, arg);
+  }
+  Real z = 0.0;
+  for (int n=0; n<nangles; ++n) {
+    const Real prior = solid_angles.h_view(n)/(4.0*M_PI);
+    const Real arg = lambda[0]*nh_c.h_view(n,1) +
+                     lambda[1]*nh_c.h_view(n,2) +
+                     lambda[2]*nh_c.h_view(n,3);
+    weights[n] = prior*std::exp(arg - max_arg);
+    z += weights[n];
+  }
+  Real sum_w = 0.0, mx = 0.0, my = 0.0, mz = 0.0;
+  for (int n=0; n<nangles; ++n) {
+    weights[n] /= z;
+    const Real w = weights[n];
+    sum_w += w;
+    mx += w*nh_c.h_view(n,1);
+    my += w*nh_c.h_view(n,2);
+    mz += w*nh_c.h_view(n,3);
+  }
+  const Real moment_err = std::sqrt(SQR(mx - target[0]) + SQR(my - target[1]) +
+                                    SQR(mz - target[2]));
+  return std::fabs(sum_w - 1.0) <= 1.0e-11 && moment_err <= 1.0e-10;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void FlashLaunchGeometry()
 //! \brief Returns the launch point and (unit, in-plane) ring-tangent coordinate aim
@@ -3078,6 +3510,16 @@ bool FlashProjectedWeights(const DualArray2D<Real> &nh_c, const int nangles,
 //! chosen orbital sense, optionally rotated by aim_offset.
 
 void FlashLaunchGeometry(const Real t, Real pos[3], Real dir[3]) {
+  if (flash.fixed_launch) {
+    pos[0] = flash.fixed_pos[0];
+    pos[1] = flash.fixed_pos[1];
+    pos[2] = flash.fixed_pos[2];
+    dir[0] = flash.fixed_dir[0];
+    dir[1] = flash.fixed_dir[1];
+    dir[2] = flash.fixed_dir[2];
+    return;
+  }
+
   Real traj[NTRAJ];
   find_traj_t(t, traj);
   Real cx, cy, cz, vx, vy, vz, m_src, chi_src;
@@ -3171,7 +3613,18 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
     std::exit(EXIT_FAILURE);
   }
   static std::vector<Real> h_weights;
-  if (!FlashProjectedWeights(pmbp->pdynrad->nh_c, nangles, ell, h_weights)) {
+  bool weights_ok = false;
+  if (flash.nearest_weight) {
+    weights_ok = FlashNearestWeight(pmbp->pdynrad->nh_c, nangles, ell, h_weights);
+  } else if (flash.projected_weights || !(flash.flux_fraction > 0.0)) {
+    weights_ok = FlashProjectedWeights(pmbp->pdynrad->nh_c, nangles, ell, h_weights);
+  } else {
+    weights_ok = FlashAllAngleMomentWeights(pmbp->pdynrad->nh_c,
+                                            pmbp->pdynrad->prgeo->solid_angles,
+                                            nangles, ell, flash.flux_fraction,
+                                            h_weights);
+  }
+  if (!weights_ok) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "flash beam angular projection failed" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -3207,6 +3660,7 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
   auto &excise = pmbp->pcoord->coord_data.bh_excise;
   auto &rad_mask = pmbp->pcoord->excision_floor;
   auto weights = *d_weights_ptr;
+  const bool fm = pmbp->pdynrad->frequency_moments;
 
   const Real width2 = SQR(flash.width);
   const Real inject = amp_t*bdt;
@@ -3221,8 +3675,11 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
     Real dist2 = SQR(x1v - sxp) + SQR(x2v - syp) + SQR(x3v - szp);
     Real spatial = exp(-0.5*dist2/width2);
     if (spatial < 1.0e-8) return;
-    i0(m,n,k,j,i) += sqrt_detg_c(m,k,j,i)*inject*spatial
-                     *weights(n)/solid_angles.d_view(n);
+    const Real dinj = sqrt_detg_c(m,k,j,i)*inject*spatial
+                      *weights(n)/solid_angles.d_view(n);
+    i0(m,n,k,j,i) += dinj;
+    // photon number injected at the reference frequency nu=1
+    if (fm) { i0(m,nangles+n,k,j,i) += dinj; }
   });
 }
 

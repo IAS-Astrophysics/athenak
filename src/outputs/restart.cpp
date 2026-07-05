@@ -86,7 +86,7 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
   } else if (pdynrad != nullptr) {
-    nrad = pdynrad->prgeo->nangles;
+    nrad = pdynrad->nvars_tot;
   }
 
   // Note for restarts, outarrays are dimensioned (m,n,k,j,i)
@@ -169,7 +169,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
   } else if (pdynrad != nullptr) {
-    nrad = pdynrad->prgeo->nangles;
+    nrad = pdynrad->nvars_tot;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;

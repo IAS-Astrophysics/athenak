@@ -22,6 +22,54 @@
 #include "reconstruct/wenoz.hpp"
 
 namespace dyn_radiation {
+
+//----------------------------------------------------------------------------------------
+//! \fn Real ReconFaceUpwind
+//! \brief Upwind face reconstruction of the primitive intensity, shared by the energy
+//! and (with frequency_moments) photon-number fields so the advection speed, upwind
+//! decision, and geometric normalizations are computed once per face.
+
+KOKKOS_INLINE_FUNCTION
+Real ReconFaceUpwind(const ReconstructionMethod rm, const bool near_excision,
+                     const Real nsign, const Real im3, const Real im2, const Real im1,
+                     const Real icc, const Real ip1, const Real ip2) {
+  Real iiu = 0.0, scr;
+  if (near_excision) {
+    if (nsign > 0.0) iiu = im1;
+    else             iiu = icc;
+    return iiu;
+  }
+  switch (rm) {
+    case ReconstructionMethod::dc:
+      if (nsign > 0.0) iiu = im1;
+      else             iiu = icc;
+      break;
+    case ReconstructionMethod::plm:
+      if (nsign > 0.0) PLM(im2, im1, icc, iiu, scr);
+      else             PLM(im1, icc, ip1, scr, iiu);
+      break;
+    case ReconstructionMethod::ppm4:
+      if (nsign > 0.0) PPM4(im3, im2, im1, icc, ip1, iiu, scr);
+      else             PPM4(im2, im1, icc, ip1, ip2, scr, iiu);
+      break;
+    case ReconstructionMethod::ppmx:
+      if (nsign > 0.0) PPMX(im3, im2, im1, icc, ip1, iiu, scr);
+      else             PPMX(im2, im1, icc, ip1, ip2, scr, iiu);
+      break;
+    case ReconstructionMethod::wenoz:
+      if (nsign > 0.0) WENOZ(im3, im2, im1, icc, ip1, iiu, scr);
+      else             WENOZ(im2, im1, icc, ip1, ip2, scr, iiu);
+      break;
+    case ReconstructionMethod::wenomz:
+      if (nsign > 0.0) WENOMZ(im3, im2, im1, icc, ip1, iiu, scr);
+      else             WENOMZ(im2, im1, icc, ip1, ip2, scr, iiu);
+      break;
+    default:
+      break;
+  }
+  return iiu;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  void DynRadiation::CalculateFluxes
 //! \brief Compute dyn_radiation fluxes
@@ -41,6 +89,12 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
   auto &tet_c_ = tet_c;
   auto &sqrt_detg_c_ = sqrt_detg_c;
   bool use_adm_geometry_ = use_adm_geometry;
+  bool excise = pmy_pack->pcoord->coord_data.bh_excise && excision_donor_cell;
+  auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+  const bool fm_ = frequency_moments;
+  const int nang_ = prgeo->nangles;
+
+  ApplyExcisionToIntensity(i0);
 
   //--------------------------------------------------------------------------------------
   // i-direction
@@ -55,7 +109,7 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
             + t1d1(m,2,k,j,i)*nh_c_.d_view(n,2) + t1d1(m,3,k,j,i)*nh_c_.d_view(n,3);
 
     // convert to primitive n_0 I
-    Real iim1, iicc, iim2, iip1, iim3, iip2;
+    Real iim1, iicc, iim2 = 0.0, iip1 = 0.0, iim3 = 0.0, iip2 = 0.0;
     Real norm_im1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i-1) : tet_c_(m,0,0,k,j,i-1);
     Real norm_i   = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i  ) : tet_c_(m,0,0,k,j,i  );
     iim1 = i0_(m,n,k,j,i-1)/norm_im1;
@@ -74,39 +128,40 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
     }
 
     // reconstruct primitive intensity
-    Real iiu, scr;
-    switch (recon_method_) {
-      case ReconstructionMethod::dc:
-        if (n1 > 0.0) iiu = iim1;
-        else          iiu = iicc;
-        break;
-      case ReconstructionMethod::plm:
-        if (n1 > 0.0) PLM(iim2, iim1, iicc, iiu, scr);
-        else          PLM(iim1, iicc, iip1, scr, iiu);
-        break;
-      case ReconstructionMethod::ppm4:
-        if (n1 > 0.0) PPM4(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-        else          PPM4(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-        break;
-      case ReconstructionMethod::ppmx:
-        if (n1 > 0.0) PPMX(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-        else          PPMX(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-        break;
-      case ReconstructionMethod::wenoz:
-        if (n1 > 0.0) WENOZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-        else          WENOZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-        break;
-      case ReconstructionMethod::wenomz:
-        if (n1 > 0.0) WENOMZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-        else          WENOMZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-        break;
-      default:
-        break;
-    }
+    bool near_excision = excise && (excision_flux_(m,k,j,i-1) ||
+                                    excision_flux_(m,k,j,i));
+    Real iiu = ReconFaceUpwind(recon_method_, near_excision, n1,
+                               iim3, iim2, iim1, iicc, iip1, iip2);
 
     // compute x1flux
     Real face_norm = use_adm_geometry_ ? sqrt_detg_x1f_(m,k,j,i) : 1.0;
     flx1(m,n,k,j,i) = face_norm*n1*iiu;
+
+    // photon-number field: reuse the advection speed, upwind decision, and norms
+    if (fm_) {
+      Real nnm1, nncc, nnm2 = 0.0, nnp1 = 0.0, nnm3 = 0.0, nnp2 = 0.0;
+      nnm1 = i0_(m,nang_+n,k,j,i-1)/norm_im1;
+      nncc = i0_(m,nang_+n,k,j,i  )/norm_i;
+      if (recon_method_ > 0) {
+        Real norm_im2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i-2)
+                                          : tet_c_(m,0,0,k,j,i-2);
+        Real norm_ip1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i+1)
+                                          : tet_c_(m,0,0,k,j,i+1);
+        nnm2 = i0_(m,nang_+n,k,j,i-2)/norm_im2;
+        nnp1 = i0_(m,nang_+n,k,j,i+1)/norm_ip1;
+      }
+      if (recon_method_ > 1) {
+        Real norm_im3 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i-3)
+                                          : tet_c_(m,0,0,k,j,i-3);
+        Real norm_ip2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i+2)
+                                          : tet_c_(m,0,0,k,j,i+2);
+        nnm3 = i0_(m,nang_+n,k,j,i-3)/norm_im3;
+        nnp2 = i0_(m,nang_+n,k,j,i+2)/norm_ip2;
+      }
+      Real nnu = ReconFaceUpwind(recon_method_, near_excision, n1,
+                                 nnm3, nnm2, nnm1, nncc, nnp1, nnp2);
+      flx1(m,nang_+n,k,j,i) = face_norm*n1*nnu;
+    }
   });
 
   //--------------------------------------------------------------------------------------
@@ -123,7 +178,7 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
               + t2d2(m,2,k,j,i)*nh_c_.d_view(n,2) + t2d2(m,3,k,j,i)*nh_c_.d_view(n,3);
 
       // convert to primitive n_0 I
-      Real iim1, iicc, iim2, iip1, iim3, iip2;
+      Real iim1, iicc, iim2 = 0.0, iip1 = 0.0, iim3 = 0.0, iip2 = 0.0;
       Real norm_jm1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-1,i) : tet_c_(m,0,0,k,j-1,i);
       Real norm_j   = use_adm_geometry_ ? sqrt_detg_c_(m,k,j  ,i) : tet_c_(m,0,0,k,j  ,i);
       iim1 = i0_(m,n,k,j-1,i)/norm_jm1;
@@ -142,39 +197,40 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
 
       // reconstruct primitive intensity
-      Real iiu, scr;
-      switch (recon_method_) {
-        case ReconstructionMethod::dc:
-          if (n2 > 0.0) iiu = iim1;
-          else          iiu = iicc;
-          break;
-        case ReconstructionMethod::plm:
-          if (n2 > 0.0) PLM(iim2, iim1, iicc, iiu, scr);
-          else          PLM(iim1, iicc, iip1, scr, iiu);
-          break;
-        case ReconstructionMethod::ppm4:
-          if (n2 > 0.0) PPM4(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          PPM4(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        case ReconstructionMethod::ppmx:
-          if (n2 > 0.0) PPMX(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          PPMX(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        case ReconstructionMethod::wenoz:
-          if (n2 > 0.0) WENOZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          WENOZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        case ReconstructionMethod::wenomz:
-          if (n2 > 0.0) WENOMZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          WENOMZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        default:
-          break;
-      }
+      bool near_excision = excise && (excision_flux_(m,k,j-1,i) ||
+                                      excision_flux_(m,k,j,i));
+      Real iiu = ReconFaceUpwind(recon_method_, near_excision, n2,
+                                 iim3, iim2, iim1, iicc, iip1, iip2);
 
       // compute x2flux
       Real face_norm = use_adm_geometry_ ? sqrt_detg_x2f_(m,k,j,i) : 1.0;
       flx2(m,n,k,j,i) = face_norm*n2*iiu;
+
+      // photon-number field: reuse the advection speed, upwind decision, and norms
+      if (fm_) {
+        Real nnm1, nncc, nnm2 = 0.0, nnp1 = 0.0, nnm3 = 0.0, nnp2 = 0.0;
+        nnm1 = i0_(m,nang_+n,k,j-1,i)/norm_jm1;
+        nncc = i0_(m,nang_+n,k,j  ,i)/norm_j;
+        if (recon_method_ > 0) {
+          Real norm_jm2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-2,i)
+                                            : tet_c_(m,0,0,k,j-2,i);
+          Real norm_jp1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j+1,i)
+                                            : tet_c_(m,0,0,k,j+1,i);
+          nnm2 = i0_(m,nang_+n,k,j-2,i)/norm_jm2;
+          nnp1 = i0_(m,nang_+n,k,j+1,i)/norm_jp1;
+        }
+        if (recon_method_ > 1) {
+          Real norm_jm3 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-3,i)
+                                            : tet_c_(m,0,0,k,j-3,i);
+          Real norm_jp2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j+2,i)
+                                            : tet_c_(m,0,0,k,j+2,i);
+          nnm3 = i0_(m,nang_+n,k,j-3,i)/norm_jm3;
+          nnp2 = i0_(m,nang_+n,k,j+2,i)/norm_jp2;
+        }
+        Real nnu = ReconFaceUpwind(recon_method_, near_excision, n2,
+                                   nnm3, nnm2, nnm1, nncc, nnp1, nnp2);
+        flx2(m,nang_+n,k,j,i) = face_norm*n2*nnu;
+      }
     });
   }
 
@@ -192,7 +248,7 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
               + t3d3(m,2,k,j,i)*nh_c_.d_view(n,2) + t3d3(m,3,k,j,i)*nh_c_.d_view(n,3);
 
       // convert to primitive n_0 I
-      Real iim1, iicc, iim2, iip1, iim3, iip2;
+      Real iim1, iicc, iim2 = 0.0, iip1 = 0.0, iim3 = 0.0, iip2 = 0.0;
       Real norm_km1 = use_adm_geometry_ ? sqrt_detg_c_(m,k-1,j,i) : tet_c_(m,0,0,k-1,j,i);
       Real norm_k   = use_adm_geometry_ ? sqrt_detg_c_(m,k  ,j,i) : tet_c_(m,0,0,k  ,j,i);
       iim1 = i0_(m,n,k-1,j,i)/norm_km1;
@@ -211,39 +267,40 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
       }
 
       // reconstruct primitive intensity
-      Real iiu, scr;
-      switch (recon_method_) {
-        case ReconstructionMethod::dc:
-          if (n3 > 0.0) iiu = iim1;
-          else          iiu = iicc;
-          break;
-        case ReconstructionMethod::plm:
-          if (n3 > 0.0) PLM(iim2, iim1, iicc, iiu, scr);
-          else          PLM(iim1, iicc, iip1, scr, iiu);
-          break;
-        case ReconstructionMethod::ppm4:
-          if (n3 > 0.0) PPM4(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          PPM4(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        case ReconstructionMethod::ppmx:
-          if (n3 > 0.0) PPMX(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          PPMX(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        case ReconstructionMethod::wenoz:
-          if (n3 > 0.0) WENOZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          WENOZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        case ReconstructionMethod::wenomz:
-          if (n3 > 0.0) WENOMZ(iim3, iim2, iim1, iicc, iip1, iiu, scr);
-          else          WENOMZ(iim2, iim1, iicc, iip1, iip2, scr, iiu);
-          break;
-        default:
-          break;
-      }
+      bool near_excision = excise && (excision_flux_(m,k-1,j,i) ||
+                                      excision_flux_(m,k,j,i));
+      Real iiu = ReconFaceUpwind(recon_method_, near_excision, n3,
+                                 iim3, iim2, iim1, iicc, iip1, iip2);
 
       // compute x3flux
       Real face_norm = use_adm_geometry_ ? sqrt_detg_x3f_(m,k,j,i) : 1.0;
       flx3(m,n,k,j,i) = face_norm*n3*iiu;
+
+      // photon-number field: reuse the advection speed, upwind decision, and norms
+      if (fm_) {
+        Real nnm1, nncc, nnm2 = 0.0, nnp1 = 0.0, nnm3 = 0.0, nnp2 = 0.0;
+        nnm1 = i0_(m,nang_+n,k-1,j,i)/norm_km1;
+        nncc = i0_(m,nang_+n,k  ,j,i)/norm_k;
+        if (recon_method_ > 0) {
+          Real norm_km2 = use_adm_geometry_ ? sqrt_detg_c_(m,k-2,j,i)
+                                            : tet_c_(m,0,0,k-2,j,i);
+          Real norm_kp1 = use_adm_geometry_ ? sqrt_detg_c_(m,k+1,j,i)
+                                            : tet_c_(m,0,0,k+1,j,i);
+          nnm2 = i0_(m,nang_+n,k-2,j,i)/norm_km2;
+          nnp1 = i0_(m,nang_+n,k+1,j,i)/norm_kp1;
+        }
+        if (recon_method_ > 1) {
+          Real norm_km3 = use_adm_geometry_ ? sqrt_detg_c_(m,k-3,j,i)
+                                            : tet_c_(m,0,0,k-3,j,i);
+          Real norm_kp2 = use_adm_geometry_ ? sqrt_detg_c_(m,k+2,j,i)
+                                            : tet_c_(m,0,0,k+2,j,i);
+          nnm3 = i0_(m,nang_+n,k-3,j,i)/norm_km3;
+          nnp2 = i0_(m,nang_+n,k+2,j,i)/norm_kp2;
+        }
+        Real nnu = ReconFaceUpwind(recon_method_, near_excision, n3,
+                                   nnm3, nnm2, nnm1, nncc, nnp1, nnp2);
+        flx3(m,nang_+n,k,j,i) = face_norm*n3*nnu;
+      }
     });
   }
 
@@ -262,24 +319,28 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
     par_for("rflux_angular",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       divfa_(m,n,k,j,i) = 0.0;
+      Real divn = 0.0;
       for (int nb=0; nb<numn.d_view(n); ++nb) {
+        const Real na_edge = na_(m,n,k,j,i,nb);
+        const int n_upw = (na_edge < 0.0) ? indn.d_view(n,nb) : n;
         Real flx_edge;
         if (use_adm_geometry_) {
           // ADM angular drift is a coordinate-time angular velocity, so the
           // finite-volume unknown is U=sqrt(gamma) I itself.
-          flx_edge = na_(m,n,k,j,i,nb) *
-                     ((na_(m,n,k,j,i,nb) < 0.0) ?
-                      i0_(m,indn.d_view(n,nb),k,j,i) : i0_(m,n,k,j,i));
+          flx_edge = na_edge*i0_(m,n_upw,k,j,i);
         } else {
           // Preserve the legacy CKS normalization: the angular flux advects
           // the invariant intensity primitive U/k^0.
-          flx_edge = na_(m,n,k,j,i,nb) *
-                     ((na_(m,n,k,j,i,nb) < 0.0) ?
-                      i0_(m,indn.d_view(n,nb),k,j,i)/tet_c_(m,0,0,k,j,i) :
-                      i0_(m,n,k,j,i)/tet_c_(m,0,0,k,j,i));
+          flx_edge = na_edge*i0_(m,n_upw,k,j,i)/tet_c_(m,0,0,k,j,i);
         }
         divfa_(m,n,k,j,i) += (arcl.d_view(n,nb)*flx_edge/solid_angles_.d_view(n));
+        if (fm_) {
+          // photon number advects with the same edge speeds and upwind bins
+          divn += (arcl.d_view(n,nb)*na_edge*i0_(m,nang_+n_upw,k,j,i)
+                   /solid_angles_.d_view(n));
+        }
       }
+      if (fm_) { divfa_(m,nang_+n,k,j,i) = divn; }
     });
   }
 

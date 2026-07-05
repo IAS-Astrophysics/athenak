@@ -15,6 +15,7 @@
 #include <algorithm> // min
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
@@ -209,6 +210,17 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
   if (angular_fluxes_) { dtnew = std::min(dtnew, dta); }
   if (use_adm_geometry && adm_metric_source) { dtnew = std::min(dtnew, dtg); }
+
+  // periodically report the cumulative frequency-cap deleted budget
+  if (frequency_moments && global_variable::my_rank == 0 &&
+      (pmy_pack->pmesh->ncycle % 100 == 0)) {
+    auto h_budget = Kokkos::create_mirror_view(deleted_budget);
+    Kokkos::deep_copy(h_budget, deleted_budget);
+    std::cout << "dynrad(frequency_moments): cumulative nu-cap deleted energy="
+              << std::setprecision(6) << std::scientific << h_budget(0)
+              << " number=" << h_budget(1)
+              << " (cycle " << pmy_pack->pmesh->ncycle << ")" << std::endl;
+  }
 
   return TaskStatus::complete;
 }

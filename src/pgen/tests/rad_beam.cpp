@@ -600,6 +600,7 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
   DvceArray6D<Real> tet_c;
   DvceArray6D<Real> tetcov_c;
   DvceArray4D<Real> sqrt_detg_c;
+  bool fm = false;
   if (pmbp->prad != nullptr) {
     nang1 = pmbp->prad->prgeo->nangles - 1;
     i0 = pmbp->prad->i0;
@@ -610,6 +611,7 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
   } else if (pmbp->pdynrad != nullptr) {
     nang1 = pmbp->pdynrad->prgeo->nangles - 1;
     use_adm_geometry = pmbp->pdynrad->use_adm_geometry;
+    fm = pmbp->pdynrad->frequency_moments;
     i0 = pmbp->pdynrad->i0;
     nh_c = pmbp->pdynrad->nh_c;
     solid_angles = pmbp->pdynrad->prgeo->solid_angles;
@@ -619,6 +621,7 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
   } else {
     throw std::runtime_error("rad_crossing_beams requires <radiation> or <dyn_radiation>");
   }
+  const int nangles_ = nang1 + 1;
 
   auto &size = pmbp->pmb->mb_size;
   auto &mb_bcs = pmbp->pmb->mb_bcs;
@@ -675,6 +678,8 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
       norm = tet_c(m,0,0,k,j,i)*n_0;
     }
     i0(m,n,k,j,i) = norm*intensity;
+    // photon number injected at the reference frequency nu=1
+    if (fm) { i0(m,nangles_+n,k,j,i) = norm*intensity; }
   });
 }
 
@@ -1592,6 +1597,7 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
 
   int nang1 = -1;
   bool use_adm_geometry = false;
+  bool fm = false;
   DvceArray5D<Real> i0;
   DualArray2D<Real> nh_c;
   DualArray1D<Real> solid_angles;
@@ -1608,6 +1614,7 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
   } else if (pmbp->pdynrad != nullptr) {
     nang1 = pmbp->pdynrad->prgeo->nangles - 1;
     use_adm_geometry = pmbp->pdynrad->use_adm_geometry;
+    fm = pmbp->pdynrad->frequency_moments;
     i0 = pmbp->pdynrad->i0;
     nh_c = pmbp->pdynrad->nh_c;
     solid_angles = pmbp->pdynrad->prgeo->solid_angles;
@@ -1620,6 +1627,7 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
   if (kerr_orbit_beam.angular_weights == nullptr) {
     throw std::runtime_error("rad_kerr_orbit_beam angular weights were not initialized");
   }
+  const int nangles_ = nang1 + 1;
 
   auto &size = pmbp->pmb->mb_size;
   auto &excise = pmbp->pcoord->coord_data.bh_excise;
@@ -1659,6 +1667,8 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
         norm = tet_c(m,0,0,k,j,i)*n_0;
       }
       i0(m,n,k,j,i) += norm*primitive_source;
+      // photon number injected at the reference frequency nu=1
+      if (fm) { i0(m,nangles_+n,k,j,i) += norm*primitive_source; }
     });
   }
 }
@@ -1687,7 +1697,8 @@ void ZeroIntensity(Mesh *pm) {
     nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
   } else if (pm->pmb_pack->pdynrad != nullptr) {
     i0_ = pm->pmb_pack->pdynrad->i0;
-    nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
+    // covers the photon-number slots too when frequency_moments is enabled
+    nang1 = pm->pmb_pack->pdynrad->nvars_tot - 1;
   }
   int nmb = pm->pmb_pack->nmb_thispack;
 

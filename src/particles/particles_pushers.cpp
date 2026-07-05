@@ -12,6 +12,9 @@
 #include "coordinates/adm.hpp"
 #include "particles.hpp"
 
+#include <cmath>
+#include <limits>
+
 namespace particles {
 namespace {
 
@@ -61,11 +64,13 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &mbsize = pmy_pack->pmb->mb_size;
+  auto &mblev = pmy_pack->pmb->mb_lev;
   auto &pi = prtcl_idata;
   auto &pr = prtcl_rdata;
   auto dt_ = (pmy_pack->pmesh->dt);
   auto gids = pmy_pack->gids;
   int nmb = pmy_pack->nmb_thispack;
+  const Real block_eps = 16.0*std::numeric_limits<Real>::epsilon();
 
   switch (pusher) {
     case ParticlesPusher::drift:
@@ -90,24 +95,65 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     break;
   case ParticlesPusher::null_geodesic:
     {
+    if (pmy_pack->padm != nullptr && pmy_pack->padm->is_dynamic &&
+        pmy_pack->padm->SetADMVariables != nullptr) {
+      pmy_pack->padm->SetADMVariables(pmy_pack);
+    }
     auto &adm_vars = pmy_pack->padm->adm;
     par_for("part_null_geodesic",DevExeSpace(),0,(nprtcl_thispack-1),
     KOKKOS_LAMBDA(const int p) {
       int m = pi(PGID,p) - gids;
+      const Real xp = pr(IPX,p);
+      const Real yp = pr(IPY,p);
+      const Real zp = pr(IPZ,p);
+
+      // Particle communication updates PGID only after a push.  For null-geodesic
+      // tracers this is not enough near AMR boundaries: using the old block and then
+      // clamping indices can sample the wrong, nearly constant metric.  Re-locate the
+      // particle in the finest local block before evaluating the ADM Hamiltonian.
+      int best_m = -1;
+      int best_lev = -1000000;
+      for (int mm=0; mm<nmb; ++mm) {
+        const Real eps1 = block_eps*fmax(1.0, fmax(fabs(mbsize.d_view(mm).x1min),
+                                                   fabs(mbsize.d_view(mm).x1max)));
+        const Real eps2 = block_eps*fmax(1.0, fmax(fabs(mbsize.d_view(mm).x2min),
+                                                   fabs(mbsize.d_view(mm).x2max)));
+        const Real eps3 = block_eps*fmax(1.0, fmax(fabs(mbsize.d_view(mm).x3min),
+                                                   fabs(mbsize.d_view(mm).x3max)));
+        bool inside = (xp >= mbsize.d_view(mm).x1min - eps1 &&
+                       xp <= mbsize.d_view(mm).x1max + eps1);
+        if (multi_d) {
+          inside = inside && (yp >= mbsize.d_view(mm).x2min - eps2 &&
+                              yp <= mbsize.d_view(mm).x2max + eps2);
+        }
+        if (three_d) {
+          inside = inside && (zp >= mbsize.d_view(mm).x3min - eps3 &&
+                              zp <= mbsize.d_view(mm).x3max + eps3);
+        }
+        const int lev = mblev.d_view(mm);
+        if (inside && lev >= best_lev) {
+          best_m = mm;
+          best_lev = lev;
+        }
+      }
+      if (best_m >= 0) {
+        m = best_m;
+        pi(PGID,p) = gids + m;
+      }
       if ((m < 0) || (m >= nmb)) return;
 
-      int i = static_cast<int>((pr(IPX,p) - mbsize.d_view(m).x1min)/
+      int i = static_cast<int>((xp - mbsize.d_view(m).x1min)/
                                mbsize.d_view(m).dx1) + is;
       i = (i < is) ? is : ((i > ie) ? ie : i);
       int j = js;
       if (multi_d) {
-        j = static_cast<int>((pr(IPY,p) - mbsize.d_view(m).x2min)/
+        j = static_cast<int>((yp - mbsize.d_view(m).x2min)/
                              mbsize.d_view(m).dx2) + js;
         j = (j < js) ? js : ((j > je) ? je : j);
       }
       int k = ks;
       if (three_d) {
-        k = static_cast<int>((pr(IPZ,p) - mbsize.d_view(m).x3min)/
+        k = static_cast<int>((zp - mbsize.d_view(m).x3min)/
                              mbsize.d_view(m).dx3) + ks;
         k = (k < ks) ? ks : ((k > ke) ? ke : k);
       }
