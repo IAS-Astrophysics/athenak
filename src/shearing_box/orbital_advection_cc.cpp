@@ -226,9 +226,7 @@ TaskStatus OrbitalAdvectionCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
 
   auto &mbsize = pmy_pack->pmb->mb_size;
-  auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &dt = pmy_pack->pmesh->dt;
-  Real ly = (mesh_size.x2max - mesh_size.x2min);
   Real qo = qshear*omega0;
 
   int scr_lvl=0;

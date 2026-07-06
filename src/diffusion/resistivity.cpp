@@ -6,14 +6,17 @@
 //! \file resistivity.cpp
 //  \brief Implements functions for Resistivity class.
 
+#include <float.h>
 #include <algorithm>
 #include <iostream>
 #include <limits>
+#include <string> // string
 
 // Athena++ headers
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
 #include "resistivity.hpp"
 #include "current_density.hpp"
 
@@ -21,26 +24,10 @@
 // ctor: also calls Resistivity base class constructor
 
 Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp) {
-  // Read parameters for Ohmic diffusion (if any)
-  eta_ohm = pin->GetReal("mhd","ohmic_resistivity");
-
-  // resistive timestep on MeshBlock(s) in this pack
-  dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pmb->mb_size;
-  Real fac;
-  if (pp->pmesh->three_d) {
-    fac = 1.0/6.0;
-  } else if (pp->pmesh->two_d) {
-    fac = 0.25;
-  } else {
-    fac = 0.5;
-  }
-  for (int m=0; m<(pp->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_ohm);
-    if (pp->pmesh->multi_d) {dtnew = std::min(dtnew,fac*SQR(size.h_view(m).dx2)/eta_ohm);}
-    if (pp->pmesh->three_d) {dtnew = std::min(dtnew,fac*SQR(size.h_view(m).dx3)/eta_ohm);}
-  }
+    pmy_pack(pp) {
+  // Read non-ideal MHD coefficients (if any). A non-zero value enables the term.
+  eta_ohm = pin->GetOrAddReal("mhd","eta_ohm",0.0);
+  eta_ad  = pin->GetOrAddReal("mhd","eta_ad",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -50,13 +37,48 @@ Resistivity::~Resistivity() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn OhmicEField()
+//! \fn void AddResistiveEMFs()
+//! \brief Wrapper function that adds non-ideal electric fields to the corner-centered
+//! EMF. Adds the Ohmic contribution if eta_ohm != 0 and the ambipolar contribution if
+//! eta_ad != 0. Both use constant coefficients.
+
+void Resistivity::AddResistiveEMFs(const DvceFaceFld4D<Real> &b0,
+    DvceEdgeFld4D<Real> &efld) {
+  if (eta_ohm != 0.0) {
+    AddEMFConstantResist(b0, efld);
+  }
+  if (eta_ad != 0.0) {
+    AddEMFConstantAmbipolar(b0, efld);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddResistiveFluxes()
+//! \brief Wrapper function that adds non-ideal energy (Poynting) fluxes to the energy
+//! flux. Adds the Ohmic contribution if eta_ohm != 0 and the ambipolar contribution if
+//! eta_ad != 0. Both use constant coefficients.
+
+void Resistivity::AddResistiveFluxes(const DvceFaceFld4D<Real> &b0,
+    DvceFaceFld5D<Real> &flx) {
+  if (eta_ohm != 0.0) {
+    AddFluxConstantResist(b0, flx);
+  }
+  if (eta_ad != 0.0) {
+    AddFluxConstantAmbipolar(b0, flx);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn AddEMFConstantResist()
 //  \brief Adds electric field from Ohmic resistivity to corner-centered electric field
 //  Using Ohm's Law to compute the electric field:  E + (v x B) = \eta J, then
 //    E_{inductive} = - (v x B)  [computed in the MHD Riemann solver]
 //    E_{resistive} = \eta J     [computed in this function]
 
-void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real> &efld) {
+void Resistivity::AddEMFConstantResist(const DvceFaceFld4D<Real> &b0,
+    DvceEdgeFld4D<Real> &efld) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -162,13 +184,12 @@ void Resistivity::OhmicEField(const DvceFaceFld4D<Real> &b0, DvceEdgeFld4D<Real>
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn OhmicEnergyFlux()
+//! \fn AddResistiveFluxConstantResist()
 //  \brief Adds Poynting flux from Ohmic resistivity to energy flux
 //  Total energy equation is dE/dt = - Div(F) where F = (E X B) = \eta (J X B)
 
-
-void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b,
-                                  DvceFaceFld5D<Real> &flx) {
+void Resistivity::AddFluxConstantResist(const DvceFaceFld4D<Real> &b,
+                                        DvceFaceFld5D<Real> &flx) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -181,7 +202,6 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b,
 
   //------------------------------
   // energy fluxes in x1-direction
-
   auto &flx1 = flx.x1f;
   par_for("ohm_heat1", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie+1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -210,7 +230,6 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b,
 
   //------------------------------
   // energy fluxes in x2-direction
-
   auto &flx2 = flx.x2f;
   par_for("ohm_heat2", DevExeSpace(), 0, nmb1, ks, ke, js, je+1, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -237,7 +256,6 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b,
 
   //------------------------------
   // energy fluxes in x3-direction
-
   auto &flx3 = flx.x3f;
   par_for("ohm_heat3", DevExeSpace(), 0, nmb1, ks, ke+1, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -257,6 +275,90 @@ void Resistivity::OhmicEnergyFlux(const DvceFaceFld4D<Real> &b,
                              j2i  *(b.x1f(m,k,j  ,i  ) + b.x1f(m,k-1,j  ,i  )) -
                              j2ip1*(b.x1f(m,k,j  ,i+1) + b.x1f(m,k-1,j  ,i+1)));
   });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Resistivity::NewTimeStep()
+//! \brief Compute new time step for non-ideal MHD (Ohmic + ambipolar).
+//! Ohmic:     dt <= fac * dx^2 / eta_ohm                  (constant diffusivity)
+//! Ambipolar: dt <= fac * dx^2 / (eta_ohm + eta_ad * B^2) (diffusivity varies in space)
+//! When ambipolar diffusion is active the limit is evaluated PER CELL (each cell pairs
+//! its own dx with its own total diffusivity eta_ohm + eta_ad*B^2, and the global min is
+//! taken), matching Athena++ FieldDiffusion::NewDiffusionDt and AthenaK's own spatially-
+//! varying module Conduction::NewTimeStep. This avoids pairing the global-min dx with the
+//! global-max B^2, which over-restricts dt under mesh refinement.
+
+void Resistivity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+  // non-ideal MHD timestep on MeshBlock(s) in this pack
+  dtnew = std::numeric_limits<float>::max();
+  auto size = pmy_pack->pmb->mb_size;
+  Real fac;
+  if (pmy_pack->pmesh->three_d) {
+    fac = 1.0/6.0;
+  } else if (pmy_pack->pmesh->two_d) {
+    fac = 0.25;
+  } else {
+    fac = 0.5;
+  }
+  auto &multi_d = pmy_pack->pmesh->multi_d;
+  auto &three_d = pmy_pack->pmesh->three_d;
+
+  // Ohmic diffusivity is a CONSTANT coefficient: when no (spatially-varying) ambipolar
+  // term is active, the limit is simply fac*dx^2/eta_ohm and a cheap host loop suffices
+  // (matching Viscosity::NewTimeStep). Keeping this branch separate leaves the eta_ad==0
+  // (AD-off) behaviour byte-identical to before.
+  if (eta_ad == 0.0) {
+    if (eta_ohm > 0.0) {
+      for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
+        dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/eta_ohm);
+        if (multi_d) {
+          dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/eta_ohm);
+        }
+        if (three_d) {
+          dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/eta_ohm);
+        }
+      }
+    }
+    return;
+  }
+
+  // Ambipolar diffusivity eta_ad*B^2 varies in space, so evaluate the limit per cell.
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, nx1 = indcs.nx1;
+  int js = indcs.js, nx2 = indcs.nx2;
+  int ks = indcs.ks, nx3 = indcs.nx3;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  auto &bcc0 = pmy_pack->pmhd->bcc0;
+  Real eta_o = eta_ohm;
+  Real eta_a = eta_ad;
+
+  // find smallest dx^2/(eta_ohm + eta_ad*B^2) over all cells, then scale by fac
+  Kokkos::parallel_reduce("resist_newdt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &min_dt) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real eta = eta_o + eta_a*(SQR(bcc0(m,IBX,k,j,i)) + SQR(bcc0(m,IBY,k,j,i))
+                            + SQR(bcc0(m,IBZ,k,j,i)));
+    if (eta > 0.0) {
+      min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/eta);
+      if (multi_d) {
+        min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/eta);
+      }
+      if (three_d) {
+        min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/eta);
+      }
+    }
+  }, Kokkos::Min<Real>(dtnew));
+  dtnew *= fac;
 
   return;
 }
