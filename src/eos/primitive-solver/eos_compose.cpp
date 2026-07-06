@@ -195,10 +195,10 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     m_min_h = std::numeric_limits<Real>::max();
     // New form of bound based on properties of NQT functions and their
     // departure from 'true' log behaviour
-    int it = 0; // T = T_min is a safe assumption for the minimum enthalpy
-    for (int in = 0; in < m_nn-1; ++in) {
+    size_t it = 0; // T = T_min is a safe assumption for the minimum enthalpy
+    for (size_t in = 0; in < m_nn-1; ++in) {
       Real const nb = exp2_(host_log_nb(in));
-      for (int iy = 0; iy < m_ny-1; ++iy) {
+      for (size_t iy = 0; iy < m_ny-1; ++iy) {
         Real min_log2_e_in = Kokkos::fmin(host_table(ECLOGE,in,iy,it),
                                           host_table(ECLOGE,in,iy+1,it));
         Real max_log2_e_in = Kokkos::fmax(host_table(ECLOGE,in,iy,it),

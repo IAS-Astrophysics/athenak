@@ -22,12 +22,10 @@ The numerical algorithms implemented in AthenaK are all based on higher-order fi
 
 ## Getting Started
 
-The code is designed to be user-friendly with as few external dependencies as possible.
+See the [Documentation](https://ias-astrophysics.github.io/athenak-docs) to get started.
 
-Documention is permanently under construction on the [wiki](https://github.com/IAS-Astrophysics/athenak/wiki) pages.
-
-In particular, see the complete list of [requirements](https://github.com/IAS-Astrophysics/athenak/wikis/Requirements), or
-instructions on how to [download](https://github.com/IAS-Astrophysics/athenak/wikis/Download) and [build](https://github.com/IAS-Astrophysics/athenak/wikis/Build) the code for various devices.
+In particular, see the complete list of [requirements](https://ias-astrophysics.github.io/athenak-docs/requirements.html), or
+instructions on how to [download](https://ias-astrophysics.github.io/athenak-docs/download.html) and [build](https://ias-astrophysics.github.io/athenak-docs/build.html) the code for various devices.
 Other pages give instructions for running the code.
 
 Since AthenaK is very similar to Athena++, the [Athena++ documention](https://github.com/PrincetonUniversity/athena/wiki) may also be helpful.

@@ -93,7 +93,7 @@ class FastFlow {
   int lmpoints; // lmax * lmax
   int nh; // Counter variable
   bool wait_until_punc_are_close;
-  bool use_stored_metric_drvts;
+  [[maybe_unused]] bool use_stored_metric_drvts;
   int nhorizon; // Number of horizons
   std::string flow_function;
   int flowflag = 0;

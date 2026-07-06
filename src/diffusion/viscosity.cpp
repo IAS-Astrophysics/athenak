@@ -8,6 +8,7 @@
 //  viscosity in a Newtonian fluid (in which stress is proportional to shear).
 //  Viscosity may be added to Hydro and/or MHD independently.
 
+#include <float.h>
 #include <algorithm>
 #include <limits>
 #include <iostream>
@@ -26,28 +27,11 @@
 // object is being constructed, and therefore which <block> in the input file from which
 // the parameters are read.
 
-Viscosity::Viscosity(std::string block, MeshBlockPack *pp,
-                     ParameterInput *pin) :
-  pmy_pack(pp) {
-  // Read coefficient of isotropic kinematic shear viscosity (must be present)
-  nu_iso = pin->GetReal(block,"viscosity");
-
-  // viscous timestep on MeshBlock(s) in this pack
-  dtnew = std::numeric_limits<float>::max();
-  auto size = pmy_pack->pmb->mb_size;
-  Real fac;
-  if (pp->pmesh->three_d) {
-    fac = 1.0/6.0;
-  } else if (pp->pmesh->two_d) {
-    fac = 0.25;
-  } else {
-    fac = 0.5;
-  }
-  for (int m=0; m<(pp->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/nu_iso);
-    if (pp->pmesh->multi_d) {dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/nu_iso);}
-    if (pp->pmesh->three_d) {dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/nu_iso);}
-  }
+Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
+    pmy_pack(pp) {
+  // Read parameters for viscosity (if any)
+  nu_iso = pin->GetOrAddReal(block,"nu_iso",0.0);
+  nu_aniso = pin->GetOrAddReal(block,"nu_aniso",0.0);
 }
 
 //----------------------------------------------------------------------------------------
@@ -57,11 +41,28 @@ Viscosity::~Viscosity() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void AddIsoViscousFlux
+//! \fn void AddViscousFluxes()
+//! \brief Wrapper function that adds viscous fluxes for different types of viscosity
+//! to face-centered fluxes of conserved variables
+//! Currently only isotropic viscosity with constant coefficient implemented
+
+void Viscosity::AddViscousFluxes(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
+  if (nu_iso != 0.0) {
+    AddViscousFluxIso(w0, eos, flx);
+  }
+  if (nu_iso != 0.0) {
+    AddViscousFluxAniso(w0, eos, flx);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddViscousFluxIso
 //  \brief Adds viscous fluxes to face-centered fluxes of conserved variables
 
-void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_iso,
-  const EOS_Data &eos, DvceFaceFld5D<Real> &flx) {
+void Viscosity::AddViscousFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -71,10 +72,9 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
   auto size = pmy_pack->pmb->mb_size;
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
+  Real nu_iso_ = nu_iso;
 
-  //--------------------------------------------------------------------------------------
   // fluxes in x1-direction
-
   int scr_level = 0;
   size_t scr_size = (ScrArray1D<Real>::shmem_size(ncells1)) * 3;
   auto flx1 = flx.x1f;
@@ -114,7 +114,7 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
 
     // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
     par_for_inner(member, is, ie+1, [&](const int i) {
-      Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
+      Real nud = 0.5*nu_iso_*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
       flx1(m,IVX,k,j,i) -= nud*fvx(i);
       flx1(m,IVY,k,j,i) -= nud*fvy(i);
       flx1(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -127,9 +127,7 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
   });
   if (pmy_pack->pmesh->one_d) {return;}
 
-  //--------------------------------------------------------------------------------------
   // fluxes in x2-direction
-
   auto flx2 = flx.x2f;
 
   par_for_outer("visc2",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke, js, je+1,
@@ -161,7 +159,7 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
 
     // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
     par_for_inner(member, is, ie, [&](const int i) {
-      Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
+      Real nud = 0.5*nu_iso_*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
       flx2(m,IVX,k,j,i) -= nud*fvx(i);
       flx2(m,IVY,k,j,i) -= nud*fvy(i);
       flx2(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -174,9 +172,7 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
   });
   if (pmy_pack->pmesh->two_d) {return;}
 
-  //--------------------------------------------------------------------------------------
   // fluxes in x3-direction
-
   auto flx3 = flx.x3f;
 
   par_for_outer("visc3",DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke+1, js, je,
@@ -202,7 +198,7 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
 
     // Sum viscous fluxes into fluxes of conserved variables; including energy fluxes
     par_for_inner(member, is, ie, [&](const int i) {
-      Real nud = 0.5*nu_iso*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
+      Real nud = 0.5*nu_iso_*(w0(m,IDN,k,j,i) + w0(m,IDN,k-1,j,i));
       flx3(m,IVX,k,j,i) -= nud*fvx(i);
       flx3(m,IVY,k,j,i) -= nud*fvy(i);
       flx3(m,IVZ,k,j,i) -= nud*fvz(i);
@@ -214,5 +210,42 @@ void Viscosity::IsotropicViscousFlux(const DvceArray5D<Real> &w0, const Real nu_
     });
   });
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void AddViscousFluxAniso
+//  \brief Currently no-op function, to be added later
+
+void Viscosity::AddViscousFluxAniso(const DvceArray5D<Real> &w0, const EOS_Data &eos,
+    DvceFaceFld5D<Real> &flx) {
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Viscosity::NewTimeStep()
+//! \brief Compute new time step for viscosity
+
+void Viscosity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
+  // viscous timestep on MeshBlock(s) in this pack for constant isotropic viscosity
+  dtnew = std::numeric_limits<float>::max();
+  auto size = pmy_pack->pmb->mb_size;
+  Real fac;
+  if (pmy_pack->pmesh->three_d) {
+    fac = 1.0/6.0;
+  } else if (pmy_pack->pmesh->two_d) {
+    fac = 0.25;
+  } else {
+    fac = 0.5;
+  }
+  for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
+    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/nu_iso);
+    if (pmy_pack->pmesh->multi_d) {
+      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/nu_iso);
+    }
+    if (pmy_pack->pmesh->three_d) {
+      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/nu_iso);
+    }
+  }
   return;
 }

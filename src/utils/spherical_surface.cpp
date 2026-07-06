@@ -24,18 +24,18 @@
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
                                    Real rad, Real xc, Real yc, Real zc)
-    : pmy_pack(pmy_pack),
+    : ntheta(ntheta),
       radius(rad),
       xc(xc),
       yc(yc),
       zc(zc),
-      ntheta(ntheta),
       int_weights("int_weights", 1),
-      polar_pos("polar_pos", 1, 1),
       cart_pos("cart_pos", 1, 1),
+      polar_pos("polar_pos", 1, 1),
+      interp_vals("interp_vals", 1),
       interp_indcs("interp_indcs", 1, 1),
       interp_wghts("interp_wghts", 1, 1, 1),
-      interp_vals("interp_vals", 1) {
+      pmy_pack(pmy_pack) {
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
   nangles = 2 * ntheta * ntheta;
