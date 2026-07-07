@@ -14,6 +14,7 @@
 #include <iostream>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include <Kokkos_Core.hpp>
 
@@ -209,6 +210,26 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
             host_table(ECYP,in,iy,it) = has_yp ? table_yp[iflat] : host_yq(iy);
             host_table(ECYN,in,iy,it) = has_yn ? table_yn[iflat] : 1.0 - host_yq(iy);
+          }
+        }
+      }
+    }
+
+    { // Read effective nucleon potential difference -> dU
+      // Dataset "dU" not found: fill table with zeros
+      std::vector<Real> zeros_dU;
+      Real * table_dU = nullptr;
+      if (table.HasField("dU")) {
+        table_dU = table["dU"];
+      } else {
+        zeros_dU.assign(m_nt * m_ny * m_nn, 0.0);
+        table_dU = zeros_dU.data();
+      }
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECDU,in,iy,it) = table_dU[iflat];
           }
         }
       }

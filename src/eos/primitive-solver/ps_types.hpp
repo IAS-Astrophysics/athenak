@@ -27,6 +27,7 @@ enum SpatialMetricIndex{S11=0, S12=1, S13=2, S22=3, S23=4, S33=5, NSPMETRIC=6};
 
 class SupportsEntropy{};
 class SupportsChemicalPotentials{};
+class SupportsInteractionPotentialDifference{};
 
 //! Indices into the weight array of the partially-equilibrated weak-equilibrium
 //! residuals: one weight per neutrino channel, per species wherever the two members of

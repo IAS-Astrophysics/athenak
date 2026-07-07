@@ -30,7 +30,7 @@
 namespace Primitive {
 
 template<typename LogPolicy>
-class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy, public SupportsChemicalPotentials {
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy, public SupportsChemicalPotentials, public SupportsInteractionPotentialDifference {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
@@ -45,7 +45,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     ECCS    = 6,  //! sound speed [c]
     ECYP    = 7,  //! proton fraction
     ECYN    = 8,  //! neutron fraction
-    ECNVARS = 9
+    ECDU    = 9,  //! effective nucleon potential difference dU [MeV]
+    ECNVARS = 10
   };
 
   //! Where a BetaEquilibriumTrapped answer came from, reported through that
@@ -179,6 +180,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                                                               Real *Y) const {
     assert (m_initialized);
     return eval_at_nty(ECMUL, n, T, Y[0]);
+  }
+
+  /// Calculate the effective nucleon interaction potential difference
+  KOKKOS_INLINE_FUNCTION Real InteractionPotentialDifference(Real n, Real T,
+                                                              Real *Y) const {
+    assert (m_initialized);
+    return eval_at_nty(ECDU, n, T, Y[0]);
   }
 
   /// Calculate the proton fraction
