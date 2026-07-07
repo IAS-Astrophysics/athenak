@@ -181,6 +181,14 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   auto &adm_g_dd_c_ = adm_g_dd_c;
   auto &solid_angles_ = prgeo->solid_angles;
   bool use_adm_geometry_ = use_adm_geometry;
+  // Killing-weighted transport couples to matter by reweighting: the stored
+  // variable is W = (-n_0) U, so the Eulerian conserved intensity entering the
+  // (unchanged) implicit solve is U = W/max(-n_0, n_0_floor), and updates are
+  // written back through the same factor.  Absorption then scales W by the same
+  // per-bin factor as the intensity (exact: absorption preserves Killing energy),
+  // emission adds w*dE, and the w<=0 ergosphere cone receives at most the floored
+  // weight (clamped Penrose emission).
+  const bool kw_ = killing_weight;
 
   // Extract hydro/mhd quantities
   DvceArray5D<Real> u0_, w0_, bcc0_;
@@ -328,6 +336,18 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     Real n0 = use_adm_geometry_ ? 1.0/alpha : tt(m,0,0,k,j,i);
     Real sqrtg = use_adm_geometry_ ? sqrt_detg_c_(m,k,j,i) : 1.0;
 
+    // Per-bin Killing weight: with killing_weight the stored variable is
+    // W = (-n_0) U, so the Eulerian conserved variable entering the solve is
+    // U = W/max(-n_0, n_0_floor) and updates return through the same factor.
+    auto kw_weight = [&](const int n) -> Real {
+      if (!(kw_)) { return 1.0; }
+      Real n_0k = 0.0;
+      for (int d=0; d<4; ++d) {
+        n_0k += tc(m,d,0,k,j,i)*nh_c_.d_view(n,d);
+      }
+      return fmax(-n_0k, n_0_floor_);
+    };
+
     Real sigma_a = 0.0, sigma_s = 0.0, sigma_p = 0.0;
     Real dtcsiga = 0.0, dtcsigs = 0.0, dtcsigp = 0.0;
     Real dtaucsiga = 0.0, dtaucsigs = 0.0, dtaucsigp = 0.0;
@@ -402,7 +422,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           }
           Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                         u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
-          Real norm = use_adm_geometry_ ? sqrtg : n0*n_0;
+          Real norm = use_adm_geometry_ ? kw_weight(n)*sqrtg : n0*n_0;
           if (norm == 0.0 || n0_cm == 0.0 || !(Kokkos::isfinite(norm)) ||
               !(Kokkos::isfinite(n0_cm))) {
             velocity_ok = false;
@@ -440,7 +460,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
               n_0 = tc(m,0,0,k,j,i)*nh0 + tc(m,1,0,k,j,i)*nh1 +
                     tc(m,2,0,k,j,i)*nh2 + tc(m,3,0,k,j,i)*nh3;
             }
-            Real norm = use_adm_geometry_ ? sqrtg : n0*n_0;
+            Real norm = use_adm_geometry_ ? kw_weight(n)*sqrtg : n0*n_0;
             if (norm == 0.0 || !(Kokkos::isfinite(norm))) {
               velocity_ok = false;
               break;
@@ -559,7 +579,7 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
         Real omega_cm = solid_angles_.d_view(n)/SQR(n0_cm);
-        Real intensity = use_adm_geometry_ ? i0_(m,n,k,j,i)/sqrtg :
+        Real intensity = use_adm_geometry_ ? i0_(m,n,k,j,i)/(kw_weight(n)*sqrtg) :
                                              i0_(m,n,k,j,i)/(n0*n_0);
         Real intensity_cm = 4.0*M_PI*intensity*SQR(SQR(n0_cm));
         // In ADM mode n0=1/alpha, so this denominator is n0 times
@@ -653,11 +673,12 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           mom[1] = n_2/n_0;
           mom[2] = n_3/n_0;
         }
-        // compute moments before coupling
-        m_old[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-        m_old[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-        m_old[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-        m_old[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        // compute moments before coupling (Eulerian: unweight W when killing_weight)
+        const Real u_old = i0_(m,n,k,j,i)/kw_weight(n);
+        m_old[0] += (    u_old    *solid_angles_.d_view(n));
+        m_old[1] += (mom[0]*u_old*solid_angles_.d_view(n));
+        m_old[2] += (mom[1]*u_old*solid_angles_.d_view(n));
+        m_old[3] += (mom[2]*u_old*solid_angles_.d_view(n));
       }
 
       for (int n=0; n<=nang1; ++n) {
@@ -668,7 +689,11 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
                 tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) +
                 tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
         }
-        Real conserved_norm = use_adm_geometry_ ? sqrtg : n0*n_0;
+        // With killing_weight the effective conserved norm carries the per-bin
+        // weight, so the identical comoving solve reads U = W/(w sqrt(gamma)) and
+        // the write-back returns the update through the same factor: absorption
+        // scales W like the intensity and emission deposits w*dE.
+        Real conserved_norm = use_adm_geometry_ ? kw_weight(n)*sqrtg : n0*n_0;
         // update intensity
         Real n0_cm = (u_tet[0]*nh_c_.d_view(n,0) - u_tet[1]*nh_c_.d_view(n,1) -
                       u_tet[2]*nh_c_.d_view(n,2) - u_tet[3]*nh_c_.d_view(n,3));
@@ -745,10 +770,11 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           mom[1] = n_2/n_0;
           mom[2] = n_3/n_0;
         }
-        m_new[0] += (    i0_(m,n,k,j,i)    *solid_angles_.d_view(n));
-        m_new[1] += (mom[0]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-        m_new[2] += (mom[1]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
-        m_new[3] += (mom[2]*i0_(m,n,k,j,i)*solid_angles_.d_view(n));
+        const Real u_new = i0_(m,n,k,j,i)/kw_weight(n);
+        m_new[0] += (    u_new    *solid_angles_.d_view(n));
+        m_new[1] += (mom[0]*u_new*solid_angles_.d_view(n));
+        m_new[2] += (mom[1]*u_new*solid_angles_.d_view(n));
+        m_new[3] += (mom[2]*u_new*solid_angles_.d_view(n));
       }
       // update conserved fluid variables
       if (affect_fluid_) {

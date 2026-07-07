@@ -619,14 +619,18 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
 void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (restart) return;
-  if (pmbp->phydro == nullptr || (pmbp->prad == nullptr && pmbp->pdynrad == nullptr)) {
-    throw std::runtime_error("rad_equilibration requires <hydro> and a radiation solver");
+  if ((pmbp->phydro == nullptr && pmbp->pmhd == nullptr) ||
+      (pmbp->prad == nullptr && pmbp->pdynrad == nullptr)) {
+    throw std::runtime_error("rad_equilibration requires <hydro> or <mhd> "
+                             "and a radiation solver");
   }
 
   const Real rho = pin->GetOrAddReal("problem", "rho", 1.0);
   const Real tgas = pin->GetOrAddReal("problem", "tgas", 2.0);
   const Real trad = pin->GetOrAddReal("problem", "trad", 1.0);
-  const Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+  const Real gm1 = (pmbp->phydro != nullptr)
+                   ? pmbp->phydro->peos->eos_data.gamma - 1.0
+                   : pmbp->pmhd->peos->eos_data.gamma - 1.0;
   Real arad = 1.0;
   if (pmbp->prad != nullptr) {
     arad = pmbp->prad->arad;
@@ -642,16 +646,45 @@ void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool re
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int nmb1 = pmbp->nmb_thispack - 1;
 
-  auto &w0 = pmbp->phydro->w0;
-  par_for("rad_equil_hydro",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    w0(m,IDN,k,j,i) = rho;
-    w0(m,IVX,k,j,i) = 0.0;
-    w0(m,IVY,k,j,i) = 0.0;
-    w0(m,IVZ,k,j,i) = 0.0;
-    w0(m,IEN,k,j,i) = rho*tgas/gm1;
-  });
-  pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+  if (pmbp->phydro != nullptr) {
+    auto &w0 = pmbp->phydro->w0;
+    par_for("rad_equil_hydro",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      w0(m,IDN,k,j,i) = rho;
+      w0(m,IVX,k,j,i) = 0.0;
+      w0(m,IVY,k,j,i) = 0.0;
+      w0(m,IVZ,k,j,i) = 0.0;
+      w0(m,IEN,k,j,i) = rho*tgas/gm1;
+    });
+    pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+  } else {
+    // MHD branch (zero field), needed by the ADM dynamic-metric infrastructure
+    auto &w0 = pmbp->pmhd->w0;
+    auto &b0 = pmbp->pmhd->b0;
+    par_for("rad_equil_mhd",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      w0(m,IDN,k,j,i) = rho;
+      w0(m,IVX,k,j,i) = 0.0;
+      w0(m,IVY,k,j,i) = 0.0;
+      w0(m,IVZ,k,j,i) = 0.0;
+      w0(m,IEN,k,j,i) = rho*tgas/gm1;
+      b0.x1f(m,k,j,i) = 0.0;
+      b0.x2f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = 0.0;
+      if (i == n1-1) { b0.x1f(m,k,j,i+1) = 0.0; }
+      if (j == n2-1) { b0.x2f(m,k,j+1,i) = 0.0; }
+      if (k == n3-1) { b0.x3f(m,k+1,j,i) = 0.0; }
+    });
+    auto &bcc0 = pmbp->pmhd->bcc0;
+    par_for("rad_equil_bcc",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      bcc0(m,IBX,k,j,i) = 0.0;
+      bcc0(m,IBY,k,j,i) = 0.0;
+      bcc0(m,IBZ,k,j,i) = 0.0;
+    });
+    pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u0,
+                                 0,(n1-1), 0,(n2-1), 0,(n3-1));
+  }
 
   DvceArray5D<Real> i0;
   DualArray2D<Real> nh_c;

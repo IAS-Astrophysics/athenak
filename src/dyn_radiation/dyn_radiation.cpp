@@ -212,17 +212,6 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
               << "geometry='adm' and compton=false" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (killing_weight && rad_source &&
-      (kappa_a > 0.0 || kappa_s > 0.0 || kappa_p > 0.0)) {
-    // The implicit coupling operates on Eulerian intensities; the Killing-weighted
-    // bookkeeping (reconstruct I = W/(w sqrt(gamma)), run the identical solve,
-    // re-weight the update by w, clamp emission into the w<=0 cone) is not
-    // implemented yet.
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "<dyn_radiation> killing_weight=true does not yet "
-              << "support nonzero opacities" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
