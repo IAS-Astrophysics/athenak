@@ -65,10 +65,6 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
   Real &n_0_floor_ = n_0_floor;
   bool n0_absorb_ = excision_n0_absorb;
-  const bool fm_ = frequency_moments;
-  const int nang_ = prgeo->nangles;
-  const Real nu_cap_ = nu_cap;
-  auto &deleted_budget_ = deleted_budget;
 
   if (use_adm_geometry_) {
     auto &adm_alpha_c_ = adm_alpha_c;
@@ -113,26 +109,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
 
       i0_(m,n,k,j,i) = i_new;
 
-      // Photon-number field: same flux-divergence update, but NO geometric source
-      // (photon number is exactly conserved along geodesics).
-      if (fm_) {
-        const int nn = nang_ + n;
-        Real divn_s = (flx1(m,nn,k,j,i+1) - flx1(m,nn,k,j,i))/mbsize.d_view(m).dx1;
-        if (multi_d) {
-          divn_s += (flx2(m,nn,k,j+1,i) - flx2(m,nn,k,j,i))/mbsize.d_view(m).dx2;
-        }
-        if (three_d) {
-          divn_s += (flx3(m,nn,k+1,j,i) - flx3(m,nn,k,j,i))/mbsize.d_view(m).dx3;
-        }
-        Real n_new = gam0*i0_(m,nn,k,j,i) + gam1*i1_(m,nn,k,j,i) - beta_dt*divn_s;
-        if (angular_fluxes_) { n_new -= beta_dt*divfa_(m,nn,k,j,i); }
-        i0_(m,nn,k,j,i) = n_new;
-      }
-
       if (excise) {
         if (rad_mask_(m,k,j,i)) {
           i0_(m,n,k,j,i) = 0.0;
-          if (fm_) { i0_(m,nang_+n,k,j,i) = 0.0; }
         } else if (n0_absorb_) {
           // Absorb bins with near-zero Killing energy (n_0 = -alpha + beta.s ~ 0).
           // Such photons exist only inside the ergosphere and cannot escape; they
@@ -145,7 +124,6 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
                      tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
           if (fabs(n_0) < n_0_floor_) {
             i0_(m,n,k,j,i) = 0.0;
-            if (fm_) { i0_(m,nang_+n,k,j,i) = 0.0; }
           }
         }
       }
@@ -153,36 +131,7 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
     par_for("dynrad_adm_update_positivity",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1);
-      if (fm_) {
-        ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1, nang_);
-      }
     });
-    if (fm_) {
-      // Frequency cap: bins whose mean frequency E/N exceeds nu_cap have blueshifted
-      // off the top of the (one-group) frequency grid and are removed.  Physical
-      // photons in these problems never accumulate more than a factor of a few of
-      // blueshift before capture or escape, so the cap only bites numerically
-      // manufactured trapped content.  The deleted conserved budget is accumulated
-      // for the run log.
-      par_for("dynrad_adm_nu_cap",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
-      KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        const Real dvol = mbsize.d_view(m).dx1*mbsize.d_view(m).dx2
-                         *mbsize.d_view(m).dx3;
-        for (int n=0; n<nang_; ++n) {
-          const Real e = i0_(m,n,k,j,i);
-          if (!(e > 0.0)) { continue; }
-          const Real nn = i0_(m,nang_+n,k,j,i);
-          if (e > nu_cap_*nn) {
-            Kokkos::atomic_add(&deleted_budget_(0),
-                               e*solid_angles_.d_view(n)*dvol);
-            Kokkos::atomic_add(&deleted_budget_(1),
-                               fmax(nn,0.0)*solid_angles_.d_view(n)*dvol);
-            i0_(m,n,k,j,i) = 0.0;
-            i0_(m,nang_+n,k,j,i) = 0.0;
-          }
-        }
-      });
-    }
     ApplyExcisionToIntensity(i0);
     return TaskStatus::complete;
   }

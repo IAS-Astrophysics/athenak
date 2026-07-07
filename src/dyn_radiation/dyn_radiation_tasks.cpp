@@ -41,7 +41,7 @@ void DynRadiation::ApplyExcisionToIntensity(DvceArray5D<Real> &ir) {
   const int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
   const int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
   const int nmb1 = pmy_pack->nmb_thispack - 1;
-  const int nang1 = nvars_tot - 1;  // covers the N slots too when frequency_moments
+  const int nang1 = prgeo->nangles - 1;
   const bool smooth_excise = pmy_pack->pcoord->coord_data.smooth_excise;
   const bool absorb_flux = excision_absorb_flux;
   auto &floor = pmy_pack->pcoord->excision_floor;
@@ -63,38 +63,6 @@ void DynRadiation::ApplyExcisionToIntensity(DvceArray5D<Real> &ir) {
       if (w > 0.0) {
         ir(m,n,k,j,i) = (1.0 - w)*val;
       }
-    }
-  });
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void DynRadiation::HealNumberField
-//! \brief With frequency_moments, seed the photon-number field from initial data at
-//! the reference frequency nu=1: any bin with E>0 and N<=0 gets N=E.  This must only
-//! run at startup (cycle 0): all continuous injectors insert N explicitly, and during
-//! evolution a bin with E>0 and N<=0 means its mean frequency diverged, which the
-//! nu-cap must delete rather than reset (resetting would erase the accumulated
-//! blueshift history and re-arm the near-horizon amplifier).
-
-void DynRadiation::HealNumberField(DvceArray5D<Real> &ir) {
-  if (!(frequency_moments)) return;
-  if (pmy_pack->pmesh->ncycle > 0) return;
-
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  const int ng = indcs.ng;
-  const int n1 = indcs.nx1 + 2*ng;
-  const int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
-  const int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
-  const int nmb1 = pmy_pack->nmb_thispack - 1;
-  const int nang1 = prgeo->nangles - 1;
-  const int nang = prgeo->nangles;
-
-  par_for("dynrad_heal_number", DevExeSpace(), 0, nmb1, 0, nang1,
-          0, n3-1, 0, n2-1, 0, n1-1,
-  KOKKOS_LAMBDA(const int m, const int n, const int k, const int j, const int i) {
-    const Real e = ir(m,n,k,j,i);
-    if (e > 0.0 && !(ir(m,nang+n,k,j,i) > 0.0)) {
-      ir(m,nang+n,k,j,i) = e;
     }
   });
 }
@@ -291,14 +259,14 @@ void DynRadiation::QueueDynRadiationTasks() {
 
 TaskStatus DynRadiation::InitRecv(Driver *pdrive, int stage) {
   // post receives for I
-  TaskStatus tstat = pbval_i->InitRecv(nvars_tot);
+  TaskStatus tstat = pbval_i->InitRecv(prgeo->nangles);
   if (tstat != TaskStatus::complete) return tstat;
 
   // do not post receives for fluxes when stage < 0 (i.e. ICs)
   if (stage >= 0) {
     // with SMR/AMR, post receives for fluxes of I
     if (pmy_pack->pmesh->multilevel) {
-      tstat = pbval_i->InitFluxRecv(nvars_tot);
+      tstat = pbval_i->InitFluxRecv(prgeo->nangles);
       if (tstat != TaskStatus::complete) return tstat;
     }
   }
@@ -312,8 +280,6 @@ TaskStatus DynRadiation::InitRecv(Driver *pdrive, int stage) {
 
 TaskStatus DynRadiation::CopyCons(Driver *pdrive, int stage) {
   ApplyExcisionToIntensity(i0);
-  // heals initial data and user-boundary ghost fills before this stage's fluxes
-  HealNumberField(i0);
   if (stage == 1) {
     // dyn_radiation
     Kokkos::deep_copy(DevExeSpace(), i1, i0);

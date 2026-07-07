@@ -181,8 +181,6 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   auto &adm_g_dd_c_ = adm_g_dd_c;
   auto &solid_angles_ = prgeo->solid_angles;
   bool use_adm_geometry_ = use_adm_geometry;
-  const bool fm_ = frequency_moments;
-  const int nang_ = prgeo->nangles;
 
   // Extract hydro/mhd quantities
   DvceArray5D<Real> u0_, w0_, bcc0_;
@@ -680,21 +678,8 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         Real di_cm = ( ((dtcsigs-dtcsigp)*jr_cm
                       + (dtcsiga+dtcsigp)*emission
                       - (dtcsigs+dtcsiga)*intensity_cm)*vncsigma2 );
-        const Real iold = i0_(m,n,k,j,i);
         i0_(m,n,k,j,i) = conserved_norm*(i0_(m,n,k,j,i)/conserved_norm +
                                          di_cm/(4.0*M_PI*SQR(SQR(n0_cm))));
-        // Photon-number bookkeeping: gray absorption is frequency-blind, so net
-        // removal scales N by the same per-bin factor; net gain (emission or
-        // scattering-in) inserts number at the thermal mean frequency.
-        if (fm_) {
-          const Real inew = i0_(m,n,k,j,i);
-          if (inew < iold && iold > 0.0) {
-            i0_(m,nang_+n,k,j,i) *= fmax(inew, 0.0)/iold;
-          } else if (inew > iold) {
-            const Real nu_em = fmax(2.7*tgasnew, 1.0e-30);
-            i0_(m,nang_+n,k,j,i) += (inew - iold)/nu_em;
-          }
-        }
       }
 
       // handle excision
@@ -714,17 +699,11 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           bool apply_excision = (rad_mask_(m,k,j,i) ||
                                  (!(use_adm_geometry_) && !(is_compton_enabled_) &&
                                   fabs(n_0) < n_0_floor_));
-          if (apply_excision) {
-            i0_(m,n,k,j,i) = 0.0;
-            if (fm_) { i0_(m,nang_+n,k,j,i) = 0.0; }
-          }
+          if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
         }
       }
       if (use_adm_geometry_) {
         ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1);
-        if (fm_) {
-          ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1, nang_);
-        }
       } else {
         ConservativePrimitiveAngularFloor(i0_, solid_angles_, tt, tc, nh_c_,
                                           m, k, j, i, nang1);

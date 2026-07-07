@@ -232,27 +232,15 @@ class DynRadiation {
   bool excision_donor_cell;            // force donor-cell reconstruction near flux mask
   bool excision_n0_absorb;             // absorb bins with |n_0| < n_0_floor (ADM branch)
   Real n_0_floor;                     // floor on n_0
-  // Number-conservative frequency-moment scheme: evolve photon number N per angular
-  // bin alongside the energy variable U=sqrt(gamma)I.  N has no geometric source
-  // (photon number is exactly conserved along geodesics), so total energy is bounded
-  // by nu_cap * N_total and the near-horizon exp(geom*dt) runaway is unrepresentable.
-  // Bins whose mean frequency E/N exceeds nu_cap are removed (the one-group analogue
-  // of blueshifting off the top of a frequency grid); the deleted budget is logged.
-  // When false, arrays and kernels are identical to the original single-moment
-  // integrator (no memory or performance penalty).
-  bool frequency_moments;             // evolve photon number N alongside energy
-  Real nu_cap;                        // mean-frequency cap (units of injection freq.)
-  // Killing-weighted transport: the energy slots store the Killing-energy density
+  // Killing-weighted transport: the intensity slots store the Killing-energy density
   // W = (alpha - beta.s) U instead of the Eulerian energy U.  In a (quasi-)stationary
   // metric W is exactly conserved along geodesics, so its transport has NO geometric
   // source: gravitational red/blueshift is baked into the static per-bin weight
-  // w = -n_0 at injection and at reconstruction (E = W/w, saturated by nu_cap*N and
-  // w >= n_0_floor for the ergosphere cone).  This removes the near-horizon
-  // gain/advection feedback entirely rather than bounding it, keeps W sign-definite
-  // (unlike the HARM n^0 n_0 I variable), and needs no division in the evolution.
-  bool killing_weight;                // evolve Killing-energy density (requires fm)
-  int nvars_tot;                      // nangles (E only) or 2*nangles (E then N)
-  DvceArray1D<Real> deleted_budget;   // [0]=deleted energy, [1]=deleted number
+  // w = -n_0 at injection and at reconstruction (E = W/max(w, n_0_floor), which
+  // regularizes the ergosphere cone).  This removes the near-horizon gain/advection
+  // feedback entirely rather than bounding it, keeps W sign-definite (unlike the
+  // HARM n^0 n_0 I variable), and needs no division in the evolution.
+  bool killing_weight;                // evolve Killing-energy density
   GeodesicGrid *prgeo = nullptr;      // pointer to dyn_radiation angular mesh
 
   // Tetrad arrays and functions
@@ -312,7 +300,6 @@ class DynRadiation {
   // ...in "stagen_tl" task list
   TaskStatus CopyCons(Driver *d, int stage);
   void ApplyExcisionToIntensity(DvceArray5D<Real> &ir);
-  void HealNumberField(DvceArray5D<Real> &ir);
   TaskStatus CalculateFluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);

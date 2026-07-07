@@ -149,7 +149,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   if (pmy_mesh->pmb_pack->prad != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->prad->prgeo->nangles);
   } else if (pmy_mesh->pmb_pack->pdynrad != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pdynrad->nvars_tot);
+    ncc_tosend += (pmy_mesh->pmb_pack->pdynrad->prgeo->nangles);
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->pz4c->nz4c);
@@ -406,7 +406,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   if (pmy_mesh->pmb_pack->prad != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->prad->prgeo->nangles);
   } else if (pmy_mesh->pmb_pack->pdynrad != nullptr) {
-    ncc_tosend += (pmy_mesh->pmb_pack->pdynrad->nvars_tot);
+    ncc_tosend += (pmy_mesh->pmb_pack->pdynrad->prgeo->nangles);
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->pz4c->nz4c);
@@ -553,7 +553,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
     ncc_sent += prad->prgeo->nangles;
   } else if (pdynrad != nullptr) {
     PackAMRBuffersCC(pdynrad->i0, pdynrad->coarse_i0, ncc_sent, nfc_sent);
-    ncc_sent += pdynrad->nvars_tot;
+    ncc_sent += pdynrad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     PackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_sent, nfc_sent);
@@ -847,7 +847,7 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
     ncc_recv += prad->prgeo->nangles;
   } else if (pdynrad != nullptr) {
     UnpackAMRBuffersCC(pdynrad->i0, pdynrad->coarse_i0, ncc_recv, nfc_recv);
-    ncc_recv += pdynrad->nvars_tot;
+    ncc_recv += pdynrad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     UnpackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_recv, nfc_recv);

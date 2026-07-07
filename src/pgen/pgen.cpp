@@ -131,7 +131,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
   } else if (pdynrad != nullptr) {
-    nrad = pdynrad->nvars_tot;
+    nrad = pdynrad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;

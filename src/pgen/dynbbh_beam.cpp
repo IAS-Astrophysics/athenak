@@ -3662,7 +3662,6 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
   auto &excise = pmbp->pcoord->coord_data.bh_excise;
   auto &rad_mask = pmbp->pcoord->excision_floor;
   auto weights = *d_weights_ptr;
-  const bool fm = pmbp->pdynrad->frequency_moments;
   const bool kw = pmbp->pdynrad->killing_weight;
 
   const Real width2 = SQR(flash.width);
@@ -3693,8 +3692,6 @@ void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
       wgt = fmax(-n_0, 0.0);
     }
     i0(m,n,k,j,i) += wgt*dinj;
-    // photon number injected at the reference frequency nu=1
-    if (fm) { i0(m,nangles+n,k,j,i) += dinj; }
   });
 }
 

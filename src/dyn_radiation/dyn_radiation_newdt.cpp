@@ -213,22 +213,19 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
     dtnew = std::min(dtnew, dtg);
   }
 
-  // periodically report the cumulative frequency-cap deleted budget and the
-  // conserved totals: with killing_weight the energy slots hold W, which is
-  // source-free, so any growth of the W total isolates transport
-  // non-conservation (angular-edge/prolongation leaks) from redistribution.
-  if (frequency_moments && global_variable::my_rank == 0 &&
+  // periodically report the conserved total: with killing_weight the intensity
+  // slots hold the source-free Killing-energy density W, so any growth of this
+  // total isolates transport non-conservation (angular-edge/prolongation leaks)
+  // from redistribution.
+  if (killing_weight && global_variable::my_rank == 0 &&
       (pmy_pack->pmesh->ncycle % 100 == 0)) {
-    auto h_budget = Kokkos::create_mirror_view(deleted_budget);
-    Kokkos::deep_copy(h_budget, deleted_budget);
-
     auto &i0_ = i0;
     auto &solid_angles_ = prgeo->solid_angles;
     const int nang_tot = nang1 + 1;
-    Real w_sum = 0.0, n_sum = 0.0;
+    Real w_sum = 0.0;
     Kokkos::parallel_reduce("dynrad_totals",
       Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &wsum, Real &nsum) {
+    KOKKOS_LAMBDA(const int &idx, Real &wsum) {
       int m = (idx)/nkji;
       int k = (idx - m*nkji)/nji;
       int j = (idx - m*nkji - k*nji)/nx1;
@@ -236,19 +233,15 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
       k += ks;
       j += js;
       const Real dvol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-      Real wloc = 0.0, nloc = 0.0;
+      Real wloc = 0.0;
       for (int n=0; n<nang_tot; ++n) {
         wloc += i0_(m,n,k,j,i)*solid_angles_.d_view(n);
-        nloc += i0_(m,nang_tot+n,k,j,i)*solid_angles_.d_view(n);
       }
       wsum += wloc*dvol;
-      nsum += nloc*dvol;
-    }, Kokkos::Sum<Real>(w_sum), Kokkos::Sum<Real>(n_sum));
+    }, Kokkos::Sum<Real>(w_sum));
 
-    std::cout << "dynrad(frequency_moments): cumulative nu-cap deleted energy="
-              << std::setprecision(6) << std::scientific << h_budget(0)
-              << " number=" << h_budget(1)
-              << " totals W_sum=" << w_sum << " N_sum=" << n_sum
+    std::cout << "dynrad(killing_weight): total W_sum="
+              << std::setprecision(6) << std::scientific << w_sum
               << " (cycle " << pmy_pack->pmesh->ncycle << ")" << std::endl;
   }
 

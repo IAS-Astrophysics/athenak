@@ -1018,7 +1018,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     int nang1 = -1;
     bool use_adm_radiation = false;
     bool kw_ = false;
-    Real nu_cap_ = 0.0, w_floor_ = 0.1;
+    Real w_floor_ = 0.1;
     DualArray2D<Real> nh_c_;
     DvceArray6D<Real> tet_c_;
     DvceArray6D<Real> tetcov_c_;
@@ -1038,7 +1038,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
       use_adm_radiation = pm->pmb_pack->pdynrad->use_adm_geometry;
       kw_ = pm->pmb_pack->pdynrad->killing_weight;
-      nu_cap_ = pm->pmb_pack->pdynrad->nu_cap;
       w_floor_ = pm->pmb_pack->pdynrad->n_0_floor;
       nh_c_ = pm->pmb_pack->pdynrad->nh_c;
       tet_c_ = pm->pmb_pack->pdynrad->tet_c;
@@ -1048,7 +1047,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       norm_to_tet_ = pm->pmb_pack->pdynrad->norm_to_tet;
       sqrt_detg_c_ = pm->pmb_pack->pdynrad->sqrt_detg_c;
     }
-    const int nang_off_ = nang1 + 1;
 
     // Select either Hydro or MHD (if fluid enabled)
     DvceArray5D<Real> w0_;
@@ -1090,12 +1088,10 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
             if (!(use_adm_radiation)) {
               intensity /= n_0;
             } else if (kw_) {
-              // Killing-weighted transport: the energy slot stores W = (-n_0) U.
-              // Reconstruct the Eulerian energy with the static weight, saturated
-              // by the ergosphere-cone floor and the per-photon frequency cap.
-              Real erec = i0_(m,n,k,j,i)/fmax(-n_0, w_floor_);
-              Real ncap = nu_cap_*fmax(i0_(m,nang_off_+n,k,j,i), 0.0);
-              intensity = fmin(erec, ncap)/intensity_norm;
+              // Killing-weighted transport: the intensity slot stores
+              // W = (-n_0) U.  Reconstruct the Eulerian energy with the static
+              // weight, regularized on the ergosphere cone by the n_0 floor.
+              intensity = (i0_(m,n,k,j,i)/fmax(-n_0, w_floor_))/intensity_norm;
             }
             dv(m,n12,k,j,i) += nmun1*nmun2*intensity*solid_angles_.d_view(n);
           }
