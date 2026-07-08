@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 
 #include "athena.hpp"
@@ -337,6 +338,8 @@ TaskStatus DynRadiation::RecvFlux(Driver *pdrive, int stage) {
 
 TaskStatus DynRadiation::RadSrcTerms(Driver *pdrive, int stage) {
   Real beta_dt = (pdrive->beta[stage-1])*(pmy_pack->pmesh->dt);
+  const bool wbud = debug_w_budget && (global_variable::my_rank == 0);
+  Real wb0 = wbud ? DebugWTotal() : 0.0;
 
   // Add physics source terms (must be computed from primitives)
   if (psrc != nullptr) psrc->ApplySrcTerms(i0, beta_dt);
@@ -347,6 +350,11 @@ TaskStatus DynRadiation::RadSrcTerms(Driver *pdrive, int stage) {
   }
 
   ApplyExcisionToIntensity(i0);
+  if (wbud) {
+    std::cout << "WBUD cyc=" << pmy_pack->pmesh->ncycle << " stg=" << stage
+              << std::scientific << std::setprecision(6)
+              << " dsrc=" << (DebugWTotal() - wb0) << std::endl;
+  }
   return TaskStatus::complete;
 }
 

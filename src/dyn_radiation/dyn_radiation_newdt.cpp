@@ -247,4 +247,41 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
 
   return TaskStatus::complete;
 }
+
+//----------------------------------------------------------------------------------------
+// \!fn Real DynRadiation::DebugWTotal()
+// \brief domain-integrated total of the evolved intensity field (interior cells only).
+// Used by the debug_w_budget diagnostic to attribute non-conservation to tasks.
+
+Real DynRadiation::DebugWTotal() {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is, &nx1 = indcs.nx1;
+  int &js = indcs.js, &nx2 = indcs.nx2;
+  int &ks = indcs.ks, &nx3 = indcs.nx3;
+  auto &size = pmy_pack->pmb->mb_size;
+  const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  const int nang_tot = prgeo->nangles;
+  auto &i0_ = i0;
+  auto &solid_angles_ = prgeo->solid_angles;
+  Real w_sum = 0.0;
+  Kokkos::parallel_reduce("dynrad_debug_wtot",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &wsum) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+    const Real dvol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    Real wloc = 0.0;
+    for (int n=0; n<nang_tot; ++n) {
+      wloc += i0_(m,n,k,j,i)*solid_angles_.d_view(n);
+    }
+    wsum += wloc*dvol;
+  }, Kokkos::Sum<Real>(w_sum));
+  return w_sum;
+}
 } // namespace dyn_radiation

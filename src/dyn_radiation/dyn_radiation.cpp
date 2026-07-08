@@ -206,6 +206,7 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
                                             "excision_n0_absorb", false);
   n_0_floor = pin->GetOrAddReal("dyn_radiation","n_0_floor",0.1);
   killing_weight = pin->GetOrAddBoolean("dyn_radiation","killing_weight",false);
+  debug_w_budget = pin->GetOrAddBoolean("dyn_radiation","debug_w_budget",false);
   if (killing_weight && (!(use_adm_geometry) || is_compton_enabled)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "<dyn_radiation> killing_weight=true requires "
@@ -213,6 +214,19 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
   prgeo = new GeodesicGrid(nlevel, rotate_geo, angular_fluxes);
+  // Optional dump of the angular discretization (bin index, unit direction,
+  // solid angle) so problem setups can align beams with bin directions.
+  if (pin->GetOrAddBoolean("dyn_radiation","dump_angular_grid",false)) {
+    std::cout << "# dyn_radiation angular grid: nlevel=" << nlevel
+              << " nangles=" << prgeo->nangles << std::endl;
+    for (int n=0; n<prgeo->nangles; ++n) {
+      std::cout << "angular_bin " << n << " "
+                << prgeo->cart_pos.h_view(n,0) << " "
+                << prgeo->cart_pos.h_view(n,1) << " "
+                << prgeo->cart_pos.h_view(n,2) << " "
+                << prgeo->solid_angles.h_view(n) << std::endl;
+    }
+  }
 
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));

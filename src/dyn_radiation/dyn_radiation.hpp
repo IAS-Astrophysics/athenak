@@ -241,6 +241,7 @@ class DynRadiation {
   // feedback entirely rather than bounding it, keeps W sign-definite (unlike the
   // HARM n^0 n_0 I variable), and needs no division in the evolution.
   bool killing_weight;                // evolve Killing-energy density
+  bool debug_w_budget;                // per-task W-total budget diagnostic
   GeodesicGrid *prgeo = nullptr;      // pointer to dyn_radiation angular mesh
 
   // Tetrad arrays and functions
@@ -293,6 +294,7 @@ class DynRadiation {
   // functions...
   void AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   void QueueDynRadiationTasks();
+  Real DebugWTotal();  // domain-integrated total of the evolved intensity field
   void PrepareADMGeometry();
   TaskStatus PrepareGeometryTask(Driver *d, int stage);
   // ...in "before_stagen_tl" task list

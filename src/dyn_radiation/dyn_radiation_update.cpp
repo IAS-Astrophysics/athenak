@@ -9,7 +9,11 @@
 //   partial time step appropriate to stage.
 //  Explicit (not implicit) dyn_radiation source terms are included in this update.
 
+#include <iostream>
+#include <iomanip>
+
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "coordinates/adm.hpp"
@@ -65,6 +69,80 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
   auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
   Real &n_0_floor_ = n_0_floor;
   bool n0_absorb_ = excision_n0_absorb;
+
+  // Per-task W budget diagnostic: totals before/after each sub-operation isolate
+  // which operator fails to conserve the Killing-energy total.
+  const bool wbud = debug_w_budget && (global_variable::my_rank == 0);
+  Real wb_pre = 0.0, wb_i1 = 0.0;
+  if (wbud) {
+    wb_pre = DebugWTotal();
+    auto i0_saved = i0;
+    i0 = i1; wb_i1 = DebugWTotal(); i0 = i0_saved;
+  }
+
+  // Face-integrated flux sums per meshblock: conservation demands the two sides
+  // of every interior seam agree exactly, so a mismatch localizes the leak.
+  if (wbud && (stage == 1) && (pmy_pack->pmesh->ncycle % 20 == 0)) {
+    auto &solid_angles_dbg = prgeo->solid_angles;
+    auto &fx1 = iflx.x1f;
+    auto &fx2 = iflx.x2f;
+    auto &fx3 = iflx.x3f;
+    const int nang_tot = prgeo->nangles;
+    for (int m=0; m<pmy_pack->nmb_thispack; ++m) {
+      Real fsum[6];
+      const Real dx1 = pmy_pack->pmb->mb_size.h_view(m).dx1;
+      const Real dx2 = pmy_pack->pmb->mb_size.h_view(m).dx2;
+      const Real dx3 = pmy_pack->pmb->mb_size.h_view(m).dx3;
+      const int nkj = (ke-ks+1)*(je-js+1);
+      const int nki = (ke-ks+1)*(ie-is+1);
+      const int nji_d = (je-js+1)*(ie-is+1);
+      for (int f=0; f<6; ++f) {
+        Real s = 0.0;
+        if (f < 2) {
+          const int ii = (f == 0) ? is : ie+1;
+          Kokkos::parallel_reduce("dbg_fx1",
+            Kokkos::RangePolicy<>(DevExeSpace(), 0, nang_tot*nkj),
+          KOKKOS_LAMBDA(const int idx, Real &acc) {
+            const int n = idx/nkj;
+            const int k = ks + (idx - n*nkj)/(je-js+1);
+            const int j = js + (idx - n*nkj)%(je-js+1);
+            acc += fx1(m,n,k,j,ii)*solid_angles_dbg.d_view(n);
+          }, Kokkos::Sum<Real>(s));
+          s *= dx2*dx3;
+        } else if (f < 4) {
+          const int jj = (f == 2) ? js : je+1;
+          Kokkos::parallel_reduce("dbg_fx2",
+            Kokkos::RangePolicy<>(DevExeSpace(), 0, nang_tot*nki),
+          KOKKOS_LAMBDA(const int idx, Real &acc) {
+            const int n = idx/nki;
+            const int k = ks + (idx - n*nki)/(ie-is+1);
+            const int i = is + (idx - n*nki)%(ie-is+1);
+            acc += fx2(m,n,k,jj,i)*solid_angles_dbg.d_view(n);
+          }, Kokkos::Sum<Real>(s));
+          s *= dx1*dx3;
+        } else {
+          const int kk = (f == 4) ? ks : ke+1;
+          Kokkos::parallel_reduce("dbg_fx3",
+            Kokkos::RangePolicy<>(DevExeSpace(), 0, nang_tot*nji_d),
+          KOKKOS_LAMBDA(const int idx, Real &acc) {
+            const int n = idx/nji_d;
+            const int j = js + (idx - n*nji_d)/(ie-is+1);
+            const int i = is + (idx - n*nji_d)%(ie-is+1);
+            acc += fx3(m,n,kk,j,i)*solid_angles_dbg.d_view(n);
+          }, Kokkos::Sum<Real>(s));
+          s *= dx1*dx2;
+        }
+        fsum[f] = s;
+      }
+      std::cout << "WFACE cyc=" << pmy_pack->pmesh->ncycle << " m=" << m
+                << std::scientific << std::setprecision(10)
+                << " x[" << pmy_pack->pmb->mb_size.h_view(m).x1min << ","
+                << pmy_pack->pmb->mb_size.h_view(m).x2min << "]"
+                << " xL=" << fsum[0] << " xR=" << fsum[1]
+                << " yL=" << fsum[2] << " yR=" << fsum[3]
+                << " zL=" << fsum[4] << " zR=" << fsum[5] << std::endl;
+    }
+  }
 
   if (use_adm_geometry_) {
     auto &adm_alpha_c_ = adm_alpha_c;
@@ -128,11 +206,24 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
         }
       }
     });
+    Real wb_flux = wbud ? DebugWTotal() : 0.0;
     par_for("dynrad_adm_update_positivity",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       ConservativeAngularFloor(i0_, solid_angles_, m, k, j, i, nang1);
     });
+    Real wb_floor = wbud ? DebugWTotal() : 0.0;
     ApplyExcisionToIntensity(i0);
+    if (wbud) {
+      Real wb_exc = DebugWTotal();
+      Real expect = gam0*wb_pre + gam1*wb_i1;
+      std::cout << "WBUD cyc=" << pmy_pack->pmesh->ncycle << " stg=" << stage
+                << std::scientific << std::setprecision(6)
+                << " pre=" << wb_pre << " expect=" << expect
+                << " dflux=" << (wb_flux - expect)
+                << " dfloor=" << (wb_floor - wb_flux)
+                << " dexc=" << (wb_exc - wb_floor)
+                << " post=" << wb_exc << std::endl;
+    }
     return TaskStatus::complete;
   }
 

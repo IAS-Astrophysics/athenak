@@ -283,6 +283,15 @@ struct flash_beam_pgen {
   Real flux_fraction = -1.0; // <=0: projected <=3 weights; otherwise max-entropy all-angle
   bool projected_weights = true; // true: exact <=3-bin projection; false: max-entropy
   bool nearest_weight = false; // true: inject into the nearest single angular bin
+  // Corner tracers: 4 null geodesics seeded at the in-plane corners of the beam's
+  // bounding box.  Two launch at t=0 (head edges) and two are held at the launch
+  // corners until corner_t2 (~2 e-folds of the flash, the effective turn-off),
+  // tracing the tail edges.  Each is aimed along its side's edge of the beam's
+  // opening angle.
+  bool corner_tracers = false;
+  Real corner_t2 = 0.0;       // release time of the trailing pair
+  Real corner_offset = 0.0;   // transverse offset of the corners (default: width)
+  Real corner_spread = 0.0;   // half-opening angle (rad) of the edge directions
 };
 
 struct bbh_pgen bbh;
@@ -477,6 +486,8 @@ Real FlashPhotonRingRadiusCKS(const Real mass, const Real chi, const Real sense)
 void FlashMetricAt(const Real t, const Real x, const Real y, const Real z,
                    Real g4[NDIM][NDIM]);
 bool FlashCovariantNull(const Real g4[NDIM][NDIM], const Real dir[3], Real k_cov[NDIM]);
+void FlashCornerState(const Real t, const int c, Real cpos[3], Real kseed[3]);
+void HoldCornerTracers(Mesh *pm);
 void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
 
 //----------------------------------------------------------------------------------------
@@ -807,6 +818,12 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
                 << std::endl << "flash_beam/tau must be positive" << std::endl;
       std::exit(EXIT_FAILURE);
     }
+    flash.corner_tracers = pin->GetOrAddBoolean("problem", "corner_tracers", false);
+    flash.corner_t2 = pin->GetOrAddReal("problem", "corner_t2",
+                                        flash.t0 + 2.0*flash.tau);
+    flash.corner_offset = pin->GetOrAddReal("problem", "corner_offset", flash.width);
+    flash.corner_spread = pin->GetOrAddReal("problem", "corner_spread_deg", 3.0)
+                          *(M_PI/180.0);
     user_srcs = true;
     user_srcs_func = DynBBHFlashBeamSource;
   }
@@ -950,23 +967,68 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
       d1 /= dnorm; d2 /= dnorm; d3 /= dnorm;
     }
 
-    // A fixed number of tracers fanned across the beam's angular width, in the orbital
-    // (x-y) plane (aim direction rotated about the z-axis).  The two extreme rays are the
-    // beam edges; the interior rays fill in the fan for visualization.
+    // Tracer seeding.  Default: a fan of n_edge rays across the beam's angular width,
+    // all from the launch point, in the orbital (x-y) plane.  With
+    // problem/corner_tracers=true instead seed exactly 4 null tracers at the in-plane
+    // corners of the beam's bounding box: transverse edges at +/- corner_offset from
+    // the axis, each aimed along its side's edge (+/- corner_spread) of the beam's
+    // opening angle.  The leading pair (tags 0,1) flies from t=0; the trailing pair
+    // (tags 2,3) is re-pinned to the launch corners every substage until t=corner_t2
+    // (~2 e-folds of the flash, its effective turn-off) by HoldCornerTracers, so it
+    // traces the tail of the wave train.  Tag<->corner identification assumes a
+    // single-rank run (tags are then the seed order).
+    const bool corner_mode = flash.enabled && flash.corner_tracers;
     int n_edge = pin->GetOrAddInteger("problem", "n_edge_tracers", 21);
     if (n_edge < 1) n_edge = 1;
     Real spread = pin->GetOrAddReal("problem", "edge_spread_deg",
                                     edge_spread_default)*(M_PI/180.0);
+    const int nseed = corner_mode ? 4 : n_edge;
 
-    // Find the (single) local meshblock that contains the launch point, if any.
-    int msel_h = -1;
-    for (int m=0; m<nmb; ++m) {
-      bool inside = (p1 >= size.h_view(m).x1min && p1 <= size.h_view(m).x1max) &&
-                    (p2 >= size.h_view(m).x2min && p2 <= size.h_view(m).x2max) &&
-                    (p3 >= size.h_view(m).x3min && p3 <= size.h_view(m).x3max);
-      if (inside) msel_h = m;
+    // Seed state (position, covariant momentum) for every tracer on the host.
+    std::vector<Real> seed_pos(3*nseed), seed_k(3*nseed);
+    Real g4l[NDIM][NDIM];
+    FlashMetricAt(pmbp->pmesh->time, p1, p2, p3, g4l);
+    for (int p=0; p<nseed; ++p) {
+      if (corner_mode) {
+        Real cp[3], ck[3];
+        FlashCornerState(pmbp->pmesh->time, p, cp, ck);
+        for (int d=0; d<3; ++d) { seed_pos[3*p+d] = cp[d]; seed_k[3*p+d] = ck[d]; }
+      } else {
+        Real frac = (n_edge > 1)
+                  ? (static_cast<Real>(p)/static_cast<Real>(n_edge - 1) - 0.5) : 0.0;
+        Real psi = frac*spread;
+        Real dirp[3] = {std::cos(psi)*d1 - std::sin(psi)*d2,
+                        std::sin(psi)*d1 + std::cos(psi)*d2, d3};
+        Real k_cov[NDIM];
+        if (!FlashCovariantNull(g4l, dirp, k_cov)) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "edge tracer direction is not null-realizable"
+                    << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+        seed_pos[3*p+0] = p1; seed_pos[3*p+1] = p2; seed_pos[3*p+2] = p3;
+        seed_k[3*p+0] = k_cov[1]; seed_k[3*p+1] = k_cov[2]; seed_k[3*p+2] = k_cov[3];
+      }
     }
-    int npart_local = (msel_h >= 0) ? n_edge : 0;
+
+    // Find the local meshblock owning each seed point (corners may straddle blocks).
+    std::vector<int> msel(nseed, -1);
+    for (int p=0; p<nseed; ++p) {
+      for (int m=0; m<nmb; ++m) {
+        bool inside =
+          (seed_pos[3*p+0] >= size.h_view(m).x1min &&
+           seed_pos[3*p+0] <= size.h_view(m).x1max) &&
+          (seed_pos[3*p+1] >= size.h_view(m).x2min &&
+           seed_pos[3*p+1] <= size.h_view(m).x2max) &&
+          (seed_pos[3*p+2] >= size.h_view(m).x3min &&
+           seed_pos[3*p+2] <= size.h_view(m).x3max);
+        if (inside) msel[p] = m;
+      }
+    }
+    int npart_local = 0;
+    for (int p=0; p<nseed; ++p) {
+      if (msel[p] >= 0) npart_local++;
+    }
     pmbp->ppart->nprtcl_thispack = npart_local;
     Kokkos::resize(pmbp->ppart->prtcl_rdata, pmbp->ppart->nrdata, npart_local);
     Kokkos::resize(pmbp->ppart->prtcl_idata, pmbp->ppart->nidata, npart_local);
@@ -985,51 +1047,40 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
     pmbp->ppart->CreateParticleTags(pin);
 
     if (npart_local > 0) {
-      // Seed the covariant momenta on the host from the ANALYTIC metric at the exact
-      // launch point.  Each fan ray has coordinate direction d^i (the beam axis rotated
-      // about z); its time component d^0 comes from the null condition, and the covariant
-      // spatial momentum is k_i = g_{i mu} d^mu = gamma_ij d^j + beta_i d^0.  The
-      // beta_i d^0 (shift) term is essential: the null-geodesic pusher then yields
-      // coordinate velocity dx^i/dt = d^i/d^0, exactly parallel to the radiation beam's
-      // null completion.  (Seeding k_i = gamma_ij d^j alone -- the old approach -- makes
-      // the tracer velocity alpha*dhat - beta, which visibly disagrees with the beam
-      // wherever the shift is significant, i.e. everywhere near the punctures.)
-      Real g4l[NDIM][NDIM];
-      FlashMetricAt(pmbp->pmesh->time, p1, p2, p3, g4l);
-      DualArray2D<Real> kseed("kseed", npart_local, 3);
-      for (int p=0; p<npart_local; ++p) {
-        Real frac = (n_edge > 1)
-                  ? (static_cast<Real>(p)/static_cast<Real>(n_edge - 1) - 0.5) : 0.0;
-        Real psi = frac*spread;
-        Real dirp[3] = {std::cos(psi)*d1 - std::sin(psi)*d2,
-                        std::sin(psi)*d1 + std::cos(psi)*d2, d3};
-        Real k_cov[NDIM];
-        if (!FlashCovariantNull(g4l, dirp, k_cov)) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "edge tracer direction is not null-realizable"
-                    << std::endl;
-          std::exit(EXIT_FAILURE);
-        }
-        kseed.h_view(p,0) = k_cov[1];
-        kseed.h_view(p,1) = k_cov[2];
-        kseed.h_view(p,2) = k_cov[3];
+      // Covariant momenta were seeded on the host from the ANALYTIC metric at the exact
+      // seed point.  Each ray has coordinate direction d^i; its time component d^0 comes
+      // from the null condition, and the covariant spatial momentum is
+      // k_i = g_{i mu} d^mu = gamma_ij d^j + beta_i d^0.  The beta_i d^0 (shift) term is
+      // essential: the null-geodesic pusher then yields coordinate velocity
+      // dx^i/dt = d^i/d^0, exactly parallel to the radiation beam's null completion.
+      DualArray2D<Real> seed_d("seed", npart_local, 7);
+      int q = 0;
+      for (int p=0; p<nseed; ++p) {
+        if (msel[p] < 0) continue;
+        seed_d.h_view(q,0) = seed_pos[3*p+0];
+        seed_d.h_view(q,1) = seed_pos[3*p+1];
+        seed_d.h_view(q,2) = seed_pos[3*p+2];
+        seed_d.h_view(q,3) = seed_k[3*p+0];
+        seed_d.h_view(q,4) = seed_k[3*p+1];
+        seed_d.h_view(q,5) = seed_k[3*p+2];
+        seed_d.h_view(q,6) = static_cast<Real>(pmbp->gids + msel[p]);
+        q++;
       }
-      kseed.template modify<HostMemSpace>();
-      kseed.template sync<DevExeSpace>();
+      seed_d.template modify<HostMemSpace>();
+      seed_d.template sync<DevExeSpace>();
 
       auto &pr = pmbp->ppart->prtcl_rdata;
       auto &pi = pmbp->ppart->prtcl_idata;
-      int pgid = pmbp->gids + msel_h;
-      auto kseed_d = kseed.d_view;
+      auto seed_dd = seed_d.d_view;
       par_for("dynbbh_beam_edge_particles", DevExeSpace(), 0, npart_local-1,
       KOKKOS_LAMBDA(const int p) {
-        pi(PGID,p) = pgid;
-        pr(IPX,p) = p1;
-        pr(IPY,p) = p2;
-        pr(IPZ,p) = p3;
-        pr(IPVX,p) = kseed_d(p,0);
-        pr(IPVY,p) = kseed_d(p,1);
-        pr(IPVZ,p) = kseed_d(p,2);
+        pi(PGID,p) = static_cast<int>(seed_dd(p,6));
+        pr(IPX,p) = seed_dd(p,0);
+        pr(IPY,p) = seed_dd(p,1);
+        pr(IPZ,p) = seed_dd(p,2);
+        pr(IPVX,p) = seed_dd(p,3);
+        pr(IPVY,p) = seed_dd(p,4);
+        pr(IPVZ,p) = seed_dd(p,5);
       });
     }
   }
@@ -3567,6 +3618,87 @@ void FlashLaunchGeometry(const Real t, Real pos[3], Real dir[3]) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void FlashCornerState()
+//! \brief Seed state of corner tracer c at time t: position at the +/- corner_offset
+//! transverse edge of the beam, covariant null momentum along the +/- corner_spread
+//! edge of the opening angle.  Even c takes the +perp/+spread side (left of the beam),
+//! odd c the -perp/-spread side; c<2 is the leading (t=0) pair, c>=2 the trailing pair.
+
+void FlashCornerState(const Real t, const int c, Real cpos[3], Real kseed[3]) {
+  Real pos[3], dir[3];
+  FlashLaunchGeometry(t, pos, dir);
+  const Real side = (c % 2 == 0) ? +1.0 : -1.0;
+  const Real hyp = std::sqrt(SQR(dir[0]) + SQR(dir[1]));
+  if (!(hyp > 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "corner tracers require an in-plane beam direction"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  const Real perp[2] = {-dir[1]/hyp, dir[0]/hyp};
+  cpos[0] = pos[0] + side*flash.corner_offset*perp[0];
+  cpos[1] = pos[1] + side*flash.corner_offset*perp[1];
+  cpos[2] = pos[2];
+  const Real psi = side*flash.corner_spread;
+  Real dirp[3] = {std::cos(psi)*dir[0] - std::sin(psi)*dir[1],
+                  std::sin(psi)*dir[0] + std::cos(psi)*dir[1], dir[2]};
+  Real g4[NDIM][NDIM];
+  FlashMetricAt(t, cpos[0], cpos[1], cpos[2], g4);
+  Real k_cov[NDIM];
+  if (!FlashCovariantNull(g4, dirp, k_cov)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "corner tracer direction is not null-realizable"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  kseed[0] = k_cov[1];
+  kseed[1] = k_cov[2];
+  kseed[2] = k_cov[3];
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void HoldCornerTracers()
+//! \brief Re-pin the trailing corner-tracer pair (tags 2,3) to the launch corners,
+//! with momenta recomputed against the current metric, until t >= corner_t2.  Called
+//! every substage from DynBBHFlashBeamSource; idempotent within a substage.
+
+void HoldCornerTracers(Mesh *pm) {
+  if (!(flash.corner_tracers)) return;
+  const Real t = pm->time;
+  if (t >= flash.corner_t2) return;
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->ppart == nullptr) return;
+  const int npart = pmbp->ppart->nprtcl_thispack;
+  if (npart == 0) return;
+
+  Real hold[12];
+  for (int c=2; c<4; ++c) {
+    Real cp[3], ck[3];
+    FlashCornerState(t, c, cp, ck);
+    const int o = 6*(c - 2);
+    hold[o+0] = cp[0]; hold[o+1] = cp[1]; hold[o+2] = cp[2];
+    hold[o+3] = ck[0]; hold[o+4] = ck[1]; hold[o+5] = ck[2];
+  }
+  Kokkos::Array<Real,12> hold_d;
+  for (int d=0; d<12; ++d) { hold_d[d] = hold[d]; }
+
+  auto &pr = pmbp->ppart->prtcl_rdata;
+  auto &pi = pmbp->ppart->prtcl_idata;
+  par_for("dynbbh_corner_hold", DevExeSpace(), 0, npart-1,
+  KOKKOS_LAMBDA(const int p) {
+    const int tag = pi(PTAG,p);
+    if (tag < 2 || tag > 3) return;
+    const int o = 6*(tag - 2);
+    pr(IPX,p)  = hold_d[o+0];
+    pr(IPY,p)  = hold_d[o+1];
+    pr(IPZ,p)  = hold_d[o+2];
+    pr(IPVX,p) = hold_d[o+3];
+    pr(IPVY,p) = hold_d[o+4];
+    pr(IPVZ,p) = hold_d[o+5];
+  });
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void DynBBHFlashBeamSource()
 //! \brief Custom radiation source term for the orbiting BBH background.  A compact,
 //! exponentially-decaying "flash" of radiation is injected on one BH's equatorial photon
@@ -3582,6 +3714,7 @@ void FlashLaunchGeometry(const Real t, Real pos[3], Real dir[3]) {
 
 void DynBBHFlashBeamSource(Mesh *pm, const Real bdt) {
   if (!flash.enabled) return;
+  HoldCornerTracers(pm);
   const Real t = pm->time;
   if (t < flash.t0 || t > flash.toff) return;
 

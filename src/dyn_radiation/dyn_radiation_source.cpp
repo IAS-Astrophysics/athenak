@@ -6,8 +6,11 @@
 //! \file radiation_source.cpp
 
 #include <limits>
+#include <iostream>
+#include <iomanip>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "driver/driver.hpp"
 #include "coordinates/adm.hpp"
@@ -98,9 +101,16 @@ TaskStatus DynRadiation::AddTmunu(Driver *pdriver, int stage) {
 //! gr_rad branch, dyn_radiation/coupling/emission.cpp commit be7f84565b.
 
 TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
+  const bool wbud = debug_w_budget && (global_variable::my_rank == 0);
+  const Real wb0 = wbud ? DebugWTotal() : 0.0;
   // Return if dyn_radiation source term disabled
   if (!(rad_source)) {
     ApplyExcisionToIntensity(i0);
+    if (wbud) {
+      std::cout << "WBUD cyc=" << pmy_pack->pmesh->ncycle << " stg=" << stage
+                << std::scientific << std::setprecision(6)
+                << " dcoupl=" << (DebugWTotal() - wb0) << std::endl;
+    }
     return TaskStatus::complete;
   }
 
@@ -968,6 +978,11 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   });
 
   ApplyExcisionToIntensity(i0);
+  if (wbud) {
+    std::cout << "WBUD cyc=" << pmy_pack->pmesh->ncycle << " stg=" << stage
+              << std::scientific << std::setprecision(6)
+              << " dcoupl=" << (DebugWTotal() - wb0) << std::endl;
+  }
   return TaskStatus::complete;
 }
 
