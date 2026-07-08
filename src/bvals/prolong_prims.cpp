@@ -25,6 +25,23 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+Real BoundaryInternalEnergyFloor(const EOS_Data &eos, const Real dens) {
+  Real eint_floor = eos.pfloor/(eos.gamma - 1.0);
+  if (eos.tfloor > 0.0) {
+    eint_floor = fmax(eint_floor, dens*eos.tfloor/(eos.gamma - 1.0));
+  }
+  if (eos.sfloor > 0.0) {
+    eint_floor = fmax(eint_floor, dens*eos.sfloor*pow(dens, eos.gamma - 1.0)/
+                                  (eos.gamma - 1.0));
+  }
+  return eint_floor;
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 //! \fn void ConsToPrimCoarseBndry()
 //! \brief Converts Hydro conserved variables in coarse level boundary buffers into
@@ -52,6 +69,9 @@ void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
   auto &eos = pmy_pack->phydro->peos->eos_data;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
+  bool use_dual = pmy_pack->phydro->use_dual_energy;
+  int dual_idx = pmy_pack->phydro->dual_energy_idx;
+  Real dual_eta1 = pmy_pack->phydro->dual_energy_eta1;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr), Kokkos::AUTO);
@@ -154,8 +174,26 @@ void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
             w.vy *= factor;
             w.vz *= factor;
           }
-        } else {
+        } else if (!use_dual) {
           SingleC2P_IdealHyd(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+        } else {
+          if (u.d < eos.dfloor) {
+            u.d = eos.dfloor;
+          }
+          w.d = u.d;
+          const Real di = 1.0/u.d;
+          w.vx = di*u.mx;
+          w.vy = di*u.my;
+          w.vz = di*u.mz;
+          const Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
+          const Real eint_cons = u.e - e_k;
+          Real eint_aux = cons(m, dual_idx, k, j, i);
+          eint_aux = fmax(eint_aux, BoundaryInternalEnergyFloor(eos, w.d));
+          const bool use_cons_e =
+              (eint_cons > 0.0) &&
+              ((dual_eta1 <= 0.0) || (eint_cons > dual_eta1*fmax(u.e, 1.0e-18)));
+          w.e = use_cons_e ? eint_cons : eint_aux;
+          w.e = fmax(w.e, BoundaryInternalEnergyFloor(eos, w.d));
         }
 
         // No need to correct conserved state in coarse boundary arrays if floors used
@@ -173,6 +211,10 @@ void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
             cons(m,n,k,j,i) = 0.0;
           }
           prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+        }
+        if (use_dual) {
+          prim(m,dual_idx,k,j,i) = fmax(cons(m,dual_idx,k,j,i),
+                                        BoundaryInternalEnergyFloor(eos, w.d));
         }
       });
     }
@@ -204,9 +246,12 @@ void MeshBoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   bool &is_sr = pmy_pack->pcoord->is_special_relativistic;
   bool &is_gr = pmy_pack->pcoord->is_general_relativistic;
-  Real &gamma = pmy_pack->phydro->peos->eos_data.gamma;
+  auto &eos = pmy_pack->phydro->peos->eos_data;
+  Real &gamma = eos.gamma;
   int &nhyd  = pmy_pack->phydro->nhydro;
   int &nscal = pmy_pack->phydro->nscalars;
+  bool use_dual = pmy_pack->phydro->use_dual_energy;
+  int dual_idx = pmy_pack->phydro->dual_energy_idx;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr), Kokkos::AUTO);
@@ -286,6 +331,10 @@ void MeshBoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
         for (int n=nhyd; n<(nhyd+nscal); ++n) {
           cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
         }
+        if (use_dual) {
+          cons(m,dual_idx,k,j,i) = fmax(prim(m,dual_idx,k,j,i),
+                                        BoundaryInternalEnergyFloor(eos, u.d));
+        }
       });
     }
     tmember.team_barrier();
@@ -320,6 +369,9 @@ void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
   auto &eos = pmy_pack->pmhd->peos->eos_data;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
+  bool use_dual = pmy_pack->pmhd->use_dual_energy;
+  int dual_idx = pmy_pack->pmhd->dual_energy_idx;
+  Real dual_eta1 = pmy_pack->pmhd->dual_energy_eta1;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr), Kokkos::AUTO);
@@ -428,8 +480,29 @@ void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
             w.vy *= factor;
             w.vz *= factor;
           }
-        } else {
+        } else if (!use_dual) {
           SingleC2P_IdealMHD(u, eos, w, dfloor_used, efloor_used, tfloor_used);
+        } else {
+          const Real b2 = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+          const Real dfloor = fmax(eos.dfloor, b2/eos.sigma_max);
+          if (u.d < dfloor) {
+            u.d = dfloor;
+          }
+          w.d = u.d;
+          const Real di = 1.0/u.d;
+          w.vx = di*u.mx;
+          w.vy = di*u.my;
+          w.vz = di*u.mz;
+          const Real e_k = 0.5*di*(SQR(u.mx) + SQR(u.my) + SQR(u.mz));
+          const Real e_m = 0.5*b2;
+          const Real eint_cons = u.e - e_k - e_m;
+          Real eint_aux = cons(m, dual_idx, k, j, i);
+          eint_aux = fmax(eint_aux, BoundaryInternalEnergyFloor(eos, w.d));
+          const bool use_cons_e =
+              (eint_cons > 0.0) &&
+              ((dual_eta1 <= 0.0) || (eint_cons > dual_eta1*fmax(u.e, 1.0e-18)));
+          w.e = use_cons_e ? eint_cons : eint_aux;
+          w.e = fmax(w.e, BoundaryInternalEnergyFloor(eos, w.d));
         }
 
         // No need to correct conserved state in coarse boundary arrays if floors used
@@ -448,6 +521,10 @@ void MeshBoundaryValuesCC::ConsToPrimCoarseBndry(const DvceArray5D<Real> &cons,
             cons(m,n,k,j,i) = 0.0;
           }
           prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
+        }
+        if (use_dual) {
+          prim(m,dual_idx,k,j,i) = fmax(cons(m,dual_idx,k,j,i),
+                                        BoundaryInternalEnergyFloor(eos, w.d));
         }
       });
     }
@@ -479,9 +556,12 @@ void MeshBoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
   auto &spin = pmy_pack->pcoord->coord_data.bh_spin;
   bool &is_sr = pmy_pack->pcoord->is_special_relativistic;
   bool &is_gr = pmy_pack->pcoord->is_general_relativistic;
-  Real &gamma = pmy_pack->pmhd->peos->eos_data.gamma;
+  auto &eos = pmy_pack->pmhd->peos->eos_data;
+  Real &gamma = eos.gamma;
   int &nmhd  = pmy_pack->pmhd->nmhd;
   int &nscal = pmy_pack->pmhd->nscalars;
+  bool use_dual = pmy_pack->pmhd->use_dual_energy;
+  int dual_idx = pmy_pack->pmhd->dual_energy_idx;
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr), Kokkos::AUTO);
@@ -564,6 +644,10 @@ void MeshBoundaryValuesCC::PrimToConsFineBndry(const DvceArray5D<Real> &prim,
         // convert scalars (if any)
         for (int n=nmhd; n<(nmhd+nscal); ++n) {
           cons(m,n,k,j,i) = u.d*prim(m,n,k,j,i);
+        }
+        if (use_dual) {
+          cons(m,dual_idx,k,j,i) = fmax(prim(m,dual_idx,k,j,i),
+                                        BoundaryInternalEnergyFloor(eos, u.d));
         }
       });
     }

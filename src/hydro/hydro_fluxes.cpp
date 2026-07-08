@@ -22,6 +22,7 @@
 #include "hydro/rsolvers/hlle_hyd.hpp"
 #include "hydro/rsolvers/hllc_hyd.hpp"
 #include "hydro/rsolvers/roe_hyd.hpp"
+#include "hydro/rsolvers/dual_eint_hyd.hpp"
 #include "hydro/rsolvers/llf_srhyd.hpp"
 #include "hydro/rsolvers/hlle_srhyd.hpp"
 #include "hydro/rsolvers/hllc_srhyd.hpp"
@@ -43,7 +44,10 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   int ncells1 = indcs_.nx1 + 2*(indcs_.ng);
 
   int &nhyd_  = nhydro;
-  int nvars = nhydro + nscalars;
+  int nvars = this->nvars;
+  int nuser_vars = nhydro + nscalars;
+  const bool use_dual_energy_ = use_dual_energy;
+  const int dual_idx_ = dual_energy_idx;
   int nmb1 = pmy_pack->nmb_thispack - 1;
   const auto recon_method_ = recon_method;
   bool extrema = false;
@@ -62,6 +66,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   size_t scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 2;
   int scr_level = 0;
   auto &flx1_ = uflx.x1f;
+  auto &vf1_ = dual_vf.x1f;
 
   // set the loop limits for 1D/2D/3D problems
   int il = is, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
@@ -97,6 +102,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
       default:
         break;
     }
+    if (use_dual_energy_) {
+      FloorDualEnergyFaceStates(member, eos_, dual_idx_, il, iu, wl, wr);
+    }
     // Sync all threads in the team so that scratch memory is consistent
     member.team_barrier();
 
@@ -107,6 +115,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
     auto size = size_;
     auto coord = coord_;
     auto flx1 = flx1_;
+    auto vf1 = vf1_;
+    const bool dual_enabled = use_dual_energy_;
+    const int dual_idx = dual_idx_;
     if constexpr (rsolver_method_ == Hydro_RSolver::advect) {
       Advect(member, eos, indcs, size, coord, m, k, j, il, iu, IVX, wl, wr, flx1);
     } else if constexpr (rsolver_method_ == Hydro_RSolver::llf) {
@@ -129,10 +140,14 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
       HLLE_GR(member, eos, indcs, size, coord, m, k, j, il, iu, IVX, wl, wr, flx1);
     }
     member.team_barrier();
+    if (dual_enabled) {
+      UpwindDualEnergyFlux(member, eos, dual_idx, m, k, j, il, iu, wl, wr, flx1, vf1);
+      member.team_barrier();
+    }
 
     // calculate fluxes of scalars (if any)
-    if (nvars > nhyd_) {
-      for (int n=nhyd_; n<nvars; ++n) {
+    if (nuser_vars > nhyd_) {
+      for (int n=nhyd_; n<nuser_vars; ++n) {
         par_for_inner(member, is, ie+1, [&](const int i) {
           if (flx1_(m,IDN,k,j,i) >= 0.0) {
             flx1_(m,n,k,j,i) = flx1_(m,IDN,k,j,i)*wl(n,i);
@@ -150,6 +165,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->multi_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
     auto &flx2_ = uflx.x2f;
+    auto &vf2_ = dual_vf.x2f;
 
     // set the loop limits for 1D/2D/3D problems
     il = is, iu = ie, jl = js-1, ju = je+1, kl = ks, ku = ke;
@@ -196,6 +212,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           default:
             break;
         }
+        if (use_dual_energy_) {
+          FloorDualEnergyFaceStates(member, eos_, dual_idx_, il, iu, wl_jp1, wr);
+        }
         member.team_barrier();
 
         // compute fluxes over [js,je+1].  RS returns flux in input wr array
@@ -206,6 +225,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           auto size = size_;
           auto coord = coord_;
           auto flx2 = flx2_;
+          auto vf2 = vf2_;
+          const bool dual_enabled = use_dual_energy_;
+          const int dual_idx = dual_idx_;
           if constexpr (rsolver_method_ == Hydro_RSolver::advect) {
             Advect(member, eos, indcs, size, coord, m, k, j, il, iu, IVY, wl, wr, flx2);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::llf) {
@@ -228,11 +250,16 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             HLLE_GR(member, eos, indcs, size, coord, m, k, j, il, iu, IVY, wl, wr, flx2);
           }
           member.team_barrier();
+          if (dual_enabled) {
+            UpwindDualEnergyFlux(member, eos, dual_idx, m, k, j, il, iu,
+                                 wl, wr, flx2, vf2);
+            member.team_barrier();
+          }
         }
 
         // calculate fluxes of scalars (if any)
-        if (nvars > nhyd_) {
-          for (int n=nhyd_; n<nvars; ++n) {
+        if (nuser_vars > nhyd_) {
+          for (int n=nhyd_; n<nuser_vars; ++n) {
             par_for_inner(member, is, ie, [&](const int i) {
               if (flx2_(m,IDN,k,j,i) >= 0.0) {
                 flx2_(m,n,k,j,i) = flx2_(m,IDN,k,j,i)*wl(n,i);
@@ -252,6 +279,7 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->three_d) {
     scr_size = ScrArray2D<Real>::shmem_size(nvars, ncells1) * 3;
     auto &flx3_ = uflx.x3f;
+    auto &vf3_ = dual_vf.x3f;
 
     // set the loop limits
     il = is, iu = ie, jl = js, ju = je, kl = ks-1, ku = ke+1;
@@ -291,6 +319,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           default:
             break;
         }
+        if (use_dual_energy_) {
+          FloorDualEnergyFaceStates(member, eos_, dual_idx_, il, iu, wl_kp1, wr);
+        }
         member.team_barrier();
 
         // compute fluxes over [ks,ke+1].  RS returns flux in input wr array
@@ -301,6 +332,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           auto size = size_;
           auto coord = coord_;
           auto flx3 = flx3_;
+          auto vf3 = vf3_;
+          const bool dual_enabled = use_dual_energy_;
+          const int dual_idx = dual_idx_;
           if constexpr (rsolver_method_ == Hydro_RSolver::advect) {
             Advect(member, eos, indcs, size, coord, m, k, j, il, iu, IVZ, wl, wr, flx3);
           } else if constexpr (rsolver_method_ == Hydro_RSolver::llf) {
@@ -323,11 +357,16 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             HLLE_GR(member, eos, indcs, size, coord, m, k, j, il, iu, IVZ, wl, wr, flx3);
           }
           member.team_barrier();
+          if (dual_enabled) {
+            UpwindDualEnergyFlux(member, eos, dual_idx, m, k, j, il, iu,
+                                 wl, wr, flx3, vf3);
+            member.team_barrier();
+          }
         }
 
         // calculate fluxes of scalars (if any)
-        if (nvars > nhyd_) {
-          for (int n=nhyd_; n<nvars; ++n) {
+        if (nuser_vars > nhyd_) {
+          for (int n=nhyd_; n<nuser_vars; ++n) {
             par_for_inner(member, is, ie, [&](const int i) {
               if (flx3_(m,IDN,k,j,i) >= 0.0) {
                 flx3_(m,n,k,j,i) = flx3_(m,IDN,k,j,i)*wl(n,i);

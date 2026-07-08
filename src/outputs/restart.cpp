@@ -68,10 +68,10 @@ void RestartOutput::LoadOutputData(Mesh *pm) {
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   int nhydro=0, nmhd=0, nrad=0, nforce=3, nadm=0, nz4c=0;
   if (phydro != nullptr) {
-    nhydro = phydro->nhydro + phydro->nscalars;
+    nhydro = phydro->nvars;
   }
   if (pmhd != nullptr) {
-    nmhd = pmhd->nmhd + pmhd->nscalars;
+    nmhd = pmhd->nvars;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
@@ -150,10 +150,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   adm::ADM* padm = pm->pmb_pack->padm;
   int nhydro=0, nmhd=0, nrad=0, nforce=3, nz4c=0, nadm=0, nco=0;
   if (phydro != nullptr) {
-    nhydro = phydro->nhydro + phydro->nscalars;
+    nhydro = phydro->nvars;
   }
   if (pmhd != nullptr) {
-    nmhd = pmhd->nmhd + pmhd->nscalars;
+    nmhd = pmhd->nvars;
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;

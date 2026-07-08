@@ -586,10 +586,20 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   if (nnew > 0) {
     if (phydro != nullptr) {
       RefineCC(new_to_old, phydro->u0, phydro->coarse_u0);
+      if (phydro->use_dual_energy) {
+        phydro->RepairRefinedDualEnergyState(new_to_old, refine_flag,
+                                             new_gids_eachrank[global_variable::my_rank],
+                                             new_nmb_eachrank[global_variable::my_rank]);
+      }
     }
     if (pmhd != nullptr) {
       RefineCC(new_to_old, pmhd->u0, pmhd->coarse_u0);
       RefineFC(new_to_old, pmhd->b0, pmhd->coarse_b0);
+      if (pmhd->use_dual_energy) {
+        pmhd->RepairRefinedDualEnergyState(new_to_old, refine_flag,
+                                           new_gids_eachrank[global_variable::my_rank],
+                                           new_nmb_eachrank[global_variable::my_rank]);
+      }
     }
     if (prad != nullptr) {
       RefineCC(new_to_old, prad->i0, prad->coarse_i0);

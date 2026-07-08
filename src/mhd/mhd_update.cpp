@@ -34,7 +34,7 @@ TaskStatus MHD::RKUpdate(Driver *pdriver, int stage) {
   Real &gam1 = pdriver->gam1[stage-1];
   Real beta_dt = (pdriver->beta[stage-1])*(pmy_pack->pmesh->dt);
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nv1 = nmhd + nscalars - 1;
+  int nv1 = nvars - 1;
   auto u0_ = u0;
   auto u1_ = u1;
   auto flx1 = uflx.x1f;

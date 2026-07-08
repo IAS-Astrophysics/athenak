@@ -62,6 +62,7 @@ add_executable(
         geodesic-grid/gauss_legendre.cpp
 
         hydro/hydro.cpp
+        hydro/hydro_dual_energy.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_fofc.cpp
         hydro/hydro_newdt.cpp
@@ -83,6 +84,7 @@ add_executable(
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
         mhd/mhd_ct.cpp
+        mhd/mhd_dual_energy.cpp
         mhd/mhd_fluxes.cpp
         mhd/mhd_fofc.cpp
         mhd/mhd_newdt.cpp
