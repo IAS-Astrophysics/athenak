@@ -135,7 +135,6 @@ struct my_params {
     Real thmin, thi, tho, thmax;
     Real origid, rmagsph, denstar;
     Real mm, rb, delta;
-    Real fofc_scalar_tau;  // timescale for damping FOFC diagnostic scalar (0 = off)
     bool is_ideal;
     bool magnetic_fields_enabled;
     bool avg_grid_bfields;
@@ -176,7 +175,6 @@ void MyHistFunc(HistoryData *pdata, Mesh *pm);
 void StarMask(Mesh* pm, const Real bdt);
 void BoundarySpongeMask(Mesh* pm, const Real bdt);
 void DiscOnlyMask(Mesh* pm, const Real bdt);
-void MyFluxDiode(Mesh* pm);
 void FixedHydroBC(Mesh *pm);
 void FixedMHDBC(Mesh *pm);
 
@@ -212,10 +210,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     if (user_constraint) {
         user_constraint_func = CoolingSourceTerms;
-    }
-
-    if (user_fluxmask && (pmbp->pmhd != nullptr)) {
-        user_fluxmask_func = MyFluxDiode;
     }
 
     if (user_hist) {
@@ -274,7 +268,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.rmagsph = pin->GetOrAddReal("problem","rmagsph",0.0);
     mp.rs = pin->GetOrAddReal("problem", "rstar",0.1);
     mp.gravsmooth = pin->GetOrAddReal("problem","gravsmooth",0.1);
-    mp.fofc_scalar_tau = pin->GetOrAddReal("problem","fofc_scalar_tau",0.0);
     mp.sig_star_disc = pin->GetOrAddReal("problem","sig_star_disc",0.1);
     mp.avg_grid_bfields = pin->GetOrAddBoolean("problem","avg_grid_bfields",false);
     mp.mag_option = pin->GetOrAddInteger("problem","mag_option",1);
@@ -500,17 +493,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                                +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
         }
     });
-
-    // Initialize FOFC diagnostic passive scalar to 0 (when used)
-    if (pmbp->pmhd != nullptr && pmbp->pmhd->nscalars >= 1) {
-        int nmhd = pmbp->pmhd->nmhd;
-        auto u0_scalar_ = pmbp->pmhd->u0;
-        par_for("magnetosphere_pgen_fofc_scalar", DevExeSpace(), 0, (nmb - 1), ks, ke,
-                js, je, is, ie,
-        KOKKOS_LAMBDA(int m, int k, int j, int i) {
-            u0_scalar_(m, nmhd, k, j, i) = 0.0;
-        });
-    }
 
     // initialize magnetic field if required ---------------------------------------
     if (pmbp->pmhd != nullptr) {
@@ -1170,25 +1152,6 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     if (mp.denstar > 0.0) StarMask(pm, bdt);
     if (mp.disc_mask_rin >= 0.0 || mp.disc_mask_rout >= 0.0) DiscOnlyMask(pm, bdt);
 
-    // FOFC diagnostic: damp conserved scalar (rho*s) with source -bdt*dens*s/tau
-    MeshBlockPack *pmbp = pm->pmb_pack;
-    if (pmbp->pmhd != nullptr && pmbp->pmhd->nscalars >= 1 && mp.fofc_scalar_tau > 0.0) {
-        auto &indcs = pm->mb_indcs;
-        int is = indcs.is, ie = indcs.ie, js = indcs.js, je = indcs.je, ks = indcs.ks,
-            ke = indcs.ke;
-        int nmhd = pmbp->pmhd->nmhd;
-        Real tau = mp.fofc_scalar_tau;
-        auto u0_ = pmbp->pmhd->u0;
-        par_for("pgen_fofc_scalar_damp", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks,
-                ke, js, je, is, ie,
-        KOKKOS_LAMBDA(int m, int k, int j, int i) {
-            Real dens = u0_(m, IDN, k, j, i);
-            Real rho_s = u0_(m, nmhd, k, j, i);
-            Real sink = bdt * rho_s / tau;
-            u0_(m, nmhd, k, j, i) = fmax(0.0, rho_s - sink);
-        });
-    }
-
     return;
 }
 
@@ -1259,116 +1222,6 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
         u0_(m,IDN,k,j,i) = fmax(u0_(m,IDN,k,j,i),rho_floor(mp_,rc));
     }); // end par_for
 } // end star source terms
-
-//----------------------------------------------------------------------------------------
-// Diode boundary condition applied to the conserved-variable flux arrays.
-// Called after RecvFlux and before RKUpdate (via the user_fluxmask hook).
-// At every face that straddles the mask boundary (one adjacent cell inside
-// rc<rfix, the other outside), the entire flux vector is zeroed if the mass
-// flux is directed outward (mask interior -> exterior).  Inward fluxes
-// (accretion) are left unchanged.
-void MyFluxDiode(Mesh* pm) {
-    auto &indcs = pm->mb_indcs;
-    int is = indcs.is, ie = indcs.ie;
-    int js = indcs.js, je = indcs.je;
-    int ks = indcs.ks, ke = indcs.ke;
-    MeshBlockPack *pmbp = pm->pmb_pack;
-    auto &size = pmbp->pmb->mb_size;
-    auto mp_ = mp;
-    auto uflx_ = pmbp->pmhd->uflx;
-
-    // --- x1-faces: face i lies between cells (i-1) and (i) ---
-    par_for("diode_x1", DevExeSpace(),
-            0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie+1,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x1v_L = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
-        Real x1v_R = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-        Real rc_L = sqrt(x1v_L*x1v_L + x2v*x2v + x3v*x3v);
-        Real rc_R = sqrt(x1v_R*x1v_R + x2v*x2v + x3v*x3v);
-
-        // boundary face: one side inside mask, other outside
-        bool is_bdy = (rc_L < mp_.rfix) != (rc_R < mp_.rfix);
-        if (is_bdy) {
-            // out_sign: +1 when interior is on LEFT (flux towards RIGHT = outward)
-            //           -1 when interior is on RIGHT (flux towards LEFT = outward)
-            // Blocking inward flux (< 0): allows ejection, prevents accretion
-            // Blocking outward flux (> 0): prevents ejection, allows accretion
-            Real out_sign = (rc_L < mp_.rfix) ? 1.0 : -1.0;
-            if (uflx_.x1f(m, IDN, k, j, i) * out_sign > 0.0) {
-                uflx_.x1f(m, IDN, k, j, i) = 0.0;
-            }
-        }
-    }); // end par_for x1
-
-    // --- x2-faces: face j lies between cells (j-1) and (j) ---
-    par_for("diode_x2", DevExeSpace(),
-            0, (pmbp->nmb_thispack-1), ks, ke, js, je+1, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real x2v_L = CellCenterX(j-1-js, indcs.nx2, x2min, x2max);
-        Real x2v_R = CellCenterX(j  -js, indcs.nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-        Real rc_L = sqrt(x1v*x1v + x2v_L*x2v_L + x3v*x3v);
-        Real rc_R = sqrt(x1v*x1v + x2v_R*x2v_R + x3v*x3v);
-
-        bool is_bdy = (rc_L < mp_.rfix) != (rc_R < mp_.rfix);
-        if (is_bdy) {
-            Real out_sign = (rc_L < mp_.rfix) ? 1.0 : -1.0;
-            if (uflx_.x2f(m, IDN, k, j, i) * out_sign > 0.0) {
-                uflx_.x2f(m, IDN, k, j, i) = 0.0;
-            }
-        }
-    }); // end par_for x2
-
-    // --- x3-faces: face k lies between cells (k-1) and (k) ---
-    par_for("diode_x3", DevExeSpace(),
-            0, (pmbp->nmb_thispack-1), ks, ke+1, js, je, is, ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        Real &x1min = size.d_view(m).x1min;
-        Real &x1max = size.d_view(m).x1max;
-        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-        Real &x2min = size.d_view(m).x2min;
-        Real &x2max = size.d_view(m).x2max;
-        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-        Real &x3min = size.d_view(m).x3min;
-        Real &x3max = size.d_view(m).x3max;
-        Real x3v_L = CellCenterX(k-1-ks, indcs.nx3, x3min, x3max);
-        Real x3v_R = CellCenterX(k  -ks, indcs.nx3, x3min, x3max);
-
-        Real rc_L = sqrt(x1v*x1v + x2v*x2v + x3v_L*x3v_L);
-        Real rc_R = sqrt(x1v*x1v + x2v*x2v + x3v_R*x3v_R);
-
-        bool is_bdy = (rc_L < mp_.rfix) != (rc_R < mp_.rfix);
-        if (is_bdy) {
-            Real out_sign = (rc_L < mp_.rfix) ? 1.0 : -1.0;
-            if (uflx_.x3f(m, IDN, k, j, i) * out_sign > 0.0) {
-                uflx_.x3f(m, IDN, k, j, i) = 0.0;
-            }
-        }
-    }); // end par_for x3
-} // end MyFluxDiode
 
 //----------------------------------------------------------------------------------------
 void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED

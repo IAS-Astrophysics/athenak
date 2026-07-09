@@ -51,7 +51,6 @@ struct MHDTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
-  TaskID fluxmask;
   TaskID rkupdt;
   TaskID srctrms;
   TaskID sendu_oa;
@@ -143,7 +142,6 @@ class MHD {
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
   DvceArray5D<bool> fofc_scal;  // flag to indicate if FOFC for scalar is needed
   bool use_fofc = false;   // flag to enable FOFC
-  bool use_sofc = false;  // flag to enable SOFC (PLM + LLF when fofc set)
 
   // following used for region-based reconstruction switch
   bool use_recon_region = false;
@@ -173,7 +171,6 @@ class MHD {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
-  TaskStatus FluxMask(Driver *d, int stage);
   TaskStatus RKUpdate(Driver *d, int stage);
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);

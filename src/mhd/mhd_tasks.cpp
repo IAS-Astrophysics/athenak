@@ -50,8 +50,7 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.flux      = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
   id.sendf     = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
   id.recvf     = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.fluxmask  = tl["stagen"]->AddTask(&MHD::FluxMask, this, id.recvf);
-  id.rkupdt    = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.fluxmask);
+  id.rkupdt    = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
   id.srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
   id.sendu_oa  = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
   id.recvu_oa  = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.sendu_oa);
@@ -210,8 +209,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     presist->AddResistiveFluxes(b0, uflx);
   }
 
-  // call FOFC/SOFC if necessary
-  if (use_fofc || use_sofc) {
+  // call FOFC if necessary
+  if (use_fofc) {
     FOFC(pdrive, stage);
   } else if (pmy_pack->pcoord->is_general_relativistic) {
     if (pmy_pack->pcoord->coord_data.bh_excise) {
@@ -248,20 +247,6 @@ TaskStatus MHD::RecvFlux(Driver *pdrive, int stage) {
     tstat = pbval_u->RecvAndUnpackFluxCC(uflx);
   }
   return tstat;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn TaskStatus MHD::FluxMask
-//! \brief Wrapper task to apply user-defined flux mask (e.g. diode BC) to conserved
-//! variable fluxes. Runs after RecvFlux and before RKUpdate so that the flux
-//! modification is applied before the conservative update.
-
-TaskStatus MHD::FluxMask(Driver *pdrive, int stage) {
-  if (pmy_pack->pmesh->pgen->user_fluxmask &&
-      pmy_pack->pmesh->pgen->user_fluxmask_func != nullptr) {
-    (pmy_pack->pmesh->pgen->user_fluxmask_func)(pmy_pack->pmesh);
-  }
-  return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------

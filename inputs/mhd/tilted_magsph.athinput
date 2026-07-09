@@ -249,8 +249,6 @@ gamma       = 1.4      # gamma
 dfloor      = 1.e-9    # Density floor
 rsolver     = hlld     # Riemann-solver to be used
 fofc        = true     # First order flux correction
-sofc        = false    # Second order flux correction
-nscalars    = 0        # FOFC diagnostic passive scalar (temporary)
 
 # Region-based reconstruction switch: use alternate method (plm or dc) inside a region
 recon_region        = sphere  # none, box, or sphere
@@ -267,7 +265,6 @@ pgen_name = magsph      # problem generator name
 user_srcs        = true    # Switch the user source terms on
 user_constraint  = true    # Cooling applied in separate MHD stage (after RecvB_Shr)
 user_esrcs       = true    # Switch the user e-field mask on
-user_fluxmask    = false   # Apply a mask to the fluxes
 user_hist        = false   # Switch the user history function on
 
 # --- Stellar parameters ---
@@ -327,6 +324,3 @@ cooling_direct_set = true  # if true, set T directly;
 # --- Disc mask (optional) ---
 disc_mask_rin  = -1        # inner disc-only mask radius (negative = off)
 disc_mask_rout = -1        # outer disc-only mask radius (negative = off)
-
-# --- Diagnostics ---
-fofc_scalar_tau = 0.0      # FOFC diagnostic scalar damping timescale (0 = off)

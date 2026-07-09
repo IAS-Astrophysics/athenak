@@ -1293,17 +1293,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 4;
   }
 
-  // Diagnostic: value 1 on entire mesh (including ghosts), for exact integral tests.
-  if (name.compare("unity") == 0) {
-    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
-    auto dv = derived_var;
-    par_for("unity_fill", DevExeSpace(), 0, (nmb-1), 0, n3-1, 0, n2-1, 0, n1-1,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m, 0, k, j, i) = 1.0;
-    });
-    return;
-  }
-
   // Cartesian-to-spherical MHD diagnostics.
   // Computes 14 scalar channels at every cell centre using the transformation:
   //   r = sqrt(x^2+y^2+z^2),  R = sqrt(x^2+y^2)
