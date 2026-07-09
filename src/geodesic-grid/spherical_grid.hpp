@@ -21,8 +21,10 @@ class MeshBlockPack;
 class SphericalGrid: public GeodesicGrid {
  public:
     // Creates a geodesic grid with refinement level nlev and radius rad.
-    // ng_interp controls the Lagrange stencil half-width per axis (full stencil = 2×ng_interp points):
-    //   ng_interp < 0 : default — use full mesh ghost-zone depth (original behaviour, e.g. ng=4 → 8-point, 7th-order)
+    // ng_interp controls the Lagrange stencil half-width per axis (full stencil =
+    // 2×ng_interp points):
+    //   ng_interp < 0 : default — use full mesh ghost-zone depth (original behaviour,
+    //   e.g. ng=4 → 8-point, 7th-order)
     //   ng_interp = 0 : nearest-cell (1 point, fastest, strictly monotone)
     //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)
     SphericalGrid(MeshBlockPack *pmy_pack, int nlev, Real rad, int ng_interp = -1);

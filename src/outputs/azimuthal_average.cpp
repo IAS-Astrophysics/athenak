@@ -6,8 +6,6 @@
 //! \file azimuthal_average.cpp
 //! \brief writes azimuthally averaged data on an (r, theta) grid in binary VTK format.
 
-#include "utils/spherical_surface.hpp"
-
 #include <sys/stat.h>  // mkdir
 
 #include <cmath>
@@ -16,6 +14,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "utils/spherical_surface.hpp"
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -39,7 +39,8 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   adaptive_ = pm->adaptive;
 
   // Allow a smaller Lagrange stencil than the full ghost-zone depth.
-  // ng_interp controls the half-stencil width per axis (full stencil = 2×ng_interp points):
+  // ng_interp controls the half-stencil width per axis (full stencil = 2×ng_interp
+  // points):
   //   ng_interp < 0 : default — full mesh stencil
   //   ng_interp = 0 : nearest-cell (single read, no weights, strictly monotone)
   //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)

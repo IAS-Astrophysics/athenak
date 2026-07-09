@@ -11,6 +11,7 @@
 #include <cstdio>  // snprintf
 #include <fstream>
 #include <iomanip>
+#include <memory>
 #include <sstream>
 #include <string>
 
@@ -31,15 +32,15 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
   rmin = pin->GetReal(op.block_name, "rmin");
   rmax = pin->GetReal(op.block_name, "rmax");
   int nlev = pin->GetOrAddInteger(op.block_name, "nlev", 4);
-  
+
   // Optional logarithmic spacing
   log_spacing = pin->GetOrAddBoolean(op.block_name, "log_spacing", false);
 
   // Surface integral on sphere at shell center r0 (r0^2 dOmega) vs shell volume weighting
   surface_integral = pin->GetOrAddBoolean(op.block_name, "surface_integral", false);
-  
+
   // Note: Spheres are always centered at the origin (0,0,0)
-  
+
   // Initialize array of radial faces (nr+1 values from rmin to rmax)
   radii_faces.resize(nr + 1);
   if (log_spacing) {
@@ -57,7 +58,7 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
       radii_faces[i] = rmin + i * dr;
     }
   }
-  
+
   // Initialize array of radial centers (nr values, midpoints between faces)
   radii.resize(nr);
   if (log_spacing) {
@@ -72,7 +73,8 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
     }
   }
 
-  // Read ng_interp: controls Lagrange stencil half-width per axis (full stencil = 2×ng_interp points).
+  // Read ng_interp: controls Lagrange stencil half-width per axis (full stencil =
+  // 2×ng_interp points).
   //   ng_interp < 0 : default — full mesh stencil
   //   ng_interp = 0 : nearest-cell (fastest, strictly monotone)
   //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)
@@ -120,7 +122,8 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
     Real r1 = radii_faces[ir];     // Inner face
     Real r2 = radii_faces[ir + 1]; // Outer face
 
-    // Radial weight: shell volume int r^2 dr = (r2^3-r1^3)/3, or surface r0^2 for dA = r0^2 dOmega
+    // Radial weight: shell volume int r^2 dr = (r2^3-r1^3)/3, or surface r0^2 for dA =
+    // r0^2 dOmega
     Real radial_weight = surface_integral
         ? (r0 * r0)
         : ((r2 * r2 * r2 - r1 * r1 * r1) / 3.0);
@@ -130,7 +133,8 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
       // Note the geodesic spherical grid uses an inclusive range for the variables
       // so we pass the same index for vs and ve (start and end).
       // This is unlike in the SphericalSurface class.
-      sphere->InterpolateToSphere(outvars[n].data_index, outvars[n].data_index, *(outvars[n].data_ptr));
+      sphere->InterpolateToSphere(outvars[n].data_index, outvars[n].data_index,
+                                  *(outvars[n].data_ptr));
 
       // Sum value * dOmega * radial_weight (volume element or sphere-area element at r0)
       Real integrated_value = 0.0;
@@ -146,7 +150,8 @@ void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
 
 #if MPI_PARALLEL_ENABLED
   // Sum contributions from all ranks
-  // Note that InterpolateToSphere will set zero values for points not owned by current rank
+  // Note that InterpolateToSphere will set zero values for points not owned by current
+  // rank
   int count = nout_vars * nr;
   if (0 == global_variable::my_rank) {
     MPI_Reduce(MPI_IN_PLACE, outarray.data(), count, MPI_ATHENA_REAL, MPI_SUM,
@@ -170,7 +175,7 @@ void SphericalShellsOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Open file
     std::ofstream ofile(fname);
-    
+
     // Write header
     if (surface_integral) {
       ofile << "# Spherically surface-integrated data (sum over solid_angle * r_center^2 "
@@ -189,7 +194,7 @@ void SphericalShellsOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     } else {
       ofile << " (linear spacing)" << std::endl;
     }
-    
+
     // Write column headers
     ofile << "# Columns: radius";
     int nout_vars = outvars.size();
@@ -197,10 +202,10 @@ void SphericalShellsOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       ofile << " " << outvars[n].label;
     }
     ofile << std::endl;
-    
+
     // Set output precision
     ofile << std::scientific << std::setprecision(8);
-    
+
     // Write data for each radius
     for (int ir = 0; ir < nr; ++ir) {
       ofile << radii[ir];
@@ -209,7 +214,7 @@ void SphericalShellsOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       }
       ofile << std::endl;
     }
-    
+
     ofile.close();
 
 #if MPI_PARALLEL_ENABLED

@@ -83,7 +83,6 @@ struct MHDTaskIDs {
 };
 
 namespace mhd {
-
 //----------------------------------------------------------------------------------------
 //! \class MHD
 
@@ -155,7 +154,8 @@ class MHD {
   Real recon_region_x2min_ = 0.0, recon_region_x2max_ = 0.0;
   Real recon_region_x3min_ = 0.0, recon_region_x3max_ = 0.0;
   // sphere (problem coordinates)
-  Real recon_region_x1_center_ = 0.0, recon_region_x2_center_ = 0.0, recon_region_x3_center_ = 0.0;
+  Real recon_region_x1_center_ = 0.0, recon_region_x2_center_ = 0.0,
+      recon_region_x3_center_ = 0.0;
   Real recon_region_radius_ = 0.0;
 
   // container to hold names of TaskIDs
@@ -218,6 +218,5 @@ class MHD {
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;
 };
-
 } // namespace mhd
 #endif // MHD_MHD_HPP_

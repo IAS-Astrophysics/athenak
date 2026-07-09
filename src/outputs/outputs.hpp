@@ -455,10 +455,13 @@ class SphericalShellsOutput : public BaseTypeOutput {
   int nr;                                           // number of radial shells
   Real rmin, rmax;                                  // min and max radii
   bool log_spacing;                                 // use logarithmic spacing
-  bool surface_integral;                            // if true, r0^2 dOmega; else shell volume weight
-  int ng_interp_;                                   // Lagrange stencil half-width (0=nearest-cell)
+  // if true, r0^2 dOmega; else shell volume weight
+  bool surface_integral;
+  // Lagrange stencil half-width (0=nearest-cell)
+  int ng_interp_;
   std::vector<Real> radii;                          // array of shell center radii
-  std::vector<Real> radii_faces;                    // array of shell face radii (nr+1 values)
+  // array of shell face radii (nr+1 values)
+  std::vector<Real> radii_faces;
   std::vector<std::unique_ptr<SphericalGrid>> spheres;  // grid for each shell
 };
 
@@ -471,6 +474,7 @@ class AzimuthalAverageOutput : public BaseTypeOutput {
   ~AzimuthalAverageOutput();
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+
  private:
   int nr, ntheta, nphi;
   Real rmin, rmax;

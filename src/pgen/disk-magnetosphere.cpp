@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iostream>   // endl
 #include <limits>
+#include <memory>     // make_unique
 #include <sstream>    // stringstream
 #include <stdexcept>  // runtime_error
 #include <string>     // c_str()
@@ -42,36 +43,44 @@
 
 // prototypes for functions used internally to this pgen
 namespace {
+    KOKKOS_INLINE_FUNCTION
+    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,
+                            const Real x1, const Real x2, const Real x3);
 
     KOKKOS_INLINE_FUNCTION
-    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z, const Real x1, const Real x2, const Real x3);
+    static void RotateCart(struct my_params mp, Real &x1rot, Real &x2rot, Real &x3rot,
+                           const Real x1, const Real x2,const Real x3,const Real rot);
 
     KOKKOS_INLINE_FUNCTION
-    static void RotateCart(struct my_params mp, Real &x1rot, Real &x2rot, Real &x3rot, const Real x1, const Real x2,const Real x3,const Real rot);
+    static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z);
 
     KOKKOS_INLINE_FUNCTION
-    static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
-
-    KOKKOS_INLINE_FUNCTION
-    static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z);
+    static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z);
 
     KOKKOS_INLINE_FUNCTION
     static Real PoverR(struct my_params mp, const Real rad);
 
     KOKKOS_INLINE_FUNCTION
-    static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
+    static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z, Real &v1, Real &v2, Real &v3);
 
     KOKKOS_INLINE_FUNCTION
-    static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3);
-    
-    KOKKOS_INLINE_FUNCTION
-    static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &v1_star, Real &v2_star, Real &v3_star);
+    static void VelStarCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z, Real &v1, Real &v2, Real &v3);
 
     KOKKOS_INLINE_FUNCTION
-    static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &den);
+    static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3,
+                        Real &v1_star, Real &v2_star, Real &v3_star);
 
     KOKKOS_INLINE_FUNCTION
-    static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &ux, Real &uy, Real &uz);
+    static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2,
+                                const Real x3, Real &den);
+
+    KOKKOS_INLINE_FUNCTION
+    static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2,
+                                const Real x3, Real &ux, Real &uy, Real &uz);
 
     KOKKOS_INLINE_FUNCTION
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3);
@@ -83,7 +92,9 @@ namespace {
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3);
 
     KOKKOS_INLINE_FUNCTION
-    static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz);
+    static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3,
+                       const Real mmx, const Real mmy, const Real mmz, Real &bx,
+                           Real &by,  Real &bz);
 
     // Moment-parameterised vector potential: A = (m x r) * f(r)
     // These accept an arbitrary dipole moment vector (mx, my, mz) and are used
@@ -112,7 +123,7 @@ namespace {
     // Initialize global instance of the parameter structure
     // pgen_struct disc_params;
 
-    struct my_params {
+struct my_params {
     Real thetaw, thetab;
     Real gm0, r0, rho0, dslope, p0_over_r0, qslope, gamma_gas;
     Real dfloor, rho_floor1, rho_floor_slope1, rho_floor2, rho_floor_slope2;
@@ -133,10 +144,14 @@ namespace {
     Real disc_mask_rout;  // outer disc-only mask radius (negative = off)
     Real esrc_blend_width;  // E-field blend width inside rfix (0 = hard boundary)
     Real sponge_width;    // thickness of sponge zone outside rfix (0 = disabled)
-    Real sponge_tau;      // sponge relaxation timescale in units of the free-fall time at rfix
-    int inflow_bc_depth;  // number of ghost layers inside mask for inflow BC (0 = disabled)
-    Real ghost_vr_frac;   // minimum inward radial velocity in ghost cells as fraction of local free-fall (0 = off)
-    };
+    // sponge relaxation timescale in units of the free-fall time at rfix
+    Real sponge_tau;
+    // number of ghost layers inside mask for inflow BC (0 = disabled)
+    int inflow_bc_depth;
+    // minimum inward radial velocity in ghost cells as fraction of local
+    // free-fall (0 = off)
+    Real ghost_vr_frac;
+};
 
     my_params mp;
 
@@ -145,7 +160,6 @@ namespace {
     DvceArray4D<int> ghost_depth;
     // donor_idx(m, 0/1/2, k,j,i) = i/j/k index of exterior donor cell
     DvceArray5D<int> donor_idx;
-
 } // End of namespace
 
 KOKKOS_INLINE_FUNCTION
@@ -168,13 +182,14 @@ void FixedMHDBC(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \fn
-//! \brief Problem Generator for warped disc experiments. Sets initial conditions for an equilibrium
-//! which is then rotated in spherical shells to introduce a radially dependent tilt and twait profile.
+//! \brief Problem Generator for warped disc experiments. Sets initial conditions for an
+//! equilibrium
+//! which is then rotated in spherical shells to introduce a radially dependent tilt and
+//! twait profile.
 //! Compile with '-D PROBLEM=warp_disc' to enroll as a user-specific problem generator.
 //----------------------------------------------------------------------------------------
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
-
     MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
     // Now enroll user source terms and boundary conditions if specified
@@ -204,7 +219,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
 
     if (user_hist) {
-
         // Spherical Grid for user-defined history
         auto &grids = spherical_grids;
         Real rslice1 = 1.0;
@@ -218,7 +232,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         EOS_Data &eos = pmbp->phydro->peos->eos_data;
         mp.is_ideal = eos.is_ideal;
         mp.dfloor = eos.dfloor;
-    } 
+    }
 
     if (pmbp->pmhd != nullptr) {
         EOS_Data &eos = pmbp->pmhd->peos->eos_data;
@@ -232,13 +246,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.dslope = pin->GetOrAddReal("problem","dslope",0.0);
     mp.gamma_gas = pin->GetReal("mhd","gamma");
     mp.gm0 = pin->GetOrAddReal("problem","gm0",1.0);
-    if (pmbp->pmhd != nullptr) mp.magnetic_fields_enabled = true;
-    else mp.magnetic_fields_enabled = false;
+    if (pmbp->pmhd != nullptr) {
+        mp.magnetic_fields_enabled = true;
+    } else {
+        mp.magnetic_fields_enabled = false;
+    }
     mp.mm = pin->GetOrAddReal("problem","mm",0.0);
     mp.rb = pin->GetOrAddReal("problem","rb",0.05);
     mp.delta = pin->GetOrAddReal("problem","delta",1.0);
     mp.origid = pin->GetOrAddReal("problem","origid",0.0);
-    if (mp.is_ideal){
+    if (mp.is_ideal) {
         mp.p0_over_r0 = SQR(pin->GetOrAddReal("problem","h_over_r0",0.1));
     } else { mp.p0_over_r0 = SQR(pin->GetReal("mhd","iso_sound_speed")); }
     mp.qslope = pin->GetOrAddReal("problem","qslope",0.0);
@@ -268,7 +285,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     mp.sponge_tau   = pin->GetOrAddReal("problem", "sponge_tau",   1.0);
     mp.inflow_bc_depth = pin->GetOrAddInteger("problem", "inflow_bc_depth", 0);
     mp.ghost_vr_frac   = pin->GetOrAddReal("problem", "ghost_vr_frac", 0.0);
-    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the
+    // size of the meshblocks.
     auto &indcs = pmy_mesh_->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
     int &js = indcs.js; int &je = indcs.je;
@@ -276,7 +294,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto &size = pmbp->pmb->mb_size;
     int nmb = pmbp->nmb_thispack;
 
-    // Initialise a pointer to the disc parameter structure   
+    // Initialise a pointer to the disc parameter structure
     auto mp_ = mp;
 
     // Pre-compute ghost-depth and donor index arrays for inflow BC
@@ -332,7 +350,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         // Pass 2: mark layer-2 cells (interior cells with a layer-1 face-neighbour)
         // Only needed if inflow_bc_depth >= 2
         if (mp.inflow_bc_depth >= 2) {
-            par_for("ghost_depth_pass2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+            par_for("ghost_depth_pass2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is,
+                    ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i) {
                 if (ghost_depth_(m,k,j,i) != -1) return;
                 int di[6] = {1,-1,0, 0,0, 0};
@@ -349,7 +368,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         }
 
         // Pass 3a: compute donor indices for layer-1 ghost cells
-        // Donor = nearest exterior face-neighbour (smallest rc among those with rc >= rfix)
+        // Donor = nearest exterior face-neighbour (smallest rc among those with rc >=
+        // rfix)
         par_for("ghost_donor_layer1", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
             if (ghost_depth_(m,k,j,i) != 1) return;
@@ -386,7 +406,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         // Pass 3b: compute donor indices for layer-2 ghost cells
         // Donor = the donor of the nearest layer-1 face-neighbour
         if (mp.inflow_bc_depth >= 2) {
-            par_for("ghost_donor_layer2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+            par_for("ghost_donor_layer2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is,
+                    ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i) {
                 if (ghost_depth_(m,k,j,i) != 2) return;
 
@@ -426,18 +447,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     // If restarting then end initialisation here
     if (restart) return;
 
-    // Select either Hydro or MHD and extract the arrays - set on the device specifically since this is where the calculations
-    // are going to be done anyway. 
+    // Select either Hydro or MHD and extract the arrays - set on the device specifically
+    // since this is where the calculations
+    // are going to be done anyway.
     DvceArray5D<Real> u0_, w0_;
-    if (pmbp->phydro != nullptr){
+    if (pmbp->phydro != nullptr) {
         u0_ = pmbp->phydro->u0;
         w0_ = pmbp->phydro->w0;
-    }   else if (pmbp->pmhd != nullptr){
+    }   else if (pmbp->pmhd != nullptr) {
         u0_ = pmbp->pmhd->u0;
         w0_ = pmbp->pmhd->w0;
     }
 
-    // initialize conservative variables for new run ---------------------------------------
+    // initialize conservative variables for new run
+    // ---------------------------------------
     par_for("magnetosphere_pgen",DevExeSpace(),0,(nmb-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
         Real &x1min = size.d_view(m).x1min;
@@ -474,16 +497,16 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             u0_(m,IEN,k,j,i) = p_over_r*u0_(m,IDN,k,j,i)/(mp_.gamma_gas - 1.0)
                                +0.5*(SQR(u0_(m,IM1,k,j,i))
                                +SQR(u0_(m,IM2,k,j,i))
-                               +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i) ;
+                               +SQR(u0_(m,IM3,k,j,i)))/u0_(m,IDN,k,j,i);
         }
-
     });
 
     // Initialize FOFC diagnostic passive scalar to 0 (when used)
     if (pmbp->pmhd != nullptr && pmbp->pmhd->nscalars >= 1) {
         int nmhd = pmbp->pmhd->nmhd;
         auto u0_scalar_ = pmbp->pmhd->u0;
-        par_for("magnetosphere_pgen_fofc_scalar", DevExeSpace(), 0, (nmb - 1), ks, ke, js, je, is, ie,
+        par_for("magnetosphere_pgen_fofc_scalar", DevExeSpace(), 0, (nmb - 1), ks, ke,
+                js, je, is, ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
             u0_scalar_(m, nmhd, k, j, i) = 0.0;
         });
@@ -491,7 +514,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // initialize magnetic field if required ---------------------------------------
     if (pmbp->pmhd != nullptr) {
-
         // compute vector potential over all faces
         int ncells1 = indcs.nx1 + 2*(indcs.ng);
         int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
@@ -532,7 +554,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             a2(m,k,j,i) = A2(mp_, x1f, x2v, x3f);
             a3(m,k,j,i) = A3(mp_, x1f, x2f, x3v);
 
-            // When neighboring MeshBock is at finer level, compute vector potential as sum of
+            // When neighboring MeshBock is at finer level, compute vector potential as
+            // sum of
             // values at fine grid resolution.  This guarantees flux on shared fine/coarse
             // faces is identical.
 
@@ -625,7 +648,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 Real xr = x3v - 0.25*dx3;
                 a3(m,k,j,i) = 0.5*(A3(mp_, x1f,x2f,xl) + A3(mp_, x1f,x2f,xr));
             }
-        
         });
 
         auto &b0_ = pmbp->pmhd->b0;
@@ -659,33 +681,31 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         });
 
         if (mp_.is_ideal) {
-
             par_for("bcc_e", DevExeSpace(), 0,(nmb-1),ks,ke,js,je,is,ie,
             KOKKOS_LAMBDA(int m, int k, int j, int i) {
-                u0_(m,IEN,k,j,i) += 0.5*(SQR(0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1))) +
+                u0_(m,IEN,k,j,i) += 0.5*(SQR(0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,
+                    i+1))) +
                                     SQR(0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i))) +
                                     SQR(0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i))));
-                    
             });
-
         }
-
     } // End of magnetic field initialization
 
     return; // END OF ProblemGenerator::UserProblem()
 }
 
 //----------------------------------------------------------------------------------------
-//! Now we define a variety of functions for use in the problem generation within the local 
+//! Now we define a variety of functions for use in the problem generation within the
+//! local
 //! namespace. Compatible with their declaration in the preamble.
 //----------------------------------------------------------------------------------------
 
 namespace {
-
     //----------------------------------------------------------------------------------------
     //! Transform from cartesian to cylindrical coordinates
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z, const Real x1, const Real x2, const Real x3) {
+    static void GetCylCoord(struct my_params mp, Real &rad,Real &phi,Real &z,
+                            const Real x1, const Real x2, const Real x3) {
         rad=sqrt(x1*x1 + x2*x2);
         phi=atan2(x2,x1);
         z=x3;
@@ -695,12 +715,15 @@ namespace {
     //----------------------------------------------------------------------------------------
     //! Rotate the cartesian coordinates by some angle to get the tilted coordinates
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void RotateCart(struct my_params mp, Real &x1rot,Real &x2rot,Real &x3rot, const Real x1, const Real x2,const Real x3, const Real theta) {
+    static void RotateCart(struct my_params mp, Real &x1rot,Real &x2rot,Real &x3rot,
+                           const Real x1, const Real x2,const Real x3, const Real theta) {
+        // The adopted convetion here rotates the underlying axes counter-clockwise by an
+        // angle theta about the y-axis.
+        // Hence one can bring the axes into alignment with the spin axis or initial
+        // dipole axis.
+        // Note that converting the cartesian vectors in this tilted frame back to the
+        // standard frame requires a rotation of components by -theta.
 
-        // The adopted convetion here rotates the underlying axes counter-clockwise by an angle theta about the y-axis. 
-        // Hence one can bring the axes into alignment with the spin axis or initial dipole axis.
-        // Note that converting the cartesian vectors in this tilted frame back to the standard frame requires a rotation of components by -theta.
-        
         // Rotation matrix R about the y axis
         Real cost=cos(theta);
         Real sint=sin(theta);
@@ -714,10 +737,10 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
-        
+    static Real DenDiscCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z) {
         // Compute the density profile in cylindrical coordinates
-        // Vertical hydrostatic equilibrium (Nelson et al. 2013) 
+        // Vertical hydrostatic equilibrium (Nelson et al. 2013)
 
         Real den(0.0);
         Real r = fmax(rad, mp.rs);
@@ -741,36 +764,37 @@ namespace {
         }
 
         den = denmid*std::exp(mp.gm0/p_over_r*(1./std::sqrt(SQR(r)+SQR(z))-1./r));
-        
+
         return den;
     }
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z) {
-        
+    static Real DenStarCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z) {
         // Add the stellar density profile component
         Real den(0.0);
         Real rc = sqrt(rad*rad+z*z);  // spherical radius
 
         if (rc<mp.rmagsph) {
-
             Real sinsq = rad*rad/rc/rc;
             Real csq0 = PoverR(mp, mp.rs);
             Real pre0=mp.denstar*csq0;   // reference pressure
             Real dr = mp.rs/100.;        // integration step size
 
             // Real rint = mp.rs;        // integrate from stellar surface
-            // Real pre = pre0*exp(0.5*mp.origid*mp.origid*mp.rs*mp.rs*sinsq/csq0);  // pressure at stellar surface
+            // Real pre = pre0*exp(0.5*mp.origid*mp.origid*mp.rs*mp.rs*sinsq/csq0);  //
+            // pressure at stellar surface
             // if (rc < mp.rs) {
             //     // analytic solution inside the star
             //     pre = pre0*exp(0.5*mp.origid*mp.origid*rad*rad/csq0);
             // } else {
-                
             //     // integrate stellar envelope out from the stellar surface towards rc
             //     while(rint<rc) {
             //         pre += -dr*mp.gm0/rint/rint *
-            //             (rint-mp.rs) * (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth) *
+            //             (rint-mp.rs) *
+            //             (rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)
+            //             *
             //             pre/csq0 + dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
             //         rint = rint + dr;
             //     }
@@ -785,7 +809,9 @@ namespace {
                     pre = pre+dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
                 } else {
                     // outside the star
-                    pre = pre-dr*mp.gm0/rint/rint*(rint-mp.rs)*(rint-mp.rs)/((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)*pre/csq0
+                    pre = pre-dr*mp.gm0/rint/rint*(rint-mp.rs)*(rint-mp.rs)
+                          /((rint-mp.rs)*(rint-mp.rs)+mp.gravsmooth*mp.gravsmooth)
+                          *pre/csq0
                           +dr*mp.origid*mp.origid*rint*sinsq*pre/csq0;
                 }
                 rint += + dr;
@@ -793,7 +819,7 @@ namespace {
             den = pre/csq0;
             }
         }
-        
+
         return den;
     }
 
@@ -808,20 +834,23 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
-        
+    static void VelDiscCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z, Real &v1, Real &v2, Real &v3) {
         Real r = fmax(rad, mp.rs);
 
         // Old method for power law
         Real p_over_r = PoverR(mp, r);
-        Real vel = (mp.dslope+mp.qslope)*p_over_r/(mp.gm0/r) + (1.0+mp.qslope) - mp.qslope*r/sqrt(r*r+z*z);
+        Real vel = (mp.dslope+mp.qslope)*p_over_r/(mp.gm0/r) + (1.0+mp.qslope)
+                   - mp.qslope*r/sqrt(r*r+z*z);
         vel = sqrt(mp.gm0/r)*sqrt(vel);
 
         // Testing new method for balance with pressure gradients
         // Real rc = sqrt(r*r+z*z);
         // Real dR = fmin(mp.rad_in_smooth, mp.rad_out_smooth)/100;
-        // Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) * DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
-        // Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi, z)*dPdr,0.0));
+        // Real dPdr = (PoverR(mp, r+dR) * DenDiscCyl(mp, r+dR,phi,z) - PoverR(mp, r-dR) *
+        // DenDiscCyl(mp, r - dR,phi,z))/(2 * dR);
+        // Real vel = sqrt(fmax(mp.gm0*r*r/rc/rc/rc+r/DenDiscCyl(mp, r, phi,
+        // z)*dPdr,0.0));
 
         v1=-vel*sin(phi);
         v2=+vel*cos(phi);
@@ -832,9 +861,10 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void VelStarCyl(struct my_params mp, const Real rad, const Real phi, const Real z, Real &v1, Real &v2, Real &v3) {
-        
-        // The rigid body velocity of the star in coordinates aligned with the stellar rotation axis.
+    static void VelStarCyl(struct my_params mp, const Real rad, const Real phi,
+                           const Real z, Real &v1, Real &v2, Real &v3) {
+        // The rigid body velocity of the star in coordinates aligned with the stellar
+        // rotation axis.
         Real vel(0.0);
         vel = mp.origid*rad; // rigid rotation
 
@@ -847,11 +877,13 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &v1_star, Real &v2_star, Real &v3_star) {
+    static void VelStar(struct my_params mp, const Real x1, const Real x2, const Real x3,
+                        Real &v1_star, Real &v2_star, Real &v3_star) {
         // The stellar velocity in the original cartesian frame.
         Real x1w(0.0), x2w(0.0), x3w(0.0);
         Real v1_starw(0.0), v2_starw(0.0), v3_starw(0.0);
-        Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
+        // coordinates in frame aligned with stellar rotation axis
+        Real radw(0.0), phiw(0.0), zw(0.0);
 
         // rotate to the frame aligned with the stellar rotation axis
         RotateCart(mp, x1w, x2w, x3w, x1, x2, x3, mp.thetaw);
@@ -859,25 +891,27 @@ namespace {
         // add the stellar velocity component at this location
         VelStarCyl(mp, radw, phiw, zw, v1_starw, v2_starw, v3_starw);
         // rotate the velocity components back to the original frame
-        RotateCart(mp, v1_star, v2_star, v3_star, v1_starw, v2_starw, v3_starw, -mp.thetaw);
+        RotateCart(mp, v1_star, v2_star, v3_star, v1_starw, v2_starw, v3_starw,
+                   -mp.thetaw);
 
         return;
     }
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
-    static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &den) {
-
+    static void DenDiscPlusStar(struct my_params mp, const Real x1, const Real x2,
+                                const Real x3, Real &den) {
         Real x1w(0.0), x2w(0.0), x3w(0.0);
         Real rad(0.0), phi(0.0), z(0.0);
-        Real radw(0.0), phiw(0.0), zw(0.0);  // coordinates in frame aligned with stellar rotation axis
+        // coordinates in frame aligned with stellar rotation axis
+        Real radw(0.0), phiw(0.0), zw(0.0);
 
         // get the cylindrical coodinates corresponding to this cartesian location
         GetCylCoord(mp,rad, phi, z, x1, x2, x3);
-    
+
         // compute the disc density component at this location
         den = DenDiscCyl(mp, rad, phi, z);
-        
+
         // rotate to the frame aligned with the stellar rotation axis
         RotateCart(mp, x1w, x2w, x3w, x1, x2, x3, mp.thetaw);
         GetCylCoord(mp,radw, phiw, zw, x1w, x2w, x3w);
@@ -893,8 +927,8 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION
-    static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2, const Real x3, Real &ux, Real &uy, Real &uz) {
-
+    static void VelDiscPlusStar(struct my_params mp, const Real x1, const Real x2,
+                                const Real x3, Real &ux, Real &uy, Real &uz) {
         Real rad(0.0), phi(0.0), z(0.0);
         Real v1_disc(0.0), v2_disc(0.0), v3_disc(0.0);
         Real v1_star(0.0), v2_star(0.0), v3_star(0.0);
@@ -902,7 +936,7 @@ namespace {
         // compute the disc velocity component at this location
         GetCylCoord(mp,rad, phi, z, x1, x2, x3);
         VelDiscCyl(mp, rad, phi, z, v1_disc, v2_disc, v3_disc);
-    
+
         // compute the stellar velocity component at this location
         VelStar(mp, x1, x2, x3, v1_star, v2_star, v3_star);
 
@@ -914,7 +948,6 @@ namespace {
             ux = v1_disc;
             uy = v2_disc;
             uz = v3_disc;
-
         } else {
             // inside the inner cutoff, set the velocity to the stellar velocity
             ux = v1_disc*exp(-SQR((rc-mp.rmagsph)/mp.rs));
@@ -924,7 +957,7 @@ namespace {
             ux += v1_star;
             uy += v2_star;
             uz += v3_star;
-        } 
+        }
 
         // // Smooth velocity siwtch setup ----------------------
         // Real sigma = 1/(1+exp((rc - mp.rmagsph)/mp.sig_star_disc));
@@ -938,7 +971,6 @@ namespace {
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A1(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        
         Real a1=0.0;
 
         if (mp.mag_option == 1) {
@@ -949,18 +981,17 @@ namespace {
             Real x2b = x2;
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
             Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
-            a1 = mp.mm* f * (-1.*x2b*cos(mp.thetab));  
-        }      
-        
+            a1 = mp.mm* f * (-1.*x2b*cos(mp.thetab));
+        }
+
         return(a1);
     }
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A2(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        
         Real a2=0.0;
-        
+
         if (mp.mag_option == 1) {
             Real x1b = cos(mp.thetab)*x1 + sin(mp.thetab)*x3;
             Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs/2);
@@ -971,16 +1002,15 @@ namespace {
             Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
             a2 = mp.mm* f * (+1.*x1b);
         }
-        
+
         return(a2);
     }
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
     static Real A3(struct my_params mp, const Real x1, const Real x2, const Real x3) {
-        
         Real a3=0.0;
-        
+
         if (mp.mag_option == 1) {
             Real x2b = x2;
             Real rc = fmax(sqrt(x1*x1+x2*x2+x3*x3),mp.rs/2);
@@ -997,8 +1027,9 @@ namespace {
 
     //----------------------------------------------------------------------------------------
     KOKKOS_INLINE_FUNCTION //CF:CHECKED
-    static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3, const Real mmx, const Real mmy, const Real mmz, Real &bx, Real &by,  Real &bz) {
-
+    static void Bfield(struct my_params mp, const Real x1, const Real x2, const Real x3,
+                       const Real mmx, const Real mmy, const Real mmz, Real &bx,
+                           Real &by,  Real &bz) {
         if (mp.mag_option == 1) {
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
             Real rccubed = rc*rc*rc;
@@ -1014,14 +1045,13 @@ namespace {
                 by = 3.*x2*mdotr/rccubed/rc/rc - mmy/rccubed;
                 bz = 3.*x3*mdotr/rccubed/rc/rc - mmz/rccubed;
             }
-
         } else if (mp.mag_option == 2) {
-
             Real mdotr = mmx*x1 + mmy*x2 + mmz*x3;
 
             Real rc = sqrt(x1*x1+x2*x2+x3*x3);
             Real f = pow(mp.rb,-3)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta);
-            Real g = -3*pow(mp.rb,-5)*pow(pow(rc/mp.rb,3*mp.delta)+1,-1/mp.delta-1)*pow(rc/mp.rb,3*mp.delta-2);
+            Real g = -3*pow(mp.rb,-5)*pow(pow(rc/mp.rb,3*mp.delta)+1,
+                                          -1/mp.delta-1)*pow(rc/mp.rb,3*mp.delta-2);
 
             bx = 2*mmx*f + g*(mmx*rc*rc-mdotr*x1);
             by = 2*mmy*f + g*(mmy*rc*rc-mdotr*x2);
@@ -1029,8 +1059,7 @@ namespace {
         }
 
         return;
-
-    } // end B field 
+    } // end B field
 
     //----------------------------------------------------------------------------------------
     // Moment-parameterised vector potential components.
@@ -1115,14 +1144,14 @@ namespace {
         // Rotate from spin frame to lab frame
         RotateCart(mp, mmx, mmy, mmz, mmxw, mmyw, mmzw, -mp.thetaw);
     }
-
-} // End of namespace functions
+}  // namespace
 
 KOKKOS_INLINE_FUNCTION
 Real rho_floor(struct my_params mp, Real rc) {
     Real rhofloor = mp.rho_floor1;
     if (rc > mp.rs) rhofloor = mp.rho_floor1*pow(rc/mp.r0, mp.rho_floor_slope1);
-    if (mp.mm != 0. && rc > mp.rs) rhofloor += mp.rho_floor2*pow(rc/mp.r0,mp.rho_floor_slope2);
+    if (mp.mm != 0. && rc > mp.rs) rhofloor += mp.rho_floor2*pow(rc/mp.r0,
+                                                                 mp.rho_floor_slope2);
     return fmax(rhofloor,mp.dfloor);
 }
 
@@ -1134,7 +1163,6 @@ Real rho_floor(struct my_params mp, Real rc) {
 //! and a velocity damping function.
 
 void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
-
     StarGravSourceTerm(pm, bdt);
     // Exterior sponge before stellar mask: donors (r >= rfix) see damped u0 first;
     // StarMask/inflow is the last mask-style overwrite in this block.
@@ -1146,11 +1174,13 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     MeshBlockPack *pmbp = pm->pmb_pack;
     if (pmbp->pmhd != nullptr && pmbp->pmhd->nscalars >= 1 && mp.fofc_scalar_tau > 0.0) {
         auto &indcs = pm->mb_indcs;
-        int is = indcs.is, ie = indcs.ie, js = indcs.js, je = indcs.je, ks = indcs.ks, ke = indcs.ke;
+        int is = indcs.is, ie = indcs.ie, js = indcs.js, je = indcs.je, ks = indcs.ks,
+            ke = indcs.ke;
         int nmhd = pmbp->pmhd->nmhd;
         Real tau = mp.fofc_scalar_tau;
         auto u0_ = pmbp->pmhd->u0;
-        par_for("pgen_fofc_scalar_damp", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
+        par_for("pgen_fofc_scalar_damp", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks,
+                ke, js, je, is, ie,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
             Real dens = u0_(m, IDN, k, j, i);
             Real rho_s = u0_(m, nmhd, k, j, i);
@@ -1158,14 +1188,14 @@ void MySourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
             u0_(m, nmhd, k, j, i) = fmax(0.0, rho_s - sink);
         });
     }
-    
+
     return;
 }
 
 //----------------------------------------------------------------------------------------
 void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
-
-    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the
+    // size of the meshblocks.
     auto &indcs = pm->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
     int &js = indcs.js; int &je = indcs.je;
@@ -1189,7 +1219,6 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     par_for("pgen_starsource",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
-
         // Extract the cell center coordinates
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
@@ -1205,7 +1234,7 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
 
         Real rc = sqrt(x1v*x1v+x2v*x2v+x3v*x3v);
         Real fcoe=-mp_.gm0/rc/rc/rc;
-        
+
         // Implement the smoothing function
         Real rcv2 = (rc-mp_.rs)*(rc-mp_.rs);
         Real fsmooth = rcv2/(rcv2+mp_.gravsmooth*mp_.gravsmooth);
@@ -1219,19 +1248,17 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
         u0_(m,IM1,k,j,i) += bdt*w0_(m,IDN,k,j,i)*f_x1;
         u0_(m,IM2,k,j,i) += bdt*w0_(m,IDN,k,j,i)*f_x2;
         u0_(m,IM3,k,j,i) += bdt*w0_(m,IDN,k,j,i)*f_x3;
-        
+
         if(mp_.is_ideal) {
             u0_(m,IEN,k,j,i) += bdt*w0_(m,IDN,k,j,i)*
-                            (w0_(m,IM1,k,j,i)*f_x1 + 
-                             w0_(m,IM2,k,j,i)*f_x2 + 
+                            (w0_(m,IM1,k,j,i)*f_x1 +
+                             w0_(m,IM2,k,j,i)*f_x2 +
                              w0_(m,IM3,k,j,i)*f_x3);
         }
-            
-        u0_(m,IDN,k,j,i) = fmax(u0_(m,IDN,k,j,i),rho_floor(mp_,rc));
-        
-    }); // end par_for
 
-} // end star source terms 
+        u0_(m,IDN,k,j,i) = fmax(u0_(m,IDN,k,j,i),rho_floor(mp_,rc));
+    }); // end par_for
+} // end star source terms
 
 //----------------------------------------------------------------------------------------
 // Diode boundary condition applied to the conserved-variable flux arrays.
@@ -1241,7 +1268,6 @@ void StarGravSourceTerm(Mesh* pm, const Real bdt) { //CF:CHECKED
 // flux is directed outward (mask interior -> exterior).  Inward fluxes
 // (accretion) are left unchanged.
 void MyFluxDiode(Mesh* pm) {
-
     auto &indcs = pm->mb_indcs;
     int is = indcs.is, ie = indcs.ie;
     int js = indcs.js, je = indcs.je;
@@ -1342,13 +1368,12 @@ void MyFluxDiode(Mesh* pm) {
             }
         }
     }); // end par_for x3
-
 } // end MyFluxDiode
 
 //----------------------------------------------------------------------------------------
 void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
-
-    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the
+    // size of the meshblocks.
     auto &indcs = pm->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
     int &js = indcs.js; int &je = indcs.je;
@@ -1372,7 +1397,6 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
 
     par_for("pgen_starmask",DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
-
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
@@ -1455,7 +1479,6 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
                         + SQR(bcc0_(m,IBY,k,j,i)) + SQR(bcc0_(m,IBZ,k,j,i)));
                 }
             }
-
         } else if (depth == -1) {
             // Deep interior: original hard reset
             Real den(0.0), ux(0.0), uy(0.0), uz(0.0);
@@ -1478,23 +1501,21 @@ void StarMask(Mesh* pm, const Real bdt) { //CF:CHECKED
             }
         }
         // depth == 0: outside mask, do nothing
-
     }); // end par_for
-
-} // end stellar mask  
+} // end stellar mask
 
 //----------------------------------------------------------------------------------------
 // Sponge / damping layer applied in the thin shell rfix < rc < rfix + sponge_width.
 // At each timestep, conserved fluid variables (density, momenta, energy) are relaxed
 // exponentially toward the unperturbed disc initial-condition profile.  The relaxation
-// strength is weighted linearly from 1 at rc = rfix down to 0 at rc = rfix + sponge_width,
+// strength is weighted linearly from 1 at rc = rfix down to 0 at rc = rfix +
+// sponge_width,
 // and the timescale is sponge_tau * t_ff(rfix), where t_ff = (pi/2)*sqrt(rfix^3/(2*gm0))
 // is the free-fall time from rfix to the origin.
 // The magnetic field is left untouched; the current bcc0 magnetic energy is included in
 // the energy target so only the fluid thermal/kinetic energy is damped.
 // Disabled (no-op) when sponge_width = 0.
 void BoundarySpongeMask(Mesh* pm, const Real bdt) {
-
     if (mp.sponge_width <= 0.0) return;
 
     auto &indcs = pm->mb_indcs;
@@ -1514,9 +1535,9 @@ void BoundarySpongeMask(Mesh* pm, const Real bdt) {
         bcc0_ = pmbp->pmhd->bcc0;
     }
 
-    par_for("boundary_sponge", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
+    par_for("boundary_sponge", DevExeSpace(), 0, (pmbp->nmb_thispack-1), ks, ke, js, je,
+            is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
@@ -1544,7 +1565,8 @@ void BoundarySpongeMask(Mesh* pm, const Real bdt) {
                        (0.5*M_PI * sqrt(mp_.rfix*mp_.rfix*mp_.rfix / (2.0*mp_.gm0)));
         Real dfrac   = fmin(wgt * bdt / tau_ref, 1.0);  // clamp to avoid overshoot
 
-        // target density: full initial-condition profile (disc + stellar contribution + floor)
+        // target density: full initial-condition profile (disc + stellar contribution +
+        // floor)
         Real den_t(0.0);
         DenDiscPlusStar(mp_, x1v, x2v, x3v, den_t);
 
@@ -1567,7 +1589,8 @@ void BoundarySpongeMask(Mesh* pm, const Real bdt) {
         // Scale all non-magnetic energy by rho_scale.
         // This preserves both velocity (v = mom/rho unchanged) and temperature
         // (e_int/rho = specific internal energy unchanged). The sponge acts as a
-        // pure density sink/source with no direct effect on the fluid state per unit mass.
+        // pure density sink/source with no direct effect on the fluid state per unit
+        // mass.
         if (mp_.is_ideal) {
             Real e_mag(0.0);
             if (mp_.magnetic_fields_enabled) {
@@ -1579,12 +1602,10 @@ void BoundarySpongeMask(Mesh* pm, const Real bdt) {
             u0_(m,IEN,k,j,i) = e_mag + e_non_mag * rho_scale;
         }
     }); // end par_for
-
 } // end BoundarySpongeMask
 
 //----------------------------------------------------------------------------------------
 void DiscOnlyMask(Mesh* pm, const Real bdt) {
-
     if (mp.disc_mask_rin < 0.0 && mp.disc_mask_rout < 0.0) return;
 
     auto &indcs = pm->mb_indcs;
@@ -1606,9 +1627,9 @@ void DiscOnlyMask(Mesh* pm, const Real bdt) {
         bcc0_ = pmbp->pmhd->bcc0;
     }
 
-    par_for("pgen_disconlymask", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js, je, is, ie,
+    par_for("pgen_disconlymask", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), ks, ke, js,
+            je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real x1v = CellCenterX(i - is, indcs.nx1, x1min, x1max);
@@ -1654,8 +1675,8 @@ void DiscOnlyMask(Mesh* pm, const Real bdt) {
 
 //----------------------------------------------------------------------------------------
 void MyEfieldMask(Mesh* pm) { //CF:CHECKED
-
-    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the size of the meshblocks.
+    // Capture variables for kernel - e.g. indices for looping over the meshblocks and the
+    // size of the meshblocks.
     auto &indcs = pm->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
     int &js = indcs.js; int &je = indcs.je;
@@ -1692,7 +1713,6 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 
     par_for("pgen_e1mask", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je+1,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
         // Extract the cell center and left aligned edge coordinates coordinates
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
@@ -1715,16 +1735,16 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
             Real Bx(0.0),By(0.0),Bz(0.0);
 
             VelStar(mp_, x1v, x2f, x3f, vx, vy, vz);
-            
+
             if (mp_.avg_grid_bfields) {
                 // Average face-centered B fields to edge location
                 // E1 edge at (i,j,k) samples from [k-1,k]x[j-1,j]x[i,i+1]
                 // Bx (parallel): 8-point average over [k-1,k]x[j-1,j]x[i,i+1]
                 // By (perpendicular): 2-point average in k direction at [k-1,k]x[j]
                 // Bz (perpendicular): 2-point average in j direction at [j-1,j]x[k]
-                Bx = 0.125*(b0_.x1f(m,k-1,j-1,i) + b0_.x1f(m,k-1,j,i) + 
+                Bx = 0.125*(b0_.x1f(m,k-1,j-1,i) + b0_.x1f(m,k-1,j,i) +
                             b0_.x1f(m,k,j-1,i) + b0_.x1f(m,k,j,i) +
-                            b0_.x1f(m,k-1,j-1,i+1) + b0_.x1f(m,k-1,j,i+1) + 
+                            b0_.x1f(m,k-1,j-1,i+1) + b0_.x1f(m,k-1,j,i+1) +
                             b0_.x1f(m,k,j-1,i+1) + b0_.x1f(m,k,j,i+1));
                 By = 0.5*(b0_.x2f(m,k-1,j,i) + b0_.x2f(m,k,j,i));
                 Bz = 0.5*(b0_.x3f(m,k,j-1,i) + b0_.x3f(m,k,j,i));
@@ -1737,14 +1757,11 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
             e1_(m,k,j,i) = blend_w1*(vz*By - vy*Bz)
                            + (1.0 - blend_w1)*e1_(m,k,j,i);
-
         }
-            
     }); // end par_for
 
     par_for("pgen_e2mask", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke+1,js,je,is,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real x1f    = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
@@ -1766,7 +1783,7 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
             Real Bx(0.0),By(0.0),Bz(0.0);
 
             VelStar(mp_, x1f, x2v, x3f, vx, vy, vz);
-            
+
             if (mp_.avg_grid_bfields) {
                 // Average face-centered B fields to edge location
                 // E2 edge at (i,j,k) samples from [k-1,k]x[j,j+1]x[i-1,i]
@@ -1774,9 +1791,9 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 // Bx (perpendicular): 2-point average in k direction at [k-1,k]x[i]
                 // Bz (perpendicular): 2-point average in i direction at [i-1,i]x[k]
                 Bx = 0.5*(b0_.x1f(m,k-1,j,i) + b0_.x1f(m,k,j,i));
-                By = 0.125*(b0_.x2f(m,k-1,j,i-1) + b0_.x2f(m,k-1,j+1,i-1) + 
+                By = 0.125*(b0_.x2f(m,k-1,j,i-1) + b0_.x2f(m,k-1,j+1,i-1) +
                             b0_.x2f(m,k,j,i-1) + b0_.x2f(m,k,j+1,i-1) +
-                            b0_.x2f(m,k-1,j,i) + b0_.x2f(m,k-1,j+1,i) + 
+                            b0_.x2f(m,k-1,j,i) + b0_.x2f(m,k-1,j+1,i) +
                             b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
                 Bz = 0.5*(b0_.x3f(m,k,j,i-1) + b0_.x3f(m,k,j,i));
             } else {
@@ -1788,14 +1805,11 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
             e2_(m,k,j,i) = blend_w2*(vx*Bz - vz*Bx)
                            + (1.0 - blend_w2)*e2_(m,k,j,i);
-
         }
-            
     }); // end par_for
 
     par_for("pgen_e3mask", DevExeSpace(), 0,(pmbp->nmb_thispack-1),ks,ke,js,je+1,is,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
         Real x1f    = LeftEdgeX(i-is, indcs.nx1, x1min, x1max);
@@ -1817,7 +1831,7 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
             Real Bx(0.0),By(0.0),Bz(0.0);
 
             VelStar(mp_, x1f, x2f, x3v, vx, vy, vz);
-            
+
             if (mp_.avg_grid_bfields) {
                 // Average face-centered B fields to edge location
                 // E3 edge at (i,j,k) samples from [k,k+1]x[j-1,j]x[i-1,i]
@@ -1826,9 +1840,9 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 // By (perpendicular): 2-point average in i direction at [i-1,i]x[j]
                 Bx = 0.5*(b0_.x1f(m,k,j-1,i) + b0_.x1f(m,k,j,i));
                 By = 0.5*(b0_.x2f(m,k,j,i-1) + b0_.x2f(m,k,j,i));
-                Bz = 0.125*(b0_.x3f(m,k,j-1,i-1) + b0_.x3f(m,k,j,i-1) + 
+                Bz = 0.125*(b0_.x3f(m,k,j-1,i-1) + b0_.x3f(m,k,j,i-1) +
                             b0_.x3f(m,k,j-1,i) + b0_.x3f(m,k,j,i) +
-                            b0_.x3f(m,k+1,j-1,i-1) + b0_.x3f(m,k+1,j,i-1) + 
+                            b0_.x3f(m,k+1,j-1,i-1) + b0_.x3f(m,k+1,j,i-1) +
                             b0_.x3f(m,k+1,j-1,i) + b0_.x3f(m,k+1,j,i));
             } else {
                 Bfield(mp_, x1f, x2f, x3v, mmx, mmy, mmz, Bx, By, Bz);
@@ -1839,14 +1853,11 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
                 fmin(1.0, (mp_.efix - rc) / mp_.esrc_blend_width) : 1.0;
             e3_(m,k,j,i) = blend_w3*(vy*Bx - vx*By)
                            + (1.0 - blend_w3)*e3_(m,k,j,i);
-
         }
-            
     }); // end par_for
 
     return;
-
-} // end E field mask   
+} // end E field mask
 
 //----------------------------------------------------------------------------------------
 // Vector-potential E-field masking.
@@ -1855,7 +1866,6 @@ void MyEfieldMask(Mesh* pm) { //CF:CHECKED
 // then produces B = curl(A(t+dt)) exactly on the discrete mesh.
 //----------------------------------------------------------------------------------------
 void MyEfieldMask_VecPot(Mesh* pm) {
-
     auto &indcs = pm->mb_indcs;
     int &is = indcs.is; int &ie = indcs.ie;
     int &js = indcs.js; int &je = indcs.je;
@@ -2026,7 +2036,6 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
     par_for("pgen_coolsource", DevExeSpace(), 0, (pmbp->nmb_thispack - 1), kl,
             ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
-
         // Extract the cell center coordinates
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
@@ -2040,10 +2049,12 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         Real &x3max = size.d_view(m).x3max;
         Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-        Real mom2 = 0.5*(SQR(u0_(m,IM1,k,j,i)) + SQR(u0_(m,IM2,k,j,i)) + SQR(u0_(m,IM3,k,j,i)));
+        Real mom2 = 0.5*(SQR(u0_(m,IM1,k,j,i)) + SQR(u0_(m,IM2,k,j,i)) + SQR(u0_(m,IM3,k,
+            j,i)));
         Real e_m = 0.0;
         if (mp_.magnetic_fields_enabled) {
-            // Compute cell-centered B from updated face-centered B (same as ConToPrim and setup)
+            // Compute cell-centered B from updated face-centered B (same as ConToPrim and
+            // setup)
             Real bx_cc = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
             Real by_cc = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
             Real bz_cc = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
@@ -2058,13 +2069,12 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
         GetCylCoord(mp_,rad,phi,z,x1v,x2v,x3v);
         p_over_r = PoverR(mp_,rad);
 
-        // Set total energy so temperature matches desired profile directly (no relaxation)
+        // Set total energy so temperature matches desired profile directly (no
+        // relaxation)
         Real eint_set = p_over_r*dens_u0/(mp_.gamma_gas - 1.0);
         u0_(m,IEN,k,j,i) = e_k_u0 + e_m + eint_set;
-        
     }); // end par_for
-
-}// end cooling source terms 
+}// end cooling source terms
 
 //----------------------------------------------------------------------------------------
 //! \fn FixedDiscBC
@@ -2072,8 +2082,7 @@ void CoolingSourceTerms(Mesh* pm, const Real bdt) { //CF:CHECKED
 // Note quantities at boundaries are held fixed to initial condition values
 
 void FixedHydroBC(Mesh *pm) {
-
-      // Start by extracting the mesh block and cell information 
+      // Start by extracting the mesh block and cell information
       auto &indcs = pm->mb_indcs;
       auto &size = pm->pmb_pack->pmb->mb_size;
       int &ng = indcs.ng;
@@ -2085,7 +2094,7 @@ void FixedHydroBC(Mesh *pm) {
       int &ks = indcs.ks;  int &ke  = indcs.ke;
       auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
 
-      // Initialise a pointer to the disc parameter structure   
+      // Initialise a pointer to the disc parameter structure
       auto mp_ = mp;
 
       int nmb = pm->pmb_pack->nmb_thispack;
@@ -2094,16 +2103,16 @@ void FixedHydroBC(Mesh *pm) {
       if (pm->pmb_pack->phydro != nullptr) {
         u0_ = pm->pmb_pack->phydro->u0;
         w0_ = pm->pmb_pack->phydro->w0;
-      } 
+      }
 
-      // X1 BOUNDARY CONDITIONS ---------------> 
+      // X1 BOUNDARY CONDITIONS --------------->
 
-      // Start off by converting all the conservative variables to primitives so everything is synchronised
+      // Start off by converting all the conservative variables to primitives so
+      // everything is synchronised
       pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,is-ng,is-1,0,(n2-1),0,(n3-1));
       pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,ie+1,ie+ng,0,(n2-1),0,(n3-1));
       par_for("fixed_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
         // Extract coordinates at inner x1 boundary on each meshblock in the pack
         Real &x1min = size.d_view(m).x1min;
         Real &x1max = size.d_view(m).x1max;
@@ -2119,19 +2128,18 @@ void FixedHydroBC(Mesh *pm) {
 
         Real den(0.0), pgas, ux(0.0), uy(0.0), uz(0.0);
         Real rad(0.0), phi(0.0), z(0.0);
-        
+
         // Inner x1 boundary
         if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
-            
             // Compute the primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            if (mp_.rho0 > 0.0){
+            if (mp_.rho0 > 0.0) {
                 den = DenDiscCyl(mp_, rad, phi, z);
                 VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
             } else {
                 den = DenStarCyl(mp_, rad, phi, z);
                 VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-            } 
+            }
 
             w0_(m,IDN,k,j,i) = den;
             w0_(m,IVX,k,j,i) = ux;
@@ -2142,23 +2150,21 @@ void FixedHydroBC(Mesh *pm) {
                 pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,j,i) = pgas/(mp_.gamma_gas - 1.0);
             }
-
         }
 
         // Outer x1 boundary
         x1v = CellCenterX((ie+i+1)-is, indcs.nx1, x1min, x1max);
 
         if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
-
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            if (mp_.rho0 > 0.0){
+            if (mp_.rho0 > 0.0) {
                 den = DenDiscCyl(mp_, rad, phi, z);
                 VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
             } else {
                 den = DenStarCyl(mp_, rad, phi, z);
                 VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-            } 
-            
+            }
+
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,j,(ie+i+1)) = den;
             w0_(m,IVX,k,j,(ie+i+1)) = ux;
@@ -2169,7 +2175,6 @@ void FixedHydroBC(Mesh *pm) {
                 pgas = PoverR(mp_, rad)*den;
                 w0_(m,IEN,k,j,(ie+i+1)) = pgas/(mp_.gamma_gas - 1.0);
             }
-
         }
       });
       // Now synchronise PrimToCons on X1 physical boundary ghost zones
@@ -2177,7 +2182,7 @@ void FixedHydroBC(Mesh *pm) {
       pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
 
 
-      // X2 BOUNDARY CONDITIONS ---------------> 
+      // X2 BOUNDARY CONDITIONS --------------->
 
       pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),js-ng,js-1,0,(n3-1));
       pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),je+1,je+ng,0,(n3-1));
@@ -2201,16 +2206,15 @@ void FixedHydroBC(Mesh *pm) {
 
         // Inner x2 boundary
         if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
-            
             // Compute the primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            if (mp_.rho0 > 0.0){
+            if (mp_.rho0 > 0.0) {
                 den = DenDiscCyl(mp_, rad, phi, z);
                 VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
             } else {
                 den = DenStarCyl(mp_, rad, phi, z);
                 VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-            } 
+            }
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,j,i) = den;
@@ -2230,13 +2234,13 @@ void FixedHydroBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
             // Compute the primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            if (mp_.rho0 > 0.0){
+            if (mp_.rho0 > 0.0) {
                 den = DenDiscCyl(mp_, rad, phi, z);
                 VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
             } else {
                 den = DenStarCyl(mp_, rad, phi, z);
                 VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-            } 
+            }
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,(je+j+1),i) = den;
@@ -2253,7 +2257,7 @@ void FixedHydroBC(Mesh *pm) {
       pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
       pm->pmb_pack->phydro->peos->PrimToCons(w0_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
 
-      // X3 BOUNDARY CONDITIONS ---------------> 
+      // X3 BOUNDARY CONDITIONS --------------->
 
       pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ks-ng,ks-1);
       pm->pmb_pack->phydro->peos->ConsToPrim(u0_,w0_,false,0,(n1-1),0,(n2-1),ke+1,ke+ng);
@@ -2280,13 +2284,13 @@ void FixedHydroBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            if (mp_.rho0 > 0.0){
+            if (mp_.rho0 > 0.0) {
                 den = DenDiscCyl(mp_, rad, phi, z);
                 VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
             } else {
                 den = DenStarCyl(mp_, rad, phi, z);
                 VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-            } 
+            }
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,k,j,i) = den;
@@ -2306,13 +2310,13 @@ void FixedHydroBC(Mesh *pm) {
         if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
             // Compute the warped primitive variables at this location
             GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-            if (mp_.rho0 > 0.0){
+            if (mp_.rho0 > 0.0) {
                 den = DenDiscCyl(mp_, rad, phi, z);
                 VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
             } else {
                 den = DenStarCyl(mp_, rad, phi, z);
                 VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-            } 
+            }
 
             // Now set the conserved variables using the primitive variables
             w0_(m,IDN,(ke+k+1),j,i) = den;
@@ -2337,8 +2341,7 @@ void FixedHydroBC(Mesh *pm) {
 // Note quantities at boundaries are held fixed to initial condition values
 
 void FixedMHDBC(Mesh *pm) {
-
-  // Start by extracting the mesh block and cell information 
+  // Start by extracting the mesh block and cell information
   auto &indcs = pm->mb_indcs;
   auto &size = pm->pmb_pack->pmb->mb_size;
   int &ng = indcs.ng;
@@ -2350,7 +2353,7 @@ void FixedMHDBC(Mesh *pm) {
   int &ks = indcs.ks;  int &ke  = indcs.ke;
   auto &mb_bcs = pm->pmb_pack->pmb->mb_bcs;
 
-  // Initialise a pointer to the disc parameter structure   
+  // Initialise a pointer to the disc parameter structure
   auto mp_ = mp;
 
   int nmb = pm->pmb_pack->nmb_thispack;
@@ -2365,7 +2368,7 @@ void FixedMHDBC(Mesh *pm) {
     w0_ = pm->pmb_pack->pmhd->w0;
   }
 
-  // X1 BOUNDARY CONDITIONS ---------------> 
+  // X1 BOUNDARY CONDITIONS --------------->
 
   par_for("mhd_bc_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),
   KOKKOS_LAMBDA(int m, int k, int j) {
@@ -2396,7 +2399,6 @@ void FixedMHDBC(Mesh *pm) {
 
   par_for("hd_bc_x1", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(ng-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
     // Extract coordinates at inner x1 boundary on each meshblock in the pack
     Real &x1min = size.d_view(m).x1min;
     Real &x1max = size.d_view(m).x1max;
@@ -2415,16 +2417,15 @@ void FixedMHDBC(Mesh *pm) {
 
     // Inner x1 boundary
     if (mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) {
-            
         // Compute primitive variables at this location
         GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-        if (mp_.rho0 > 0.0){
+        if (mp_.rho0 > 0.0) {
             den = DenDiscCyl(mp_, rad, phi, z);
             VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
         } else {
             den = DenStarCyl(mp_, rad, phi, z);
             VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-        } 
+        }
 
         // Apply density floor
         Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
@@ -2444,16 +2445,15 @@ void FixedMHDBC(Mesh *pm) {
     x1v = CellCenterX((ie+i+1)-is, indcs.nx1, x1min, x1max);
 
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
-        
         // Compute primitive variables at this location
         GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-        if (mp_.rho0 > 0.0){
+        if (mp_.rho0 > 0.0) {
             den = DenDiscCyl(mp_, rad, phi, z);
             VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
         } else {
             den = DenStarCyl(mp_, rad, phi, z);
             VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-        } 
+        }
 
         // Apply density floor
         Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
@@ -2473,7 +2473,7 @@ void FixedMHDBC(Mesh *pm) {
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,is-ng,is-1,0,(n2-1),0,(n3-1));
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,ie+1,ie+ng,0,(n2-1),0,(n3-1));
 
-  // X2 BOUNDARY CONDITIONS ---------------> 
+  // X2 BOUNDARY CONDITIONS --------------->
 
   par_for("mhd_bc_x2", DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int i) {
@@ -2520,16 +2520,15 @@ void FixedMHDBC(Mesh *pm) {
 
     // Inner x2 boundary
     if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
-
         // Compute primitive variables at this location
         GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-        if (mp_.rho0 > 0.0){
+        if (mp_.rho0 > 0.0) {
             den = DenDiscCyl(mp_, rad, phi, z);
             VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
         } else {
             den = DenStarCyl(mp_, rad, phi, z);
             VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-        } 
+        }
 
         // Apply density floor
         Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
@@ -2549,16 +2548,15 @@ void FixedMHDBC(Mesh *pm) {
     x2v = CellCenterX((je+j+1)-js, indcs.nx2, x2min, x2max);
 
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
-
         // Compute primitive variables at this location
         GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-        if (mp_.rho0 > 0.0){
+        if (mp_.rho0 > 0.0) {
             den = DenDiscCyl(mp_, rad, phi, z);
             VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
         } else {
             den = DenStarCyl(mp_, rad, phi, z);
             VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-        } 
+        }
 
         // Apply density floor
         Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
@@ -2578,7 +2576,7 @@ void FixedMHDBC(Mesh *pm) {
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),js-ng,js-1,0,(n3-1));
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),je+1,je+ng,0,(n3-1));
 
-  // X3 BOUNDARY CONDITIONS ---------------> 
+  // X3 BOUNDARY CONDITIONS --------------->
 
   par_for("mhd_bc_x3", DevExeSpace(),0,(nmb-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int j, int i) {
@@ -2625,16 +2623,15 @@ void FixedMHDBC(Mesh *pm) {
 
     // Inner x3 boundary
     if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
-        
         // Compute primitive variables at this location
         GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-        if (mp_.rho0 > 0.0){
+        if (mp_.rho0 > 0.0) {
             den = DenDiscCyl(mp_, rad, phi, z);
             VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
         } else {
             den = DenStarCyl(mp_, rad, phi, z);
             VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-        } 
+        }
 
         // Apply density floor
         Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
@@ -2654,16 +2651,15 @@ void FixedMHDBC(Mesh *pm) {
     x3v = CellCenterX((ke+k+1)-ks, indcs.nx3, x3min, x3max);
 
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
-
         // Compute primitive variables at this location
         GetCylCoord(mp_,rad, phi, z, x1v, x2v, x3v);
-        if (mp_.rho0 > 0.0){
+        if (mp_.rho0 > 0.0) {
             den = DenDiscCyl(mp_, rad, phi, z);
             VelDiscCyl(mp_, rad, phi, z, ux, uy, uz);
         } else {
             den = DenStarCyl(mp_, rad, phi, z);
             VelStarCyl(mp_, rad, phi, z, ux, uy, uz);
-        } 
+        }
 
         // Apply density floor
         Real rc = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
@@ -2679,18 +2675,17 @@ void FixedMHDBC(Mesh *pm) {
         }
     }
   });
-    
+
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),0,(n2-1),ks-ng,ks-1);
   pm->pmb_pack->pmhd->peos->PrimToCons(w0_,bcc_,u0_,0,(n1-1),0,(n2-1),ke+1,ke+ng);
 
   return;
-} 
+}
 
 //----------------------------------------------------------------------------------------
 // Function for computing accretion fluxes through constant spherical KS radius surfaces
 
 void MyHistFunc(HistoryData *pdata, Mesh *pm) {
-
     MeshBlockPack *pmbp = pm->pmb_pack;
 
   // set nvars, primitive array w0, and field array bcc0
@@ -2716,7 +2711,7 @@ void MyHistFunc(HistoryData *pdata, Mesh *pm) {
   // ... list other fluxes here as needed
 
   // Number of history variables = no. of radial slices * no. of fluxes
-  pdata->nhist = nradii*nflux; 
+  pdata->nhist = nradii*nflux;
   if (pdata->nhist > NHISTORY_VARIABLES) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "User history function specified pdata->nhist larger than"
@@ -2773,7 +2768,6 @@ void MyHistFunc(HistoryData *pdata, Mesh *pm) {
 
       // compute mass flux -ve sign convention so inwards accretion is +ve
       pdata->hdata[nflux*g+0] += -1.0*int_dn*ur*dA;
-
     }
   }
 

@@ -130,7 +130,8 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   if (multi_d) { jl = js-1, ju = je+1; }
   if (three_d) { kl = ks-1, ku = ke+1; }
 
-  // FOFC diagnostic: set conserved passive scalar to rho*s (s=1) at cells where FOFC triggered
+  // FOFC diagnostic: set conserved passive scalar to rho*s (s=1) at cells where FOFC
+  // triggered
   if ((use_fofc || use_sofc) && nscalars >= 1) {
     int &nmhd_ = nmhd;
     auto &u0_ = u0;
@@ -515,7 +516,6 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         e2x3_(m,k,j,i) = flux.by;
         e1x3_(m,k,j,i) = flux.bz;
       }
-
     }
   });
 
@@ -721,13 +721,17 @@ void MHD::FOFC(Driver *pdriver, int stage) {
             PLM(w0_(m,IEN,k,j,i), w0_(m,IEN,k,j,i+1), w0_(m,IEN,k,j,i+2), ql_ip2, qr_ip1);
             wR.e = qr_ip1;
           }
-          PLM(bcc0_(m,IBY,k,j,i-1), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), ql_ip1, qr_i);
+          PLM(bcc0_(m,IBY,k,j,i-1), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), ql_ip1,
+              qr_i);
           wL.by = ql_ip1;
-          PLM(bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), bcc0_(m,IBY,k,j,i+2), ql_ip2, qr_ip1);
+          PLM(bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k,j,i+1), bcc0_(m,IBY,k,j,i+2), ql_ip2,
+              qr_ip1);
           wR.by = qr_ip1;
-          PLM(bcc0_(m,IBZ,k,j,i-1), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), ql_ip1, qr_i);
+          PLM(bcc0_(m,IBZ,k,j,i-1), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), ql_ip1,
+              qr_i);
           wL.bz = ql_ip1;
-          PLM(bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), bcc0_(m,IBZ,k,j,i+2), ql_ip2, qr_ip1);
+          PLM(bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j,i+1), bcc0_(m,IBZ,k,j,i+2), ql_ip2,
+              qr_ip1);
           wR.bz = qr_ip1;
 
           // compute new SOFC (PLM+LLF) flux at (i+1)-face
@@ -788,13 +792,17 @@ void MHD::FOFC(Driver *pdriver, int stage) {
             PLM(w0_(m,IEN,k,j,i), w0_(m,IEN,k,j+1,i), w0_(m,IEN,k,j+2,i), ql_jp2, qr_jp1);
             wR.e = qr_jp1;
           }
-          PLM(bcc0_(m,IBZ,k,j-1,i), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), ql_jp1, qr_j);
+          PLM(bcc0_(m,IBZ,k,j-1,i), bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), ql_jp1,
+              qr_j);
           wL.by = ql_jp1;
-          PLM(bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), bcc0_(m,IBZ,k,j+2,i), ql_jp2, qr_jp1);
+          PLM(bcc0_(m,IBZ,k,j,i), bcc0_(m,IBZ,k,j+1,i), bcc0_(m,IBZ,k,j+2,i), ql_jp2,
+              qr_jp1);
           wR.by = qr_jp1;
-          PLM(bcc0_(m,IBX,k,j-1,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), ql_jp1, qr_j);
+          PLM(bcc0_(m,IBX,k,j-1,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), ql_jp1,
+              qr_j);
           wL.bz = ql_jp1;
-          PLM(bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), bcc0_(m,IBX,k,j+2,i), ql_jp2, qr_jp1);
+          PLM(bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k,j+1,i), bcc0_(m,IBX,k,j+2,i), ql_jp2,
+              qr_jp1);
           wR.bz = qr_jp1;
 
           // compute new SOFC (PLM+LLF) flux at (j+1)-face
@@ -853,13 +861,17 @@ void MHD::FOFC(Driver *pdriver, int stage) {
             PLM(w0_(m,IEN,k,j,i), w0_(m,IEN,k+1,j,i), w0_(m,IEN,k+2,j,i), ql_kp2, qr_kp1);
             wR.e = qr_kp1;
           }
-          PLM(bcc0_(m,IBX,k-1,j,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), ql_kp1, qr_k);
+          PLM(bcc0_(m,IBX,k-1,j,i), bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), ql_kp1,
+              qr_k);
           wL.by = ql_kp1;
-          PLM(bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), bcc0_(m,IBX,k+2,j,i), ql_kp2, qr_kp1);
+          PLM(bcc0_(m,IBX,k,j,i), bcc0_(m,IBX,k+1,j,i), bcc0_(m,IBX,k+2,j,i), ql_kp2,
+              qr_kp1);
           wR.by = qr_kp1;
-          PLM(bcc0_(m,IBY,k-1,j,i), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), ql_kp1, qr_k);
+          PLM(bcc0_(m,IBY,k-1,j,i), bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), ql_kp1,
+              qr_k);
           wL.bz = ql_kp1;
-          PLM(bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), bcc0_(m,IBY,k+2,j,i), ql_kp2, qr_kp1);
+          PLM(bcc0_(m,IBY,k,j,i), bcc0_(m,IBY,k+1,j,i), bcc0_(m,IBY,k+2,j,i), ql_kp2,
+              qr_kp1);
           wR.bz = qr_kp1;
 
           // compute new SOFC (PLM+LLF) flux at (k+1)-face
@@ -891,7 +903,6 @@ void MHD::FOFC(Driver *pdriver, int stage) {
           e2x3_(m,k+1,j,i) = flux.by;
           e1x3_(m,k+1,j,i) = flux.bz;
         }
-
     }
   });
 
@@ -902,5 +913,4 @@ void MHD::FOFC(Driver *pdriver, int stage) {
 
   return;
 }
-
 } // namespace mhd
