@@ -8,9 +8,11 @@
 
 #include <sys/stat.h>  // mkdir
 
-#include <cstdio>  // snprintf
+#include <cstdio>   // snprintf
+#include <cstdlib>  // exit
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -73,20 +75,27 @@ SphericalShellsOutput::SphericalShellsOutput(ParameterInput *pin, Mesh *pm,
     }
   }
 
-  // Read ng_interp: controls Lagrange stencil half-width per axis (full stencil =
-  // 2×ng_interp points).
-  //   ng_interp < 0 : default — full mesh stencil
-  //   ng_interp = 0 : nearest-cell (fastest, strictly monotone)
-  //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)
-  int ng_mesh = pm->pmb_pack->pmesh->mb_indcs.ng;
-  ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", -1);
-  if (ng_interp_ < 0)       ng_interp_ = ng_mesh; // negative → full mesh stencil
-  if (ng_interp_ > ng_mesh) ng_interp_ = ng_mesh;
+  // The old half-width parameter was renamed; fail loudly rather than silently
+  // falling back to the full-stencil default.
+  if (pin->DoesParameterExist(op.block_name, "ng_interp")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<" << op.block_name << "> parameter 'ng_interp' has been renamed "
+              << "'ninterp' (number of interpolation points per axis, as on main). "
+              << "Convert: ng_interp=0 -> ninterp=1, ng_interp=k -> ninterp=2k."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // Read ninterp: number of interpolation points per axis (main convention).
+  //   ninterp < 0 : default — full mesh stencil (2*ng points)
+  //   ninterp = 1 : nearest-cell (fastest, strictly monotone)
+  //   ninterp > 1 : Lagrange stencil with ninterp points per axis (odd or even)
+  ninterp_ = pin->GetOrAddInteger(op.block_name, "ninterp", -1);
 
   // Create SphericalGrid objects for each radius
   for (int i = 0; i < nr; ++i) {
     spheres.push_back(
-        std::make_unique<SphericalGrid>(pm->pmb_pack, nlev, radii[i], ng_interp_));
+        std::make_unique<SphericalGrid>(pm->pmb_pack, nlev, radii[i], ninterp_));
   }
 }
 
@@ -95,14 +104,8 @@ SphericalShellsOutput::~SphericalShellsOutput() {
 }
 
 void SphericalShellsOutput::LoadOutputData(Mesh *pm) {
-  // If AMR is enabled we need to reset the grids
-  if (pm->adaptive) {
-    for (auto& sphere : spheres) {
-      sphere->SetInterpolationIndices();
-      sphere->SetInterpolationWeights();
-    }
-  }
-
+  // NOTE: under AMR, SphericalGrid::InterpolateToSphere rebuilds its own
+  // interpolation indices and weights internally (main convention).
   int nout_vars = outvars.size();
 
   // Allocate output array: (nradii, nvars)

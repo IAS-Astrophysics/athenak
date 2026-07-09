@@ -9,6 +9,7 @@
 #include "spherical_surface.hpp"
 
 #include <cmath>
+#include <cstdlib>  // exit
 #include <iostream>
 #include <list>
 
@@ -24,7 +25,7 @@
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
                                    Real rad, Real xc, Real yc, Real zc,
-                                   int nphi_in, bool uniform_theta)
+                                   int nphi_in, bool uniform_theta, int nintp)
     : pmy_pack(pmy_pack),
       radius(rad),
       xc(xc),
@@ -40,14 +41,21 @@ SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
       interp_wghts("interp_wghts", 1, 1, 1),
       interp_vals("interp_vals", 1) {
   // reallocate and set interpolation coordinates, indices, and weights
-  int &ng = pmy_pack->pmesh->mb_indcs.ng;
+  // (ninterp semantics follow SphericalGrid on main: number of points per axis)
+  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
+  if (ninterp > pmy_pack->pmesh->mb_indcs.ng*2+1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ninterp = " << ninterp << " exceeds maximum allowed value of "
+              << pmy_pack->pmesh->mb_indcs.ng*2+1 << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   nangles = nphi * ntheta;
 
   Kokkos::realloc(int_weights, nangles);
   Kokkos::realloc(polar_pos, nangles, 2);
   Kokkos::realloc(cart_pos, nangles, 3);
   Kokkos::realloc(interp_indcs, nangles, 4);
-  Kokkos::realloc(interp_wghts, nangles, 2 * ng, 3);
+  Kokkos::realloc(interp_wghts, nangles, ninterp, 3);
 
   InitializeAngleAndWeights();
   InitializeRadius();
@@ -127,6 +135,10 @@ void SphericalSurface::SetInterpolationIndices() {
   int nang1 = nangles - 1;
   auto &rcoord = cart_pos;
   auto &iindcs = interp_indcs;
+  // Anchor convention follows SphericalGrid on main: even stencils anchor on
+  // the last cell whose center is at/left of the point (stencil straddles the
+  // point); odd stencils anchor on the containing cell (stencil centered).
+  Real offset = (ninterp % 2 == 0) ? -0.5 : 0.0;
   for (int n = 0; n <= nang1; ++n) {
     // indices default to -1 if angle does not reside in this MeshBlockPack
     iindcs.h_view(n, 0) = -1;
@@ -160,11 +172,11 @@ void SphericalSurface::SetInterpolationIndices() {
           (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {
         iindcs.h_view(n, 0) = m;
         iindcs.h_view(n, 1) = static_cast<int>(
-            std::floor((rcoord.h_view(n, 0) - (x1min + dx1 / 2.0)) / dx1));
+            std::floor((rcoord.h_view(n, 0) - (x1min + offset * dx1)) / dx1));
         iindcs.h_view(n, 2) = static_cast<int>(
-            std::floor((rcoord.h_view(n, 1) - (x2min + dx2 / 2.0)) / dx2));
+            std::floor((rcoord.h_view(n, 1) - (x2min + offset * dx2)) / dx2));
         iindcs.h_view(n, 3) = static_cast<int>(
-            std::floor((rcoord.h_view(n, 2) - (x3min + dx3 / 2.0)) / dx3));
+            std::floor((rcoord.h_view(n, 2) - (x3min + offset * dx3)) / dx3));
       }
     }
   }
@@ -180,12 +192,9 @@ void SphericalSurface::SetInterpolationIndices() {
 //! \fn void SphericalSurface::SetInterpolationWeights
 //! \brief set weights used by Lagrangian interpolation
 
-void SphericalSurface::SetInterpolationWeights(int ng_interp) {
+void SphericalSurface::SetInterpolationWeights() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  // Use the requested stencil half-width; fall back to the mesh ghost-zone
-  // depth when the caller passes the default value of -1.
-  int ng = (ng_interp > 0) ? ng_interp : indcs.ng;
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
@@ -197,7 +206,7 @@ void SphericalSurface::SetInterpolationWeights(int ng_interp) {
     int &ii3 = iindcs.h_view(n, 3);
 
     if (ii0 == -1) {  // angle not on this rank
-      for (int i = 0; i < 2 * ng; ++i) {
+      for (int i = 0; i < ninterp; ++i) {
         iwghts.h_view(n, i, 0) = 0.0;
         iwghts.h_view(n, i, 1) = 0.0;
         iwghts.h_view(n, i, 2) = 0.0;
@@ -216,29 +225,24 @@ void SphericalSurface::SetInterpolationWeights(int ng_interp) {
       Real &x3min = size.h_view(ii0).x3min;
       Real &x3max = size.h_view(ii0).x3max;
 
-      // set interpolation weights using (2*ng)-point Lagrange stencil.
-      // The stencil spans cell-centres ii{1,2,3} - ng + 1 .. ii{1,2,3} + ng,
-      // which always brackets the target point for any ng <= indcs.ng.
-      for (int i = 0; i < 2 * ng; ++i) {
+      // set interpolation weights using a ninterp-point Lagrange stencil
+      // spanning cells ii{1,2,3} - nleft .. ii{1,2,3} - nleft + ninterp - 1
+      // (same convention as SphericalGrid on main)
+      int nleft = ninterp/2;
+      for (int i = 0; i < ninterp; ++i) {
         iwghts.h_view(n, i, 0) = 1.;
         iwghts.h_view(n, i, 1) = 1.;
         iwghts.h_view(n, i, 2) = 1.;
-        for (int j = 0; j < 2 * ng; ++j) {
+        Real x1vpi1 = CellCenterX(ii1 - nleft + i, indcs.nx1, x1min, x1max);
+        Real x2vpi1 = CellCenterX(ii2 - nleft + i, indcs.nx2, x2min, x2max);
+        Real x3vpi1 = CellCenterX(ii3 - nleft + i, indcs.nx3, x3min, x3max);
+        for (int j = 0; j < ninterp; ++j) {
           if (j != i) {
-            Real x1vpi1 =
-                CellCenterX(ii1 - ng + i + 1, indcs.nx1, x1min, x1max);
-            Real x1vpj1 =
-                CellCenterX(ii1 - ng + j + 1, indcs.nx1, x1min, x1max);
+            Real x1vpj1 = CellCenterX(ii1 - nleft + j, indcs.nx1, x1min, x1max);
             iwghts.h_view(n, i, 0) *= (x0 - x1vpj1) / (x1vpi1 - x1vpj1);
-            Real x2vpi1 =
-                CellCenterX(ii2 - ng + i + 1, indcs.nx2, x2min, x2max);
-            Real x2vpj1 =
-                CellCenterX(ii2 - ng + j + 1, indcs.nx2, x2min, x2max);
+            Real x2vpj1 = CellCenterX(ii2 - nleft + j, indcs.nx2, x2min, x2max);
             iwghts.h_view(n, i, 1) *= (y0 - x2vpj1) / (x2vpi1 - x2vpj1);
-            Real x3vpi1 =
-                CellCenterX(ii3 - ng + i + 1, indcs.nx3, x3min, x3max);
-            Real x3vpj1 =
-                CellCenterX(ii3 - ng + j + 1, indcs.nx3, x3min, x3max);
+            Real x3vpj1 = CellCenterX(ii3 - nleft + j, indcs.nx3, x3min, x3max);
             iwghts.h_view(n, i, 2) *= (z0 - x3vpj1) / (x3vpi1 - x3vpj1);
           }
         }
@@ -267,9 +271,10 @@ void SphericalSurface::InterpolateToSphere(int var_ind,
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
-  int &ng = indcs.ng;
   int nang1 = nangles - 1;
   int v = var_ind;
+  int nintp = ninterp;
+  int nleft = nintp / 2;
 
   // reallocate container
   Kokkos::realloc(interp_vals, nangles);
@@ -287,14 +292,14 @@ void SphericalSurface::InterpolateToSphere(int var_ind,
           ivals.d_view(n) = 0.0;
         } else {
           Real int_value = 0.0;
-          for (int i = 0; i < 2 * ng; i++) {
-            for (int j = 0; j < 2 * ng; j++) {
-              for (int k = 0; k < 2 * ng; k++) {
+          for (int i = 0; i < nintp; i++) {
+            for (int j = 0; j < nintp; j++) {
+              for (int k = 0; k < nintp; k++) {
                 Real iwght = iwghts.d_view(n, i, 0) * iwghts.d_view(n, j, 1) *
                              iwghts.d_view(n, k, 2);
-                int_value += iwght * val(ii0, v, ii3 - (ng - k - ks) + 1,
-                                         ii2 - (ng - j - js) + 1,
-                                         ii1 - (ng - i - is) + 1);
+                int_value += iwght * val(ii0, v, ii3 + k + ks - nleft,
+                                         ii2 + j + js - nleft,
+                                         ii1 + i + is - nleft);
               }
             }
           }

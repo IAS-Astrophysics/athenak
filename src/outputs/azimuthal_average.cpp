@@ -9,8 +9,10 @@
 #include <sys/stat.h>  // mkdir
 
 #include <cmath>
-#include <cstdio>  // snprintf
+#include <cstdio>   // snprintf
+#include <cstdlib>  // exit
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -38,15 +40,23 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   ks_ = indcs.ks;
   adaptive_ = pm->adaptive;
 
-  // Allow a smaller Lagrange stencil than the full ghost-zone depth.
-  // ng_interp controls the half-stencil width per axis (full stencil = 2×ng_interp
-  // points):
-  //   ng_interp < 0 : default — full mesh stencil
-  //   ng_interp = 0 : nearest-cell (single read, no weights, strictly monotone)
-  //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)
-  ng_interp_ = pin->GetOrAddInteger(op.block_name, "ng_interp", -1);
-  if (ng_interp_ < 0)   ng_interp_ = ng_;  // negative → full mesh stencil
-  if (ng_interp_ > ng_) ng_interp_ = ng_;
+  // The old half-width parameter was renamed; fail loudly rather than silently
+  // falling back to the full-stencil default.
+  if (pin->DoesParameterExist(op.block_name, "ng_interp")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<" << op.block_name << "> parameter 'ng_interp' has been renamed "
+              << "'ninterp' (number of interpolation points per axis, as on main). "
+              << "Convert: ng_interp=0 -> ninterp=1, ng_interp=k -> ninterp=2k."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  // Read ninterp: number of interpolation points per axis (main convention).
+  //   ninterp < 0 : default — full mesh stencil (2*ng points)
+  //   ninterp = 1 : nearest-cell (single read, no weights, strictly monotone)
+  //   ninterp > 1 : Lagrange stencil with ninterp points per axis (odd or even)
+  ninterp_ = pin->GetOrAddInteger(op.block_name, "ninterp", -1);
+  if (ninterp_ <= 0) ninterp_ = 2 * ng_;  // resolve default (validated below)
 
   nr = pin->GetInteger(op.block_name, "nr");
   ntheta = pin->GetOrAddInteger(op.block_name, "ntheta", 32);
@@ -73,26 +83,20 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   }
 
   // Create one SphericalSurface per radius to build interpolation tables.
+  // The SphericalSurface constructor validates ninterp (max 2*ng+1) and builds
+  // indices and weights for the requested stencil.
   surfaces.reserve(nr);
   for (int i = 0; i < nr; ++i) {
     surfaces.push_back(
         std::make_unique<SphericalSurface>(pm->pmb_pack, ntheta, radii[i],
-                                           0.0, 0.0, 0.0, nphi, uniform_theta_));
+                                           0.0, 0.0, 0.0, nphi, uniform_theta_,
+                                           ninterp_));
   }
 
   // Extract theta grid from the first surface (identical for all radii).
   theta_grid.resize(ntheta);
   for (int j = 0; j < ntheta; ++j)
     theta_grid[j] = surfaces[0]->polar_pos.h_view(j, 0);
-
-  // If a reduced stencil is requested, recompute weights with smaller width.
-  // When ng_interp_ == ng_ (full stencil), SphericalSurface already has default
-  // full-width weights from its constructor — no recomputation needed.
-  // When ng_interp_ == 0 (nearest-cell), weights are unused — skip entirely.
-  if (ng_interp_ > 0 && ng_interp_ < ng_) {
-    for (auto &surf : surfaces)
-      surf->SetInterpolationWeights(ng_interp_);
-  }
 
   // Flatten per-radius tables into fused arrays.  For non-AMR runs the
   // SphericalSurface objects are then freed to recover ~1 MB/surface.
@@ -129,14 +133,14 @@ void AzimuthalAverageOutput::BuildFusedArrays() {
   fused_indcs.template modify<HostMemSpace>();
   fused_indcs.template sync<DevExeSpace>();
 
-  // fused_wghts is only needed for Lagrange interpolation (ng_interp_ > 0).
-  if (ng_interp_ > 0) {
-    Kokkos::realloc(fused_wghts, total_angles, 2 * ng_interp_, 3);
+  // fused_wghts is only needed for Lagrange interpolation (ninterp_ > 1).
+  if (ninterp_ > 1) {
+    Kokkos::realloc(fused_wghts, total_angles, ninterp_, 3);
     for (int ir = 0; ir < nr; ++ir) {
       int offset = ir * nang_per_r;
       auto &surf = surfaces[ir];
       for (int n = 0; n < nang_per_r; ++n)
-        for (int i = 0; i < 2 * ng_interp_; ++i)
+        for (int i = 0; i < ninterp_; ++i)
           for (int k = 0; k < 3; ++k)
             fused_wghts.h_view(offset + n, i, k) =
                 surf->interp_wghts.h_view(n, i, k);
@@ -153,8 +157,8 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
   if (adaptive_) {
     for (auto &surf : surfaces) {
       surf->SetInterpolationIndices();
-      if (ng_interp_ > 0)
-        surf->SetInterpolationWeights(ng_interp_);
+      if (ninterp_ > 1)
+        surf->SetInterpolationWeights();
     }
     BuildFusedArrays();
   }
@@ -188,8 +192,9 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
     }
   };
 
-  if (ng_interp_ == 0) {
+  if (ninterp_ == 1) {
     // Nearest-cell path: single cell read per angle, no weights.
+    // The anchor is the containing cell (main's odd-stencil convention).
     for (int n = 0; n < nout_vars; ++n) {
       int  v   = outvars[n].data_index;
       auto val = *(outvars[n].data_ptr);
@@ -208,13 +213,13 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
       phi_average(n);
     }
   } else {
-    // Lagrange interpolation path (ng_interp_ >= 1).
+    // Lagrange interpolation path (ninterp_ > 1, odd or even).
     auto f_wghts = fused_wghts.d_view;
-    // ngi: stencil half-width; is/js/ks: active-zone starts (= ng_).
-    // The index formula ii1 - (ngi - i - is) + 1 maps stencil point i to the
-    // correct array index regardless of ngi, because is = ng_ offsets into the
-    // ghost zone correctly even when ngi < ng_.
-    int ngi = ng_interp_;
+    // Stencil spans cells ii{1,2,3} - nleft .. ii{1,2,3} - nleft + nintp - 1,
+    // the same convention as SphericalGrid on main; is/js/ks are active-zone
+    // starts (= ng_) that offset into the ghost-padded array.
+    int nintp = ninterp_;
+    int nleft = nintp / 2;
 
     for (int n = 0; n < nout_vars; ++n) {
       int  v   = outvars[n].data_index;
@@ -231,15 +236,15 @@ void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
               f_vals(idx) = 0.0;
             } else {
               Real sum = 0.0;
-              for (int i = 0; i < 2 * ngi; ++i)
-                for (int j = 0; j < 2 * ngi; ++j)
-                  for (int k = 0; k < 2 * ngi; ++k)
+              for (int i = 0; i < nintp; ++i)
+                for (int j = 0; j < nintp; ++j)
+                  for (int k = 0; k < nintp; ++k)
                     sum += f_wghts(idx, i, 0) * f_wghts(idx, j, 1) *
                            f_wghts(idx, k, 2) *
                            val(ii0, v,
-                               ii3 - (ngi - k - ks) + 1,
-                               ii2 - (ngi - j - js) + 1,
-                               ii1 - (ngi - i - is) + 1);
+                               ii3 + k + ks - nleft,
+                               ii2 + j + js - nleft,
+                               ii1 + i + is - nleft);
               f_vals(idx) = sum;
             }
           });

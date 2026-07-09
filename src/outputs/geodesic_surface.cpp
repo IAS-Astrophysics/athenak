@@ -9,8 +9,10 @@
 
 #include <sys/stat.h>  // mkdir
 
-#include <cstdio>  // snprintf
+#include <cstdio>   // snprintf
+#include <cstdlib>  // exit
 #include <fstream>
+#include <iostream>
 #include <string>
 
 #include "athena.hpp"
@@ -28,26 +30,31 @@ GeodesicSurfaceOutput::GeodesicSurfaceOutput(ParameterInput *pin, Mesh *pm,
   Real rad  = pin->GetReal(op.block_name, "radius");
   int  nlev = pin->GetOrAddInteger(op.block_name, "nlev", 4);
 
-  // Read ng_interp: controls Lagrange stencil half-width per axis.
-  //   ng_interp < 0 : default — full mesh stencil (original behaviour)
-  //   ng_interp = 0 : nearest-cell (fastest, strictly monotone — no Runge overshoot)
-  //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points per axis)
-  int ng_mesh = pm->pmb_pack->pmesh->mb_indcs.ng;
-  ng_interp_  = pin->GetOrAddInteger(op.block_name, "ng_interp", -1);
-  if (ng_interp_ < 0)       ng_interp_ = ng_mesh;
-  if (ng_interp_ > ng_mesh) ng_interp_ = ng_mesh;
+  // The old half-width parameter was renamed; fail loudly rather than silently
+  // falling back to the full-stencil default.
+  if (pin->DoesParameterExist(op.block_name, "ng_interp")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<" << op.block_name << "> parameter 'ng_interp' has been renamed "
+              << "'ninterp' (number of interpolation points per axis, as on main). "
+              << "Convert: ng_interp=0 -> ninterp=1, ng_interp=k -> ninterp=2k."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
-  pgrid = new SphericalGrid(pm->pmb_pack, nlev, rad, ng_interp_);
+  // Read ninterp: number of interpolation points per axis (main convention).
+  //   ninterp < 0 : default — full mesh stencil (2*ng points)
+  //   ninterp = 1 : nearest-cell (fastest, strictly monotone — no Runge overshoot)
+  //   ninterp > 1 : Lagrange stencil with ninterp points per axis (odd or even)
+  ninterp_ = pin->GetOrAddInteger(op.block_name, "ninterp", -1);
+
+  pgrid = new SphericalGrid(pm->pmb_pack, nlev, rad, ninterp_);
 }
 
 GeodesicSurfaceOutput::~GeodesicSurfaceOutput() { delete pgrid; }
 
 void GeodesicSurfaceOutput::LoadOutputData(Mesh *pm) {
-  if (pm->adaptive) {
-    pgrid->SetInterpolationIndices();
-    pgrid->SetInterpolationWeights();
-  }
-
+  // NOTE: under AMR, SphericalGrid::InterpolateToSphere rebuilds its own
+  // interpolation indices and weights internally (main convention).
   int nout_vars = outvars.size();
   Kokkos::realloc(outarray, nout_vars, 1, 1, 1, pgrid->nangles);
 

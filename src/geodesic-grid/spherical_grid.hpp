@@ -20,34 +20,25 @@ class MeshBlockPack;
 
 class SphericalGrid: public GeodesicGrid {
  public:
-    // Creates a geodesic grid with refinement level nlev and radius rad.
-    // ng_interp controls the Lagrange stencil half-width per axis (full stencil =
-    // 2×ng_interp points):
-    //   ng_interp < 0 : default — use full mesh ghost-zone depth (original behaviour,
-    //   e.g. ng=4 → 8-point, 7th-order)
-    //   ng_interp = 0 : nearest-cell (1 point, fastest, strictly monotone)
-    //   ng_interp > 0 : Lagrange stencil half-width (2×ng_interp points)
-    SphericalGrid(MeshBlockPack *pmy_pack, int nlev, Real rad, int ng_interp = -1);
+    // Creates a geodesic grid with refinement level nlev and radius rad
+    SphericalGrid(MeshBlockPack *pmy_pack, int nlev, Real rad, int ninterp = -1);
     ~SphericalGrid();
 
     Real radius;  // const radius for SphericalGrid
+    int ninterp;  // number of interpolation points along each dimension
     DualArray2D<Real> interp_coord;  // Cartesian coordinates for grid points
     DualArray2D<Real> interp_vals;   // container for data interpolated to sphere
     void InterpolateToSphere(int nvars, DvceArray5D<Real>& val);  // interpolate to sphere
     // interpolate a range of variables to a sphere
     void InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val);
-    // Public methods for updating interpolation when mesh changes (e.g., AMR)
-    void SetInterpolationIndices();
-    // Set Lagrange weights for a given stencil half-width (ng_interp > 0) or
-    // nearest-cell mode (ng_interp = 0). Default -1 uses the stored ng_interp_.
-    void SetInterpolationWeights(int ng_interp = -1);
 
  private:
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
     DualArray2D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
     DualArray3D<Real> interp_wghts;  // weights for interpolation
-    int ng_interp_;                  // effective stencil half-width (0 = nearest-cell)
-    void SetInterpolationCoordinates();  // set interpolation coordinates
+    void SetInterpolationCoordinates();  // set indexing for interpolation
+    void SetInterpolationIndices();      // set indexing for interpolation
+    void SetInterpolationWeights();      // set weights for interpolation
 };
 
 #endif // GEODESIC_GRID_SPHERICAL_GRID_HPP_

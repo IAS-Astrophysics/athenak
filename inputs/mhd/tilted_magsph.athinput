@@ -33,7 +33,7 @@ variable  = mhd_u_bcc
 radius    = 0.2
 dt        = 0.0628
 nlev      = 40
-ng_interp   = 1
+ninterp     = 2
 
 <output5>
 file_type = geosph
@@ -41,7 +41,7 @@ variable  = mhd_u_bcc
 radius    = 0.3
 dt        = 0.0628
 nlev      = 40
-ng_interp   = 1
+ninterp     = 2
 
 <output6>
 file_type = geosph
@@ -49,7 +49,7 @@ variable  = mhd_u_bcc
 radius    = 0.4
 dt        = 0.0628
 nlev      = 40
-ng_interp   = 1
+ninterp     = 2
 
 <output7>
 file_type        = sphshell
@@ -61,7 +61,7 @@ rmax             = 16.0
 log_spacing      = true
 nlev             = 40
 surface_integral = true
-ng_interp = 1
+ninterp   = 2
 
 <output8>
 file_type   = azavg
@@ -73,7 +73,7 @@ nphi        = 128
 rmin        = 0.3
 rmax        = 10.0
 log_spacing = true
-ng_interp   = 0
+ninterp     = 1
 uniform_theta = true
 
 <output9>
@@ -86,7 +86,7 @@ rmax             = 16.0
 log_spacing      = true
 nlev             = 40
 surface_integral = false       # volume-weighted shell L (matches warp validation)
-ng_interp        = 1
+ninterp          = 2
 
 <time>
 evolution   = dynamic
