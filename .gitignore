@@ -1,6 +1,9 @@
 # build directories
 build*/
-*.sh
+
+# local build helper scripts (root only; tracked scripts elsewhere unaffected)
+/build.sh
+/warp_build.sh
 
 # cmake files
 CMakeFiles/
