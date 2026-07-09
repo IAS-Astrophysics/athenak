@@ -76,29 +76,29 @@ TaskStatus ShearingBoxFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
       // Load scratch array
       if (n==0) {
         if (v==0) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,i);
           });
         } else if (v==1) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,i);
           });
         } else if (v==2) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,i);
           });
         }
       } else if (n==1) {
         if (v==0) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             a_(j) = b.x1f(mm,k,j,(ie+2)+i);
           });
         } else if (v==1) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             a_(j) = b.x2f(mm,k,j,(ie+1)+i);
           });
         } else if (v==2) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             a_(j) = b.x3f(mm,k,j,(ie+1)+i);
           });
         }
@@ -127,7 +127,7 @@ TaskStatus ShearingBoxFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
       }
       member.team_barrier();
 
-      // update data in send buffer with fracational shift
+      // update data in send buffer with fractional shift
       par_for_inner(member, js, je, [&](const int j) {
         sbuf[n].vars(m,j,v,k,i) = a_(j) - (flx(j+1) - flx(j));
       });
@@ -276,6 +276,7 @@ TaskStatus ShearingBoxFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
           }
         }
@@ -392,34 +393,34 @@ TaskStatus ShearingBoxFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b) {
       int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
       if (n==0) {
         if (v==0) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             b.x1f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
           });
           member.team_barrier();
         } else if (v==1) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             b.x2f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
           });
           member.team_barrier();
         } else if (v==2) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             b.x3f(mm,k,j,i) = rbuf[n].vars(m,j,v,k,i);
           });
           member.team_barrier();
         }
       } else {
         if (v==0) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             b.x1f(mm,k,j,(ie+2)+i) = rbuf[n].vars(m,j,v,k,i);
           });
           member.team_barrier();
         } else if (v==1) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             b.x2f(mm,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
           });
           member.team_barrier();
         } else if (v==2) {
-          par_for_inner(member, 0, nj, [&](const int j) {
+          par_for_inner(member, 0, nj-1, [&](const int j) {
             b.x3f(mm,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
           });
           member.team_barrier();

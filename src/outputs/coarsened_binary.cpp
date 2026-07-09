@@ -296,9 +296,6 @@ void CoarsenedBinaryOutput::LoadOutputData(Mesh *pm) {
 //   All MeshBlocks are written to the same file.
 
 void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  // check if slicing
-  bool bin_slice = (out_params.slice1 || out_params.slice2 || out_params.slice3);
-
   // create filename: "cbin_"+"file_id"+"_"+"coarsening_factor"+"/file_basename"
   // + "." + "file_id" + "." + XXXXX + ".cbin"
   // where XXXXX = 5-digit file_number
@@ -312,10 +309,10 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   fname.append(out_params.file_id);
   fname.append("_");
   fname.append(std::to_string(out_params.coarsen_factor));
+  fname.append("/");
   if (single_file_per_rank) {
     char rank_dir[20];
     std::snprintf(rank_dir, sizeof(rank_dir), "rank_%08d/", global_variable::my_rank);
-    fname.append("/");
     fname.append(rank_dir);
   }
   fname.append(out_params.file_basename);
@@ -353,14 +350,14 @@ void CoarsenedBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       << "  variables:  ";
   if (out_params.compute_moments) {
     // need to write the label for each of the 4 moments
-    for (int n=0; n<outvars.size(); n++) {
+    for (size_t n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "_1st  ";
       msg << outvars[n].label.c_str() << "_2nd  ";
       msg << outvars[n].label.c_str() << "_3rd  ";
       msg << outvars[n].label.c_str() << "_4th  ";
     }
   } else {
-    for (int n=0; n<outvars.size(); n++) {
+    for (size_t n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "  ";
     }
   }

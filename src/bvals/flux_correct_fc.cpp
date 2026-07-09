@@ -65,7 +65,7 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
         ku = sbuf[n].iflux_coar[v].bke;
         ndat = sbuf[n].iflxc_ndat;
       // if neighbor is at same level, use sindices to pack buffer
-      } else if (nghbr.d_view(m,n).lev == mblev.d_view(m)) {
+      } else {
         il = sbuf[n].iflux_same[v].bis;
         iu = sbuf[n].iflux_same[v].bie;
         jl = sbuf[n].iflux_same[v].bjs;
@@ -452,7 +452,7 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &mbbcs = pmy_pack->pmb->mb_bcs;
 
-  // Sum recieve buffers into EMFs stored on MeshBlocks
+  // Sum receive buffers into EMFs stored on MeshBlocks
   // Outer loop over (# of MeshBlocks)*(3 field components)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {

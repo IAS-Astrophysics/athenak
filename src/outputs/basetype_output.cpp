@@ -8,10 +8,10 @@
 
 #include <iostream>
 #include <sstream>
-#include <string>   // std::string, to_string()
-#include <cstdio> // snprintf
+#include <string>    // std::string, to_string()
+#include <cstdio>    // snprintf
 #include <algorithm> // min_element
-#include <utility> // pair<>
+#include <utility>   // pair<>
 #include <vector>
 
 #include "athena.hpp"
@@ -39,10 +39,10 @@
 // Creates vector of output variable data
 
 BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters opar) :
+    out_params(opar),
     derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
-    outfield("fc_outvar",1,1,1,1),
-    out_params(opar) {
+    outfield("fc_outvar",1,1,1,1) {
   // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0 ||

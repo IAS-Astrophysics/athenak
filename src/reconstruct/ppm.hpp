@@ -138,7 +138,7 @@ void PPMX(const Real &q_im2, const Real &q_im1, const Real &q_i, const Real &q_i
   Real qa = (qrv - q_i)*(q_i - qlv);
   Real qb = (q_im1 - q_i)*(q_i - q_ip1);
   if (qa <= 0.0 || qb <= 0.0) {
-    // approximate secnd derivates (PH 3.37)
+    // approximate second derivatives (PH 3.37)
     // KGF: add the off-center quantities first to preserve FP symmetry
     Real d2q  = 6.0*(qlv + qrv - 2.0*q_i);
     Real d2qc = (q_im1 + q_ip1) - 2.0*q_i;

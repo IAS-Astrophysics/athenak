@@ -75,11 +75,11 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
 
       // Load scratch array
       if (n==0) {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a_(j) = a(mm,v,k,j,i);
         });
       } else {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a_(j) = a(mm,v,k,j,(ie+1)+i);
         });
       }
@@ -107,7 +107,7 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
       }
       member.team_barrier();
 
-      // update data in send buffer with fracational shift
+      // update data in send buffer with fractional shift
       par_for_inner(member, js, je, [&](const int j) {
         sbuf[n].vars(m,j,v,k,i) = a_(j) - (flx(j+1) - flx(j));
       });
@@ -256,6 +256,7 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
+            if (ierr != MPI_SUCCESS) {no_errors=false;}
 #endif
           }
         }
@@ -372,12 +373,12 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
     KOKKOS_LAMBDA(TeamMember_t member,const int m,const int v,const int k,const int i) {
       int mm = x1bndry_mbgid_.d_view(n,m) - gids_;
       if (n==0) {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a(mm,v,k,j,i) = rbuf[n].vars(m,j,v,k,i);
         });
         member.team_barrier();
       } else {
-        par_for_inner(member, 0, nj, [&](const int j) {
+        par_for_inner(member, 0, nj-1, [&](const int j) {
           a(mm,v,k,j,(ie+1)+i) = rbuf[n].vars(m,j,v,k,i);
         });
         member.team_barrier();

@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <sstream>
 #include <string>
@@ -84,16 +85,18 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // 4. Header (input file information)
   {
     std::stringstream msg;
+    const int time_precision = std::numeric_limits<Real>::max_digits10 - 1;
     msg << "Athena binary output version=1.1" << std::endl
         // preheader size includes "size of preheader" line up to "number of variables"
         << "  size of preheader=5" << std::endl
+        << std::scientific << std::setprecision(time_precision)
         << "  time=" << pm->time << std::endl
         << "  cycle=" << pm->ncycle << std::endl
         << "  size of location=" << sizeof(Real) << std::endl
         << "  size of variable=" << sizeof(float) << std::endl
         << "  number of variables=" << outvars.size() << std::endl
         << "  variables:  ";
-    for (int n=0; n<outvars.size(); n++) {
+    for (size_t n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "  ";
     }
     msg << std::endl;

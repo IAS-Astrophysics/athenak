@@ -22,9 +22,9 @@
 LagrangeInterpolator::LagrangeInterpolator(
   MeshBlockPack *pmy_pack,
   Real rcoords[3]):
-              pmy_pack(pmy_pack),
-              rcoord("rccord", 1), interp_indcs("interp_indcs", 1),
-              interp_wghts("interp_wghts", 1, 1), point_exist(false) {
+              point_exist(false), rcoord("rccord", 1),
+              pmy_pack(pmy_pack), interp_indcs("interp_indcs", 1),
+              interp_wghts("interp_wghts", 1, 1) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   // int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;

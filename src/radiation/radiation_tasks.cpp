@@ -273,7 +273,7 @@ TaskStatus Radiation::RecvI(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Radiation::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call funtions that set physical and user BCs
+//! \brief Wrapper task list function to call functions that set physical and user BCs
 
 TaskStatus Radiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
