@@ -1,20 +1,6 @@
 # build directories
 build*/
 
-# local build helper scripts (root only; tracked scripts elsewhere unaffected)
-/build.sh
-/warp_build.sh
-
-# cmake files
-CMakeFiles/
-CMakeCache.txt
-
-# analysis cache directories
-vis/python/__pycache__/
-
-# test-only input files (not for version control)
-inputs/mhd/magnetosphere_*.athinput
-
 # Athena output files
 *.tab
 *.vtk
@@ -31,16 +17,3 @@ inputs/mhd/magnetosphere_*.athinput
 *~
 *.swp
 Lorene
-
-# Legacy/benchmark magnetosphere inputs kept locally only (archived outside the repo).
-# Production input is inputs/mhd/tilted_magsph.athinput (tracked).
-inputs/mhd/magnetosphere.athinput
-inputs/mhd/magnetosphere2.athinput
-inputs/mhd/magnetosphere3.athinput
-inputs/mhd/magnetospheric_strong_scaling.athinput
-inputs/mhd/magnetospheric_weak_scaling.athinput
-inputs/mhd/magnetospheric_weak_scaling_v2.athinput
-inputs/mhd/magnetospheric_weak_scaling_v3.athinput
-
-# Run instructions are shared with collaborators directly, not via the remote.
-inputs/mhd/tilted_magsph_run_instructions.md
