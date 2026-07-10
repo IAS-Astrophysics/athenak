@@ -55,6 +55,11 @@ struct NuratesParams {
   bool use_decay;
   bool use_BRT_brem;
 
+  int eq_warmup_cycles;  // force use_equilibrium_distribution for the first
+                         // this-many cycles on a fresh start, to avoid
+                         // reconstructing the distribution from the floored,
+                         // neutrinoless initial field
+
   int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
   MyQuadrature quadrature;
   int quad_nx_2;

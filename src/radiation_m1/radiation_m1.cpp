@@ -161,6 +161,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", false);
     nurates_params.use_BRT_brem =
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
+    nurates_params.eq_warmup_cycles =
+        pin->GetOrAddInteger("bns_nurates", "eq_warmup_cycles", 1);
 
     nurates_params.quadrature.nx = nurates_params.quad_nx;
     nurates_params.quadrature.dim = 1;

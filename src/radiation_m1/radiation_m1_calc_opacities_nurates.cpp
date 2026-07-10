@@ -62,7 +62,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &radiation_mask_ = radiation_mask;
 
   auto &m1_params_ = params;
-  auto &nurates_params_ = nurates_params;
+  // Force the equilibrium distribution for the first eq_warmup_cycles cycles.
+  // On a fresh (neutrinoless) start the M1 moments are floored, so
+  // reconstructing the distribution from them (use_equilibrium_distribution =
+  // false) yields garbage.
+  NuratesParams nurates_params_ = nurates_params;
+  if (pmy_pack->pmesh->ncycle < nurates_params_.eq_warmup_cycles) {
+    nurates_params_.use_equilibrium_distribution = true;
+  }
 
   auto &eta_0_ = eta_0;
   auto &abs_0_ = abs_0;
@@ -417,6 +424,28 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // it only to nu_e (0) and nubar_e (1); heavy leptons (2,3) get 1.
             Real corr_ae = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
 
+            // Correction for the NEPS
+            // emissivity when using the equilibrium distribution. The NEPS
+            // in-scattering emissivity scales with the neutrino occupation
+            // (~ g_nu); the equilibrium distribution over-populates the field in
+            // the decoupling region, over-estimating it. Scale the non-thermal
+            // (NEPS) emissivity by the ratio of the ACTUAL M1 density to the
+            // equilibrium density (a grey proxy for g_field/g_eq), using the number
+            // ratio to preserve the spectrum and apply the ratio to both
+            // the number (nudens_0) and energy (nudens_1) channels. Capped
+            // at 1 so it only removes the spurious excess, never amplifies; deep
+            // in the optically-thick core the field ~ equilibrium so the factor
+            // -> 1. This mimics the reconstructed-distribution result without
+            // reconstructing the spectrum. Only the non-thermal (NEPS) part is
+            // touched; the spontaneous (beta) emissivity has no g_nu dependence.
+            if (nurates_params_.use_equilibrium_distribution) {
+              Real f_occ_0 =
+                  (my_nudens_0 > 0.0) ? nudens_0[nuidx] / my_nudens_0 : 1.0;
+              if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
+              f_occ_0 = Kokkos::fmin(f_occ_0, 1.0);
+              eta_1_non_th_loc[nuidx] *= f_occ_0;
+            }
+
             if (nurates_params_.use_kirchhoff_law) {
               // enforce Kirchhoff's laws.
               // Number absorption: apply the non-LTE correction only to the THERMAL
@@ -424,12 +453,12 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real const abs_0_th_corr =
                   Kokkos::fmax(abs_0_(m, nuidx, k, j, i) - abs_0_non_th_loc[nuidx], 0.0)
                   * corr_ae;
-              abs_0_(m, nuidx, k, j, i) = abs_0_th_corr + abs_0_non_th_loc[nuidx];
+              abs_0_(m, nuidx, k, j, i) = abs_0_th_corr;
               // Number emissivity: apply Kirchhoff ONLY to the thermal part; the
               // non-thermal (NEPS) number emission is kept out of thermalization.
               eta_0_(m, nuidx, k, j, i) =
                   (abs_0_th_corr > 0)
-                      ? abs_0_th_corr * my_nudens_0 + eta_0_non_th_loc[nuidx]
+                      ? abs_0_th_corr * my_nudens_0
                       : eta_0_(m, nuidx, k, j, i);
               // Energy absorption: apply the non-LTE correction (kappa ~ E^2)
               // only to the thermal part.
