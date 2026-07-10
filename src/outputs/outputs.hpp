@@ -8,6 +8,7 @@
 //! \file outputs.hpp
 //  \brief provides classes to handle ALL types of data output
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -15,13 +16,15 @@
 
 #include "athena.hpp"
 #include "io_wrapper.hpp"
+#include "geodesic-grid/spherical_grid.hpp"
+#include "utils/spherical_surface.hpp"
 
 #define NHISTORY_VARIABLES 20
 #if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 153
+#define NOUTPUT_CHOICES 156
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -33,25 +36,25 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "hydro_u_d", "hydro_u_m1", "hydro_u_m2", "hydro_u_m3", "hydro_u_e",     "hydro_u",
   "hydro_w_d", "hydro_w_vx", "hydro_w_vy", "hydro_w_vz", "hydro_w_e",     "hydro_w",
   "hydro_u_s", "hydro_w_s",
-  // hydro derived variables (14-15)
-  "hydro_wz",   "hydro_w2",
-  // MHD variables (16-37)
+  // hydro derived variables (14-16)
+  "hydro_wz",   "hydro_w2",   "hydro_angmom",
+  // MHD variables (17-38)
   "mhd_u_d",   "mhd_u_m1",   "mhd_u_m2",   "mhd_u_m3",   "mhd_u_e",       "mhd_u",
   "mhd_w_d",   "mhd_w_vx",   "mhd_w_vy",   "mhd_w_vz",   "mhd_w_e",       "mhd_w",
   "mhd_u_s",   "mhd_w_s",    "mhd_wz",     "mhd_w2",
   "mhd_bcc1",  "mhd_bcc2",   "mhd_bcc3",   "mhd_bcc",    "mhd_u_bcc",     "mhd_w_bcc",
-  // DynGRMHD variables (38)
+  // DynGRMHD variables (39)
   "mhd_t",
-  // MHD derived variables (39-46)
+  // MHD derived variables (40-48)
   "mhd_jz",    "mhd_j2",     "mhd_curv",   "mhd_k_jxb",  "mhd_curv_perp", "mhd_bmag",
-  "mhd_divb", "mhd_jcon",
-  // useful for coarsened binary output (47-48)
+  "mhd_divb", "mhd_jcon",    "mhd_angmom",
+  // useful for coarsened binary output (49-50)
   "hydro_sgs", "mhd_sgs",
-  // dynamo wavenumber scales (49)
+  // dynamo wavenumber scales (51)
   "mhd_dynamo_ks",
-  // turbulence (50)
+  // turbulence (52)
   "turb_force",
-  // radiation (51-67, 68-87)
+  // radiation (53-69, 70-89)
   "rad_coord",     "rad_fluid",      "rad_coord_fluid",
   "rad_hydro_u_d", "rad_hydro_u_m1", "rad_hydro_u_m2", "rad_hydro_u_m3", "rad_hydro_u_e",
   "rad_hydro_u",   "rad_hydro_w_d",  "rad_hydro_w_vx", "rad_hydro_w_vy", "rad_hydro_w_vz",
@@ -61,14 +64,14 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rad_mhd_w_e",   "rad_mhd_w",      "rad_mhd_u_s",    "rad_mhd_w_s",    "rad_mhd_bcc1",
   "rad_mhd_bcc2",  "rad_mhd_bcc3",   "rad_mhd_bcc",    "rad_mhd_u_bcc",  "rad_mhd_w_bcc",
 
-  // ADM (88-105)
+  // ADM (90-107)
   "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
   "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
   "adm_psi4",
   "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
   "adm",
 
-  // Z4c (106-128)
+  // Z4c (108-130)
   "z4c_chi",
   "z4c_gxx", "z4c_gxy", "z4c_gxz", "z4c_gyy", "z4c_gyz", "z4c_gzz",
   "z4c_Khat",
@@ -79,11 +82,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "z4c_betax", "z4c_betay", "z4c_betaz",
   "z4c",
 
-  // Weyl (129-131)
+  // Weyl (131-133)
   "weyl_rpsi4", "weyl_ipsi4",
   "weyl",
 
-  // ADM constraints (132-139)
+  // ADM constraints (134-141)
   "con_C",
   "con_H",
   "con_M",
@@ -91,14 +94,16 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "con_Mx", "con_My", "con_Mz",
   "con",
 
-  // Tmunu (140-150)
+  // Tmunu (142-152)
   "tmunu_Sxx", "tmunu_Sxy", "tmunu_Sxz", "tmunu_Syy", "tmunu_Syz", "tmunu_Szz",
   "tmunu_E",
   "tmunu_Sx", "tmunu_Sy", "tmunu_Sz",
   "tmunu",
 
-  // Particles (151-152)
-  "prtcl_all", "prtcl_d"
+  // Particles (153-154)
+  "prtcl_all", "prtcl_d",
+  // Magnetospheric Cartesian-to-spherical diagnostics (155)
+  "mhd_cart_to_sph"
 };
 
 
@@ -432,6 +437,79 @@ class SphericalSurfaceOutput : public BaseTypeOutput {
  private:
   SphericalSurface *psurf;
 };
+
+//----------------------------------------------------------------------------------------
+//! \class SphericalShellsOutput
+//  \brief derived BaseTypeOutput class for spherically integrated output over shells
+class SphericalShellsOutput : public BaseTypeOutput {
+ public:
+  SphericalShellsOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~SphericalShellsOutput();
+  //! Interpolate and integrate data over spherical shells
+  void LoadOutputData(Mesh *pm) override;
+  //! Write the integrated data to file
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  int nr;                                           // number of radial shells
+  Real rmin, rmax;                                  // min and max radii
+  bool log_spacing;                                 // use logarithmic spacing
+  // if true, r0^2 dOmega; else shell volume weight
+  bool surface_integral;
+  // interpolation points per axis (1=nearest-cell, -1=full mesh default)
+  int ninterp_;
+  std::vector<Real> radii;                          // array of shell center radii
+  // array of shell face radii (nr+1 values)
+  std::vector<Real> radii_faces;
+  std::vector<std::unique_ptr<SphericalGrid>> spheres;  // grid for each shell
+};
+
+//----------------------------------------------------------------------------------------
+//! \class AzimuthalAverageOutput
+//  \brief derived BaseTypeOutput class for phi-averaged output on (r, theta) grid
+class AzimuthalAverageOutput : public BaseTypeOutput {
+ public:
+  AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~AzimuthalAverageOutput();
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+
+ private:
+  int nr, ntheta, nphi;
+  Real rmin, rmax;
+  bool log_spacing;
+  bool uniform_theta_;  // true → uniform θ spacing; false → uniform cos(θ)
+  std::vector<Real> radii;
+  std::vector<Real> theta_grid;
+  // SphericalSurface objects are kept only when adaptive=true; otherwise freed
+  // after their interpolation tables are copied into the fused arrays below.
+  std::vector<std::unique_ptr<SphericalSurface>> surfaces;
+
+  // Fused interpolation tables (all radii concatenated).
+  // Layout: flat index = ir * nphi * ntheta + ip * ntheta + it
+  // Reduces nr*nout_vars Kokkos kernel launches to nout_vars launches.
+  DualArray2D<int>  fused_indcs;   // (total_angles, 4)
+  DualArray3D<Real> fused_wghts;   // (total_angles, ninterp, 3)
+  int ng_, ninterp_;               // mesh ghost-zone depth; points per axis
+  int is_, js_, ks_;               // active-zone start indices (= ng_)
+  bool adaptive_;                  // true when AMR is active
+
+  void BuildFusedArrays();          // copy surface tables → fused arrays
+};
+
+//----------------------------------------------------------------------------------------
+//! \class GeodesicSurfaceOutput
+//  \brief derived BaseTypeOutput class for output on a geodesic grid at a given radius
+class GeodesicSurfaceOutput : public BaseTypeOutput {
+ public:
+  GeodesicSurfaceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ~GeodesicSurfaceOutput();
+  void LoadOutputData(Mesh *pm) override;
+  void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
+ private:
+  SphericalGrid *pgrid;
+  int ninterp_;   // interpolation points per axis (1=nearest-cell, -1=full mesh default)
+};
+
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput
 //  \brief derived BaseTypeOutput class for event counter data

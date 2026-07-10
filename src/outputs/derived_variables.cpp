@@ -11,6 +11,8 @@
 //!   - magnitude of vorticity Curl(v)^2  [non-relativistic]
 //!   - z-component of current density Jz  [non-relativistic]
 //!   - magnitude of current density J^2  [non-relativistic]
+//!   - angular momentum components L_i = (r x rho*v)_i  [non-relativistic]
+//!   - magnitude of angular momentum L^2  [non-relativistic]
 
 #include <algorithm>
 #include <iostream>
@@ -1245,6 +1247,152 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         }
       }
     });
+  }
+
+  // angular momentum: L = r x rho*v
+  // Outputs all four components: L_x, L_y, L_z, L^2
+  if (name.compare("hydro_angmom") == 0 ||
+      name.compare("mhd_angmom") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    auto &w0_ = (name.compare("hydro_angmom") == 0)?
+      pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
+
+    par_for("angmom", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+
+      Real rho = w0_(m,IDN,k,j,i);
+      Real momx = w0_(m,IVX,k,j,i) * rho;  // rho*vx
+      Real momy = w0_(m,IVY,k,j,i) * rho;  // rho*vy
+      Real momz = w0_(m,IVZ,k,j,i) * rho;  // rho*vz
+
+      // L_x = y*(rho*vz) - z*(rho*vy)
+      Real L_x = x2v * momz - x3v * momy;
+      // L_y = z*(rho*vx) - x*(rho*vz)
+      Real L_y = x3v * momx - x1v * momz;
+      // L_z = x*(rho*vy) - y*(rho*vx)
+      Real L_z = x1v * momy - x2v * momx;
+
+      dv(m,i_dv,k,j,i) = L_x;       // Component 0: L_x
+      dv(m,i_dv+1,k,j,i) = L_y;     // Component 1: L_y
+      dv(m,i_dv+2,k,j,i) = L_z;     // Component 2: L_z
+      dv(m,i_dv+3,k,j,i) = L_x*L_x + L_y*L_y + L_z*L_z;  // Component 3: L^2
+    });
+    i_dv += 4;
+  }
+
+  // Cartesian-to-spherical MHD diagnostics.
+  // Computes 14 scalar channels at every cell centre using the transformation:
+  //   r = sqrt(x^2+y^2+z^2),  R = sqrt(x^2+y^2)
+  //   vr     = (x*vx + y*vy + z*vz) / r
+  //   vtheta = (x*z*vx + y*z*vy - R^2*vz) / (r*R)
+  //   vphi   = (-y*vx + x*vy) / R
+  //   Br, Btheta, Bphi: same rotation on (Bx,By,Bz)
+  //   Polar-axis fallback (R < 1e-12): vtheta=vz, vphi=0, Btheta=Bz, Bphi=0
+  // Channel 0 is density; channels 1-6 are spherical v and B components;
+  // channels 7-10 are flux/stress products; channels 11-13 are energetics.
+  //
+  // NOTE: the kernel is intentionally run over ALL cells including ghost zones
+  // (indices 0..n1-1, 0..n2-1, 0..n3-1) so that the azimuthal-average
+  // interpolation stencil never reads uninitialised ghost-zone values from
+  // derived_var.  To do this safely we read from u0 and bcc0 (conserved
+  // variables and cell-centred B), whose ghost zones are correctly filled by
+  // the meshblock communicator, and derive primitives on the fly.  Reading from
+  // w0 (primitives) would be wrong here because w0 ghost zones are NOT filled.
+  if (name.compare("mhd_cart_to_sph") == 0) {
+    Kokkos::realloc(derived_var, nmb, 14, n3, n2, n1);
+    auto dv = derived_var;
+    auto &u0_  = pm->pmb_pack->pmhd->u0;
+    auto &bcc_ = pm->pmb_pack->pmhd->bcc0;
+    Real gam = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    // Run over full array extent (0..n*-1) so ghost zones are populated.
+    par_for("cart_to_sph", DevExeSpace(), 0, (nmb-1), 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // cell-centre coordinates (Cartesian), valid for ghost cells too
+      Real x1min = size.d_view(m).x1min;
+      Real x1max = size.d_view(m).x1max;
+      Real x2min = size.d_view(m).x2min;
+      Real x2max = size.d_view(m).x2max;
+      Real x3min = size.d_view(m).x3min;
+      Real x3max = size.d_view(m).x3max;
+      Real x = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+      Real y = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+      Real z = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+
+      Real r  = sqrt(x*x + y*y + z*z);
+      Real R  = sqrt(x*x + y*y);
+
+      // Compute primitives from conserved variables (u0 ghost zones are filled).
+      Real rho  = u0_(m, IDN, k, j, i);
+      Real mx   = u0_(m, IM1, k, j, i);
+      Real my   = u0_(m, IM2, k, j, i);
+      Real mz_  = u0_(m, IM3, k, j, i);
+      Real E    = u0_(m, IEN, k, j, i);
+      Real Bx   = bcc_(m, IBX, k, j, i);
+      Real By   = bcc_(m, IBY, k, j, i);
+      Real Bz_  = bcc_(m, IBZ, k, j, i);
+
+      Real rho_safe = (rho > 0.0) ? rho : 1.0e-30;
+      Real vx   = mx  / rho_safe;
+      Real vy   = my  / rho_safe;
+      Real vz   = mz_ / rho_safe;
+      // thermal pressure P = (gam-1)*(E - KE - Emag)
+      Real Bmag2 = Bx*Bx + By*By + Bz_*Bz_;
+      Real Ekin  = 0.5 * (mx*mx + my*my + mz_*mz_) / rho_safe;
+      Real eint  = (gam - 1.0) * (E - Ekin - 0.5 * Bmag2);  // = (gam-1)*P
+
+      // spherical components
+      Real vr_, vt_, vp_, Br_, Bt_, Bp_;
+      if (R > 1.0e-12) {
+        Real inv_r  = 1.0 / r;
+        Real inv_rR = 1.0 / (r * R);
+        vr_ = (x*vx  + y*vy  + z*vz ) * inv_r;
+        vt_ = (x*z*vx + y*z*vy  - R*R*vz ) * inv_rR;
+        vp_ = (-y*vx + x*vy ) / R;
+        Br_ = (x*Bx  + y*By  + z*Bz_) * inv_r;
+        Bt_ = (x*z*Bx + y*z*By  - R*R*Bz_) * inv_rR;
+        Bp_ = (-y*Bx + x*By ) / R;
+      } else {
+        vr_ = vz;   vt_ = vz;  vp_ = 0.0;
+        Br_ = Bz_;  Bt_ = Bz_;  Bp_ = 0.0;
+      }
+
+      // [0] density
+      dv(m,  0, k, j, i) = rho;
+
+      // [1-6] spherical velocity and field components
+      dv(m,  1, k, j, i) = vr_;
+      dv(m,  2, k, j, i) = vt_;
+      dv(m,  3, k, j, i) = vp_;
+      dv(m,  4, k, j, i) = Br_;
+      dv(m,  5, k, j, i) = Bt_;
+      dv(m,  6, k, j, i) = Bp_;
+
+      // [7-10] mass flux + Maxwell/Reynolds stress scalars
+      dv(m,  7, k, j, i) = rho * vr_;           // radial mass flux density
+      dv(m,  8, k, j, i) = -Br_ * Bp_;          // r-phi Maxwell stress
+      dv(m,  9, k, j, i) = -Bt_ * Bp_;          // theta-phi Maxwell stress
+      dv(m, 10, k, j, i) = rho * vr_ * vp_;     // total r-phi Reynolds stress
+
+      // [11-13] energetics — eint = (gam-1)*P, matching the pre-fix convention
+      Real Ekin_prim = 0.5 * rho_safe * (vx*vx + vy*vy + vz*vz);
+      dv(m, 11, k, j, i) = eint;
+      dv(m, 12, k, j, i) = Bmag2;
+      dv(m, 13, k, j, i) = Ekin_prim;
+    });
+    return;
   }
 
   // Particle density binned to mesh.

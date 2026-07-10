@@ -93,7 +93,7 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           << std::endl;
     ofile << "BINARY" << std::endl;
     ofile << "DATASET STRUCTURED_GRID" << std::endl;
-    ofile << "DIMENSIONS 1 " << psurf->ntheta << " " << 2 * psurf->ntheta
+    ofile << "DIMENSIONS 1 " << psurf->ntheta << " " << psurf->nphi
           << std::endl;
     ofile << "POINTS " << psurf->nangles << " float\n";
 

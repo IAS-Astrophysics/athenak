@@ -19,11 +19,18 @@ class MeshBlockPack;
 
 class SphericalSurface {
  public:
+  // ninterp: number of interpolation points per axis (main SphericalGrid
+  // convention).  <=0 selects the default full stencil of 2*ng points;
+  // 1 = nearest-cell; odd values use a stencil centered on the containing
+  // cell; maximum allowed is 2*ng+1.
   SphericalSurface(MeshBlockPack *pmy_pack, int ntheta, Real rad, Real xc = 0.0,
-                   Real yc = 0.0, Real zc = 0.0);
+                   Real yc = 0.0, Real zc = 0.0, int nphi = -1,
+                   bool uniform_theta = false, int ninterp = -1);
   ~SphericalSurface();
-  int nangles;  // total number of gridpoints
-  int ntheta;   // number of gridpoints along theta direction, nphi = 2ntheta
+  int nangles;  // total number of gridpoints (= nphi * ntheta)
+  int ntheta;   // number of gridpoints along theta direction
+  int nphi;     // number of gridpoints along phi direction
+  int ninterp;  // number of interpolation points along each dimension
   Real radius;  // radius to initialize the sphere
   Real xc, yc, zc;                // sphere center
   DualArray1D<Real> int_weights;  // weights for quadrature integration
@@ -47,5 +54,6 @@ class SphericalSurface {
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  bool uniform_theta_;      // true → uniform θ spacing; false → uniform cos(θ)
 };
 #endif  // UTILS_SPHERICAL_SURFACE_HPP_

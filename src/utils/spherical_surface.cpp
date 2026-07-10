@@ -4,11 +4,12 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file gauss_legendre.cpp
-//  \brief Initializes a Gauss-Legendre grid to interpolate data onto
+//  \brief Initializes a Gauss-Legendra grid to interpolate data onto
 
 #include "spherical_surface.hpp"
 
 #include <cmath>
+#include <cstdlib>  // exit
 #include <iostream>
 #include <list>
 
@@ -23,28 +24,38 @@
 // constructor, initializes data structures and parameters
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
-                                   Real rad, Real xc, Real yc, Real zc)
-    : ntheta(ntheta),
+                                   Real rad, Real xc, Real yc, Real zc,
+                                   int nphi_in, bool uniform_theta, int nintp)
+    : pmy_pack(pmy_pack),
       radius(rad),
       xc(xc),
       yc(yc),
       zc(zc),
+      ntheta(ntheta),
+      nphi(nphi_in > 0 ? nphi_in : 2 * ntheta),
+      uniform_theta_(uniform_theta),
       int_weights("int_weights", 1),
-      cart_pos("cart_pos", 1, 1),
       polar_pos("polar_pos", 1, 1),
-      interp_vals("interp_vals", 1),
+      cart_pos("cart_pos", 1, 1),
       interp_indcs("interp_indcs", 1, 1),
       interp_wghts("interp_wghts", 1, 1, 1),
-      pmy_pack(pmy_pack) {
+      interp_vals("interp_vals", 1) {
   // reallocate and set interpolation coordinates, indices, and weights
-  int &ng = pmy_pack->pmesh->mb_indcs.ng;
-  nangles = 2 * ntheta * ntheta;
+  // (ninterp semantics follow SphericalGrid on main: number of points per axis)
+  ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
+  if (ninterp > pmy_pack->pmesh->mb_indcs.ng*2+1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ninterp = " << ninterp << " exceeds maximum allowed value of "
+              << pmy_pack->pmesh->mb_indcs.ng*2+1 << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  nangles = nphi * ntheta;
 
   Kokkos::realloc(int_weights, nangles);
   Kokkos::realloc(polar_pos, nangles, 2);
   Kokkos::realloc(cart_pos, nangles, 3);
   Kokkos::realloc(interp_indcs, nangles, 4);
-  Kokkos::realloc(interp_wghts, nangles, 2 * ng, 3);
+  Kokkos::realloc(interp_wghts, nangles, ninterp, 3);
 
   InitializeAngleAndWeights();
   InitializeRadius();
@@ -60,14 +71,34 @@ SphericalSurface::~SphericalSurface() {}
 
 void SphericalSurface::InitializeAngleAndWeights() {
   int n = 0;
-  for (int i = 0; i < 2 * ntheta; ++i) {
-    Real phi = M_PI / ntheta * i;
-    for (int j = 0; j < ntheta; ++j) {
-      Real mu = -1.0 + 2.0 / (ntheta - 1) * j;
-      int_weights.h_view(n) = (M_PI / ntheta) * (2.0 / ntheta);
-      polar_pos.h_view(n, 0) = acos(mu);
-      polar_pos.h_view(n, 1) = phi;
-      n++;
+  if (uniform_theta_) {
+    // Uniform spacing in θ: θ_j = j * π / (ntheta - 1)
+    // Integration weights use the trapezoidal solid-angle element:
+    //   w = (2π/nphi) * sin(θ) * dθ
+    Real dphi   = 2.0 * M_PI / nphi;
+    Real dtheta = M_PI / (ntheta - 1);
+    for (int i = 0; i < nphi; ++i) {
+      Real phi = dphi * i;
+      for (int j = 0; j < ntheta; ++j) {
+        Real theta = dtheta * j;
+        int_weights.h_view(n) = dphi * std::sin(theta) * dtheta;
+        polar_pos.h_view(n, 0) = theta;
+        polar_pos.h_view(n, 1) = phi;
+        n++;
+      }
+    }
+  } else {
+    // Uniform spacing in cos(θ) (default): μ_j = -1 + 2j/(ntheta-1)
+    // All solid-angle weights are equal: w = (2π/nphi) * (2/ntheta)
+    for (int i = 0; i < nphi; ++i) {
+      Real phi = 2.0 * M_PI / nphi * i;
+      for (int j = 0; j < ntheta; ++j) {
+        Real mu = -1.0 + 2.0 / (ntheta - 1) * j;
+        int_weights.h_view(n) = (2.0 * M_PI / nphi) * (2.0 / ntheta);
+        polar_pos.h_view(n, 0) = acos(mu);
+        polar_pos.h_view(n, 1) = phi;
+        n++;
+      }
     }
   }
 
@@ -104,6 +135,10 @@ void SphericalSurface::SetInterpolationIndices() {
   int nang1 = nangles - 1;
   auto &rcoord = cart_pos;
   auto &iindcs = interp_indcs;
+  // Anchor convention follows SphericalGrid on main: even stencils anchor on
+  // the last cell whose center is at/left of the point (stencil straddles the
+  // point); odd stencils anchor on the containing cell (stencil centered).
+  Real offset = (ninterp % 2 == 0) ? -0.5 : 0.0;
   for (int n = 0; n <= nang1; ++n) {
     // indices default to -1 if angle does not reside in this MeshBlockPack
     iindcs.h_view(n, 0) = -1;
@@ -125,17 +160,23 @@ void SphericalSurface::SetInterpolationIndices() {
       Real &dx3 = size.h_view(m).dx3;
 
       // save MeshBlock and zone indicies for nearest position to spherical
-      // patch center if this angle position resides in this MeshBlock
+      // patch center if this angle position resides in this MeshBlock.
+      // Use half-open intervals [xmin, xmax) so that points exactly on an
+      // internal meshblock boundary are claimed by exactly one block, preventing
+      // double-counting when different MPI ranks own adjacent meshblocks.
+      // Points at the outer domain boundary are never interpolated (the sphere
+      // radii are always strictly inside the domain), so the open upper bound
+      // is safe for all intended uses.
       if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) < x1max) &&
           (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) < x2max) &&
           (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {
         iindcs.h_view(n, 0) = m;
         iindcs.h_view(n, 1) = static_cast<int>(
-            std::floor((rcoord.h_view(n, 0) - (x1min + dx1 / 2.0)) / dx1));
+            std::floor((rcoord.h_view(n, 0) - (x1min + offset * dx1)) / dx1));
         iindcs.h_view(n, 2) = static_cast<int>(
-            std::floor((rcoord.h_view(n, 1) - (x2min + dx2 / 2.0)) / dx2));
+            std::floor((rcoord.h_view(n, 1) - (x2min + offset * dx2)) / dx2));
         iindcs.h_view(n, 3) = static_cast<int>(
-            std::floor((rcoord.h_view(n, 2) - (x3min + dx3 / 2.0)) / dx3));
+            std::floor((rcoord.h_view(n, 2) - (x3min + offset * dx3)) / dx3));
       }
     }
   }
@@ -154,7 +195,6 @@ void SphericalSurface::SetInterpolationIndices() {
 void SphericalSurface::SetInterpolationWeights() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  int &ng = indcs.ng;
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
@@ -166,7 +206,7 @@ void SphericalSurface::SetInterpolationWeights() {
     int &ii3 = iindcs.h_view(n, 3);
 
     if (ii0 == -1) {  // angle not on this rank
-      for (int i = 0; i < 2 * ng; ++i) {
+      for (int i = 0; i < ninterp; ++i) {
         iwghts.h_view(n, i, 0) = 0.0;
         iwghts.h_view(n, i, 1) = 0.0;
         iwghts.h_view(n, i, 2) = 0.0;
@@ -185,27 +225,24 @@ void SphericalSurface::SetInterpolationWeights() {
       Real &x3min = size.h_view(ii0).x3min;
       Real &x3max = size.h_view(ii0).x3max;
 
-      // set interpolation weights
-      for (int i = 0; i < 2 * ng; ++i) {
+      // set interpolation weights using a ninterp-point Lagrange stencil
+      // spanning cells ii{1,2,3} - nleft .. ii{1,2,3} - nleft + ninterp - 1
+      // (same convention as SphericalGrid on main)
+      int nleft = ninterp/2;
+      for (int i = 0; i < ninterp; ++i) {
         iwghts.h_view(n, i, 0) = 1.;
         iwghts.h_view(n, i, 1) = 1.;
         iwghts.h_view(n, i, 2) = 1.;
-        for (int j = 0; j < 2 * ng; ++j) {
+        Real x1vpi1 = CellCenterX(ii1 - nleft + i, indcs.nx1, x1min, x1max);
+        Real x2vpi1 = CellCenterX(ii2 - nleft + i, indcs.nx2, x2min, x2max);
+        Real x3vpi1 = CellCenterX(ii3 - nleft + i, indcs.nx3, x3min, x3max);
+        for (int j = 0; j < ninterp; ++j) {
           if (j != i) {
-            Real x1vpi1 =
-                CellCenterX(ii1 - ng + i + 1, indcs.nx1, x1min, x1max);
-            Real x1vpj1 =
-                CellCenterX(ii1 - ng + j + 1, indcs.nx1, x1min, x1max);
+            Real x1vpj1 = CellCenterX(ii1 - nleft + j, indcs.nx1, x1min, x1max);
             iwghts.h_view(n, i, 0) *= (x0 - x1vpj1) / (x1vpi1 - x1vpj1);
-            Real x2vpi1 =
-                CellCenterX(ii2 - ng + i + 1, indcs.nx2, x2min, x2max);
-            Real x2vpj1 =
-                CellCenterX(ii2 - ng + j + 1, indcs.nx2, x2min, x2max);
+            Real x2vpj1 = CellCenterX(ii2 - nleft + j, indcs.nx2, x2min, x2max);
             iwghts.h_view(n, i, 1) *= (y0 - x2vpj1) / (x2vpi1 - x2vpj1);
-            Real x3vpi1 =
-                CellCenterX(ii3 - ng + i + 1, indcs.nx3, x3min, x3max);
-            Real x3vpj1 =
-                CellCenterX(ii3 - ng + j + 1, indcs.nx3, x3min, x3max);
+            Real x3vpj1 = CellCenterX(ii3 - nleft + j, indcs.nx3, x3min, x3max);
             iwghts.h_view(n, i, 2) *= (z0 - x3vpj1) / (x3vpi1 - x3vpj1);
           }
         }
@@ -234,9 +271,10 @@ void SphericalSurface::InterpolateToSphere(int var_ind,
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
-  int &ng = indcs.ng;
   int nang1 = nangles - 1;
   int v = var_ind;
+  int nintp = ninterp;
+  int nleft = nintp / 2;
 
   // reallocate container
   Kokkos::realloc(interp_vals, nangles);
@@ -254,14 +292,14 @@ void SphericalSurface::InterpolateToSphere(int var_ind,
           ivals.d_view(n) = 0.0;
         } else {
           Real int_value = 0.0;
-          for (int i = 0; i < 2 * ng; i++) {
-            for (int j = 0; j < 2 * ng; j++) {
-              for (int k = 0; k < 2 * ng; k++) {
+          for (int i = 0; i < nintp; i++) {
+            for (int j = 0; j < nintp; j++) {
+              for (int k = 0; k < nintp; k++) {
                 Real iwght = iwghts.d_view(n, i, 0) * iwghts.d_view(n, j, 1) *
                              iwghts.d_view(n, k, 2);
-                int_value += iwght * val(ii0, v, ii3 - (ng - k - ks) + 1,
-                                         ii2 - (ng - j - js) + 1,
-                                         ii1 - (ng - i - is) + 1);
+                int_value += iwght * val(ii0, v, ii3 + k + ks - nleft,
+                                         ii2 + j + js - nleft,
+                                         ii1 + i + is - nleft);
               }
             }
           }
