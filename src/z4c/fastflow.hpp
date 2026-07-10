@@ -11,6 +11,7 @@
 
 #include <cstdio>
 
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -58,6 +59,15 @@ class FastFlow {
   // Some of the main parameters in the fast-flow algorithm
   bool ah_found; // Horizon found
   Real time_first_found; // Time, when horizon first found
+  bool ah_excise_ready; // latched: horizon has settled -> safe to begin excision
+  // Auto excision-trigger (detects when the BH has stopped forming):
+  bool excise_auto;         // false (default) => excise as soon as horizon found
+  Real excise_settle_rrate; // max |dR/R|/dt for a find to count as "settled"
+  Real excise_settle_hrms;  // max surface hrms for a find to count as "settled"
+  int  excise_settle_count; // consecutive settled finds required to latch
+  Real settle_prev_time;    // previous find time (for radius-rate estimate)
+  Real settle_prev_radius;  // previous find mean coordinate radius
+  int  settle_streak;       // running count of consecutive settled finds
   Real initial_radius; // Initial guess for the radius of the horizon
   Real rr_min; // Minimum radius
   Real expand_guess; // Expand the initial guess by this factor

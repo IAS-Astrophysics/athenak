@@ -211,7 +211,11 @@ void Coordinates::UpdateExcisionMasks() {
       hcenter.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1]; // center y-coord.
       hcenter.h_view(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2]; // center z-coord.
       hradius.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min; // minimum radius
-      hfound.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found; // found/not found
+      // Excise only once the horizon finder has flagged this horizon as settled
+      // (ah_excise_ready, auto-detected in FastFlow::Find once the BH has stopped
+      // forming, and latched across restarts).
+      hfound.h_view(h,0) = (pmy_pack->pz4c->pfastflow[h]->ah_found &&
+                            pmy_pack->pz4c->pfastflow[h]->ah_excise_ready);
     }
 
     // sync to device
