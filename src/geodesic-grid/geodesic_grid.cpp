@@ -231,9 +231,8 @@ GeodesicGrid::GeodesicGrid(int nlev, bool rotate, bool fluxes) :
       }
     }
 
-    // rotate geodesic mesh — OptimalAngles is expensive O(nzeta*npsi*nangles).
-    // Cache result per nlev: the unrotated geometry is deterministic for a given nlev,
-    // so every SphericalGrid at the same nlev gets the same optimal angles.
+    // rotate geodesic mesh; cache OptimalAngles per nlev (expensive, and
+    // deterministic per nlev) so all SphericalGrids at that nlev reuse it.
     if (rotate_geo) {
       // file-scoped cache: nlev → (zeta, psi)
       static std::map<int, std::pair<Real,Real>> angle_cache;

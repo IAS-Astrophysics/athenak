@@ -715,8 +715,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 
-  // Cartesian-to-spherical MHD diagnostics (13 channels):
-  //   spherical v and B components, mass flux, Maxwell/Reynolds stresses, energetics
+  // Cartesian-to-spherical MHD diagnostics (14 channels): density, spherical v
+  // and B components, mass flux, Maxwell/Reynolds stresses, energetics
   if (out_params.variable.compare("mhd_cart_to_sph") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 14;

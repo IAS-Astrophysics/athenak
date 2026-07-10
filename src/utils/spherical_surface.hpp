@@ -5,8 +5,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file geodesic_grid.hpp
-//  \brief definitions for GaussLegendreGrid class
+//! \file spherical_surface.hpp
+//  \brief definitions for the SphericalSurface class
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -19,10 +19,8 @@ class MeshBlockPack;
 
 class SphericalSurface {
  public:
-  // ninterp: number of interpolation points per axis (main SphericalGrid
-  // convention).  <=0 selects the default full stencil of 2*ng points;
-  // 1 = nearest-cell; odd values use a stencil centered on the containing
-  // cell; maximum allowed is 2*ng+1.
+  // ninterp: interpolation points per axis (SphericalGrid convention);
+  // <=0 selects the default full stencil of 2*ng points (max 2*ng+1).
   SphericalSurface(MeshBlockPack *pmy_pack, int ntheta, Real rad, Real xc = 0.0,
                    Real yc = 0.0, Real zc = 0.0, int nphi = -1,
                    bool uniform_theta = false, int ninterp = -1);

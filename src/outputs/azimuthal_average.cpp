@@ -40,21 +40,7 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
   ks_ = indcs.ks;
   adaptive_ = pm->adaptive;
 
-  // The old half-width parameter was renamed; fail loudly rather than silently
-  // falling back to the full-stencil default.
-  if (pin->DoesParameterExist(op.block_name, "ng_interp")) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<" << op.block_name << "> parameter 'ng_interp' has been renamed "
-              << "'ninterp' (number of interpolation points per axis, as on main). "
-              << "Convert: ng_interp=0 -> ninterp=1, ng_interp=k -> ninterp=2k."
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  // Read ninterp: number of interpolation points per axis (main convention).
-  //   ninterp < 0 : default — full mesh stencil (2*ng points)
-  //   ninterp = 1 : nearest-cell (single read, no weights, strictly monotone)
-  //   ninterp > 1 : Lagrange stencil with ninterp points per axis (odd or even)
+  // interpolation points per axis (<=0 → default full 2*ng stencil)
   ninterp_ = pin->GetOrAddInteger(op.block_name, "ninterp", -1);
   if (ninterp_ <= 0) ninterp_ = 2 * ng_;  // resolve default (validated below)
 
@@ -105,16 +91,18 @@ AzimuthalAverageOutput::AzimuthalAverageOutput(ParameterInput *pin, Mesh *pm,
     surfaces.clear();
 }
 
-// ── Destructor ────────────────────────────────────────────────────────────────
+//----------------------------------------------------------------------------------------
+//! \fn AzimuthalAverageOutput::~AzimuthalAverageOutput
+//! \brief destructor
 
 AzimuthalAverageOutput::~AzimuthalAverageOutput() {
   surfaces.clear();
 }
 
-// ── BuildFusedArrays ─────────────────────────────────────────────────────────
-// Copy interp_indcs and interp_wghts from all nr surfaces into flat arrays.
-// Flat index layout: idx = ir * (nphi*ntheta) + ip * ntheta + it,
-// matching the phi-outer, theta-inner ordering of InitializeAngleAndWeights.
+//----------------------------------------------------------------------------------------
+//! \fn void AzimuthalAverageOutput::BuildFusedArrays
+//! \brief copy per-surface interpolation tables into flat arrays; index layout
+//!        idx = ir*(nphi*ntheta) + ip*ntheta + it (phi-outer, theta-inner)
 
 void AzimuthalAverageOutput::BuildFusedArrays() {
   int nang_per_r   = nphi * ntheta;
@@ -150,7 +138,9 @@ void AzimuthalAverageOutput::BuildFusedArrays() {
   }
 }
 
-// ── LoadOutputData ────────────────────────────────────────────────────────────
+//----------------------------------------------------------------------------------------
+//! \fn void AzimuthalAverageOutput::LoadOutputData
+//! \brief interpolate and azimuthally-average data onto the (r, theta) grid
 
 void AzimuthalAverageOutput::LoadOutputData(Mesh *pm) {
   // For AMR runs rebuild the per-rank interpolation tables before every output.

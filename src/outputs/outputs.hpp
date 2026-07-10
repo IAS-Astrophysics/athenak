@@ -424,13 +424,13 @@ class CartesianGridOutput : public BaseTypeOutput {
 class SphericalSurface;
 
 //----------------------------------------------------------------------------------------
-//! \class SphericalGridOutput
-//  \brief derived BaseTypeOutput class for output on a Cartesian grid
+//! \class SphericalSurfaceOutput
+//  \brief derived BaseTypeOutput class for output on a spherical surface
 class SphericalSurfaceOutput : public BaseTypeOutput {
  public:
   SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   ~SphericalSurfaceOutput();
-  //! Interpolate the data on the Cartesian grid and handle MPI communication
+  //! Interpolate mesh data onto the spherical surface and handle MPI communication
   void LoadOutputData(Mesh *pm) override;
   //! Write the data to file
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;

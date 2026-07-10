@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file gauss_legendre.cpp
-//  \brief Initializes a Gauss-Legendra grid to interpolate data onto
+//! \file spherical_surface.cpp
+//  \brief implements the SphericalSurface class for interpolating data onto a sphere
 
 #include "spherical_surface.hpp"
 
@@ -124,9 +124,8 @@ void SphericalSurface::InitializeRadius() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SphericalSurface::SetInterpolationIndices
-//! \brief determine which MeshBlocks and MeshBlock zones therein that will be
-//! used in
-//         interpolation onto the sphere
+//! \brief determine which MeshBlocks and zones therein are used for
+//!        interpolation onto the sphere
 
 void SphericalSurface::SetInterpolationIndices() {
   auto &size = pmy_pack->pmb->mb_size;
@@ -161,12 +160,9 @@ void SphericalSurface::SetInterpolationIndices() {
 
       // save MeshBlock and zone indicies for nearest position to spherical
       // patch center if this angle position resides in this MeshBlock.
-      // Use half-open intervals [xmin, xmax) so that points exactly on an
-      // internal meshblock boundary are claimed by exactly one block, preventing
-      // double-counting when different MPI ranks own adjacent meshblocks.
-      // Points at the outer domain boundary are never interpolated (the sphere
-      // radii are always strictly inside the domain), so the open upper bound
-      // is safe for all intended uses.
+      // Half-open intervals [xmin, xmax) claim boundary points for exactly one
+      // block, avoiding double-counting across ranks (sphere radii are strictly
+      // inside the domain, so the open upper bound is always safe).
       if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) < x1max) &&
           (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) < x2max) &&
           (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {

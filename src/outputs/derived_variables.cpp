@@ -13,6 +13,7 @@
 //!   - magnitude of current density J^2  [non-relativistic]
 //!   - angular momentum components L_i = (r x rho*v)_i  [non-relativistic]
 //!   - magnitude of angular momentum L^2  [non-relativistic]
+//!   - Cartesian-to-spherical MHD diagnostics, 14 channels  [non-relativistic]
 
 #include <algorithm>
 #include <iostream>
@@ -1249,8 +1250,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
-  // angular momentum: L = r x rho*v
-  // Outputs all four components: L_x, L_y, L_z, L^2
+  // angular momentum L = r x rho*v (components L_x, L_y, L_z and L^2)
   if (name.compare("hydro_angmom") == 0 ||
       name.compare("mhd_angmom") == 0) {
     if (derived_var.extent(4) <= 1)
@@ -1293,24 +1293,10 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     i_dv += 4;
   }
 
-  // Cartesian-to-spherical MHD diagnostics.
-  // Computes 14 scalar channels at every cell centre using the transformation:
-  //   r = sqrt(x^2+y^2+z^2),  R = sqrt(x^2+y^2)
-  //   vr     = (x*vx + y*vy + z*vz) / r
-  //   vtheta = (x*z*vx + y*z*vy - R^2*vz) / (r*R)
-  //   vphi   = (-y*vx + x*vy) / R
-  //   Br, Btheta, Bphi: same rotation on (Bx,By,Bz)
-  //   Polar-axis fallback (R < 1e-12): vtheta=vz, vphi=0, Btheta=Bz, Bphi=0
-  // Channel 0 is density; channels 1-6 are spherical v and B components;
-  // channels 7-10 are flux/stress products; channels 11-13 are energetics.
-  //
-  // NOTE: the kernel is intentionally run over ALL cells including ghost zones
-  // (indices 0..n1-1, 0..n2-1, 0..n3-1) so that the azimuthal-average
-  // interpolation stencil never reads uninitialised ghost-zone values from
-  // derived_var.  To do this safely we read from u0 and bcc0 (conserved
-  // variables and cell-centred B), whose ghost zones are correctly filled by
-  // the meshblock communicator, and derive primitives on the fly.  Reading from
-  // w0 (primitives) would be wrong here because w0 ghost zones are NOT filled.
+  // Cartesian-to-spherical MHD diagnostics: 14 channels per cell (density;
+  // spherical v and B; flux/stress products; energetics).  Reads ghost-filled
+  // u0/bcc0 (not w0, whose ghost zones are unfilled) so the azimuthal-average
+  // interpolation stencil never reads uninitialised values.
   if (name.compare("mhd_cart_to_sph") == 0) {
     Kokkos::realloc(derived_var, nmb, 14, n3, n2, n1);
     auto dv = derived_var;

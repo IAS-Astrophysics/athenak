@@ -30,21 +30,7 @@ GeodesicSurfaceOutput::GeodesicSurfaceOutput(ParameterInput *pin, Mesh *pm,
   Real rad  = pin->GetReal(op.block_name, "radius");
   int  nlev = pin->GetOrAddInteger(op.block_name, "nlev", 4);
 
-  // The old half-width parameter was renamed; fail loudly rather than silently
-  // falling back to the full-stencil default.
-  if (pin->DoesParameterExist(op.block_name, "ng_interp")) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "<" << op.block_name << "> parameter 'ng_interp' has been renamed "
-              << "'ninterp' (number of interpolation points per axis, as on main). "
-              << "Convert: ng_interp=0 -> ninterp=1, ng_interp=k -> ninterp=2k."
-              << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  // Read ninterp: number of interpolation points per axis (main convention).
-  //   ninterp < 0 : default — full mesh stencil (2*ng points)
-  //   ninterp = 1 : nearest-cell (fastest, strictly monotone — no Runge overshoot)
-  //   ninterp > 1 : Lagrange stencil with ninterp points per axis (odd or even)
+  // interpolation points per axis (<=0 → default full 2*ng stencil)
   ninterp_ = pin->GetOrAddInteger(op.block_name, "ninterp", -1);
 
   pgrid = new SphericalGrid(pm->pmb_pack, nlev, rad, ninterp_);
