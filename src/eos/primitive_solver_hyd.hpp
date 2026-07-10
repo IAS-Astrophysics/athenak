@@ -602,9 +602,9 @@ class PrimitiveSolverHydro {
     Real cmsq = csq + vasq - csq*vasq;
 
     // Set fast magnetosonic speed in appropriate coordinates
-    Real a = u0*u0 - (g00 + u0*u0)*cmsq;
-    Real b = -2.0 * (u0 * u1 - (g01 + u0 * u1) *cmsq);
-    Real c = u1*u1 - (g11 + u1*u1)*cmsq;
+    Real a = u0*u0*(1.0 - cmsq) - g00*cmsq;
+    Real b = -2.0*(u0*u1*(1.0 - cmsq) - g01*cmsq);
+    Real c = u1*u1*(1.0 - cmsq) - g11*cmsq;
     Real a1 = b / a;
     Real a0 = c / a;
     Real s = fmax(a1*a1 - 4.0 * a0, 0.0);
