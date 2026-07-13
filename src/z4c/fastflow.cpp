@@ -11,7 +11,9 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <iostream>
 #include <sstream>
@@ -270,6 +272,19 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       fflush(pofile_summary);
     }
 
+    // Shape file: open once and keep open (closed in the destructor), like the
+    // summary/verbose files. Opening in append mode ("a") preserves existing
+    // contents on restart. This avoids a per-write fopen(), which can fail
+    // transiently on a busy parallel filesystem and abort a long run.
+    pofile_shape = fopen(ofname_shape.c_str(), "a");
+    if (NULL == pofile_shape) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "Could not open file '" << ofname_shape << "' for writing! "
+            << std::strerror(errno) << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
     if (output_grid) {
       pofile_grid = fopen(ofname_grid.c_str(), "w");
       if (NULL == pofile_grid) {
@@ -369,6 +384,7 @@ FastFlow::~FastFlow() {
   // Close files
   if (ioproc) {
     fclose(pofile_summary);
+    fclose(pofile_shape);
     if (verbose) {
       fclose(pofile_verbose);
     }
@@ -400,14 +416,8 @@ void FastFlow::Write(int iter, Real time) {
     fflush(pofile_summary);
 
     if (ah_found) {
-      // Shape file (coefficients).
-      pofile_shape = fopen(ofname_shape.c_str(), "a");
-      if (NULL == pofile_shape) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl
-            << "Could not open file '" << pofile_shape << "' for writing!" << std::endl;
-        exit(EXIT_FAILURE);
-      }
+      // Shape file (coefficients). File is opened once in the constructor and
+      // kept open, so here we only append and flush.
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
       for (int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0.h_view(l));
@@ -419,7 +429,7 @@ void FastFlow::Write(int iter, Real time) {
         }
       }
       fprintf(pofile_shape,"\n");
-      fclose(pofile_shape);
+      fflush(pofile_shape);
     }
   }
 
