@@ -20,7 +20,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 // Parameters which define initial solution -- made global so that they can be shared
 // Anonymous namespace used to prevent name collisions outside of this file
