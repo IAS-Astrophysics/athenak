@@ -12,6 +12,7 @@
 #include <utility>
 #include <algorithm> // max
 #include <map>
+#include <vector>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -44,8 +45,7 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
 #endif
   ,
   pmy_pack(pp),
-  is_z4c_(z4c)
-{
+  is_z4c_(z4c) {
   // allocate vector of status flags and MPI requests (if needed)
   int nnghbr = pmy_pack->pmb->nnghbr;
 
