@@ -135,6 +135,32 @@ else()
 	set(TWO_PUNCTURES 0)
 endif()
 
+# Build Kokkos Kernels
+include(FetchContent)
+set(Kokkos_ROOT ${CMAKE_CURRENT_BINARY_DIR}/kokkos CACHE PATH "" FORCE)
+
+# Get Kokkos Kernels and pin to a specific version. The version should match the Kokkos
+# version. This accepts either a git SHA or tag. Best practice would be to use the git SHA
+# corresponding to the version/tag you want to avoid a malicious actor changing the tag to
+# point at malicious code.
+FetchContent_Declare(kokkoskernels
+  GIT_REPOSITORY https://github.com/kokkos/kokkos-kernels.git
+  GIT_TAG        0608a337389ceb7e2695570db830230c2703bfe0) # v4.4.00
+
+# Choose which components are enabled to improve build times
+set(KokkosKernels_ENABLE_ALL_COMPONENTS    OFF CACHE BOOL "" FORCE)
+set(KokkosKernels_ENABLE_COMPONENT_BATCHED  ON CACHE BOOL "" FORCE)
+set(KokkosKernels_ENABLE_COMPONENT_ODE      ON CACHE BOOL "" FORCE)
+set(KokkosKernels_ENABLE_COMPONENT_BLAS     ON CACHE BOOL "" FORCE)
+set(KokkosKernels_ENABLE_COMPONENT_LAPACK  OFF CACHE BOOL "" FORCE)
+set(KokkosKernels_ENABLE_COMPONENT_GRAPH   OFF CACHE BOOL "" FORCE)
+set(KokkosKernels_ENABLE_COMPONENT_SPARSE  OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(kokkoskernels ...)
+FetchContent_MakeAvailable(kokkoskernels)
+
+target_link_libraries(athena PUBLIC Kokkos::kokkoskernels)
+
 if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
   # Load binary black hole initial data from the SpECTRE code:
   # https://spectre-code.org
@@ -252,4 +278,3 @@ target_include_directories(athena PUBLIC
 configure_file(config.hpp.in config.hpp)
 
 install( TARGETS athena DESTINATION bin )
-

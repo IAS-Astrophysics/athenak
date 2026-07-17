@@ -38,12 +38,12 @@ struct FESettings {
  *
  * \tparam T The type of the ODE system to solve
  */
-template <typename T>
+template <typename ode_t>
 class ForwardEuler {
  public:
   // ----- Constructor & Destructor -----
   KOKKOS_FUNCTION
-  ForwardEuler(FESettings const settings, T& ode_system, Real const t_start,
+  ForwardEuler(FESettings const settings, ode_t& ode_system, Real const t_start,
                Real const dt)
       : ode_system(ode_system),
         fe_cfl(settings.fe_cfl),
@@ -66,13 +66,11 @@ class ForwardEuler {
   /// The maximum number of forward euler iterations
   unsigned int fe_n_subcycle_max;
   /// The system of ODEs to solve
-  T& ode_system;
+  ode_t& ode_system;
   /// The starting time for this solve
   const Real t_start;
   /// The amount of time to evolve the system of equations
   const Real dt;
-  /// If the solver failed to converge within the allocated number of cycles
-  bool failed = false;
 
   /*!
    * \brief Get the settings for the Forward Euler ODE solver from the input
@@ -100,7 +98,8 @@ class ForwardEuler {
     Real t_end = t_start + dt;
     while (t_now < t_end) {
       // Evaluate the ODEs
-      ode_system.evaluate_function();
+      ode_system.evaluate_function(Real{}, Real{}, ode_system.y,
+                                   ode_system.y_new);
 
       // Compute the subcycle timestep
       Real dt_subcycle;
@@ -114,7 +113,7 @@ class ForwardEuler {
           // Compute the value to reduce
           // NOLINTNEXTLINE(build/include_what_you_use)
           dt_subcycle = Kokkos::min(
-              dt_subcycle, Kokkos::abs(yf / (ode_system.f(i) + small)));
+              dt_subcycle, Kokkos::abs(yf / (ode_system.y_new(i) + small)));
         }
         dt_subcycle = fe_cfl * dt_subcycle;
 
@@ -127,7 +126,7 @@ class ForwardEuler {
       // Advance one subcycle
       {
         for (int i = 0; i < ode_system.neqs; i++) {
-          ode_system.y(i) += ode_system.f(i) * dt_subcycle;
+          ode_system.y(i) += ode_system.y_new(i) * dt_subcycle;
         }
       }
 
@@ -138,8 +137,9 @@ class ForwardEuler {
       // check if convergence is established within fe_n_subcycle_max.  If not,
       // trigger a failure
       if (icount > fe_n_subcycle_max) {
-        failed = true;
-        break;
+        Kokkos::abort(
+            "The Forward Euler ODE solver failed to converge within the "
+            "maximum number of iterations.");
       }
     }
   }

@@ -10,7 +10,7 @@ import athena_read
 import pathlib
 import numpy as np
 
-ode_solvers = ["forward_euler"]
+ode_solvers = ["forward_euler", "kokkos_BDF"]
 input_file = "inputs/H2_uniform_test.athinput"
 
 
@@ -92,7 +92,7 @@ def run_h2_uniform(ode_solver, mpi=False):
     and GPU tests."""
     RUN = testutils.mpi_run if mpi else testutils.run
     try:
-        results = RUN(input_file, [f"chemistry/{ode_solver}"])
+        results = RUN(input_file, [f"chemistry/ode_solver={ode_solver}"])
         assert results, f"H2 uniform test run failed for {ode_solver} solver."
 
         # Load the data

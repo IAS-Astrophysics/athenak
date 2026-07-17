@@ -10,7 +10,7 @@ import athena_read
 import pathlib
 import numpy as np
 
-ode_solvers = ["forward_euler"]
+ode_solvers = ["forward_euler", "kokkos_BDF"]
 input_file = "inputs/H2_advection_test.athinput"
 
 
@@ -128,13 +128,19 @@ def run_h2_advection(ode_solver, mpi=False):
             if mpi:
                 results = testutils.mpi_run(
                     input_file,
-                    [f"chemistry/{ode_solver}", f"mesh/nx1={resolutions[i]}"],
+                    [
+                        f"chemistry/ode_solver={ode_solver}",
+                        f"mesh/nx1={resolutions[i]}",
+                    ],
                     threads=8,
                 )
             else:
                 results = testutils.run(
                     input_file,
-                    [f"chemistry/{ode_solver}", f"mesh/nx1={resolutions[i]}"],
+                    [
+                        f"chemistry/ode_solver={ode_solver}",
+                        f"mesh/nx1={resolutions[i]}",
+                    ],
                 )
             assert results, f"H2 uniform test run failed for {ode_solver} solver."
 

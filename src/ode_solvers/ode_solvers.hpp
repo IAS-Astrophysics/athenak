@@ -11,5 +11,6 @@
 //  include a significant number of ODE solver files.
 
 #include "ode_solvers/forward_euler.hpp"
+#include "ode_solvers/kokkos_bdf.hpp"
 
 #endif  // ODE_SOLVERS_ODE_SOLVERS_HPP_

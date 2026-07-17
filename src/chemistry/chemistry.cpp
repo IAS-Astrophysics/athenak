@@ -61,12 +61,10 @@ TaskStatus Chemistry::UpdateChemistryTask(Driver* d, int stage) {
   const std::string ode_solver = my_pin->GetString("chemistry", "ode_solver");
 
   if (network == "H2") {
-    auto h2_settings = H2Network::GetSettings(my_pin);
     if (ode_solver == "forward_euler") {
-      auto fe_settings = ode_solvers::ForwardEuler<H2Network>::GetSettings(
-          my_pin, "chemistry");
-      UpdateChemistry<ode_solvers::ForwardEuler<H2Network>, H2Network>(
-          fe_settings, h2_settings);
+      UpdateChemistry<ode_solvers::ForwardEuler, H2Network>();
+    } else if (ode_solver == "kokkos_BDF") {
+      UpdateChemistry<ode_solvers::KokkosBDF, H2Network>();
     }
   }
 
@@ -78,16 +76,9 @@ TaskStatus Chemistry::UpdateChemistryTask(Driver* d, int stage) {
  *
  * \tparam ODE_Solver_t The ODE solver to ues
  * \tparam Network_t The chemistry network to use
- * \tparam ODESettings The type of the settings struct to pass to the ODE solver
- * \tparam NetworkSettings The type of the settings struct to pass to the ODE
- * solver
- * \param ode_settings The settings struct to pass to the ODE solver
- * \param network_settings The settings struct to pass to the ODE solver
  */
-template <typename ODE_Solver_t, typename Network_t, typename ODESettings,
-          typename NetworkSettings>
-void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
-                                NetworkSettings const& network_settings) {
+template <template <typename> class ODE_Solver_t, typename Network_t>
+void Chemistry::UpdateChemistry() {
   // ------ Collect variables that we'll need -----
   // The primitive grid
   auto w0 = GetW0();
@@ -96,10 +87,6 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
   // The timestep
   Real const dt = pmy_pack->pmesh->dt;
 
-  // ----- Variables for the ODE solver -----
-  // For reporting if the ODE solver doesn't converge
-  DvceArray0D<bool> chemisty_ode_failure("chemisty_ode_failure", false);
-
   // ----- Get the unit conversions and constants we'll need -----
   Real const time_cgs = pmy_pack->punit->time_cgs();
   Real const energy_density_cgs = pmy_pack->punit->pressure_cgs();
@@ -107,6 +94,11 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
   Real const hydrogen_mass_cgs = pmy_pack->punit->hydrogen_mass_cgs;
   Real const gamma = pmy_pack->phydro->peos->eos_data.gamma;
   Real const mu_H_local = mu_H;
+
+  // ----- Load network and ODE solver settings -----
+  auto const ode_settings =
+      ODE_Solver_t<Network_t>::GetSettings(my_pin, "chemistry");
+  auto const network_settings = Network_t::GetSettings(my_pin);
 
   // ----- Get all the loop limits and generate the parallel policy ------
   // NOLINTNEXTLINE(whitespace/braces)
@@ -140,12 +132,8 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
 
         // ------ Solve the ODEs ------
         ODE_Solver_t ode_solver(ode_settings, chem_net, t_start, dt);
+        // ode_solvers::KokkosBDF solver(chem_net, t_start, dt);
         ode_solver.SolveODE();
-
-        // check if the ODE solver failed
-        if (ode_solver.failed) {
-          chemisty_ode_failure() = ode_solver.failed;
-        }
 
         // ------ Write cell values back out ------
         // Chemistry scalars
@@ -158,13 +146,6 @@ void Chemistry::UpdateChemistry(ODESettings const& ode_settings,
         // Write internal energy
         w0(mb_idx, IEN, k, j, i) = chem_net.y(Network_t::IIE);
       });
-
-  // Get the failure flag and check for failure
-  bool chemisty_ode_failure_h;
-  Kokkos::deep_copy(chemisty_ode_failure_h, chemisty_ode_failure);
-  if (chemisty_ode_failure_h) {
-    std::cerr << "The chemistry ODE solver failed to converge." << std::endl;
-  }
 }
 
 /*!

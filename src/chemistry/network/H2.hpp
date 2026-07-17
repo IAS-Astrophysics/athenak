@@ -8,6 +8,8 @@
 //! \file H2.hpp
 //  \brief The implementation for the struct for the H2 chemistry network
 
+#include <Kokkos_ArithTraits.hpp>
+
 #include "athena.hpp"
 #include "chemistry/chemistry_utils.hpp"
 #include "chemistry/thermo/thermo.hpp"
@@ -46,7 +48,9 @@ class H2Network {
         units_time_cgs(units_time_cgs),
         units_energy_density_cgs(units_energy_density_cgs),
         const_cv(settings.const_cv),
-        isothermal(settings.isothermal) {}
+        isothermal(settings.isothermal),
+        y(y_buffer_, neqs),
+        y_new(y_new_buffer_, neqs) {}
 
   // ----- Number of equations -----
   static constexpr int neqs = 3;
@@ -57,9 +61,11 @@ class H2Network {
   /// If the network is using an isothermal equation of state
   const bool isothermal;
 
-  // ----- Arrays to store ODE state -----
-  RegisterArray<Real, neqs> y;  // The current state
-  RegisterArray<Real, neqs> f;  // The results of evaluating the ODEs
+  // ----- Views to store ODE state -----
+  // The current state
+  Kokkos::View<Real*, Kokkos::LayoutRight, Kokkos::MemoryUnmanaged> y;
+  // The results of evaluating the ODEs
+  Kokkos::View<Real*, Kokkos::LayoutRight, Kokkos::MemoryUnmanaged> y_new;
 
   // ----- Species indices within the ODE system ------
   enum {
@@ -105,7 +111,7 @@ class H2Network {
    * \return Real The temperature in the cell
    */
   KOKKOS_FUNCTION
-  Real Temperature() {
+  Real Temperature() const {
     // Constants needed for computing temperature
     static constexpr Real x_He = 0.1;
     static constexpr Real x_e = 0.0;
@@ -127,7 +133,7 @@ class H2Network {
    * HeatingTerm() - CoolingTerm();`
    */
   KOKKOS_FUNCTION
-  Real CoolingTerm(Real const& T) {
+  Real CoolingTerm(Real const& T) const {
     return Thermo::alpha_GD_ * n_H * Kokkos::sqrt(T) * T;
   }
 
@@ -141,7 +147,7 @@ class H2Network {
    * energy update should look like `E = HeatingTerm() - CoolingTerm();`
    */
   KOKKOS_FUNCTION
-  Real HeatingTerm(Real const& T) { return 0.0; }
+  Real HeatingTerm(Real const& T) const { return 0.0; }
 
   /*!
    * \brief Evaluate the internal energy equation
@@ -149,7 +155,7 @@ class H2Network {
    * \return Real The result of evaluating the internal energy equation
    */
   KOKKOS_FUNCTION
-  Real Edot() {
+  Real Edot() const {
     if (isothermal) {
       return 0.0;
     }
@@ -174,7 +180,7 @@ class H2Network {
    * arrays.
    */
   KOKKOS_FUNCTION
-  CDRates_t<neqs - 1> CDRates() {
+  CDRates_t<neqs - 1> CDRates() const {
     CDRates_t<neqs - 1> rates;
 
     // cr = cosmic ray, gr = dust grain
@@ -200,11 +206,10 @@ class H2Network {
     return rates;
   }
 
-  /*!
-   * \brief Updates `f` using the values in `y`
-   */
-  KOKKOS_FUNCTION
-  void evaluate_function() {
+  template <class vec_type1, class vec_type2>
+  KOKKOS_FUNCTION void evaluate_function(const Real /*t*/, const Real /*dt*/,
+                                         const vec_type1& y_in,
+                                         vec_type2& f) const {
     // ----- Internal energy equation -----
     f(IIE) = Edot();
 
@@ -216,6 +221,20 @@ class H2Network {
       f(i) = rates.creation(i) - y(i) * rates.destruction(i);
     }
   }
+
+  template <class vec_type, class mat_type>
+  KOKKOS_FUNCTION void evaluate_jacobian(const Real t, const Real dt,
+                                         const vec_type& y_in,
+                                         const mat_type& jac) const {
+    chemistry::numerical_jacobian(*this, t, dt, y_in, jac);
+  }
+
+ private:
+  // ----- Raw array buffers -----
+  // The current state
+  Real y_buffer_[neqs];  // NOLINT(runtime/arrays)
+  // The results of evaluating the ODEs
+  Real y_new_buffer_[neqs];  // NOLINT(runtime/arrays)
 };
 }  // namespace chemistry
 #endif  // CHEMISTRY_NETWORK_H2_HPP_

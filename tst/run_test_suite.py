@@ -150,7 +150,7 @@ if args.mpicpu is not None:
     os.chdir(original_dir)
 
 if args.gpu is not None:
-    testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]))
+    testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=ON"]))
     test(tests + ["-k", "_gpu"])  # run all scripts with _gpu in name
     os.chdir(original_dir)
 

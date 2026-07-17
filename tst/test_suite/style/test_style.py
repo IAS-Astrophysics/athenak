@@ -45,7 +45,13 @@ def test_lint_python():
     try:
         print("Running Python linting...")
         print("Current directory:", os.getcwd())
-        command = ["python", "-m", "flake8"]
+        command = [
+            "python",
+            "-m",
+            "flake8",
+            "--exclude",
+            "build,kokkos,tst/scripts/style/cpplint.py",
+        ]
         process = Popen(command, stdout=PIPE, stderr=PIPE)
         output, errors = process.communicate()
         status = process.returncode == 0
