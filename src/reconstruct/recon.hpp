@@ -130,7 +130,7 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
 //! The par_for kernels are written directly in this function template, which has external
 //! (vague) linkage: nvcc forbids extended __device__ lambdas inside functions with
 //! internal linkage (e.g. an anonymous namespace).  The variable index `n` is the inner
-//! parallel index, run over [0, nvars-1]; `apply_floors` toggles the PPMX/WENOZ/TENO floors
+//! parallel index, run over [0, nvars-1]; `apply_floors` toggles the WENOZ, etc. floors
 //! (true for fluid primitives, false for the cell-centered B field).
 template <int ivx>
 inline void ReconDispatch(ReconstructionMethod recon, const char *name, int nmb1,
