@@ -970,6 +970,14 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, is_restart);
+  } else if (pgen_fun_name.compare("gravity") == 0) {
+    SelfGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("binary_gravity") == 0) {
+    BinaryGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("be_collapse") == 0) {
+    BECollapse(pin, is_restart);
 
   // pre-defined unit tests
   } else if (pgen_fun_name.compare("eos_compose") == 0) {

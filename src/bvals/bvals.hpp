@@ -17,7 +17,10 @@ enum BoundaryFace {undef=-1, inner_x1, outer_x1, inner_x2, outer_x2, inner_x3, o
 
 // identifiers for boundary conditions
 enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, periodic,
-                         shear_periodic, vacuum};
+                         shear_periodic, vacuum, mg_zerograd, mg_zerofixed, mg_multipole};
+
+//! identifiers for status of MPI boundary communications
+enum class BoundaryStatus {waiting, arrived, completed};
 
 #include <algorithm>
 #include <vector>
@@ -73,6 +76,7 @@ struct MeshBoundaryBuffer {
 
   // Maximum number of data elements (bie-bis+1) across 3 components of above
   int isame_ndat, isame_z4c_ndat, icoar_ndat, ifine_ndat, iflxs_ndat, iflxc_ndat;
+  DualArray1D<int> faces; // face identifiers for this buffer
 
   // 2D Views that store buffer data on device, dimensioned (nmb, ndata)
   DvceArray2D<Real> vars, flux;
@@ -96,7 +100,34 @@ struct MeshBoundaryBuffer {
     }
     int nmax = std::max(iflxs_ndat, iflxc_ndat);
     Kokkos::realloc(flux, nmb, (nvars*nmax));
+    Kokkos::realloc(faces, 3);
   }
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct RankPackedVarEntry
+//! \brief metadata for one (MeshBlock,neighbor) var-payload in a rank-packed message
+
+struct RankPackedVarEntry {
+  int m;
+  int n;
+  int lid;
+  int dn;
+  int data_size;
+  int offset;
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct RankPackedVarMessage
+//! \brief metadata for one aggregated MPI vars message between ranks
+
+struct RankPackedVarMessage {
+  int rank;
+  int nentries;
+  int entry_offset;
+  int hdr_offset;
+  int offset;
+  int data_size;
 };
 
 // Forward declarations
@@ -122,6 +153,31 @@ class MeshBoundaryValues {
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for each case (variables/fluxes)
   MPI_Comm comm_vars, comm_flux;
+
+  // rank-packed vars communication path
+  int rank_packed_bvals_nvars_;
+  int rank_packed_mesh_seq_;
+  std::vector<RankPackedVarEntry> send_var_entries_, recv_var_entries_;
+  std::vector<RankPackedVarMessage> send_var_msgs_, recv_var_msgs_;
+  std::vector<MPI_Request> send_var_reqs_, recv_var_reqs_;
+  std::vector<MPI_Request> send_var_hdr_reqs_, recv_var_hdr_reqs_;
+  DvceArray1D<Real> rank_sendbuf_vars_, rank_recvbuf_vars_;
+  HostArray1D<int> rank_sendhdr_vars_, rank_recvhdr_vars_;
+  // Device-resident mirrors of the entry tables, used by fused pack/unpack
+  // kernels (one launch per direction per call) instead of N small
+  // Kokkos::deep_copy calls. Rebuilt by BuildRankPackedVarMetadata.
+  DvceArray1D<RankPackedVarEntry> send_var_entries_d_, recv_var_entries_d_;
+  // Cached unpack-task table for the recv-side scatter kernel. Built once in
+  // BuildRankPackedVarMetadata from the headers received from each peer.
+  DvceArray1D<RankPackedVarEntry> unpack_tasks_d_;
+  // Per-(MeshBlock,neighbour) base offsets into the rank-packed aggregate
+  // buffers, dimensioned (nmb*nnghbr). For off-rank neighbours these hold the
+  // entry's offset in rank_{send,recv}buf_vars_; on-rank/non-existent entries
+  // are -1. Built once in BuildRankPackedVarMetadata so the pack/unpack kernels
+  // read/write the aggregate buffer directly (fusing the former
+  // RankPackAgg/RankUnpackScatter kernels into SendBuff/RecvBuff).
+  DvceArray1D<int> send_agg_offset_, recv_agg_offset_;
+  void InvalidateRankPackedVarMetadata() { rank_packed_bvals_nvars_ = -1; }
 #endif
 
   //functions
@@ -148,6 +204,11 @@ class MeshBoundaryValues {
   // many types (Hydro, MHD, Radiation, Z4c, etc.)
   MeshBlockPack* pmy_pack;
   bool is_z4c_;   // flag to denote if this BoundaryValues is for Z4c module
+
+#if MPI_PARALLEL_ENABLED
+  int GetVarDataSize(const MeshBoundaryBuffer &buf, int m, int n, int nvars) const;
+  void BuildRankPackedVarMetadata(const int nvars);
+#endif
 };
 
 //----------------------------------------------------------------------------------------

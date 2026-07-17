@@ -1,0 +1,106 @@
+# AthenaK input file: Bonnor-Ebert sphere collapse with MHD and AMR
+# Isothermal MHD with barotropic transition, uniform Bz from mu,
+# self-gravity with multipole BCs, Jeans-based AMR criterion.
+# Reference: Tomida & Stone (2023), ApJS, 266, 7 (Figure 12)
+
+<job>
+basename  = be_collapse
+
+<mesh>
+nghost    = 4
+nx1       = 64
+x1min     = -16.0
+x1max     = 16.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 64
+x2min     = -16.0
+x2max     = 16.0
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 64
+x3min     = -16.0
+x3max     = 16.0
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 16
+nx2       = 16
+nx3       = 16
+
+<mesh_refinement>
+refinement       = adaptive
+max_nmb_per_rank = 2048
+num_levels       = 10
+
+<amr_criterion0>
+method = user
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = -1
+tlim       = 4.0
+ndiag      = 1
+
+<mhd>
+eos         = ideal
+gamma       = 1.6666666666667
+reconstruct = plm
+rsolver     = hlld
+
+<gravity>
+four_pi_G      = 1.0
+mg_bc          = multipole
+mporder        = 4
+auto_mporigin  = true
+mask_radius    = 6.45
+mask_origin_x1 = 0.0
+mask_origin_x2 = 0.0
+mask_origin_x3 = 0.0
+threshold      = 1E-4
+niteration     = 10
+npresmooth     = 2
+npostsmooth    = 2
+full_multigrid = true
+fmg_ncycle     = 1
+show_defect    = false
+mg_nghost      = 1
+
+<mhd_srcterms>
+self_gravity = true
+
+<problem>
+pgen_name   = be_collapse
+user_srcs   = true
+mass        = 1.0
+temperature = 10.0
+f           = 1.2
+njeans      = 16
+rhocrit     = 1e-13
+amp         = 0.1
+mu          = 3.0
+omegatff    = 0.03
+
+<output1>
+file_type  = bin
+variable   = mhd_w
+dt         = 0.25
+
+<output2>
+file_type  = bin
+variable   = mhd_bcc
+dt         = 0.25
+
+<output3>
+file_type  = bin
+variable   = grav_phi
+dt         = 0.25
+
+<output4>
+file_type  = rst
+dt         = 1.0

@@ -172,9 +172,15 @@ class Mesh {
   int NumberOfMeshBlockCells() const {
     return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
   }
+  bool IsMeshUpdated() const { return mesh_updated_; }
+  void MarkMeshUpdated() {mesh_updated_ = true; ++amr_lb_seq_;}
+  void ClearMeshUpdated() { mesh_updated_ = false; }
+  int GetAMRLoadBalanceUpdateSeq() const { return amr_lb_seq_; }
 
  private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
+  bool mesh_updated_ = false;
+  int amr_lb_seq_ = 0;
 };
 #endif  // MESH_MESH_HPP_
