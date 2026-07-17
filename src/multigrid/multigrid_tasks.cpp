@@ -488,14 +488,25 @@ void MultigridDriver::SetMGTaskListToFiner(int nsmooth, int ngh, int flag) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void MultigridDriver::SetMGTaskListFMGProlongate(int ngh)
+//! \fn void MultigridDriver::SetMGTaskListFMGProlongate(int ngh, int flag)
 //! \brief Set the task list for FMG prolongation only (no smoothing)
 
-void MultigridDriver::SetMGTaskListFMGProlongate(int ngh) {
+void MultigridDriver::SetMGTaskListFMGProlongate(int ngh, int flag) {
   auto &tl = pmy_pack_->tl_map;
   tl.erase("mg_fmg_prolongate");
   tl.emplace(std::make_pair("mg_fmg_prolongate", std::make_shared<TaskList>()));
   TaskID none(0);
+
+  if (flag == 1) {
+    // First time on meshblock levels, right after TransferFromRootToBlocks:
+    // block data and ghosts were filled directly from the root/octet grids, and
+    // the boundary machinery cannot operate at the 1-cell level (FillCoarseMG /
+    // ProlongateFCMG no-op below 2 cells; sends would read a stale coarse_buf_).
+    // Prolongate only, matching Athena++ SetMGTaskListFMGProlongate flag==1.
+    id.fmg_prolongate = tl["mg_fmg_prolongate"]->AddTask(
+                    &MultigridDriver::FMGProlongateTask, this, none);
+    return;
+  }
 
   id.fill_coarse0 = tl["mg_fmg_prolongate"]->AddTask(
                   &MultigridDriver::FillCoarseBoundary, this, none);

@@ -481,7 +481,7 @@ class MultigridDriver {
   TaskStatus ClearRecv(Driver *pdrive, int stag);
   TaskStatus ClearSend(Driver *pdrive, int stag);
   void SetMGTaskListToFiner(int nsmooth, int ngh, int flag=0);
-  void SetMGTaskListFMGProlongate(int ngh);
+  void SetMGTaskListFMGProlongate(int ngh, int flag = 0);
   void SetMGTaskListToCoarser(int nsmooth, int ngh);
   void DoTaskListOneStage();
 

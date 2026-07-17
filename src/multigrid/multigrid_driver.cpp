@@ -569,13 +569,20 @@ void MultigridDriver::TransferFromRootToBlocks(bool folddata) {
 
 void MultigridDriver::FMGProlongate(Driver *pdriver) {
   int ngh = mgroot_->ngh_;
+  int flag = 0;
   if (current_level_ == nrootlevel_ + nreflevel_ - 1) {
     MGRootBoundary();
     TransferFromRootToBlocks(false);
+    // flag = 1: first time on meshblock levels; ghosts (incl. the 1-cell level)
+    // were just filled from root/octets by SetFromRootGrid, so no inter-block
+    // boundary comm here (matches Athena++ SetMGTaskListFMGProlongate flag==1).
+    // The boundary machinery cannot operate at the 1-cell level anyway
+    // (FillCoarseMG/ProlongateFCMG no-op below 2 cells).
+    flag = 1;
   }
   if (current_level_ >= nrootlevel_ + nreflevel_ - 1) { // MeshBlocks
     pmg = mglevels_;
-    SetMGTaskListFMGProlongate(ngh);
+    SetMGTaskListFMGProlongate(ngh, flag);
     pdriver->ExecuteTaskList(pmy_mesh_, "mg_fmg_prolongate", 0);
     current_level_++;
   } else if (current_level_ >= nrootlevel_ - 1) { // octets
