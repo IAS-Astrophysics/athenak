@@ -18,6 +18,7 @@
 #include "plm.hpp"    // PLM()
 #include "ppm.hpp"    // PPM4(), PPMX()
 #include "wenoz.hpp"  // WENOZ()
+#include "teno.hpp"  // TENO()
 
 //----------------------------------------------------------------------------------------
 //! \fn ReconCellT<recon,ivx>()
@@ -34,7 +35,7 @@
 //!   ivx=IVY:  j in [js-1, je+1], (transverse i,k over their active+ghost range)
 //!   ivx=IVZ:  k in [ks-1, ke+1], (transverse i,j over their active+ghost range)
 //!
-//! The wide (+/-2) stencil used by PPM/WENOZ requires nghost >= 3 (enforced in the
+//! The wide (+/-2) stencil used by PPM/WENOZ/TENO requires nghost >= 3 (enforced in the
 //! Hydro/MHD constructor); DC/PLM only touch the +/-1 stencil.  The method-dispatch is a
 //! constexpr-if on the template parameter, so no per-cell branch survives on the device.
 template <ReconstructionMethod recon, int ivx>
@@ -94,6 +95,19 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
         ql_val = fmax(ql_val, efloor); qr_val = fmax(qr_val, efloor);
       }
     }
+  } else if constexpr (recon == ReconstructionMethod::teno) {
+    TENO(q(m, n, k - 2*dk, j - 2*dj, i - 2*di),
+          q(m, n, k -   dk, j -   dj, i -   di),
+          q(m, n, k,        j,        i),
+          q(m, n, k +   dk, j +   dj, i +   di),
+          q(m, n, k + 2*dk, j + 2*dj, i + 2*di),
+          ql_val, qr_val);
+    if (apply_floors) {
+      if (n == IDN) { ql_val = fmax(ql_val, dfloor); qr_val = fmax(qr_val, dfloor); }
+      if (eos.is_ideal && n == IEN) {
+        ql_val = fmax(ql_val, efloor); qr_val = fmax(qr_val, efloor);
+      }
+    }
   } else {
     ql_val = q(m, n, k, j, i);
     qr_val = q(m, n, k, j, i);
@@ -116,7 +130,7 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
 //! The par_for kernels are written directly in this function template, which has external
 //! (vague) linkage: nvcc forbids extended __device__ lambdas inside functions with
 //! internal linkage (e.g. an anonymous namespace).  The variable index `n` is the inner
-//! parallel index, run over [0, nvars-1]; `apply_floors` toggles the PPMX/WENOZ floors
+//! parallel index, run over [0, nvars-1]; `apply_floors` toggles the PPMX/WENOZ/TENO floors
 //! (true for fluid primitives, false for the cell-centered B field).
 template <int ivx>
 inline void ReconDispatch(ReconstructionMethod recon, const char *name, int nmb1,
@@ -150,6 +164,13 @@ inline void ReconDispatch(ReconstructionMethod recon, const char *name, int nmb1
       par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
         KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
           ReconCellT<ReconstructionMethod::wenoz, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
+    case ReconstructionMethod::teno:
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::teno, ivx>(
               eos, apply_floors, m, n, k, j, i, q, ql, qr);
         });
       break;

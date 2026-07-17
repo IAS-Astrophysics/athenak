@@ -10,7 +10,7 @@
 //! reconstruction kernel that materializes the L/R primitive states in the global
 //! wl3d/wr3d buffers, followed by (2) a per-face Riemann solve that reads those
 //! buffers and writes the interface flux.  All reconstruction methods (DC/PLM/PPM4/
-//! PPMX/WENOZ) and non-relativistic Riemann solvers (Advect/LLF/HLLE/HLLC/Roe) are
+//! PPMX/WENOZ/TENO) and non-relativistic Riemann solvers (Advect/LLF/HLLE/HLLC/Roe) are
 //! supported; the reconstruction method is chosen at runtime, the solver at compile time
 //! via the rsolver template parameter.
 

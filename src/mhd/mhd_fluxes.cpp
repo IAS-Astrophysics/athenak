@@ -12,7 +12,7 @@
 //! wl3d/wr3d buffers and the L/R cell-centered magnetic field (bcc0) in the
 //! bl3d/br3d buffers, followed by (2) a per-face Riemann solve that reads those
 //! buffers and writes both the interface flux and the two area-averaged EMF components.
-//! All reconstruction methods (DC/PLM/PPM4/PPMX/WENOZ) and Riemann solvers
+//! All reconstruction methods (DC/PLM/PPM4/PPMX/WENOZ/TENO) and Riemann solvers
 //! (Advect/LLF/HLLE/HLLD and the SR/GR variants) are supported; the reconstruction method
 //! is chosen at runtime, the solver at compile time via the rsolver template parameter.
 //!
