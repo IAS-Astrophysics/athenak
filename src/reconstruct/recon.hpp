@@ -14,7 +14,6 @@
 
 #include "athena.hpp"
 #include "eos/eos.hpp"
-#include "dc.hpp"     // (trivial donor-cell handled inline below)
 #include "plm.hpp"    // PLM()
 #include "ppm.hpp"    // PPM4(), PPMX()
 #include "wenoz.hpp"  // WENOZ()
