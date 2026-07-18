@@ -14,7 +14,6 @@
 #include "eos/eos.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "radiation.hpp"
-#include "reconstruct/dc.hpp"
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
 #include "reconstruct/wenoz.hpp"
