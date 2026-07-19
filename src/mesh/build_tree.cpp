@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file build_tree.cpp
-//! \brief Functions to build MeshBlockTreee, both for new runs and restarts
+//! \brief Functions to build MeshBlock, both for new runs and restarts
 
 #include <algorithm>
 #include <iostream>
@@ -297,11 +297,6 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   }
 #endif
 
-  // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
-  if (multilevel) {
-    pmr = new MeshRefinement(this, pin);
-  }
-
   // set initial time/cycle parameters, output diagnostics
   time = pin->GetOrAddReal("time", "start_time", 0.0);
   dt   = std::numeric_limits<float>::max();
@@ -322,7 +317,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
                                                      bool single_file_per_rank) {
   // At this point, the restartfile is already open and the ParameterInput (input file)
   // data has already been read in main(). Thus the file pointer is set to after <par_end>
-  IOWrapperSizeT headeroffset = resfile.GetPosition();
+  IOWrapperSizeT headeroffset = resfile.GetPosition(single_file_per_rank);
 
   // following must be identical to calculation of headeroffset (excluding size of
   // ParameterInput data) in restart.cpp
@@ -592,11 +587,6 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
         << std::endl;
       std::exit(EXIT_FAILURE);
     }
-  }
-
-  // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
-  if (multilevel) {
-    pmr = new MeshRefinement(this, pin);
   }
 
   // set remaining parameters, output diagnostics

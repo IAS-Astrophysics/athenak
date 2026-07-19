@@ -28,7 +28,6 @@ namespace mhd {
 // constructor, initializes data structures and parameters
 
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
@@ -40,20 +39,22 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     b1("B_fc1",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
-    wsaved("wsaved",1,1,1,1,1),
-    bccsaved("bccsaved",1,1,1,1,1),
     e3x1("e3x1",1,1,1,1),
     e2x1("e2x1",1,1,1,1),
     e1x2("e1x2",1,1,1,1),
     e3x2("e3x2",1,1,1,1),
     e2x3("e2x3",1,1,1,1),
     e1x3("e1x3",1,1,1,1),
-    e1_cc("e1_cc",1,1,1,1),
-    e2_cc("e2_cc",1,1,1,1),
-    e3_cc("e3_cc",1,1,1,1),
+    wsaved("wsaved",1,1,1,1,1),
+    bccsaved("bccsaved",1,1,1,1,1),
+    fofc("fofc",1,1,1,1),
+    fofc_scal("fofc_scal",1,1,1,1,1),
     utest("utest",1,1,1,1,1),
     bcctest("bcctest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1) {
+    pmy_pack(ppack),
+    e1_cc("e1_cc",1,1,1,1),
+    e2_cc("e2_cc",1,1,1,1),
+    e3_cc("e3_cc",1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -63,6 +64,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (eqn_of_state.compare("ideal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic) {
       peos = new IdealSRMHD(ppack, pin);
+    } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
+      // DynGRMHD uses PrimitiveSolver instead, so use a no-op here.
+      peos = new NoOpDynGRMHD(ppack, pin);
     } else if (pmy_pack->pcoord->is_general_relativistic) {
       peos = new IdealGRMHD(ppack, pin);
     } else {
@@ -93,23 +97,34 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","viscosity")) {
+  if (pin->DoesParameterExist("mhd","nu_iso") ||
+      pin->DoesParameterExist("mhd","nu_aniso")) {
     pvisc = new Viscosity("mhd", ppack, pin);
   } else {
     pvisc = nullptr;
   }
 
-  // Resistivity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
+  // Resistivity / non-ideal MHD (only constructed if needed). The Resistivity class now
+  // also implements ambipolar diffusion, so it is constructed if either the Ohmic
+  // coefficient (eta_ohm) or the ambipolar coefficient (eta_ad) is supplied in <mhd>.
+  if (pin->DoesParameterExist("mhd","eta_ohm") ||
+      pin->DoesParameterExist("mhd","eta_ad")) {
     presist = new Resistivity(ppack, pin);
   } else {
     presist = nullptr;
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","conductivity") ||
-      pin->DoesParameterExist("mhd","tdep_conductivity")) {
-    pcond = new Conduction("mhd", ppack, pin);
+  if (pin->DoesParameterExist("mhd","alpha_iso") ||
+      pin->DoesParameterExist("mhd","alpha_aniso") ||
+      pin->DoesParameterExist("mhd","alpha_spitzer")) {
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("mhd", ppack, pin);
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }
@@ -348,6 +363,10 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         Kokkos::realloc(utest,   nmb, nvars, ncells3, ncells2, ncells1);
         Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
         Kokkos::deep_copy(fofc, false);
+        if (nscalars > 0) {
+          Kokkos::realloc(fofc_scal,    nmb, nscalars, ncells3, ncells2, ncells1);
+          Kokkos::deep_copy(fofc_scal, false);
+        }
       }
     }
   }
@@ -357,13 +376,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 MHD::~MHD() {
-  delete peos;
-  delete pbval_u;
+  if (psbox_b != nullptr) {delete psbox_b;}
+  if (psbox_u != nullptr) {delete psbox_u;}
+  if (porb_b != nullptr) {delete porb_b;}
+  if (porb_u != nullptr) {delete porb_u;}
   delete pbval_b;
-  if (pvisc != nullptr) {delete pvisc;}
-  if (presist!= nullptr) {delete presist;}
-  if (pcond != nullptr) {delete pcond;}
+  delete pbval_u;
   if (psrc!= nullptr) {delete psrc;}
+  if (pcond != nullptr) {delete pcond;}
+  if (presist!= nullptr) {delete presist;}
+  if (pvisc != nullptr) {delete pvisc;}
+  delete peos;
 }
 
 //----------------------------------------------------------------------------------------

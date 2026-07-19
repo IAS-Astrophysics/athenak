@@ -60,9 +60,8 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvu     = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
   id.sendu_shr = tl["stagen"]->AddTask(&MHD::SendU_Shr, this, id.recvu);
   id.recvu_shr = tl["stagen"]->AddTask(&MHD::RecvU_Shr, this, id.sendu_shr);
-  id.efld      = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu_shr);
-  id.efldsrc   = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
-  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
+  id.efld      = tl["stagen"]->AddTask(&MHD::EField, this, id.recvu_shr);
+  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efld);
   id.recve     = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
   id.ct        = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
   id.sendb_oa  = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
@@ -139,7 +138,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
     }
   }
 
-  // with shearing box boundaries caluclate x2-distance x1-boundaries have sheared and
+  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
   // with MPI post receives for U and B
   if (psbox_u != nullptr) {
     // only execute when (3D OR 2d_r_phi)
@@ -197,15 +196,15 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<MHD_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add viscous, resistive, heat-flux, etc fluxes
+  // Add diffusive fluxes
+  if (pcond != nullptr) {
+    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
+  }
   if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
+    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
   if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->OhmicEnergyFlux(b0, uflx);
-  }
-  if (pcond != nullptr) {
-    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
+    presist->AddResistiveFluxes(b0, uflx);
   }
 
   // call FOFC if necessary
@@ -375,10 +374,22 @@ TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::EField
+//! \brief Wrapper task list function to compute electric field and apply source terms
+
+TaskStatus MHD::EField(Driver *pdrive, int stage) {
+  CornerE(pdrive, stage);
+  return EFieldSrc(pdrive, stage);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::EFieldSrc
 //! \brief Wrapper task list function to apply source terms to electric field
 
 TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
+  if (presist != nullptr) {
+    presist->AddResistiveEMFs(b0, efld);
+  }
   if (psbox_b != nullptr) {
     // only execute when (2D)
     if (pmy_pack->pmesh->two_d) {
@@ -508,7 +519,7 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call funtions that set physical and user BCs
+//! \brief Wrapper task list function to call functions that set physical and user BCs
 
 TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic

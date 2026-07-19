@@ -22,7 +22,8 @@ struct EOS_Data;
 enum class ExcisionScheme {
   fixed,
   lapse,
-  puncture
+  puncture,
+  horizon
 };
 
 KOKKOS_INLINE_FUNCTION
@@ -86,6 +87,8 @@ struct CoordData {
   Real punc_1_rad;
   Real punc_flux_rad_factor;        // puncture flux-excision radius / punc_rad
   bool smooth_excise;              // smoothly drain primitive variables inside horizon
+  Real horizon_factor;             // scale factor for fastflow horizon excision
+  Real tdamp;                       // damping time for smooth excision
   Real smooth_excise_puncture_weight_exponent; // polynomial weight family index
   Real smooth_excise_width;        // radial width of drain layer inside geometric masks
   Real smooth_excise_puncture_width_fraction; // puncture smooth width / punc_rad

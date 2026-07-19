@@ -144,7 +144,7 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     fwrite(&pmbp->pmesh->time, sizeof(Real), 1, etk_output_file);
     // Write the 4D array to the binary file
     size_t elementsWritten = fwrite(data_out, sizeof(Real), count, etk_output_file);
-    if (elementsWritten != count) {
+    if (elementsWritten != static_cast<size_t>(count)) {
       perror("Error writing to file");
     }
     // Close the file
@@ -268,11 +268,11 @@ void HorizonDump::ETK_setup_parfile() {
             "readBHaHdata::recent_ah_radius_max_filename = \"ah_radius_max_BH_1.txt\"\n");
 
   //if(commondata->time == 0) {
-    fprintf(etk_parfile,
-            "AHFinderDirect::initial_guess_method[1]"
-            "                = \"coordinate sphere\"\n"
-            "AHFinderDirect::initial_guess__coord_sphere__radius[1] = %e\n",
-            r_guess);
+  fprintf(etk_parfile,
+          "AHFinderDirect::initial_guess_method[1]"
+          "                = \"coordinate sphere\"\n"
+          "AHFinderDirect::initial_guess__coord_sphere__radius[1] = %e\n",
+          r_guess);
   /*} else {
     if(BH==LESSMASSIVE_BH_PREMERGER)
       fprintf(etk_parfile,

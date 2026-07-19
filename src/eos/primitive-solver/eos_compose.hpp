@@ -51,8 +51,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Constructor
   EOSCompOSE() :
       m_log_nb("log nb",1),
-      m_log_t("log T",1),
       m_yq("yq",1),
+      m_log_t("log T",1),
       m_table("EoS table",1,1,1,1) {
     n_species = 1;
     eos_units = MakeNuclear();
@@ -62,9 +62,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     m_id_log_nb = std::numeric_limits<Real>::quiet_NaN();
     m_id_log_t = std::numeric_limits<Real>::quiet_NaN();
     m_id_yq = std::numeric_limits<Real>::quiet_NaN();
-    m_nn = std::numeric_limits<int>::quiet_NaN();
-    m_nt = std::numeric_limits<int>::quiet_NaN();
-    m_ny = std::numeric_limits<int>::quiet_NaN();
+    m_nn = 0;
+    m_nt = 0;
+    m_ny = 0;
     m_min_h = std::numeric_limits<Real>::max();
     mb =    std::numeric_limits<Real>::quiet_NaN();
     min_n = std::numeric_limits<Real>::quiet_NaN();
@@ -739,11 +739,11 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   // Inverse of table spacing
   Real m_id_log_nb, m_id_yq, m_id_log_t;
   // Table size
-  int m_nn, m_nt, m_ny;
+  size_t m_nn, m_nt, m_ny;
   // Minimum enthalpy per baryon
   Real m_min_h;
 
-  // bool to protect against access of uninitialised table and prevent repeated reading
+  // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
   bool m_initialized;
 

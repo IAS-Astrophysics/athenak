@@ -63,7 +63,6 @@ struct MHDTaskIDs {
   TaskID sendu_shr;
   TaskID recvu_shr;
   TaskID efld;
-  TaskID efldsrc;
   TaskID sende;
   TaskID recve;
   TaskID ct;
@@ -143,6 +142,7 @@ class MHD {
 
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
+  DvceArray5D<bool> fofc_scal;  // flag to indicate if FOFC for scalar is needed
   bool use_fofc = false;   // flag to enable FOFC
 
   // guarded repair for non-finite flux/EMF data in unstable restarts
@@ -178,6 +178,7 @@ class MHD {
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
+  TaskStatus EField(Driver *d, int stage);
   TaskStatus EFieldSrc(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
   TaskStatus RecvE(Driver *d, int stage);

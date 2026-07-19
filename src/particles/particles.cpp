@@ -234,7 +234,7 @@ void Particles::CreateParticleTags(ParameterInput *pin) {
   // tag algorithm not recognized, so quit with error
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Particle tag assinment type = '" << assign << "' not recognized"
+              << "Particle tag assignment type = '" << assign << "' not recognized"
               << std::endl;
     std::exit(EXIT_FAILURE);
   }

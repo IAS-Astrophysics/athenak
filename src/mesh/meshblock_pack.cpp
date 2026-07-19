@@ -62,8 +62,9 @@ MeshBlockPack::~MeshBlockPack() {
   if (pdynrad != nullptr) {delete pdynrad;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (pnr    != nullptr) {delete pnr;}
-  if (pturb  != nullptr) {delete pturb;}
-  if (punit  != nullptr) {delete punit;}
+  if (pdyngr != nullptr) {delete pdyngr;}
+  if (ptmunu != nullptr) {delete ptmunu;}
+  if (padm   != nullptr) {delete padm;}
   if (pz4c   != nullptr) {
     delete pz4c;
     // cce dump
@@ -72,8 +73,12 @@ MeshBlockPack::~MeshBlockPack() {
     }
     pz4c_cce.resize(0);
   }
-  if (ppart  != nullptr) {delete ppart;}
-  // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
+  if (pturb  != nullptr) {delete pturb;}
+  if (prad   != nullptr) {delete prad;}
+  if (pmhd   != nullptr) {delete pmhd;}
+  if (phydro != nullptr) {delete phydro;}
+  if (punit  != nullptr) {delete punit;}
+  delete pcoord;
   delete pmb;
 }
 
@@ -260,7 +265,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pdynrad->AssembleRadTasks(tl_map);
   }
 
-  // (8) PARTICLES
+  // (9) PARTICLES
   // Create particles module.  Create tasklist.
   if (pin->DoesBlockExist("particles")) {
     ppart = new particles::Particles(this, pin);

@@ -28,9 +28,9 @@ struct EOS_Data {
   Real gamma;        // ratio of specific heats for ideal gas
   Real iso_cs;       // isothermal sound speed
   bool is_ideal;     // flag to denote ideal gas EOS
-  bool use_e, use_t; // use internal energy density (e) or temperature (t) as primitive
   Real dfloor, pfloor, tfloor, sfloor;  // density, pressure, temperature, entropy floors
   Real gamma_max;    // ceiling on Lorentz factor in SR/GR
+  Real sigma_max;    // ceiling on magnetization in MHD
   Real temp_ceiling; // optional temperature ceiling for low-density GRMHD cells
   Real temp_ceiling_density_max; // density gate for optional temperature ceiling
   bool c2p_failure_use_previous_state; // fallback to previous primitive state on C2P failure
@@ -391,6 +391,19 @@ class IdealGRMHD : public EquationOfState {
   void PrimToCons(const DvceArray5D<Real> &prim, const DvceArray5D<Real> &bcc,
                   DvceArray5D<Real> &cons, const int il, const int iu,
                   const int jl, const int ju, const int kl, const int ku) override;
+};
+
+//----------------------------------------------------------------------------------------
+//! \class NoOpDynGRMHD
+//! \brief Derived class for no-op EOS in dynamical GRMHD
+
+class NoOpDynGRMHD : public EquationOfState {
+ public:
+  // Following suppress warnings that MHD versions are not over-ridden
+  using EquationOfState::ConsToPrim;
+  using EquationOfState::PrimToCons;
+
+  NoOpDynGRMHD(MeshBlockPack *pp, ParameterInput *pin);
 };
 
 #endif // EOS_EOS_HPP_
