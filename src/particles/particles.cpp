@@ -87,7 +87,9 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     case ParticleType::cosmic_ray:
       {
         int ndim=4;
-        if (pmy_pack->pmesh->three_d) {ndim+=2;}
+        if (pmy_pack->pmesh->three_d) {
+          ndim += 2;
+        }
         nrdata = ndim;
         nidata = 2;
         break;
@@ -191,8 +193,12 @@ TaskStatus Particles::NewTimeStep(Driver *pdriver, int stage) {
     Kokkos::RangePolicy<>(DevExeSpace(), 0, pmy_pack->nmb_thispack),
     KOKKOS_LAMBDA(const int &m, Real &min_dt) {
       min_dt = fmin(min_dt, mbsize.d_view(m).dx1);
-      if (multi_d) { min_dt = fmin(min_dt, mbsize.d_view(m).dx2); }
-      if (three_d) { min_dt = fmin(min_dt, mbsize.d_view(m).dx3); }
+      if (multi_d) {
+        min_dt = fmin(min_dt, mbsize.d_view(m).dx2);
+      }
+      if (three_d) {
+        min_dt = fmin(min_dt, mbsize.d_view(m).dx3);
+      }
     }, Kokkos::Min<Real>(dt_min));
   }
 

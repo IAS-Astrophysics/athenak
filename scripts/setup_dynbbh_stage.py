@@ -17,11 +17,7 @@ import struct
 import subprocess
 from pathlib import Path
 
-
-CPU_BIND = (
-    "list:1-8:9-16:17-24:25-32:33-40:41-48:"
-    "53-60:61-68:69-76:77-84:85-92:93-100"
-)
+CPU_BIND = "list:1-8:9-16:17-24:25-32:33-40:41-48:" "53-60:61-68:69-76:77-84:85-92:93-100"
 ORBIT_DURATION = 785.398163397
 DEFAULT_RANKS = 264
 DEFAULT_RANKS_PER_NODE = 12
@@ -61,22 +57,24 @@ def set_param(text, block, key, value):
     if not match:
         return text.rstrip() + f"\n\n<{block}>\n{key} = {value}\n"
 
-    next_block = re.search(r"(?m)^<[^>\n]+>\s*$", text[match.end():])
+    next_block = re.search(r"(?m)^<[^>\n]+>\s*$", text[match.end() :])
     end = match.end() + next_block.start() if next_block else len(text)
-    body = text[match.end():end]
+    body = text[match.end() : end]
     key_pat = re.compile(rf"(?m)^(\s*{re.escape(key)}\s*=\s*)[^#\n]*(.*)$")
     if key_pat.search(body):
+
         def repl(key_match):
             suffix = key_match.group(2)
             if suffix.startswith("#"):
                 suffix = " " + suffix
             return f"{key_match.group(1)}{value}{suffix}"
+
         body = key_pat.sub(repl, body, count=1)
     else:
         if body and not body.endswith("\n"):
             body += "\n"
         body += f"{key} = {value}\n"
-    return text[:match.end()] + body + text[end:]
+    return text[: match.end()] + body + text[end:]
 
 
 def format_real(value):
@@ -101,9 +99,7 @@ def find_output_block(text, file_type):
 
 
 def find_output_block_with_key(text, key, value):
-    key_pat = re.compile(
-        rf"(?m)^\s*{re.escape(key)}\s*=\s*{re.escape(value)}(?:\s|#|$)"
-    )
+    key_pat = re.compile(rf"(?m)^\s*{re.escape(key)}\s*=\s*{re.escape(value)}(?:\s|#|$)")
     for block, start, end in iter_blocks(text):
         if block.startswith("output") and key_pat.search(text[start:end]):
             return block
@@ -226,8 +222,9 @@ def copy_restart_set(src_rank0, dst_rst, expected_ranks):
         dst_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src_root / rank_dir / name, dst_dir / name)
         if rank == 0 or (rank + 1) % 32 == 0 or rank + 1 == expected_ranks:
-            print(f"copied {rank + 1}/{expected_ranks} restart ranks for {name}",
-                  flush=True)
+            print(
+                f"copied {rank + 1}/{expected_ranks} restart ranks for {name}", flush=True
+            )
     return dst_rst / "rank_00000000" / name
 
 
@@ -385,9 +382,20 @@ raise SystemExit(f"could not decode restart time from {sys.argv[1]}")
     path.chmod(0o755)
 
 
-def write_zoom_launch(path, *, label, run_dir, exe, input_file, runtime,
-                      initial_restart="", initial_restart_root="", spin_ramp=False,
-                      helper="", require_source_advanced=False):
+def write_zoom_launch(
+    path,
+    *,
+    label,
+    run_dir,
+    exe,
+    input_file,
+    runtime,
+    initial_restart="",
+    initial_restart_root="",
+    spin_ramp=False,
+    helper="",
+    require_source_advanced=False,
+):
     initial_restart = shlex.quote(str(initial_restart)) if initial_restart else ""
     initial_restart_root = (
         shlex.quote(str(initial_restart_root)) if initial_restart_root else ""
@@ -474,9 +482,23 @@ gpu_tile_compact.sh "$EXE" -d "$RUN_DIR" -t "$RUNTIME" -r "$RESTART" -i "$INPUT"
     path.chmod(0o755)
 
 
-def write_bundle_pbs(path, *, root, runs, account, queue, job_name, walltime,
-                     runtime, max_iters, ranks, ranks_per_node, nodes_per_run,
-                     cpu_bind, auto_resubmit=False):
+def write_bundle_pbs(
+    path,
+    *,
+    root,
+    runs,
+    account,
+    queue,
+    job_name,
+    walltime,
+    runtime,
+    max_iters,
+    ranks,
+    ranks_per_node,
+    nodes_per_run,
+    cpu_bind,
+    auto_resubmit=False,
+):
     run_lines = "\n".join(
         f'  "{run["name"]}|{run["run_dir"]}|{run["launch"]}"' for run in runs
     )
@@ -603,9 +625,19 @@ fi
     path.chmod(0o755)
 
 
-def apply_common_zoom_updates(text, *, root, case, stage, source_restart,
-                              source_state, tlim, restart_dt,
-                              angular_momentum_dt, slice_dt):
+def apply_common_zoom_updates(
+    text,
+    *,
+    root,
+    case,
+    stage,
+    source_restart,
+    source_state,
+    tlim,
+    restart_dt,
+    angular_momentum_dt,
+    slice_dt,
+):
     updates = {
         ("comment", "zoom_workflow_root"): str(root),
         ("comment", "zoom_case"): case,
@@ -619,18 +651,38 @@ def apply_common_zoom_updates(text, *, root, case, stage, source_restart,
     for (block, key), value in updates.items():
         text = set_param(text, block, key, value)
     return set_zoom_output_cadence(
-        text, restart_dt=restart_dt, angular_momentum_dt=angular_momentum_dt,
-        slice_dt=slice_dt)
+        text,
+        restart_dt=restart_dt,
+        angular_momentum_dt=angular_momentum_dt,
+        slice_dt=slice_dt,
+    )
 
 
-def stage2_horizon_text(text, *, root, case, source_restart, source_state,
-                        orbit_duration, restart_dt, angular_momentum_dt, slice_dt):
+def stage2_horizon_text(
+    text,
+    *,
+    root,
+    case,
+    source_restart,
+    source_state,
+    orbit_duration,
+    restart_dt,
+    angular_momentum_dt,
+    slice_dt,
+):
     tlim = source_state["time"] + orbit_duration
     text = apply_common_zoom_updates(
-        text, root=root, case=case, stage="stage2_horizon_zero_spin",
-        source_restart=source_restart, source_state=source_state, tlim=tlim,
-        restart_dt=restart_dt, angular_momentum_dt=angular_momentum_dt,
-        slice_dt=slice_dt)
+        text,
+        root=root,
+        case=case,
+        stage="stage2_horizon_zero_spin",
+        source_restart=source_restart,
+        source_state=source_state,
+        tlim=tlim,
+        restart_dt=restart_dt,
+        angular_momentum_dt=angular_momentum_dt,
+        slice_dt=slice_dt,
+    )
     updates = {
         ("job", "restart_file"): str(source_restart),
         ("coord", "excise_1_rad"): "4.0",
@@ -653,17 +705,38 @@ def stage2_horizon_text(text, *, root, case, source_restart, source_state,
     return text, tlim
 
 
-def stage3_spin_text(text, *, root, case, spin_name, spin_mag, theta1_deg,
-                     theta2_deg,
-                     alignment, source_restart_root, source_state, expected_start_time,
-                     orbit_duration, spin_orbits, restart_dt,
-                     angular_momentum_dt, slice_dt):
+def stage3_spin_text(
+    text,
+    *,
+    root,
+    case,
+    spin_name,
+    spin_mag,
+    theta1_deg,
+    theta2_deg,
+    alignment,
+    source_restart_root,
+    source_state,
+    expected_start_time,
+    orbit_duration,
+    spin_orbits,
+    restart_dt,
+    angular_momentum_dt,
+    slice_dt,
+):
     tlim = expected_start_time + spin_orbits * orbit_duration
     text = apply_common_zoom_updates(
-        text, root=root, case=case, stage=f"stage3_{spin_name}_{alignment}",
-        source_restart=source_restart_root, source_state=source_state, tlim=tlim,
-        restart_dt=restart_dt, angular_momentum_dt=angular_momentum_dt,
-        slice_dt=slice_dt)
+        text,
+        root=root,
+        case=case,
+        stage=f"stage3_{spin_name}_{alignment}",
+        source_restart=source_restart_root,
+        source_state=source_state,
+        tlim=tlim,
+        restart_dt=restart_dt,
+        angular_momentum_dt=angular_momentum_dt,
+        slice_dt=slice_dt,
+    )
     spin_ramp = spin_mag > 0.0
     updates = {
         ("comment", "zoom_spin_case"): spin_name,
@@ -749,23 +822,36 @@ def setup_zoom_survey(args):
         stage2_rank0 = copy_restart_set(rank0_restart, stage2_rst, args.ranks)
         stage2_input = inputs_dir / f"{case}_stage2_horizon_zero_spin.par"
         text, stage2_tlim = stage2_horizon_text(
-            template_text, root=root, case=case, source_restart=stage2_rank0,
-            source_state=state, orbit_duration=args.orbit_duration,
+            template_text,
+            root=root,
+            case=case,
+            source_restart=stage2_rank0,
+            source_state=state,
+            orbit_duration=args.orbit_duration,
             restart_dt=args.restart_dt,
             angular_momentum_dt=args.angular_momentum_dt,
-            slice_dt=args.slice_dt)
+            slice_dt=args.slice_dt,
+        )
         text = apply_overrides(text, args.set)
         stage2_input.write_text(text)
         stage2_launch = stage2_run / "launch.sh"
         write_zoom_launch(
-            stage2_launch, label=f"{case} stage2_horizon_zero_spin",
-            run_dir=stage2_run, exe=exe, input_file=stage2_input,
-            runtime=args.runtime, initial_restart=stage2_rank0, helper=helper)
-        stage2_runs.append({
-            "name": f"{case}_stage2",
-            "run_dir": stage2_run,
-            "launch": stage2_launch,
-        })
+            stage2_launch,
+            label=f"{case} stage2_horizon_zero_spin",
+            run_dir=stage2_run,
+            exe=exe,
+            input_file=stage2_input,
+            runtime=args.runtime,
+            initial_restart=stage2_rank0,
+            helper=helper,
+        )
+        stage2_runs.append(
+            {
+                "name": f"{case}_stage2",
+                "run_dir": stage2_run,
+                "launch": stage2_launch,
+            }
+        )
         readme_rows.append(
             f"- {case}: template `{template}`, restart `{rank0_restart}`, "
             f"time={format_real(state['time'])}, cycle={state['cycle']}"
@@ -776,47 +862,81 @@ def setup_zoom_survey(args):
             spin_run.mkdir(parents=True, exist_ok=True)
             spin_input = inputs_dir / f"{case}_stage3_{spin_name}.par"
             spin_text, _, spin_ramp = stage3_spin_text(
-                template_text, root=root, case=case, spin_name=spin_name,
-                spin_mag=spin_mag, theta1_deg=theta1_deg,
-                theta2_deg=theta2_deg, alignment=alignment,
-                source_restart_root=stage2_rst, source_state=state,
+                template_text,
+                root=root,
+                case=case,
+                spin_name=spin_name,
+                spin_mag=spin_mag,
+                theta1_deg=theta1_deg,
+                theta2_deg=theta2_deg,
+                alignment=alignment,
+                source_restart_root=stage2_rst,
+                source_state=state,
                 expected_start_time=stage2_tlim,
-                orbit_duration=args.orbit_duration, spin_orbits=args.spin_orbits,
+                orbit_duration=args.orbit_duration,
+                spin_orbits=args.spin_orbits,
                 restart_dt=args.restart_dt,
                 angular_momentum_dt=args.angular_momentum_dt,
-                slice_dt=args.slice_dt)
+                slice_dt=args.slice_dt,
+            )
             spin_text = apply_overrides(spin_text, args.set)
             spin_input.write_text(spin_text)
             spin_launch = spin_run / "launch.sh"
             write_zoom_launch(
-                spin_launch, label=f"{case} {spin_name}",
-                run_dir=spin_run, exe=exe, input_file=spin_input,
-                runtime=args.runtime, initial_restart_root=stage2_rst,
-                spin_ramp=spin_ramp, helper=helper,
-                require_source_advanced=True)
-            stage3_runs.append({
-                "name": f"{case}_{spin_name}",
-                "run_dir": spin_run,
-                "launch": spin_launch,
-            })
+                spin_launch,
+                label=f"{case} {spin_name}",
+                run_dir=spin_run,
+                exe=exe,
+                input_file=spin_input,
+                runtime=args.runtime,
+                initial_restart_root=stage2_rst,
+                spin_ramp=spin_ramp,
+                helper=helper,
+                require_source_advanced=True,
+            )
+            stage3_runs.append(
+                {
+                    "name": f"{case}_{spin_name}",
+                    "run_dir": spin_run,
+                    "launch": spin_launch,
+                }
+            )
 
     stage2_pbs = scripts_dir / "submit_stage2_horizon_debug_scaling.pbs"
     write_bundle_pbs(
-        stage2_pbs, root=root, runs=stage2_runs, account=args.account,
-        queue=args.stage2_queue, job_name=args.stage2_job_name,
-        walltime=args.stage2_walltime, runtime=args.runtime, max_iters=1,
-        ranks=args.ranks, ranks_per_node=args.ranks_per_node,
-        nodes_per_run=args.nodes_per_run, cpu_bind=args.cpu_bind,
-        auto_resubmit=False)
+        stage2_pbs,
+        root=root,
+        runs=stage2_runs,
+        account=args.account,
+        queue=args.stage2_queue,
+        job_name=args.stage2_job_name,
+        walltime=args.stage2_walltime,
+        runtime=args.runtime,
+        max_iters=1,
+        ranks=args.ranks,
+        ranks_per_node=args.ranks_per_node,
+        nodes_per_run=args.nodes_per_run,
+        cpu_bind=args.cpu_bind,
+        auto_resubmit=False,
+    )
 
     stage3_pbs = scripts_dir / "submit_stage3_spin_survey_prod.pbs"
     write_bundle_pbs(
-        stage3_pbs, root=root, runs=stage3_runs, account=args.account,
-        queue=args.stage3_queue, job_name=args.stage3_job_name,
-        walltime=args.stage3_walltime, runtime=args.runtime,
-        max_iters=args.stage3_max_iters, ranks=args.ranks,
-        ranks_per_node=args.ranks_per_node, nodes_per_run=args.nodes_per_run,
-        cpu_bind=args.cpu_bind, auto_resubmit=args.auto_resubmit)
+        stage3_pbs,
+        root=root,
+        runs=stage3_runs,
+        account=args.account,
+        queue=args.stage3_queue,
+        job_name=args.stage3_job_name,
+        walltime=args.stage3_walltime,
+        runtime=args.runtime,
+        max_iters=args.stage3_max_iters,
+        ranks=args.ranks,
+        ranks_per_node=args.ranks_per_node,
+        nodes_per_run=args.nodes_per_run,
+        cpu_bind=args.cpu_bind,
+        auto_resubmit=args.auto_resubmit,
+    )
 
     readme = root / "README.md"
     readme.write_text(f"""# dynbbh staged zoom workflow
@@ -858,16 +978,21 @@ def main():
     parser.add_argument("--workflow", choices=["single", "zoom-survey"], default="single")
     parser.add_argument("--base-dir", type=Path, required=True)
     parser.add_argument("--case")
-    parser.add_argument("--stage", choices=[
-        "burnin-schwarzschild",
-        "shrink-to-horizon",
-        "horizon-start",
-        "spin-ramp",
-        "spin-static",
-    ])
+    parser.add_argument(
+        "--stage",
+        choices=[
+            "burnin-schwarzschild",
+            "shrink-to-horizon",
+            "horizon-start",
+            "spin-ramp",
+            "spin-static",
+        ],
+    )
     parser.add_argument("--source-run", type=Path)
     parser.add_argument("--template-parfile", type=Path)
-    parser.add_argument("--exe", type=Path, default=Path("/home/hzhu/athenak/build_cb/src/athena"))
+    parser.add_argument(
+        "--exe", type=Path, default=Path("/home/hzhu/athenak/build_cb/src/athena")
+    )
     parser.add_argument("--restart", type=Path)
     parser.add_argument("--spin-target", type=float, default=0.9)
     parser.add_argument("--spin-ramp-timescale", type=float, default=785.0)
@@ -888,7 +1013,9 @@ def main():
     parser.add_argument("--submit", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument(
-        "--case-source", action="append", default=[],
+        "--case-source",
+        action="append",
+        default=[],
         help="zoom-survey source as CASE=template.par,rank0_restart.rst[,label]",
     )
     parser.add_argument("--orbit-duration", type=float, default=ORBIT_DURATION)
@@ -952,8 +1079,9 @@ def main():
     print(f"pbs={pbs_path}")
     print(f"restart={restart}")
     if args.submit:
-        result = subprocess.run(["qsub", str(pbs_path)], check=True,
-                                text=True, capture_output=True)
+        result = subprocess.run(
+            ["qsub", str(pbs_path)], check=True, text=True, capture_output=True
+        )
         print(f"job_id={result.stdout.strip()}")
 
 

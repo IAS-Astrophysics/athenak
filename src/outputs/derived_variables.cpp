@@ -1147,7 +1147,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
               n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
             }
             Real intensity = i0_(m,n,k,j,i)/intensity_norm;
-            if (!(use_adm_radiation)) { intensity /= n_0; }
+            if (!(use_adm_radiation)) {
+              intensity /= n_0;
+            }
             dv(m,n12,k,j,i) += nmun1*nmun2*intensity*solid_angles_.d_view(n);
           }
         }

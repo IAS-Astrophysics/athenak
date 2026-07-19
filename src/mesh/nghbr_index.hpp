@@ -28,8 +28,12 @@
 KOKKOS_INLINE_FUNCTION
 static int NeighborIndex(int ix, int iy, int iz, int n1, int n2) {
   // do some error checking on input parameters
-  if ((std::abs(ix) + std::abs(iy) + std::abs(iz)) == 0) {return -1;}
-  if (std::abs(ix*iy*iz) > 1) {return -1;}
+  if ((std::abs(ix) + std::abs(iy) + std::abs(iz)) == 0) {
+    return -1;
+  }
+  if (std::abs(ix * iy * iz) > 1) {
+    return -1;
+  }
 
   if (iz == 0) {
     // x1faces or x2faces

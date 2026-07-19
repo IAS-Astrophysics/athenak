@@ -455,7 +455,9 @@ struct array_type {
   ScalarType the_array[N];
   KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
   array_type() {
-    for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
+    for (int i = 0; i < N; i++) {
+      the_array[i] = 0;
+    }
   }
   KOKKOS_INLINE_FUNCTION   // Copy Constructor
   array_type(const array_type & rhs) {

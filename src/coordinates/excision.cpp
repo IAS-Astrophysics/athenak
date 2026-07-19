@@ -198,7 +198,8 @@ void Coordinates::UpdateExcisionMasks() {
 
     Real &excise_lapse = coord_data.excise_lapse;
     Real lapse_width = coord_data.smooth_excise_lapse_width;
-    Real flux_lapse = coord_data.smooth_excise ? excise_lapse + lapse_width : excise_lapse;
+    Real flux_lapse =
+        coord_data.smooth_excise ? excise_lapse + lapse_width : excise_lapse;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -232,7 +233,7 @@ void Coordinates::UpdateExcisionMasks() {
     Real p0_vx = coord_data.punc_0_vel[0];
     Real p0_vy = coord_data.punc_0_vel[1];
     Real p0_vz = coord_data.punc_0_vel[2];
-    
+
     Real p1_x = coord_data.punc_1[0];
     Real p1_y = coord_data.punc_1[1];
     Real p1_z = coord_data.punc_1[2];

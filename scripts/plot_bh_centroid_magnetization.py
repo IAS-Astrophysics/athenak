@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import bin_convert
+import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import csv
 import glob
@@ -9,12 +12,10 @@ import sys
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
 
 sys.path.insert(0, "/home/hzhu/athenak/vis/python")
-import bin_convert
 
 
 RUN_DIR = Path(__file__).resolve().parent
@@ -41,7 +42,7 @@ def read_par_value(parfile, name, default):
 
 
 def bh_positions(time, sep, q):
-    omega = sep ** -1.5
+    omega = sep**-1.5
     phase = omega * time
     c = math.cos(phase)
     s = math.sin(phase)
@@ -87,7 +88,9 @@ def sample_point(data, x, y):
                 "bcc2": float(np.asarray(data["mb_data"]["bcc2"][mb])[iz, iy, ix]),
                 "bcc3": float(np.asarray(data["mb_data"]["bcc3"][mb])[iz, iy, ix]),
             }
-            values.update({key: float(value) for key, value in derived_values(values).items()})
+            values.update(
+                {key: float(value) for key, value in derived_values(values).items()}
+            )
             best = {
                 "area": area,
                 "dx": dx,
@@ -119,7 +122,7 @@ def average_in_radius(data, x, y, radius):
         xc = x0 + (np.arange(nx) + 0.5) * dx
         yc = y0 + (np.arange(ny) + 0.5) * dy
         xx, yy = np.meshgrid(xc, yc)
-        mask = (xx - x) ** 2 + (yy - y) ** 2 <= radius ** 2
+        mask = (xx - x) ** 2 + (yy - y) ** 2 <= radius**2
         if not np.any(mask):
             continue
 
@@ -148,7 +151,9 @@ def average_in_radius(data, x, y, radius):
                 maxs[key] = max(maxs[key], float(np.max(finite)))
 
     if area_total == 0.0:
-        raise RuntimeError("No slice cells within radius {:.6g} of ({:.6g}, {:.6g})".format(radius, x, y))
+        raise RuntimeError(
+            "No slice cells within radius {:.6g} of ({:.6g}, {:.6g})".format(radius, x, y)
+        )
 
     result = {
         "area": area_total,
@@ -295,14 +300,23 @@ def main():
     times = np.array([r["time"] for r in rows])
     t0 = times[0]
     fig, axes = plt.subplots(4, 1, figsize=(9, 11), sharex=True)
-    axes[0].plot(times - t0, [r["bh1_point_sigma"] for r in rows], "o-", label="BH1 point")
-    axes[0].plot(times - t0, [r["bh2_point_sigma"] for r in rows], "s-", label="BH2 point")
+    axes[0].plot(
+        times - t0, [r["bh1_point_sigma"] for r in rows], "o-", label="BH1 point"
+    )
+    axes[0].plot(
+        times - t0, [r["bh2_point_sigma"] for r in rows], "s-", label="BH2 point"
+    )
     axes[0].plot(times - t0, [r["bh1_avg_sigma"] for r in rows], "o--", label="BH1 avg")
     axes[0].plot(times - t0, [r["bh2_avg_sigma"] for r in rows], "s--", label="BH2 avg")
-    set_log_if_positive(axes[0], ([r["bh1_point_sigma"] for r in rows],
-                                  [r["bh2_point_sigma"] for r in rows],
-                                  [r["bh1_avg_sigma"] for r in rows],
-                                  [r["bh2_avg_sigma"] for r in rows]))
+    set_log_if_positive(
+        axes[0],
+        (
+            [r["bh1_point_sigma"] for r in rows],
+            [r["bh2_point_sigma"] for r in rows],
+            [r["bh1_avg_sigma"] for r in rows],
+            [r["bh2_avg_sigma"] for r in rows],
+        ),
+    )
     axes[0].set_ylabel(r"$\sigma = B^2/\rho$")
     axes[0].legend(loc="best")
     axes[0].grid(True, alpha=0.3)
@@ -311,10 +325,15 @@ def main():
     axes[1].plot(times - t0, [r["bh2_point_b_sq"] for r in rows], "s-", label="BH2 point")
     axes[1].plot(times - t0, [r["bh1_avg_b_sq"] for r in rows], "o--", label="BH1 avg")
     axes[1].plot(times - t0, [r["bh2_avg_b_sq"] for r in rows], "s--", label="BH2 avg")
-    set_log_if_positive(axes[1], ([r["bh1_point_b_sq"] for r in rows],
-                                  [r["bh2_point_b_sq"] for r in rows],
-                                  [r["bh1_avg_b_sq"] for r in rows],
-                                  [r["bh2_avg_b_sq"] for r in rows]))
+    set_log_if_positive(
+        axes[1],
+        (
+            [r["bh1_point_b_sq"] for r in rows],
+            [r["bh2_point_b_sq"] for r in rows],
+            [r["bh1_avg_b_sq"] for r in rows],
+            [r["bh2_avg_b_sq"] for r in rows],
+        ),
+    )
     axes[1].set_ylabel(r"$B^2$")
     axes[1].grid(True, alpha=0.3)
 
@@ -322,21 +341,35 @@ def main():
     axes[2].plot(times - t0, [r["bh2_point_rho"] for r in rows], "s-", label="BH2 point")
     axes[2].plot(times - t0, [r["bh1_avg_rho"] for r in rows], "o--", label="BH1 avg")
     axes[2].plot(times - t0, [r["bh2_avg_rho"] for r in rows], "s--", label="BH2 avg")
-    set_log_if_positive(axes[2], ([r["bh1_point_rho"] for r in rows],
-                                  [r["bh2_point_rho"] for r in rows],
-                                  [r["bh1_avg_rho"] for r in rows],
-                                  [r["bh2_avg_rho"] for r in rows]))
+    set_log_if_positive(
+        axes[2],
+        (
+            [r["bh1_point_rho"] for r in rows],
+            [r["bh2_point_rho"] for r in rows],
+            [r["bh1_avg_rho"] for r in rows],
+            [r["bh2_avg_rho"] for r in rows],
+        ),
+    )
     axes[2].set_ylabel(r"$\rho$")
     axes[2].grid(True, alpha=0.3)
 
-    axes[3].plot(times - t0, [r["bh1_point_press"] for r in rows], "o-", label="BH1 point")
-    axes[3].plot(times - t0, [r["bh2_point_press"] for r in rows], "s-", label="BH2 point")
+    axes[3].plot(
+        times - t0, [r["bh1_point_press"] for r in rows], "o-", label="BH1 point"
+    )
+    axes[3].plot(
+        times - t0, [r["bh2_point_press"] for r in rows], "s-", label="BH2 point"
+    )
     axes[3].plot(times - t0, [r["bh1_avg_press"] for r in rows], "o--", label="BH1 avg")
     axes[3].plot(times - t0, [r["bh2_avg_press"] for r in rows], "s--", label="BH2 avg")
-    set_log_if_positive(axes[3], ([r["bh1_point_press"] for r in rows],
-                                  [r["bh2_point_press"] for r in rows],
-                                  [r["bh1_avg_press"] for r in rows],
-                                  [r["bh2_avg_press"] for r in rows]))
+    set_log_if_positive(
+        axes[3],
+        (
+            [r["bh1_point_press"] for r in rows],
+            [r["bh2_point_press"] for r in rows],
+            [r["bh1_avg_press"] for r in rows],
+            [r["bh2_avg_press"] for r in rows],
+        ),
+    )
     axes[3].set_xlabel(r"$t - t_0$ (M)")
     axes[3].set_ylabel(r"$p$")
     axes[3].grid(True, alpha=0.3)
@@ -348,17 +381,35 @@ def main():
 
     fig, axes = plt.subplots(3, 1, figsize=(9, 9), sharex=True)
     for bh, marker in (("bh1", "o"), ("bh2", "s")):
-        axes[0].plot(times - t0, [r[f"{bh}_avg_temp"] for r in rows], marker + "--", label=bh.upper())
-        axes[1].plot(times - t0, [r[f"{bh}_avg_b_mag"] for r in rows], marker + "--", label=bh.upper())
-        axes[2].plot(times - t0, [r[f"{bh}_avg_beta"] for r in rows], marker + "--", label=bh.upper())
-    set_log_if_positive(axes[0], ([r["bh1_avg_temp"] for r in rows],
-                                  [r["bh2_avg_temp"] for r in rows]))
+        axes[0].plot(
+            times - t0,
+            [r[f"{bh}_avg_temp"] for r in rows],
+            marker + "--",
+            label=bh.upper(),
+        )
+        axes[1].plot(
+            times - t0,
+            [r[f"{bh}_avg_b_mag"] for r in rows],
+            marker + "--",
+            label=bh.upper(),
+        )
+        axes[2].plot(
+            times - t0,
+            [r[f"{bh}_avg_beta"] for r in rows],
+            marker + "--",
+            label=bh.upper(),
+        )
+    set_log_if_positive(
+        axes[0], ([r["bh1_avg_temp"] for r in rows], [r["bh2_avg_temp"] for r in rows])
+    )
     axes[0].set_ylabel("avg temperature")
-    set_log_if_positive(axes[1], ([r["bh1_avg_b_mag"] for r in rows],
-                                  [r["bh2_avg_b_mag"] for r in rows]))
+    set_log_if_positive(
+        axes[1], ([r["bh1_avg_b_mag"] for r in rows], [r["bh2_avg_b_mag"] for r in rows])
+    )
     axes[1].set_ylabel(r"avg $|B|$")
-    set_log_if_positive(axes[2], ([r["bh1_avg_beta"] for r in rows],
-                                  [r["bh2_avg_beta"] for r in rows]))
+    set_log_if_positive(
+        axes[2], ([r["bh1_avg_beta"] for r in rows], [r["bh2_avg_beta"] for r in rows])
+    )
     axes[2].set_ylabel(r"avg $\beta$")
     axes[2].set_xlabel(r"$t - t_0$ (M)")
     for ax in axes:
@@ -384,7 +435,11 @@ def main():
             finite_or_nan(row["global_temperature_finite_max"]),
         ]
         max_temp = max([v for v in temp_values if math.isfinite(v)] or [math.nan])
-        growth = max_temp / temp0 if math.isfinite(max_temp) and math.isfinite(temp0) else math.nan
+        growth = (
+            max_temp / temp0
+            if math.isfinite(max_temp) and math.isfinite(temp0)
+            else math.nan
+        )
         nonfinite_temp = int(row["global_temperature_nonfinite"])
         nonfinite_press = int(row["global_press_nonfinite"])
         status = "pass"
@@ -392,23 +447,29 @@ def main():
         if nonfinite_temp > 0 or nonfinite_press > 0:
             status = "fail"
             reasons.append("nonfinite thermodynamic cells")
-        if math.isfinite(TEMP_ABS_LIMIT) and math.isfinite(max_temp) and max_temp > TEMP_ABS_LIMIT:
+        if (
+            math.isfinite(TEMP_ABS_LIMIT)
+            and math.isfinite(max_temp)
+            and max_temp > TEMP_ABS_LIMIT
+        ):
             status = "fail"
             reasons.append("temperature above absolute limit")
         if math.isfinite(growth) and growth > TEMP_GROWTH_LIMIT:
             status = "fail"
             reasons.append("temperature growth above limit")
-        status_rows.append({
-            "file": row["file"],
-            "time": row["time"],
-            "cycle": row["cycle"],
-            "max_temperature": max_temp,
-            "temperature_growth": growth,
-            "temperature_nonfinite": nonfinite_temp,
-            "pressure_nonfinite": nonfinite_press,
-            "status": status,
-            "reason": "; ".join(reasons),
-        })
+        status_rows.append(
+            {
+                "file": row["file"],
+                "time": row["time"],
+                "cycle": row["cycle"],
+                "max_temperature": max_temp,
+                "temperature_growth": growth,
+                "temperature_nonfinite": nonfinite_temp,
+                "pressure_nonfinite": nonfinite_press,
+                "status": status,
+                "reason": "; ".join(reasons),
+            }
+        )
 
     health_csv = out_dir / "temperature_health_xy.csv"
     with health_csv.open("w", newline="") as handle:
@@ -417,25 +478,47 @@ def main():
         writer.writerows(status_rows)
 
     fig, axes = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
-    axes[0].plot(times - t0, [finite_or_nan(r["global_temperature_finite_max"]) for r in rows],
-                 "k-", label="global finite max")
-    axes[0].plot(times - t0, [finite_or_nan(r["bh1_avg_temp"]) for r in rows],
-                 "o--", label="BH1 sink avg")
-    axes[0].plot(times - t0, [finite_or_nan(r["bh2_avg_temp"]) for r in rows],
-                 "s--", label="BH2 sink avg")
+    axes[0].plot(
+        times - t0,
+        [finite_or_nan(r["global_temperature_finite_max"]) for r in rows],
+        "k-",
+        label="global finite max",
+    )
+    axes[0].plot(
+        times - t0,
+        [finite_or_nan(r["bh1_avg_temp"]) for r in rows],
+        "o--",
+        label="BH1 sink avg",
+    )
+    axes[0].plot(
+        times - t0,
+        [finite_or_nan(r["bh2_avg_temp"]) for r in rows],
+        "s--",
+        label="BH2 sink avg",
+    )
     if math.isfinite(TEMP_ABS_LIMIT):
         axes[0].axhline(TEMP_ABS_LIMIT, color="r", linestyle=":", label="absolute limit")
-    set_log_if_positive(axes[0], ([finite_or_nan(r["global_temperature_finite_max"]) for r in rows],
-                                  [finite_or_nan(r["bh1_avg_temp"]) for r in rows],
-                                  [finite_or_nan(r["bh2_avg_temp"]) for r in rows]))
+    set_log_if_positive(
+        axes[0],
+        (
+            [finite_or_nan(r["global_temperature_finite_max"]) for r in rows],
+            [finite_or_nan(r["bh1_avg_temp"]) for r in rows],
+            [finite_or_nan(r["bh2_avg_temp"]) for r in rows],
+        ),
+    )
     axes[0].set_ylabel("temperature")
     axes[0].grid(True, alpha=0.3)
     axes[0].legend(loc="best")
 
-    axes[1].plot(times - t0, [r["temperature_nonfinite"] for r in status_rows],
-                 "o-", label="temperature")
-    axes[1].plot(times - t0, [r["pressure_nonfinite"] for r in status_rows],
-                 "s-", label="pressure")
+    axes[1].plot(
+        times - t0,
+        [r["temperature_nonfinite"] for r in status_rows],
+        "o-",
+        label="temperature",
+    )
+    axes[1].plot(
+        times - t0, [r["pressure_nonfinite"] for r in status_rows], "s-", label="pressure"
+    )
     axes[1].set_yscale("symlog", linthresh=1.0)
     axes[1].set_xlabel(r"$t - t_0$ (M)")
     axes[1].set_ylabel("nonfinite cells")
@@ -455,14 +538,19 @@ def main():
         handle.write(f"TEMP_GROWTH_LIMIT = {TEMP_GROWTH_LIMIT:.6e}\n")
         if first_fail is None:
             handle.write("overall_status = pass\n")
-            handle.write("No nonfinite pressure/temperature cells and no configured temperature-limit failures.\n")
+            handle.write(
+                "No nonfinite pressure/temperature cells and no configured temperature-limit failures.\n"
+            )
         else:
             handle.write("overall_status = fail\n")
             handle.write(
                 "first_failure = {file}, time={time:.17g}, cycle={cycle}, "
                 "max_temperature={max_temperature:.6e}, growth={temperature_growth:.6e}, "
                 "temperature_nonfinite={temperature_nonfinite}, "
-                "pressure_nonfinite={pressure_nonfinite}, reason={reason}\n".format(**first_fail))
+                "pressure_nonfinite={pressure_nonfinite}, reason={reason}\n".format(
+                    **first_fail
+                )
+            )
 
     print("wrote", csv_path)
     print("wrote", out_dir / "bh_centroid_magnetization_xy.png")

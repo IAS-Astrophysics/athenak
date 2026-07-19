@@ -255,7 +255,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
 
   // initialize cost array with the simplest estimate; all the blocks are equal
   // TODO(@user): implement variable cost per MeshBlock as needed
-  for (int i=0; i<nmb_total; i++) {cost_eachmb[i] = 1.0;}
+  for (int i = 0; i < nmb_total; i++) {
+    cost_eachmb[i] = 1.0;
+  }
   LoadBalance(cost_eachmb, rank_eachmb, gids_eachrank, nmb_eachrank, nmb_total);
 
   // create MeshBlockPack for this rank
@@ -302,7 +304,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
   dt   = std::numeric_limits<float>::max();
   cfl_no = pin->GetReal("time", "cfl_number");
   ncycle = 0;
-  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
+  if (global_variable::my_rank == 0) {
+    PrintMeshDiagnostics();
+  }
 
   return;
 }
@@ -395,18 +399,21 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
     char *legacy_headerdata = new char[legacy_headersize];
     if (global_variable::my_rank == 0 || single_file_per_rank) {
       resfile.Seek(headeroffset, single_file_per_rank);
-      IOWrapperSizeT read_size = resfile.Read_bytes(legacy_headerdata, 1, legacy_headersize,
-                                                    single_file_per_rank);
+      IOWrapperSizeT read_size = resfile.Read_bytes(
+          legacy_headerdata, 1, legacy_headersize, single_file_per_rank);
       if (read_size != legacy_headersize) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Legacy header size read from restart file is incorrect, "
-                  << "expected " << legacy_headersize << ", got " << read_size << std::endl;
+                  << std::endl
+                  << "Legacy header size read from restart file is incorrect, "
+                  << "expected " << legacy_headersize << ", got " << read_size
+                  << std::endl;
         exit(EXIT_FAILURE);
       }
     }
 #if MPI_PARALLEL_ENABLED
     if (!single_file_per_rank) {
-      int mpi_err = MPI_Bcast(legacy_headerdata, legacy_headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
+      int mpi_err =
+          MPI_Bcast(legacy_headerdata, legacy_headersize, MPI_CHAR, 0, MPI_COMM_WORLD);
       if (mpi_err != MPI_SUCCESS) {
         char error_string[1024];
         int length_of_error_string;
@@ -529,7 +536,9 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
   // rebuild the MeshBlockTree
   ptree = std::make_unique<MeshBlockTree>(this);
   ptree->CreateRootGrid();
-  for (int i=0; i<nmb_total; i++) {ptree->AddNodeWithoutRefinement(lloc_eachmb[i]);}
+  for (int i = 0; i < nmb_total; i++) {
+    ptree->AddNodeWithoutRefinement(lloc_eachmb[i]);
+  }
 
   // check the tree structure by making sure total # of MBs counted in tree same as the
   // number read from the restart file.
@@ -591,5 +600,7 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
 
   // set remaining parameters, output diagnostics
   cfl_no = pin->GetReal("time", "cfl_number");
-  if (global_variable::my_rank == 0) {PrintMeshDiagnostics();}
+  if (global_variable::my_rank == 0) {
+    PrintMeshDiagnostics();
+  }
 }

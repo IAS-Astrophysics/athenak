@@ -694,14 +694,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 // Instantiated templates
 template class DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
-                          Primitive::ResetFloor>;
+using NormalCompOSE = Primitive::EOSCompOSE<Primitive::NormalLogs>;
+using NQTCompOSE = Primitive::EOSCompOSE<Primitive::NQTLogs>;
+using NormalHybrid = Primitive::EOSHybrid<Primitive::NormalLogs>;
+using NQTHybrid = Primitive::EOSHybrid<Primitive::NQTLogs>;
+template class DynGRMHDPS<NormalCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<NQTCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<NormalHybrid, Primitive::ResetFloor>;
+template class DynGRMHDPS<NQTHybrid, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \

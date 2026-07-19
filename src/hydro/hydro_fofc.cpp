@@ -54,8 +54,12 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
 
     // Index bounds
     int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
-    if (multi_d) { jl = js-1, ju = je+1; }
-    if (three_d) { kl = ks-1, ku = ke+1; }
+    if (multi_d) {
+      jl = js - 1, ju = je + 1;
+    }
+    if (three_d) {
+      kl = ks - 1, ku = ke + 1;
+    }
 
     // Estimate updated conserved variables and cell-centered fields
     par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
@@ -94,8 +98,12 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
 
   // Index bounds
   int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
-  if (multi_d) { jl = js-1, ju = je+1; }
-  if (three_d) { kl = ks-1, ku = ke+1; }
+  if (multi_d) {
+    jl = js - 1, ju = je + 1;
+  }
+  if (three_d) {
+    kl = ks - 1, ku = ke + 1;
+  }
 
   // Now replace fluxes with first-order LLF fluxes for any cell where floors needed (if
   // using FOFC) and/or for any cell about the excision (if GR+excising)
@@ -103,12 +111,16 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Check for FOFC flag
     bool fofc_flag = false;
-    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+    if (use_fofc_) {
+      fofc_flag = fofc_(m, k, j, i);
+    }
 
     // Check for GR + excision
     bool fofc_excision = false;
     if (is_gr) {
-      if (use_excise) { fofc_excision = excision_flux_(m,k,j,i); }
+      if (use_excise) {
+        fofc_excision = excision_flux_(m, k, j, i);
+      }
     }
 
     // Apply FOFC
@@ -120,7 +132,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       wim1.vx = w0_(m,IVX,k,j,i-1);
       wim1.vy = w0_(m,IVY,k,j,i-1);
       wim1.vz = w0_(m,IVZ,k,j,i-1);
-      if (eos.is_ideal) {wim1.e  = w0_(m,IEN,k,j,i-1);}
+      if (eos.is_ideal) {
+        wim1.e = w0_(m, IEN, k, j, i - 1);
+      }
 
       // load right state
       HydPrim1D wi;
@@ -128,7 +142,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       wi.vx = w0_(m,IVX,k,j,i);
       wi.vy = w0_(m,IVY,k,j,i);
       wi.vz = w0_(m,IVZ,k,j,i);
-      if (eos.is_ideal) {wi.e = w0_(m,IEN,k,j,i);}
+      if (eos.is_ideal) {
+        wi.e = w0_(m, IEN, k, j, i);
+      }
 
       // compute new 1st-order LLF flux
       HydCons1D flux;
@@ -156,7 +172,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       flx1(m,IM1,k,j,i) = flux.mx;
       flx1(m,IM2,k,j,i) = flux.my;
       flx1(m,IM3,k,j,i) = flux.mz;
-      if (eos.is_ideal) {flx1(m,IEN,k,j,i) = flux.e;}
+      if (eos.is_ideal) {
+        flx1(m, IEN, k, j, i) = flux.e;
+      }
 
       // replace x1-flux at i+1
       // load right state (left state just wi from above)
@@ -165,7 +183,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       wip1.vx = w0_(m,IVX,k,j,i+1);
       wip1.vy = w0_(m,IVY,k,j,i+1);
       wip1.vz = w0_(m,IVZ,k,j,i+1);
-      if (eos.is_ideal) {wip1.e = w0_(m,IEN,k,j,i+1);}
+      if (eos.is_ideal) {
+        wip1.e = w0_(m, IEN, k, j, i + 1);
+      }
 
       // compute new 1st-order LLF flux
       if (is_gr) {
@@ -192,7 +212,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
       flx1(m,IM1,k,j,i+1) = flux.mx;
       flx1(m,IM2,k,j,i+1) = flux.my;
       flx1(m,IM3,k,j,i+1) = flux.mz;
-      if (eos.is_ideal) {flx1(m,IEN,k,j,i+1) = flux.e;}
+      if (eos.is_ideal) {
+        flx1(m, IEN, k, j, i + 1) = flux.e;
+      }
 
       if (multi_d) {
         // replace x2-flux at j
@@ -202,7 +224,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         wjm1.vx = w0_(m,IVY,k,j-1,i);
         wjm1.vy = w0_(m,IVZ,k,j-1,i);
         wjm1.vz = w0_(m,IVX,k,j-1,i);
-        if (eos.is_ideal) {wjm1.e = w0_(m,IEN,k,j-1,i);}
+        if (eos.is_ideal) {
+          wjm1.e = w0_(m, IEN, k, j - 1, i);
+        }
 
         // load right state, permutting components of vectors
         HydPrim1D wj;
@@ -210,7 +234,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         wj.vx = w0_(m,IVY,k,j,i);
         wj.vy = w0_(m,IVZ,k,j,i);
         wj.vz = w0_(m,IVX,k,j,i);
-        if (eos.is_ideal) {wj.e = w0_(m,IEN,k,j,i);}
+        if (eos.is_ideal) {
+          wj.e = w0_(m, IEN, k, j, i);
+        }
 
         // compute new first-order flux
         if (is_gr) {
@@ -237,7 +263,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         flx2(m,IM2,k,j,i) = flux.mx;
         flx2(m,IM3,k,j,i) = flux.my;
         flx2(m,IM1,k,j,i) = flux.mz;
-        if (eos.is_ideal) {flx2(m,IEN,k,j,i) = flux.e;}
+        if (eos.is_ideal) {
+          flx2(m, IEN, k, j, i) = flux.e;
+        }
 
         // replace x2-flux at j+1
         // load left state, permutting components of vectors (just wj from above)
@@ -247,7 +275,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         wjp1.vx = w0_(m,IVY,k,j+1,i);
         wjp1.vy = w0_(m,IVZ,k,j+1,i);
         wjp1.vz = w0_(m,IVX,k,j+1,i);
-        if (eos.is_ideal) {wjp1.e = w0_(m,IEN,k,j+1,i);}
+        if (eos.is_ideal) {
+          wjp1.e = w0_(m, IEN, k, j + 1, i);
+        }
 
         // compute new first-order flux
         if (is_gr) {
@@ -274,7 +304,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         flx2(m,IM2,k,j+1,i) = flux.mx;
         flx2(m,IM3,k,j+1,i) = flux.my;
         flx2(m,IM1,k,j+1,i) = flux.mz;
-        if (eos.is_ideal) {flx2(m,IEN,k,j+1,i) = flux.e;}
+        if (eos.is_ideal) {
+          flx2(m, IEN, k, j + 1, i) = flux.e;
+        }
       }
 
       if (three_d) {
@@ -285,7 +317,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         wkm1.vx = w0_(m,IVZ,k-1,j,i);
         wkm1.vy = w0_(m,IVX,k-1,j,i);
         wkm1.vz = w0_(m,IVY,k-1,j,i);
-        if (eos.is_ideal) {wkm1.e = w0_(m,IEN,k-1,j,i);}
+        if (eos.is_ideal) {
+          wkm1.e = w0_(m, IEN, k - 1, j, i);
+        }
 
         // load right state, permutting components of vectors
         HydPrim1D wk;
@@ -293,7 +327,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         wk.vx = w0_(m,IVZ,k,j,i);
         wk.vy = w0_(m,IVX,k,j,i);
         wk.vz = w0_(m,IVY,k,j,i);
-        if (eos.is_ideal) {wk.e = w0_(m,IEN,k,j,i);}
+        if (eos.is_ideal) {
+          wk.e = w0_(m, IEN, k, j, i);
+        }
 
         // compute new first-order flux
         if (is_gr) {
@@ -320,7 +356,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         flx3(m,IM3,k,j,i) = flux.mx;
         flx3(m,IM1,k,j,i) = flux.my;
         flx3(m,IM2,k,j,i) = flux.mz;
-        if (eos.is_ideal) {flx3(m,IEN,k,j,i) = flux.e;}
+        if (eos.is_ideal) {
+          flx3(m, IEN, k, j, i) = flux.e;
+        }
 
         // replace x3-flux at k+1
         // load left state, permutting components of vectors (just wk from above)
@@ -330,7 +368,9 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         wkp1.vx = w0_(m,IVZ,k+1,j,i);
         wkp1.vy = w0_(m,IVX,k+1,j,i);
         wkp1.vz = w0_(m,IVY,k+1,j,i);
-        if (eos.is_ideal) {wkp1.e = w0_(m,IEN,k+1,j,i);}
+        if (eos.is_ideal) {
+          wkp1.e = w0_(m, IEN, k + 1, j, i);
+        }
 
         // compute new first-order flux
         if (is_gr) {
@@ -357,11 +397,15 @@ void Hydro::FOFC(Driver *pdriver, int stage) {
         flx3(m,IM3,k+1,j,i) = flux.mx;
         flx3(m,IM1,k+1,j,i) = flux.my;
         flx3(m,IM2,k+1,j,i) = flux.mz;
-        if (eos.is_ideal) {flx3(m,IEN,k+1,j,i) = flux.e;}
+        if (eos.is_ideal) {
+          flx3(m, IEN, k + 1, j, i) = flux.e;
+        }
       }
 
       // reset FOFC flag (do not reset excision flag)
-      if (use_fofc_ && fofc_flag) { fofc_(m,k,j,i) = false; }
+      if (use_fofc_ && fofc_flag) {
+        fofc_(m, k, j, i) = false;
+      }
     }
   });
 

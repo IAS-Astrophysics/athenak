@@ -42,7 +42,7 @@
 
 //----------------------------------------------------------------------------------------
 // MeshRefinement constructor:
-// called from Mesh::BuildTree (before physics modules are enrolled)
+// called from main() after physics modules are enrolled
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   pmy_mesh(pm),
@@ -71,9 +71,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
-  // allocate arrays for AMR
-  // NOTE: RefinementCriteria object cannot be allocated until Physics modules are defined
-  // This is done in Mesh::AddCoordinatesAndPhysics and not in this constructor
+  // allocate arrays for AMR and enroll refinement criteria
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
@@ -212,7 +210,9 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
     ncyc_since_ref(m) += 1;
   }
-  if ((pmy_mesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
+  if ((pmy_mesh->ncycle) % (ncyc_check_amr) != 0) {
+    return;
+  }  // not cycle to check
 
   // calculate derived refinement variables
   if (pmrc->nderived > 0) {
@@ -249,15 +249,21 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   for (int m=0; m<nmb; ++m) {
     if (pmy_mesh->lloc_eachmb[m+mbs].level == pmy_mesh->max_level) {
-      if (refine_flag.h_view(m+mbs) > 0) {refine_flag.h_view(m+mbs) = 0;}
+      if (refine_flag.h_view(m + mbs) > 0) {
+        refine_flag.h_view(m + mbs) = 0;
+      }
     }
     if (pmy_mesh->lloc_eachmb[m+mbs].level == pmy_mesh->root_level) {
-      if (refine_flag.h_view(m+mbs) < 0) {refine_flag.h_view(m+mbs) = 0;}
+      if (refine_flag.h_view(m + mbs) < 0) {
+        refine_flag.h_view(m + mbs) = 0;
+      }
     }
   }
   // Turn off (on host) refine/derefine flag for any MB that has been recently refined
   for (int m=0; m<nmb; ++m) {
-    if (ncyc_since_ref(m+mbs) < refinement_interval) {refine_flag.h_view(m+mbs) = 0;}
+    if (ncyc_since_ref(m + mbs) < refinement_interval) {
+      refine_flag.h_view(m + mbs) = 0;
+    }
   }
 
 #if MPI_PARALLEL_ENABLED
@@ -280,8 +286,12 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   // compute nleaf= number of leaf MeshBlocks per refined block
   int nleaf = 2;
-  if (pmy_mesh->two_d) {nleaf = 4;}
-  if (pmy_mesh->three_d) {nleaf = 8;}
+  if (pmy_mesh->two_d) {
+    nleaf = 4;
+  }
+  if (pmy_mesh->three_d) {
+    nleaf = 8;
+  }
 
   // count the number of the blocks to be (de)refined on this rank
   nref_eachrank[global_variable::my_rank] = 0;
@@ -483,7 +493,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   new_gids_eachrank = new int[global_variable::nranks];
   new_nmb_eachrank = new int[global_variable::nranks];
 
-  for (int i=0; i<new_nmb; i++) {new_cost_eachmb[i] = 1.0;}
+  for (int i = 0; i < new_nmb; i++) {
+    new_cost_eachmb[i] = 1.0;
+  }
   pm->LoadBalance(new_cost_eachmb, new_rank_eachmb, new_gids_eachrank, new_nmb_eachrank,
                   new_nmb_total);
   if (new_nmb_eachrank[global_variable::my_rank] > pm->nmb_maxperrank) {
@@ -600,8 +612,12 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 8.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
-  if (nmb_send > 0) {ClearSendAMR();}
-  if (nmb_recv > 0) {ClearRecvAndUnpackAMR();}
+  if (nmb_send > 0) {
+    ClearSendAMR();
+  }
+  if (nmb_recv > 0) {
+    ClearRecvAndUnpackAMR();
+  }
 #endif
 
   // copy newtoold array to DualView so that it can be accessed in kernel

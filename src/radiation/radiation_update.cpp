@@ -72,7 +72,9 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
     i0_(m,n,k,j,i) = gam0*i0_(m,n,k,j,i)+gam1*i1_(m,n,k,j,i)-beta_dt*divf_s;
 
     // angular fluxes
-    if (angular_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
+    if (angular_fluxes_) {
+      i0_(m, n, k, j, i) -= beta_dt * divfa_(m, n, k, j, i);
+    }
 
     // zero intensity if negative
     Real n0  = tt(m,0,0,k,j,i);
@@ -85,7 +87,9 @@ TaskStatus Radiation::RKUpdate(Driver *pdriver, int stage) {
     // intensities within rks <= 1.0 and zeroes intensities within angles where n_0
     // is about zero.  This needs future attention.
     if (excise) {
-      if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+      if (rad_mask_(m, k, j, i) || fabs(n_0) < n_0_floor_) {
+        i0_(m, n, k, j, i) = 0.0;
+      }
     }
   });
   return TaskStatus::complete;

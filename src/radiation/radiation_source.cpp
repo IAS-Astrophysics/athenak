@@ -275,7 +275,9 @@ TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage) {
         if (excise) {
           bool apply_excision = (rad_mask_(m,k,j,i) ||
                                  (!(is_compton_enabled_) && fabs(n_0) < n_0_floor_));
-          if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
+          if (apply_excision) {
+            i0_(m, n, k, j, i) = 0.0;
+          }
         }
       }
       // update conserved fluid variables
@@ -361,7 +363,9 @@ TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage) {
 
           // handle excision (see notes above)
           if (excise) {
-            if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+            if (rad_mask_(m, k, j, i) || fabs(n_0) < n_0_floor_) {
+              i0_(m, n, k, j, i) = 0.0;
+            }
           }
         }
 
@@ -382,7 +386,9 @@ TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage) {
                        tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)+
                        tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+
                        tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-            if (rad_mask_(m,k,j,i) || fabs(n_0) < n_0_floor_) { i0_(m,n,k,j,i) = 0.0; }
+            if (rad_mask_(m, k, j, i) || fabs(n_0) < n_0_floor_) {
+              i0_(m, n, k, j, i) = 0.0;
+            }
           }
         }
       }

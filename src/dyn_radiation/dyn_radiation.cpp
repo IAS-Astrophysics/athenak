@@ -107,8 +107,8 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
-  // Enable dyn_radiation source term (dyn_radiation+(M)HD) by default if hydro or mhd enabled
-  // Otherwise, disable dyn_radiation source term.  The former can be overriden by
+  // Enable dyn_radiation source term (dyn_radiation+(M)HD) by default if hydro or mhd
+  // enabled Otherwise, disable dyn_radiation source term.  The former can be overriden by
   // specification in the input file.
   if (is_hydro_enabled || is_mhd_enabled) {
     rad_source = pin->GetOrAddBoolean("dyn_radiation","rad_source",true);
@@ -231,7 +231,9 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(adm_grad_g_uu_c,nmb,18,ncells3,ncells2,ncells1);
   Kokkos::realloc(adm_grad_cotriad_c,nmb,27,ncells3,ncells2,ncells1);
   Kokkos::realloc(adm_dt_cotriad_c,nmb,9,ncells3,ncells2,ncells1);
-  if (angular_fluxes) {Kokkos::realloc(na,nmb,prgeo->nangles,ncells3,ncells2,ncells1,6);}
+  if (angular_fluxes) {
+    Kokkos::realloc(na, nmb, prgeo->nangles, ncells3, ncells2, ncells1, 6);
+  }
   if (is_hydro_enabled || is_mhd_enabled) {
     Kokkos::realloc(norm_to_tet,nmb,4,4,ncells3,ncells2,ncells1);
   }
@@ -293,7 +295,8 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<dyn_radiation> recon = '" << xorder << "' not implemented"
+                << std::endl
+                << "<dyn_radiation> recon = '" << xorder << "' not implemented"
                 << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -319,7 +322,9 @@ DynRadiation::DynRadiation(MeshBlockPack *ppack, ParameterInput *pin) :
 DynRadiation::~DynRadiation() {
   delete pbval_i;
   delete prgeo;
-  if (psrc != nullptr) {delete psrc;}
+  if (psrc != nullptr) {
+    delete psrc;
+  }
 }
 
 //----------------------------------------------------------------------------------------

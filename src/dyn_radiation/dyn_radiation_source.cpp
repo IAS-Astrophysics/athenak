@@ -66,7 +66,9 @@ bool OpacityDensityScale(const Real wdn, const Real dfloor, const Real dfloor_op
   Real wdn_opacity = wdn_real;
   if (fabs(fac_trunc - 1.0) > 1.0e-12) {
     const Real denom = log(1.0/sigmoid_residual - 1.0);
-    if (!(denom > 0.0)) { return false; }
+    if (!(denom > 0.0)) {
+      return false;
+    }
     const Real wid_trunc = 0.5*log10(fac_trunc)/denom;
     if (!(wid_trunc > 0.0) || !(Kokkos::isfinite(wid_trunc))) {
       return false;
@@ -94,8 +96,8 @@ TaskStatus DynRadiation::AddTmunu(Driver *pdriver, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage)
-//! \brief Add implicit dyn_radiation-fluid source terms.  Based on @c-white and @yanfeij's
-//! gr_rad branch, dyn_radiation/coupling/emission.cpp commit be7f84565b.
+//! \brief Add implicit dyn_radiation-fluid source terms.  Based on @c-white and
+//! @yanfeij's gr_rad branch, dyn_radiation/coupling/emission.cpp commit be7f84565b.
 
 TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   // Return if dyn_radiation source term disabled
@@ -606,9 +608,13 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       const Real rel = fabs(tupdated - tgasnew)/
                        fmax(fmax(fabs(tupdated), fabs(tgasnew)), coupling_floor);
       tgasnew = tupdated;
-      if (!(power_opacity_) || rel <= source_tolerance_) { break; }
+      if (!(power_opacity_) || rel <= source_tolerance_) {
+        break;
+      }
     }
-    if (badcell) { tgasnew = tgas; }
+    if (badcell) {
+      tgasnew = tgas;
+    }
 
     // Update the specific intensity
     if (!(badcell)) {
@@ -698,7 +704,9 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           bool apply_excision = (rad_mask_(m,k,j,i) ||
                                  (!(use_adm_geometry_) && !(is_compton_enabled_) &&
                                   fabs(n_0) < n_0_floor_));
-          if (apply_excision) { i0_(m,n,k,j,i) = 0.0; }
+          if (apply_excision) {
+            i0_(m, n, k, j, i) = 0.0;
+          }
         }
       }
       if (use_adm_geometry_) {
@@ -787,10 +795,9 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       suma2 = 4.0*dtaucsigs*inv_t_electron_*gm1/wdn;
 
       // compute partially updated dyn_radiation temperature
-      const bool compton_well_defined = (jr_cm > coupling_floor &&
-                                         fabs(suma1) > coupling_floor &&
-                                         arad_ > coupling_floor &&
-                                         Kokkos::isfinite(jr_cm) && Kokkos::isfinite(suma1));
+      const bool compton_well_defined =
+          (jr_cm > coupling_floor && fabs(suma1) > coupling_floor &&
+           arad_ > coupling_floor && Kokkos::isfinite(jr_cm) && Kokkos::isfinite(suma1));
       Real trad = compton_well_defined ? sqrt(sqrt(jr_cm/arad_)) : tgas;
       const bool temp_equil = (fabs(trad - tgas) < 1.0e-12);
 
@@ -831,12 +838,18 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           } else {
             n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
                  +tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-            Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
-                     + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
-            Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
-                     + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
-            Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
-                     + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+            Real n_1 = tc(m, 0, 1, k, j, i) * nh_c_.d_view(n, 0) +
+                       tc(m, 1, 1, k, j, i) * nh_c_.d_view(n, 1) +
+                       tc(m, 2, 1, k, j, i) * nh_c_.d_view(n, 2) +
+                       tc(m, 3, 1, k, j, i) * nh_c_.d_view(n, 3);
+            Real n_2 = tc(m, 0, 2, k, j, i) * nh_c_.d_view(n, 0) +
+                       tc(m, 1, 2, k, j, i) * nh_c_.d_view(n, 1) +
+                       tc(m, 2, 2, k, j, i) * nh_c_.d_view(n, 2) +
+                       tc(m, 3, 2, k, j, i) * nh_c_.d_view(n, 3);
+            Real n_3 = tc(m, 0, 3, k, j, i) * nh_c_.d_view(n, 0) +
+                       tc(m, 1, 3, k, j, i) * nh_c_.d_view(n, 1) +
+                       tc(m, 2, 3, k, j, i) * nh_c_.d_view(n, 2) +
+                       tc(m, 3, 3, k, j, i) * nh_c_.d_view(n, 3);
             mom[0] = n_1/n_0;
             mom[1] = n_2/n_0;
             mom[2] = n_3/n_0;
@@ -895,12 +908,18 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
           } else {
             n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
                  +tc(m,2,0,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-            Real n_1 = tc(m,0,1,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,1,k,j,i)*nh_c_.d_view(n,1)
-                     + tc(m,2,1,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,1,k,j,i)*nh_c_.d_view(n,3);
-            Real n_2 = tc(m,0,2,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,2,k,j,i)*nh_c_.d_view(n,1)
-                     + tc(m,2,2,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,2,k,j,i)*nh_c_.d_view(n,3);
-            Real n_3 = tc(m,0,3,k,j,i)*nh_c_.d_view(n,0)+tc(m,1,3,k,j,i)*nh_c_.d_view(n,1)
-                     + tc(m,2,3,k,j,i)*nh_c_.d_view(n,2)+tc(m,3,3,k,j,i)*nh_c_.d_view(n,3);
+            Real n_1 = tc(m, 0, 1, k, j, i) * nh_c_.d_view(n, 0) +
+                       tc(m, 1, 1, k, j, i) * nh_c_.d_view(n, 1) +
+                       tc(m, 2, 1, k, j, i) * nh_c_.d_view(n, 2) +
+                       tc(m, 3, 1, k, j, i) * nh_c_.d_view(n, 3);
+            Real n_2 = tc(m, 0, 2, k, j, i) * nh_c_.d_view(n, 0) +
+                       tc(m, 1, 2, k, j, i) * nh_c_.d_view(n, 1) +
+                       tc(m, 2, 2, k, j, i) * nh_c_.d_view(n, 2) +
+                       tc(m, 3, 2, k, j, i) * nh_c_.d_view(n, 3);
+            Real n_3 = tc(m, 0, 3, k, j, i) * nh_c_.d_view(n, 0) +
+                       tc(m, 1, 3, k, j, i) * nh_c_.d_view(n, 1) +
+                       tc(m, 2, 3, k, j, i) * nh_c_.d_view(n, 2) +
+                       tc(m, 3, 3, k, j, i) * nh_c_.d_view(n, 3);
             mom[0] = n_1/n_0;
             mom[1] = n_2/n_0;
             mom[2] = n_3/n_0;
@@ -960,30 +979,44 @@ bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root) {
 
   // For coef4 >= 0, f(x)=coef4*x^4+x+tconst is monotone on x >= 0.
   // A positive root exists only when f(0) <= 0.
-  if (tconst > 0.0) { return false; }
+  if (tconst > 0.0) {
+    return false;
+  }
 
   Real lo = 0.0;
   Real hi = fmax(1.0, root);
-  if (!(Kokkos::isfinite(hi)) || hi <= 0.0) { hi = 1.0; }
+  if (!(Kokkos::isfinite(hi)) || hi <= 0.0) {
+    hi = 1.0;
+  }
   bool bracketed = false;
   for (int it=0; it<128; ++it) {
     Real fhi = coef4*SQR(SQR(hi)) + hi + tconst;
-    if (!(Kokkos::isfinite(fhi))) { return false; }
+    if (!(Kokkos::isfinite(fhi))) {
+      return false;
+    }
     if (fhi >= 0.0) {
       bracketed = true;
       break;
     }
     hi *= 2.0;
-    if (!(Kokkos::isfinite(hi))) { return false; }
+    if (!(Kokkos::isfinite(hi))) {
+      return false;
+    }
   }
-  if (!(bracketed)) { return false; }
+  if (!(bracketed)) {
+    return false;
+  }
 
   Real x = fmin(fmax(root, lo), hi);
-  if (x <= lo || x >= hi) { x = 0.5*(lo + hi); }
+  if (x <= lo || x >= hi) {
+    x = 0.5 * (lo + hi);
+  }
   const Real ftol = 1.0e-13*(1.0 + fabs(tconst));
   for (int it=0; it<80; ++it) {
     const Real f = coef4*SQR(SQR(x)) + x + tconst;
-    if (!(Kokkos::isfinite(f))) { return false; }
+    if (!(Kokkos::isfinite(f))) {
+      return false;
+    }
     if (fabs(f) <= ftol) {
       root = x;
       return true;

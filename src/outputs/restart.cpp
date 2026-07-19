@@ -340,14 +340,14 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   if (pturb != nullptr)  max_vars = std::max(max_vars, nforce);
   if (pz4c != nullptr)   max_vars = std::max(max_vars, nz4c);
   else if (padm != nullptr) max_vars = std::max(max_vars, nadm);
-  
+
   // Calculate maximum size needed for Face Fields (MHD B-field)
   // x1f: (nout1+1)*nout2*nout3, x2f: nout1*(nout2+1)*nout3, x3f: nout1*nout2*(nout3+1)
   int ncells_f1 = (nout1+1)*nout2*nout3;
   int ncells_f2 = nout1*(nout2+1)*nout3;
   int ncells_f3 = nout1*nout2*(nout3+1);
   int max_buf_size = std::max({ncells * max_vars, ncells_f1, ncells_f2, ncells_f3});
-  
+
   // Allocate buffer
   std::vector<Real> host_buffer(std::max(max_buf_size, 1));
   // ----------------------------------------------------------------------
@@ -489,7 +489,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
                 }
             }
         }
-        
+
         fldcnt = nout1*(nout2+1)*nout3; // Update count
         if (resfile.Write_any_type_at_all(host_buffer.data(),fldcnt,myoffset,"Real",
                                           single_file_per_rank) != fldcnt) {
@@ -522,12 +522,15 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
         myoffset += fldcnt*sizeof(Real);
 
-        myoffset += data_size-((nout1+1)*nout2*nout3 + nout1*(nout2+1)*nout3 + nout1*nout2*(nout3+1))*sizeof(Real);
+        myoffset +=
+            data_size - ((nout1 + 1) * nout2 * nout3 + nout1 * (nout2 + 1) * nout3 +
+                         nout1 * nout2 * (nout3 + 1)) *
+                            sizeof(Real);
 
-      // some ranks are finished writing, so use non-collective write
+        // some ranks are finished writing, so use non-collective write
       } else if (m < pm->nmb_thisrank) {
         // PACK x1f was done above for all m < pm->nmb_thisrank
-        
+
         int fldcnt = (nout1+1)*nout2*nout3;
         if (resfile.Write_any_type_at(host_buffer.data(),fldcnt,myoffset,"Real",
                                       single_file_per_rank) != fldcnt) {
@@ -578,7 +581,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
         myoffset += fldcnt*sizeof(Real);
 
-        myoffset += data_size-((nout1+1)*nout2*nout3 + nout1*(nout2+1)*nout3 + nout1*nout2*(nout3+1))*sizeof(Real);
+        myoffset +=
+            data_size - ((nout1 + 1) * nout2 * nout3 + nout1 * (nout2 + 1) * nout3 +
+                         nout1 * nout2 * (nout3 + 1)) *
+                            sizeof(Real);
       }
     }
     offset_myrank += (nout1+1)*nout2*nout3*sizeof(Real);    // mhd b0.x1f

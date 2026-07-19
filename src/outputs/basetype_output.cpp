@@ -55,7 +55,9 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // check for valid choice of variables
   int ivar = -1;
   for (int i=0; i<(NOUTPUT_CHOICES); ++i) {
-    if (out_params.variable.compare(var_choice[i]) == 0) {ivar = i;}
+    if (out_params.variable.compare(var_choice[i]) == 0) {
+      ivar = i;
+    }
   }
   if (ivar < 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -769,7 +771,9 @@ void BaseTypeOutput::LoadOutputData(Mesh *pm) {
   auto &gids  = pm->pmb_pack->gids;
   for (int m=0; m<(pm->pmb_pack->nmb_thispack); ++m) {
     // skip if MeshBlock ID is specified and not equal to this ID
-    if (out_params.gid >= 0 && (m+gids) != out_params.gid) { continue; }
+    if (out_params.gid >= 0 && (m + gids) != out_params.gid) {
+      continue;
+    }
 
     int ois,oie,ojs,oje,oks,oke;
 

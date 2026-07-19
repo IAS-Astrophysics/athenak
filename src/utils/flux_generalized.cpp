@@ -1,10 +1,18 @@
 //========================================================================================
-// flux_generalized.cpp — integrate fluxes on arbitrary r(θ,φ) surfaces (Valencia MHD)
-//----------------------------------------------------------------------------------------
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file flux_generalized.cpp
+//! \brief Integrate fluxes on arbitrary surfaces in Valencia MHD.
+
 #include "flux_generalized.hpp"
+
 #include <iomanip>
-#include <sstream>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -52,18 +60,17 @@ struct FluxAccumulator {
 };
 
 namespace Kokkos {
-  template<>
-  struct reduction_identity<FluxAccumulator> {
-    KOKKOS_INLINE_FUNCTION
-    static FluxAccumulator sum() { return FluxAccumulator{}; }
-  };
+template <>
+struct reduction_identity<FluxAccumulator> {
+  KOKKOS_INLINE_FUNCTION
+  static FluxAccumulator sum() { return FluxAccumulator{}; }
+};
 } // namespace Kokkos
 
 //----------------------------------------------------------------------------------------
 // Main Function Definition (no EOS templates; gamma-law assumed)
 //----------------------------------------------------------------------------------------
-void TorusFluxes_General(HistoryData *pdata,
-                         MeshBlockPack *pmbp,
+void TorusFluxes_General(HistoryData* pdata, MeshBlockPack* pmbp,
                          const std::vector<SphericalSurfaceGrid*>& surfs) {
   //--- 1. Validation and Setup ---
   if (pmbp->padm == nullptr || pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr) {
@@ -369,8 +376,7 @@ void TorusFluxes_General(HistoryData *pdata,
           // B_u is the Eulerian magnetic field (already available).
           // dS_d is the covariant surface area element (normal vector * area).
 
-          const Real flux_dot_dS = 
-            B_u[0]*dS_d[0] + B_u[1]*dS_d[1] + B_u[2]*dS_d[2];
+          const Real flux_dot_dS = B_u[0] * dS_d[0] + B_u[1] * dS_d[1] + B_u[2] * dS_d[2];
 
           update.phiB += 0.5 * Kokkos::fabs(flux_dot_dS);
         }

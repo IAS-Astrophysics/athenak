@@ -42,10 +42,11 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt);
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
-  if (pmbp->pdyngr == nullptr || pmbp->padm == nullptr || 
-      pmbp->pmhd == nullptr || pmbp->punit == nullptr) {
+  if (pmbp->pdyngr == nullptr || pmbp->padm == nullptr || pmbp->pmhd == nullptr ||
+      pmbp->punit == nullptr) {
     if (global_variable::my_rank == 0) {
-      std::cout << "### FATAL ERROR: cooling_test requires DynGRMHD, ADM, MHD, and Units.\n";
+      std::cout
+          << "### FATAL ERROR: cooling_test requires DynGRMHD, ADM, MHD, and Units.\n";
     }
     exit(EXIT_FAILURE);
   }
@@ -79,7 +80,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const Real vx = pin->GetOrAddReal("problem", "vx", 0.0);
   const Real vy = pin->GetOrAddReal("problem", "vy", 0.0);
   const Real vz = pin->GetOrAddReal("problem", "vz", 0.0);
-  
+
   const Real vsq = vx*vx + vy*vy + vz*vz;
   if (vsq >= 1.0) {
     if (global_variable::my_rank == 0) std::cout << "### FATAL ERROR: v < 1 required\n";
@@ -101,7 +102,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m, IVX, k, j, i) = u1p0;
     w0_(m, IVY, k, j, i) = u2p0;
     w0_(m, IVZ, k, j, i) = u3p0;
-    
+
     bcc0_(m, IBX, k, j, i) = 0.0;
     bcc0_(m, IBY, k, j, i) = 0.0;
     bcc0_(m, IBZ, k, j, i) = 0.0;
@@ -140,9 +141,9 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   Real pressure_unit = pmbp->punit->pressure_cgs();
 
   Real mu  = pmbp->punit->mu();
-  Real amu = pmbp->punit->atomic_mass_unit_cgs; 
+  Real amu = pmbp->punit->atomic_mass_unit_cgs;
 
-  Real n_unit = density_unit / (mu * amu); 
+  Real n_unit = density_unit / (mu * amu);
   Real cooling_unit = pressure_unit / time_unit / (n_unit * n_unit);
 
   // ---- Indices ----
@@ -155,19 +156,19 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   // ---- Accessors ----
   auto &adm = pmbp->padm->adm;
   auto &w0  = pmbp->pmhd->w0;  // primitives
-  auto &u0  = pmbp->pmhd->u0;  // conserved 
+  auto &u0 = pmbp->pmhd->u0;   // conserved
 
   // ---- EOS ----
   auto &eos_data = pmbp->pmhd->peos->eos_data;
   Real gamma_adi = eos_data.gamma;
   Real gm1       = gamma_adi - 1.0;
-  Real rho_floor = eos_data.dfloor; 
-  Real p_floor   = eos_data.pfloor; 
+  Real rho_floor = eos_data.dfloor;
+  Real p_floor = eos_data.pfloor;
 
   // ---- Stability Control ----
   // Use the simulation's global CFL number for consistency
   // instead of a hardcoded "by-hand" value.
-  Real cfl_limit = pm->cfl_no; 
+  Real cfl_limit = pm->cfl_no;
 
   constexpr int  max_sub  = 64;
   constexpr Real tiny     = 1.0e-30;
@@ -175,7 +176,6 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   par_for("Valencia_IsotropicCooling", DevExeSpace(),
           0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
     // --- metric gamma_ij and sqrt(gamma) ---
     Real gxx = adm.g_dd(m,0,0,k,j,i);
     Real gxy = adm.g_dd(m,0,1,k,j,i);
@@ -225,7 +225,7 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
     Real dS3_total  = 0.0;
 
     for (int n = 0; n < max_sub && dt_rem > 0.0; ++n) {
-      // Temperature proxy 
+      // Temperature proxy
       Real T_cgs = ( (e_int * gm1) / rho ) * temp_unit;
 
       // Determine Cooling Rate
@@ -243,11 +243,11 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       Real rate_e_dt = (alpha / W) * q;
 
       // === DYNAMIC CLAMP (Based on CFL) ===
-      // Max allowed rate is one that removes 'cfl_limit' fraction of e_int 
+      // Max allowed rate is one that removes 'cfl_limit' fraction of e_int
       // over the full timestep 'bdt'.
       // This ensures operator splitting doesn't shock the hydro solver.
       Real rate_max = (cfl_limit * e_int) / (bdt + tiny);
-      
+
       rate_e_dt = fmin(rate_e_dt, rate_max);
       // ====================================
 
@@ -256,8 +256,8 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       dt_sub = fmin(dt_sub, dt_rem);
       dt_sub = fmax(dt_sub, tiny * bdt);
 
-      // Proposed decrement 
-      Real de = rate_e_dt * dt_sub; 
+      // Proposed decrement
+      Real de = rate_e_dt * dt_sub;
 
       // Enforce floor on e_int
       Real de_applied = de;
@@ -287,7 +287,7 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
       dt_rem -= dt_sub;
     }
 
-    // Apply to conserved variables 
+    // Apply to conserved variables
     u0(m,IEN,k,j,i) -= dTau_total;
     u0(m,IM1,k,j,i) -= dS1_total;
     u0(m,IM2,k,j,i) -= dS2_total;
@@ -329,58 +329,79 @@ void CoolingDiagHistory(HistoryData *pdata, Mesh *pm) {
   Real edot_p = 0, p1_p = 0, p2_p = 0, p3_p = 0;
   Real Tmin = 1e30, Tmax = 0, n_active = 0;
 
-  Kokkos::parallel_reduce("cooling_diag", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int idx, Real &lrho, Real &lp, Real &ltau, Real &ls1, Real &ls2, Real &ls3,
-                  Real &lE, Real &lp1, Real &lp2, Real &lp3, Real &lTmin, Real &lTmax, Real &lNa) {
-      int m=idx/nkji, rem=idx%nkji;
-      int k=(rem/nji)+ks, rem2=rem%nji;
-      int j=(rem2/nx1)+js, i=(rem2%nx1)+is;
+  Kokkos::parallel_reduce(
+      "cooling_diag", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int idx, Real &lrho, Real &lp, Real &ltau, Real &ls1, Real &ls2,
+                    Real &ls3, Real &lE, Real &lp1, Real &lp2, Real &lp3, Real &lTmin,
+                    Real &lTmax, Real &lNa) {
+        int m = idx / nkji, rem = idx % nkji;
+        int k = (rem / nji) + ks, rem2 = rem % nji;
+        int j = (rem2 / nx1) + js, i = (rem2 % nx1) + is;
 
-      const Real rho = w0(m, IDN, k, j, i);
-      const Real p   = w0(m, IPR, k, j, i);
-      lrho += rho; lp += p;
-      ltau += u0(m, IEN, k, j, i);
-      ls1  += u0(m, IM1, k, j, i);
-      ls2  += u0(m, IM2, k, j, i);
-      ls3  += u0(m, IM3, k, j, i);
+        const Real rho = w0(m, IDN, k, j, i);
+        const Real p = w0(m, IPR, k, j, i);
+        lrho += rho;
+        lp += p;
+        ltau += u0(m, IEN, k, j, i);
+        ls1 += u0(m, IM1, k, j, i);
+        ls2 += u0(m, IM2, k, j, i);
+        ls3 += u0(m, IM3, k, j, i);
 
-      const Real gxx=adm.g_dd(m,0,0,k,j,i), gxy=adm.g_dd(m,0,1,k,j,i), gxz=adm.g_dd(m,0,2,k,j,i);
-      const Real gyy=adm.g_dd(m,1,1,k,j,i), gyz=adm.g_dd(m,1,2,k,j,i), gzz=adm.g_dd(m,2,2,k,j,i);
-      const Real vol = sqrt(fmax(adm::SpatialDet(gxx,gxy,gxz,gyy,gyz,gzz), tiny));
-      const Real alpha = adm.alpha(m,k,j,i);
+        const Real gxx = adm.g_dd(m, 0, 0, k, j, i), gxy = adm.g_dd(m, 0, 1, k, j, i),
+                   gxz = adm.g_dd(m, 0, 2, k, j, i);
+        const Real gyy = adm.g_dd(m, 1, 1, k, j, i), gyz = adm.g_dd(m, 1, 2, k, j, i),
+                   gzz = adm.g_dd(m, 2, 2, k, j, i);
+        const Real vol = sqrt(fmax(adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz), tiny));
+        const Real alpha = adm.alpha(m, k, j, i);
 
-      const Real u1p=w0(m,IVX,k,j,i), u2p=w0(m,IVY,k,j,i), u3p=w0(m,IVZ,k,j,i);
-      const Real W = sqrt(1.0 + gxx*u1p*u1p + 2*gxy*u1p*u2p + 2*gxz*u1p*u3p + gyy*u2p*u2p + 2*gyz*u2p*u3p + gzz*u3p*u3p);
+        const Real u1p = w0(m, IVX, k, j, i), u2p = w0(m, IVY, k, j, i),
+                   u3p = w0(m, IVZ, k, j, i);
+        const Real W =
+            sqrt(1.0 + gxx * u1p * u1p + 2 * gxy * u1p * u2p + 2 * gxz * u1p * u3p +
+                 gyy * u2p * u2p + 2 * gyz * u2p * u3p + gzz * u3p * u3p);
 
-      Real T_cgs = (rho>tiny) ? (p/rho)*temp_unit : 0.0;
-      lTmin = fmin(lTmin, T_cgs); lTmax = fmax(lTmax, T_cgs);
+        Real T_cgs = (rho > tiny) ? (p / rho) * temp_unit : 0.0;
+        lTmin = fmin(lTmin, T_cgs);
+        lTmax = fmax(lTmax, T_cgs);
 
-      if (T_cgs >= tfloor_code*temp_unit) {
-        Real L = ISMCoolFn(T_cgs);
-        if (L > 0 && rho > tiny) {
-          lNa += 1.0;
-          const Real q = (rho*rho)*(L/cooling_unit);
-          lE  += vol * alpha * q * W;
-          lp1 += vol * alpha * q * (gxx*u1p+gxy*u2p+gxz*u3p);
-          lp2 += vol * alpha * q * (gxy*u1p+gyy*u2p+gyz*u3p);
-          lp3 += vol * alpha * q * (gxz*u1p+gyz*u2p+gzz*u3p);
+        if (T_cgs >= tfloor_code * temp_unit) {
+          Real L = ISMCoolFn(T_cgs);
+          if (L > 0 && rho > tiny) {
+            lNa += 1.0;
+            const Real q = (rho * rho) * (L / cooling_unit);
+            lE += vol * alpha * q * W;
+            lp1 += vol * alpha * q * (gxx * u1p + gxy * u2p + gxz * u3p);
+            lp2 += vol * alpha * q * (gxy * u1p + gyy * u2p + gyz * u3p);
+            lp3 += vol * alpha * q * (gxz * u1p + gyz * u2p + gzz * u3p);
+          }
         }
-      }
-    },
-    Kokkos::Sum<Real>(sum_rho), Kokkos::Sum<Real>(sum_p),
-    Kokkos::Sum<Real>(sum_tau), Kokkos::Sum<Real>(sum_s1), Kokkos::Sum<Real>(sum_s2), Kokkos::Sum<Real>(sum_s3),
-    Kokkos::Sum<Real>(edot_p), Kokkos::Sum<Real>(p1_p), Kokkos::Sum<Real>(p2_p), Kokkos::Sum<Real>(p3_p),
-    Kokkos::Min<Real>(Tmin), Kokkos::Max<Real>(Tmax), Kokkos::Sum<Real>(n_active)
-  );
+      },
+      Kokkos::Sum<Real>(sum_rho), Kokkos::Sum<Real>(sum_p), Kokkos::Sum<Real>(sum_tau),
+      Kokkos::Sum<Real>(sum_s1), Kokkos::Sum<Real>(sum_s2), Kokkos::Sum<Real>(sum_s3),
+      Kokkos::Sum<Real>(edot_p), Kokkos::Sum<Real>(p1_p), Kokkos::Sum<Real>(p2_p),
+      Kokkos::Sum<Real>(p3_p), Kokkos::Min<Real>(Tmin), Kokkos::Max<Real>(Tmax),
+      Kokkos::Sum<Real>(n_active));
 
 #if MPI_PARALLEL_ENABLED
-  double buf[13] = {sum_rho, sum_p, sum_tau, sum_s1, sum_s2, sum_s3, edot_p, p1_p, p2_p, p3_p, Tmin, Tmax, n_active};
+  double buf[13] = {sum_rho, sum_p, sum_tau, sum_s1, sum_s2, sum_s3,  edot_p,
+                    p1_p,    p2_p,  p3_p,    Tmin,   Tmax,   n_active};
   MPI_Allreduce(MPI_IN_PLACE, buf, 10, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &buf[10], 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &buf[11], 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, &buf[12], 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-  sum_rho=buf[0]; sum_p=buf[1]; sum_tau=buf[2]; sum_s1=buf[3]; sum_s2=buf[4]; sum_s3=buf[5];
-  edot_p=buf[6]; p1_p=buf[7]; p2_p=buf[8]; p3_p=buf[9]; Tmin=buf[10]; Tmax=buf[11]; n_active=buf[12];
+  sum_rho = buf[0];
+  sum_p = buf[1];
+  sum_tau = buf[2];
+  sum_s1 = buf[3];
+  sum_s2 = buf[4];
+  sum_s3 = buf[5];
+  edot_p = buf[6];
+  p1_p = buf[7];
+  p2_p = buf[8];
+  p3_p = buf[9];
+  Tmin = buf[10];
+  Tmax = buf[11];
+  n_active = buf[12];
 #endif
 
   const Real ncell = static_cast<Real>(pm->nmb_total) * nx1 * nx2 * nx3;
@@ -402,7 +423,12 @@ void CoolingDiagHistory(HistoryData *pdata, Mesh *pm) {
     relP2   = (P2_fd - p2_p) / fmax(fabs(p2_p), 1e-60);
     relP3   = (P3_fd - p3_p) / fmax(fabs(p3_p), 1e-60);
   }
-  first = false; t_prev = pm->time; tau_p = sum_tau; s1_p = sum_s1; s2_p = sum_s2; s3_p = sum_s3;
+  first = false;
+  t_prev = pm->time;
+  tau_p = sum_tau;
+  s1_p = sum_s1;
+  s2_p = sum_s2;
+  s3_p = sum_s3;
 
   pdata->nhist = 20;
   pdata->label[0] = "rho_avg";    pdata->hdata[0] = sum_rho * invN;

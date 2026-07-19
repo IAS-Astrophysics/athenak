@@ -372,9 +372,7 @@ def read_coarsened_binary(filename):
     for var in var_list:
         mb_data[var] = []
     while fp.tell() < filesize:
-        mb_index_i = (
-            np.frombuffer(fp.read(24), dtype=np.int32).astype(np.int64) - nghost
-        )
+        mb_index_i = np.frombuffer(fp.read(24), dtype=np.int32).astype(np.int64) - nghost
         mb_index.append(mb_index_i)
         nx1_out = (mb_index_i[1] - mb_index_i[0]) + 1
         nx2_out = (mb_index_i[3] - mb_index_i[2]) + 1
@@ -462,9 +460,7 @@ def read_all_ranks_binary(rank0_filename):
         unique_file_sizes = np.unique(file_sizes)
         larger_file_size = max(unique_file_sizes)
         rank_files = [
-            file
-            for file, size in zip(rank_files, file_sizes)
-            if size == larger_file_size
+            file for file, size in zip(rank_files, file_sizes) if size == larger_file_size
         ]
 
     # Read the rank 0 file to get the metadata
@@ -677,18 +673,12 @@ def read_binary_as_athdf(
                 nx_vals.append(1)
             else:  # nontrivial sum
                 num_blocks_this_dim = 0
-                for level_this_dim, loc_this_dim in zip(
-                    levels, logical_locations[:, d]
-                ):
+                for level_this_dim, loc_this_dim in zip(levels, logical_locations[:, d]):
                     if level_this_dim <= level:
-                        possible_max = (loc_this_dim + 1) * 2 ** (
-                            level - level_this_dim
-                        )
+                        possible_max = (loc_this_dim + 1) * 2 ** (level - level_this_dim)
                         num_blocks_this_dim = max(num_blocks_this_dim, possible_max)
                     else:
-                        possible_max = (loc_this_dim + 1) // 2 ** (
-                            level_this_dim - level
-                        )
+                        possible_max = (loc_this_dim + 1) // 2 ** (level_this_dim - level)
                         num_blocks_this_dim = max(num_blocks_this_dim, possible_max)
                 nx_vals.append(num_blocks_this_dim)
         elif block_size[d] == 1:  # singleton dimension
@@ -763,9 +753,7 @@ def read_binary_as_athdf(
     # Prepare arrays for data and bookkeeping
     if new_data:
         for q in quantities:
-            data[q] = np.zeros(
-                (k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype
-            )
+            data[q] = np.zeros((k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype)
         if return_levels:
             data["Levels"] = np.empty(
                 (k_max - k_min, j_max - j_min, i_max - i_min), dtype=np.int32
@@ -937,18 +925,12 @@ def read_all_ranks_binary_as_athdf(
                 nx_vals.append(1)
             else:  # nontrivial sum
                 num_blocks_this_dim = 0
-                for level_this_dim, loc_this_dim in zip(
-                    levels, logical_locations[:, d]
-                ):
+                for level_this_dim, loc_this_dim in zip(levels, logical_locations[:, d]):
                     if level_this_dim <= level:
-                        possible_max = (loc_this_dim + 1) * 2 ** (
-                            level - level_this_dim
-                        )
+                        possible_max = (loc_this_dim + 1) * 2 ** (level - level_this_dim)
                         num_blocks_this_dim = max(num_blocks_this_dim, possible_max)
                     else:
-                        possible_max = (loc_this_dim + 1) // 2 ** (
-                            level_this_dim - level
-                        )
+                        possible_max = (loc_this_dim + 1) // 2 ** (level_this_dim - level)
                         num_blocks_this_dim = max(num_blocks_this_dim, possible_max)
                 nx_vals.append(num_blocks_this_dim)
         elif block_size[d] == 1:  # singleton dimension
@@ -1022,9 +1004,7 @@ def read_all_ranks_binary_as_athdf(
     # Prepare arrays for data and bookkeeping
     if new_data:
         for q in quantities:
-            data[q] = np.zeros(
-                (k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype
-            )
+            data[q] = np.zeros((k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype)
         if return_levels:
             data["Levels"] = np.empty(
                 (k_max - k_min, j_max - j_min, i_max - i_min), dtype=np.int32
@@ -1254,9 +1234,7 @@ def read_all_ranks_coarsened_binary_as_athdf(
     # Prepare arrays for data and bookkeeping
     if new_data:
         for q in quantities:
-            data[q] = np.zeros(
-                (k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype
-            )
+            data[q] = np.zeros((k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype)
         if return_levels:
             data["Levels"] = np.empty(
                 (k_max - k_min, j_max - j_min, i_max - i_min), dtype=np.int32
@@ -1455,9 +1433,7 @@ def read_single_rank_binary_as_athdf(
     # Prepare arrays for data
     if new_data:
         for q in quantities:
-            data[q] = np.zeros(
-                (k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype
-            )
+            data[q] = np.zeros((k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype)
         if return_levels:
             data["Levels"] = np.empty(
                 (k_max - k_min, j_max - j_min, i_max - i_min), dtype=np.int32
@@ -1614,9 +1590,7 @@ def read_coarsened_binary_as_athdf(
     # Prepare arrays for data and bookkeeping
     if new_data:
         for q in quantities:
-            data[q] = np.zeros(
-                (k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype
-            )
+            data[q] = np.zeros((k_max - k_min, j_max - j_min, i_max - i_min), dtype=dtype)
         if return_levels:
             data["Levels"] = np.empty(
                 (k_max - k_min, j_max - j_min, i_max - i_min), dtype=np.int32
@@ -1791,7 +1765,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         mb_x3v = 0.5 * (mb_x3f[1:] + mb_x3f[:-1])
         if x1slice:
             x1f[mb] = np.array(
-                mb_x1f[(fdata["mb_index"][mb][0]): (fdata["mb_index"][mb][0] + 2)]
+                mb_x1f[(fdata["mb_index"][mb][0]) : (fdata["mb_index"][mb][0] + 2)]
             )
             x1v[mb] = np.array([np.average(mb_x1f)])
         else:
@@ -1799,7 +1773,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
             x1v[mb] = mb_x1v
         if x2slice:
             x2f[mb] = np.array(
-                mb_x2f[(fdata["mb_index"][mb][2]): (fdata["mb_index"][mb][2] + 2)]
+                mb_x2f[(fdata["mb_index"][mb][2]) : (fdata["mb_index"][mb][2] + 2)]
             )
             x2v[mb] = np.array([np.average(x2f[mb])])
         else:
@@ -1807,7 +1781,7 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
             x2v[mb] = mb_x2v
         if x3slice:
             x3f[mb] = np.array(
-                mb_x3f[(fdata["mb_index"][mb][4]): (fdata["mb_index"][mb][4] + 2)]
+                mb_x3f[(fdata["mb_index"][mb][4]) : (fdata["mb_index"][mb][4] + 2)]
             )
             x3v[mb] = np.array([np.average(x3f[mb])])
         else:
@@ -1879,28 +1853,25 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode="auto"):
     def write_meshblock(fp, mb, nx1, nx2, nx3, nmb, dumpname, vars_no_b, vars_w_b):
         fp.write(f"""  <Grid Name="MeshBlock{mb}" GridType="Uniform">\n""")
         fp.write("""   <Topology TopologyType="3DRectMesh" """)
-        fp.write(f""" NumberOfElements="{nx3+1} {nx2+1} {nx1+1}"/>\n""")
+        fp.write(f""" NumberOfElements="{nx3 + 1} {nx2 + 1} {nx1 + 1}"/>\n""")
         fp.write("""   <Geometry GeometryType="VXVYVZ">\n""")
-        fp.write(
-            f"""    <DataItem ItemType="HyperSlab" Dimensions="{nx1+1}">
-     <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx1+1} </DataItem>
-     <DataItem Dimensions="{nmb} {nx1+1}" Format="HDF"> {dumpname}:/x1f </DataItem>
+        fp.write(f"""    <DataItem ItemType="HyperSlab" Dimensions="{nx1 + 1}">
+     <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx1 + 1} </DataItem>
+     <DataItem Dimensions="{nmb} {nx1 + 1}" Format="HDF"> {dumpname}:/x1f </DataItem>
     </DataItem>
-    <DataItem ItemType="HyperSlab" Dimensions="{nx2+1}">
-     <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx2+1} </DataItem>
-     <DataItem Dimensions="{nmb} {nx2+1}" Format="HDF"> {dumpname}:/x2f </DataItem>
+    <DataItem ItemType="HyperSlab" Dimensions="{nx2 + 1}">
+     <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx2 + 1} </DataItem>
+     <DataItem Dimensions="{nmb} {nx2 + 1}" Format="HDF"> {dumpname}:/x2f </DataItem>
     </DataItem>
-    <DataItem ItemType="HyperSlab" Dimensions="{nx3+1}">
-     <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx3+1} </DataItem>
-     <DataItem Dimensions="{nmb} {nx3+1}" Format="HDF"> {dumpname}:/x3f </DataItem>
+    <DataItem ItemType="HyperSlab" Dimensions="{nx3 + 1}">
+     <DataItem Dimensions="3 2" NumberType="Int"> {mb} 0 1 1 1 {nx3 + 1} </DataItem>
+     <DataItem Dimensions="{nmb} {nx3 + 1}" Format="HDF"> {dumpname}:/x3f </DataItem>
     </DataItem>
-   </Geometry>\n"""
-        )
+   </Geometry>\n""")
 
         nvar_no_b = len(vars_no_b)
         for vi, var_name in enumerate(vars_no_b):
-            fp.write(
-                f"""   <Attribute Name="{var_name}" Center="Cell">
+            fp.write(f"""   <Attribute Name="{var_name}" Center="Cell">
     <DataItem ItemType="HyperSlab" Dimensions="{nx3} {nx2} {nx1}">
      <DataItem Dimensions="3 5" NumberType="Int">
       {vi} {mb} 0 0 0 1 1 1 1 1 1 1 {nx3} {nx2} {nx1}
@@ -1909,14 +1880,12 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode="auto"):
       {dumpname}:/uov
      </DataItem>
     </DataItem>
-   </Attribute>\n"""
-            )
+   </Attribute>\n""")
 
         nvar_w_b = len(vars_w_b)
         if nvar_w_b > 0:
             for vi, var_name in enumerate(vars_w_b):
-                fp.write(
-                    f"""   <Attribute Name="{var_name}" Center="Cell">
+                fp.write(f"""   <Attribute Name="{var_name}" Center="Cell">
         <DataItem ItemType="HyperSlab" Dimensions="{nx3} {nx2} {nx1}">
          <DataItem Dimensions="3 5" NumberType="Int">
           {vi} {mb} 0 0 0 1 1 1 1 1 1 1 {nx3} {nx2} {nx1}
@@ -1925,17 +1894,14 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode="auto"):
           {dumpname}:/B
          </DataItem>
         </DataItem>
-       </Attribute>\n"""
-                )
+       </Attribute>\n""")
 
         fp.write("""  </Grid>\n""")
 
-    fp.write(
-        """<?xml version="1.0" ?>
+    fp.write("""<?xml version="1.0" ?>
 <!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
 <Xdmf Version="2.0">
-<Information Name="TimeVaryingMetaData" Value="True"/>\n"""
-    )
+<Information Name="TimeVaryingMetaData" Value="True"/>\n""")
     fp.write("""<Domain>\n""")
     fp.write("""<Grid Name="Mesh" GridType="Collection">\n""")
     fp.write(f""" <Time Value="{fdata['time']}"/>\n""")
@@ -1949,9 +1915,7 @@ def write_xdmf_for(xdmfname, dumpname, fdata, mode="auto"):
     nmb = fdata["n_mbs"]
 
     for mb in range(nmb):
-        write_meshblock(
-            fp, mb, nx1, nx2, nx3, nmb, dumpname, vars_without_b, vars_only_b
-        )
+        write_meshblock(fp, mb, nx1, nx2, nx3, nmb, dumpname, vars_without_b, vars_only_b)
 
     fp.write("""</Grid>\n""")
     fp.write("""</Domain>\n""")

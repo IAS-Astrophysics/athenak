@@ -275,4 +275,4 @@ class Z4c {
 };
 
 } // namespace z4c
-#endif //Z4C_Z4C_HPP_
+#endif  // Z4C_Z4C_HPP_

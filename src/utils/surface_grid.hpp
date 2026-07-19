@@ -1,11 +1,17 @@
 //========================================================================================
-// surface_grid.hpp — Parametric (θ,φ) → r(θ,φ) surface sampler + interpolator (Cartesian)
-//----------------------------------------------------------------------------------------
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file surface_grid.hpp
+//! \brief Parametric surface sampler and Cartesian interpolator.
+
 #pragma once
 
-#include "athena.hpp" // For Real, DualArray, etc.
-#include <functional> // For std::function
-#include <string>     // For std::string
+#include <functional>
+#include <string>
+
+#include "athena.hpp"
 
 //========================================================================================
 // A uniformly sampled (θ,φ) surface with radius r(θ,φ) in Cartesian coords.

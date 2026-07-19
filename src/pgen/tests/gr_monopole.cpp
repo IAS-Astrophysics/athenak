@@ -475,18 +475,26 @@ void ReflectingMonopole(Mesh *pm) {
       for (int i=0; i<ng; ++i) {
         b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
         b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
-        if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b0.x2f(m,k,j+1,is);}
+        if (j == n2 - 1) {
+          b0.x2f(m, k, j + 1, is - i - 1) = b0.x2f(m, k, j + 1, is);
+        }
         b0.x3f(m,k,j,is-i-1) = b0.x3f(m,k,j,is);
-        if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b0.x3f(m,k+1,j,is);}
+        if (k == n3 - 1) {
+          b0.x3f(m, k + 1, j, is - i - 1) = b0.x3f(m, k + 1, j, is);
+        }
       }
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
       for (int i=0; i<ng; ++i) {
         b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
         b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
-        if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b0.x2f(m,k,j+1,ie);}
+        if (j == n2 - 1) {
+          b0.x2f(m, k, j + 1, ie + i + 1) = b0.x2f(m, k, j + 1, ie);
+        }
         b0.x3f(m,k,j,ie+i+1) = b0.x3f(m,k,j,ie);
-        if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b0.x3f(m,k+1,j,ie);}
+        if (k == n3 - 1) {
+          b0.x3f(m, k + 1, j, ie + i + 1) = b0.x3f(m, k + 1, j, ie);
+        }
       }
     }
   });
@@ -527,19 +535,27 @@ void ReflectingMonopole(Mesh *pm) {
     if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
       for (int j=0; j<ng; ++j) {
         b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
-        if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, k, js - j - 1, i + 1) = b0.x1f(m, k, js, i + 1);
+        }
         b0.x2f(m,k,js-j-1,i) = b0.x2f(m,k,js,i);
         b0.x3f(m,k,js-j-1,i) = b0.x3f(m,k,js,i);
-        if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b0.x3f(m,k+1,js,i);}
+        if (k == n3 - 1) {
+          b0.x3f(m, k + 1, js - j - 1, i) = b0.x3f(m, k + 1, js, i);
+        }
       }
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
       for (int j=0; j<ng; ++j) {
         b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
-        if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, k, je + j + 1, i + 1) = b0.x1f(m, k, je, i + 1);
+        }
         b0.x2f(m,k,je+j+2,i) = b0.x2f(m,k,je+1,i);
         b0.x3f(m,k,je+j+1,i) = b0.x3f(m,k,je,i);
-        if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b0.x3f(m,k+1,je,i);}
+        if (k == n3 - 1) {
+          b0.x3f(m, k + 1, je + j + 1, i) = b0.x3f(m, k + 1, je, i);
+        }
       }
     }
   });
@@ -580,18 +596,26 @@ void ReflectingMonopole(Mesh *pm) {
     if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
       for (int k=0; k<ng; ++k) {
         b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
-        if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, ks - k - 1, j, i + 1) = b0.x1f(m, ks, j, i + 1);
+        }
         b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
-        if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
+        if (j == n2 - 1) {
+          b0.x2f(m, ks - k - 1, j + 1, i) = b0.x2f(m, ks, j + 1, i);
+        }
         b0.x3f(m,ks-k-1,j,i) = -b0.x3f(m,ks+1,j,i);
       }
     }
     if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
       for (int k=0; k<ng; ++k) {
         b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
-        if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, ke + k + 1, j, i + 1) = b0.x1f(m, ke, j, i + 1);
+        }
         b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
-        if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+        if (j == n2 - 1) {
+          b0.x2f(m, ke + k + 1, j + 1, i) = b0.x2f(m, ke, j + 1, i);
+        }
         b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
       }
     }
@@ -725,7 +749,10 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
     // Compute field rotation rate (in units of rotation rate of horizon)
     // Should give value ~1/2
     Real omega = 0.0;
-    if (x3 > 0) {omega = ((uph*br - ur*bph)/fmax(u0*br - ur*b0, 1.0e-12))/(0.5*spin/rh);}
+    if (x3 > 0) {
+      omega =
+          ((uph * br - ur * bph) / fmax(u0 * br - ur * b0, 1.0e-12)) / (0.5 * spin / rh);
+    }
 
     // store field rotation rate at theta, phi locations
     monopole_diag[n] = omega;

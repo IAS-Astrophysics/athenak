@@ -1,3 +1,4 @@
+import bin_convert
 import glob
 import os
 import sys
@@ -6,11 +7,11 @@ from multiprocessing import Pool
 
 sys.dont_write_bytecode = True
 # Ensure the path is correct for your environment
-sys.path.insert(0, '/home/hzhu/athenak/vis/python')
+sys.path.insert(0, "/home/hzhu/athenak/vis/python")
 
-import bin_convert
 
-target_dir = 'bin/'
+target_dir = "bin/"
+
 
 def convert_single_file(filename):
     """
@@ -37,14 +38,16 @@ def convert_single_file(filename):
     except Exception as e:
         print(f"Failed to process {filename}: {e}")
 
+
 def main():
     # 1. Setup command line argument parsing
     parser = argparse.ArgumentParser(description="Parallel binary to athdf converter.")
     parser.add_argument(
-        '-n', '--nproc',
+        "-n",
+        "--nproc",
         type=int,
         default=1,
-        help='Number of parallel processes to use (default: 1)'
+        help="Number of parallel processes to use (default: 1)",
     )
     args = parser.parse_args()
 
@@ -57,7 +60,7 @@ def main():
     tasks = []
     for i in bin_files:
         athdf_name = i.replace(".bin", ".athdf")
-        
+
         # Check if the target athdf already exists
         if athdf_name in athdf_files:
             # --- MODIFICATION START ---
@@ -65,15 +68,17 @@ def main():
             # Delete the existing athdf/xdmf so we can start fresh.
             athdf_path = os.path.join(target_dir, athdf_name)
             xdmf_path = athdf_path + ".xdmf"
-            
-            print(f"Both binary and athdf exist for {i}. Deleting old athdf to regenerate...")
+
+            print(
+                f"Both binary and athdf exist for {i}. Deleting old athdf to regenerate..."
+            )
             try:
                 os.remove(athdf_path)
                 if os.path.exists(xdmf_path):
                     os.remove(xdmf_path)
             except OSError as e:
                 print(f"Error deleting old files for {i}: {e}")
-                continue # Skip this file if we can't clean up
+                continue  # Skip this file if we can't clean up
             # --- MODIFICATION END ---
 
         # Add to tasks list (whether it was fresh or we just deleted the old output)
@@ -85,13 +90,16 @@ def main():
         return
 
     if args.nproc > 1:
-        print(f"Starting parallel conversion on {args.nproc} processes for {len(tasks)} files...")
+        print(f"Starting parallel conversion on {
+                args.nproc} processes for {
+                len(tasks)} files...")
         with Pool(args.nproc) as p:
             p.map(convert_single_file, tasks)
     else:
         print(f"Starting serial conversion for {len(tasks)} files...")
         for f in tasks:
             convert_single_file(f)
+
 
 if __name__ == "__main__":
     main()

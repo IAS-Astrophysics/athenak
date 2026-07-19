@@ -65,7 +65,9 @@ TaskStatus MeshBoundaryValues::InitRecv(const int nvars) {
           // Post non-blocking receive for this buffer on this MeshBlock
           int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                comm_vars, &(recvbuf[n].vars_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
         }
       }
     }
@@ -98,7 +100,9 @@ TaskStatus MeshBoundaryValues::ClearRecv() {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
         int ierr = MPI_Wait(&(recvbuf[n].vars_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
       }
     }
   }
@@ -130,7 +134,9 @@ TaskStatus MeshBoundaryValues::ClearSend() {
       if ( (nghbr.h_view(m,n).gid >= 0) &&
            (nghbr.h_view(m,n).rank != global_variable::my_rank) ) {
         int ierr = MPI_Wait(&(sendbuf[n].vars_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
       }
     }
   }
@@ -163,7 +169,9 @@ TaskStatus MeshBoundaryValues::ClearFluxRecv() {
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (recvbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(recvbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
       }
     }
   }
@@ -192,7 +200,9 @@ TaskStatus MeshBoundaryValues::ClearFluxSend() {
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (sendbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(sendbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
       }
     }
   }

@@ -16,16 +16,16 @@ input_file = "inputs/mri3d.athinput"
 # function to calculate mean of B^2 over time interval t=[25,50]
 # assumed data (history file) runs from t=[0,50]
 def compute_mean(data):
-    time = data['time']
+    time = data["time"]
     # zero B2 for t<25
     b2 = np.where(
         time > 25.0,
         # divide by 32 to correct for volume of domain
-        (data['1-ME'] + data['2-ME'] + data['3-ME'])/32.0,
+        (data["1-ME"] + data["2-ME"] + data["3-ME"]) / 32.0,
         0.0,
     )
     # return 2X mean since 1/2 of array is zero
-    return (2.0*(np.mean(b2)))
+    return 2.0 * (np.mean(b2))
 
 
 def arguments():
@@ -39,7 +39,7 @@ def arguments():
         "meshblock/nx2=32",
         "meshblock/nx3=16",
         "time/tlim=50.0",
-        "mhd/reconstruct=wenoz"
+        "mhd/reconstruct=wenoz",
     ]
 
 

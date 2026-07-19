@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Plot XY ATHDF slices closest in time to restart files."""
 
+from matplotlib.colors import LogNorm
+import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import csv
 import re
@@ -12,13 +15,9 @@ import h5py
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.colors import LogNorm
 
 sys.path.insert(0, "/home/hzhu/athenak/vis/python")
 import bin_convert  # noqa: E402
-
 
 RST_TIME_OFFSET = 256
 
@@ -214,7 +213,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rst-dir", type=Path)
     parser.add_argument("--athdf-dir", type=Path)
-    parser.add_argument("--input-dir", type=Path, help="plot all torus.slice_x3 .bin/.athdf files")
+    parser.add_argument(
+        "--input-dir", type=Path, help="plot all torus.slice_x3 .bin/.athdf files"
+    )
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--zoom-width", type=float, default=100.0)
     args = parser.parse_args()
@@ -224,7 +225,9 @@ def main():
         if not slice_paths:
             slice_paths = sorted(args.input_dir.glob("torus.slice_x3.*.bin"))
         if not slice_paths:
-            raise SystemExit(f"no torus.slice_x3.*.bin/.athdf files found in {args.input_dir}")
+            raise SystemExit(
+                f"no torus.slice_x3.*.bin/.athdf files found in {args.input_dir}"
+            )
 
         args.out_dir.mkdir(parents=True, exist_ok=True)
         with (args.out_dir / "slice_files.csv").open("w", newline="") as fp:
@@ -257,7 +260,9 @@ def main():
         return
 
     if args.rst_dir is None or args.athdf_dir is None:
-        raise SystemExit("--rst-dir and --athdf-dir are required unless --input-dir is used")
+        raise SystemExit(
+            "--rst-dir and --athdf-dir are required unless --input-dir is used"
+        )
 
     rst_paths = sorted(args.rst_dir.glob("torus.*.rst"))
     athdf_paths = sorted(args.athdf_dir.glob("torus.slice_x3.*.athdf"))
@@ -280,7 +285,15 @@ def main():
             ["restart_file", "restart_time", "slice_file", "slice_time", "abs_dt"]
         )
         for rst_path, rst_t, ath_path, ath_t, delta in rows:
-            writer.writerow([rst_path.name, f"{rst_t:.17g}", ath_path.name, f"{ath_t:.17g}", f"{delta:.17g}"])
+            writer.writerow(
+                [
+                    rst_path.name,
+                    f"{rst_t:.17g}",
+                    ath_path.name,
+                    f"{ath_t:.17g}",
+                    f"{delta:.17g}",
+                ]
+            )
 
     for rst_path, rst_t, ath_path, _ath_t, _delta in rows:
         rst_idx = file_index(rst_path)

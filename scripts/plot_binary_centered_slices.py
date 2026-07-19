@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Plot AthenaK binary slice files centered on the binary."""
 
+from matplotlib.colors import LogNorm
+import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import math
-import os
 import sys
 from multiprocessing import Pool
 from pathlib import Path
@@ -11,9 +13,6 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.colors import LogNorm
 
 sys.path.insert(0, "/home/hzhu/athenak/vis/python")
 import bin_convert  # noqa: E402
@@ -34,7 +33,7 @@ def read_par_value(parfile, name, default):
 
 
 def bh_positions(time, sep, q):
-    omega = sep ** -1.5
+    omega = sep**-1.5
     phase = omega * time
     c = math.cos(phase)
     s = math.sin(phase)
@@ -145,11 +144,20 @@ def finite_range(arrays, geometries, extent, default, info):
 
 
 def plot_one(args):
-    (path_s, outdir_s, parfile_s, width, sep, q, mark_holes, circle_radius,
-     auto_density, ranges) = args
+    (
+        path_s,
+        outdir_s,
+        _parfile_s,
+        width,
+        sep,
+        q,
+        mark_holes,
+        circle_radius,
+        auto_density,
+        ranges,
+    ) = args
     path = Path(path_s)
     outdir = Path(outdir_s)
-    parfile = Path(parfile_s)
     data = bin_convert.read_binary(str(path))
     time = float(data["time"])
     cycle = int(data["cycle"])
@@ -172,7 +180,9 @@ def plot_one(args):
         if field in ranges:
             vmin, vmax = ranges[field]
         elif field == "rho" and auto_density:
-            vmin, vmax = finite_range(arrays, data["mb_geometry"], extent, default_range, info)
+            vmin, vmax = finite_range(
+                arrays, data["mb_geometry"], extent, default_range, info
+            )
         else:
             vmin, vmax = default_range
         image = None
@@ -195,8 +205,15 @@ def plot_one(args):
             cbar.ax.tick_params(labelsize=8)
         if circle_radius > 0.0 and info["mark_bh"]:
             for xh, yh in (pos1, pos2):
-                ax.add_patch(plt.Circle((xh, yh), circle_radius, fill=False,
-                                        edgecolor="red", linewidth=1.3))
+                ax.add_patch(
+                    plt.Circle(
+                        (xh, yh),
+                        circle_radius,
+                        fill=False,
+                        edgecolor="red",
+                        linewidth=1.3,
+                    )
+                )
         if mark_holes and info["mark_bh"]:
             ax.plot([pos1[0], pos2[0]], [pos1[1], pos2[1]], "wo", ms=4, mec="k", mew=0.7)
         ax.set_xlim(xmin, xmax)
@@ -220,31 +237,75 @@ def main():
     parser.add_argument("--width", type=float, default=200.0)
     parser.add_argument("-n", "--nproc", type=int, default=1)
     parser.add_argument("--stride", type=int, default=1)
-    parser.add_argument("--mark-holes", action="store_true", help="draw BH centroid markers")
-    parser.add_argument("--circle-radius", type=float, default=-1.0,
-                        help="draw red empty circles of this radius; negative uses excise_1_rad")
-    parser.add_argument("--auto-density", action="store_true",
-                        help="autoscale density using positive finite values in the plotted viewport")
-    parser.add_argument("--density-vmin", type=float, default=None,
-                        help="fixed density colorbar lower bound")
-    parser.add_argument("--density-vmax", type=float, default=None,
-                        help="fixed density colorbar upper bound")
-    parser.add_argument("--temperature-vmin", type=float, default=None,
-                        help="fixed temperature colorbar lower bound")
-    parser.add_argument("--temperature-vmax", type=float, default=None,
-                        help="fixed temperature colorbar upper bound")
-    parser.add_argument("--beta-vmin", type=float, default=None,
-                        help="fixed plasma beta colorbar lower bound")
-    parser.add_argument("--beta-vmax", type=float, default=None,
-                        help="fixed plasma beta colorbar upper bound")
-    parser.add_argument("--plane", choices=("x1", "x2", "x3", "all"), default="x3",
-                        help="slice plane to plot: x1=yz, x2=xz, x3=xy")
+    parser.add_argument(
+        "--mark-holes", action="store_true", help="draw BH centroid markers"
+    )
+    parser.add_argument(
+        "--circle-radius",
+        type=float,
+        default=-1.0,
+        help="draw red empty circles of this radius; negative uses excise_1_rad",
+    )
+    parser.add_argument(
+        "--auto-density",
+        action="store_true",
+        help="autoscale density using positive finite values in the plotted viewport",
+    )
+    parser.add_argument(
+        "--density-vmin",
+        type=float,
+        default=None,
+        help="fixed density colorbar lower bound",
+    )
+    parser.add_argument(
+        "--density-vmax",
+        type=float,
+        default=None,
+        help="fixed density colorbar upper bound",
+    )
+    parser.add_argument(
+        "--temperature-vmin",
+        type=float,
+        default=None,
+        help="fixed temperature colorbar lower bound",
+    )
+    parser.add_argument(
+        "--temperature-vmax",
+        type=float,
+        default=None,
+        help="fixed temperature colorbar upper bound",
+    )
+    parser.add_argument(
+        "--beta-vmin",
+        type=float,
+        default=None,
+        help="fixed plasma beta colorbar lower bound",
+    )
+    parser.add_argument(
+        "--beta-vmax",
+        type=float,
+        default=None,
+        help="fixed plasma beta colorbar upper bound",
+    )
+    parser.add_argument(
+        "--plane",
+        choices=("x1", "x2", "x3", "all"),
+        default="x3",
+        help="slice plane to plot: x1=yz, x2=xz, x3=xy",
+    )
     args = parser.parse_args()
 
-    slice_ids = ["slice_x1", "slice_x2", "slice_x3"] if args.plane == "all" else [f"slice_{args.plane}"]
+    slice_ids = (
+        ["slice_x1", "slice_x2", "slice_x3"] if args.plane == "all" else [f"slice_{
+            args.plane}"]
+    )
     files = []
     for slice_id in slice_ids:
-        files.extend(sorted((args.run_dir / "bin").glob(f"torus.{slice_id}.*.bin"))[:: max(args.stride, 1)])
+        files.extend(
+            sorted((args.run_dir / "bin").glob(f"torus.{slice_id}.*.bin"))[
+                :: max(args.stride, 1)
+            ]
+        )
     if not files:
         raise SystemExit(f"No requested slice .bin files found in {args.run_dir / 'bin'}")
     parfile = args.run_dir / "parfile.par"
@@ -252,21 +313,40 @@ def main():
     q = read_par_value(parfile, "q", 1.0)
     circle_radius = args.circle_radius
     if circle_radius < 0.0:
-        circle_radius = read_par_value(parfile, "sink_radius",
-                        read_par_value(parfile, "excise_1_rad", 4.0))
+        circle_radius = read_par_value(
+            parfile, "sink_radius", read_par_value(parfile, "excise_1_rad", 4.0)
+        )
     ranges = {}
-    for field, label in (("rho", "density"), ("temperature", "temperature"), ("beta", "beta")):
+    for field, label in (
+        ("rho", "density"),
+        ("temperature", "temperature"),
+        ("beta", "beta"),
+    ):
         vmin = getattr(args, f"{label}_vmin")
         vmax = getattr(args, f"{label}_vmax")
         if (vmin is None) != (vmax is None):
-            raise SystemExit(f"--{label}-vmin and --{label}-vmax must be provided together")
+            raise SystemExit(
+                f"--{label}-vmin and --{label}-vmax must be provided together"
+            )
         if vmin is not None:
             if vmin <= 0.0 or vmax <= vmin:
-                raise SystemExit(f"--{label}-vmin must be positive and less than --{label}-vmax")
+                raise SystemExit(
+                    f"--{label}-vmin must be positive and less than --{label}-vmax"
+                )
             ranges[field] = (vmin, vmax)
     tasks = [
-        (str(path), str(args.out_dir), str(parfile), args.width, sep, q,
-         args.mark_holes, circle_radius, args.auto_density, ranges)
+        (
+            str(path),
+            str(args.out_dir),
+            str(parfile),
+            args.width,
+            sep,
+            q,
+            args.mark_holes,
+            circle_radius,
+            args.auto_density,
+            ranges,
+        )
         for path in files
     ]
     if args.nproc > 1:

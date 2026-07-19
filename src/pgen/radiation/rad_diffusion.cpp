@@ -160,7 +160,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       // Calculate intensity in tetrad frame
       Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-      for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
+      for (int d = 0; d < 4; ++d) {
+        n_0 += tetcov_c_(m, d, 0, k, j, i) * nh_c_.d_view(n, d);
+      }
       i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
     }
   });

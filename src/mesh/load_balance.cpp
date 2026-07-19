@@ -294,7 +294,9 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_req[rb_idx]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
           rb_idx++;
         }
       }
@@ -309,7 +311,9 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_req[rb_idx]));
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
         rb_idx++;
       }
     } else {                                        // old MB was refined
@@ -325,7 +329,9 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
         int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_req[rb_idx]));
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
         rb_idx++;
       }
     }
@@ -579,7 +585,9 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm+l], tag, amr_comm,
                      &(send_req[sb_idx]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
           sb_idx++;
         }
       }
@@ -596,7 +604,9 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
                      &(send_req[sb_idx]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
           sb_idx++;
         }
       } else {                                  // old MB was de-refined
@@ -616,7 +626,9 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
                      &(send_req[sb_idx]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
           sb_idx++;
         }
       }
@@ -806,7 +818,9 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
   bool no_errors=true;
   for (int n=0; n<nmb_recv; ++n) {
     int ierr = MPI_Wait(&(recv_req[n]), MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -1022,7 +1036,9 @@ void MeshRefinement::ClearSendAMR() {
   bool no_errors=true;
   for (int n=0; n<nmb_send; ++n) {
     int ierr = MPI_Wait(&(send_req[n]), MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
   }
   // Quit if MPI error detected
   if (!(no_errors)) {

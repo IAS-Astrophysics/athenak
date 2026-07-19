@@ -97,7 +97,9 @@ class Task {
   bool IsComplete() {return complete_;}
   // If this Task depends on id, change that dependency to 'newdep'
   void ChangeDependency(TaskID id, TaskID newdep) {
-    if ((dep_ & id) == id) {dep_ = ((dep_ ^ id) | newdep);}
+    if ((dep_ & id) == id) {
+      dep_ = ((dep_ ^ id) | newdep);
+    }
   }
 
  private:
@@ -132,13 +134,23 @@ class TaskList {
   void MarkTaskComplete(TaskID id) { tasks_completed_.SetComplete(id); }
   TaskID GetIDLastTask() {return task_list_.back().GetID();}
   // output diagnostics (useful for debugging)
-  void PrintIDs() { for (auto &it : task_list_) {it.GetID().PrintID();} }
-  void PrintDependencies() { for (auto &it : task_list_) {it.GetDependency().PrintID();} }
+  void PrintIDs() {
+    for (auto &it : task_list_) {
+      it.GetID().PrintID();
+    }
+  }
+  void PrintDependencies() {
+    for (auto &it : task_list_) {
+      it.GetDependency().PrintID();
+    }
+  }
 
   //
   void Reset() {
     tasks_completed_.Clear();  // TaskID Clear() fn
-    for (auto &it : task_list_) { it.SetIncomplete(); }
+    for (auto &it : task_list_) {
+      it.SetIncomplete();
+    }
   }
 
   // cycle through task list once, do any tasks whose dependencies are clear

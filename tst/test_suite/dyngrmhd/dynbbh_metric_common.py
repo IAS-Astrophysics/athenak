@@ -7,11 +7,10 @@ from pathlib import Path
 import numpy as np
 import athena_read
 
-
 INPUT_FILE = "inputs/dynbbh_metric.athinput"
 SEP = 25.0
 Q = 1.0
-OMEGA = SEP ** -1.5
+OMEGA = SEP**-1.5
 M1 = 1.0 / (Q + 1.0)
 M2 = 1.0 - M1
 FD_STEP = 5.0e-5
@@ -22,9 +21,22 @@ PH1 = math.radians(123.0)
 TH2 = math.radians(71.0)
 PH2 = math.radians(-41.0)
 CHECK_KEYS = (
-    "adm_gxx", "adm_gxy", "adm_gxz", "adm_gyy", "adm_gyz", "adm_gzz",
-    "adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kyz", "adm_Kzz",
-    "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
+    "adm_gxx",
+    "adm_gxy",
+    "adm_gxz",
+    "adm_gyy",
+    "adm_gyz",
+    "adm_gzz",
+    "adm_Kxx",
+    "adm_Kxy",
+    "adm_Kxz",
+    "adm_Kyy",
+    "adm_Kyz",
+    "adm_Kzz",
+    "adm_alpha",
+    "adm_betax",
+    "adm_betay",
+    "adm_betaz",
 )
 CASES = (
     {
@@ -39,11 +51,20 @@ CASES = (
         "y": 5.0,
         "z": 3.0,
         "flags": [
-            "mesh/nx1=4", "mesh/x1min=15.0", "mesh/x1max=27.0",
-            "mesh/nx2=5", "mesh/x2min=2.5", "mesh/x2max=7.5",
-            "mesh/nx3=5", "mesh/x3min=0.5", "mesh/x3max=5.5",
-            "meshblock/nx1=4", "meshblock/nx2=5", "meshblock/nx3=5",
-            "output1/slice_x2=5.0", "output1/slice_x3=3.0",
+            "mesh/nx1=4",
+            "mesh/x1min=15.0",
+            "mesh/x1max=27.0",
+            "mesh/nx2=5",
+            "mesh/x2min=2.5",
+            "mesh/x2max=7.5",
+            "mesh/nx3=5",
+            "mesh/x3min=0.5",
+            "mesh/x3max=5.5",
+            "meshblock/nx1=4",
+            "meshblock/nx2=5",
+            "meshblock/nx3=5",
+            "output1/slice_x2=5.0",
+            "output1/slice_x3=3.0",
         ],
         "rtol": 5.0e-7,
     },
@@ -167,10 +188,14 @@ def superposed_metric(t, x, y, z):
 def metric_derivatives(t, x, y, z):
     h = FD_STEP
     return (
-        (superposed_metric(t + h, x, y, z) - superposed_metric(t - h, x, y, z)) / (2.0 * h),
-        (superposed_metric(t, x + h, y, z) - superposed_metric(t, x - h, y, z)) / (2.0 * h),
-        (superposed_metric(t, x, y + h, z) - superposed_metric(t, x, y - h, z)) / (2.0 * h),
-        (superposed_metric(t, x, y, z + h) - superposed_metric(t, x, y, z - h)) / (2.0 * h),
+        (superposed_metric(t + h, x, y, z) - superposed_metric(t - h, x, y, z))
+        / (2.0 * h),
+        (superposed_metric(t, x + h, y, z) - superposed_metric(t, x - h, y, z))
+        / (2.0 * h),
+        (superposed_metric(t, x, y + h, z) - superposed_metric(t, x, y - h, z))
+        / (2.0 * h),
+        (superposed_metric(t, x, y, z + h) - superposed_metric(t, x, y, z - h))
+        / (2.0 * h),
     )
 
 
@@ -206,18 +231,60 @@ def adm_from_metric(t, x, y, z):
     dgxxz, dgxyz, dgxzz = dzg[1, 1], dzg[1, 2], dzg[1, 3]
     dgyyz, dgyzz, dgzzz = dzg[2, 2], dzg[2, 3], dzg[3, 3]
     kdd = np.zeros((3, 3))
-    kdd[0, 0] = -(-2 * dbetadownxx - bx * dgxxx - by * dgxxy - bz * dgxxz
-                  + 2 * (bx * dgxxx + by * dgxyx + bz * dgxzx) + dtgxx) / (2 * alpha)
-    kdd[0, 1] = -(-dbetadownxy - dbetadownyx + bx * dgxxy - bz * dgxyz
-                  + bz * dgxzy + by * dgyyx + bz * dgyzx + dtgxy) / (2 * alpha)
-    kdd[0, 2] = -(-dbetadownxz - dbetadownzx + bx * dgxxz + by * dgxyz
-                  - by * dgxzy + by * dgyzx + bz * dgzzx + dtgxz) / (2 * alpha)
-    kdd[1, 1] = -(-2 * dbetadownyy - bx * dgyyx - by * dgyyy - bz * dgyyz
-                  + 2 * (bx * dgxyy + by * dgyyy + bz * dgyzy) + dtgyy) / (2 * alpha)
-    kdd[1, 2] = -(-dbetadownyz - dbetadownzy + bx * dgxyz + bx * dgxzy
-                  + by * dgyyz - bx * dgyzx + bz * dgzzy + dtgyz) / (2 * alpha)
-    kdd[2, 2] = -(-2 * dbetadownzz - bx * dgzzx - by * dgzzy - bz * dgzzz
-                  + 2 * (bx * dgxzz + by * dgyzz + bz * dgzzz) + dtgzz) / (2 * alpha)
+    kdd[0, 0] = -(
+        -2 * dbetadownxx
+        - bx * dgxxx
+        - by * dgxxy
+        - bz * dgxxz
+        + 2 * (bx * dgxxx + by * dgxyx + bz * dgxzx)
+        + dtgxx
+    ) / (2 * alpha)
+    kdd[0, 1] = -(
+        -dbetadownxy
+        - dbetadownyx
+        + bx * dgxxy
+        - bz * dgxyz
+        + bz * dgxzy
+        + by * dgyyx
+        + bz * dgyzx
+        + dtgxy
+    ) / (2 * alpha)
+    kdd[0, 2] = -(
+        -dbetadownxz
+        - dbetadownzx
+        + bx * dgxxz
+        + by * dgxyz
+        - by * dgxzy
+        + by * dgyzx
+        + bz * dgzzx
+        + dtgxz
+    ) / (2 * alpha)
+    kdd[1, 1] = -(
+        -2 * dbetadownyy
+        - bx * dgyyx
+        - by * dgyyy
+        - bz * dgyyz
+        + 2 * (bx * dgxyy + by * dgyyy + bz * dgyzy)
+        + dtgyy
+    ) / (2 * alpha)
+    kdd[1, 2] = -(
+        -dbetadownyz
+        - dbetadownzy
+        + bx * dgxyz
+        + bx * dgxzy
+        + by * dgyyz
+        - bx * dgyzx
+        + bz * dgzzy
+        + dtgyz
+    ) / (2 * alpha)
+    kdd[2, 2] = -(
+        -2 * dbetadownzz
+        - bx * dgzzx
+        - by * dgzzy
+        - bz * dgzzz
+        + 2 * (bx * dgxzz + by * dgyzz + bz * dgzzz)
+        + dtgzz
+    ) / (2 * alpha)
     kdd[1, 0] = kdd[0, 1]
     kdd[2, 0] = kdd[0, 2]
     kdd[2, 1] = kdd[1, 2]
@@ -246,19 +313,41 @@ def write_trajectory_table(path):
     rows = []
     for t in (-1.0e-3, 0.0, 1.0e-3):
         tr = trajectory(t)
-        rows.append([
-            t, tr["m1"], tr["m2"],
-            tr["x1"], tr["y1"], tr["z1"], tr["x2"], tr["y2"], tr["z2"],
-            tr["ax1"], tr["ay1"], tr["az1"], tr["ax2"], tr["ay2"], tr["az2"],
-            tr["vx1"], tr["vy1"], tr["vz1"], tr["vx2"], tr["vy2"], tr["vz2"],
-        ])
+        rows.append(
+            [
+                t,
+                tr["m1"],
+                tr["m2"],
+                tr["x1"],
+                tr["y1"],
+                tr["z1"],
+                tr["x2"],
+                tr["y2"],
+                tr["z2"],
+                tr["ax1"],
+                tr["ay1"],
+                tr["az1"],
+                tr["ax2"],
+                tr["ay2"],
+                tr["az2"],
+                tr["vx1"],
+                tr["vy1"],
+                tr["vz1"],
+                tr["vx2"],
+                tr["vy2"],
+                tr["vz2"],
+            ]
+        )
     with open(path, "w", encoding="utf-8") as stream:
         for row in rows:
             stream.write(" ".join(f"{x:.17e}" for x in row) + "\n")
 
 
 def run_case(method, use_table=False, fd_step=FD_STEP, case=CASES[0]):
-    label = f"{case['name']}_{method}_{'table' if use_table else 'analytic'}_{fd_step:.0e}"
+    label = f"{
+        case['name']}_{method}_{
+        'table' if use_table else 'analytic'}_{
+            fd_step:.0e}"
     basename = f"dynbbh_metric_{label}"
     flags = [
         "./athena",
@@ -273,7 +362,10 @@ def run_case(method, use_table=False, fd_step=FD_STEP, case=CASES[0]):
     if use_table:
         table_path = Path(f"{basename}.traj")
         write_trajectory_table(table_path)
-        flags += ["problem/use_traj_table=true", f"problem/traj_file={table_path.resolve()}"]
+        flags += [
+            "problem/use_traj_table=true",
+            f"problem/traj_file={table_path.resolve()}",
+        ]
     subprocess.check_call(flags)
     return athena_read.tab(Path("tab") / f"{basename}.adm.00000.tab")
 
@@ -282,7 +374,12 @@ def check_against_reference(data, method, case=CASES[0]):
     for n, x in enumerate(data["x1v"]):
         ref = adm_from_metric(0.0, float(x), case["y"], case["z"])
         for key, val in ref.items():
-            atol = 2.0e-8 if key.startswith("adm_g") or key in ("adm_alpha", "adm_betax", "adm_betay", "adm_betaz") else 4.0e-7
+            atol = (
+                2.0e-8
+                if key.startswith("adm_g")
+                or key in ("adm_alpha", "adm_betax", "adm_betay", "adm_betaz")
+                else 4.0e-7
+            )
             if not np.isclose(data[key][n], val, rtol=case["rtol"], atol=atol):
                 raise AssertionError(
                     f"{method} {key} mismatch at x={x}: code={data[key][n]} ref={val}"
@@ -299,7 +396,9 @@ def compare_outputs(lhs, rhs, label):
 
 def run_and_check(method, use_table=False, case=CASES[0]):
     data = run_case(method, use_table=use_table, case=case)
-    check_against_reference(data, f"{case['name']} {method} {'table' if use_table else 'analytic'}", case)
+    check_against_reference(data, f"{
+            case['name']} {method} {
+            'table' if use_table else 'analytic'}", case)
     return data
 
 
@@ -309,7 +408,9 @@ def run_stress_suite():
             ad = run_and_check("ad", use_table=use_table, case=case)
             subprocess.call("rm -rf tab *.dat *.hst", shell=True)
             fd = run_and_check("finite_difference", use_table=use_table, case=case)
-            compare_outputs(ad, fd, f"{case['name']} {'table' if use_table else 'analytic'} ad-vs-fd")
+            compare_outputs(ad, fd, f"{
+                    case['name']} {
+                    'table' if use_table else 'analytic'} ad-vs-fd")
             subprocess.call("rm -rf tab *.dat *.hst", shell=True)
 
 

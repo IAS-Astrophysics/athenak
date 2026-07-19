@@ -122,7 +122,9 @@ void Radiation::SetOrthonormalTetrad() {
     ComputeMetricDerivatives(x1f,x2v,x3v,flat,spin,dgx,dgy,dgz);
     Real e[4][4], e_cov[4][4], omega[4][4][4];
     ComputeTetrad(x1f,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d1_x1f_(m,d,k,j,i) = e[d][1]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d1_x1f_(m, d, k, j, i) = e[d][1];
+    }
   });
 
   // set tetrad components (subset) at x2f
@@ -147,7 +149,9 @@ void Radiation::SetOrthonormalTetrad() {
     ComputeMetricDerivatives(x1v,x2f,x3v,flat,spin,dgx,dgy,dgz);
     Real e[4][4], e_cov[4][4], omega[4][4][4];
     ComputeTetrad(x1v,x2f,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d2_x2f_(m,d,k,j,i) = e[d][2]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d2_x2f_(m, d, k, j, i) = e[d][2];
+    }
   });
 
   // set tetrad components (subset) at x3f
@@ -172,7 +176,9 @@ void Radiation::SetOrthonormalTetrad() {
     ComputeMetricDerivatives(x1v,x2v,x3f,flat,spin,dgx,dgy,dgz);
     Real e[4][4], e_cov[4][4], omega[4][4][4];
     ComputeTetrad(x1v,x2v,x3f,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d3_x3f_(m,d,k,j,i) = e[d][3]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d3_x3f_(m, d, k, j, i) = e[d][3];
+    }
   });
 
   // Calculate n^angle

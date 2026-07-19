@@ -1,3 +1,9 @@
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+
 #include <stdio.h>
 #include <math.h>
 
@@ -458,10 +464,9 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
         if (grid_ptr->Label() == "H1") {
             // Move grid to BH1 location (Indices 0, 1, 2)
             grid_ptr->SetCenter(&btraj[0]);
-        }
-        else if (grid_ptr->Label() == "H2") {
-            // Move grid to BH2 location (Indices 3, 4, 5)
-            grid_ptr->SetCenter(&btraj[3]);
+        } else if (grid_ptr->Label() == "H2") {
+          // Move grid to BH2 location (Indices 3, 4, 5)
+          grid_ptr->SetCenter(&btraj[3]);
         }
     }
 
@@ -478,12 +483,9 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
 
 
 KOKKOS_INLINE_FUNCTION
-static void GetSuperposedAndInverse(const Real t,
-                            const Real x, const Real y, const Real z,
-                            Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ],
-                            const bbh_pgen bbh_);
-
-
+static void GetSuperposedAndInverse(const Real t, const Real x, const Real y,
+                                    const Real z, Real gcov[][NDIM], Real gcon[][NDIM],
+                                    const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_);
 
 KOKKOS_INLINE_FUNCTION
 static void CalculateCN(struct bbh_pgen pgen, Real *cparam, Real *nparam);
@@ -721,7 +723,8 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
       std::exit(EXIT_FAILURE);
     }
 
-    std::string beam_block = pin->DoesBlockExist("rad_srcterms") ? "rad_srcterms" : "problem";
+    std::string beam_block =
+        pin->DoesBlockExist("rad_srcterms") ? "rad_srcterms" : "problem";
     Real p1 = pin->GetOrAddReal(beam_block, "pos_1", 0.0);
     Real p2 = pin->GetOrAddReal(beam_block, "pos_2", 0.0);
     Real p3 = pin->GetOrAddReal(beam_block, "pos_3", 0.0);
@@ -803,9 +806,12 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
         Real sy = ct*d2 + st*(cos(phi)*e1y + sin(phi)*e2y);
         Real sz = ct*d3 + st*(cos(phi)*e1z + sin(phi)*e2z);
 
-        int i = static_cast<int>((p1 - size.d_view(msel).x1min)/size.d_view(msel).dx1) + is;
-        int j = static_cast<int>((p2 - size.d_view(msel).x2min)/size.d_view(msel).dx2) + js;
-        int k = static_cast<int>((p3 - size.d_view(msel).x3min)/size.d_view(msel).dx3) + ks;
+        int i =
+            static_cast<int>((p1 - size.d_view(msel).x1min) / size.d_view(msel).dx1) + is;
+        int j =
+            static_cast<int>((p2 - size.d_view(msel).x2min) / size.d_view(msel).dx2) + js;
+        int k =
+            static_cast<int>((p3 - size.d_view(msel).x3min) / size.d_view(msel).dx3) + ks;
         i = (i < is) ? is : ((i > ie) ? ie : i);
         j = (j < js) ? js : ((j > je) ? je : j);
         k = (k < ks) ? ks : ((k > ke) ? ke : k);
@@ -1000,9 +1006,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 }
 
 KOKKOS_INLINE_FUNCTION
-int four_metric_to_three_metric(const struct four_metric &met,
-                                struct three_metric &gam)
-{
+int four_metric_to_three_metric(const struct four_metric &met, struct three_metric &gam) {
   /* Check determinant first */
   gam.gxx = met.g.xx;
   gam.gxy = met.g.xy;
@@ -1015,7 +1019,8 @@ int four_metric_to_three_metric(const struct four_metric &met,
                                    gam.gyy, gam.gyz, gam.gzz);
 
   /* If determinant is not >0  something is wrong with the metric */
-  /* This could occur during the transition to merger at certain points so here we restart to Minkowski */
+  /* This could occur during the transition to merger at certain points so here we restart
+   * to Minkowski */
   if (!(det > 0)) {
     det = 1.0;
     gam.gxx = 1.0;
@@ -1094,7 +1099,6 @@ int four_metric_to_three_metric(const struct four_metric &met,
     gam.kzz = 0.0;
 
   } else {
-
     /* Compute components if detg is not <0 */
     Real betadownx = met.g.tx;
     Real betadowny = met.g.ty;
@@ -1434,9 +1438,9 @@ KOKKOS_FORCEINLINE_FUNCTION T BoostGammaMinusOneOverV2(const T v2, const T gamma
 template <typename T>
 KOKKOS_FORCEINLINE_FUNCTION void BuildBoostJacobian(T vx, T vy, T vz,
                                                T J[NDIM][NDIM]) {
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = 0; j < NDIM; ++j)
       J[i][j] = T(0.0);
   T v2 = vx * vx + vy * vy + vz * vz;
@@ -1486,20 +1490,20 @@ KerrSchildPerturbation(T x, T y, T z, T ax, T ay, T az, T m, T KS[NDIM][NDIM]) {
   ell[0] = y * az - z * ay + rt2 * ad * ax / rho + rho * x * irt2;
   ell[1] = -x * az + z * ax + rt2 * ad * ay / rho + rho * y * irt2;
   ell[2] = x * ay - y * ax + rt2 * ad * az / rho + rho * z * irt2;
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = 0; j < NDIM; ++j)
       KS[i][j] = T(0.0);
   KS[0][0] = fac;
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < 3; ++i) {
     KS[0][i + 1] = fac * ell[i] * iden;
     KS[i + 1][0] = KS[0][i + 1];
   }
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < 3; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = i; j < 3; ++j) {
       KS[i + 1][j + 1] = fac * ell[i] * ell[j] * iden * iden;
       KS[j + 1][i + 1] = KS[i + 1][j + 1];
@@ -1509,14 +1513,14 @@ template <typename T>
 KOKKOS_FORCEINLINE_FUNCTION void AddBoostedKerrSchildHole(const T KS[NDIM][NDIM],
                                                      const T J[NDIM][NDIM],
                                                      T gcov[NDIM][NDIM]) {
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = i; j < NDIM; ++j) {
       T sum = T(0.0);
-      #pragma unroll
+#pragma unroll
       for (int m = 0; m < NDIM; ++m)
-        #pragma unroll
+#pragma unroll
         for (int n = 0; n < NDIM; ++n)
           sum = sum + J[m][i] * J[n][j] * KS[m][n];
       gcov[i][j] = gcov[i][j] + sum;
@@ -1559,9 +1563,9 @@ SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
   KerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, m2, KS2);
   BuildBoostJacobian(v1x, v1y, v1z, J1);
   BuildBoostJacobian(v2x, v2y, v2z, J2);
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = 0; j < NDIM; ++j)
       gcov[i][j] = (i == j) ? ((i == 0) ? T(-1.0) : T(1.0)) : T(0.0);
   AddBoostedKerrSchildHole(KS1, J1, gcov);
@@ -1571,9 +1575,9 @@ SuperposedBBHTemplate(T x, T y, T z, T gcov[NDIM][NDIM], const T tr[NTRAJ],
 template <typename V>
 KOKKOS_FORCEINLINE_FUNCTION void BuildBoostJacobianMixed(V vx, V vy, V vz,
                                                     V J[NDIM][NDIM]) {
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = 0; j < NDIM; ++j)
       J[i][j] = V(0.0);
   auto v2 = vx * vx + vy * vy + vz * vz;
@@ -1630,20 +1634,20 @@ KerrSchildPerturbationMixed(C x, C y, C z, P ax, P ay, P az, P m,
   ell[0] = y * az - z * ay + rt2 * ad * ax / rho + rho * x * irt2;
   ell[1] = -x * az + z * ax + rt2 * ad * ay / rho + rho * y * irt2;
   ell[2] = x * ay - y * ax + rt2 * ad * az / rho + rho * z * irt2;
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = 0; j < NDIM; ++j)
       KS[i][j] = G(0.0);
   KS[0][0] = fac;
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < 3; ++i) {
     KS[0][i + 1] = fac * ell[i] * iden;
     KS[i + 1][0] = KS[0][i + 1];
   }
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < 3; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = i; j < 3; ++j) {
       KS[i + 1][j + 1] = fac * ell[i] * ell[j] * iden * iden;
       KS[j + 1][i + 1] = KS[i + 1][j + 1];
@@ -1655,14 +1659,14 @@ KOKKOS_FORCEINLINE_FUNCTION void
 AddBoostedKerrSchildHoleMixed(const K KS[NDIM][NDIM],
                               const J Jmat[NDIM][NDIM],
                               G gcov[NDIM][NDIM]) {
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = i; j < NDIM; ++j) {
       G sum = G(0.0);
-      #pragma unroll
+#pragma unroll
       for (int m = 0; m < NDIM; ++m)
-        #pragma unroll
+#pragma unroll
         for (int n = 0; n < NDIM; ++n)
           sum = sum + Jmat[m][i] * Jmat[n][j] * KS[m][n];
       gcov[i][j] = gcov[i][j] + sum;
@@ -1711,19 +1715,17 @@ SuperposedBBHTemplateMixed(C x, C y, C z, G gcov[NDIM][NDIM],
   KerrSchildPerturbationMixed<G, P, G>(x2, y2, z2, a2x, a2y, a2z, m2, KS2);
   BuildBoostJacobianMixed(v1x, v1y, v1z, J1);
   BuildBoostJacobianMixed(v2x, v2y, v2z, J2);
-  #pragma unroll
+#pragma unroll
   for (int i = 0; i < NDIM; ++i)
-    #pragma unroll
+#pragma unroll
     for (int j = 0; j < NDIM; ++j)
       gcov[i][j] = (i == j) ? ((i == 0) ? G(-1.0) : G(1.0)) : G(0.0);
   AddBoostedKerrSchildHoleMixed(KS1, J1, gcov);
   AddBoostedKerrSchildHoleMixed(KS2, J2, gcov);
 }
 KOKKOS_INLINE_FUNCTION
-void
-SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-              Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen b)
-{
+void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
+                   Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen b) {
   (void)time;
   SuperposedBBHTemplate<Real>(x, y, z, gcov, traj_array, b);
 }
@@ -1939,7 +1941,6 @@ void RefineTracker(MeshBlockPack *pmbp) {
   const int tracker_reflevel1 = bbh_ref.tracker_reflevel[0];
   const int tracker_reflevel2 = bbh_ref.tracker_reflevel[1];
   for (int m = 0; m < nmb; ++m) {
-
     int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
 
     // extract MeshBlock bounds
@@ -2212,8 +2213,10 @@ static void CalculateCN(struct bbh_pgen pgen, Real *cparam, Real *nparam) {
   Real cc; // constant of angular momentum profile
   Real l_edge = SQR(pgen.r_edge)/(sqrt(pgen.r_edge)*(pgen.r_edge - 2.0));
   Real l_peak = SQR(pgen.r_peak)/(sqrt(pgen.r_peak)*(pgen.r_peak - 2.0));
-  Real lambda_edge = sqrt((l_edge*(SQR(pgen.r_edge)*pgen.r_edge))/(l_edge*(pgen.r_edge - 2.0)));
-  Real lambda_peak = sqrt((l_peak*(SQR(pgen.r_peak)*pgen.r_peak))/(l_peak*(pgen.r_peak - 2.0)));
+  Real lambda_edge =
+      sqrt((l_edge * (SQR(pgen.r_edge) * pgen.r_edge)) / (l_edge * (pgen.r_edge - 2.0)));
+  Real lambda_peak =
+      sqrt((l_peak * (SQR(pgen.r_peak) * pgen.r_peak)) / (l_peak * (pgen.r_peak - 2.0)));
   if (n_input == 0.0) {
     nn = log(l_peak/l_edge)/log(lambda_peak/lambda_edge);
     cc = l_edge*pow(lambda_edge, -nn);
@@ -2352,7 +2355,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct bbh_pgen pgen,
         if (pgen.potential_falloff != 0) {
           scaling_param *= exp(-r/pgen.potential_falloff);
         }
-	aphi_tilt = pow(rho/pgen.rho_max, pgen.potential_rho_pow)*scaling_param;
+        aphi_tilt = pow(rho / pgen.rho_max, pgen.potential_rho_pow) * scaling_param;
         aphi_tilt -= pgen.potential_cutoff;
         aphi_tilt = fmax(aphi_tilt, 0.0);
         if (pgen.psi != 0.0) {
@@ -2582,10 +2585,9 @@ static void TransformVector(struct bbh_pgen pgen,
 
 
 KOKKOS_INLINE_FUNCTION
-static void GetSuperposedAndInverse(const Real t,
-                            const Real x, const Real y, const Real z,
-                            Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ],
-                            const bbh_pgen bbh_){
+static void GetSuperposedAndInverse(const Real t, const Real x, const Real y,
+                                    const Real z, Real gcov[][NDIM], Real gcon[][NDIM],
+                                    const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_) {
   //Real gcov[NDIM][NDIM];
   //Real gcon[NDIM][NDIM];
   SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, bbh_);
@@ -2594,52 +2596,71 @@ static void GetSuperposedAndInverse(const Real t,
   return;
 }
 
-
 KOKKOS_INLINE_FUNCTION
-static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]){
-  Real A2323 = gcov[YY][YY] * gcov[ZZ][ZZ] - gcov[YY][ZZ] * gcov[ZZ][YY] ;
-  Real A1323 = gcov[YY][XX] * gcov[ZZ][ZZ] - gcov[YY][ZZ] * gcov[ZZ][XX] ;
-  Real A1223 = gcov[YY][XX] * gcov[ZZ][YY] - gcov[YY][YY] * gcov[ZZ][XX] ;
-  Real A0323 = gcov[YY][TT] * gcov[ZZ][ZZ] - gcov[YY][ZZ] * gcov[ZZ][TT] ;
-  Real A0223 = gcov[YY][TT] * gcov[ZZ][YY] - gcov[YY][YY] * gcov[ZZ][TT] ;
-  Real A0123 = gcov[YY][TT] * gcov[ZZ][XX] - gcov[YY][XX] * gcov[ZZ][TT] ;
-  Real A2313 = gcov[XX][YY] * gcov[ZZ][ZZ] - gcov[XX][ZZ] * gcov[ZZ][YY] ;
-  Real A1313 = gcov[XX][XX] * gcov[ZZ][ZZ] - gcov[XX][ZZ] * gcov[ZZ][XX] ;
-  Real A1213 = gcov[XX][XX] * gcov[ZZ][YY] - gcov[XX][YY] * gcov[ZZ][XX] ;
-  Real A2312 = gcov[XX][YY] * gcov[YY][ZZ] - gcov[XX][ZZ] * gcov[YY][YY] ;
-  Real A1312 = gcov[XX][XX] * gcov[YY][ZZ] - gcov[XX][ZZ] * gcov[YY][XX] ;
-  Real A1212 = gcov[XX][XX] * gcov[YY][YY] - gcov[XX][YY] * gcov[YY][XX] ;
-  Real A0313 = gcov[XX][TT] * gcov[ZZ][ZZ] - gcov[XX][ZZ] * gcov[ZZ][TT] ;
-  Real A0213 = gcov[XX][TT] * gcov[ZZ][YY] - gcov[XX][YY] * gcov[ZZ][TT] ;
-  Real A0312 = gcov[XX][TT] * gcov[YY][ZZ] - gcov[XX][ZZ] * gcov[YY][TT] ;
-  Real A0212 = gcov[XX][TT] * gcov[YY][YY] - gcov[XX][YY] * gcov[YY][TT] ;
-  Real A0113 = gcov[XX][TT] * gcov[ZZ][XX] - gcov[XX][XX] * gcov[ZZ][TT] ;
-  Real A0112 = gcov[XX][TT] * gcov[YY][XX] - gcov[XX][XX] * gcov[YY][TT] ;
+static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]) {
+  Real A2323 = gcov[YY][YY] * gcov[ZZ][ZZ] - gcov[YY][ZZ] * gcov[ZZ][YY];
+  Real A1323 = gcov[YY][XX] * gcov[ZZ][ZZ] - gcov[YY][ZZ] * gcov[ZZ][XX];
+  Real A1223 = gcov[YY][XX] * gcov[ZZ][YY] - gcov[YY][YY] * gcov[ZZ][XX];
+  Real A0323 = gcov[YY][TT] * gcov[ZZ][ZZ] - gcov[YY][ZZ] * gcov[ZZ][TT];
+  Real A0223 = gcov[YY][TT] * gcov[ZZ][YY] - gcov[YY][YY] * gcov[ZZ][TT];
+  Real A0123 = gcov[YY][TT] * gcov[ZZ][XX] - gcov[YY][XX] * gcov[ZZ][TT];
+  Real A2313 = gcov[XX][YY] * gcov[ZZ][ZZ] - gcov[XX][ZZ] * gcov[ZZ][YY];
+  Real A1313 = gcov[XX][XX] * gcov[ZZ][ZZ] - gcov[XX][ZZ] * gcov[ZZ][XX];
+  Real A1213 = gcov[XX][XX] * gcov[ZZ][YY] - gcov[XX][YY] * gcov[ZZ][XX];
+  Real A2312 = gcov[XX][YY] * gcov[YY][ZZ] - gcov[XX][ZZ] * gcov[YY][YY];
+  Real A1312 = gcov[XX][XX] * gcov[YY][ZZ] - gcov[XX][ZZ] * gcov[YY][XX];
+  Real A1212 = gcov[XX][XX] * gcov[YY][YY] - gcov[XX][YY] * gcov[YY][XX];
+  Real A0313 = gcov[XX][TT] * gcov[ZZ][ZZ] - gcov[XX][ZZ] * gcov[ZZ][TT];
+  Real A0213 = gcov[XX][TT] * gcov[ZZ][YY] - gcov[XX][YY] * gcov[ZZ][TT];
+  Real A0312 = gcov[XX][TT] * gcov[YY][ZZ] - gcov[XX][ZZ] * gcov[YY][TT];
+  Real A0212 = gcov[XX][TT] * gcov[YY][YY] - gcov[XX][YY] * gcov[YY][TT];
+  Real A0113 = gcov[XX][TT] * gcov[ZZ][XX] - gcov[XX][XX] * gcov[ZZ][TT];
+  Real A0112 = gcov[XX][TT] * gcov[YY][XX] - gcov[XX][XX] * gcov[YY][TT];
 
-  Real det = gcov[TT][TT] * ( gcov[XX][XX] * A2323 - gcov[XX][YY] * A1323 + gcov[XX][ZZ] * A1223 )
-    - gcov[TT][XX] * ( gcov[XX][TT] * A2323 - gcov[XX][YY] * A0323 + gcov[XX][ZZ] * A0223 )
-    + gcov[TT][YY] * ( gcov[XX][TT] * A1323 - gcov[XX][XX] * A0323 + gcov[XX][ZZ] * A0123 )
-    - gcov[TT][ZZ] * ( gcov[XX][TT] * A1223 - gcov[XX][XX] * A0223 + gcov[XX][YY] * A0123 ) ;
+  Real det =
+      gcov[TT][TT] *
+          (gcov[XX][XX] * A2323 - gcov[XX][YY] * A1323 + gcov[XX][ZZ] * A1223) -
+      gcov[TT][XX] *
+          (gcov[XX][TT] * A2323 - gcov[XX][YY] * A0323 + gcov[XX][ZZ] * A0223) +
+      gcov[TT][YY] *
+          (gcov[XX][TT] * A1323 - gcov[XX][XX] * A0323 + gcov[XX][ZZ] * A0123) -
+      gcov[TT][ZZ] * (gcov[XX][TT] * A1223 - gcov[XX][XX] * A0223 + gcov[XX][YY] * A0123);
   det = 1 / det;
 
-   gcon[TT][TT] = det *   ( gcov[XX][XX] * A2323 - gcov[XX][YY] * A1323 + gcov[XX][ZZ] * A1223 );
-   gcon[TT][XX] = det * - ( gcov[TT][XX] * A2323 - gcov[TT][YY] * A1323 + gcov[TT][ZZ] * A1223 );
-   gcon[TT][YY] = det *   ( gcov[TT][XX] * A2313 - gcov[TT][YY] * A1313 + gcov[TT][ZZ] * A1213 );
-   gcon[TT][ZZ] = det * - ( gcov[TT][XX] * A2312 - gcov[TT][YY] * A1312 + gcov[TT][ZZ] * A1212 );
-   gcon[XX][TT] = det * - ( gcov[XX][TT] * A2323 - gcov[XX][YY] * A0323 + gcov[XX][ZZ] * A0223 );
-   gcon[XX][XX] = det *   ( gcov[TT][TT] * A2323 - gcov[TT][YY] * A0323 + gcov[TT][ZZ] * A0223 );
-   gcon[XX][YY] = det * - ( gcov[TT][TT] * A2313 - gcov[TT][YY] * A0313 + gcov[TT][ZZ] * A0213 );
-   gcon[XX][ZZ] = det *   ( gcov[TT][TT] * A2312 - gcov[TT][YY] * A0312 + gcov[TT][ZZ] * A0212 );
-   gcon[YY][TT] = det *   ( gcov[XX][TT] * A1323 - gcov[XX][XX] * A0323 + gcov[XX][ZZ] * A0123 );
-   gcon[YY][XX] = det * - ( gcov[TT][TT] * A1323 - gcov[TT][XX] * A0323 + gcov[TT][ZZ] * A0123 );
-   gcon[YY][YY] = det *   ( gcov[TT][TT] * A1313 - gcov[TT][XX] * A0313 + gcov[TT][ZZ] * A0113 );
-   gcon[YY][ZZ] = det * - ( gcov[TT][TT] * A1312 - gcov[TT][XX] * A0312 + gcov[TT][ZZ] * A0112 );
-   gcon[ZZ][TT] = det * - ( gcov[XX][TT] * A1223 - gcov[XX][XX] * A0223 + gcov[XX][YY] * A0123 );
-   gcon[ZZ][XX] = det *   ( gcov[TT][TT] * A1223 - gcov[TT][XX] * A0223 + gcov[TT][YY] * A0123 );
-   gcon[ZZ][YY] = det * - ( gcov[TT][TT] * A1213 - gcov[TT][XX] * A0213 + gcov[TT][YY] * A0113 );
-   gcon[ZZ][ZZ] = det *   ( gcov[TT][TT] * A1212 - gcov[TT][XX] * A0212 + gcov[TT][YY] * A0112 );
+  gcon[TT][TT] =
+      det * (gcov[XX][XX] * A2323 - gcov[XX][YY] * A1323 + gcov[XX][ZZ] * A1223);
+  gcon[TT][XX] =
+      det * -(gcov[TT][XX] * A2323 - gcov[TT][YY] * A1323 + gcov[TT][ZZ] * A1223);
+  gcon[TT][YY] =
+      det * (gcov[TT][XX] * A2313 - gcov[TT][YY] * A1313 + gcov[TT][ZZ] * A1213);
+  gcon[TT][ZZ] =
+      det * -(gcov[TT][XX] * A2312 - gcov[TT][YY] * A1312 + gcov[TT][ZZ] * A1212);
+  gcon[XX][TT] =
+      det * -(gcov[XX][TT] * A2323 - gcov[XX][YY] * A0323 + gcov[XX][ZZ] * A0223);
+  gcon[XX][XX] =
+      det * (gcov[TT][TT] * A2323 - gcov[TT][YY] * A0323 + gcov[TT][ZZ] * A0223);
+  gcon[XX][YY] =
+      det * -(gcov[TT][TT] * A2313 - gcov[TT][YY] * A0313 + gcov[TT][ZZ] * A0213);
+  gcon[XX][ZZ] =
+      det * (gcov[TT][TT] * A2312 - gcov[TT][YY] * A0312 + gcov[TT][ZZ] * A0212);
+  gcon[YY][TT] =
+      det * (gcov[XX][TT] * A1323 - gcov[XX][XX] * A0323 + gcov[XX][ZZ] * A0123);
+  gcon[YY][XX] =
+      det * -(gcov[TT][TT] * A1323 - gcov[TT][XX] * A0323 + gcov[TT][ZZ] * A0123);
+  gcon[YY][YY] =
+      det * (gcov[TT][TT] * A1313 - gcov[TT][XX] * A0313 + gcov[TT][ZZ] * A0113);
+  gcon[YY][ZZ] =
+      det * -(gcov[TT][TT] * A1312 - gcov[TT][XX] * A0312 + gcov[TT][ZZ] * A0112);
+  gcon[ZZ][TT] =
+      det * -(gcov[XX][TT] * A1223 - gcov[XX][XX] * A0223 + gcov[XX][YY] * A0123);
+  gcon[ZZ][XX] =
+      det * (gcov[TT][TT] * A1223 - gcov[TT][XX] * A0223 + gcov[TT][YY] * A0123);
+  gcon[ZZ][YY] =
+      det * -(gcov[TT][TT] * A1213 - gcov[TT][XX] * A0213 + gcov[TT][YY] * A0113);
+  gcon[ZZ][ZZ] =
+      det * (gcov[TT][TT] * A1212 - gcov[TT][XX] * A0212 + gcov[TT][YY] * A0112);
 
-   return;
+  return;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -2731,83 +2752,85 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
 
   if (pm->one_d) {
-    par_for_outer("dynbbh_b_damp1", DevExeSpace(), scr_size, scr_level, 0, nmb1,
-    KOKKOS_LAMBDA(TeamMember_t member, const int m) {
-      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
-      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
-      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
-      auto size = mbsize.d_view(m);
-      Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
-	      CurrentDensity(member, m, ks, js, is, ie+1, b0, size, j1, j2, j3);
-	      par_for_inner(member, is, ie+1, [&](const int i) {
-	        Real w = EdgeWeightX1D(weight, m, ks, js, i);
-	        if (w > 0.0 && isfinite(w)) {
-	          Real damp = eta*w;
-	          e2(m,ks,  js,i) += damp*j2(i);
-	          e2(m,ke+1,js,i) += damp*j2(i);
-	          e3(m,ks,  js,i) += damp*j3(i);
-	          e3(m,ks,je+1,i) += damp*j3(i);
-	        }
-	      });
-	    });
+    par_for_outer(
+        "dynbbh_b_damp1", DevExeSpace(), scr_size, scr_level, 0, nmb1,
+        KOKKOS_LAMBDA(TeamMember_t member, const int m) {
+          ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+          ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+          ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+          auto size = mbsize.d_view(m);
+          Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+          CurrentDensity(member, m, ks, js, is, ie + 1, b0, size, j1, j2, j3);
+          par_for_inner(member, is, ie + 1, [&](const int i) {
+            Real w = EdgeWeightX1D(weight, m, ks, js, i);
+            if (w > 0.0 && isfinite(w)) {
+              Real damp = eta * w;
+              e2(m, ks, js, i) += damp * j2(i);
+              e2(m, ke + 1, js, i) += damp * j2(i);
+              e3(m, ks, js, i) += damp * j3(i);
+              e3(m, ks, je + 1, i) += damp * j3(i);
+            }
+          });
+        });
     return;
   }
 
   if (pm->two_d) {
-    par_for_outer("dynbbh_b_damp2", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je+1,
-    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
-      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
-      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
-      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
-      auto size = mbsize.d_view(m);
-      Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
-	      CurrentDensity(member, m, ks, j, is, ie+1, b0, size, j1, j2, j3);
-	      par_for_inner(member, is, ie+1, [&](const int i) {
-	        Real w1 = StrictSmoothExcisionBWeight(weight(m,ks,j,i),
-	                                             weight(m,ks,j-1,i));
-	        if (w1 > 0.0 && isfinite(w1)) {
-	          e1(m,ks,  j,i) += eta*w1*j1(i);
-	          e1(m,ke+1,j,i) += eta*w1*j1(i);
-	        }
-	        Real w2 = EdgeWeightX1D(weight, m, ks, j, i);
-	        if (w2 > 0.0 && isfinite(w2)) {
-	          e2(m,ks,  j,i) += eta*w2*j2(i);
-	          e2(m,ke+1,j,i) += eta*w2*j2(i);
-	        }
-	        Real w3 = EdgeWeightX3(weight, m, ks, j, i);
-	        if (w3 > 0.0 && isfinite(w3)) {
-	          e3(m,ks,  j,i) += eta*w3*j3(i);
-	        }
-	      });
-	    });
+    par_for_outer(
+        "dynbbh_b_damp2", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je + 1,
+        KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
+          ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+          ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+          ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+          auto size = mbsize.d_view(m);
+          Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+          CurrentDensity(member, m, ks, j, is, ie + 1, b0, size, j1, j2, j3);
+          par_for_inner(member, is, ie + 1, [&](const int i) {
+            Real w1 =
+                StrictSmoothExcisionBWeight(weight(m, ks, j, i), weight(m, ks, j - 1, i));
+            if (w1 > 0.0 && isfinite(w1)) {
+              e1(m, ks, j, i) += eta * w1 * j1(i);
+              e1(m, ke + 1, j, i) += eta * w1 * j1(i);
+            }
+            Real w2 = EdgeWeightX1D(weight, m, ks, j, i);
+            if (w2 > 0.0 && isfinite(w2)) {
+              e2(m, ks, j, i) += eta * w2 * j2(i);
+              e2(m, ke + 1, j, i) += eta * w2 * j2(i);
+            }
+            Real w3 = EdgeWeightX3(weight, m, ks, j, i);
+            if (w3 > 0.0 && isfinite(w3)) {
+              e3(m, ks, j, i) += eta * w3 * j3(i);
+            }
+          });
+        });
     return;
   }
 
-  par_for_outer("dynbbh_b_damp3", DevExeSpace(), scr_size, scr_level,
-                0, nmb1, ks, ke+1, js, je+1,
-  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
-    ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
-    ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
-    ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
-    auto size = mbsize.d_view(m);
-	    Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
-	    CurrentDensity(member, m, k, j, is, ie+1, b0, size, j1, j2, j3);
-	    par_for_inner(member, is, ie+1, [&](const int i) {
-	      Real w1 = EdgeWeightX1(weight, m, k, j, i);
-	      if (w1 > 0.0 && isfinite(w1)) {
-	        e1(m,k,j,i) += eta*w1*j1(i);
-	      }
-	      Real w2 = EdgeWeightX2(weight, m, k, j, i);
-	      if (w2 > 0.0 && isfinite(w2)) {
-	        e2(m,k,j,i) += eta*w2*j2(i);
-	      }
-	      Real w3 = EdgeWeightX3(weight, m, k, j, i);
-	      if (w3 > 0.0 && isfinite(w3)) {
-	        e3(m,k,j,i) += eta*w3*j3(i);
-	      }
-	    });
-	  });
-	}
+  par_for_outer(
+      "dynbbh_b_damp3", DevExeSpace(), scr_size, scr_level, 0, nmb1, ks, ke + 1, js,
+      je + 1, KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+        ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+        ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+        ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+        auto size = mbsize.d_view(m);
+        Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+        CurrentDensity(member, m, k, j, is, ie + 1, b0, size, j1, j2, j3);
+        par_for_inner(member, is, ie + 1, [&](const int i) {
+          Real w1 = EdgeWeightX1(weight, m, k, j, i);
+          if (w1 > 0.0 && isfinite(w1)) {
+            e1(m, k, j, i) += eta * w1 * j1(i);
+          }
+          Real w2 = EdgeWeightX2(weight, m, k, j, i);
+          if (w2 > 0.0 && isfinite(w2)) {
+            e2(m, k, j, i) += eta * w2 * j2(i);
+          }
+          Real w3 = EdgeWeightX3(weight, m, k, j, i);
+          if (w3 > 0.0 && isfinite(w3)) {
+            e3(m, k, j, i) += eta * w3 * j3(i);
+          }
+        });
+      });
+}
 
 void AddDynBBHUserSources(Mesh *pm, const Real bdt) {
   if (bbh.cooling_source == CoolingSource::ism) {
@@ -2975,7 +2998,6 @@ void AddValenciaGRCooling(Mesh *pm, const Real bdt) {
   par_for("Valencia_IsotropicCooling", DevExeSpace(),
           0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-
     // --- metric gamma_ij and sqrt(gamma) ---
     Real gxx = adm.g_dd(m,0,0,k,j,i);
     Real gxy = adm.g_dd(m,0,1,k,j,i);

@@ -53,9 +53,10 @@ Real FiniteAverage4(const Real a, const Real b, const Real c, const Real d, int 
 }
 
 KOKKOS_INLINE_FUNCTION
-Real RepairEdgeEMF(const Real edge, const Real a, const Real b, const Real c, const Real d,
-                   const int component, const int m, const int k, const int j, const int i,
-                   const DvceArray1D<int> &counts, const DvceArray2D<int> &first_locs) {
+Real RepairEdgeEMF(const Real edge, const Real a, const Real b, const Real c,
+                   const Real d, const int component, const int m, const int k,
+                   const int j, const int i, const DvceArray1D<int> &counts,
+                   const DvceArray2D<int> &first_locs) {
   if (FiniteEMF(edge)) return edge;
 
   int finite_count = 0;
@@ -263,7 +264,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
   if (pmy_pack->pmesh->three_d) {
     RepairNonFiniteFluxArrays("CornerE pre-SG07", pdriver, stage);
     RepairNonFiniteFaceEMFs("CornerE pre-SG07", pdriver, stage);
-    if (!CheckFiniteDensityFlux("CornerE pre-SG07", pdriver, stage)) return TaskStatus::fail;
+    if (!CheckFiniteDensityFlux("CornerE pre-SG07", pdriver, stage))
+      return TaskStatus::fail;
     if (!CheckFiniteFaceEMF("CornerE pre-SG07", pdriver, stage)) return TaskStatus::fail;
 
     // Compute cell-centered electric fields

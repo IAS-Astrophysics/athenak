@@ -290,7 +290,9 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
 void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
   MeshBlockPack* pmbp = pm->pmb_pack;
   for (int p=0; p<(pm->nmb_packs_thisrank); ++p) {
-    if (!(pmbp->tl_map[tl]->Empty())) {pmbp->tl_map[tl]->Reset();}
+    if (!(pmbp->tl_map[tl]->Empty())) {
+      pmbp->tl_map[tl]->Reset();
+    }
   }
   int npack_left = (pm->nmb_packs_thisrank);
   while (npack_left > 0) {
@@ -299,7 +301,9 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
     } else {
       if (!pmbp->tl_map[tl]->IsComplete()) {
         auto status = pmbp->tl_map[tl]->DoAvailable(this, stage);
-        if (status == TaskListStatus::complete) { npack_left--; }
+        if (status == TaskListStatus::complete) {
+          npack_left--;
+        }
       }
     }
   }
@@ -399,7 +403,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     }
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
-      if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
+      if (global_variable::my_rank == 0) {
+        OutputCycleDiagnostics(pmesh);
+      }
 
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
@@ -448,7 +454,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       }
 
       // AMR
-      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
+      if (pmesh->adaptive) {
+        pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+      }
       // compute new timestep AFTER all Meshblocks refined/derefined
       if (pmesh->pmb_pack->ppart != nullptr) {
         (void) pmesh->pmb_pack->ppart->NewTimeStep(this, nexp_stages);

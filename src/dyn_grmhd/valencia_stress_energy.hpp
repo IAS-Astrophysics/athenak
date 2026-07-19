@@ -1,4 +1,8 @@
 //========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
 // Valencia GRMHD Stress-Energy Helpers (AthenaK style)
 // Conventions:
 //  - Primitive velocity: u_prim^i = W v^i (v^i is Eulerian 3-velocity)
@@ -7,8 +11,8 @@
 //  - EOS: Gamma-law, h = 1 + Gamma * P / [rho (Gamma - 1)]
 //========================================================================================
 
-#ifndef VALENCIA_STRESS_ENERGY_HPP_
-#define VALENCIA_STRESS_ENERGY_HPP_
+#ifndef DYN_GRMHD_VALENCIA_STRESS_ENERGY_HPP_
+#define DYN_GRMHD_VALENCIA_STRESS_ENERGY_HPP_
 
 #include "athena.hpp"
 #include "coordinates/adm.hpp" // for adm::SpatialDet
@@ -285,5 +289,4 @@ void ValenciaStressEnergyTotal(const Real rho,
   }
 }
 
-#endif // VALENCIA_STRESS_ENERGY_HPP_
-
+#endif  // DYN_GRMHD_VALENCIA_STRESS_ENERGY_HPP_

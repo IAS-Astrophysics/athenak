@@ -36,10 +36,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   auto &z4c = pmy_pack->pz4c->z4c;
   auto &rhs = pmy_pack->pz4c->rhs;
   auto &opt = pmy_pack->pz4c->opt;
-  
+
   bool is_vacuum = (pmy_pack->ptmunu == nullptr || !opt.back_reaction);
   Real time = pmy_pack->pmesh->time;
-  
+
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
@@ -558,22 +558,27 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       Real W2 = (z4c.chi(m,k,j,i)>opt.chi_min_floor)
                     ? z4c.chi(m,k,j,i) : opt.chi_min_floor;
       Real W = pow(W2,0.5);
-      rhs.alpha(m,k,j,i) += opt.ssl_damping_amp*(W-z4c.alpha(m,k,j,i))*pow(W,opt.ssl_damping_index)*exp(-0.5*pow(time/                      
-      			    (opt.ssl_damping_time),2));
+      rhs.alpha(m, k, j, i) += opt.ssl_damping_amp * (W - z4c.alpha(m, k, j, i)) *
+                               pow(W, opt.ssl_damping_index) *
+                               exp(-0.5 * pow(time / (opt.ssl_damping_time), 2));
     }
     if (opt.telegraph_lapse) {
       Real W = (z4c.chi(m,k,j,i)>0)
               ? z4c.chi(m,k,j,i) : 0;
       rhs.alpha(m,k,j,i) += W*dB;
       for(int a = 0; a < 3; ++a) {
-        rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + (1.0/opt.telegraph_tau) * ( - z4c.vB_d(m,a,k,j,i) + opt.telegraph_kappa*dalpha_d(a));
+        rhs.vB_d(m, a, k, j, i) =
+            opt.lapse_advect * LB_d(a) +
+            (1.0 / opt.telegraph_tau) *
+                (-z4c.vB_d(m, a, k, j, i) + opt.telegraph_kappa * dalpha_d(a));
       }
     }
     // shift vector
     for(int a = 0; a < 3; ++a) {
-      rhs.beta_u(m,a,k,j,i) = (1-opt.sss_damping_amp*exp(-0.5*pow(time/(opt.sss_damping_time),2)))
-                              * opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
-                            + opt.shift_advect * Lbeta_u(a);
+      rhs.beta_u(m, a, k, j, i) =
+          (1 - opt.sss_damping_amp * exp(-0.5 * pow(time / (opt.sss_damping_time), 2))) *
+              opt.shift_ggamma * z4c.vGam_u(m, a, k, j, i) +
+          opt.shift_advect * Lbeta_u(a);
       rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
       // FORCE beta = 0
       //rhs.beta_u(m,a,k,j,i) = 0;
@@ -610,4 +615,4 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 template TaskStatus Z4c::CalcRHS<2>(Driver *pdriver, int stage);
 template TaskStatus Z4c::CalcRHS<3>(Driver *pdriver, int stage);
 template TaskStatus Z4c::CalcRHS<4>(Driver *pdriver, int stage);
-} // namespace z4c
+}  // namespace z4c

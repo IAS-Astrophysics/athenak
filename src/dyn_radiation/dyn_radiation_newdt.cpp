@@ -28,7 +28,8 @@ namespace dyn_radiation {
 
 //----------------------------------------------------------------------------------------
 // \!fn void DynRadiation::NewTimeStep()
-// \brief calculate the minimum timestep within a MeshBlockPack for dyn_radiation problems.
+// \brief calculate the minimum timestep within a MeshBlockPack for dyn_radiation
+// problems.
 //        Only computed once at beginning of calculation.
 
 TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
@@ -166,49 +167,59 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
   if (use_adm_geometry_ && adm_metric_source_) {
     auto &adm_ = pmy_pack->padm->adm;
     auto &adm_grad_alpha_c_ = adm_grad_alpha_c;
-    Kokkos::parallel_reduce("RadiationGeomDt",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &min_dtg) {
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
-      if (excise && rad_mask_(m,k,j,i)) {
-        return;
-      }
+    Kokkos::parallel_reduce(
+        "RadiationGeomDt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+        KOKKOS_LAMBDA(const int &idx, Real &min_dtg) {
+          int m = (idx) / nkji;
+          int k = (idx - m * nkji) / nji;
+          int j = (idx - m * nkji - k * nji) / nx1;
+          int i = (idx - m * nkji - k * nji - j * nx1) + is;
+          k += ks;
+          j += js;
+          if (excise && rad_mask_(m, k, j, i)) {
+            return;
+          }
 
-      Real tmp_min_dtg = max_dt;
-      for (int n=0; n<=nang1; ++n) {
-        Real s[3] = {0.0, 0.0, 0.0};
-        for (int a=0; a<3; ++a) {
-          for (int d=0; d<3; ++d) {
-            s[d] += tet_c_(m,a+1,d+1,k,j,i)*nh_c_.d_view(n,a+1);
+          Real tmp_min_dtg = max_dt;
+          for (int n = 0; n <= nang1; ++n) {
+            Real s[3] = {0.0, 0.0, 0.0};
+            for (int a = 0; a < 3; ++a) {
+              for (int d = 0; d < 3; ++d) {
+                s[d] += tet_c_(m, a + 1, d + 1, k, j, i) * nh_c_.d_view(n, a + 1);
+              }
+            }
+            Real kss = 0.0;
+            Real sdalpha = 0.0;
+            for (int a = 0; a < 3; ++a) {
+              sdalpha += s[a] * adm_grad_alpha_c_(m, a, k, j, i);
+              for (int b = 0; b < 3; ++b) {
+                kss += adm_.vK_dd(m, a, b, k, j, i) * s[a] * s[b];
+              }
+            }
+            Real geom = adm_.alpha(m, k, j, i) * kss - sdalpha;
+            if (fabs(geom) > tiny) {
+              tmp_min_dtg = fmin(tmp_min_dtg, 1.0 / fabs(geom));
+            }
           }
-        }
-        Real kss = 0.0;
-        Real sdalpha = 0.0;
-        for (int a=0; a<3; ++a) {
-          sdalpha += s[a]*adm_grad_alpha_c_(m,a,k,j,i);
-          for (int b=0; b<3; ++b) {
-            kss += adm_.vK_dd(m,a,b,k,j,i)*s[a]*s[b];
-          }
-        }
-        Real geom = adm_.alpha(m,k,j,i)*kss - sdalpha;
-        if (fabs(geom) > tiny) {
-          tmp_min_dtg = fmin(tmp_min_dtg, 1.0/fabs(geom));
-        }
-      }
-      min_dtg = fmin(tmp_min_dtg, min_dtg);
-    }, Kokkos::Min<Real>(dtg));
+          min_dtg = fmin(tmp_min_dtg, min_dtg);
+        },
+        Kokkos::Min<Real>(dtg));
   }
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
   dtnew = dt1;
-  if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
-  if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
-  if (angular_fluxes_) { dtnew = std::min(dtnew, dta); }
-  if (use_adm_geometry && adm_metric_source) { dtnew = std::min(dtnew, dtg); }
+  if (pmy_pack->pmesh->multi_d) {
+    dtnew = std::min(dtnew, dt2);
+  }
+  if (pmy_pack->pmesh->three_d) {
+    dtnew = std::min(dtnew, dt3);
+  }
+  if (angular_fluxes_) {
+    dtnew = std::min(dtnew, dta);
+  }
+  if (use_adm_geometry && adm_metric_source) {
+    dtnew = std::min(dtnew, dtg);
+  }
 
   return TaskStatus::complete;
 }

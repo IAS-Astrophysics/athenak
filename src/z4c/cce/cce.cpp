@@ -169,4 +169,4 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   delete[] data_real;
   delete[] data_imag;
 }
-} // end namespace z4c
+}  // end namespace z4c

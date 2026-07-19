@@ -131,7 +131,7 @@ struct torus_pgen {
   Real potential_rho_pow;                     // set vector potential dependence on rho
 };
 
-  torus_pgen torus;
+torus_pgen torus;
 
 } // namespace
 
@@ -616,7 +616,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
         // Calculate intensity in tetrad frame
         Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
+        for (int d = 0; d < 4; ++d) {
+          n_0 += tetcov_c_(m, d, 0, k, j, i) * nh_c_.d_view(n, d);
+        }
         i0_(m,n,k,j,i) = n0*n_0*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
       }
     }
@@ -963,9 +965,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       b0.x1f(m,k,j,i) *= bnorm;
       b0.x2f(m,k,j,i) *= bnorm;
       b0.x3f(m,k,j,i) *= bnorm;
-      if (i==ie) { b0.x1f(m,k,j,i+1) *= bnorm; }
-      if (j==je) { b0.x2f(m,k,j+1,i) *= bnorm; }
-      if (k==ke) { b0.x3f(m,k+1,j,i) *= bnorm; }
+      if (i == ie) {
+        b0.x1f(m, k, j, i + 1) *= bnorm;
+      }
+      if (j == je) {
+        b0.x2f(m, k, j + 1, i) *= bnorm;
+      }
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) *= bnorm;
+      }
     });
 
     // Recompute cell-centered magnetic field
@@ -1628,18 +1636,26 @@ void NoInflowTorus(Mesh *pm) {
         for (int i=0; i<ng; ++i) {
           b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
           b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
-          if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b0.x2f(m,k,j+1,is);}
+          if (j == n2 - 1) {
+            b0.x2f(m, k, j + 1, is - i - 1) = b0.x2f(m, k, j + 1, is);
+          }
           b0.x3f(m,k,j,is-i-1) = b0.x3f(m,k,j,is);
-          if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b0.x3f(m,k+1,j,is);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, j, is - i - 1) = b0.x3f(m, k + 1, j, is);
+          }
         }
       }
       if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
         for (int i=0; i<ng; ++i) {
           b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
           b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
-          if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b0.x2f(m,k,j+1,ie);}
+          if (j == n2 - 1) {
+            b0.x2f(m, k, j + 1, ie + i + 1) = b0.x2f(m, k, j + 1, ie);
+          }
           b0.x3f(m,k,j,ie+i+1) = b0.x3f(m,k,j,ie);
-          if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b0.x3f(m,k+1,j,ie);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, j, ie + i + 1) = b0.x3f(m, k + 1, j, ie);
+          }
         }
       }
     });
@@ -1712,19 +1728,27 @@ void NoInflowTorus(Mesh *pm) {
       if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
         for (int j=0; j<ng; ++j) {
           b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
-          if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, k, js - j - 1, i + 1) = b0.x1f(m, k, js, i + 1);
+          }
           b0.x2f(m,k,js-j-1,i) = b0.x2f(m,k,js,i);
           b0.x3f(m,k,js-j-1,i) = b0.x3f(m,k,js,i);
-          if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b0.x3f(m,k+1,js,i);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, js - j - 1, i) = b0.x3f(m, k + 1, js, i);
+          }
         }
       }
       if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
         for (int j=0; j<ng; ++j) {
           b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
-          if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, k, je + j + 1, i + 1) = b0.x1f(m, k, je, i + 1);
+          }
           b0.x2f(m,k,je+j+2,i) = b0.x2f(m,k,je+1,i);
           b0.x3f(m,k,je+j+1,i) = b0.x3f(m,k,je,i);
-          if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b0.x3f(m,k+1,je,i);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, je + j + 1, i) = b0.x3f(m, k + 1, je, i);
+          }
         }
       }
     });
@@ -1797,18 +1821,26 @@ void NoInflowTorus(Mesh *pm) {
       if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
         for (int k=0; k<ng; ++k) {
           b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
-          if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, ks - k - 1, j, i + 1) = b0.x1f(m, ks, j, i + 1);
+          }
           b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
-          if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
+          if (j == n2 - 1) {
+            b0.x2f(m, ks - k - 1, j + 1, i) = b0.x2f(m, ks, j + 1, i);
+          }
           b0.x3f(m,ks-k-1,j,i) = b0.x3f(m,ks,j,i);
         }
       }
       if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
         for (int k=0; k<ng; ++k) {
           b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
-          if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, ke + k + 1, j, i + 1) = b0.x1f(m, ke, j, i + 1);
+          }
           b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
-          if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+          if (j == n2 - 1) {
+            b0.x2f(m, ke + k + 1, j + 1, i) = b0.x2f(m, ke, j + 1, i);
+          }
           b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
         }
       }

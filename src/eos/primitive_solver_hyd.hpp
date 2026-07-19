@@ -14,6 +14,7 @@
 #include <math.h>
 
 // C++ headers
+#include <cstdint>
 #include <string>
 #include <type_traits>
 #include <iostream>
@@ -176,7 +177,8 @@ class PrimitiveSolverHydro {
     if (c2p_failure_use_previous_state &&
         c2p_failure_previous_state_density_max <= 0.0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << block << "/c2p_failure_use_previous_state requires positive "
+                << std::endl
+                << block << "/c2p_failure_use_previous_state requires positive "
                 << "c2p_failure_previous_state_density_max" << std::endl;
       std::exit(EXIT_FAILURE);
     }
@@ -419,424 +421,434 @@ class PrimitiveSolverHydro {
 
     // FIXME(JMF): We can short-circuit the primitive solve if FOFC is already enabled
     // due to a maximum principle violation.
-    unsigned long long count_all=0;
-    Kokkos::parallel_reduce("pshyd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, unsigned long long &sumcounts) {
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/ni;
-      int i = (idx - m*nkji - k*nji - j*ni) + il;
-      j += jl;
-      k += kl;
+    uint64_t count_all = 0;
+    Kokkos::parallel_reduce(
+        "pshyd_c2p", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+        KOKKOS_LAMBDA(const int &idx, uint64_t &sumcounts) {
+          int m = (idx) / nkji;
+          int k = (idx - m * nkji) / nji;
+          int j = (idx - m * nkji - k * nji) / ni;
+          int i = (idx - m * nkji - k * nji - j * ni) + il;
+          j += jl;
+          k += kl;
 
-      // Add in a short circuit where FOFC is guaranteed.
-      if (floors_only && fofc_(m, k, j, i)) {
-        return;
-      }
-      if (floors_only && excise) {
-        if (excision_flux_(m,k,j,i)) {
-          return;
-        }
-      }
-
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      // Extract the metric
-      Real g3d[NSPMETRIC], g3u[NSPMETRIC], detg, sdetg;
-      g3d[S11] = adm.g_dd(m, 0, 0, k, j, i);
-      g3d[S12] = adm.g_dd(m, 0, 1, k, j, i);
-      g3d[S13] = adm.g_dd(m, 0, 2, k, j, i);
-      g3d[S22] = adm.g_dd(m, 1, 1, k, j, i);
-      g3d[S23] = adm.g_dd(m, 1, 2, k, j, i);
-      g3d[S33] = adm.g_dd(m, 2, 2, k, j, i);
-      detg = Primitive::GetDeterminant(g3d);
-      sdetg = sqrt(detg);
-      Real isdetg = 1.0/sdetg;
-      adm::SpatialInv(1.0/detg,
-                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
-                 &g3u[S11], &g3u[S12], &g3u[S13], &g3u[S22], &g3u[S23], &g3u[S33]);
-
-      // Extract the conserved variables
-      Real cons_pt[NCONS], cons_pt_old[NCONS], prim_pt[NPRIM];
-      cons_pt[CDN] = cons_pt_old[CDN] = cons(m, IDN, k, j, i)*isdetg;
-      cons_pt[CSX] = cons_pt_old[CSX] = cons(m, IM1, k, j, i)*isdetg;
-      cons_pt[CSY] = cons_pt_old[CSY] = cons(m, IM2, k, j, i)*isdetg;
-      cons_pt[CSZ] = cons_pt_old[CSZ] = cons(m, IM3, k, j, i)*isdetg;
-      cons_pt[CTA] = cons_pt_old[CTA] = cons(m, IEN, k, j, i)*isdetg;
-      for (int n = 0; n < nscal; n++) {
-        cons_pt[CYD + n] = cons_pt_old[CYD + n] = cons(m, nhyd + n, k, j, i)*isdetg;
-      }
-      // If we're only testing the floors, we can use the CC fields.
-      Real b3u[NMAG];
-      if (floors_only) {
-        b3u[IBX] = bcc0(m, IBX, k, j, i)*isdetg;
-        b3u[IBY] = bcc0(m, IBY, k, j, i)*isdetg;
-        b3u[IBZ] = bcc0(m, IBZ, k, j, i)*isdetg;
-      } else {
-        // Otherwise we don't have the correct CC fields yet, so use
-        // the FC fields.
-        bcc0(m, IBX, k, j, i) = 0.5*(bfc.x1f(m,k,j,i) + bfc.x1f(m,k,j,i+1));
-        bcc0(m, IBY, k, j, i) = 0.5*(bfc.x2f(m,k,j,i) + bfc.x2f(m,k,j+1,i));
-        bcc0(m, IBZ, k, j, i) = 0.5*(bfc.x3f(m,k,j,i) + bfc.x3f(m,k+1,j,i));
-        b3u[IBX] = bcc0(m, IBX, k, j, i)*isdetg;
-        b3u[IBY] = bcc0(m, IBY, k, j, i)*isdetg;
-        b3u[IBZ] = bcc0(m, IBZ, k, j, i)*isdetg;
-      }
-
-      // If we're in an excised region, set the primitives to some default value.
-      Primitive::SolverResult result;
-      Real excise_weight = (excise && smooth_excise_) ? excision_weight_(m,k,j,i) : 0.0;
-      Real prim_prev[NPRIM];
-      prim_prev[PRH] = prim(m, IDN, k, j, i)/mb;
-      prim_prev[PVX] = prim(m, IVX, k, j, i);
-      prim_prev[PVY] = prim(m, IVY, k, j, i);
-      prim_prev[PVZ] = prim(m, IVZ, k, j, i);
-      prim_prev[PPR] = prim(m, IPR, k, j, i);
-      for (int n = 0; n < nscal; n++) {
-        prim_prev[PYF + n] = prim(m, nhyd + n, k, j, i);
-      }
-      if (excise) {
-        if (excision_floor_(m,k,j,i) && !smooth_excise_) {
-          prim_pt[PRH] = dexcise_/mb;
-          prim_pt[PVX] = 0.0;
-          prim_pt[PVY] = 0.0;
-          prim_pt[PVZ] = 0.0;
-          prim_pt[PPR] = pexcise_;
-          for (int n = 0; n < nscal; n++) {
-            // FIXME: Particle abundances should probably be set to a
-            // default inside an excised region.
-            prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
+          // Add in a short circuit where FOFC is guaranteed.
+          if (floors_only && fofc_(m, k, j, i)) {
+            return;
           }
-          prim_pt[PPR] = (texcise_ > 0.0) ?
-              eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]) : pexcise_;
-          prim_pt[PTM] =
-            eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
-          result.error = Primitive::Error::SUCCESS;
-          result.iterations = 0;
-          result.cons_floor = false;
-          result.prim_floor = false;
-          result.cons_adjusted = true;
-          ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
-        } else {
-          result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
-        }
-      } else {
-        result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
-      }
-      bool c2p_failed = (result.error == Primitive::Error::BRACKETING_FAILED ||
-                         result.error == Primitive::Error::NO_SOLUTION ||
-                         result.error == Primitive::Error::RHO_TOO_SMALL ||
-                         result.error == Primitive::Error::RHO_TOO_BIG);
-      if (!floors_only && c2p_failed &&
-          c2p_failure_use_previous_state_ &&
-          prim_prev[PRH]*mb <= c2p_failure_previous_state_density_max_ &&
-          prim_prev[PRH] > 0.0 && prim_prev[PPR] > 0.0 &&
-          isfinite(prim_prev[PRH]) && isfinite(prim_prev[PPR]) &&
-          isfinite(prim_prev[PVX]) && isfinite(prim_prev[PVY]) &&
-          isfinite(prim_prev[PVZ])) {
-        prim_pt[PRH] = prim_prev[PRH];
-        prim_pt[PVX] = prim_prev[PVX];
-        prim_pt[PVY] = prim_prev[PVY];
-        prim_pt[PVZ] = prim_prev[PVZ];
-        prim_pt[PPR] = prim_prev[PPR];
-        prim_pt[PRH] = fmax(prim_pt[PRH], eos_.GetDensityFloor());
-        for (int n = 0; n < nscal; n++) {
-          prim_pt[PYF + n] = isfinite(prim_prev[PYF + n]) ? prim_prev[PYF + n] :
-                              eos_.GetSpeciesAtmosphere(n);
-        }
-        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
-                                                &prim_pt[PYF]);
-        if (!(prim_pt[PTM] > 0.0) || !isfinite(prim_pt[PTM]) ||
-            prim_pt[PTM] < eos_.GetTemperatureFloor()) {
-          prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], eos_.GetTemperatureFloor(),
-                                          &prim_pt[PYF]);
-          prim_pt[PTM] = eos_.GetTemperatureFloor();
-        }
-        Real u2 = g3d[S11]*SQR(prim_pt[PVX]) + g3d[S22]*SQR(prim_pt[PVY]) +
-                  g3d[S33]*SQR(prim_pt[PVZ]) + 2.0*g3d[S12]*prim_pt[PVX]*prim_pt[PVY] +
-                  2.0*g3d[S13]*prim_pt[PVX]*prim_pt[PVZ] +
-                  2.0*g3d[S23]*prim_pt[PVY]*prim_pt[PVZ];
-        if (!(u2 >= 0.0) || !isfinite(u2)) {
-          prim_pt[PVX] = prim_pt[PVY] = prim_pt[PVZ] = 0.0;
-          u2 = 0.0;
-        }
-        Real target_vmax2 = fmin(SQR(eos_.GetMaxVelocity()), 1.0 - 1.0e-12);
-        Real target_umax2 = target_vmax2/fmax(1.0 - target_vmax2, 1.0e-300);
-        if (u2 > target_umax2) {
-          Real factor = sqrt(target_umax2/u2);
-          prim_pt[PVX] *= factor;
-          prim_pt[PVY] *= factor;
-          prim_pt[PVZ] *= factor;
-        }
-        result.error = Primitive::Error::SUCCESS;
-        result.iterations = 0;
-        result.cons_floor = false;
-        result.prim_floor = false;
-        result.cons_adjusted = true;
-        ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
-      }
-
-      if (!floors_only && smooth_excise_ && excise_weight > 0.0) {
-        Real rhotarget = dexcise_/mb;
-        if (excise_sigma_max_ > 0.0) {
-          Real b2cc = SQR(bcc0(m, IBX, k, j, i)) + SQR(bcc0(m, IBY, k, j, i)) +
-                      SQR(bcc0(m, IBZ, k, j, i));
-          rhotarget = fmax(rhotarget, (b2cc/excise_sigma_max_)/mb);
-        }
-        if (result.error != Primitive::Error::SUCCESS) {
-          prim_pt[PRH] = rhotarget;
-          for (int n = 0; n < nscal; n++) {
-            prim_pt[PYF + n] = cons_pt[CDN] != 0.0 ? cons_pt[CYD + n]/cons_pt[CDN] : 0.0;
+          if (floors_only && excise) {
+            if (excision_flux_(m, k, j, i)) {
+              return;
+            }
           }
-          excise_weight = 1.0;
-        }
-        Real ptarget = (texcise_ > 0.0) ?
-            eos_.GetPressure(rhotarget, texcise_, &prim_pt[PYF]) : pexcise_;
-        Real bx0, by0, bz0, bx1, by1, bz1;
-        ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
-                                    p0_vx, p0_vy, p0_vz, &bx0, &by0, &bz0);
-        ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z,
-                                    p1_vx, p1_vy, p1_vz, &bx1, &by1, &bz1);
-        Real rks0 = ExcisionKSRXSpin(bx0, by0, bz0, p0_ax, p0_ay, p0_az);
-        Real rks1 = ExcisionKSRXSpin(bx1, by1, bz1, p1_ax, p1_ay, p1_az);
-        bool use_p1 = (p1_rad > 0.0) &&
-                      (p0_rad <= 0.0 ||
-                       rks1 < rks0);
-        Real tvx = use_p1 ? p1_vx : p0_vx;
-        Real tvy = use_p1 ? p1_vy : p0_vy;
-        Real tvz = use_p1 ? p1_vz : p0_vz;
-        if (excise_inflow_ && excise_inflow_speed_ > 0.0) {
-          Real rx = use_p1 ? bx1 : bx0;
-          Real ry = use_p1 ? by1 : by0;
-          Real rz = use_p1 ? bz1 : bz0;
-          Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
-          if (rnorm > 0.0 && isfinite(rnorm)) {
-            Real nx = rx/rnorm;
-            Real ny = ry/rnorm;
-            Real nz = rz/rnorm;
-            Real vin = excise_inflow_speed_ * excise_weight;
-            Real cvx = tvx;
-            Real cvy = tvy;
-            Real cvz = tvz;
-            if (result.error == Primitive::Error::SUCCESS &&
-                isfinite(prim_pt[PVX]) && isfinite(prim_pt[PVY]) && isfinite(prim_pt[PVZ])) {
-              Real cu2 = g3d[S11]*SQR(prim_pt[PVX]) + g3d[S22]*SQR(prim_pt[PVY]) +
-                         g3d[S33]*SQR(prim_pt[PVZ]) + 2.0*g3d[S12]*prim_pt[PVX]*prim_pt[PVY] +
-                         2.0*g3d[S13]*prim_pt[PVX]*prim_pt[PVZ] +
-                         2.0*g3d[S23]*prim_pt[PVY]*prim_pt[PVZ];
-              if (cu2 >= 0.0 && isfinite(cu2)) {
-                Real cW = sqrt(1.0 + cu2);
-                cvx = prim_pt[PVX]/cW;
-                cvy = prim_pt[PVY]/cW;
-                cvz = prim_pt[PVZ]/cW;
+
+          Real &x1min = size.d_view(m).x1min;
+          Real &x1max = size.d_view(m).x1max;
+          Real x1v = CellCenterX(i - is, indcs.nx1, x1min, x1max);
+
+          Real &x2min = size.d_view(m).x2min;
+          Real &x2max = size.d_view(m).x2max;
+          Real x2v = CellCenterX(j - js, indcs.nx2, x2min, x2max);
+
+          Real &x3min = size.d_view(m).x3min;
+          Real &x3max = size.d_view(m).x3max;
+          Real x3v = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
+
+          // Extract the metric
+          Real g3d[NSPMETRIC], g3u[NSPMETRIC], detg, sdetg;
+          g3d[S11] = adm.g_dd(m, 0, 0, k, j, i);
+          g3d[S12] = adm.g_dd(m, 0, 1, k, j, i);
+          g3d[S13] = adm.g_dd(m, 0, 2, k, j, i);
+          g3d[S22] = adm.g_dd(m, 1, 1, k, j, i);
+          g3d[S23] = adm.g_dd(m, 1, 2, k, j, i);
+          g3d[S33] = adm.g_dd(m, 2, 2, k, j, i);
+          detg = Primitive::GetDeterminant(g3d);
+          sdetg = sqrt(detg);
+          Real isdetg = 1.0 / sdetg;
+          adm::SpatialInv(1.0 / detg, g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23],
+                          g3d[S33], &g3u[S11], &g3u[S12], &g3u[S13], &g3u[S22], &g3u[S23],
+                          &g3u[S33]);
+
+          // Extract the conserved variables
+          Real cons_pt[NCONS], cons_pt_old[NCONS], prim_pt[NPRIM];
+          cons_pt[CDN] = cons_pt_old[CDN] = cons(m, IDN, k, j, i) * isdetg;
+          cons_pt[CSX] = cons_pt_old[CSX] = cons(m, IM1, k, j, i) * isdetg;
+          cons_pt[CSY] = cons_pt_old[CSY] = cons(m, IM2, k, j, i) * isdetg;
+          cons_pt[CSZ] = cons_pt_old[CSZ] = cons(m, IM3, k, j, i) * isdetg;
+          cons_pt[CTA] = cons_pt_old[CTA] = cons(m, IEN, k, j, i) * isdetg;
+          for (int n = 0; n < nscal; n++) {
+            cons_pt[CYD + n] = cons_pt_old[CYD + n] = cons(m, nhyd + n, k, j, i) * isdetg;
+          }
+          // If we're only testing the floors, we can use the CC fields.
+          Real b3u[NMAG];
+          if (floors_only) {
+            b3u[IBX] = bcc0(m, IBX, k, j, i) * isdetg;
+            b3u[IBY] = bcc0(m, IBY, k, j, i) * isdetg;
+            b3u[IBZ] = bcc0(m, IBZ, k, j, i) * isdetg;
+          } else {
+            // Otherwise we don't have the correct CC fields yet, so use
+            // the FC fields.
+            bcc0(m, IBX, k, j, i) = 0.5 * (bfc.x1f(m, k, j, i) + bfc.x1f(m, k, j, i + 1));
+            bcc0(m, IBY, k, j, i) = 0.5 * (bfc.x2f(m, k, j, i) + bfc.x2f(m, k, j + 1, i));
+            bcc0(m, IBZ, k, j, i) = 0.5 * (bfc.x3f(m, k, j, i) + bfc.x3f(m, k + 1, j, i));
+            b3u[IBX] = bcc0(m, IBX, k, j, i) * isdetg;
+            b3u[IBY] = bcc0(m, IBY, k, j, i) * isdetg;
+            b3u[IBZ] = bcc0(m, IBZ, k, j, i) * isdetg;
+          }
+
+          // If we're in an excised region, set the primitives to some default value.
+          Primitive::SolverResult result;
+          Real excise_weight =
+              (excise && smooth_excise_) ? excision_weight_(m, k, j, i) : 0.0;
+          Real prim_prev[NPRIM];
+          prim_prev[PRH] = prim(m, IDN, k, j, i) / mb;
+          prim_prev[PVX] = prim(m, IVX, k, j, i);
+          prim_prev[PVY] = prim(m, IVY, k, j, i);
+          prim_prev[PVZ] = prim(m, IVZ, k, j, i);
+          prim_prev[PPR] = prim(m, IPR, k, j, i);
+          for (int n = 0; n < nscal; n++) {
+            prim_prev[PYF + n] = prim(m, nhyd + n, k, j, i);
+          }
+          if (excise) {
+            if (excision_floor_(m, k, j, i) && !smooth_excise_) {
+              prim_pt[PRH] = dexcise_ / mb;
+              prim_pt[PVX] = 0.0;
+              prim_pt[PVY] = 0.0;
+              prim_pt[PVZ] = 0.0;
+              prim_pt[PPR] = pexcise_;
+              for (int n = 0; n < nscal; n++) {
+                // FIXME: Particle abundances should probably be set to a
+                // default inside an excised region.
+                prim_pt[PYF + n] = cons_pt[CYD] / cons_pt[CDN];
+              }
+              prim_pt[PPR] = (texcise_ > 0.0)
+                                 ? eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF])
+                                 : pexcise_;
+              prim_pt[PTM] =
+                  eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+              result.error = Primitive::Error::SUCCESS;
+              result.iterations = 0;
+              result.cons_floor = false;
+              result.prim_floor = false;
+              result.cons_adjusted = true;
+              ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+            } else {
+              result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+            }
+          } else {
+            result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+          }
+          bool c2p_failed = (result.error == Primitive::Error::BRACKETING_FAILED ||
+                             result.error == Primitive::Error::NO_SOLUTION ||
+                             result.error == Primitive::Error::RHO_TOO_SMALL ||
+                             result.error == Primitive::Error::RHO_TOO_BIG);
+          if (!floors_only && c2p_failed && c2p_failure_use_previous_state_ &&
+              prim_prev[PRH] * mb <= c2p_failure_previous_state_density_max_ &&
+              prim_prev[PRH] > 0.0 && prim_prev[PPR] > 0.0 && isfinite(prim_prev[PRH]) &&
+              isfinite(prim_prev[PPR]) && isfinite(prim_prev[PVX]) &&
+              isfinite(prim_prev[PVY]) && isfinite(prim_prev[PVZ])) {
+            prim_pt[PRH] = prim_prev[PRH];
+            prim_pt[PVX] = prim_prev[PVX];
+            prim_pt[PVY] = prim_prev[PVY];
+            prim_pt[PVZ] = prim_prev[PVZ];
+            prim_pt[PPR] = prim_prev[PPR];
+            prim_pt[PRH] = fmax(prim_pt[PRH], eos_.GetDensityFloor());
+            for (int n = 0; n < nscal; n++) {
+              prim_pt[PYF + n] = isfinite(prim_prev[PYF + n])
+                                     ? prim_prev[PYF + n]
+                                     : eos_.GetSpeciesAtmosphere(n);
+            }
+            prim_pt[PTM] =
+                eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+            if (!(prim_pt[PTM] > 0.0) || !isfinite(prim_pt[PTM]) ||
+                prim_pt[PTM] < eos_.GetTemperatureFloor()) {
+              prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], eos_.GetTemperatureFloor(),
+                                              &prim_pt[PYF]);
+              prim_pt[PTM] = eos_.GetTemperatureFloor();
+            }
+            Real u2 = g3d[S11] * SQR(prim_pt[PVX]) + g3d[S22] * SQR(prim_pt[PVY]) +
+                      g3d[S33] * SQR(prim_pt[PVZ]) +
+                      2.0 * g3d[S12] * prim_pt[PVX] * prim_pt[PVY] +
+                      2.0 * g3d[S13] * prim_pt[PVX] * prim_pt[PVZ] +
+                      2.0 * g3d[S23] * prim_pt[PVY] * prim_pt[PVZ];
+            if (!(u2 >= 0.0) || !isfinite(u2)) {
+              prim_pt[PVX] = prim_pt[PVY] = prim_pt[PVZ] = 0.0;
+              u2 = 0.0;
+            }
+            Real target_vmax2 = fmin(SQR(eos_.GetMaxVelocity()), 1.0 - 1.0e-12);
+            Real target_umax2 = target_vmax2 / fmax(1.0 - target_vmax2, 1.0e-300);
+            if (u2 > target_umax2) {
+              Real factor = sqrt(target_umax2 / u2);
+              prim_pt[PVX] *= factor;
+              prim_pt[PVY] *= factor;
+              prim_pt[PVZ] *= factor;
+            }
+            result.error = Primitive::Error::SUCCESS;
+            result.iterations = 0;
+            result.cons_floor = false;
+            result.prim_floor = false;
+            result.cons_adjusted = true;
+            ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+          }
+
+          if (!floors_only && smooth_excise_ && excise_weight > 0.0) {
+            Real rhotarget = dexcise_ / mb;
+            if (excise_sigma_max_ > 0.0) {
+              Real b2cc = SQR(bcc0(m, IBX, k, j, i)) + SQR(bcc0(m, IBY, k, j, i)) +
+                          SQR(bcc0(m, IBZ, k, j, i));
+              rhotarget = fmax(rhotarget, (b2cc / excise_sigma_max_) / mb);
+            }
+            if (result.error != Primitive::Error::SUCCESS) {
+              prim_pt[PRH] = rhotarget;
+              for (int n = 0; n < nscal; n++) {
+                prim_pt[PYF + n] =
+                    cons_pt[CDN] != 0.0 ? cons_pt[CYD + n] / cons_pt[CDN] : 0.0;
+              }
+              excise_weight = 1.0;
+            }
+            Real ptarget = (texcise_ > 0.0)
+                               ? eos_.GetPressure(rhotarget, texcise_, &prim_pt[PYF])
+                               : pexcise_;
+            Real bx0, by0, bz0, bx1, by1, bz1;
+            ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z, p0_vx, p0_vy,
+                                        p0_vz, &bx0, &by0, &bz0);
+            ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z, p1_vx, p1_vy,
+                                        p1_vz, &bx1, &by1, &bz1);
+            Real rks0 = ExcisionKSRXSpin(bx0, by0, bz0, p0_ax, p0_ay, p0_az);
+            Real rks1 = ExcisionKSRXSpin(bx1, by1, bz1, p1_ax, p1_ay, p1_az);
+            bool use_p1 = (p1_rad > 0.0) && (p0_rad <= 0.0 || rks1 < rks0);
+            Real tvx = use_p1 ? p1_vx : p0_vx;
+            Real tvy = use_p1 ? p1_vy : p0_vy;
+            Real tvz = use_p1 ? p1_vz : p0_vz;
+            if (excise_inflow_ && excise_inflow_speed_ > 0.0) {
+              Real rx = use_p1 ? bx1 : bx0;
+              Real ry = use_p1 ? by1 : by0;
+              Real rz = use_p1 ? bz1 : bz0;
+              Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
+              if (rnorm > 0.0 && isfinite(rnorm)) {
+                Real nx = rx / rnorm;
+                Real ny = ry / rnorm;
+                Real nz = rz / rnorm;
+                Real vin = excise_inflow_speed_ * excise_weight;
+                Real cvx = tvx;
+                Real cvy = tvy;
+                Real cvz = tvz;
+                if (result.error == Primitive::Error::SUCCESS && isfinite(prim_pt[PVX]) &&
+                    isfinite(prim_pt[PVY]) && isfinite(prim_pt[PVZ])) {
+                  Real cu2 = g3d[S11] * SQR(prim_pt[PVX]) + g3d[S22] * SQR(prim_pt[PVY]) +
+                             g3d[S33] * SQR(prim_pt[PVZ]) +
+                             2.0 * g3d[S12] * prim_pt[PVX] * prim_pt[PVY] +
+                             2.0 * g3d[S13] * prim_pt[PVX] * prim_pt[PVZ] +
+                             2.0 * g3d[S23] * prim_pt[PVY] * prim_pt[PVZ];
+                  if (cu2 >= 0.0 && isfinite(cu2)) {
+                    Real cW = sqrt(1.0 + cu2);
+                    cvx = prim_pt[PVX] / cW;
+                    cvy = prim_pt[PVY] / cW;
+                    cvz = prim_pt[PVZ] / cW;
+                  }
+                }
+                Real vrad = (cvx - tvx) * nx + (cvy - tvy) * ny + (cvz - tvz) * nz;
+                if (vrad > -vin) {
+                  Real dv = vrad + vin;
+                  tvx = cvx - dv * nx;
+                  tvy = cvy - dv * ny;
+                  tvz = cvz - dv * nz;
+                } else {
+                  tvx = cvx;
+                  tvy = cvy;
+                  tvz = cvz;
+                }
               }
             }
-            Real vrad = (cvx - tvx)*nx + (cvy - tvy)*ny + (cvz - tvz)*nz;
-            if (vrad > -vin) {
-              Real dv = vrad + vin;
-              tvx = cvx - dv*nx;
-              tvy = cvy - dv*ny;
-              tvz = cvz - dv*nz;
+            Real tv2 = g3d[S11] * SQR(tvx) + g3d[S22] * SQR(tvy) + g3d[S33] * SQR(tvz) +
+                       2.0 * g3d[S12] * tvx * tvy + 2.0 * g3d[S13] * tvx * tvz +
+                       2.0 * g3d[S23] * tvy * tvz;
+            if (!(tv2 >= 0.0) || !isfinite(tv2)) {
+              tvx = tvy = tvz = 0.0;
+              tv2 = 0.0;
+            }
+            Real target_vmax2 = fmin(SQR(eos_.GetMaxVelocity()), 1.0 - 1.0e-12);
+            if (tv2 > target_vmax2) {
+              Real factor = sqrt(target_vmax2 / tv2);
+              tvx *= factor;
+              tvy *= factor;
+              tvz *= factor;
+              tv2 = target_vmax2;
+            }
+            Real tlor = 1.0 / sqrt(fmax(1.0 - tv2, 1.0e-300));
+            Real twvx = tlor * tvx;
+            Real twvy = tlor * tvy;
+            Real twvz = tlor * tvz;
+            Real keep = 1.0 - excise_weight;
+            prim_pt[PRH] = keep * prim_pt[PRH] + excise_weight * rhotarget;
+            prim_pt[PVX] = keep * prim_pt[PVX] + excise_weight * twvx;
+            prim_pt[PVY] = keep * prim_pt[PVY] + excise_weight * twvy;
+            prim_pt[PVZ] = keep * prim_pt[PVZ] + excise_weight * twvz;
+            prim_pt[PPR] = keep * prim_pt[PPR] + excise_weight * ptarget;
+            if (excise_temp_ceil_ > 0.0) {
+              prim_pt[PPR] =
+                  fmin(prim_pt[PPR],
+                       eos_.GetPressure(prim_pt[PRH], excise_temp_ceil_, &prim_pt[PYF]));
+            }
+            prim_pt[PTM] =
+                eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+            bool smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
+                                        isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
+            for (int n = 0; n < PYF + nscal; ++n) {
+              smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
+            }
+            if (!smooth_state_finite) {
+              prim_pt[PRH] = rhotarget;
+              prim_pt[PVX] = twvx;
+              prim_pt[PVY] = twvy;
+              prim_pt[PVZ] = twvz;
+              prim_pt[PPR] = ptarget;
+              for (int n = 0; n < nscal; n++) {
+                prim_pt[PYF + n] =
+                    cons_pt[CDN] != 0.0 ? cons_pt[CYD + n] / cons_pt[CDN] : 0.0;
+              }
+              if (excise_temp_ceil_ > 0.0) {
+                prim_pt[PPR] = fmin(
+                    prim_pt[PPR],
+                    eos_.GetPressure(prim_pt[PRH], excise_temp_ceil_, &prim_pt[PYF]));
+              }
+              prim_pt[PTM] =
+                  eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+              smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
+                                     isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
+              for (int n = 0; n < PYF + nscal; ++n) {
+                smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
+              }
+            }
+            if (smooth_state_finite) {
+              result.error = Primitive::Error::SUCCESS;
+              result.iterations = 0;
+              result.cons_floor = false;
+              result.prim_floor = false;
+              result.cons_adjusted = true;
+              ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
             } else {
-              tvx = cvx;
-              tvy = cvy;
-              tvz = cvz;
+              result.error = Primitive::Error::NO_SOLUTION;
             }
           }
-        }
-        Real tv2 = g3d[S11]*SQR(tvx) + g3d[S22]*SQR(tvy) + g3d[S33]*SQR(tvz) +
-                   2.0*g3d[S12]*tvx*tvy + 2.0*g3d[S13]*tvx*tvz +
-                   2.0*g3d[S23]*tvy*tvz;
-        if (!(tv2 >= 0.0) || !isfinite(tv2)) {
-          tvx = tvy = tvz = 0.0;
-          tv2 = 0.0;
-        }
-        Real target_vmax2 = fmin(SQR(eos_.GetMaxVelocity()), 1.0 - 1.0e-12);
-        if (tv2 > target_vmax2) {
-          Real factor = sqrt(target_vmax2/tv2);
-          tvx *= factor;
-          tvy *= factor;
-          tvz *= factor;
-          tv2 = target_vmax2;
-        }
-        Real tlor = 1.0/sqrt(fmax(1.0 - tv2, 1.0e-300));
-        Real twvx = tlor*tvx;
-        Real twvy = tlor*tvy;
-        Real twvz = tlor*tvz;
-        Real keep = 1.0 - excise_weight;
-        prim_pt[PRH] = keep*prim_pt[PRH] + excise_weight*rhotarget;
-        prim_pt[PVX] = keep*prim_pt[PVX] + excise_weight*twvx;
-        prim_pt[PVY] = keep*prim_pt[PVY] + excise_weight*twvy;
-        prim_pt[PVZ] = keep*prim_pt[PVZ] + excise_weight*twvz;
-        prim_pt[PPR] = keep*prim_pt[PPR] + excise_weight*ptarget;
-        if (excise_temp_ceil_ > 0.0) {
-          prim_pt[PPR] = fmin(prim_pt[PPR],
-              eos_.GetPressure(prim_pt[PRH], excise_temp_ceil_, &prim_pt[PYF]));
-        }
-        prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
-        bool smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
-                                    isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
-        for (int n = 0; n < PYF + nscal; ++n) {
-          smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
-        }
-        if (!smooth_state_finite) {
-          prim_pt[PRH] = rhotarget;
-          prim_pt[PVX] = twvx;
-          prim_pt[PVY] = twvy;
-          prim_pt[PVZ] = twvz;
-          prim_pt[PPR] = ptarget;
-          for (int n = 0; n < nscal; n++) {
-            prim_pt[PYF + n] = cons_pt[CDN] != 0.0 ? cons_pt[CYD + n]/cons_pt[CDN] : 0.0;
+
+          if (!floors_only && result.error == Primitive::Error::SUCCESS &&
+              temp_ceiling_ > 0.0 && temp_ceiling_density_max_ > 0.0 &&
+              prim_pt[PRH] * mb <= temp_ceiling_density_max_ &&
+              prim_pt[PTM] > temp_ceiling_ && isfinite(prim_pt[PRH]) &&
+              isfinite(prim_pt[PPR]) && isfinite(prim_pt[PTM])) {
+            Real pceil = eos_.GetPressure(prim_pt[PRH], temp_ceiling_, &prim_pt[PYF]);
+            if (pceil > 0.0 && isfinite(pceil)) {
+              prim_pt[PPR] = pceil;
+              prim_pt[PTM] = temp_ceiling_;
+              result.cons_adjusted = true;
+              ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+              sumcounts += (1ULL << 32);
+            }
           }
-          if (excise_temp_ceil_ > 0.0) {
-            prim_pt[PPR] = fmin(prim_pt[PPR],
-                eos_.GetPressure(prim_pt[PRH], excise_temp_ceil_, &prim_pt[PYF]));
+
+          if (result.error != Primitive::Error::SUCCESS && floors_only) {
+            fofc_(m, k, j, i) = true;
+          } else if (!floors_only) {
+            int sumerrs = static_cast<int>(sumcounts & 0xffffffffULL);
+            if (result.error != Primitive::Error::SUCCESS &&
+                (nerrs_ + sumerrs < errcap_)) {
+              sumcounts++;
+              sumerrs++;
+              // Find out where the point went bad and report a bunch of information about
+              // it.
+              Kokkos::printf(
+                  "An error occurred during the primitive solve: %s\n"
+                  "  Location: (%d, %d, %d, %d)\n"
+                  "            (%.17g, %.17g, %.17g)\n"
+                  "  Conserved vars: \n"
+                  "    D   = %.17g\n"
+                  "    Sx  = %.17g\n"
+                  "    Sy  = %.17g\n"
+                  "    Sz  = %.17g\n"
+                  "    tau = %.17g\n"
+                  "    Dye = %.17g\n"
+                  "    Bx  = %.17g\n"
+                  "    By  = %.17g\n"
+                  "    Bz  = %.17g\n"
+                  "  Metric vars: \n"
+                  "    detg = %.17g\n"
+                  "    g_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n"
+                  "    alp  = %.17g\n"
+                  "    beta = {%.17g, %.17g, %.17g}\n"
+                  "    psi4 = %.17g\n"
+                  "    K_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n",
+                  ErrorToString(result.error), m, k, j, i, x1v, x2v, x3v,
+                  cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
+                  cons_pt_old[CTA], cons_pt_old[CYD], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
+                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
+                  adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
+                  adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
+                  adm.psi4(m, k, j, i), adm.vK_dd(m, 0, 0, k, j, i),
+                  adm.vK_dd(m, 0, 1, k, j, i), adm.vK_dd(m, 0, 2, k, j, i),
+                  adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
+                  adm.vK_dd(m, 2, 2, k, j, i));
+              if (nerrs_ + sumerrs == errcap_) {
+                Kokkos::printf(
+                    "%d C2P errors have been detected on rank %d."
+                    "All future C2P errors\n"
+                    "on this rank will be suppressed. Fix your code!\n",
+                    nerrs_ + sumerrs, rank);
+              }
+            }
+            // Regardless of failure, we need to copy the primitives.
+            prim(m, IDN, k, j, i) = prim_pt[PRH] * mb;
+            prim(m, IVX, k, j, i) = prim_pt[PVX];
+            prim(m, IVY, k, j, i) = prim_pt[PVY];
+            prim(m, IVZ, k, j, i) = prim_pt[PVZ];
+            prim(m, IPR, k, j, i) = prim_pt[PPR];
+            for (int n = 0; n < nscal; n++) {
+              prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
+            }
+
+            temperature(m, 0, k, j, i) = prim_pt[PTM];
+
+            // If the conservative variables were floored or adjusted for consistency,
+            // we need to copy the conserved variables, too.
+            if (result.cons_floor || result.cons_adjusted) {
+              /*if (fabs((cons_pt[CDN] - cons_pt_old[CDN])/cons_pt_old[CDN]) > 1e-12) {
+                Real &x1min = size.d_view(m).x1min;
+                Real &x1max = size.d_view(m).x1max;
+                Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+
+                Real &x2min = size.d_view(m).x2min;
+                Real &x2max = size.d_view(m).x2max;
+                Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+
+                Real &x3min = size.d_view(m).x3min;
+                Real &x3max = size.d_view(m).x3max;
+                Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+                bool is_ghost = (i < is) || (i > ie) ||
+                                (j < js) || (j > je) ||
+                                (k < ks) || (k > ke);
+
+                printf("Density was nontrivially adjusted on MeshBlock %d!\n"
+                       "  Grid index: (i=%d, j=%d, k=%d)\n"
+                       "  Physical position: (%g, %g, %g)\n"
+                       "  D (old): %.17g\n"
+                       "  D (new): %.17g\n"
+                       "  Ghost zone? %s\n",
+                       m, i, j, k,
+                       x1v, x2v, x3v, cons_pt_old[CDN], cons_pt[CDN],
+                       is_ghost ? "true" : "false");
+              }*/
+              cons(m, IDN, k, j, i) = cons_pt[CDN] * sdetg;
+              cons(m, IM1, k, j, i) = cons_pt[CSX] * sdetg;
+              cons(m, IM2, k, j, i) = cons_pt[CSY] * sdetg;
+              cons(m, IM3, k, j, i) = cons_pt[CSZ] * sdetg;
+              cons(m, IEN, k, j, i) = cons_pt[CTA] * sdetg;
+              for (int n = 0; n < nscal; n++) {
+                cons(m, nhyd + n, k, j, i) = cons_pt[CYD + n] * sdetg;
+              }
+            }
           }
-          prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
-          smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
-                                 isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
-          for (int n = 0; n < PYF + nscal; ++n) {
-            smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
-          }
-        }
-        if (smooth_state_finite) {
-          result.error = Primitive::Error::SUCCESS;
-          result.iterations = 0;
-          result.cons_floor = false;
-          result.prim_floor = false;
-          result.cons_adjusted = true;
-          ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
-        } else {
-          result.error = Primitive::Error::NO_SOLUTION;
-        }
-      }
-
-      if (!floors_only && result.error == Primitive::Error::SUCCESS &&
-          temp_ceiling_ > 0.0 && temp_ceiling_density_max_ > 0.0 &&
-          prim_pt[PRH]*mb <= temp_ceiling_density_max_ &&
-          prim_pt[PTM] > temp_ceiling_ &&
-          isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]) && isfinite(prim_pt[PTM])) {
-        Real pceil = eos_.GetPressure(prim_pt[PRH], temp_ceiling_, &prim_pt[PYF]);
-        if (pceil > 0.0 && isfinite(pceil)) {
-          prim_pt[PPR] = pceil;
-          prim_pt[PTM] = temp_ceiling_;
-          result.cons_adjusted = true;
-          ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
-          sumcounts += (1ULL << 32);
-        }
-      }
-
-      if (result.error != Primitive::Error::SUCCESS && floors_only) {
-        fofc_(m,k,j,i) = true;
-      } else if (!floors_only) {
-        int sumerrs = static_cast<int>(sumcounts & 0xffffffffULL);
-        if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
-          sumcounts++;
-          sumerrs++;
-          // Find out where the point went bad and report a bunch of information about it.
-          Kokkos::printf("An error occurred during the primitive solve: %s\n"
-                 "  Location: (%d, %d, %d, %d)\n"
-                 "            (%.17g, %.17g, %.17g)\n"
-                 "  Conserved vars: \n"
-                 "    D   = %.17g\n"
-                 "    Sx  = %.17g\n"
-                 "    Sy  = %.17g\n"
-                 "    Sz  = %.17g\n"
-                 "    tau = %.17g\n"
-                 "    Dye = %.17g\n"
-                 "    Bx  = %.17g\n"
-                 "    By  = %.17g\n"
-                 "    Bz  = %.17g\n"
-                 "  Metric vars: \n"
-                 "    detg = %.17g\n"
-                 "    g_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n"
-                 "    alp  = %.17g\n"
-                 "    beta = {%.17g, %.17g, %.17g}\n"
-                 "    psi4 = %.17g\n"
-                 "    K_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n",
-                 ErrorToString(result.error),
-                 m, k, j, i,
-                 x1v, x2v, x3v,
-                 cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
-                 cons_pt_old[CTA], cons_pt_old[CYD], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
-                 g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
-                 adm.alpha(m, k, j, i),
-                 adm.beta_u(m, 0, k, j, i),
-                 adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-                 adm.psi4(m, k, j, i),
-                 adm.vK_dd(m, 0, 0, k, j, i), adm.vK_dd(m, 0, 1, k, j, i),
-                 adm.vK_dd(m, 0, 2, k, j, i),
-                 adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
-                 adm.vK_dd(m, 2, 2, k, j, i));
-          if (nerrs_ + sumerrs == errcap_) {
-            Kokkos::printf("%d C2P errors have been detected on rank %d."
-                   "All future C2P errors\n"
-                   "on this rank will be suppressed. Fix your code!\n",
-                   nerrs_ + sumerrs,rank);
-          }
-        }
-        // Regardless of failure, we need to copy the primitives.
-        prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
-        prim(m, IVX, k, j, i) = prim_pt[PVX];
-        prim(m, IVY, k, j, i) = prim_pt[PVY];
-        prim(m, IVZ, k, j, i) = prim_pt[PVZ];
-        prim(m, IPR, k, j, i) = prim_pt[PPR];
-        for (int n = 0; n < nscal; n++) {
-          prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
-        }
-
-        temperature(m,0,k,j,i) = prim_pt[PTM];
-
-        // If the conservative variables were floored or adjusted for consistency,
-        // we need to copy the conserved variables, too.
-        if (result.cons_floor || result.cons_adjusted) {
-          /*if (fabs((cons_pt[CDN] - cons_pt_old[CDN])/cons_pt_old[CDN]) > 1e-12) {
-            Real &x1min = size.d_view(m).x1min;
-            Real &x1max = size.d_view(m).x1max;
-            Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-            Real &x2min = size.d_view(m).x2min;
-            Real &x2max = size.d_view(m).x2max;
-            Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-            Real &x3min = size.d_view(m).x3min;
-            Real &x3max = size.d_view(m).x3max;
-            Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-            bool is_ghost = (i < is) || (i > ie) ||
-                            (j < js) || (j > je) ||
-                            (k < ks) || (k > ke);
-
-            printf("Density was nontrivially adjusted on MeshBlock %d!\n"
-                   "  Grid index: (i=%d, j=%d, k=%d)\n"
-                   "  Physical position: (%g, %g, %g)\n"
-                   "  D (old): %.17g\n"
-                   "  D (new): %.17g\n"
-                   "  Ghost zone? %s\n",
-                   m, i, j, k,
-                   x1v, x2v, x3v, cons_pt_old[CDN], cons_pt[CDN],
-                   is_ghost ? "true" : "false");
-          }*/
-          cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
-          cons(m, IM1, k, j, i) = cons_pt[CSX]*sdetg;
-          cons(m, IM2, k, j, i) = cons_pt[CSY]*sdetg;
-          cons(m, IM3, k, j, i) = cons_pt[CSZ]*sdetg;
-          cons(m, IEN, k, j, i) = cons_pt[CTA]*sdetg;
-          for (int n = 0; n < nscal; n++) {
-            cons(m, nhyd + n, k, j, i) = cons_pt[CYD + n]*sdetg;
-          }
-        }
-      }
-    }, Kokkos::Sum<unsigned long long>(count_all));
+        },
+        Kokkos::Sum<uint64_t>(count_all));
 
     int count_errs = static_cast<int>(count_all & 0xffffffffULL);
     int count_tceil = static_cast<int>(count_all >> 32);

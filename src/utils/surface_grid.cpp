@@ -1,27 +1,29 @@
 //========================================================================================
-// surface_grid.cpp — Implementation for the SphericalSurfaceGrid class
-//----------------------------------------------------------------------------------------
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file surface_grid.cpp
+//! \brief Implements the SphericalSurfaceGrid class.
 
 #include "surface_grid.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
+#include <string>
 
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "coordinates/adm.hpp" // For adm::SpatialDet and metric indices
-
-#include <cmath>
-#include <iostream>
-#include <cstdlib>
-#include <algorithm> // For std::min
+#include "coordinates/adm.hpp"
 
 //----------------------------------------------------------------------------------------
 // Constructor
-SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack* pack,
-                                           int ntheta, int nphi,
-                                           RFunc r_of_thph,
-                                           const std::string& name,
-                                           const Real* center,
-                                           int interp_order)
+SphericalSurfaceGrid::SphericalSurfaceGrid(MeshBlockPack *pack, int ntheta, int nphi,
+                                           RFunc r_of_thph, const std::string &name,
+                                           const Real *center, int interp_order)
     : pmy_pack(pack), tag(name), metric_is_flat_(true), interp_order_(interp_order) {
   // --- basic validation ---
   if (pmy_pack == nullptr || pmy_pack->pmesh == nullptr || pmy_pack->pmb == nullptr) {
@@ -142,9 +144,11 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
       for (int k_sten = 0; k_sten < nsten; ++k_sten) {
         for (int j_sten = 0; j_sten < nsten; ++j_sten) {
           for (int i_sten = 0; i_sten < nsten; ++i_sten) {
-            const Real w = iwghts.d_view(p, i_sten, 0) * iwghts.d_view(p, j_sten, 1) * iwghts.d_view(p, k_sten, 2);
+            const Real w = iwghts.d_view(p, i_sten, 0) * iwghts.d_view(p, j_sten, 1) *
+                           iwghts.d_view(p, k_sten, 2);
 
-            // --- FIXED: This index logic is now consistent with SetInterpolationWeights ---
+            // --- FIXED: This index logic is now consistent with SetInterpolationWeights
+            // ---
             const int I = is + i0 - nleft + 1 + i_sten;
             const int J = js + j0 - nleft + 1 + j_sten;
             const int K = ks + k0 - nleft + 1 + k_sten;
@@ -165,7 +169,8 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
 void SphericalSurfaceGrid::InterpolateMetric() {
   const int start = adm::ADM::I_ADM_GXX;
   const int end = start + 6;
-  DualArray2D<Real> interpolated_metric = InterpolateToSurface(pmy_pack->padm->u_adm, start, end);
+  DualArray2D<Real> interpolated_metric =
+      InterpolateToSurface(pmy_pack->padm->u_adm, start, end);
 
   auto dst_view = g_dd_surf_.d_view;
   auto src_view = interpolated_metric.d_view;
@@ -187,21 +192,23 @@ void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) cons
   auto &eTh = tan_th; auto &ePh = tan_ph; auto &wq = weights;
   auto &g_surf = g_dd_surf_;
 
-  Kokkos::parallel_for("surf_cov_curved", Kokkos::RangePolicy<DevExeSpace>(0, np),
-    KOKKOS_LAMBDA(const int p) {
-      const Real gxx = g_surf.d_view(p, 0), gxy = g_surf.d_view(p, 1), gxz = g_surf.d_view(p, 2);
-      const Real gyy = g_surf.d_view(p, 3), gyz = g_surf.d_view(p, 4), gzz = g_surf.d_view(p, 5);
-      const Real gamma = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
-      const Real sqrt_gamma = (gamma > 0.0) ? sqrt(gamma) : 0.0;
-      const Real s = sqrt_gamma * wq.d_view(p);
+  Kokkos::parallel_for(
+      "surf_cov_curved", Kokkos::RangePolicy<DevExeSpace>(0, np),
+      KOKKOS_LAMBDA(const int p) {
+        const Real gxx = g_surf.d_view(p, 0), gxy = g_surf.d_view(p, 1),
+                   gxz = g_surf.d_view(p, 2);
+        const Real gyy = g_surf.d_view(p, 3), gyz = g_surf.d_view(p, 4),
+                   gzz = g_surf.d_view(p, 5);
+        const Real gamma = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
+        const Real sqrt_gamma = (gamma > 0.0) ? sqrt(gamma) : 0.0;
+        const Real s = sqrt_gamma * wq.d_view(p);
 
-      const Real e1x = eTh.d_view(p,0), e1y = eTh.d_view(p,1), e1z = eTh.d_view(p,2);
-      const Real e2x = ePh.d_view(p,0), e2y = ePh.d_view(p,1), e2z = ePh.d_view(p,2);
-      dSigma.d_view(p,0) = s * (e1y*e2z - e1z*e2y);
-      dSigma.d_view(p,1) = s * (e1z*e2x - e1x*e2z);
-      dSigma.d_view(p,2) = s * (e1x*e2y - e1y*e2x);
-    }
-  );
+        const Real e1x = eTh.d_view(p, 0), e1y = eTh.d_view(p, 1), e1z = eTh.d_view(p, 2);
+        const Real e2x = ePh.d_view(p, 0), e2y = ePh.d_view(p, 1), e2z = ePh.d_view(p, 2);
+        dSigma.d_view(p, 0) = s * (e1y * e2z - e1z * e2y);
+        dSigma.d_view(p, 1) = s * (e1z * e2x - e1x * e2z);
+        dSigma.d_view(p, 2) = s * (e1x * e2y - e1y * e2x);
+      });
 
   Kokkos::fence();
 
@@ -219,37 +226,41 @@ void SphericalSurfaceGrid::CalculateDerivedGeometry() {
     auto gamma_2D = gamma_dd_surf_.d_view;
     auto dA = proper_dA_.d_view;
 
-    Kokkos::parallel_for("CalculateDerivedGeom", Kokkos::RangePolicy<DevExeSpace>(0, npts),
-      KOKKOS_LAMBDA(const int p) {
-        const Real gxx = g_3D(p, 0);
-        const Real gxy = g_3D(p, 1);
-        const Real gxz = g_3D(p, 2);
-        const Real gyy = g_3D(p, 3);
-        const Real gyz = g_3D(p, 4);
-        const Real gzz = g_3D(p, 5);
+    Kokkos::parallel_for(
+        "CalculateDerivedGeom", Kokkos::RangePolicy<DevExeSpace>(0, npts),
+        KOKKOS_LAMBDA(const int p) {
+          const Real gxx = g_3D(p, 0);
+          const Real gxy = g_3D(p, 1);
+          const Real gxz = g_3D(p, 2);
+          const Real gyy = g_3D(p, 3);
+          const Real gyz = g_3D(p, 4);
+          const Real gzz = g_3D(p, 5);
 
-        const Real e_th_x = e_th(p, 0), e_th_y = e_th(p, 1), e_th_z = e_th(p, 2);
-        const Real e_ph_x = e_ph(p, 0), e_ph_y = e_ph(p, 1), e_ph_z = e_ph(p, 2);
+          const Real e_th_x = e_th(p, 0), e_th_y = e_th(p, 1), e_th_z = e_th(p, 2);
+          const Real e_ph_x = e_ph(p, 0), e_ph_y = e_ph(p, 1), e_ph_z = e_ph(p, 2);
 
-        const Real gamma_th_th = gxx*e_th_x*e_th_x + gyy*e_th_y*e_th_y + gzz*e_th_z*e_th_z
-                               + 2.0*(gxy*e_th_x*e_th_y + gxz*e_th_x*e_th_z + gyz*e_th_y*e_th_z);
-        const Real gamma_ph_ph = gxx*e_ph_x*e_ph_x + gyy*e_ph_y*e_ph_y + gzz*e_ph_z*e_ph_z
-                               + 2.0*(gxy*e_ph_x*e_ph_y + gxz*e_ph_x*e_ph_z + gyz*e_ph_y*e_ph_z);
-        const Real gamma_th_ph = gxx*e_th_x*e_ph_x + gyy*e_th_y*e_ph_y + gzz*e_th_z*e_ph_z
-                               + gxy*(e_th_x*e_ph_y + e_th_y*e_ph_x)
-                               + gxz*(e_th_x*e_ph_z + e_th_z*e_ph_x)
-                               + gyz*(e_th_y*e_ph_z + e_th_z*e_ph_y);
+          const Real gamma_th_th =
+              gxx * e_th_x * e_th_x + gyy * e_th_y * e_th_y + gzz * e_th_z * e_th_z +
+              2.0 *
+                  (gxy * e_th_x * e_th_y + gxz * e_th_x * e_th_z + gyz * e_th_y * e_th_z);
+          const Real gamma_ph_ph =
+              gxx * e_ph_x * e_ph_x + gyy * e_ph_y * e_ph_y + gzz * e_ph_z * e_ph_z +
+              2.0 *
+                  (gxy * e_ph_x * e_ph_y + gxz * e_ph_x * e_ph_z + gyz * e_ph_y * e_ph_z);
+          const Real gamma_th_ph = gxx * e_th_x * e_ph_x + gyy * e_th_y * e_ph_y +
+                                   gzz * e_th_z * e_ph_z +
+                                   gxy * (e_th_x * e_ph_y + e_th_y * e_ph_x) +
+                                   gxz * (e_th_x * e_ph_z + e_th_z * e_ph_x) +
+                                   gyz * (e_th_y * e_ph_z + e_th_z * e_ph_y);
 
-        gamma_2D(p, 0) = gamma_th_th;
-        gamma_2D(p, 1) = gamma_th_ph;
-        gamma_2D(p, 2) = gamma_ph_ph;
+          gamma_2D(p, 0) = gamma_th_th;
+          gamma_2D(p, 1) = gamma_th_ph;
+          gamma_2D(p, 2) = gamma_ph_ph;
 
-        const Real det_gamma_2D = gamma_th_th * gamma_ph_ph - SQR(gamma_th_ph);
+          const Real det_gamma_2D = gamma_th_th * gamma_ph_ph - SQR(gamma_th_ph);
 
-        dA(p) = (det_gamma_2D > 0.0)
-                ? sqrt(det_gamma_2D) * quad_weights(p)
-                : 0.0;
-    });
+          dA(p) = (det_gamma_2D > 0.0) ? sqrt(det_gamma_2D) * quad_weights(p) : 0.0;
+        });
 
     gamma_dd_surf_.template modify<DevExeSpace>();
     proper_dA_.template modify<DevExeSpace>();
@@ -320,12 +331,16 @@ void SphericalSurfaceGrid::SetInterpolationIndices() {
     for (int m = 0; m < nmb; ++m) {
       const auto &mb = size.h_view(m);
       const Real x1p = h_coords(p,0), x2p = h_coords(p,1), x3p = h_coords(p,2);
-      if ((x1p >= mb.x1min && x1p < mb.x1max) && (x2p >= mb.x2min && x2p < mb.x2max) && (x3p >= mb.x3min && x3p < mb.x3max)) {
+      if ((x1p >= mb.x1min && x1p < mb.x1max) && (x2p >= mb.x2min && x2p < mb.x2max) &&
+          (x3p >= mb.x3min && x3p < mb.x3max)) {
         h_iind(p,0) = m;
-        h_iind(p,1) = static_cast<int>(std::floor((x1p - (mb.x1min + mb.dx1/2.0)) / mb.dx1));
-        h_iind(p,2) = static_cast<int>(std::floor((x2p - (mb.x2min + mb.dx2/2.0)) / mb.dx2));
+        h_iind(p, 1) =
+            static_cast<int>(std::floor((x1p - (mb.x1min + mb.dx1 / 2.0)) / mb.dx1));
+        h_iind(p, 2) =
+            static_cast<int>(std::floor((x2p - (mb.x2min + mb.dx2 / 2.0)) / mb.dx2));
         // --- FIXED: Corrected typo "static_ofc" to "static_cast" ---
-        h_iind(p,3) = static_cast<int>(std::floor((x3p - (mb.x3min + mb.dx3/2.0)) / mb.dx3));
+        h_iind(p, 3) =
+            static_cast<int>(std::floor((x3p - (mb.x3min + mb.dx3 / 2.0)) / mb.dx3));
         break;
       }
     }
@@ -414,11 +429,13 @@ void SphericalSurfaceGrid::BuildTangentsFD() {
       } else if (it == 0) { // forward
         const int p1 = p + n_ph, p2 = p + 2*n_ph;
         const Real fac = 0.5 / dth;
-        for (int d=0; d<3; ++d) h_tan_th(p,d) = fac*(-3.0*h_x(p,d) + 4.0*h_x(p1,d) - h_x(p2,d));
+        for (int d = 0; d < 3; ++d)
+          h_tan_th(p, d) = fac * (-3.0 * h_x(p, d) + 4.0 * h_x(p1, d) - h_x(p2, d));
       } else { // backward (it == n_th - 1)
         const int p1 = p - n_ph, p2 = p - 2*n_ph;
         const Real fac = 0.5 / dth;
-        for (int d=0; d<3; ++d) h_tan_th(p,d) = fac*(3.0*h_x(p,d) - 4.0*h_x(p1,d) + h_x(p2,d));
+        for (int d = 0; d < 3; ++d)
+          h_tan_th(p, d) = fac * (3.0 * h_x(p, d) - 4.0 * h_x(p1, d) + h_x(p2, d));
       }
       const int pr = it * n_ph + ((ip + 1) % n_ph);
       const int pl = it * n_ph + ((ip - 1 + n_ph) % n_ph);

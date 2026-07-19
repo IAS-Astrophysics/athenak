@@ -414,9 +414,13 @@ void StratifiedVerticalBCs(Mesh *pm) {
       // apply boundaries to inner_x3
       for (int k=0; k<ng; ++k) {
         b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
-        if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, ks - k - 1, j, i + 1) = b0.x1f(m, ks, j, i + 1);
+        }
         b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
-        if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
+        if (j == n2 - 1) {
+          b0.x2f(m, ks - k - 1, j + 1, i) = b0.x2f(m, ks, j + 1, i);
+        }
         b0.x3f(m,ks-k-1,j,i) = b0.x3f(m,ks,j,i);
       }
     }
@@ -425,9 +429,13 @@ void StratifiedVerticalBCs(Mesh *pm) {
       // apply boundaries to outer_x3
       for (int k=0; k<ng; ++k) {
         b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
-        if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, ke + k + 1, j, i + 1) = b0.x1f(m, ke, j, i + 1);
+        }
         b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
-        if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+        if (j == n2 - 1) {
+          b0.x2f(m, ke + k + 1, j + 1, i) = b0.x2f(m, ke, j + 1, i);
+        }
         b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
       }
     }

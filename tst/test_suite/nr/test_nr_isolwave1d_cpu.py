@@ -9,7 +9,6 @@ Runs tests in both hydro and MHD using RK3 for different
 import pytest
 import test_suite.testutils as testutils
 
-
 # Threshold errors and error ratios for different integrators, reconstruction,
 # algorithms, and waves
 errors = {

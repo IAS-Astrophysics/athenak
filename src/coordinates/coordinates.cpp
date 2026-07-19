@@ -29,7 +29,8 @@
 Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     excision_floor("excision_floor",1,1,1,1),
     excision_flux("excision_flux",1,1,1,1),
-    excision_weight("excision_weight",1,1,1,1) {
+    excision_weight("excision_weight",1,1,1,1),
+    pmy_pack(ppack) {
   coord_data.bh_excise = false;
   coord_data.smooth_excise = false;
   coord_data.smooth_excise_puncture_weight_exponent = 1.0;

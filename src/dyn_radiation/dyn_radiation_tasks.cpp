@@ -76,7 +76,7 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.mhd_restb = tl["stagen"]->AddTask(&mhd::MHD::RestrictB, pmhd, id.mhd_recvu);
     id.mhd_sendb = tl["stagen"]->AddTask(&mhd::MHD::SendB, pmhd, id.mhd_restb);
     id.mhd_recvb = tl["stagen"]->AddTask(&mhd::MHD::RecvB, pmhd, id.mhd_sendb);
-    id.bcs       = tl["stagen"]->AddTask(&DynRadiation::ApplyPhysicalBCs,this,id.mhd_recvb);
+    id.bcs = tl["stagen"]->AddTask(&DynRadiation::ApplyPhysicalBCs, this, id.mhd_recvb);
     id.rad_prol  = tl["stagen"]->AddTask(&DynRadiation::Prolongate, this, id.bcs);
     id.mhd_prol  = tl["stagen"]->AddTask(&mhd::MHD::Prolongate, pmhd, id.rad_prol);
     id.mhd_c2p   = tl["stagen"]->AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_prol);
@@ -87,7 +87,8 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.mhd_csend = tl["after_stagen"]->AddTask(&mhd::MHD::ClearSend, pmhd, none);
     // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
     // task list anyways to catch potential bugs in MPI communication logic
-    id.rad_crecv = tl["after_stagen"]->AddTask(&DynRadiation::ClearRecv, this, id.rad_csend);
+    id.rad_crecv =
+        tl["after_stagen"]->AddTask(&DynRadiation::ClearRecv, this, id.rad_csend);
     id.mhd_crecv = tl["after_stagen"]->AddTask(
                                           &mhd::MHD::ClearRecv, pmhd, id.mhd_csend);
 
@@ -118,7 +119,7 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.hyd_restu = tl["stagen"]->AddTask(&hydro::Hydro::RestrictU, phyd, id.rad_recvi);
     id.hyd_sendu = tl["stagen"]->AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
     id.hyd_recvu = tl["stagen"]->AddTask(&hydro::Hydro::RecvU, phyd, id.hyd_sendu);
-    id.bcs       = tl["stagen"]->AddTask(&DynRadiation::ApplyPhysicalBCs,this,id.hyd_recvu);
+    id.bcs = tl["stagen"]->AddTask(&DynRadiation::ApplyPhysicalBCs, this, id.hyd_recvu);
     id.rad_prol  = tl["stagen"]->AddTask(&DynRadiation::Prolongate, this, id.bcs);
     id.hyd_prol  = tl["stagen"]->AddTask(&hydro::Hydro::Prolongate, phyd, id.rad_prol);
     id.hyd_c2p   = tl["stagen"]->AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_prol);
@@ -130,7 +131,8 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.hyd_csend = tl["after_stagen"]->AddTask(&hydro::Hydro::ClearSend, phyd, none);
     // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
     // task list anyways to catch potential bugs in MPI communication logic
-    id.rad_crecv = tl["after_stagen"]->AddTask(&DynRadiation::ClearRecv, this, id.rad_csend);
+    id.rad_crecv =
+        tl["after_stagen"]->AddTask(&DynRadiation::ClearRecv, this, id.rad_csend);
     id.hyd_crecv = tl["after_stagen"]->AddTask(
                                        &hydro::Hydro::ClearRecv, phyd, id.hyd_csend);
 
@@ -161,7 +163,8 @@ void DynRadiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskLi
     id.rad_csend = tl["after_stagen"]->AddTask(&DynRadiation::ClearSend, this, none);
     // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
     // task list anyways to catch potential bugs in MPI communication logic
-    id.rad_crecv = tl["after_stagen"]->AddTask(&DynRadiation::ClearRecv, this, id.rad_csend);
+    id.rad_crecv =
+        tl["after_stagen"]->AddTask(&DynRadiation::ClearRecv, this, id.rad_csend);
   }
 
   return;

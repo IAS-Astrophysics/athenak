@@ -77,7 +77,7 @@ struct CoordData {
   Real flux_excise_r;              // reduce to first-order inside this radius
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
-  Real punc_0[3];                  // if excision_scheme = puncture, excise within a radius
+  Real punc_0[3];  // if excision_scheme = puncture, excise within a radius
   Real punc_1[3];                  // of punc_n_rad of punc_n
   Real punc_0_spin[3];             // Kerr a-vector used for puncture excision shape
   Real punc_1_spin[3];

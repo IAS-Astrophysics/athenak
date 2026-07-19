@@ -64,9 +64,7 @@ class CartesianGridData:
                 np.linspace(0, pi, self.numpoints[d])
             )
         else:
-            return self.center[d] + self.extent[d] * np.linspace(
-                -1, 1, self.numpoints[d]
-            )
+            return self.center[d] + self.extent[d] * np.linspace(-1, 1, self.numpoints[d])
 
     def meshgrid(self):
         """Returns a mesh grid with all the coordinates"""

@@ -26,7 +26,9 @@ void ComputeTetrad(Real x, Real y, Real z, const bool minkowski, const Real a,
   Real ll2 = (r*y - (a)*x)/( SQR(r) + SQR(a) );
   Real ll3 = z/r;
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
-  if (minkowski) {f=0.0;}
+  if (minkowski) {
+    f = 0.0;
+  }
 
   // Set Cartesian tetrad
   Real wa = sqrt(1.0+f);

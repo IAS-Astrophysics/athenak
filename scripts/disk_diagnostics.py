@@ -59,16 +59,20 @@ def get_rot_matrix(tilt_angle_y=0.0, tilt_angle_x=0.0):
     cx, sx = np.cos(tilt_angle_x), np.sin(tilt_angle_x)
     cy, sy = np.cos(tilt_angle_y), np.sin(tilt_angle_y)
 
-    rx = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, cx, -sx],
-        [0.0, sx, cx],
-    ])
-    ry = np.array([
-        [cy, 0.0, sy],
-        [0.0, 1.0, 0.0],
-        [-sy, 0.0, cy],
-    ])
+    rx = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, cx, -sx],
+            [0.0, sx, cx],
+        ]
+    )
+    ry = np.array(
+        [
+            [cy, 0.0, sy],
+            [0.0, 1.0, 0.0],
+            [-sy, 0.0, cy],
+        ]
+    )
     return ry @ rx
 
 
@@ -87,7 +91,9 @@ def normalize_vector(vec, fallback=None):
             fallback_arr = np.zeros_like(arr)
             fallback_arr[..., 2] = 1.0
         else:
-            fallback_arr = np.broadcast_to(np.asarray(fallback, dtype=np.float64), arr.shape)
+            fallback_arr = np.broadcast_to(
+                np.asarray(fallback, dtype=np.float64), arr.shape
+            )
         out = np.where(bad[..., None], fallback_arr, out)
     return out
 
@@ -243,7 +249,9 @@ def load_trajectory_table(path):
 def interpolate_trajectory_table(time, table):
     times = table["time"]
     trange = times[-1] - times[0]
-    tol = 64.0 * np.finfo(np.float64).eps * max(1.0, abs(times[0]), abs(times[-1]), trange)
+    tol = (
+        64.0 * np.finfo(np.float64).eps * max(1.0, abs(times[0]), abs(times[-1]), trange)
+    )
     if time < times[0] - tol or time > times[-1] + tol:
         raise ValueError(
             f"requested time {time} is outside trajectory-table range "
@@ -459,8 +467,12 @@ def superposed_bbh_metric(x, y, z, time, params, kernel_source):
     rbh2 = np.sqrt(x1bh2 * x1bh2 + x2bh2 * x2bh2 + x3bh2 * x3bh2)
     rbh1_cutoff = np.abs(a1) * (1.0 + params["a1_buffer"]) + params["cutoff_floor"]
     rbh2_cutoff = np.abs(a2) * (1.0 + params["a2_buffer"]) + params["cutoff_floor"]
-    x3bh1 = np.where(rbh1 < rbh1_cutoff, np.where(x3bh1 > 0.0, rbh1_cutoff, -rbh1_cutoff), x3bh1)
-    x3bh2 = np.where(rbh2 < rbh2_cutoff, np.where(x3bh2 > 0.0, rbh2_cutoff, -rbh2_cutoff), x3bh2)
+    x3bh1 = np.where(
+        rbh1 < rbh1_cutoff, np.where(x3bh1 > 0.0, rbh1_cutoff, -rbh1_cutoff), x3bh1
+    )
+    x3bh2 = np.where(
+        rbh2 < rbh2_cutoff, np.where(x3bh2 > 0.0, rbh2_cutoff, -rbh2_cutoff), x3bh2
+    )
 
     ks1 = kerr_schild_perturbation(x1bh1, x2bh1, x3bh1, a1x, a1y, a1z, m1)
     ks2 = kerr_schild_perturbation(x1bh2, x2bh2, x3bh2, a2x, a2y, a2z, m2)
@@ -539,7 +551,9 @@ def transform_metric_to_spherical(gcov_cart, jac):
     gcov_sph[..., 0, 0] = gcov_cart[..., 0, 0]
     gcov_sph[..., 0, 1:] = np.einsum("...i,...ia->...a", gcov_cart[..., 0, 1:], jac)
     gcov_sph[..., 1:, 0] = gcov_sph[..., 0, 1:]
-    gcov_sph[..., 1:, 1:] = np.einsum("...ia,...ij,...jb->...ab", jac, gcov_cart[..., 1:, 1:], jac)
+    gcov_sph[..., 1:, 1:] = np.einsum(
+        "...ia,...ij,...jb->...ab", jac, gcov_cart[..., 1:, 1:], jac
+    )
     return gcov_sph
 
 
@@ -594,7 +608,9 @@ def orthonormalize_covector(seed_cov, gcon, basis_covectors):
     return cov / scale[..., None]
 
 
-def build_shell_geometry(pts_aligned, pts_sim, coord_dA, r_mat, time, params, kernel_source):
+def build_shell_geometry(
+    pts_aligned, pts_sim, coord_dA, r_mat, time, params, kernel_source
+):
     gcov_sim = superposed_bbh_metric(
         pts_sim[..., 0], pts_sim[..., 1], pts_sim[..., 2], time, params, kernel_source
     )
@@ -611,7 +627,9 @@ def build_shell_geometry(pts_aligned, pts_sim, coord_dA, r_mat, time, params, ke
     )
     d_sigma_cov = coord_normal_cov * coord_dA[..., None]
     proper_dA = np.sqrt(
-        np.maximum(np.einsum("...i,...ij,...j->...", d_sigma_cov, gamma_uu, d_sigma_cov), 0.0)
+        np.maximum(
+            np.einsum("...i,...ij,...j->...", d_sigma_cov, gamma_uu, d_sigma_cov), 0.0
+        )
     )
     unit_normal_cov = np.divide(
         d_sigma_cov,
@@ -646,7 +664,6 @@ def valencia_shell_diagnostics(
     params,
 ):
     gcov = shell_geom["gcov"]
-    gcon = shell_geom["gcon"]
     gamma_dd = shell_geom["gamma_dd"]
     gamma_uu = shell_geom["gamma_uu"]
     alpha = shell_geom["alpha"]
@@ -676,9 +693,8 @@ def valencia_shell_diagnostics(
 
     b_con = np.zeros_like(u_con)
     b_con[..., 0] = w_lorentz * bv / alpha
-    b_con[..., 1:] = (
-        b_u / w_lorentz[..., None]
-        + w_lorentz[..., None] * bv[..., None] * (v_u - beta_u / alpha[..., None])
+    b_con[..., 1:] = b_u / w_lorentz[..., None] + w_lorentz[..., None] * bv[..., None] * (
+        v_u - beta_u / alpha[..., None]
     )
     b_cov = np.einsum("...ab,...b->...a", gcov, b_con)
 
@@ -700,7 +716,9 @@ def valencia_shell_diagnostics(
     # azimuthal tangent, using the spatial metric gamma_ij for normalization and
     # orthogonalization. This is the natural GR-consistent frame for local
     # r-phi stresses on the analysis shell.
-    radial_seed_u = pts_aligned / np.maximum(np.linalg.norm(pts_aligned, axis=-1, keepdims=True), 1.0e-300)
+    radial_seed_u = pts_aligned / np.maximum(
+        np.linalg.norm(pts_aligned, axis=-1, keepdims=True), 1.0e-300
+    )
     radial_norm = np.sqrt(
         np.maximum(
             np.einsum("...i,...ij,...j->...", radial_seed_u, gamma_dd, radial_seed_u),
@@ -819,7 +837,9 @@ def valencia_shell_diagnostics(
     omega_theta = orthonormalize_covector(seed_theta_cov, gcon_sph, [omega_t, omega_r])
     seed_phi_cov = np.zeros_like(u_con_sph)
     seed_phi_cov[..., 3] = 1.0
-    omega_phi = orthonormalize_covector(seed_phi_cov, gcon_sph, [omega_t, omega_r, omega_theta])
+    omega_phi = orthonormalize_covector(
+        seed_phi_cov, gcon_sph, [omega_t, omega_r, omega_theta]
+    )
 
     coframe = np.stack((omega_t, omega_r, omega_theta, omega_phi), axis=-2)
     frame = np.linalg.inv(coframe)
@@ -827,7 +847,10 @@ def valencia_shell_diagnostics(
     ehat_theta_mean = frame[..., :, 2]
     ehat_phi_mean = frame[..., :, 3]
 
-    t_rey_cov_penna = rho_h[..., None, None] * u_cov_sph[..., :, None] * u_cov_sph[..., None, :] + press[..., None, None] * gcov_sph
+    t_rey_cov_penna = (
+        rho_h[..., None, None] * u_cov_sph[..., :, None] * u_cov_sph[..., None, :]
+        + press[..., None, None] * gcov_sph
+    )
 
     stress_rey_penna_local = np.einsum(
         "...a,...ab,...b->...", ehat_r_mean, t_rey_cov_penna, ehat_phi_mean
@@ -843,25 +866,37 @@ def valencia_shell_diagnostics(
     bhat_phi_penna = np.einsum("...a,...a->...", ehat_phi_mean, b_cov_sph)
     stress_max_penna_local = -bhat_r_penna * bhat_phi_penna
     stress_shear_max_penna_local = -bhat_r_penna * bhat_theta_penna
-    stress_em_exact_penna_local = b_sq * uhat_r_penna * uhat_phi_penna + stress_max_penna_local
+    stress_em_exact_penna_local = (
+        b_sq * uhat_r_penna * uhat_phi_penna + stress_max_penna_local
+    )
     stress_shear_em_exact_penna_local = (
         b_sq * uhat_r_penna * uhat_theta_penna + stress_shear_max_penna_local
     )
     stress_tot_penna_local = stress_rey_penna_local + stress_em_exact_penna_local
-    stress_shear_tot_penna_local = stress_shear_rey_penna_local + stress_shear_em_exact_penna_local
+    stress_shear_tot_penna_local = (
+        stress_shear_rey_penna_local + stress_shear_em_exact_penna_local
+    )
     alpha_rey_penna_local = stress_rey_penna_local / np.maximum(total_pressure, 1.0e-300)
     alpha_max_penna_local = stress_max_penna_local / np.maximum(total_pressure, 1.0e-300)
-    alpha_em_exact_penna_local = stress_em_exact_penna_local / np.maximum(total_pressure, 1.0e-300)
-    alpha_penna_local = stress_tot_penna_local / np.maximum(total_pressure, 1.0e-300)
-    alpha_shear_rey_penna_local = stress_shear_rey_penna_local / np.maximum(total_pressure, 1.0e-300)
-    alpha_shear_max_penna_local = stress_shear_max_penna_local / np.maximum(total_pressure, 1.0e-300)
-    alpha_shear_em_exact_penna_local = (
-        stress_shear_em_exact_penna_local / np.maximum(total_pressure, 1.0e-300)
+    alpha_em_exact_penna_local = stress_em_exact_penna_local / np.maximum(
+        total_pressure, 1.0e-300
     )
-    alpha_shear_penna_local = stress_shear_tot_penna_local / np.maximum(total_pressure, 1.0e-300)
+    alpha_penna_local = stress_tot_penna_local / np.maximum(total_pressure, 1.0e-300)
+    alpha_shear_rey_penna_local = stress_shear_rey_penna_local / np.maximum(
+        total_pressure, 1.0e-300
+    )
+    alpha_shear_max_penna_local = stress_shear_max_penna_local / np.maximum(
+        total_pressure, 1.0e-300
+    )
+    alpha_shear_em_exact_penna_local = stress_shear_em_exact_penna_local / np.maximum(
+        total_pressure, 1.0e-300
+    )
+    alpha_shear_penna_local = stress_shear_tot_penna_local / np.maximum(
+        total_pressure, 1.0e-300
+    )
 
     penna_scale_weight = rho * u_con_sph[..., 0] * sqrt_neg_g
-    penna_scale_num = np.sum((midplane_distance ** 2) * penna_scale_weight, axis=(1, 2))
+    penna_scale_num = np.sum((midplane_distance**2) * penna_scale_weight, axis=(1, 2))
     penna_scale_den = np.sum(penna_scale_weight, axis=(1, 2))
     scale_height_penna = np.where(
         penna_scale_den > 0.0,
@@ -924,18 +959,24 @@ def valencia_shell_diagnostics(
         "penna_total_theta_weighted": penna_total_theta * penna_vert_weight_theta,
         "penna_shear_rey_theta_weighted": penna_shear_rey_theta * penna_vert_weight_theta,
         "penna_shear_max_theta_weighted": penna_shear_max_theta * penna_vert_weight_theta,
-        "penna_shear_em_exact_theta_weighted": penna_shear_em_exact_theta * penna_vert_weight_theta,
-        "penna_shear_total_theta_weighted": penna_shear_total_theta * penna_vert_weight_theta,
+        "penna_shear_em_exact_theta_weighted": penna_shear_em_exact_theta
+        * penna_vert_weight_theta,
+        "penna_shear_total_theta_weighted": penna_shear_total_theta
+        * penna_vert_weight_theta,
         "penna_alpha_rey_theta_weighted": penna_alpha_rey_theta * penna_vert_weight_theta,
         "penna_alpha_max_theta_weighted": penna_alpha_max_theta * penna_vert_weight_theta,
-        "penna_alpha_em_exact_theta_weighted": penna_alpha_em_exact_theta * penna_vert_weight_theta,
+        "penna_alpha_em_exact_theta_weighted": penna_alpha_em_exact_theta
+        * penna_vert_weight_theta,
         "penna_alpha_theta_weighted": penna_alpha_theta * penna_vert_weight_theta,
-        "penna_alpha_shear_rey_theta_weighted": penna_alpha_shear_rey_theta * penna_vert_weight_theta,
-        "penna_alpha_shear_max_theta_weighted": penna_alpha_shear_max_theta * penna_vert_weight_theta,
+        "penna_alpha_shear_rey_theta_weighted": penna_alpha_shear_rey_theta
+        * penna_vert_weight_theta,
+        "penna_alpha_shear_max_theta_weighted": penna_alpha_shear_max_theta
+        * penna_vert_weight_theta,
         "penna_alpha_shear_em_exact_theta_weighted": (
             penna_alpha_shear_em_exact_theta * penna_vert_weight_theta
         ),
-        "penna_alpha_shear_theta_weighted": penna_alpha_shear_theta * penna_vert_weight_theta,
+        "penna_alpha_shear_theta_weighted": penna_alpha_shear_theta
+        * penna_vert_weight_theta,
         "penna_mean_flow_ut": mean_flow_con_sph_theta[..., 0],
         "penna_mean_flow_ur": mean_flow_con_sph_theta[..., 1],
         "penna_mean_flow_utheta": mean_flow_con_sph_theta[..., 2],
@@ -1004,7 +1045,7 @@ def make_shell_points(radii_axis, theta_vals, phi_vals, r_mats):
 
     dtheta = theta_vals[1] - theta_vals[0] if theta_vals.size > 1 else np.pi
     dphi = phi_vals[1] - phi_vals[0] if phi_vals.size > 1 else 2.0 * np.pi
-    coord_dA = (r_3d ** 2) * np.sin(theta_3d) * dtheta * dphi
+    coord_dA = (r_3d**2) * np.sin(theta_3d) * dtheta * dphi
     return r_3d, theta_3d, phi_3d, pts_aligned, pts_sim, coord_dA
 
 
@@ -1061,14 +1102,30 @@ def interpolate_shell_samples(
         b_block = ds_b[:, b, :, :, :]
         pts_query = np.column_stack([z_flat[mask], y_flat[mask], x_flat[mask]])
         axes = (x3v[b], x2v[b], x1v[b])
-        interp_dens[mask] = RegularGridInterpolator(axes, uov_block[dens_i], **interp_kwargs)(pts_query)
-        interp_press[mask] = RegularGridInterpolator(axes, uov_block[press_i], **interp_kwargs)(pts_query)
-        interp_vx[mask] = RegularGridInterpolator(axes, uov_block[vx_i], **interp_kwargs)(pts_query)
-        interp_vy[mask] = RegularGridInterpolator(axes, uov_block[vy_i], **interp_kwargs)(pts_query)
-        interp_vz[mask] = RegularGridInterpolator(axes, uov_block[vz_i], **interp_kwargs)(pts_query)
-        interp_bx[mask] = RegularGridInterpolator(axes, b_block[0], **interp_kwargs)(pts_query)
-        interp_by[mask] = RegularGridInterpolator(axes, b_block[1], **interp_kwargs)(pts_query)
-        interp_bz[mask] = RegularGridInterpolator(axes, b_block[2], **interp_kwargs)(pts_query)
+        interp_dens[mask] = RegularGridInterpolator(
+            axes, uov_block[dens_i], **interp_kwargs
+        )(pts_query)
+        interp_press[mask] = RegularGridInterpolator(
+            axes, uov_block[press_i], **interp_kwargs
+        )(pts_query)
+        interp_vx[mask] = RegularGridInterpolator(axes, uov_block[vx_i], **interp_kwargs)(
+            pts_query
+        )
+        interp_vy[mask] = RegularGridInterpolator(axes, uov_block[vy_i], **interp_kwargs)(
+            pts_query
+        )
+        interp_vz[mask] = RegularGridInterpolator(axes, uov_block[vz_i], **interp_kwargs)(
+            pts_query
+        )
+        interp_bx[mask] = RegularGridInterpolator(axes, b_block[0], **interp_kwargs)(
+            pts_query
+        )
+        interp_by[mask] = RegularGridInterpolator(axes, b_block[1], **interp_kwargs)(
+            pts_query
+        )
+        interp_bz[mask] = RegularGridInterpolator(axes, b_block[2], **interp_kwargs)(
+            pts_query
+        )
         unassigned[mask] = False
 
     if np.any(unassigned):
@@ -1111,7 +1168,7 @@ def compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edge
         h_r = 0.5 * np.sqrt(dx * dx + dy * dy + dz * dz)
 
         z_grid, y_grid, x_grid = np.meshgrid(z, y, x, indexing="ij")
-        r_grid = np.sqrt(x_grid ** 2 + y_grid ** 2 + z_grid ** 2)
+        r_grid = np.sqrt(x_grid**2 + y_grid**2 + z_grid**2)
 
         dens_flat_block = uov_block[dens_i].ravel()
         x_block = x_grid.ravel()
@@ -1143,7 +1200,9 @@ def compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edge
             if np.any(valid_easy):
                 bins_to_count = final_bins[valid_easy]
                 weights = dens_active[mask_easy][valid_easy] * dV
-                mass_shell += np.bincount(bins_to_count, weights=weights, minlength=n_bins)
+                mass_shell += np.bincount(
+                    bins_to_count, weights=weights, minlength=n_bins
+                )
 
         mask_split = ~mask_easy
         if use_supersampling and np.any(mask_split):
@@ -1165,7 +1224,9 @@ def compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edge
                 (-off_x, -off_y, -off_z),
             ]
             for ox, oy, oz in offsets:
-                r_sub = np.sqrt((x_split + ox) ** 2 + (y_split + oy) ** 2 + (z_split + oz) ** 2)
+                r_sub = np.sqrt(
+                    (x_split + ox) ** 2 + (y_split + oy) ** 2 + (z_split + oz) ** 2
+                )
                 bins_sub = np.floor((r_sub - rmin) / dr).astype(int)
                 mask_valid_sub = (bins_sub >= 0) & (bins_sub < n_bins)
                 if np.any(mask_valid_sub):
@@ -1175,13 +1236,17 @@ def compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edge
     return mass_shell
 
 
-def estimate_shell_angular_momentum_axes(rho, prim_wv_sim, pts_sim, proper_dA, fallback_axis):
+def estimate_shell_angular_momentum_axes(
+    rho, prim_wv_sim, pts_sim, proper_dA, fallback_axis
+):
     weights = rho * proper_dA
     shell_l = np.sum(np.cross(pts_sim, prim_wv_sim) * weights[..., None], axis=(1, 2))
     fallback = np.broadcast_to(normalize_vector(fallback_axis), shell_l.shape)
     norms = np.linalg.norm(shell_l, axis=1)
     valid = np.isfinite(shell_l).all(axis=1) & (norms > 1.0e-300)
-    axes = np.divide(shell_l, norms[:, None], out=np.zeros_like(shell_l), where=norms[:, None] > 0.0)
+    axes = np.divide(
+        shell_l, norms[:, None], out=np.zeros_like(shell_l), where=norms[:, None] > 0.0
+    )
     axes = np.where(valid[:, None], axes, fallback)
     flip = np.sum(axes * fallback, axis=1) < 0.0
     axes = np.where(flip[:, None], -axes, axes)
@@ -1238,10 +1303,14 @@ def integrate_and_save(args):
             theta_vals = np.linspace(0.0, np.pi, n_theta, endpoint=False) + 0.5 * dtheta
             phi_vals = np.linspace(0.0, 2.0 * np.pi, n_phi, endpoint=False) + 0.5 * dphi
 
-            dynamic_disk_frame = tilt_is_dynamical(metric_params.get("tilt_angle_deg", 0.0))
+            dynamic_disk_frame = tilt_is_dynamical(
+                metric_params.get("tilt_angle_deg", 0.0)
+            )
             fixed_r_mat = get_rot_matrix(tilt_y, tilt_x)
             if dynamic_disk_frame and abs(tilt_y) < 1.0e-15 and abs(tilt_x) < 1.0e-15:
-                parfile_axis = disk_axis_from_tilt_angle(metric_params.get("tilt_angle_deg", 0.0))
+                parfile_axis = disk_axis_from_tilt_angle(
+                    metric_params.get("tilt_angle_deg", 0.0)
+                )
                 initial_r_mat = rotation_matrix_from_axis(parfile_axis)
             else:
                 # Preserve the original fixed-frame behavior for tilt_angle within
@@ -1285,8 +1354,8 @@ def integrate_and_save(args):
                     rho_grid, prim_wv, pts_sim, proper_dA, fallback_axis
                 )
                 r_mats = rotation_matrices_from_axes(disk_lhat)
-                r_3d, theta_3d, phi_3d, pts_aligned, pts_sim, coord_dA = make_shell_points(
-                    radii_axis, theta_vals, phi_vals, r_mats
+                r_3d, theta_3d, phi_3d, pts_aligned, pts_sim, coord_dA = (
+                    make_shell_points(radii_axis, theta_vals, phi_vals, r_mats)
                 )
                 rho_grid, press_grid, prim_wv, b_tilde_sim = interpolate_shell_samples(
                     ds_uov,
@@ -1322,23 +1391,29 @@ def integrate_and_save(args):
                 frame_mode_id = 0
                 analysis_r_mat = initial_r_mat
 
-            mass_shell = compute_mass_shell(ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edges)
+            mass_shell = compute_mass_shell(
+                ds_uov, x1v, x2v, x3v, dens_i, rmin, dr, n_bins, bin_edges
+            )
             disk_euler_zyx = euler_zyx_from_rotation_matrix(np.swapaxes(r_mats, -1, -2))
 
             lambda_mass = np.sum(rho_grid * proper_dA, axis=(1, 2))
             midplane_distance = np.abs(r_3d * (theta_3d - np.pi / 2.0))
-            mass_rtheta2 = np.sum(rho_grid * (midplane_distance ** 2) * proper_dA, axis=(1, 2))
+            mass_rtheta2 = np.sum(
+                rho_grid * (midplane_distance**2) * proper_dA, axis=(1, 2)
+            )
 
-            mdot_density, mdot_surface, ur_coord, vr_euler, stress_profiles = valencia_shell_diagnostics(
-                rho_grid,
-                press_grid,
-                prim_wv,
-                b_tilde_sim,
-                pts_aligned,
-                midplane_distance,
-                analysis_r_mat,
-                shell_geom,
-                metric_params,
+            mdot_density, mdot_surface, ur_coord, vr_euler, stress_profiles = (
+                valencia_shell_diagnostics(
+                    rho_grid,
+                    press_grid,
+                    prim_wv,
+                    b_tilde_sim,
+                    pts_aligned,
+                    midplane_distance,
+                    analysis_r_mat,
+                    shell_geom,
+                    metric_params,
+                )
             )
 
             m1_real = np.sum(rho_grid * np.cos(phi_3d) * proper_dA, axis=(1, 2))
@@ -1354,15 +1429,11 @@ def integrate_and_save(args):
             ldot_fluid_theta_phi_avg = np.nanmean(
                 stress_profiles["ldot_fluid_density"], axis=2
             )
-            ldot_em_theta_phi_avg = np.nanmean(
-                stress_profiles["ldot_em_density"], axis=2
-            )
+            ldot_em_theta_phi_avg = np.nanmean(stress_profiles["ldot_em_density"], axis=2)
             ldot_fluid_of_radius = np.nansum(
                 stress_profiles["ldot_fluid_surface"], axis=(1, 2)
             )
-            ldot_em_of_radius = np.nansum(
-                stress_profiles["ldot_em_surface"], axis=(1, 2)
-            )
+            ldot_em_of_radius = np.nansum(stress_profiles["ldot_em_surface"], axis=(1, 2))
 
         reading_h5 = False
         np.savez(
@@ -1409,32 +1480,74 @@ def integrate_and_save(args):
             stress_mean_em_exact=np.array([stress_profiles["stress_mean_em_exact"]]),
             stress_mean_uhat_r=np.array([stress_profiles["stress_mean_uhat_r"]]),
             stress_mean_uhat_phi=np.array([stress_profiles["stress_mean_uhat_phi"]]),
-            stress_mean_matter_ortho=np.array([stress_profiles["stress_mean_matter_ortho"]]),
-            stress_mean_maxwell_ortho=np.array([stress_profiles["stress_mean_maxwell_ortho"]]),
-            stress_mean_em_exact_ortho=np.array([stress_profiles["stress_mean_em_exact_ortho"]]),
+            stress_mean_matter_ortho=np.array(
+                [stress_profiles["stress_mean_matter_ortho"]]
+            ),
+            stress_mean_maxwell_ortho=np.array(
+                [stress_profiles["stress_mean_maxwell_ortho"]]
+            ),
+            stress_mean_em_exact_ortho=np.array(
+                [stress_profiles["stress_mean_em_exact_ortho"]]
+            ),
             stress_disk_area=np.array([stress_profiles["stress_disk_area"]]),
             scale_height_penna=np.array([stress_profiles["scale_height_penna"]]),
             h_over_r_penna=np.array([stress_profiles["h_over_r_penna"]]),
             penna_scale_num=np.array([stress_profiles["penna_scale_num"]]),
             penna_scale_den=np.array([stress_profiles["penna_scale_den"]]),
-            penna_vert_weight_theta=np.array([stress_profiles["penna_vert_weight_theta"]]),
-            penna_ptot_theta_weighted=np.array([stress_profiles["penna_ptot_theta_weighted"]]),
-            penna_rey_theta_weighted=np.array([stress_profiles["penna_rey_theta_weighted"]]),
-            penna_max_theta_weighted=np.array([stress_profiles["penna_max_theta_weighted"]]),
-            penna_em_exact_theta_weighted=np.array([stress_profiles["penna_em_exact_theta_weighted"]]),
-            penna_total_theta_weighted=np.array([stress_profiles["penna_total_theta_weighted"]]),
-            penna_shear_rey_theta_weighted=np.array([stress_profiles["penna_shear_rey_theta_weighted"]]),
-            penna_shear_max_theta_weighted=np.array([stress_profiles["penna_shear_max_theta_weighted"]]),
-            penna_shear_em_exact_theta_weighted=np.array([stress_profiles["penna_shear_em_exact_theta_weighted"]]),
-            penna_shear_total_theta_weighted=np.array([stress_profiles["penna_shear_total_theta_weighted"]]),
-            penna_alpha_rey_theta_weighted=np.array([stress_profiles["penna_alpha_rey_theta_weighted"]]),
-            penna_alpha_max_theta_weighted=np.array([stress_profiles["penna_alpha_max_theta_weighted"]]),
-            penna_alpha_em_exact_theta_weighted=np.array([stress_profiles["penna_alpha_em_exact_theta_weighted"]]),
-            penna_alpha_theta_weighted=np.array([stress_profiles["penna_alpha_theta_weighted"]]),
-            penna_alpha_shear_rey_theta_weighted=np.array([stress_profiles["penna_alpha_shear_rey_theta_weighted"]]),
-            penna_alpha_shear_max_theta_weighted=np.array([stress_profiles["penna_alpha_shear_max_theta_weighted"]]),
-            penna_alpha_shear_em_exact_theta_weighted=np.array([stress_profiles["penna_alpha_shear_em_exact_theta_weighted"]]),
-            penna_alpha_shear_theta_weighted=np.array([stress_profiles["penna_alpha_shear_theta_weighted"]]),
+            penna_vert_weight_theta=np.array(
+                [stress_profiles["penna_vert_weight_theta"]]
+            ),
+            penna_ptot_theta_weighted=np.array(
+                [stress_profiles["penna_ptot_theta_weighted"]]
+            ),
+            penna_rey_theta_weighted=np.array(
+                [stress_profiles["penna_rey_theta_weighted"]]
+            ),
+            penna_max_theta_weighted=np.array(
+                [stress_profiles["penna_max_theta_weighted"]]
+            ),
+            penna_em_exact_theta_weighted=np.array(
+                [stress_profiles["penna_em_exact_theta_weighted"]]
+            ),
+            penna_total_theta_weighted=np.array(
+                [stress_profiles["penna_total_theta_weighted"]]
+            ),
+            penna_shear_rey_theta_weighted=np.array(
+                [stress_profiles["penna_shear_rey_theta_weighted"]]
+            ),
+            penna_shear_max_theta_weighted=np.array(
+                [stress_profiles["penna_shear_max_theta_weighted"]]
+            ),
+            penna_shear_em_exact_theta_weighted=np.array(
+                [stress_profiles["penna_shear_em_exact_theta_weighted"]]
+            ),
+            penna_shear_total_theta_weighted=np.array(
+                [stress_profiles["penna_shear_total_theta_weighted"]]
+            ),
+            penna_alpha_rey_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_rey_theta_weighted"]]
+            ),
+            penna_alpha_max_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_max_theta_weighted"]]
+            ),
+            penna_alpha_em_exact_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_em_exact_theta_weighted"]]
+            ),
+            penna_alpha_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_theta_weighted"]]
+            ),
+            penna_alpha_shear_rey_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_shear_rey_theta_weighted"]]
+            ),
+            penna_alpha_shear_max_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_shear_max_theta_weighted"]]
+            ),
+            penna_alpha_shear_em_exact_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_shear_em_exact_theta_weighted"]]
+            ),
+            penna_alpha_shear_theta_weighted=np.array(
+                [stress_profiles["penna_alpha_shear_theta_weighted"]]
+            ),
             penna_mean_flow_ut=np.array([stress_profiles["penna_mean_flow_ut"]]),
             penna_mean_flow_ur=np.array([stress_profiles["penna_mean_flow_ur"]]),
             penna_mean_flow_utheta=np.array([stress_profiles["penna_mean_flow_utheta"]]),
@@ -1616,7 +1729,10 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
                 out_data[key][idx] = data[key][0]
             if all(key in data.files for key in stress_keys):
                 if stress_sums is None:
-                    stress_sums = {key: np.zeros_like(data[key][0], dtype=np.float64) for key in stress_keys}
+                    stress_sums = {
+                        key: np.zeros_like(data[key][0], dtype=np.float64)
+                        for key in stress_keys
+                    }
                 weight = float(orbit_weights[idx])
                 for key in stress_keys:
                     stress_sums[key] += weight * data[key][0]
@@ -1627,13 +1743,19 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
     out_data["radius"] = radii_axis
     out_data["theta"] = theta_axis
     out_data["rmin_used"] = rmin_used
-    out_data["scale_height"] = np.sqrt(out_data["mass_rtheta2"] / (out_data["lambda_mass"] + 1.0e-30))
+    out_data["scale_height"] = np.sqrt(
+        out_data["mass_rtheta2"] / (out_data["lambda_mass"] + 1.0e-30)
+    )
     out_data["stress_snapshot_time_weight"] = time_weights
     out_data["stress_snapshot_orbit"] = orbit_coords
     out_data["stress_snapshot_orbit_weight"] = orbit_weights
     out_data["stress_num_files"] = np.array([stress_count], dtype=np.int64)
-    out_data["stress_time_weight_total"] = np.array([stress_time_weight_total], dtype=np.float64)
-    out_data["stress_orbit_weight_total"] = np.array([stress_weight_total], dtype=np.float64)
+    out_data["stress_time_weight_total"] = np.array(
+        [stress_time_weight_total], dtype=np.float64
+    )
+    out_data["stress_orbit_weight_total"] = np.array(
+        [stress_weight_total], dtype=np.float64
+    )
 
     if stress_weight_total > 0.0:
         mean_press = stress_sums["stress_mean_press"] / stress_weight_total
@@ -1647,8 +1769,12 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         mean_uhat_r = stress_sums["stress_mean_uhat_r"] / stress_weight_total
         mean_uhat_phi = stress_sums["stress_mean_uhat_phi"] / stress_weight_total
         mean_matter_ortho = stress_sums["stress_mean_matter_ortho"] / stress_weight_total
-        mean_maxwell_ortho = stress_sums["stress_mean_maxwell_ortho"] / stress_weight_total
-        mean_em_exact_ortho = stress_sums["stress_mean_em_exact_ortho"] / stress_weight_total
+        mean_maxwell_ortho = (
+            stress_sums["stress_mean_maxwell_ortho"] / stress_weight_total
+        )
+        mean_em_exact_ortho = (
+            stress_sums["stress_mean_em_exact_ortho"] / stress_weight_total
+        )
         mean_disk_area = stress_sums["stress_disk_area"] / stress_weight_total
 
         stress_adv = mean_rhoh * mean_ur * mean_uphi
@@ -1688,22 +1814,34 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         out_data["alpha_eff_gr"] = (stress_rey + mean_em_exact) * inv_ptot
         out_data["alpha_rey_ortho_pgas"] = stress_rey_ortho * inv_press
         out_data["alpha_max_ortho_pgas"] = mean_maxwell_ortho * inv_press
-        out_data["alpha_eff_ortho_pgas"] = (stress_rey_ortho + mean_maxwell_ortho) * inv_press
+        out_data["alpha_eff_ortho_pgas"] = (
+            stress_rey_ortho + mean_maxwell_ortho
+        ) * inv_press
         out_data["alpha_em_exact_ortho_pgas"] = mean_em_exact_ortho * inv_press
-        out_data["alpha_eff_gr_ortho_pgas"] = (stress_rey_ortho + mean_em_exact_ortho) * inv_press
+        out_data["alpha_eff_gr_ortho_pgas"] = (
+            stress_rey_ortho + mean_em_exact_ortho
+        ) * inv_press
         out_data["alpha_rey_ortho"] = stress_rey_ortho * inv_ptot
         out_data["alpha_max_ortho"] = mean_maxwell_ortho * inv_ptot
         out_data["alpha_eff_ortho"] = (stress_rey_ortho + mean_maxwell_ortho) * inv_ptot
         out_data["alpha_em_exact_ortho"] = mean_em_exact_ortho * inv_ptot
-        out_data["alpha_eff_gr_ortho"] = (stress_rey_ortho + mean_em_exact_ortho) * inv_ptot
+        out_data["alpha_eff_gr_ortho"] = (
+            stress_rey_ortho + mean_em_exact_ortho
+        ) * inv_ptot
 
         penna_scale_height_exact = np.where(
             stress_sums["penna_scale_den"] > 0.0,
-            np.sqrt(np.maximum(stress_sums["penna_scale_num"] / stress_sums["penna_scale_den"], 0.0)),
+            np.sqrt(
+                np.maximum(
+                    stress_sums["penna_scale_num"] / stress_sums["penna_scale_den"], 0.0
+                )
+            ),
             np.nan,
         )
         penna_h_over_r_exact = penna_scale_height_exact / np.maximum(radii_axis, 1.0e-300)
-        penna_mask_theta = np.abs(theta_axis[None, :] - np.pi / 2.0) <= penna_h_over_r_exact[:, None]
+        penna_mask_theta = (
+            np.abs(theta_axis[None, :] - np.pi / 2.0) <= penna_h_over_r_exact[:, None]
+        )
         penna_weight_theta = stress_sums["penna_vert_weight_theta"]
         penna_weight_masked = np.where(penna_mask_theta, penna_weight_theta, 0.0)
         penna_weight_sum = np.sum(penna_weight_masked, axis=1)
@@ -1715,18 +1853,36 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         mean_ptot_penna = penna_vertical_average(stress_sums["penna_ptot_theta_weighted"])
         mean_rey_penna = penna_vertical_average(stress_sums["penna_rey_theta_weighted"])
         mean_max_penna = penna_vertical_average(stress_sums["penna_max_theta_weighted"])
-        mean_em_exact_penna = penna_vertical_average(stress_sums["penna_em_exact_theta_weighted"])
-        mean_total_penna = penna_vertical_average(stress_sums["penna_total_theta_weighted"])
-        mean_shear_rey_penna = penna_vertical_average(stress_sums["penna_shear_rey_theta_weighted"])
-        mean_shear_max_penna = penna_vertical_average(stress_sums["penna_shear_max_theta_weighted"])
+        mean_em_exact_penna = penna_vertical_average(
+            stress_sums["penna_em_exact_theta_weighted"]
+        )
+        mean_total_penna = penna_vertical_average(
+            stress_sums["penna_total_theta_weighted"]
+        )
+        mean_shear_rey_penna = penna_vertical_average(
+            stress_sums["penna_shear_rey_theta_weighted"]
+        )
+        mean_shear_max_penna = penna_vertical_average(
+            stress_sums["penna_shear_max_theta_weighted"]
+        )
         mean_shear_em_exact_penna = penna_vertical_average(
             stress_sums["penna_shear_em_exact_theta_weighted"]
         )
-        mean_shear_total_penna = penna_vertical_average(stress_sums["penna_shear_total_theta_weighted"])
-        mean_alpha_rey_penna = penna_vertical_average(stress_sums["penna_alpha_rey_theta_weighted"])
-        mean_alpha_max_penna = penna_vertical_average(stress_sums["penna_alpha_max_theta_weighted"])
-        mean_alpha_em_exact_penna = penna_vertical_average(stress_sums["penna_alpha_em_exact_theta_weighted"])
-        mean_alpha_penna = penna_vertical_average(stress_sums["penna_alpha_theta_weighted"])
+        mean_shear_total_penna = penna_vertical_average(
+            stress_sums["penna_shear_total_theta_weighted"]
+        )
+        mean_alpha_rey_penna = penna_vertical_average(
+            stress_sums["penna_alpha_rey_theta_weighted"]
+        )
+        mean_alpha_max_penna = penna_vertical_average(
+            stress_sums["penna_alpha_max_theta_weighted"]
+        )
+        mean_alpha_em_exact_penna = penna_vertical_average(
+            stress_sums["penna_alpha_em_exact_theta_weighted"]
+        )
+        mean_alpha_penna = penna_vertical_average(
+            stress_sums["penna_alpha_theta_weighted"]
+        )
         mean_alpha_shear_rey_penna = penna_vertical_average(
             stress_sums["penna_alpha_shear_rey_theta_weighted"]
         )
@@ -1736,7 +1892,9 @@ def stitch_archives(output_filename, files=None, npz_pattern=None, omega_bin=Non
         mean_alpha_shear_em_exact_penna = penna_vertical_average(
             stress_sums["penna_alpha_shear_em_exact_theta_weighted"]
         )
-        mean_alpha_shear_penna = penna_vertical_average(stress_sums["penna_alpha_shear_theta_weighted"])
+        mean_alpha_shear_penna = penna_vertical_average(
+            stress_sums["penna_alpha_shear_theta_weighted"]
+        )
 
         out_data["h_over_r_penna"] = penna_h_over_r_exact
         out_data["scale_height_penna"] = penna_scale_height_exact

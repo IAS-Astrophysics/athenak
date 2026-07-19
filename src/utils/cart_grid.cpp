@@ -309,7 +309,7 @@ void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
           for (int k=0; k<2*ng; k++) {
             Real iwght = iwghts.d_view(nx,ny,nz,i,0)*
                   iwghts.d_view(nx,ny,nz,j,1)*iwghts.d_view(nx,ny,nz,k,2);
-            
+
             // Extract MB bounds
             Real &x1min = size.d_view(ii0).x1min;
             Real &x1max = size.d_view(ii0).x1max;

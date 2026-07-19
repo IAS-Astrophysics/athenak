@@ -144,7 +144,9 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   // swap data for this variable into big endian order
   if (!big_end) {
-    for (int i=0; i<(3*npout_thisrank); ++i) { Swap4Bytes(&data[i]); }
+    for (int i = 0; i < (3 * npout_thisrank); ++i) {
+      Swap4Bytes(&data[i]);
+    }
   }
   // calculate local data offset
   std::vector<int> rank_offset(global_variable::nranks, 0);
@@ -213,7 +215,9 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
     // swap data for this variable into big endian order
     if (!big_end) {
-      for (int i=0; i<npout_thisrank; ++i) { Swap4Bytes(&data[i]); }
+      for (int i = 0; i < npout_thisrank; ++i) {
+        Swap4Bytes(&data[i]);
+      }
     }
 
     // calculate local data offset and write gid

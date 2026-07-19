@@ -19,7 +19,6 @@ from typing import Any
 import h5py
 import numpy as np
 
-
 SETUP_ROOT = Path("/home/hzhu/scratch3/staged_zoom_20260528_192623")
 REPORT_PATH = SETUP_ROOT / "sink_slice_diagnostics.md"
 
@@ -43,8 +42,7 @@ PBS_SCRIPTS = {
     for case in CASES
 }
 LAUNCH_SCRIPTS = {
-    case: SETUP_ROOT / case / "scripts" / "launch_stage1.sh"
-    for case in CASES
+    case: SETUP_ROOT / case / "scripts" / "launch_stage1.sh" for case in CASES
 }
 
 SEP = 25.0
@@ -71,8 +69,7 @@ def read_time(path: Path) -> float:
 
 def decode_attr_array(values: Any) -> tuple[str, ...]:
     return tuple(
-        v.decode("utf-8") if isinstance(v, bytes | np.bytes_) else str(v)
-        for v in values
+        v.decode("utf-8") if isinstance(v, bytes | np.bytes_) else str(v) for v in values
     )
 
 
@@ -100,7 +97,9 @@ def scan_candidate(path: Path) -> Candidate | None:
         return None
 
 
-def bracket_by_time(paths: list[Path], restart_time: float, window: int = 64) -> tuple[list[Path], int]:
+def bracket_by_time(
+    paths: list[Path], restart_time: float, window: int = 64
+) -> tuple[list[Path], int]:
     lo = 0
     hi = len(paths) - 1
     best_idx = 0
@@ -153,7 +152,7 @@ def variable_location(candidate: Candidate, variable: str) -> tuple[str, int]:
 
 
 def binary_positions(time: float) -> tuple[tuple[float, float], tuple[float, float]]:
-    omega = SEP ** -1.5
+    omega = SEP**-1.5
     phase = omega * time
     c = math.cos(phase)
     s = math.sin(phase)
@@ -165,7 +164,13 @@ def binary_positions(time: float) -> tuple[tuple[float, float], tuple[float, flo
 def summarize(values: np.ndarray) -> dict[str, float | int]:
     finite = values[np.isfinite(values)]
     if finite.size == 0:
-        return {"count": 0, "mean": math.nan, "median": math.nan, "min": math.nan, "max": math.nan}
+        return {
+            "count": 0,
+            "mean": math.nan,
+            "median": math.nan,
+            "min": math.nan,
+            "max": math.nan,
+        }
     return {
         "count": int(finite.size),
         "mean": float(np.mean(finite)),
@@ -179,7 +184,8 @@ def measure(candidate: Candidate, temp_unit_cgs: float | None) -> dict[str, Any]
     rho_dataset, rho_index = variable_location(candidate, "rho")
     press_dataset, press_index = variable_location(candidate, "press")
     if rho_dataset != press_dataset:
-        raise RuntimeError(f"rho and pressure live in different datasets in {candidate.path}")
+        raise RuntimeError(f"rho and pressure live in different datasets in {
+                candidate.path}")
 
     bh1, bh2 = binary_positions(candidate.time)
     stats: dict[str, Any] = {
@@ -296,9 +302,12 @@ def verify_pbs() -> dict[str, dict[str, bool]]:
         result[case] = {
             "pbs_required_lines": all(line in pbs_text for line in required),
             "no_qsub": "qsub" not in pbs_text and "qsub" not in launch_text,
-            "local_restart": f"{case_dir}/rst/" in pbs_text and f"{case_dir}/rst/" in launch_text,
-            "stage1_input": f"{case_dir}/input/stage1.par" in launch_text or "input/stage1.par" in launch_text,
-            "case_logs": f"{case_dir}/logs" in pbs_text and 'LOG_DIR="$CASE_DIR/logs"' in launch_text,
+            "local_restart": f"{case_dir}/rst/" in pbs_text
+            and f"{case_dir}/rst/" in launch_text,
+            "stage1_input": f"{case_dir}/input/stage1.par" in launch_text
+            or "input/stage1.par" in launch_text,
+            "case_logs": f"{case_dir}/logs" in pbs_text
+            and 'LOG_DIR="$CASE_DIR/logs"' in launch_text,
         }
     return result
 
@@ -343,11 +352,19 @@ def write_report(results: dict[str, Any], pbs_check: dict[str, dict[str, bool]])
         stats = result["stats"]
         bh1 = stats["bh1"]
         bh2 = stats["bh2"]
-        lines.append(
-            f"| {case} | {result['file_count']} | {result['candidate_count']} | {CASES[case]['restart_time']:.6f} | "
-            f"{candidate.time:.6f} | {abs(candidate.time - CASES[case]['restart_time']):.6f} | "
-            f"`{candidate.path}` | ({bh1[0]:.6f}, {bh1[1]:.6f}) | ({bh2[0]:.6f}, {bh2[1]:.6f}) |"
-        )
+        lines.append(f"| {case} | {
+                result['file_count']} | {
+                result['candidate_count']} | {
+                CASES[case]['restart_time']:.6f} | " f"{
+                    candidate.time:.6f} | {
+                        abs(
+                            candidate.time -
+                            CASES[case]['restart_time']):.6f} | " f"`{
+                                candidate.path}` | ({
+                                    bh1[0]:.6f}, {
+                                        bh1[1]:.6f}) | ({
+                                            bh2[0]:.6f}, {
+                                                bh2[1]:.6f}) |")
 
     lines += [
         "",
@@ -388,7 +405,9 @@ def main() -> None:
     results: dict[str, Any] = {}
     for case, config in CASES.items():
         print(f"{case}: scanning {config['run_dir'] / 'bin'}", flush=True)
-        file_count, count, candidate = select_closest(config["run_dir"], config["restart_time"])
+        file_count, count, candidate = select_closest(
+            config["run_dir"], config["restart_time"]
+        )
         case_temp_unit = temp_unit if case == "BONDI" else None
         stats = measure(candidate, case_temp_unit)
         results[case] = {

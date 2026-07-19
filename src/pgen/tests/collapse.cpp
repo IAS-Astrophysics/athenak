@@ -107,9 +107,15 @@ void ProblemGenerator::SphericalCollapse(ParameterInput *pin, const bool restart
     b0.x1f(m, k, j, i) = 0.0;
     b0.x2f(m, k, j, i) = 0.0;
     b0.x3f(m, k, j, i) = 0.0;
-    if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-    if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-    if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+    if (i == ie) {
+      b0.x1f(m, k, j, i + 1) = 0.0;
+    }
+    if (j == je) {
+      b0.x2f(m, k, j + 1, i) = 0.0;
+    }
+    if (k == ke) {
+      b0.x3f(m, k + 1, j, i) = 0.0;
+    }
     bcc0(m, IBX, k, j, i) = 0.0;
     bcc0(m, IBY, k, j, i) = 0.0;
     bcc0(m, IBZ, k, j, i) = 0.0;

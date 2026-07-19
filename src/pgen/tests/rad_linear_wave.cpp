@@ -61,8 +61,8 @@ struct RadEigensystem {
   Real dfxrad_real, dfxrad_imag, dfyrad_real, dfyrad_imag, dfzrad_real, dfzrad_imag;
 };
 
-  RadLinWaveVariables rlw;
-  RadEigensystem eig;
+RadLinWaveVariables rlw;
+RadEigensystem eig;
 
 } // end anonymous namespace
 
@@ -76,7 +76,8 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
     pgen_final_func = DynRadSourceIterationCheck;
     if (restart) return;
     if (pmbp->pdynrad == nullptr || pmbp->phydro == nullptr) {
-      throw std::runtime_error("source_iteration_test requires <hydro> and <dyn_radiation>");
+      throw std::runtime_error(
+          "source_iteration_test requires <hydro> and <dyn_radiation>");
     }
 
     const Real rho = pin->GetReal("problem", "rho");
@@ -252,7 +253,8 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
   } else if (pmbp->pdynrad != nullptr) {
     nangles_ = pmbp->pdynrad->prgeo->nangles;
   } else {
-    throw std::runtime_error("rad_linear_wave requires either <radiation> or <dyn_radiation>");
+    throw std::runtime_error(
+        "rad_linear_wave requires either <radiation> or <dyn_radiation>");
   }
   auto eig_ = eig;
   auto wv_ = rlw;
@@ -330,9 +332,15 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
       b.x1f(m,k,j,i) = 0.0;
       b.x2f(m,k,j,i) = 0.0;
       b.x3f(m,k,j,i) = 0.0;
-      if (i == n1-1) { b.x1f(m,k,j,i+1) = 0.0; }
-      if (j == n2-1) { b.x2f(m,k,j+1,i) = 0.0; }
-      if (k == n3-1) { b.x3f(m,k+1,j,i) = 0.0; }
+      if (i == n1 - 1) {
+        b.x1f(m, k, j, i + 1) = 0.0;
+      }
+      if (j == n2 - 1) {
+        b.x2f(m, k, j + 1, i) = 0.0;
+      }
+      if (k == n3 - 1) {
+        b.x3f(m, k + 1, j, i) = 0.0;
+      }
     });
 
     if (pmbp->padm != nullptr) {
@@ -597,15 +605,18 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
           ii_f = ee_f/(9.0*M_PI)*(fn_f - 3.0*f_f + 2.0)/SQR(1.0 - f_f);
         }
 
-	    // Calculate intensity in tetrad frame
-	    Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-	    for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-	    if (use_adm_geometry_) {
-	      i0(m,n,k,j,i) = sqrt_detg_c_(m,k,j,i)*ii_f/SQR(SQR(n0_f));
-	    } else {
-	      i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
-	    }
-	  }
+        // Calculate intensity in tetrad frame
+        Real n0 = tet_c_(m, 0, 0, k, j, i);
+        Real n_0 = 0.0;
+        for (int d = 0; d < 4; ++d) {
+          n_0 += tetcov_c_(m, d, 0, k, j, i) * nh_c_.d_view(n, d);
+        }
+        if (use_adm_geometry_) {
+          i0(m, n, k, j, i) = sqrt_detg_c_(m, k, j, i) * ii_f / SQR(SQR(n0_f));
+        } else {
+          i0(m, n, k, j, i) = n0 * n_0 * ii_f / SQR(SQR(n0_f));
+        }
+      }
     });
   }
 
@@ -711,12 +722,14 @@ void RadiationLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void DynRadSourceIterationCheck()
-//! \brief Checks positivity and total local energy conservation for the nonlinear source test.
+//! \brief Checks positivity and total local energy conservation for the nonlinear source
+//! test.
 
 void DynRadSourceIterationCheck(ParameterInput *pin, Mesh *pm) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   if (pmbp->pdynrad == nullptr || pmbp->phydro == nullptr) {
-    throw std::runtime_error("source_iteration_test requires <hydro> and <dyn_radiation>");
+    throw std::runtime_error(
+        "source_iteration_test requires <hydro> and <dyn_radiation>");
   }
 
   const Real pgas = pin->GetReal("problem", "pgas");

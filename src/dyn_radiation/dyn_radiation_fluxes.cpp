@@ -129,14 +129,18 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
       iim1 = i0_(m,n,k,j-1,i)/norm_jm1;
       iicc = i0_(m,n,k,j  ,i)/norm_j;
       if (recon_method_ > 0) {
-        Real norm_jm2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-2,i) : tet_c_(m,0,0,k,j-2,i);
-        Real norm_jp1 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j+1,i) : tet_c_(m,0,0,k,j+1,i);
+        Real norm_jm2 = use_adm_geometry_ ? sqrt_detg_c_(m, k, j - 2, i)
+                                          : tet_c_(m, 0, 0, k, j - 2, i);
+        Real norm_jp1 = use_adm_geometry_ ? sqrt_detg_c_(m, k, j + 1, i)
+                                          : tet_c_(m, 0, 0, k, j + 1, i);
         iim2 = i0_(m,n,k,j-2,i)/norm_jm2;
         iip1 = i0_(m,n,k,j+1,i)/norm_jp1;
       }
       if (recon_method_ > 1) {
-        Real norm_jm3 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j-3,i) : tet_c_(m,0,0,k,j-3,i);
-        Real norm_jp2 = use_adm_geometry_ ? sqrt_detg_c_(m,k,j+2,i) : tet_c_(m,0,0,k,j+2,i);
+        Real norm_jm3 = use_adm_geometry_ ? sqrt_detg_c_(m, k, j - 3, i)
+                                          : tet_c_(m, 0, 0, k, j - 3, i);
+        Real norm_jp2 = use_adm_geometry_ ? sqrt_detg_c_(m, k, j + 2, i)
+                                          : tet_c_(m, 0, 0, k, j + 2, i);
         iim3 = i0_(m,n,k,j-3,i)/norm_jm3;
         iip2 = i0_(m,n,k,j+2,i)/norm_jp2;
       }
@@ -198,14 +202,18 @@ TaskStatus DynRadiation::CalculateFluxes(Driver *pdriver, int stage) {
       iim1 = i0_(m,n,k-1,j,i)/norm_km1;
       iicc = i0_(m,n,k  ,j,i)/norm_k;
       if (recon_method_ > 0) {
-        Real norm_km2 = use_adm_geometry_ ? sqrt_detg_c_(m,k-2,j,i) : tet_c_(m,0,0,k-2,j,i);
-        Real norm_kp1 = use_adm_geometry_ ? sqrt_detg_c_(m,k+1,j,i) : tet_c_(m,0,0,k+1,j,i);
+        Real norm_km2 = use_adm_geometry_ ? sqrt_detg_c_(m, k - 2, j, i)
+                                          : tet_c_(m, 0, 0, k - 2, j, i);
+        Real norm_kp1 = use_adm_geometry_ ? sqrt_detg_c_(m, k + 1, j, i)
+                                          : tet_c_(m, 0, 0, k + 1, j, i);
         iim2 = i0_(m,n,k-2,j,i)/norm_km2;
         iip1 = i0_(m,n,k+1,j,i)/norm_kp1;
       }
       if (recon_method_ > 1) {
-        Real norm_km3 = use_adm_geometry_ ? sqrt_detg_c_(m,k-3,j,i) : tet_c_(m,0,0,k-3,j,i);
-        Real norm_kp2 = use_adm_geometry_ ? sqrt_detg_c_(m,k+2,j,i) : tet_c_(m,0,0,k+2,j,i);
+        Real norm_km3 = use_adm_geometry_ ? sqrt_detg_c_(m, k - 3, j, i)
+                                          : tet_c_(m, 0, 0, k - 3, j, i);
+        Real norm_kp2 = use_adm_geometry_ ? sqrt_detg_c_(m, k + 2, j, i)
+                                          : tet_c_(m, 0, 0, k + 2, j, i);
         iim3 = i0_(m,n,k-3,j,i)/norm_km3;
         iip2 = i0_(m,n,k+2,j,i)/norm_kp2;
       }

@@ -72,7 +72,9 @@ void SingleStateLLF_Hyd(const HydPrim1D &wl, const HydPrim1D &wr, const EOS_Data
   flux.mx = 0.5*(fsum.mx - du.mx);
   flux.my = 0.5*(fsum.my - du.my);
   flux.mz = 0.5*(fsum.mz - du.mz);
-  if (eos.is_ideal) {flux.e = 0.5*(fsum.e - du.e);}
+  if (eos.is_ideal) {
+    flux.e = 0.5 * (fsum.e - du.e);
+  }
 
   return;
 }

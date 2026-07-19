@@ -96,7 +96,9 @@ void IonNeutral::AssembleIonNeutralTasks(
 //  drag term.  Should be the first task called in TaskList.
 
 TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
-  if (stage != 1) {return TaskStatus::complete;}  // only execute on first stage
+  if (stage != 1) {
+    return TaskStatus::complete;
+  }  // only execute on first stage
 
   mhd::MHD *pmhd = pmy_pack->pmhd;
   hydro::Hydro *phyd = pmy_pack->phydro;

@@ -443,16 +443,24 @@ void DynRadiation::SetOrthonormalTetrad() {
       int km[3] = {i, j, (k > 0) ? k-1 : k};
       int kp[3] = {i, j, (k < n3-1) ? k+1 : k};
       Real inv_dx[3] = {
-        1.0/(size.d_view(m).dx1*((ip[0] == im[0]) ? 1.0 : static_cast<Real>(ip[0]-im[0]))),
-        multi_d ? 1.0/(size.d_view(m).dx2*((jp[1] == jm[1]) ? 1.0 :
-                      static_cast<Real>(jp[1]-jm[1]))) : 0.0,
-        three_d ? 1.0/(size.d_view(m).dx3*((kp[2] == km[2]) ? 1.0 :
-                       static_cast<Real>(kp[2]-km[2]))) : 0.0
+          1.0 / (size.d_view(m).dx1 *
+                 ((ip[0] == im[0]) ? 1.0 : static_cast<Real>(ip[0] - im[0]))),
+          multi_d ? 1.0 / (size.d_view(m).dx2 *
+                           ((jp[1] == jm[1]) ? 1.0 : static_cast<Real>(jp[1] - jm[1])))
+                  : 0.0,
+          three_d ? 1.0 / (size.d_view(m).dx3 *
+                           ((kp[2] == km[2]) ? 1.0 : static_cast<Real>(kp[2] - km[2])))
+                  : 0.0};
+      int lo[3][3] = {
+          {im[0], im[1], im[2]},
+          {jm[0], jm[1], jm[2]},
+          {km[0], km[1], km[2]}
       };
-      int lo[3][3] = {{im[0], im[1], im[2]}, {jm[0], jm[1], jm[2]},
-                      {km[0], km[1], km[2]}};
-      int hi[3][3] = {{ip[0], ip[1], ip[2]}, {jp[0], jp[1], jp[2]},
-                      {kp[0], kp[1], kp[2]}};
+      int hi[3][3] = {
+          {ip[0], ip[1], ip[2]},
+          {jp[0], jp[1], jp[2]},
+          {kp[0], kp[1], kp[2]}
+      };
 
       Real grad_gdd[3][3][3];
       Real grad_beta[3][3];
@@ -546,7 +554,6 @@ void DynRadiation::SetOrthonormalTetrad() {
           adm_dt_cotriad_c_(m,3*a+b,k,j,i) = dco_dt[a][b];
         }
       }
-
     });
 
     if (is_hydro_enabled || is_mhd_enabled) {
@@ -631,7 +638,9 @@ void DynRadiation::SetOrthonormalTetrad() {
       adm::Face1Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
       Real coeff[4];
       BuildADMFaceTransportCoeffs(0, alpha, beta, g3d, coeff);
-      for (int d=0; d<4; ++d) { tet_d1_x1f_(m,d,k,j,i) = coeff[d]; }
+      for (int d = 0; d < 4; ++d) {
+        tet_d1_x1f_(m, d, k, j, i) = coeff[d];
+      }
       sqrt_detg_x1f_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
                                            g3d[S22], g3d[S23], g3d[S33]);
     });
@@ -642,10 +651,13 @@ void DynRadiation::SetOrthonormalTetrad() {
       par_for("dynrad_adm_x2f",DevExeSpace(),0,(nmb-1),ks,ke,js,(je+1),is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real g3d[6], beta[3], alpha;
-        adm::Face2Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
+        adm::Face2Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta,
+                         alpha);
         Real coeff[4];
         BuildADMFaceTransportCoeffs(1, alpha, beta, g3d, coeff);
-        for (int d=0; d<4; ++d) { tet_d2_x2f_(m,d,k,j,i) = coeff[d]; }
+        for (int d = 0; d < 4; ++d) {
+          tet_d2_x2f_(m, d, k, j, i) = coeff[d];
+        }
         sqrt_detg_x2f_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
                                              g3d[S22], g3d[S23], g3d[S33]);
       });
@@ -657,10 +669,13 @@ void DynRadiation::SetOrthonormalTetrad() {
       par_for("dynrad_adm_x3f",DevExeSpace(),0,(nmb-1),ks,(ke+1),js,je,is,ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
         Real g3d[6], beta[3], alpha;
-        adm::Face3Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta, alpha);
+        adm::Face3Metric(m, k, j, i, adm_.g_dd, adm_.beta_u, adm_.alpha, g3d, beta,
+                         alpha);
         Real coeff[4];
         BuildADMFaceTransportCoeffs(2, alpha, beta, g3d, coeff);
-        for (int d=0; d<4; ++d) { tet_d3_x3f_(m,d,k,j,i) = coeff[d]; }
+        for (int d = 0; d < 4; ++d) {
+          tet_d3_x3f_(m, d, k, j, i) = coeff[d];
+        }
         sqrt_detg_x3f_(m,k,j,i) = ADMDetSqrt(g3d[S11], g3d[S12], g3d[S13],
                                              g3d[S22], g3d[S23], g3d[S33]);
       });
@@ -722,7 +737,9 @@ void DynRadiation::SetOrthonormalTetrad() {
     ComputeMetricDerivatives(x1f,x2v,x3v,flat,spin,dgx,dgy,dgz);
     Real e[4][4], e_cov[4][4], omega[4][4][4];
     ComputeTetrad(x1f,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d1_x1f_(m,d,k,j,i) = e[d][1]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d1_x1f_(m, d, k, j, i) = e[d][1];
+    }
   });
 
   // set tetrad components (subset) at x2f
@@ -747,7 +764,9 @@ void DynRadiation::SetOrthonormalTetrad() {
     ComputeMetricDerivatives(x1v,x2f,x3v,flat,spin,dgx,dgy,dgz);
     Real e[4][4], e_cov[4][4], omega[4][4][4];
     ComputeTetrad(x1v,x2f,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d2_x2f_(m,d,k,j,i) = e[d][2]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d2_x2f_(m, d, k, j, i) = e[d][2];
+    }
   });
 
   // set tetrad components (subset) at x3f
@@ -772,7 +791,9 @@ void DynRadiation::SetOrthonormalTetrad() {
     ComputeMetricDerivatives(x1v,x2v,x3f,flat,spin,dgx,dgy,dgz);
     Real e[4][4], e_cov[4][4], omega[4][4][4];
     ComputeTetrad(x1v,x2v,x3f,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d3_x3f_(m,d,k,j,i) = e[d][3]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d3_x3f_(m, d, k, j, i) = e[d][3];
+    }
   });
 
   // Calculate n^angle

@@ -80,9 +80,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       b0.x1f(m,k,j,i) = B0;
       b0.x2f(m,k,j,i) = 0.0;
       b0.x3f(m,k,j,i) = 0.0;
-      if (i==ie) {b0.x1f(m,k,j,i+1) = B0;}
-      if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-      if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+      if (i == ie) {
+        b0.x1f(m, k, j, i + 1) = B0;
+      }
+      if (j == je) {
+        b0.x2f(m, k, j + 1, i) = 0.0;
+      }
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) = 0.0;
+      }
 
       if (eos.is_ideal) {
         u0(m,IEN,k,j,i) = p0/gm1 + 0.5; // 0.5 comes from B^2/2
@@ -115,9 +121,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       b0.x1f(m,k,j,i) = B0;
       b0.x2f(m,k,j,i) = 0.0;
       b0.x3f(m,k,j,i) = 0.0;
-      if (i==ie) {b0.x1f(m,k,j,i+1) = B0;}
-      if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-      if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+      if (i == ie) {
+        b0.x1f(m, k, j, i + 1) = B0;
+      }
+      if (j == je) {
+        b0.x2f(m, k, j + 1, i) = 0.0;
+      }
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) = 0.0;
+      }
 
       if (eos.is_ideal) {
         u0(m,IEN,k,j,i) = p0/gm1 + 0.5; // 0.5 comes from B^2/2

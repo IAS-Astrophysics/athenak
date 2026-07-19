@@ -112,7 +112,9 @@ bool SolveLinear4(Real a[4][5], Real x[4]) {
         pivot = row;
       }
     }
-    if (max_abs < 1.0e-14) { return false; }
+    if (max_abs < 1.0e-14) {
+      return false;
+    }
     if (pivot != col) {
       for (int c=col; c<5; ++c) {
         std::swap(a[col][c], a[pivot][c]);
@@ -123,7 +125,9 @@ bool SolveLinear4(Real a[4][5], Real x[4]) {
       a[col][c] *= inv_pivot;
     }
     for (int row=0; row<4; ++row) {
-      if (row == col) { continue; }
+      if (row == col) {
+        continue;
+      }
       const Real factor = a[row][col];
       for (int c=col; c<5; ++c) {
         a[row][c] -= factor*a[col][c];
@@ -147,7 +151,9 @@ bool SolveLinear3(Real a[3][4], Real x[3]) {
         pivot = row;
       }
     }
-    if (max_abs < 1.0e-14) { return false; }
+    if (max_abs < 1.0e-14) {
+      return false;
+    }
     if (pivot != col) {
       for (int c=col; c<4; ++c) {
         std::swap(a[col][c], a[pivot][c]);
@@ -158,7 +164,9 @@ bool SolveLinear3(Real a[3][4], Real x[3]) {
       a[col][c] *= inv_pivot;
     }
     for (int row=0; row<3; ++row) {
-      if (row == col) { continue; }
+      if (row == col) {
+        continue;
+      }
       const Real factor = a[row][col];
       for (int c=col; c<4; ++c) {
         a[row][c] -= factor*a[col][c];
@@ -218,7 +226,9 @@ void SetProjectedAngularWeights(NhView nh_c, WeightView weights,
           {1.0,                 1.0,                 1.0,                 0.0, 1.0},
         };
         Real sol[4];
-        if (!(SolveLinear4(mat, sol))) { continue; }
+        if (!(SolveLinear4(mat, sol))) {
+          continue;
+        }
         const Real min_lam = std::min(sol[0], std::min(sol[1], sol[2]));
         const Real r = sol[3];
         if (min_lam >= -1.0e-10 && r > best_r && r <= 1.0 + 1.0e-10) {
@@ -256,14 +266,15 @@ void SetProjectedAngularWeights(NhView nh_c, WeightView weights,
   const Real cz = mx*qy - my*qx;
   if (fabs(sum_w - 1.0) > 1.0e-10 ||
       sqrt(SQR(cx) + SQR(cy) + SQR(cz)) > 1.0e-10) {
-    throw std::runtime_error(std::string(label) + " angular projection failed moment check");
+    throw std::runtime_error(std::string(label) +
+                             " angular projection failed moment check");
   }
 }
 
-template<typename NhView, typename SolidAngleView, typename WeightView>
-void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles, WeightView weights,
-                              const int beam, const int nangles, const Real qx_in,
-                              const Real qy_in, const Real qz_in,
+template <typename NhView, typename SolidAngleView, typename WeightView>
+void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles,
+                              WeightView weights, const int beam, const int nangles,
+                              const Real qx_in, const Real qy_in, const Real qz_in,
                               const Real flux_fraction, const char *label) {
   for (int n=0; n<nangles; ++n) {
     weights(beam,n) = 0.0;
@@ -302,7 +313,9 @@ void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles, WeightVi
           {1.0,                 1.0,                 1.0,                 0.0, 1.0},
         };
         Real sol[4];
-        if (!(SolveLinear4(mat, sol))) { continue; }
+        if (!(SolveLinear4(mat, sol))) {
+          continue;
+        }
         const Real min_lam = std::min(sol[0], std::min(sol[1], sol[2]));
         const Real r = sol[3];
         if (min_lam >= -1.0e-10 && r > best_r && r <= 1.0 + 1.0e-10) {
@@ -332,7 +345,11 @@ void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles, WeightVi
 
     Real z = 0.0;
     Real moment[3] = {0.0, 0.0, 0.0};
-    Real second[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    Real second[3][3] = {
+        {0.0, 0.0, 0.0},
+        {0.0, 0.0, 0.0},
+        {0.0, 0.0, 0.0}
+    };
     for (int n=0; n<nangles; ++n) {
       const Real prior = solid_angles.h_view(n)/(4.0*M_PI);
       const Real arg = lambda[0]*nh_c.h_view(n,1) +
@@ -374,7 +391,9 @@ void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles, WeightVi
       mat[a][3] = residual[a];
     }
     Real delta[3];
-    if (!(SolveLinear3(mat, delta))) { break; }
+    if (!(SolveLinear3(mat, delta))) {
+      break;
+    }
     Real max_delta = fmax(fabs(delta[0]), fmax(fabs(delta[1]), fabs(delta[2])));
     const Real step = (max_delta > 8.0) ? (8.0/max_delta) : 1.0;
     for (int a=0; a<3; ++a) {
@@ -558,13 +577,17 @@ Real CrossingBeamProfile(const Real x, const Real y,
   const Real dx = x - x0;
   const Real dy = y - y0;
   const Real along = dx*qx + dy*qy;
-  if (along < 0.0) { return 0.0; }
+  if (along < 0.0) {
+    return 0.0;
+  }
   const Real perp = -dx*qy + dy*qx;
   return amp*exp(-0.5*SQR(perp/sigma));
 }
 
 void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
-  if (!(crossing_beams.enabled)) { return; }
+  if (!(crossing_beams.enabled)) {
+    return;
+  }
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
@@ -601,7 +624,8 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
     tetcov_c = pmbp->pdynrad->tetcov_c;
     sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
   } else {
-    throw std::runtime_error("rad_crossing_beams requires <radiation> or <dyn_radiation>");
+    throw std::runtime_error(
+        "rad_crossing_beams requires <radiation> or <dyn_radiation>");
   }
 
   auto &size = pmbp->pmb->mb_size;
@@ -624,14 +648,17 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
   KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
     bool fill_cell = !(boundaries_only);
     if (boundaries_only) {
-      fill_cell = ((i < is && mb_bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) ||
-                   (i > ie && mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) ||
-                   (j < js && mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) ||
-                   (j > je && mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) ||
-                   (k < ks && mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) ||
-                   (k > ke && mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user));
+      fill_cell =
+          ((i < is && mb_bcs.d_view(m, BoundaryFace::inner_x1) == BoundaryFlag::user) ||
+           (i > ie && mb_bcs.d_view(m, BoundaryFace::outer_x1) == BoundaryFlag::user) ||
+           (j < js && mb_bcs.d_view(m, BoundaryFace::inner_x2) == BoundaryFlag::user) ||
+           (j > je && mb_bcs.d_view(m, BoundaryFace::outer_x2) == BoundaryFlag::user) ||
+           (k < ks && mb_bcs.d_view(m, BoundaryFace::inner_x3) == BoundaryFlag::user) ||
+           (k > ke && mb_bcs.d_view(m, BoundaryFace::outer_x3) == BoundaryFlag::user));
     }
-    if (!(fill_cell)) { return; }
+    if (!(fill_cell)) {
+      return;
+    }
 
     const Real x = CellCenterX(i-is, indcs.nx1,
                                size.d_view(m).x1min, size.d_view(m).x1max);
@@ -958,13 +985,15 @@ void ProblemGenerator::RadiationCrossingBeams(ParameterInput *pin, const bool re
     nh_c = pmbp->pdynrad->nh_c;
     solid_angles = pmbp->pdynrad->prgeo->solid_angles;
   } else {
-    throw std::runtime_error("rad_crossing_beams requires <radiation> or <dyn_radiation>");
+    throw std::runtime_error(
+        "rad_crossing_beams requires <radiation> or <dyn_radiation>");
   }
 
   crossing_beams.enabled = true;
   crossing_beams.amp = pin->GetOrAddReal("problem", "beam_amp", 1.0);
   crossing_beams.sigma = pin->GetOrAddReal("problem", "beam_sigma", 0.055);
-  crossing_beams.flux_fraction = pin->GetOrAddReal("problem", "beam_flux_fraction", 0.995);
+  crossing_beams.flux_fraction =
+      pin->GetOrAddReal("problem", "beam_flux_fraction", 0.995);
   crossing_beams.x0 = pin->GetOrAddReal("problem", "beam_x0", 0.12);
   crossing_beams.y_lower = pin->GetOrAddReal("problem", "beam_y_lower", 0.15);
   crossing_beams.y_upper = pin->GetOrAddReal("problem", "beam_y_upper", 0.85);
@@ -1021,13 +1050,18 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
   if (pmbp->prad != nullptr) {
     nangles = pmbp->prad->prgeo->nangles;
     nh_c = pmbp->prad->nh_c;
-    if (!(restart)) { Kokkos::deep_copy(pmbp->prad->i0, 0.0); }
+    if (!(restart)) {
+      Kokkos::deep_copy(pmbp->prad->i0, 0.0);
+    }
   } else if (pmbp->pdynrad != nullptr) {
     nangles = pmbp->pdynrad->prgeo->nangles;
     nh_c = pmbp->pdynrad->nh_c;
-    if (!(restart)) { Kokkos::deep_copy(pmbp->pdynrad->i0, 0.0); }
+    if (!(restart)) {
+      Kokkos::deep_copy(pmbp->pdynrad->i0, 0.0);
+    }
   } else {
-    throw std::runtime_error("rad_kerr_orbit_beam requires <radiation> or <dyn_radiation>");
+    throw std::runtime_error(
+        "rad_kerr_orbit_beam requires <radiation> or <dyn_radiation>");
   }
 
   const auto &coord = pmbp->pcoord->coord_data;
@@ -1088,7 +1122,9 @@ void ProblemGenerator::RadiationFLRWRedshift(ParameterInput *pin, const bool res
   pmbp->padm->SetADMVariables(pmbp);
   pmbp->pdynrad->PrepareADMGeometry();
   pgen_final_func = DynRadFLRWRedshiftCheck;
-  if (restart) { return; }
+  if (restart) {
+    return;
+  }
 
   auto &indcs = pmy_mesh_->mb_indcs;
   const int ng = indcs.ng;
@@ -1123,7 +1159,9 @@ void ProblemGenerator::RadiationLapseGradient(ParameterInput *pin, const bool re
   pmbp->padm->SetADMVariables(pmbp);
   pmbp->pdynrad->PrepareADMGeometry();
   pgen_final_func = DynRadLapseGradientCheck;
-  if (restart) { return; }
+  if (restart) {
+    return;
+  }
 
   const int nangles = pmbp->pdynrad->prgeo->nangles;
   const Real flux_fraction = pin->GetOrAddReal("problem", "flux_fraction", 0.7);
@@ -1173,7 +1211,9 @@ void ProblemGenerator::RadiationMomentumSource(ParameterInput *pin, const bool r
   pmbp->padm->SetADMVariables(pmbp);
   pmbp->pdynrad->PrepareADMGeometry();
   pgen_final_func = DynRadMomentumSourceCheck;
-  if (restart) { return; }
+  if (restart) {
+    return;
+  }
 
   const int nangles = pmbp->pdynrad->prgeo->nangles;
   const Real flux_fraction = pin->GetOrAddReal("problem", "flux_fraction", 0.45);
@@ -1195,10 +1235,12 @@ void ProblemGenerator::RadiationMomentumSource(ParameterInput *pin, const bool r
   auto &i0 = pmbp->pdynrad->i0;
   auto &sqrt_detg = pmbp->pdynrad->sqrt_detg_c;
   auto &solid_angles = pmbp->pdynrad->prgeo->solid_angles;
-  par_for("momentum_source_init", DevExeSpace(), 0,nmb1,0,nang1,0,(n3-1),0,(n2-1),0,(n1-1),
-  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-    i0(m,n,k,j,i) = sqrt_detg(m,k,j,i)*erad*weights(0,n)/solid_angles.d_view(n);
-  });
+  par_for(
+      "momentum_source_init", DevExeSpace(), 0, nmb1, 0, nang1, 0, (n3 - 1), 0, (n2 - 1),
+      0, (n1 - 1), KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+        i0(m, n, k, j, i) =
+            sqrt_detg(m, k, j, i) * erad * weights(0, n) / solid_angles.d_view(n);
+      });
   Kokkos::fence();
 }
 
@@ -1468,7 +1510,11 @@ void DynRadMomentumSourceCheck(ParameterInput *pin, Mesh *pm) {
 
     Real e = 0.0;
     Real s_cov[3] = {0.0, 0.0, 0.0};
-    Real p_uu[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    Real p_uu[3][3] = {
+        {0.0, 0.0, 0.0},
+        {0.0, 0.0, 0.0},
+        {0.0, 0.0, 0.0}
+    };
     Real ham[3] = {0.0, 0.0, 0.0};
     for (int n=0; n<=nang1; ++n) {
       const Real intensity = i0(m,n,k,j,i)/sqrt_detg(m,k,j,i);
@@ -1535,7 +1581,9 @@ void DynRadMomentumSourceCheck(ParameterInput *pin, Mesh *pm) {
 //! \brief Adds a compact, moment-projected beam source tangent to a Kerr photon orbit.
 
 void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
-  if (!(kerr_orbit_beam.enabled)) { return; }
+  if (!(kerr_orbit_beam.enabled)) {
+    return;
+  }
   MeshBlockPack *pmbp = pm->pmb_pack;
   auto &indcs = pm->mb_indcs;
   const int is = indcs.is;
@@ -1571,7 +1619,8 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
     tetcov_c = pmbp->pdynrad->tetcov_c;
     sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
   } else {
-    throw std::runtime_error("rad_kerr_orbit_beam requires <radiation> or <dyn_radiation>");
+    throw std::runtime_error(
+        "rad_kerr_orbit_beam requires <radiation> or <dyn_radiation>");
   }
   if (kerr_orbit_beam.angular_weights == nullptr) {
     throw std::runtime_error("rad_kerr_orbit_beam angular weights were not initialized");
@@ -1587,32 +1636,35 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
   const Real sy = kerr_orbit_beam.source_y;
   const Real sz = kerr_orbit_beam.source_z;
 
-  par_for("kerr_orbit_beam_source",DevExeSpace(),0,nmb1,0,nang1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-    if (excise && rad_mask(m,k,j,i)) { return; }
+  par_for(
+      "kerr_orbit_beam_source", DevExeSpace(), 0, nmb1, 0, nang1, ks, ke, js, je, is, ie,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+        if (excise && rad_mask(m, k, j, i)) {
+          return;
+        }
 
-    const Real x = CellCenterX(i-is, indcs.nx1,
-                               size.d_view(m).x1min, size.d_view(m).x1max);
-    const Real y = CellCenterX(j-js, indcs.nx2,
-                               size.d_view(m).x2min, size.d_view(m).x2max);
-    const Real z = CellCenterX(k-ks, indcs.nx3,
-                               size.d_view(m).x3min, size.d_view(m).x3max);
-    const Real dist2 = SQR(x - sx) + SQR(y - sy) + SQR(z - sz);
-    const Real primitive_source = amp*bdt*exp(-0.5*dist2/SQR(sigma))*
-                                  angular_weights(0,n)/solid_angles.d_view(n);
+        const Real x =
+            CellCenterX(i - is, indcs.nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+        const Real y =
+            CellCenterX(j - js, indcs.nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+        const Real z =
+            CellCenterX(k - ks, indcs.nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+        const Real dist2 = SQR(x - sx) + SQR(y - sy) + SQR(z - sz);
+        const Real primitive_source = amp * bdt * exp(-0.5 * dist2 / SQR(sigma)) *
+                                      angular_weights(0, n) / solid_angles.d_view(n);
 
-    Real norm = 1.0;
-    if (use_adm_geometry) {
-      norm = sqrt_detg_c(m,k,j,i);
-    } else {
-      Real n_0 = 0.0;
-      for (int d=0; d<4; ++d) {
-        n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
-      }
-      norm = tet_c(m,0,0,k,j,i)*n_0;
-    }
-    i0(m,n,k,j,i) += norm*primitive_source;
-  });
+        Real norm = 1.0;
+        if (use_adm_geometry) {
+          norm = sqrt_detg_c(m, k, j, i);
+        } else {
+          Real n_0 = 0.0;
+          for (int d = 0; d < 4; ++d) {
+            n_0 += tetcov_c(m, d, 0, k, j, i) * nh_c.d_view(n, d);
+          }
+          norm = tet_c(m, 0, 0, k, j, i) * n_0;
+        }
+        i0(m, n, k, j, i) += norm * primitive_source;
+      });
 }
 
 //----------------------------------------------------------------------------------------
@@ -1702,7 +1754,8 @@ void ZeroIntensity(Mesh *pm) {
 
 //----------------------------------------------------------------------------------------
 //! \fn CrossingBeamBoundary
-//! \brief Fills physical ghost zones with the analytic crossing-beam inflow/outflow state.
+//! \brief Fills physical ghost zones with the analytic crossing-beam inflow/outflow
+//! state.
 
 void CrossingBeamBoundary(Mesh *pm) {
   FillCrossingBeams(pm, true);

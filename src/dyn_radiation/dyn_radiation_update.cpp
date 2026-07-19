@@ -78,7 +78,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
       }
       Real i_stage = i0_(m,n,k,j,i);
       Real i_new = gam0*i_stage + gam1*i1_(m,n,k,j,i) - beta_dt*divf_s;
-      if (angular_fluxes_) { i_new -= beta_dt*divfa_(m,n,k,j,i); }
+      if (angular_fluxes_) {
+        i_new -= beta_dt * divfa_(m, n, k, j, i);
+      }
 
       if (adm_metric_source_) {
         Real s[3] = {0.0, 0.0, 0.0};
@@ -105,7 +107,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
       }
 
       i0_(m,n,k,j,i) = i_new;
-      if (excise && rad_mask_(m,k,j,i)) { i0_(m,n,k,j,i) = 0.0; }
+      if (excise && rad_mask_(m, k, j, i)) {
+        i0_(m, n, k, j, i) = 0.0;
+      }
     });
     par_for("dynrad_adm_update_positivity",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -127,7 +131,9 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
     i0_(m,n,k,j,i) = gam0*i0_(m,n,k,j,i)+gam1*i1_(m,n,k,j,i)-beta_dt*divf_s;
 
     // angular fluxes
-    if (angular_fluxes_) { i0_(m,n,k,j,i) -= beta_dt*divfa_(m,n,k,j,i); }
+    if (angular_fluxes_) {
+      i0_(m, n, k, j, i) -= beta_dt * divfa_(m, n, k, j, i);
+    }
 
     Real n_0 = 1.0;
     // zero intensity if negative

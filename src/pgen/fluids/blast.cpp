@@ -27,11 +27,11 @@
 #include "coordinates/cell_locations.hpp"
 
 namespace {
-  Real R_max0;     // Maximum radius at t=t0.
-  Real v_max;      // Maximum speed.
-  Real t0;
-  Real fac;
-  void SetADMVariablesToFLRW(MeshBlockPack *pmbp);
+Real R_max0;  // Maximum radius at t=t0.
+Real v_max;   // Maximum speed.
+Real t0;
+Real fac;
+void SetADMVariablesToFLRW(MeshBlockPack *pmbp);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -370,7 +370,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (j==je) {
         b0.x2f(m,k,j+1,i) = -(a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1;
       }
-      if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) = 0.0;
+      }
     });
 
     // Compute cell-centered fields

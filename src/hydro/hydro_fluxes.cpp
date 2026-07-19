@@ -262,7 +262,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
     // set the loop limits
     il = is, iu = ie, jl = js, ju = je, kl = ks-1, ku = ke+1;
-    if (use_fofc) { il = is-1, iu = ie+1, jl = js-1, ju = je+1, kl = ks-2, ku = ke+2; }
+    if (use_fofc) {
+      il = is - 1, iu = ie + 1, jl = js - 1, ju = je + 1, kl = ks - 2, ku = ke + 2;
+    }
 
     par_for_outer("hflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, jl, ju,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {

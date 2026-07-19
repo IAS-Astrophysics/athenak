@@ -226,7 +226,9 @@ void Resistivity::AddFluxConstantResist(const DvceFaceFld4D<Real> &b,
                              j3j  *(b.x2f(m,k  ,j  ,i) + b.x2f(m,k  ,j  ,i-1)) -
                              j3jp1*(b.x2f(m,k  ,j+1,i) + b.x2f(m,k  ,j+1,i-1)));
   });
-  if (pmy_pack->pmesh->one_d) {return;}
+  if (pmy_pack->pmesh->one_d) {
+    return;
+  }
 
   //------------------------------
   // energy fluxes in x2-direction
@@ -252,7 +254,9 @@ void Resistivity::AddFluxConstantResist(const DvceFaceFld4D<Real> &b,
                              j1k  *(b.x3f(m,k  ,j,i  ) + b.x3f(m,k  ,j-1,i  )) -
                              j1kp1*(b.x3f(m,k+1,j,i  ) + b.x3f(m,k+1,j-1,i  )));
   });
-  if (pmy_pack->pmesh->two_d) {return;}
+  if (pmy_pack->pmesh->two_d) {
+    return;
+  }
 
   //------------------------------
   // energy fluxes in x3-direction

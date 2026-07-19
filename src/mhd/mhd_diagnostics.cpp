@@ -117,49 +117,55 @@ void RepairConsRange(const ViewType &u0, const ViewType &u1, const int nvars,
   const int total = nm*nk*nj*ni;
   if (total <= 0 || nvars <= 0) return;
 
-  Kokkos::parallel_for("mhd_repair_conserved", Kokkos::RangePolicy<>(DevExeSpace(), 0, total),
-  KOKKOS_LAMBDA(const int idx) {
-    int q = idx;
-    const int i = irange.lo + (q % ni);
-    q /= ni;
-    const int j = jrange.lo + (q % nj);
-    q /= nj;
-    const int k = krange.lo + (q % nk);
-    q /= nk;
-    const int m = mrange.lo + q;
+  Kokkos::parallel_for(
+      "mhd_repair_conserved", Kokkos::RangePolicy<>(DevExeSpace(), 0, total),
+      KOKKOS_LAMBDA(const int idx) {
+        int q = idx;
+        const int i = irange.lo + (q % ni);
+        q /= ni;
+        const int j = jrange.lo + (q % nj);
+        q /= nj;
+        const int k = krange.lo + (q % nk);
+        q /= nk;
+        const int m = mrange.lo + q;
 
-    bool bad_cell = false;
-    int bad_components = 0;
-    int first_bad_component = -1;
-    bool previous_state_ok = true;
-    for (int n = 0; n < nvars; ++n) {
-      const Real v = u0(m,n,k,j,i);
-      if (!FiniteForRepair(v)) {
-        bad_cell = true;
-        ++bad_components;
-        if (first_bad_component < 0) first_bad_component = n;
-      }
-      if (!FiniteForRepair(u1(m,n,k,j,i))) previous_state_ok = false;
-    }
-    if (!bad_cell) return;
+        bool bad_cell = false;
+        int bad_components = 0;
+        int first_bad_component = -1;
+        bool previous_state_ok = true;
+        for (int n = 0; n < nvars; ++n) {
+          const Real v = u0(m, n, k, j, i);
+          if (!FiniteForRepair(v)) {
+            bad_cell = true;
+            ++bad_components;
+            if (first_bad_component < 0)
+              first_bad_component = n;
+          }
+          if (!FiniteForRepair(u1(m, n, k, j, i)))
+            previous_state_ok = false;
+        }
+        if (!bad_cell)
+          return;
 
-    const int old_count = Kokkos::atomic_fetch_add(&counts(0), 1);
-    Kokkos::atomic_add(&counts(1), bad_components);
-    if (!previous_state_ok) Kokkos::atomic_add(&counts(2), 1);
-    if (old_count == 0) {
-      first_locs(0,0) = m;
-      first_locs(0,1) = k;
-      first_locs(0,2) = j;
-      first_locs(0,3) = i;
-      first_locs(0,4) = first_bad_component;
-    }
+        const int old_count = Kokkos::atomic_fetch_add(&counts(0), 1);
+        Kokkos::atomic_add(&counts(1), bad_components);
+        if (!previous_state_ok)
+          Kokkos::atomic_add(&counts(2), 1);
+        if (old_count == 0) {
+          first_locs(0, 0) = m;
+          first_locs(0, 1) = k;
+          first_locs(0, 2) = j;
+          first_locs(0, 3) = i;
+          first_locs(0, 4) = first_bad_component;
+        }
 
-    for (int n = 0; n < nvars; ++n) {
-      const Real prev = u1(m,n,k,j,i);
-      const Real curr = u0(m,n,k,j,i);
-      u0(m,n,k,j,i) = FiniteForRepair(prev) ? prev : (FiniteForRepair(curr) ? curr : 0.0);
-    }
-  });
+        for (int n = 0; n < nvars; ++n) {
+          const Real prev = u1(m, n, k, j, i);
+          const Real curr = u0(m, n, k, j, i);
+          u0(m, n, k, j, i) =
+              FiniteForRepair(prev) ? prev : (FiniteForRepair(curr) ? curr : 0.0);
+        }
+      });
   DevExeSpace().fence();
 }
 
@@ -234,7 +240,8 @@ void RepairFaceEMFArray(const char *component, const ViewType &a, const int coun
       }
     }
 
-    const Real fallback = (finite_count > 0) ? (sum/static_cast<Real>(finite_count)) : 0.0;
+    const Real fallback =
+        (finite_count > 0) ? (sum / static_cast<Real>(finite_count)) : 0.0;
     const int old_count = Kokkos::atomic_fetch_add(&counts(count_index), 1);
     if (old_count == 0) {
       first_locs(count_index,0) = m;

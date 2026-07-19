@@ -107,7 +107,9 @@ void IsothermalHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &pri
 
     // set FOFC flag and quit loop if this function called only to check floors
     if (only_testfloors) {
-      if (dfloor_used) {fofc_(m,k,j,i) = true;}
+      if (dfloor_used) {
+        fofc_(m, k, j, i) = true;
+      }
     } else {
       // store primitive state in 3D array
       prim(m,IDN,k,j,i) = w.d;

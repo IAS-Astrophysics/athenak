@@ -109,7 +109,9 @@ void ConservativeAngularFloor(IView i0, SolidAngles solid_angles,
       positive += weighted_i;
     }
   }
-  if (deficit <= 0.0) { return; }
+  if (deficit <= 0.0) {
+    return;
+  }
 
   if (positive > deficit) {
     const Real scale = (positive - deficit)/positive;
@@ -127,14 +129,11 @@ void ConservativeAngularFloor(IView i0, SolidAngles solid_angles,
   }
 }
 
-template<typename IView, typename SolidAngles, typename TetradView,
-         typename TetradCovView, typename NhView>
-KOKKOS_INLINE_FUNCTION
-void ConservativePrimitiveAngularFloor(IView i0, SolidAngles solid_angles,
-                                       TetradView tet_c, TetradCovView tetcov_c,
-                                       NhView nh_c,
-                                       const int m, const int k, const int j, const int i,
-                                       const int nang1) {
+template <typename IView, typename SolidAngles, typename TetradView,
+typename TetradCovView, typename NhView>
+KOKKOS_INLINE_FUNCTION void ConservativePrimitiveAngularFloor(
+    IView i0, SolidAngles solid_angles, TetradView tet_c, TetradCovView tetcov_c,
+    NhView nh_c, const int m, const int k, const int j, const int i, const int nang1) {
   Real positive = 0.0;
   Real deficit = 0.0;
   for (int n=0; n<=nang1; ++n) {
@@ -159,7 +158,9 @@ void ConservativePrimitiveAngularFloor(IView i0, SolidAngles solid_angles,
       positive += weighted_i;
     }
   }
-  if (deficit <= 0.0) { return; }
+  if (deficit <= 0.0) {
+    return;
+  }
 
   if (positive > deficit) {
     const Real scale = (positive - deficit)/positive;
@@ -246,7 +247,7 @@ class DynRadiation {
   DvceArray4D<Real> adm_alpha_c;       // cached ADM lapse at cell centers
   DvceArray5D<Real> adm_beta_u_c;      // cached ADM shift at cell centers
   DvceArray6D<Real> adm_g_dd_c;        // cached ADM spatial metric at cell centers
-  DvceArray6D<Real> adm_g_uu_c;        // cached ADM inverse spatial metric at cell centers
+  DvceArray6D<Real> adm_g_uu_c;  // cached ADM inverse spatial metric at cell centers
   DvceArray6D<Real> adm_K_dd_c;        // cached ADM extrinsic curvature at cell centers
   DvceArray6D<Real> adm_cotriad_c;     // cached ADM spatial co-triad e^a_i
   DvceArray5D<Real> adm_grad_alpha_c;  // cached spatial derivatives of lapse

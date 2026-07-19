@@ -86,7 +86,9 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
   }
   int il = is, iu = ie+1;
-  if (use_fofc) { il = is-1, iu = ie+2; }
+  if (use_fofc) {
+    il = is - 1, iu = ie + 2;
+  }
 
   par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level,
       0, nmb1, kl, ku, jl, ju,
@@ -184,7 +186,9 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       kl = ks-1, ku = ke+1;
     }
     jl = js-1, ju = je+1;
-    if (use_fofc) { jl = js-2, ju = je+2; }
+    if (use_fofc) {
+      jl = js - 2, ju = je + 2;
+    }
 
     par_for_outer("dyngrflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
@@ -296,7 +300,9 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     auto &e13_  = pmy_pack->pmhd->e1x3;
 
     kl = ks-1, ku = ke+1;
-    if (use_fofc) { kl = ks-2, ku = ke+2; }
+    if (use_fofc) {
+      kl = ks - 2, ku = ke + 2;
+    }
 
     par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {

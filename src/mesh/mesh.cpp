@@ -338,7 +338,9 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  if (pmb_pack->ppart != nullptr) {delete [] nprtcl_eachrank;}
+  if (pmb_pack->ppart != nullptr) {
+    delete[] nprtcl_eachrank;
+  }
   if (multilevel) {
     delete pmr;
   }
@@ -641,7 +643,9 @@ void Mesh::NewTimeStep(const Real tlim) {
 #endif
 
   // limit last time step to stop at tlim *exactly*
-  if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
+  if ((time < tlim) && ((time + dt) > tlim)) {
+    dt = tlim - time;
+  }
 
   return;
 }
@@ -676,11 +680,5 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     if (pmb_pack->ppart != nullptr) {
       pmb_pack->ppart->CreateParticleTags(pinput);
     }
-  }
-
-  // Call RefinementCriteria constructor to enroll various criteria
-  // can only be done after the physics modules have been constructed
-  if (adaptive) {
-    pmr->pmrc = new RefinementCriteria(this, pinput);
   }
 }

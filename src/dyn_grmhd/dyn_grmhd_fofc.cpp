@@ -94,8 +94,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     // Index bounds
     int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
     int jadd = 0, kadd = 0;
-    if (multi_d) { jl = js-1, ju = je+1, jadd = 1; }
-    if (three_d) { kl = ks-1, ku = ke+1, kadd = 1; }
+    if (multi_d) {
+      jl = js - 1, ju = je + 1, jadd = 1;
+    }
+    if (three_d) {
+      kl = ks - 1, ku = ke + 1, kadd = 1;
+    }
 
     // Estimate updated conserved variables and cell-centered fields
     par_for("FOFC-newu", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
@@ -212,8 +216,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
   // Index bounds
   int il = is-1, iu = ie+1, jl = js, ju = je, kl = ks, ku = ke;
-  if (multi_d) { jl = js-1, ju = je+1; }
-  if (three_d) { kl = ks-1, ku = ke+1; }
+  if (multi_d) {
+    jl = js - 1, ju = je + 1;
+  }
+  if (three_d) {
+    kl = ks - 1, ku = ke + 1;
+  }
 
   // Replace fluxes with first-order LLF fluxes at i,j,k faces for any cell where FOFC
   // and/or excision is used (if GR+excising)
@@ -221,7 +229,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Check for FOFC flag
     bool fofc_flag = false;
-    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+    if (use_fofc_) {
+      fofc_flag = fofc_(m, k, j, i);
+    }
 
     bool fofc_scalar_any = fofc_flag;
     if (use_fofc_ && nscal_ > 0 && !fofc_flag) {
@@ -233,7 +243,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
     // Check for GR + excision
     bool fofc_excision = false;
-    if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
+    if (use_excise_) {
+      fofc_excision = excision_flux_(m, k, j, i);
+    }
 
     // Apply FOFC
     if (fofc_flag || fofc_excision || fofc_scalar_any) {
@@ -370,7 +382,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Check for FOFC flag
     bool fofc_flag = false;
-    if (use_fofc_) { fofc_flag = fofc_(m,k,j,i); }
+    if (use_fofc_) {
+      fofc_flag = fofc_(m, k, j, i);
+    }
 
     // Initialize FOFC scalar flag to be FOFC flag
     bool fofc_scalar_any = fofc_flag;
@@ -383,7 +397,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
     // Check for GR + excision
     bool fofc_excision = false;
-    if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
+    if (use_excise_) {
+      fofc_excision = excision_flux_(m, k, j, i);
+    }
 
     // Apply FOFC
     if (fofc_flag || fofc_excision || fofc_scalar_any) {
@@ -538,8 +554,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     il = is, iu = ie+1;
     jl = js, ju = je;
     kl = ks, ku = ke;
-    if (multi_d) { alp_pp = 4.0, jl = js, ju = je+1; }
-    if (three_d) { alp_pp = 6.0, kl = ks, ku = ke+1; }
+    if (multi_d) {
+      alp_pp = 4.0, jl = js, ju = je + 1;
+    }
+    if (three_d) {
+      alp_pp = 6.0, kl = ks, ku = ke + 1;
+    }
 
     // Positivity Presserving Limiter for scalar
     par_for("FOFC-flx", DevExeSpace(), 0, nmb-1, kl, ku, jl, ju, il, iu,
@@ -583,7 +603,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           }
         }
       } else {
-        for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
+        for (int n = 0; n < nscal_; ++n) {
+          wthe_m[n] = 0.0;
+        }
       }
       // Estimate density D^+ at boundary from i
       uD = utest_(m,IDN,k,j,i) + bet_pp * flx1(m,IDN,k,j,i);
@@ -603,7 +625,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           }
         }
       } else {
-        for (int n=0; n < nscal_; ++n) {wthe_p[n] = 0.0;}
+        for (int n = 0; n < nscal_; ++n) {
+          wthe_p[n] = 0.0;
+        }
       }
       for (int n=0; n < nscal_; ++n) {
         wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
@@ -643,7 +667,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             }
           }
         } else {
-          for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
+          for (int n = 0; n < nscal_; ++n) {
+            wthe_m[n] = 0.0;
+          }
         }
         uD = utest_(m,IDN,k,j,i) + bet_pp * flx2(m,IDN,k,j,i);
         if ( uD > 0.0 ) {
@@ -662,7 +688,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             }
           }
         } else {
-          for (int n=0; n < nscal_; ++n) {wthe_p[n] = 0.0;}
+          for (int n = 0; n < nscal_; ++n) {
+            wthe_p[n] = 0.0;
+          }
         }
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
@@ -704,7 +732,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             }
           }
         } else {
-          for (int n=0; n < nscal_; ++n) {wthe_m[n] = 0.0;}
+          for (int n = 0; n < nscal_; ++n) {
+            wthe_m[n] = 0.0;
+          }
         }
         uD = utest_(m,IDN,k,j,i) + bet_pp * flx3(m,IDN,k,j,i);
         if ( uD > 0.0 ) {
@@ -723,7 +753,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
             }
           }
         } else {
-          for (int n=0; n < nscal_; ++n) {wthe_p[n] = 0.0;}
+          for (int n = 0; n < nscal_; ++n) {
+            wthe_p[n] = 0.0;
+          }
         }
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
@@ -737,7 +769,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   // reset FOFC flag (do not reset excision flag)
   if (use_fofc_) {
     Kokkos::deep_copy(fofc_, false);
-    if (nscal_ > 0) {Kokkos::deep_copy(fofc_scal_, false);}
+    if (nscal_ > 0) {
+      Kokkos::deep_copy(fofc_scal_, false);
+    }
   }
 
   return;

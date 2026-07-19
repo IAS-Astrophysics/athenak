@@ -17,7 +17,6 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-
 DEFAULT_ROOTS = [
     "/home/hzhu/scratch2/hzhu/acc/cbd/tilted_large",
     "/home/hzhu/scratch2/hzhu/acc/bondi/adi",
@@ -158,9 +157,7 @@ def parse_parfile(path):
                 continue
             key_match = key_re.match(line)
             if current and key_match:
-                blocks[current][key_match.group(1).strip()] = (
-                    key_match.group(2).strip()
-                )
+                blocks[current][key_match.group(1).strip()] = key_match.group(2).strip()
     return blocks
 
 
@@ -212,8 +209,7 @@ def infer_orbit_model(run_dir, par, dynbbh_info):
             "use_traj_table": True,
             "confidence": "low",
             "method": (
-                "ambiguous: use_traj_table=true; "
-                "analytic sep^-1.5 orbit not assumed"
+                "ambiguous: use_traj_table=true; " "analytic sep^-1.5 orbit not assumed"
             ),
             "notes": ["trajectory table runs need explicit time-to-orbit review"],
         }
@@ -232,7 +228,7 @@ def infer_orbit_model(run_dir, par, dynbbh_info):
         confidence = "medium"
     else:
         confidence = "high"
-    omega = sep ** -1.5
+    omega = sep**-1.5
     period = 2.0 * math.pi / omega
     return {
         "period": period,
@@ -374,20 +370,22 @@ def classify(record, par, basename, outputs):
             time_method = "filename output index only; output dt unavailable"
 
     result = dict(record)
-    result.update({
-        "category": category,
-        "output_name": output_name,
-        "output_tokens": sorted(tokens),
-        "index": index,
-        "index_token": index_token,
-        "dt": dt,
-        "time": time,
-        "time_method": time_method,
-        "ambiguity": ambiguity,
-        "include_by_rule": include_by_rule,
-        "selection_reason": selection_reason,
-        "selected": False,
-    })
+    result.update(
+        {
+            "category": category,
+            "output_name": output_name,
+            "output_tokens": sorted(tokens),
+            "index": index,
+            "index_token": index_token,
+            "dt": dt,
+            "time": time,
+            "time_method": time_method,
+            "ambiguity": ambiguity,
+            "include_by_rule": include_by_rule,
+            "selection_reason": selection_reason,
+            "selected": False,
+        }
+    )
     return result
 
 
@@ -421,14 +419,16 @@ def select_nearest_groups(groups, orbit_model, orbit_stride):
     if period is None:
         key = sortable[-1][2]
         selected[key] = "last available group only; orbital period unavailable"
-        selections.append({
-            "target_orbit": None,
-            "selected_group": key,
-            "selected_orbit": None,
-            "selected_time": sortable[-1][3][0].get("time"),
-            "mismatch_orbits": None,
-            "reason": selected[key],
-        })
+        selections.append(
+            {
+                "target_orbit": None,
+                "selected_group": key,
+                "selected_orbit": None,
+                "selected_time": sortable[-1][3][0].get("time"),
+                "mismatch_orbits": None,
+                "reason": selected[key],
+            }
+        )
         return selected, selections, "period unavailable"
 
     orbit_groups = []
@@ -441,14 +441,16 @@ def select_nearest_groups(groups, orbit_model, orbit_stride):
     if not orbit_groups:
         key = sortable[-1][2]
         selected[key] = "last available group only; no physical times parsed"
-        selections.append({
-            "target_orbit": None,
-            "selected_group": key,
-            "selected_orbit": None,
-            "selected_time": sortable[-1][3][0].get("time"),
-            "mismatch_orbits": None,
-            "reason": selected[key],
-        })
+        selections.append(
+            {
+                "target_orbit": None,
+                "selected_group": key,
+                "selected_orbit": None,
+                "selected_time": sortable[-1][3][0].get("time"),
+                "mismatch_orbits": None,
+                "reason": selected[key],
+            }
+        )
         return selected, selections, "no physical times parsed"
 
     max_orbit = max(item[0] for item in orbit_groups)
@@ -460,29 +462,35 @@ def select_nearest_groups(groups, orbit_model, orbit_stride):
         reason = f"nearest available group to target orbit {target:g}"
         if key not in selected:
             selected[key] = reason
-        selections.append({
-            "target_orbit": target,
-            "selected_group": key,
-            "selected_orbit": nearest[0],
-            "selected_time": nearest[2][0].get("time"),
-            "mismatch_orbits": mismatch,
-            "reason": reason,
-        })
+        selections.append(
+            {
+                "target_orbit": target,
+                "selected_group": key,
+                "selected_orbit": nearest[0],
+                "selected_time": nearest[2][0].get("time"),
+                "mismatch_orbits": mismatch,
+                "reason": reason,
+            }
+        )
         target += orbit_stride
 
     last_key = max(orbit_groups, key=lambda item: item[0])[1]
     selected[last_key] = "last available group"
-    if all(s["selected_group"] != last_key or s["reason"] != "last available group"
-           for s in selections):
+    if all(
+        s["selected_group"] != last_key or s["reason"] != "last available group"
+        for s in selections
+    ):
         last = [item for item in orbit_groups if item[1] == last_key][0]
-        selections.append({
-            "target_orbit": "last",
-            "selected_group": last_key,
-            "selected_orbit": last[0],
-            "selected_time": last[2][0].get("time"),
-            "mismatch_orbits": None,
-            "reason": "last available group",
-        })
+        selections.append(
+            {
+                "target_orbit": "last",
+                "selected_group": last_key,
+                "selected_orbit": last[0],
+                "selected_time": last[2][0].get("time"),
+                "mismatch_orbits": None,
+                "reason": "last available group",
+            }
+        )
     return selected, selections, None
 
 
@@ -491,79 +499,91 @@ def inventory_run(run_dir):
     records = []
     bin_dir = run_dir / "bin"
     rst_dir = run_dir / "rst"
-    records.extend(run_find(
-        bin_dir,
-        ["-maxdepth", "1", "-type", "f", "-name", "*.athdf*"],
-        "athdf",
-        run_dir,
-    ))
-    records.extend(run_find(
-        rst_dir,
-        ["-maxdepth", "2", "-type", "f", "-name", "*.rst*"],
-        "restart",
-        run_dir,
-    ))
+    records.extend(
+        run_find(
+            bin_dir,
+            ["-maxdepth", "1", "-type", "f", "-name", "*.athdf*"],
+            "athdf",
+            run_dir,
+        )
+    )
+    records.extend(
+        run_find(
+            rst_dir,
+            ["-maxdepth", "2", "-type", "f", "-name", "*.rst*"],
+            "restart",
+            run_dir,
+        )
+    )
     for place in (run_dir, bin_dir):
-        records.extend(run_find(
-            place,
+        records.extend(
+            run_find(
+                place,
+                [
+                    "-maxdepth",
+                    "1",
+                    "-type",
+                    "f",
+                    "(",
+                    "-name",
+                    "*.hst",
+                    "-o",
+                    "-iname",
+                    "*history*",
+                    ")",
+                ],
+                "history",
+                run_dir,
+            )
+        )
+    records.extend(
+        run_find(
+            run_dir,
             [
                 "-maxdepth",
-                "1",
+                "2",
                 "-type",
                 "f",
                 "(",
                 "-name",
-                "*.hst",
+                "parfile.par",
+                "-o",
+                "-name",
+                "*.athinput",
+                "-o",
+                "-name",
+                "*.par",
+                "-o",
+                "-name",
+                "*.in",
                 "-o",
                 "-iname",
-                "*history*",
+                "*config*",
+                "-o",
+                "-iname",
+                "*setup*",
                 ")",
             ],
-            "history",
+            "parfile_input",
             run_dir,
-        ))
-    records.extend(run_find(
-        run_dir,
-        [
-            "-maxdepth",
-            "2",
-            "-type",
-            "f",
-            "(",
-            "-name",
-            "parfile.par",
-            "-o",
-            "-name",
-            "*.athinput",
-            "-o",
-            "-name",
-            "*.par",
-            "-o",
-            "-name",
-            "*.in",
-            "-o",
-            "-iname",
-            "*config*",
-            "-o",
-            "-iname",
-            "*setup*",
-            ")",
-        ],
-        "parfile_input",
-        run_dir,
-    ))
-    records.extend(run_find(
-        run_dir,
-        ["-type", "f", "-name", "*.npz"],
-        "npz",
-        run_dir,
-    ))
-    records.extend(run_find(
-        run_dir,
-        ["-type", "f", "-iname", "*.png"],
-        "png",
-        run_dir,
-    ))
+        )
+    )
+    records.extend(
+        run_find(
+            run_dir,
+            ["-type", "f", "-name", "*.npz"],
+            "npz",
+            run_dir,
+        )
+    )
+    records.extend(
+        run_find(
+            run_dir,
+            ["-type", "f", "-iname", "*.png"],
+            "png",
+            run_dir,
+        )
+    )
     seen = set()
     deduped = []
     for record in records:
@@ -592,10 +612,7 @@ def classify_and_select_run(run_dir, raw_records, repo_root, orbit_stride):
     dynbbh_info = inspect_dynbbh(repo_root)
     orbit_model = infer_orbit_model(run_dir, par, dynbbh_info)
     basename, outputs = output_blocks(par)
-    classified = [
-        classify(record, par, basename, outputs)
-        for record in raw_records
-    ]
+    classified = [classify(record, par, basename, outputs) for record in raw_records]
     for record in classified:
         period = orbit_model.get("period")
         if period and record.get("time") is not None:
@@ -612,9 +629,11 @@ def classify_and_select_run(run_dir, raw_records, repo_root, orbit_stride):
             restart_groups[checkpoint_key(record)].append(record)
 
     selected_mhd, mhd_selection, mhd_issue = select_nearest_groups(
-        mhd_groups, orbit_model, orbit_stride)
+        mhd_groups, orbit_model, orbit_stride
+    )
     selected_rst, rst_selection, rst_issue = select_nearest_groups(
-        restart_groups, orbit_model, orbit_stride)
+        restart_groups, orbit_model, orbit_stride
+    )
 
     for record in classified:
         key = checkpoint_key(record)
@@ -649,9 +668,19 @@ def classify_and_select_run(run_dir, raw_records, repo_root, orbit_stride):
     return classified, [r for r in classified if r["selected"]], summary
 
 
-def build_run_summary(run_dir, records, orbit_model, outputs, mhd_selection,
-                      rst_selection, mhd_issue, rst_issue, rst_rank_local,
-                      rst_ambiguous, has_parfile):
+def build_run_summary(
+    run_dir,
+    records,
+    orbit_model,
+    outputs,
+    mhd_selection,
+    rst_selection,
+    mhd_issue,
+    rst_issue,
+    rst_rank_local,
+    rst_ambiguous,
+    has_parfile,
+):
     counts = defaultdict(int)
     sizes = defaultdict(int)
     selected_counts = defaultdict(int)
@@ -707,13 +736,16 @@ def latest_selected(records, categories):
     candidates = [r for r in records if r["category"] in categories]
     if not candidates:
         return None
-    return max(candidates, key=lambda r: (
-        r.get("time") is not None,
-        r.get("time") if r.get("time") is not None else -1,
-        r.get("index") if r.get("index") is not None else -1,
-        not r["path"].endswith(".xdmf"),
-        r["path"],
-    ))
+    return max(
+        candidates,
+        key=lambda r: (
+            r.get("time") is not None,
+            r.get("time") if r.get("time") is not None else -1,
+            r.get("index") if r.get("index") is not None else -1,
+            not r["path"].endswith(".xdmf"),
+            r["path"],
+        ),
+    )
 
 
 def rel_for_rsync(path):
@@ -749,12 +781,14 @@ def write_run_summary_csv(path, summaries):
             "selected_total_bytes",
         ]
         for category in CATEGORY_ORDER:
-            fields.extend([
-                f"count_{category}",
-                f"bytes_{category}",
-                f"selected_count_{category}",
-                f"selected_bytes_{category}",
-            ])
+            fields.extend(
+                [
+                    f"count_{category}",
+                    f"bytes_{category}",
+                    f"selected_count_{category}",
+                    f"selected_bytes_{category}",
+                ]
+            )
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         for summary in summaries:
@@ -762,11 +796,11 @@ def write_run_summary_csv(path, summaries):
             for category in CATEGORY_ORDER:
                 row[f"count_{category}"] = summary["counts"].get(category, 0)
                 row[f"bytes_{category}"] = summary["sizes"].get(category, 0)
-                row[f"selected_count_{category}"] = (
-                    summary["selected_counts"].get(category, 0)
+                row[f"selected_count_{category}"] = summary["selected_counts"].get(
+                    category, 0
                 )
-                row[f"selected_bytes_{category}"] = (
-                    summary["selected_sizes"].get(category, 0)
+                row[f"selected_bytes_{category}"] = summary["selected_sizes"].get(
+                    category, 0
                 )
             writer.writerow(row)
 
@@ -778,7 +812,8 @@ def write_outputs(output_dir, raw_all, classified_all, selected_all, summaries):
     write_jsonl(output_dir / "selected_transfer_manifest.jsonl", selected_all)
     source_roots = set()
     with (output_dir / "selected_transfer_manifest.txt").open(
-            "w", encoding="utf-8") as handle:
+        "w", encoding="utf-8"
+    ) as handle:
         for record in selected_all:
             relpath, root = rel_for_rsync(record["path"])
             source_roots.add(root)
@@ -796,7 +831,8 @@ def write_manifest_metadata(output_dir, source_roots):
         ),
     }
     (output_dir / "manifest_metadata.json").write_text(
-        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def main():
@@ -829,7 +865,8 @@ def main():
         log(f"run {index}/{len(runs)}: {run_dir}")
         raw_records = load_or_create_raw(run_dir, cache_dir, args.refresh_cache)
         classified, selected, summary = classify_and_select_run(
-            run_dir, raw_records, repo_root, args.orbit_stride)
+            run_dir, raw_records, repo_root, args.orbit_stride
+        )
         append_jsonl(raw_path, raw_records)
         append_jsonl(classified_path, classified)
         append_jsonl(selected_path, selected)

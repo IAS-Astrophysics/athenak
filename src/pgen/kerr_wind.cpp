@@ -248,17 +248,21 @@ void PrintAnalytic(ParameterInput *pin, Mesh *pm) {
         const Real analysis_radius = pin->GetReal("problem", "analysis_radius");
         const Real Ra = analysis_radius; // shorthand
 
-        std::cout << "---------------------------------------------------------" << std::endl;
-        std::cout << "--- Analytical Fluxes (Exact for Initial Conditions) ---" << std::endl;
-        std::cout << "---------------------------------------------------------" << std::endl;
+        std::cout << "---------------------------------------------------------"
+                  << std::endl;
+        std::cout << "--- Analytical Fluxes (Exact for Initial Conditions) ---"
+                  << std::endl;
+        std::cout << "---------------------------------------------------------"
+                  << std::endl;
 
         // --- Calculate derived quantities at the analysis radius ---
         const Real psi = 1.0 + 0.5 * adm_mass / Ra;
         const Real v_sq_proper = psi*psi*psi*psi * inflow_speed*inflow_speed;
 
         if (v_sq_proper >= 1.0) {
-            std::cout << "ERROR: Fluid velocity is superluminal at analysis radius." << std::endl;
-            return;
+          std::cout << "ERROR: Fluid velocity is superluminal at analysis radius."
+                    << std::endl;
+          return;
         }
         const Real W = 1.0 / sqrt(1.0 - v_sq_proper);
         const Real h = 1.0 + (p_inf / rho_inf) * (gamma_ad / (gamma_ad - 1.0));
@@ -267,8 +271,10 @@ void PrintAnalytic(ParameterInput *pin, Mesh *pm) {
         // --- Calculate exact analytical fluxes ---
         // These formulas are derived to match exactly what the numerical integrator in
         // flux_generalized.cpp calculates for this specific coordinate system and setup.
-        const Real mdot_analytic = 4.0 * M_PI * Ra*Ra * pow(psi, 10) * rho_inf * W * inflow_speed;
-        const Real edot_analytic = 4.0 * M_PI * Ra*Ra * pow(psi, 4) * H * W*W * inflow_speed;
+        const Real mdot_analytic =
+            4.0 * M_PI * Ra * Ra * pow(psi, 10) * rho_inf * W * inflow_speed;
+        const Real edot_analytic =
+            4.0 * M_PI * Ra * Ra * pow(psi, 4) * H * W * W * inflow_speed;
         const Real pdot_analytic = 0.0; // Zero by spherical symmetry
 
         // --- Print Comparison ---
@@ -279,10 +285,14 @@ void PrintAnalytic(ParameterInput *pin, Mesh *pm) {
         std::cout << "Expected Energy Flux (edot_fluid): " << edot_analytic << std::endl;
         std::cout << "Expected Momentum Flux (pdot):     " << pdot_analytic << std::endl;
 
-        std::cout << "---------------------------------------------------------" << std::endl;
-        std::cout << "NOTE: These are the exact fluxes for the initial data slice." << std::endl;
-        std::cout << "The numerical fluxes should match these values at t=0." << std::endl;
-        std::cout << "---------------------------------------------------------" << std::endl;
+        std::cout << "---------------------------------------------------------"
+                  << std::endl;
+        std::cout << "NOTE: These are the exact fluxes for the initial data slice."
+                  << std::endl;
+        std::cout << "The numerical fluxes should match these values at t=0."
+                  << std::endl;
+        std::cout << "---------------------------------------------------------"
+                  << std::endl;
     }
 }
 } // namespace

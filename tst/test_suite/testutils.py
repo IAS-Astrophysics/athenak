@@ -156,8 +156,8 @@ def mpi_run(
     command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(
-           f"Failed to execute {inputfile} with flags {flags} using MPI "
-           f"and {threads}-threads"
+            f"Failed to execute {inputfile} with flags {flags} using MPI "
+            f"and {threads}-threads"
         )
         raise RuntimeError(
             f"Failed to execute {inputfile} with flags {flags} using MPI "
@@ -252,9 +252,7 @@ def test_error_convergence(
     for wv in _wave:
         try:
             for res in _res:
-                results = RUN(
-                    input_file, arguments(iv, rv, fv, wv, res, soe, test_name)
-                )
+                results = RUN(input_file, arguments(iv, rv, fv, wv, res, soe, test_name))
                 assert results, f"Run failed for {soe}+{iv}+{res}+{fv}+{rv}+{wv}."
             maxerror, maxerrorratio = errors[(soe, iv, rv, wv)]
             data = athena_read.error_dat(f"{test_name}-errs.dat")

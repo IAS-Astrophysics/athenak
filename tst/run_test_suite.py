@@ -17,6 +17,7 @@ Notes:
   - Scripts that run tests on GPU must have '_gpu' in name
   - For more information, check online automatic testing wiki page.
 """
+
 import os
 import sys
 import pytest

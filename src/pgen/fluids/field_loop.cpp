@@ -149,7 +149,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real dens = 1.0;
       if (iprob == 1) {
         for (int n=0; n<5; ++n) {
-          if (sqrt(SQR(x1v-xpt[n])+SQR(x2v-ypt[n])) <= (0.1*lx)) {dens *= drat;}
+          if (sqrt(SQR(x1v - xpt[n]) + SQR(x2v - ypt[n])) <= (0.1 * lx)) {
+            dens *= drat;
+          }
         }
       } else {
         Real x = x1v*cos_a2 + x3v*sin_a2;
@@ -157,14 +159,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         // shift x back to the domain -0.5*lambda <= x <= 0.5*lambda
         while (x >  0.5*lambda) x -= lambda;
         while (x < -0.5*lambda) x += lambda;
-        if ((x*x + y*y) < rad*rad) {dens += amp;}
+        if ((x * x + y * y) < rad * rad) {
+          dens += amp;
+        }
       }
 
       u0(m,IDN,k,j,i) = dens;
       u0(m,IM1,k,j,i) = dens*vx0;
       u0(m,IM2,k,j,i) = 0.0;
       u0(m,IM3,k,j,i) = 0.0;
-      if (eos.is_ideal) { u0(m,IEN,k,j,i) = 1.0/gm1 + 0.5*dens*vx0*vx0; }
+      if (eos.is_ideal) {
+        u0(m, IEN, k, j, i) = 1.0 / gm1 + 0.5 * dens * vx0 * vx0;
+      }
     });
   }
 

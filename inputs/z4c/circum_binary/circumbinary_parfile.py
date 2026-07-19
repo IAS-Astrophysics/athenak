@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # This script generates an AthenaK input file for a BBH run
-import numpy as np
-
 TEMPLATE = """
 <comment>
 problem   = two punctures run with tracker
@@ -264,11 +262,11 @@ class Parfile(object):
         # Other numerical parameters
         cfl=0.25,
         # Initial data (defaults to calibration run)
-        par_b = 3.257, # orbital separation in x
-        par_P_plus1 = 0,
-        par_P_plus2 = -0.133,
-        par_P_minus1 = 0,
-        par_P_minus2 = 0.133,
+        par_b=3.257,  # orbital separation in x
+        par_P_plus1=0,
+        par_P_plus2=-0.133,
+        par_P_minus1=0,
+        par_P_minus2=0.133,
     ):
         self.subs = {}
 
@@ -291,7 +289,7 @@ class Parfile(object):
         self.subs["refinement2_x1min"] = bh_1_x - bh_1_rad
         self.subs["refinement2_x1max"] = bh_1_x + bh_1_rad
 
-        self.subs["par_b"] = abs(bh_0_x - bh_1_x)/2
+        self.subs["par_b"] = abs(bh_0_x - bh_1_x) / 2
         self.subs["center_offset"] = bh_0_x - self.subs["par_b"]
 
         self.subs["bh_0_x"] = bh_0_x
@@ -301,8 +299,10 @@ class Parfile(object):
         self.subs["bh_1_x"] = bh_1_x
         self.subs["bh_1_px"] = par_P_minus1
         self.subs["bh_1_py"] = par_P_minus2
+
     def __str__(self):
         return TEMPLATE.format(**self.subs)
+
 
 if __name__ == "__main__":
     print(Parfile())

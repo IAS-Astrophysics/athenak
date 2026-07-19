@@ -304,12 +304,22 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 Hydro::~Hydro() {
-  if (psbox_u != nullptr) {delete psbox_u;}
-  if (porb_u != nullptr) {delete porb_u;}
+  if (psbox_u != nullptr) {
+    delete psbox_u;
+  }
+  if (porb_u != nullptr) {
+    delete porb_u;
+  }
   delete pbval_u;
-  if (psrc != nullptr) {delete psrc;}
-  if (pcond != nullptr) {delete pcond;}
-  if (pvisc != nullptr) {delete pvisc;}
+  if (psrc != nullptr) {
+    delete psrc;
+  }
+  if (pcond != nullptr) {
+    delete pcond;
+  }
+  if (pvisc != nullptr) {
+    delete pvisc;
+  }
   delete peos;
 }
 

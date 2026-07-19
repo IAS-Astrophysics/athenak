@@ -306,7 +306,9 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
       // swap data for this variable into big endian order
       if (!big_end) {
-        for (int i=0; i<(nout1*nout2*nout3); ++i) { Swap4Bytes(&data[i]); }
+        for (int i = 0; i < (nout1 * nout2 * nout3); ++i) {
+          Swap4Bytes(&data[i]);
+        }
       }
       // now write the data as unformatted binary
       std::fwrite(&(data[0]), sizeof(float), nout1*nout2*nout3, pfile);

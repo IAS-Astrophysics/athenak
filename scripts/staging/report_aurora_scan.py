@@ -7,7 +7,6 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-
 CATEGORY_ORDER = [
     "restart",
     "restart_rank_local",
@@ -79,20 +78,22 @@ def write_report(output_dir):
 
     total_selected = sum(selected_sizes.values())
     missing_period = [
-        row["run_dir"] for row in summaries
+        row["run_dir"]
+        for row in summaries
         if not row.get("orbit_period") or row.get("orbit_confidence") in ("none", "low")
     ]
     restart_ambiguous = [
-        row["run_dir"] for row in summaries
+        row["run_dir"]
+        for row in summaries
         if row.get("restart_grouping_ambiguous") == "True"
     ]
     rank_local = [
-        row["run_dir"] for row in summaries
+        row["run_dir"]
+        for row in summaries
         if row.get("single_file_per_rank_detected") == "True"
     ]
     missing_par = [
-        row["run_dir"] for row in summaries
-        if row.get("has_parfile") == "False"
+        row["run_dir"] for row in summaries if row.get("has_parfile") == "False"
     ]
     missing_outputs = [
         (row["run_dir"], row.get("missing_expected_outputs", ""))

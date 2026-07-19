@@ -298,4 +298,4 @@ Z4c::~Z4c() {
   delete pamr;
 }
 
-} // namespace z4c
+}  // namespace z4c

@@ -53,19 +53,25 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
-  delete pcoord;
-  if (phydro != nullptr) {delete phydro;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (padm   != nullptr) {delete padm;}
-  if (ptmunu != nullptr) {delete ptmunu;}
-  if (prad   != nullptr) {delete prad;}
-  if (pdynrad != nullptr) {delete pdynrad;}
-  if (pdyngr != nullptr) {delete pdyngr;}
-  if (pnr    != nullptr) {delete pnr;}
-  if (pdyngr != nullptr) {delete pdyngr;}
-  if (ptmunu != nullptr) {delete ptmunu;}
-  if (padm   != nullptr) {delete padm;}
-  if (pz4c   != nullptr) {
+  if (ppart != nullptr) {
+    delete ppart;
+  }
+  if (pnr != nullptr) {
+    delete pnr;
+  }
+  if (pdynrad != nullptr) {
+    delete pdynrad;
+  }
+  if (pdyngr != nullptr) {
+    delete pdyngr;
+  }
+  if (ptmunu != nullptr) {
+    delete ptmunu;
+  }
+  if (padm != nullptr) {
+    delete padm;
+  }
+  if (pz4c != nullptr) {
     delete pz4c;
     // cce dump
     for (auto cce : pz4c_cce) {
@@ -73,12 +79,23 @@ MeshBlockPack::~MeshBlockPack() {
     }
     pz4c_cce.resize(0);
   }
-  if (pturb  != nullptr) {delete pturb;}
-  if (prad   != nullptr) {delete prad;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (phydro != nullptr) {delete phydro;}
-  if (punit  != nullptr) {delete punit;}
+  if (pturb != nullptr) {
+    delete pturb;
+  }
+  if (prad != nullptr) {
+    delete prad;
+  }
+  if (pmhd != nullptr) {
+    delete pmhd;
+  }
+  if (phydro != nullptr) {
+    delete phydro;
+  }
+  if (punit != nullptr) {
+    delete punit;
+  }
   delete pcoord;
+  // must be last, since BoundaryValues destructors use pmy_pack->pmb->nnghbr
   delete pmb;
 }
 
