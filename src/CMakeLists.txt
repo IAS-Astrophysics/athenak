@@ -181,6 +181,7 @@ add_executable(
         z4c/z4c_wave_extr.cpp
         z4c/z4c_amr.cpp
         z4c/cce/cce.cpp
+        z4c/driftcontrol/driftcontrol.cpp
 )
 
 # custom problem generator to be included in compile
