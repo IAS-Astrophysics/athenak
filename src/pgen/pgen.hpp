@@ -13,13 +13,17 @@
 #include <vector>
 
 #include "geodesic-grid/spherical_grid.hpp"
+#include "utils/surface_grid.hpp"
 #include "parameter_input.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
+using UserEFieldFnPtr = void (*)(Mesh* pm, DvceEdgeFld4D<Real> &efld);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
+using PostRestartPrimitiveInitFnPtr = void (*)(Mesh *pm);
+using PreRestartConservedInitFnPtr = void (*)(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -39,11 +43,15 @@ class ProblemGenerator {
   // true if user srcterms are specified
   bool user_srcs;
 
+  // true if user electric-field terms are specified
+  bool user_efield;
+
   // true if user history outputs are specified
   bool user_hist;
 
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
+  std::vector<std::unique_ptr<SphericalSurfaceGrid>> surface_grids;
 
   // function pointer for final work after main loop (e.g. compute errors).  Called by
   // Driver::Finalize()
@@ -51,8 +59,14 @@ class ProblemGenerator {
   // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
   UserBoundaryFnPtr user_bcs_func=nullptr;
   UserSrctermFnPtr user_srcs_func=nullptr;
+  UserEFieldFnPtr user_efield_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
+  PreRestartConservedInitFnPtr pre_restart_conserved_init_func=nullptr;
+  PostRestartPrimitiveInitFnPtr post_restart_primitive_init_func=nullptr;
+
+  // true when an old restart was read without the active dyn_radiation i0 block
+  bool restart_missing_dynrad_i0=false;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);
@@ -60,6 +74,7 @@ class ProblemGenerator {
   void AlfvenWave(ParameterInput *pin, const bool restart);
   void BondiAccretion(ParameterInput *pin, const bool restart);
   void CShock(ParameterInput *pin, const bool restart);
+  void DivBAMR(ParameterInput *pin, const bool restart);
   void Diffusion(ParameterInput *pin, const bool restart);
   void LinearWave(ParameterInput *pin, const bool restart);
   void LWImplode(ParameterInput *pin, const bool restart);
@@ -68,8 +83,16 @@ class ProblemGenerator {
   void OrszagTang(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void Shwave(ParameterInput *pin, const bool restart);
+  void SphericalCollapse(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);
+  void RadiationEquilibration(ParameterInput *pin, const bool restart);
   void RadiationBeam(ParameterInput *pin, const bool restart);
+  void RadiationCrossingBeams(ParameterInput *pin, const bool restart);
+  void RadiationKerrOrbitBeam(ParameterInput *pin, const bool restart);
+  void RadiationFLRWRedshift(ParameterInput *pin, const bool restart);
+  void RadiationLapseGradient(ParameterInput *pin, const bool restart);
+  void RadiationMomentumSource(ParameterInput *pin, const bool restart);
+  void DynBBHBeam(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
 

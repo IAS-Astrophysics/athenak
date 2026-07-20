@@ -21,6 +21,7 @@
 #include "parameter_input.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "dyn_grmhd/valencia_stress_energy.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
@@ -28,6 +29,8 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "utils/finite_diff.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
@@ -1077,19 +1080,35 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     Kokkos::realloc(derived_var, nmb_alloc, mom_var_size, n3, n2, n1);
     auto dv = derived_var;
 
-    // Coordinates
-    auto &coord = pm->pmb_pack->pcoord->coord_data;
-    bool &flat = coord.is_minkowski;
-    Real &spin = coord.bh_spin;
-
     // Radiation
-    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
-    auto nh_c_ = pm->pmb_pack->prad->nh_c;
-    auto tet_c_ = pm->pmb_pack->prad->tet_c;
-    auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
-    auto solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
-    auto i0_ = pm->pmb_pack->prad->i0;
-    auto norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+    int nang1 = -1;
+    bool use_adm_radiation = false;
+    DualArray2D<Real> nh_c_;
+    DvceArray6D<Real> tet_c_;
+    DvceArray6D<Real> tetcov_c_;
+    DualArray1D<Real> solid_angles_;
+    DvceArray5D<Real> i0_;
+    DvceArray6D<Real> norm_to_tet_;
+    DvceArray4D<Real> sqrt_detg_c_;
+    if (pm->pmb_pack->prad != nullptr) {
+      nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+      nh_c_ = pm->pmb_pack->prad->nh_c;
+      tet_c_ = pm->pmb_pack->prad->tet_c;
+      tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
+      solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
+      i0_ = pm->pmb_pack->prad->i0;
+      norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+    } else {
+      nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
+      use_adm_radiation = pm->pmb_pack->pdynrad->use_adm_geometry;
+      nh_c_ = pm->pmb_pack->pdynrad->nh_c;
+      tet_c_ = pm->pmb_pack->pdynrad->tet_c;
+      tetcov_c_ = pm->pmb_pack->pdynrad->tetcov_c;
+      solid_angles_ = pm->pmb_pack->pdynrad->prgeo->solid_angles;
+      i0_ = pm->pmb_pack->pdynrad->i0;
+      norm_to_tet_ = pm->pmb_pack->pdynrad->norm_to_tet;
+      sqrt_detg_c_ = pm->pmb_pack->pdynrad->sqrt_detg_c;
+    }
 
     // Select either Hydro or MHD (if fluid enabled)
     DvceArray5D<Real> w0_;
@@ -1101,24 +1120,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("moments",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      // Extract components of metric
-      Real glower[4][4], gupper[4][4];
-      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      Real glower[4][4];
+      for (int mu=0; mu<4; ++mu) {
+        for (int nu=0; nu<4; ++nu) {
+          glower[mu][nu] = 0.0;
+          for (int a=0; a<4; ++a) {
+            Real eta = (a == 0) ? -1.0 : 1.0;
+            glower[mu][nu] += eta*tetcov_c_(m,a,mu,k,j,i)*tetcov_c_(m,a,nu,k,j,i);
+          }
+        }
+      }
 
       // coordinate component n^0
       Real n0 = tet_c_(m,0,0,k,j,i);
+      Real intensity_norm = use_adm_radiation ? sqrt_detg_c_(m,k,j,i) : n0;
 
       // set coordinate frame components
       for (int n1=0, n12=0; n1<4; ++n1) {
@@ -1131,8 +1146,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
               nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
               n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
             }
-            dv(m,n12,k,j,i) += (nmun1*nmun2*(i0_(m,n,k,j,i)/(n0*n_0))*
-                                solid_angles_.d_view(n));
+            Real intensity = i0_(m,n,k,j,i)/intensity_norm;
+            if (!(use_adm_radiation)) {
+              intensity /= n_0;
+            }
+            dv(m,n12,k,j,i) += nmun1*nmun2*intensity*solid_angles_.d_view(n);
           }
         }
       }
@@ -1272,6 +1290,345 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
       pdens(m,0,kp,jp,ip) += 1.0;
     });
+  }
+
+  // Angular Momentum density about the origin.
+  // Separated into Fluid (Gas) and Electromagnetic components.
+  // Densitized (multiplied by sqrt{gamma}) for direct integration.
+  // 0-2: Fluid Angular Momentum (Lx, Ly, Lz)
+  // 3-5: EM    Angular Momentum (Lx, Ly, Lz)
+  if (name.compare("angular_momentum") == 0) {
+    int n_comp = 6;
+    if (derived_var.extent(4) <= 1) {
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    }
+
+    auto dv   = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+    auto &prim = pm->pmb_pack->pmhd->w0;
+    auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+
+    // Gamma-law EOS
+    Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+
+    par_for("angular_momentum", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // --- 1. Spatial metric and inverse ---
+      Real g_dd_1d[6];
+      g_dd_1d[0] = adm.g_dd(m,0,0,k,j,i);
+      g_dd_1d[1] = adm.g_dd(m,0,1,k,j,i);
+      g_dd_1d[2] = adm.g_dd(m,0,2,k,j,i);
+      g_dd_1d[3] = adm.g_dd(m,1,1,k,j,i);
+      g_dd_1d[4] = adm.g_dd(m,1,2,k,j,i);
+      g_dd_1d[5] = adm.g_dd(m,2,2,k,j,i);
+
+      // det(gamma), sqrt(gamma)
+      Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                                  g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
+      if (detg <= 0.0) {
+        for (int n = 0; n < n_comp; ++n) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+        return;
+      }
+      Real sqrt_gamma = sqrt(detg);
+
+      // Inverse metric g^ij
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+      adm::SpatialInv(1.0/detg,
+                      g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                      g_dd_1d[3], g_dd_1d[4], g_dd_1d[5],
+                      &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                      &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+      // --- 2. Primitives: rho, P, Wv^i, densitized B^i ---
+      Real rho  = prim(m, IDN, k, j, i);
+      Real pres = prim(m, IPR, k, j, i);
+
+      Real prim_Wv_u[3] = {
+        prim(m, IVX, k, j, i),
+        prim(m, IVY, k, j, i),
+        prim(m, IVZ, k, j, i)
+      };
+
+      Real B_tilde_u[3] = {
+        bcc(m, 0, k, j, i),
+        bcc(m, 1, k, j, i),
+        bcc(m, 2, k, j, i)
+      };
+
+      // --- 3. Eulerian velocity and magnetic field ---
+      Real W, v_u[3], v_d[3];
+      ValenciaPrimsToEulerianVelocity(prim_Wv_u, g_dd_1d, W, v_u, v_d);
+
+      Real sqrt_gamma_chk, B_u[3], B_d[3];
+      ValenciaEulerianMagneticFromDensitized(B_tilde_u, g_dd_1d,
+                                            sqrt_gamma_chk, B_u, B_d);
+
+      // --- 4. Comoving B and stress-energy decomposition ---
+      Real Bv, b0, b_u[3], b_d[3], b2;
+      ValenciaComovingB(v_u, v_d, B_u, B_d, W, Bv, b0, b_u, b_d, b2);
+
+      Real E_fluid, E_em;
+      Real S_fluid_d[3], S_em_d[3];
+      Real S_fluid_dd[3][3], S_em_dd[3][3];
+
+      ValenciaStressEnergyDecomposed(rho, pres, gamma_gas,
+                                    v_u, v_d, W,
+                                    B_u, B_d,
+                                    b0, b_d, b2,
+                                    g_dd_1d,
+                                    E_fluid, E_em,
+                                    S_fluid_d, S_em_d,
+                                    S_fluid_dd, S_em_dd);
+
+      // --- 5. Coordinates (Cartesian) ---
+      Real x1v = CellCenterX(i - is, indcs.nx1,
+                            size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j - js, indcs.nx2,
+                            size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k - ks, indcs.nx3,
+                            size.d_view(m).x3min, size.d_view(m).x3max);
+
+      // --- 6. Angular momentum densities (densitized by sqrt(gamma)) ---
+      // L = (r x S) * sqrt(gamma)
+
+      // Fluid
+      dv(m, i_dv,   k, j, i) =
+        (x2v * S_fluid_d[2] - x3v * S_fluid_d[1]) * sqrt_gamma; // Lx
+      dv(m, i_dv+1, k, j, i) =
+        (x3v * S_fluid_d[0] - x1v * S_fluid_d[2]) * sqrt_gamma; // Ly
+      dv(m, i_dv+2, k, j, i) =
+        (x1v * S_fluid_d[1] - x2v * S_fluid_d[0]) * sqrt_gamma; // Lz
+
+      // EM
+      dv(m, i_dv+3, k, j, i) =
+        (x2v * S_em_d[2] - x3v * S_em_d[1]) * sqrt_gamma;
+      dv(m, i_dv+4, k, j, i) =
+        (x3v * S_em_d[0] - x1v * S_em_d[2]) * sqrt_gamma;
+      dv(m, i_dv+5, k, j, i) =
+        (x1v * S_em_d[1] - x2v * S_em_d[0]) * sqrt_gamma;
+    });
+    i_dv += n_comp;
+  }
+
+  // Torque Integrand (Torque density)
+  // Goal: consistent with paper’s momentum source (Eq. like 9a) AND the derived
+  // angular-momentum balance law.
+  //
+  // We output the *densitized* torque source for Cartesian rotations about the origin:
+  //
+  //   tau_a = sqrt(gamma) * [ (r × G)_a  +  (F^j{}_i ∂_j φ^i)_a ]
+  //
+  // where
+  //   G_i =  - E ∂_i α  +  S_j ∂_i β^j  +  (1/2) α S^{jk} ∂_i γ_{jk}
+  // and for Cartesian rotations: (F^j{}_i ∂_j φ^i)_a = F^j{}_i ε_{a j}{}^{i},
+  // with
+  //   F^j{}_i = α S^j{}_i - β^j S_i  (momentum flux, non-densitized here).
+  //
+  // IMPORTANT: assumes E, S_i, S_ij returned by ValenciaStressEnergyTotal are
+  // *non-densitized* (no sqrt(gamma)); we densitize only at the end.
+  if (name.compare("torque") == 0) {
+    int n_comp = 3;
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
+
+    auto dv    = derived_var;
+    auto &adm  = pm->pmb_pack->padm->adm;
+    auto &prim = pm->pmb_pack->pmhd->w0;
+    auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+
+    Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+
+    par_for("torque", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // --- 0. Cell geometry + inverse dx ---
+      Real idx[3] = {
+        1.0/size.d_view(m).dx1,
+        1.0/size.d_view(m).dx2,
+        1.0/size.d_view(m).dx3
+      };
+
+      // --- 1. Metric, det, inverse ---
+      Real g_dd_1d[6];
+      g_dd_1d[0] = adm.g_dd(m,0,0,k,j,i);
+      g_dd_1d[1] = adm.g_dd(m,0,1,k,j,i);
+      g_dd_1d[2] = adm.g_dd(m,0,2,k,j,i);
+      g_dd_1d[3] = adm.g_dd(m,1,1,k,j,i);
+      g_dd_1d[4] = adm.g_dd(m,1,2,k,j,i);
+      g_dd_1d[5] = adm.g_dd(m,2,2,k,j,i);
+
+      Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                                  g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
+
+      // Guard against bad metric
+      if (detg <= 0.0) {
+        dv(m,i_dv+0,k,j,i) = 0.0;
+        dv(m,i_dv+1,k,j,i) = 0.0;
+        dv(m,i_dv+2,k,j,i) = 0.0;
+        return;
+      }
+      Real sqrt_gamma = sqrt(detg);
+
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+      adm::SpatialInv(1.0/detg,
+                      g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                      g_dd_1d[3], g_dd_1d[4], g_dd_1d[5],
+                      &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                      &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+      Real alpha = adm.alpha(m, k, j, i);
+
+      // --- 2. Metric derivatives, lapse/shift derivatives (index DOWN: ∂_i) ---
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;   // ∂_c γ_ab
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // ∂_c α
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // ∂_c β^a
+
+      // ∂_c γ_ab
+      for (int c = 0; c < 3; ++c) {
+        for (int a = 0; a < 3; ++a) {
+          for (int b = a; b < 3; ++b) {
+            dg_ddd(c,a,b) = Dx<4>(c, idx, adm.g_dd, m, a, b, k, j, i);
+          }
+        }
+      }
+
+      // ∂_c α
+      for (int c = 0; c < 3; ++c) {
+        dalpha_d(c) = Dx<4>(c, idx, adm.alpha, m, k, j, i);
+      }
+
+      // ∂_c β^a
+      for (int c = 0; c < 3; ++c) {
+        for (int a = 0; a < 3; ++a) {
+          dbeta_du(c,a) = Dx<4>(c, idx, adm.beta_u, m, a, k, j, i);
+        }
+      }
+
+      // --- 3. Primitives + B field as Valencia objects ---
+      Real rho  = prim(m, IDN, k, j, i);
+      Real pres = prim(m, IPR, k, j, i);
+
+      Real prim_Wv_u[3] = {
+        prim(m, IVX, k, j, i),
+        prim(m, IVY, k, j, i),
+        prim(m, IVZ, k, j, i)
+      };
+
+      Real B_tilde_u[3] = {
+        bcc(m, 0, k, j, i),
+        bcc(m, 1, k, j, i),
+        bcc(m, 2, k, j, i)
+      };
+
+      Real W, v_u[3], v_d[3];
+      ValenciaPrimsToEulerianVelocity(prim_Wv_u, g_dd_1d, W, v_u, v_d);
+
+      Real sqrt_gamma_chk, B_u[3], B_d[3];
+      ValenciaEulerianMagneticFromDensitized(B_tilde_u, g_dd_1d,
+                                            sqrt_gamma_chk, B_u, B_d);
+
+      Real Bv, b0, b_u[3], b_d[3], b2;
+      ValenciaComovingB(v_u, v_d, B_u, B_d, W, Bv, b0, b_u, b_d, b2);
+
+      // Total stress-energy (fluid + EM), non-densitized
+      Real E_tot;
+      Real S_d[3];
+      Real S_dd[3][3];
+      ValenciaStressEnergyTotal(rho, pres, gamma_gas,
+                                v_u, v_d, W,
+                                B_u, B_d,
+                                b0, b_d, b2,
+                                g_dd_1d,
+                                E_tot, S_d, S_dd);
+
+      // --- 4. Build stresses with needed index placements ---
+      // Mixed spatial stress: S^k{}_j = g^{km} S_{mj}
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> S_ud;
+      for (int kk = 0; kk < 3; ++kk) {
+        for (int jj = 0; jj < 3; ++jj) {
+          Real sum = 0.0;
+          for (int mm = 0; mm < 3; ++mm) {
+            sum += g_uu(kk,mm) * S_dd[mm][jj];
+          }
+          S_ud(kk,jj) = sum;
+        }
+      }
+
+      // Fully contravariant spatial stress: S^{jk} = g^{jm} g^{kn} S_{mn}
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> S_uu;
+      for (int a = 0; a < 3; ++a) {
+        for (int b = a; b < 3; ++b) {
+          Real sum = 0.0;
+          for (int m2 = 0; m2 < 3; ++m2) {
+            for (int n2 = 0; n2 < 3; ++n2) {
+              sum += g_uu(a,m2) * g_uu(b,n2) * S_dd[m2][n2];
+            }
+          }
+          S_uu(a,b) = sum;
+        }
+      }
+
+      // --- 5. Momentum source G_i (index DOWN) consistent with paper ---
+      // G_i = -E ∂_i α + S_j ∂_i β^j + (1/2) α S^{jk} ∂_i γ_{jk}
+      Real G_d[3] = {0.0, 0.0, 0.0};
+      for (int i_idx = 0; i_idx < 3; ++i_idx) {
+        // -E ∂_i α
+        Real term1 = -E_tot * dalpha_d(i_idx);
+
+        // S_j ∂_i β^j
+        Real term2 = 0.0;
+        for (int j_idx = 0; j_idx < 3; ++j_idx) {
+          term2 += S_d[j_idx] * dbeta_du(i_idx, j_idx);
+        }
+
+        // (1/2) α S^{jk} ∂_i γ_{jk}
+        Real term3 = 0.0;
+        for (int j_idx = 0; j_idx < 3; ++j_idx) {
+          for (int k_idx = j_idx; k_idx < 3; ++k_idx) {
+            const Real fac = (j_idx == k_idx ? 1.0 : 2.0); // account for symmetry
+            term3 += 0.5 * fac * S_uu(j_idx, k_idx) * dg_ddd(i_idx, j_idx, k_idx);
+          }
+        }
+        term3 *= alpha;
+
+        G_d[i_idx] = term1 + term2 + term3;
+      }
+
+      // --- 6. Position and densitized torque density (r × G)_a ---
+      Real x1v = CellCenterX(i - is, indcs.nx1,
+                            size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j - js, indcs.nx2,
+                            size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k - ks, indcs.nx3,
+                            size.d_view(m).x3min, size.d_view(m).x3max);
+
+      // Start with sqrt(gamma) * (r × G)_a   (using Cartesian r × ...)
+      dv(m,i_dv+0,k,j,i) = (x2v * G_d[2] - x3v * G_d[1]) * sqrt_gamma; // tau_x
+      dv(m,i_dv+1,k,j,i) = (x3v * G_d[0] - x1v * G_d[2]) * sqrt_gamma; // tau_y
+      dv(m,i_dv+2,k,j,i) = (x1v * G_d[1] - x2v * G_d[0]) * sqrt_gamma; // tau_z
+
+      // --- 7. Add the product-rule term: F^j{}_i ∂_j φ^i = F^j{}_i ε_{a j}{}^{i} ---
+      // F^j{}_i = α S^j{}_i - β^j S_i
+      Real F_ud[3][3];
+      for (int jdir = 0; jdir < 3; ++jdir) {
+        const Real betaj = adm.beta_u(m, jdir, k, j, i); // β^j
+        for (int idir = 0; idir < 3; ++idir) {
+          F_ud[jdir][idir] = alpha * S_ud(jdir, idir) - betaj * S_d[idir];
+        }
+      }
+
+      // (F^j{}_i ε_{a j}{}^{i}) components
+      Real miss[3] = {0.0, 0.0, 0.0};
+      miss[0] = F_ud[1][2] - F_ud[2][1]; // a = x
+      miss[1] = F_ud[2][0] - F_ud[0][2]; // a = y
+      miss[2] = F_ud[0][1] - F_ud[1][0]; // a = z
+
+      dv(m,i_dv+0,k,j,i) += sqrt_gamma * miss[0];
+      dv(m,i_dv+1,k,j,i) += sqrt_gamma * miss[1];
+      dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
+    });
+    i_dv += n_comp;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
 }

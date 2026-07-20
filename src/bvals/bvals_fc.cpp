@@ -19,6 +19,28 @@
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
 
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+bool IsActiveFCFace(const int v, const int k, const int j, const int i,
+                    const RegionIndcs &indcs) {
+  if (v == 0) {
+    return (i >= indcs.is) && (i <= indcs.ie + 1) &&
+           (j >= indcs.js) && (j <= indcs.je) &&
+           (k >= indcs.ks) && (k <= indcs.ke);
+  } else if (v == 1) {
+    return (i >= indcs.is) && (i <= indcs.ie) &&
+           (j >= indcs.js) && (j <= indcs.je + 1) &&
+           (k >= indcs.ks) && (k <= indcs.ke);
+  } else {
+    return (i >= indcs.is) && (i <= indcs.ie) &&
+           (j >= indcs.js) && (j <= indcs.je) &&
+           (k >= indcs.ks) && (k <= indcs.ke + 1);
+  }
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
 
@@ -213,7 +235,9 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                comm_vars, &(sendbuf[n].vars_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
         }
       }
     }
@@ -239,6 +263,7 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
@@ -250,7 +275,9 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
         if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
           int test;
           int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
           if (!(static_cast<bool>(test))) {
             bflag = true;
           }
@@ -266,7 +293,9 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
     std::exit(EXIT_FAILURE);
   }
   // exit if recv boundary buffer communications have not completed
-  if (bflag) {return TaskStatus::incomplete;}
+  if (bflag) {
+    return TaskStatus::incomplete;
+  }
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack 3-components of field
@@ -326,6 +355,9 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             int i = (idx - k*nji - j*ni) + il;
             k += kl;
             j += jl;
+            if (IsActiveFCFace(v, k, j, i, indcs)) {
+              return;
+            }
             if (v==0) {
               b.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
             } else if (v==1) {

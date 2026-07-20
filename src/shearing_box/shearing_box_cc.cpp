@@ -57,7 +57,10 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
   const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
   const auto &mbsize = pmy_pack->pmb->mb_size;
   int kl=ks, ku=ke;
-  if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
+  if (pmy_pack->pmesh->three_d) {
+    kl -= ng;
+    ku += ng;
+  }
   int nj = indcs.nx2 + 2*ng;
   const int &gids_ = pmy_pack->gids;
   const Real &yshear_ = yshear;
@@ -87,7 +90,9 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
 
       // compute fractional offset
       Real eps = fmod(yshear_,(mbsize.d_view(mm).dx2))/(mbsize.d_view(mm).dx2);
-      if (n == 1) {eps *= -1.0;}
+      if (n == 1) {
+        eps *= -1.0;
+      }
 
       // Compute "fluxes" at shifted cell faces
       switch (rcon) {
@@ -100,6 +105,7 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
         case ReconstructionMethod::ppm4:
         case ReconstructionMethod::ppmx:
         case ReconstructionMethod::wenoz:
+        case ReconstructionMethod::wenomz:
           PPMX_RemapFlx(member, js, (je+1), eps, a_, flx);
           break;
         default:
@@ -157,7 +163,11 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
         // ox1 boundary: send to (target-1) through (target+1)
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l-1;} else {jshift = l-1-ji;} // offset of target
+          if (n == 0) {
+            jshift = ji + l - 1;
+          } else {
+            jshift = l - 1 - ji;
+          }  // offset of target
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
@@ -174,7 +184,9 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
 #endif
           }
         }
@@ -196,7 +208,11 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
         // ox1 boundary: send to (target-1) through (target  )
         for (int l=0; l<2; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l;} else {jshift = l-1-ji;}
+          if (n == 0) {
+            jshift = ji + l;
+          } else {
+            jshift = l - 1 - ji;
+          }
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
@@ -213,7 +229,9 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
 #endif
           }
         }
@@ -239,7 +257,11 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
         // ox1 boundary: send to (target-2) through (target  )
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l;} else {jshift = l-2-ji;}
+          if (n == 0) {
+            jshift = ji + l;
+          } else {
+            jshift = l - 2 - ji;
+          }
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank == global_variable::my_rank) {
             int tm = TargetIndex(n,tgid);
@@ -256,7 +278,9 @@ TaskStatus ShearingBoxCC::PackAndSendCC(DvceArray5D<Real> &a, ReconstructionMeth
             int data_size = send_ptr.size();
             int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, trank, tag,
                                  comm_sbox, &(sendbuf[n].vars_req[3*m + l]));
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
 #endif
           }
         }
@@ -301,14 +325,22 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
         // ox1 boundary: receive from (target+1) through (target-1)
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l-1);} else {jshift = -(l-1-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l - 1);
+          } else {
+            jshift = -(l - 1 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             int test;
             int ierr = MPI_Test(&(recvbuf[n].vars_req[3*m + l]),&test,MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
-            if (!(static_cast<bool>(test))) {bflag = true;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
+            if (!(static_cast<bool>(test))) {
+              bflag = true;
+            }
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -316,14 +348,22 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
         // ox1 boundary: receive from (target+1) through (target  )
         for (int l=0; l<2; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-1-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l);
+          } else {
+            jshift = -(l - 1 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             int test;
             int ierr = MPI_Test(&(recvbuf[n].vars_req[3*m + l]),&test,MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
-            if (!(static_cast<bool>(test))) {bflag = true;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
+            if (!(static_cast<bool>(test))) {
+              bflag = true;
+            }
           }
         }
       } else {                     //--- CASE 3
@@ -331,14 +371,22 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
         // ox1 boundary: send to (target-2) through (target  )
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-2-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l);
+          } else {
+            jshift = -(l - 2 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             int test;
             int ierr = MPI_Test(&(recvbuf[n].vars_req[3*m + l]),&test,MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
-            if (!(static_cast<bool>(test))) {bflag = true;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
+            if (!(static_cast<bool>(test))) {
+              bflag = true;
+            }
           }
         }
       }
@@ -352,7 +400,9 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
     std::exit(EXIT_FAILURE);
   }
   // exit if recv boundary buffer communications have not completed
-  if (bflag) {return TaskStatus::incomplete;}
+  if (bflag) {
+    return TaskStatus::incomplete;
+  }
 #endif
 
   //----- STEP 2: communications have all completed, so unpack and apply shift
@@ -360,7 +410,10 @@ TaskStatus ShearingBoxCC::RecvAndUnpackCC(DvceArray5D<Real> &a) {
   const int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L must be NVAR
   const int &ie = indcs.ie;
   int kl=indcs.ks, ku=indcs.ke;
-  if (pmy_pack->pmesh->three_d) {kl -= ng; ku += ng;}
+  if (pmy_pack->pmesh->three_d) {
+    kl -= ng;
+    ku += ng;
+  }
   int nj = indcs.nx2 + 2*ng;
   const int &gids_ = pmy_pack->gids;
   const auto &x1bndry_mbgid_ = x1bndry_mbgid;

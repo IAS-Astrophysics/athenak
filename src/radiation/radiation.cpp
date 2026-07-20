@@ -123,7 +123,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(tet_d1_x1f,nmb,4,ncells3,ncells2,ncells1+1);
   Kokkos::realloc(tet_d2_x2f,nmb,4,ncells3,ncells2+1,ncells1);
   Kokkos::realloc(tet_d3_x3f,nmb,4,ncells3+1,ncells2,ncells1);
-  if (angular_fluxes) {Kokkos::realloc(na,nmb,prgeo->nangles,ncells3,ncells2,ncells1,6);}
+  if (angular_fluxes) {
+    Kokkos::realloc(na, nmb, prgeo->nangles, ncells3, ncells2, ncells1, 6);
+  }
   if (is_hydro_enabled || is_mhd_enabled) {
     Kokkos::realloc(norm_to_tet,nmb,4,4,ncells3,ncells2,ncells1);
   }
@@ -165,7 +167,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
       recon_method = ReconstructionMethod::plm;
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
-               xorder.compare("wenoz") == 0) {
+               xorder.compare("wenoz") == 0 ||
+               xorder.compare("wenomz") == 0) {
       // check that nghost > 2
       if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -179,6 +182,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::ppmx;
       } else if (xorder.compare("wenoz") == 0) {
         recon_method = ReconstructionMethod::wenoz;
+      } else if (xorder.compare("wenomz") == 0) {
+        recon_method = ReconstructionMethod::wenomz;
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -208,7 +213,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
 Radiation::~Radiation() {
   delete pbval_i;
   delete prgeo;
-  if (psrc != nullptr) {delete psrc;}
+  if (psrc != nullptr) {
+    delete psrc;
+  }
 }
 
 } // namespace radiation

@@ -43,6 +43,7 @@ class HorizonDump {
   int horizon_ind; // indices for horizon
   // TODO(hzhu) : check if this works with rst
   int output_count; // counting the output number (for naming subfolders)
+  int regularize_order; // multiply data by r^n before interpolating to regularize
 
   Real horizon_dt;
   Real horizon_last_output_time;
@@ -50,6 +51,7 @@ class HorizonDump {
   CartesianGrid *pcat_grid=nullptr; // pointer to cartesian grid
   Real pos[NDIM]; // position of the puncture
   Real r_guess;  // nominal radius of the object (for the AMR driver)
+  bool is_cheb;  // dump data on chebyshev grid
 
  private:
   MeshBlockPack const *pmbp;

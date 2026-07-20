@@ -16,6 +16,7 @@
 #include "reconstruct/dc.hpp"
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
+#include "reconstruct/wenomz.hpp"
 #include "reconstruct/wenoz.hpp"
 #include "hydro/rsolvers/advect_hyd.hpp"
 #include "hydro/rsolvers/llf_hyd.hpp"
@@ -93,6 +94,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
         break;
       case ReconstructionMethod::wenoz:
         WENOZX1(member, eos_, true, m, k, j, il-1, iu, w0_, wl, wr);
+        break;
+      case ReconstructionMethod::wenomz:
+        WENOMZX1(member, eos_, true, m, k, j, il-1, iu, w0_, wl, wr);
         break;
       default:
         break;
@@ -193,6 +197,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, true, m, k, j, il, iu, w0_, wl_jp1, wr);
             break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX2(member, eos_, true, m, k, j, il, iu, w0_, wl_jp1, wr);
+            break;
           default:
             break;
         }
@@ -255,7 +262,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
 
     // set the loop limits
     il = is, iu = ie, jl = js, ju = je, kl = ks-1, ku = ke+1;
-    if (use_fofc) { il = is-1, iu = ie+1, jl = js-1, ju = je+1, kl = ks-2, ku = ke+2; }
+    if (use_fofc) {
+      il = is - 1, iu = ie + 1, jl = js - 1, ju = je + 1, kl = ks - 2, ku = ke + 2;
+    }
 
     par_for_outer("hflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, jl, ju,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -287,6 +296,9 @@ void Hydro::CalculateFluxes(Driver *pdriver, int stage) {
             break;
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, true, m, k, j, il, iu, w0_, wl_kp1, wr);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX3(member, eos_, true, m, k, j, il, iu, w0_, wl_kp1, wr);
             break;
           default:
             break;

@@ -83,6 +83,7 @@ add_executable(
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
         mhd/mhd_ct.cpp
+        mhd/mhd_diagnostics.cpp
         mhd/mhd_fluxes.cpp
         mhd/mhd_fofc.cpp
         mhd/mhd_newdt.cpp
@@ -114,6 +115,7 @@ add_executable(
         pgen/tests/advection.cpp
         pgen/tests/cpaw.cpp
         pgen/tests/cshock.cpp
+        pgen/tests/divb_amr.cpp
         pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_monopole.cpp
@@ -125,6 +127,7 @@ add_executable(
         pgen/tests/shwave.cpp
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
+        pgen/tests/collapse.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
 
@@ -138,6 +141,13 @@ add_executable(
         radiation/radiation_tasks.cpp
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
+        dyn_radiation/dyn_radiation.cpp
+        dyn_radiation/dyn_radiation_fluxes.cpp
+        dyn_radiation/dyn_radiation_newdt.cpp
+        dyn_radiation/dyn_radiation_source.cpp
+        dyn_radiation/dyn_radiation_tasks.cpp
+        dyn_radiation/dyn_radiation_tetrad.cpp
+        dyn_radiation/dyn_radiation_update.cpp
 
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp
@@ -164,6 +174,8 @@ add_executable(
         utils/tr_table.cpp
         utils/cart_grid.cpp
         utils/spherical_surface.cpp
+        utils/flux_generalized.cpp
+        utils/surface_grid.cpp
 
         z4c/compact_object_tracker.cpp
         z4c/fastflow.cpp
@@ -191,6 +203,11 @@ if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
   target_sources(athena
       PRIVATE
           pgen/${PROBLEM}.cpp
+  )
+else()
+  target_sources(athena
+      PRIVATE
+          pgen/dynbbh_beam.cpp
   )
 endif()
 

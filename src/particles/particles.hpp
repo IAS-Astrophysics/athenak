@@ -20,7 +20,8 @@
 // forward declarations
 
 // constants that enumerate ParticlesPusher options
-enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
+enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc,
+                            null_geodesic};
 
 // constants that enumerate ParticleTypes
 enum class ParticleType {cosmic_ray};
@@ -61,6 +62,7 @@ class Particles {
   DvceArray2D<Real> prtcl_rdata;   // real number properties each particle (x,v,etc.)
   DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
   Real dtnew;
+  Real particle_cfl;
 
   ParticlesPusher pusher;
 
@@ -73,6 +75,7 @@ class Particles {
   // functions...
   void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  TaskStatus NewTimeStep(Driver *pdriver, int stage);
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
   TaskStatus SendCnt(Driver *pdriver, int stage);

@@ -35,8 +35,6 @@ def test_run():
         maxerror = 2.5e-6
 
         if l1_rms > maxerror:
-            pytest.fail(
-                f"L1 error too large, error: {l1_rms:g} threshold: {maxerror:g}"
-            )
+            pytest.fail(f"L1 error too large, error: {l1_rms:g} threshold: {maxerror:g}")
     finally:
         testutils.cleanup()

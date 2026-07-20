@@ -55,7 +55,7 @@ def test_run_2nd():
         if (l1_rms_err1 / l1_rms_err0) > errorratio:
             pytest.fail(
                 f"Z4c wave converging too slow,"
-                f"error ratio: {(l1_rms_err1/l1_rms_err0):g}"
+                f"error ratio: {(l1_rms_err1 / l1_rms_err0):g}"
                 f"  expected ratio: {errorratio:g}"
             )
     finally:

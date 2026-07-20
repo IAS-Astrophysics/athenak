@@ -1,0 +1,136 @@
+# AthenaK input file for initializing MHD disk from GIZMO simulation data
+# Problem generator: gbondi
+#
+# GIZMO data is stored in units where binary separation a_bin = 1
+# Use binary_separation parameter to set the physical scale
+
+<comment>
+problem   = GIZMO disk to AthenaK MHD
+reference = GIZMO snapshot gridded data
+configure = -DPROBLEM=gbondi --kokkos_arch AMPERE80 --cuda
+
+<job>
+basename  = gizmo_disk
+
+<mesh>
+nghost    = 4
+nx1       = 256
+x1min     = -2.47e7
+x1max     = 2.47e7
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 256
+x2min     = -2.47e7
+x2max     = 2.47e7
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 256
+x3min     = -2.47e7
+x3max     = 2.47e7
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 64
+nx2       = 64
+nx3       = 64
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+tlim       = 100.0
+nlim       = -1
+
+ndiag      = 1
+
+<mhd>
+eos         = ideal
+reconstruct = ppm4
+rsolver     = hlld
+gamma       = 1.6666666666667
+
+betafloor   = 0.001
+local_iso   = false
+
+<problem>
+# GIZMO HDF5 file with gridded data (a_bin = 1 units)
+gizmo_file    = /data/haiyangw/diag-gizmo/snapshot_108_gridded_256cubed.h5
+
+# Binary separation: physical separation in code units
+# GIZMO data x_phys = x_gizmo * binary_separation
+# For snapshot_108: original separation = 0.1770 pc, M_BH = 3.65e6 Msun
+# Set to desired code unit value (e.g., 1.0 for a_bin = 1)
+
+binary_separation = 1.0  #1.0
+
+# Scale factors (applied after binary_separation scaling)
+# length_scale defaults to binary_separation if not specified
+
+length_scale  = 1.65e5 #1.0
+density_scale = 1.0
+velocity_scale = 1.0
+pressure_scale = 1.0
+bfield_scale  = 1.0
+
+# Offset to shift the disk center
+x_offset      = 0.0
+y_offset      = 0.0
+z_offset      = 0.0
+
+# Floor values
+rho_floor     = 1.0e-6
+pgas_floor    = 1.0e-6
+
+# MHD options
+mhd = true
+dmax = 1e6
+tmax = 1e6
+vmax = 1e3
+sigma_max = 1e2
+
+<units>
+density_cgs = 1.026213053178e-24     # number density 1 cm^-3
+bhmass_msun = 3.65e6             # 3.65e6 Msun (Shi 2025 CBD)
+mu          = 0.618                  # mean molecular weight
+
+#length_cgs  = 3.0856775809623245e+21 # 1 kpc
+#mass_cgs    = 3.015012867156497e+40  # number density 1 cm^-3, 1.516e7 Msun
+#time_cgs    = 3.15576e+13            # 1 Myr
+
+
+#<output1>
+#file_type  = hst
+#dt         = 1.0
+
+#<output2>
+#file_type  = bin
+#variable   = mhd_w
+#dt         = 10.0
+
+<output3>
+file_type  = rst
+dt         = 100.0
+
+<output4>
+file_type  = bin            # Binary data dump
+slice_x1   = 0.0            # slice in X1 plane
+id         = slice_x1       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 1e-6           # time increment between outputs
+
+<output5>
+file_type  = bin            # Binary data dump
+slice_x2   = 0.0            # slice in X1 plane
+id         = slice_x2       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 1e-6           # time increment between outputs
+
+<output6>
+file_type  = bin            # Binary data dump
+slice_x3   = 0.0            # slice in X1 plane
+id         = slice_x3       # output id tag
+variable   = mhd_w_bcc  # variables to be output
+dt         = 1e-6           # time increment between outputs

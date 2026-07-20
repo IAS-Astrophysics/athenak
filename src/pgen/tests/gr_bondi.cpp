@@ -73,7 +73,7 @@ struct bondi_pgen {
   bool reset_ic = false;    // reset initial conditions after run
 };
 
-  bondi_pgen bondi;
+bondi_pgen bondi;
 
 } // namespace
 

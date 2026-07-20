@@ -119,8 +119,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
 }
 
 DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
-    temperature("temperature",1,1,1,1,1),
-    pmy_pack(pp) {
+    pmy_pack(pp),
+    temperature("temperature",1,1,1,1,1) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -145,6 +145,7 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
+  calculate_tmunu = pin->GetOrAddBoolean("mhd", "calculate_tmunu", false);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
   scalar_pplimiter = pin->GetOrAddBoolean("mhd", "scalar_pplimiter", true);
 
@@ -195,7 +196,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   }
 
   // Now the rest of the MHD run tasks
-  if (pz4c != nullptr) {
+  if (pz4c != nullptr || calculate_tmunu) {
     pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
                    Task_Run, {MHD_CopyU});
   }
@@ -203,20 +204,27 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
                  Task_Run, {MHD_Flux});
   pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux",
                  Task_Run, {MHD_SendFlux});
+  pnr->QueueTask(&MHD::RepairNonFiniteFluxes, pmhd, MHD_RepairFlux,
+                 "MHD_RepairFlux", Task_Run, {MHD_RecvFlux});
   if (pz4c != nullptr) {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
-                   {MHD_RecvFlux, MHD_SetTmunu});
+                   {MHD_RepairFlux, MHD_SetTmunu});
   } else {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
-                   {MHD_RecvFlux});
+                   {MHD_RepairFlux});
   }
+  pnr->QueueTask(&MHD::RepairNonFiniteConserved, pmhd, MHD_RepairCons,
+                 "MHD_RepairCons", Task_Run, {MHD_ExplRK});
   pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, MHD_AddSrc, "MHD_AddSrc", Task_Run,
-                 {MHD_ExplRK});
-  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_AddSrc});
+                 {MHD_RepairCons});
+  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run,
+                 {MHD_AddSrc}, {Rad_Couple});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
   pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});
-  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EField});
+  pnr->QueueTask(&MHD::EFieldSrc, pmhd, MHD_EFieldSrc, "MHD_EFieldSrc", Task_Run,
+                 {MHD_EField});
+  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EFieldSrc});
   pnr->QueueTask(&MHD::RecvE, pmhd, MHD_RecvE, "MHD_RecvE", Task_Run, {MHD_SendE});
   pnr->QueueTask(&MHD::CT, pmhd, MHD_CT, "MHD_CT", Task_Run, {MHD_RecvE});
   pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, {MHD_CT});
@@ -515,7 +523,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
   // fetch flag for smooth excision and
   // excision mask, and target values
-  bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
+  bool smoothing = pmy_pack->pcoord->coord_data.smooth_excise;
   auto &floor = pmy_pack->pcoord->excision_floor;
   Real &dexcise = pmy_pack->pcoord->coord_data.dexcise;
   // Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
@@ -686,14 +694,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 // Instantiated templates
 template class DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
-                          Primitive::ResetFloor>;
+using NormalCompOSE = Primitive::EOSCompOSE<Primitive::NormalLogs>;
+using NQTCompOSE = Primitive::EOSCompOSE<Primitive::NQTLogs>;
+using NormalHybrid = Primitive::EOSHybrid<Primitive::NormalLogs>;
+using NQTHybrid = Primitive::EOSHybrid<Primitive::NQTLogs>;
+template class DynGRMHDPS<NormalCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<NQTCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<NormalHybrid, Primitive::ResetFloor>;
+template class DynGRMHDPS<NQTHybrid, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \

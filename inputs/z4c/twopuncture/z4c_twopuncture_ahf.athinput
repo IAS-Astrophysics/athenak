@@ -153,7 +153,7 @@ par_S_minus1     = -0.194426746452653             # spin of the m- puncture
 par_S_minus2     = -0.122647458220544
 par_S_minus3     = -0.013305724330153
 give_bare_mass   = False
-    
+
 npoints_A = 40                         # No. coeff in the compactified radial dir.
 npoints_B = 40                         # No. coeff in the angular dir.
 npoints_phi = 20                       # no. coeff in the phi dir.

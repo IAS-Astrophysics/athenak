@@ -18,6 +18,7 @@
 #include "reconstruct/dc.hpp"
 #include "reconstruct/plm.hpp"
 #include "reconstruct/ppm.hpp"
+#include "reconstruct/wenomz.hpp"
 #include "reconstruct/wenoz.hpp"
 #include "mhd/rsolvers/advect_mhd.hpp"
 #include "mhd/rsolvers/llf_mhd.hpp"
@@ -80,7 +81,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
     jl = js-1, ju = je+1, kl = ks-1, ku = ke+1;
   }
   int il = is, iu = ie+1;
-  if (use_fofc) { il = is-1, iu = ie+2; }
+  if (use_fofc) {
+    il = is - 1, iu = ie + 2;
+  }
 
   par_for_outer("mhd_flux1",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku, jl, ju,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
@@ -107,6 +110,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
       case ReconstructionMethod::wenoz:
         WENOZX1(member, eos_, true,  m, k, j, il-1, iu, w0_, wl, wr);
         WENOZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
+        break;
+      case ReconstructionMethod::wenomz:
+        WENOMZX1(member, eos_, true,  m, k, j, il-1, iu, w0_, wl, wr);
+        WENOMZX1(member, eos_, false, m, k, j, il-1, iu, b0_, bl, br);
         break;
       default:
         break;
@@ -177,7 +184,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
       kl = ks-1, ku = ke+1;
     }
     jl = js-1, ju = je+1;
-    if (use_fofc) { jl = js-2, ju = je+2; }
+    if (use_fofc) {
+      jl = js - 2, ju = je + 2;
+    }
 
     par_for_outer("mhd_flux2",DevExeSpace(),scr_size,scr_level,0,nmb1, kl, ku,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
@@ -221,6 +230,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::wenoz:
             WENOZX2(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
             WENOZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX2(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_jp1, wr);
+            WENOMZX2(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_jp1, br);
             break;
           default:
             break;
@@ -297,7 +310,9 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
 
     // set the loop limits
     kl = ks-1, ku = ke+1;
-    if (use_fofc) { kl = ks-2, ku = ke+2; }
+    if (use_fofc) {
+      kl = ks - 2, ku = ke + 2;
+    }
 
     par_for_outer("mhd_flux3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
@@ -341,6 +356,10 @@ void MHD::CalculateFluxes(Driver *pdriver, int stage) {
           case ReconstructionMethod::wenoz:
             WENOZX3(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
             WENOZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
+            break;
+          case ReconstructionMethod::wenomz:
+            WENOMZX3(member, eos_, true,  m, k, j, is-1, ie+1, w0_, wl_kp1, wr);
+            WENOMZX3(member, eos_, false, m, k, j, is-1, ie+1, b0_, bl_kp1, br);
             break;
           default:
             break;

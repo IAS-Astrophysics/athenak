@@ -410,8 +410,8 @@ void ShwaveHistory(HistoryData *pdata, Mesh *pm) {
       hvars.the_array[0] = vol*2.0*w0_(m,IVY,k,j,i)*cos(kx*x1v + sv.ky*x2v);
     }
 
-    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
-    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+    // fill the unused device-reduction slots with zeros
+    for (int n=nhist_; n<NREDUCTION_VARIABLES; ++n) {
       hvars.the_array[n] = 0.0;
     }
 

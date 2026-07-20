@@ -38,6 +38,7 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   int* pdfloor = &(pm->ecounter.neos_dfloor);
   int* pefloor = &(pm->ecounter.neos_efloor);
   int* ptfloor = &(pm->ecounter.neos_tfloor);
+  int* ptceil  = &(pm->ecounter.neos_tceil);
   int* pvceil  = &(pm->ecounter.neos_vceil);
   int* pfail   = &(pm->ecounter.neos_fail);
   int* pmaxit  = &(pm->ecounter.maxit_c2p);
@@ -45,6 +46,7 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   MPI_Allreduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, ptfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, ptceil,  1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pvceil,  1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pfail,   1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
@@ -56,6 +58,7 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   if (pm->ecounter.neos_dfloor > 0 ||
       pm->ecounter.neos_efloor > 0 ||
       pm->ecounter.neos_tfloor > 0 ||
+      pm->ecounter.neos_tceil  > 0 ||
       pm->ecounter.neos_vceil  > 0 ||
       pm->ecounter.neos_fail   > 0 ||
       pm->ecounter.nfofc > 0 ||
@@ -90,7 +93,8 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     // Write header, if it has not been written already
     if (!(header_written)) {
       std::fprintf(pfile,"# Athena event counter data\n");
-      std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor eos_tfloor eos_vceil");
+      std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor eos_tfloor eos_tceil");
+      std::fprintf(pfile," eos_vceil");
       std::fprintf(pfile," eos_fail c2p_it fofc");
       std::fprintf(pfile,"\n");  // terminate line
       header_written = true;
@@ -102,6 +106,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       std::fprintf(pfile, " %8d", pm->ecounter.neos_dfloor);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_efloor);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_tfloor);
+      std::fprintf(pfile, " %8d", pm->ecounter.neos_tceil);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_vceil);
       std::fprintf(pfile, " %8d", pm->ecounter.neos_fail);
       std::fprintf(pfile, " %6d", pm->ecounter.maxit_c2p);
@@ -115,6 +120,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   pm->ecounter.neos_dfloor = 0;
   pm->ecounter.neos_efloor = 0;
   pm->ecounter.neos_tfloor = 0;
+  pm->ecounter.neos_tceil = 0;
   pm->ecounter.neos_vceil = 0;
   pm->ecounter.neos_fail = 0;
   pm->ecounter.maxit_c2p = 0;

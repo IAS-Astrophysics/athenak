@@ -52,6 +52,7 @@ class Z4c {
     I_Z4C_THETA,
     I_Z4C_ALPHA,
     I_Z4C_BETAX, I_Z4C_BETAY, I_Z4C_BETAZ,
+    I_Z4C_BX, I_Z4C_BY, I_Z4C_BZ,
     nz4c
   };
   // Names of Z4c variables
@@ -114,6 +115,8 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
+    // advective derivative of shift or heat flux for telegraph lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_d;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
@@ -161,17 +164,25 @@ class Z4c {
     Real ssl_damping_amp;
     Real ssl_damping_time;
     Real ssl_damping_index;
+    // telegrapher lapse condition
+    bool telegraph_lapse;
+    Real telegraph_tau;
+    Real telegraph_kappa;
+
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
-    // turn on shift damping smoothly
-    bool slow_roll_eta;
-    Real turn_on_time;
+    // slow start shift condition
+    Real sss_damping_amp;
+    Real sss_damping_time;
+
     // Enable BSSN if false (disable theta)
     bool use_z4c;
+    // disable fluid Back-reaction
+    bool back_reaction;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
     // Boundary extrapolation order
@@ -256,13 +267,6 @@ class Z4c {
   std::vector<std::unique_ptr<FastFlow>> pfastflow;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
 
-  /*
-  std::list<CartesianGrid> horizon_dump;
-  Real horizon_dt;
-  Real horizon_last_output_time;
-  std::vector<Real> horizon_extent; // radius for dumping data in a cube
-  std::vector<int> horizon_nx;  // number of points in each direction
-  */
   // TODO(@hzhu): think about how to automatically trigger common horizon
   // maybe have a horizon dump object to save all the space here
   // same for the waveform.
@@ -271,4 +275,4 @@ class Z4c {
 };
 
 } // namespace z4c
-#endif //Z4C_Z4C_HPP_
+#endif  // Z4C_Z4C_HPP_

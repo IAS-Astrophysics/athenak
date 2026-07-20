@@ -23,6 +23,8 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "particles/particles.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -288,7 +290,9 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
 void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
   MeshBlockPack* pmbp = pm->pmb_pack;
   for (int p=0; p<(pm->nmb_packs_thisrank); ++p) {
-    if (!(pmbp->tl_map[tl]->Empty())) {pmbp->tl_map[tl]->Reset();}
+    if (!(pmbp->tl_map[tl]->Empty())) {
+      pmbp->tl_map[tl]->Reset();
+    }
   }
   int npack_left = (pm->nmb_packs_thisrank);
   while (npack_left > 0) {
@@ -297,7 +301,9 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
     } else {
       if (!pmbp->tl_map[tl]->IsComplete()) {
         auto status = pmbp->tl_map[tl]->DoAvailable(this, stage);
-        if (status == TaskListStatus::complete) { npack_left--; }
+        if (status == TaskListStatus::complete) {
+          npack_left--;
+        }
       }
     }
   }
@@ -317,7 +323,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  dyn_radiation::DynRadiation *pdynrad = pmesh->pmb_pack->pdynrad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  particles::Particles *ppart = pmesh->pmb_pack->ppart;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -328,8 +336,14 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (prad != nullptr) {
       (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
     }
+    if (pdynrad != nullptr) {
+      (void) pmesh->pmb_pack->pdynrad->NewTimeStep(this, nexp_stages);
+    }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
+    }
+    if (ppart != nullptr) {
+      (void) ppart->NewTimeStep(this, nexp_stages);
     }
 
     pmesh->NewTimeStep(tlim);
@@ -389,7 +403,9 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     }
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
-      if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
+      if (global_variable::my_rank == 0) {
+        OutputCycleDiagnostics(pmesh);
+      }
 
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
@@ -438,8 +454,13 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       }
 
       // AMR
-      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
+      if (pmesh->adaptive) {
+        pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+      }
       // compute new timestep AFTER all Meshblocks refined/derefined
+      if (pmesh->pmb_pack->ppart != nullptr) {
+        (void) pmesh->pmb_pack->ppart->NewTimeStep(this, nexp_stages);
+      }
       pmesh->NewTimeStep(tlim);
 
       // Update wall clock time if needed.
@@ -574,6 +595,15 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->ApplyPhysicalBCs(this, 0);
     (void) pz4c->Prolongate(this, 0);
+    if (pm->pmb_pack->pdynrad != nullptr && pm->pmb_pack->pdyngr == nullptr) {
+      (void) pz4c->ConvertZ4cToADM(this, 0);
+    }
+  }
+
+  auto pre_restart_conserved_init_func = pm->pgen->pre_restart_conserved_init_func;
+  if (pre_restart_conserved_init_func != nullptr) {
+    pre_restart_conserved_init_func(pm);
+    pm->pgen->pre_restart_conserved_init_func = nullptr;
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
@@ -628,6 +658,13 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     }
   }
 
+  auto post_restart_primitive_init_func = pm->pgen->post_restart_primitive_init_func;
+  if (post_restart_primitive_init_func != nullptr) {
+    post_restart_primitive_init_func(pm);
+    pm->pgen->post_restart_primitive_init_func = nullptr;
+    pm->pgen->restart_missing_dynrad_i0 = false;
+  }
+
   // Initialize radiation: ghost zones and intensity (everywhere)
   // DOES NOT include communications for shearing box boundaries
   radiation::Radiation *prad = pm->pmb_pack->prad;
@@ -640,6 +677,17 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->RecvI(this, 0);
     (void) prad->ApplyPhysicalBCs(this, 0);
     (void) prad->Prolongate(this, 0);
+  }
+  dyn_radiation::DynRadiation *pdynrad = pm->pmb_pack->pdynrad;
+  if (pdynrad != nullptr) {
+    (void) pdynrad->RestrictI(this, 0);
+    (void) pdynrad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pdynrad->SendI(this, 0);
+    (void) pdynrad->ClearSend(this, -1);
+    (void) pdynrad->ClearRecv(this, -1);
+    (void) pdynrad->RecvI(this, 0);
+    (void) pdynrad->ApplyPhysicalBCs(this, 0);
+    (void) pdynrad->Prolongate(this, 0);
   }
 
   return;

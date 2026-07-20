@@ -106,7 +106,7 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
   }
   if (tstat != TaskStatus::complete) return tstat;
 
-  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
+  // with shearing box boundaries calculate x2-distance x1-boundarues have sheared and
   // with MPI post receives for U.
   // only execute if (3D OR 2d_r_phi)
   if (psbox_u != nullptr) {

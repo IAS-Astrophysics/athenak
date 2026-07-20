@@ -86,7 +86,9 @@ class TabulatedEOS {
     Kokkos::realloc(m_log_rho, m_nn);
     Kokkos::realloc(m_log_p, m_nn);
     Kokkos::realloc(m_log_e, m_nn);
-    if (has_ye) {Kokkos::realloc(m_ye, m_nn);}
+    if (has_ye) {
+      Kokkos::realloc(m_ye, m_nn);
+    }
 
     // Read rho
     test_field(table.HasField("nb"), "nb");
@@ -138,12 +140,16 @@ class TabulatedEOS {
     m_log_rho.template modify<HostMemSpace>();
     m_log_p.template modify<HostMemSpace>();
     m_log_e.template modify<HostMemSpace>();
-    if (has_ye) {m_ye.template modify<HostMemSpace>();}
+    if (has_ye) {
+      m_ye.template modify<HostMemSpace>();
+    }
 
     m_log_rho.template sync<DevExeSpace>();
     m_log_p.template sync<DevExeSpace>();
     m_log_e.template sync<DevExeSpace>();
-    if (has_ye) {m_ye.template sync<DevExeSpace>();}
+    if (has_ye) {
+      m_ye.template sync<DevExeSpace>();
+    }
   }
 
   template<LocationTag loc>
@@ -178,13 +184,9 @@ class TabulatedEOS {
   KOKKOS_INLINE_FUNCTION
   Real GetRhoFromE(Real e) const {
     Real le = log(e);
-
-    // Guard against negative total energy
-    // densities and garbage values.
-    if (le < le_min || e < 0.0) {
+    if (le < le_min) {
       return 0.0;
     }
-
     return GetRhoFromVar<loc>(le, m_log_e);
   }
 

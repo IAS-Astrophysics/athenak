@@ -38,15 +38,11 @@ enum class LocationTag {Host, Device};
 template<class TOVEOS, class = void>
 constexpr bool UsesYe = false;
 
-template<class TOVEOS>
+template <class TOVEOS>
 constexpr bool UsesYe<
-  TOVEOS,
-  std::void_t<
-    decltype(std::declval<TOVEOS>().
-             template GetYeFromRho<LocationTag::Host>(std::declval<Real>()))
-  >
-> = true;
-
+TOVEOS,
+std::void_t<decltype(std::declval<TOVEOS>().template GetYeFromRho<LocationTag::Host>(
+        std::declval<Real>()))> > = true;
 
 } // namespace tov
 

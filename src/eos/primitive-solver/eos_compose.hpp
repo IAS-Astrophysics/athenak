@@ -92,7 +92,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (m_initialized);
     if (n < min_n) {
       return min_T;
-    } else if (e <= 0.0) {
+    } else if (e <= MinimumEnergy(n, Y)) {
       return min_T;
     }
     Real log_e = log2_(e);
@@ -363,7 +363,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // use in and in+1.
     if (*in < 0) {
       *in = 0;
-    } else if (*in > static_cast<int>(m_nn) - 2) {
+    } else if (*in > m_nn - 2) {
       *in = m_nn - 2;
     }
     *w1 = (log_n - m_log_nb(*in))*m_id_log_nb;
@@ -376,7 +376,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // Clamp iy. See weight_idx_ln.
     if (*iy < 0) {
       *iy = 0;
-    } else if (*iy > static_cast<int>(m_ny) - 2) {
+    } else if (*iy > m_ny - 2) {
       *iy = m_ny - 2;
     }
     *w1 = (yq - m_yq(*iy))*m_id_yq;
@@ -391,7 +391,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // Clamp it. See weight_idx_ln.
     if (*it < 0) {
       *it = 0;
-    } else if (*it > static_cast<int>(m_nt) - 2) {
+    } else if (*it > m_nt - 2) {
       *it = m_nt - 2;
     }
     *w1 = (log_t - m_log_t(*it))*m_id_log_t;
@@ -481,8 +481,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real lthi = m_log_t[ihi];
     Real ltlo = m_log_t[ilo];
 
-    //Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
-    Real lt = (ltlo*fhi - lthi*flo)/(fhi - flo);
+    Real lt = m_log_t[ilo] - flo*(lthi - ltlo)/(fhi - flo);
     return exp2_(lt);
   }
 
@@ -505,8 +504,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     // initialize the iteration variables
     int n_iter = 0;
-    Real J[2][2] = {};
-    Real invJ[2][2] = {};
+    Real J[2][2] = {0.0};
+    Real invJ[2][2] = {0.0};
     Real dx1[2] = {0.0};
     Real dxa[2] = {0.0};
     Real norm[2] = {0.0};

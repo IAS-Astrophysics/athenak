@@ -1,0 +1,119 @@
+<comment>
+problem = small dynbbh ADM metric regression
+
+<job>
+basename = dynbbh_metric
+
+<mesh>
+nghost = 4
+nx1 = 4
+x1min = 180.0
+x1max = 300.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 5
+x2min = -2.5
+x2max = 2.5
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 5
+x3min = -2.5
+x3max = 2.5
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 4
+nx2 = 5
+nx3 = 5
+
+<mesh_refinement>
+refinement = none
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim = 0
+tlim = 0.0
+ndiag = 1
+
+<coord>
+general_rel = true
+m = 1.0
+a = 0.0
+excise = true
+excision_scheme = puncture
+excise_1_rad = 1.0
+excise_2_rad = 1.0
+dexcise = 1.0e-8
+pexcise = 3.33e-11
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+dfloor = 1.0e-10
+pfloor = 1.0e-18
+tfloor = 1.0e-8
+gamma = 1.44444444444
+fofc = true
+gamma_max = 20.0
+enforce_maximum = false
+calculate_tmunu = true
+
+<adm>
+dynamic = true
+
+<problem>
+r_edge = 60.0
+r_peak = 240.0
+tilt_angle = 0.0
+potential_beta_min = 100.0
+potential_cutoff = 0.2
+potential_r_pow = 3.0
+potential_falloff = 400.0
+potential_rho_pow = 1.0
+rho_min = 1.0e-5
+rho_pow = -1.5
+pgas_min = 3.33e-8
+pgas_pow = -2.5
+rho_max = 1.0
+l = 0.0
+pert_amp = 0.0
+
+sep = 25.0
+q = 1.0
+a1 = 0.93
+a2 = 0.88
+th_a1 = 37.0
+ph_a1 = 123.0
+th_a2 = 71.0
+ph_a2 = -41.0
+metric_derivative = ad
+metric_fd_step = 5.0e-5
+use_traj_table = false
+traj_file = none
+
+amr_condition = none
+radius_thr = 5.0
+alpha_thr = 0.8
+
+user_hist = false
+flux_rsurf_inner = 2.0
+flux_rsurf_outer = 1.0
+flux_dr_surf = 100.0
+flux_horizon1 = false
+flux_horizon2 = false
+
+<output1>
+file_type = tab
+variable = adm
+data_format = %.17e
+dt = 1.0
+slice_x2 = 0.0
+slice_x3 = 0.0

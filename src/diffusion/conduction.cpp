@@ -124,7 +124,9 @@ void Conduction::AddHeatFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &eos
     Real densf = 0.5*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j,i-1));
     flx1(m,IEN,k,j,i) -= alpha_ * densf * dtempdx;
   });
-  if (pmy_pack->pmesh->one_d) {return;}
+  if (pmy_pack->pmesh->one_d) {
+    return;
+  }
 
   // fluxes in x2-direction
   auto &flx2 = flx.x2f;
@@ -136,7 +138,9 @@ void Conduction::AddHeatFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &eos
     Real densf = 0.5*(w0(m,IDN,k,j,i) + w0(m,IDN,k,j-1,i));
     flx2(m,IEN,k,j,i) -= alpha_ * densf * dtempdx;
   });
-  if (pmy_pack->pmesh->two_d) {return;}
+  if (pmy_pack->pmesh->two_d) {
+    return;
+  }
 
   // fluxes in x3-direction
   auto &flx3 = flx.x3f;

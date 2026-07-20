@@ -19,6 +19,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "refinement_criteria.hpp"
 #include "utils/utils.hpp"
 
@@ -83,9 +84,9 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
       Kokkos::abort("MHD refinement variable used but <mhd> not defined");
     }
     if ((it->rvariable.compare(0, 3, "rad") == 0) &&
-        (pm->pmb_pack->prad == nullptr)) {
+        (pm->pmb_pack->prad == nullptr && pm->pmb_pack->pdynrad == nullptr)) {
       std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
-      Kokkos::abort("radiation refinement variable used but <radiation> not defined");
+      Kokkos::abort("radiation refinement variable used but no radiation solver defined");
     }
   }
 
@@ -204,8 +205,12 @@ void RefinementCriteria::CheckMinMax(MeshBlockPack* pmbp, RefCritData crit) {
       },Kokkos::Max<Real>(team_qmax));
       // only derefine when flag has not been set by other criteria
       int &flag = refine_flag.d_view(m+mbs);
-      if  (team_qmax > valmax)                 {flag = 1;}
-      if ((team_qmax < valmax) && (flag == 0)) {flag = -1;}
+      if (team_qmax > valmax) {
+        flag = 1;
+      }
+      if ((team_qmax < valmax) && (flag == 0)) {
+        flag = -1;
+      }
     });
   }
 
@@ -225,8 +230,12 @@ void RefinementCriteria::CheckMinMax(MeshBlockPack* pmbp, RefCritData crit) {
       },Kokkos::Min<Real>(team_qmin));
       // only derefine when flag has not been set by other criteria
       int &flag = refine_flag.d_view(m+mbs);
-      if  (team_qmin < valmin)                 {flag = 1;}
-      if ((team_qmin > valmin) && (flag == 0)) {flag = -1;}
+      if (team_qmin < valmin) {
+        flag = 1;
+      }
+      if ((team_qmin > valmin) && (flag == 0)) {
+        flag = -1;
+      }
     });
   }
   // sync device array with host
@@ -270,14 +279,22 @@ void RefinementCriteria::CheckSlope(MeshBlockPack* pmbp, RefCritData crit) {
         j += js;
         k += ks;
         Real d2 = SQR(q0(m,k,j,i+1) - q0(m,k,j,i-1));
-        if (multi_d) {d2 += SQR(q0(m,k,j+1,i) - q0(m,k,j-1,i));}
-        if (three_d) {d2 += SQR(q0(m,k+1,j,i) - q0(m,k-1,j,i));}
+        if (multi_d) {
+          d2 += SQR(q0(m, k, j + 1, i) - q0(m, k, j - 1, i));
+        }
+        if (three_d) {
+          d2 += SQR(q0(m, k + 1, j, i) - q0(m, k - 1, j, i));
+        }
         dqmax = fmax((0.5*sqrt(d2)/q0(m,k,j,i)), dqmax);
       },Kokkos::Max<Real>(team_dqmax));
       // only derefine when flag has not been set by other criteria
       int &flag = refine_flag.d_view(m+mbs);
-      if  (team_dqmax > valmax)                 {flag = 1;}
-      if ((team_dqmax < valmax) && (flag == 0)) {flag = -1;}
+      if (team_dqmax > valmax) {
+        flag = 1;
+      }
+      if ((team_dqmax < valmax) && (flag == 0)) {
+        flag = -1;
+      }
     });
   }
   // sync device array with host
@@ -321,14 +338,22 @@ void RefinementCriteria::CheckSecondDeriv(MeshBlockPack* pmbp, RefCritData crit)
         j += js;
         k += ks;
         Real d2q = q0(m,k,j,i+1) - 2.0*q0(m,k,j,i) + q0(m,k,j,i-1);
-        if (multi_d) {d2q += (q0(m,k,j+1,i) - 2.0*q0(m,k,j,i) + q0(m,k,j-1,i));}
-        if (three_d) {d2q += (q0(m,k+1,j,i) - 2.0*q0(m,k,j,i) + q0(m,k-1,j,i));}
+        if (multi_d) {
+          d2q += (q0(m, k, j + 1, i) - 2.0 * q0(m, k, j, i) + q0(m, k, j - 1, i));
+        }
+        if (three_d) {
+          d2q += (q0(m, k + 1, j, i) - 2.0 * q0(m, k, j, i) + q0(m, k - 1, j, i));
+        }
         d2qmax = fmax((fabs(d2q)/q0(m,k,j,i)), d2qmax);
       },Kokkos::Max<Real>(team_d2qmax));
       // only derefine when flag has not been set by other criteria
       int &flag = refine_flag.d_view(m+mbs);
-      if  (team_d2qmax > valmax)                 {flag = 1;}
-      if ((team_d2qmax < valmax) && (flag == 0)) {flag = -1;}
+      if (team_d2qmax > valmax) {
+        flag = 1;
+      }
+      if ((team_d2qmax < valmax) && (flag == 0)) {
+        flag = -1;
+      }
     });
   }
   // sync device array with host

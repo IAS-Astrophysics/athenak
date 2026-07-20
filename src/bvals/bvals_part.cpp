@@ -60,12 +60,13 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto myrank = global_variable::my_rank;
   auto &nghbr = pmy_part->pmy_pack->pmb->nghbr;
   auto &psendl = sendlist;
-  int counter=0;
-  int *pcounter = &counter;
+  DvceArray1D<int> send_counter("particle_send_counter", 1);
+  Kokkos::deep_copy(send_counter, 0);
+  int *pcounter = send_counter.data();
   bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
 
-  Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
+  Kokkos::realloc(sendlist, npart);
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
     int m = pi(PGID,p) - gids;
     int mylevel = mblev.d_view(m);
@@ -99,7 +100,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           if (nghbr.d_view(m,indx).lev > mylevel) {       // neighbor at finer level
             indx = NeighborIndex(ix,0,0,fy,fz);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
+          while (nghbr.d_view(m, indx).gid < 0) {
+            indx++;
+          }  // neighbor at coarser level
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else if (ix == 0) {
           // x2 face
@@ -107,7 +110,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(0,iy,0,fx,fz);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          while (nghbr.d_view(m, indx).gid < 0) {
+            indx++;
+          }
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // x1x2 edge
@@ -115,7 +120,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(ix,iy,0,fz,0);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          while (nghbr.d_view(m, indx).gid < 0) {
+            indx++;
+          }
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
       } else if (iy == 0) {
@@ -125,7 +132,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(0,0,iz,fx,fy);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          while (nghbr.d_view(m, indx).gid < 0) {
+            indx++;
+          }
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // x3x1 edge
@@ -133,7 +142,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(ix,0,iz,fy,0);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          while (nghbr.d_view(m, indx).gid < 0) {
+            indx++;
+          }
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         }
       } else {
@@ -143,7 +154,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(0,iy,iz,fx,0);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
+          while (nghbr.d_view(m, indx).gid < 0) {
+            indx++;
+          }
           UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
         } else {
           // corners
@@ -170,7 +183,8 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       }
     }
   });
-  nprtcl_send = counter;
+  auto send_counter_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), send_counter);
+  nprtcl_send = send_counter_h(0);
   Kokkos::resize(sendlist, nprtcl_send);
   // sync sendlist device array with host
   sendlist.template modify<DevExeSpace>();
@@ -294,7 +308,9 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
     // Post non-blocking receive
     int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                          mpi_comm_part, &(rrecv_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
     data_start += data_size;
   }
   // Init receives for ints
@@ -310,7 +326,9 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
     // Post non-blocking receive
     int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_INT, drank, tag,
                          mpi_comm_part, &(irecv_req[n]));
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
     data_start += data_size;
   }
 
@@ -382,7 +400,9 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
       // Post non-blocking sends
       int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                            mpi_comm_part, &(rsend_req[n]));
-      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      if (ierr != MPI_SUCCESS) {
+        no_errors = false;
+      }
       data_start += data_size;
     }
     // Send ints
@@ -398,7 +418,9 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
       // Post non-blocking sends
       int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_INT, drank, tag,
                            mpi_comm_part, &(isend_req[n]));
-      if (ierr != MPI_SUCCESS) {no_errors=false;}
+      if (ierr != MPI_SUCCESS) {
+        no_errors = false;
+      }
       data_start += data_size;
     }
   }
@@ -439,12 +461,16 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   for (int n=0; n<nrecvs; ++n) {
     int test;
     int ierr = MPI_Test(&(rrecv_req[n]), &test, MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
     if (!(static_cast<bool>(test))) {
       bflag = true;
     }
     ierr = MPI_Test(&(irecv_req[n]), &test, MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
     if (!(static_cast<bool>(test))) {
       bflag = true;
     }
@@ -457,7 +483,9 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     std::exit(EXIT_FAILURE);
   }
   // exit if particle communications have not completed
-  if (bflag) {return TaskStatus::incomplete;}
+  if (bflag) {
+    return TaskStatus::incomplete;
+  }
 
   // unpack particles into positions of sent particles
   if (nprtcl_recv > 0) {
@@ -534,9 +562,13 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclSend() {
   // wait for all non-blocking sends for vars to finish before continuing
   for (int n=0; n<nsends; ++n) {
     int ierr = MPI_Wait(&(rsend_req[n]), MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
     ierr = MPI_Wait(&(isend_req[n]), MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -561,9 +593,13 @@ TaskStatus ParticlesBoundaryValues::ClearPrtclRecv() {
   // wait for all non-blocking receives to finish before continuing
   for (int n=0; n<nrecvs; ++n) {
     int ierr = MPI_Wait(&(rrecv_req[n]), MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
     ierr = MPI_Wait(&(irecv_req[n]), MPI_STATUS_IGNORE);
-    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (ierr != MPI_SUCCESS) {
+      no_errors = false;
+    }
   }
   // Quit if MPI error detected
   if (!(no_errors)) {

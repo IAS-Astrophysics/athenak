@@ -92,8 +92,8 @@ num_horizons = 1
 store_metric_drvts = false
 
 # Grid points
-ntheta = 10	# nphi = 2*ntheta 
-lmax = 6	
+ntheta = 10	# nphi = 2*ntheta
+lmax = 6
 
 # Puncture 0
 use_puncture_0 = 0
@@ -125,5 +125,3 @@ file_type = bin
 variable = z4c
 dt = 0.1
 slice_x3 = 0.0
-
-

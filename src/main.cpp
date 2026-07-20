@@ -300,8 +300,12 @@ int main(int argc, char *argv[]) {
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
-    if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
-    if (res_flag) {restartfile.Close(single_file_per_rank);}
+    if (global_variable::my_rank == 0) {
+      pmesh->WriteMeshStructure();
+    }
+    if (res_flag) {
+      restartfile.Close(single_file_per_rank);
+    }
     delete pmesh;
     delete pinput;
     Kokkos::finalize();

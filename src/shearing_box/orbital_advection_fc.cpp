@@ -81,7 +81,11 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 
     // indices of x2-face buffers in nghbr view
     int nnghbr;
-    if (n==0) {nnghbr=8;} else {nnghbr=12;}
+    if (n == 0) {
+      nnghbr = 8;
+    } else {
+      nnghbr = 12;
+    }
 
     // only load buffers when neighbor exists
     if (nghbr.d_view(m,nnghbr).gid >= 0) {
@@ -139,7 +143,11 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
     for (int n=0; n<2; ++n) {
       // indices of x2-face buffers in nghbr view
       int nnghbr;
-      if (n==0) {nnghbr=8;} else {nnghbr=12;}
+      if (n == 0) {
+        nnghbr = 8;
+      } else {
+        nnghbr = 12;
+      }
       if (nghbr.h_view(m,nnghbr).gid >= 0) {  // neighbor exists and not a physical bndry
         // index and rank of destination Neighbor
         int dn = nghbr.h_view(m,nnghbr).dest;
@@ -156,7 +164,9 @@ TaskStatus OrbitalAdvectionFC::PackAndSendFC(DvceFaceFld4D<Real> &b) {
 
           int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
                                comm_orb_advect, &(sbuf[n].vars_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
         }
       }
     }
@@ -194,12 +204,18 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     for (int n=0; n<2; ++n) {
       // indices of x2-face buffers in nghbr view
       int nnghbr;
-      if (n==0) {nnghbr=8;} else {nnghbr=12;}
+      if (n == 0) {
+        nnghbr = 8;
+      } else {
+        nnghbr = 12;
+      }
       if (nghbr.h_view(m,nnghbr).gid >= 0) { // neighbor exists and not a physical bndry
         if (nghbr.h_view(m,nnghbr).rank != global_variable::my_rank) {
           int test;
           int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
+          if (ierr != MPI_SUCCESS) {
+            no_errors = false;
+          }
           if (!(static_cast<bool>(test))) {
             bflag = true;
           }
@@ -215,7 +231,9 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     std::exit(EXIT_FAILURE);
   }
   // exit if recv boundary buffer communications have not completed
-  if (bflag) {return TaskStatus::incomplete;}
+  if (bflag) {
+    return TaskStatus::incomplete;
+  }
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack and compute effective EMF
@@ -288,6 +306,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
       case ReconstructionMethod::wenoz:
+      case ReconstructionMethod::wenomz:
         PPMX_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
       default:

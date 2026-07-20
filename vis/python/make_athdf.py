@@ -13,7 +13,7 @@ import bin_convert
 # Main function
 def main(**kwargs):
     # Get the root name for the file.
-    files = glob.glob(kwargs['file_stem'] + '*.bin')
+    files = glob.glob(kwargs["file_stem"] + "*.bin")
     if len(files) < 1:
         print(f"No files found with stem {kwargs['file_stem']}")
         quit()
@@ -27,15 +27,16 @@ def main(**kwargs):
         filedata = bin_convert.read_binary(fname)
         bin_convert.write_athdf(athdf_name, filedata)
         bin_convert.write_xdmf_for(xdmf_name, os.path.basename(athdf_name), filedata)
-        if kwargs['verbose']:
-            print(f'Converting {count}/{total}: {fname}')
-        count = count+1
+        if kwargs["verbose"]:
+            print(f"Converting {count}/{total}: {fname}")
+        count = count + 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('file_stem', help='path to files, excluding .#.bin')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        help='print file conversion progress')
+    parser.add_argument("file_stem", help="path to files, excluding .#.bin")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="print file conversion progress"
+    )
     args = parser.parse_args()
     main(**vars(args))

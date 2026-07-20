@@ -44,6 +44,8 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "units/units.hpp"
 
 #include <Kokkos_Random.hpp>
 
@@ -99,12 +101,15 @@ Real A2(struct torus_pgen pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
 Real A3(struct torus_pgen pgen, Real x1, Real x2, Real x3);
 
+void InitializeGRTorusRestartDynRadiation(Mesh *pm);
+
 // Useful container for physical parameters of torus
 struct torus_pgen {
   Real spin;                                  // black hole spin
   Real dexcise, pexcise;                      // excision parameters
   Real gamma_adi;                             // EOS parameters
   Real arad;                                  // radiation constant
+  Real restart_seed_erad_fraction;            // multiplier for old GRMHD restart rad seed
   bool prograde;                              // flag indicating disk is prograde (FM)
   Real r_edge, r_peak, l, rho_max;            // fixed torus parameters
   Real l_peak;                                // fixed torus parameters
@@ -123,7 +128,7 @@ struct torus_pgen {
   Real potential_rho_pow;                     // set vector potential dependence on rho
 };
 
-  torus_pgen torus;
+torus_pgen torus;
 
 } // namespace
 
@@ -165,7 +170,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Extract BH parameters
   torus.spin = coord.bh_spin;
   const Real r_excise = coord.rexcise;
-  const bool is_radiation_enabled = (pmbp->prad != nullptr);
+  const bool is_radiation_enabled = (pmbp->prad != nullptr || pmbp->pdynrad != nullptr);
 
   // Spherical Grid for user-defined history
   auto &grids = spherical_grids;
@@ -177,6 +182,50 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 12.0));
   grids.push_back(std::make_unique<SphericalGrid>(pmbp, 5, 24.0));
   user_hist_func = TorusFluxes;
+
+  if (pmbp->pdynrad != nullptr) {
+    if (pmbp->pdynrad->are_units_enabled) {
+      torus.arad = (pmbp->punit->rad_constant_cgs*
+                    SQR(SQR(pmbp->punit->temperature_cgs()))/
+                    pmbp->punit->pressure_cgs());
+    } else {
+      torus.arad = pin->GetReal("dyn_radiation","arad");
+    }
+    if (!(torus.arad > 0.0) || !std::isfinite(torus.arad)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "gr_torus <dyn_radiation> requires a positive finite "
+                << "radiation constant." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    torus.restart_seed_erad_fraction =
+        pin->GetOrAddReal("dyn_radiation", "restart_seed_erad_fraction", 1.0);
+    if (!(torus.restart_seed_erad_fraction >= 0.0) ||
+        !std::isfinite(torus.restart_seed_erad_fraction)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "gr_torus <dyn_radiation>/restart_seed_erad_fraction "
+                << "must be finite and non-negative." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (pmbp->pdynrad->use_adm_geometry) {
+      if (pmbp->padm == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "gr_torus <dyn_radiation> geometry='adm' requires "
+                  << "ADM variables." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      pmbp->padm->SetADMVariables(pmbp);
+      pmbp->pdynrad->PrepareADMGeometry();
+    }
+    if (restart_missing_dynrad_i0) {
+      if (pmbp->pmhd == nullptr && pmbp->phydro == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "gr_torus restart activation of <dyn_radiation> "
+                  << "requires a fluid module." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      post_restart_primitive_init_func = InitializeGRTorusRestartDynRadiation;
+    }
+  }
 
   // return if restart
   if (restart) return;
@@ -194,15 +243,28 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Extract radiation parameters if enabled
   int nangles_;
   DualArray2D<Real> nh_c_;
+  bool use_adm_radiation_ = false;
   DvceArray6D<Real> norm_to_tet_, tet_c_, tetcov_c_;
+  DvceArray4D<Real> sqrt_detg_c_;
   DvceArray5D<Real> i0_;
   if (is_radiation_enabled) {
-    nangles_ = pmbp->prad->prgeo->nangles;
-    nh_c_ = pmbp->prad->nh_c;
-    norm_to_tet_ = pmbp->prad->norm_to_tet;
-    tet_c_ = pmbp->prad->tet_c;
-    tetcov_c_ = pmbp->prad->tetcov_c;
-    i0_ = pmbp->prad->i0;
+    if (pmbp->prad != nullptr) {
+      nangles_ = pmbp->prad->prgeo->nangles;
+      nh_c_ = pmbp->prad->nh_c;
+      norm_to_tet_ = pmbp->prad->norm_to_tet;
+      tet_c_ = pmbp->prad->tet_c;
+      tetcov_c_ = pmbp->prad->tetcov_c;
+      i0_ = pmbp->prad->i0;
+    } else {
+      nangles_ = pmbp->pdynrad->prgeo->nangles;
+      nh_c_ = pmbp->pdynrad->nh_c;
+      use_adm_radiation_ = pmbp->pdynrad->use_adm_geometry;
+      norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
+      tet_c_ = pmbp->pdynrad->tet_c;
+      tetcov_c_ = pmbp->pdynrad->tetcov_c;
+      sqrt_detg_c_ = pmbp->pdynrad->sqrt_detg_c;
+      i0_ = pmbp->pdynrad->i0;
+    }
   }
 
   // Get ideal gas EOS data
@@ -216,6 +278,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Get Radiation constant (if radiation enabled)
   if (pmbp->prad != nullptr) {
     torus.arad = pmbp->prad->arad;
+  } else if (pmbp->pdynrad != nullptr) {
+    if (pmbp->pdynrad->are_units_enabled) {
+      torus.arad = (pmbp->punit->rad_constant_cgs*
+                    SQR(SQR(pmbp->punit->temperature_cgs()))/
+                    pmbp->punit->pressure_cgs());
+    } else {
+      torus.arad = pin->GetReal("dyn_radiation","arad");
+    }
   }
 
   // Read problem-specific parameters from input file
@@ -451,9 +521,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real n0_f = u_tet_[0]*nh_c_.d_view(n,0) - un_t;
 
         // Calculate intensity in tetrad frame
+        Real rad_norm = 0.0;
         Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-        i0_(m,n,k,j,i) = n0*n_0*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+        for (int d = 0; d < 4; ++d) {
+          n_0 += tetcov_c_(m, d, 0, k, j, i) * nh_c_.d_view(n, d);
+        }
+        if (use_adm_radiation_) {
+          rad_norm = sqrt_detg_c_(m,k,j,i);
+        } else {
+          rad_norm = n0*n_0;
+        }
+        i0_(m,n,k,j,i) = rad_norm*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
       }
     }
 
@@ -799,9 +877,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       b0.x1f(m,k,j,i) *= bnorm;
       b0.x2f(m,k,j,i) *= bnorm;
       b0.x3f(m,k,j,i) *= bnorm;
-      if (i==ie) { b0.x1f(m,k,j,i+1) *= bnorm; }
-      if (j==je) { b0.x2f(m,k,j+1,i) *= bnorm; }
-      if (k==ke) { b0.x3f(m,k+1,j,i) *= bnorm; }
+      if (i == ie) {
+        b0.x1f(m, k, j, i + 1) *= bnorm;
+      }
+      if (j == je) {
+        b0.x2f(m, k, j + 1, i) *= bnorm;
+      }
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) *= bnorm;
+      }
     });
 
     // Recompute cell-centered magnetic field
@@ -834,6 +918,170 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 namespace {
+
+void InitializeGRTorusRestartDynRadiation(Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pdynrad == nullptr || (pmbp->pmhd == nullptr && pmbp->phydro == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "gr_torus restart radiation initialization requires "
+              << "<dyn_radiation> and a fluid module." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  if (pmbp->pdynrad->use_adm_geometry) {
+    if (pmbp->padm == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "gr_torus <dyn_radiation> geometry='adm' requires "
+                << "ADM variables." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pmbp->padm->SetADMVariables(pmbp);
+    pmbp->pdynrad->PrepareADMGeometry();
+  }
+  if (pmbp->pcoord->coord_data.bh_excise) {
+    pmbp->pcoord->UpdateExcisionMasks();
+  }
+
+  if (pmbp->nmb_thispack == 0) {
+    return;
+  }
+
+  auto &indcs = pm->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie;
+  int &js = indcs.js, &je = indcs.je;
+  int &ks = indcs.ks, &ke = indcs.ke;
+  int nmb1 = pmbp->nmb_thispack - 1;
+  int nang1 = pmbp->pdynrad->prgeo->nangles - 1;
+
+  DvceArray5D<Real> w0;
+  Real gm1 = 0.0;
+  Real density_floor = 0.0;
+  Real pressure_floor = 0.0;
+  const bool use_mhd = (pmbp->pmhd != nullptr);
+  const bool use_dyngr = (pmbp->pdyngr != nullptr);
+  if (use_mhd) {
+    w0 = pmbp->pmhd->w0;
+    gm1 = pmbp->pmhd->peos->eos_data.gamma - 1.0;
+    density_floor = 10.0*pmbp->pmhd->peos->eos_data.dfloor;
+    pressure_floor = pmbp->pmhd->peos->eos_data.pfloor;
+  } else {
+    w0 = pmbp->phydro->w0;
+    gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+    density_floor = 10.0*pmbp->phydro->peos->eos_data.dfloor;
+    pressure_floor = pmbp->phydro->peos->eos_data.pfloor;
+  }
+
+  auto &i0 = pmbp->pdynrad->i0;
+  auto &nh_c = pmbp->pdynrad->nh_c;
+  auto &norm_to_tet = pmbp->pdynrad->norm_to_tet;
+  auto &tet_c = pmbp->pdynrad->tet_c;
+  auto &tetcov_c = pmbp->pdynrad->tetcov_c;
+  auto &sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+  auto &adm_g_dd_c = pmbp->pdynrad->adm_g_dd_c;
+  const bool use_adm_radiation = pmbp->pdynrad->use_adm_geometry;
+  auto &size = pmbp->pmb->mb_size;
+  auto &coord = pmbp->pcoord->coord_data;
+  const bool use_excise = coord.bh_excise;
+  auto &excision_floor = pmbp->pcoord->excision_floor;
+  const Real arad = torus.arad;
+  const Real seed_erad_fraction = torus.restart_seed_erad_fraction;
+
+  par_for("gr_torus_restart_dynrad_i0", DevExeSpace(), 0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    Real intensity = 0.0;
+    bool seed_radiation = true;
+    if (use_excise && excision_floor(m,k,j,i)) {
+      seed_radiation = false;
+    }
+
+    const Real rho = w0(m,IDN,k,j,i);
+    const Real pgas = use_dyngr ? w0(m,IPR,k,j,i) : gm1*w0(m,IEN,k,j,i);
+    if (!(rho > density_floor) || !(pgas > pressure_floor) ||
+        !(Kokkos::isfinite(rho)) || !(Kokkos::isfinite(pgas))) {
+      seed_radiation = false;
+    }
+
+    if (seed_radiation) {
+      const Real uu1 = w0(m,IVX,k,j,i);
+      const Real uu2 = w0(m,IVY,k,j,i);
+      const Real uu3 = w0(m,IVZ,k,j,i);
+      Real q = 0.0;
+      if (use_adm_radiation) {
+        q = (adm_g_dd_c(m,0,0,k,j,i)*uu1*uu1 +
+             2.0*adm_g_dd_c(m,0,1,k,j,i)*uu1*uu2 +
+             2.0*adm_g_dd_c(m,0,2,k,j,i)*uu1*uu3 +
+             adm_g_dd_c(m,1,1,k,j,i)*uu2*uu2 +
+             2.0*adm_g_dd_c(m,1,2,k,j,i)*uu2*uu3 +
+             adm_g_dd_c(m,2,2,k,j,i)*uu3*uu3);
+      } else {
+        Real &x1min = size.d_view(m).x1min;
+        Real &x1max = size.d_view(m).x1max;
+        Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
+        Real &x2min = size.d_view(m).x2min;
+        Real &x2max = size.d_view(m).x2max;
+        Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
+        Real &x3min = size.d_view(m).x3min;
+        Real &x3max = size.d_view(m).x3max;
+        Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+        Real glower[4][4], gupper[4][4];
+        ComputeMetricAndInverse(x1v, x2v, x3v, coord.is_minkowski, coord.bh_spin,
+                                glower, gupper);
+        q = (glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2 +
+             2.0*glower[1][3]*uu1*uu3 + glower[2][2]*uu2*uu2 +
+             2.0*glower[2][3]*uu2*uu3 + glower[3][3]*uu3*uu3);
+      }
+
+      if (Kokkos::isfinite(q) && 1.0 + q > 0.0) {
+        const Real uu0 = sqrt(1.0 + q);
+        Real u_tet[4];
+        u_tet[0] = (norm_to_tet(m,0,0,k,j,i)*uu0 +
+                    norm_to_tet(m,0,1,k,j,i)*uu1 +
+                    norm_to_tet(m,0,2,k,j,i)*uu2 +
+                    norm_to_tet(m,0,3,k,j,i)*uu3);
+        u_tet[1] = (norm_to_tet(m,1,0,k,j,i)*uu0 +
+                    norm_to_tet(m,1,1,k,j,i)*uu1 +
+                    norm_to_tet(m,1,2,k,j,i)*uu2 +
+                    norm_to_tet(m,1,3,k,j,i)*uu3);
+        u_tet[2] = (norm_to_tet(m,2,0,k,j,i)*uu0 +
+                    norm_to_tet(m,2,1,k,j,i)*uu1 +
+                    norm_to_tet(m,2,2,k,j,i)*uu2 +
+                    norm_to_tet(m,2,3,k,j,i)*uu3);
+        u_tet[3] = (norm_to_tet(m,3,0,k,j,i)*uu0 +
+                    norm_to_tet(m,3,1,k,j,i)*uu1 +
+                    norm_to_tet(m,3,2,k,j,i)*uu2 +
+                    norm_to_tet(m,3,3,k,j,i)*uu3);
+
+        const Real un_t = (u_tet[1]*nh_c.d_view(n,1) +
+                           u_tet[2]*nh_c.d_view(n,2) +
+                           u_tet[3]*nh_c.d_view(n,3));
+        const Real n0_f = u_tet[0]*nh_c.d_view(n,0) - un_t;
+        const Real temp = pgas/rho;
+        const Real urad = seed_erad_fraction*arad*SQR(SQR(temp));
+        if (Kokkos::isfinite(n0_f) && n0_f != 0.0 &&
+            Kokkos::isfinite(urad) && urad >= 0.0) {
+          Real rad_norm = 0.0;
+          if (use_adm_radiation) {
+            rad_norm = sqrt_detg_c(m,k,j,i);
+          } else {
+            const Real n0 = tet_c(m,0,0,k,j,i);
+            Real n_0 = 0.0;
+            for (int d=0; d<4; ++d) {
+              n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+            }
+            rad_norm = n0*n_0;
+          }
+          intensity = rad_norm*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+          if (!(Kokkos::isfinite(intensity)) || intensity < 0.0) {
+            intensity = 0.0;
+          }
+        }
+      }
+    }
+
+    i0(m,n,k,j,i) = intensity;
+  });
+  Kokkos::fence();
+}
 
 //----------------------------------------------------------------------------------------
 // Function for calculating angular momentum variable l in Fishbone-Moncrief torus
@@ -1467,18 +1715,26 @@ void NoInflowTorus(Mesh *pm) {
         for (int i=0; i<ng; ++i) {
           b0.x1f(m,k,j,is-i-1) = b0.x1f(m,k,j,is);
           b0.x2f(m,k,j,is-i-1) = b0.x2f(m,k,j,is);
-          if (j == n2-1) {b0.x2f(m,k,j+1,is-i-1) = b0.x2f(m,k,j+1,is);}
+          if (j == n2 - 1) {
+            b0.x2f(m, k, j + 1, is - i - 1) = b0.x2f(m, k, j + 1, is);
+          }
           b0.x3f(m,k,j,is-i-1) = b0.x3f(m,k,j,is);
-          if (k == n3-1) {b0.x3f(m,k+1,j,is-i-1) = b0.x3f(m,k+1,j,is);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, j, is - i - 1) = b0.x3f(m, k + 1, j, is);
+          }
         }
       }
       if (mb_bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) {
         for (int i=0; i<ng; ++i) {
           b0.x1f(m,k,j,ie+i+2) = b0.x1f(m,k,j,ie+1);
           b0.x2f(m,k,j,ie+i+1) = b0.x2f(m,k,j,ie);
-          if (j == n2-1) {b0.x2f(m,k,j+1,ie+i+1) = b0.x2f(m,k,j+1,ie);}
+          if (j == n2 - 1) {
+            b0.x2f(m, k, j + 1, ie + i + 1) = b0.x2f(m, k, j + 1, ie);
+          }
           b0.x3f(m,k,j,ie+i+1) = b0.x3f(m,k,j,ie);
-          if (k == n3-1) {b0.x3f(m,k+1,j,ie+i+1) = b0.x3f(m,k+1,j,ie);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, j, ie + i + 1) = b0.x3f(m, k + 1, j, ie);
+          }
         }
       }
     });
@@ -1551,19 +1807,27 @@ void NoInflowTorus(Mesh *pm) {
       if (mb_bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) {
         for (int j=0; j<ng; ++j) {
           b0.x1f(m,k,js-j-1,i) = b0.x1f(m,k,js,i);
-          if (i == n1-1) {b0.x1f(m,k,js-j-1,i+1) = b0.x1f(m,k,js,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, k, js - j - 1, i + 1) = b0.x1f(m, k, js, i + 1);
+          }
           b0.x2f(m,k,js-j-1,i) = b0.x2f(m,k,js,i);
           b0.x3f(m,k,js-j-1,i) = b0.x3f(m,k,js,i);
-          if (k == n3-1) {b0.x3f(m,k+1,js-j-1,i) = b0.x3f(m,k+1,js,i);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, js - j - 1, i) = b0.x3f(m, k + 1, js, i);
+          }
         }
       }
       if (mb_bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) {
         for (int j=0; j<ng; ++j) {
           b0.x1f(m,k,je+j+1,i) = b0.x1f(m,k,je,i);
-          if (i == n1-1) {b0.x1f(m,k,je+j+1,i+1) = b0.x1f(m,k,je,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, k, je + j + 1, i + 1) = b0.x1f(m, k, je, i + 1);
+          }
           b0.x2f(m,k,je+j+2,i) = b0.x2f(m,k,je+1,i);
           b0.x3f(m,k,je+j+1,i) = b0.x3f(m,k,je,i);
-          if (k == n3-1) {b0.x3f(m,k+1,je+j+1,i) = b0.x3f(m,k+1,je,i);}
+          if (k == n3 - 1) {
+            b0.x3f(m, k + 1, je + j + 1, i) = b0.x3f(m, k + 1, je, i);
+          }
         }
       }
     });
@@ -1636,18 +1900,26 @@ void NoInflowTorus(Mesh *pm) {
       if (mb_bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) {
         for (int k=0; k<ng; ++k) {
           b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
-          if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, ks - k - 1, j, i + 1) = b0.x1f(m, ks, j, i + 1);
+          }
           b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
-          if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
+          if (j == n2 - 1) {
+            b0.x2f(m, ks - k - 1, j + 1, i) = b0.x2f(m, ks, j + 1, i);
+          }
           b0.x3f(m,ks-k-1,j,i) = b0.x3f(m,ks,j,i);
         }
       }
       if (mb_bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user) {
         for (int k=0; k<ng; ++k) {
           b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
-          if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+          if (i == n1 - 1) {
+            b0.x1f(m, ke + k + 1, j, i + 1) = b0.x1f(m, ke, j, i + 1);
+          }
           b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
-          if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+          if (j == n2 - 1) {
+            b0.x2f(m, ke + k + 1, j + 1, i) = b0.x2f(m, ke, j + 1, i);
+          }
           b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
         }
       }

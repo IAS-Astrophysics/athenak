@@ -192,6 +192,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (evolution_t.compare("stationary") != 0) {
     // determine if FOFC is enabled
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+    repair_nonfinite_fluxes = pin->GetOrAddBoolean("mhd","repair_nonfinite_fluxes",false);
+    repair_nonfinite_face_emfs = pin->GetOrAddBoolean("mhd",
+                                                      "repair_nonfinite_face_emfs",false);
+    repair_nonfinite_conserved = pin->GetOrAddBoolean("mhd",
+                                                      "repair_nonfinite_conserved",false);
+    repair_nonfinite_fluxes_verbose = pin->GetOrAddBoolean("mhd",
+        "repair_nonfinite_fluxes_verbose",true);
 
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
@@ -209,7 +216,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       }
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
-               xorder.compare("wenoz") == 0) {
+               xorder.compare("wenoz") == 0 ||
+               xorder.compare("wenomz") == 0) {
       // check that nghost > 2
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (indcs.ng < 3) {
@@ -231,6 +239,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::ppmx;
       } else if (xorder.compare("wenoz") == 0) {
         recon_method = ReconstructionMethod::wenoz;
+      } else if (xorder.compare("wenomz") == 0) {
+        recon_method = ReconstructionMethod::wenomz;
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -366,16 +376,32 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 MHD::~MHD() {
-  if (psbox_b != nullptr) {delete psbox_b;}
-  if (psbox_u != nullptr) {delete psbox_u;}
-  if (porb_b != nullptr) {delete porb_b;}
-  if (porb_u != nullptr) {delete porb_u;}
+  if (psbox_b != nullptr) {
+    delete psbox_b;
+  }
+  if (psbox_u != nullptr) {
+    delete psbox_u;
+  }
+  if (porb_b != nullptr) {
+    delete porb_b;
+  }
+  if (porb_u != nullptr) {
+    delete porb_u;
+  }
   delete pbval_b;
   delete pbval_u;
-  if (psrc!= nullptr) {delete psrc;}
-  if (pcond != nullptr) {delete pcond;}
-  if (presist!= nullptr) {delete presist;}
-  if (pvisc != nullptr) {delete pvisc;}
+  if (psrc != nullptr) {
+    delete psrc;
+  }
+  if (pcond != nullptr) {
+    delete pcond;
+  }
+  if (presist != nullptr) {
+    delete presist;
+  }
+  if (pvisc != nullptr) {
+    delete pvisc;
+  }
   delete peos;
 }
 

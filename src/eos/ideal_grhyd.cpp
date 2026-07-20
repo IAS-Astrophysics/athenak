@@ -54,8 +54,33 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+  auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+  auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
+  auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
+  auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow;
+  auto &excise_inflow_speed_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
+  Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
+  Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
+  Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
+  Real p0_ax = pmy_pack->pcoord->coord_data.punc_0_spin[0];
+  Real p0_ay = pmy_pack->pcoord->coord_data.punc_0_spin[1];
+  Real p0_az = pmy_pack->pcoord->coord_data.punc_0_spin[2];
+  Real p0_vx = pmy_pack->pcoord->coord_data.punc_0_vel[0];
+  Real p0_vy = pmy_pack->pcoord->coord_data.punc_0_vel[1];
+  Real p0_vz = pmy_pack->pcoord->coord_data.punc_0_vel[2];
+  Real p1_x = pmy_pack->pcoord->coord_data.punc_1[0];
+  Real p1_y = pmy_pack->pcoord->coord_data.punc_1[1];
+  Real p1_z = pmy_pack->pcoord->coord_data.punc_1[2];
+  Real p1_ax = pmy_pack->pcoord->coord_data.punc_1_spin[0];
+  Real p1_ay = pmy_pack->pcoord->coord_data.punc_1_spin[1];
+  Real p1_az = pmy_pack->pcoord->coord_data.punc_1_spin[2];
+  Real p1_vx = pmy_pack->pcoord->coord_data.punc_1_vel[0];
+  Real p1_vy = pmy_pack->pcoord->coord_data.punc_1_vel[1];
+  Real p1_vz = pmy_pack->pcoord->coord_data.punc_1_vel[2];
+  Real p0_rad = pmy_pack->pcoord->coord_data.punc_0_rad;
+  Real p1_rad = pmy_pack->pcoord->coord_data.punc_1_rad;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
@@ -100,11 +125,14 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
     bool dfloor_used=false, efloor_used=false;
     bool vceiling_used=false, c2p_failure=false;
     int iter_used=0;
+    Real excise_weight = 0.0;
+    bool smooth_applied = false;
 
     // Only execute cons2prim if outside excised region
     bool excised = false;
     if (use_excise) {
-      if (excision_floor_(m,k,j,i)) {
+      excise_weight = smooth_excise_ ? excision_weight_(m,k,j,i) : 0.0;
+      if (excision_floor_(m,k,j,i) && !smooth_excise_) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
@@ -144,6 +172,106 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         w.vy *= factor;
         w.vz *= factor;
       }
+      if (smooth_excise_ && excise_weight > 0.0 && !only_testfloors) {
+        if (c2p_failure) {
+          w.d = dexcise_;
+          w.e = pexcise_/gm1;
+          excise_weight = 1.0;
+        }
+        Real bx0, by0, bz0, bx1, by1, bz1;
+        ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
+                                    p0_vx, p0_vy, p0_vz, &bx0, &by0, &bz0);
+        ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z,
+                                    p1_vx, p1_vy, p1_vz, &bx1, &by1, &bz1);
+        Real rks0 = ExcisionKSRXSpin(bx0, by0, bz0, p0_ax, p0_ay, p0_az);
+        Real rks1 = ExcisionKSRXSpin(bx1, by1, bz1, p1_ax, p1_ay, p1_az);
+        bool use_p1 = (p1_rad > 0.0) &&
+                      (p0_rad <= 0.0 ||
+                       rks1 < rks0);
+        Real tvx = use_p1 ? p1_vx : p0_vx;
+        Real tvy = use_p1 ? p1_vy : p0_vy;
+        Real tvz = use_p1 ? p1_vz : p0_vz;
+        if (excise_inflow_ && excise_inflow_speed_ > 0.0) {
+          Real rx = use_p1 ? bx1 : bx0;
+          Real ry = use_p1 ? by1 : by0;
+          Real rz = use_p1 ? bz1 : bz0;
+          Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
+          if (rnorm > 0.0 && isfinite(rnorm) &&
+              isfinite(w.vx) && isfinite(w.vy) && isfinite(w.vz)) {
+            Real nx = rx/rnorm;
+            Real ny = ry/rnorm;
+            Real nz = rz/rnorm;
+            Real u_sq = glower[1][1]*SQR(w.vx) + glower[2][2]*SQR(w.vy) +
+                        glower[3][3]*SQR(w.vz) + 2.0*glower[1][2]*w.vx*w.vy +
+                        2.0*glower[1][3]*w.vx*w.vz + 2.0*glower[2][3]*w.vy*w.vz;
+            if (u_sq >= 0.0 && isfinite(u_sq)) {
+              Real iW = 1.0/sqrt(1.0 + u_sq);
+              Real cvx = w.vx*iW;
+              Real cvy = w.vy*iW;
+              Real cvz = w.vz*iW;
+              Real vin = excise_inflow_speed_ * excise_weight;
+              Real vrad = (cvx - tvx)*nx + (cvy - tvy)*ny + (cvz - tvz)*nz;
+              if (vrad > -vin) {
+                Real dv = vrad + vin;
+                tvx = cvx - dv*nx;
+                tvy = cvy - dv*ny;
+                tvz = cvz - dv*nz;
+              } else {
+                tvx = cvx;
+                tvy = cvy;
+                tvz = cvz;
+              }
+            }
+          }
+        }
+        Real tv2 = glower[1][1]*SQR(tvx) + glower[2][2]*SQR(tvy) +
+                   glower[3][3]*SQR(tvz) + 2.0*glower[1][2]*tvx*tvy +
+                   2.0*glower[1][3]*tvx*tvz + 2.0*glower[2][3]*tvy*tvz;
+        if (!(tv2 >= 0.0) || !isfinite(tv2)) {
+          tvx = tvy = tvz = 0.0;
+          tv2 = 0.0;
+        }
+        Real gtarget = fmax(eos.gamma_max, 1.0 + 1.0e-12);
+        Real target_vmax2 = (gtarget > 1.0e12) ? 1.0 - 1.0e-12 :
+                             1.0 - 1.0/SQR(gtarget);
+        target_vmax2 = fmin(target_vmax2, 1.0 - 1.0e-12);
+        if (tv2 > target_vmax2) {
+          Real factor = sqrt(target_vmax2/tv2);
+          tvx *= factor;
+          tvy *= factor;
+          tvz *= factor;
+          tv2 = target_vmax2;
+        }
+        Real tlor = 1.0/sqrt(fmax(1.0 - tv2, 1.0e-300));
+        Real twvx = tlor*tvx;
+        Real twvy = tlor*tvy;
+        Real twvz = tlor*tvz;
+        if (c2p_failure) {
+          w.vx = twvx;
+          w.vy = twvy;
+          w.vz = twvz;
+        }
+        Real keep = 1.0 - excise_weight;
+        Real etarget = pexcise_/gm1;
+        w.d = keep*w.d + excise_weight*dexcise_;
+        w.vx = keep*w.vx + excise_weight*twvx;
+        w.vy = keep*w.vy + excise_weight*twvy;
+        w.vz = keep*w.vz + excise_weight*twvz;
+        w.e = keep*w.e + excise_weight*etarget;
+        if (excise_temp_ceil_ > 0.0) {
+          w.e = fmin(w.e, excise_temp_ceil_*w.d/gm1);
+        }
+        if (!(w.d > 0.0) || !(w.e > 0.0) || !isfinite(w.d) || !isfinite(w.e) ||
+            !isfinite(w.vx) || !isfinite(w.vy) || !isfinite(w.vz)) {
+          w.d = dexcise_;
+          w.vx = twvx;
+          w.vy = twvy;
+          w.vz = twvz;
+          w.e = etarget;
+          c2p_failure = false;
+        }
+        smooth_applied = true;
+      }
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
@@ -153,10 +281,18 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
-      if (dfloor_used) {sumd++;}
-      if (efloor_used) {sume++;}
-      if (vceiling_used) {sumv++;}
-      if (c2p_failure) {sumf++;}
+      if (dfloor_used) {
+        sumd++;
+      }
+      if (efloor_used) {
+        sume++;
+      }
+      if (vceiling_used) {
+        sumv++;
+      }
+      if (c2p_failure) {
+        sumf++;
+      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
 
       // store primitive state in 3D array
@@ -167,7 +303,8 @@ void IdealGRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
       prim(m,IEN,k,j,i) = w.e;
 
       // reset conserved variables if floor, ceiling, failure, or excision encountered
-      if (dfloor_used || efloor_used || vceiling_used || c2p_failure || excised) {
+      if (dfloor_used || efloor_used || vceiling_used || c2p_failure || excised ||
+          smooth_applied) {
         SingleP2C_IdealGRHyd(glower, gupper, w, eos.gamma, u);
         cons(m,IDN,k,j,i) = u.d;
         cons(m,IM1,k,j,i) = u.mx;

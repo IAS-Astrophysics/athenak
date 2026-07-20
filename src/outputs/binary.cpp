@@ -159,38 +159,38 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int &oke = outmbs[m].oke;
 
     // output indexing for MB
-    int32_t nx = (int32_t)(ois);
+    int32_t nx = static_cast<int32_t>(ois);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(oie);
+    nx = static_cast<int32_t>(oie);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(ojs);
+    nx = static_cast<int32_t>(ojs);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(oje);
+    nx = static_cast<int32_t>(oje);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(oks);
+    nx = static_cast<int32_t>(oks);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(oke);
+    nx = static_cast<int32_t>(oke);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
 
     // logical location lx1, lx2, lx3
-    nx = (int32_t)(loc.lx1);
+    nx = static_cast<int32_t>(loc.lx1);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(loc.lx2);
+    nx = static_cast<int32_t>(loc.lx2);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
-    nx = (int32_t)(loc.lx3);
+    nx = static_cast<int32_t>(loc.lx3);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
 
     // physical refinement level
-    nx = (int32_t)(loc.level-pm->root_level);
+    nx = static_cast<int32_t>(loc.level - pm->root_level);
     memcpy(pdata,&(nx),sizeof(nx));
     pdata+=sizeof(nx);
 

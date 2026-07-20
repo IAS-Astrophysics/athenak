@@ -65,7 +65,7 @@ enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8,
 enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 
 // integer constants to specify spatial reconstruction methods
-enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
+enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz, wenomz};
 
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};
@@ -446,8 +446,8 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
 //----------------------------------------------------------------------------------------
 //! \struct summed_array_type
 // Following code is copied from Kokkos wiki pages on building custom reducers.  It allows
-// an arbitrary number (set by the compile time constant NREDUCTION_VARIABLES above) of
-// sum reductions to be computed simultaneously.  Used for history outputs, etc.
+// a small fixed number (set by NREDUCTION_VARIABLES above) of sum reductions to be
+// computed simultaneously on device.  Large user-history arrays are stored separately.
 
 namespace array_sum {  // namespace helps with name resolution in reduction identity
 template< class ScalarType, int N >
@@ -455,7 +455,9 @@ struct array_type {
   ScalarType the_array[N];
   KOKKOS_INLINE_FUNCTION   // Default constructor - Initialize to 0's
   array_type() {
-    for (int i = 0; i < N; i++ ) { the_array[i] = 0; }
+    for (int i = 0; i < N; i++) {
+      the_array[i] = 0;
+    }
   }
   KOKKOS_INLINE_FUNCTION   // Copy Constructor
   array_type(const array_type & rhs) {
@@ -477,7 +479,7 @@ struct array_type {
     }
   }
 };
-// Number of reductions templated by (NHISTORY_VARIABLES)
+// Number of simultaneous device reductions
 typedef array_type<Real,(NREDUCTION_VARIABLES)> GlobalSum;  // simplifies code below
 } // namespace array_sum
 

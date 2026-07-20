@@ -79,18 +79,30 @@ void MeshBoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
     // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
     // x1f component on x1-faces
     if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
-      if (ox1 > 0) {isame[0].bie++;}
-      if (ox1 < 0) {isame[0].bis--;}
+      if (ox1 > 0) {
+        isame[0].bie++;
+      }
+      if (ox1 < 0) {
+        isame[0].bis--;
+      }
     }
     // x2f component on x2-faces
     if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
-      if (ox2 > 0) {isame[1].bje++;}
-      if (ox2 < 0) {isame[1].bjs--;}
+      if (ox2 > 0) {
+        isame[1].bje++;
+      }
+      if (ox2 < 0) {
+        isame[1].bjs--;
+      }
     }
     // x3f component on x3-faces
     if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
-      if (ox3 > 0) {isame[2].bke++;}
-      if (ox3 < 0) {isame[2].bks--;}
+      if (ox3 > 0) {
+        isame[2].bke++;
+      }
+      if (ox3 < 0) {
+        isame[2].bks--;
+      }
     }
     for (int i=0; i<=2; ++i) {
       int ndat = (isame[i].bie - isame[i].bis + 1)*(isame[i].bje - isame[i].bjs + 1)*
@@ -144,16 +156,28 @@ void MeshBoundaryValuesFC::InitSendIndices(MeshBoundaryBuffer &buf,
   }
   // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
   if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
-    if (ox1 > 0) {icoar[0].bie++;}
-    if (ox1 < 0) {icoar[0].bis--;}
+    if (ox1 > 0) {
+      icoar[0].bie++;
+    }
+    if (ox1 < 0) {
+      icoar[0].bis--;
+    }
   }
   if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
-    if (ox2 > 0) {icoar[1].bje++;}
-    if (ox2 < 0) {icoar[1].bjs--;}
+    if (ox2 > 0) {
+      icoar[1].bje++;
+    }
+    if (ox2 < 0) {
+      icoar[1].bjs--;
+    }
   }
   if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
-    if (ox3 > 0) {icoar[2].bke++;}
-    if (ox3 < 0) {icoar[2].bks--;}
+    if (ox3 > 0) {
+      icoar[2].bke++;
+    }
+    if (ox3 < 0) {
+      icoar[2].bks--;
+    }
   }
   for (int i=0; i<=2; ++i) {
     int ndat = (icoar[i].bie - icoar[i].bis + 1)*(icoar[i].bje - icoar[i].bjs + 1)*
@@ -436,18 +460,30 @@ void MeshBoundaryValuesFC::InitRecvIndices(MeshBoundaryBuffer &buf,
     // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
     // x1f component on x1-faces
     if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
-      if (ox1 > 0) {isame[0].bis--;}
-      if (ox1 < 0) {isame[0].bie++;}
+      if (ox1 > 0) {
+        isame[0].bis--;
+      }
+      if (ox1 < 0) {
+        isame[0].bie++;
+      }
     }
     // x2f component on x2-faces
     if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
-      if (ox2 > 0) {isame[1].bjs--;}
-      if (ox2 < 0) {isame[1].bje++;}
+      if (ox2 > 0) {
+        isame[1].bjs--;
+      }
+      if (ox2 < 0) {
+        isame[1].bje++;
+      }
     }
     // x3f component on x3-faces
     if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
-      if (ox3 > 0) {isame[2].bks--;}
-      if (ox3 < 0) {isame[2].bke++;}
+      if (ox3 > 0) {
+        isame[2].bks--;
+      }
+      if (ox3 < 0) {
+        isame[2].bke++;
+      }
     }
     for (int i=0; i<=2; ++i) {
       int ndat = (isame[i].bie - isame[i].bis + 1)*(isame[i].bje - isame[i].bjs + 1)*
@@ -659,16 +695,28 @@ void MeshBoundaryValuesFC::InitRecvIndices(MeshBoundaryBuffer &buf,
   }
   // for SMR/AMR, always include the overlapping faces in edge and corner boundaries
   if (pmy_pack->pmesh->multilevel && (ox2 != 0 || ox3 != 0)) {
-    if (ox1 > 0) {ifine[0].bis--;}
-    if (ox1 < 0) {ifine[0].bie++;}
+    if (ox1 > 0) {
+      ifine[0].bis--;
+    }
+    if (ox1 < 0) {
+      ifine[0].bie++;
+    }
   }
   if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox3 != 0)) {
-    if (ox2 > 0) {ifine[1].bjs--;}
-    if (ox2 < 0) {ifine[1].bje++;}
+    if (ox2 > 0) {
+      ifine[1].bjs--;
+    }
+    if (ox2 < 0) {
+      ifine[1].bje++;
+    }
   }
   if (pmy_pack->pmesh->multilevel && (ox1 != 0 || ox2 != 0)) {
-    if (ox3 > 0) {ifine[2].bks--;}
-    if (ox3 < 0) {ifine[2].bke++;}
+    if (ox3 > 0) {
+      ifine[2].bks--;
+    }
+    if (ox3 < 0) {
+      ifine[2].bke++;
+    }
   }
   for (int i=0; i<=2; ++i) {
     int ndat = (ifine[i].bie - ifine[i].bis + 1)*(ifine[i].bje - ifine[i].bjs + 1)*

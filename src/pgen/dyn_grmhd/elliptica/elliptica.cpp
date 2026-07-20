@@ -858,9 +858,15 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
       b0.x1f(m,k,j,i) *= bnorm;
       b0.x2f(m,k,j,i) *= bnorm;
       b0.x3f(m,k,j,i) *= bnorm;
-      if (i==ie) { b0.x1f(m,k,j,i+1) *= bnorm; }
-      if (j==je) { b0.x2f(m,k,j+1,i) *= bnorm; }
-      if (k==ke) { b0.x3f(m,k+1,j,i) *= bnorm; }
+      if (i == ie) {
+        b0.x1f(m, k, j, i + 1) *= bnorm;
+      }
+      if (j == je) {
+        b0.x2f(m, k, j + 1, i) *= bnorm;
+      }
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) *= bnorm;
+      }
     });
 
     // Re-compute cell-centered fields.

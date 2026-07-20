@@ -25,9 +25,11 @@
 #include "mesh_refinement.hpp"
 #include "refinement_criteria.hpp"
 
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
@@ -40,24 +42,25 @@
 
 //----------------------------------------------------------------------------------------
 // MeshRefinement constructor:
-// called from Mesh::BuildTree (before physics modules are enrolled)
+// called from main() after physics modules are enrolled
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
+  pmy_mesh(pm),
+  refine_flag("rflag",pm->nmb_total),
+  fc_amr_repair("fc_amr_repair",pm->nmb_total),
+  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
   nmb_created(0),
   nmb_deleted(0),
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
-  prolong_prims(false),
-  refine_flag("rflag",pm->nmb_total),
-  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
 #endif
-  pmy_mesh(pm) {
+  prolong_prims(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
@@ -68,7 +71,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
-  // allocate arrays for AMR, add RefinementCriteria object
+  // allocate arrays for AMR and enroll refinement criteria
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
@@ -80,10 +83,13 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   // be sure Views are initialized to zero
   for (int m=0; m<(pm->nmb_total); ++m) {
     refine_flag.h_view(m) = 0;
+    fc_amr_repair.h_view(m) = 0;
     ncyc_since_ref(m) = 0;
   }
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+  fc_amr_repair.template modify<HostMemSpace>();
+  fc_amr_repair.template sync<DevExeSpace>();
 
   // initialize interpolation weights for prolongation and restriction
   InitInterpWghts();
@@ -152,6 +158,17 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
+    if (pmbp->pmhd != nullptr) {
+      RepairAMRFC(pmbp->pmhd->b0);
+      if (pmbp->pdyngr == nullptr) {
+        (void) pmbp->pmhd->ConToPrim(pdriver, 0);
+      } else {
+        if (pmbp->pz4c != nullptr) {
+          (void) pmbp->pz4c->ConvertZ4cToADM(pdriver, 0);
+        }
+        (void) pmbp->pdyngr->ConToPrim(pdriver, 0);
+      }
+    }
     if (pmbp->phydro != nullptr) {
       (void) pmbp->phydro->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
@@ -160,6 +177,9 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     }
     if (pmbp->prad != nullptr) {
       (void) pmbp->prad->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->pdynrad != nullptr) {
+      (void) pmbp->pdynrad->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
     if (pmbp->pz4c != nullptr) {
       (void) pmbp->pz4c->NewTimeStep(pdriver, pdriver->nexp_stages);
@@ -190,7 +210,9 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   for (int m=0; m<(pmy_mesh->nmb_total); ++m) {
     ncyc_since_ref(m) += 1;
   }
-  if ((pmy_mesh->ncycle)%(ncyc_check_amr) != 0) {return;}  // not cycle to check
+  if ((pmy_mesh->ncycle) % (ncyc_check_amr) != 0) {
+    return;
+  }  // not cycle to check
 
   // calculate derived refinement variables
   if (pmrc->nderived > 0) {
@@ -227,15 +249,21 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
   int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
   for (int m=0; m<nmb; ++m) {
     if (pmy_mesh->lloc_eachmb[m+mbs].level == pmy_mesh->max_level) {
-      if (refine_flag.h_view(m+mbs) > 0) {refine_flag.h_view(m+mbs) = 0;}
+      if (refine_flag.h_view(m + mbs) > 0) {
+        refine_flag.h_view(m + mbs) = 0;
+      }
     }
     if (pmy_mesh->lloc_eachmb[m+mbs].level == pmy_mesh->root_level) {
-      if (refine_flag.h_view(m+mbs) < 0) {refine_flag.h_view(m+mbs) = 0;}
+      if (refine_flag.h_view(m + mbs) < 0) {
+        refine_flag.h_view(m + mbs) = 0;
+      }
     }
   }
   // Turn off (on host) refine/derefine flag for any MB that has been recently refined
   for (int m=0; m<nmb; ++m) {
-    if (ncyc_since_ref(m+mbs) < refinement_interval) {refine_flag.h_view(m+mbs) = 0;}
+    if (ncyc_since_ref(m + mbs) < refinement_interval) {
+      refine_flag.h_view(m + mbs) = 0;
+    }
   }
 
 #if MPI_PARALLEL_ENABLED
@@ -258,8 +286,12 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
 void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   // compute nleaf= number of leaf MeshBlocks per refined block
   int nleaf = 2;
-  if (pmy_mesh->two_d) {nleaf = 4;}
-  if (pmy_mesh->three_d) {nleaf = 8;}
+  if (pmy_mesh->two_d) {
+    nleaf = 4;
+  }
+  if (pmy_mesh->three_d) {
+    nleaf = 8;
+  }
 
   // count the number of the blocks to be (de)refined on this rank
   nref_eachrank[global_variable::my_rank] = 0;
@@ -461,7 +493,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   new_gids_eachrank = new int[global_variable::nranks];
   new_nmb_eachrank = new int[global_variable::nranks];
 
-  for (int i=0; i<new_nmb; i++) {new_cost_eachmb[i] = 1.0;}
+  for (int i = 0; i < new_nmb; i++) {
+    new_cost_eachmb[i] = 1.0;
+  }
   pm->LoadBalance(new_cost_eachmb, new_rank_eachmb, new_gids_eachrank, new_nmb_eachrank,
                   new_nmb_total);
   if (new_nmb_eachrank[global_variable::my_rank] > pm->nmb_maxperrank) {
@@ -492,6 +526,16 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
 
+  hydro::Hydro* phydro = pm->pmb_pack->phydro;
+  mhd::MHD* pmhd = pm->pmb_pack->pmhd;
+  radiation::Radiation* prad = pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad = pm->pmb_pack->pdynrad;
+  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
+  adm::ADM* padm = pm->pmb_pack->padm;
+  if ((ndel > 0) && (pmhd != nullptr)) {
+    RestrictFC(pmhd->b0, pmhd->coarse_b0);
+  }
+
   // Step 4.
   // Allocate send/recv buffers for load balancing, post receives.
   // Pack send buffers for load blancing and send data
@@ -505,11 +549,6 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // De-refine (restrict) evolved physics variables for MeshBlocks within this rank.
   // Simply copies data from coarse arrays in source MBs to appropriate octant of fine
   // array in target MB.
-  hydro::Hydro* phydro = pm->pmb_pack->phydro;
-  mhd::MHD* pmhd = pm->pmb_pack->pmhd;
-  radiation::Radiation* prad = pm->pmb_pack->prad;
-  z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
-  adm::ADM* padm = pm->pmb_pack->padm;
   // derefine (if needed)
   if (ndel > 0) {
     if (phydro != nullptr) {
@@ -521,6 +560,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       DerefineCCSameRank(prad->i0, prad->coarse_i0);
+    } else if (pdynrad != nullptr) {
+      DerefineCCSameRank(pdynrad->i0, pdynrad->coarse_i0);
     }
     if (pz4c != nullptr) {
       DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
@@ -539,6 +580,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   if (prad != nullptr) {
     CopyCC(prad->i0);
+  } else if (pdynrad != nullptr) {
+    CopyCC(pdynrad->i0);
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
@@ -558,6 +601,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       CopyForRefinementCC(prad->i0, prad->coarse_i0);
+    } else if (pdynrad != nullptr) {
+      CopyForRefinementCC(pdynrad->i0, pdynrad->coarse_i0);
     }
     if (pz4c != nullptr) {
       CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
@@ -567,8 +612,12 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   // Step 8.
   // Wait for all MPI load balancing communications to finish.  Unpack data.
 #if MPI_PARALLEL_ENABLED
-  if (nmb_send > 0) {ClearSendAMR();}
-  if (nmb_recv > 0) {ClearRecvAndUnpackAMR();}
+  if (nmb_send > 0) {
+    ClearSendAMR();
+  }
+  if (nmb_recv > 0) {
+    ClearRecvAndUnpackAMR();
+  }
 #endif
 
   // copy newtoold array to DualView so that it can be accessed in kernel
@@ -593,6 +642,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       RefineCC(new_to_old, prad->i0, prad->coarse_i0);
+    } else if (pdynrad != nullptr) {
+      RefineCC(new_to_old, pdynrad->i0, pdynrad->coarse_i0);
     }
     if (pz4c != nullptr) {
       RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0, true);
@@ -639,6 +690,17 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
 
+  Kokkos::realloc(fc_amr_repair, new_nmb_total);
+  for (int m=0; m<new_nmb_total; ++m) {
+    // Refined children need their internal faces rebuilt after boundary exchange
+    // finalizes the prolongated exterior faces.  Derefined blocks already receive a
+    // complete, divergence-preserving face field from RestrictFC/DerefineFC; rebuilding
+    // their internal faces would unnecessarily change that restricted solution.
+    fc_amr_repair.h_view(m) = (refine_flag.h_view(newtoold[m]) > 0) ? 1 : 0;
+  }
+  fc_amr_repair.template modify<HostMemSpace>();
+  fc_amr_repair.template sync<DevExeSpace>();
+
   // clean-up
   delete [] newtoold;
   delete [] oldtonew;
@@ -653,6 +715,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     // With radiation, compute tetrads and associated mesh arrays
     if (prad != nullptr) {
       prad->SetOrthonormalTetrad();
+    } else if (pdynrad != nullptr) {
+      pdynrad->PrepareADMGeometry();
     }
   }
 
@@ -689,6 +753,7 @@ void MeshRefinement::DerefineCCSameRank(DvceArray5D<Real> &a, DvceArray5D<Real> 
   for (int oldm=ombs; oldm<=ombe; ++oldm) {
     if (refine_flag.h_view(oldm) < -1) {  // only derefine if nleaf blocks flagged
       int newm = oldtonew[oldm];
+      if ((oldm > 0) && (oldtonew[oldm-1] == newm)) continue;
       // only copy data if target MB stays on this rank
       if (new_rank_eachmb[newm] == global_variable::my_rank) {
         for (int l=0; l<nleaf; l++) {
@@ -745,6 +810,7 @@ void MeshRefinement::DerefineFCSameRank(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
   for (int oldm=ombs; oldm<=ombe; ++oldm) {
     if (refine_flag.h_view(oldm) < -1) {  // only derefine if nleaf blocks flagged
       int newm = oldtonew[oldm];
+      if ((oldm > 0) && (oldtonew[oldm-1] == newm)) continue;
       // only copy data if target MB stays on this rank
       if (new_rank_eachmb[newm] == global_variable::my_rank) {
         for (int l=0; l<nleaf; l++) {
@@ -1144,6 +1210,44 @@ void MeshRefinement::RefineFC(DualArray1D<int> &n2o, DvceFaceFld4D<Real> &b,
         b.x1f(m,fk,fj,fi+1) = 0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2));
       } else {
         // in multi-D call inlined prolongation operator for FC fields at internal faces
+        ProlongFCInternal(m,fk,fj,fi,three_d,b);
+      }
+    }
+  });
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshRefinement::RepairAMRFC
+//! \brief Recompute internal face-centered fields in AMR-affected MeshBlocks after
+//! exterior faces have been finalized by boundary exchange/prolongation.
+
+void MeshRefinement::RepairAMRFC(DvceFaceFld4D<Real> &b) {
+  auto &indcs = pmy_mesh->mb_indcs;
+  auto &is = indcs.is;
+  auto &js = indcs.js;
+  auto &ks = indcs.ks;
+  auto &cis = indcs.cis, &cie = indcs.cie;
+  auto &cjs = indcs.cjs, &cje = indcs.cje;
+  auto &cks = indcs.cks, &cke = indcs.cke;
+
+  const int nmb = pmy_mesh->pmb_pack->nmb_thispack;
+  const int mbs = pmy_mesh->gids_eachrank[global_variable::my_rank];
+  bool &one_d = pmy_mesh->one_d;
+  bool &three_d = pmy_mesh->three_d;
+  auto &repair = fc_amr_repair;
+
+  par_for("RepairAMRFC",DevExeSpace(), 0,(nmb-1), cks,cke, cjs,cje, cis,cie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (repair.d_view(m + mbs) != 0) {
+      int fi = (i - cis)*2 + is;
+      int fj = (j - cjs)*2 + js;
+      int fk = (k - cks)*2 + ks;
+
+      if (one_d) {
+        b.x1f(m,fk,fj,fi+1) = 0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2));
+      } else {
         ProlongFCInternal(m,fk,fj,fi,three_d,b);
       }
     }

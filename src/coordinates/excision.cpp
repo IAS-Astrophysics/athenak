@@ -23,6 +23,19 @@ Real KSRX(const Real x1, const Real x2, const Real x3, const Real a) {
   return sqrt((SQR(rad)-SQR(a)+sqrt(SQR(SQR(rad)-SQR(a))+4.0*SQR(a)*SQR(x3)))/2.0);
 }
 
+KOKKOS_INLINE_FUNCTION
+Real SmoothStep01(const Real x) {
+  Real s = fmin(1.0, fmax(0.0, x));
+  return s*s*(3.0 - 2.0*s);
+}
+
+KOKKOS_INLINE_FUNCTION
+Real PunctureSmoothWeight01(const Real x, const Real exponent) {
+  Real s = fmin(1.0, fmax(0.0, x));
+  Real n = fmax(exponent, 1.0e-12);
+  return pow(s, 2.0*n)*((2.0*n + 1.0) - 2.0*n*s);
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void Coordinates::SetExcisionMasks()
 //  \brief Sets boolean masks for the excision in CKS
@@ -40,6 +53,8 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
   auto &size = pmy_pack->pmb->mb_size;
   auto &spin = coord_data.bh_spin;
   auto &excision_radius = coord_data.rexcise;
+  auto &weight = excision_weight;
+  Real smooth_width = coord_data.smooth_excise_width;
 
   auto &flux_excise_r = coord_data.flux_excise_r;
 
@@ -83,11 +98,16 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     Real x3fp1 = LeftEdgeX  (k+1-ks, indcs.nx3, x3min, x3max);
     Real x3fp2 = LeftEdgeX  (k+2-ks, indcs.nx3, x3min, x3max);
 
+    excision_floor(m,k,j,i) = false;
+    excision_flux(m,k,j,i) = false;
+    weight(m,k,j,i) = 0.0;
+
     // Set excision floor mask
-    if (KSRX(x1v,
-             x2v,
-             x3v,
-             spin) <= excision_radius) excision_floor(m,k,j,i) = true;
+    Real rks = KSRX(x1v, x2v, x3v, spin);
+    if (rks <= excision_radius) {
+      excision_floor(m,k,j,i) = true;
+      weight(m,k,j,i) = SmoothStep01((excision_radius - rks)/smooth_width);
+    }
 
     // Set excision flux mask
     Real x1, x2, x3;
@@ -174,14 +194,96 @@ void Coordinates::UpdateExcisionMasks() {
     auto &adm = pmy_pack->padm->adm;
     auto &floor = excision_floor;
     auto &flux = excision_flux;
+    auto &weight = excision_weight;
 
     Real &excise_lapse = coord_data.excise_lapse;
+    Real lapse_width = coord_data.smooth_excise_lapse_width;
+    Real flux_lapse =
+        coord_data.smooth_excise ? excise_lapse + lapse_width : excise_lapse;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       bool excise = (adm.alpha(m,k,j,i) < excise_lapse);
+      bool flux_excise = (adm.alpha(m,k,j,i) < flux_lapse);
       floor(m,k,j,i) = excise;
-      flux(m,k,j,i) = excise;
+      flux(m,k,j,i) = flux_excise;
+      weight(m,k,j,i) = excise ? SmoothStep01((excise_lapse - adm.alpha(m,k,j,i))/
+                                                lapse_width) : 0.0;
+    });
+  } else if (coord_data.excision_scheme == ExcisionScheme::puncture) {
+    // capture variables for kernel
+    auto &size = pmy_pack->pmb->mb_size;
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+    int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
+    int nmb1 = pmy_pack->nmb_thispack - 1;
+    auto &floor = excision_floor;
+    auto &flux = excision_flux;
+    auto &weight = excision_weight;
+
+    Real p0_x = coord_data.punc_0[0];
+    Real p0_y = coord_data.punc_0[1];
+    Real p0_z = coord_data.punc_0[2];
+    Real p0_ax = coord_data.punc_0_spin[0];
+    Real p0_ay = coord_data.punc_0_spin[1];
+    Real p0_az = coord_data.punc_0_spin[2];
+    Real p0_vx = coord_data.punc_0_vel[0];
+    Real p0_vy = coord_data.punc_0_vel[1];
+    Real p0_vz = coord_data.punc_0_vel[2];
+
+    Real p1_x = coord_data.punc_1[0];
+    Real p1_y = coord_data.punc_1[1];
+    Real p1_z = coord_data.punc_1[2];
+    Real p1_ax = coord_data.punc_1_spin[0];
+    Real p1_ay = coord_data.punc_1_spin[1];
+    Real p1_az = coord_data.punc_1_spin[2];
+    Real p1_vx = coord_data.punc_1_vel[0];
+    Real p1_vy = coord_data.punc_1_vel[1];
+    Real p1_vz = coord_data.punc_1_vel[2];
+
+    Real &punc_0_r = coord_data.punc_0_rad;
+    Real &punc_1_r = coord_data.punc_1_rad;
+    Real width_fraction = coord_data.smooth_excise_puncture_width_fraction;
+    Real flux_rad_factor = coord_data.punc_flux_rad_factor;
+    Real weight_exponent = coord_data.smooth_excise_puncture_weight_exponent;
+
+    par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
+
+      Real x1v   = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
+      Real x2v   = CellCenterX(j  -js, indcs.nx2, x2min, x2max);
+      Real x3v   = CellCenterX(k  -ks, indcs.nx3, x3min, x3max);
+
+      Real x0, y0, z0, x1, y1, z1;
+      ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
+                                  p0_vx, p0_vy, p0_vz, &x0, &y0, &z0);
+      ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z,
+                                  p1_vx, p1_vy, p1_vz, &x1, &y1, &z1);
+      Real r0 = ExcisionKSRXSpin(x0, y0, z0, p0_ax, p0_ay, p0_az);
+      Real r1 = ExcisionKSRXSpin(x1, y1, z1, p1_ax, p1_ay, p1_az);
+
+      bool excise = ((punc_0_r > 0.0 && r0 <= punc_0_r) ||
+                     (punc_1_r > 0.0 && r1 <= punc_1_r));
+      bool flux_excise = ((punc_0_r > 0.0 && r0 <= flux_rad_factor*punc_0_r) ||
+                          (punc_1_r > 0.0 && r1 <= flux_rad_factor*punc_1_r));
+      floor(m,k,j,i) = excise;
+      flux(m,k,j,i) = flux_excise;
+      Real punc_0_width = width_fraction*punc_0_r;
+      Real punc_1_width = width_fraction*punc_1_r;
+      Real w0 = (punc_0_width > 0.0) ?
+          PunctureSmoothWeight01((punc_0_r - r0)/punc_0_width, weight_exponent) : 0.0;
+      Real w1 = (punc_1_width > 0.0) ?
+          PunctureSmoothWeight01((punc_1_r - r1)/punc_1_width, weight_exponent) : 0.0;
+      weight(m,k,j,i) = fmax(w0, w1);
     });
   }
 

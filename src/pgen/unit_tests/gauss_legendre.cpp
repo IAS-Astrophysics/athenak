@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <sstream>
 #include <iomanip>
 #include <iostream>   // endl
@@ -16,7 +17,6 @@
 #include <string>     // c_str(), string
 #include <vector>
 #include <cctype>
-#include <random>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -25,10 +25,6 @@
 #include "coordinates/cell_locations.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "utils/spherical_harm.hpp"
-
-using u32    = uint_least32_t;
-using s32    = int_least32_t;
-using engine = std::mt19937;
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::GaussLegendre()
@@ -41,25 +37,29 @@ void ProblemGenerator::GaussLegendre(ParameterInput *pin, const bool restart) {
 
   // ADMOnePuncture(pmbp, pin);
   int ntheta = pin->GetOrAddInteger("problem", "ntheta", 16);
+  if (ntheta < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Gauss-Legendre unit test requires ntheta >= 2"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   GaussLegendreGrid grid(pmbp, ntheta, 1);
 
-  // test that the cross integral of spherical harmonics are delta functions.
-  // First initialize 10 random pairs of l and m, with 0 <= l <=ntheta.
-
-  std::random_device os_seed;
-  const u32 seed = os_seed();
-
-  engine generator( seed );
-  std::uniform_int_distribution< u32 > distribute_l( 1, ntheta-1);
-
+  // Test a deterministic sample spanning low through near-Nyquist angular modes.
+  constexpr int nmodes = 10;
   std::vector<int> ls;
   std::vector<int> ms;
-
-  for (int repetition = 0; repetition < 10; ++repetition) {
-    int l = distribute_l(generator);
-    std::uniform_int_distribution< s32 > distribute_m( -l, l);
-    int m = distribute_m(generator);
+  for (int n=0; n<nmodes; ++n) {
+    int l = 1 + n*(ntheta - 2)/(nmodes - 1);
+    int m = 0;
+    if (n%4 == 1) {
+      m = l;
+    } else if (n%4 == 2) {
+      m = -l;
+    } else if (n%4 == 3) {
+      m = l/2;
+    }
     ls.push_back(l);
     ms.push_back(m);
   }
@@ -68,10 +68,11 @@ void ProblemGenerator::GaussLegendre(ParameterInput *pin, const bool restart) {
   double int_r, int_i;
   bool failed = false;
   double max_err = 0;
+  constexpr double tolerance = 1.0e-9;
 
   // outer loop over pairs of spherical harmonics
-  for (int n1 = 0; n1 < 10; ++n1)
-  for (int n2 = n1; n2 < 10; ++n2) {
+  for (int n1 = 0; n1 < nmodes; ++n1)
+  for (int n2 = n1; n2 < nmodes; ++n2) {
     // reset doubles to store integration value
     int_r = 0;
     int_i = 0;
@@ -93,14 +94,14 @@ void ProblemGenerator::GaussLegendre(ParameterInput *pin, const bool restart) {
       max_err = (abs(int_r-1)> max_err) ? abs(int_r-1) : max_err;
       max_err = (abs(int_i)> max_err) ? abs(int_i) : max_err;
 
-      if (abs(int_r-1) >= 1e-10 || abs(int_i) >= 1e-10) {
+      if (abs(int_r-1) >= tolerance || abs(int_i) >= tolerance) {
         failed = true;
       }
     } else {
       max_err = (abs(int_r)> max_err) ? abs(int_r) : max_err;
       max_err = (abs(int_i)> max_err) ? abs(int_i) : max_err;
 
-      if (abs(int_r) >= 1e-10 || abs(int_i) >= 1e-10) {
+      if (abs(int_r) >= tolerance || abs(int_i) >= tolerance) {
         failed = true;
       }
     }

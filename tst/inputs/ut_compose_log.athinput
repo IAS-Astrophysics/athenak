@@ -40,7 +40,7 @@ nlim       = 0         # cycle limit
 tlim       = 0         # time limit
 ndiag      = 1         # cycles between diagostic output
 
-<coord> 
+<coord>
 general_rel = true
 minkowski   = true
 excise      = false
