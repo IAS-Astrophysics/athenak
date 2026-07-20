@@ -12,24 +12,35 @@ from typing import List
 import time
 import pytest
 import logging
+from pathlib import Path
+import shutil
 import sys
 
-sys.path.insert(0, "../vis/python")
+# Resolve repository paths independently of the directory used to invoke pytest.
+ATHENAK_PATH = Path(__file__).resolve().parents[2]
+ATHENAK_BUILD = ATHENAK_PATH / "tst" / "build" / "src"
+LOG_FILE_PATH = ATHENAK_PATH / "tst" / "test_log.txt"
+
+sys.path.insert(0, str(ATHENAK_PATH / "vis" / "python"))
 import athena_read  # noqa: E402
 
 athena_read.check_nan_flag = True  # Enable NaN checking in athena_read
 
-# Constants and configurations
-ATHENAK_PATH = ".."
-ATHENAK_BUILD = "build/src"
+
+def default_test_threads(maximum=None):
+    """Return the configured build/MPI thread count, optionally capped."""
+    threads = int(os.environ.get("ATHENAK_TEST_THREADS", os.cpu_count()))
+    if threads < 1:
+        raise ValueError("ATHENAK_TEST_THREADS must be a positive integer")
+    return min(threads, maximum) if maximum is not None else threads
+
 
 # Configure logging
-LOG_FILE_PATH = os.path.abspath(os.path.join(ATHENAK_PATH, "tst", "test_log.txt"))
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(LOG_FILE_PATH),
+        logging.FileHandler(str(LOG_FILE_PATH)),
         logging.StreamHandler(),  # Optional: Keep console logging
     ],
 )
@@ -60,7 +71,7 @@ def run_command(command: List[str], text: bool = False) -> bool:
     return process.returncode == 0
 
 
-def cmake(flags: List[str] = [], **kwargs) -> bool:
+def cmake(flags: List[str] = None, **kwargs) -> bool:
     """
     Runs the CMake command to configure the build system.
 
@@ -74,9 +85,12 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     Raises:
         RuntimeError: If the CMake command fails.
     """
+    if flags is None:
+        flags = []
+
     original_dir = os.getcwd()
     try:
-        os.chdir(ATHENAK_PATH)
+        os.chdir(str(ATHENAK_PATH))
         logging.info(f"Configuring CMake in {os.getcwd()}")
 
         command = ["cmake"] + flags + ["-B", "tst/build"]
@@ -87,7 +101,7 @@ def cmake(flags: List[str] = [], **kwargs) -> bool:
     return True
 
 
-def make(threads: int = os.cpu_count(), **kwargs) -> bool:
+def make(threads: int = None, **kwargs) -> bool:
     """
     Runs the Make command to compile the project.
 
@@ -101,7 +115,12 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     Raises:
         RuntimeError: If the Make command fails.
     """
-    os.chdir(ATHENAK_BUILD)
+    if threads is None:
+        threads = default_test_threads()
+    elif "ATHENAK_TEST_THREADS" in os.environ:
+        threads = min(threads, default_test_threads())
+
+    os.chdir(str(ATHENAK_BUILD))
     command = ["make", "-j", f"{threads}"]
     start_time = time.time()
     status = run_command(command, **kwargs)
@@ -113,7 +132,7 @@ def make(threads: int = os.cpu_count(), **kwargs) -> bool:
     return True
 
 
-def run(inputfile: str, flags=[], **kwargs) -> bool:
+def run(inputfile: str, flags=None, **kwargs) -> bool:
     """
     Executes a test case using the AthenaK binary.
 
@@ -128,6 +147,9 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
     Raises:
         AssertionError: If the test case execution fails.
     """
+    if flags is None:
+        flags = []
+
     command = ["./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(f"Failed to execute {inputfile} with flags {flags}")
@@ -136,7 +158,7 @@ def run(inputfile: str, flags=[], **kwargs) -> bool:
 
 
 def mpi_run(
-    inputfile: str, flags=[], threads: int = min(16, os.cpu_count()), **kwargs
+    inputfile: str, flags=None, threads: int = None, **kwargs
 ) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
@@ -153,6 +175,13 @@ def mpi_run(
     Raises:
         AssertionError: If the test case execution fails.
     """
+    if flags is None:
+        flags = []
+    if threads is None:
+        threads = default_test_threads(maximum=16)
+    elif "ATHENAK_TEST_THREADS" in os.environ:
+        threads = min(threads, default_test_threads(maximum=16))
+
     command = ["mpirun", "-np", str(threads), "./athena", "-i", inputfile] + flags
     if not run_command(command, **kwargs):
         logging.error(
@@ -183,10 +212,10 @@ def clean() -> None:
     Cleans the build directory.
     """
     logging.info("Cleaning build directory")
-    Popen(["rm -rf build/"], shell=True, stdout=PIPE).communicate()
+    shutil.rmtree(ATHENAK_PATH / "tst" / "build", ignore_errors=True)
 
 
-def clean_make(threads: int = os.cpu_count(), **kwargs) -> None:
+def clean_make(threads: int = None, **kwargs) -> None:
     """
     Cleans the build directory and rebuilds the project.
     Removes all files in the build directory and then runs CMake and Make.
@@ -249,6 +278,8 @@ def test_error_convergence(
     mpi=False,
 ):
     RUN = mpi_run if mpi else run
+    l1_rms_l = 0.0
+    l1_rms_r = 0.0
     for wv in _wave:
         try:
             for res in _res:

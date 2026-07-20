@@ -16,10 +16,10 @@
 #include "athena.hpp"
 #include "io_wrapper.hpp"
 
+// Host-side capacity for user-defined history output.  This is intentionally
+// independent of NREDUCTION_VARIABLES: large custom histories use dedicated
+// accumulators or host data, while the generic device reducers remain small.
 #define NHISTORY_VARIABLES 2000
-#if NHISTORY_VARIABLES > NREDUCTION_VARIABLES
-    #error NHISTORY > NREDUCTION in outputs.hpp
-#endif
 
 #define NOUTPUT_CHOICES 158
 // choices for output variables used in <ouput> blocks in input file

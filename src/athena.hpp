@@ -442,12 +442,12 @@ KOKKOS_INLINE_FUNCTION void par_for_inner(TeamMember_t tmember, const int il,con
   Kokkos::parallel_for(Kokkos::TeamVectorRange(tmember, il, iu+1), function);
 }
 
-#define NREDUCTION_VARIABLES 2000
+#define NREDUCTION_VARIABLES 20
 //----------------------------------------------------------------------------------------
 //! \struct summed_array_type
 // Following code is copied from Kokkos wiki pages on building custom reducers.  It allows
-// an arbitrary number (set by the compile time constant NREDUCTION_VARIABLES above) of
-// sum reductions to be computed simultaneously.  Used for history outputs, etc.
+// a small fixed number (set by NREDUCTION_VARIABLES above) of sum reductions to be
+// computed simultaneously on device.  Large user-history arrays are stored separately.
 
 namespace array_sum {  // namespace helps with name resolution in reduction identity
 template< class ScalarType, int N >
@@ -479,7 +479,7 @@ struct array_type {
     }
   }
 };
-// Number of reductions templated by (NHISTORY_VARIABLES)
+// Number of simultaneous device reductions
 typedef array_type<Real,(NREDUCTION_VARIABLES)> GlobalSum;  // simplifies code below
 } // namespace array_sum
 

@@ -402,8 +402,8 @@ void TurbulentHistory(HistoryData *pdata, Mesh *pm) {
            *(w0_(m,IVZ,k,j+1,i)-w0_(m,IVZ,k,j-1,i))))
      / dx_squared)*vol;
 
-    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
-    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+    // fill the unused device-reduction slots with zeros
+    for (int n=nhist_; n<NREDUCTION_VARIABLES; ++n) {
       hvars.the_array[n] = 0.0;
     }
 
