@@ -32,6 +32,9 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
     excision_weight("excision_weight",1,1,1,1),
     pmy_pack(ppack) {
   coord_data.bh_excise = false;
+  coord_data.dexcise = 0.0;
+  coord_data.pexcise = 0.0;
+  coord_data.texcise = -1.0;
   coord_data.smooth_excise = false;
   coord_data.smooth_excise_puncture_weight_exponent = 1.0;
   coord_data.punc_flux_rad_factor = 1.0;
@@ -79,15 +82,21 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       // Set the density and pressure to which cells inside the excision radius will
       // be reset to.  Primitive velocities will be set to zero.
       coord_data.dexcise = pin->GetReal("coord","dexcise");
-      coord_data.texcise = pin->GetOrAddReal("coord","texcise", -1.0);
-      coord_data.pexcise = (coord_data.texcise > 0.0) ?
-          coord_data.dexcise*coord_data.texcise : pin->GetReal("coord","pexcise");
-      if (coord_data.texcise == 0.0) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
-                  << __LINE__ << std::endl
-                  << "coord/texcise must be positive or negative to disable"
-                  << std::endl;
-        std::exit(EXIT_FAILURE);
+      if (is_dynamical_relativistic) {
+        coord_data.texcise = pin->GetOrAddReal("coord","texcise", -1.0);
+        coord_data.pexcise = (coord_data.texcise > 0.0) ?
+            coord_data.dexcise*coord_data.texcise : pin->GetReal("coord","pexcise");
+        if (coord_data.texcise == 0.0) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                    << __LINE__ << std::endl
+                    << "coord/texcise must be positive or negative to disable"
+                    << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+      } else {
+        // Preserve the static-GR interface: an optional temperature parameter must not
+        // override the explicitly configured pressure floor.
+        coord_data.pexcise = pin->GetReal("coord","pexcise");
       }
       for (int n = 0; n < 3; ++n) {
         coord_data.punc_0[n] = coord_data.punc_1[n] = 0.0;

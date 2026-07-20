@@ -5,6 +5,7 @@ Checks source code style, based on Google style guide with some custom modificat
 # Modules
 import os
 import pytest
+import sys
 from subprocess import Popen, PIPE
 
 
@@ -55,7 +56,7 @@ def test_lint_python():
                 "\nErrors:\n" + tracked_errors.decode()
             )
         python_files = tracked_output.decode().rstrip("\0").split("\0")
-        command = ["python", "-m", "flake8"] + python_files
+        command = [sys.executable, "-m", "flake8"] + python_files
         process = Popen(command, stdout=PIPE, stderr=PIPE)
         output, errors = process.communicate()
         status = process.returncode == 0

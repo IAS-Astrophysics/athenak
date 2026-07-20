@@ -361,7 +361,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // Calculate linear wave perturbations in hydro
     Real rem[5][5], ev[5];
-    Real lambda, delta_rho, delta_pgas, delta_v[4];
+    Real lambda, delta_v[4];
+    Real delta_rho = 0.0, delta_pgas = 0.0;
     if (relativistic) {
       // Calculate background 4-vectors
       Real u[4];
@@ -482,7 +483,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // Calculate linear wave perturbations in MHD
     Real rem[7][7], ev[7];
-    Real lambda, delta_rho, delta_pgas,u[4],delta_u[4],delta_b[4];
+    Real lambda, u[4],delta_u[4],delta_b[4];
+    Real delta_rho = 0.0, delta_pgas = 0.0;
     if (relativistic) {
       // Calculate background 4-vectors
       Real v_sq = SQR(lwv.vx_0) + SQR(lwv.vy_0) + SQR(lwv.vz_0);
@@ -1175,7 +1177,6 @@ void RelMHDPerturbations(LinWaveVariables lwv, Real u[4], Real b[4],
      Real &lambda, Real &delta_rho, Real &delta_pgas, Real delta_u[4], Real delta_b[4]) {
   Real b_sq = -SQR(b[0]) + SQR(b[1]) + SQR(b[2]) + SQR(b[3]);
   Real wtot = lwv.wgas + b_sq;
-  Real cs = std::sqrt(lwv.cs_sq);
   switch (lwv.wave_flag) {
     case 3: {  // entropy (A 46)
       lambda = lwv.vx_0;
@@ -1263,7 +1264,7 @@ void RelMHDPerturbations(LinWaveVariables lwv, Real u[4], Real b[4],
       Real lambda_fl, lambda_sl, lambda_sr, lambda_fr;
       QuarticRoots(coeff_3/coeff_4, coeff_2/coeff_4, coeff_1/coeff_4, coeff_0/coeff_4,
                    &lambda_fl, &lambda_sl, &lambda_sr, &lambda_fr);
-      Real lambda_other_ms;
+      Real lambda_other_ms=0.0;
       if (lwv.wave_flag == 0) {
         lambda = lambda_fl;
         lambda_other_ms = lambda_sl;
