@@ -692,7 +692,11 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
 
   Kokkos::realloc(fc_amr_repair, new_nmb_total);
   for (int m=0; m<new_nmb_total; ++m) {
-    fc_amr_repair.h_view(m) = (refine_flag.h_view(newtoold[m]) != 0) ? 1 : 0;
+    // Refined children need their internal faces rebuilt after boundary exchange
+    // finalizes the prolongated exterior faces.  Derefined blocks already receive a
+    // complete, divergence-preserving face field from RestrictFC/DerefineFC; rebuilding
+    // their internal faces would unnecessarily change that restricted solution.
+    fc_amr_repair.h_view(m) = (refine_flag.h_view(newtoold[m]) > 0) ? 1 : 0;
   }
   fc_amr_repair.template modify<HostMemSpace>();
   fc_amr_repair.template sync<DevExeSpace>();
