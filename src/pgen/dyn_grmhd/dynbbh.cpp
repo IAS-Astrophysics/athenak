@@ -171,9 +171,11 @@ struct three_metric {
   Real kzz;
 };
 
+using bbh_traj_array = Kokkos::Array<Real, NTRAJ>;
+
 struct bbh_traj_state {
-  Real q[NTRAJ];
-  Real dq[NTRAJ];
+  bbh_traj_array q;
+  bbh_traj_array dq;
 };
 
 enum class MetricDerivativeMethod {
@@ -1174,9 +1176,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real &dx2 = size.d_view(m).dx2;
     Real &dx3 = size.d_view(m).dx3;
 
-    // Extract metric and inverse -- presumably should get actual metric?????
+    // Extract metric and inverse
     Real glower[4][4], gupper[4][4];
-    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
+    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
+                            traj0.q.data(), trs);
 
     // Calculate Boyer-Lindquist coordinates of cell
     Real r, theta, phi;
@@ -1262,7 +1265,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                       x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
       Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
+      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
+                              traj0.q.data(), trs);
 
       uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
       uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
@@ -1550,7 +1554,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, traj0.q, trs);
+      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
+                              traj0.q.data(), trs);
 
       // Calculate Boyer-Lindquist coordinates of cell
       Real r, theta, phi;
@@ -2157,14 +2162,15 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
       struct four_metric met4;
       struct three_metric met3;
-      get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, traj.q, traj.dq, bbh_);
+      get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, traj.q.data(),
+                                 traj.dq.data(), bbh_);
       four_metric_to_three_metric(met4, met3);
       StoreADMVariables(adm, m, k, j, i, met3);
     });
     return;
   }
 
-  Real traj_m[NTRAJ], traj_p[NTRAJ];
+  bbh_traj_array traj_m, traj_p;
   Real hm = bbh_.metric_fd_step, hp = bbh_.metric_fd_step;
 
   if (bbh_.use_traj_table && !bbh_table.t.empty()) {
@@ -2181,12 +2187,12 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
     }
   }
   if (hm > 0.0) {
-    find_traj_t(tt - hm, traj_m);
+    find_traj_t(tt - hm, traj_m.data());
   } else {
     for (int n = 0; n < NTRAJ; ++n) traj_m[n] = traj.q[n];
   }
   if (hp > 0.0) {
-    find_traj_t(tt + hp, traj_p);
+    find_traj_t(tt + hp, traj_p.data());
   } else {
     for (int n = 0; n < NTRAJ; ++n) traj_p[n] = traj.q[n];
   }
@@ -2207,7 +2213,8 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    numerical_4metric(tt, x1v, x2v, x3v, met4, traj_m, traj.q, traj_p,
+    numerical_4metric(tt, x1v, x2v, x3v, met4, traj_m.data(), traj.q.data(),
+                      traj_p.data(),
                       hm, hp, bbh_);
 
     four_metric_to_three_metric(met4, met3);
@@ -2497,7 +2504,7 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
 
 bbh_traj_state find_traj_state(Real t) {
   bbh_traj_state state;
-  find_traj_t_with_deriv(t, state.q, state.dq);
+  find_traj_t_with_deriv(t, state.q.data(), state.dq.data());
   return state;
 }
 
@@ -3022,6 +3029,7 @@ void numerical_4metric(const Real t, const Real x, const Real y,
   DifferenceMetric(met_p.g, met_m.g, 2.0*hx, outmet.g_z);
 }
 
+KOKKOS_FORCEINLINE_FUNCTION
 void TimeMetricAD(const Real x, const Real y, const Real z,
                   const Real tr[NTRAJ], const Real dtr[NTRAJ],
                   const bbh_pgen b, struct dd_sym &g, struct dd_sym &dg) {
