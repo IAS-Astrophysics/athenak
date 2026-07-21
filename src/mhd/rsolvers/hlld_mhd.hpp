@@ -214,10 +214,24 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       // (KGF): group transverse by, bz terms for floating-point associativity symmetry
       urst.e = (sdr*ur.e - ptr*wr_ivx + ptst*spd[2] +
                 bxi*(wr_ivx*bxi + (wr_ivy*ur.by + wr_ivz*ur.bz) - vbstr))*sdmr_inv;
-      // ul** and ur** - if Bx is near zero, same as *-states
-      if (0.5*bxsq < (HLLD_SMALL_NUMBER)*ptst) {
-        uldst = ulst;
-        urdst = urst;
+      // ul** and ur**.  At exactly Bx=0, the rotational waves collapse onto the
+      // contact, so no double-star flux is selected below.
+      if (bxi == 0.0) {
+        uldst.d = ulst.d;
+        uldst.mx = ulst.mx;
+        uldst.my = ulst.my;
+        uldst.mz = ulst.mz;
+        uldst.e = ulst.e;
+        uldst.by = ulst.by;
+        uldst.bz = ulst.bz;
+
+        urdst.d = urst.d;
+        urdst.mx = urst.mx;
+        urdst.my = urst.my;
+        urdst.mz = urst.mz;
+        urdst.e = urst.e;
+        urdst.by = urst.by;
+        urdst.bz = urst.bz;
       } else {
         Real invsumd = 1.0/(sqrtdl + sqrtdr);
         Real bxsig = (bxi > 0.0 ? 1.0 : -1.0);
@@ -241,13 +255,13 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
         urdst.mz = urdst.d * tmp;
 
         // eqn (61) of M&K
-        tmp = invsumd*(sqrtdl*urst.by + sqrtdr*ulst.by +
-                       bxsig*sqrtdl*sqrtdr*((urst.my*urst_d_inv) - (ulst.my*ulst_d_inv)));
+        tmp = invsumd*(sqrtdl*urst.by + sqrtdr*ulst.by + bxsig*sqrtdl*sqrtdr*
+                       ((urst.my*urst_d_inv) - (ulst.my*ulst_d_inv)));
         uldst.by = urdst.by = tmp;
 
         // eqn (62) of M&K
-        tmp = invsumd*(sqrtdl*urst.bz + sqrtdr*ulst.bz +
-                       bxsig*sqrtdl*sqrtdr*((urst.mz*urst_d_inv) - (ulst.mz*ulst_d_inv)));
+        tmp = invsumd*(sqrtdl*urst.bz + sqrtdr*ulst.bz + bxsig*sqrtdl*sqrtdr*
+                       ((urst.mz*urst_d_inv) - (ulst.mz*ulst_d_inv)));
         uldst.bz = urdst.bz = tmp;
 
         // eqn (63) of M&K
@@ -316,6 +330,15 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
         flxi.e  = fl.e  + ulst.e;
         flxi.by = fl.by + ulst.by;
         flxi.bz = fl.bz + ulst.bz;
+      } else if (spd[3] <= 0.0) {
+        // return Fr*
+        flxi.d = fr.d  + urst.d;
+        flxi.mx = fr.mx + urst.mx;
+        flxi.my = fr.my + urst.my;
+        flxi.mz = fr.mz + urst.mz;
+        flxi.e  = fr.e  + urst.e;
+        flxi.by = fr.by + urst.by;
+        flxi.bz = fr.bz + urst.bz;
       } else if (spd[2] >= 0.0) {
         // return Fl**
         flxi.d = fl.d  + ulst.d + uldst.d;
@@ -325,7 +348,7 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
         flxi.e  = fl.e  + ulst.e + uldst.e;
         flxi.by = fl.by + ulst.by + uldst.by;
         flxi.bz = fl.bz + ulst.bz + uldst.bz;
-      } else if (spd[3] > 0.0) {
+      } else {
         // return Fr**
         flxi.d = fr.d + urst.d + urdst.d;
         flxi.mx = fr.mx + urst.mx + urdst.mx;
@@ -334,15 +357,6 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
         flxi.e  = fr.e + urst.e + urdst.e;
         flxi.by = fr.by + urst.by + urdst.by;
         flxi.bz = fr.bz + urst.bz + urdst.bz;
-      } else {
-        // return Fr*
-        flxi.d = fr.d  + urst.d;
-        flxi.mx = fr.mx + urst.mx;
-        flxi.my = fr.my + urst.my;
-        flxi.mz = fr.mz + urst.mz;
-        flxi.e  = fr.e  + urst.e;
-        flxi.by = fr.by + urst.by;
-        flxi.bz = fr.bz + urst.bz;
       }
 
       flx(m,IDN,k,j,i) = flxi.d;
