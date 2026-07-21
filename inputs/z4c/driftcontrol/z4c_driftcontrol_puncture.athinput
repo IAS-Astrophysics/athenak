@@ -12,7 +12,7 @@ problem   = z4c drift control on an off-centre puncture
 basename  = z4c
 
 <mesh>
-nghost    = 2
+nghost    = 4
 nx1       = 96
 x1min     = -8
 x1max     = 8
