@@ -214,42 +214,61 @@ void HLLD(TeamMember_t const &member, const EOS_Data &eos,
       // (KGF): group transverse by, bz terms for floating-point associativity symmetry
       urst.e = (sdr*ur.e - ptr*wr_ivx + ptst*spd[2] +
                 bxi*(wr_ivx*bxi + (wr_ivy*ur.by + wr_ivz*ur.bz) - vbstr))*sdmr_inv;
-      // ul** and ur**
-      Real invsumd = 1.0/(sqrtdl + sqrtdr);
-      Real bxsig = (bxi > 0.0 ? 1.0 : -1.0);
+      // ul** and ur**.  At exactly Bx=0, the rotational waves collapse onto the
+      // contact, so no double-star flux is selected below.
+      if (bxi == 0.0) {
+        uldst.d = ulst.d;
+        uldst.mx = ulst.mx;
+        uldst.my = ulst.my;
+        uldst.mz = ulst.mz;
+        uldst.e = ulst.e;
+        uldst.by = ulst.by;
+        uldst.bz = ulst.bz;
 
-      uldst.d = ulst.d;
-      urdst.d = urst.d;
+        urdst.d = urst.d;
+        urdst.mx = urst.mx;
+        urdst.my = urst.my;
+        urdst.mz = urst.mz;
+        urdst.e = urst.e;
+        urdst.by = urst.by;
+        urdst.bz = urst.bz;
+      } else {
+        Real invsumd = 1.0/(sqrtdl + sqrtdr);
+        Real bxsig = (bxi > 0.0 ? 1.0 : -1.0);
 
-      uldst.mx = ulst.mx;
-      urdst.mx = urst.mx;
+        uldst.d = ulst.d;
+        urdst.d = urst.d;
 
-      // eqn (59) of M&K
-      Real tmp = invsumd*(sqrtdl*(ulst.my*ulst_d_inv) + sqrtdr*(urst.my*urst_d_inv) +
-                          bxsig*(urst.by - ulst.by));
-      uldst.my = uldst.d * tmp;
-      urdst.my = urdst.d * tmp;
+        uldst.mx = ulst.mx;
+        urdst.mx = urst.mx;
 
-      // eqn (60) of M&K
-      tmp = invsumd*(sqrtdl*(ulst.mz*ulst_d_inv) + sqrtdr*(urst.mz*urst_d_inv) +
-                     bxsig*(urst.bz - ulst.bz));
-      uldst.mz = uldst.d * tmp;
-      urdst.mz = urdst.d * tmp;
+        // eqn (59) of M&K
+        Real tmp = invsumd*(sqrtdl*(ulst.my*ulst_d_inv) + sqrtdr*(urst.my*urst_d_inv) +
+                            bxsig*(urst.by - ulst.by));
+        uldst.my = uldst.d * tmp;
+        urdst.my = urdst.d * tmp;
 
-      // eqn (61) of M&K
-      tmp = invsumd*(sqrtdl*urst.by + sqrtdr*ulst.by +
-                     bxsig*sqrtdl*sqrtdr*((urst.my*urst_d_inv) - (ulst.my*ulst_d_inv)));
-      uldst.by = urdst.by = tmp;
+        // eqn (60) of M&K
+        tmp = invsumd*(sqrtdl*(ulst.mz*ulst_d_inv) + sqrtdr*(urst.mz*urst_d_inv) +
+                       bxsig*(urst.bz - ulst.bz));
+        uldst.mz = uldst.d * tmp;
+        urdst.mz = urdst.d * tmp;
 
-      // eqn (62) of M&K
-      tmp = invsumd*(sqrtdl*urst.bz + sqrtdr*ulst.bz +
-                     bxsig*sqrtdl*sqrtdr*((urst.mz*urst_d_inv) - (ulst.mz*ulst_d_inv)));
-      uldst.bz = urdst.bz = tmp;
+        // eqn (61) of M&K
+        tmp = invsumd*(sqrtdl*urst.by + sqrtdr*ulst.by + bxsig*sqrtdl*sqrtdr*
+                       ((urst.my*urst_d_inv) - (ulst.my*ulst_d_inv)));
+        uldst.by = urdst.by = tmp;
 
-      // eqn (63) of M&K
-      tmp = spd[2]*bxi + (uldst.my*uldst.by + uldst.mz*uldst.bz)/uldst.d;
-      uldst.e = ulst.e - sqrtdl*bxsig*(vbstl - tmp);
-      urdst.e = urst.e + sqrtdr*bxsig*(vbstr - tmp);
+        // eqn (62) of M&K
+        tmp = invsumd*(sqrtdl*urst.bz + sqrtdr*ulst.bz + bxsig*sqrtdl*sqrtdr*
+                       ((urst.mz*urst_d_inv) - (ulst.mz*ulst_d_inv)));
+        uldst.bz = urdst.bz = tmp;
+
+        // eqn (63) of M&K
+        tmp = spd[2]*bxi + (uldst.my*uldst.by + uldst.mz*uldst.bz)/uldst.d;
+        uldst.e = ulst.e - sqrtdl*bxsig*(vbstl - tmp);
+        urdst.e = urst.e + sqrtdr*bxsig*(vbstr - tmp);
+      }
 
       //--- Step 6.  Compute flux
       uldst.d = spd[1] * (uldst.d - ulst.d);
