@@ -273,6 +273,14 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // allocate boundary buffers for evolved (cell-centered) variables
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers(nvarstot);
+
+#if ENABLE_TORCH
+  // NOTE(package-0): trivial placeholder exercising a real LibTorch symbol (not just the
+  // header include in radiation_m1.hpp) so the -DAthena_ENABLE_TORCH=ON build genuinely
+  // links against libtorch/c10, not merely compiles against its headers. Package 1 replaces
+  // this with real RheaModel construction (rhea_athenak_port_design.md §4); remove then.
+  { torch::Tensor rhea_probe = torch::zeros({1}); (void)rhea_probe; }
+#endif
 }
 
 //----------------------------------------------------------------------------------------

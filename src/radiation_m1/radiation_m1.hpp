@@ -27,6 +27,14 @@
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif
 
+// NOTE(package-0): trivial placeholder proving Athena_ENABLE_TORCH's build wiring compiles
+// end-to-end (CMakeLists.txt/config.hpp.in/src/CMakeLists.txt). Package 1
+// (radiation_m1_rhea.hpp/.cpp, see rhea_athenak_port_design.md §4) owns the real RheaModel
+// interop layer and should remove this once that header is included from here instead.
+#if ENABLE_TORCH
+#include <torch/torch.h>  // NOLINT
+#endif
+
 namespace radiationm1 {
 
 //----------------------------------------------------------------------------------------

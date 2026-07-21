@@ -28,6 +28,9 @@
 // use bns_nurates
 #define ENABLE_NURATES @ENABLE_NURATES@
 
+// use LibTorch (Rhea flavor mixing, radiation_m1)
+#define ENABLE_TORCH @ENABLE_TORCH@
+
 // number of species for radiation_m1
 #define M1_TOTAL_NUM_SPECIES @M1_TOTAL_NUM_SPECIES@
 
