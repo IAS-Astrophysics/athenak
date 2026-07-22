@@ -112,7 +112,6 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
-        pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
         pgen/tests/cshock.cpp
         pgen/tests/divb_amr.cpp
@@ -131,6 +130,9 @@ add_executable(
         pgen/tests/rad_m1_diffusiontest.cpp
         pgen/tests/rad_m1_velocityjump.cpp
         pgen/tests/z4c_linear_wave.cpp
+
+        pgen/unit_tests/eos_compose.cpp
+        pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
@@ -183,6 +185,7 @@ add_executable(
         z4c/z4c_wave_extr.cpp
         z4c/z4c_amr.cpp
         z4c/cce/cce.cpp
+        z4c/driftcontrol/driftcontrol.cpp
 
         radiation_m1/radiation_m1.cpp
         radiation_m1/radiation_m1_tasks.cpp

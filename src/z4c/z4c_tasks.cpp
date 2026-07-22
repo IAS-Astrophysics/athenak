@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/driftcontrol/driftcontrol.hpp"
 #include "z4c/fastflow.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
@@ -315,6 +316,10 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
       pt->InterpolateVelocity(pmy_pack);
       pt->EvolveTracker(pmy_pack);
       pt->WriteTracker();
+    }
+    if (pmy_pack->pz4c->opt.enable_driftcontrol) {
+      pdrift_control->EvolveDriftControl();
+      pdrift_control->WriteDriftControl();
     }
   }
   return TaskStatus::complete;
