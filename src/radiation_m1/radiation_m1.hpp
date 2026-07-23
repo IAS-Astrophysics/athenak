@@ -27,12 +27,8 @@
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif
 
-// NOTE(package-0): trivial placeholder proving Athena_ENABLE_TORCH's build wiring compiles
-// end-to-end (CMakeLists.txt/config.hpp.in/src/CMakeLists.txt). Package 1
-// (radiation_m1_rhea.hpp/.cpp, see rhea_athenak_port_design.md §4) owns the real RheaModel
-// interop layer and should remove this once that header is included from here instead.
 #if ENABLE_TORCH
-#include <torch/torch.h>  // NOLINT
+#include "radiation_m1/radiation_m1_rhea.hpp"
 #endif
 
 namespace radiationm1 {
@@ -102,6 +98,16 @@ class RadiationM1 {
   DvceArray5D<Real> abs_1;           // energy absorptivity coefficient
   DvceArray5D<Real> scat_1;          // energy scattering coefficient
 
+#if ENABLE_TORCH
+  // Rhea ML flavor-mixing state (rhea_athenak_port_design.md §4). Null unless
+  // params.flavor_mix_type == FlavMixRhea; constructed once in the RadiationM1
+  // constructor (the direct analog of THC's THC_M1_InitRhea).
+  std::unique_ptr<RheaModel> prhea;
+  // Preallocated once at construction, shape (n_batch, 2, NF=3, 4), n_batch =
+  // nmb_thispack * nx1*nx2*nx3 (§6.1). Deliberately float32 regardless of Real (§5.3).
+  Kokkos::View<float****, LayoutWrapper, DevMemSpace> rhea_f4_in_scratch;
+#endif
+
   MeshBoundaryValuesCC* pbval_u;  // Communication buffers and functions for u
   RadiationM1TaskIDs id;          // container to hold names of TaskIDs
   Real dtnew{};
@@ -127,6 +133,17 @@ class RadiationM1 {
   TaskStatus CalcOpacityPhotons(Driver* pdrive, int stage);
   TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
   TaskStatus FlavorMix(Driver* d, int stage);
+#if ENABLE_TORCH
+  // Rhea ML flavor-mixing pipeline (rhea_athenak_port_design.md §4, §10 Package 4),
+  // called sequentially from the FlavMixRhea branch of FlavorMix -- no new TaskIDs
+  // (precedented by CalculateFluxes's sequential par_for calls in one task body).
+  TaskStatus PackRheaInputs(Driver* pdrive, int stage);
+  TaskStatus ApplyRheaMixing(Driver* pdrive, int stage,
+                              const DvceArray4D<const float>& rhea_f4_out,
+                              const DvceArray1D<const float>& rhea_growthrate,
+                              const DvceArray1D<const float>& rhea_stability,
+                              Real unit_num_dens);
+#endif
   TaskStatus RestrictU(Driver* d, int stage);
   TaskStatus SendU(Driver* d, int stage);
   TaskStatus RecvU(Driver* d, int stage);
@@ -145,6 +162,13 @@ class RadiationM1 {
   TaskStatus CalcOpacityPhotons_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
+#if ENABLE_TORCH
+  // Needs eos.GetEOSUnitSystem() (§6.1), hence EOS-templated like CalcOpacityNurates_;
+  // dispatched to from the non-templated PackRheaInputs above via the same
+  // dynamic_cast(pmy_pack->pdyngr) pattern as RadiationM1::CalcOpacityNurates.
+  template <class EOSPolicy, class ErrorPolicy>
+  TaskStatus PackRheaInputs_(Driver* pdrive, int stage);
+#endif
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack

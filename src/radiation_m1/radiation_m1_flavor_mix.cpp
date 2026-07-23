@@ -42,7 +42,29 @@
 #include "radiation_m1/radiation_m1_macro.hpp"
 #include "radiation_m1/radiation_m1_tensors.hpp"
 
+#if ENABLE_TORCH
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/primitive-solver/unit_system.hpp"
+#endif
+
 namespace radiationm1 {
+
+#if ENABLE_TORCH
+namespace {
+//! \fn Real RheaUnitNumDens
+//! \brief eos_units -> cgs number-density conversion factor (design doc §6.1), computed
+//! the same way PackRheaInputs_ computes it for the forward (pack) conversion -- needed
+//! here too since ApplyRheaMixing takes it as an explicit parameter rather than computing
+//! it itself (radiation_m1_flavor_mix_rhea.cpp's file-level NOTE 2, Package 3).
+template <class EOSPolicy, class ErrorPolicy>
+Real RheaUnitNumDens(MeshBlockPack *pmy_pack) {
+  Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
+      static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
+          ->eos.ps.GetEOSMutable();
+  return eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS());
+}
+}  // namespace
+#endif
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::FlavorMix
@@ -52,6 +74,55 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
   if (params.flavor_mix_type == FlavMixNone || nspecies <= 1) {
     return TaskStatus::complete;
   }
+
+#if ENABLE_TORCH
+  // Rhea ML flavor mixing (rhea_athenak_port_design.md §3, §4, §10 Package 4): structurally
+  // different from the equilibrium/maximal branches below (a batched Torch call sandwiched
+  // between two Kokkos kernels, not one self-contained par_for), so it dispatches to its own
+  // functions rather than being inlined into the KOKKOS_LAMBDA further down. No new TaskIDs
+  // -- PackRheaInputs -> prhea->Predict() -> ApplyRheaMixing run sequentially inside this one
+  // task-function invocation, precedented by CalculateFluxes's sequential par_for calls in
+  // one task body (radiation_m1_fluxes.cpp).
+  if (params.flavor_mix_type == FlavMixRhea) {
+    // Same dynamic_cast-dispatch pattern as RadiationM1::CalcOpacityNurates/PackRheaInputs
+    // (radiation_m1_calc_opacities_nurates.cpp:18-46). NOTE: PackRheaInputs below performs
+    // this same dispatch internally (Package 2's PackRheaInputs_ computes its own
+    // unit_num_dens rather than taking it as a parameter -- see final report), so this is a
+    // second, harmless dispatch of the same cheap host-side scalar computation, not a
+    // duplicated device kernel.
+    Real unit_num_dens;
+    auto *ptest_nqt =
+        dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                       Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+    if (ptest_nqt != nullptr) {
+      unit_num_dens = RheaUnitNumDens<Primitive::EOSCompOSE<Primitive::NQTLogs>,
+                                      Primitive::ResetFloor>(pmy_pack);
+    } else {
+      auto *ptest_nlog = dynamic_cast<dyngr::DynGRMHDPS<
+          Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
+          pmy_pack->pdyngr);
+      if (ptest_nlog != nullptr) {
+        unit_num_dens = RheaUnitNumDens<Primitive::EOSCompOSE<Primitive::NormalLogs>,
+                                        Primitive::ResetFloor>(pmy_pack);
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl;
+        std::cout << "Unsupported EOS type!\n";
+        abort();
+      }
+    }
+
+    TaskStatus tstat = PackRheaInputs(pdrive, stage);
+    if (tstat != TaskStatus::complete) return tstat;
+
+    // pred must stay alive as a local for the duration of ApplyRheaMixing's kernel (§5.1's
+    // output-side lifetime hazard) -- do not take the Views out of it and let it go out of
+    // scope before ApplyRheaMixing runs.
+    RheaModel::Prediction pred = prhea->Predict(rhea_f4_in_scratch);
+    return ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate, pred.stability,
+                            unit_num_dens);
+  }
+#endif
 
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;

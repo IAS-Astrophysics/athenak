@@ -49,6 +49,7 @@ enum FlavorMixType {
   FlavMixNone        = 0,  // no mixing
   FlavMixEquilibrium = 1,  // equilibrium mixing (arXiv:2307.16793)
   FlavMixMaximal     = 2,  // maximal mixing
+  FlavMixRhea        = 3,  // Rhea ML-based mixing (rhea_athenak_port_design.md)
 };
 
 //----------------------------------------------------------------------------------------
@@ -93,6 +94,18 @@ struct RadiationM1Params {
   Real bgk_inv_tau_0;  // BGK number-density relaxation rate [1/code_time]; 0 = no mixing
   Real bgk_inv_tau_1;  // BGK energy-density relaxation rate [1/code_time]; 0 = no mixing
   Real flavor_mix_rho; // density threshold for mixing [code_density]; -1 = mix everywhere
+
+  // Rhea ML flavor-mixing parameters (rhea_athenak_port_design.md §4/§8). NOTE: the model
+  // path and the RheaModel/torch::jit::Module objects are host-only state and live on
+  // RadiationM1/RheaModel, never here -- this struct is captured by value into
+  // KOKKOS_LAMBDA device closures elsewhere and must stay trivially copyable (no
+  // std::string, no owning pointers, no torch:: types, ever).
+  Real rhea_stability_threshold;  // stability[i] < this => unstable; default 0.5 (THC
+                                   // param.ccl:374-377)
+  Real rhea_tau_0_factor;         // multiplies gamma_code for inv_tau_0; default 1.0
+                                   // (THC param.ccl:379-382)
+  Real rhea_tau_1_factor;         // multiplies gamma_code for inv_tau_1; default 1.0
+                                   // (THC param.ccl:384-387)
 };
 
 enum SrcSignal {

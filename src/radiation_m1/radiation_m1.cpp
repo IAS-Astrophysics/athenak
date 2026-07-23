@@ -197,11 +197,40 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   }
 
   // Flavor mixing parameters (ported from THC_M1)
+  // rhea_model_path/rhea_mem_fraction are host-only config (never on RadiationM1Params,
+  // §4) -- parsed here if flavor_mix=rhea, used further down in this constructor to build
+  // prhea/rhea_f4_in_scratch (needs nmb_thispack/indcs, computed later below).
+  std::string rhea_model_path;
+  Real rhea_mem_fraction = 0.05;
   std::string flavor_mix = pin->GetOrAddString("radiation_m1", "flavor_mix", "none");
   if (flavor_mix == "equilibrium") {
     params.flavor_mix_type = FlavMixEquilibrium;
   } else if (flavor_mix == "maximal") {
     params.flavor_mix_type = FlavMixMaximal;
+  } else if (flavor_mix == "rhea") {
+#if ENABLE_TORCH
+    params.flavor_mix_type = FlavMixRhea;
+
+    params.rhea_stability_threshold =
+        pin->GetOrAddReal("radiation_m1", "rhea_stability_threshold", 0.5);
+    params.rhea_tau_0_factor = pin->GetOrAddReal("radiation_m1", "rhea_tau_0_factor", 1.0);
+    params.rhea_tau_1_factor = pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
+
+    // Required, no default (§8 PI decision): startup error if unset/empty.
+    rhea_model_path = pin->GetOrAddString("radiation_m1", "rhea_model_path", "");
+    if (rhea_model_path.empty()) {
+      std::cerr << "Error: flavor_mix = rhea requires rhea_model_path to be set "
+                   "in the <radiation_m1> block (no default path exists)."
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    rhea_mem_fraction = pin->GetOrAddReal("radiation_m1", "rhea_mem_fraction", 0.05);
+#else
+    std::cerr << "Error: To use flavor_mix = rhea, executable must be compiled with "
+                 "-DAthena_ENABLE_TORCH=ON"
+              << std::endl;
+    exit(EXIT_FAILURE);
+#endif
   } else {
     params.flavor_mix_type = FlavMixNone;
   }
@@ -275,11 +304,15 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   pbval_u->InitializeBuffers(nvarstot);
 
 #if ENABLE_TORCH
-  // NOTE(package-0): trivial placeholder exercising a real LibTorch symbol (not just the
-  // header include in radiation_m1.hpp) so the -DAthena_ENABLE_TORCH=ON build genuinely
-  // links against libtorch/c10, not merely compiles against its headers. Package 1 replaces
-  // this with real RheaModel construction (rhea_athenak_port_design.md §4); remove then.
-  { torch::Tensor rhea_probe = torch::zeros({1}); (void)rhea_probe; }
+  // RheaModel construction: the direct analog of THC's THC_M1_InitRhea, scheduled once
+  // AT CCTK_STARTUP there (rhea_athenak_port_design.md §4) -- here, once per RadiationM1
+  // instance, iff flavor_mix = rhea. n_batch/rhea_f4_in_scratch's shape follow §6.1: the
+  // entire rank's interior zones, one inference call per MeshBlockPack per RK stage.
+  if (params.flavor_mix_type == FlavMixRhea) {
+    int n_batch = ppack->nmb_thispack * indcs.nx1 * indcs.nx2 * indcs.nx3;
+    Kokkos::realloc(rhea_f4_in_scratch, n_batch, 2, RheaModel::kNumFlavors, 4);
+    prhea = std::make_unique<RheaModel>(rhea_model_path, n_batch, rhea_mem_fraction);
+  }
 #endif
 }
 

@@ -535,6 +535,25 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         const Real betay = adm.beta_u(m, 1, k, j, i);
         const Real betaz = adm.beta_u(m, 2, k, j, i);
 
+        // volform = sqrt(det gamma_ij), the ADM spatial-metric determinant's square
+        // root -- the same purely-geometric densitization factor PackRheaInputs_'s
+        // block [A] computes (radiation_m1_flavor_mix_rhea.cpp's pack half). u0_'s
+        // stored N is densitized (carries this factor); Rhea's N_post_* (below) is
+        // undensitized, since PackRheaInputs_ already divided by volform before
+        // feeding Rhea (and unit_num_dens is a pure unit-system conversion, not a
+        // densitization). BLOCKING FIX (design doc §10 Package 4, review-found):
+        // without dividing nn[] by volform before ReconstructMixingMatrix, the
+        // reconstructed mixing angle picks up a spurious 1/volform factor
+        // everywhere volform != 1 (i.e. essentially everywhere in a real
+        // dynamical-GR run). Does not affect Y's column-stochastic conservation
+        // property or the gamma=0 BGK no-op (both hold for any Y) -- only the
+        // numeric value of the mixing angle itself.
+        const Real gam_here = adm::SpatialDet(
+            adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+            adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+            adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+        const Real volform = Kokkos::sqrt(gam_here);
+
         // -------------------------------------------------------------------
         // [B] Pre-mix N/E/F for the 4 species (0=e,1=a,2=x,3=y); causal floor.
         //     Rhea mixing requires nspecies == 4 (§1, non-goal to relax).
@@ -576,9 +595,18 @@ TaskStatus RadiationM1::ApplyRheaMixing(
 
         // -------------------------------------------------------------------
         // [D] Reconstruct the block-diagonal column-stochastic mixing matrix.
+        //     nn_pre_undens: nn[] (u0_'s densitized N, floored) undensitized by
+        //     volform so it is on the same footing as N_post_* above (BLOCKING FIX,
+        //     see the volform computation in [A] above). nn[] itself (still
+        //     densitized) is deliberately left untouched for use in [E] below --
+        //     Y is dimensionless, so applying it to the densitized nn[]/E[]/F[] is
+        //     correct and preserves the sector-conservation property regardless of
+        //     densitization.
         // -------------------------------------------------------------------
+        Real const nn_pre_undens[4] = {nn[0] / volform, nn[1] / volform,
+                                        nn[2] / volform, nn[3] / volform};
         Real Y[4][4];
-        ReconstructMixingMatrix(nn, N_post_e, N_post_x, N_post_a, N_post_y, Y);
+        ReconstructMixingMatrix(nn_pre_undens, N_post_e, N_post_x, N_post_a, N_post_y, Y);
 
         // -------------------------------------------------------------------
         // [E] Apply Y to all five M1 moments (N, E, Fx, Fy, Fz); re-floor.

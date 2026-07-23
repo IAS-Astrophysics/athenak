@@ -218,11 +218,13 @@ endif()
 # add LibTorch (Rhea flavor mixing, radiation_m1)
 if (ENABLE_TORCH)
     target_compile_definitions(athena PUBLIC ENABLE_TORCH)
-    # NOTE(package-0): radiation_m1_rhea.cpp, radiation_m1_flavor_mix_rhea.cpp, and
-    # pgen/tests/rad_m1_rhea_singlezone.cpp do not exist yet -- they are added to
-    # target_sources here by later work packages (see rhea_athenak_port_design.md §7/§10).
-    # Until then, the ENABLE_TORCH-gated code lives entirely in already-compiled sources
-    # (radiation_m1.hpp/.cpp), guarded by #if ENABLE_TORCH.
+    # pgen/tests/rad_m1_rhea_singlezone.cpp (Package 5, rhea_athenak_port_design.md §10) does
+    # not exist yet -- added to target_sources here once that package lands.
+    target_sources(athena
+        PRIVATE
+            radiation_m1/radiation_m1_rhea.cpp
+            radiation_m1/radiation_m1_flavor_mix_rhea.cpp
+    )
 endif()
 
 # custom problem generator to be included in compile
