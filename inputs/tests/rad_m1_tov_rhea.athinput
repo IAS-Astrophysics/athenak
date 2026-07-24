@@ -1,0 +1,171 @@
+# Athena++ (Kokkos version) input file for TOV star + Rhea ML flavor mixing.
+#
+# Companion to inputs/tests/rad_m1_tov.athinput (rhea_athenak_port_design.md §9 Stage C,
+# §10 Package 6) -- new file, does not modify the existing nurates-only TOV test. Adds
+# flavor_mix = rhea on top of the same physics setup (bns-nurates opacities + Rhea flavor
+# mixing together, both active, exactly as they would be in a real production run).
+#
+# Deliberately SCALED DOWN from rad_m1_tov.athinput for CPU tractability (this environment
+# has no GPU; the build here uses Kokkos::Serial, single-threaded): nx1=nx2=nx3=16 (dx=3.2),
+# single MeshBlock, no static mesh refinement, integrator=rk1 -- see the Package 6
+# implementation report for the full justification (resolution/step-count budget, and why
+# rk1 specifically -- it keeps "one relaxation application per output cycle" exactly true,
+# which the densitization-fix spot-check and the restart-reproducibility check both rely on).
+# A production/GPU run should use rad_m1_tov.athinput's resolution/integrator (rk3) instead;
+# this file is an integration/stability/coupling smoke test, not a converged simulation.
+#
+# Requires: an EOSCompOSE DD2 table (local paths below; adjust for your system) and a toy
+# TorchScript model at rhea_model_path (not part of the repo -- see
+# scratchpad/rhea_pkg6/make_toy_flavor_swap_tov.py for how toy_flavor_swap_tov.pt was built;
+# it is Package 5's exact "genuine flavor swap" toy-model architecture, reused deliberately
+# -- see the Package 6 report for why that reuse is the right choice for the
+# densitization-fix check specifically, and only the growthrate constant was retuned for
+# this run's larger CFL-limited dt).
+
+<comment>
+problem  = radiation m1 tov + Rhea flavor mixing (Package 6, Stage C)
+
+<job>
+basename = tov_rhea
+
+<mesh>
+nghost = 4       # Number of ghost cells
+nx1    = 16      # number of cells in x1-direction
+x1min  = 0.0     # minimum x1
+x1max  = 51.2    # maximum x1
+ix1_bc = reflect # inner boundary
+ox1_bc = outflow # outer boundary
+
+nx2    = 16      # number of cells in x2-direction
+x2min  = 0.0     # minimum x2
+x2max  = 51.2    # maximum x2
+ix2_bc = reflect # inner boundary
+ox2_bc = outflow # outer boundary
+
+nx3    = 16      # number of cells in x3-direction
+x3min  = 0.0     # minimum x3
+x3max  = 51.2    # maximum x3
+ix3_bc = reflect # inner boundary
+ox3_bc = outflow # outer boundary
+
+<meshblock>
+nx1  = 16        # single MeshBlock -- no AMR, no MPI decomposition (see report)
+nx2  = 16
+nx3  = 16
+
+<time>
+evolution  = dynamic    # dynamic/kinematic/static
+integrator = rk1        # forward Euler -- deliberate, see file header comment
+cfl_number = 0.1
+nlim       = 40         # generous for a CPU smoke/stability test; see report for wall-clock
+tlim       = 10000
+ndiag      = 1          # cycles between diagnostic output
+
+<coord>
+general_rel = true      # general relativity
+m           = 1.0
+a           = 0.0
+excise      = false
+
+<radiation_m1>
+num_species = 4
+closure_fun = minerbo
+src_update = implicit
+opacity_type = bns-nurates
+backreact = false
+
+flavor_mix = rhea
+rhea_model_path = toy_flavor_swap_tov.pt
+rhea_stability_threshold = 0.5
+rhea_tau_0_factor = 1.0
+rhea_tau_1_factor = 1.0
+rhea_mem_fraction = 0.05
+
+<mhd>
+eos         = ideal     # EOS type
+dyn_eos     = compose     # EOS type (Rhea mixing requires EOSCompOSE, §6.1/§11.9)
+dyn_error   = reset_floor # error policy
+reconstruct = wenoz     # spatial reconstruction method
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.28e-13   # floor on density rho
+tfloor      = 1.28e-11
+dthreshold  = 0.1       # Threshold for flooring
+gamma       = 2.0       # ratio of specific heats Gamma
+dyn_scratch = 0
+fofc        = true
+enforce_maximum = false
+dmp_M       = 1.2
+nscalars = 1
+s0_atmosphere = 0.5
+table       = /home/dradice/Data/EOS/DD2/DD2.athtab
+
+<adm>
+
+<z4c>
+diss        = 0.1
+extrap_order = 2
+
+<problem>
+table       = /home/dradice/Data/EOS/DD2/0.01MeV/DD2_cold_equal.athtab
+rhoc        = 1.28e-3 # Central density
+kappa       = 100.0    # P = kappa*rho^gamma
+npoints     = 10000.0  # buffer points for TOV calculation
+dr          = 1e-3     # radial step for TOV calculation
+b_norm      = 0.0
+pcut        = 1e-6
+magindex    = 1
+isotropic   = true
+user_hist   = true
+v_pert      = 0.0
+rho_cut = 1.0e-7
+
+<output1>
+file_type   = rst
+dcycle      = 20        # one restart file mid-run, for the restart-reproducibility check
+
+<output2>
+file_type   = hst      # History data dump
+dcycle      = 1
+data_format = %20.15e
+
+<output3>
+file_type   = tab      # 1D ray along x1 through the star center (x2=x3=0 octant edge) --
+                        # spans a wide range of volform (strong curvature near center to
+                        # near-flat at the outer edge), used for the densitization spot-check
+variable    = adm_psi4
+slice_x2    = 0.0
+slice_x3    = 0.0
+dcycle      = 1
+data_format = %24.17e
+
+<output4>
+file_type   = tab
+variable    = z4c_alpha
+slice_x2    = 0.0
+slice_x3    = 0.0
+dcycle      = 1
+data_format = %24.17e
+
+<output5>
+file_type   = tab
+variable    = rad_m1_N
+slice_x2    = 0.0
+slice_x3    = 0.0
+dcycle      = 1
+data_format = %24.17e
+
+<output6>
+file_type   = tab
+variable    = rad_m1_E
+slice_x2    = 0.0
+slice_x3    = 0.0
+dcycle      = 1
+data_format = %24.17e
+
+<output7>
+file_type   = tab
+variable    = mhd_w
+slice_x2    = 0.0
+slice_x3    = 0.0
+dcycle      = 1
+data_format = %20.15e
