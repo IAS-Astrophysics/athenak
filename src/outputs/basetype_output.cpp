@@ -798,6 +798,59 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
+  // radiation m1 fluid-frame energy density J = u_a u_b T^{ab} (per species)
+  if (out_params.variable.compare("rad_m1_J") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("J:" + std::to_string(nuidx), nuidx, &(derived_var));
+    }
+  }
+
+  // radiation m1 fluid frame flux H^i = -proj^i_a u_b T^{ab} (per species per comp)
+  if (out_params.variable.compare("rad_m1_H") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += 3 * nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("Hx:" + std::to_string(nuidx), 3*nuidx + 0, &(derived_var));
+      outvars.emplace_back("Hy:" + std::to_string(nuidx), 3*nuidx + 1, &(derived_var));
+      outvars.emplace_back("Hz:" + std::to_string(nuidx), 3*nuidx + 2, &(derived_var));
+    }
+  }
+
+  // radiation m1 fluid frame number density n = N/Gamma (per species)
+  if (out_params.variable.compare("rad_m1_n") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("n:" + std::to_string(nuidx), nuidx, &(derived_var));
+    }
+  }
+
+  // radiation m1 number-current direction fnu^a = u^a + H^a/J (per species per comp)
+  if (out_params.variable.compare("rad_m1_fnu") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += 4 * nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("fnu_t:" + std::to_string(nuidx), 4*nuidx + 0, &(derived_var));
+      outvars.emplace_back("fnu_x:" + std::to_string(nuidx), 4*nuidx + 1, &(derived_var));
+      outvars.emplace_back("fnu_y:" + std::to_string(nuidx), 4*nuidx + 2, &(derived_var));
+      outvars.emplace_back("fnu_z:" + std::to_string(nuidx), 4*nuidx + 3, &(derived_var));
+    }
+  }
+
+  // lower time-component of the fluid four-velocity u_t
+  if (out_params.variable.compare("u_t") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 1;
+    int i_derived = out_params.n_derived - 1;
+    outvars.emplace_back("u_t", i_derived, &(derived_var));
+  }
+
   // spherical coordinate radius r = sqrt(x^2 + y^2 + z^2)
   if (out_params.variable.compare("r_sph") == 0 ||
       out_params.variable_2.compare("r_sph") == 0) {
