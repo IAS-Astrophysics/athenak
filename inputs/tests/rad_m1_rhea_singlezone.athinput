@@ -1,0 +1,147 @@
+<comment>
+problem = Rhea flavor-mix single-zone fixed-point convergence test (rhea_athenak_port_
+          design.md §9 Stage B, §10 Package 5). See rad_m1_rhea_singlezone.cpp for the full
+          rationale. Requires an external toy TorchScript model (not part of the repo,
+          rhea_model_path below) and an EOSCompOSE table (table below) to be present in the
+          working directory when this input file is run -- same convention as
+          inputs/tests/rad_m1_singlezone.athinput's DD2.athtab dependency.
+
+<job>
+basename = rhea_singlezone  # name of run
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+# rk1 (forward Euler) is deliberate: with exactly one explicit stage per cycle, "successive
+# RK stages" and "successive cycles" coincide, so the standard per-cycle tab output already
+# checks the design doc's stage-to-stage convergence criterion at the right granularity.
+integrator = rk1
+cfl_number = 0.1     # homogeneous background -> no real stability constraint from hydro;
+                     # kept well below 1 (rk1's cfl_limit) as a safety margin, not tuned.
+nlim       = 4000    # generous cap; convergence is checked well before this (see report)
+tlim       = 40.0    # generous cap; see report for the measured relaxation time
+
+<mesh>
+nghost = 2         # Number of ghost cells
+nx1    = 4         # Number of zones in X1-direction
+x1min  = -2.0      # minimum value of X1
+x1max  = 2.0       # maximum value of X1
+ix1_bc = periodic  # inner-X1 boundary flag
+ox1_bc = periodic  # outer-X1 boundary flag
+
+nx2    = 1         # Number of zones in X2-direction
+x2min  = -0.5      # minimum value of X2
+x2max  = 0.5       # maximum value of X2
+ix2_bc = periodic  # inner-X2 boundary flag
+ox2_bc = periodic  # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = -0.5      # minimum value of X3
+x3max  = 0.5       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 4          # Number of cells in each MeshBlock, X1-dir
+nx2       = 1            # Number of cells in each MeshBlock, X2-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+
+<adm>
+# This needs to be here
+
+<mhd>
+eos         = ideal     # EOS type
+gamma       = 2.0       # ratio of specific heats Gamma
+
+nscalars    = 1
+dyn_eos     = compose     # EOS type
+table       = DD2.athtab
+dyn_error   = reset_floor # error policy
+reconstruct = dc      # spatial reconstruction method (exact zero-flux at homogeneous
+                       # interfaces, matching rad_m1_singlezone.cpp's own choice)
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.0e-16   # floor on density rho
+dthreshold  = 1.02      # Threshold for flooring
+dyn_scratch = 1
+fofc        = false
+enforce_maximum = false
+
+<coord>
+general_rel = true      # general relativity
+m           = 0.0
+a           = 0.0
+excise      = false
+
+<radiation_m1>
+closure_fun = eddington
+src_update = implicit
+opacity_type = none    # deliberately no bns-nurates/photon opacities: isolate the
+                        # flavor-mixing source term as the *only* driver of evolution
+                        # (design doc §9 Stage B), matching matter_sources=false below
+
+gr_sources = false      # isolate flavor-mix: no other M1<->matter/GR source coupling
+matter_sources = false
+backreact = false
+
+theta_limiter = false # default: false
+
+flavor_mix = rhea
+rhea_model_path = toy_flavor_swap.pt
+rhea_stability_threshold = 0.5
+rhea_tau_0_factor = 1.0
+rhea_tau_1_factor = 1.0
+rhea_mem_fraction = 0.05
+
+<problem>
+pgen_name = rad_m1_rhea_singlezonetest
+rho  = 1.619e-5  # initial density [code] (matter background, fixed by homogeneity+periodicity)
+temp = 50.0      # initial temperature [code, MeV]
+Y_e  = 0.1       # electron fraction
+# v = 0 (matter at rest) is hard-coded in the pgen -- required by this test's analytic
+# fixed-point derivation (fluid frame == Eulerian frame exactly when v=0).
+
+# Initial M1 state, species index convention 0=nu_e,1=nu_ebar,2=nu_x,3=nu_xbar (matches
+# ReconstructMixingMatrix/ApplyRheaMixing). Deliberately asymmetric within each sector
+# {0,2} and {1,3} so the mixing-matrix reconstruction's degenerate branch is never hit.
+# F (flux) = 0 for all species always (hard-coded in the pgen, not a free parameter) --
+# stays exactly 0 for all time (Y applied to zero flux is zero), keeping RestrictToPhysical's
+# boost correction exactly evaluable by hand -- see the implementation report.
+#
+# Magnitude note: eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS())
+# (unit_num_dens, PackRheaInputs_) measured ~1e39 for this DD2 table/code-unit system, and
+# Rhea's F4_in is float32 (max ~3.4e38) -- an O(1) code-unit N (tried first) overflows to
+# `inf` in the packed tensor. Scaled down by 1e-7 here so N*unit_num_dens ~ 1e32 cm^-3,
+# comfortably inside float32 range and in the ballpark §2a's cited example magnitudes
+# (~1e32-1e33) -- see the implementation report for the full diagnosis.
+rad_N0 = 4.0e-7   # nu_e
+rad_N1 = 3.0e-7   # nu_ebar
+rad_N2 = 1.0e-7   # nu_x
+rad_N3 = 2.0e-7   # nu_xbar
+rad_E0 = 2.0e-7   # nu_e
+rad_E1 = 1.5e-7   # nu_ebar
+rad_E2 = 0.5e-7   # nu_x
+rad_E3 = 1.0e-7   # nu_xbar
+
+<output1>
+file_type   = tab         # Binary data dump
+variable    = mhd_w       # Primitive variables
+dcycle      = 1
+
+<output2>
+file_type   = tab        # output format
+variable    = rad_m1_E    # choice of variables to output
+dcycle      = 1
+data_format = %24.17e    # full double precision -- needed to measure the convergence
+                         # tolerance this test proposes (default %12.5e is nowhere near
+                         # tight enough)
+
+<output3>
+file_type   = tab        # output format
+variable    = rad_m1_N    # choice of variables to output
+dcycle      = 1
+data_format = %24.17e
+
+<output4>
+file_type   = tab        # output format
+variable    = rad_m1_F    # choice of variables to output
+dcycle      = 1
+data_format = %24.17e

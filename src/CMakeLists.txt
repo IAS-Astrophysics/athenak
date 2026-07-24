@@ -218,12 +218,11 @@ endif()
 # add LibTorch (Rhea flavor mixing, radiation_m1)
 if (ENABLE_TORCH)
     target_compile_definitions(athena PUBLIC ENABLE_TORCH)
-    # pgen/tests/rad_m1_rhea_singlezone.cpp (Package 5, rhea_athenak_port_design.md §10) does
-    # not exist yet -- added to target_sources here once that package lands.
     target_sources(athena
         PRIVATE
             radiation_m1/radiation_m1_rhea.cpp
             radiation_m1/radiation_m1_flavor_mix_rhea.cpp
+            pgen/tests/rad_m1_rhea_singlezone.cpp
     )
 endif()
 
