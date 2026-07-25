@@ -119,8 +119,20 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     // output-side lifetime hazard) -- do not take the Views out of it and let it go out of
     // scope before ApplyRheaMixing runs.
     RheaModel::Prediction pred = prhea->Predict(rhea_f4_in_scratch);
-    return ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate, pred.stability,
-                            unit_num_dens);
+    TaskStatus astat = ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate,
+                                       pred.stability, unit_num_dens);
+    // Defensive device fence before `pred` (which owns the Torch output buffers the unpack
+    // kernel reads) is destroyed at end of scope. ApplyRheaMixing only ENQUEUES its par_for
+    // on DevExeSpace(), so on a device backend pred's destructor could otherwise return
+    // those buffers to Torch's caching allocator before the kernel has executed. Same-stream
+    // caching-allocator ordering makes this very likely safe already (buffers are freed to,
+    // and any reuse is serialized on, the single DevExeSpace() stream) -- this fence removes
+    // the remaining doubt and future-proofs against a second stream ever being introduced
+    // (§5.1 lifetime hazard, final-review finding). No-op on CPU (Serial/OpenMP block
+    // already). If GPU profiling later shows this fence matters, re-evaluate it against the
+    // same-stream-ordering argument before removing.
+    Kokkos::fence();
+    return astat;
   }
 #endif
 

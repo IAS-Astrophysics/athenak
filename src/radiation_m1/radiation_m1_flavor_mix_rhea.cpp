@@ -65,6 +65,8 @@
 //!    conversion (or recompute it identically) -- do not let the two drift apart.
 //! ============================================================================
 
+#include <cassert>
+
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
@@ -435,6 +437,19 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
             for (int sp = 0; sp < 3; ++sp) {
               f4_in_(idx, mm, f, sp) = static_cast<float>(N_space[sp] * unit_num_dens);
             }
+            // Guard the eos_units -> cgs conversion: unit_num_dens ~ 1e39 for a typical EOS
+            // table, and F4_in is float32 (max ~3.4e38), so a code-unit density above ~1e-1
+            // overflows to inf here -- which would then silently poison N_post/ntot/growthrate
+            // downstream and break the gamma=0 stable-zone bit-identity (1*N_old + 0*nan =
+            // nan). Real neutrino densities (~1e-5 code units) sit ~4 orders below that
+            // ceiling, so this only fires on a pathological/overflowing input; the assert
+            // (compiled out under -DNDEBUG, matching CalcOpacityNurates_'s own isfinite
+            // asserts) catches it in debug/test builds instead of as an unexplained NaN much
+            // later. See design doc §11 (float32 magnitude constraint, found in Package 5).
+            assert(Kokkos::isfinite(f4_in_(idx, mm, f, 3)));
+            assert(Kokkos::isfinite(f4_in_(idx, mm, f, 0)));
+            assert(Kokkos::isfinite(f4_in_(idx, mm, f, 1)));
+            assert(Kokkos::isfinite(f4_in_(idx, mm, f, 2)));
           }
         }
       });  // par_for
@@ -641,8 +656,20 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         //     log(growthrate) to growthrate.
         // -------------------------------------------------------------------
         const bool unstable = rhea_stability(idx) < stability_threshold;
+        // Clamp the rate to >= 0. TODO(sherwood): Rhea's growthrate output can be NEGATIVE
+        // even for a cell flagged unstable -- the returned growthrate is growthrate_box3d +
+        // y_growthrate (ml_neuralnet.py:308), where the NN correction y_growthrate is a bare
+        // 1x0e scalar with unconstrained sign, while stability is derived from
+        // growthrate_box3d ALONE (ml_neuralnet.py:322), so the two are not guaranteed
+        // sign-consistent (design doc §2a). Without this clamp a negative rate gives
+        // inv_tau < 0 -> lambda = exp(+x) > 1, i.e. BGK *anti-damping*: the update moves
+        // away from the mix target each stage, an unphysical exponential blow-up of N/E/F.
+        // THC never hit this because it applied exp(lgr) >= 0; the (correct, PI-confirmed)
+        // switch to the linear growthrate interpretation silently dropped that positivity
+        // guarantee, so restore it here. Confirm the intended semantics with Sherwood.
         const Real gamma_persec = unstable
-            ? static_cast<Real>(rhea_growthrate(idx)) * ndens_to_invsec
+            ? Kokkos::max(Real(0),
+                          static_cast<Real>(rhea_growthrate(idx)) * ndens_to_invsec)
             : Real(0);
         const Real gamma_code = isunits_ ? gamma_persec * time_cgs : gamma_persec;
         const Real inv_tau_0 = gamma_code * tau0_factor;

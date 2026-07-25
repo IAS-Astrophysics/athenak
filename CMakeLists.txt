@@ -111,6 +111,19 @@ endif ()
 # TorchConfig.cmake sets (it is empty for at least one CPU-only distribution actually tested
 # while wiring this up, see Package 0's final report -- do not assume it is always empty).
 if(Athena_ENABLE_TORCH)
+  # Rhea flavor mixing hard-requires nspecies == 4 (design doc §1), but M1_TOTAL_NUM_SPECIES
+  # is only set to 4 by Athena_ENABLE_NURATES above -- with TORCH=ON and NURATES=OFF it stays
+  # 1, RadiationM1::FlavorMix silently early-exits (nspecies <= 1), and flavor_mix = rhea
+  # would load the model and then do nothing, with no error (final-review finding, design doc
+  # §11 item 13a). Fail loudly at configure time instead. (Longer-term fix is to decouple
+  # M1_TOTAL_NUM_SPECIES from nurates; for now Rhea always builds alongside nurates, which is
+  # also the only combination the port was actually tested against.)
+  if(NOT Athena_ENABLE_NURATES)
+    message(FATAL_ERROR
+      "Athena_ENABLE_TORCH=ON requires Athena_ENABLE_NURATES=ON: Rhea flavor mixing needs "
+      "M1_TOTAL_NUM_SPECIES=4, which is currently only set by Athena_ENABLE_NURATES. "
+      "Re-run cmake with -DAthena_ENABLE_NURATES=ON.")
+  endif()
   set(ENABLE_TORCH 1)
   find_package(Torch REQUIRED)
   message(STATUS "Compiling with LibTorch (Rhea flavor mixing): ${TORCH_INSTALL_PREFIX}")
