@@ -27,6 +27,23 @@
 
 #include <cassert>
 
+// §6.4 (Performance knobs, Package 7): torch::jit::freeze_module, the pass-level function
+// behind torch::jit::freeze. Used directly (not through the torch::jit::freeze/torch::jit::
+// optimize_for_inference convenience wrappers in torch/csrc/jit/api/module.h) -- see the
+// RheaModel constructor below for why: those wrappers hard-require a `forward` method to
+// exist REGARDLESS of what is passed as preserved_attrs/other_methods (verified directly
+// against local LibTorch 2.12.1: both `torch::jit::freeze(model_, {"predict_all"})` and
+// `torch::jit::optimize_for_inference(model_, {"predict_all"})` throw "Method 'forward' is
+// not defined", because their C++ implementations call module.get_method("forward")
+// unconditionally before ever looking at the method list). Rhea's TorchScript contract
+// (§2a) exports `predict_all`, not `forward`, as its entry point, so neither convenience
+// wrapper is usable here. torch::jit::freeze_module (this header) is the lower-level pass
+// both wrappers are ultimately built on; it takes an explicit list of method names with no
+// hardcoded "forward" requirement, confirmed to inline submodule calls and constant-fold
+// parameters into predict_all's graph correctly (spot-checked bit-for-bit against the
+// unfrozen module's output).
+#include <torch/csrc/jit/passes/freeze_module.h>
+
 #if defined(KOKKOS_ENABLE_CUDA)
 #include <c10/cuda/CUDAGuard.h>
 #include <c10/cuda/CUDACachingAllocator.h>
@@ -193,6 +210,26 @@ RheaModel::RheaModel(const std::string &model_path, int n_batch, double mem_frac
   model_.to(device_);
   model_.eval();
 
+  // §6.4 (Performance knobs, Package 7): freeze the model once here at model-load time --
+  // low risk (one-time startup cost, not per-stage), always-on default per the design doc,
+  // which offers a choice between torch::jit::optimize_for_inference and "torch::jit::
+  // freeze followed by standard JIT optimization passes". We use the latter, via the
+  // pass-level torch::jit::freeze_module (see the #include block above for why: the
+  // higher-level torch::jit::freeze/optimize_for_inference convenience wrappers hard-require
+  // a `forward` method, which Rhea's `predict_all`-only contract does not have). Explicitly
+  // preserving "predict_all" is what makes freeze_module inline submodule calls and
+  // constant-fold parameters into ITS graph specifically (an empty/default preserved-method
+  // list would only touch a (nonexistent) `forward`, silently freezing nothing useful).
+  // freeze_module already performs the standard freezing optimization suite (submodule
+  // inlining, constant propagation/folding, dead-code elimination) as part of the pass
+  // itself -- verified by inspecting the resulting graph on a toy multi-layer model
+  // (Package 7 benchmark harness): plain `prim::GetAttr`+`prim::CallMethod` chains for each
+  // Linear submodule collapse into direct `aten::linear` calls with the weight/bias baked
+  // in as `prim::Constant` tensors, and the output is bit-for-bit identical to the unfrozen
+  // module's. freeze_module returns a new (frozen) Module; the original model_ is
+  // intentionally replaced, not mutated in place.
+  model_ = torch::jit::freeze_module(model_, std::vector<std::string>{"predict_all"});
+
   CapAllocatorMemoryFraction(device_, mem_fraction);
 }
 
@@ -224,8 +261,19 @@ RheaModel::Prediction RheaModel::Predict(
        static_cast<int64_t>(f4_in.extent(2)), static_cast<int64_t>(f4_in.extent(3))},
       torch::TensorOptions().dtype(torch::kFloat32).device(device_));
 
-  // §6.4 note: torch::InferenceMode / optimize_for_inference are deliberately NOT wired
-  // up here -- that is Package 7's job (measure their effect against this baseline).
+  // §6.4 (Performance knobs, Package 7): torch::InferenceMode guard around the actual
+  // predict_all invocation -- essentially free, always-on default (no autograd bookkeeping
+  // needed; Predict() never needs gradients). Scoped as the OUTER guard here, enclosing
+  // each backend's own stream/queue guard below (MakeCudaStreamGuard() etc., constructed
+  // inside the per-backend blocks): both guards must be active for the actual predict_all
+  // call, and InferenceMode's thread-local dispatch-key state is independent of the
+  // per-backend stream guard's thread-local current-stream state, so the nesting order
+  // between the two has no functional consequence -- InferenceMode is placed outermost
+  // here only because it applies uniformly across all four backend branches (including the
+  // CPU fallback, which has no stream guard of its own), while the stream guard is
+  // backend-specific and lives inside each branch.
+  torch::InferenceMode inference_mode_guard;
+
   torch::IValue out_ivalue;
 #if defined(KOKKOS_ENABLE_CUDA)
   {
