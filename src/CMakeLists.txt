@@ -149,6 +149,8 @@ add_executable(
         shearing_box/shearing_box_srcterms.cpp
         shearing_box/shearing_box_tasks.cpp
 
+        rhine/rhine.cpp
+
         srcterms/srcterms.cpp
         srcterms/srcterms_newdt.cpp
         srcterms/turb_driver.cpp

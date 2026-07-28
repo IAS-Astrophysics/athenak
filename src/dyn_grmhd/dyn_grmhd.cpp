@@ -28,6 +28,7 @@
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
+#include "rhine/rhine.hpp"
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
@@ -210,8 +211,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
                    {MHD_RecvFlux});
   }
+  TaskName src_dep = MHD_ExplRK;
+  if (pmy_pack->prhine != nullptr) {
+    pnr->QueueTask(&rhine::RHINE::AddSources, pmy_pack->prhine, MHD_RhineSrc,
+                   "MHD_RhineSrc", Task_Run, {MHD_ExplRK});
+    src_dep = MHD_RhineSrc;
+  }
   pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, MHD_AddSrc, "MHD_AddSrc", Task_Run,
-                 {MHD_ExplRK});
+                 {src_dep});
   pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_AddSrc});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});

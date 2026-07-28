@@ -23,6 +23,7 @@
 #include "tasklist/numerical_relativity.hpp"
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "rhine/rhine.hpp"
 #include "z4c/cce/cce.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
@@ -54,6 +55,7 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
 MeshBlockPack::~MeshBlockPack() {
   if (ppart  != nullptr) {delete ppart;}
   if (pnr    != nullptr) {delete pnr;}
+  if (prhine != nullptr) {delete prhine;}
   if (pdyngr != nullptr) {delete pdyngr;}
   if (ptmunu != nullptr) {delete ptmunu;}
   if (padm   != nullptr) {delete padm;}
@@ -222,6 +224,13 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
       (pin->DoesBlockExist("mhd")) ) {
     pdyngr = dyngr::BuildDynGRMHD(this, pin);
     ptmunu = new Tmunu(this, pin);
+  }
+
+  if (pin->DoesBlockExist("rhine")) {
+    prhine = new rhine::RHINE(this, pin);
+    nphysics++;
+  } else {
+    prhine = nullptr;
   }
 
   if (pz4c != nullptr || padm != nullptr) {
