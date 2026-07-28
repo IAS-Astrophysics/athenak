@@ -52,10 +52,10 @@ namespace radiationm1 {
 #if ENABLE_TORCH
 namespace {
 //! \fn Real RheaUnitNumDens
-//! \brief eos_units -> cgs number-density conversion factor (design doc §6.1), computed
-//! the same way PackRheaInputs_ computes it for the forward (pack) conversion -- needed
-//! here too since ApplyRheaMixing takes it as an explicit parameter rather than computing
-//! it itself (radiation_m1_flavor_mix_rhea.cpp's file-level NOTE 2, Package 3).
+//! \brief eos_units -> cgs number-density conversion factor, computed the same way
+//! PackRheaInputs_ computes it for the forward (pack) conversion -- needed here too since
+//! ApplyRheaMixing takes it as an explicit parameter rather than computing it itself (see
+//! radiation_m1_flavor_mix_rhea.cpp's file-level NOTE 2).
 template <class EOSPolicy, class ErrorPolicy>
 Real RheaUnitNumDens(MeshBlockPack *pmy_pack) {
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
@@ -76,20 +76,19 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
   }
 
 #if ENABLE_TORCH
-  // Rhea ML flavor mixing (rhea_athenak_port_design.md §3, §4, §10 Package 4): structurally
-  // different from the equilibrium/maximal branches below (a batched Torch call sandwiched
-  // between two Kokkos kernels, not one self-contained par_for), so it dispatches to its own
-  // functions rather than being inlined into the KOKKOS_LAMBDA further down. No new TaskIDs
-  // -- PackRheaInputs -> prhea->Predict() -> ApplyRheaMixing run sequentially inside this one
-  // task-function invocation, precedented by CalculateFluxes's sequential par_for calls in
-  // one task body (radiation_m1_fluxes.cpp).
+  // Rhea ML flavor mixing: structurally different from the equilibrium/maximal branches
+  // below (a batched Torch call sandwiched between two Kokkos kernels, not one
+  // self-contained par_for), so it dispatches to its own functions rather than being
+  // inlined into the KOKKOS_LAMBDA further down. No new TaskIDs -- PackRheaInputs ->
+  // prhea->Predict() -> ApplyRheaMixing run sequentially inside this one task-function
+  // invocation, precedented by CalculateFluxes's sequential par_for calls in one task
+  // body (radiation_m1_fluxes.cpp).
   if (params.flavor_mix_type == FlavMixRhea) {
     // Same dynamic_cast-dispatch pattern as RadiationM1::CalcOpacityNurates/PackRheaInputs
     // (radiation_m1_calc_opacities_nurates.cpp:18-46). NOTE: PackRheaInputs below performs
-    // this same dispatch internally (Package 2's PackRheaInputs_ computes its own
-    // unit_num_dens rather than taking it as a parameter -- see final report), so this is a
-    // second, harmless dispatch of the same cheap host-side scalar computation, not a
-    // duplicated device kernel.
+    // this same dispatch internally (PackRheaInputs_ computes its own unit_num_dens rather
+    // than taking it as a parameter), so this is a second, harmless dispatch of the same
+    // cheap host-side scalar computation, not a duplicated device kernel.
     Real unit_num_dens;
     auto *ptest_nqt =
         dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
@@ -115,9 +114,9 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     TaskStatus tstat = PackRheaInputs(pdrive, stage);
     if (tstat != TaskStatus::complete) return tstat;
 
-    // pred must stay alive as a local for the duration of ApplyRheaMixing's kernel (§5.1's
-    // output-side lifetime hazard) -- do not take the Views out of it and let it go out of
-    // scope before ApplyRheaMixing runs.
+    // pred must stay alive as a local for the duration of ApplyRheaMixing's kernel
+    // (output-side lifetime hazard) -- do not take the Views out of it and let it go out
+    // of scope before ApplyRheaMixing runs.
     RheaModel::Prediction pred = prhea->Predict(rhea_f4_in_scratch);
     TaskStatus astat = ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate,
                                        pred.stability, unit_num_dens);
@@ -127,10 +126,9 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     // those buffers to Torch's caching allocator before the kernel has executed. Same-stream
     // caching-allocator ordering makes this very likely safe already (buffers are freed to,
     // and any reuse is serialized on, the single DevExeSpace() stream) -- this fence removes
-    // the remaining doubt and future-proofs against a second stream ever being introduced
-    // (§5.1 lifetime hazard, final-review finding). No-op on CPU (Serial/OpenMP block
-    // already). If GPU profiling later shows this fence matters, re-evaluate it against the
-    // same-stream-ordering argument before removing.
+    // the remaining doubt and future-proofs against a second stream ever being introduced.
+    // No-op on CPU (Serial/OpenMP block already). If GPU profiling later shows this fence
+    // matters, re-evaluate it against the same-stream-ordering argument before removing.
     Kokkos::fence();
     return astat;
   }

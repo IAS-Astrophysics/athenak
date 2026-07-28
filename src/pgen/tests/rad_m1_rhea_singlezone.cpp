@@ -5,31 +5,28 @@
 //========================================================================================
 //! \file rad_m1_rhea_singlezone.cpp
 //! \brief Radiation M1 single-zone Rhea flavor-mixing fixed-point convergence test
-//! (rhea_athenak_port_design.md §9 Stage B, §10 Package 5).
 //!
-//! This is a **new**, dedicated pgen -- not an extension of rad_m1_singlezone.cpp (which is
-//! tied to bns-nurates equilibration and is not the right harness for an isolated Rhea/
-//! flavor-mix smoke test, per the design doc). It sets up a homogeneous, periodic zone with
-//! a hand-specified initial M1 state (four species, deliberately asymmetric within each
+//! This is a new, dedicated pgen -- not an extension of rad_m1_singlezone.cpp (which is
+//! tied to bns-nurates equilibration and is not the right harness for an isolated
+//! Rhea/flavor-mix smoke test). It sets up a homogeneous, periodic zone with a
+//! hand-specified initial M1 state (four species, deliberately asymmetric within each
 //! nu/nubar sector so the mixing-matrix reconstruction never hits its degenerate branch)
 //! and a *fixed* matter background (matter at rest, v=0, flat conformally-flat metric,
 //! matter/GR sources for M1 turned off) so that homogeneity + periodicity make the MHD and
 //! M1 flux-divergence terms vanish identically, leaving `flavor_mix = rhea`'s BGK relaxation
-//! as the *only* thing that can change u0 from one cycle to the next.
+//! as the only thing that can change u0 from one cycle to the next.
 //!
 //! `integrator = rk1` (forward Euler, one explicit stage per cycle) is used deliberately, so
-//! that "successive RK stages" (the design doc's §9 Stage B unit of comparison) and
-//! "successive cycles" (the unit AthenaK's tab-file output records) coincide exactly -- this
-//! sidesteps needing any new sub-cycle output machinery to check the acceptance criterion at
-//! the exact granularity the design doc asks for.
+//! that "successive RK stages" and "successive cycles" (the unit AthenaK's tab-file output
+//! records) coincide exactly -- this sidesteps needing any new sub-cycle output machinery to
+//! check stage-to-stage convergence at the right granularity.
 //!
-//! With `flavor_mix = rhea` already wired into RadiationM1::FlavorMix's task-graph dispatch
-//! (Package 4), this pgen does not need to do anything special to exercise the pipeline --
+//! With `flavor_mix = rhea` already wired into RadiationM1::FlavorMix's task-graph dispatch,
+//! this pgen does not need to do anything special to exercise the pipeline --
 //! PackRheaInputs -> RheaModel::Predict -> ApplyRheaMixing already runs once per stage
 //! automatically. This file's only job is to set up initial data for which the resulting
-//! fixed-point iteration is analytically tractable (see the toy model and the companion
-//! verification analysis referenced in the implementation report), and to fail loudly at
-//! startup if the run is not actually configured to exercise that path.
+//! fixed-point iteration is analytically tractable, and to fail loudly at startup if the
+//! run is not actually configured to exercise that path.
 
 // C++ headers
 #include <iostream>
@@ -81,8 +78,8 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   // -------------------------------------------------------------------------------------
-  // Preconditions. Rhea mixing requires dynamical-GR MHD (design doc §1/§6.1: PackRheaInputs
-  // needs eos.GetEOSUnitSystem()) and flavor_mix = rhea specifically -- this pgen is only a
+  // Preconditions. Rhea mixing requires dynamical-GR MHD (PackRheaInputs needs
+  // eos.GetEOSUnitSystem()) and flavor_mix = rhea specifically -- this pgen is only a
   // meaningful test of the Rhea path, not a generic single-zone harness, so it fails loudly
   // (matching rad_m1_singlezone.cpp's own style) rather than silently doing something else.
   // -------------------------------------------------------------------------------------
@@ -107,8 +104,8 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   if (pmbp->pradm1->nspecies != 4) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Rhea flavor mixing requires nspecies == 4 (compile with "
-                 "-DAthena_ENABLE_NURATES=ON, which sets M1_TOTAL_NUM_SPECIES=4 -- see "
-                 "rhea_athenak_port_design.md §11 item 13a)" << std::endl;
+                 "-DAthena_ENABLE_NURATES=ON, which sets M1_TOTAL_NUM_SPECIES=4)"
+              << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -131,10 +128,9 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   // already relies on), so rho/temp/v never actually evolve; matter_sources = gr_sources =
   // backreact = false in the input file additionally ensures no M1<->matter source coupling
   // could perturb this. v = 0 (matter at rest) is a *hard* requirement of this test's
-  // analytic fixed-point derivation (see the implementation report): it is what makes the
-  // fluid-frame and lab (Eulerian) frames coincide exactly, giving Gamma_s = 1 and
-  // J_s = E_s, H_d = F_d exactly for every species, with no relativistic-beaming correction
-  // to track by hand.
+  // analytic fixed-point derivation: it is what makes the fluid-frame and lab (Eulerian)
+  // frames coincide exactly, giving Gamma_s = 1 and J_s = E_s, H_d = F_d exactly for every
+  // species, with no relativistic-beaming correction to track by hand.
   // -------------------------------------------------------------------------------------
   Real rho = pin->GetReal("problem", "rho");
   Real temp = pin->GetReal("problem", "temp");
@@ -157,7 +153,7 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   // F = 0 for all species (isotropic) -- combined with the homogeneous/periodic setup, this
   // stays exactly 0 for all time (Y applied to an all-zero flux vector is exactly zero,
   // regardless of Y), which is both physically the simplest case and what keeps
-  // RestrictToPhysical's boost correction exactly evaluable by hand (see report).
+  // RestrictToPhysical's boost correction exactly evaluable by hand.
   // -------------------------------------------------------------------------------------
   Real N_init[4], E_init[4];
   N_init[0] = pin->GetReal("problem", "rad_N0");

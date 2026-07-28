@@ -1,29 +1,25 @@
 # Athena++ (Kokkos version) input file for TOV star + Rhea ML flavor mixing.
 #
-# Companion to inputs/tests/rad_m1_tov.athinput (rhea_athenak_port_design.md §9 Stage C,
-# §10 Package 6) -- new file, does not modify the existing nurates-only TOV test. Adds
-# flavor_mix = rhea on top of the same physics setup (bns-nurates opacities + Rhea flavor
-# mixing together, both active, exactly as they would be in a real production run).
+# Companion to inputs/tests/rad_m1_tov.athinput -- new file, does not modify the existing
+# nurates-only TOV test. Adds flavor_mix = rhea on top of the same physics setup
+# (bns-nurates opacities + Rhea flavor mixing together, both active, exactly as they would
+# be in a real production run).
 #
-# Deliberately SCALED DOWN from rad_m1_tov.athinput for CPU tractability (this environment
-# has no GPU; the build here uses Kokkos::Serial, single-threaded): nx1=nx2=nx3=16 (dx=3.2),
-# single MeshBlock, no static mesh refinement, integrator=rk1 -- see the Package 6
-# implementation report for the full justification (resolution/step-count budget, and why
-# rk1 specifically -- it keeps "one relaxation application per output cycle" exactly true,
-# which the densitization-fix spot-check and the restart-reproducibility check both rely on).
-# A production/GPU run should use rad_m1_tov.athinput's resolution/integrator (rk3) instead;
-# this file is an integration/stability/coupling smoke test, not a converged simulation.
+# Deliberately SCALED DOWN from rad_m1_tov.athinput for CPU tractability (no GPU; the build
+# here uses Kokkos::Serial, single-threaded): nx1=nx2=nx3=16 (dx=3.2), single MeshBlock, no
+# static mesh refinement, integrator=rk1 (keeps "one relaxation application per output
+# cycle" exactly true, which the densitization-fix spot-check and the
+# restart-reproducibility check both rely on). A production/GPU run should use
+# rad_m1_tov.athinput's resolution/integrator (rk3) instead; this file is an
+# integration/stability/coupling smoke test, not a converged simulation.
 #
 # Requires: an EOSCompOSE DD2 table (local paths below; adjust for your system) and a toy
-# TorchScript model at rhea_model_path (not part of the repo -- see
-# scratchpad/rhea_pkg6/make_toy_flavor_swap_tov.py for how toy_flavor_swap_tov.pt was built;
-# it is Package 5's exact "genuine flavor swap" toy-model architecture, reused deliberately
-# -- see the Package 6 report for why that reuse is the right choice for the
-# densitization-fix check specifically, and only the growthrate constant was retuned for
-# this run's larger CFL-limited dt).
+# TorchScript model at rhea_model_path (not part of the repo). Reuses the same "genuine
+# flavor swap" toy-model architecture as rad_m1_rhea_singlezone.athinput, with only the
+# growthrate constant retuned for this run's larger CFL-limited dt.
 
 <comment>
-problem  = radiation m1 tov + Rhea flavor mixing (Package 6, Stage C)
+problem  = radiation m1 tov + Rhea flavor mixing
 
 <job>
 basename = tov_rhea
@@ -49,7 +45,7 @@ ix3_bc = reflect # inner boundary
 ox3_bc = outflow # outer boundary
 
 <meshblock>
-nx1  = 16        # single MeshBlock -- no AMR, no MPI decomposition (see report)
+nx1  = 16        # single MeshBlock -- no AMR, no MPI decomposition
 nx2  = 16
 nx3  = 16
 
@@ -57,7 +53,7 @@ nx3  = 16
 evolution  = dynamic    # dynamic/kinematic/static
 integrator = rk1        # forward Euler -- deliberate, see file header comment
 cfl_number = 0.1
-nlim       = 40         # generous for a CPU smoke/stability test; see report for wall-clock
+nlim       = 40         # generous for a CPU smoke/stability test
 tlim       = 10000
 ndiag      = 1          # cycles between diagnostic output
 
@@ -83,7 +79,7 @@ rhea_mem_fraction = 0.05
 
 <mhd>
 eos         = ideal     # EOS type
-dyn_eos     = compose     # EOS type (Rhea mixing requires EOSCompOSE, §6.1/§11.9)
+dyn_eos     = compose     # EOS type (Rhea mixing requires EOSCompOSE)
 dyn_error   = reset_floor # error policy
 reconstruct = wenoz     # spatial reconstruction method
 rsolver     = hlle      # Riemann solver to be used

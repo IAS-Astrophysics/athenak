@@ -91,33 +91,30 @@ else()
 endif ()
 
 # set torch macro (true/false) and locate LibTorch (Rhea flavor mixing, radiation_m1).
-# Pin: LibTorch 2.6.0 (PI decision; matches Rhea's own Python/training pin). Point CMake at
-# an install via -DCMAKE_PREFIX_PATH=<path-to-libtorch> (standard LibTorch convention) or
-# -DTorch_DIR=<path-to-libtorch>/share/cmake/Torch.
+# Point CMake at an install via -DCMAKE_PREFIX_PATH=<path-to-libtorch> (standard LibTorch
+# convention) or -DTorch_DIR=<path-to-libtorch>/share/cmake/Torch.
 #
-# KNOWN, DOCUMENTED FRICTION (see design doc rhea_athenak_port_design.md §7/§11.5): unlike
-# bns_nurates above (a plain in-tree header directory with no CMake package of its own),
-# LibTorch ships a real CMake package, so find_package(Torch) is used rather than
+# Unlike bns_nurates above (a plain in-tree header directory with no CMake package of its
+# own), LibTorch ships a real CMake package, so find_package(Torch) is used rather than
 # reimplemented -- but this means it also injects its own CMAKE_CXX_FLAGS and
 # _GLIBCXX_USE_CXX11_ABI setting (via the imported `torch` target's
 # INTERFACE_COMPILE_OPTIONS, propagated to `athena` through target_link_libraries below).
-# That setting MUST agree with whatever Kokkos and the device compiler
+# That setting must agree with whatever Kokkos and the device compiler
 # (nvcc_wrapper/hipcc/icpx) were built with, or the result is either a hard link error
 # (undefined std::__cxx11::... symbols) or, worse, a silent ODR violation across the
 # LibTorch/Kokkos boundary that only misbehaves at runtime. AthenaK's in-repo CI only
-# exercises the CUDA+nvcc_wrapper path (.gitlab-ci.yml); there is NO in-repo precedent for
-# combining find_package(Torch) with hipcc or icpx -- budget real time for ABI-flag friction
-# on the first HIP/SYCL attempt, and check the actual TORCH_CXX_FLAGS value LibTorch's
-# TorchConfig.cmake sets (it is empty for at least one CPU-only distribution actually tested
-# while wiring this up, see Package 0's final report -- do not assume it is always empty).
+# exercises the CUDA+nvcc_wrapper path (.gitlab-ci.yml); combining find_package(Torch) with
+# hipcc or icpx has no in-repo precedent, so budget real time for ABI-flag friction on the
+# first HIP/SYCL attempt, and check the actual TORCH_CXX_FLAGS value LibTorch's
+# TorchConfig.cmake sets (it is empty for at least one CPU-only distribution -- do not
+# assume it is always empty).
 if(Athena_ENABLE_TORCH)
-  # Rhea flavor mixing hard-requires nspecies == 4 (design doc §1), but M1_TOTAL_NUM_SPECIES
-  # is only set to 4 by Athena_ENABLE_NURATES above -- with TORCH=ON and NURATES=OFF it stays
-  # 1, RadiationM1::FlavorMix silently early-exits (nspecies <= 1), and flavor_mix = rhea
-  # would load the model and then do nothing, with no error (final-review finding, design doc
-  # §11 item 13a). Fail loudly at configure time instead. (Longer-term fix is to decouple
-  # M1_TOTAL_NUM_SPECIES from nurates; for now Rhea always builds alongside nurates, which is
-  # also the only combination the port was actually tested against.)
+  # Rhea flavor mixing hard-requires nspecies == 4, but M1_TOTAL_NUM_SPECIES is only set to
+  # 4 by Athena_ENABLE_NURATES above -- with TORCH=ON and NURATES=OFF it stays 1,
+  # RadiationM1::FlavorMix silently early-exits (nspecies <= 1), and flavor_mix = rhea would
+  # load the model and then do nothing, with no error. Fail loudly at configure time instead.
+  # (Longer-term fix is to decouple M1_TOTAL_NUM_SPECIES from nurates; for now Rhea always
+  # builds alongside nurates, which is also the only combination the port was tested against.)
   if(NOT Athena_ENABLE_NURATES)
     message(FATAL_ERROR
       "Athena_ENABLE_TORCH=ON requires Athena_ENABLE_NURATES=ON: Rhea flavor mixing needs "

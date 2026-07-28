@@ -1,14 +1,15 @@
 # Building AthenaK with LibTorch (Rhea flavor mixing)
 
 This describes the `Athena_ENABLE_TORCH` CMake option, added to support the Rhea
-ML flavor-mixing model in `radiation_m1` (`flavor_mix = rhea`). Full design context is in
-[`rhea_athenak_port_design.md`](../rhea_athenak_port_design.md) (repo root, one level up from
-this file) — this file only covers how to configure and build.
+ML flavor-mixing model in `radiation_m1` (`flavor_mix = rhea`). This file covers how to
+configure and build against LibTorch; see `radiation_m1_rhea.hpp`/`radiation_m1_rhea.cpp`
+for the interop layer itself.
 
 ## Version pin
 
-LibTorch **2.6.0** (matches Rhea's own Python/training pin). Do not use a newer or older
-version without checking the design doc §7/§11 first — a version bump is deferred.
+LibTorch **2.6.0** (matches Rhea's own Python/training pin). A version bump is deferred;
+treat a newer or older release as untested until it has been validated against Rhea's own
+Python/training pin.
 
 ## Getting LibTorch
 
@@ -52,7 +53,7 @@ ships inside a PyTorch Python environment — see below).
         -DAthena_ENABLE_TORCH=On -DCMAKE_PREFIX_PATH=<path-to-libtorch-2.6.0-rocm*> ..
   ```
 - **SYCL (Aurora, Intel Data Center GPU Max / PVC)**: requires the vendored `kokkos`
-  submodule at **>= 4.7** (already the case on this branch as of the Package 0 commit).
+  submodule at **>= 4.7** (already the case on this branch).
   ```
   cmake -DKokkos_ENABLE_SYCL=On -DKokkos_ARCH_INTEL_PVC=On \
         -DCMAKE_CXX_COMPILER=icpx \
@@ -86,6 +87,6 @@ With `Athena_ENABLE_TORCH=OFF` (default), the binary has zero LibTorch dependenc
 `ldd athena` should show `libtorch.so`/`libtorch_cpu.so`/`libc10.so` (plus CUDA/HIP/SYCL
 backend libraries as applicable) resolved from your `CMAKE_PREFIX_PATH`. Running e.g.
 `inputs/hydro/sod.athinput` should produce bit-identical output between `ON` and `OFF`
-builds, since no code path is wired up to actually use LibTorch yet beyond the placeholder
-in `radiation_m1.hpp`/`radiation_m1.cpp` — see the design doc's work-breakdown (§10) for
-what each subsequent package adds.
+builds, since problems that don't set `flavor_mix = rhea` never touch LibTorch; see
+`inputs/tests/rad_m1_rhea_singlezone.athinput` and `inputs/tests/rad_m1_tov_rhea.athinput`
+for problems that exercise the Rhea mixing path itself.

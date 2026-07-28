@@ -7,61 +7,34 @@
 //! \brief Rhea-based neutrino flavor mixing: pack Rhea's input tensor from M1/ADM/EOS
 //! state, and unpack/apply its prediction via BGK relaxation.
 //!
-//! NOTE(package split): this file is shared by two independently-scoped work packages
-//! (rhea_athenak_port_design.md §4, §10): Package 2 owns `RadiationM1::PackRheaInputs`/
-//! `PackRheaInputs_` (the pack half); Package 3 owns `RadiationM1::ApplyRheaMixing` and
-//! everything below (the unpack/mix half). Package 2's pack half has since been added,
-//! immediately after the `namespace radiationm1 {` opening and before Package 3's
-//! implementation notes/`ApplyRheaMixing` below (Package 2 was not running concurrently
-//! with Package 3, so nothing below this point was overwritten).
-//!
 //! ============================================================================
-//! Package 3 (unpack/mix half) -- implementation notes, please read before extending:
+//! Implementation notes, please read before extending:
 //!
-//! `RestrictToPhysical` and `ReconstructMixingMatrix` (the physics kernels the design doc
-//! §4 explicitly mandates) live in radiation_m1_rhea_kernels.hpp, are pure
-//! KOKKOS_INLINE_FUNCTION free functions with zero Torch types, and are unit-tested
-//! directly against synthetic fixtures (see the accompanying standalone Kokkos-only test,
-//! not part of this repo's CMake build -- rhea_athenak_port_design.md §10 Package 3's
-//! "tested via"). Everything below composes those two kernels into the per-cell BGK
-//! relaxation update, ported from thc_M1_flavor_mix.cc:255-711 (§2b).
+//! `RestrictToPhysical` and `ReconstructMixingMatrix` (the physics kernels this mixing
+//! scheme needs) live in radiation_m1_rhea_kernels.hpp as pure KOKKOS_INLINE_FUNCTION free
+//! functions with zero Torch types, so they are unit-testable directly against synthetic
+//! fixtures independent of a real Rhea model. Everything below composes those two kernels
+//! into the per-cell BGK relaxation update, ported from thc_M1_flavor_mix.cc:255-711.
 //!
-//! Two genuine open points this file could not resolve without touching files outside
-//! this package's scope (radiation_m1.hpp/radiation_m1_params.hpp, owned by Package 4)
-//! are flagged explicitly where they matter, and repeated in the implementing agent's
-//! final report:
+//! Two design choices worth flagging for whoever next touches this file:
 //!
-//! 1. SIGNATURE. Design doc §4 shows `TaskStatus RadiationM1::ApplyRheaMixing(Driver*,
-//!    int)` with no further parameters, and its own prose says it "calls prhea->Predict(),
-//!    then in one Kokkos kernel...". But §10 Package 3 says this package "does not call
-//!    RheaModel::Predict itself" and should take "a RheaModel::Prediction ... or ... any
-//!    Views of the matching shape/type", and §10 Package 4 independently describes
-//!    `RadiationM1::FlavorMix` "calling PackRheaInputs -> RheaModel::Predict ->
-//!    ApplyRheaMixing sequentially" -- three separate top-level calls, which only makes
-//!    sense if Predict()'s result reaches ApplyRheaMixing as data, not via an internal
-//!    Predict() call. This implementation follows the latter (§10) reading: it does not
-//!    call Predict() itself, and takes the three prediction Views as explicit parameters
-//!    beyond (Driver*, int). This also lets this function stay genuinely free of Torch
-//!    types (design doc §5.9) and independent of radiation_m1_rhea.hpp, which does not
-//!    exist in this working tree as of this writing (Package 1 runs concurrently with,
-//!    and this package does not depend on, Package 1). Package 4, which owns
-//!    radiation_m1.hpp, should treat this signature choice as a proposal to confirm/adjust
-//!    when it adds the actual class declaration, not as settled fact.
+//! 1. SIGNATURE. `ApplyRheaMixing` does not call `RheaModel::Predict` itself: it takes the
+//!    three prediction Views (F4_out, growthrate, stability) as explicit parameters beyond
+//!    (Driver*, int). `RadiationM1::FlavorMix` calls PackRheaInputs -> prhea->Predict() ->
+//!    ApplyRheaMixing sequentially instead, so Predict()'s result reaches ApplyRheaMixing
+//!    as data. This also keeps this function genuinely free of Torch types and
+//!    independent of radiation_m1_rhea.hpp.
 //!
-//! 2. UNITS. §6.1 says the reverse conversion of F4_out's post-mix densities back to code
-//!    units ("the same is true in reverse for ApplyRheaMixing") uses the same
-//!    `eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS())` factor
-//!    PackRheaInputs computes going the other way -- which requires the EOS-templated
-//!    dynamic_cast dispatch pattern (radiation_m1_calc_opacities_nurates.cpp:18-46). That
-//!    dispatch needs `pmy_pack`, a *private* RadiationM1 member, so it can only be done in
-//!    a genuine RadiationM1 member function template -- which would need a new
-//!    `ApplyRheaMixing_<EOSPolicy,ErrorPolicy>` declaration in radiation_m1.hpp, again
-//!    outside this package's file scope (§10 Package 3's own "May assume" list does not
-//!    mention EOS/unit access at all, unlike Package 2's). To avoid duplicating or
-//!    guessing at Package 2's EOS-dispatch implementation, `ApplyRheaMixing` below takes
-//!    the conversion factor as a caller-supplied scalar (`unit_num_dens`) instead of
-//!    computing it itself. Whoever wires Package 4's FlavMixRhea dispatch branch should
-//!    pass the same `unit_num_dens` PackRheaInputs already computed for the forward
+//! 2. UNITS. The reverse conversion of F4_out's post-mix densities back to code units uses
+//!    the same `eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS())`
+//!    factor PackRheaInputs computes going the other way -- which requires the
+//!    EOS-templated dynamic_cast dispatch pattern
+//!    (radiation_m1_calc_opacities_nurates.cpp:18-46). That dispatch needs `pmy_pack`, a
+//!    *private* RadiationM1 member, so it can only be done in a genuine RadiationM1 member
+//!    function template. Rather than duplicate that dispatch here, `ApplyRheaMixing` below
+//!    takes the conversion factor as a caller-supplied scalar (`unit_num_dens`) instead of
+//!    computing it itself. Whoever calls this from FlavorMix's FlavMixRhea dispatch branch
+//!    must pass the same `unit_num_dens` PackRheaInputs already computed for the forward
 //!    conversion (or recompute it identically) -- do not let the two drift apart.
 //! ============================================================================
 
@@ -83,19 +56,18 @@
 namespace radiationm1 {
 
 //! ============================================================================
-//! Package 2 (pack half) -- implementation notes, please read before extending:
+//! PackRheaInputs implementation notes, please read before extending:
 //!
-//! Ported from THC's thc_M1_rhea.cc:65-174 (design doc §2a/§6.1), restructured into a
-//! per-cell Kokkos kernel, mirroring RadiationM1::CalcOpacityNurates/CalcOpacityNurates_'s
+//! Ported from THC's thc_M1_rhea.cc:65-174, restructured into a per-cell Kokkos kernel,
+//! mirroring RadiationM1::CalcOpacityNurates/CalcOpacityNurates_'s
 //! dynamic_cast-dispatch-to-templated-helper pattern exactly
 //! (radiation_m1_calc_opacities_nurates.cpp:18-93). Two points worth flagging for whoever
 //! next touches this file:
 //!
 //! 1. TETRAD. THC projects the lab-frame number 4-current onto a per-cell "Eulerian
 //!    tetrad" built by CPPUtils/src/utils_tetrad.hh's build_tetrad(n^mu, g_dd, &e) (CPPUtils
-//!    is THC's own shared tensor-utilities dependency, outside both read-only reference
-//!    codebases this port is scoped to -- Rhea/, THCode/ -- so it was read for background
-//!    only, not ported from directly): leg 0 is the Eulerian normal n^mu itself; legs 1-3
+//!    is THC's own shared tensor-utilities dependency, read for background only, not
+//!    ported from directly): leg 0 is the Eulerian normal n^mu itself; legs 1-3
 //!    are the coordinate x/y/z axes Gram-Schmidt-orthonormalized against all previous legs
 //!    under the full 4-metric g_dd. Worked through by hand (not guessed): in that
 //!    Gram-Schmidt loop, every leg-0 (time-leg) projection is identically zero for every
@@ -125,14 +97,13 @@ namespace radiationm1 {
 //!    not verbatim, to avoid double-applying flv_fac by accident.
 //!
 //! Unlike CalcOpacityNurates_, this kernel does NOT early-return for stage>1: the
-//! FlavMixRhea dispatch branch (Package 4) that will call PackRheaInputs is required to fire
-//! every RK stage, not once per timestep (design doc §3, PI-confirmed) -- copying
-//! CalcOpacityNurates_'s stage>1 skip here would silently freeze Rhea's input on stale
-//! substage-1 data every subsequent stage.
+//! FlavMixRhea dispatch branch that calls PackRheaInputs is required to fire every RK
+//! stage, not once per timestep -- copying CalcOpacityNurates_'s stage>1 skip here would
+//! silently freeze Rhea's input on stale substage-1 data every subsequent stage.
 //!
 //! Indexing: writes rhea_f4_in_scratch using RheaBatchIndex(m,k,j,i,ks,js,is,nx3,nx2,nx1)
-//! (radiation_m1_rhea_kernels.hpp) -- the exact same index Package 3's ApplyRheaMixing uses
-//! to read F4_out/growthrate/stability back. Do not derive an independent formula here.
+//! (radiation_m1_rhea_kernels.hpp) -- the exact same index ApplyRheaMixing uses to read
+//! F4_out/growthrate/stability back. Do not derive an independent formula here.
 //! ============================================================================
 
 namespace {
@@ -140,7 +111,7 @@ namespace {
 //----------------------------------------------------------------------------------------
 //! \fn void BuildSpatialTriad
 //! \brief Gram-Schmidt-orthonormalize the coordinate axes under the ADM 3-metric gamma_ij,
-//! producing the purely-spatial legs of THC's Eulerian tetrad (see the Package 2 note [1]
+//! producing the purely-spatial legs of THC's Eulerian tetrad (see note [1]
 //! above for why the full 4D construction reduces to this 3D one). `E[a][p]`: tetrad leg
 //! a=0,1,2 (THC's legs 1,2,3, i.e. x,y,z), coordinate component p=0,1,2. Ported from
 //! CPPUtils/src/utils_tetrad.hh's build_tetrad, restricted to its spatial legs.
@@ -178,10 +149,10 @@ void BuildSpatialTriad(const Real gamma_dd[3][3], Real E[3][3]) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::PackRheaInputs
-//! \brief Dispatch to the EOS-templated PackRheaInputs_ (needed for eos.GetEOSUnitSystem(),
-//! §6.1), exactly mirroring RadiationM1::CalcOpacityNurates's dynamic_cast dispatch pattern
+//! \brief Dispatch to the EOS-templated PackRheaInputs_ (needed for eos.GetEOSUnitSystem()),
+//! exactly mirroring RadiationM1::CalcOpacityNurates's dynamic_cast dispatch pattern
 //! (radiation_m1_calc_opacities_nurates.cpp:18-46). Requires pmy_pack->pdyngr != nullptr
-//! (dynamical-GR MHD active, §6.1/§11.9) -- if it is null, both dynamic_casts below fail and
+//! (dynamical-GR MHD active) -- if it is null, both dynamic_casts below fail and
 //! this falls through to the same "Unsupported EOS type" abort CalcOpacityNurates uses.
 TaskStatus RadiationM1::PackRheaInputs(Driver *pdrive, int stage) {
   // Here we are using dynamic_cast to infer which derived type pdyngr is
@@ -211,13 +182,13 @@ TaskStatus RadiationM1::PackRheaInputs(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::PackRheaInputs_
 //! \brief Fill rhea_f4_in_scratch from u0_/w0_/ADM state via THC's Eulerian-tetrad
-//! projection of the lab-frame number 4-current (thc_M1_rhea.cc:65-174, design doc §2a),
+//! projection of the lab-frame number 4-current (thc_M1_rhea.cc:65-174),
 //! folding in the i_flv_map/flv_fac species mapping and the eos_units -> cgs number-density
-//! conversion (§6.1) in the same pass. See the Package 2 implementation notes above for the
+//! conversion in the same pass. See the implementation notes above for the
 //! tetrad-reduction and fluid-frame-decomposition details.
 //!
 //! Runs every RK stage (no stage>1 early exit -- see note above); requires nspecies == 4
-//! (Rhea mixing's hard, non-goal-to-relax prerequisite, §1).
+//! (Rhea mixing's hard prerequisite, not relaxed elsewhere).
 template <class EOSPolicy, class ErrorPolicy>
 TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
   assert(nspecies == 4);
@@ -246,17 +217,17 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
 
-  // eos_units -> cgs number-density conversion factor (§6.1); this is the ONLY conversion
+  // eos_units -> cgs number-density conversion factor; this is the ONLY conversion
   // factor needed -- F4_in's spatial (flux) components share the same number-density units
-  // as its time component (§2a/§6.1), so there is no separate EnergyDensityConversion call,
+  // as its time component, so there is no separate EnergyDensityConversion call,
   // unlike CalcOpacityNurates_. Deliberately a plain local (not stashed anywhere) so
-  // Package 4's FlavMixRhea dispatch branch can cheaply recompute the identical one-line
-  // expression for ApplyRheaMixing's reverse conversion (design doc §6.1's "SETTLED
-  // (Package 3)" note) -- no shared-state mechanism needed for a cheap host-side scalar.
+  // FlavorMix's FlavMixRhea dispatch branch can cheaply recompute the identical one-line
+  // expression for ApplyRheaMixing's reverse conversion -- no shared-state mechanism
+  // needed for a cheap host-side scalar.
   Real const unit_num_dens =
       eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS());
 
-  // Species -> Rhea (m,f) mapping, lin = NF*m + f (§2a, thc_M1_rhea.cc:79-85). Port exactly;
+  // Species -> Rhea (m,f) mapping, lin = NF*m + f (thc_M1_rhea.cc:79-85). Port exactly;
   // do not re-derive. AthenaK species order: 0=e, 1=a(bar-e), 2=x, 3=y(bar-x), matching
   // ReconstructMixingMatrix's convention (radiation_m1_rhea_kernels.hpp).
   constexpr int NF = 3;
@@ -335,7 +306,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
         calc_proj(u_d, u_u, proj_ud);
 
         // -------------------------------------------------------------------
-        // [C] Purely-spatial legs of THC's Eulerian tetrad (Package 2 note [1]
+        // [C] Purely-spatial legs of THC's Eulerian tetrad (note [1]
         //     above).
         // -------------------------------------------------------------------
         Real gamma3[3][3];
@@ -394,7 +365,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
         //     and J_fluid (the fluid-frame quantities computed in [D]) are
         //     species-level, unscaled; THC scales n_pt, J_pt, AND H_d all by
         //     flv_fac before forming H_d/J_pt, but that factor cancels
-        //     exactly in the ratio (Package 2 note [2] above), so applying it
+        //     exactly in the ratio (note [2] above), so applying it
         //     to the unscaled H_fluid/J_fluid ratio directly is algebraically
         //     identical and avoids double-applying it by accident.
         // -------------------------------------------------------------------
@@ -424,7 +395,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
 
             // Project onto the Eulerian tetrad: time leg = -n^mu N_mu (lab-
             // frame number density); spatial legs = the Gram-Schmidt triad
-            // contracted with N_d's spatial components (Package 2 note [1]).
+            // contracted with N_d's spatial components (note [1]).
             const Real N_time = -tensor_dot(n_u, N_d);
             Real N_space[3] = {0.0, 0.0, 0.0};
             for (int a = 0; a < 3; ++a) {
@@ -445,7 +416,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
             // ceiling, so this only fires on a pathological/overflowing input; the assert
             // (compiled out under -DNDEBUG, matching CalcOpacityNurates_'s own isfinite
             // asserts) catches it in debug/test builds instead of as an unexplained NaN much
-            // later. See design doc §11 (float32 magnitude constraint, found in Package 5).
+            // later.
             assert(Kokkos::isfinite(f4_in_(idx, mm, f, 3)));
             assert(Kokkos::isfinite(f4_in_(idx, mm, f, 0)));
             assert(Kokkos::isfinite(f4_in_(idx, mm, f, 1)));
@@ -460,25 +431,24 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::ApplyRheaMixing
 //! \brief Unpack Rhea's per-cell prediction, reconstruct the flavor mixing matrix, and
-//! relax the M1 moments towards the mixed state via BGK relaxation (rhea_athenak_port_
-//! design.md §2b). See the file-level NOTE above for the two open integration points
-//! (signature, units) this implementation had to make a documented choice on.
+//! relax the M1 moments towards the mixed state via BGK relaxation. See the file-level
+//! NOTE above for the two design choices (signature, units) this implementation makes.
 //!
-//! Does NOT write the mixed state directly into u0 -- it relaxes towards it exponentially
-//! (§2b), and does NOT implement THC's 5x5x5 spatial smoothing of inv_tau (explicitly
-//! deferred, §2b/§11.1); gamma/lambda are computed inline, per cell, with no persistent
-//! inv_tau_0/inv_tau_1 grid-function arrays.
+//! Does NOT write the mixed state directly into u0 -- it relaxes towards it exponentially,
+//! and does NOT implement THC's 5x5x5 spatial smoothing of inv_tau (explicitly deferred);
+//! gamma/lambda are computed inline, per cell, with no persistent inv_tau_0/inv_tau_1
+//! grid-function arrays.
 //!
-//! \param rhea_f4_out      [n_batch, 2, NF=3, 4] float32, lab-frame cgs number density
-//!                         (§2a); n_batch/index convention: RheaBatchIndex (radiation_m1_
+//! \param rhea_f4_out      [n_batch, 2, NF=3, 4] float32, lab-frame cgs number density;
+//!                         n_batch/index convention: RheaBatchIndex (radiation_m1_
 //!                         rhea_kernels.hpp).
 //! \param rhea_growthrate  [n_batch] float32, linear FFI growth-rate proxy in cm^-3, *not*
-//!                         log-scaled and *not* 1/s (§2a's PI-confirmed bug fix -- THC's
-//!                         C++ applies exp() here and predates Rhea commit 7bd7b98).
+//!                         log-scaled and *not* 1/s (a deliberate departure from THC's
+//!                         C++, which applies exp() here and predates Rhea commit 7bd7b98).
 //! \param rhea_stability   [n_batch] float32, exactly 0.0 (unstable) or 1.0 (stable).
-//! \param unit_num_dens    eos_units -> cgs number-density conversion factor (§6.1); see
-//!                         NOTE 2 above for why this is a parameter instead of being
-//!                         computed here.
+//! \param unit_num_dens    eos_units -> cgs number-density conversion factor; see NOTE 2
+//!                         above for why this is a parameter instead of being computed
+//!                         here.
 TaskStatus RadiationM1::ApplyRheaMixing(
     Driver *pdrive, int stage,
     const DvceArray4D<const float> &rhea_f4_out,
@@ -556,10 +526,9 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         // stored N is densitized (carries this factor); Rhea's N_post_* (below) is
         // undensitized, since PackRheaInputs_ already divided by volform before
         // feeding Rhea (and unit_num_dens is a pure unit-system conversion, not a
-        // densitization). BLOCKING FIX (design doc §10 Package 4, review-found):
-        // without dividing nn[] by volform before ReconstructMixingMatrix, the
-        // reconstructed mixing angle picks up a spurious 1/volform factor
-        // everywhere volform != 1 (i.e. essentially everywhere in a real
+        // densitization). IMPORTANT: without dividing nn[] by volform before
+        // ReconstructMixingMatrix, the reconstructed mixing angle picks up a spurious
+        // 1/volform factor everywhere volform != 1 (i.e. essentially everywhere in a real
         // dynamical-GR run). Does not affect Y's column-stochastic conservation
         // property or the gamma=0 BGK no-op (both hold for any Y) -- only the
         // numeric value of the mixing angle itself.
@@ -571,7 +540,7 @@ TaskStatus RadiationM1::ApplyRheaMixing(
 
         // -------------------------------------------------------------------
         // [B] Pre-mix N/E/F for the 4 species (0=e,1=a,2=x,3=y); causal floor.
-        //     Rhea mixing requires nspecies == 4 (§1, non-goal to relax).
+        //     Rhea mixing requires nspecies == 4 (a hard prerequisite, not relaxed elsewhere).
         // -------------------------------------------------------------------
         Real nn[4], E[4], Fx[4], Fy[4], Fz[4];
         for (int s = 0; s < 4; ++s) {
@@ -588,10 +557,10 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         }
 
         // -------------------------------------------------------------------
-        // [C] RestrictToPhysical on Rhea's raw per-cell prediction (§2a PI
-        //     decision -- THC does not call this, we do), then fold Rhea's
-        //     mu/tau flavor slots back into AthenaK's x/y species (§2a) and
-        //     convert the post-mix densities back to code units (§6.1).
+        // [C] RestrictToPhysical on Rhea's raw per-cell prediction (a deliberate
+        //     departure from THC, which does not call this), then fold Rhea's
+        //     mu/tau flavor slots back into AthenaK's x/y species and
+        //     convert the post-mix densities back to code units.
         // -------------------------------------------------------------------
         Real F4_cell[2][3][4];
         for (int mm = 0; mm < 2; ++mm) {
@@ -611,8 +580,8 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         // -------------------------------------------------------------------
         // [D] Reconstruct the block-diagonal column-stochastic mixing matrix.
         //     nn_pre_undens: nn[] (u0_'s densitized N, floored) undensitized by
-        //     volform so it is on the same footing as N_post_* above (BLOCKING FIX,
-        //     see the volform computation in [A] above). nn[] itself (still
+        //     volform so it is on the same footing as N_post_* above (see the
+        //     volform computation in [A] above). nn[] itself (still
         //     densitized) is deliberately left untouched for use in [E] below --
         //     Y is dimensionless, so applying it to the densitized nn[]/E[]/F[] is
         //     correct and preserves the sector-conservation property regardless of
@@ -644,9 +613,9 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         }
 
         // -------------------------------------------------------------------
-        // [F] Per-cell BGK relaxation towards the mixed state (§2b, exact
+        // [F] Per-cell BGK relaxation towards the mixed state (exact
         //     formula -- computed inline, no persistent inv_tau_0/1 fields,
-        //     no 5x5x5 spatial smoothing, per the PI decision).
+        //     no 5x5x5 spatial smoothing).
         //
         //     TODO(sherwood): confirm predict_all's growthrate output is
         //     linear (cm^-3), not log-scaled, for whichever Rhea checkpoint
@@ -661,12 +630,12 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         // y_growthrate (ml_neuralnet.py:308), where the NN correction y_growthrate is a bare
         // 1x0e scalar with unconstrained sign, while stability is derived from
         // growthrate_box3d ALONE (ml_neuralnet.py:322), so the two are not guaranteed
-        // sign-consistent (design doc §2a). Without this clamp a negative rate gives
+        // sign-consistent. Without this clamp a negative rate gives
         // inv_tau < 0 -> lambda = exp(+x) > 1, i.e. BGK *anti-damping*: the update moves
         // away from the mix target each stage, an unphysical exponential blow-up of N/E/F.
-        // THC never hit this because it applied exp(lgr) >= 0; the (correct, PI-confirmed)
-        // switch to the linear growthrate interpretation silently dropped that positivity
-        // guarantee, so restore it here. Confirm the intended semantics with Sherwood.
+        // THC never hit this because it applied exp(lgr) >= 0; the switch to the linear
+        // growthrate interpretation silently dropped that positivity guarantee, so restore
+        // it here. Confirm the intended semantics with Sherwood.
         const Real gamma_persec = unstable
             ? Kokkos::max(Real(0),
                           static_cast<Real>(rhea_growthrate(idx)) * ndens_to_invsec)
@@ -680,7 +649,7 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         // NOTE: the "old" term below intentionally re-reads u0_ directly
         // (the raw, un-floored stored value), not the floored local nn[]/
         // E[]/Fx[]/Fy[]/Fz[] computed in [B] -- this is what makes the
-        // gamma=0 => lambda=1 no-op bit-identical to u0_ (§2b), and matches
+        // gamma=0 => lambda=1 no-op bit-identical to u0_, and matches
         // both THC (thc_M1_flavor_mix.cc:672, using rN[i4D] not nn_pt[f])
         // and the existing equilibrium/maximal FlavorMix task
         // (radiation_m1_flavor_mix.cpp:245-259).

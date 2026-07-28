@@ -1,10 +1,10 @@
 <comment>
-problem = Rhea flavor-mix single-zone fixed-point convergence test (rhea_athenak_port_
-          design.md §9 Stage B, §10 Package 5). See rad_m1_rhea_singlezone.cpp for the full
-          rationale. Requires an external toy TorchScript model (not part of the repo,
-          rhea_model_path below) and an EOSCompOSE table (table below) to be present in the
-          working directory when this input file is run -- same convention as
-          inputs/tests/rad_m1_singlezone.athinput's DD2.athtab dependency.
+problem = Rhea flavor-mix single-zone fixed-point convergence test. See
+          rad_m1_rhea_singlezone.cpp for the full rationale. Requires an external toy
+          TorchScript model (not part of the repo, rhea_model_path below) and an EOSCompOSE
+          table (table below) to be present in the working directory when this input file
+          is run -- same convention as inputs/tests/rad_m1_singlezone.athinput's DD2.athtab
+          dependency.
 
 <job>
 basename = rhea_singlezone  # name of run
@@ -13,12 +13,12 @@ basename = rhea_singlezone  # name of run
 evolution  = dynamic  # dynamic/kinematic/static
 # rk1 (forward Euler) is deliberate: with exactly one explicit stage per cycle, "successive
 # RK stages" and "successive cycles" coincide, so the standard per-cycle tab output already
-# checks the design doc's stage-to-stage convergence criterion at the right granularity.
+# checks the stage-to-stage convergence criterion at the right granularity.
 integrator = rk1
 cfl_number = 0.1     # homogeneous background -> no real stability constraint from hydro;
                      # kept well below 1 (rk1's cfl_limit) as a safety margin, not tuned.
-nlim       = 4000    # generous cap; convergence is checked well before this (see report)
-tlim       = 40.0    # generous cap; see report for the measured relaxation time
+nlim       = 4000    # generous cap; convergence is checked well before this
+tlim       = 40.0    # generous cap; well above the measured relaxation time
 
 <mesh>
 nghost = 2         # Number of ghost cells
@@ -75,8 +75,8 @@ excise      = false
 closure_fun = eddington
 src_update = implicit
 opacity_type = none    # deliberately no bns-nurates/photon opacities: isolate the
-                        # flavor-mixing source term as the *only* driver of evolution
-                        # (design doc §9 Stage B), matching matter_sources=false below
+                        # flavor-mixing source term as the *only* driver of evolution,
+                        # matching matter_sources=false below
 
 gr_sources = false      # isolate flavor-mix: no other M1<->matter/GR source coupling
 matter_sources = false
@@ -104,14 +104,14 @@ Y_e  = 0.1       # electron fraction
 # {0,2} and {1,3} so the mixing-matrix reconstruction's degenerate branch is never hit.
 # F (flux) = 0 for all species always (hard-coded in the pgen, not a free parameter) --
 # stays exactly 0 for all time (Y applied to zero flux is zero), keeping RestrictToPhysical's
-# boost correction exactly evaluable by hand -- see the implementation report.
+# boost correction exactly evaluable by hand.
 #
 # Magnitude note: eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS())
 # (unit_num_dens, PackRheaInputs_) measured ~1e39 for this DD2 table/code-unit system, and
 # Rhea's F4_in is float32 (max ~3.4e38) -- an O(1) code-unit N (tried first) overflows to
 # `inf` in the packed tensor. Scaled down by 1e-7 here so N*unit_num_dens ~ 1e32 cm^-3,
-# comfortably inside float32 range and in the ballpark §2a's cited example magnitudes
-# (~1e32-1e33) -- see the implementation report for the full diagnosis.
+# comfortably inside float32 range and in the ballpark of typical neutrino number densities
+# (~1e32-1e33 cm^-3).
 rad_N0 = 4.0e-7   # nu_e
 rad_N1 = 3.0e-7   # nu_ebar
 rad_N2 = 1.0e-7   # nu_x

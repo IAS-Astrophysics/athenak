@@ -9,12 +9,11 @@
 //! \brief Pure-Kokkos physics kernels for Rhea-based neutrino flavor mixing.
 //!
 //! Everything in this header is a KOKKOS_INLINE_FUNCTION free function with zero Torch
-//! types and zero backend-conditional compilation (rhea_athenak_port_design.md §5.9) --
-//! it operates only on plain Real/float scalars and small fixed-size C arrays, so it is
-//! identically testable whether the inputs came from a real Rhea inference call or a
-//! synthetic fixture. Ported faithfully from THC_M1 (thc_M1_flavor_mix.cc:255-711) and
-//! from Rhea's own reference C++ helper (Rhea/cpp_interface/FFISubgridModel.h:61-86) --
-//! see rhea_athenak_port_design.md §2b for the physics contract.
+//! types and zero backend-conditional compilation -- it operates only on plain Real/float
+//! scalars and small fixed-size C arrays, so it is identically testable whether the
+//! inputs came from a real Rhea inference call or a synthetic fixture. Ported faithfully
+//! from THC_M1 (thc_M1_flavor_mix.cc:255-711) and from Rhea's own reference C++ helper
+//! (Rhea/cpp_interface/FFISubgridModel.h:61-86).
 
 #include "athena.hpp"
 
@@ -26,7 +25,7 @@ namespace radiationm1 {
 //!
 //! Ports Rhea/cpp_interface/FFISubgridModel.h:61-86 (`restrict_to_physical`) from its
 //! batched-tensor form down to a single cell. Input/output layout matches Rhea's raw
-//! `F4_out` (design doc §2a, *before* the mu/tau -> x/y fold): `F4[m][f][mu]` with
+//! `F4_out` (before the mu/tau -> x/y fold): `F4[m][f][mu]` with
 //! `m = 0 (nu), 1 (nubar)`, `f = 0 (e), 1 (mu), 2 (tau)`, and `mu` a Minkowski 4-vector
 //! index where `mu = 3` is the (negative-signature) time leg = lab-frame number density
 //! and `mu = 0,1,2` are the (positive-signature) spatial number-flux components -- this
@@ -40,18 +39,17 @@ namespace radiationm1 {
 //! cell and apply it uniformly to every one of them (matches `torch.amax(alpha, {1,2})`
 //! taking the max over both the nu/nubar and flavor axes before boosting).
 //!
-//! NOTE(observed while implementing this package -- see final report): this only
-//! mathematically guarantees the Minkowski norm is <= 0 (timelike-or-null); it does NOT
-//! separately guarantee non-negative density (a future-pointing vector). A 4-vector that
-//! is already timelike but *past*-pointing (e.g. `{0,0,0,-N}`, N>0 -- negative density,
-//! zero flux) has no alpha>0 that helps: boosting towards an also-timelike average cannot
-//! flip a vector's time-orientation. FFISubgridModel.h's own docstring claims the result
-//! is "time-like and have positive density", but the algorithm itself (ported here
-//! faithfully, matching Rhea's own C++ reference bit-for-logic) only delivers the former
-//! in general. Confirmed empirically by this package's standalone test. This package's
-//! stated acceptance criterion (design doc §10 Package 3) is timelike-ness only, which
-//! this function does satisfy; do not assume non-negative density downstream without an
-//! explicit additional floor (ApplyRheaMixing already floors N_post_* separately).
+//! NOTE: this only mathematically guarantees the Minkowski norm is <= 0
+//! (timelike-or-null); it does NOT separately guarantee non-negative density (a
+//! future-pointing vector). A 4-vector that is already timelike but *past*-pointing (e.g.
+//! `{0,0,0,-N}`, N>0 -- negative density, zero flux) has no alpha>0 that helps: boosting
+//! towards an also-timelike average cannot flip a vector's time-orientation.
+//! FFISubgridModel.h's own docstring claims the result is "time-like and have positive
+//! density", but the algorithm itself (ported here faithfully, matching Rhea's own C++
+//! reference bit-for-logic) only delivers the former in general. This function's contract
+//! is timelike-ness only, which it does satisfy; do not assume non-negative density
+//! downstream without an explicit additional floor (ApplyRheaMixing already floors
+//! N_post_* separately).
 //!
 //! NOTE(sherwood): FFISubgridModel.h's C++ `restrict_to_physical` has a dead-code bug --
 //! the fallback branch for the near-degenerate `a ~= 0` case is computed
@@ -59,9 +57,9 @@ namespace radiationm1 {
 //! back to `alpha` (the statement's return value is simply discarded), so that branch is
 //! actually inert in the reference implementation. Porting the bug verbatim would produce
 //! NaN/Inf whenever an averaged 4-vector `avgF4[m]` is itself null-or-near-null (exactly
-//! the adversarial inputs this port's acceptance criteria require to stay finite/timelike,
-//! rhea_athenak_port_design.md §10 Package 3), so this port applies the evidently-intended
-//! fix (actually use the linear solution `-c/b` when `a` is negligible relative to `b`),
+//! the kind of adversarial input this function needs to stay finite/timelike for), so
+//! this port applies the evidently-intended fix (actually use the linear solution `-c/b`
+//! when `a` is negligible relative to `b`),
 //! with an additional `b ~= 0` guard (alpha = 0, i.e. no correction) that neither the
 //! Python (`ml_tools.py:56-83`) nor the C++ reference handles explicitly. Confirm with
 //! Sherwood before relying on this in a regime where it matters physically.
@@ -146,7 +144,7 @@ void RestrictToPhysical(Real F4_final[2][3][4]) {
 //! cross-sector entries of Y are exactly 0 (FFI cannot exchange between the neutrino and
 //! antineutrino sectors). Y is column-stochastic (each column sums to exactly 1) by
 //! construction, so applying it to N and to E within each sector conserves the sector
-//! total exactly (rhea_athenak_port_design.md §2b, §9 Stage A acceptance criterion).
+//! total exactly.
 KOKKOS_INLINE_FUNCTION
 void ReconstructMixingMatrix(Real const nn_pre[4], Real const N_post_e, Real const N_post_x,
                               Real const N_post_a, Real const N_post_y, Real Y[4][4]) {
@@ -189,19 +187,16 @@ void ReconstructMixingMatrix(Real const nn_pre[4], Real const N_post_e, Real con
 
 //----------------------------------------------------------------------------------------
 //! \fn int radiationm1::RheaBatchIndex
-//! \brief Linear index into the rank-wide Rhea batch (design doc §6.1: `n_batch =
+//! \brief Linear index into the rank-wide Rhea batch (`n_batch =
 //! nmb_thispack*nx1*nx2*nx3`) for interior zone `(m,k,j,i)`.
 //!
-//! NOT one of the two functions the design doc's §4 illustrative kernel-signature list
-//! mandates (`RestrictToPhysical`, `ReconstructMixingMatrix`) -- added here only so
-//! Package 2's `PackRheaInputs` (which fills `rhea_f4_in_scratch` at this same index) and
-//! Package 3's `ApplyRheaMixing` (which reads `F4_out`/`growthrate`/`stability` at this
-//! index) share a single, unambiguous definition of the pack/unpack correspondence. The
-//! design doc does not pin this mapping down explicitly; a silent mismatch here would be
-//! exactly the kind of "no crash, just silently wrong physics" bug §5.4 warns about for
-//! stream ordering, just on the indexing side instead. Row-major over `(m, k-ks, j-js,
-//! i-is)` with `i` fastest, matching AthenaK's own `LayoutRight` `(m,n,k,j,i)` convention
-//! (`athena.hpp:100`). Confirm this against whatever Package 2 actually implements.
+//! Added here so `PackRheaInputs` (which fills `rhea_f4_in_scratch` at this same index)
+//! and `ApplyRheaMixing` (which reads `F4_out`/`growthrate`/`stability` at this index)
+//! share a single, unambiguous definition of the pack/unpack correspondence -- a silent
+//! mismatch here would be a "no crash, just silently wrong physics" bug, just on the
+//! indexing side rather than stream ordering. Row-major over `(m, k-ks, j-js, i-is)` with
+//! `i` fastest, matching AthenaK's own `LayoutRight` `(m,n,k,j,i)` convention
+//! (`athena.hpp:100`).
 KOKKOS_INLINE_FUNCTION
 int RheaBatchIndex(int m, int k, int j, int i, int ks, int js, int is,
                     int nx3, int nx2, int nx1) {

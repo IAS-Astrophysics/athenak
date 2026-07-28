@@ -99,12 +99,12 @@ class RadiationM1 {
   DvceArray5D<Real> scat_1;          // energy scattering coefficient
 
 #if ENABLE_TORCH
-  // Rhea ML flavor-mixing state (rhea_athenak_port_design.md §4). Null unless
-  // params.flavor_mix_type == FlavMixRhea; constructed once in the RadiationM1
-  // constructor (the direct analog of THC's THC_M1_InitRhea).
+  // Rhea ML flavor-mixing state. Null unless params.flavor_mix_type == FlavMixRhea;
+  // constructed once in the RadiationM1 constructor (the direct analog of THC's
+  // THC_M1_InitRhea).
   std::unique_ptr<RheaModel> prhea;
   // Preallocated once at construction, shape (n_batch, 2, NF=3, 4), n_batch =
-  // nmb_thispack * nx1*nx2*nx3 (§6.1). Deliberately float32 regardless of Real (§5.3).
+  // nmb_thispack * nx1*nx2*nx3. Deliberately float32 regardless of Real.
   Kokkos::View<float****, LayoutWrapper, DevMemSpace> rhea_f4_in_scratch;
 #endif
 
@@ -134,9 +134,9 @@ class RadiationM1 {
   TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
   TaskStatus FlavorMix(Driver* d, int stage);
 #if ENABLE_TORCH
-  // Rhea ML flavor-mixing pipeline (rhea_athenak_port_design.md §4, §10 Package 4),
-  // called sequentially from the FlavMixRhea branch of FlavorMix -- no new TaskIDs
-  // (precedented by CalculateFluxes's sequential par_for calls in one task body).
+  // Rhea ML flavor-mixing pipeline, called sequentially from the FlavMixRhea branch of
+  // FlavorMix -- no new TaskIDs (precedented by CalculateFluxes's sequential par_for
+  // calls in one task body).
   TaskStatus PackRheaInputs(Driver* pdrive, int stage);
   TaskStatus ApplyRheaMixing(Driver* pdrive, int stage,
                               const DvceArray4D<const float>& rhea_f4_out,
@@ -163,7 +163,7 @@ class RadiationM1 {
   template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
 #if ENABLE_TORCH
-  // Needs eos.GetEOSUnitSystem() (§6.1), hence EOS-templated like CalcOpacityNurates_;
+  // Needs eos.GetEOSUnitSystem(), hence EOS-templated like CalcOpacityNurates_;
   // dispatched to from the non-templated PackRheaInputs above via the same
   // dynamic_cast(pmy_pack->pdyngr) pattern as RadiationM1::CalcOpacityNurates.
   template <class EOSPolicy, class ErrorPolicy>

@@ -197,8 +197,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   }
 
   // Flavor mixing parameters (ported from THC_M1)
-  // rhea_model_path/rhea_mem_fraction are host-only config (never on RadiationM1Params,
-  // §4) -- parsed here if flavor_mix=rhea, used further down in this constructor to build
+  // rhea_model_path/rhea_mem_fraction are host-only config (never on RadiationM1Params)
+  // -- parsed here if flavor_mix=rhea, used further down in this constructor to build
   // prhea/rhea_f4_in_scratch (needs nmb_thispack/indcs, computed later below).
   std::string rhea_model_path;
   Real rhea_mem_fraction = 0.05;
@@ -216,7 +216,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.rhea_tau_0_factor = pin->GetOrAddReal("radiation_m1", "rhea_tau_0_factor", 1.0);
     params.rhea_tau_1_factor = pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
 
-    // Required, no default (§8 PI decision): startup error if unset/empty.
+    // Required, no default: startup error if unset/empty.
     rhea_model_path = pin->GetOrAddString("radiation_m1", "rhea_model_path", "");
     if (rhea_model_path.empty()) {
       std::cerr << "Error: flavor_mix = rhea requires rhea_model_path to be set "
@@ -305,9 +305,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
 #if ENABLE_TORCH
   // RheaModel construction: the direct analog of THC's THC_M1_InitRhea, scheduled once
-  // AT CCTK_STARTUP there (rhea_athenak_port_design.md §4) -- here, once per RadiationM1
-  // instance, iff flavor_mix = rhea. n_batch/rhea_f4_in_scratch's shape follow §6.1: the
-  // entire rank's interior zones, one inference call per MeshBlockPack per RK stage.
+  // AT CCTK_STARTUP there -- here, once per RadiationM1 instance, iff flavor_mix = rhea.
+  // n_batch/rhea_f4_in_scratch's shape cover the entire rank's interior zones, one
+  // inference call per MeshBlockPack per RK stage.
   if (params.flavor_mix_type == FlavMixRhea) {
     int n_batch = ppack->nmb_thispack * indcs.nx1 * indcs.nx2 * indcs.nx3;
     Kokkos::realloc(rhea_f4_in_scratch, n_batch, 2, RheaModel::kNumFlavors, 4);
