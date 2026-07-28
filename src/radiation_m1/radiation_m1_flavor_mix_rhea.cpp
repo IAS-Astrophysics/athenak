@@ -14,7 +14,7 @@
 //! scheme needs) live in radiation_m1_rhea_kernels.hpp as pure KOKKOS_INLINE_FUNCTION free
 //! functions with zero Torch types, so they are unit-testable directly against synthetic
 //! fixtures independent of a real Rhea model. Everything below composes those two kernels
-//! into the per-cell BGK relaxation update, ported from thc_M1_flavor_mix.cc:255-711.
+//! into the per-cell BGK relaxation update.
 //!
 //! Two design choices worth flagging for whoever next touches this file:
 //!
@@ -58,43 +58,41 @@ namespace radiationm1 {
 //! ============================================================================
 //! PackRheaInputs implementation notes, please read before extending:
 //!
-//! Ported from THC's thc_M1_rhea.cc:65-174, restructured into a per-cell Kokkos kernel,
-//! mirroring RadiationM1::CalcOpacityNurates/CalcOpacityNurates_'s
+//! Implemented as a per-cell Kokkos kernel, mirroring
+//! RadiationM1::CalcOpacityNurates/CalcOpacityNurates_'s
 //! dynamic_cast-dispatch-to-templated-helper pattern exactly
 //! (radiation_m1_calc_opacities_nurates.cpp:18-93). Two points worth flagging for whoever
 //! next touches this file:
 //!
-//! 1. TETRAD. THC projects the lab-frame number 4-current onto a per-cell "Eulerian
-//!    tetrad" built by CPPUtils/src/utils_tetrad.hh's build_tetrad(n^mu, g_dd, &e) (CPPUtils
-//!    is THC's own shared tensor-utilities dependency, read for background only, not
-//!    ported from directly): leg 0 is the Eulerian normal n^mu itself; legs 1-3
+//! 1. TETRAD. This kernel projects the lab-frame number 4-current onto a per-cell
+//!    "Eulerian tetrad": leg 0 is the Eulerian normal n^mu itself; legs 1-3
 //!    are the coordinate x/y/z axes Gram-Schmidt-orthonormalized against all previous legs
 //!    under the full 4-metric g_dd. Worked through by hand (not guessed): in that
 //!    Gram-Schmidt loop, every leg-0 (time-leg) projection is identically zero for every
 //!    spatial seed vector, because it reduces to an inner product against n_d's *spatial*
 //!    components, which are exactly 0 by the ADM 3+1 definition n_d = (-alpha,0,0,0)
 //!    (radiation_m1_tensors.hpp's pack_n_d). So the spatial legs never pick up a nonzero
-//!    time component, and THC's full 4D construction reduces exactly to an ordinary 3D
-//!    Gram-Schmidt of the coordinate axes under the ADM 3-metric gamma_ij alone.
+//!    time component, and the full 4D tetrad construction reduces exactly to an ordinary
+//!    3D Gram-Schmidt of the coordinate axes under the ADM 3-metric gamma_ij alone.
 //!    BuildSpatialTriad below implements exactly that reduced 3D construction; the tetrad's
 //!    leg-0 (time) projection of a covector is then just -n^mu N_mu (n^mu obtained from n_d
 //!    via tensor_contract with g_uu) -- no separate 4D tetrad object is ever materialized.
 //!
-//! 2. FLUID-FRAME DECOMPOSITION. AthenaK's radiation_m1 does not persist THC's precomputed
-//!    fluid-frame grid functions (rnnu/rJ/rHt,x,y,z); this pack kernel recomputes the
+//! 2. FLUID-FRAME DECOMPOSITION. This pack kernel recomputes the
 //!    per-species fluid-frame number density, energy density, and flux covector inline,
-//!    every call, reusing exactly the same closure/projection machinery
+//!    every call (no persistent fluid-frame grid functions are stored), reusing exactly
+//!    the same closure/projection machinery
 //!    RadiationM1::CalcOpacityNurates_ already uses for J[]/rnnu[]/Gamma[]
 //!    (radiation_m1_calc_opacities_nurates.cpp:167-199) -- plus radiation_m1_helpers.hpp's
 //!    calc_H_from_rT for the flux covector H_d, which CalcOpacityNurates_ does not need but
 //!    this pack kernel does. n/J/H_d are all divided by volform (sqrt(det gamma)) to match
 //!    CalcOpacityNurates_'s "local undensitized neutrino quantities" convention (that file's
-//!    own comment, line 193) before entering THC's N_mu = n(u_mu + H_mu/J) formula. Also
-//!    note: THC scales n_pt AND J_pt AND H_d by the per-(m,f)-slot flv_fac before forming
-//!    the ratio H_d/J_pt (thc_M1_rhea.cc:122-131) -- since H and J are scaled by the SAME
-//!    factor, it cancels exactly in the ratio, so only n_pt actually needs the flv_fac
-//!    multiplier in the final formula (see [E] below); ported algebraically simplified,
-//!    not verbatim, to avoid double-applying flv_fac by accident.
+//!    own comment, line 193) before entering the N_mu = n(u_mu + H_mu/J) formula. Also
+//!    note: scaling n_pt AND J_pt AND H_d by the per-(m,f)-slot flv_fac before forming
+//!    the ratio H_d/J_pt would cancel exactly in the ratio, since H and J share the
+//!    same factor -- so only n_pt actually needs the flv_fac
+//!    multiplier in the final formula (see [E] below); this avoids double-applying
+//!    flv_fac by accident.
 //!
 //! Unlike CalcOpacityNurates_, this kernel does NOT early-return for stage>1: the
 //! FlavMixRhea dispatch branch that calls PackRheaInputs is required to fire every RK
@@ -111,10 +109,9 @@ namespace {
 //----------------------------------------------------------------------------------------
 //! \fn void BuildSpatialTriad
 //! \brief Gram-Schmidt-orthonormalize the coordinate axes under the ADM 3-metric gamma_ij,
-//! producing the purely-spatial legs of THC's Eulerian tetrad (see note [1]
+//! producing the purely-spatial legs of the per-cell Eulerian tetrad (see note [1]
 //! above for why the full 4D construction reduces to this 3D one). `E[a][p]`: tetrad leg
-//! a=0,1,2 (THC's legs 1,2,3, i.e. x,y,z), coordinate component p=0,1,2. Ported from
-//! CPPUtils/src/utils_tetrad.hh's build_tetrad, restricted to its spatial legs.
+//! a=0,1,2 (legs 1,2,3 of the full 4D tetrad, i.e. x,y,z), coordinate component p=0,1,2.
 KOKKOS_INLINE_FUNCTION
 void BuildSpatialTriad(const Real gamma_dd[3][3], Real E[3][3]) {
   for (int a = 0; a < 3; ++a) {
@@ -137,7 +134,7 @@ void BuildSpatialTriad(const Real gamma_dd[3][3], Real E[3][3]) {
         norm2 += gamma_dd[p][q] * s[p] * s[q];
       }
     }
-    // std::sqrt(std::abs(...)) matches build_tetrad's own defensive norm, verbatim.
+    // std::sqrt(std::abs(...)) is a defensive guard against a numerically negative norm2.
     const Real norm = Kokkos::sqrt(Kokkos::abs(norm2));
     for (int p = 0; p < 3; ++p) {
       E[a][p] = s[p] / norm;
@@ -181,8 +178,8 @@ TaskStatus RadiationM1::PackRheaInputs(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::PackRheaInputs_
-//! \brief Fill rhea_f4_in_scratch from u0_/w0_/ADM state via THC's Eulerian-tetrad
-//! projection of the lab-frame number 4-current (thc_M1_rhea.cc:65-174),
+//! \brief Fill rhea_f4_in_scratch from u0_/w0_/ADM state via an Eulerian-tetrad
+//! projection of the lab-frame number 4-current,
 //! folding in the i_flv_map/flv_fac species mapping and the eos_units -> cgs number-density
 //! conversion in the same pass. See the implementation notes above for the
 //! tetrad-reduction and fluid-frame-decomposition details.
@@ -227,7 +224,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
   Real const unit_num_dens =
       eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS());
 
-  // Species -> Rhea (m,f) mapping, lin = NF*m + f (thc_M1_rhea.cc:79-85). Port exactly;
+  // Species -> Rhea (m,f) mapping, lin = NF*m + f. Fixed by Rhea's own contract;
   // do not re-derive. AthenaK species order: 0=e, 1=a(bar-e), 2=x, 3=y(bar-x), matching
   // ReconstructMixingMatrix's convention (radiation_m1_rhea_kernels.hpp).
   constexpr int NF = 3;
@@ -306,7 +303,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
         calc_proj(u_d, u_u, proj_ud);
 
         // -------------------------------------------------------------------
-        // [C] Purely-spatial legs of THC's Eulerian tetrad (note [1]
+        // [C] Purely-spatial legs of the Eulerian tetrad (note [1]
         //     above).
         // -------------------------------------------------------------------
         Real gamma3[3][3];
@@ -357,15 +354,15 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
         // -------------------------------------------------------------------
         // [E] Per Rhea (mm,f) slot: apply the species mapping, build the
         //     covariant lab-frame number 4-current N_mu = n_pt*(u_mu + H_mu/J)
-        //     with the lab-frame floor enforced before projection (thc_M1_
-        //     rhea.cc:120-141), project onto the Eulerian tetrad, convert to
-        //     cgs, and write into rhea_f4_in_scratch at RheaBatchIndex.
+        //     with the lab-frame floor enforced before projection, project onto the
+        //     Eulerian tetrad, convert to cgs, and write into rhea_f4_in_scratch at
+        //     RheaBatchIndex.
         //
         //     NOTE: only n_pt carries the flv_fac multiplier here -- H_fluid
         //     and J_fluid (the fluid-frame quantities computed in [D]) are
-        //     species-level, unscaled; THC scales n_pt, J_pt, AND H_d all by
-        //     flv_fac before forming H_d/J_pt, but that factor cancels
-        //     exactly in the ratio (note [2] above), so applying it
+        //     species-level, unscaled; scaling n_pt, J_pt, AND H_d all by
+        //     flv_fac before forming H_d/J_pt would cancel exactly in the ratio
+        //     (note [2] above), so applying it
         //     to the unscaled H_fluid/J_fluid ratio directly is algebraically
         //     identical and avoids double-applying it by accident.
         // -------------------------------------------------------------------
@@ -385,7 +382,7 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
             }
 
             // Enforce the lab-frame number-density floor by adding a multiple
-            // of u_d (thc_M1_rhea.cc:136-141).
+            // of u_d.
             const Real ndens = -tensor_dot(g_uu, N_d, u_d);
             const Real floor_prefactor =
                 Kokkos::max(Real(0.0), params_.rad_N_floor - ndens);
@@ -435,7 +432,8 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
 //! NOTE above for the two design choices (signature, units) this implementation makes.
 //!
 //! Does NOT write the mixed state directly into u0 -- it relaxes towards it exponentially,
-//! and does NOT implement THC's 5x5x5 spatial smoothing of inv_tau (explicitly deferred);
+//! and does NOT apply any spatial smoothing to inv_tau across neighboring cells
+//! (a 5x5x5 stencil was considered and explicitly deferred);
 //! gamma/lambda are computed inline, per cell, with no persistent inv_tau_0/inv_tau_1
 //! grid-function arrays.
 //!
@@ -443,8 +441,9 @@ TaskStatus RadiationM1::PackRheaInputs_(Driver *pdrive, int stage) {
 //!                         n_batch/index convention: RheaBatchIndex (radiation_m1_
 //!                         rhea_kernels.hpp).
 //! \param rhea_growthrate  [n_batch] float32, linear FFI growth-rate proxy in cm^-3, *not*
-//!                         log-scaled and *not* 1/s (a deliberate departure from THC's
-//!                         C++, which applies exp() here and predates Rhea commit 7bd7b98).
+//!                         log-scaled and *not* 1/s (predates Rhea commit 7bd7b98, which
+//!                         changed the model from predicting log(growthrate) to
+//!                         growthrate).
 //! \param rhea_stability   [n_batch] float32, exactly 0.0 (unstable) or 1.0 (stable).
 //! \param unit_num_dens    eos_units -> cgs number-density conversion factor; see NOTE 2
 //!                         above for why this is a parameter instead of being computed
@@ -558,8 +557,9 @@ TaskStatus RadiationM1::ApplyRheaMixing(
 
         // -------------------------------------------------------------------
         // [C] RestrictToPhysical on Rhea's raw per-cell prediction (a deliberate
-        //     departure from THC, which does not call this), then fold Rhea's
-        //     mu/tau flavor slots back into AthenaK's x/y species and
+        //     safety step not present in the reference implementation this was ported
+        //     from), then fold Rhea's mu/tau flavor slots back into AthenaK's x/y species
+        //     and
         //     convert the post-mix densities back to code units.
         // -------------------------------------------------------------------
         Real F4_cell[2][3][4];
@@ -619,8 +619,8 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         //
         //     TODO(sherwood): confirm predict_all's growthrate output is
         //     linear (cm^-3), not log-scaled, for whichever Rhea checkpoint
-        //     is actually deployed. This differs from THC's thc_M1_flavor_
-        //     mix.cc, which applies exp() and predates Rhea commit 7bd7b98
+        //     is actually deployed. This differs from earlier reference code, which
+        //     applied exp() and predates Rhea commit 7bd7b98
         //     (2025-11-27), which changed the model from predicting
         //     log(growthrate) to growthrate.
         // -------------------------------------------------------------------
@@ -633,9 +633,9 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         // sign-consistent. Without this clamp a negative rate gives
         // inv_tau < 0 -> lambda = exp(+x) > 1, i.e. BGK *anti-damping*: the update moves
         // away from the mix target each stage, an unphysical exponential blow-up of N/E/F.
-        // THC never hit this because it applied exp(lgr) >= 0; the switch to the linear
-        // growthrate interpretation silently dropped that positivity guarantee, so restore
-        // it here. Confirm the intended semantics with Sherwood.
+        // Earlier reference code never hit this because it applied exp(lgr) >= 0; the
+        // switch to the linear growthrate interpretation silently dropped that positivity
+        // guarantee, so restore it here. Confirm the intended semantics with Sherwood.
         const Real gamma_persec = unstable
             ? Kokkos::max(Real(0),
                           static_cast<Real>(rhea_growthrate(idx)) * ndens_to_invsec)
@@ -649,10 +649,10 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         // NOTE: the "old" term below intentionally re-reads u0_ directly
         // (the raw, un-floored stored value), not the floored local nn[]/
         // E[]/Fx[]/Fy[]/Fz[] computed in [B] -- this is what makes the
-        // gamma=0 => lambda=1 no-op bit-identical to u0_, and matches
-        // both THC (thc_M1_flavor_mix.cc:672, using rN[i4D] not nn_pt[f])
-        // and the existing equilibrium/maximal FlavorMix task
-        // (radiation_m1_flavor_mix.cpp:245-259).
+        // gamma=0 => lambda=1 no-op bit-identical to u0_, matching
+        // the existing equilibrium/maximal FlavorMix task
+        // (radiation_m1_flavor_mix.cpp:245-259), which likewise re-reads the raw stored
+        // value rather than a floored local copy.
         for (int s = 0; s < 4; ++s) {
           u0_(m, CombinedIdx(s, M1_N_IDX,  nvars_), k, j, i) =
               lambda_0 * u0_(m, CombinedIdx(s, M1_N_IDX,  nvars_), k, j, i)

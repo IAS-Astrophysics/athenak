@@ -25,6 +25,16 @@
 #if ENABLE_TORCH
 
 #include <cassert>
+#include <filesystem>  // NOLINT std::filesystem::canonical (RheaModuleCache key)
+#include <map>
+#include <mutex>  // NOLINT cpplint's default deny-list predates broad C++11 header
+                  // approval; this codebase already requires C++17 throughout (Kokkos),
+                  // and std::mutex is exactly what RheaModuleCache needs (it is
+                  // explicitly mutex-guarded below).
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
 
 // torch::jit::freeze_module, the pass-level function behind torch::jit::freeze. Used
 // directly (not through the torch::jit::freeze/torch::jit::optimize_for_inference
@@ -118,6 +128,130 @@ void CapAllocatorMemoryFraction(const torch::Device &device, double mem_fraction
 }
 
 //----------------------------------------------------------------------------------------
+//! \class RheaModuleCache
+//! \brief Process-global cache of loaded/frozen Rhea TorchScript modules, keyed by
+//! (canonicalized model path, device index). A Meyers singleton, private to this
+//! translation unit -- RheaModel (radiation_m1_rhea.hpp) never sees this type, only the
+//! torch::jit::Module handle Get() returns, which it copies into its own model_ member.
+//!
+//! WHY a cache at all: every RheaModel construction used to unconditionally perform
+//! three expensive steps that are pure functions of (model path, device) --
+//! torch::jit::load (disk read + deserialization), model.to(device) (host->device weight
+//! upload), and torch::jit::freeze_module (a full JIT optimization pass) -- even though
+//! none of them depend on n_capacity, the only argument that ever varies between
+//! RheaModel instances. The capacity-sized scratch buffer (rhea_f4_in_scratch, sized at
+//! rank capacity so it survives AMR regrids without reallocation) already makes AMR
+//! regrids need no RheaModel reconstruction at all; this cache makes any construction
+//! that still happens anyway (repeated test construction, or a future workflow that does
+//! rebuild the pack) cheap regardless -- a cache hit is a mutex lock, a map lookup, and a
+//! torch::jit::Module copy (an intrusive_ptr bump, not a deep copy: Module is internally
+//! a shared object handle, so the copy returned here and the one RheaModel stores both
+//! point at the SAME frozen graph and GraphExecutor shape-specialization cache -- a
+//! second RheaModel for the same key inherits the first one's warmed-up JIT state
+//! instead of starting cold).
+//!
+//! Sharing safety: the module is immutable after freeze_module (weights are
+//! constant-folded into the frozen graph), and only one RheaModel runs Predict() at a
+//! time per rank (one MeshBlockPack, host-driven task loop) -- the mutex below protects
+//! the maps themselves, not concurrent inference (there is none to protect against). MPI
+//! ranks are separate processes, so this cache is per-rank by construction: one disk read
+//! and one device upload per rank at startup, same as before this cache existed.
+//!
+//! No invalidation: the model file is assumed immutable for the lifetime of the process,
+//! so canonicalizing the path (std::filesystem::canonical) is enough to avoid
+//! same-file-different-spelling duplicate cache entries; content checksumming is not
+//! worth it.
+class RheaModuleCache {
+ public:
+  static RheaModuleCache &Instance() {
+    static RheaModuleCache instance;
+    return instance;
+  }
+
+  // Returns a cheap-to-copy handle to the loaded+frozen module for (model_path, device),
+  // doing the one-shot load/freeze work only the first time this exact (canonicalized
+  // path, device index) key is requested, and the one-shot threading/allocator-cap work
+  // only the first time ever / first time this device index is seen, respectively.
+  torch::jit::Module Get(const std::string &model_path, const torch::Device &device,
+                         double mem_fraction) {
+    // std::filesystem::canonical requires the path to exist -- true here regardless,
+    // since torch::jit::load below would fail on a missing file anyway; this merely
+    // fails slightly earlier, with a clearer error.
+    const std::string canonical_path = std::filesystem::canonical(model_path).string();
+    const int device_index = static_cast<int>(device.index());
+    const Key key{canonical_path, device_index};
+
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    // Process-wide one-shot threading configuration, moved here from RheaModel's
+    // constructor (this is the natural home for it now: it is a process-global concern,
+    // not a per-instance one). set_num_interop_threads is a hard one-shot-per-process
+    // call (must happen before any inter-op/JIT work starts) -- the guard below is
+    // load-bearing (a second call would abort). set_num_threads is safe to call
+    // repeatedly; it is folded into this same one-shot block only because there is
+    // nothing to gain from repeating it. Reasoning for capping both to 1,
+    // unconditionally, on every backend: on device backends Torch's CPU intra-op
+    // thread count is irrelevant to the device-side forward pass; on CPU our
+    // parallelism source is Kokkos::OpenMP batching over zones (one batched Torch
+    // call, not per-zone CPU threading), so giving Torch's CPU thread pool any width
+    // only risks oversubscription against Kokkos::OpenMP's own threads.
+    //
+    // CAVEAT (flagged, not resolved here): pytorch/pytorch#19213 reports set_num_threads
+    // does not always reliably cap real CPU usage on all systems/MKL configurations.
+    // torch::get_num_threads() == 1 (the API's own reported value) is what is checkable
+    // standalone; it does NOT independently confirm the OS thread count actually
+    // launched matches, which would need an OS-level thread audit.
+    if (!threading_configured_) {
+      torch::set_num_interop_threads(1);
+      torch::set_num_threads(1);
+      threading_configured_ = true;
+    }
+
+    auto it = modules_.find(key);
+    if (it == modules_.end()) {
+      torch::jit::Module model = torch::jit::load(model_path);
+      model.to(device);
+      model.eval();
+
+      // Freeze once here, at first-load time for this key -- low risk (one-time cost,
+      // amortized across every RheaModel that shares this key), always-on default. Uses
+      // the pass-level torch::jit::freeze_module directly rather than the higher-level
+      // torch::jit::freeze/torch::jit::optimize_for_inference convenience wrappers: see
+      // the #include block above this file's namespace for why (both wrappers
+      // hard-require a `forward` method, which Rhea's `predict_all`-only contract does
+      // not have -- verified directly against local LibTorch 2.12.1). Explicitly
+      // preserving "predict_all" is what makes freeze_module inline submodule calls and
+      // constant-fold parameters into ITS graph specifically. freeze_module returns a
+      // new (frozen) Module; the loaded model is intentionally replaced, not mutated in
+      // place.
+      model = torch::jit::freeze_module(model, std::vector<std::string>{"predict_all"});
+      it = modules_.emplace(key, std::move(model)).first;
+    }
+
+    // Allocator memory-fraction cap: first-call-wins PER DEVICE -- keyed on device_index
+    // alone, not the full (path, device) key, since the cap is an allocator-level
+    // concept, not a per-model one. A second model loaded onto an already-capped device
+    // does not recap it, even if called with a different mem_fraction argument.
+    if (capped_devices_.insert(device_index).second) {
+      CapAllocatorMemoryFraction(device, mem_fraction);
+    }
+
+    return it->second;
+  }
+
+ private:
+  RheaModuleCache() = default;
+
+  // (canonicalized model path, device index) -- the cache key exactly.
+  using Key = std::pair<std::string, int>;
+
+  std::mutex mutex_;
+  std::map<Key, torch::jit::Module> modules_;
+  std::set<int> capped_devices_;
+  bool threading_configured_ = false;
+};
+
+//----------------------------------------------------------------------------------------
 // Per-backend stream-guard construction. Each guard is bound to
 // DevExeSpace()'s own stream/queue for the scope of the predict_all call below, rather
 // than fencing before and after -- same-stream/queue ordering is guaranteed by the
@@ -177,54 +311,16 @@ c10::StreamGuard MakeXpuStreamGuard(c10::DeviceIndex device_index) {
 
 //----------------------------------------------------------------------------------------
 //! \fn RheaModel::RheaModel
-RheaModel::RheaModel(const std::string &model_path, int n_batch, double mem_fraction)
-    : device_(ResolveDevice()), n_batch_(n_batch) {
-  // set_num_threads is safe to call repeatedly; set_num_interop_threads is a hard
-  // one-shot-per-process call (must happen before any inter-op/JIT work starts) -- guard
-  // it so constructing more than one RheaModel in a process does not re-invoke it and
-  // abort. Reasoning for capping both to 1, unconditionally, on every backend: on device
-  // backends Torch's CPU intra-op thread count is irrelevant to the device-side forward
-  // pass; on CPU our parallelism source is Kokkos::OpenMP batching over zones (one
-  // batched Torch call, not per-zone CPU threading), so giving Torch's CPU thread pool
-  // any width only risks oversubscription against Kokkos::OpenMP's own threads.
-  //
-  // CAVEAT (flagged, not resolved here): pytorch/pytorch#19213 reports set_num_threads
-  // does not always reliably cap real CPU usage on all systems/MKL configurations.
-  // torch::get_num_threads() == 1 (the API's own reported value) is what is checkable
-  // standalone; it does NOT independently confirm the OS thread count actually launched
-  // matches, which would need an OS-level thread audit.
-  static bool s_threading_configured = false;
-  if (!s_threading_configured) {
-    torch::set_num_interop_threads(1);
-    s_threading_configured = true;
-  }
-  torch::set_num_threads(1);
-
-  model_ = torch::jit::load(model_path);
-  model_.to(device_);
-  model_.eval();
-
-  // Freeze the model once here at model-load time -- low risk (one-time startup cost, not
-  // per-stage), always-on default. Freezing offers a choice between
-  // torch::jit::optimize_for_inference and "torch::jit::freeze followed by standard JIT
-  // optimization passes". We use the latter, via the pass-level torch::jit::freeze_module
-  // (see the #include block above for why: the higher-level
-  // torch::jit::freeze/optimize_for_inference convenience wrappers hard-require a
-  // `forward` method, which Rhea's `predict_all`-only contract does not have). Explicitly
-  // preserving "predict_all" is what makes freeze_module inline submodule calls and
-  // constant-fold parameters into ITS graph specifically (an empty/default preserved-method
-  // list would only touch a (nonexistent) `forward`, silently freezing nothing useful).
-  // freeze_module already performs the standard freezing optimization suite (submodule
-  // inlining, constant propagation/folding, dead-code elimination) as part of the pass
-  // itself -- verified by inspecting the resulting graph on a toy multi-layer model:
-  // plain `prim::GetAttr`+`prim::CallMethod` chains for each Linear submodule collapse
-  // into direct `aten::linear` calls with the weight/bias baked in as `prim::Constant`
-  // tensors, and the output is bit-for-bit identical to the unfrozen module's.
-  // freeze_module returns a new (frozen) Module; the original model_ is intentionally
-  // replaced, not mutated in place.
-  model_ = torch::jit::freeze_module(model_, std::vector<std::string>{"predict_all"});
-
-  CapAllocatorMemoryFraction(device_, mem_fraction);
+//! \brief Resolve the Kokkos-agreeing device, then hand off to the process-global
+//! RheaModuleCache (above) for everything else. Collapses to a cache lookup plus a
+//! torch::jit::Module handle copy -- no disk read, no device
+//! upload, and no JIT freeze pass happen here unless this is the first RheaModel ever
+//! constructed for this (model_path, device) pair in this process. n_capacity is stored
+//! only for Predict()'s extent(0) <= n_capacity_ bounds check; it plays no
+//! role in what the cache loads, since none of the cached one-shot work depends on it.
+RheaModel::RheaModel(const std::string &model_path, int n_capacity, double mem_fraction)
+    : device_(ResolveDevice()), n_capacity_(n_capacity) {
+  model_ = RheaModuleCache::Instance().Get(model_path, device_, mem_fraction);
 }
 
 //----------------------------------------------------------------------------------------
@@ -235,20 +331,27 @@ RheaModel::~RheaModel() = default;
 //! \fn RheaModel::Prediction RheaModel::Predict
 RheaModel::Prediction RheaModel::Predict(
     Kokkos::View<const float****, LayoutWrapper, DevMemSpace> f4_in) {
-  assert(static_cast<int>(f4_in.extent(0)) == n_batch_);
+  // extent(0) is the ACTIVE batch size for this call and may be less than n_capacity_ --
+  // e.g. after an AMR regrid shrinks the live nmb_thispack below the capacity
+  // rhea_f4_in_scratch/this RheaModel were sized at. Only extents 1-3 (2, NF, 4) are
+  // still asserted exactly; the batch axis is the only dynamic one.
+  assert(static_cast<int>(f4_in.extent(0)) <= n_capacity_);
   assert(static_cast<int>(f4_in.extent(1)) == 2);
   assert(static_cast<int>(f4_in.extent(2)) == kNumFlavors);
   assert(static_cast<int>(f4_in.extent(3)) == 4);
 
   // torch::from_blob never takes ownership by default -- with no custom deleter, the
   // context is {nullptr, noopDelete} (ATen/ops/from_blob.h), so destroying the resulting
-  // Tensor is a true no-op w.r.t. f4_in's storage. rhea_f4_in_scratch is allocated with
-  // exactly the shape/layout Torch expects ([n_batch,2,NF,4], LayoutRight == row-major ==
-  // Torch's default contiguous strides), so no explicit strides argument is needed. The
-  // const_cast is safe: Predict()
-  // only ever reads through f4_in_t (feeds it to the model as input); it never writes
-  // through it, and f4_in itself is caller-owned memory this function borrows, not
-  // allocates.
+  // Tensor is a true no-op w.r.t. f4_in's storage. f4_in's shape is read directly off its
+  // own extents (not off n_capacity_), so a smaller active extent(0) than capacity is
+  // handled automatically here -- no separate code path. f4_in is always a LayoutRight
+  // (row-major) view sized [<=n_capacity_,2,NF,4] -- either rhea_f4_in_scratch itself, or
+  // a leading-index-range subview/reconstruction of it that stays LayoutRight-contiguous,
+  // matching Torch's default contiguous strides for this shape -- so no explicit strides
+  // argument is ever needed here. The const_cast is safe:
+  // Predict() only ever reads through f4_in_t (feeds it to the model as input); it never
+  // writes through it, and f4_in itself is caller-owned memory this function borrows,
+  // not allocates.
   torch::Tensor f4_in_t = torch::from_blob(
       const_cast<float *>(f4_in.data()),
       {static_cast<int64_t>(f4_in.extent(0)), static_cast<int64_t>(f4_in.extent(1)),

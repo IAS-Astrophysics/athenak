@@ -308,8 +308,8 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
   }
   
-  // The factors of 2 below come from the fact that bns_nurates and THC weight
-  // the heavy neutrinos differently. THC weights them with a factor of 2
+  // The factors of 2 below come from the fact that bns_nurates and this module weight
+  // the heavy neutrinos differently. This module weights them with a factor of 2
   // (because "nux" means "mu AND tau"), bns_nurates with a factor of 1 (because
   // "nux" means "mu OR tau"). Note: the factor of 2 is applied to the
   // emissivities (sources, summed over the two heavy species) but NOT to the

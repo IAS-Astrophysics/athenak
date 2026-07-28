@@ -158,8 +158,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
       "radiation_m1_update", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         // Excised cells: keep radiation fields pinned at zero and skip the flux
-        // divergence, geometric, and matter-source updates (mirrors THC's
-        // thc_M1_calc_update mask handling).
+        // divergence, geometric, and matter-source updates.
         if (radiation_mask_(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) = 0;

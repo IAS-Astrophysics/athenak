@@ -11,11 +11,13 @@
 //! Everything in this header is a KOKKOS_INLINE_FUNCTION free function with zero Torch
 //! types and zero backend-conditional compilation -- it operates only on plain Real/float
 //! scalars and small fixed-size C arrays, so it is identically testable whether the
-//! inputs came from a real Rhea inference call or a synthetic fixture. Ported faithfully
-//! from THC_M1 (thc_M1_flavor_mix.cc:255-711) and from Rhea's own reference C++ helper
+//! inputs came from a real Rhea inference call or a synthetic fixture. RestrictToPhysical
+//! below is ported faithfully from Rhea's own reference C++ helper
 //! (Rhea/cpp_interface/FFISubgridModel.h:61-86).
 
 #include "athena.hpp"
+
+#if ENABLE_TORCH
 
 namespace radiationm1 {
 
@@ -31,7 +33,7 @@ namespace radiationm1 {
 //! and `mu = 0,1,2` are the (positive-signature) spatial number-flux components -- this
 //! sign convention is read directly off `FFISubgridModel::dot4_Minkowski`.
 //!
-//! Algorithm, per THC/Rhea's reference: within each nu/nubar sector, average the NF=3
+//! Algorithm, per Rhea's reference: within each nu/nubar sector, average the NF=3
 //! flavor 4-vectors to get a reference vector `avgF4[m]` that IS timelike by construction
 //! (an incoherent mix of physical states); for every flavor's 4-vector, solve for the
 //! smallest boost `alpha >= 0` towards `avgF4[m]` that makes `F4[m][f] + alpha*avgF4[m]`
@@ -132,10 +134,10 @@ void RestrictToPhysical(Real F4_final[2][3][4]) {
 //! \brief Build the 4x4 block-diagonal, column-stochastic flavor transition matrix
 //! `Y[f][g] = P(g -> f)` from pre/post-mix number densities.
 //!
-//! Ports thc_M1_flavor_mix.cc:465-503. Species order matches the rest of radiation_m1
+//! Species order matches the rest of radiation_m1
 //! (radiation_m1_flavor_mix.cpp's own convention): `0 = nu_e, 1 = nu_ebar, 2 = nu_x,
-//! 3 = nu_xbar`. `nn_pre` must already be floored (rad_N_floor) by the caller, exactly as
-//! THC's `nn_pt` is before this reconstruction runs.
+//! 3 = nu_xbar`. `nn_pre` must already be floored (rad_N_floor) by the caller before this
+//! reconstruction runs.
 //!
 //! For each of the two sectors {e,x} and {a,y} independently, solves for a survival
 //! probability `p` from the pre/post density difference, clamped to [0,1]; falls back to
@@ -204,5 +206,7 @@ int RheaBatchIndex(int m, int k, int j, int i, int ks, int js, int is,
 }
 
 }  // namespace radiationm1
+
+#endif
 
 #endif  // RADIATION_M1_RHEA_KERNELS_HPP

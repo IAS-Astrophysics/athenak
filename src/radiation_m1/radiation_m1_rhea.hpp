@@ -16,9 +16,15 @@
 //! torch::kCUDA vs torch::kXPU distinctions; the per-backend stream guard and
 //! device-binding logic live entirely inside radiation_m1_rhea.cpp.
 //!
-//! RheaModel owns nothing about M1 physics: it moves a float32 `[n_batch, 2, NF, 4]`
-//! device tensor into a loaded Rhea TorchScript module's `predict_all` method and hands
-//! back read-only Kokkos Views over the (Torch-owned) outputs.
+//! RheaModel owns nothing about M1 physics: it moves a float32 `[n <= n_capacity, 2, NF,
+//! 4]` device tensor into a loaded Rhea TorchScript module's `predict_all` method and
+//! hands back read-only Kokkos Views over the (Torch-owned) outputs.
+//!
+//! The loaded/frozen torch::jit::Module itself is owned by a process-global cache
+//! (`RheaModuleCache`, private to radiation_m1_rhea.cpp) keyed by (canonicalized model
+//! path, device index) -- RheaModel only holds a cheap shared-handle copy of it, so
+//! constructing more than one RheaModel for the same (path, device) does not re-read the
+//! model from disk or re-upload weights.
 
 #include <string>
 
@@ -65,12 +71,25 @@ class RheaModel {
 
   //--------------------------------------------------------------------------------------
   //! model_path: required, no default (rhea_model_path has no default and startup fails
-  //! without it; enforced by the caller, not here). n_batch: nmb_thispack * nx3*nx2*nx1
-  //! for this rank -- the fixed batch extent Predict() expects on every call.
+  //! without it; enforced by the caller, not here).
+  //!
+  //! n_capacity: batch CAPACITY, i.e. the largest extent(0) any call to Predict() on this
+  //! instance will ever be given -- std::max(nmb_thispack, nmb_maxperrank) * nx1*nx2*nx3
+  //! for this rank (radiation_m1.cpp), the same capacity-not-live-count sizing u0/u1/etc.
+  //! already use so they survive AMR regrids without reallocation. SUPERSEDES the old
+  //! fixed-n_batch contract: Predict() now accepts any active extent(0) <= n_capacity,
+  //! not only exactly n_capacity, because a regrid can shrink the live nmb_thispack below
+  //! the capacity this instance/its scratch buffer were sized at without requiring
+  //! RheaModel to be reconstructed.
+  //!
   //! mem_fraction: Torch caching-allocator cap, fraction of device memory, CUDA/HIP/XPU
-  //! only (no-op on CPU); default is a conservatively small value for the (currently
-  //! unwired) rhea_mem_fraction input parameter.
-  RheaModel(const std::string &model_path, int n_batch, double mem_fraction = 0.05);
+  //! only (no-op on CPU). Applied first-call-wins PER DEVICE by the process-global module
+  //! cache (RheaModuleCache, radiation_m1_rhea.cpp): the cap is an allocator-level, not a
+  //! per-instance, concept, so a second RheaModel construction targeting a device that
+  //! has already been capped does not recap it, even if given a different mem_fraction
+  //! here. Default is a conservatively small value for the rhea_mem_fraction input
+  //! parameter.
+  RheaModel(const std::string &model_path, int n_capacity, double mem_fraction = 0.05);
   ~RheaModel();
 
   // Backend/stream/device state below makes this non-copyable; moving is not needed
@@ -81,12 +100,22 @@ class RheaModel {
   RheaModel &operator=(RheaModel &&) = delete;
 
   //--------------------------------------------------------------------------------------
-  //! f4_in: exactly [n_batch, 2, NF, 4], float32, device-resident, allocated by Kokkos on
-  //! DevExeSpace(), LayoutRight-contiguous (rhea_f4_in_scratch). Returns once Torch's
-  //! forward pass has been ENQUEUED on DevExeSpace()'s stream/queue -- not necessarily
-  //! complete. Safe to immediately enqueue further DevExeSpace() kernels that consume the
-  //! returned Prediction with no explicit Kokkos::fence() in between, PROVIDED they too
-  //! run on DevExeSpace() (same-stream ordering, not a real completion guarantee).
+  //! f4_in: [extent(0) <= n_capacity_, 2, NF, 4], float32, device-resident,
+  //! LayoutRight-contiguous. extent(0) (the ACTIVE batch size for this call) may be
+  //! smaller than the capacity this RheaModel/its caller's scratch buffer were
+  //! constructed with -- a live nmb_thispack that shrinks below capacity (e.g. after an
+  //! AMR regrid) needs no RheaModel reconstruction, it simply calls Predict() with a
+  //! smaller active extent over the SAME preallocated buffer. Only extent(0) is dynamic;
+  //! extents 1-3 (2, NF, 4) stay exactly fixed. The caller
+  //! (radiation_m1_flavor_mix.cpp's FlavMixRhea branch) is responsible for slicing
+  //! rhea_f4_in_scratch down to the live active extent before calling Predict() -- see
+  //! that call site for the LayoutRight-contiguity argument this relies on (a
+  //! leading-index-range subview of a LayoutRight view stays LayoutRight-contiguous, so
+  //! from_blob below still needs no explicit strides). Returns once Torch's forward pass
+  //! has been ENQUEUED on DevExeSpace()'s stream/queue -- not necessarily complete. Safe
+  //! to immediately enqueue further DevExeSpace() kernels that consume the returned
+  //! Prediction with no explicit Kokkos::fence() in between, PROVIDED they too run on
+  //! DevExeSpace() (same-stream ordering, not a real completion guarantee).
   Prediction Predict(Kokkos::View<const float****, LayoutWrapper, DevMemSpace> f4_in);
 
   //! The torch::Device Predict() runs on -- resolved once at construction from Kokkos's
@@ -97,7 +126,9 @@ class RheaModel {
  private:
   torch::jit::Module model_;
   torch::Device device_;
-  int n_batch_;
+  // Batch CAPACITY (not the live per-call active count) -- see the constructor comment
+  // above and Predict()'s extent(0) <= n_capacity_ assert (radiation_m1_rhea.cpp).
+  int n_capacity_;
 };
 
 }  // namespace radiationm1

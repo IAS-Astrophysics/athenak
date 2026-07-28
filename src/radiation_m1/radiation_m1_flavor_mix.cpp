@@ -7,7 +7,7 @@
 //! \brief Neutrino flavor mixing for grey M1 transport.
 //!
 //! Implements equilibrium and maximal flavor mixing with BGK relaxation,
-//! ported from THC_M1 (D. Radice, arXiv:2307.16793).
+//! following D. Radice, arXiv:2307.16793.
 //!
 //! Algorithm (per cell):
 //!   1. Load N, E, F for all species; apply causal floor.
@@ -43,6 +43,9 @@
 #include "radiation_m1/radiation_m1_tensors.hpp"
 
 #if ENABLE_TORCH
+#include <type_traits>
+#include <utility>
+
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
 #endif
@@ -114,10 +117,50 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     TaskStatus tstat = PackRheaInputs(pdrive, stage);
     if (tstat != TaskStatus::complete) return tstat;
 
+    // rhea_f4_in_scratch is allocated at rank CAPACITY (nmb =
+    // std::max(nmb_thispack, nmb_maxperrank), radiation_m1.cpp) so AMR regrids never
+    // require reallocation, which can exceed the LIVE nmb_thispack for this call (e.g.
+    // right after an AMR regrid shrinks the block count on this rank). PackRheaInputs_
+    // only fills the leading n_active rows (its
+    // par_for ranges m over 0..nmb_thispack-1, and RheaBatchIndex's m-major ordering
+    // means those are exactly rows [0, n_active) of the scratch buffer's leading index)
+    // -- slice down to that active extent before handing the buffer to Predict(), which
+    // accepts any extent(0) <= its capacity (RheaModel::n_capacity_).
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    const int n_active = pmy_pack->nmb_thispack * indcs.nx1 * indcs.nx2 * indcs.nx3;
+
+    // CONTIGUITY ARGUMENT (do not remove without re-verifying):
+    // rhea_f4_in_scratch is Kokkos::View<float****, LayoutRight, ...>. Slicing a
+    // Kokkos::pair RANGE on the LEADING index while keeping Kokkos::ALL on every other
+    // index carves out a contiguous run of whole "rows" of a LayoutRight (row-major)
+    // view's linear storage, since the leading index has the LARGEST stride. Kokkos's
+    // subview type-deduction is conservative, though (rank/pattern-based, not a runtime
+    // contiguity check), and in general could deduce LayoutStride for a subview built
+    // from a Kokkos::pair argument even when the actual strides stay contiguous -- which
+    // would make RheaModel::Predict's torch::from_blob (given only `sizes`, no explicit
+    // strides) silently wrong. This was checked empirically against the exact Kokkos
+    // version vendored in this repo (its subview-type-deduction rule lives in
+    // View/Kokkos_ViewMapping.hpp), via a standalone probe compiled and linked against
+    // this repo's own build's libkokkoscore.a: a leading-range/ALL/ALL/ALL subview of a
+    // View<float****,LayoutRight,DevMemSpace> deduces LayoutRight, not LayoutStride, and
+    // is directly assignable to Kokkos::View<const float****, LayoutWrapper,
+    // DevMemSpace>. The static_assert below pins that fact so a future Kokkos upgrade
+    // that changes the deduction rule fails to COMPILE here instead of silently handing
+    // Predict() a mis-strided view.
+    auto f4_in_active = Kokkos::subview(rhea_f4_in_scratch, std::make_pair(0, n_active),
+                                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    static_assert(
+        std::is_same<decltype(f4_in_active)::array_layout, LayoutWrapper>::value,
+        "Kokkos::subview over a leading-index range of rhea_f4_in_scratch no longer "
+        "deduces LayoutRight -- RheaModel::Predict's torch::from_blob call assumes "
+        "contiguous row-major strides from shape alone; either restore contiguity or "
+        "construct the argument View explicitly from a raw pointer + extents instead of "
+        "relying on Kokkos::subview's deduced type here (see the comment above).");
+
     // pred must stay alive as a local for the duration of ApplyRheaMixing's kernel
     // (output-side lifetime hazard) -- do not take the Views out of it and let it go out
     // of scope before ApplyRheaMixing runs.
-    RheaModel::Prediction pred = prhea->Predict(rhea_f4_in_scratch);
+    RheaModel::Prediction pred = prhea->Predict(f4_in_active);
     TaskStatus astat = ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate,
                                        pred.stability, unit_num_dens);
     // Defensive device fence before `pred` (which owns the Torch output buffers the unpack

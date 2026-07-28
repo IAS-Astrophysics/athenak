@@ -196,7 +196,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
-  // Flavor mixing parameters (ported from THC_M1)
+  // Flavor mixing parameters.
   // rhea_model_path/rhea_mem_fraction are host-only config (never on RadiationM1Params)
   // -- parsed here if flavor_mix=rhea, used further down in this constructor to build
   // prhea/rhea_f4_in_scratch (needs nmb_thispack/indcs, computed later below).
@@ -304,14 +304,22 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   pbval_u->InitializeBuffers(nvarstot);
 
 #if ENABLE_TORCH
-  // RheaModel construction: the direct analog of THC's THC_M1_InitRhea, scheduled once
-  // AT CCTK_STARTUP there -- here, once per RadiationM1 instance, iff flavor_mix = rhea.
-  // n_batch/rhea_f4_in_scratch's shape cover the entire rank's interior zones, one
-  // inference call per MeshBlockPack per RK stage.
+  // RheaModel construction: constructed once per RadiationM1 instance, at startup, iff
+  // flavor_mix = rhea.
+  //
+  // n_capacity/rhea_f4_in_scratch's shape are sized at rank CAPACITY -- nmb (computed
+  // above, std::max(nmb_thispack, nmb_maxperrank)) rather than the live nmb_thispack --
+  // exactly the same pattern u0/u1/etc. already use above so they survive AMR regrids
+  // without reallocation. This buffer/RheaModel used to be sized
+  // from the live nmb_thispack directly, which was the one per-block Rhea-owned array
+  // NOT already AMR-proof; using the same `nmb` capacity variable as everything above
+  // fixes that regardless of whether AMR is actually in use for a given run. The live
+  // active batch size for a given call (<= this capacity) is computed per-call in
+  // radiation_m1_flavor_mix.cpp's FlavMixRhea branch, not here.
   if (params.flavor_mix_type == FlavMixRhea) {
-    int n_batch = ppack->nmb_thispack * indcs.nx1 * indcs.nx2 * indcs.nx3;
-    Kokkos::realloc(rhea_f4_in_scratch, n_batch, 2, RheaModel::kNumFlavors, 4);
-    prhea = std::make_unique<RheaModel>(rhea_model_path, n_batch, rhea_mem_fraction);
+    int n_capacity = nmb * indcs.nx1 * indcs.nx2 * indcs.nx3;
+    Kokkos::realloc(rhea_f4_in_scratch, n_capacity, 2, RheaModel::kNumFlavors, 4);
+    prhea = std::make_unique<RheaModel>(rhea_model_path, n_capacity, rhea_mem_fraction);
   }
 #endif
 }

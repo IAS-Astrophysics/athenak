@@ -100,11 +100,16 @@ class RadiationM1 {
 
 #if ENABLE_TORCH
   // Rhea ML flavor-mixing state. Null unless params.flavor_mix_type == FlavMixRhea;
-  // constructed once in the RadiationM1 constructor (the direct analog of THC's
-  // THC_M1_InitRhea).
+  // constructed once in the RadiationM1 constructor, at startup.
   std::unique_ptr<RheaModel> prhea;
-  // Preallocated once at construction, shape (n_batch, 2, NF=3, 4), n_batch =
-  // nmb_thispack * nx1*nx2*nx3. Deliberately float32 regardless of Real.
+  // Preallocated once at construction, shape (n_capacity, 2, NF=3, 4), where n_capacity =
+  // std::max(nmb_thispack, nmb_maxperrank) * nx1*nx2*nx3 -- rank CAPACITY, not the live
+  // nmb_thispack, matching u0/u1/etc.'s own capacity sizing so this buffer survives AMR
+  // regrids without reallocation. Only the leading n_active =
+  // nmb_thispack*nx1*nx2*nx3 rows are live data on any given call; see
+  // radiation_m1_flavor_mix.cpp's FlavMixRhea branch for where that active extent is
+  // computed and sliced out before calling RheaModel::Predict(). Deliberately float32
+  // regardless of Real.
   Kokkos::View<float****, LayoutWrapper, DevMemSpace> rhea_f4_in_scratch;
 #endif
 

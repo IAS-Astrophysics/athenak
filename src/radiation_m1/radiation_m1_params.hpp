@@ -89,7 +89,7 @@ struct RadiationM1Params {
   Real source_scat_limit;   // Use the scattering limit if the isotropization time is less
                             // than the timestep over this factor
 
-  // Flavor mixing parameters (ported from THC_M1)
+  // Flavor mixing parameters
   FlavorMixType flavor_mix_type;  // mixing scheme
   Real bgk_inv_tau_0;  // BGK number-density relaxation rate [1/code_time]; 0 = no mixing
   Real bgk_inv_tau_1;  // BGK energy-density relaxation rate [1/code_time]; 0 = no mixing
@@ -100,12 +100,9 @@ struct RadiationM1Params {
   // RadiationM1/RheaModel, never here -- this struct is captured by value into
   // KOKKOS_LAMBDA device closures elsewhere and must stay trivially copyable (no
   // std::string, no owning pointers, no torch:: types, ever).
-  Real rhea_stability_threshold;  // stability[i] < this => unstable; default 0.5 (THC
-                                   // param.ccl:374-377)
+  Real rhea_stability_threshold;  // stability[i] < this => unstable; default 0.5
   Real rhea_tau_0_factor;         // multiplies gamma_code for inv_tau_0; default 1.0
-                                   // (THC param.ccl:379-382)
   Real rhea_tau_1_factor;         // multiplies gamma_code for inv_tau_1; default 1.0
-                                   // (THC param.ccl:384-387)
 };
 
 enum SrcSignal {

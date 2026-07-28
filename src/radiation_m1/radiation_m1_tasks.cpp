@@ -138,8 +138,8 @@ TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn  void RadiationM1::SetMask
 //! \brief Sets the radiation excision mask from the coordinate (horizon/lapse/fixed)
-//! excision mask and zeroes the radiation fields in masked cells. Mirrors THC's
-//! THC_M1_SetMask, which derives thc_m1_mask from the matter (hydro) excision mask.
+//! excision mask and zeroes the radiation fields in masked cells, deriving the mask
+//! from the matter (hydro) excision mask.
 //! Runs each stage before the closure so that closure/opacities/Tmunu/update (all of
 //! which already honor radiation_mask) see an up-to-date mask, and so that fluxes
 //! across the excision boundary are reconstructed from zeroed states.
