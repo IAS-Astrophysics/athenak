@@ -23,7 +23,6 @@
 #include "outputs/outputs.hpp"
 #include "parameter_input.hpp"
 #include "radiation/radiation.hpp"
-#include "driver.hpp"
 #include "utils/utils.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation_m1/radiation_m1.hpp"

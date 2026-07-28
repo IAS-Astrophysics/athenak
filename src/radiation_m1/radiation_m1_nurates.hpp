@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_NURATES_HPP
-#define RADIATION_M1_NURATES_HPP
+#ifndef RADIATION_M1_RADIATION_M1_NURATES_HPP_
+#define RADIATION_M1_RADIATION_M1_NURATES_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -130,7 +130,8 @@ struct NuratesParams {
 //   \param[in]  nurates_units   bns_nurates units
 
 KOKKOS_INLINE_FUNCTION
-void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p, Real &mu_e,
+void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p,
+                 Real &mu_e,
                  Real nudens_0[4],
                  Real nudens_1[4],
                  Real chi[4],
@@ -235,7 +236,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     scat_1_anux = 0.;
     return;
   }
-      
+
   // populate opacity params
   GreyOpacityParams grey_op_params = {0};
 
@@ -254,7 +255,8 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
-  grey_op_params.opacity_pars.brem_implementation = nurates_params.use_BRT_brem ? BREM_BRT06 : BREM_HR98;
+  grey_op_params.opacity_pars.brem_implementation =
+      nurates_params.use_BRT_brem ? BREM_BRT06 : BREM_HR98;
 
   // populate EOS quantities
   grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
@@ -298,7 +300,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     // compute gray neutrino number and energy densities assuming equilibrium
     // N.B.: required for normalization factor of energy-averaged opacities
     ComputeM1DensitiesEq(&grey_op_params.eos_pars,
-			 &grey_op_params.distr_pars,
+                         &grey_op_params.distr_pars,
                          &grey_op_params.m1_pars);
 
     // populate eddington factor
@@ -307,7 +309,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
   }
-  
+
   // The factors of 2 below come from the fact that bns_nurates and this module weight
   // the heavy neutrinos differently. This module weights them with a factor of 2
   // (because "nux" means "mu AND tau"), bns_nurates with a factor of 1 (because
@@ -536,4 +538,4 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
 
 }  // namespace radiationm1
 #endif  // ENABLE_NURATES
-#endif  // RADIATION_M1_NURATES_HPP
+#endif  // RADIATION_M1_RADIATION_M1_NURATES_HPP_

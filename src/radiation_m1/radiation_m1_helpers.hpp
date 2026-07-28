@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_CLOSURE_HPP
-#define RADIATION_M1_CLOSURE_HPP
+#ifndef RADIATION_M1_RADIATION_M1_HELPERS_HPP_
+#define RADIATION_M1_RADIATION_M1_HELPERS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -315,4 +315,4 @@ void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu, Re
 }
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_CLOSURE_HPP
+#endif  // RADIATION_M1_RADIATION_M1_HELPERS_HPP_

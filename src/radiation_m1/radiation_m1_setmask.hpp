@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_SETMASK_HPP
-#define RADIATION_M1_SETMASK_HPP
+#ifndef RADIATION_M1_RADIATION_M1_SETMASK_HPP_
+#define RADIATION_M1_RADIATION_M1_SETMASK_HPP_
 
 #include "radiation_m1.hpp"
 
@@ -24,4 +24,4 @@ void RadiationM1SetMask() {
   // see RadiationM1::SetMask in radiation_m1_tasks.cpp
 }
 }
-#endif //RADIATION_M1_SETMASK_HPP
+#endif  // RADIATION_M1_RADIATION_M1_SETMASK_HPP_

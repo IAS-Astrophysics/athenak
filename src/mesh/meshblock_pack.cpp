@@ -50,7 +50,8 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   tl_map.insert(std::make_pair("opsplit_before_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("opsplit_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("opsplit_after_stagen",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("opsplit_after_timeintegrator",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("opsplit_after_timeintegrator",
+                                std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------

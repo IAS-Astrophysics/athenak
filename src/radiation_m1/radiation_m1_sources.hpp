@@ -1,18 +1,19 @@
-#ifndef RADIATION_M1_SOURCES_HPP
-#define RADIATION_M1_SOURCES_HPP
-
-#include "athena.hpp"
-#include "athena_tensor.hpp"
-#include "radiation_m1/radiation_m1.hpp"
-#include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
-
+#ifndef RADIATION_M1_RADIATION_M1_SOURCES_HPP_
+#define RADIATION_M1_RADIATION_M1_SOURCES_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_m1_macro.hpp
-//  \brief macros for Grey M1 radiation class
+//! \file radiation_m1_sources.hpp
+//  \brief source terms for Grey M1 radiation class
+
+#include <cstdio>
+
+#include "athena.hpp"
+#include "athena_tensor.hpp"
+#include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
 
 namespace radiationm1 {
 
@@ -93,7 +94,7 @@ void explicit_update(const SrcParams &src_params, Real &Enew,
   Fnew_d(3) = src_params.Fstar_d(3) + src_params.cdt * src_params.tS_d(3);
   // F_0 = g_0i F^i = beta_i F^i = beta^i F_i
   Fnew_d(0) = - src_params.alp * src_params.n_u(1) * Fnew_d(1)
-    - src_params.alp * src_params.n_u(2) * Fnew_d(2) 
+    - src_params.alp * src_params.n_u(2) * Fnew_d(2)
     - src_params.alp * src_params.n_u(3) * Fnew_d(3);
 }
 
@@ -268,8 +269,7 @@ SrcSignal source_update(
 #ifdef DEBUG_BUILD
     if (ierr != SrcOk) {
       Kokkos::printf("source_update: The source solver has failed!\n");
-    }
-    else {
+    } else {
       Kokkos::printf("source_update: Backup solver worked!\n");
     }
 #endif
@@ -279,4 +279,4 @@ SrcSignal source_update(
 
 }  // namespace radiationm1
 
-#endif  // RADIATION_M1_SOURCES_HPP
+#endif  // RADIATION_M1_RADIATION_M1_SOURCES_HPP_

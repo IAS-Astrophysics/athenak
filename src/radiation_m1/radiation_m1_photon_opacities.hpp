@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_PHOTON_OPACITIES_HPP
-#define RADIATION_M1_PHOTON_OPACITIES_HPP
+#ifndef RADIATION_M1_RADIATION_M1_PHOTON_OPACITIES_HPP_
+#define RADIATION_M1_RADIATION_M1_PHOTON_OPACITIES_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -26,4 +26,4 @@ struct PhotonOpacityParams {
 };
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_PHOTON_OPACITIES_HPP
+#endif  // RADIATION_M1_RADIATION_M1_PHOTON_OPACITIES_HPP_

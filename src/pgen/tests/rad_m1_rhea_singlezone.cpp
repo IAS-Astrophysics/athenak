@@ -12,17 +12,17 @@
 //! hand-specified initial M1 state (four species, deliberately asymmetric within each
 //! nu/nubar sector so the mixing-matrix reconstruction never hits its degenerate branch)
 //! and a *fixed* matter background (matter at rest, v=0, flat conformally-flat metric,
-//! matter/GR sources for M1 turned off) so that homogeneity + periodicity make the MHD and
-//! M1 flux-divergence terms vanish identically, leaving `flavor_mix = rhea`'s BGK relaxation
-//! as the only thing that can change u0 from one cycle to the next.
+//! matter/GR sources for M1 turned off) so that homogeneity + periodicity make the MHD
+//! and M1 flux-divergence terms vanish identically, leaving `flavor_mix = rhea`'s BGK
+//! relaxation as the only thing that can change u0 from one cycle to the next.
 //!
-//! `integrator = rk1` (forward Euler, one explicit stage per cycle) is used deliberately, so
-//! that "successive RK stages" and "successive cycles" (the unit AthenaK's tab-file output
-//! records) coincide exactly -- this sidesteps needing any new sub-cycle output machinery to
-//! check stage-to-stage convergence at the right granularity.
+//! `integrator = rk1` (forward Euler, one explicit stage per cycle) is used deliberately,
+//! so that "successive RK stages" and "successive cycles" (the unit AthenaK's tab-file
+//! output records) coincide exactly -- this sidesteps needing any new sub-cycle output
+//! machinery to check stage-to-stage convergence at the right granularity.
 //!
-//! With `flavor_mix = rhea` already wired into RadiationM1::FlavorMix's task-graph dispatch,
-//! this pgen does not need to do anything special to exercise the pipeline --
+//! With `flavor_mix = rhea` already wired into RadiationM1::FlavorMix's task-graph
+//! dispatch, this pgen does not need to do anything special to exercise the pipeline --
 //! PackRheaInputs -> RheaModel::Predict -> ApplyRheaMixing already runs once per stage
 //! automatically. This file's only job is to set up initial data for which the resulting
 //! fixed-point iteration is analytically tractable, and to fail loudly at startup if the
@@ -80,8 +80,9 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   // -------------------------------------------------------------------------------------
   // Preconditions. Rhea mixing requires dynamical-GR MHD (PackRheaInputs needs
   // eos.GetEOSUnitSystem()) and flavor_mix = rhea specifically -- this pgen is only a
-  // meaningful test of the Rhea path, not a generic single-zone harness, so it fails loudly
-  // (matching rad_m1_singlezone.cpp's own style) rather than silently doing something else.
+  // meaningful test of the Rhea path, not a generic single-zone harness, so it fails
+  // loudly (matching rad_m1_singlezone.cpp's own style) rather than silently doing
+  // something else.
   // -------------------------------------------------------------------------------------
   if (pmbp->pdyngr == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -124,13 +125,14 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   // -------------------------------------------------------------------------------------
   // Matter background (fixed for the whole run, by construction): homogeneous + periodic
   // means MHD's flux divergence is exactly zero every cycle (identical states on both
-  // sides of every interface -> hlle/dc give exactly zero net flux, as rad_m1_singlezone.cpp
-  // already relies on), so rho/temp/v never actually evolve; matter_sources = gr_sources =
-  // backreact = false in the input file additionally ensures no M1<->matter source coupling
-  // could perturb this. v = 0 (matter at rest) is a *hard* requirement of this test's
-  // analytic fixed-point derivation: it is what makes the fluid-frame and lab (Eulerian)
-  // frames coincide exactly, giving Gamma_s = 1 and J_s = E_s, H_d = F_d exactly for every
-  // species, with no relativistic-beaming correction to track by hand.
+  // sides of every interface -> hlle/dc give exactly zero net flux, as
+  // rad_m1_singlezone.cpp already relies on), so rho/temp/v never actually evolve;
+  // matter_sources = gr_sources = backreact = false in the input file additionally
+  // ensures no M1<->matter source coupling could perturb this. v = 0 (matter at rest) is
+  // a *hard* requirement of this test's analytic fixed-point derivation: it is what makes
+  // the fluid-frame and lab (Eulerian) frames coincide exactly, giving Gamma_s = 1 and
+  // J_s = E_s, H_d = F_d exactly for every species, with no relativistic-beaming
+  // correction to track by hand.
   // -------------------------------------------------------------------------------------
   Real rho = pin->GetReal("problem", "rho");
   Real temp = pin->GetReal("problem", "temp");
@@ -146,14 +148,15 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   Real nb = rho / mb;
 
   // -------------------------------------------------------------------------------------
-  // Per-species initial M1 state. Species index convention (matches ReconstructMixingMatrix/
-  // ApplyRheaMixing, radiation_m1_rhea_kernels.hpp): 0=nu_e, 1=nu_ebar, 2=nu_x, 3=nu_xbar.
-  // N/E are deliberately distinct *within* each sector {0,2} and {1,3} so the mixing-matrix
-  // reconstruction's degenerate (|N_e-N_x| ~ 0 -> p=1 identity) branch is never hit at t=0;
-  // F = 0 for all species (isotropic) -- combined with the homogeneous/periodic setup, this
-  // stays exactly 0 for all time (Y applied to an all-zero flux vector is exactly zero,
-  // regardless of Y), which is both physically the simplest case and what keeps
-  // RestrictToPhysical's boost correction exactly evaluable by hand.
+  // Per-species initial M1 state. Species index convention (matches
+  // ReconstructMixingMatrix/ApplyRheaMixing, radiation_m1_rhea_kernels.hpp): 0=nu_e,
+  // 1=nu_ebar, 2=nu_x, 3=nu_xbar. N/E are deliberately distinct *within* each sector
+  // {0,2} and {1,3} so the mixing-matrix reconstruction's degenerate (|N_e-N_x| ~ 0 ->
+  // p=1 identity) branch is never hit at t=0; F = 0 for all species (isotropic) --
+  // combined with the homogeneous/periodic setup, this stays exactly 0 for all time (Y
+  // applied to an all-zero flux vector is exactly zero, regardless of Y), which is both
+  // physically the simplest case and what keeps RestrictToPhysical's boost correction
+  // exactly evaluable by hand.
   // -------------------------------------------------------------------------------------
   Real N_init[4], E_init[4];
   N_init[0] = pin->GetReal("problem", "rad_N0");
@@ -168,7 +171,8 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   Real N0 = N_init[0], N1 = N_init[1], N2 = N_init[2], N3 = N_init[3];
   Real E0 = E_init[0], E1 = E_init[1], E2 = E_init[2], E3 = E_init[3];
 
-  // initialize ADM variables: flat conformally-flat metric, matching rad_m1_singlezone.cpp.
+  // initialize ADM variables: flat conformally-flat metric, matching
+  // rad_m1_singlezone.cpp.
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   par_for(
       "pgen_rhea_singlezone_metric", DevExeSpace(), 0, nmb1, 0, (n3 - 1), 0, (n2 - 1), 0,
@@ -203,9 +207,12 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
               E_local[nuidx];
           uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, m1_nvars_), k, j, i) =
               N_local[nuidx];
-          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, m1_nvars_), k, j, i) = 0.0;
-          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, m1_nvars_), k, j, i) = 0.0;
-          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, m1_nvars_), k, j, i) = 0.0;
+          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, m1_nvars_), k, j, i) =
+              0.0;
+          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, m1_nvars_), k, j, i) =
+              0.0;
+          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, m1_nvars_), k, j, i) =
+              0.0;
         }
       });
 

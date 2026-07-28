@@ -28,8 +28,12 @@
 //!                     [1/s if <units> block present; 1/code_time otherwise]
 //!   bgk_inv_tau_1   = BGK rate for energy density   (default: 0 = no mixing)
 //!                     [1/s if <units> block present; 1/code_time otherwise]
-//!   flavor_mix_rho  = density threshold below which mixing is skipped (default: -1 = everywhere)
+//!   flavor_mix_rho  = density threshold below which mixing is skipped
+//!                     (default: -1 = everywhere)
 //!                     [g/cm^3 if <units> block present; code density otherwise]
+
+#include <algorithm>
+#include <iostream>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -87,11 +91,13 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
   // invocation, precedented by CalculateFluxes's sequential par_for calls in one task
   // body (radiation_m1_fluxes.cpp).
   if (params.flavor_mix_type == FlavMixRhea) {
-    // Same dynamic_cast-dispatch pattern as RadiationM1::CalcOpacityNurates/PackRheaInputs
-    // (radiation_m1_calc_opacities_nurates.cpp:18-46). NOTE: PackRheaInputs below performs
-    // this same dispatch internally (PackRheaInputs_ computes its own unit_num_dens rather
-    // than taking it as a parameter), so this is a second, harmless dispatch of the same
-    // cheap host-side scalar computation, not a duplicated device kernel.
+    // Same dynamic_cast-dispatch pattern as
+    // RadiationM1::CalcOpacityNurates/PackRheaInputs
+    // (radiation_m1_calc_opacities_nurates.cpp:18-46). NOTE: PackRheaInputs below
+    // performs this same dispatch internally (PackRheaInputs_ computes its own
+    // unit_num_dens rather than taking it as a parameter), so this is a second, harmless
+    // dispatch of the same cheap host-side scalar computation, not a duplicated device
+    // kernel.
     Real unit_num_dens;
     auto *ptest_nqt =
         dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
@@ -163,13 +169,14 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     RheaModel::Prediction pred = prhea->Predict(f4_in_active);
     TaskStatus astat = ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate,
                                        pred.stability, unit_num_dens);
-    // Defensive device fence before `pred` (which owns the Torch output buffers the unpack
-    // kernel reads) is destroyed at end of scope. ApplyRheaMixing only ENQUEUES its par_for
-    // on DevExeSpace(), so on a device backend pred's destructor could otherwise return
-    // those buffers to Torch's caching allocator before the kernel has executed. Same-stream
-    // caching-allocator ordering makes this very likely safe already (buffers are freed to,
-    // and any reuse is serialized on, the single DevExeSpace() stream) -- this fence removes
-    // the remaining doubt and future-proofs against a second stream ever being introduced.
+    // Defensive device fence before `pred` (which owns the Torch output buffers the
+    // unpack kernel reads) is destroyed at end of scope. ApplyRheaMixing only ENQUEUES
+    // its par_for on DevExeSpace(), so on a device backend pred's destructor could
+    // otherwise return those buffers to Torch's caching allocator before the kernel has
+    // executed. Same-stream caching-allocator ordering makes this very likely safe
+    // already (buffers are freed to, and any reuse is serialized on, the single
+    // DevExeSpace() stream) -- this fence removes the remaining doubt and future-proofs
+    // against a second stream ever being introduced.
     // No-op on CPU (Serial/OpenMP block already). If GPU profiling later shows this fence
     // matters, re-evaluate it against the same-stream-ordering argument before removing.
     Kokkos::fence();
@@ -205,7 +212,6 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
   par_for(
       "radiation_m1_flavor_mix", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-
         // Optional density threshold: skip cells below rho floor
         if (params_.flavor_mix_rho > 0.0 && (ismhd_ || ishydro_)) {
           if (w0_(m, IDN, k, j, i) > params_.flavor_mix_rho) return;

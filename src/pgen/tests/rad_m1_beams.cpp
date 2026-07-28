@@ -7,6 +7,8 @@
 //  \brief 1D beam for grey M1
 
 // C++ headers
+#include <cstdio>
+#include <iostream>
 
 // Athena++ headers
 #include <coordinates/cell_locations.hpp>

@@ -35,7 +35,8 @@ void ApplyBeamSources1D(Mesh *pmesh) {
           case BoundaryFlag::outflow:
             for (int i = 0; i < ng; ++i) {
                 for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-                  u0_(m, CombinedIdx(nuidx, n, nvars_), 0, 0, is - i - 1) = beam_source_1_vals_(n); 
+                  u0_(m, CombinedIdx(nuidx, n, nvars_), 0, 0, is - i - 1) =
+                      beam_source_1_vals_(n);
                 }
             }
             break;
@@ -80,7 +81,8 @@ void ApplyBeamSources2D(Mesh *pmesh) {
             if (beam_source_1_y1_ <= x2 && x2 <= beam_source_1_y2_) {
               for (int i = 0; i < ng; ++i) {
                 for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-                  u0_(m, CombinedIdx(nuidx, n, nvars_), k, j, is - i - 1) = beam_source_1_vals_(n);
+                  u0_(m, CombinedIdx(nuidx, n, nvars_), k, j, is - i - 1) =
+                      beam_source_1_vals_(n);
                 }
               }
             }
@@ -184,14 +186,16 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
                 // apply_floor(g_uu, E, F_d, params_);
                 for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
                   u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) = E;
-                  u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = F_d(1);
-                  u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = F_d(2);
-                  u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = F_d(3);
+                  u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) =
+                      F_d(1);
+                  u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) =
+                      F_d(2);
+                  u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) =
+                      F_d(3);
                   u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = 1.0;
                 }
               }
-            }
-            else {
+            } else {
               for (int i = 0; i < ng; ++i) {
                 for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
                   u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, is - i - 1) =

@@ -7,6 +7,8 @@
 //  \brief 2D lattice test for grey M1
 
 // C++ headers
+#include <cstdio>
+#include <iostream>
 
 // Athena++ headers
 #include "athena.hpp"
@@ -53,7 +55,8 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Lattice};
+  pmbp->pradm1->toy_opacity_fn =
+      radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Lattice};
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

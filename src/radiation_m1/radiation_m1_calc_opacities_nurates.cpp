@@ -6,6 +6,9 @@
 //! \file radiation_m1_calc_opacity.cpp
 //! \brief calculate opacities for grey M1
 
+#include <cstdio>
+#include <iostream>
+
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
@@ -263,8 +266,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             eta_1_loc[nuidx] = (eta_1_loc[nuidx] > 0) ? eta_1_loc[nuidx] : 0;
             abs_0_loc[nuidx] = (abs_0_loc[nuidx] > 0) ? abs_0_loc[nuidx] : 0;
             abs_1_loc[nuidx] = (abs_1_loc[nuidx] > 0) ? abs_1_loc[nuidx] : 0;
-            eta_1_non_th_loc[nuidx] = (eta_1_non_th_loc[nuidx] > 0) ? eta_1_non_th_loc[nuidx] : 0;
-            abs_1_non_th_loc[nuidx] = (abs_1_non_th_loc[nuidx] > 0) ? abs_1_non_th_loc[nuidx] : 0;
+            eta_1_non_th_loc[nuidx] =
+                (eta_1_non_th_loc[nuidx] > 0) ? eta_1_non_th_loc[nuidx] : 0;
+            abs_1_non_th_loc[nuidx] =
+                (abs_1_non_th_loc[nuidx] > 0) ? abs_1_non_th_loc[nuidx] : 0;
           }
 
           Real tau{}, nudens_0_trap[4]{}, nudens_1_trap[4]{},

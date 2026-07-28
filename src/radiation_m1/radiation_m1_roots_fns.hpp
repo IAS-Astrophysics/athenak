@@ -1,5 +1,12 @@
-#ifndef RADIATION_M1_ROOTS_FNS_H
-#define RADIATION_M1_ROOTS_FNS_H
+#ifndef RADIATION_M1_RADIATION_M1_ROOTS_FNS_HPP_
+#define RADIATION_M1_RADIATION_M1_ROOTS_FNS_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_m1_roots_fns.hpp
+//  \brief root-finding functions used by the Grey M1 radiation source update
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -207,4 +214,4 @@ class HybridsjFunctor {
 
 }  // namespace radiationm1
 
-#endif  // RADIATION_M1_ROOTS_FNS_H
+#endif  // RADIATION_M1_RADIATION_M1_ROOTS_FNS_HPP_

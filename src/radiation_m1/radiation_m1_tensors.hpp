@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_TENSORS_HPP
-#define RADIATION_M1_TENSORS_HPP
+#ifndef RADIATION_M1_RADIATION_M1_TENSORS_HPP_
+#define RADIATION_M1_RADIATION_M1_TENSORS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -241,7 +241,7 @@ void pack_P_dd(Real betax_u, Real betay_u, Real betaz_u,
 //  \brief Lorentz factor from fluid velocity z^i = W v^i and 4-metric
 KOKKOS_INLINE_FUNCTION
 Real get_w_lorentz(const Real zx, const Real zy, const Real zz,
-		   const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd) {
+                   const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_dd) {
   AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
   v_u(0) = 0;
   v_u(1) = zx;
@@ -250,4 +250,4 @@ Real get_w_lorentz(const Real zx, const Real zy, const Real zz,
   return Kokkos::sqrt(1. + tensor_dot(g_dd, v_u, v_u));
 }
 
-#endif  // RADIATION_M1_TENSORS_HPP
+#endif  // RADIATION_M1_RADIATION_M1_TENSORS_HPP_

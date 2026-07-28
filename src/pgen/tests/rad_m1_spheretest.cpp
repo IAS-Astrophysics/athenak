@@ -7,6 +7,7 @@
 //  \brief Sphere test for grey M1
 
 // C++ headers
+#include <iostream>
 
 // Athena++ headers
 #include "athena.hpp"
@@ -36,7 +37,8 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Sphere};
+  pmbp->pradm1->toy_opacity_fn =
+      radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Sphere};
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

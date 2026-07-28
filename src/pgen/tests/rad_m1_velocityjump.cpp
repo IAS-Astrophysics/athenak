@@ -7,6 +7,7 @@
 //  \brief 1D diffusion test in a moving medium for grey M1
 
 // C++ headers
+#include <iostream>
 
 // Athena++ headers
 #include <coordinates/cell_locations.hpp>

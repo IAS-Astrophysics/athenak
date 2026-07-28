@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "athena.hpp"
@@ -47,7 +48,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     // @TODO phydro are only partially implemented
     exit(EXIT_FAILURE);
   }
-  
+
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
@@ -73,7 +74,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
-  
+
   // set closure (default: minerbo)
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
@@ -109,14 +110,16 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.opacity_type = BnsNurates;
 
     nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 6);
-    nurates_params.quad_nx_2 = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
+    nurates_params.quad_nx_2 =
+        pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
     nurates_params.opacity_tau_trap =
         pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
     nurates_params.opacity_tau_delta =
         pin->GetOrAddReal("bns_nurates", "opacity_tau_delta", 1.0);
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
-    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.); // in bns_nurates()
+    // in bns_nurates()
+    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.);
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
@@ -213,8 +216,10 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
     params.rhea_stability_threshold =
         pin->GetOrAddReal("radiation_m1", "rhea_stability_threshold", 0.5);
-    params.rhea_tau_0_factor = pin->GetOrAddReal("radiation_m1", "rhea_tau_0_factor", 1.0);
-    params.rhea_tau_1_factor = pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
+    params.rhea_tau_0_factor =
+        pin->GetOrAddReal("radiation_m1", "rhea_tau_0_factor", 1.0);
+    params.rhea_tau_1_factor =
+        pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
 
     // Required, no default: startup error if unset/empty.
     rhea_model_path = pin->GetOrAddString("radiation_m1", "rhea_model_path", "");

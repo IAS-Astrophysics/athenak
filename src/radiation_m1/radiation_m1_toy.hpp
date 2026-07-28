@@ -1,5 +1,12 @@
-#ifndef RADIATION_M1_TOY_HPP
-#define RADIATION_M1_TOY_HPP
+#ifndef RADIATION_M1_RADIATION_M1_TOY_HPP_
+#define RADIATION_M1_RADIATION_M1_TOY_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_m1_toy.hpp
+//  \brief toy opacity models for Grey M1 radiation class
 
 #include "athena.hpp"
 
@@ -105,17 +112,17 @@ struct ToyOpacity {
                   Real &eta_0, Real &abs_0, Real &eta_1, Real &abs_1,
                   Real &scat_1) const {
     if (model == ToyOpacityModel::Lattice) {
-      LatticeOpacities{}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1, abs_1,
-                         scat_1);
+      LatticeOpacities {}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1, abs_1,
+                          scat_1);
     } else if (model == ToyOpacityModel::Sphere) {
-      SphereOpacities{}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1, abs_1,
-                        scat_1);
+      SphereOpacities {}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1, abs_1,
+                         scat_1);
     } else if (model == ToyOpacityModel::DiffusionExplicit) {
-      DiffusionOpacitiesExplicit{}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1,
-                                   abs_1, scat_1);
+      DiffusionOpacitiesExplicit {}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1,
+                                    abs_1, scat_1);
     } else if (model == ToyOpacityModel::DiffusionImplicit) {
-      DiffusionOpacitiesImplicit{}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1,
-                                   abs_1, scat_1);
+      DiffusionOpacitiesImplicit {}(x1, x2, x3, dx, dy, dz, nuidx, eta_0, abs_0, eta_1,
+                                    abs_1, scat_1);
     } else {
       // default behavior
     }
@@ -123,4 +130,4 @@ struct ToyOpacity {
 };
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_TOY_HPP
+#endif  // RADIATION_M1_RADIATION_M1_TOY_HPP_

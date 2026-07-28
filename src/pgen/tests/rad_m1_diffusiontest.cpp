@@ -7,6 +7,7 @@
 //  \brief 1D diffusion test in a moving medium for grey M1
 
 // C++ headers
+#include <iostream>
 
 // Athena++ headers
 #include <coordinates/cell_locations.hpp>
@@ -51,10 +52,12 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
   }
 
   if (pmbp->pradm1->params.src_update == radiationm1::Explicit) {
-    pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionExplicit};
+    pmbp->pradm1->toy_opacity_fn =
+        radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionExplicit};
   }
   if (pmbp->pradm1->params.src_update == radiationm1::Implicit) {
-    pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionImplicit};
+    pmbp->pradm1->toy_opacity_fn =
+        radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionImplicit};
   }
 
   // capture variables for kernel

@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_RHEA_KERNELS_HPP
-#define RADIATION_M1_RHEA_KERNELS_HPP
+#ifndef RADIATION_M1_RADIATION_M1_RHEA_KERNELS_HPP_
+#define RADIATION_M1_RADIATION_M1_RHEA_KERNELS_HPP_
 //========================================================================================
 // AthenaK astrophysical fluid dynamics and numerical relativity code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -15,6 +15,8 @@
 //! below is ported faithfully from Rhea's own reference C++ helper
 //! (Rhea/cpp_interface/FFISubgridModel.h:61-86).
 
+#include <algorithm>
+
 #include "athena.hpp"
 
 #if ENABLE_TORCH
@@ -23,7 +25,8 @@ namespace radiationm1 {
 
 //----------------------------------------------------------------------------------------
 //! \fn void radiationm1::RestrictToPhysical
-//! \brief Ensure Rhea's raw per-cell 4-current prediction is timelike (or null), in place.
+//! \brief Ensure Rhea's raw per-cell 4-current prediction is timelike (or null), in
+//! place.
 //!
 //! Ports Rhea/cpp_interface/FFISubgridModel.h:61-86 (`restrict_to_physical`) from its
 //! batched-tensor form down to a single cell. Input/output layout matches Rhea's raw
@@ -148,8 +151,9 @@ void RestrictToPhysical(Real F4_final[2][3][4]) {
 //! construction, so applying it to N and to E within each sector conserves the sector
 //! total exactly.
 KOKKOS_INLINE_FUNCTION
-void ReconstructMixingMatrix(Real const nn_pre[4], Real const N_post_e, Real const N_post_x,
-                              Real const N_post_a, Real const N_post_y, Real Y[4][4]) {
+void ReconstructMixingMatrix(Real const nn_pre[4], Real const N_post_e,
+                              Real const N_post_x, Real const N_post_a,
+                              Real const N_post_y, Real Y[4][4]) {
   constexpr int ie = 0, ia = 1, ix = 2, iy = 3;
   constexpr Real p_eps = 1e-10;
 
@@ -209,4 +213,4 @@ int RheaBatchIndex(int m, int k, int j, int i, int ks, int js, int is,
 
 #endif
 
-#endif  // RADIATION_M1_RHEA_KERNELS_HPP
+#endif  // RADIATION_M1_RADIATION_M1_RHEA_KERNELS_HPP_

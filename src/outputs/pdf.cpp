@@ -20,6 +20,7 @@
 
 #include <sys/stat.h>  // mkdir
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <iomanip>
@@ -209,7 +210,8 @@ void PDFOutput::LoadOutputData(Mesh *pm) {
   int nx3 = indcs.nx3 + 2*indcs.ng;
 
   // Copy MeshBlock data from host to device
-  DvceArray5D<Real> outvars_device("outvars_device", outvars.size(), nmb_alloc, nx3, nx2, nx1);
+  DvceArray5D<Real> outvars_device("outvars_device", outvars.size(), nmb_alloc, nx3, nx2,
+                                   nx1);
   for (std::size_t i = 0; i < outvars.size(); ++i) {
       auto d_slice = Kokkos::subview(*(outvars[i].data_ptr),
       Kokkos::ALL(), outvars[i].data_index, Kokkos::ALL(), Kokkos::ALL(), Kokkos::ALL());

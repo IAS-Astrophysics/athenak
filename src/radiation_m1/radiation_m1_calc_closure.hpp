@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_CALC_CLOSURE_HPP
-#define RADIATION_M1_CALC_CLOSURE_HPP
+#ifndef RADIATION_M1_RADIATION_M1_CALC_CLOSURE_HPP_
+#define RADIATION_M1_RADIATION_M1_CALC_CLOSURE_HPP_
 //========================================================================================
 // AthenaK astrophysical fluid dynamics and numerical relativity code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -7,6 +7,8 @@
 //========================================================================================
 //! \file radiation_m1_calc_closure.hpp
 //! \brief compute closure and inv. closure using Brent-Dekker routines
+
+#include <cstdio>
 
 #include "radiation_m1/radiation_m1_roots_brent.hpp"
 #include "radiation_m1/radiation_m1_roots_fns.hpp"
@@ -94,4 +96,4 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
 }
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_CALC_CLOSURE_HPP
+#endif  // RADIATION_M1_RADIATION_M1_CALC_CLOSURE_HPP_

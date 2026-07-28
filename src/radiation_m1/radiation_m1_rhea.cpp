@@ -24,6 +24,23 @@
 
 #if ENABLE_TORCH
 
+// torch::jit::freeze_module, the pass-level function behind torch::jit::freeze. Used
+// directly (not through the torch::jit::freeze/torch::jit::optimize_for_inference
+// convenience wrappers in torch/csrc/jit/api/module.h) -- see the RheaModel constructor
+// below for why: those wrappers hard-require a `forward` method to exist REGARDLESS of
+// what is passed as preserved_attrs/other_methods (verified directly against local
+// LibTorch 2.12.1: both `torch::jit::freeze(model_, {"predict_all"})` and
+// `torch::jit::optimize_for_inference(model_, {"predict_all"})` throw "Method 'forward'
+// is not defined", because their C++ implementations call module.get_method("forward")
+// unconditionally before ever looking at the method list). Rhea's TorchScript contract
+// exports `predict_all`, not `forward`, as its entry point, so neither convenience
+// wrapper is usable here. torch::jit::freeze_module (this header) is the lower-level pass
+// both wrappers are ultimately built on; it takes an explicit list of method names with
+// no hardcoded "forward" requirement, confirmed to inline submodule calls and
+// constant-fold parameters into predict_all's graph correctly (spot-checked bit-for-bit
+// against the unfrozen module's output).
+#include <torch/csrc/jit/passes/freeze_module.h>
+
 #include <cassert>
 #include <filesystem>  // NOLINT std::filesystem::canonical (RheaModuleCache key)
 #include <map>
@@ -35,23 +52,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-// torch::jit::freeze_module, the pass-level function behind torch::jit::freeze. Used
-// directly (not through the torch::jit::freeze/torch::jit::optimize_for_inference
-// convenience wrappers in torch/csrc/jit/api/module.h) -- see the RheaModel constructor
-// below for why: those wrappers hard-require a `forward` method to exist REGARDLESS of
-// what is passed as preserved_attrs/other_methods (verified directly against local
-// LibTorch 2.12.1: both `torch::jit::freeze(model_, {"predict_all"})` and
-// `torch::jit::optimize_for_inference(model_, {"predict_all"})` throw "Method 'forward' is
-// not defined", because their C++ implementations call module.get_method("forward")
-// unconditionally before ever looking at the method list). Rhea's TorchScript contract
-// exports `predict_all`, not `forward`, as its entry point, so neither convenience
-// wrapper is usable here. torch::jit::freeze_module (this header) is the lower-level pass
-// both wrappers are ultimately built on; it takes an explicit list of method names with no
-// hardcoded "forward" requirement, confirmed to inline submodule calls and constant-fold
-// parameters into predict_all's graph correctly (spot-checked bit-for-bit against the
-// unfrozen module's output).
-#include <torch/csrc/jit/passes/freeze_module.h>
 
 #if defined(KOKKOS_ENABLE_CUDA)
 #include <c10/cuda/CUDAGuard.h>

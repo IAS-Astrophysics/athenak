@@ -24,7 +24,6 @@
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
-#include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation_m1/radiation_m1.hpp"
@@ -86,7 +85,9 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of DynMHD variable requested in <output> block '"
        << out_params.block_name << "' but no DynMHD object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block" << std::endl;
+       << std::endl
+       << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block"
+       << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar==50) && (pm->pmb_pack->pturb == nullptr)) {

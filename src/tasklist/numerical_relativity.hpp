@@ -172,6 +172,7 @@ class NumericalRelativity {
 
   void AssembleNumericalRelativityTasks(
          std::map<std::string, std::shared_ptr<TaskList>>& tl);
+
  private:
   MeshBlockPack *pmy_pack;
   std::vector<QueuedTask> start_queue;

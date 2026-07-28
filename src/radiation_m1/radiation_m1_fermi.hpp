@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_FERMI_HPP
-#define RADIATION_M1_FERMI_HPP
+#ifndef RADIATION_M1_RADIATION_M1_FERMI_HPP_
+#define RADIATION_M1_RADIATION_M1_FERMI_HPP_
 
 //========================================================================================
 // AthenaK astrophysical fluid dynamics and numerical relativity code
@@ -63,4 +63,4 @@ KOKKOS_INLINE_FUNCTION Real fermi3(Real eta) {
 
 #undef ETA0
 
-#endif
+#endif  // RADIATION_M1_RADIATION_M1_FERMI_HPP_

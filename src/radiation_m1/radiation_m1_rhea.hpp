@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_RHEA_HPP
-#define RADIATION_M1_RHEA_HPP
+#ifndef RADIATION_M1_RADIATION_M1_RHEA_HPP_
+#define RADIATION_M1_RADIATION_M1_RHEA_HPP_
 //========================================================================================
 // AthenaK astrophysical fluid dynamics and numerical relativity code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -134,4 +134,4 @@ class RheaModel {
 }  // namespace radiationm1
 
 #endif  // ENABLE_TORCH
-#endif  // RADIATION_M1_RHEA_HPP
+#endif  // RADIATION_M1_RADIATION_M1_RHEA_HPP_

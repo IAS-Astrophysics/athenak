@@ -19,6 +19,7 @@
 #include <vector>
 #include <list>
 #include <iterator>
+#include <string>
 
 class Driver;
 
@@ -86,7 +87,8 @@ class TaskID {
 
 class Task {
  public:
-  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func, const std::string & name = "unnamed") :
+  Task(TaskID id, TaskID dep, std::function<TaskStatus(Driver*, int)> func,
+       const std::string & name = "unnamed") :
   myid_(id), dep_(dep), func_(func), name_(name) {}
   // overloaded operator() calls task function
   TaskStatus operator()(Driver *d, int s) {return func_(d,s);}
@@ -193,7 +195,8 @@ class TaskList {
   // list. Returns ID of new task. Task function must have arguments (Driver*, int).
   // Usage:
   //      taskid = tl.AddTask(DoSomething, dependency);
-  TaskID AddTask(std::function<TaskStatus(Driver*, int)> func, TaskID &dep, const std::string & name = "unnamed") {
+  TaskID AddTask(std::function<TaskStatus(Driver*, int)> func, TaskID &dep,
+                 const std::string & name = "unnamed") {
     auto size = task_list_.size();
     TaskID id(size+1);
     task_list_.push_back(Task(id, dep, func, name));

@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_ROOTS_HPP
-#define RADIATION_M1_ROOTS_HPP
+#ifndef RADIATION_M1_RADIATION_M1_ROOTS_BRENT_HPP_
+#define RADIATION_M1_RADIATION_M1_ROOTS_BRENT_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -7,6 +7,8 @@
 //========================================================================================
 //! \file radiation_m1_roots_brent.hpp
 //  \brief functions for Brent-Dekker rootfinder
+
+#include <cstdio>
 
 #include "athena.hpp"
 #include "radiation_m1/radiation_m1_linalg.hpp"
@@ -201,7 +203,6 @@ KOKKOS_INLINE_FUNCTION MathSignal BrentIterate(Functor &&f, Real &x_lower,
 KOKKOS_INLINE_FUNCTION
 MathSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
                               Real epsrel) {
-
   const Real abs_lower = Kokkos::fabs(x_lower);
   const Real abs_upper = Kokkos::fabs(x_upper);
 
@@ -232,4 +233,4 @@ MathSignal BrentTestInterval(Real x_lower, Real x_upper, Real epsabs,
 }
 
 } // namespace radiationm1
-#endif // RADIATION_M1_ROOTS_HPP
+#endif  // RADIATION_M1_RADIATION_M1_ROOTS_BRENT_HPP_

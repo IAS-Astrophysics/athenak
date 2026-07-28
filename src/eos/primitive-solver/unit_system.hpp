@@ -50,7 +50,8 @@ struct UnitSystem {
     return b.length/length * time/b.time;
   }
 
-  KOKKOS_INLINE_FUNCTION constexpr Real NumberDensityConversion(const UnitSystem& b) const {
+  KOKKOS_INLINE_FUNCTION constexpr
+  Real NumberDensityConversion(const UnitSystem& b) const {
     return b.numberDensity/numberDensity;
   }
 
@@ -88,7 +89,8 @@ struct UnitSystem {
     return b.temperature/temperature;
   }
 
-  KOKKOS_INLINE_FUNCTION constexpr Real ChemicalPotentialConversion(const UnitSystem& b) const {
+  KOKKOS_INLINE_FUNCTION constexpr
+  Real ChemicalPotentialConversion(const UnitSystem& b) const {
     return b.chemicalPotential/chemicalPotential;
   }
   //! \}
@@ -135,7 +137,7 @@ UnitSystem MakeGeometricKilometer();
   1e-5, // length, km
   CGS.c * 1e-5, // time, km
   1e-39, // number density in fm^-3
-  1e-15, // volume in km^3 
+  1e-15, // volume in km^3
   CGS.G/(CGS.c*CGS.c)*1e-5, // mass, km
   CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e-5, // energy, km
   CGS.G/(CGS.c*CGS.c*CGS.c*CGS.c)*1e10, // pressure, km^-2

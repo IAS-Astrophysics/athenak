@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_CLOSURE_H
-#define RADIATION_M1_CLOSURE_H
+#ifndef RADIATION_M1_RADIATION_M1_CLOSURE_HPP_
+#define RADIATION_M1_RADIATION_M1_CLOSURE_HPP_
 //========================================================================================
 // AthenaK astrophysical fluid dynamics and numerical relativity code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -28,4 +28,4 @@ KOKKOS_INLINE_FUNCTION Real closure_fun(const Real &xi,
   }
 }
 }  // namespace radiationm1
-#endif  // RADIATION_M1_CLOSURE_H
+#endif  // RADIATION_M1_RADIATION_M1_CLOSURE_HPP_

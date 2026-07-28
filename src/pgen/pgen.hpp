@@ -86,9 +86,9 @@ class ProblemGenerator {
   template <class EOSPolicy, class ErrorPolicy>
   void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
   // Rhea flavor-mixing single-zone fixed-point convergence test; a dedicated pgen, not an
-  // extension of RadiationM1SingleZoneTest above (see rad_m1_rhea_singlezone.cpp). Declared
-  // unconditionally, like RadiationM1SingleZoneTest above whose .cpp is likewise only
-  // compiled if ENABLE_NURATES -- only the .cpp (compiled iff ENABLE_TORCH) and the
+  // extension of RadiationM1SingleZoneTest above (see rad_m1_rhea_singlezone.cpp).
+  // Declared unconditionally, like RadiationM1SingleZoneTest above whose .cpp is likewise
+  // only compiled if ENABLE_NURATES -- only the .cpp (compiled iff ENABLE_TORCH) and the
   // pgen.cpp dispatch call site are actually gated.
   void RadiationM1RheaSingleZoneTest(ParameterInput *pin, const bool restart);
   template <class EOSPolicy, class ErrorPolicy>

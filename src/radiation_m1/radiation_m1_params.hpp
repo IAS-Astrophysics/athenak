@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_PARAMS_HPP
-#define RADIATION_M1_PARAMS_HPP
+#ifndef RADIATION_M1_RADIATION_M1_PARAMS_HPP_
+#define RADIATION_M1_RADIATION_M1_PARAMS_HPP_
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -66,7 +66,7 @@ struct RadiationM1Params {
   bool beam_sources;    // include beam sources
   bool backreact;
   bool backreact_tmunu;
-  
+
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
   int closure_maxiter;       // maximum number of iterations in closure root finder
@@ -188,4 +188,4 @@ struct SrcParams {
 };
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_PARAMS_HPP
+#endif  // RADIATION_M1_RADIATION_M1_PARAMS_HPP_
