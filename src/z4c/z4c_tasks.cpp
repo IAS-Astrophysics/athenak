@@ -56,12 +56,12 @@ void Z4c::QueueZ4cTasks() {
                      Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
       break;
   }
-  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
-                 {Z4c_CalcRHS});
   pnr->QueueTask(&Z4c::ApplyUserRHS, this, Z4c_UserSrc, "Z4c_UserSrc", Task_Run,
-                 {Z4c_SomBC});
+                 {Z4c_CalcRHS});
+  pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
+                 {Z4c_UserSrc});
   pnr->QueueTask(&Z4c::ExpRKUpdate, this, Z4c_ExplRK, "Z4c_ExplRK", Task_Run,
-                 {Z4c_UserSrc},{MHD_EField});
+                 {Z4c_SomBC},{MHD_EField});
   pnr->QueueTask(&Z4c::RestrictU, this, Z4c_RestU, "Z4c_RestU", Task_Run, {Z4c_ExplRK});
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
@@ -106,7 +106,7 @@ void Z4c::QueueZ4cTasks() {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Z4c::ApplyUserRHS
-//! \brief apply a problem-generator source after boundary RHS construction
+//! \brief apply a problem-generator source after RHS construction
 TaskStatus Z4c::ApplyUserRHS(Driver *pdrive, int stage) {
   if (user_rhs_func != nullptr) {
     user_rhs_func(pmy_pack->pmesh);
