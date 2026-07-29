@@ -18,7 +18,10 @@
 //! against the vendored Kokkos >=4.7 submodule's actual CUDA/HIP/SYCL accessor
 //! implementations, but the CUDA/HIP/SYCL code paths below were never compiled or
 //! executed on real hardware in this environment -- only the `#else` (CPU/Serial/OpenMP)
-//! path was. Do not read "structurally validated" as "confirmed working."
+//! path was. Do not read "structurally validated" as "confirmed working."  Concretely:
+//! the first icpx/SYCL compile on Aurora (2026-07-29) caught a mis-transcribed device-index
+//! accessor in ResolveDevice() that the CUDA and HIP branches shared, so treat the
+//! remaining uncompiled CUDA/HIP branches with the same suspicion.
 
 #include "radiation_m1/radiation_m1_rhea.hpp"
 
@@ -83,21 +86,27 @@ namespace {
 //! Kokkos itself resolved to, so Torch and Kokkos agree on physical device regardless of
 //! how the launcher or Kokkos's own rank-to-GPU heuristics chose it.
 torch::Device ResolveDevice() {
+// NOTE: `device_id(exec)` is NOT a member of the execution-space classes -- it lives in
+// Kokkos::Tools::Experimental::DeviceTypeTraits<Space> (Kokkos_Cuda.hpp:242-250,
+// Kokkos_HIP.hpp:150-158, Kokkos_SYCL.hpp:132-141), so `Kokkos::SYCL::device_id(...)` and
+// friends do not compile. Use the public per-instance accessors each space does expose.
 #if defined(KOKKOS_ENABLE_CUDA)
-  // Kokkos_Cuda.hpp:248: `static int device_id(const Cuda& exec) { return
-  // exec.cuda_device(); }` -- confirmed present in the vendored Kokkos >=4.7 submodule.
-  int const dev = Kokkos::Cuda::device_id(DevExeSpace());
+  // Kokkos_Cuda.hpp:242 `int cuda_device() const;` -- the same accessor
+  // MakeCudaStreamGuard() below already uses.
+  int const dev = DevExeSpace().cuda_device();
   return torch::Device(torch::kCUDA, static_cast<c10::DeviceIndex>(dev));
 #elif defined(KOKKOS_ENABLE_HIP)
-  // Kokkos_HIP.hpp:156: `static int device_id(const HIP& exec) { return
-  // exec.hip_device(); }`. Device type is still torch::kCUDA (masquerade, see the HIP
-  // #include block above).
-  int const dev = Kokkos::HIP::device_id(DevExeSpace());
+  // Kokkos_HIP.hpp:103 `int hip_device() const;`. Device type is still torch::kCUDA
+  // (masquerade, see the HIP #include block above).
+  int const dev = DevExeSpace().hip_device();
   return torch::Device(torch::kCUDA, static_cast<c10::DeviceIndex>(dev));
 #elif defined(KOKKOS_ENABLE_SYCL)
-  // Kokkos_SYCL.hpp:139: `static int device_id(const Kokkos::SYCL& exec)` -- a static
-  // function (SYCL has no instance-method form the way Cuda/HIP do).
-  int const dev = Kokkos::SYCL::device_id(DevExeSpace());
+  // Kokkos::SYCL exposes no public device-index accessor (only
+  // impl_internal_space_instance()->m_syclDev), so go through the backend-agnostic
+  // Kokkos_Core.hpp:106 `int device_id() noexcept`, whose SYCL branch returns exactly that
+  // same Impl::SYCLInternal::m_syclDev (Kokkos_Core.cpp:187-188). m_syclDev is `static`,
+  // i.e. one SYCL device per process, so there is no instance to disambiguate anyway.
+  int const dev = Kokkos::device_id();
   return torch::Device(torch::kXPU, static_cast<c10::DeviceIndex>(dev));
 #else
   return torch::Device(torch::kCPU);
