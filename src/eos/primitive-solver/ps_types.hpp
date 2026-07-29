@@ -14,8 +14,20 @@
 
 #include "athena.hpp"
 
-#define MAX_SPECIES 3
+#define MAX_SPECIES 7
 #define NHYDRO ((5) + (MAX_SPECIES))
+
+//! Layout of the composition vector Y[] handed to the transition/Helmholtz EOS.
+enum ScalarVariables {
+  SCYE   = 0,  //! electron fraction
+  SCXN   = 1,  //! mass fraction of free neutrons
+  SCXP   = 2,  //! mass fraction of free protons
+  SCXA   = 3,  //! mass fraction of alpha particles
+  SCXH   = 4,  //! mass fraction of heavy nuclei
+  SCAH   = 5,  //! average atomic mass of heavy nuclei
+  SCEB   = 6,  //! binding energy per baryon relative to the baryon-mass factor
+  SCNVAR = 7   //! number of scalar variables
+};
 
 enum ConsIndex {CDN=0, CSX=1, CSY=2, CSZ=3, CTA=4, CYD=5, NCONS=(NHYDRO)};
 // FIXME: Make sure that the position of IYF makes sense.

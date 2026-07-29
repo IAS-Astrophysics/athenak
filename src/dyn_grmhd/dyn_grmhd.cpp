@@ -72,6 +72,16 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
                                 ErrorPolicy>(ppack, pin);
       }
       break;
+    case DynGRMHD_EOS::eos_transition:
+      use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      if (use_NQT) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                                ErrorPolicy>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                                ErrorPolicy>(ppack, pin);
+      }
+      break;
   }
   return dyn_gr;
 }
@@ -90,6 +100,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGRMHD_EOS::eos_compose;
   } else if (eos_string.compare("hybrid") == 0) {
     eos_policy = DynGRMHD_EOS::eos_hybrid;
+  } else if (eos_string.compare("transition") == 0) {
+    eos_policy = DynGRMHD_EOS::eos_transition;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
@@ -98,6 +110,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   }
   if (error_string.compare("reset_floor") == 0) {
     error_policy = DynGRMHD_Error::reset_floor;
+  } else if (error_string.compare("reset_floor_transition") == 0) {
+    error_policy = DynGRMHD_Error::reset_floor_transition;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_error = '" << error_string
@@ -110,6 +124,23 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   switch (error_policy) {
     case DynGRMHD_Error::reset_floor:
       dyn_gr = SelectDynGRMHDEOS<Primitive::ResetFloor>(ppack, pin, eos_policy);
+      break;
+    case DynGRMHD_Error::reset_floor_transition:
+      // The transition error policy is only meaningful with the transition EOS,
+      // so instantiate that combination directly instead of the full matrix.
+      if (eos_policy != DynGRMHD_EOS::eos_transition) {
+        std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd> dyn_error = 'reset_floor_transition' requires "
+                  << "dyn_eos = 'transition'" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (pin->GetOrAddBoolean("mhd", "use_NQT", false)) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                                Primitive::ResetFloorTransition>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                                Primitive::ResetFloorTransition>(ppack, pin);
+      }
       break;
   }
 
@@ -701,6 +732,14 @@ template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
                           Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
                           Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                          Primitive::ResetFloorTransition>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                          Primitive::ResetFloorTransition>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -722,6 +761,14 @@ INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NormalLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NQTLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NormalLogs>,
+                        Primitive::ResetFloorTransition);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NQTLogs>,
+                        Primitive::ResetFloorTransition);
 INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor);

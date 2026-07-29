@@ -184,6 +184,117 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
+    // Composition channels (used by the transition EOS).
+    auto clamp01 = [](Real x) { return fmax(0.0, fmin(x, 1.0)); };
+
+    { // Y[n] -> ECYN
+      Real * d = table["Y[n]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYN,in,iy,it) = clamp01(d[iflat]);
+          }
+        }
+      }
+    }
+
+    { // Y[p] -> ECYP
+      Real * d = table["Y[p]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYP,in,iy,it) = clamp01(d[iflat]);
+          }
+        }
+      }
+    }
+
+    { // Y[He4] -> ECXA (mass fraction), plus optional light nuclei H2/H3/He3
+      Real * d = table["Y[He4]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECXA,in,iy,it) = clamp01(d[iflat]*4.0);
+          }
+        }
+      }
+      const char* light[3] = {"Y[H2]", "Y[H3]", "Y[He3]"};
+      const Real amass[3] = {2.0, 3.0, 3.0};
+      for (int l = 0; l < 3; ++l) {
+        if (!table.HasField(light[l])) { continue; }
+        Real * dl = table[light[l]];
+        for (size_t in=0; in<m_nn; ++in) {
+          for (size_t iy=0; iy<m_ny; ++iy) {
+            for (size_t it=0; it<m_nt; ++it) {
+              size_t iflat = it + m_nt*(iy + m_ny*in);
+              host_table(ECXA,in,iy,it) += clamp01(dl[iflat]*amass[l]);
+            }
+          }
+        }
+      }
+    }
+
+    { // A[N] -> ECAN
+      Real * d = table["A[N]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECAN,in,iy,it) = fmax(1.0, d[iflat]);
+          }
+        }
+      }
+    }
+
+    { // Z[N] -> ECZN
+      Real * d = table["Z[N]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECZN,in,iy,it) = d[iflat];
+          }
+        }
+      }
+    }
+
+    if (table.HasField("dU")) { // optional dU -> ECDU
+      Real * d = table["dU"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECDU,in,iy,it) = d[iflat];
+          }
+        }
+      }
+      m_has_dU = true;
+    } else {
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            host_table(ECDU,in,iy,it) = 0.0;
+          }
+        }
+      }
+      m_has_dU = false;
+    }
+
+    { // Y[N] with A[N] -> ECXH = A_N * Y_N (heavy-nucleus mass fraction)
+      Real * d = table["Y[N]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECXH,in,iy,it) = clamp01(host_table(ECAN,in,iy,it)*d[iflat]);
+          }
+        }
+      }
+    }
+
     // Copy from host to device
     Kokkos::deep_copy(m_log_nb, host_log_nb);
     Kokkos::deep_copy(m_yq,     host_yq);

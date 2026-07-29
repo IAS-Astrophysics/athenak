@@ -28,23 +28,34 @@
 
 namespace Primitive {
 
+template<typename LogPolicy> class EOSTransition;
+
 template<typename LogPolicy>
 class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy,
                    public SupportsChemicalPotentials {
+  template<typename LP> friend class EOSTransition;
+
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
 
  public:
   enum TableVariables {
-    ECLOGP  = 0,  //! log (pressure / 1 MeV fm^-3)
-    ECENT   = 1,  //! entropy per baryon [kb]
-    ECMUB   = 2,  //! baryon chemical potential [MeV]
-    ECMUQ   = 3,  //! charge chemical potential [MeV]
-    ECMUL   = 4,  //! lepton chemical potential [MeV]
-    ECLOGE  = 5,  //! log (total energy density / 1 MeV fm^-3)
-    ECCS    = 6,  //! sound speed [c]
-    ECNVARS = 7
+    ECLOGP  = 0,   //! log (pressure / 1 MeV fm^-3)
+    ECENT   = 1,   //! entropy per baryon [kb]
+    ECMUB   = 2,   //! baryon chemical potential [MeV]
+    ECMUQ   = 3,   //! charge chemical potential [MeV]
+    ECMUL   = 4,   //! lepton chemical potential [MeV]
+    ECLOGE  = 5,   //! log (total energy density / 1 MeV fm^-3)
+    ECCS    = 6,   //! sound speed [c]
+    ECYN    = 7,   //! Y[n]
+    ECYP    = 8,   //! Y[p]
+    ECXA    = 9,   //! X[He4] (+ optional light nuclei)
+    ECXH    = 10,  //! X_h = A_N * Y[N], heavy-nucleus mass fraction
+    ECAN    = 11,  //! A[N]
+    ECZN    = 12,  //! Z[N]
+    ECDU    = 13,  //! effective nucleon potential difference dU [MeV]
+    ECNVARS = 14
   };
 
  protected:
@@ -57,6 +68,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     n_species = 1;
     eos_units = MakeNuclear();
     m_initialized = false;
+    m_has_dU = false;
 
     // These will be set properly when the table is read
     m_id_log_nb = std::numeric_limits<Real>::quiet_NaN();
@@ -109,6 +121,35 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     }
     Real log_p = log2_(p);
     return temperature_from_var(ECLOGP, log_p, n, Y[0]);
+  }
+
+  /// Temperature from specific internal energy.
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromEps(Real n, Real eps, Real *Y) const {
+    return TemperatureFromE(n, (1.0 + eps)*mb*n, Y);
+  }
+
+  /// Composition accessors read from the tabulated NSE composition channels.
+  KOKKOS_INLINE_FUNCTION Real FrYn(Real n, Real T, Real *Y) const {
+    return eval_at_nty(ECYN, n, T, Y[0]);
+  }
+  KOKKOS_INLINE_FUNCTION Real FrYp(Real n, Real T, Real *Y) const {
+    return eval_at_nty(ECYP, n, T, Y[0]);
+  }
+  KOKKOS_INLINE_FUNCTION Real FrXa(Real n, Real T, Real *Y) const {
+    return eval_at_nty(ECXA, n, T, Y[0]);
+  }
+  KOKKOS_INLINE_FUNCTION Real FrXh(Real n, Real T, Real *Y) const {
+    return eval_at_nty(ECXH, n, T, Y[0]);
+  }
+  KOKKOS_INLINE_FUNCTION Real AN(Real n, Real T, Real *Y) const {
+    return eval_at_nty(ECAN, n, T, Y[0]);
+  }
+  KOKKOS_INLINE_FUNCTION Real ZN(Real n, Real T, Real *Y) const {
+    return eval_at_nty(ECZN, n, T, Y[0]);
+  }
+  KOKKOS_INLINE_FUNCTION Real InteractionPotentialDifference(Real n, Real T,
+                                                             Real *Y) const {
+    return eval_at_nty(ECDU, n, T, Y[0]);
   }
 
   /// Calculate the energy density using.
@@ -276,9 +317,23 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return Energy(n, max_T, Y);
   }
 
+  /// Get the minimum specific internal energy at a given density/composition
+  KOKKOS_INLINE_FUNCTION Real MinimumSpecificInternalEnergy(Real n, Real *Y) const {
+    return MinimumEnergy(n, Y)/(mb*n) - 1.0;
+  }
+
+  /// Get the maximum specific internal energy at a given density/composition
+  KOKKOS_INLINE_FUNCTION Real MaximumSpecificInternalEnergy(Real n, Real *Y) const {
+    return MaximumEnergy(n, Y)/(mb*n) - 1.0;
+  }
+
  public:
   /// Reads the table file.
   void ReadTableFromFile(std::string fname);
+
+  /// Set the baryon mass. The table stores total energy and baryon number
+  /// density, so no rescaling of the table is required.
+  KOKKOS_INLINE_FUNCTION void SetBaryonMass(Real new_mb) { mb = new_mb; }
 
   /// Get the raw number density
   KOKKOS_INLINE_FUNCTION DvceArray1D<Real> const GetRawLogNumberDensity() const {
@@ -747,6 +802,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
   bool m_initialized;
+  // whether the optional dU (nucleon interaction potential) channel was present
+  bool m_has_dU;
 
   // Table storage on DEVICE.
   DvceArray1D<Real> m_log_nb;

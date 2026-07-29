@@ -75,6 +75,7 @@ class ProblemGenerator {
 
   // predefined problem generator functions for unit tests
   void EOSCompose(ParameterInput *pin, const bool restart);
+  void EOSTransition(ParameterInput *pin, const bool restart);
   void GaussLegendre(ParameterInput *pin, const bool restart);
 
   // Generic error output function (using difference u0-u1)
