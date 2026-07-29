@@ -53,12 +53,17 @@ ships inside a PyTorch Python environment — see below).
         -DAthena_ENABLE_TORCH=On -DCMAKE_PREFIX_PATH=<path-to-libtorch-2.6.0-rocm*> ..
   ```
 - **SYCL (Aurora, Intel Data Center GPU Max / PVC)**: requires the vendored `kokkos`
-  submodule at **>= 4.7** (already the case on this branch).
+  submodule at **>= 4.7** (already the case on this branch). **Builds, links, and runs
+  correctly on a PVC** as of 2026-07-29 — see "Validated on Aurora" below.
   ```
-  cmake -DKokkos_ENABLE_SYCL=On -DKokkos_ARCH_INTEL_PVC=On \
-        -DCMAKE_CXX_COMPILER=icpx \
-        -DAthena_ENABLE_TORCH=On -DCMAKE_PREFIX_PATH=<path-to-libtorch-2.6.0-xpu> ..
+  cmake -DKokkos_ENABLE_SYCL=On -DKokkos_ENABLE_SYCL_RELOCATABLE_DEVICE_CODE=On \
+        -DKokkos_ARCH_INTEL_PVC=On -DCMAKE_CXX_COMPILER=icpx \
+        -DAthena_ENABLE_NURATES=On -DAthena_ENABLE_TORCH=On \
+        -DCMAKE_PREFIX_PATH=`python -c 'import torch;print(torch.utils.cmake_prefix_path)'` ..
   ```
+  On Aurora, `module load frameworks` supplies the XPU-enabled LibTorch, the matching oneAPI
+  SDK, and `cmake` together; scripted as
+  `batchtools/templates/athenak/aurora/{environment,configure}-rhea.sh`.
 - **CPU (Serial or OpenMP)** — fastest path for local iteration/unit tests:
   ```
   cmake -DKokkos_ENABLE_SERIAL=On \
@@ -73,12 +78,75 @@ Then build as usual: `cmake --build . -j <N>`.
 setting through the imported `torch` target. This **must** agree with whatever Kokkos and
 the device compiler (`nvcc_wrapper`/`hipcc`/`icpx`) were built with, or you get either a hard
 link error (undefined `std::__cxx11::...` symbols) or a silent ODR violation that only
-misbehaves at runtime. AthenaK's own CI only exercises CUDA+`nvcc_wrapper`; there is no
-in-repo precedent yet for `find_package(Torch)` combined with `hipcc`/`icpx` — budget time
-for this on the first HIP/SYCL build attempt. Check the actual `TORCH_CXX_FLAGS` your
+misbehaves at runtime. AthenaK's own CI only exercises CUDA+`nvcc_wrapper`.
+
+**Resolved for icpx/SYCL:** this did *not* bite on Aurora (2026-07-29, oneAPI 2025.3.1 +
+frameworks-module torch `2.10.0a0`). Configure, compile, and link all succeeded with no
+`_GLIBCXX_USE_CXX11_ABI` override needed and no undefined `std::__cxx11::...` symbols. The
+one real portability defect the icpx build exposed was unrelated to ABI: `ResolveDevice()` in
+`radiation_m1_rhea.cpp` called `Kokkos::SYCL::device_id(exec)`, but `device_id(exec)` is a
+member of `Kokkos::Tools::Experimental::DeviceTypeTraits<Space>`, not of the space classes —
+the CUDA and HIP branches had the same mistake and are now fixed too, though still uncompiled.
+Every problem found after that point was in the *launch environment*, not the code (see
+"Validated on Aurora" above).
+`hipcc` remains without in-repo precedent. Check the actual `TORCH_CXX_FLAGS` your
 LibTorch distribution sets (it was empty for the CPU-only conda-forge build used to validate
 this CMake wiring — do not assume it is always empty; official pytorch.org distributions do
 set it explicitly per ABI variant).
+
+## Validated on Aurora (2026-07-29)
+
+The SYCL/XPU interop path in `radiation_m1_rhea.cpp` was designed against documentation and
+headers only; it has now been **executed on real PVC hardware** (oneAPI 2025.3.1,
+frameworks-module torch `2.10.0a0+git449b176`, one node of the `debug` queue, a single tile).
+The Rhea single-zone test with the trained checkpoint reproduces the model's asymptotic
+prediction and agrees with an x86 CPU `Kokkos::Serial` build of the same commit to
+**2.9e-7 relative** — the float32 floor of the network itself — with per-sector `N` conserved
+to 2.2e-16. `predict_all` alone, run from Python on the same node, agrees CPU-vs-XPU to
+4.5e-6.
+
+Two results worth recording explicitly:
+
+- **The USM-context concern did not materialise.** `Predict()` hands a raw Kokkos device
+  pointer to `torch::from_blob(..., TensorOptions().device(kXPU, i))`, and SYCL USM
+  allocations are context-bound: Kokkos constructs its queue as `sycl::queue{device, ...}`
+  (`kokkos/core/src/SYCL/Kokkos_SYCL_Instance.cpp`) while Torch constructs its own, so nothing
+  in either API guarantees they share a `sycl::context`. In practice Intel's DPC++ hands both
+  the platform default context and the borrow is valid. This is an *observation on one
+  configuration*, not a guarantee — if a future oneAPI or torch build faults at the first
+  `predict_all`, this is the first thing to check
+  (`DevExeSpace().sycl_queue().get_context()` vs
+  `c10::xpu::getCurrentXPUStream().queue().get_context()`).
+- `c10::xpu::getStreamFromExternal` and `XPUCachingAllocator::setMemoryFraction` behave as
+  expected against torch `2.10.0a0`, not just the 2.12.1 headers they were written against.
+
+### Aurora launch environment: two traps
+
+Both cost a job apiece and neither is visible from a login node.
+
+1. **`module load frameworks` sets `ZE_FLAT_DEVICE_HIERARCHY=FLAT`**, under which PVC tiles are
+   root devices and `ZE_AFFINITY_MASK` is a flat list (`0`, `1`, ... `11`).
+   `/soft/tools/mpi_wrapper_utils/gpu_tile_compact.sh` — which
+   `batchtools/templates/athenak/aurora/batch.sub` uses — emits COMPOSITE `gpu.tile` masks
+   (`0.0`, `0.1`, ...). Under FLAT those match **nothing**, and the failure is quiet: `sycl-ls`
+   reports "No platforms found", `torch.xpu.device_count()` returns 0, and
+   `Kokkos::initialize()` aborts with "no GPU available for execution". **`module load
+   frameworks` and `gpu_tile_compact.sh` cannot simply be combined**; an MPI-enabled Rhea job
+   needs its own rank-to-tile mapping.
+2. **The frameworks module sets `ONEAPI_DEVICE_SELECTOR="opencl:gpu;level_zero:gpu"`** (for
+   Triton-XPU/vLLM/Ray/dpctl; it prints this on stderr and sanctions reverting). Exposing two
+   backends makes SYCL enumerate every physical GPU twice, and this port's correctness rests on
+   Kokkos's device index and Torch's XPU index naming the same physical device from two
+   independently built enumerations. Set `ONEAPI_DEVICE_SELECTOR=level_zero:gpu` unless you
+   need the OpenCL consumers.
+
+Also note `set -u` in a job script makes `module load` abort immediately — Lmod's bash init
+reads `ZSH_EVAL_CONTEXT` unconditionally.
+
+The staged bring-up script that established all of the above (device probing, Kokkos-without-
+Torch, Torch-without-AthenaK, then the test itself, each stage's exit status recorded rather
+than aborting the job) is `scripts/aurora_rhea_singlezone.sub` in the NeuOscillations
+superproject.
 
 ## Verifying the build
 
