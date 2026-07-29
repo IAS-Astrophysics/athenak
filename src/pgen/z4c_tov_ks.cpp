@@ -340,11 +340,13 @@ inline void ConfigureCircularGeodesicOrbit(const tov::TOVStar &tov_star) {
   }
 }
 
-void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
+void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd,
+                        bool update_z4c_rhs) {
   if (force_minkowski_metric) {
     ResetToMinkowskiMetric(pm);
   }
-  if (excision_damp_rate <= 0.0 && !excision_project_state) {
+  if (!update_z4c_rhs && excision_damp_rate <= 0.0 &&
+      !excision_project_state) {
     return;
   }
 
@@ -425,7 +427,7 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
   // faces.  The radial geometry is centered on the Kerr-Schild black hole,
   // rises over a finite transition shell, and remains at full strength
   // between the shell and the outer boundary.
-  const bool osp_enabled = outer_sponge_enabled;
+  const bool osp_enabled = update_z4c_rhs && outer_sponge_enabled;
   const bool osp_radial = outer_sponge_radial;
   const Real osp_width = outer_sponge_width;
   const Real osp_rate = outer_sponge_rate;
@@ -475,39 +477,43 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
 
     Real ramp = InnerExcisionRamp(x, y, z, bh_spin_l, excision_freeze_radius_l,
                                   excision_ramp_radius_l);
-    if (ramp >= 1.0 && sigma_out <= 0.0 && isfinite(z4c_rhs(m,n,k,j,i)) &&
-        isfinite(z4c_u0(m,n,k,j,i)) && isfinite(z4c_u1(m,n,k,j,i))) {
+    if (ramp >= 1.0 && sigma_out <= 0.0 &&
+        (!update_z4c_rhs || isfinite(z4c_rhs(m,n,k,j,i))) &&
+        (!excision_project_state_l ||
+         (isfinite(z4c_u0(m,n,k,j,i)) && isfinite(z4c_u1(m,n,k,j,i))))) {
       return;
     }
-    if (sigma_out > 0.0) {
-      Real rhs_here = z4c_rhs(m,n,k,j,i);
-      Real u0_here = z4c_u0(m,n,k,j,i);
-      z4c_rhs(m,n,k,j,i) = (isfinite(rhs_here) && isfinite(u0_here)) ?
-                            rhs_here - sigma_out*u0_here : 0.0;
-    }
-    if (excision_damp_rate_l > 0.0) {
-      // Sponge layer: keep the full RHS -- crucially including the KO
-      // dissipation -- active through the transition annulus, and relax the
-      // residual toward zero (pure background) at a rate that rises smoothly
-      // from 0 at the ramp edge to excision_damp_rate at the freeze edge.
-      // Scaling the entire RHS by ramp (old scheme) suppressed KO near the
-      // freeze edge while FD stencils, which have no numerical causality,
-      // carried the undamped edge modes upstream past the all-ingoing
-      // radius: exterior constraints e-folded in ~1.2 M in the infall run.
-      // Explicit-RK stability of the relaxation needs sigma*dt <~ 2.5
-      // (sigma = 50, dt = 3.75e-3 -> 0.19, comfortable).
-      if (ramp <= 0.0) {
-        z4c_rhs(m,n,k,j,i) = 0.0;
-      } else {
-        Real sigma = excision_damp_rate_l*(1.0 - ramp);
-        Real rhs_full = z4c_rhs(m,n,k,j,i);
+    if (update_z4c_rhs) {
+      if (sigma_out > 0.0) {
+        Real rhs_here = z4c_rhs(m,n,k,j,i);
         Real u0_here = z4c_u0(m,n,k,j,i);
-        z4c_rhs(m,n,k,j,i) = (isfinite(rhs_full) && isfinite(u0_here)) ?
-                              rhs_full - sigma*u0_here : 0.0;
+        z4c_rhs(m,n,k,j,i) = (isfinite(rhs_here) && isfinite(u0_here)) ?
+                              rhs_here - sigma_out*u0_here : 0.0;
       }
-    } else {
-      z4c_rhs(m,n,k,j,i) = isfinite(z4c_rhs(m,n,k,j,i)) ?
-                            ramp*z4c_rhs(m,n,k,j,i) : 0.0;
+      if (excision_damp_rate_l > 0.0) {
+        // Sponge layer: keep the full RHS -- crucially including the KO
+        // dissipation -- active through the transition annulus, and relax the
+        // residual toward zero (pure background) at a rate that rises smoothly
+        // from 0 at the ramp edge to excision_damp_rate at the freeze edge.
+        // Scaling the entire RHS by ramp (old scheme) suppressed KO near the
+        // freeze edge while FD stencils, which have no numerical causality,
+        // carried the undamped edge modes upstream past the all-ingoing
+        // radius: exterior constraints e-folded in ~1.2 M in the infall run.
+        // Explicit-RK stability of the relaxation needs sigma*dt <~ 2.5
+        // (sigma = 50, dt = 3.75e-3 -> 0.19, comfortable).
+        if (ramp <= 0.0) {
+          z4c_rhs(m,n,k,j,i) = 0.0;
+        } else {
+          Real sigma = excision_damp_rate_l*(1.0 - ramp);
+          Real rhs_full = z4c_rhs(m,n,k,j,i);
+          Real u0_here = z4c_u0(m,n,k,j,i);
+          z4c_rhs(m,n,k,j,i) = (isfinite(rhs_full) && isfinite(u0_here)) ?
+                                rhs_full - sigma*u0_here : 0.0;
+        }
+      } else {
+        z4c_rhs(m,n,k,j,i) = isfinite(z4c_rhs(m,n,k,j,i)) ?
+                              ramp*z4c_rhs(m,n,k,j,i) : 0.0;
+      }
     }
     if (excision_project_state_l) {
       // Hard projection only in the deep freeze zone (ramp == 0), where all
@@ -524,8 +530,16 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
   });
 }
 
+void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
+  ApplyInnerExcision(pm, bdt, project_mhd, false);
+}
+
 void ApplyInnerExcision(Mesh *pm, Real bdt) {
-  ApplyInnerExcision(pm, bdt, true);
+  ApplyInnerExcision(pm, bdt, true, false);
+}
+
+void ApplyZ4cUserRHS(Mesh *pm) {
+  ApplyInnerExcision(pm, 0.0, false, true);
 }
 
 void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
@@ -2602,6 +2616,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   pmbp->pz4c->SetADMBackground = &SetADMBackgroundKerrSchild;
   pmbp->pz4c->SetZ4cBackground =
       use_direct_z4c_background ? &SetZ4cBackgroundKerrSchild : nullptr;
+  pmbp->pz4c->user_rhs_func = &ApplyZ4cUserRHS;
 
   if (restart) {
     pmbp->pz4c->UpdateBackgroundState(pmy_mesh_->time);

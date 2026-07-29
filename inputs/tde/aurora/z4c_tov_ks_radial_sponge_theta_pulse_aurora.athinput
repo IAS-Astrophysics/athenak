@@ -43,7 +43,7 @@ ndiag = 1
 
 <mhd>
 evolution = dynamic
-fixed = false
+fixed = true
 zero_tmunu_feedback = true
 eos = ideal
 dyn_eos = ideal

@@ -28,6 +28,7 @@ class Coordinates;
 class Driver;
 class CompactObjectTracker;
 class HorizonDump;
+class Mesh;
 
 namespace z4c {
 class Z4c_AMR;
@@ -134,8 +135,10 @@ class Z4c {
 
   using SetADMBackgroundFnPtr = void (*)(MeshBlockPack *pmbp, Real time);
   using SetZ4cBackgroundFnPtr = void (*)(MeshBlockPack *pmbp, Real time);
+  using UserRHSFnPtr = void (*)(Mesh *pm);
   SetADMBackgroundFnPtr SetADMBackground = nullptr;
   SetZ4cBackgroundFnPtr SetZ4cBackground = nullptr;
+  UserRHSFnPtr user_rhs_func = nullptr;
   bool use_analytic_background = false;
   bool evolve_gauge_residual = false;
   bool evolve_lapse_residual = false;
