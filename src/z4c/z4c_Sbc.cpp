@@ -258,12 +258,6 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
     });
   }
 
-  // Problem-specific lower-order sources must be applied after the boundary
-  // RHS has been set and immediately before the explicit RK update.
-  if (user_rhs_func != nullptr) {
-    user_rhs_func(pm);
-  }
-
   return TaskStatus::complete;
 }
 
