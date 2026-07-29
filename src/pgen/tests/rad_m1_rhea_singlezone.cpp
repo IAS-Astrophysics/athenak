@@ -78,11 +78,13 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   // -------------------------------------------------------------------------------------
-  // Preconditions. Rhea mixing requires dynamical-GR MHD (PackRheaInputs needs
-  // eos.GetEOSUnitSystem()) and flavor_mix = rhea specifically -- this pgen is only a
-  // meaningful test of the Rhea path, not a generic single-zone harness, so it fails
-  // loudly (matching rad_m1_singlezone.cpp's own style) rather than silently doing
-  // something else.
+  // Preconditions. Rhea mixing itself no longer needs dynamical-GR MHD (PackRheaInputs
+  // packs code-unit densities directly and has no EOS/unit-system query -- see
+  // radiation_m1_flavor_mix_rhea.cpp's file-level NOTE 2); this pgen still requires it
+  // for its OWN EOS dispatch below (GetBaryonMass(), GetPressure()), plus flavor_mix =
+  // rhea specifically -- this pgen is only a meaningful test of the Rhea path, not a
+  // generic single-zone harness, so it fails loudly (matching rad_m1_singlezone.cpp's
+  // own style) rather than silently doing something else.
   // -------------------------------------------------------------------------------------
   if (pmbp->pdyngr == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl

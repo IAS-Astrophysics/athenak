@@ -146,8 +146,7 @@ class RadiationM1 {
   TaskStatus ApplyRheaMixing(Driver* pdrive, int stage,
                               const DvceArray4D<const float>& rhea_f4_out,
                               const DvceArray1D<const float>& rhea_growthrate,
-                              const DvceArray1D<const float>& rhea_stability,
-                              Real unit_num_dens);
+                              const DvceArray1D<const float>& rhea_stability);
 #endif
   TaskStatus RestrictU(Driver* d, int stage);
   TaskStatus SendU(Driver* d, int stage);
@@ -167,13 +166,6 @@ class RadiationM1 {
   TaskStatus CalcOpacityPhotons_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
-#if ENABLE_TORCH
-  // Needs eos.GetEOSUnitSystem(), hence EOS-templated like CalcOpacityNurates_;
-  // dispatched to from the non-templated PackRheaInputs above via the same
-  // dynamic_cast(pmy_pack->pdyngr) pattern as RadiationM1::CalcOpacityNurates.
-  template <class EOSPolicy, class ErrorPolicy>
-  TaskStatus PackRheaInputs_(Driver* pdrive, int stage);
-#endif
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack

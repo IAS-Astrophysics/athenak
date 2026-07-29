@@ -106,12 +106,11 @@ Y_e  = 0.1       # electron fraction
 # stays exactly 0 for all time (Y applied to zero flux is zero), keeping RestrictToPhysical's
 # boost correction exactly evaluable by hand.
 #
-# Magnitude note: eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS())
-# (unit_num_dens, PackRheaInputs_) measured ~1e39 for this DD2 table/code-unit system, and
-# Rhea's F4_in is float32 (max ~3.4e38) -- an O(1) code-unit N (tried first) overflows to
-# `inf` in the packed tensor. Scaled down by 1e-7 here so N*unit_num_dens ~ 1e32 cm^-3,
-# comfortably inside float32 range and in the ballpark of typical neutrino number densities
-# (~1e32-1e33 cm^-3).
+# Magnitude note: these values (~1e-7 code units, i.e. ~1e32 cm^-3 -- code-unit number
+# densities are packed straight into Rhea's F4_in with no eos_units -> cgs conversion,
+# see radiation_m1_flavor_mix_rhea.cpp's file-level NOTE 2) are not scaled down for
+# float32 range -- that concern no longer applies -- but chosen as a physically
+# realistic neutrino number density (~1e32-1e33 cm^-3, matching typical values).
 rad_N0 = 4.0e-7   # nu_e
 rad_N1 = 3.0e-7   # nu_ebar
 rad_N2 = 1.0e-7   # nu_x

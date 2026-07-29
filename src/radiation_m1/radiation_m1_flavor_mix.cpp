@@ -33,7 +33,6 @@
 //!                     [g/cm^3 if <units> block present; code density otherwise]
 
 #include <algorithm>
-#include <iostream>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -49,29 +48,9 @@
 #if ENABLE_TORCH
 #include <type_traits>
 #include <utility>
-
-#include "dyn_grmhd/dyn_grmhd.hpp"
-#include "eos/primitive-solver/unit_system.hpp"
 #endif
 
 namespace radiationm1 {
-
-#if ENABLE_TORCH
-namespace {
-//! \fn Real RheaUnitNumDens
-//! \brief eos_units -> cgs number-density conversion factor, computed the same way
-//! PackRheaInputs_ computes it for the forward (pack) conversion -- needed here too since
-//! ApplyRheaMixing takes it as an explicit parameter rather than computing it itself (see
-//! radiation_m1_flavor_mix_rhea.cpp's file-level NOTE 2).
-template <class EOSPolicy, class ErrorPolicy>
-Real RheaUnitNumDens(MeshBlockPack *pmy_pack) {
-  Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
-      static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
-          ->eos.ps.GetEOSMutable();
-  return eos.GetEOSUnitSystem().NumberDensityConversion(Primitive::MakeCGS());
-}
-}  // namespace
-#endif
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::FlavorMix
@@ -91,42 +70,13 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
   // invocation, precedented by CalculateFluxes's sequential par_for calls in one task
   // body (radiation_m1_fluxes.cpp).
   if (params.flavor_mix_type == FlavMixRhea) {
-    // Same dynamic_cast-dispatch pattern as
-    // RadiationM1::CalcOpacityNurates/PackRheaInputs
-    // (radiation_m1_calc_opacities_nurates.cpp:18-46). NOTE: PackRheaInputs below
-    // performs this same dispatch internally (PackRheaInputs_ computes its own
-    // unit_num_dens rather than taking it as a parameter), so this is a second, harmless
-    // dispatch of the same cheap host-side scalar computation, not a duplicated device
-    // kernel.
-    Real unit_num_dens;
-    auto *ptest_nqt =
-        dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                       Primitive::ResetFloor> *>(pmy_pack->pdyngr);
-    if (ptest_nqt != nullptr) {
-      unit_num_dens = RheaUnitNumDens<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                      Primitive::ResetFloor>(pmy_pack);
-    } else {
-      auto *ptest_nlog = dynamic_cast<dyngr::DynGRMHDPS<
-          Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
-          pmy_pack->pdyngr);
-      if (ptest_nlog != nullptr) {
-        unit_num_dens = RheaUnitNumDens<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                                        Primitive::ResetFloor>(pmy_pack);
-      } else {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl;
-        std::cout << "Unsupported EOS type!\n";
-        abort();
-      }
-    }
-
     TaskStatus tstat = PackRheaInputs(pdrive, stage);
     if (tstat != TaskStatus::complete) return tstat;
 
     // rhea_f4_in_scratch is allocated at rank CAPACITY (nmb =
     // std::max(nmb_thispack, nmb_maxperrank), radiation_m1.cpp) so AMR regrids never
     // require reallocation, which can exceed the LIVE nmb_thispack for this call (e.g.
-    // right after an AMR regrid shrinks the block count on this rank). PackRheaInputs_
+    // right after an AMR regrid shrinks the block count on this rank). PackRheaInputs
     // only fills the leading n_active rows (its
     // par_for ranges m over 0..nmb_thispack-1, and RheaBatchIndex's m-major ordering
     // means those are exactly rows [0, n_active) of the scratch buffer's leading index)
@@ -168,7 +118,7 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     // of scope before ApplyRheaMixing runs.
     RheaModel::Prediction pred = prhea->Predict(f4_in_active);
     TaskStatus astat = ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate,
-                                       pred.stability, unit_num_dens);
+                                       pred.stability);
     // Defensive device fence before `pred` (which owns the Torch output buffers the
     // unpack kernel reads) is destroyed at end of scope. ApplyRheaMixing only ENQUEUES
     // its par_for on DevExeSpace(), so on a device backend pred's destructor could
