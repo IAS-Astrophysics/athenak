@@ -900,6 +900,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     BondiAccretion(pin, is_restart);
   } else if (pgen_fun_name.compare("cshock") == 0) {
     CShock(pin, is_restart);
+  } else if (pgen_fun_name.compare("diffusion") == 0) {
+    Diffusion(pin, is_restart);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("implode") == 0) {
@@ -922,12 +924,15 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
-  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
-    SphericalCollapse(pin, is_restart);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, is_restart);
-  // else, name not set on command line or input file, print warning and quit
+
+  // pre-defined unit tests
+  } else if (pgen_fun_name.compare("eos_compose") == 0) {
+    EOSCompose(pin, is_restart);
+  } else if (pgen_fun_name.compare("gauss_legendre") == 0) {
+    GaussLegendre(pin, is_restart);
+
   } else {
+    // name not set on command line or input file, print warning and quit
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
         << std::endl

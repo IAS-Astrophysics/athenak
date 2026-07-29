@@ -34,7 +34,6 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
-option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -122,7 +121,7 @@ endif()
 if (ENABLE_OPENMP)
   target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
 endif()
-if (${PROBLEM} STREQUAL "z4c_two_puncture")
+if (${PROBLEM} MATCHES "z4c/two_punctures/*")
 	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
 	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)
 	#target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/gsl/include)
@@ -135,7 +134,7 @@ else()
 	set(TWO_PUNCTURES 0)
 endif()
 
-if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
+if (${PROBLEM} MATCHES "z4c/spectre/*")
   # Load binary black hole initial data from the SpECTRE code:
   # https://spectre-code.org
   #
@@ -161,7 +160,7 @@ if (${PROBLEM} STREQUAL "z4c_spectre_bbh")
   target_link_libraries(athena PRIVATE spectre::Exporter)
 endif()
 
-if (${PROBLEM} STREQUAL "elliptica")
+if (${PROBLEM} MATCHES "dyn_grmhd/elliptica/*")
   target_include_directories(athena PRIVATE
       ${CMAKE_SOURCE_DIR}/Elliptica_ID_Reader/include)
   target_link_libraries(athena PUBLIC
@@ -173,7 +172,7 @@ if (${PROBLEM} STREQUAL "elliptica")
   endif()
 endif()
 
-if (Athena_ENABLE_RNS)
+if (${PROBLEM} MATCHES "dyn_grmhd/rns/*")
   # Support for RNS library for rotating neutron stars. See
   # https://github.com/computationalrelativity/RNSC
   target_include_directories(athena PRIVATE
@@ -182,12 +181,12 @@ if (Athena_ENABLE_RNS)
       ${CMAKE_SOURCE_DIR}/rnsc/lib/libRNS.a)
 endif()
 
-if (${PROBLEM} STREQUAL "sgrid_bns")
+if (${PROBLEM} MATCHES "dyn_grmhd/sgrid/*")
   target_link_libraries(athena PUBLIC
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
 endif()
 
-if (${PROBLEM} STREQUAL "kadath_bns")
+if (${PROBLEM} MATCHES "dyn_grmhd/kadath/*")
   # Kadath (FUKa) BNS initial data reader.
   # Expects Kadath to be linked at ${CMAKE_SOURCE_DIR}/kadath
   # with libkadath.a in its lib/ directory.
@@ -221,7 +220,7 @@ if (${PROBLEM} STREQUAL "kadath_bns")
   endif()
 endif()
 
-if (${PROBLEM} STREQUAL "lorene_bns")
+if (${PROBLEM} MATCHES "dyn_grmhd/lorene/*")
   # FIXME(user): The way the Fortran libraries here are linked is not great. Because these
   # are implicit libraries, we shouldn't have to add them manually, but at least on some
   # machines this seems to be necessary. We should find out if there's a better way to
