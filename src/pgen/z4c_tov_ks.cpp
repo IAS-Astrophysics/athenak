@@ -529,7 +529,7 @@ void ApplyInnerExcision(Mesh *pm, Real bdt) {
 }
 
 void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = metric_diag_history ? 23 : 2;
+  pdata->nhist = metric_diag_history ? 20 : 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
   if (metric_diag_history) {
@@ -548,12 +548,15 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     pdata->label[14] = "src-full";
     pdata->label[15] = "src-bg";
     pdata->label[16] = "src-res";
-    pdata->label[17] = "src-adapt";
-    pdata->label[18] = "aK-bg";
-    pdata->label[19] = "Khat-res";
-    pdata->label[20] = "res-inner";
-    pdata->label[21] = "res-ramp";
-    pdata->label[22] = "res-outer";
+    if (outer_sponge_radial) {
+      pdata->label[17] = "res-inner";
+      pdata->label[18] = "res-ramp";
+      pdata->label[19] = "res-outer";
+    } else {
+      pdata->label[17] = "src-adapt";
+      pdata->label[18] = "aK-bg";
+      pdata->label[19] = "Khat-res";
+    }
   }
 
   auto &w0 = pm->pmb_pack->pmhd->w0;
@@ -917,12 +920,15 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     pdata->hdata[14] = lapse_src_full_abs_max;
     pdata->hdata[15] = lapse_src_bg_abs_max;
     pdata->hdata[16] = lapse_src_res_abs_max;
-    pdata->hdata[17] = lapse_src_adapt_abs_max;
-    pdata->hdata[18] = alpha_k_bg_abs_max;
-    pdata->hdata[19] = khat_res_abs_max;
-    pdata->hdata[20] = residual_inner_abs_max;
-    pdata->hdata[21] = residual_ramp_abs_max;
-    pdata->hdata[22] = residual_outer_abs_max;
+    if (outer_sponge_radial) {
+      pdata->hdata[17] = residual_inner_abs_max;
+      pdata->hdata[18] = residual_ramp_abs_max;
+      pdata->hdata[19] = residual_outer_abs_max;
+    } else {
+      pdata->hdata[17] = lapse_src_adapt_abs_max;
+      pdata->hdata[18] = alpha_k_bg_abs_max;
+      pdata->hdata[19] = khat_res_abs_max;
+    }
   }
 }
 
