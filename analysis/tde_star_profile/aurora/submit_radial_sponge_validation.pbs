@@ -37,6 +37,14 @@ export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 CPU_BIND="${CPU_BIND:-list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100}"
 NNODES="$(wc -l < "${PBS_NODEFILE}")"
 NTOTRANKS="$((NNODES * RANKS_PER_NODE))"
+LAUNCH_RANKS="${NTOTRANKS}"
+LAUNCH_PPN="${RANKS_PER_NODE}"
+if [[ "${MESH_ONLY}" == "1" ]]; then
+  # Mesh construction is global and writes one mesh_structure.dat.  Launching
+  # -m on every GPU rank makes those ranks race on the same output file.
+  LAUNCH_RANKS=1
+  LAUNCH_PPN=1
+fi
 RUN_DIR="${RUN_ROOT}/${CASE_NAME}"
 
 if [[ -e "${RUN_DIR}" ]]; then
@@ -55,7 +63,7 @@ cp "${INPUT_DECK}" "${RUN_DIR}/"
   echo "athena_sha256=$(sha256sum "${ATHENA_EXE}" | awk '{print $1}')"
   echo "nodes=${NNODES}"
   echo "ranks_per_node=${RANKS_PER_NODE}"
-  echo "total_ranks=${NTOTRANKS}"
+  echo "total_ranks=${LAUNCH_RANKS}"
   echo "sycl_device_filter=${SYCL_DEVICE_FILTER}"
   echo "oneapi_device_selector=${ONEAPI_DEVICE_SELECTOR}"
 } > "${RUN_DIR}/run_metadata.txt"
@@ -68,7 +76,7 @@ if [[ "${MESH_ONLY}" == "1" ]]; then
 fi
 
 cd "${RUN_DIR}"
-mpiexec -n "${NTOTRANKS}" -ppn "${RANKS_PER_NODE}" --cpu-bind "${CPU_BIND}" \
+mpiexec -n "${LAUNCH_RANKS}" -ppn "${LAUNCH_PPN}" --cpu-bind "${CPU_BIND}" \
   gpu_tile_compact.sh "${ATHENA_EXE}" \
   -i "${INPUT_DECK}" -d "${RUN_DIR}" -t "${ATHENA_WALLTIME}" \
   "${ATHENA_MODE_ARGV[@]}" "${ATHENA_EXTRA_ARGV[@]}" |
