@@ -14,7 +14,17 @@
 //! and a *fixed* matter background (matter at rest, v=0, flat conformally-flat metric,
 //! matter/GR sources for M1 turned off) so that homogeneity + periodicity make the MHD
 //! and M1 flux-divergence terms vanish identically, leaving `flavor_mix = rhea`'s BGK
-//! relaxation as the only thing that can change u0 from one cycle to the next.
+//! relaxation as the only thing that can change u0 from one cycle to the next. Note the
+//! flux-divergence cancellation follows from spatial uniformity alone and so holds for
+//! any initial flux, not only F = 0 (identical states on both sides of every interface).
+//!
+//! Per-species initial fluxes are set by the optional `rad_ff<s>{x,y,z}` flux factors
+//! (F_s = rad_ff_s * E_s), defaulting to 0. A REAL trained Rhea model needs them nonzero:
+//! an exactly isotropic state has no ELN angular crossing, so Rhea reports every cell
+//! stable and the mixing path is an exact no-op (and checkpoints whose baked-in Box3D
+//! layer predates Rhea's `nan_to_num` guard divide by |F| = 0 and raise outright). Toy
+//! models from scripts/make_toy_rhea_model.py do not care and are exercised at the F = 0
+//! default.
 //!
 //! `integrator = rk1` (forward Euler, one explicit stage per cycle) is used deliberately,
 //! so that "successive RK stages" and "successive cycles" (the unit AthenaK's tab-file
@@ -154,13 +164,20 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   // ReconstructMixingMatrix/ApplyRheaMixing, radiation_m1_rhea_kernels.hpp): 0=nu_e,
   // 1=nu_ebar, 2=nu_x, 3=nu_xbar. N/E are deliberately distinct *within* each sector
   // {0,2} and {1,3} so the mixing-matrix reconstruction's degenerate (|N_e-N_x| ~ 0 ->
-  // p=1 identity) branch is never hit at t=0; F = 0 for all species (isotropic) --
-  // combined with the homogeneous/periodic setup, this stays exactly 0 for all time (Y
-  // applied to an all-zero flux vector is exactly zero, regardless of Y), which is both
-  // physically the simplest case and what keeps RestrictToPhysical's boost correction
-  // exactly evaluable by hand.
+  // p=1 identity) branch is never hit at t=0.
+  //
+  // Fluxes are specified as per-species flux factors rad_ff<s>{x,y,z} (F_s = ff_s * E_s,
+  // default 0), which is also exactly the flux factor of the lab-frame number 4-current
+  // PackRheaInputs hands to Rhea: at v = 0 the fluid and Eulerian frames coincide, so
+  // Gamma_s = 1, J_s = E_s and H_d = F_d exactly, and N_mu = n_s*(u_mu + H_mu/J) projects
+  // onto the Eulerian tetrad as (n_s*ff_s, n_s). Keep |ff_s| < 1 for a causal state
+  // (apply_floor would otherwise clamp it). Unlike N and E, the fluxes are NOT invariant
+  // under the mixing update in any exactly-hand-evaluable way once nonzero: Y mixes them
+  // within each sector like everything else, and RestrictToPhysical's boost correction
+  // then depends on the predicted 4-currents. F = 0 (the default) is the degenerate case
+  // where the flux stays exactly 0 for all time regardless of Y.
   // -------------------------------------------------------------------------------------
-  Real N_init[4], E_init[4];
+  Real N_init[4], E_init[4], F_init[4][3];
   N_init[0] = pin->GetReal("problem", "rad_N0");
   N_init[1] = pin->GetReal("problem", "rad_N1");
   N_init[2] = pin->GetReal("problem", "rad_N2");
@@ -169,9 +186,27 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
   E_init[1] = pin->GetReal("problem", "rad_E1");
   E_init[2] = pin->GetReal("problem", "rad_E2");
   E_init[3] = pin->GetReal("problem", "rad_E3");
+  F_init[0][0] = pin->GetOrAddReal("problem", "rad_ff0x", 0.0) * E_init[0];
+  F_init[0][1] = pin->GetOrAddReal("problem", "rad_ff0y", 0.0) * E_init[0];
+  F_init[0][2] = pin->GetOrAddReal("problem", "rad_ff0z", 0.0) * E_init[0];
+  F_init[1][0] = pin->GetOrAddReal("problem", "rad_ff1x", 0.0) * E_init[1];
+  F_init[1][1] = pin->GetOrAddReal("problem", "rad_ff1y", 0.0) * E_init[1];
+  F_init[1][2] = pin->GetOrAddReal("problem", "rad_ff1z", 0.0) * E_init[1];
+  F_init[2][0] = pin->GetOrAddReal("problem", "rad_ff2x", 0.0) * E_init[2];
+  F_init[2][1] = pin->GetOrAddReal("problem", "rad_ff2y", 0.0) * E_init[2];
+  F_init[2][2] = pin->GetOrAddReal("problem", "rad_ff2z", 0.0) * E_init[2];
+  F_init[3][0] = pin->GetOrAddReal("problem", "rad_ff3x", 0.0) * E_init[3];
+  F_init[3][1] = pin->GetOrAddReal("problem", "rad_ff3y", 0.0) * E_init[3];
+  F_init[3][2] = pin->GetOrAddReal("problem", "rad_ff3z", 0.0) * E_init[3];
 
   Real N0 = N_init[0], N1 = N_init[1], N2 = N_init[2], N3 = N_init[3];
   Real E0 = E_init[0], E1 = E_init[1], E2 = E_init[2], E3 = E_init[3];
+  // Copied out to scalars for the same reason N0-N3/E0-E3 above are: a C array cannot be
+  // captured by value in the device lambda below.
+  Real Fx0 = F_init[0][0], Fy0 = F_init[0][1], Fz0 = F_init[0][2];
+  Real Fx1 = F_init[1][0], Fy1 = F_init[1][1], Fz1 = F_init[1][2];
+  Real Fx2 = F_init[2][0], Fy2 = F_init[2][1], Fz2 = F_init[2][2];
+  Real Fx3 = F_init[3][0], Fy3 = F_init[3][1], Fz3 = F_init[3][2];
 
   // initialize ADM variables: flat conformally-flat metric, matching
   // rad_m1_singlezone.cpp.
@@ -204,17 +239,20 @@ void ProblemGenerator::RadiationM1RheaSingleZoneTest_(ParameterInput *pin,
 
         Real N_local[4] = {N0, N1, N2, N3};
         Real E_local[4] = {E0, E1, E2, E3};
+        Real Fx_local[4] = {Fx0, Fx1, Fx2, Fx3};
+        Real Fy_local[4] = {Fy0, Fy1, Fy2, Fy3};
+        Real Fz_local[4] = {Fz0, Fz1, Fz2, Fz3};
         for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
           uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, m1_nvars_), k, j, i) =
               E_local[nuidx];
           uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, m1_nvars_), k, j, i) =
               N_local[nuidx];
           uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FX_IDX, m1_nvars_), k, j, i) =
-              0.0;
+              Fx_local[nuidx];
           uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FY_IDX, m1_nvars_), k, j, i) =
-              0.0;
+              Fy_local[nuidx];
           uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_FZ_IDX, m1_nvars_), k, j, i) =
-              0.0;
+              Fz_local[nuidx];
         }
       });
 

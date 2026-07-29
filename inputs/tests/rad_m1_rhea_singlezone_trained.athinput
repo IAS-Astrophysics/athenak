@@ -1,0 +1,193 @@
+<comment>
+problem = Rhea flavor-mix single-zone test driven by a REAL trained Rhea checkpoint (as
+          opposed to rad_m1_rhea_singlezone.athinput, which drives the same pgen with the
+          toy models from scripts/make_toy_rhea_model.py). Same pgen
+          (rad_m1_rhea_singlezone.cpp): homogeneous periodic zone, matter at rest, no
+          opacities, no matter/GR source coupling, so flavor_mix = rhea's BGK relaxation is
+          the only thing that evolves u0.
+
+          Measures: do the four species' number densities relax to the asymptotic state the
+          model predicts from the initial data?
+
+          Initial data is Rhea's own NSM1 test point (Rhea/model_training/
+          example_use_model.py:37-52) converted to code units (1e-39 x cgs, i.e.
+          GeometricSolar number densities in fm^-3), so the model's prediction for it can be
+          checked against the published Emu reference in that file. Expected model output
+          for the initial data below, per species [nu_e, nu_ebar, nu_x, nu_xbar]:
+
+              N_target    = [1.00752e-6, 1.49649e-6, 1.39698e-6, 1.40101e-6]
+              growthrate  = 2.662e-7 (code number density)
+                          -> gamma_code = 2.52e5 / code_time
+              stability   = 0 (unstable)
+
+          Sector sums N_e + N_x = 2.4045e-6 and N_ebar + N_xbar = 2.8975e-6 are conserved
+          exactly (Y is column-stochastic), and Rhea's own flavor-trace correction is what
+          makes the reconstructed mixing matrix reproduce the model's prediction rather than
+          merely approximate it.
+
+          RATE NOTE: at the physical growth rate, dt * alpha * gamma_code = 2.5e4 with this
+          input's dt = cfl_number * dx = 0.1, i.e. lambda_0 = exp(-2.5e4) = 0 exactly: the
+          relaxation completes in a single cycle. To resolve it, override cfl_number on the
+          command line (dt = cfl_number here, since dx = 1):
+
+              athena -i rad_m1_rhea_singlezone_trained.athinput time/cfl_number=1e-5
+
+          Beware that a resolved relaxation does NOT converge to N_target: mixing erases the
+          ELN crossing, so gamma decays as the state mixes and the relaxation self-limits
+          short of the asymptotic prediction. That is the model's own saturation behaviour,
+          not a numerical artifact.
+
+          Requires two files that are not part of the repo, both referenced below by
+          absolute path (edit if your paths differ):
+            - the trained checkpoint, rhea_model_path
+            - a CompOSE EOS table, <mhd> table
+          Note the checkpoint is CUDA-serialized; loading it in a CPU build relies on
+          RheaModuleCache passing the resolved device to torch::jit::load
+          (src/radiation_m1/radiation_m1_rhea.cpp).
+
+<job>
+basename = rhea_singlezone_trained  # name of run
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+# rk1 (forward Euler) is deliberate: with exactly one explicit stage per cycle, "successive
+# RK stages" and "successive cycles" coincide, so the standard per-cycle tab output records
+# the relaxation at exactly the granularity at which it is applied.
+integrator = rk1
+cfl_number = 0.1     # dt = cfl_number * dx = cfl_number here (dx = 1). Homogeneous
+                     # background -> no real stability constraint from hydro; this is the
+                     # knob that sets dt * gamma_code (see RATE NOTE above).
+nlim       = 60      # the relaxation is complete long before this at the physical rate
+tlim       = 40.0    # generous; nlim terminates the run
+
+<mesh>
+nghost = 2         # Number of ghost cells
+nx1    = 4         # Number of zones in X1-direction
+x1min  = -2.0      # minimum value of X1
+x1max  = 2.0       # maximum value of X1
+ix1_bc = periodic  # inner-X1 boundary flag
+ox1_bc = periodic  # outer-X1 boundary flag
+
+nx2    = 1         # Number of zones in X2-direction
+x2min  = -0.5      # minimum value of X2
+x2max  = 0.5       # maximum value of X2
+ix2_bc = periodic  # inner-X2 boundary flag
+ox2_bc = periodic  # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = -0.5      # minimum value of X3
+x3max  = 0.5       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 4          # Number of cells in each MeshBlock, X1-dir
+nx2       = 1            # Number of cells in each MeshBlock, X2-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+
+<adm>
+# This needs to be here
+
+<mhd>
+eos         = ideal     # EOS type
+gamma       = 2.0       # ratio of specific heats Gamma
+
+nscalars    = 1
+dyn_eos     = compose     # EOS type
+table       = /var/home/dradice/Projects/NeuOscillations/data/eos/DD2/DD2.athtab
+dyn_error   = reset_floor # error policy
+reconstruct = dc      # spatial reconstruction method (exact zero-flux at homogeneous
+                       # interfaces, matching rad_m1_singlezone.cpp's own choice)
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.0e-16   # floor on density rho
+dthreshold  = 1.02      # Threshold for flooring
+dyn_scratch = 1
+fofc        = false
+enforce_maximum = false
+
+<coord>
+general_rel = true      # general relativity
+m           = 0.0
+a           = 0.0
+excise      = false
+
+<radiation_m1>
+closure_fun = eddington
+src_update = implicit
+opacity_type = none    # deliberately no bns-nurates/photon opacities: isolate the
+                        # flavor-mixing source term as the *only* driver of evolution,
+                        # matching matter_sources=false below
+
+gr_sources = false      # isolate flavor-mix: no other M1<->matter/GR source coupling
+matter_sources = false
+backreact = false
+
+theta_limiter = false # default: false
+
+flavor_mix = rhea
+rhea_model_path = /var/home/dradice/Projects/NeuOscillations/data/model_exp21_8x0e_4x10_2x2e_quadratic.pt
+rhea_stability_threshold = 0.5
+rhea_tau_0_factor = 1.0   # physical rate; see RATE NOTE above
+rhea_tau_1_factor = 1.0
+rhea_mem_fraction = 0.05
+
+<problem>
+pgen_name = rad_m1_rhea_singlezonetest
+rho  = 1.619e-5  # initial density [code] (matter background, fixed by homogeneity+periodicity)
+temp = 50.0      # initial temperature [code, MeV]
+Y_e  = 0.1       # electron fraction
+# v = 0 (matter at rest) is hard-coded in the pgen -- required for the fluid frame to
+# coincide with the Eulerian frame exactly, which is what makes the flux factors below the
+# flux factors of the number 4-current Rhea actually receives.
+
+# Initial M1 state: Rhea's NSM1 point in code units. Species index convention
+# 0=nu_e, 1=nu_ebar, 2=nu_x, 3=nu_xbar. The heavy species carry the SUM of Rhea's mu and tau
+# slots (PackRheaInputs splits them back into equal halves via flv_fac), so
+# rad_N2 = rad_N3 = 2 * 4.9125e-7 here, matching NSM1's 19.65e32/4 per flavor.
+rad_N0 = 1.422e-6    # nu_e
+rad_N1 = 1.915e-6    # nu_ebar
+rad_N2 = 9.825e-7    # nu_x    (= nu_mu + nu_tau)
+rad_N3 = 9.825e-7    # nu_xbar (= nu_mubar + nu_taubar)
+# E is numerically set equal to N. Only the ratio F/E reaches Rhea (as the number-current
+# flux factor), so E's absolute scale is immaterial to the mixing prediction; it is still
+# evolved by the same BGK relaxation (lambda_1) and dumped for cross-checking.
+rad_E0 = 1.422e-6
+rad_E1 = 1.915e-6
+rad_E2 = 9.825e-7
+rad_E3 = 9.825e-7
+# Flux factors F/E, i.e. NSM1's per-species flux factors. |ff| = 0.172 (nu_e), 0.354
+# (nu_ebar), 0.542 (heavies): all < 1, so the state is causal and apply_floor never clamps.
+# These MUST be nonzero: an exactly isotropic state has no ELN angular crossing, so Rhea
+# reports it stable and the mixing path is an exact no-op -- and this checkpoint's Box3D
+# layer divides by |F| without a nan guard, so F = 0 raises inside predict_all.
+rad_ff0x =  0.0974
+rad_ff0y =  0.0421
+rad_ff0z = -0.1343
+rad_ff1x =  0.0723
+rad_ff1y =  0.0313
+rad_ff1z = -0.3446
+rad_ff2x = -0.0216
+rad_ff2y =  0.0743
+rad_ff2z = -0.5354
+rad_ff3x = -0.0216
+rad_ff3y =  0.0743
+rad_ff3z = -0.5354
+
+<output1>
+file_type   = tab        # output format
+variable    = rad_m1_N    # choice of variables to output
+dcycle      = 1
+data_format = %24.17e    # full double precision -- needed to resolve the float32-level
+                         # agreement with the model's own prediction
+
+<output2>
+file_type   = tab        # output format
+variable    = rad_m1_E    # choice of variables to output
+dcycle      = 1
+data_format = %24.17e
+
+<output3>
+file_type   = tab        # output format
+variable    = rad_m1_F    # choice of variables to output
+dcycle      = 1
+data_format = %24.17e
