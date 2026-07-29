@@ -44,7 +44,9 @@ nx3 = 64
 refinement = adaptive
 num_levels = 14
 refinement_interval = 2
-max_nmb_per_rank = 320
+# 1184 startup MeshBlocks / 384 ranks on 32 Aurora nodes = 3.08/rank.
+# Keep >5x startup headroom for adaptive motion while avoiding over-allocation.
+max_nmb_per_rank = 16
 
 <amr_criterion0>
 method = user
