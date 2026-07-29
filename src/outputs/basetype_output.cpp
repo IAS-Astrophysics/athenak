@@ -23,6 +23,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "rhine/rhine.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
@@ -166,6 +167,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==153) && (pm->pmb_pack->prhine == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of rhine_aux requested in <output> block '"
+       << out_params.block_name << "' but RHINE object not constructed."
+       << std::endl << "Input file is likely missing a <rhine> block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -434,6 +442,24 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         vname.append(number);
         outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
       }
+    }
+
+    // RHINE / transition-EOS diagnostics
+    if (variable.compare("rhine_aux") == 0) {
+      auto *aux = &(pm->pmb_pack->prhine->aux);
+      outvars.emplace_back("rhine_heating_rate", rhine::A_HEAT, aux);
+      outvars.emplace_back("rhine_transition_w", rhine::A_TRANS, aux);
+      outvars.emplace_back("rhine_X_err",        rhine::A_XERR, aux);
+      outvars.emplace_back("rhine_fnu",          rhine::A_FNU,  aux);
+      outvars.emplace_back("rhine_qdot_code",    rhine::A_QDOT, aux);
+      outvars.emplace_back("rhine_fnu_lum",      rhine::A_LNU,  aux);
+      outvars.emplace_back("rhine_dye",          rhine::A_DYE,  aux);
+      outvars.emplace_back("rhine_dyn",          rhine::A_DYN,  aux);
+      outvars.emplace_back("rhine_dyp",          rhine::A_DYP,  aux);
+      outvars.emplace_back("rhine_dya",          rhine::A_DYA,  aux);
+      outvars.emplace_back("rhine_dyh",          rhine::A_DYH,  aux);
+      outvars.emplace_back("rhine_dah",          rhine::A_DAH,  aux);
+      outvars.emplace_back("rhine_dma",          rhine::A_DMA,  aux);
     }
 
     // mhd cell-centered magnetic fields

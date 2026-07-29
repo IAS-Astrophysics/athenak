@@ -329,6 +329,20 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
 
  public:
   //--------------------------------------------------------------------------
+  // Public wrappers so external drivers (e.g. RHINE) can query the blend
+  // weight and sanitize a composition without touching the EOS internals.
+  //--------------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION Real GetTransitionFactor(Real n, Real T) const {
+    return TransitionFactor(n, T);
+  }
+  KOKKOS_INLINE_FUNCTION Real GetSanitizedMassFractions(const Real *Y,
+                                                        Real *Y_norm) const {
+    return SanitizeMassFractions(Y, Y_norm);
+  }
+  //! Raw baryon mass in EOS (nuclear, MeV) units, for per-baryon energetics.
+  KOKKOS_INLINE_FUNCTION Real GetBaryonMassMeV() const { return mb; }
+
+  //--------------------------------------------------------------------------
   // Composition accessors (NSE composition where w==1, advected otherwise).
   //--------------------------------------------------------------------------
   KOKKOS_INLINE_FUNCTION Real FrYn(Real n, Real T, Real *Y) const {

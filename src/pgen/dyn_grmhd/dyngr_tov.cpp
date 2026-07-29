@@ -185,6 +185,17 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     if (use_ye && nscal >= 1) {
       w0_(m,nvars,k,j,i) = ye;
     }
+    // Transition-EOS composition seed (Ye, Xn, Xp, Xa, Xh, Ah, E_B): free
+    // nucleons consistent with Ye; the RHINE NSE resync sets the true table
+    // composition in the dense interior on the first step.
+    if (nscal >= 7) {
+      w0_(m,nvars+1,k,j,i) = 1.0 - ye;  // Xn
+      w0_(m,nvars+2,k,j,i) = ye;        // Xp
+      w0_(m,nvars+3,k,j,i) = 0.0;       // Xa
+      w0_(m,nvars+4,k,j,i) = 0.0;       // Xh
+      w0_(m,nvars+5,k,j,i) = 1.0;       // Ah
+      w0_(m,nvars+6,k,j,i) = 0.0;       // E_B
+    }
 
     // Set ADM variables
     adm.alpha(m,k,j,i) = alp;
@@ -424,6 +435,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
     } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
       SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_transition) {
+      SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
     } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
       SolveTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
     }
@@ -436,6 +449,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
     SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+    SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_transition) {
     SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
     SetupTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
