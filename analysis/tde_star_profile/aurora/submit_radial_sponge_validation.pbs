@@ -20,6 +20,7 @@ RUN_ROOT="${RUN_ROOT:-${PROJECT_ROOT}/runs/radial_sponge}"
 RANKS_PER_NODE="${RANKS_PER_NODE:-12}"
 ATHENA_WALLTIME="${ATHENA_WALLTIME:-00:50:00}"
 MESH_ONLY="${MESH_ONLY:-0}"
+ATHENA_EXTRA_ARGS="${ATHENA_EXTRA_ARGS:-}"
 
 if type module >/dev/null 2>&1; then
   module reset >/dev/null 2>&1 || true
