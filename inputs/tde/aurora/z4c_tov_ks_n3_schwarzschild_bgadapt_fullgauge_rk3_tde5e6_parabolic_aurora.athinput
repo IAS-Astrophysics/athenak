@@ -8,27 +8,30 @@
 # geodesic with pericenter r_p=r_t at r0:
 #   v_r = -0.1698143307, v_phi = +0.1823077341.
 # Coordinate-time estimate r0 -> r_t is 142.36458, so tlim=284.72916.
+# The outer boundary is causally disconnected from the stellar region over
+# this interval. Residual Z4c fields are absorbed in a radial layer beginning
+# at r=512 with a 128 M smooth transition and a 16 M damping timescale.
 
 <job>
 basename = z4c_tov_ks_n3_schwarzschild_bgadapt_fullgauge_rk3_tde5e6_parabolic_aurora
 
 <mesh>
 nghost = 4
-nx1 = 320
-x1min = -101.4
-x1max = 101.4
+nx1 = 128
+x1min = -1024.0
+x1max = 1024.0
 ix1_bc = outflow
 ox1_bc = outflow
 
-nx2 = 320
-x2min = -101.4
-x2max = 101.4
+nx2 = 128
+x2min = -1024.0
+x2max = 1024.0
 ix2_bc = outflow
 ox2_bc = outflow
 
-nx3 = 64
-x3min = -20.28
-x3max = 20.28
+nx3 = 128
+x3min = -1024.0
+x3max = 1024.0
 ix3_bc = outflow
 ox3_bc = outflow
 
@@ -39,7 +42,7 @@ nx3 = 64
 
 <mesh_refinement>
 refinement = adaptive
-num_levels = 9
+num_levels = 14
 refinement_interval = 2
 max_nmb_per_rank = 320
 
@@ -47,7 +50,7 @@ max_nmb_per_rank = 320
 method = user
 
 <refined_region1>
-level = 1
+level = 6
 x1min = -5.12
 x1max = 5.12
 x2min = -5.12
@@ -56,7 +59,7 @@ x3min = -5.12
 x3max = 5.12
 
 <refined_region2>
-level = 2
+level = 7
 x1min = -3.84
 x1max = 3.84
 x2min = -3.84
@@ -65,7 +68,7 @@ x3min = -3.84
 x3max = 3.84
 
 <refined_region3>
-level = 3
+level = 8
 x1min = -3.84
 x1max = 3.84
 x2min = -3.84
@@ -74,7 +77,7 @@ x3min = -3.84
 x3max = 3.84
 
 <refined_region4>
-level = 2
+level = 7
 x1min = 28.16
 x1max = 36.16
 x2min = -4.0
@@ -83,7 +86,7 @@ x3min = -4.0
 x3max = 4.0
 
 <refined_region5>
-level = 3
+level = 8
 x1min = 30.16
 x1max = 34.16
 x2min = -2.0
@@ -92,7 +95,7 @@ x3min = -2.0
 x3max = 2.0
 
 <refined_region6>
-level = 4
+level = 9
 x1min = 31.16
 x1max = 33.16
 x2min = -1.0
@@ -101,7 +104,7 @@ x3min = -1.0
 x3max = 1.0
 
 <refined_region7>
-level = 5
+level = 10
 x1min = 31.66
 x1max = 32.78
 x2min = -0.56
@@ -110,7 +113,7 @@ x3min = -0.56
 x3max = 0.56
 
 <refined_region8>
-level = 6
+level = 11
 x1min = 31.86
 x1max = 32.58
 x2min = -0.36
@@ -119,7 +122,7 @@ x3min = -0.36
 x3max = 0.36
 
 <refined_region9>
-level = 7
+level = 12
 x1min = 31.98
 x1max = 32.42
 x2min = -0.24
@@ -128,7 +131,7 @@ x3min = -0.24
 x3max = 0.24
 
 <refined_region10>
-level = 8
+level = 13
 x1min = 32.04
 x1max = 32.32
 x2min = -0.18
@@ -199,6 +202,10 @@ bh_center_x1 = 0.0
 bh_center_x2 = 0.0
 bh_center_x3 = 0.0
 use_direct_z4c_background = true
+outer_sponge_geometry = radial
+outer_sponge_start_radius = 512.0
+outer_sponge_ramp_width = 128.0
+outer_sponge_damping_time = 16.0
 
 star_center_x1 = 32.22011917669886
 star_center_x2 = 0.0
@@ -225,11 +232,11 @@ amr_rho_min = 2.5e-9
 amr_bh_exclusion_radius = 3.0
 amr_bh_refine_radius = 3.0
 amr_bh_derefine_radius = 4.0
-amr_bh_refine_level = 3
+amr_bh_refine_level = 8
 amr_star_refine = true
 amr_star_refine_radius = 0.142
 amr_star_derefine_radius = 0.190
-amr_star_refine_level = 8
+amr_star_refine_level = 13
 amr_star_track_rhomax = true
 amr_star_track_rho_floor = 1.0e-10
 

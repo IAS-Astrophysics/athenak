@@ -1,0 +1,124 @@
+# Pure Kerr-Schild background with a small spherical Theta pulse used to
+# measure the radial residual sponge independently of the TDE interior.
+
+<job>
+basename = z4c_tov_ks_radial_sponge_theta_pulse_aurora
+
+<mesh>
+nghost = 4
+nx1 = 256
+x1min = -1024.0
+x1max = 1024.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 256
+x2min = -1024.0
+x2max = 1024.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 256
+x3min = -1024.0
+x3max = 1024.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 64
+nx2 = 64
+nx3 = 64
+
+<mesh_refinement>
+refinement = none
+max_nmb_per_rank = 8
+
+<time>
+evolution = dynamic
+integrator = rk3
+cfl_number = 0.3
+nlim = -1
+tlim = 32.0
+ndiag = 1
+
+<mhd>
+evolution = dynamic
+fixed = true
+zero_tmunu_feedback = true
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = wenoz
+rsolver = llf
+fofc_method = llf
+gamma = 1.3333333333333333
+dfloor = 1.0e-16
+pfloor = 1.0e-22
+dthreshold = 1.0
+gamma_max = 10.0
+fofc = false
+
+<adm>
+
+<coord>
+general_rel = true
+is_dynamical = true
+a = 0.0
+excise = false
+
+<z4c>
+use_analytic_background = true
+evolve_gauge_residual = true
+evolve_lapse_residual = true
+evolve_shift_residual = true
+residual_gauge = background_adapted
+residual_lapse_f = 1.0
+residual_lapse_damping = 0.0
+residual_shift_damping = 0.0
+diss = 0.5
+damp_kappa1 = 0.0
+damp_kappa2 = 0.0
+lapse_harmonic = 0.0
+lapse_oplog = 2.0
+lapse_advect = 0.0
+shift_Gamma = 1.0
+shift_advect = 0.0
+shift_eta = 2.0
+history_excise_ks_horizon = true
+
+<problem>
+pgen_name = z4c_tov_ks
+user_hist = true
+metric_diag_history = true
+pure_background = true
+zero_tmunu = true
+
+bh_mass = 1.0
+bh_spin = 0.0
+bh_center_x1 = 0.0
+bh_center_x2 = 0.0
+bh_center_x3 = 0.0
+use_direct_z4c_background = true
+
+outer_sponge_enabled = true
+outer_sponge_geometry = radial
+outer_sponge_start_radius = 512.0
+outer_sponge_ramp_width = 128.0
+outer_sponge_damping_time = 16.0
+outer_sponge_test_theta_pulse_amplitude = 1.0e-8
+outer_sponge_test_theta_pulse_radius = 700.0
+outer_sponge_test_theta_pulse_width = 32.0
+
+excision_damp_rate = 50.0
+amr_rho_slope_refine = false
+amr_bh_exclusion_radius = 0.0
+amr_star_refine = false
+
+<output1>
+file_type = hst
+dt = 2.0
+data_format = %20.15e
+
+<output2>
+file_type = log
+dcycle = 1

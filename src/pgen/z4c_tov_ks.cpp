@@ -48,8 +48,16 @@ Real bh_center_x1 = 0.0;
 Real bh_center_x2 = 0.0;
 Real bh_center_x3 = 0.0;
 Real bh_horizon_radius = 1.0;
+bool outer_sponge_enabled = true;
+bool outer_sponge_radial = false;
 Real outer_sponge_width = 2.0;
 Real outer_sponge_rate = 5.0;
+Real outer_sponge_start_radius = 0.0;
+Real outer_sponge_ramp_width = 0.0;
+Real outer_sponge_damping_time = 0.0;
+Real outer_sponge_test_theta_pulse_amplitude = 0.0;
+Real outer_sponge_test_theta_pulse_radius = 0.0;
+Real outer_sponge_test_theta_pulse_width = 0.0;
 Real star_center_x1 = 8.0;
 Real star_center_x2 = 0.0;
 Real star_center_x3 = 0.0;
@@ -126,6 +134,15 @@ KOKKOS_INLINE_FUNCTION
 Real SmootherStep(Real q) {
   q = fmax(0.0, fmin(1.0, q));
   return q*q*q*(10.0 + q*(-15.0 + 6.0*q));
+}
+
+KOKKOS_INLINE_FUNCTION
+Real RadialOuterSpongeRate(Real radius, Real start_radius, Real ramp_width,
+                           Real damping_time) {
+  if (radius <= start_radius) {
+    return 0.0;
+  }
+  return SmootherStep((radius - start_radius)/ramp_width)/damping_time;
 }
 
 // Largest Kerr-Schild radius (equatorial estimate) at which *all* outgoing
@@ -403,16 +420,18 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
   auto &z4c_u1 = pmbp->pz4c->u1;
   auto &z4c_rhs = pmbp->pz4c->u_rhs;
   int nz4c = pmbp->pz4c->nz4c;
-  // Outer absorbing sponge: the z4c "outflow" BC is polynomial extrapolation
-  // of the residual, which supports boundary-fed growing modes (observed as
-  // a fixed exterior |H| hotspot in the outermost cell layer at z = z_max,
-  // e-folding in ~0.55 M and dominating the constraint norms; also the
-  // likely cause of the long-term frozen-gauge Minkowski instability).
-  // Relax the residual toward the analytic background within
-  // outer_sponge_width of any outer face, with rate rising smootherstep
-  // from 0 to outer_sponge_rate at the boundary.
+  // Outer absorbing sponge: relax every evolved residual field toward the
+  // analytic background.  The legacy geometry rises toward the Cartesian
+  // faces.  The radial geometry is centered on the Kerr-Schild black hole,
+  // rises over a finite transition shell, and remains at full strength
+  // between the shell and the outer boundary.
+  const bool osp_enabled = outer_sponge_enabled;
+  const bool osp_radial = outer_sponge_radial;
   const Real osp_width = outer_sponge_width;
   const Real osp_rate = outer_sponge_rate;
+  const Real osp_start_radius = outer_sponge_start_radius;
+  const Real osp_ramp_width = outer_sponge_ramp_width;
+  const Real osp_damping_time = outer_sponge_damping_time;
   const Real mesh_x1min = pm->mesh_size.x1min;
   const Real mesh_x1max = pm->mesh_size.x1max;
   const Real mesh_x2min = pm->mesh_size.x2min;
@@ -437,14 +456,20 @@ void ApplyInnerExcision(Mesh *pm, Real bdt, bool project_mhd) {
     Real z = zr - bh_center_x3_l;
 
     Real sigma_out = 0.0;
-    if (osp_rate > 0.0 && osp_width > 0.0) {
-      Real dbdy = fmin(fmin(xr - mesh_x1min, mesh_x1max - xr),
-                  fmin(fmin(yr - mesh_x2min, mesh_x2max - yr),
-                       fmin(zr - mesh_x3min, mesh_x3max - zr)));
-      Real s = 1.0 - dbdy/osp_width;
-      if (s > 0.0) {
-        s = fmin(s, 1.0);
-        sigma_out = osp_rate*s*s*s*(s*(6.0*s - 15.0) + 10.0);
+    if (osp_enabled) {
+      if (osp_radial) {
+        const Real radius = KerrSchildRadius(x, y, z, bh_spin_l);
+        sigma_out = RadialOuterSpongeRate(radius, osp_start_radius,
+                                          osp_ramp_width, osp_damping_time);
+      } else if (osp_rate > 0.0 && osp_width > 0.0) {
+        Real dbdy = fmin(fmin(xr - mesh_x1min, mesh_x1max - xr),
+                    fmin(fmin(yr - mesh_x2min, mesh_x2max - yr),
+                         fmin(zr - mesh_x3min, mesh_x3max - zr)));
+        Real s = 1.0 - dbdy/osp_width;
+        if (s > 0.0) {
+          s = fmin(s, 1.0);
+          sigma_out = osp_rate*SmootherStep(s);
+        }
       }
     }
 
@@ -504,7 +529,7 @@ void ApplyInnerExcision(Mesh *pm, Real bdt) {
 }
 
 void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = metric_diag_history ? 20 : 2;
+  pdata->nhist = metric_diag_history ? 23 : 2;
   pdata->label[0] = "rho-max";
   pdata->label[1] = "alpha-min";
   if (metric_diag_history) {
@@ -526,6 +551,9 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     pdata->label[17] = "src-adapt";
     pdata->label[18] = "aK-bg";
     pdata->label[19] = "Khat-res";
+    pdata->label[20] = "res-inner";
+    pdata->label[21] = "res-ramp";
+    pdata->label[22] = "res-outer";
   }
 
   auto &w0 = pm->pmb_pack->pmhd->w0;
@@ -533,6 +561,8 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   auto &z4c_res = pm->pmb_pack->pz4c->z4c;
   auto &z4c_full = pm->pmb_pack->pz4c->full;
   auto &z4c_bg = pm->pmb_pack->pz4c->bg;
+  auto &z4c_u0 = pm->pmb_pack->pz4c->u0;
+  auto &size = pm->pmb_pack->pmb->mb_size;
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
   int is = indcs.is;
   int js = indcs.js;
@@ -541,6 +571,7 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   int nx2 = indcs.nx2;
   int nx3 = indcs.nx3;
   int nmkji = pm->pmb_pack->nmb_thispack*nx3*nx2*nx1;
+  int nz4c = pm->pmb_pack->pz4c->nz4c;
   int nkji = nx3*nx2*nx1;
   int nji = nx2*nx1;
   const bool metric_diag_history_l = metric_diag_history;
@@ -577,6 +608,9 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
   Real lapse_src_adapt_abs_max = 0.0;
   Real alpha_k_bg_abs_max = 0.0;
   Real khat_res_abs_max = 0.0;
+  Real residual_inner_abs_max = 0.0;
+  Real residual_ramp_abs_max = 0.0;
+  Real residual_outer_abs_max = 0.0;
   Kokkos::parallel_reduce(
       "TOVKerrSchildHistory", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
       KOKKOS_LAMBDA(const int &idx, Real &rho_local, Real &alpha_min_local,
@@ -698,6 +732,50 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
       Kokkos::Max<Real>(alpha_k_bg_abs_max),
       Kokkos::Max<Real>(khat_res_abs_max));
 
+  if (metric_diag_history && outer_sponge_radial) {
+    const Real start_radius = outer_sponge_start_radius;
+    const Real ramp_end = outer_sponge_start_radius + outer_sponge_ramp_width;
+    const Real bh_center_x1_l = bh_center_x1;
+    const Real bh_center_x2_l = bh_center_x2;
+    const Real bh_center_x3_l = bh_center_x3;
+    const Real bh_spin_l = bh_spin;
+    Kokkos::parallel_reduce(
+        "TOVKerrSchildSpongeHistory",
+        Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji*nz4c),
+        KOKKOS_LAMBDA(const int &idx, Real &inner_local, Real &ramp_local,
+                      Real &outer_local) {
+          const int n = idx % nz4c;
+          const int cell_idx = idx/nz4c;
+          const int m = cell_idx/nkji;
+          const int k0 = (cell_idx - m*nkji)/nji;
+          const int j0 = (cell_idx - m*nkji - k0*nji)/nx1;
+          const int i = cell_idx - m*nkji - k0*nji - j0*nx1 + is;
+          const int j = j0 + js;
+          const int k = k0 + ks;
+          const Real x =
+              CellCenterX(i - indcs.is, indcs.nx1, size.d_view(m).x1min,
+                          size.d_view(m).x1max) - bh_center_x1_l;
+          const Real y =
+              CellCenterX(j - indcs.js, indcs.nx2, size.d_view(m).x2min,
+                          size.d_view(m).x2max) - bh_center_x2_l;
+          const Real z =
+              CellCenterX(k - indcs.ks, indcs.nx3, size.d_view(m).x3min,
+                          size.d_view(m).x3max) - bh_center_x3_l;
+          const Real radius = KerrSchildRadius(x, y, z, bh_spin_l);
+          const Real value = fabs(z4c_u0(m,n,k,j,i));
+          if (radius <= start_radius) {
+            inner_local = fmax(inner_local, value);
+          } else if (radius < ramp_end) {
+            ramp_local = fmax(ramp_local, value);
+          } else {
+            outer_local = fmax(outer_local, value);
+          }
+        },
+        Kokkos::Max<Real>(residual_inner_abs_max),
+        Kokkos::Max<Real>(residual_ramp_abs_max),
+        Kokkos::Max<Real>(residual_outer_abs_max));
+  }
+
 #if MPI_PARALLEL_ENABLED
   if (global_variable::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -736,6 +814,12 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
       MPI_Reduce(MPI_IN_PLACE, &alpha_k_bg_abs_max, 1, MPI_ATHENA_REAL,
                  MPI_MAX, 0, MPI_COMM_WORLD);
       MPI_Reduce(MPI_IN_PLACE, &khat_res_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &residual_inner_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &residual_ramp_abs_max, 1, MPI_ATHENA_REAL,
+                 MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(MPI_IN_PLACE, &residual_outer_abs_max, 1, MPI_ATHENA_REAL,
                  MPI_MAX, 0, MPI_COMM_WORLD);
     }
   } else {
@@ -776,6 +860,12 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
                  MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
       MPI_Reduce(&khat_res_abs_max, &khat_res_abs_max, 1,
                  MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&residual_inner_abs_max, &residual_inner_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&residual_ramp_abs_max, &residual_ramp_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+      MPI_Reduce(&residual_outer_abs_max, &residual_outer_abs_max, 1,
+                 MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     }
     rho_max = 0.0;
     alpha_min = 0.0;
@@ -803,6 +893,9 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     lapse_src_adapt_abs_max = 0.0;
     alpha_k_bg_abs_max = 0.0;
     khat_res_abs_max = 0.0;
+    residual_inner_abs_max = 0.0;
+    residual_ramp_abs_max = 0.0;
+    residual_outer_abs_max = 0.0;
   }
 #endif
 
@@ -827,6 +920,9 @@ void TOVKerrSchildHistory(HistoryData *pdata, Mesh *pm) {
     pdata->hdata[17] = lapse_src_adapt_abs_max;
     pdata->hdata[18] = alpha_k_bg_abs_max;
     pdata->hdata[19] = khat_res_abs_max;
+    pdata->hdata[20] = residual_inner_abs_max;
+    pdata->hdata[21] = residual_ramp_abs_max;
+    pdata->hdata[22] = residual_outer_abs_max;
   }
 }
 
@@ -1728,6 +1824,65 @@ void SetupPureBackground(ParameterInput *pin, Mesh *pmy_mesh) {
   }
 }
 
+void SeedOuterSpongeThetaPulse(Mesh *pm) {
+  if (outer_sponge_test_theta_pulse_amplitude == 0.0) {
+    return;
+  }
+
+  auto *pmbp = pm->pmb_pack;
+  auto &indcs = pm->mb_indcs;
+  auto &size = pmbp->pmb->mb_size;
+  auto &u0 = pmbp->pz4c->u0;
+  const int is = indcs.is;
+  const int ie = indcs.ie;
+  const int js = indcs.js;
+  const int je = indcs.je;
+  const int ks = indcs.ks;
+  const int ke = indcs.ke;
+  const int nmb = pmbp->nmb_thispack;
+  const int itheta = pmbp->pz4c->I_Z4C_THETA;
+  const Real amplitude = outer_sponge_test_theta_pulse_amplitude;
+  const Real pulse_radius = outer_sponge_test_theta_pulse_radius;
+  const Real pulse_width = outer_sponge_test_theta_pulse_width;
+  const Real bh_center_x1_l = bh_center_x1;
+  const Real bh_center_x2_l = bh_center_x2;
+  const Real bh_center_x3_l = bh_center_x3;
+  const Real bh_spin_l = bh_spin;
+
+  par_for("z4c_tov_ks_outer_sponge_theta_pulse", DevExeSpace(), 0, nmb - 1,
+          ks, ke, js, je, is, ie,
+          KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    const Real x = CellCenterX(i - indcs.is, indcs.nx1, size.d_view(m).x1min,
+                              size.d_view(m).x1max) - bh_center_x1_l;
+    const Real y = CellCenterX(j - indcs.js, indcs.nx2, size.d_view(m).x2min,
+                              size.d_view(m).x2max) - bh_center_x2_l;
+    const Real z = CellCenterX(k - indcs.ks, indcs.nx3, size.d_view(m).x3min,
+                              size.d_view(m).x3max) - bh_center_x3_l;
+    const Real radius = KerrSchildRadius(x, y, z, bh_spin_l);
+    const Real q = (radius - pulse_radius)/pulse_width;
+    u0(m,itheta,k,j,i) += amplitude*exp(-0.5*q*q);
+  });
+
+  pmbp->pz4c->ReconstructFullState();
+  pmbp->pz4c->Z4cToADM(pmbp);
+  switch (indcs.ng) {
+    case 2:
+      pmbp->pz4c->ADMConstraints<2>(pmbp);
+      break;
+    case 3:
+      pmbp->pz4c->ADMConstraints<3>(pmbp);
+      break;
+    case 4:
+      pmbp->pz4c->ADMConstraints<4>(pmbp);
+      break;
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "OUTER_SPONGE_TEST_THETA_PULSE amplitude=" << amplitude
+              << " radius=" << pulse_radius << " width=" << pulse_width
+              << std::endl;
+  }
+}
+
 template <class TOVEOS>
 KOKKOS_INLINE_FUNCTION
 Real MagneticPressureProfile(const TOVEOS &eos, const tov::TOVStar &tov_star,
@@ -2250,11 +2405,127 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pin->GetOrAddReal("problem", "excision_freeze_radius", default_freeze);
   excision_ramp_radius =
       pin->GetOrAddReal("problem", "excision_ramp_radius", default_ramp);
+  outer_sponge_enabled =
+      pin->GetOrAddBoolean("problem", "outer_sponge_enabled", true);
+  const std::string outer_sponge_geometry =
+      pin->GetOrAddString("problem", "outer_sponge_geometry", "face");
+  if (outer_sponge_geometry == "face") {
+    outer_sponge_radial = false;
+  } else if (outer_sponge_geometry == "radial") {
+    outer_sponge_radial = true;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unsupported <problem>/outer_sponge_geometry = "
+              << outer_sponge_geometry << ". Supported values are face and radial."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
   outer_sponge_width = pin->GetOrAddReal("problem", "outer_sponge_width", 2.0);
   outer_sponge_rate = pin->GetOrAddReal("problem", "outer_sponge_rate", 5.0);
+  outer_sponge_start_radius =
+      pin->GetOrAddReal("problem", "outer_sponge_start_radius", 0.0);
+  outer_sponge_ramp_width =
+      pin->GetOrAddReal("problem", "outer_sponge_ramp_width", 0.0);
+  outer_sponge_damping_time =
+      pin->GetOrAddReal("problem", "outer_sponge_damping_time", 0.0);
+  outer_sponge_test_theta_pulse_amplitude =
+      pin->GetOrAddReal("problem", "outer_sponge_test_theta_pulse_amplitude", 0.0);
+  outer_sponge_test_theta_pulse_radius =
+      pin->GetOrAddReal("problem", "outer_sponge_test_theta_pulse_radius", 0.0);
+  outer_sponge_test_theta_pulse_width =
+      pin->GetOrAddReal("problem", "outer_sponge_test_theta_pulse_width", 0.0);
+
+  const bool legacy_sponge_valid =
+      std::isfinite(outer_sponge_width) && outer_sponge_width >= 0.0 &&
+      std::isfinite(outer_sponge_rate) && outer_sponge_rate >= 0.0;
+  if (!legacy_sponge_valid) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Face outer sponge requires finite, nonnegative "
+              << "outer_sponge_width and outer_sponge_rate." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  Real nearest_boundary_radius =
+      fmin(bh_center_x1 - pin->GetReal("mesh", "x1min"),
+           pin->GetReal("mesh", "x1max") - bh_center_x1);
+  if (pin->GetInteger("mesh", "nx2") > 1) {
+    nearest_boundary_radius =
+        fmin(nearest_boundary_radius,
+             fmin(bh_center_x2 - pin->GetReal("mesh", "x2min"),
+                  pin->GetReal("mesh", "x2max") - bh_center_x2));
+  }
+  if (pin->GetInteger("mesh", "nx3") > 1) {
+    nearest_boundary_radius =
+        fmin(nearest_boundary_radius,
+             fmin(bh_center_x3 - pin->GetReal("mesh", "x3min"),
+                  pin->GetReal("mesh", "x3max") - bh_center_x3));
+  }
+  if (outer_sponge_radial) {
+    const bool radial_sponge_valid =
+        std::isfinite(outer_sponge_start_radius) &&
+        outer_sponge_start_radius >= 0.0 &&
+        std::isfinite(outer_sponge_ramp_width) &&
+        outer_sponge_ramp_width > 0.0 &&
+        std::isfinite(outer_sponge_damping_time) &&
+        outer_sponge_damping_time > 0.0 &&
+        outer_sponge_start_radius + outer_sponge_ramp_width <
+            nearest_boundary_radius;
+    if (!radial_sponge_valid) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Radial outer sponge requires finite values with "
+                << "start_radius >= 0, ramp_width > 0, damping_time > 0, and "
+                << "start_radius + ramp_width inside the nearest mesh boundary "
+                << "(r=" << nearest_boundary_radius << ")." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+  if (outer_sponge_test_theta_pulse_amplitude != 0.0 &&
+      (!(std::isfinite(outer_sponge_test_theta_pulse_amplitude)) ||
+       !(std::isfinite(outer_sponge_test_theta_pulse_radius)) ||
+       outer_sponge_test_theta_pulse_radius < 0.0 ||
+       !(std::isfinite(outer_sponge_test_theta_pulse_width)) ||
+       outer_sponge_test_theta_pulse_width <= 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Outer-sponge Theta pulse requires finite amplitude "
+              << "and radius and a finite, positive width." << std::endl;
+    exit(EXIT_FAILURE);
+  }
   if (global_variable::my_rank == 0) {
-    std::cout << "OUTER_SPONGE width=" << outer_sponge_width
-              << " rate=" << outer_sponge_rate << std::endl;
+    if (outer_sponge_radial) {
+      const Real midpoint =
+          outer_sponge_start_radius + 0.5*outer_sponge_ramp_width;
+      const Real ramp_end =
+          outer_sponge_start_radius + outer_sponge_ramp_width;
+      std::cout << "OUTER_SPONGE enabled=" << outer_sponge_enabled
+                << " geometry=radial start=" << outer_sponge_start_radius
+                << " ramp_width=" << outer_sponge_ramp_width
+                << " damping_time=" << outer_sponge_damping_time
+                << " max_rate=" << 1.0/outer_sponge_damping_time
+                << " nearest_boundary_radius=" << nearest_boundary_radius
+                << " sigma_start="
+                << RadialOuterSpongeRate(outer_sponge_start_radius,
+                                         outer_sponge_start_radius,
+                                         outer_sponge_ramp_width,
+                                         outer_sponge_damping_time)
+                << " sigma_mid="
+                << RadialOuterSpongeRate(midpoint, outer_sponge_start_radius,
+                                         outer_sponge_ramp_width,
+                                         outer_sponge_damping_time)
+                << " sigma_end="
+                << RadialOuterSpongeRate(ramp_end, outer_sponge_start_radius,
+                                         outer_sponge_ramp_width,
+                                         outer_sponge_damping_time)
+                << " sigma_boundary="
+                << RadialOuterSpongeRate(nearest_boundary_radius,
+                                         outer_sponge_start_radius,
+                                         outer_sponge_ramp_width,
+                                         outer_sponge_damping_time)
+                << std::endl;
+    } else {
+      std::cout << "OUTER_SPONGE enabled=" << outer_sponge_enabled
+                << " geometry=face width=" << outer_sponge_width
+                << " rate=" << outer_sponge_rate << std::endl;
+    }
   }
   if (excision_freeze_radius < 0.0 || excision_ramp_radius < excision_freeze_radius ||
       excision_ramp_radius > bh_horizon_radius) {
@@ -2309,6 +2580,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pin->GetOrAddReal("problem", "amr_star_track_rho_floor", 1.0e-10);
   zero_tmunu = pin->GetOrAddBoolean("problem", "zero_tmunu", false);
   pure_background = pin->GetOrAddBoolean("problem", "pure_background", false);
+  if (outer_sponge_test_theta_pulse_amplitude != 0.0 && !pure_background) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "outer_sponge_test_theta_pulse_amplitude is a "
+              << "validation-only option and requires pure_background = true."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
   metric_diag_history =
       pin->GetOrAddBoolean("problem", "metric_diag_history", false) ||
       std::getenv("ATHENA_METRIC_DIAG_HISTORY") != nullptr;
@@ -2333,6 +2611,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   if (pure_background) {
     SetupPureBackground(pin, pmy_mesh_);
+    SeedOuterSpongeThetaPulse(pmy_mesh_);
     return;
   }
 
