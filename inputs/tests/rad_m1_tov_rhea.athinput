@@ -16,7 +16,15 @@
 # Requires: an EOSCompOSE DD2 table (local paths below; adjust for your system) and a toy
 # TorchScript model at rhea_model_path (not part of the repo). Reuses the same "genuine
 # flavor swap" toy-model architecture as rad_m1_rhea_singlezone.athinput, with only the
-# growthrate constant retuned for this run's larger CFL-limited dt.
+# growthrate constant retuned for this run's larger CFL-limited dt:
+#
+#   python3 scripts/make_toy_rhea_model.py toy_flavor_swap_tov.pt --gamma-code 1.0
+#
+# At this run's dt = 0.32 (constant, cfl=0.1, dx=3.2) and lapse alpha = 0.59-0.96 across the
+# star, this gives dt*alpha*inv_tau_0 = 0.19-0.31, i.e. per-step lambda = 0.74-0.83: the BGK
+# relaxation is resolved, not saturated, so the result genuinely depends on the rate rather
+# than collapsing to an instantaneous swap. backreact = false, so the mixing perturbs only
+# the radiation field (N, E, F), not the fluid/metric.
 
 <comment>
 problem  = radiation m1 tov + Rhea flavor mixing

@@ -15,7 +15,7 @@ when it wraps the outputs in unmanaged Kokkos Views.
 
 Two model variants, selected with --model:
 
-  generic (default)
+  generic
       Input-dependent but physically inert: a small nonlinearity plus a per-row scalar
       reduction, so a broken pack kernel or a wrong batch slice is visible in the
       output rather than masked by a constant response. Note it reports every cell
@@ -25,7 +25,7 @@ Two model variants, selected with --model:
       those tests bit-reproducible -- but it means such a run exercises pack ->
       predict -> unpack and nothing downstream of the stability gate.
 
-  swap
+  swap (default)
       Flags every cell UNSTABLE and performs a full e<->x (and ebar<->xbar) flavor
       swap, so ReconstructMixingMatrix recovers a survival probability p = 0 and the
       BGK relaxation actually runs. Use this to test the mixing path itself. The
@@ -36,16 +36,22 @@ Two model variants, selected with --model:
       dt*alpha*gamma_code is O(1); a much larger value saturates lambda to 0 and
       collapses the test to an instantaneous swap, which is insensitive to the rate.
 
+      This is the default: every in-tree input now wants swap, and a forgotten
+      --model flag should produce a sensitive test (mixing actually runs, so a
+      regression is visible) rather than a silently vacuous one (generic's
+      always-stable no-op, which would pass even a broken mixing kernel).
+
 These are test stand-ins with no physical content. Usage:
 
     python3 make_toy_rhea_model.py [output_path.pt] [--model generic|swap]
                                    [--gamma-code FLOAT]
 
 Generate the file named by rhea_model_path in the chosen input file and place it in
-the working directory the run starts from. As of this writing:
-inputs/tests/rad_m1_rhea_singlezone.athinput wants toy_flavor_swap.pt built with
---model swap; the two TOV inputs want toy_flavor_swap_tov.pt built with the default
---model generic.
+the working directory the run starts from. As of this writing: both TOV inputs
+(inputs/tests/rad_m1_tov_rhea.athinput and rad_m1_tov_rhea_amr.athinput) want
+toy_flavor_swap_tov.pt built with --gamma-code 1.0; the single-zone test
+(inputs/tests/rad_m1_rhea_singlezone.athinput) wants toy_flavor_swap.pt built at the
+default --gamma-code 10.0. Both now use the default --model swap.
 """
 import argparse
 import torch
@@ -117,8 +123,8 @@ def main():
         description="Generate a toy TorchScript stand-in for the Rhea model.")
     parser.add_argument("output_path", nargs="?", default="toy_flavor_swap.pt",
                         help="output .pt path (default: toy_flavor_swap.pt)")
-    parser.add_argument("--model", choices=("generic", "swap"), default="generic",
-                        help="model variant (default: generic)")
+    parser.add_argument("--model", choices=("generic", "swap"), default="swap",
+                        help="model variant (default: swap)")
     parser.add_argument("--gamma-code", type=float, default=10.0,
                         help="swap model only: target BGK rate in 1/code_time "
                              "(default: 10.0)")

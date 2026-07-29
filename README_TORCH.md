@@ -89,4 +89,8 @@ backend libraries as applicable) resolved from your `CMAKE_PREFIX_PATH`. Running
 `inputs/hydro/sod.athinput` should produce bit-identical output between `ON` and `OFF`
 builds, since problems that don't set `flavor_mix = rhea` never touch LibTorch; see
 `inputs/tests/rad_m1_rhea_singlezone.athinput` and `inputs/tests/rad_m1_tov_rhea.athinput`
-for problems that exercise the Rhea mixing path itself.
+for problems that exercise the Rhea mixing path itself:
+```
+python3 scripts/make_toy_rhea_model.py toy_flavor_swap.pt --gamma-code 10.0      # single-zone
+python3 scripts/make_toy_rhea_model.py toy_flavor_swap_tov.pt --gamma-code 1.0   # both TOV inputs
+```

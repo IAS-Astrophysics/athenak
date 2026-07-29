@@ -6,15 +6,17 @@ problem = Rhea flavor-mix single-zone fixed-point convergence test. See
           is run -- same convention as inputs/tests/rad_m1_singlezone.athinput's DD2.athtab
           dependency.
 
-          Generate the model with the SWAP variant, not the default:
+          Generate the model with (--model swap and --gamma-code 10.0 are both the
+          defaults; spelled out here because the TOV inputs use a different rate):
 
-              python3 scripts/make_toy_rhea_model.py toy_flavor_swap.pt --model swap
+              python3 scripts/make_toy_rhea_model.py toy_flavor_swap.pt --gamma-code 10.0
 
-          The default (--model generic) reports every cell stable, which gates the BGK
-          rate to zero and makes the whole mixing path an exact no-op -- this test would
-          then pass identically with ApplyRheaMixing deleted. --model swap flags cells
-          unstable and swaps flavors, which is what makes the fixed-point convergence
-          below an actual measurement. Its constant growth rate is calibrated so
+          Do NOT build this one with --model generic: that variant reports every cell
+          stable, which gates the BGK rate to zero and makes the whole mixing path an
+          exact no-op -- this test would then pass identically with ApplyRheaMixing
+          deleted. The swap variant flags cells unstable and swaps flavors, which is
+          what makes the fixed-point convergence below an actual measurement, and it is
+          the default for exactly that reason. Its constant growth rate is calibrated so
           gamma_code = 10 per code time, i.e. dt*alpha*inv_tau_0 = 1 at this input's
           dt = 0.1, so lambda_0 = exp(-1) and the relaxation is resolved rather than
           saturated. Expected behaviour: equilibration towards equipartition

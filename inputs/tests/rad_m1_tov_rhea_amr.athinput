@@ -15,8 +15,16 @@
 # Like its non-AMR companion, this is a CPU-tractable smoke/stability test (rk1, a
 # handful of cycles), not a converged simulation. Requires: an EOSCompOSE DD2 table
 # (local paths below; adjust for your system) and a toy TorchScript model at
-# rhea_model_path in the working directory (not part of the repo; generate with
-# scripts/make_toy_rhea_model.py).
+# rhea_model_path in the working directory (not part of the repo); it shares the exact
+# same model file as rad_m1_tov_rhea.athinput, generated with:
+#
+#   python3 scripts/make_toy_rhea_model.py toy_flavor_swap_tov.pt --gamma-code 1.0
+#
+# On the non-AMR companion's own dt = 0.32 and lapse alpha = 0.59-0.96, this gives
+# dt*alpha*inv_tau_0 = 0.19-0.31 (lambda = 0.74-0.83): resolved, not saturated. Here the
+# global dt is halved by the refined level (dx=1.6 on the finest level), giving
+# dt*alpha*inv_tau_0 = 0.09-0.15 -- still comfortably resolved. backreact = false, so the
+# mixing perturbs only the radiation field, not the fluid/metric.
 
 <comment>
 problem  = radiation m1 tov + Rhea flavor mixing, AMR-enabled
