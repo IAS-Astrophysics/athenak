@@ -209,7 +209,17 @@ class RheaModuleCache {
 
     auto it = modules_.find(key);
     if (it == modules_.end()) {
-      torch::jit::Module model = torch::jit::load(model_path);
+      // Pass `device` to load(), do not rely on the model.to(device) below alone: a
+      // TorchScript archive records the device its tensors were serialized from, and
+      // torch::jit::load restores them there unless overridden. A checkpoint saved from a
+      // CUDA run (Rhea's own trainer saves as model<epoch>_cuda.pt) therefore fails to
+      // load at all in a CPU-only build -- "Could not run 'aten::empty_strided' with
+      // arguments from the 'CUDA' backend" -- before .to(device) ever gets a chance to
+      // move it. Overriding at load time is what Rhea's Python side does with
+      // map_location="cpu" (model_training/convert_model_to_cpu.py). model.to(device)
+      // below is kept: it is the no-op/cheap case when the archive already matches, and
+      // it still does real work for a CPU-saved model on a device build.
+      torch::jit::Module model = torch::jit::load(model_path, device);
       model.to(device);
       model.eval();
 
