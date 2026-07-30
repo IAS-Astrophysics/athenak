@@ -2356,10 +2356,6 @@ TaskStatus MultigridBoundaryValues::PackAndSendMG(const DvceArray5D<Real> &u) {
                            &mg_send_var_reqs_[i]);
     if (ierr_d != MPI_SUCCESS) {
       no_errors = false;
-    } else {
-      pmy_mg->pmy_driver_->mg_timers_.msg_count += 1;
-      pmy_mg->pmy_driver_->mg_timers_.bytes_sent +=
-          (msg.data_size * static_cast<int64_t>(sizeof(Real)));
     }
   }
   // Quit if MPI error detected

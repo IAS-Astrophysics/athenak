@@ -185,45 +185,6 @@ struct MultigridTaskIDs {
       TaskID fill_coarseB2;
 };
 
-struct MGTimers {
-  using Clock = std::chrono::high_resolution_clock;
-  double pack_send_sec     = 0.0;
-  double recv_unpack_sec   = 0.0;
-  double allreduce_sec     = 0.0;
-  double vcycle_sec        = 0.0;
-  double smooth_sec        = 0.0;
-  double restrict_sec      = 0.0;
-  double prolongate_sec    = 0.0;
-  double prolongate_fc_sec = 0.0;
-  double fillfc_sec        = 0.0;
-  int    msg_count         = 0;
-  int64_t bytes_sent       = 0;
-  int    vcycle_count      = 0;
-
-  void Reset() {
-    pack_send_sec = recv_unpack_sec = allreduce_sec = 0.0;
-    vcycle_sec = smooth_sec = restrict_sec = prolongate_sec = 0.0;
-    prolongate_fc_sec = fillfc_sec = 0.0;
-    msg_count = 0; bytes_sent = 0; vcycle_count = 0;
-  }
-  void Print(int rank) {
-    std::cout << "[Rank " << rank << "] MG timers:"
-              << " vcycles=" << vcycle_count
-              << " vcycle=" << vcycle_sec << "s"
-              << " pack_send=" << pack_send_sec << "s"
-              << " recv_unpack=" << recv_unpack_sec << "s"
-              << " allreduce=" << allreduce_sec << "s"
-              << " smooth=" << smooth_sec << "s"
-              << " restrict=" << restrict_sec << "s"
-              << " prolongate=" << prolongate_sec << "s"
-              << " prolongate_fc=" << prolongate_fc_sec << "s"
-              << " fillfc=" << fillfc_sec << "s"
-              << " msgs=" << msg_count
-              << " bytes=" << bytes_sent
-              << std::endl;
-  }
-};
-
 //! \class Multigrid
 //  \brief Multigrid object containing each MeshBlock and/or the root block
 
@@ -521,10 +482,6 @@ class MultigridDriver {
   bool full_multigrid_;
   int fmg_ncycle_;
 
- public:
-  MGTimers mg_timers_;
-
- protected:
   // Source masking (zero source outside mask_radius_)
   Real mask_radius_;
   Real mask_origin_[3];
