@@ -99,6 +99,32 @@ struct MeshBoundaryBuffer {
   }
 };
 
+//----------------------------------------------------------------------------------------
+//! \struct RankPackedVarEntry
+//! \brief metadata for one (MeshBlock,neighbor) var-payload in a rank-packed message
+
+struct RankPackedVarEntry {
+  int m;
+  int n;
+  int lid;
+  int dn;
+  int data_size;
+  int offset;
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct RankPackedVarMessage
+//! \brief metadata for one aggregated MPI vars message between ranks
+
+struct RankPackedVarMessage {
+  int rank;
+  int nentries;
+  int entry_offset;
+  int hdr_offset;
+  int offset;
+  int data_size;
+};
+
 // Forward declarations
 class MeshBlockPack;
 
@@ -122,6 +148,25 @@ class MeshBoundaryValues {
 #if MPI_PARALLEL_ENABLED
   // unique MPI communicators for each case (variables/fluxes)
   MPI_Comm comm_vars, comm_flux;
+
+  // rank-packed vars communication path
+  int rank_packed_bvals_nvars_;
+  int rank_packed_mesh_seq_;
+  std::vector<RankPackedVarEntry> send_var_entries_, recv_var_entries_;
+  std::vector<RankPackedVarMessage> send_var_msgs_, recv_var_msgs_;
+  std::vector<MPI_Request> send_var_reqs_, recv_var_reqs_;
+  DvceArray1D<Real> rank_sendbuf_vars_, rank_recvbuf_vars_;
+  // Scratch host buffers holding the (lid,dn,data_size) triples per entry, used
+  // only for the one-shot header exchange in BuildRankPackedVarMetadata that
+  // teaches each receiver its peers' pack order.
+  HostArray1D<int> rank_sendhdr_vars_, rank_recvhdr_vars_;
+  // Per-(MeshBlock,neighbour) base offsets into the rank-packed aggregate
+  // buffers, dimensioned (nmb*nnghbr). For off-rank neighbours these hold the
+  // entry's offset in rank_{send,recv}buf_vars_; on-rank/non-existent entries
+  // are -1. Built once in BuildRankPackedVarMetadata so the pack/unpack kernels
+  // read/write the aggregate buffer directly (fusing the former
+  // RankPackAgg/RankUnpackScatter kernels into SendBuff/RecvBuff).
+  DvceArray1D<int> send_agg_offset_, recv_agg_offset_;
 #endif
 
   //functions
@@ -148,6 +193,11 @@ class MeshBoundaryValues {
   // many types (Hydro, MHD, Radiation, Z4c, etc.)
   MeshBlockPack* pmy_pack;
   bool is_z4c_;   // flag to denote if this BoundaryValues is for Z4c module
+
+#if MPI_PARALLEL_ENABLED
+  int GetVarDataSize(const MeshBoundaryBuffer &buf, int m, int n, int nvars) const;
+  void BuildRankPackedVarMetadata(const int nvars);
+#endif
 };
 
 //----------------------------------------------------------------------------------------
