@@ -61,9 +61,11 @@ ships inside a PyTorch Python environment — see below).
         -DAthena_ENABLE_NURATES=On -DAthena_ENABLE_TORCH=On \
         -DCMAKE_PREFIX_PATH=`python -c 'import torch;print(torch.utils.cmake_prefix_path)'` ..
   ```
-  On Aurora, `module load frameworks` supplies the XPU-enabled LibTorch, the matching oneAPI
-  SDK, and `cmake` together; scripted as
-  `batchtools/templates/athenak/aurora/{environment,configure}-rhea.sh`.
+  On Aurora, `module load frameworks` is where the XPU-enabled LibTorch lives — but do **not**
+  load it, at build time or run time; point `CMAKE_PREFIX_PATH` at its
+  `.../torch/share/cmake` directly and keep the ordinary production module stack. Scripted as
+  `batchtools/templates/athenak/aurora/{environment,configure}-rhea.sh`; see "LibTorch without
+  the frameworks module" below for why this matters and the evidence that it works.
 - **CPU (Serial or OpenMP)** — fastest path for local iteration/unit tests:
   ```
   cmake -DKokkos_ENABLE_SERIAL=On \
@@ -120,9 +122,34 @@ Two results worth recording explicitly:
 - `c10::xpu::getStreamFromExternal` and `XPUCachingAllocator::setMemoryFraction` behave as
   expected against torch `2.10.0a0`, not just the 2.12.1 headers they were written against.
 
+### LibTorch without the frameworks module
+
+`module load frameworks` is the obvious way to get an XPU LibTorch on Aurora, and it is the wrong
+thing to have in a job. It is also unnecessary — at **either** stage. Verified 2026-07-29:
+
+- **Runtime**: `ldd src/athena` reports **zero** unresolved libraries with only the production
+  module stack (`boost`/`fftw`/`cmake`, i.e. `environment.sh`). The linked binary's `RUNPATH`
+  already covers `.../torch/lib`, and `libsycl`/`libmkl` come from `oneapi/release/2025.3.1`,
+  which Aurora loads *by default*.
+- **Configure**: `find_package(Torch)` succeeds with
+  `-DCMAKE_PREFIX_PATH=<torch-prefix>/share/cmake` and no module loaded. `TorchConfig.cmake` and
+  `Caffe2Config.cmake` search only inside `TORCH_INSTALL_PREFIX`, `Caffe2Targets.cmake` names no
+  path outside it, SYCL is found from the default oneAPI, and `TORCH_CXX_FLAGS` comes back
+  **empty** — independently re-confirming there is no ABI flag to reconcile here.
+- `frameworks` does **not** swap `mpich` or `oneapi`: both stacks carry
+  `mpich/opt/5.0.0.aurora_test.3c70a61` and `oneapi/release/2025.3.1`. So this choice is
+  orthogonal to enabling MPI.
+
+Why it matters is the next section: the module mutates two `ZE_*`/`ONEAPI_*` variables in ways
+that break the standard Aurora launch recipe and undermine an assumption this port relies on.
+Keeping it out of the environment makes both problems disappear rather than requiring a
+workaround, because the *site defaults* are already the values we want (`COMPOSITE`,
+`level_zero:gpu`).
+
 ### Aurora launch environment: two traps
 
-Both cost a job apiece and neither is visible from a login node.
+These are what you hit if you do load the module. Both cost a job apiece and neither is visible
+from a login node.
 
 1. **`module load frameworks` sets `ZE_FLAT_DEVICE_HIERARCHY=FLAT`**, under which PVC tiles are
    root devices and `ZE_AFFINITY_MASK` is a flat list (`0`, `1`, ... `11`).
@@ -131,14 +158,17 @@ Both cost a job apiece and neither is visible from a login node.
    (`0.0`, `0.1`, ...). Under FLAT those match **nothing**, and the failure is quiet: `sycl-ls`
    reports "No platforms found", `torch.xpu.device_count()` returns 0, and
    `Kokkos::initialize()` aborts with "no GPU available for execution". **`module load
-   frameworks` and `gpu_tile_compact.sh` cannot simply be combined**; an MPI-enabled Rhea job
-   needs its own rank-to-tile mapping.
+   frameworks` and `gpu_tile_compact.sh` cannot simply be combined** — so don't load it, and the
+   wrapper works as written. Under the site-default `COMPOSITE` hierarchy, `gpu_tile_compact.sh`
+   gives each rank exactly one visible tile, which is precisely the condition that makes Kokkos's
+   and Torch's device indices agree trivially (both 0). That is the right MPI story for this port.
 2. **The frameworks module sets `ONEAPI_DEVICE_SELECTOR="opencl:gpu;level_zero:gpu"`** (for
    Triton-XPU/vLLM/Ray/dpctl; it prints this on stderr and sanctions reverting). Exposing two
    backends makes SYCL enumerate every physical GPU twice, and this port's correctness rests on
    Kokkos's device index and Torch's XPU index naming the same physical device from two
-   independently built enumerations. Set `ONEAPI_DEVICE_SELECTOR=level_zero:gpu` unless you
-   need the OpenCL consumers.
+   independently built enumerations. The site default is already `level_zero:gpu` alone, so once
+   again the fix is to not load the module; set `ONEAPI_DEVICE_SELECTOR=level_zero:gpu` explicitly
+   if you must have it loaded.
 
 Also note `set -u` in a job script makes `module load` abort immediately — Lmod's bash init
 reads `ZSH_EVAL_CONTEXT` unconditionally.
