@@ -144,7 +144,6 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real vr = 0.;
     Real p_pert = 0.;
     Real ye = ye_atmo;
-    auto &use_ye_ = use_ye;
     if (!isotropic) {
       tov_.GetPrimitivesAtPoint(eos_, r, rho, p, mass, alp);
       if (r <= tov_.R_edge) {
@@ -523,7 +522,6 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
-  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;

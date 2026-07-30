@@ -38,7 +38,6 @@ class TabulatedEOS {
   bool has_ye = false;
   Real ye_atmosphere;
 
-  std::string fname;
   size_t m_nn;
 
   //static const Real fm_to_Msun = 6.771781959609192e-19
@@ -47,7 +46,7 @@ class TabulatedEOS {
 
  public:
   explicit TabulatedEOS(ParameterInput* pin) {
-    fname = pin->GetString("problem", "table");
+    const std::string fname = pin->GetString("problem", "table");
 
     TableReader::Table table;
 

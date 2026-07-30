@@ -324,7 +324,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
       }
     }
     if (flo*fhi > 0) {
-      return std::numeric_limits<Real>::quiet_NaN();
+      return Kokkos::Experimental::quiet_NaN_v<Real>;
     }
     while (ihi - ilo > 1) {
       int ip = ilo + (ihi - ilo)/2;

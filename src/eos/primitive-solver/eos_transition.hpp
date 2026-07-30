@@ -492,7 +492,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
       }
       flo = fnext;
     }
-    if (!bracketed) { return std::numeric_limits<Real>::quiet_NaN(); }
+    if (!bracketed) { return Kokkos::Experimental::quiet_NaN_v<Real>; }
 
     Real ltlo = lT_node(ilo);
     Real lthi = lT_node(ihi);
