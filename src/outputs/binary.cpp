@@ -96,7 +96,7 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         << "  size of variable=" << sizeof(float) << std::endl
         << "  number of variables=" << outvars.size() << std::endl
         << "  variables:  ";
-    for (int n=0; n<outvars.size(); n++) {
+    for (size_t n=0; n<outvars.size(); n++) {
       msg << outvars[n].label.c_str() << "  ";
     }
     msg << std::endl;

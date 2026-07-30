@@ -54,9 +54,8 @@ using Real = double;
 // data types only used in physics modules (defined here to avoid recursive dependencies)
 
 // constants that determine array index of Hydro/MHD variables
-// array indices for conserved: density, momentum, total energy
-enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4,
-                    ITM=4, IPR=4, IYF=5};
+// array indices for conserved: density, momemtum, total energy
+enum VariableIndex {IDN=0, IM1=1, IVX=1, IM2=2, IVY=2, IM3=3, IVZ=3, IEN=4, IPR=4, IYF=5};
 // array indices for components of magnetic field
 enum BFieldIndex {IBX=0, IBY=1, IBZ=2, NMAG=3};
 // array indices for metric matrices in GR
@@ -66,7 +65,7 @@ enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8,
 enum ParticlesIndex {PGID=0, PTAG=1, IPX=0, IPVX=1, IPY=2, IPVY=3, IPZ=4, IPVZ=5};
 
 // integer constants to specify spatial reconstruction methods
-enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz};
+enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz, teno};
 
 // constants that enumerate time evolution options
 enum TimeEvolution {tstatic, kinematic, dynamic};
@@ -152,6 +151,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 
 //----------------------------------------------------------------------------------------
 // struct for storing face-centered (area-averaged) variables, e.g. magnetic field
+/* [using old C-style comments to prevent multi-line-comment warning with -Wall]
 //                 ___________
 //                 |x3f[k+1,j,i]
 //                 | \    X    \
@@ -161,6 +161,7 @@ using ScrArray2D = Kokkos::View<T **, LayoutWrapper, ScratchMemSpace,
 //   x2 x3          \  |    X    |
 //    \ |            \ |         |
 //     \|__x1         \|_________|
+*/
 
 template <typename T>
 struct DvceFaceFld4D {
@@ -194,6 +195,7 @@ struct HostFaceFld4D {
 
 //----------------------------------------------------------------------------------------
 // struct for storing edge-centered (line-averaged) variables, e.g. EMF
+/* [using old C-style comments to prevent multi-line-comment warning with -Wall]
 //             _____________
 //             |\           \
 //             | \           \
@@ -204,6 +206,7 @@ struct HostFaceFld4D {
 //               \ |           |
 //                \|_____*_____|
 //                    x1e[k,j,i]
+*/
 
 template <typename T>
 struct DvceEdgeFld4D {

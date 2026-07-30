@@ -33,14 +33,12 @@ class CCE {
   int index;       // radius number/shell number
   Real rin;  // inner radius of shell
   Real rout; // outer radius of shell
-  Mesh *pm;             // mesh
   MeshBlockPack *pmbp;  // meshblockpack
-  ParameterInput *pin;  // param file
 
   int num_l_modes;    // number of l modes = n_theta (angular)
   int num_angular_modes; // total number of angular modes
   int num_n_modes;    // number of n modes = n_radius (radial)
-  int nlmmodes;       // total number of coefficients to store
+  //int nlmmodes;       // total number of coefficients to store (not yet implemented)
 
   int ntheta;         // number of collocation points in theta
   int nphi;           // number of collocation points in phi
