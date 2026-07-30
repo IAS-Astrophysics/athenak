@@ -94,8 +94,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
   auto my_tov = tov::TOVStar::ConstructTOV(pin, eos);
 
-
-  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
+  constexpr bool use_ye = tov::tov::UsesYe<TOVEOS>;
   Real ye_atmo = pin->GetOrAddReal("mhd", "s0_atmosphere", 0.5);
 
   //auto& u0_ = pmbp->pmhd->u0;
@@ -121,7 +120,6 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   auto &adm = pmbp->padm->adm;
   auto &tov_ = my_tov;
   auto &eos_ = eos;
-  constexpr bool use_ye_ = use_ye;
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   par_for("pgen_tov1", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -145,6 +143,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real vr = 0.;
     Real p_pert = 0.;
     Real ye = ye_atmo;
+    auto &use_ye_ = use_ye;
     if (!isotropic) {
       tov_.GetPrimitivesAtPoint(eos_, r, rho, p, mass, alp);
       if (r <= tov_.R_edge) {
@@ -153,7 +152,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
         auto rand_gen = rand_pool64.get_state();
         p_pert = 2.0*p_pert*(rand_gen.frand() - 0.5);
         rand_pool64.free_state(rand_gen);
-        if constexpr (use_ye_) {
+        if constexpr (use_ye) {
           ye = eos_.template GetYeFromRho<tov::LocationTag::Device>(rho);
         }
       }
@@ -166,7 +165,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
         auto rand_gen = rand_pool64.get_state();
         p_pert = 2.0*p_pert*(rand_gen.frand() - 0.5);
         rand_pool64.free_state(rand_gen);
-        if constexpr (use_ye_) {
+        if constexpr (use_ye) {
           ye = eos_.template GetYeFromRho<tov::LocationTag::Device>(rho);
         }
       }
@@ -182,7 +181,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     w0_(m,IVZ,k,j,i) = vr*x3v/r;
     auto &nvars = nvars_;
     auto &nscal = nscal_;
-    if (use_ye_ && nscal >= 1) {
+    if (use_ye && nscal >= 1) {
       w0_(m,nvars,k,j,i) = ye;
     }
     // Transition-EOS composition seed (Ye, Xn, Xp, Xa, Xh, Ah, E_B): free
