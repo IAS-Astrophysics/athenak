@@ -21,7 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem()

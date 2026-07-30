@@ -11,6 +11,7 @@
 #include <cmath>
 #include <iostream>
 #include <list>
+#include <vector>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -24,8 +25,14 @@
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
                                    Real rad, Real xc, Real yc, Real zc)
+    : SphericalSurface(pmy_pack, ntheta, std::vector<Real>{rad}, xc, yc, zc) {}
+
+SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
+                                   const std::vector<Real> &rad, Real xc, Real yc,
+                                   Real zc)
     : ntheta(ntheta),
-      radius(rad),
+      nradii(static_cast<int>(rad.size())),
+      radii("radii", 1),
       xc(xc),
       yc(yc),
       zc(zc),
@@ -39,12 +46,26 @@ SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
   nangles = 2 * ntheta * ntheta;
+  npoints = nradii * nangles;
+
+  // Allocate memory for the radii DualArray1D<Real>
+  // and subsequently fill the array with the specified
+  // radii.
+  Kokkos::realloc(radii, nradii);
+  for (int r = 0; r < nradii; ++r) {
+    radii.h_view(r) = rad[r];
+  }
+
+  // Sync to GPU.
+  radii.template modify<HostMemSpace>();
+  radii.template sync<DevExeSpace>();
 
   Kokkos::realloc(int_weights, nangles);
   Kokkos::realloc(polar_pos, nangles, 2);
-  Kokkos::realloc(cart_pos, nangles, 3);
-  Kokkos::realloc(interp_indcs, nangles, 4);
-  Kokkos::realloc(interp_wghts, nangles, 2 * ng, 3);
+  Kokkos::realloc(cart_pos, npoints, 3);
+  Kokkos::realloc(interp_vals, npoints);
+  Kokkos::realloc(interp_indcs, npoints, 4);
+  Kokkos::realloc(interp_wghts, npoints, 2 * ng, 3);
 
   InitializeAngleAndWeights();
   InitializeRadius();
@@ -80,12 +101,16 @@ void SphericalSurface::InitializeAngleAndWeights() {
 }
 
 void SphericalSurface::InitializeRadius() {
-  for (int n = 0; n < nangles; ++n) {
-    Real &theta = polar_pos.h_view(n, 0);
-    Real &phi = polar_pos.h_view(n, 1);
-    cart_pos.h_view(n, 0) = radius * cos(phi) * sin(theta) + xc;
-    cart_pos.h_view(n, 1) = radius * sin(phi) * sin(theta) + yc;
-    cart_pos.h_view(n, 2) = radius * cos(theta) + zc;
+  for (int r = 0; r < nradii; ++r) {
+    Real &rad = radii.h_view(r);
+    for (int n = 0; n < nangles; ++n) {
+      Real &theta = polar_pos.h_view(n, 0);
+      Real &phi = polar_pos.h_view(n, 1);
+      int p = r * nangles + n;
+      cart_pos.h_view(p, 0) = rad * cos(phi) * sin(theta) + xc;
+      cart_pos.h_view(p, 1) = rad * sin(phi) * sin(theta) + yc;
+      cart_pos.h_view(p, 2) = rad * cos(theta) + zc;
+    }
   }
   cart_pos.template modify<HostMemSpace>();
   cart_pos.template sync<DevExeSpace>();
@@ -101,7 +126,7 @@ void SphericalSurface::SetInterpolationIndices() {
   auto &size = pmy_pack->pmb->mb_size;
 
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nang1 = nangles - 1;
+  int nang1 = npoints - 1;
   auto &rcoord = cart_pos;
   auto &iindcs = interp_indcs;
   for (int n = 0; n <= nang1; ++n) {
@@ -136,6 +161,8 @@ void SphericalSurface::SetInterpolationIndices() {
             std::floor((rcoord.h_view(n, 1) - (x2min + dx2 / 2.0)) / dx2));
         iindcs.h_view(n, 3) = static_cast<int>(
             std::floor((rcoord.h_view(n, 2) - (x3min + dx3 / 2.0)) / dx3));
+        // MeshBlock bounds half-open; no other block can own this points
+        break;
       }
     }
   }
@@ -158,7 +185,7 @@ void SphericalSurface::SetInterpolationWeights() {
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
-  for (int n = 0; n < nangles; ++n) {
+  for (int n = 0; n < npoints; ++n) {
     // extract indices
     int &ii0 = iindcs.h_view(n, 0);
     int &ii1 = iindcs.h_view(n, 1);
@@ -235,11 +262,10 @@ void SphericalSurface::InterpolateToSphere(int var_ind,
   int &js = indcs.js;
   int &ks = indcs.ks;
   int &ng = indcs.ng;
-  int nang1 = nangles - 1;
+  int nang1 = npoints - 1;
   int v = var_ind;
 
   // reallocate container
-  Kokkos::realloc(interp_vals, nangles);
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
   auto &ivals = interp_vals;

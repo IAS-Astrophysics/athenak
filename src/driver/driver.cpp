@@ -25,6 +25,7 @@
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
 #include "gravity/gravity.hpp"
+#include "utils/utils.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -376,7 +377,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 //! until a relevant stopping criteria is found (e.g. t > tlim). Calls AMR driver, and
 //! performs outputs. Updates counters like (ncycle, time, etc.)
 
-void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdflag) {
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list(s)...\n" << std::endl;
   }
@@ -394,6 +395,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
            (elapsed_time < wall_time)) {
       pmesh->ClearMeshUpdated();
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
+      if (wdflag) {WatchDog(0);}
+
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
