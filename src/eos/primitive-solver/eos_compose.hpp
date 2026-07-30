@@ -69,6 +69,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     eos_units = MakeNuclear();
     m_initialized = false;
     m_has_dU = false;
+    m_has_composition = false;
 
     // These will be set properly when the table is read
     m_id_log_nb = std::numeric_limits<Real>::quiet_NaN();
@@ -804,6 +805,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   bool m_initialized;
   // whether the optional dU (nucleon interaction potential) channel was present
   bool m_has_dU;
+  // whether the composition channels needed by the transition EOS were all present
+  bool m_has_composition;
 
   // Table storage on DEVICE.
   DvceArray1D<Real> m_log_nb;

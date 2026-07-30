@@ -184,10 +184,47 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    // Composition channels (used by the transition EOS).
+    // Composition channels: needed only by the transition EOS / RHINE. A plain compose
+    // run does not use them, so a table lacking them loads with m_has_composition =
+    // false; EOSTransition::InitializeTables is what rejects such a table.
     auto clamp01 = [](Real x) { return fmax(0.0, fmin(x, 1.0)); };
 
-    { // Y[n] -> ECYN
+    const char *comp_fields[6] = {"Y[n]", "Y[p]", "Y[He4]", "A[N]", "Z[N]", "Y[N]"};
+    m_has_composition = true;
+    std::string missing;
+    for (int l = 0; l < 6; ++l) {
+      if (!table.HasField(comp_fields[l])) {
+        m_has_composition = false;
+        missing += (missing.empty() ? "" : ", ");
+        missing += comp_fields[l];
+      }
+    }
+    if (m_has_composition) {
+      std::string opt;
+      for (const char *f : {"Y[H2]", "Y[H3]", "Y[He3]", "dU"}) {
+        if (table.HasField(f)) {
+          opt += (opt.empty() ? "" : ", ");
+          opt += f;
+        }
+      }
+      std::cout << "CompOSE table " << fname << ": composition channels present"
+                << (opt.empty() ? "; no optional channels" : "; optional: " + opt)
+                << std::endl;
+    } else {
+      std::cout << "CompOSE table " << fname << ": composition channels absent ("
+                << missing << "); NSE composition unavailable." << std::endl;
+      for (int v : {ECYN, ECYP, ECXA, ECXH, ECAN, ECZN}) {
+        for (size_t in=0; in<m_nn; ++in) {
+          for (size_t iy=0; iy<m_ny; ++iy) {
+            for (size_t it=0; it<m_nt; ++it) {
+              host_table(v,in,iy,it) = (v == ECAN) ? 1.0 : 0.0;
+            }
+          }
+        }
+      }
+    }
+
+    if (m_has_composition) { // Y[n] -> ECYN
       Real * d = table["Y[n]"];
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
@@ -199,7 +236,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    { // Y[p] -> ECYP
+    if (m_has_composition) { // Y[p] -> ECYP
       Real * d = table["Y[p]"];
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
@@ -211,7 +248,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    { // Y[He4] -> ECXA (mass fraction), plus optional light nuclei H2/H3/He3
+    if (m_has_composition) { // Y[He4] -> ECXA, plus optional light nuclei H2/H3/He3
       Real * d = table["Y[He4]"];
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
@@ -237,7 +274,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    { // A[N] -> ECAN
+    if (m_has_composition) { // A[N] -> ECAN
       Real * d = table["A[N]"];
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
@@ -249,7 +286,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    { // Z[N] -> ECZN
+    if (m_has_composition) { // Z[N] -> ECZN
       Real * d = table["Z[N]"];
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
@@ -283,7 +320,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       m_has_dU = false;
     }
 
-    { // Y[N] with A[N] -> ECXH = A_N * Y_N (heavy-nucleus mass fraction)
+    if (m_has_composition) { // Y[N] with A[N] -> ECXH = A_N * Y_N
       Real * d = table["Y[N]"];
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {

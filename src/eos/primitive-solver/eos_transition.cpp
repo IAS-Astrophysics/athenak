@@ -143,6 +143,14 @@ void EOSTransition<LogPolicy>::InitializeTables(std::string fname,
     std::exit(EXIT_FAILURE);
   }
   compose_eos.ReadTableFromFile(fname);
+  if (!compose_eos.m_has_composition) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "EOSTransition requires the CompOSE composition channels Y[n], Y[p], "
+              << "Y[He4], A[N], Z[N] and Y[N]; '" << fname << "' is missing at least "
+              << "one of them (see the message above). Regenerate the table with "
+              << "pycompose including the composition datasets." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   helmholtz_eos.ReadTableFromFile(helm_fname, compose_eos.min_Y[SCYE],
                                   compose_eos.max_Y[SCYE]);
   // Default transition strips: T in [0.5, 0.6] MeV (just below NSE dropout at
