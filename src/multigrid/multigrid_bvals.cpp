@@ -1068,26 +1068,38 @@ void MultigridBoundaryValues::FillCoarseMG(const DvceArray5D<Real> &u) {
         int fj = ngh + 2*c0;
         int fk = ngh + 2*c1;
         int fi = (face == 0) ? ngh : ngh + ncells - 1;
-        int ci = (face == 0) ? ngh - 1 : ngh + cnc;
-        cbuf(m, v, ngh + c1, ngh + c0, ci) = 0.25 * (
+        Real fav = 0.25 * (
           u(m,v,fk,  fj,  fi) + u(m,v,fk,  fj+1,fi) +
           u(m,v,fk+1,fj,  fi) + u(m,v,fk+1,fj+1,fi));
+        // The send-to-coarser (icoar) face extent spans ngh coarse ghost cells, so
+        // every one of them must carry the face average; otherwise the message
+        // carries stale data for ngh > 1.
+        for (int d = 0; d < ngh; ++d) {
+          int cid = (face == 0) ? ngh - 1 - d : ngh + cnc + d;
+          cbuf(m, v, ngh + c1, ngh + c0, cid) = fav;
+        }
       } else if (face < 4) {
         int fi = ngh + 2*c0;
         int fk = ngh + 2*c1;
         int fj = (face == 2) ? ngh : ngh + ncells - 1;
-        int cj = (face == 2) ? ngh - 1 : ngh + cnc;
-        cbuf(m, v, ngh + c1, cj, ngh + c0) = 0.25 * (
+        Real fav = 0.25 * (
           u(m,v,fk,  fj,fi  ) + u(m,v,fk,  fj,fi+1) +
           u(m,v,fk+1,fj,fi  ) + u(m,v,fk+1,fj,fi+1));
+        for (int d = 0; d < ngh; ++d) {
+          int cjd = (face == 2) ? ngh - 1 - d : ngh + cnc + d;
+          cbuf(m, v, ngh + c1, cjd, ngh + c0) = fav;
+        }
       } else {
         int fi = ngh + 2*c0;
         int fj = ngh + 2*c1;
         int fk = (face == 4) ? ngh : ngh + ncells - 1;
-        int ck = (face == 4) ? ngh - 1 : ngh + cnc;
-        cbuf(m, v, ck, ngh + c1, ngh + c0) = 0.25 * (
+        Real fav = 0.25 * (
           u(m,v,fk,fj,  fi  ) + u(m,v,fk,fj,  fi+1) +
           u(m,v,fk,fj+1,fi  ) + u(m,v,fk,fj+1,fi+1));
+        for (int d = 0; d < ngh; ++d) {
+          int ckd = (face == 4) ? ngh - 1 - d : ngh + cnc + d;
+          cbuf(m, v, ckd, ngh + c1, ngh + c0) = fav;
+        }
       }
     });
 }
