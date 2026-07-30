@@ -1,23 +1,23 @@
-# AthenaK input file for AMR div(B) preservation in 1D
+# AthenaK input file for AMR div(B) preservation in 3D
 
 <job>
-basename  = DivBAMR1D
+basename  = DivBAMR3D
 
 <mesh>
 nghost    = 2
-nx1       = 64
+nx1       = 32
 x1min     = 0.0
 x1max     = 1.0
 ix1_bc    = periodic
 ox1_bc    = periodic
 
-nx2       = 1
+nx2       = 32
 x2min     = 0.0
 x2max     = 1.0
 ix2_bc    = periodic
 ox2_bc    = periodic
 
-nx3       = 1
+nx3       = 32
 x3min     = 0.0
 x3max     = 1.0
 ix3_bc    = periodic
@@ -25,8 +25,8 @@ ox3_bc    = periodic
 
 <meshblock>
 nx1       = 8
-nx2       = 1
-nx3       = 1
+nx2       = 8
+nx3       = 8
 
 <mesh_refinement>
 refinement          = adaptive
@@ -42,7 +42,7 @@ method = user
 evolution  = dynamic
 integrator = rk2
 cfl_number = 0.25
-nlim       = 24
+nlim       = 8
 tlim       = 1.0
 ndiag      = 1
 
