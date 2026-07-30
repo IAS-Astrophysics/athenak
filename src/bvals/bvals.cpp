@@ -37,9 +37,6 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
   rank_recvbuf_vars_("rank_recvbuf_vars",1),
   rank_sendhdr_vars_("rank_sendhdr_vars",1),
   rank_recvhdr_vars_("rank_recvhdr_vars",1),
-  send_var_entries_d_("send_var_entries_d",1),
-  recv_var_entries_d_("recv_var_entries_d",1),
-  unpack_tasks_d_("unpack_tasks_d",1),
   send_agg_offset_("send_agg_offset",1),
   recv_agg_offset_("recv_agg_offset",1)
 #endif
@@ -231,21 +228,6 @@ void MeshBoundaryValues::BuildRankPackedVarMetadata(const int nvars) {
   Kokkos::realloc(rank_sendhdr_vars_, std::max(1, send_hdr_total));
   Kokkos::realloc(rank_recvhdr_vars_, std::max(1, recv_hdr_total));
 
-  // Mirror entry tables to device for the fused pack/unpack kernels.
-  {
-    const std::size_t nsend = send_var_entries_.size();
-    const std::size_t nrecv = recv_var_entries_.size();
-    send_var_entries_d_ =
-        DvceArray1D<RankPackedVarEntry>("send_var_entries_d", nsend);
-    recv_var_entries_d_ =
-        DvceArray1D<RankPackedVarEntry>("recv_var_entries_d", nrecv);
-    auto h_send = Kokkos::create_mirror_view(send_var_entries_d_);
-    auto h_recv = Kokkos::create_mirror_view(recv_var_entries_d_);
-    for (std::size_t i = 0; i < nsend; ++i) h_send(i) = send_var_entries_[i];
-    for (std::size_t i = 0; i < nrecv; ++i) h_recv(i) = recv_var_entries_[i];
-    Kokkos::deep_copy(send_var_entries_d_, h_send);
-    Kokkos::deep_copy(recv_var_entries_d_, h_recv);
-  }
   send_var_reqs_.assign(send_var_msgs_.size(), MPI_REQUEST_NULL);
   recv_var_reqs_.assign(recv_var_msgs_.size(), MPI_REQUEST_NULL);
 
@@ -287,17 +269,12 @@ void MeshBoundaryValues::BuildRankPackedVarMetadata(const int nvars) {
     }
   }
 
-  // Build the cached unpack-task table + per-(m,n) aggregate-offset maps from
-  // the received headers. Lets PackBuff/RecvBuff read/write the aggregate
-  // buffer directly (fused), and the per-step path carry no header.
+  // Build the per-(m,n) aggregate-offset maps from the received headers, so
+  // SendBuff/RecvBuff read/write the aggregate buffer directly (fused pack and
+  // unpack) and the per-step path carries no header message.
   {
     const int nmb_max =
         std::max(pmy_pack->nmb_thispack, pmy_pack->pmesh->nmb_maxperrank);
-    const int n_recv_entries = static_cast<int>(recv_var_entries_.size());
-    unpack_tasks_d_ = DvceArray1D<RankPackedVarEntry>(
-        "unpack_tasks_d", std::max(1, n_recv_entries));
-    auto unpack_tasks_h = Kokkos::create_mirror_view(unpack_tasks_d_);
-
     const int map_len = nmb*nnghbr;
     recv_agg_offset_ = DvceArray1D<int>("recv_agg_offset", std::max(1, map_len));
     send_agg_offset_ = DvceArray1D<int>("send_agg_offset", std::max(1, map_len));
@@ -305,7 +282,6 @@ void MeshBoundaryValues::BuildRankPackedVarMetadata(const int nvars) {
     auto send_off_h = Kokkos::create_mirror_view(send_agg_offset_);
     for (int i = 0; i < map_len; ++i) { recv_off_h(i) = -1; send_off_h(i) = -1; }
 
-    int t = 0;
     for (const auto &msg : recv_var_msgs_) {
       int off = msg.offset;
       for (int e = 0; e < msg.nentries; ++e) {
@@ -321,19 +297,10 @@ void MeshBoundaryValues::BuildRankPackedVarMetadata(const int nvars) {
                     << msg.rank << std::endl;
           std::exit(EXIT_FAILURE);
         }
-        unpack_tasks_h(t).m = 0;
-        unpack_tasks_h(t).n = 0;
-        unpack_tasks_h(t).lid = lid;
-        unpack_tasks_h(t).dn = dn;
-        unpack_tasks_h(t).data_size = dsize;
-        unpack_tasks_h(t).offset = off;
         if (lid < nmb) recv_off_h(lid*nnghbr + dn) = off;
-        ++t;
         off += dsize;
       }
     }
-    Kokkos::deep_copy(unpack_tasks_d_, unpack_tasks_h);
-
     for (const auto &entry : send_var_entries_) {
       send_off_h(entry.m*nnghbr + entry.n) = entry.offset;
     }
@@ -380,16 +347,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
         InitRecvIndices(recvbuf[indx],n, 0, 0, fy, fz);
         sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
         recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-        sendbuf[indx].faces.h_view(0) = 1;
-        recvbuf[indx].faces.h_view(0) = 1;
-        sendbuf[indx].faces.h_view(1) = 0;
-        recvbuf[indx].faces.h_view(1) = 0;
-        sendbuf[indx].faces.h_view(2) = 0;
-        recvbuf[indx].faces.h_view(2) = 0;
-        sendbuf[indx].faces.template modify<HostMemSpace>();
-        recvbuf[indx].faces.template modify<HostMemSpace>();
-        sendbuf[indx].faces.template sync<DevMemSpace>();
-        recvbuf[indx].faces.template sync<DevMemSpace>();
       }
     }
   }
@@ -405,16 +362,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],0, m, 0, fx, fz);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          sendbuf[indx].faces.h_view(0) = 0;
-          recvbuf[indx].faces.h_view(0) = 0;
-          sendbuf[indx].faces.h_view(1) = 1;
-          recvbuf[indx].faces.h_view(1) = 1;
-          sendbuf[indx].faces.h_view(2) = 0;
-          recvbuf[indx].faces.h_view(2) = 0;
-          sendbuf[indx].faces.template modify<HostMemSpace>();
-          recvbuf[indx].faces.template modify<HostMemSpace>();
-          sendbuf[indx].faces.template sync<DevMemSpace>();
-          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -428,16 +375,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],n, m, 0, fz, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          sendbuf[indx].faces.h_view(0) = 1;
-          recvbuf[indx].faces.h_view(0) = 1;
-          sendbuf[indx].faces.h_view(1) = 1;
-          recvbuf[indx].faces.h_view(1) = 1;
-          sendbuf[indx].faces.h_view(2) = 0;
-          recvbuf[indx].faces.h_view(2) = 0;
-          sendbuf[indx].faces.template modify<HostMemSpace>();
-          recvbuf[indx].faces.template modify<HostMemSpace>();
-          sendbuf[indx].faces.template sync<DevMemSpace>();
-          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -454,16 +391,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],0, 0, l, fx, fy);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          sendbuf[indx].faces.h_view(0) = 0;
-          recvbuf[indx].faces.h_view(0) = 0;
-          sendbuf[indx].faces.h_view(1) = 0;
-          recvbuf[indx].faces.h_view(1) = 0;
-          sendbuf[indx].faces.h_view(2) = 1;
-          recvbuf[indx].faces.h_view(2) = 1;
-          sendbuf[indx].faces.template modify<HostMemSpace>();
-          recvbuf[indx].faces.template modify<HostMemSpace>();
-          sendbuf[indx].faces.template sync<DevMemSpace>();
-          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -477,16 +404,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],n, 0, l, fy, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          sendbuf[indx].faces.h_view(0) = 1;
-          recvbuf[indx].faces.h_view(0) = 1;
-          sendbuf[indx].faces.h_view(1) = 0;
-          recvbuf[indx].faces.h_view(1) = 0;
-          sendbuf[indx].faces.h_view(2) = 1;
-          recvbuf[indx].faces.h_view(2) = 1;
-          sendbuf[indx].faces.template modify<HostMemSpace>();
-          recvbuf[indx].faces.template modify<HostMemSpace>();
-          sendbuf[indx].faces.template sync<DevMemSpace>();
-          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -500,16 +417,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],0, m, l, fx, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          sendbuf[indx].faces.h_view(0) = 0;
-          recvbuf[indx].faces.h_view(0) = 0;
-          sendbuf[indx].faces.h_view(1) = 1;
-          recvbuf[indx].faces.h_view(1) = 1;
-          sendbuf[indx].faces.h_view(2) = 1;
-          recvbuf[indx].faces.h_view(2) = 1;
-          sendbuf[indx].faces.template modify<HostMemSpace>();
-          recvbuf[indx].faces.template modify<HostMemSpace>();
-          sendbuf[indx].faces.template sync<DevMemSpace>();
-          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
@@ -523,16 +430,6 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
           InitRecvIndices(recvbuf[indx],n, m, l, 0, 0);
           sendbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
           recvbuf[indx].AllocateBuffers(nmb, nvar, is_z4c_);
-          sendbuf[indx].faces.h_view(0) = 1;
-          recvbuf[indx].faces.h_view(0) = 1;
-          sendbuf[indx].faces.h_view(1) = 1;
-          recvbuf[indx].faces.h_view(1) = 1;
-          sendbuf[indx].faces.h_view(2) = 1;
-          recvbuf[indx].faces.h_view(2) = 1;
-          sendbuf[indx].faces.template modify<HostMemSpace>();
-          recvbuf[indx].faces.template modify<HostMemSpace>();
-          sendbuf[indx].faces.template sync<DevMemSpace>();
-          recvbuf[indx].faces.template sync<DevMemSpace>();
         }
       }
     }
