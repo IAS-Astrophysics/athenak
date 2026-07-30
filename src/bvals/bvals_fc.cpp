@@ -8,7 +8,6 @@
 //! Mesh variables.
 //! Prolongation of FC variables  occurs in ProlongateFC() function called from task list
 
-#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -351,12 +350,6 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             k += kl;
             j += jl;
             if (IsActiveFCFace(v, k, j, i, indcs)) {
-#ifdef ATHENAK_DEBUG_FC_AMR_OWNERSHIP
-              Kokkos::printf("FC AMR ownership blocked recv m=%d n=%d v=%d "
-                             "kji=(%d,%d,%d) nlev=%d mlev=%d\n",
-                             m, n, v, k, j, i, nghbr.d_view(m,n).lev,
-                             mblev.d_view(m));
-#endif
               return;
             }
             if (v==0) {
