@@ -684,7 +684,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
           for (int n=0; n < nscal_; ++n) {
             flx_llf[n] = w0_(m,nmhd_+n,k,j,i) * flx3(m,IDN,k,j,i);
           }
-          bet_pp = - utest_(m,IDN,k,j,i) / flx3(m,IDN,k,j,i);
         }
 
         uD = utest_(m,IDN,k-1,j,i) - bet_pp * flx3(m,IDN,k,j,i);
