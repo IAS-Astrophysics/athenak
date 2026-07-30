@@ -94,12 +94,14 @@ class ResetFloorTransition : public ErrorPolicyInterface {
   /// Response to excess magnetization
   KOKKOS_INLINE_FUNCTION Error MagnetizationResponse(Real& bsq, Real b_u[3]) const {
     if (bsq > max_bsq) {
+      // Multiply (not divide, as AthenaK's ResetFloor does): factor < 1 is what takes
+      // |b|^2 down to max_bsq. Matches GR-Athena++ ResetFloorTransition.
       Real factor = sqrt(max_bsq/bsq);
       bsq = max_bsq;
 
-      b_u[0] /= factor;
-      b_u[1] /= factor;
-      b_u[2] /= factor;
+      b_u[0] *= factor;
+      b_u[1] *= factor;
+      b_u[2] *= factor;
 
       return Error::CONS_ADJUSTED;
     }

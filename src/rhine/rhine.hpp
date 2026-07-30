@@ -54,6 +54,15 @@ enum RhineAux {
   N_RHINE_AUX
 };
 
+constexpr int N_RHINE_SCALARS = 7;
+
+//----------------------------------------------------------------------------------------
+//! Which network pass to run. GR-Athena++ evaluates the network twice per step:
+//! `source` = TransitionNetworkApply (per substep, back-reaction, '0' reference frozen at
+//! full-step start); `poststep` = Mesh::CalculateTransitionNetwork (once per step after the
+//! final C2P: NSE resync, then diagnostics-only with the current state as reference).
+enum class RhinePass {source, poststep};
+
 //----------------------------------------------------------------------------------------
 //! \class RHINE
 //! \brief Operator-split r-process heating + composition source term for the transition EOS.
@@ -62,8 +71,12 @@ class RHINE {
   RHINE(MeshBlockPack *ppack, ParameterInput *pin);
   ~RHINE();
 
-  //! Apply RHINE per cell and add source terms to the MHD conserved variables.
+  //! Per-substep pass: add RHINE source terms to the MHD conserved variables.
   TaskStatus AddSources(Driver *pdrive, int stage);
+
+  //! Once-per-step pass (final stage only): NSE resync over the full block, then
+  //! the diagnostics-only network evaluation.
+  TaskStatus PostStep(Driver *pdrive, int stage);
 
   RhineNets nets;
   int  pmode;
@@ -72,11 +85,25 @@ class RHINE {
 
   // Diagnostic array (nmb, N_RHINE_AUX, nc3, nc2, nc1).
   DvceArray5D<Real> aux;
+  // Composition frozen at full-step start; the network's '0' reference in the source
+  // pass (GR-Athena++ pscalars->r0). (nmb, N_RHINE_SCALARS, nc3, nc2, nc1).
+  DvceArray5D<Real> r0;
+
+  //! `dt_apply_code <= 0` makes the evaluation diagnostics-only.
+  template<class EOSPolicy, class ErrorPolicy>
+  TaskStatus NetworkStepEOS(Real dt_apply_code);
+
+  template<class EOSPolicy, class ErrorPolicy>
+  TaskStatus NSEResyncEOS();
+
+  void SnapshotReference();
 
  private:
-  //! EOS-typed implementation dispatched from AddSources.
+  //! Resolve the EOS/error policy template arguments and run `pass`.
+  TaskStatus Dispatch(Driver *pdrive, int stage, RhinePass pass);
+
   template<class EOSPolicy, class ErrorPolicy>
-  TaskStatus AddSourcesEOS(Driver *pdrive, int stage);
+  TaskStatus RunPassEOS(RhinePass pass, Real dt_apply_code);
 
   MeshBlockPack *pmy_pack;
 };

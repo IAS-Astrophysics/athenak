@@ -37,12 +37,12 @@ namespace rhine {
 
 namespace {
 //----------------------------------------------------------------------------------------
-//! \fn Real SqrtGammaVcoord(...)
-//! \brief Return sqrt(gamma) * v_coord^dir at cell (m,k,j,i), where v_coord^i = alpha v^i
-//!        - beta^i is the fluid coordinate 3-velocity.
+//! \fn Real SqrtGammaAlphaV(...)
+//! \brief sqrt(gamma) * alpha * v^dir at cell (m,k,j,i), the flux argument of the exact
+//!        expansion rate. v^dir is the Eulerian velocity, w0(IVX+dir)/W.
 template<class ADMVars>
 KOKKOS_INLINE_FUNCTION
-Real SqrtGammaVcoord(const ADMVars &adm, const DvceArray5D<Real> &w0,
+Real SqrtGammaAlphaV(const ADMVars &adm, const DvceArray5D<Real> &w0,
                      int m, int k, int j, int i, int dir) {
   const Real g11 = adm.g_dd(m,0,0,k,j,i), g12 = adm.g_dd(m,0,1,k,j,i);
   const Real g13 = adm.g_dd(m,0,2,k,j,i), g22 = adm.g_dd(m,1,1,k,j,i);
@@ -57,8 +57,7 @@ Real SqrtGammaVcoord(const ADMVars &adm, const DvceArray5D<Real> &w0,
   const Real iW = 1.0 / Kokkos::sqrt(1.0 + Wvsq);
 
   const Real wv_dir = (dir == 0) ? wv1 : ((dir == 1) ? wv2 : wv3);
-  const Real vcoord = adm.alpha(m, k, j, i) * (wv_dir * iW) - adm.beta_u(m, dir, k, j, i);
-  return sdetg * vcoord;
+  return sdetg * adm.alpha(m, k, j, i) * (wv_dir * iW);
 }
 }  // namespace
 
@@ -106,6 +105,7 @@ RHINE::RHINE(MeshBlockPack *ppack, ParameterInput *pin) :
   int nc2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*(indcs.ng)) : 1;
   int nc3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*(indcs.ng)) : 1;
   Kokkos::realloc(aux, nmb, N_RHINE_AUX, nc3, nc2, nc1);
+  Kokkos::realloc(r0, nmb, N_RHINE_SCALARS, nc3, nc2, nc1);
 }
 
 //----------------------------------------------------------------------------------------
@@ -114,27 +114,130 @@ RHINE::~RHINE() {}
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RHINE::AddSources(Driver *pdrive, int stage)
-//! \brief Dispatch to the EOS-typed implementation.
+//! \brief Per-substep source pass. Freezes the '0' reference at stage 1.
 TaskStatus RHINE::AddSources(Driver *pdrive, int stage) {
+  if (!apply) { return TaskStatus::complete; }  // diagnostics come from PostStep
+  return Dispatch(pdrive, stage, RhinePass::source);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus RHINE::PostStep(Driver *pdrive, int stage)
+//! \brief Once-per-step pass; a no-op except after the final RK stage.
+TaskStatus RHINE::PostStep(Driver *pdrive, int stage) {
+  if (stage != pdrive->nexp_stages) { return TaskStatus::complete; }
+  return Dispatch(pdrive, stage, RhinePass::poststep);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass)
+//! \brief Resolve the EOS/error policy template arguments and run the requested pass.
+TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass) {
   using namespace dyngr;      // NOLINT
   using namespace Primitive;  // NOLINT
   if (pmy_pack->pdyngr->eos_policy != DynGRMHD_EOS::eos_transition) {
     return TaskStatus::complete;
   }
+  Real dt_apply = 0.0;
+  if (pass == RhinePass::source) {
+    if (stage == 1) { SnapshotReference(); }
+    dt_apply = (pdrive->beta[stage-1]) * (pmy_pack->pmesh->dt);
+  }
   if (pmy_pack->pdyngr->error_policy == DynGRMHD_Error::reset_floor) {
-    return use_nqt ? AddSourcesEOS<EOSTransition<NQTLogs>, ResetFloor>(pdrive, stage)
-                   : AddSourcesEOS<EOSTransition<NormalLogs>, ResetFloor>(pdrive, stage);
+    return use_nqt
+        ? RunPassEOS<EOSTransition<NQTLogs>, ResetFloor>(pass, dt_apply)
+        : RunPassEOS<EOSTransition<NormalLogs>, ResetFloor>(pass, dt_apply);
   }
   return use_nqt
-      ? AddSourcesEOS<EOSTransition<NQTLogs>, ResetFloorTransition>(pdrive, stage)
-      : AddSourcesEOS<EOSTransition<NormalLogs>, ResetFloorTransition>(pdrive, stage);
+      ? RunPassEOS<EOSTransition<NQTLogs>, ResetFloorTransition>(pass, dt_apply)
+      : RunPassEOS<EOSTransition<NormalLogs>, ResetFloorTransition>(pass, dt_apply);
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage)
-//! \brief Evaluate RHINE per cell (diagnostics + NSE resync + network + apply).
+//! \fn TaskStatus RHINE::RunPassEOS(RhinePass pass, Real dt_apply_code)
+//! \brief Resync first, then evaluate the network (GR-Athena++ ordering).
 template<class EOSPolicy, class ErrorPolicy>
-TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage) {
+TaskStatus RHINE::RunPassEOS(RhinePass pass, Real dt_apply_code) {
+  if (pass == RhinePass::poststep) { NSEResyncEOS<EOSPolicy, ErrorPolicy>(); }
+  return NetworkStepEOS<EOSPolicy, ErrorPolicy>(dt_apply_code);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void RHINE::SnapshotReference()
+//! \brief Freeze w0's composition scalars as the network's '0' reference for this step.
+void RHINE::SnapshotReference() {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  auto &w0 = pmy_pack->pmhd->w0;
+  auto &r0_ = r0;
+
+  par_for("rhine_r0", DevExeSpace(), 0, pmy_pack->nmb_thispack-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    for (int l = 0; l < N_RHINE_SCALARS; ++l) {
+      r0_(m, l, k, j, i) = w0(m, I_YE + l, k, j, i);
+    }
+  });
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus RHINE::NSEResyncEOS()
+//! \brief Re-synchronize the advected composition of NSE cells (w >= 1) with the table.
+//!
+//! Full block INCLUDING ghosts, as in GR-Athena++: an interior-only resync leaves ghost
+//! scalars stale relative to the neighbour's resynced interior, and AthenaK's FOFC mask
+//! reads those ghosts on the next step -- flipping the fallback decision on one side of a
+//! shared face only, i.e. unequal fluxes and a mass leak. Runs once per step after the
+//! final C2P, so w0/temperature are fresh everywhere; keeping it out of the substep path
+//! is also what protects the frozen r0 reference.
+template<class EOSPolicy, class ErrorPolicy>
+TaskStatus RHINE::NSEResyncEOS() {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int ng = indcs.ng;
+  int n1m1 = indcs.nx1 + 2*ng - 1;
+  int n2m1 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng - 1) : 0;
+  int n3m1 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng - 1) : 0;
+
+  auto &w0   = pmy_pack->pmhd->w0;
+  auto &u0   = pmy_pack->pmhd->u0;
+  auto &temp = pmy_pack->pdyngr->temperature;
+  auto eos = static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy>*>(
+                 pmy_pack->pdyngr)->eos.ps.GetEOS();
+
+  par_for("rhine_nse", DevExeSpace(), 0, pmy_pack->nmb_thispack-1,
+          0, n3m1, 0, n2m1, 0, n1m1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real n_fm3 = w0(m, IDN, k, j, i) / eos.GetBaryonMass();
+    const Real T = temp(m, 0, k, j, i);
+    if (eos.GetTransitionFactor(n_fm3, T) < 1.0) { return; }
+
+    Real Y[MAX_SPECIES] = {0.0};
+    for (int l = 0; l < N_RHINE_SCALARS; ++l) { Y[SCYE + l] = w0(m, I_YE + l, k, j, i); }
+
+    w0(m, I_XN, k, j, i) = eos.FrYn(n_fm3, T, Y);
+    w0(m, I_XP, k, j, i) = eos.FrYp(n_fm3, T, Y);
+    w0(m, I_XA, k, j, i) = eos.FrXa(n_fm3, T, Y);
+    w0(m, I_XH, k, j, i) = eos.FrXh(n_fm3, T, Y);
+    w0(m, I_AH, k, j, i) = eos.AN(n_fm3, T, Y);
+    w0(m, I_EB, k, j, i) = eos.GetNSEBindingEnergy(n_fm3, T, Y);
+
+    const Real D = u0(m, IDN, k, j, i);
+    u0(m, I_XN, k, j, i) = w0(m, I_XN, k, j, i) * D;
+    u0(m, I_XP, k, j, i) = w0(m, I_XP, k, j, i) * D;
+    u0(m, I_XA, k, j, i) = w0(m, I_XA, k, j, i) * D;
+    u0(m, I_XH, k, j, i) = w0(m, I_XH, k, j, i) * D;
+    u0(m, I_AH, k, j, i) = w0(m, I_AH, k, j, i) * D;
+    u0(m, I_EB, k, j, i) = w0(m, I_EB, k, j, i) * D;
+  });
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code)
+//! \brief Evaluate RHINE per cell: diagnostics always, back-reaction if dt_apply_code > 0.
+template<class EOSPolicy, class ErrorPolicy>
+TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
@@ -147,20 +250,26 @@ TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage) {
   auto &size = pmy_pack->pmb->mb_size;
   auto &adm  = pmy_pack->padm->adm;
   auto &aux_ = aux;
+  auto &r0_  = r0;
 
   // EOS (copy; Kokkos Views inside are device handles).
   auto eos = static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy>*>(
                  pmy_pack->pdyngr)->eos.ps.GetEOS();
 
   const Real time_cgs = pmy_pack->punit->time_cgs();
-  const Real bdt = (pdrive->beta[stage-1]) * (pmy_pack->pmesh->dt);
+  // RHINE's rates are endpoint differences over dt, so the network gets the full
+  // step (as in gr-athena) while the sources are applied over the substep.
+  const Real dt_code = pmy_pack->pmesh->dt;
+  const bool net_on = (dt_code > 0.0);
+  // Back-react only in the source pass; there the frozen r0 is the '0' reference.
+  const bool apply_ = apply && (dt_apply_code > 0.0);
+  const bool use_r0 = apply_;
 
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
 
   RhineNets nets_ = nets;
   const int  pmode_ = pmode;
-  const bool apply_ = apply;
 
   constexpr Real MEV_TO_ERG = 1.602176634e-6;    // erg per MeV
   constexpr Real M_U_G      = 1.66053906660e-24; // atomic mass unit [g]
@@ -202,20 +311,13 @@ TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage) {
 
     const Real D = u0(m, IDN, k, j, i);
 
-    // --- Full-NSE interior (w >= 1): re-synchronize composition with the table.
-    if (w >= 1.0) {
-      if (apply_) {
-        u0(m, I_XN, k, j, i) = eos.FrYn(n_fm3, T, Y) * D;
-        u0(m, I_XP, k, j, i) = eos.FrYp(n_fm3, T, Y) * D;
-        u0(m, I_XA, k, j, i) = eos.FrXa(n_fm3, T, Y) * D;
-        u0(m, I_XH, k, j, i) = eos.FrXh(n_fm3, T, Y) * D;
-        u0(m, I_AH, k, j, i) = eos.AN(n_fm3, T, Y) * D;
-        u0(m, I_EB, k, j, i) = eos.GetNSEBindingEnergy(n_fm3, T, Y) * D;
-      }
-      return;
-    }
+    // --- Full-NSE interior (w >= 1): no network sources. The table resync runs once
+    //     per step in NSEResyncEOS; doing it here would overwrite registers between
+    //     stage combinations and invalidate the frozen r0 reference.
+    if (w >= 1.0) { return; }
 
     // --- Out-of-NSE (w < 1): evaluate the network.
+    if (!net_on || !(T > 0.0)) { return; }
     // Sanitize + convert mass fractions to the network's per-baryon abundances.
     Real Y_s[MAX_SPECIES];
     eos.GetSanitizedMassFractions(Y, Y_s);
@@ -230,27 +332,9 @@ TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage) {
       const Real f = s_max / s_b;
       yn *= f; ya *= f; yh *= f;
     }
-    const Real mass0 = mb_MeV*(1.0 + Y_s[SCEB]) - M_U_MEV;  // mass excess [MeV/baryon]
-
-    // Expansion rate D ln(rho)/Dt [1/s] from the coordinate divergence.
-    Real theta = (SqrtGammaVcoord(adm, w0, m, k, j, i+1, 0)
-                - SqrtGammaVcoord(adm, w0, m, k, j, i-1, 0)) * 0.5 / size.d_view(m).dx1;
-    if (multi_d) {
-      theta += (SqrtGammaVcoord(adm, w0, m, k, j+1, i, 1)
-              - SqrtGammaVcoord(adm, w0, m, k, j-1, i, 1)) * 0.5 / size.d_view(m).dx2;
-    }
-    if (three_d) {
-      theta += (SqrtGammaVcoord(adm, w0, m, k+1, j, i, 2)
-              - SqrtGammaVcoord(adm, w0, m, k-1, j, i, 2)) * 0.5 / size.d_view(m).dx3;
-    }
     const Real g11 = adm.g_dd(m,0,0,k,j,i), g12 = adm.g_dd(m,0,1,k,j,i);
     const Real g13 = adm.g_dd(m,0,2,k,j,i), g22 = adm.g_dd(m,1,1,k,j,i);
     const Real g23 = adm.g_dd(m,1,2,k,j,i), g33 = adm.g_dd(m,2,2,k,j,i);
-    const Real isdetg = 1.0 / Kokkos::sqrt(adm::SpatialDet(g11,g12,g13,g22,g23,g33));
-    theta *= isdetg;
-    const Real drho = -theta / time_cgs;
-
-    // Lorentz factor and lapse for proper-time factors.
     const Real wv1 = w0(m, IVX, k, j, i);
     const Real wv2 = w0(m, IVY, k, j, i);
     const Real wv3 = w0(m, IVZ, k, j, i);
@@ -258,15 +342,64 @@ TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage) {
                     + 2.0*(g12*wv1*wv2 + g13*wv1*wv3 + g23*wv2*wv3);
     const Real Wlor = Kokkos::sqrt(1.0 + Wvsq);
     const Real alpha = adm.alpha(m, k, j, i);
-    const Real dt_s = bdt * (alpha / Wlor) * time_cgs;   // substep proper time [s]
+    const Real dt_net = dt_code * (alpha / Wlor) * time_cgs;  // full-step proper time [s]
+    const Real dt_ap  = dt_apply_code * (alpha / Wlor) * time_cgs;  // substep proper [s]
+
+    // Expansion rate D ln(rho)/Dtau = -div(u) [1/s]. Exact up to O(v^2 d_t):
+    //   W*trK - (W/(alpha*sqrt(gamma))) d_i(sqrt(gamma) alpha v^i),
+    // obtained by eliminating d_t(sqrt(gamma)) via d_t ln sqrt(gamma) = -alpha trK + D_i
+    // beta^i, which also cancels the shift. Reduces to -d_i v^i in flat space at rest, and
+    // to trK for static matter. RHINE clamps |drho| to >= 0.3/s internally.
+    Real div = (SqrtGammaAlphaV(adm, w0, m, k, j, i+1, 0)
+              - SqrtGammaAlphaV(adm, w0, m, k, j, i-1, 0)) * 0.5 / size.d_view(m).dx1;
+    if (multi_d) {
+      div += (SqrtGammaAlphaV(adm, w0, m, k, j+1, i, 1)
+            - SqrtGammaAlphaV(adm, w0, m, k, j-1, i, 1)) * 0.5 / size.d_view(m).dx2;
+    }
+    if (three_d) {
+      div += (SqrtGammaAlphaV(adm, w0, m, k+1, j, i, 2)
+            - SqrtGammaAlphaV(adm, w0, m, k-1, j, i, 2)) * 0.5 / size.d_view(m).dx3;
+    }
+    const Real detg = adm::SpatialDet(g11, g12, g13, g22, g23, g33);
+    Real uxx, uxy, uxz, uyy, uyz, uzz;
+    adm::SpatialInv(1.0/detg, g11, g12, g13, g22, g23, g33,
+                    &uxx, &uxy, &uxz, &uyy, &uyz, &uzz);
+    const Real trK = uxx*adm.vK_dd(m,0,0,k,j,i) + uyy*adm.vK_dd(m,1,1,k,j,i)
+                   + uzz*adm.vK_dd(m,2,2,k,j,i)
+                   + 2.0*(uxy*adm.vK_dd(m,0,1,k,j,i) + uxz*adm.vK_dd(m,0,2,k,j,i)
+                        + uyz*adm.vK_dd(m,1,2,k,j,i));
+    const Real drho = (Wlor*trK - (Wlor/(alpha*Kokkos::sqrt(detg))) * div) / time_cgs;
 
     const Real n_cm3   = n_fm3 * 1e39;
     const Real rho_cgs = M_U_G * n_cm3;                  // RHINE input [g/cm^3]
 
-    // Evaluate the network (current state as the '0' reference; first order).
+    Real ye0 = ye, yn0 = yn, ya0 = ya, yh0 = yh, ah0 = ah;
+    Real mass0 = mb_MeV*(1.0 + Y_s[SCEB]) - M_U_MEV;  // mass excess [MeV/baryon]
+    if (use_r0) {
+      Real Y0[MAX_SPECIES] = {0.0};
+      Real Y0_s[MAX_SPECIES];
+      for (int l = 0; l < N_RHINE_SCALARS; ++l) { Y0[SCYE + l] = r0_(m, l, k, j, i); }
+      eos.GetSanitizedMassFractions(Y0, Y0_s);
+      // Floored atmosphere at step start carries Ah=1, outside the network's [4,300]:
+      // keep the current-state reference for those cells.
+      if (Y0_s[SCAH] >= 4.0) {
+        ye0 = Y0_s[SCYE];
+        ah0 = Y0_s[SCAH];
+        yn0 = Y0_s[SCXN];
+        ya0 = 0.25 * Y0_s[SCXA];
+        yh0 = (ah0 > 0.0) ? Y0_s[SCXH] / ah0 : 0.0;
+        const Real s_b0 = yn0 + 4.0*ya0 + ah0*yh0;
+        if (s_b0 > s_max) {
+          const Real f0 = s_max / s_b0;
+          yn0 *= f0; ya0 *= f0; yh0 *= f0;
+        }
+        mass0 = mb_MeV*(1.0 + Y0_s[SCEB]) - M_U_MEV;
+      }
+    }
+
     Real dye, dyn, dyp, dya, dyh, dah, dma, fnu;
-    nets_.run(rho_cgs, T, ye, yn, ya, yh, ah, drho, dt_s,
-              ye, yn, ya, yh, ah, mass0,
+    nets_.run(rho_cgs, T, ye, yn, ya, yh, ah, drho, dt_net,
+              ye0, yn0, ya0, yh0, ah0, mass0,
               dye, dyn, dyp, dya, dyh, dah, dma, fnu, pmode_);
 
     if (!(Kokkos::isfinite(dye) && Kokkos::isfinite(dyn) && Kokkos::isfinite(dyp) &&
@@ -295,19 +428,21 @@ TaskStatus RHINE::AddSourcesEOS(Driver *pdrive, int stage) {
 
     // --- Apply. Heating is implicit (E_B feeds eps via c2p); the neutrino loss
     //     is an explicit tau/momentum sink.
-    const Real dxh = dah*yh + ah*dyh + dt_s*dah*dyh;
-    u0(m, I_XN, k, j, i) += D * dyn * dt_s;
-    u0(m, I_XP, k, j, i) += D * dyp * dt_s;
-    u0(m, I_XA, k, j, i) += D * 4.0 * dya * dt_s;
-    u0(m, I_XH, k, j, i) += D * dxh * dt_s;
-    u0(m, I_YE, k, j, i) += D * dye * dt_s;
-    u0(m, I_AH, k, j, i) += D * dah * dt_s;
-    u0(m, I_EB, k, j, i) += D * (dma / mb_MeV) * dt_s;
+    // (Xh1 - Xh0)/dt_net; must use the '0' reference for the baryon-number identity
+    // dyn + dyp + 4 dya + dxh = 0 to hold.
+    const Real dxh = dah*yh0 + ah0*dyh + dt_net*dah*dyh;
+    u0(m, I_XN, k, j, i) += D * dyn * dt_ap;
+    u0(m, I_XP, k, j, i) += D * dyp * dt_ap;
+    u0(m, I_XA, k, j, i) += D * 4.0 * dya * dt_ap;
+    u0(m, I_XH, k, j, i) += D * dxh * dt_ap;
+    u0(m, I_YE, k, j, i) += D * dye * dt_ap;
+    u0(m, I_AH, k, j, i) += D * dah * dt_ap;
+    u0(m, I_EB, k, j, i) += D * (dma / mb_MeV) * dt_ap;
 
     // Neutrino energy sink (no 1/W; four-force tau projection).
-    u0(m, IEN, k, j, i) += D * fnu * (dma / mb_MeV) * (bdt * alpha * time_cgs);
+    u0(m, IEN, k, j, i) += D * fnu * (dma / mb_MeV) * (dt_apply_code * alpha * time_cgs);
     // Neutrino momentum sink (proper-time factor).
-    const Real snu = D * fnu * (dma / mb_MeV) * dt_s;
+    const Real snu = D * fnu * (dma / mb_MeV) * dt_ap;
     const Real u_d_1 = g11*wv1 + g12*wv2 + g13*wv3;
     const Real u_d_2 = g12*wv1 + g22*wv2 + g23*wv3;
     const Real u_d_3 = g13*wv1 + g23*wv2 + g33*wv3;

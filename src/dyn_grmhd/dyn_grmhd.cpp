@@ -278,6 +278,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
+  if (pmy_pack->prhine != nullptr) {
+    pnr->QueueTask(&rhine::RHINE::PostStep, pmy_pack->prhine, MHD_RhinePost,
+                   "MHD_RhinePost", Task_End);
+  }
   pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
 }

@@ -23,6 +23,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "rhine/rhine.hpp"
 #include "driver.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -333,6 +334,11 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
 
     pmesh->NewTimeStep(tlim);
+
+    // NSE composition resync + RHINE diagnostics for the t = 0 output; needs dt.
+    if (pmesh->pmb_pack->prhine != nullptr) {
+      (void) pmesh->pmb_pack->prhine->PostStep(this, nexp_stages);
+    }
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
