@@ -94,7 +94,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
   auto my_tov = tov::TOVStar::ConstructTOV(pin, eos);
 
-  constexpr bool use_ye = tov::tov::UsesYe<TOVEOS>;
+  constexpr bool use_ye = tov::UsesYe<TOVEOS>;
   Real ye_atmo = pin->GetOrAddReal("mhd", "s0_atmosphere", 0.5);
 
   //auto& u0_ = pmbp->pmhd->u0;
