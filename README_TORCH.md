@@ -122,6 +122,20 @@ Two results worth recording explicitly:
 - `c10::xpu::getStreamFromExternal` and `XPUCachingAllocator::setMemoryFraction` behave as
   expected against torch `2.10.0a0`, not just the 2.12.1 headers they were written against.
 
+MPI is validated as of 2026-07-29 too (`-DAthena_ENABLE_MPI=ON`): two ranks, one MeshBlock each,
+each constructing its own `RheaModel` and loading the checkpoint onto its own device, give
+**bit-identical** results to the 1-rank run over all 61 cycles — both when the ranks share one
+GPU's two tiles (`ZE_AFFINITY_MASK=0.0/0.1`) and when they occupy two distinct GPUs (`0/1`). The
+per-rank device binding that `ResolveDevice()` relies on therefore holds under both layouts, which
+is what matters: `gpu_tile_compact.sh`/`gpu_dev_compact.sh` leave each rank exactly one visible
+device, so Kokkos's and Torch's indices are both 0 and cannot diverge.
+
+Use `file_type = bin`, not `tab`, for any multi-rank run: the tab writer has every rank `fopen`
+the same file in append mode with buffered `fprintf`s serialised only by `MPI_Barrier`/`fflush`
+(`outputs/formatted_table.cpp:105-180`), whereas the binary writer does MPI-IO collective writes
+at per-rank offsets (`outputs/binary.cpp:240-284`). Note bin is float32 (`binary.cpp:224` casts
+regardless of `Real`), so it resolves ~1e-7 rather than tab's `%24.17e`.
+
 ### LibTorch without the frameworks module
 
 `module load frameworks` is the obvious way to get an XPU LibTorch on Aurora, and it is the wrong
