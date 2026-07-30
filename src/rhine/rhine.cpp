@@ -134,9 +134,6 @@ TaskStatus RHINE::PostStep(Driver *pdrive, int stage) {
 TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass) {
   using namespace dyngr;      // NOLINT
   using namespace Primitive;  // NOLINT
-  if (pmy_pack->pdyngr->eos_policy != DynGRMHD_EOS::eos_transition) {
-    return TaskStatus::complete;
-  }
   Real dt_apply = 0.0;
   if (pass == RhinePass::source) {
     if (stage == 1) { SnapshotReference(); }
