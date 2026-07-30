@@ -23,7 +23,7 @@
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 #include <Kokkos_Random.hpp>
 
