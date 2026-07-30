@@ -24,6 +24,7 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
+#include "utils/utils.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -56,15 +57,15 @@
 // "timestep" = "cycle" in explicit, multistage methods.
 
 Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptimer) :
+  impl_src("ru",1,1,1,1,1,1),
   tlim(-1.0),
   nlim(-1),
   ndiag(1),
-  nmb_updated_(0),
-  npart_updated_(0),
-  lb_efficiency_(0),
   pwall_clock_(ptimer),
   wall_time(wtlim),
-  impl_src("ru",1,1,1,1,1,1) {
+  nmb_updated_(0),
+  npart_updated_(0),
+  lb_efficiency_(0) {
   // set time-evolution option (no default)
   {
     std::string evolution_t = pin->GetString("time","evolution");
@@ -234,8 +235,8 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
       nimp_stages = 4;
       nexp_stages = 3;
       cfl_limit = 1.0;
-      gam0[0] = 0.0;
-      gam1[0] = 1.0;
+      gam0[0] = 1.0;
+      gam1[0] = 0.0;
       beta[0] = 1.0;
 
       gam0[1] = 0.25;
@@ -375,7 +376,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 //! until a relevant stopping criteria is found (e.g. t > tlim). Calls AMR driver, and
 //! performs outputs. Updates counters like (ncycle, time, etc.)
 
-void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdflag) {
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list(s)...\n" << std::endl;
   }
@@ -390,6 +391,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
+      if (wdflag) {WatchDog(0);}
 
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
@@ -544,7 +546,7 @@ void Driver::OutputCycleDiagnostics(Mesh *pm) {
 //! slightly below the wall clock time while others determine that it's time to quit.
 
 Real Driver::UpdateWallClock() {
-  Real tnow;
+  Real tnow = 0.0;
   if (global_variable::my_rank == 0) {
     tnow = pwall_clock_->seconds();
   }

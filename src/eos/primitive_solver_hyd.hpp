@@ -189,8 +189,8 @@ class PrimitiveSolverHydro {
     // FIXME(JF): Is this needed if the first-order flux correction is enabled?
     prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromP(prim_pt[PRH],
                                         prim_pt[PPR], &prim_pt[PYF]);
-    bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
-                                         prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
+    ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+                                    prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
     ps.PrimToCon(prim_pt, cons_pt, bin, g3d);
 
@@ -317,10 +317,11 @@ class PrimitiveSolverHydro {
 
     // Some problem-specific parameters
     auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
+    auto &smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
     auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
     auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
     auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
-    auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+    auto &texcise_ = pmy_pack->pcoord->coord_data.texcise;
 
     auto &adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
@@ -344,7 +345,7 @@ class PrimitiveSolverHydro {
     Real mb = eos_.GetBaryonMass();
 
     // FIXME: This only works for a flooring policy that has these functions!
-    bool prim_failure, cons_failure;
+    bool prim_failure=false, cons_failure=false;
     if (floors_only) {
       prim_failure = ps.GetEOSMutable().IsPrimitiveFlooringFailure();
       cons_failure = ps.GetEOSMutable().IsConservedFlooringFailure();
@@ -419,27 +420,31 @@ class PrimitiveSolverHydro {
       // If we're in an excised region, set the primitives to some default value.
       Primitive::SolverResult result;
       if (excise) {
-        if (excision_floor_(m,k,j,i)) {
-          prim_pt[PRH] = dexcise_/mb;
-          prim_pt[PVX] = 0.0;
-          prim_pt[PVY] = 0.0;
-          prim_pt[PVZ] = 0.0;
-          prim_pt[PPR] = pexcise_;
-          for (int n = 0; n < nscal; n++) {
-            // FIXME: Particle abundances should probably be set to a
-            // default inside an excised region.
-            prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
-          }
-          prim_pt[PTM] =
-            eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
-          result.error = Primitive::Error::SUCCESS;
-          result.iterations = 0;
-          result.cons_floor = false;
-          result.prim_floor = false;
-          result.cons_adjusted = true;
-          ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
-        } else {
+        // If smooth excision is enabled, do C2P everywhere.
+        if (smoothing) {
           result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+        } else {
+          if (excision_floor_(m,k,j,i)) {
+            prim_pt[PRH] = dexcise_/mb;
+            prim_pt[PVX] = 0.0;
+            prim_pt[PVY] = 0.0;
+            prim_pt[PVZ] = 0.0;
+            for (int n = 0; n < nscal; n++) {
+              // FIXME: Particle abundances should probably be set to a
+              // default inside an excised region.
+              prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
+            }
+            prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]);
+            prim_pt[PTM] = texcise_;
+            result.error = Primitive::Error::SUCCESS;
+            result.iterations = 0;
+            result.cons_floor = false;
+            result.prim_floor = false;
+            result.cons_adjusted = true;
+            ps_.PrimToCon(prim_pt, cons_pt, b3u, g3d);
+          } else {
+            result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
+          }
         }
       } else {
         result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
