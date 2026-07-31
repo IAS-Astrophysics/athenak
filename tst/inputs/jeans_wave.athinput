@@ -1,0 +1,91 @@
+#
+# Jeans wave test input (self-gravity problem generator)
+#
+<comment>
+problem   = Jeans wave (self-gravity)
+
+<job>
+basename  = JeansWave
+
+<mesh>
+nghost    = 4
+nx1       = 64
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 32
+x2min     = 0.0
+x2max     = 0.5
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 32
+x3min     = 0.0
+x3max     = 0.5
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<mesh_refinement>
+refinement       = none
+max_nmb_per_rank = 8192
+num_levels       = 2
+
+<amr_criterion0>
+method = min_max
+variable = hydro_w_d
+value_max = 1.0008
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim       = -1
+tlim       = 1.0
+ndiag      = 1
+
+<hydro>
+eos         = isothermal
+reconstruct = plm
+rsolver     = hlle
+iso_sound_speed = 1.0
+
+<gravity>
+four_pi_G = 1.0
+threshold = -1
+niteration = 5
+npresmooth = 2
+npostsmooth = 2
+full_multigrid = true
+fmg_ncycle = 1
+show_defect = 0
+mg_nghost = 1
+
+<hydro_srcterms>
+self_gravity = true
+
+<problem>
+pgen_name   = gravity
+rho0        = 1.0
+amp         = 1.0e-6
+n_waves     = 1
+n_jeans     = 0.5
+v0          = 0.0
+njeans_amr      = 16.0
+njeans_derefine = 2.5
+
+<output1>
+file_type  = bin
+variable   = hydro_w
+dt         = 0.1
+
+<output2>
+file_type  = bin
+variable   = grav_phi
+dt         = 0.1
