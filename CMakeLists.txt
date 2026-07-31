@@ -189,6 +189,52 @@ if (${PROBLEM} MATCHES "dyn_grmhd/sgrid/*")
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
 endif()
 
+if (${PROBLEM} MATCHES "dyn_grmhd/kadath_aei/*")
+  # Kadath (FUKa) BNS initial data reader; expects Kadath linked at
+  # ${CMAKE_SOURCE_DIR}/kadath_aei with libkadath.a in its lib/ directory.
+  target_include_directories(athena PRIVATE
+      ${CMAKE_SOURCE_DIR}/kadath_aei/include
+      # kadath_paths.h is generated into build/, never installed to include/.
+      ${CMAKE_SOURCE_DIR}/kadath_aei/build/generated)
+  target_link_libraries(athena PUBLIC
+      ${CMAKE_SOURCE_DIR}/kadath_aei/lib/libkadath.a)
+  # A raw static-lib path doesn't carry libkadath.a's PUBLIC MUMPS/PT-SCOTCH/etc.
+  # link interface, so pull it from Kadath's own build cache (KADATH_EXTRA_LIBS)
+  # instead of re-deriving it -- stays portable across clusters and ABI-safe.
+  load_cache(${CMAKE_SOURCE_DIR}/kadath_aei/build READ_WITH_PREFIX KADATH_IMPORT_
+      KADATH_EXTRA_LIBS)
+  if (NOT KADATH_IMPORT_KADATH_EXTRA_LIBS)
+    message(FATAL_ERROR "Could not read KADATH_EXTRA_LIBS from "
+        "${CMAKE_SOURCE_DIR}/kadath_aei/build/CMakeCache.txt -- has Kadath_AEI "
+        "been configured/built there?")
+  endif()
+  # KADATH_EXTRA_LIBS names imported targets (MPI::MPI_Fortran, Threads::Threads)
+  # that don't carry over between CMake configure runs, so recreate them here.
+  enable_language(Fortran)
+  find_package(MPI REQUIRED COMPONENTS Fortran)
+  find_package(Threads REQUIRED)
+  target_link_libraries(athena PUBLIC ${KADATH_IMPORT_KADATH_EXTRA_LIBS})
+  find_package(PkgConfig QUIET)
+  if (PKG_CONFIG_FOUND)
+    pkg_check_modules(FFTW3 fftw3)
+  endif()
+  if (FFTW3_FOUND)
+    target_link_libraries(athena PUBLIC ${FFTW3_LIBRARIES})
+  else()
+    find_library(FFTW3_LIB NAMES fftw3)
+    target_link_libraries(athena PUBLIC ${FFTW3_LIB})
+  endif()
+  find_package(LAPACK REQUIRED)
+  target_link_libraries(athena PUBLIC ${LAPACK_LIBRARIES})
+  find_package(GSL REQUIRED)
+  target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
+  if (Athena_ENABLE_OPENMP)
+  else ()
+    find_package(OpenMP COMPONENTS CXX)
+    target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
+  endif()
+endif()
+
 if (${PROBLEM} MATCHES "dyn_grmhd/kadath/*")
   # Kadath (FUKa) BNS initial data reader.
   # Expects Kadath to be linked at ${CMAKE_SOURCE_DIR}/kadath
