@@ -13,8 +13,7 @@ import test_suite.testutils as testutils
 # algorithms, and waves
 maxerrors = {
     ("mhd", "rk2", "plm", "0"): (2.9e-05, 0.27),
-    # Slightly above observed MPI/FP scatter (~2.00002e-06) so CI is not flaky.
-    ("mhd", "rk3", "wenoz", "0"): (2.1e-06, 0.22),
+    ("mhd", "rk3", "wenoz", "0"): (2e-06, 0.22),
 }
 
 _wave = ["0"]  # do not change order
