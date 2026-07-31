@@ -43,7 +43,7 @@
 #include "mhd/mhd.hpp"
 #include "srcterms/srcterms.hpp"
 #include "utils/random.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 #include <Kokkos_Random.hpp>
 
