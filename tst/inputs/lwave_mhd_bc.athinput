@@ -1,0 +1,88 @@
+# AthenaK input file: GR-MHD linear wave with OUTFLOW boundaries + AMR.
+# Regression test for the fine/coarse boundary fix (coarse-array physical BCs applied in
+# MHD::Prolongate before prolongation).
+#
+# The min_max AMR criterion refines the wave crest; with outflow boundaries the crest
+# reaches a physical boundary, so a fine/coarse boundary coincides with it. Without the
+# fix, prolongation reads unfilled coarse ghost zones there.
+
+<comment>
+problem   = mhd linear wave (AMR outflow-boundary regression)
+reference = Stone et al, ApJS 178, 137 (2008), sect 8.2
+
+<job>
+basename  = lwave_mhd_bc
+
+<mesh>
+nghost    = 2
+nx1       = 32
+x1min     = -0.5
+x1max     =  0.5
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 32
+x2min     = -0.5
+x2max     =  0.5
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 32
+x3min     = -0.5
+x3max     =  0.5
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<mesh_refinement>
+refinement       = adaptive
+max_nmb_per_rank = 512
+num_levels       = 2
+
+<amr_criterion1>
+method    = min_max
+variable  = mhd_u_d
+value_max = 1.0004
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = -1
+tlim       = 1.0
+ndiag      = 1
+
+<coord>
+general_rel = true
+minkowski   = true
+
+<mhd>
+eos         = ideal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.66666666667
+
+<problem>
+pgen_name = linear_wave
+wave_flag = 0
+amp       = 1.0e-3
+dens      = 1.0
+pgas      = 0.6
+vx0       = 0.0
+vy0       = 0.0
+vz0       = 0.0
+bx0       = 1.0
+by0       = 1.4142136
+bz0       = 0.5
+along_x1  = false
+along_x2  = false
+along_x3  = false
+
+# Event-counter log: the regression test parses "eos_fail" (and "fofc") from this.
+<output1>
+file_type = log
+dcycle    = 1
