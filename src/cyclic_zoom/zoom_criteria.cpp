@@ -24,8 +24,8 @@ void CyclicZoom::CheckRefinement() {
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: old level = " << zamr.level << std::endl;
     }
-    SetRefinementFlags();
     UpdateState();
+    SetRefinementFlags();
   }
 }
 
@@ -60,8 +60,10 @@ void CyclicZoom::UpdateState() {
               << " zone = " << zstate.zone
               << " level = " << zamr.level
               << std::endl;
-    std::cout << "CyclicZoom: old region radius = " << old_zregion.radius << std::endl;
-    std::cout << "CyclicZoom: new region radius = " << zregion.radius << std::endl;
+    std::cout << "CyclicZoom: old radius = " << old_zregion.radius
+              << " r_ref = " << old_zregion.ref.r << std::endl;
+    std::cout << "CyclicZoom: new radius = " << zregion.radius
+              << " r_ref = " << zregion.ref.r << std::endl;
     std::cout << "CyclicZoom: r_exc = " << zregion.exc.r
               << " r_cut = " << zregion.cut.r
               << " r_flx = " << zregion.flx.r
@@ -79,11 +81,18 @@ void CyclicZoom::UpdateState() {
 
 void CyclicZoom::SetRegionAndInterval() {
   // TODO(@mhguo): may add more flexible and robust region settings later
+  auto set_scales = [](ZoomRegion &zr) {
+    zr.ref.r = std::min(zr.ref.f * zr.radius, zr.ref.r_max);
+    zr.exc.r = std::min(zr.exc.f * zr.radius, zr.exc.r_max);
+    zr.cut.r = std::min(zr.cut.f * zr.radius, zr.cut.r_max);
+    zr.flx.r = std::min(zr.flx.f * zr.radius, zr.flx.r_max);
+  };
   old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
+  set_scales(old_zregion);
+
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
-  zregion.exc.r = std::min(zregion.exc.f * zregion.radius, zregion.exc.r_max);
-  zregion.cut.r = std::min(zregion.cut.f * zregion.radius, zregion.cut.r_max);
-  zregion.flx.r = std::min(zregion.flx.f * zregion.radius, zregion.flx.r_max);
+  set_scales(zregion);
+
   Real timescale = pow(zregion.radius,zint.trun_pow);
   zint.runtime = zint.trun_facs[zstate.zone]*timescale;
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}
@@ -102,16 +111,16 @@ void CyclicZoom::SetRefinementFlags() {
   int nmb = pmesh->pmb_pack->nmb_thispack;
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
 
-  int old_level = zamr.level;
-  int ref_flag = zamr.refine_flag;
-  Real r_zoom = zregion.radius;
+  int old_level = zamr.max_level - zstate.last_zone;
+  int ref_flag = - (zstate.zone - zstate.last_zone);
+  Real r_ref = (ref_flag < 0) ? zregion.ref.r : old_zregion.ref.r;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   if(verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: " << (ref_flag > 0 ? "refines" : "derefines")
               << " to level " << old_level + ref_flag
               << " (refine_flag=" << ref_flag << ")" << std::endl;
   }
-  // Check whether the MeshBlock is overlapping with the zoom region
+  // Check whether the MeshBlock is overlapping with the refinement radius
   for (int m=0; m<nmb; ++m) {
     if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
       // extract bounds of MeshBlock
@@ -147,7 +156,7 @@ void CyclicZoom::SetRefinementFlags() {
       Real closest_x3 = fmax(x3min, fmin(x3c, x3max));
       // Calculate the distance from sphere center to this closest point
       Real r_sq = SQR(x1c - closest_x1) + SQR(x2c - closest_x2) + SQR(x3c - closest_x3);
-      if (r_sq < SQR(r_zoom)) {
+      if (r_sq < SQR(r_ref)) {
         refine_flag.h_view(m+mbs) = ref_flag;
       }
     }
@@ -167,11 +176,12 @@ bool CyclicZoom::CheckStoreFlag(int m) {
   auto &size = pmesh->pmb_pack->pmb->mb_size;
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   // note that now the zoom state has been updated
+  int old_level = zamr.max_level - zstate.last_zone;
   // use the updated zoom region parameters
   Real r_zoom = zregion.radius;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   // check previous level (finer level)
-  if (pmesh->lloc_eachmb[m+mbs].level == zamr.level + 1) {
+  if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
     // extract bounds of MeshBlock
     Real x1min = size.h_view(m).x1min;
     Real x1max = size.h_view(m).x1max;

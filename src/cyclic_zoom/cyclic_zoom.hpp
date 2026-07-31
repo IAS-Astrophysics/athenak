@@ -49,15 +49,16 @@ typedef struct ZoomRegion {
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
 
-  // boundary parameters
-  struct ZoomBoundary {
+  // zoom scale parameters
+  struct ZoomScale {
     Real f;
     Real r;
     Real r_max;
   };
-  ZoomBoundary exc;             // excision boundary parameters
-  ZoomBoundary cut;             // cut-off boundary parameters
-  ZoomBoundary flx;             // flux limiting boundary parameters
+  ZoomScale ref;                // mesh refinement
+  ZoomScale exc;                // excision
+  ZoomScale cut;                // cut-off
+  ZoomScale flx;                // flux limiting
 
   // Kokkos inline function to check if a location is within the zoom region
   KOKKOS_INLINE_FUNCTION

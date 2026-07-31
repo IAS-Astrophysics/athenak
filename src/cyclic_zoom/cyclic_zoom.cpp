@@ -58,6 +58,8 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.x2c = pin->GetOrAddReal(block_name,"x2c",0.0);
   zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
   zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
+  zregion.ref.f = pin->GetOrAddReal(block_name,"f_ref",1.0);
+  zregion.ref.r_max = pin->GetOrAddReal(block_name,"r_ref_max",FLT_MAX);
   // default 0.4 based on monopole test
   zregion.exc.f = pin->GetOrAddReal(block_name,"f_exc",0.4);
   zregion.exc.r_max = pin->GetOrAddReal(block_name,"r_exc_max",8.0);
@@ -154,6 +156,8 @@ void CyclicZoom::PrintCyclicZoomDiagnostics() {
     std::cout << "Region: x1c = " << zregion.x1c << " x2c = " << zregion.x2c
               << " x3c = " << zregion.x3c << " r_0 = " << zregion.r_0
               << " radius = " << zregion.radius << std::endl
+              << " f_ref = " << zregion.ref.f << " r_ref = " << zregion.ref.r
+              << " r_ref_max = " << zregion.ref.r_max << std::endl
               << " f_exc = " << zregion.exc.f << " r_exc = " << zregion.exc.r
               << " r_exc_max = " << zregion.exc.r_max << std::endl
               << " f_cut = " << zregion.cut.f << " r_cut = " << zregion.cut.r
