@@ -1256,16 +1256,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("rad_m1_J") == 0 ||
       name.compare("rad_m1_H") == 0 ||
       name.compare("rad_m1_n") == 0 ||
-      name.compare("rad_m1_fnu") == 0) {
+      name.compare("rad_m1_fnu") == 0 ||
+      name.compare("rad_m1_e") == 0 ||
+      name.compare("rad_m1_absF") == 0) {
     using namespace radiationm1;
     auto *pradm1        = pm->pmb_pack->pradm1;
     const int nspecies_ = pradm1->nspecies;
     const int nvars_    = pradm1->nvars;
 
     // Select mode based on the variable for downstream computation
-    int mode = (name.compare("rad_m1_H") == 0)   ? 1
-             : (name.compare("rad_m1_n") == 0)   ? 2
-             : (name.compare("rad_m1_fnu") == 0) ? 3 : 0;
+    int mode = (name.compare("rad_m1_H") == 0)    ? 1
+             : (name.compare("rad_m1_n") == 0)    ? 2
+             : (name.compare("rad_m1_fnu") == 0)  ? 3
+             : (name.compare("rad_m1_e") == 0)    ? 4
+             : (name.compare("rad_m1_absF") == 0) ? 5 : 0;
 
     int ncomp = (mode == 1) ? 3*nspecies_ : (mode == 3) ? 4*nspecies_ : nspecies_;
     Kokkos::realloc(derived_var, nmb_alloc, ncomp, n3, n2, n1);
@@ -1376,6 +1380,30 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
           dv(m,4*nuidx+1,k,j,i) = fnu_u(1);
           dv(m,4*nuidx+2,k,j,i) = fnu_u(2);
           dv(m,4*nuidx+3,k,j,i) = fnu_u(3);
+        } else if (mode == 4) {
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+          dv(m,nuidx,k,j,i) = (nnu > 0.0) ? J / nnu : 0.0;
+        } else if (mode == 5) {
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+
+          Real gam = adm::SpatialDet(
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+          Real volform = Kokkos::sqrt(gam);
+
+          Real flux_fac = flux_factor(g_uu, J, H_d, params_.rad_E_floor);
+          dv(m,nuidx,k,j,i) = nnu * Kokkos::sqrt(flux_fac) / volform;
         } else {
           Real nnu = 0.0;
           if (nvars_ > M1_N_IDX) {
@@ -1424,6 +1452,41 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
           + gxy*(betax*vely + betay*velx)
           + gxz*(betax*velz + betaz*velx)
           + gyz*(betay*velz + betaz*vely);
+    });
+  }
+
+  // WinNet velocity V^i = \alpha v^i - \beta^i
+  if (name.compare("win_Vi") == 0) {
+    Kokkos::realloc(derived_var, nmb_alloc, 3, n3, n2, n1);
+    auto dv = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+    DvceArray5D<Real> w0_;
+    if (pm->pmb_pack->pmhd != nullptr) {
+      w0_ = pm->pmb_pack->pmhd->w0;
+    } else {
+      w0_ = pm->pmb_pack->phydro->w0;
+    }
+    par_for("win_Vi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      const Real alpha = adm.alpha(m,k,j,i);
+      const Real betax = adm.beta_u(m,0,k,j,i);
+      const Real betay = adm.beta_u(m,1,k,j,i);
+      const Real betaz = adm.beta_u(m,2,k,j,i);
+      const Real gxx = adm.g_dd(m,0,0,k,j,i);
+      const Real gxy = adm.g_dd(m,0,1,k,j,i);
+      const Real gxz = adm.g_dd(m,0,2,k,j,i);
+      const Real gyy = adm.g_dd(m,1,1,k,j,i);
+      const Real gyz = adm.g_dd(m,1,2,k,j,i);
+      const Real gzz = adm.g_dd(m,2,2,k,j,i);
+      const Real velx = w0_(m,IVX,k,j,i);
+      const Real vely = w0_(m,IVY,k,j,i);
+      const Real velz = w0_(m,IVZ,k,j,i);
+      const Real vsq = gxx*velx*velx + gyy*vely*vely + gzz*velz*velz
+                     + 2.0*(gxy*velx*vely + gxz*velx*velz + gyz*vely*velz);
+      const Real W = Kokkos::sqrt(1.0 + vsq);
+      dv(m,0,k,j,i) = alpha * (velx / W) - betax;
+      dv(m,1,k,j,i) = alpha * (vely / W) - betay;
+      dv(m,2,k,j,i) = alpha * (velz / W) - betaz;
     });
   }
 

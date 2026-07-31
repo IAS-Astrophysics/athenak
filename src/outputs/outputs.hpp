@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 169
+#define NOUTPUT_CHOICES 172
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -104,13 +104,17 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rad_m1_N", "rad_m1_E", "rad_m1_F", "rad_m1_chi", "rad_m1_eta_0", "rad_m1_abs_0",
   "rad_m1_eta_1", "rad_m1_abs_1", "rad_m1_scat_1", "rad_m1_vel",
 
-  // radiation M1 fluid-frame derived quantities (163-166)
+  // radiation M1 fluid-frame derived quantities (163-168)
   "rad_m1_J", "rad_m1_H", "rad_m1_n", "rad_m1_fnu",
+  "rad_m1_e", "rad_m1_absF",
 
-  // lower time-component of the fluid four-velocity (167)
+  // lower time-component of the fluid four-velocity (169)
   "u_t",
 
-  // Spherical radius (168)
+  // WinNet velocity (170)
+  "win_Vi",
+
+  // Spherical radius (171)
   "r_sph",
 };
 

@@ -843,12 +843,42 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
+  // radiation m1 fluid frame average energy <e> = J/n (per species)
+  if (out_params.variable.compare("rad_m1_e") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("e:" + std::to_string(nuidx), nuidx, &(derived_var));
+    }
+  }
+
+  // radiation m1 fluid frame absolute number flux |F| = n\sqrt{H^iH_i}/J/\sqrt{\gamma}
+  // (per species)
+  if (out_params.variable.compare("rad_m1_absF") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("|F|:" + std::to_string(nuidx), nuidx, &(derived_var));
+    }
+  }
+
   // lower time-component of the fluid four-velocity u_t
   if (out_params.variable.compare("u_t") == 0) {
     out_params.contains_derived = true;
     out_params.n_derived += 1;
     int i_derived = out_params.n_derived - 1;
     outvars.emplace_back("u_t", i_derived, &(derived_var));
+  }
+
+  // WinNet velocity V^i = \alpha v^i - \beta^i
+  if (out_params.variable.compare("win_Vi") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 3;
+    outvars.emplace_back("win_Vx", 0, &(derived_var));
+    outvars.emplace_back("win_Vy", 1, &(derived_var));
+    outvars.emplace_back("win_Vz", 2, &(derived_var));
   }
 
   // spherical coordinate radius r = sqrt(x^2 + y^2 + z^2)
