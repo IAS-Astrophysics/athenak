@@ -189,7 +189,7 @@ if (${PROBLEM} MATCHES "dyn_grmhd/sgrid/*")
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
 endif()
 
-if (${PROBLEM} MATCHES "dyn_grmhd/kadath_aei/*")
+if (${PROBLEM} MATCHES "^dyn_grmhd/kadath_aei/")
   # Kadath (FUKa) BNS initial data reader; expects Kadath linked at
   # ${CMAKE_SOURCE_DIR}/kadath_aei with libkadath.a in its lib/ directory.
   target_include_directories(athena PRIVATE
@@ -235,7 +235,7 @@ if (${PROBLEM} MATCHES "dyn_grmhd/kadath_aei/*")
   endif()
 endif()
 
-if (${PROBLEM} MATCHES "dyn_grmhd/kadath/*")
+if (${PROBLEM} MATCHES "^dyn_grmhd/kadath/")
   # Kadath (FUKa) BNS initial data reader.
   # Expects Kadath to be linked at ${CMAKE_SOURCE_DIR}/kadath
   # with libkadath.a in its lib/ directory.
