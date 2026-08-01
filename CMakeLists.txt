@@ -213,7 +213,11 @@ if (${PROBLEM} MATCHES "^dyn_grmhd/kadath_aei/")
   enable_language(Fortran)
   find_package(MPI REQUIRED COMPONENTS Fortran)
   find_package(Threads REQUIRED)
-  target_link_libraries(athena PUBLIC ${KADATH_IMPORT_KADATH_EXTRA_LIBS})
+  # Link real FFTW3 before KADATH_EXTRA_LIBS (which pulls in MKL): MKL ships its
+  # own FFTW3-compatible wrapper exporting the same unversioned fftw_execute/
+  # fftw_plan_r2r_1d symbols Kadath's own coefficient transforms call, so linking
+  # MKL first risks silently shadowing genuine FFTW3 at runtime. Kadath's own
+  # native build already links FFTW3 first for this exact reason.
   find_package(PkgConfig QUIET)
   if (PKG_CONFIG_FOUND)
     pkg_check_modules(FFTW3 fftw3)
@@ -224,6 +228,7 @@ if (${PROBLEM} MATCHES "^dyn_grmhd/kadath_aei/")
     find_library(FFTW3_LIB NAMES fftw3)
     target_link_libraries(athena PUBLIC ${FFTW3_LIB})
   endif()
+  target_link_libraries(athena PUBLIC ${KADATH_IMPORT_KADATH_EXTRA_LIBS})
   find_package(LAPACK REQUIRED)
   target_link_libraries(athena PUBLIC ${LAPACK_LIBRARIES})
   find_package(GSL REQUIRED)
