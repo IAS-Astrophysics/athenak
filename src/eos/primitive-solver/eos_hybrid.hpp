@@ -273,7 +273,7 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
   /// Evaluate interpolation weight for density.
   KOKKOS_INLINE_FUNCTION void weight_idx_ln(Real *w0, Real *w1, int *in, Real log_n)
       const {
-    *in = (log_n - m_log_nb(0))*m_id_log_nb;
+    *in = Kokkos::fmax(0, Kokkos::fmin(static_cast<int>(m_nn) - 2, (log_n - m_log_nb(0))*m_id_log_nb));
     *w1 = (log_n - m_log_nb(*in))*m_id_log_nb;
     *w0 = 1.0 - (*w1);
     return;
