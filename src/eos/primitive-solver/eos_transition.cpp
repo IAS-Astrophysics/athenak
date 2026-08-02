@@ -135,7 +135,8 @@ void EOSTransition<LogPolicy>::update_bounds() {
 
 template<typename LogPolicy>
 void EOSTransition<LogPolicy>::InitializeTables(std::string fname,
-                                                std::string helm_fname) {
+                                                std::string helm_fname,
+                                                Real baryon_mass) {
   if (m_initialized) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "EOSTransition: InitializeTables should only be called once."
@@ -158,7 +159,7 @@ void EOSTransition<LogPolicy>::InitializeTables(std::string fname,
   if (std::isnan(m_trans_T_width) || std::isnan(m_trans_ln_width)) {
     SetTransition(10.0*compose_eos.min_n, compose_eos.min_n, 0.6, 0.5);
   }
-  SetBaryonMass(compose_eos.mb);
+  SetBaryonMass(baryon_mass);
   update_bounds();
   m_initialized = true;
 }

@@ -320,6 +320,8 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
     eos.GetSanitizedMassFractions(Y, Y_s);
     const Real ye = Y_s[SCYE];
     const Real ah = Y_s[SCAH];
+    // Outside the network's trained domain [4,300]: floored/seeded composition.
+    // if (ah < 4.0) { return; }
     Real yn = Y_s[SCXN];
     Real ya = 0.25 * Y_s[SCXA];
     Real yh = (ah > 0.0) ? Y_s[SCXH] / ah : 0.0;

@@ -423,7 +423,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   //--------------------------------------------------------------------------
   // Host-side setup (defined in eos_transition.cpp).
   //--------------------------------------------------------------------------
-  void InitializeTables(std::string fname, std::string helm_fname);
+  void InitializeTables(std::string fname, std::string helm_fname, Real baryon_mass);
   void SetTransition(Real n_start, Real n_end, Real T_start, Real T_end);
   void SetHelmholtzTMax(Real T_max) { m_helm_T_max = T_max; if (m_initialized) update_bounds(); }
   void SetHelmholtzNMax(Real n_max) { m_helm_n_max = n_max; if (m_initialized) update_bounds(); }

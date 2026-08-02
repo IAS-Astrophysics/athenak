@@ -26,6 +26,7 @@ class TabulatedEOS {
   DualArray1D<Real> m_log_p;
   DualArray1D<Real> m_log_e;
   DualArray1D<Real> m_ye;
+  DualArray1D<Real> m_xn, m_xp, m_xa, m_xh, m_ah;
 
   Real dlrho;
   Real lrho_min;
@@ -36,6 +37,7 @@ class TabulatedEOS {
   Real le_max;
 
   bool has_ye = false;
+  bool has_comp = false;
   Real ye_atmosphere;
 
   size_t m_nn;
@@ -80,12 +82,22 @@ class TabulatedEOS {
     auto& point_info = table.GetPointInfo();
     m_nn = point_info[0].second;
     has_ye = table.HasField("Y[e]");
+    has_comp = table.HasField("Y[n]") && table.HasField("Y[p]") &&
+               table.HasField("Y[He4]") && table.HasField("A[N]") &&
+               table.HasField("Y[N]");
 
     // Allocate storage
     Kokkos::realloc(m_log_rho, m_nn);
     Kokkos::realloc(m_log_p, m_nn);
     Kokkos::realloc(m_log_e, m_nn);
     if (has_ye) {Kokkos::realloc(m_ye, m_nn);}
+    if (has_comp) {
+      Kokkos::realloc(m_xn, m_nn);
+      Kokkos::realloc(m_xp, m_nn);
+      Kokkos::realloc(m_xa, m_nn);
+      Kokkos::realloc(m_xh, m_nn);
+      Kokkos::realloc(m_ah, m_nn);
+    }
 
     // Read rho
     test_field(table.HasField("nb"), "nb");
@@ -127,6 +139,28 @@ class TabulatedEOS {
       }
     }
 
+    // Read composition (optional); Y -> X as in EOSCompOSE.
+    if (has_comp) {
+      Real * t_yn = table["Y[n]"];
+      Real * t_yp = table["Y[p]"];
+      Real * t_ya = table["Y[He4]"];
+      Real * t_an = table["A[N]"];
+      Real * t_yN = table["Y[N]"];
+      const char* light[3] = {"Y[H2]", "Y[H3]", "Y[He3]"};
+      const Real amass[3] = {2.0, 3.0, 3.0};
+      for (size_t in = 0; in < m_nn; in++) {
+        Real xa = t_ya[in]*4.0;
+        for (int l = 0; l < 3; ++l) {
+          if (table.HasField(light[l])) { xa += table[light[l]][in]*amass[l]; }
+        }
+        m_xn.h_view(in) = fmax(0.0, fmin(t_yn[in], 1.0));
+        m_xp.h_view(in) = fmax(0.0, fmin(t_yp[in], 1.0));
+        m_xa.h_view(in) = fmax(0.0, fmin(xa, 1.0));
+        m_ah.h_view(in) = fmax(1.0, t_an[in]);
+        m_xh.h_view(in) = fmax(0.0, fmin(m_ah.h_view(in)*t_yN[in], 1.0));
+      }
+    }
+
     std::cout << "Loaded table " << fname << std::endl
               << "  rho = [" << exp(lrho_min) << ", " << exp(lrho_max) << "]" << std::endl
               << "  P = [" << exp(lP_min) << ", " << exp(lP_max) << "]" << std::endl;
@@ -138,11 +172,25 @@ class TabulatedEOS {
     m_log_p.template modify<HostMemSpace>();
     m_log_e.template modify<HostMemSpace>();
     if (has_ye) {m_ye.template modify<HostMemSpace>();}
+    if (has_comp) {
+      m_xn.template modify<HostMemSpace>();
+      m_xp.template modify<HostMemSpace>();
+      m_xa.template modify<HostMemSpace>();
+      m_xh.template modify<HostMemSpace>();
+      m_ah.template modify<HostMemSpace>();
+    }
 
     m_log_rho.template sync<DevExeSpace>();
     m_log_p.template sync<DevExeSpace>();
     m_log_e.template sync<DevExeSpace>();
     if (has_ye) {m_ye.template sync<DevExeSpace>();}
+    if (has_comp) {
+      m_xn.template sync<DevExeSpace>();
+      m_xp.template sync<DevExeSpace>();
+      m_xa.template sync<DevExeSpace>();
+      m_xh.template sync<DevExeSpace>();
+      m_ah.template sync<DevExeSpace>();
+    }
   }
 
   template<LocationTag loc>
@@ -199,6 +247,26 @@ class TabulatedEOS {
     auto& lrho_view = GetView<loc>(m_log_rho);
     auto& ye_view = GetView<loc>(m_ye);
     return Interpolate(lrho, lrho_view(lb), lrho_view(ub), ye_view(lb), ye_view(ub));
+  }
+
+  //! Mass fractions and mean heavy mass number at a given density, using the same
+  //! Y -> X conventions as EOSCompOSE (Xa folds in the light nuclei, Xh = A[N]*Y[N]).
+  //! Returns false if the table carries no composition, leaving the arguments alone.
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
+  bool GetCompositionFromRho(Real rho, Real &xn, Real &xp, Real &xa,
+                             Real &xh, Real &ah) const {
+    if (!has_comp) { return false; }
+    Real lrho = fmax(log(rho), lrho_min);
+    int lb = static_cast<int>((lrho-lrho_min)/dlrho);
+    int ub = lb + 1;
+    auto& lr = GetView<loc>(m_log_rho);
+    xn = Interpolate(lrho, lr(lb), lr(ub), GetView<loc>(m_xn)(lb), GetView<loc>(m_xn)(ub));
+    xp = Interpolate(lrho, lr(lb), lr(ub), GetView<loc>(m_xp)(lb), GetView<loc>(m_xp)(ub));
+    xa = Interpolate(lrho, lr(lb), lr(ub), GetView<loc>(m_xa)(lb), GetView<loc>(m_xa)(ub));
+    xh = Interpolate(lrho, lr(lb), lr(ub), GetView<loc>(m_xh)(lb), GetView<loc>(m_xh)(ub));
+    ah = Interpolate(lrho, lr(lb), lr(ub), GetView<loc>(m_ah)(lb), GetView<loc>(m_ah)(ub));
+    return true;
   }
 
   template<LocationTag loc>

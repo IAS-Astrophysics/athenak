@@ -143,10 +143,12 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real vr = 0.;
     Real p_pert = 0.;
     Real ye = ye_atmo;
+    bool in_star = false;
     auto &use_ye_ = use_ye;
     if (!isotropic) {
       tov_.GetPrimitivesAtPoint(eos_, r, rho, p, mass, alp);
       if (r <= tov_.R_edge) {
+        in_star = true;
         Real x = r/tov_.R_edge;
         vr = 0.5*v_pert*(3.0*x - x*x*x);
         auto rand_gen = rand_pool64.get_state();
@@ -160,6 +162,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
       tov_.GetPrimitivesAtIsoPoint(eos_, r, rho, p, mass, alp);
       r_schw = tov_.FindSchwarzschildR(r, mass);
       if (r_schw <= tov_.R_edge) {
+        in_star = true;
         Real x = r_schw/tov_.R_edge;
         vr = 0.5*v_pert*(3.0*x - x*x*x);
         auto rand_gen = rand_pool64.get_state();
@@ -184,16 +187,28 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     if (use_ye && nscal >= 1) {
       w0_(m,nvars,k,j,i) = ye;
     }
-    // Transition-EOS composition seed (Ye, Xn, Xp, Xa, Xh, Ah, E_B): free
-    // nucleons consistent with Ye; the RHINE NSE resync sets the true table
-    // composition in the dense interior on the first step.
+    // Transition-EOS composition seed (Xn, Xp, Xa, Xh, Ah, E_B), as GR-Athena++:
+    // from the cold table as a function of rho, renormalized to sum(X) = 1, with
+    // E_B = 0 (the most-bound reference of the transition EOS's baryon mass).
+    // Free nucleons consistent with Ye outside the star / for tables without it.
     if (nscal >= 7) {
-      w0_(m,nvars+1,k,j,i) = 1.0 - ye;  // Xn
-      w0_(m,nvars+2,k,j,i) = ye;        // Xp
-      w0_(m,nvars+3,k,j,i) = 0.0;       // Xa
-      w0_(m,nvars+4,k,j,i) = 0.0;       // Xh
-      w0_(m,nvars+5,k,j,i) = 1.0;       // Ah
-      w0_(m,nvars+6,k,j,i) = 0.0;       // E_B
+      Real xn = 1.0 - ye, xp = ye, xa = 0.0, xh = 0.0, ah = 1.0;
+      if constexpr (tov::UsesComposition<TOVEOS>) {
+        Real cn, cp, ca, ch, cah;
+        if (in_star && eos_.template GetCompositionFromRho<tov::LocationTag::Device>(
+                rho, cn, cp, ca, ch, cah)) {
+          Real sumX = cn + cp + ca + ch;
+          if (sumX > 0.0) {
+            xn = cn/sumX; xp = cp/sumX; xa = ca/sumX; xh = ch/sumX; ah = cah;
+          }
+        }
+      }
+      w0_(m,nvars+1,k,j,i) = xn;
+      w0_(m,nvars+2,k,j,i) = xp;
+      w0_(m,nvars+3,k,j,i) = xa;
+      w0_(m,nvars+4,k,j,i) = xh;
+      w0_(m,nvars+5,k,j,i) = ah;
+      w0_(m,nvars+6,k,j,i) = 0.0;
     }
 
     // Set ADM variables

@@ -170,7 +170,10 @@ class PrimitiveSolverHydro {
       // Read the CompOSE (NSE) and Helmholtz (out-of-NSE) tables.
       std::string fname = pin->GetString(block, "table");
       std::string helm_fname = pin->GetString(block, "helm_table");
-      ps.GetEOSMutable().InitializeTables(fname, helm_fname);
+      // Reference baryon mass; the default is the Fe-56 mass per baryon, so that
+      // E_B = 0 is the most bound state (GR-Athena++ hydro/bmass).
+      Real bmass = pin->GetOrAddReal(block, "bmass", 930.4117);
+      ps.GetEOSMutable().InitializeTables(fname, helm_fname, bmass);
 
       assert(ps.GetEOSMutable().IsInitialized());
 
