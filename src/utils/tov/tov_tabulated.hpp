@@ -77,6 +77,10 @@ class TabulatedEOS {
     auto& table_scalars = table.GetScalars();
     test_field(table_scalars.count("mn") > 0, "mn");
     Real mb = table_scalars.at("mn");
+    // rho = n_b*m_b must use the same m_b as the EOS the star is evolved with,
+    // or the star is not in hydrostatic equilibrium with its own EOS. The EOS is
+    // built before the pgen, so <mhd> bmass is already set where it applies.
+    Real mb_rho = pin->GetOrAddReal("mhd", "bmass", mb);
 
     // Get table dimensions
     auto& point_info = table.GetPointInfo();
@@ -104,7 +108,7 @@ class TabulatedEOS {
     Real * table_nb = table["nb"];
     for (size_t in = 0; in < m_nn; in++) {
       //m_log_rho.h_view(in) = log(table_nb[in]*mb*ener_to_geo);
-      m_log_rho.h_view(in) = log(table_nb[in]*mb*
+      m_log_rho.h_view(in) = log(table_nb[in]*mb_rho*
                                  unit_nuc.MassDensityConversion(unit_geo));
     }
     dlrho = m_log_rho.h_view(1)-m_log_rho.h_view(0);

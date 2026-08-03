@@ -257,7 +257,12 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
   // RHINE's rates are endpoint differences over dt, so the network gets the full
   // step (as in gr-athena) while the sources are applied over the substep.
   const Real dt_code = pmy_pack->pmesh->dt;
-  const bool net_on = (dt_code > 0.0);
+  // The rates are endpoint differences over dt, and the QSE branch relaxes toward a
+  // target over dt, so both diverge as 1/dt on a step much shorter than the previous
+  // one (tlim truncation). Evaluating there yields garbage, so skip it.
+  const Real dt_prev = pmy_pack->pmesh->dtold;
+  const bool net_on = (dt_code > 0.0) &&
+                      (!(dt_prev > 0.0) || dt_code >= 1.0e-3*dt_prev);
   // Back-react only in the source pass; there the frozen r0 is the '0' reference.
   const bool apply_ = apply && (dt_apply_code > 0.0);
   const bool use_r0 = apply_;

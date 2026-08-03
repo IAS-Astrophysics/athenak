@@ -25,6 +25,7 @@
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "rhine/rhine.hpp"
 #include "utils/tov/tov.hpp"
 #include "utils/tov/tov_polytrope.hpp"
 #include "utils/tov/tov_tabulated.hpp"
@@ -625,14 +626,36 @@ void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
 
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
-  // Select the number of outputs and create labels for them.
-  pdata->nhist = 2;
-  pdata->label[0] = "rho-max";
-  pdata->label[1] = "alpha-min";
-
   // capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &u0_ = pm->pmb_pack->pmhd->u0;
   auto &adm = pm->pmb_pack->padm->adm;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  const int nmhd_ = pm->pmb_pack->pmhd->nmhd;
+
+  // Optional channels: composition needs Ye,Xn,Xp,Xa,Xh; the heating rates need
+  // the RHINE module. Runs without either simply do not get those columns.
+  const bool has_x = (pm->pmb_pack->pmhd->nscalars >= 5);
+  auto *pdyngr = pm->pmb_pack->pdyngr;
+  const bool has_T = (pdyngr != nullptr);
+  auto temp_ = has_T ? pdyngr->temperature : DvceArray5D<Real>();
+  auto *prhine = pm->pmb_pack->prhine;
+  const bool has_rhine = (prhine != nullptr);
+  auto aux_ = has_rhine ? prhine->aux : DvceArray5D<Real>();
+
+  // Select the number of outputs and create labels for them.
+  int nh = 0;
+  pdata->label[nh++] = "rho-max";
+  pdata->label[nh++] = "alpha-min";
+  if (has_T)     { pdata->label[nh++] = "T-max"; }
+  if (has_x)     { pdata->label[nh++] = "Xsum-err"; }
+  pdata->label[nh++] = "m-ej-bern";
+  pdata->label[nh++] = "m-ej-geod";
+  if (has_rhine) {
+    pdata->label[nh++] = "rhine-qdot";
+    pdata->label[nh++] = "rhine-Lfnu";
+  }
+  pdata->nhist = nh;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -644,8 +667,12 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
-  Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
+  Real T_max = -rho_max;
+  Real xerr_max = -rho_max;
+  Kokkos::parallel_reduce("TOVHistExtrema",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_T_max,
+                Real &mb_xerr_max) {
     // compute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -656,7 +683,60 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
 
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+    if (has_T) {
+      mb_T_max = fmax(mb_T_max, temp_(m,0,k,j,i));
+    }
+    if (has_x) {
+      Real xsum = w0_(m,nmhd_+1,k,j,i) + w0_(m,nmhd_+2,k,j,i)
+                + w0_(m,nmhd_+3,k,j,i) + w0_(m,nmhd_+4,k,j,i);
+      mb_xerr_max = fmax(mb_xerr_max, fabs(xsum - 1.0));
+    }
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min),
+     Kokkos::Max<Real>(T_max), Kokkos::Max<Real>(xerr_max));
+
+  // Volume-integrated quantities. These are plain sums, so the history machinery's
+  // own MPI_SUM over ranks completes them.
+  Real qdot = 0.0, lnu = 0.0, mej_b = 0.0, mej_g = 0.0;
+  Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_qdot, Real &mb_lnu, Real &mb_ejb,
+                Real &mb_ejg) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+    if (has_rhine) {
+      mb_qdot += vol*aux_(m, rhine::A_QDOT, k, j, i);
+      mb_lnu  += vol*aux_(m, rhine::A_LNU,  k, j, i);
+    }
+
+    // Unbound-mass criteria. u_i = W v_i, -u_t = alpha W - beta^i u_i, and
+    // h W = (tau + D + sqrt(gamma) p)/D since u0 is densitized but w0 is not.
+    const Real g11 = adm.g_dd(m,0,0,k,j,i), g12 = adm.g_dd(m,0,1,k,j,i);
+    const Real g13 = adm.g_dd(m,0,2,k,j,i), g22 = adm.g_dd(m,1,1,k,j,i);
+    const Real g23 = adm.g_dd(m,1,2,k,j,i), g33 = adm.g_dd(m,2,2,k,j,i);
+    const Real wv1 = w0_(m,IVX,k,j,i);
+    const Real wv2 = w0_(m,IVY,k,j,i);
+    const Real wv3 = w0_(m,IVZ,k,j,i);
+    const Real Wvsq = g11*wv1*wv1 + g22*wv2*wv2 + g33*wv3*wv3
+                    + 2.0*(g12*wv1*wv2 + g13*wv1*wv3 + g23*wv2*wv3);
+    const Real W = sqrt(1.0 + Wvsq);
+    const Real u_d1 = g11*wv1 + g12*wv2 + g13*wv3;
+    const Real u_d2 = g12*wv1 + g22*wv2 + g23*wv3;
+    const Real u_d3 = g13*wv1 + g23*wv2 + g33*wv3;
+    const Real bu = adm.beta_u(m,0,k,j,i)*u_d1 + adm.beta_u(m,1,k,j,i)*u_d2
+                  + adm.beta_u(m,2,k,j,i)*u_d3;
+    const Real mut = adm.alpha(m,k,j,i)*W - bu;   // -u_t
+    const Real D = u0_(m,IDN,k,j,i);
+    const Real sdetg = sqrt(adm::SpatialDet(g11, g12, g13, g22, g23, g33));
+    const Real hW = (u0_(m,IEN,k,j,i) + D + w0_(m,IPR,k,j,i)*sdetg)/D;
+
+    if (mut > 1.0) { mb_ejg += vol*D; }
+    if (hW*mut/W > 1.0) { mb_ejb += vol*D; }
+  }, qdot, lnu, mej_b, mej_g);
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -664,15 +744,30 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   if (global_variable::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &T_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &xerr_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&T_max, &T_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&xerr_max, &xerr_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     rho_max = 0.;
     alpha_min = 0.;
+    T_max = 0.;
+    xerr_max = 0.;
   }
 #endif
 
   // store data in hdata array
-  pdata->hdata[0] = rho_max;
-  pdata->hdata[1] = alpha_min;
+  int n = 0;
+  pdata->hdata[n++] = rho_max;
+  pdata->hdata[n++] = alpha_min;
+  if (has_T)     { pdata->hdata[n++] = T_max; }
+  if (has_x)     { pdata->hdata[n++] = xerr_max; }
+  pdata->hdata[n++] = mej_b;
+  pdata->hdata[n++] = mej_g;
+  if (has_rhine) {
+    pdata->hdata[n++] = qdot;
+    pdata->hdata[n++] = lnu;
+  }
 }
