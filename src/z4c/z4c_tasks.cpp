@@ -327,15 +327,7 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
 
 TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
   Real time = pmy_pack->pmesh->time;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
-    for (auto & pahf : pfastflow) {
-      switch (indcs.ng) {
-        case 2: pahf->MetricDerivatives<2>(time); break;
-        case 3: pahf->MetricDerivatives<3>(time); break;
-        case 4: pahf->MetricDerivatives<4>(time); break;
-      }
-    }
     for (auto & pahf : pfastflow) {
       pahf->Find(stage, time);
       pahf->Write(stage, time);

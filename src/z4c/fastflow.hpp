@@ -48,8 +48,6 @@ class FastFlow {
   void Find(int iter, Real time); // main functionality for finding AH
   void Write(int iter, Real time); // function for result writing
   template <int NGHOST>
-  void MetricDerivatives(Real time); // compute the metric derivatives
-  template <int NGHOST>
   void MetricInterp();
   void ComputeSphericalHarmonics();
   void RadiiFromSphericalHarmonics();
@@ -103,7 +101,6 @@ class FastFlow {
   int lmpoints; // lmax * lmax
   int nh; // Counter variable
   bool wait_until_punc_are_close;
-  [[maybe_unused]] bool use_stored_metric_drvts;
   int nhorizon; // Number of horizons
   std::string flow_function;
   int flowflag = 0;
@@ -153,9 +150,6 @@ class FastFlow {
   };
   static constexpr int kHnvar = 11;
   Real ah_prop[kHnvar]; // Array of horizon quantities
-
-  // 5D Device array for the metric derivatives
-  DvceArray5D<Real> dg;
 
   // Vectors to hold the DvceArray1D interpolated values of GaussLegendreGrid
   DvceArray2D<Real> g_interp, K_interp, dg_interp;
