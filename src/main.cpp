@@ -348,8 +348,16 @@ int main(int argc, char *argv[]) {
   // is fully constructed.
 
   pmesh->AddCoordinatesAndPhysics(pinput);
-  // Initialize cyclic zoom data, only if cyclic zoom is enabled
+
+  // Construct MeshRefinement object only after physics modules have been added because
+  // size of buffers for load balancing, refinement criteria, etc. depend on physics
+  if (pmesh->multilevel) {
+    pmesh->pmr = new MeshRefinement(pmesh, pinput);
+  }
+
+  // Initialize cyclic zoom data only if enabled (and only after MeshRefinement exists)
   pmesh->AddCyclicZoom(pinput);
+
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
@@ -360,12 +368,6 @@ int main(int argc, char *argv[]) {
                                                      restartfile,
                                                      single_file_per_rank);
     restartfile.Close(single_file_per_rank);
-  }
-
-  // Construct MeshRefinement object only after physics modules have been added because
-  // size of buffers for load balancing, refinement criteria, etc. depend on physics
-  if (pmesh->multilevel) {
-    pmesh->pmr = new MeshRefinement(pmesh, pinput);
   }
 
   //--- Step 6. --------------------------------------------------------------------------
