@@ -32,7 +32,7 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->SendU(pdriver, 1);
   (void) pmhd->RecvU(pdriver, 1);
   (void) pmhd->CornerE(pdriver, 1);
-  (void) pmhd->EFieldSrc(pdriver, 1);
+  (void) pmhd->EField(pdriver, 1);
   (void) pmhd->SendE(pdriver, 1);
   (void) pmhd->RecvE(pdriver, 1);
   (void) pmhd->SendB(pdriver, 1);
