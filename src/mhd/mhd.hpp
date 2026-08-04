@@ -61,7 +61,6 @@ struct MHDTaskIDs {
   TaskID sendu_shr;
   TaskID recvu_shr;
   TaskID efld;
-  TaskID efldsrc;
   TaskID sende;
   TaskID recve;
   TaskID ct;
@@ -132,6 +131,10 @@ class MHD {
   DvceArray4D<Real> e3x1, e2x1;
   DvceArray4D<Real> e1x2, e3x2;
   DvceArray4D<Real> e2x3, e1x3;
+  // global per-face L/R buffers for the split-kernel flux path: primitives (nmhd+nscalars
+  // components) and reconstructed cell-centered B-field (3 components)
+  DvceArray5D<Real> wl3d, wr3d;
+  DvceArray5D<Real> bl3d, br3d;
   Real dtnew;
 
   // following used for time derivatives in computation of jcon
@@ -141,6 +144,7 @@ class MHD {
 
   // following used for FOFC algorithm
   DvceArray4D<bool> fofc;  // flag for each cell to indicate if FOFC is needed
+  DvceArray5D<bool> fofc_scal;  // flag to indicate if FOFC for scalar is needed
   bool use_fofc = false;   // flag to enable FOFC
 
   // container to hold names of TaskIDs
@@ -168,7 +172,7 @@ class MHD {
   TaskStatus SendU_Shr(Driver *d, int stage);
   TaskStatus RecvU_Shr(Driver *d, int stage);
   TaskStatus CornerE(Driver *d, int stage);
-  TaskStatus EFieldSrc(Driver *d, int stage);
+  TaskStatus EField(Driver *d, int stage);
   TaskStatus SendE(Driver *d, int stage);
   TaskStatus RecvE(Driver *d, int stage);
   TaskStatus CT(Driver *d, int stage);

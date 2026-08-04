@@ -34,7 +34,7 @@ namespace hydro {
 //! Many of the functions in the task list are implemented in this file because they are
 //! simple, or they are wrappers that call one or more other functions.
 //!
-//! "before_stagen" tasks are those that must be cmpleted over all MeshBlocks BEFORE each
+//! "before_stagen" tasks are those that must be completed over all MeshBlocks BEFORE each
 //! stage can be run (such as posting MPI receives, setting BoundaryCommStatus flags, etc)
 //!
 //! "stagen" tasks are those performed DURING each stage
@@ -65,9 +65,9 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   id.recvu     = tl["stagen"]->AddTask(&Hydro::RecvU, this, id.sendu);
   id.sendu_shr = tl["stagen"]->AddTask(&Hydro::SendU_Shr, this, id.recvu);
   id.recvu_shr = tl["stagen"]->AddTask(&Hydro::RecvU_Shr, this, id.sendu_shr);
-  id.bcs       = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.recvu_shr);
-  id.prol      = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.bcs);
-  id.c2p       = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.prol);
+  id.prol      = tl["stagen"]->AddTask(&Hydro::Prolongate, this, id.recvu_shr);
+  id.bcs       = tl["stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, id.prol);
+  id.c2p       = tl["stagen"]->AddTask(&Hydro::ConToPrim, this, id.bcs);
   id.newdt     = tl["stagen"]->AddTask(&Hydro::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
@@ -106,7 +106,7 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
   }
   if (tstat != TaskStatus::complete) return tstat;
 
-  // with shearing box boundaries calculate x2-distance x1-boundarues have sheared and
+  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
   // with MPI post receives for U.
   // only execute if (3D OR 2d_r_phi)
   if (psbox_u != nullptr) {
@@ -180,12 +180,12 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<Hydro_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add viscous, heat-flux, etc fluxes
-  if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
-  }
+  // Add diffusion fluxes
   if (pcond != nullptr) {
-    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
+    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
+  }
+  if (pvisc != nullptr) {
+    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
 
   // call FOFC if necessary
@@ -352,13 +352,15 @@ TaskStatus Hydro::RecvU_Shr(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Hydro::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call funtions that set physical and user BCs,
+//! \brief Wrapper task list function to call functions that set physical and user BCs,
 
 TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
-  // physical BCs
+  // Step 3: apply physical BCs to the fine array. This is called *after* prolongation,
+  //         so that the corner ghost zones between a coarse neighbor and a physical
+  //         boundary read valid data.
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
 
   // TODO(@mhguo): this is temporary, need to move to a general mask function later
@@ -381,11 +383,19 @@ TaskStatus Hydro::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 TaskStatus Hydro::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
+
+    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
+    //         reads valid data in coarse ghost zones that sit at a physical boundary.
+    if (!(pmy_pack->pmesh->strictly_periodic)) {
+      pbval_u->HydroBCsCoarse(pmy_pack, pbval_u->u_in, coarse_u0);
+    }
+
     if (pmy_pack->pmesh->pmr->prolong_prims) {
       pbval_u->ConsToPrimCoarseBndry(coarse_u0, coarse_w0);
       pbval_u->ProlongateCC(w0, coarse_w0);
       pbval_u->PrimToConsFineBndry(w0, u0);
     } else {
+      // Step 2: prolongate fine ghost zones from the coarse array.
       pbval_u->ProlongateCC(u0, coarse_u0);
     }
   }

@@ -63,6 +63,7 @@ enum TaskName {
   Z4c_CalcRHS,
   Z4c_SomBC,
   Z4c_ExplRK,
+  Z4c_ChiFloor,
   Z4c_SendU,
   Z4c_RestU,
   Z4c_RecvU,
@@ -84,6 +85,7 @@ enum TaskName {
   Z4c_ClearRW,
   Z4c_Wave,
   Z4c_PT,
+  Z4c_FastFlow,
   Z4c_CCE,
   Z4c_DumpHorizon,
   Z4c_NTASKS
@@ -153,7 +155,6 @@ class NumericalRelativity {
     AddExtraDependencies(dependencies, optional);
     // Add a new task to the queue.
     //std::cout << "Queuing " << name_string << "...\n";
-    auto& queue = SelectQueue(loc);
     SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(),
       dependencies,
       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));

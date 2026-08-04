@@ -43,6 +43,7 @@ add_executable(
         cyclic_zoom/zoom_restart.cpp
         cyclic_zoom/zoom_srcterms.cpp
 
+        diffusion/ambipolar.cpp
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
         diffusion/viscosity.cpp
@@ -72,6 +73,9 @@ add_executable(
         geodesic-grid/spherical_grid.cpp
         geodesic-grid/gauss_legendre.cpp
 
+        gravity/gravity.cpp
+        gravity/mg_gravity.cpp
+
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_fofc.cpp
@@ -90,6 +94,11 @@ add_executable(
         mesh/meshblock_tree.cpp
         mesh/mesh_refinement.cpp
         mesh/refinement_criteria.cpp
+
+        multigrid/multigrid.cpp
+        multigrid/multigrid_bvals.cpp
+        multigrid/multigrid_driver.cpp
+        multigrid/multigrid_tasks.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
@@ -123,9 +132,9 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
-        pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
         pgen/tests/cshock.cpp
+        pgen/tests/divb_amr.cpp
         pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_monopole.cpp
@@ -139,6 +148,12 @@ add_executable(
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
+        pgen/tests/jeans_wave.cpp
+        pgen/tests/binary_gravity.cpp
+        pgen/tests/be_collapse.cpp
+
+        pgen/unit_tests/eos_compose.cpp
+        pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
@@ -172,10 +187,13 @@ add_executable(
         utils/tov/tov.cpp
         utils/tr_table.cpp
         utils/cart_grid.cpp
+        utils/watchdog.cpp
         utils/spherical_surface.cpp
 
+
         z4c/compact_object_tracker.cpp
-        z4c/horizon_dump.cpp
+        z4c/fastflow.cpp
+	    z4c/horizon_dump.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp

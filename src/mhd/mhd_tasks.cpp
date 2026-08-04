@@ -58,9 +58,8 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvu     = tl["stagen"]->AddTask(&MHD::RecvU, this, id.sendu);
   id.sendu_shr = tl["stagen"]->AddTask(&MHD::SendU_Shr, this, id.recvu);
   id.recvu_shr = tl["stagen"]->AddTask(&MHD::RecvU_Shr, this, id.sendu_shr);
-  id.efld      = tl["stagen"]->AddTask(&MHD::CornerE, this, id.recvu_shr);
-  id.efldsrc   = tl["stagen"]->AddTask(&MHD::EFieldSrc, this, id.efld);
-  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efldsrc);
+  id.efld      = tl["stagen"]->AddTask(&MHD::EField, this, id.recvu_shr);
+  id.sende     = tl["stagen"]->AddTask(&MHD::SendE, this, id.efld);
   id.recve     = tl["stagen"]->AddTask(&MHD::RecvE, this, id.sende);
   id.ct        = tl["stagen"]->AddTask(&MHD::CT, this, id.recve);
   id.sendb_oa  = tl["stagen"]->AddTask(&MHD::SendB_OA, this, id.ct);
@@ -70,9 +69,9 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvb     = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
   id.sendb_shr = tl["stagen"]->AddTask(&MHD::SendB_Shr, this, id.recvb);
   id.recvb_shr = tl["stagen"]->AddTask(&MHD::RecvB_Shr, this, id.sendb_shr);
-  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb_shr);
-  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.recvb_shr);
+  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.prol);
+  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.bcs);
   id.newdt     = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
@@ -137,7 +136,7 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
     }
   }
 
-  // with shearing box boundaries caluclate x2-distance x1-boundaries have sheared and
+  // with shearing box boundaries calculate x2-distance x1-boundaries have sheared and
   // with MPI post receives for U and B
   if (psbox_u != nullptr) {
     // only execute when (3D OR 2d_r_phi)
@@ -195,15 +194,15 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<MHD_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add viscous, resistive, heat-flux, etc fluxes
+  // Add diffusive fluxes
+  if (pcond != nullptr) {
+    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
+  }
   if (pvisc != nullptr) {
-    pvisc->IsotropicViscousFlux(w0, pvisc->nu_iso, peos->eos_data, uflx);
+    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
   }
   if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->OhmicEnergyFlux(b0, uflx);
-  }
-  if (pcond != nullptr) {
-    pcond->AddHeatFlux(w0, peos->eos_data, uflx);
+    presist->AddResistiveFluxes(b0, uflx);
   }
 
   // call FOFC if necessary
@@ -371,10 +370,19 @@ TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskList MHD::EFieldSrc
-//! \brief Wrapper task list function to apply source terms to electric field
+//! \fn TaskList MHD::EField
+//! \brief Wrapper task list function to compute electric field
 
-TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
+TaskStatus MHD::EField(Driver *pdrive, int stage) {
+  // Use CT to compute corner E
+  CornerE(pdrive, stage);
+
+  // Add resistive electric field (if needed)
+  if (presist != nullptr) {
+    presist->AddResistiveEMFs(b0, efld);
+  }
+  // TODO(@user): Add more resistive effects here
+
   if (psbox_b != nullptr) {
     // only execute when (2D)
     if (pmy_pack->pmesh->two_d) {
@@ -494,13 +502,15 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call funtions that set physical and user BCs
+//! \brief Wrapper task list function to call functions that set physical and user BCs
 
 TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
-  // physical BCs
+  // Step 3: apply physical BCs to the fine array. This is called *after* prolongation,
+  //         so that the corner ghost zones between a coarse neighbor and a physical
+  //         boundary read valid data.
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
   pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
 
@@ -526,12 +536,21 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
     pbval_b->FillCoarseInBndryFC(b0, coarse_b0);
+
+    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
+    //         reads valid data in coarse ghost zones that sit at a physical boundary.
+    if (!(pmy_pack->pmesh->strictly_periodic)) {
+      pbval_u->HydroBCsCoarse((pmy_pack), (pbval_u->u_in), coarse_u0);
+      pbval_b->BFieldBCsCoarse((pmy_pack), (pbval_b->b_in), coarse_b0);
+    }
+
     if (pmy_pack->pmesh->pmr->prolong_prims) {
       pbval_u->ConsToPrimCoarseBndry(coarse_u0, coarse_b0, coarse_w0);
       pbval_u->ProlongateCC(w0, coarse_w0);
       pbval_b->ProlongateFC(b0, coarse_b0);
       pbval_u->PrimToConsFineBndry(w0, b0, u0);
     } else {
+      // Step 2: prolongate fine ghost zones from the coarse array.
       pbval_u->ProlongateCC(u0, coarse_u0);
       pbval_b->ProlongateFC(b0, coarse_b0);
     }
