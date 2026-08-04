@@ -8,6 +8,8 @@
 
 #include <float.h>
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <string> // string
@@ -20,14 +22,49 @@
 #include "resistivity.hpp"
 #include "current_density.hpp"
 
+namespace {
+
+parabolic::DiffusionSelection ParseResistivityIntegrator(ParameterInput *pin) {
+  std::string integrator = pin->GetOrAddString("mhd", "resistivity_integrator",
+                                               "explicit");
+  if (integrator == "explicit") {
+    return parabolic::DiffusionSelection::explicit_only;
+  }
+  if (integrator == "sts") {
+    return parabolic::DiffusionSelection::sts_only;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<mhd>/resistivity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // ctor: also calls Resistivity base class constructor
 
 Resistivity::Resistivity(MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
+  dtnew = static_cast<Real>(std::numeric_limits<float>::max());
   // Read non-ideal MHD coefficients (if any). A non-zero value enables the term.
   eta_ohm = pin->GetOrAddReal("mhd","eta_ohm",0.0);
   eta_ad  = pin->GetOrAddReal("mhd","eta_ad",0.0);
+  mode = ParseResistivityIntegrator(pin);
+  if (mode == parabolic::DiffusionSelection::sts_only &&
+      (!std::isfinite(eta_ad) || eta_ad != 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Ambipolar diffusion is not supported with STS; use explicit "
+              << "integration" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (mode == parabolic::DiffusionSelection::sts_only &&
+      (!std::isfinite(eta_ohm) || eta_ohm <= 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "STS requires positive constant Ohmic resistivity" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
