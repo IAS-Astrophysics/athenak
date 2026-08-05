@@ -13,6 +13,8 @@
 
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/eos.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
@@ -65,12 +67,52 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin,
   int ksg = (indcs.nx3 > 1) ? ks - indcs.ng : ks;
   int keg = (indcs.nx3 > 1) ? ke + indcs.ng : ke;
   int nmb = pmbp->nmb_thispack;
-  auto &w0_ = pmbp->pradm1->w0;
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   auto &beam_vals = pmbp->pradm1->rad_m1_beam.beam_source_vals;
 
   Real adm_mass = pin->GetOrAddReal("adm", "bh_mass", 1.);
   auto metric = pin->GetOrAddString("adm", "metric", "minkowski");
+
+  // opacity_type=photons needs real density/pressure to compute opacities
+  // from (CalcOpacityPhotons_ reads w0_(IDN)/w0_(IPR)), so it uses
+  // the real <mhd> fluid instead of the placeholder pradm1->w0 the toy/
+  // neutrino models get by with. Only wired up for the 1D Minkowski beam so
+  // far -- the 2D isotropic/Kerr-Schild BH branches are a curved-spacetime
+  // beam-bending test that's a different, more complex problem.
+  bool use_mhd = (pmbp->pradm1->params.opacity_type == radiationm1::Photons);
+  dyngr::DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor> *ptest_ideal =
+      nullptr;
+  Real mb = 1.0;
+  if (use_mhd) {
+    if (!pmbp->pmesh->one_d) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "opacity_type = photons is only wired up for the 1D "
+                   "Minkowski beam test so far, not the 2D isotropic/"
+                   "Kerr-Schild BH beam" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    ptest_ideal =
+        dynamic_cast<dyngr::DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor> *>(
+            pmbp->pdyngr);
+    if (ptest_ideal == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "The beam test problem generator requires <mhd> "
+                   "dyn_eos = ideal when opacity_type = photons"
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    mb = ptest_ideal->eos.ps.GetEOSMutable().GetBaryonMass();
+  }
+  Real rho = pin->GetOrAddReal("problem", "rho", 1.0);
+  Real temp = pin->GetOrAddReal("problem", "temp", 1.0);
+  Real nb = rho / mb;
+
+  DvceArray5D<Real> w0_ = pmbp->pradm1->w0;
+  if (use_mhd) {
+    w0_ = pmbp->pmhd->w0;
+  }
 
   // set user boundary conditions to true (needed for beams)
   user_bcs = true;
@@ -191,6 +233,27 @@ void ProblemGenerator::RadiationM1BeamTest(ParameterInput *pin,
           w0_(m, IVY, k, j, i) = 0.;
           w0_(m, IVZ, k, j, i) = 0.;
         });
+  }
+
+  // opacity_type=photons: fill in the uniform density/pressure
+  // CalcOpacityPhotons_ needs, and convert to MHD conserved variables. Kept
+  // as a second kernel (rather than folded into the metric-initialize kernel
+  // above) so the EOS object -- only obtainable once ptest_ideal is known
+  // non-null -- is never captured by a Kokkos lambda unless it's actually
+  // valid to do so.
+  if (use_mhd) {
+    Primitive::EOS<Primitive::IdealGas, Primitive::ResetFloor> &eos =
+        ptest_ideal->eos.ps.GetEOSMutable();
+    par_for(
+        "pgen_beamtest_mhd_state", DevExeSpace(), 0, nmb - 1, ksg, keg, jsg,
+        jeg, isg, ieg, KOKKOS_LAMBDA(const int m, const int k, const int j,
+                                     const int i) {
+          Real dummy_y{};
+          w0_(m, IDN, k, j, i) = rho;
+          w0_(m, IPR, k, j, i) = eos.GetPressure(nb, temp, &dummy_y);
+        });
+    pmbp->pdyngr->PrimToConInit(0, (indcs.nx1 + 2 * indcs.ng - 1), jsg, jeg,
+                                ksg, keg);
   }
 
   Kokkos::realloc(beam_vals, 4);

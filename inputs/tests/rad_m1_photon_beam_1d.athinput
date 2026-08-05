@@ -1,0 +1,90 @@
+<comment>
+problem = photon free-streaming beam test
+
+<job>
+basename = photon_beam_1d
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim       = 4000
+tlim       = 6.0
+
+<mesh>
+nghost = 2
+nx1    = 400
+x1min  = 0.0
+x1max  = 8.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2    = 1
+x2min  = -0.5
+x2max  = 0.5
+ix2_bc = periodic
+ox2_bc = periodic
+
+nx3    = 1
+x3min  = -0.5
+x3max  = 0.5
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 400
+nx2 = 1
+nx3 = 1
+
+<adm>
+
+<mhd>
+eos         = ideal
+gamma       = 2.0
+dyn_eos     = ideal
+dyn_error   = reset_floor
+reconstruct = dc
+rsolver     = hlle
+dfloor      = 1.0e-16
+fofc        = false
+enforce_maximum = false
+
+<coord>
+general_rel = true
+m           = 0.0
+a           = 0.0
+excise      = false
+
+<radiation_m1>
+closure_fun    = minerbo
+src_update     = implicit
+opacity_type   = photons
+gr_sources     = false
+matter_sources = true
+backreact      = false
+rad_E_floor    = 0.0
+rad_eps        = 0.01
+theta_limiter  = false
+
+<photons>
+kappa_a       = 0.0
+kappa_s       = 1.0e-3
+kappa_p       = 0.0
+power_opacity = false
+compton       = false
+arad          = 1.0
+
+<problem>
+pgen_name = rad_m1_beamtest
+rho       = 1.0
+temp      = 1.0
+
+<output1>
+file_type = tab
+variable  = rad_m1_E
+dt        = 0.5
+
+<output2>
+file_type = tab
+variable  = rad_m1_F
+dt        = 0.5
