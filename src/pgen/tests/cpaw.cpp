@@ -218,8 +218,8 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
 
     // compute vector potential over all faces
     int ncells1 = indcs.nx1 + 2*(indcs.ng);
-    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
-    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
+    int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 2;
+    int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 2;
     DvceArray4D<Real> a1, a2, a3;
     Kokkos::realloc(a1, nmb,ncells3,ncells2,ncells1);
     Kokkos::realloc(a2, nmb,ncells3,ncells2,ncells1);
@@ -261,15 +261,17 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
       // faces is identical.
 
       // Correct A1 at x2-faces, x3-faces, and x2x3-edges
-      if ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+      if ((indcs.nx2 > 1 &&
+          ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
           (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
           (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1))) ||
+          (indcs.nx3 > 1 &&
+          ((nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
@@ -284,7 +286,7 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
           (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
           (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
-          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
+          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)))) {
         Real xl = x1v + 0.25*dx1;
         Real xr = x1v - 0.25*dx1;
         a1(m,k,j,i) = 0.5*(A1(xl,x2f,x3f,awv) + A1(xr,x2f,x3f,awv));
@@ -299,7 +301,8 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (indcs.nx3 > 1 &&
+          ((nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
@@ -314,7 +317,7 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,36).lev > mblev.d_view(m) && i==is && k==ke+1) ||
           (nghbr.d_view(m,37).lev > mblev.d_view(m) && i==is && k==ke+1) ||
           (nghbr.d_view(m,38).lev > mblev.d_view(m) && i==ie+1 && k==ke+1) ||
-          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
+          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)))) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
         a2(m,k,j,i) = 0.5*(A2(x1f,xl,x3f,awv) + A2(x1f,xr,x3f,awv));
@@ -329,7 +332,8 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+          (indcs.nx2 > 1 &&
+          ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
@@ -344,7 +348,7 @@ void ProblemGenerator::AlfvenWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,20).lev > mblev.d_view(m) && i==is && j==je+1) ||
           (nghbr.d_view(m,21).lev > mblev.d_view(m) && i==is && j==je+1) ||
           (nghbr.d_view(m,22).lev > mblev.d_view(m) && i==ie+1 && j==je+1) ||
-          (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
+          (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)))) {
         Real xl = x3v + 0.25*dx3;
         Real xr = x3v - 0.25*dx3;
         a3(m,k,j,i) = 0.5*(A3(x1f,x2f,xl,awv) + A3(x1f,x2f,xr,awv));
