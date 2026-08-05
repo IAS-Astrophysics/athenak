@@ -175,6 +175,9 @@ if (ENABLE_NN_OPACITY)
   find_package(Torch REQUIRED)
   target_link_libraries(athena PUBLIC ${TORCH_LIBRARIES})
   target_compile_options(athena PUBLIC ${TORCH_CXX_FLAGS})
+  # Direct cuBLAS for the nn_cublas forward path (cublasSgemm; no LibTorch runtime).
+  find_package(CUDAToolkit REQUIRED)
+  target_link_libraries(athena PUBLIC CUDA::cublas)
 endif()
 
 if (${PROBLEM} MATCHES "z4c/spectre/*")
