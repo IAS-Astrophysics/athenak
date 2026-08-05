@@ -102,6 +102,8 @@ void ProblemGenerator::RadiationM1PhotonDiffusion_(ParameterInput *pin,
   Real mb = eos.GetBaryonMass();
   Real nb = rho / mb;
 
+  Real dd = 1.0 / (3.0 * pmbp->pradm1->photon_op_params.kappa_s * rho);
+
   // Minkowski metric
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   par_for(
@@ -132,8 +134,10 @@ void ProblemGenerator::RadiationM1PhotonDiffusion_(ParameterInput *pin,
         Real arg = (x1v - x0) / sigma0;
         Real E0 = e_floor + e_amp * Kokkos::exp(-0.5 * arg * arg);
 
+        Real Fx0 = dd * (x1v - x0) / (sigma0 * sigma0) * (E0 - e_floor);
+
         uradm1_(m, radiationm1::CombinedIdx(0, M1_E_IDX, m1_nvars_), k, j, i) = E0;
-        uradm1_(m, radiationm1::CombinedIdx(0, M1_FX_IDX, m1_nvars_), k, j, i) = 0.;
+        uradm1_(m, radiationm1::CombinedIdx(0, M1_FX_IDX, m1_nvars_), k, j, i) = Fx0;
         uradm1_(m, radiationm1::CombinedIdx(0, M1_FY_IDX, m1_nvars_), k, j, i) = 0.;
         uradm1_(m, radiationm1::CombinedIdx(0, M1_FZ_IDX, m1_nvars_), k, j, i) = 0.;
       });
