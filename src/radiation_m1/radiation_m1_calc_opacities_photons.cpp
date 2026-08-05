@@ -124,6 +124,13 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   Real kappa_p_ = photon_op_params.kappa_p;
   Real arad_ = photon_op_params.arad;
 
+  if (power_opacity_ && !isunits) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl;
+    std::cout << "power_opacity requires a <units> block\n";
+    abort();
+  }
+
   Real gm1{};
   if (ishydro) {
     gm1 = pmy_pack->phydro->peos->eos_data.gamma - 1.0;
