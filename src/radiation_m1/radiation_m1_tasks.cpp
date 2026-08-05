@@ -71,9 +71,13 @@ void RadiationM1::AssembleRadiationM1Tasks(
   } else if (params.opacity_type == Photons) {
     id.M1_mattersrc = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityPhotons,
                                                     this, id.M1_closure, "RadiationM1::CalcOpacityPhotons");
-  } else {
+  } else if (params.opacity_type == Toy) {
     id.M1_mattersrc =
         tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcOpacityToy, this, id.M1_closure, "RadiationM1::CalcOpacityToy");
+  } else {
+    // opacity_type == None: matter_sources is on but no opacity model was
+    // selected, so there is nothing to compute here (opacities stay zero).
+    id.M1_mattersrc = id.M1_closure;
   }
 
   id.M1_flux =
