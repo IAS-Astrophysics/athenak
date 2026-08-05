@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <cstdio> // fclose
@@ -53,7 +54,28 @@ Mesh::Mesh(ParameterInput *pin) :
   nprtcl_total(0),
   dtold(0.),
   dt_last_completed(0.),
+  dt_parabolic_sts(std::numeric_limits<float>::max()),
+  sts_max_dt_ratio(-1.0),
+  sts_integrator(parabolic::STSIntegrator::none),
   nmb_packs_thisrank(1) {
+  std::string sts_method = pin->GetOrAddString("time", "sts_integrator", "none");
+  if (sts_method == "rkl2") {
+    sts_integrator = parabolic::STSIntegrator::rkl2;
+  } else if (sts_method != "none") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<time>/sts_integrator = '" << sts_method
+              << "' must be 'none' or 'rkl2'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  sts_max_dt_ratio = pin->GetOrAddReal("time", "sts_max_dt_ratio", -1.0);
+  if (!std::isfinite(sts_max_dt_ratio) ||
+      (sts_max_dt_ratio != -1.0 && sts_max_dt_ratio <= 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "<time>/sts_max_dt_ratio must be -1.0 or a positive real" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -577,69 +599,98 @@ void Mesh::NewTimeStep(const Real tlim) {
     dtold = 0.;
   }
 
-  // cycle over all MeshBlocks on this rank and find minimum dt
-  // Requires at least ONE of the physics modules to be defined.
-  // limit increase in timestep to 2x old value
-  dt = 2.0*dt;
+  // Cycle over all MeshBlocks on this rank and find the minimum cycle timestep,
+  // excluding diffusion processes selected for STS. Limit its increase to 2x.
+  Real dt_cycle = 2.0*dt;
+  dt_parabolic_sts = std::numeric_limits<float>::max();
+  Real sts_inverse_dt = 0.0;
 
   // Hydro timestep
   if (pmb_pack->phydro != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->phydro->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->phydro->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
-    }
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->phydro->dtnew) );
     // source terms timestep
     if (pmb_pack->phydro->psrc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+      dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
     }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->pmhd->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
-    }
-    // resistivity timestep (includes ambipolar diffusion, handled within Resistivity)
-    if (pmb_pack->pmhd->presist != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->pmhd->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
-    }
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pmhd->dtnew) );
     // source terms timestep
     if (pmb_pack->pmhd->psrc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+      dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
     }
+  }
+  // Diffusion-process timestep budgets
+  for (const auto &process : pmb_pack->parabolic_processes) {
+    Real process_dt = (cfl_no)*(process.ExplicitDt());
+    if (process.UsesSTS()) {
+      if (process_dt < std::numeric_limits<float>::max()) {
+        sts_inverse_dt += 1.0/process_dt;
+      }
+    } else {
+      dt_cycle = std::min(dt_cycle, process_dt);
+    }
+  }
+  if (sts_inverse_dt > 0.0) {
+    dt_parabolic_sts = 1.0/sts_inverse_dt;
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pz4c->dtnew) );
   }
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
-    dt = std::min(dt, (pmb_pack->ppart->dtnew) );
+    dt_cycle = std::min(dt_cycle, (pmb_pack->ppart->dtnew) );
   }
 
 #if MPI_PARALLEL_ENABLED
-  // get minimum dt over all MPI ranks
-  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  // get minimum cycle and parabolic timesteps over all MPI ranks
+  Real dt_reduction[2] = {dt_cycle, dt_parabolic_sts};
+  MPI_Allreduce(MPI_IN_PLACE, dt_reduction, 2, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  dt_cycle = dt_reduction[0];
+  dt_parabolic_sts = dt_reduction[1];
 #endif
+
+  if (sts_integrator != parabolic::STSIntegrator::none && sts_max_dt_ratio > 0.0 &&
+      dt_parabolic_sts < std::numeric_limits<float>::max()) {
+    dt_cycle = std::min(dt_cycle, sts_max_dt_ratio*dt_parabolic_sts);
+  }
+  dt = dt_cycle;
 
   // limit last time step to stop at tlim *exactly*
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::RefreshSTSParabolicTimeStep()
+// \brief Refresh the globally minimum explicit timestep for STS processes.
+
+void Mesh::RefreshSTSParabolicTimeStep() {
+  dt_parabolic_sts = std::numeric_limits<float>::max();
+  Real sts_inverse_dt = 0.0;
+  for (const auto &process : pmb_pack->parabolic_processes) {
+    if (process.UsesSTS()) {
+      Real process_dt = (cfl_no)*(process.ExplicitDt());
+      if (process_dt < std::numeric_limits<float>::max()) {
+        sts_inverse_dt += 1.0/process_dt;
+      }
+    }
+  }
+  if (sts_inverse_dt > 0.0) {
+    dt_parabolic_sts = 1.0/sts_inverse_dt;
+  }
+
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &dt_parabolic_sts, 1, MPI_ATHENA_REAL, MPI_MIN,
+                MPI_COMM_WORLD);
+#endif
 }
 
 //----------------------------------------------------------------------------------------
