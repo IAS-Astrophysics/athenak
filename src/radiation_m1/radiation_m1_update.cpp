@@ -67,6 +67,22 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
     }
   }
 
+  auto *ptest_ideal =
+      dynamic_cast<dyngr::DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+  if (ptest_ideal != nullptr) {
+    switch (indcs.ng) {
+      case 2:
+        return TimeUpdate_<Primitive::IdealGas, Primitive::ResetFloor, 2>(pdrive, stage);
+        break;
+      case 3:
+        return TimeUpdate_<Primitive::IdealGas, Primitive::ResetFloor, 3>(pdrive, stage);
+        break;
+      case 4:
+        return TimeUpdate_<Primitive::IdealGas, Primitive::ResetFloor, 4>(pdrive, stage);
+        break;
+    }
+  }
+
   if (!ismhd && !ishydro) {
     switch (indcs.ng) {
       case 2:

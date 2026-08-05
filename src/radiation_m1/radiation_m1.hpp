@@ -41,6 +41,7 @@ struct RadiationM1TaskIDs {
   TaskID M1_sendf;
   TaskID M1_recvf;
   TaskID M1_rkupdt;
+  TaskID M1_compton;
   TaskID M1_mattersrc;
   TaskID M1_restu;
   TaskID M1_sendu;
@@ -116,6 +117,7 @@ class RadiationM1 {
   TaskStatus TimeUpdate(Driver* d, int stage);
   TaskStatus CalcOpacityNurates(Driver* pdrive, int stage);
   TaskStatus CalcOpacityPhotons(Driver* pdrive, int stage);
+  TaskStatus CalcComptonPhotons(Driver* pdrive, int stage);
   TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
   TaskStatus RestrictU(Driver* d, int stage);
   TaskStatus SendU(Driver* d, int stage);
@@ -133,6 +135,8 @@ class RadiationM1 {
   TaskStatus CalcOpacityNurates_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy>
   TaskStatus CalcOpacityPhotons_(Driver* pdrive, int stage);
+  template <class EOSPolicy, class ErrorPolicy>
+  TaskStatus CalcComptonPhotons_(Driver* pdrive, int stage);
   template <class EOSPolicy, class ErrorPolicy, int M1_NGHOST>
   TaskStatus TimeUpdate_(Driver* d, int stage);
 

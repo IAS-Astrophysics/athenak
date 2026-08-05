@@ -190,6 +190,12 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   } else if (opacity_type == "photons") {
     params.opacity_type = Photons;
 
+    if (nspecies != 1) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+                << "You need a single species for running with photons!" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+
     photon_op_params.kappa_s = pin->GetReal("photons", "kappa_s");
     photon_op_params.is_power_opacity =
         pin->GetOrAddBoolean("photons", "power_opacity", false);
@@ -204,12 +210,23 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
                 << "Compton requires enabling units" << std::endl;
       std::exit(EXIT_FAILURE);
     }
+    if (photon_op_params.kappa_s < 0.0 ||
+        (!(photon_op_params.is_power_opacity) && (photon_op_params.kappa_a < 0.0 || photon_op_params.kappa_a + photon_op_params.kappa_p < 0.0))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "For photon opacities, you need kappa_s >= 0, kappa_a >= 0 and kappa_a + kappa_p >= 0" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     if (isunits) {
       photon_op_params.arad = (pmy_pack->punit->rad_constant_cgs *
                                SQR(SQR(pmy_pack->punit->temperature_cgs())) /
                                pmy_pack->punit->pressure_cgs());
+
+      // inverse electron rest-mass temperature in code units
+      photon_op_params.inv_t_electron = pmy_pack->punit->temperature_cgs() / pmy_pack->punit->electron_rest_mass_energy_cgs;
     } else {
       photon_op_params.arad = pin->GetReal("photons", "arad");
+      photon_op_params.inv_t_electron = 0.0;  // disable Compton without units
     }
   } else if (opacity_type == "none") {
     params.opacity_type = None;

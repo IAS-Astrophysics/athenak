@@ -206,6 +206,9 @@ add_executable(
         pgen/tests/rad_m1_hybridsj.cpp
         radiation_m1/radiation_m1_toy.hpp
         radiation_m1/radiation_m1_calc_opacities_photons.cpp
+        radiation_m1/radiation_m1_compton.cpp
+        pgen/tests/rad_m1_photon_thermalization.cpp
+        pgen/tests/rad_m1_photon_diffusion.cpp
 )
 
 # add bns_nurates

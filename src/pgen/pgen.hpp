@@ -84,6 +84,12 @@ class ProblemGenerator {
   void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
   template <class EOSPolicy, class ErrorPolicy>
   void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
+  void RadiationM1PhotonThermalization(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1PhotonThermalization_(ParameterInput *pin, const bool restart);
+  void RadiationM1PhotonDiffusion(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1PhotonDiffusion_(ParameterInput *pin, const bool restart);
 
   // predefined problem generator functions for unit tests
   void EOSCompose(ParameterInput *pin, const bool restart);

@@ -82,8 +82,15 @@ void RadiationM1::AssembleRadiationM1Tasks(
   id.M1_recvf = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvFlux, this, id.M1_sendf, "RadiationM1::RecvFlux");
   id.M1_rkupdt =
       tl["opsplit_stagen"]->AddTask(&RadiationM1::TimeUpdate, this, id.M1_recvf, "RadiationM1::TimeUpdate");
+
+  // Compton operator-split step
+  TaskID id_compton = id.M1_rkupdt;
+  if (params.matter_sources && params.opacity_type == Photons && photon_op_params.is_compton) {
+    id.M1_compton = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcComptonPhotons, this, id.M1_rkupdt, "RadiationM1::CalcComptonPhotons");
+    id_compton = id.M1_compton;
+  }
   id.M1_restu =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id.M1_rkupdt, "RadiationM1::RestrictU");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id_compton, "RadiationM1::RestrictU");
   id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu, "RadiationM1::SendU");
   id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu, "RadiationM1::RecvU");
   id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_recvu, "RadiationM1::Prolongate");

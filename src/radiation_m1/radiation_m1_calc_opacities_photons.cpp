@@ -6,12 +6,14 @@
 //! \file radiation_m1_calc_opacities_photons.cpp
 //! \brief calculate photon opacities for grey M1
 
+#include <type_traits>
+
 #include "athena.hpp"
-#include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/eos.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "radiation/radiation_opacities.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "units/units.hpp"
@@ -42,6 +44,11 @@ TaskStatus RadiationM1::CalcOpacityPhotons(Driver *pdrive, int stage) {
                                Primitive::ResetFloor>(pdrive, stage);
   }
 
+  auto *ptest_ideal = dynamic_cast<dyngr::DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor> *>(pmy_pack->pdyngr);
+  if (ptest_ideal != nullptr) {
+    return CalcOpacityPhotons_<Primitive::IdealGas, Primitive::ResetFloor>(pdrive, stage);
+  }
+
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl;
   std::cout << "Unsupported EOS type!\n";
@@ -52,40 +59,32 @@ template <class EOSPolicy, class ErrorPolicy>
 TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   assert(nspecies == 1);
 
+  constexpr bool is_ideal_eos = std::is_same_v<EOSPolicy, Primitive::IdealGas>;
+
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
-  auto nvars_ = nvars;
-
-  auto &adm = pmy_pack->padm->adm;
-
-  auto &m1_params_ = params;
 
   auto &eta_1_ = eta_1;
   auto &abs_1_ = abs_1;
   auto &scat_1_ = scat_1;
 
-  auto &u0_ = u0;
   DvceArray5D<Real> w0_ = w0;
   if (ismhd) {
     w0_ = pmy_pack->pmhd->w0;
   }
-  auto &chi_ = chi;
-
-  Real beta[2] = {0.5, 1.};
-  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
   const Real mb = eos.GetBaryonMass();
 
-  // conversion factors from cgs to code units
+  // conversion from code temperature to cgs for tabulated EOS
   auto code_units = eos.GetCodeUnitSystem();
-  auto eos_units = eos.GetEOSUnitSystem();
+  const Real temp_code_to_cgs = code_units.TemperatureConversion(Primitive::MakeCGS());
 
   // Extract radiation constant and units
   Real density_scale_ = 1.0, temperature_scale_ = 1.0, length_scale_ = 1.0;
@@ -101,10 +100,29 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
         pmy_pack->punit->planck_minus_rosseland_coef_cgs;
   }
 
+  if constexpr (!is_ideal_eos) {
+    // Check for units with tabulated EOS
+    if (!isunits || photon_op_params.is_power_opacity || photon_op_params.is_compton) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl;
+      std::cout << "Photon opacities with tabulated EOS require units and do not support power_opacity or compton\n";
+      abort();
+    }
+    Real length_code_cgs = code_units.LengthConversion(Primitive::MakeCGS());
+    Real density_code_cgs = code_units.MassDensityConversion(Primitive::MakeCGS());
+    if (fabs(length_scale_ / length_code_cgs - 1.0) > 1.0e-3 || fabs(density_scale_ / density_code_cgs - 1.0) > 1.0e-3) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl;
+      std::cout << "<units> block is inconsistent with the EOS code units\n";
+      abort();
+    }
+  }
+
   bool power_opacity_ = photon_op_params.is_power_opacity;
   Real kappa_a_ = photon_op_params.kappa_a;
   Real kappa_s_ = photon_op_params.kappa_s;
   Real kappa_p_ = photon_op_params.kappa_p;
+  Real arad_ = photon_op_params.arad;
 
   Real gm1{};
   if (ishydro) {
@@ -124,93 +142,17 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
           eta_1_(m, 0, k, j, i) = 0;
           scat_1_(m, 0, k, j, i) = 0;
         } else {
-          Real garr_dd[16];
-          Real garr_uu[16];
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
-          pack_n_d(adm.alpha(m, k, j, i), n_d);
-          adm::SpacetimeMetric(
-              adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
-              adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_dd);
-          adm::SpacetimeUpperMetric(
-              adm.alpha(m, k, j, i), adm.beta_u(m, 0, k, j, i),
-              adm.beta_u(m, 1, k, j, i), adm.beta_u(m, 2, k, j, i),
-              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i), garr_uu);
-          for (int a = 0; a < 4; ++a) {
-            for (int b = 0; b < 4; ++b) {
-              g_dd(a, b) = garr_dd[a + b * 4];
-              g_uu(a, b) = garr_uu[a + b * 4];
-            }
+          Real wdn = w0_(m, IDN, k, j, i);
+          Real pgas = w0_(m, IPR, k, j, i);
+
+          Real tgas;
+          if constexpr (is_ideal_eos) {
+            tgas = pgas / wdn;
+          } else {
+            Real nb = wdn / mb;
+            Real Y = w0_(m, IYF, k, j, i);
+            tgas = eos.GetTemperatureFromP(nb, pgas, &Y) * temp_code_to_cgs / temperature_scale_;
           }
-
-          Real gam = adm::SpatialDet(
-              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
-          Real volform = Kokkos::sqrt(gam);
-
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
-
-          Real w_lorentz{};
-          w_lorentz =
-              get_w_lorentz(w0_(m, IVX, k, j, i), w0_(m, IVY, k, j, i),
-                            w0_(m, IVZ, k, j, i), g_dd);
-          pack_u_u(
-              w_lorentz / adm.alpha(m, k, j, i),
-              w0_(m, IVX, k, j, i) - w_lorentz * adm.beta_u(m, 0, k, j, i) /
-                                         adm.alpha(m, k, j, i),
-              w0_(m, IVY, k, j, i) - w_lorentz * adm.beta_u(m, 1, k, j, i) /
-                                         adm.alpha(m, k, j, i),
-              w0_(m, IVZ, k, j, i) - w_lorentz * adm.beta_u(m, 2, k, j, i) /
-                                         adm.alpha(m, k, j, i),
-              u_u);
-          pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), adm.alpha(m, k, j, i),
-                   adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                   adm.beta_u(m, 2, k, j, i), v_u);
-          tensor_contract(g_dd, u_u, u_d);
-          tensor_contract(g_dd, v_u, v_d);
-          calc_proj(u_d, u_u, proj_ud);
-
-          // Compute lab frame energy density and number density
-          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-          pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
-                   adm.beta_u(m, 2, k, j, i),
-                   u0_(m, CombinedIdx(0, M1_FX_IDX, nvars_), k, j, i),
-                   u0_(m, CombinedIdx(0, M1_FY_IDX, nvars_), k, j, i),
-                   u0_(m, CombinedIdx(0, M1_FZ_IDX, nvars_), k, j, i), F_d);
-          const Real E = u0_(m, CombinedIdx(0, M1_E_IDX, nvars_), k, j, i);
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-          apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
-                        chi_(m, 0, k, j, i), P_dd, m1_params_);
-
-          AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
-          assemble_rT(n_d, E, F_d, P_dd, T_dd);
-
-          Real J = calc_J_from_rT(T_dd, u_u);
-
-          // fluid quantities
-          Real &wdn = w0_(m, IDN, k, j, i);
-          Real &wen = w0_(m, IEN, k, j, i);
-
-          // derived quantities
-          Real pgas = gm1 * wen;
-          Real tgas = pgas / wdn;
-
-          // local undensitized photon quantities
-          Real chi_loc = chi_(m, 0, k, j, i);
-
-          // get emissivities and opacities
-          Real eta_1_loc{}, abs_1_loc{}, scat_1_loc{};
 
           // set photon opacities
           Real sigma_a, sigma_s, sigma_p;
@@ -221,9 +163,9 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
                           sigma_p);
 
           // compute opacities from sigma_a, sigma_s, sigma_p
-          eta_1_loc = sigma_p;
-          abs_1_loc = sigma_p;
-          scat_1_loc = sigma_s + sigma_a;
+          Real eta_1_loc = (sigma_a + sigma_p) * arad_ * (tgas * tgas * tgas * tgas);
+          Real abs_1_loc = sigma_a + sigma_p;
+          Real scat_1_loc = sigma_s - sigma_p;
 
           assert(Kokkos::isfinite(eta_1_loc));
           assert(Kokkos::isfinite(abs_1_loc));
