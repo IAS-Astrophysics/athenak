@@ -10,10 +10,25 @@
 
 #if ENABLE_NN_OPACITY
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
+#include "radiation_m1/radiation_m1_nn_forward.hpp"  // NNWeights (Kokkos, no LibTorch)
+
 namespace radiationm1 {
+
+// CUDA-event checkpoints used by the opt-in, asynchronously collected NN profiler.
+// Keep the enum here (rather than exposing CUDA types) so radiation_m1.hpp stays light.
+enum class NNProfilePoint : int {
+  start = 0,
+  gather,
+  forward,
+  readout,
+  exact_1d,
+  kirchhoff,
+  count
+};
 
 //----------------------------------------------------------------------------------------
 //! \class NNOpacityEmulator
@@ -50,6 +65,26 @@ class NNOpacityEmulator {
   void InferPrebuilt(const float *x_full_ptr, float *nn_out_ptr, int N) const;
   void InferDevice(const float *eos_dev_ptr, float *nn_out_ptr, int N) const;
 
+  // CUDA-graph path: capture one fixed-size forward and replay it in chunks.
+  // This reduces forward dispatch overhead but imposes a 256k-row minimum-work
+  // quantum. Same I/O as InferPrebuilt.
+  void InferGraph(const float *x_full_ptr, float *nn_out_ptr, int N) const;
+
+  // Direct-cuBLAS path: evaluate the network with cublasSgemm (TF32) for its
+  // dense matmuls plus small Kokkos kernels for bias/GELU/LayerNorm/residual/map —
+  // ALL issued on the Kokkos stream. This keeps cuBLAS GEMM throughput and removes
+  // the LibTorch runtime from the steady-state forward. Requires ExtractWeights()
+  // first. Same zero-copy I/O contract as InferPrebuilt (x_full: N×8, out: N×32).
+  void InferCublas(const float *x_full_ptr, float *nn_out_ptr, int N) const;
+
+  // ── Optional fused-kernel path ──────────────────────────────────────────────
+  // Extract the trained weights from the loaded .pt into device-resident Views
+  // (NNWeights) so the network can be evaluated inside a single Kokkos kernel
+  // (see radiation_m1_nn_forward.hpp / nn_fused_kernel).  Call once, after Load().
+  void ExtractWeights();
+  bool WeightsReady() const;
+  const NNWeights &GetWeights() const;
+
   bool IsLoaded() const;
   bool IsGPU() const;
   int DeviceIndex() const;
@@ -58,6 +93,17 @@ class NNOpacityEmulator {
   const float *HostInStd() const;
   const float *HostOutMean() const;
   const float *HostOutStd() const;
+
+  // Opt-in sampled profiler.  Each hook is a predictable branch when disabled.
+  // Samples use CUDA events on the Kokkos stream and are collected on
+  // a later opacity call with cudaEventQuery(), never a fence/synchronize.  At the
+  // reporting interval, min/mean/max phase times and allocator deltas are reduced
+  // across ranks and printed by rank zero.
+  void ConfigureProfiling(bool enabled, int interval, const std::string &mode);
+  void ProfilePollAndReport() const;
+  void ProfileBegin(int n_cells, int infer_cells, bool kokkos_scratch_grew,
+                    size_t kokkos_scratch_bytes) const;
+  void ProfileMark(NNProfilePoint point) const;
 
  private:
   struct Impl;

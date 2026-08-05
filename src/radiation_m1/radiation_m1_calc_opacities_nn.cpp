@@ -18,6 +18,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_nn_forward.hpp"  // fused-kernel forward (optional)
 #include "radiation_m1/radiation_m1_nurates.hpp"
 
 #include <vector>
@@ -122,21 +123,46 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   const Real beta_dt_           = beta_dt;
   const Real mb_                = mb;
 
-  using ScalarView1D = Kokkos::View<float *, Kokkos::LayoutRight,
-                                    Kokkos::DefaultExecutionSpace>;
-
   // ── 1. Device gather: EOS inputs (8 features per cell, no species tiling) ────
   // The 8→32 model takes EOS features only; species symmetry is baked in
   // structurally (anux pair/brem = nux pair/brem, NEPS predicted separately).
   //
   // Layout:  eos_dev(flat, col)     col = nb_nm3,T,ye,yn,yp,mu_n,mu_p,mu_e
   //          x_full_dev(flat, col)  col = normalized EOS (8, no one-hot)
-  Kokkos::View<float **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
-      eos_dev("eos_dev", N_total, NN_NEOS);
-  Kokkos::View<float **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
-      x_full_dev("nn_inputs_dev", N_total, NN_NIN);   // (N, 8)
-  Kokkos::View<bool *, Kokkos::DefaultExecutionSpace>
-      valid_view("valid_dev", N_total);
+  // Grow-only persistent scratch: (re)allocate only when the local cell count
+  // exceeds the current capacity, then reuse across steps.  This removes the
+  // per-step cudaMalloc/cudaFree calls that can serialize the device.  Active
+  // rows are fully written before use; padded rows are independent and ignored,
+  // so no per-step zero-initialisation is needed.
+  // Optional fixed batch for runs whose local cell count changes.  Do not use it
+  // for strong-scaling measurements: padding deliberately imposes a constant-work
+  // floor.  Only the forward is padded; gather/readout use N_total, and padded
+  // output rows [N_total, nn_infer_N) are ignored.
+  const bool nn_uses_torch_forward =
+      !(nn_cublas || nn_fused_team || nn_fused_kernel);
+  const int nn_infer_N =
+      (nn_uses_torch_forward && nn_batch_size > 0 &&
+       N_total <= nn_batch_size) ? nn_batch_size : N_total;
+  nn_emulator.ProfilePollAndReport();
+  const bool nn_scratch_will_grow = nn_infer_N > nn_scratch_capacity_;
+  const size_t nn_scratch_bytes = static_cast<size_t>(nn_infer_N) *
+      (static_cast<size_t>(NN_NEOS + NN_NIN + NN_NOUT) * sizeof(float) +
+       sizeof(bool) + static_cast<size_t>(8 + 16) * sizeof(Real));
+  nn_emulator.ProfileBegin(N_total, nn_infer_N, nn_scratch_will_grow,
+                           nn_scratch_bytes);
+  if (nn_infer_N > nn_scratch_capacity_) {
+    Kokkos::realloc(nn_eos_dev_,    nn_infer_N, NN_NEOS);
+    Kokkos::realloc(nn_x_full_dev_, nn_infer_N, NN_NIN);
+    Kokkos::realloc(nn_valid_view_, nn_infer_N);
+    Kokkos::realloc(nn_view_,       static_cast<size_t>(nn_infer_N) * NN_NOUT);
+    Kokkos::realloc(nn_m1_moments_, nn_infer_N, 8);
+    Kokkos::realloc(nn_non_th_buf_, nn_infer_N, 16);
+    nn_scratch_capacity_ = nn_infer_N;
+  }
+  // Local handle-copies (share the persistent storage; NOT captured via `this`).
+  auto eos_dev    = nn_eos_dev_;
+  auto x_full_dev = nn_x_full_dev_;
+  auto valid_view = nn_valid_view_;
 
   auto &radiation_mask_cap = radiation_mask_;
 
@@ -196,42 +222,105 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           x_full_dev(flat, c) = (eos_dev(flat, c) - nn_in_mean[c]) / nn_in_std[c];
         }
       });
-  Kokkos::fence();
+  nn_emulator.ProfileMark(NNProfilePoint::gather);
+  // SCALING FIX: fence removed — the torch forward now runs on the Kokkos stream
+  // (see InferPrebuilt), so it is ordered after this gather with no barrier.
+  // Kokkos::fence();
   Kokkos::Profiling::popRegion();
 
   // ── 2. GPU-resident NN inference — no PCIe transfers ─────────────────────────
   // Output layout: nn_view(flat * NN_NOUT + s*NN_NCH + ch)
   // i.e. (N_total, NN_NSP=4, NN_NCH=8) stored row-major as (N_total, 32).
-  const int nn_flat = N_total * NN_NOUT;   // N × 32
-  ScalarView1D nn_view("nn_outputs_dev", nn_flat);
+  auto nn_view = nn_view_;   // persistent (grow-only) buffer, N_total × 32 in use
 
   Kokkos::Profiling::pushRegion("NN::InferPrebuilt");
-  nn_emulator.InferPrebuilt(x_full_dev.data(), nn_view.data(), N_total);
+  if (nn_cublas) {
+    // ── Direct-cuBLAS forward (cuBLAS-speed GEMMs, no LibTorch runtime) ─────────
+    // cublasSgemm (TF32) for the matmuls + tiny Kokkos kernels for the pointwise
+    // ops, all on the Kokkos stream.  This removes LibTorch dispatch/allocation
+    // from the steady-state forward while retaining GEMM throughput.  Dynamic
+    // N_total — no padding.
+    nn_emulator.InferCublas(x_full_dev.data(), nn_view.data(), N_total);
+  } else if (nn_fused_team) {
+    // ── Team / shared-memory fused Kokkos MLP (pure Kokkos) ───────────────────
+    // One thread-block per cell; the H-length activations live in team scratch
+    // (shared memory) and the hidden units are parallelised across the team.  No
+    // LibTorch, so this path is useful for separating framework overhead from
+    // the efficiency of the MLP implementation itself.
+    const NNWeights nnw = nn_emulator.GetWeights();
+    auto x_in_ = x_full_dev;
+    auto nn_out_ = nn_view;
+    using ScrView = Kokkos::View<float *, DevExeSpace::scratch_memory_space,
+                                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
+    const int H = NN_FWD_HIDDEN;
+    const size_t scr_bytes = 3 * ScrView::shmem_size(H);
+    Kokkos::TeamPolicy<DevExeSpace> policy(N_total, Kokkos::AUTO);
+    policy.set_scratch_size(0, Kokkos::PerTeam(scr_bytes));
+    Kokkos::parallel_for(
+        "radiation_m1_nn_fused_team", policy,
+        KOKKOS_LAMBDA(const Kokkos::TeamPolicy<DevExeSpace>::member_type &team) {
+          const int f = team.league_rank();
+          ScrView z(team.team_scratch(0), H);
+          ScrView a(team.team_scratch(0), H);
+          ScrView h(team.team_scratch(0), H);
+          float xin[NN_NIN];
+          for (int c = 0; c < NN_NIN; ++c) xin[c] = x_in_(f, c);
+          nn_forward_team(team, nnw, xin, z.data(), a.data(), h.data(),
+                          nn_out_.data() + static_cast<size_t>(f) * NN_NOUT);
+        });
+  } else if (nn_fused_kernel) {
+    // ── Optional fused Kokkos MLP path ─────────────────────────────────────────
+    // Evaluate the network in a single Kokkos kernel with device-resident weights
+    // (no LibTorch, no second allocator, no second CUDA stream, no per-step
+    // cudaMalloc).  Runs on the Kokkos execution space, so the readout below sees
+    // the results with NO extra synchronisation (no CUDA event needed).  Produces
+    // the SAME 32 normalised outputs as InferPrebuilt — denormalisation still
+    // happens in the readout kernel, so everything downstream is unchanged.
+    const NNWeights nnw = nn_emulator.GetWeights();
+    auto x_in_ = x_full_dev;
+    auto nn_out_ = nn_view;
+    par_for("radiation_m1_nn_fused_forward", DevExeSpace(), 0, N_total - 1,
+            KOKKOS_LAMBDA(const int f) {
+              float xin[NN_NIN];
+              for (int c = 0; c < NN_NIN; ++c) xin[c] = x_in_(f, c);
+              float o32[NN_NOUT];
+              nn_forward(nnw, xin, o32);
+              for (int p = 0; p < NN_NOUT; ++p) {
+                nn_out_(f * NN_NOUT + p) = o32[p];
+              }
+            });
+  } else {
+    // Fixed-shape forward (nn_infer_N) when nn_batch_size>0, else dynamic N_total.
+    if (nn_cuda_graph) {
+      // Captured-graph replay: cuBLAS speed with no per-step cudaMalloc/sync.
+      nn_emulator.InferGraph(x_full_dev.data(), nn_view.data(), nn_infer_N);
+    } else {
+      nn_emulator.InferPrebuilt(x_full_dev.data(), nn_view.data(), nn_infer_N);
+    }
 
-  // Stream-level sync: make Kokkos's CUDA stream wait for LibTorch's stream
-  // via a CUDA event, instead of cudaDeviceSynchronize() (Kokkos::fence()).
-  // cudaDeviceSynchronize() drains ALL streams including NCCL all-reduces,
-  // which inflated InferDevice timing by ~10x in profiling.
-  {
-    cudaEvent_t ev;
-    cudaEventCreateWithFlags(&ev, cudaEventDisableTiming);
-    // Record on LibTorch's current stream for this device
-    cudaStream_t lt_stream =
-        at::cuda::getCurrentCUDAStream(nn_emulator.DeviceIndex()).stream();
-    cudaEventRecord(ev, lt_stream);
-    // Make Kokkos's stream wait — does NOT stall NCCL or other streams
-    cudaStream_t kokkos_stream = Kokkos::Cuda().cuda_stream();
-    cudaStreamWaitEvent(kokkos_stream, ev, 0);
-    cudaEventDestroy(ev);
+    // SCALING FIX: cross-stream event handshake removed.  InferPrebuilt now runs
+    // the forward on the Kokkos stream, so the readout kernel below is already
+    // ordered after it on the same stream.  The old handshake (kept for
+    // reference) supplied the required dependency when two streams were used:
+    // {
+    //   cudaEvent_t ev;
+    //   cudaEventCreateWithFlags(&ev, cudaEventDisableTiming);
+    //   cudaStream_t lt_stream =
+    //       at::cuda::getCurrentCUDAStream(nn_emulator.DeviceIndex()).stream();
+    //   cudaEventRecord(ev, lt_stream);
+    //   cudaStream_t kokkos_stream = Kokkos::Cuda().cuda_stream();
+    //   cudaStreamWaitEvent(kokkos_stream, ev, 0);
+    //   cudaEventDestroy(ev);
+    // }
   }
+  nn_emulator.ProfileMark(NNProfilePoint::forward);
   Kokkos::Profiling::popRegion();
 
   // ── 3. Readout: metric reconstruction + J/rnnu + NN→code conversion ──────────
   // Intermediate buffer storing J[0..3] and rnnu[0..3] per cell so the
   // Kirchhoff kernel does not need to redo the metric/closure computation.
   // Layout: m1_moments(flat, 0..3) = J[s], m1_moments(flat, 4..7) = rnnu[s]
-  Kokkos::View<Real **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
-      m1_moments("m1_moments", N_total, 8);
+  auto m1_moments = nn_m1_moments_;   // persistent (grow-only) buffer
 
   // Non-thermal (NEPS) components from NN, needed by the Kirchhoff kernel to
   // apply corr_fac only to the thermal part while keeping NEPS unchanged.
@@ -241,8 +330,7 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   //   col  8..11 eta_0_non_th[s]  number emissivity,  code units
   //   col 12..15 eta_1_non_th[s]  energy emissivity,  code units
   // fac×2 for nux/anux already applied to eta columns; abs columns have no fac.
-  Kokkos::View<Real **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
-      non_th_buf("non_th_buf", N_total, 16);
+  auto non_th_buf = nn_non_th_buf_;   // persistent (grow-only) buffer
 
   // Capture NN output normalization stats (32-dim) for fused denorm.
   // InferPrebuilt writes raw normalized values; readout applies:
@@ -405,7 +493,10 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
         }
         (void)volform;
       });
-  Kokkos::fence();
+  nn_emulator.ProfileMark(NNProfilePoint::readout);
+  // SCALING FIX: profiling fence removed for comm/compute overlap; the next
+  // kernel (1D_exact) is ordered on the same Kokkos stream.
+  // Kokkos::fence();
   Kokkos::Profiling::popRegion();
 
   // ── 3b. 1D exact: β-processes (abs_em) + iso scattering ─────────────────────
@@ -486,10 +577,13 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
               scat_1_(m, s, k, j, i) += scat_1_loc[s];
             }
           });
-      Kokkos::fence();
+      // SCALING FIX: profiling fence removed for overlap; kirchhoff is ordered
+      // on the same Kokkos stream.
+      // Kokkos::fence();
       Kokkos::Profiling::popRegion();
     }
   }
+  nn_emulator.ProfileMark(NNProfilePoint::exact_1d);
 
   // ── 4. Kirchhoff / corr_fac / NeutrinoDens ───────────────────────────────────
   // Reads raw opacities from output arrays + J/rnnu from m1_moments.
@@ -670,7 +764,12 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           }
         }
       });  // par_for kirchhoff
-  Kokkos::fence();
+  nn_emulator.ProfileMark(NNProfilePoint::kirchhoff);
+  // Do not fence here.  Every NN path and all downstream RadiationM1 kernels use
+  // the same Kokkos CUDA stream, so stream ordering supplies the data dependency.
+  // The normal nurates opacity task likewise returns asynchronously.  A global
+  // Kokkos::fence() here stalled the task scheduler and all Kokkos execution
+  // instances, undoing the stream/allocation fixes above.
   Kokkos::Profiling::popRegion();
 
   return TaskStatus::complete;

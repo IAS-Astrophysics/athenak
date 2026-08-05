@@ -88,6 +88,33 @@ class RadiationM1 {
   NNOpacityEmulator nn_emulator{};  // NN-based opacity emulator (batched LibTorch)
   std::string nn_model_path{};      // path to TorchScript .pt file
   std::string nn_stats_dir{};       // directory with nn2d_*.bin normalisation files
+  bool nn_fused_kernel = false;     // if true, evaluate the NN in a fused Kokkos
+                                    // kernel (no LibTorch at run time) instead of
+                                    // the batched InferPrebuilt path
+  int  nn_batch_size = 0;           // if >0, pad the torch forward to this fixed
+                                    // batch (cells); useful only if the local cell
+                                    // count varies, and harmful to strong scaling
+  bool nn_fused_team = false;       // if true, evaluate the NN with the team /
+                                    // shared-memory Kokkos kernel (experimental;
+                                    // avoids LibTorch but is not GEMM-optimized)
+  bool nn_cuda_graph = false;       // if true, run the torch forward via a captured
+                                    // CUDA graph in fixed 256k-row chunks
+  bool nn_cublas = false;           // if true, evaluate the NN with direct cuBLAS
+                                    // GEMMs + Kokkos pointwise kernels (no LibTorch
+                                    // runtime). Needs ExtractWeights() (like fused).
+  // Persistent (grow-only) scratch buffers for CalcOpacityNN_.  Reused every step
+  // instead of being reallocated per call, which removes the per-step
+  // cudaMalloc/cudaFree calls that can serialize the device.  Active rows are
+  // rewritten before use every step; padded rows are independent and discarded,
+  // so no per-step re-initialisation is required.
+  Kokkos::View<float **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
+      nn_eos_dev_{}, nn_x_full_dev_{};
+  Kokkos::View<bool *, Kokkos::DefaultExecutionSpace> nn_valid_view_{};
+  Kokkos::View<float *, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
+      nn_view_{};
+  Kokkos::View<Real **, Kokkos::LayoutRight, Kokkos::DefaultExecutionSpace>
+      nn_m1_moments_{}, nn_non_th_buf_{};
+  int nn_scratch_capacity_ = 0;     // current row capacity of the buffers above
 #endif
 
   DvceArray5D<Real> u0;              // evolved variables
