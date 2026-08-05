@@ -207,6 +207,7 @@ class MHD {
   TaskStatus Prolongate(Driver* pdrive, int stage);
   TaskStatus ConToPrim(Driver *d, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
+  void RecomputeTimeStepFromCurrentState(Driver *pdrive);
   TaskStatus ClearSTSFlux(Driver *d, int stage);
   TaskStatus ClearSTSEField(Driver *d, int stage);
   TaskStatus STSFluxes(Driver *d, int stage);
@@ -230,7 +231,6 @@ class MHD {
  private:
   void AddSelectedDiffusionFluxes(parabolic::DiffusionSelection selection);
   void AddSelectedDiffusionEMF(parabolic::DiffusionSelection selection);
-  void RecomputeTimeStepFromCurrentState(Driver *pdrive);
   MeshBlockPack* pmy_pack;   // ptr to MeshBlockPack containing this MHD
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e1_cc, e2_cc, e3_cc;
