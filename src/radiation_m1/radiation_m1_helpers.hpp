@@ -302,7 +302,21 @@ KOKKOS_INLINE_FUNCTION
 void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu, Real &E,
                  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F_d,
                  const RadiationM1Params &params) {
+  bool at_floor = !Kokkos::isfinite(E) || E <= params.rad_E_floor;
+  for (int a = 0; a < 4; ++a) {
+    if (!Kokkos::isfinite(F_d(a))) {
+      at_floor = true;
+    }
+  }
+
   E = Kokkos::fmax(params.rad_E_floor, E);
+
+  if (at_floor) {
+    for (int a = 0; a < 4; ++a) {
+      F_d(a) = 0.;
+    }
+    return;
+  }
 
   const Real F2 = tensor_dot(g_uu, F_d, F_d);
   const Real lim = E * E * (1 - params.rad_eps);
