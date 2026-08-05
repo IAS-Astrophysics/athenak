@@ -11,7 +11,9 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <iostream>
 #include <sstream>
@@ -103,6 +105,20 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   last_a0 = pin->GetOrAddReal("fastflow", "last_a0_" + n_str, -1.0);
   ah_found = pin->GetOrAddBoolean("fastflow", "ah_found_a0_" + n_str, false);
   time_first_found = pin->GetOrAddReal("fastflow", "time_first_found_" + n_str, -1.0);
+
+  // Auto excision trigger: latch (persisted across restarts) and thresholds.
+  ah_excise_ready = pin->GetOrAddBoolean("fastflow", "ah_excise_ready_"+n_str, false);
+  excise_settle_rrate = pin->GetOrAddReal("fastflow", "excise_settle_rrate", 1.0e-3);
+  excise_settle_hrms  = pin->GetOrAddReal("fastflow", "excise_settle_hrms", 5.0e-3);
+  excise_settle_count = pin->GetOrAddInteger("fastflow", "excise_settle_count", 5);
+  settle_prev_time = -1.0;
+  settle_prev_radius = -1.0;
+  settle_streak = 0;
+  // excise_auto=false (default) disables the settle-based trigger: the horizon
+  // is marked excise-ready from the start, so excision begins as soon as it is
+  // found. Set excise_auto=true to wait until the horizon has settled.
+  excise_auto = pin->GetOrAddBoolean("fastflow", "excise_auto", false);
+  if (!excise_auto) { ah_excise_ready = true; }
 
   // Center
   center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
@@ -256,6 +272,19 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       fflush(pofile_summary);
     }
 
+    // Shape file: open once and keep open (closed in the destructor), like the
+    // summary/verbose files. Opening in append mode ("a") preserves existing
+    // contents on restart. This avoids a per-write fopen(), which can fail
+    // transiently on a busy parallel filesystem and abort a long run.
+    pofile_shape = fopen(ofname_shape.c_str(), "a");
+    if (NULL == pofile_shape) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "Could not open file '" << ofname_shape << "' for writing! "
+            << std::strerror(errno) << std::endl;
+      exit(EXIT_FAILURE);
+    }
+
     if (output_grid) {
       pofile_grid = fopen(ofname_grid.c_str(), "w");
       if (NULL == pofile_grid) {
@@ -355,6 +384,7 @@ FastFlow::~FastFlow() {
   // Close files
   if (ioproc) {
     fclose(pofile_summary);
+    fclose(pofile_shape);
     if (verbose) {
       fclose(pofile_verbose);
     }
@@ -386,14 +416,8 @@ void FastFlow::Write(int iter, Real time) {
     fflush(pofile_summary);
 
     if (ah_found) {
-      // Shape file (coefficients).
-      pofile_shape = fopen(ofname_shape.c_str(), "a");
-      if (NULL == pofile_shape) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl
-            << "Could not open file '" << pofile_shape << "' for writing!" << std::endl;
-        exit(EXIT_FAILURE);
-      }
+      // Shape file (coefficients). File is opened once in the constructor and
+      // kept open, so here we only append and flush.
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
       for (int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0.h_view(l));
@@ -405,7 +429,7 @@ void FastFlow::Write(int iter, Real time) {
         }
       }
       fprintf(pofile_shape,"\n");
-      fclose(pofile_shape);
+      fflush(pofile_shape);
     }
   }
 
@@ -439,6 +463,31 @@ void FastFlow::Find(int iter, Real time) {
 
     parname = "ah_found_a0_" + std::to_string(nh);
     pin->SetBoolean("fastflow", parname, ah_found);
+
+    // Auto-detect when the black hole has finished forming: the horizon must
+    // have stopped growing (small relative change of the mean coordinate radius)
+    // and be smooth (low hrms) for excise_settle_count consecutive finds. Once
+    // that holds, latch ah_excise_ready so horizon excision may begin. All
+    // quantities used here (ah_prop, time) are consistent across MPI ranks, and
+    // the latch is persisted into restarts. It never un-latches.
+    if (!ah_excise_ready) {
+      Real R = ah_prop[hmeanradius];
+      bool smooth = (ah_prop[hhrms] < excise_settle_hrms);
+      bool slow = false;
+      if (settle_prev_radius > 0.0 && R > 0.0 && time > settle_prev_time) {
+        Real rrate = fabs(R - settle_prev_radius)
+                     / ((time - settle_prev_time) * R);
+        slow = (rrate < excise_settle_rrate);
+      }
+      settle_streak = (slow && smooth) ? (settle_streak + 1) : 0;
+      settle_prev_time = time;
+      settle_prev_radius = R;
+      if (settle_streak >= excise_settle_count) {
+        ah_excise_ready = true;
+        pin->SetBoolean("fastflow", "ah_excise_ready_" + std::to_string(nh),
+                        ah_excise_ready);
+      }
+    }
   }
 }
 

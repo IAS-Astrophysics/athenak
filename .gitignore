@@ -24,3 +24,6 @@ staging_manifests/
 *~
 *.swp
 /Lorene/
+
+# bns_nurates
+src/bns_nurates/

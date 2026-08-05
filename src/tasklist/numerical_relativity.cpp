@@ -15,6 +15,7 @@
 #include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 
 namespace numrel {
 
@@ -30,6 +31,8 @@ std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
       return run_queue;
     case Task_End:
       return end_queue;
+    case Task_AfterTimeIntegrator:
+      return after_timeintegrator_queue;
     default:
       std::cout << "NumericalRelativity: Unknown task queue requested!\n";
       abort();
@@ -41,6 +44,8 @@ std::vector<QueuedTask>& NumericalRelativity::SelectQueue(TaskLocation loc) {
 PhysicsDependency NumericalRelativity::NeedsPhysics(TaskName task) {
   if (task < MHD_NTASKS) {
     return Phys_MHD;
+  } else if (task < M1_NTASKS) {
+    return Phys_M1;
   } else if (task < Z4c_NTASKS) {
     return Phys_Z4c;
   } else if (task < Rad_NTASKS) {
@@ -56,6 +61,8 @@ bool NumericalRelativity::DependencyAvailable(PhysicsDependency dep) {
       return true;
     case Phys_MHD:
       return pmy_pack->pdyngr != nullptr;
+    case Phys_M1:
+      return pmy_pack->pradm1 != nullptr;
     case Phys_Z4c:
       return pmy_pack->pz4c != nullptr;
     case Phys_DynRad:
@@ -124,7 +131,7 @@ bool NumericalRelativity::AssembleNumericalRelativityTasks(
       TaskID dep(0);
       if (DependenciesMet(task, queue, dep) && !task.added) {
         task.added = true;
-        task.id = list->AddTask(task.func_, dep);
+        task.id = list->AddTask(task.func_, dep, task.name_string);
         cycle_added++;
         added++;
         /*std::cout << "Successfully added " << task.name_string << " to task list!\n"
@@ -191,6 +198,15 @@ void NumericalRelativity::AssembleNumericalRelativityTasks(
     std::cout << "NumericalRelativity: Failed to construct end TaskList!\n"
               << "  Check that there are no cyclical dependencies or missing tasks.\n";
     PrintMissingTasks(end_queue);
+    abort();
+  }
+
+  success = AssembleNumericalRelativityTasks(tl["opsplit_after_timeintegrator"],
+                                             after_timeintegrator_queue);
+  if (!success) {
+    std::cout << "NumericalRelativity: Failed to construct end TaskList!\n"
+              << "  Check that there are no cyclical dependencies or missing tasks.\n";
+    PrintMissingTasks(after_timeintegrator_queue);
     abort();
   }
 }

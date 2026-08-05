@@ -71,9 +71,9 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvb     = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
   id.sendb_shr = tl["stagen"]->AddTask(&MHD::SendB_Shr, this, id.recvb);
   id.recvb_shr = tl["stagen"]->AddTask(&MHD::RecvB_Shr, this, id.sendb_shr);
-  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb_shr);
-  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.recvb_shr);
+  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.prol);
+  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.bcs);
   id.newdt     = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
@@ -81,6 +81,18 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
+
+  if (pmy_pack->pradm1 != nullptr) {
+    id.postrad_initrecvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::InitRecvU, this, id.crecv);
+    id.postrad_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.postrad_initrecvu);
+    id.postrad_sendu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::SendU, this, id.postrad_restu);
+    id.postrad_recvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RecvU, this, id.postrad_sendu);
+    id.postrad_bcs = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ApplyPhysicalBCs, this, id.postrad_recvu);
+    id.postrad_prol = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::Prolongate, this, id.postrad_bcs);
+    id.postrad_c2p = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ConToPrim, this, id.postrad_prol);
+    id.postrad_csend = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearSendU, this, id.postrad_c2p);
+    id.postrad_crecv = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearRecvU, this, id.postrad_csend);
+  }
 
   return;
 }
@@ -525,7 +537,9 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
-  // physical BCs
+  // Step 3: apply physical BCs to the fine array. This is called *after* prolongation,
+  //         so that the corner ghost zones between a coarse neighbor and a physical
+  //         boundary read valid data.
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
   pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
 
@@ -547,12 +561,21 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
     pbval_b->FillCoarseInBndryFC(b0, coarse_b0);
+
+    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
+    //         reads valid data in coarse ghost zones that sit at a physical boundary.
+    if (!(pmy_pack->pmesh->strictly_periodic)) {
+      pbval_u->HydroBCsCoarse((pmy_pack), (pbval_u->u_in), coarse_u0);
+      pbval_b->BFieldBCsCoarse((pmy_pack), (pbval_b->b_in), coarse_b0);
+    }
+
     if (pmy_pack->pmesh->pmr->prolong_prims) {
       pbval_u->ConsToPrimCoarseBndry(coarse_u0, coarse_b0, coarse_w0);
       pbval_u->ProlongateCC(w0, coarse_w0);
       pbval_b->ProlongateFC(b0, coarse_b0);
       pbval_u->PrimToConsFineBndry(w0, b0, u0);
     } else {
+      // Step 2: prolongate fine ghost zones from the coarse array.
       pbval_u->ProlongateCC(u0, coarse_u0);
       pbval_b->ProlongateFC(b0, coarse_b0);
     }
@@ -705,6 +728,33 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
     pmy_pack->pmesh->pmr->RestrictFC(b0, coarse_b0);
   }
   if (!CheckFiniteFaceB("RestrictB", pdrive, stage)) return TaskStatus::fail;
+
+  return TaskStatus::complete;
+}
+
+TaskStatus MHD::InitRecvU(Driver *pdrive, int stage) {
+  // post receives for U
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+  return tstat;
+}
+
+TaskStatus MHD::ClearSendU(Driver *pdrive, int stage) {
+  if ((stage >= 0) || (stage == -1)) {
+    // check sends of U complete
+    TaskStatus tstat = pbval_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus MHD::ClearRecvU(Driver *pdrive, int stage) {
+  TaskStatus tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    // check receives of U complete
+    tstat = pbval_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
   return TaskStatus::complete;
 }
 

@@ -34,6 +34,8 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
+option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
+option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -77,6 +79,16 @@ else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
 
+# set nurates macro (true/false)
+if(Athena_ENABLE_NURATES)
+  set(ENABLE_NURATES 1)
+  set(M1_TOTAL_NUM_SPECIES 4)
+  message(STATUS "Compiling with bns-nurates")
+else()
+  set(ENABLE_NURATES 0)
+  set(M1_TOTAL_NUM_SPECIES 1)
+endif ()
+
 #set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
   message(STATUS "Including user-specified problem generator file: ${PROBLEM}")
@@ -99,6 +111,7 @@ endif()
 
 # If this is a debug build, set kokkos debug on
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  add_definitions(-DDEBUG_BUILD)
   message(STATUS "Enabling Kokkos debug mode")
   set(Kokkos_ENABLE_DEBUG ON CACHE BOOL "Most general debug settings")
   set(Kokkos_ENABLE_DEBUG_BOUNDS_CHECK ON CACHE BOOL
@@ -113,6 +126,9 @@ endif()
 add_subdirectory(src)
 add_subdirectory(kokkos)
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
+
+find_package(Threads REQUIRED)
+target_link_libraries(athena PUBLIC Threads::Threads)
 
 target_link_libraries(athena PUBLIC Kokkos::kokkos)
 if (ENABLE_MPI)
@@ -133,6 +149,11 @@ if (${PROBLEM} MATCHES "z4c/two_punctures/*" OR
 	set(TWO_PUNCTURES 1)
 else()
 	set(TWO_PUNCTURES 0)
+endif()
+
+# Optionally include bns_nurates headers
+if (ENABLE_NURATES)
+  target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bns_nurates/include)
 endif()
 
 if (${PROBLEM} MATCHES "z4c/spectre/*")

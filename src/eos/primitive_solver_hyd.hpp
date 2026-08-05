@@ -63,7 +63,7 @@ class PrimitiveSolverHydro {
     }
     // Parameters for CompOSE EoS
     if constexpr (
-         std::is_same_v<Primitive::EOSCompOSE<Primitive::NormalLogs>, EOSPolicy> ||
+         std::is_same_v<Primitive::EOSCompOSE<Primitive::NormalLogs>, EOSPolicy> || 
          std::is_same_v<Primitive::EOSCompOSE<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 1.
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 1));
@@ -92,11 +92,10 @@ class PrimitiveSolverHydro {
     }
         // Parameters for Hybrid EoS
     if constexpr (
-         std::is_same_v<Primitive::EOSHybrid<Primitive::NormalLogs>, EOSPolicy> ||
+         std::is_same_v<Primitive::EOSHybrid<Primitive::NormalLogs>, EOSPolicy> || 
          std::is_same_v<Primitive::EOSHybrid<Primitive::NQTLogs>, EOSPolicy>) {
       // Get and set number of scalars in table. This will currently fail if not 0.
-      ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_thermal",
-                                         5.0/3.0));
+      ps.GetEOSMutable().SetThermalGamma(pin->GetOrAddReal(block, "gamma_thermal", 5.0/3.0));
       ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 0));
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
@@ -189,6 +188,7 @@ class PrimitiveSolverHydro {
       ps.GetEOSMutable().SetSpeciesAtmosphere(
           pin->GetOrAddReal(block, spec_name.str(), 0.0), n);
     }
+
   }
 
   // The prim to con function used on the reconstructed states inside the Riemann solver.
@@ -341,7 +341,7 @@ class PrimitiveSolverHydro {
   }
 
   void ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &bfc,
-                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
+                  DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim, 
                   DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
@@ -390,8 +390,11 @@ class PrimitiveSolverHydro {
 
     auto &indcs = pmy_pack->pmesh->mb_indcs;
     int &is = indcs.is;
+    //int &ie = indcs.ie;
     int &js = indcs.js;
+    //int &je = indcs.je;
     int &ks = indcs.ks;
+    //int &ke = indcs.ke;
     auto &size = pmy_pack->pmb->mb_size;
 
     const int ni = (iu - il + 1);
@@ -891,9 +894,9 @@ class PrimitiveSolverHydro {
     Real cmsq = csq + vasq - csq*vasq;
 
     // Set fast magnetosonic speed in appropriate coordinates
-    Real a = u0*u0 - (g00 + u0*u0)*cmsq;
-    Real b = -2.0 * (u0 * u1 - (g01 + u0 * u1) *cmsq);
-    Real c = u1*u1 - (g11 + u1*u1)*cmsq;
+    Real a = u0*u0*(1.0 - cmsq) - g00*cmsq;
+    Real b = -2.0*(u0*u1*(1.0 - cmsq) - g01*cmsq);
+    Real c = u1*u1*(1.0 - cmsq) - g11*cmsq;
     Real a1 = b / a;
     Real a0 = c / a;
     Real s = fmax(a1*a1 - 4.0 * a0, 0.0);

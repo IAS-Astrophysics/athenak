@@ -66,7 +66,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     // nearest table values at or below a specified i and yq.
     { // read nb
       Real * table_nb = table["nb"];
-
+      
       for (size_t in=0; in<m_nn; ++in) {
         host_log_nb(in) = log2_(table_nb[in]);
       }
@@ -88,11 +88,11 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     { // read T
       Real * table_t = table["t"];
-
+      
       for (size_t it=0; it<m_nt; ++it) {
         host_log_t(it) = log2_(table_t[it]);
       }
-
+     
       m_id_log_t = 1.0/(host_log_t(1) - host_log_t(0));
       min_T = table_t[0];
       max_T = table_t[m_nt-1];
@@ -179,6 +179,30 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
             host_table(ECCS,in,iy,it) = sqrt(table_cs2[iflat]);
+          }
+        }
+      }
+    }
+
+    { // Read proton fraction -> Y[p]
+      Real * table_yq = table["Y[p]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYP,in,iy,it) = table_yq[iflat];
+          }
+        }
+      }
+    }
+
+    { // Read neutron fraction -> Y[n]
+      Real * table_yq = table["Y[n]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYN,in,iy,it) = table_yq[iflat];
           }
         }
       }

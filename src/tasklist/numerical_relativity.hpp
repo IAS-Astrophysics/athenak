@@ -59,7 +59,14 @@ enum TaskName {
   MHD_Newdt,
   MHD_ClearS,
   MHD_ClearR,
+  MHD_URecv,
+  MHD_ClearSU,
+  MHD_ClearRU,
   MHD_NTASKS,
+
+  M1_Closure,
+  M1_SetTmunu,
+  M1_NTASKS,
 
   Z4c_Recv,
   Z4c_IRecvW,
@@ -118,6 +125,7 @@ enum TaskName {
 enum PhysicsDependency {
   Phys_None,
   Phys_MHD,
+  Phys_M1,
   Phys_Z4c,
   Phys_DynRad
 };
@@ -125,7 +133,8 @@ enum PhysicsDependency {
 enum TaskLocation {
   Task_Start,
   Task_Run,
-  Task_End
+  Task_End,
+  Task_AfterTimeIntegrator
 };
 
 struct QueuedTask {
@@ -187,12 +196,12 @@ class NumericalRelativity {
 
   void AssembleNumericalRelativityTasks(
          std::map<std::string, std::shared_ptr<TaskList>>& tl);
-
  private:
   MeshBlockPack *pmy_pack;
   std::vector<QueuedTask> start_queue;
   std::vector<QueuedTask> run_queue;
   std::vector<QueuedTask> end_queue;
+  std::vector<QueuedTask> after_timeintegrator_queue;
 
   std::vector<QueuedTask>& SelectQueue(TaskLocation loc);
   PhysicsDependency NeedsPhysics(TaskName task);

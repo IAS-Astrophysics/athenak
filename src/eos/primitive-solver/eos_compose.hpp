@@ -29,12 +29,10 @@
 namespace Primitive {
 
 template<typename LogPolicy>
-class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy,
-                   public SupportsChemicalPotentials {
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy, public SupportsChemicalPotentials {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
-
  public:
   enum TableVariables {
     ECLOGP  = 0,  //! log (pressure / 1 MeV fm^-3)
@@ -44,7 +42,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     ECMUL   = 4,  //! lepton chemical potential [MeV]
     ECLOGE  = 5,  //! log (total energy density / 1 MeV fm^-3)
     ECCS    = 6,  //! sound speed [c]
-    ECNVARS = 7
+    ECYP    = 7,  //! proton fraction
+    ECYN    = 8,  //! neutron fraction
+    ECNVARS = 9
   };
 
  protected:
@@ -168,11 +168,28 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return eval_at_nty(ECMUL, n, T, Y[0]);
   }
 
+  /// Calculate the proton fraction
+  KOKKOS_INLINE_FUNCTION Real ProtonFraction(Real n, Real T, Real *Y) const {
+    assert (m_initialized);
+    // Use ternary instead of fmax: on IEEE-compliant hardware (Intel SYCL),
+    // fmax(0, NaN) = NaN, so a NaN from the table lookup would propagate.
+    Real yp = eval_at_nty(ECYP, n, T, Y[0]);
+    return (yp > 0.0) ? yp : 0.0;
+  }
+
+  /// Calculate the neutron fraction
+  KOKKOS_INLINE_FUNCTION Real NeutronFraction(Real n, Real T, Real *Y) const {
+    assert (m_initialized);
+    // Use ternary instead of fmax: on IEEE-compliant hardware (Intel SYCL),
+    // fmax(0, NaN) = NaN, so a NaN from the table lookup would propagate.
+    Real yn = eval_at_nty(ECYN, n, T, Y[0]);
+    return (yn > 0.0) ? yn : 0.0;
+  }
+
   /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
-  KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq,
-      Real *Y_eq, Real T_guess, Real *Y_guess) const {
+  KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
     const int n_at = 16;
-    Real vec_guess[n_at][2] = {
+    Real vec_guess[n_at][2] = { 
       {1.00e0, 1.00e0},
       {0.90e0, 1.25e0},
       {0.90e0, 1.10e0},
@@ -207,9 +224,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       na += 1;
     }
 
-    if (ierr==0) { // Success
+    if (ierr==0){ // Success
       T_eq = x1[0];
-      Y_eq[0] = x1[1];
+      Y_eq[0] = x1[1]; // Maybe in the future we could explicitly conserve the lepton numbers
     } else {      // Failure
       T_eq = T_guess;       // Set results to guesses
       Y_eq[0] = Y_guess[0];
@@ -219,8 +236,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   }
 
   /// Calculate trapped neutrino net number and energy densities
-  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3],
-                                               Real e_nu[3]) const {
+  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
     Real mu_le = ElectronLeptonChemicalPotential(n, T, Y);
     Real eta_e = mu_le/T;
     Real eta_e2 = eta_e*eta_e;
@@ -233,19 +249,14 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     Real T3 = T*T*T;
     Real T4 = T3*T;
-    // n_nu_e   - n_anu_e   [fm^-3]
-    n_nu[0] = nu_n_prefactor * T3 * (eta_e * (pi2 + eta_e2));
-    // n_nu_mu  - n_anu_mu  [fm^-3]
-    n_nu[1] = nu_n_prefactor * T3 * (eta_m * (pi2 + eta_m2));
-    // n_nu_tau - n_anu_tau [fm^-3]
-    n_nu[2] = nu_n_prefactor * T3 * (eta_t * (pi2 + eta_t2));
 
-    // e_nu_e   + e_anu_e   [MeV fm^-3]
-    e_nu[0] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_e2*(pi2 + 0.5*eta_e2));
-    // e_nu_mu  + e_anu_mu  [MeV fm^-3]
-    e_nu[1] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_m2*(pi2 + 0.5*eta_m2));
-    // e_nu_tau + e_anu_tau [MeV fm^-3]
-    e_nu[2] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_t2*(pi2 + 0.5*eta_t2));
+    n_nu[0] = nu_n_prefactor * T3 * (eta_e * (pi2 + eta_e2)); // n_nu_e   - n_anu_e   [fm^-3]
+    n_nu[1] = nu_n_prefactor * T3 * (eta_m * (pi2 + eta_m2)); // n_nu_mu  - n_anu_mu  [fm^-3]
+    n_nu[2] = nu_n_prefactor * T3 * (eta_t * (pi2 + eta_t2)); // n_nu_tau - n_anu_tau [fm^-3]
+
+    e_nu[0] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_e2*(pi2 + 0.5*eta_e2)); // e_nu_e   + e_anu_e   [MeV fm^-3]
+    e_nu[1] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_m2*(pi2 + 0.5*eta_m2)); // e_nu_mu  + e_anu_mu  [MeV fm^-3]
+    e_nu[2] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_t2*(pi2 + 0.5*eta_t2)); // e_nu_tau + e_anu_tau [MeV fm^-3]
 
     return;
   }
@@ -430,7 +441,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         flo = f(ilo);
       }
     }
-
+    
     if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE)) {
       /*if (iv == ECLOGE) {
         Real vlo = eval_at_nty(iv,n,min_T,Yq);
@@ -442,17 +453,19 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                        "  maximum: %20.17g\n",
                        iv, var, vlo, vhi);
       }*/
+      //if (var <= eval_at_nty(iv,n,min_T,Yq)) {
       if (f(0) <= 0) {
         return min_T;
-      } else if (f(m_nt-1) >= 0) {
+      } //else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
+      else if (f(m_nt-1) >= 0) {
         return max_T;
       }
     }
-
+    
     if (flo*fhi > 0) {
       int imin = 0;
       Real fmin = f(imin);
-      Kokkos::printf("There's a problem with temperature bracketing!\n" // NOLINT
+      Kokkos::printf("There's a problem with temperature bracketing!\n"
                      "  iv = %i\n"
                      "  var = %20.17g\n"
                      "  n = %20.17g\n"
@@ -462,8 +475,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                      "  ihi = %i\n"
                      "  fmin = %20.17g\n"
                      "  flo = %20.17g\n"
-                     "  fhigh = %20.17g\n", iv, var, n , Yq, imin, ilo, ihi, fmin, flo,
-                     fhi);
+                     "  fhigh = %20.17g\n", iv, var, n , Yq, imin, ilo, ihi, fmin, flo, fhi);
       assert(flo*fhi <= 0);
     }
     while (ihi - ilo > 1) {
@@ -486,8 +498,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   }
 
   /// Low level functions for neutrino equilibrium, not intended for outside use
-  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_2DNR(Real n, Real e, Real Yle,
-                                                      Real x0[2], Real x1[2]) const {
+  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_2DNR(Real n, Real e, Real Yle, Real x0[2], Real x1[2]) const {
     int ierr = 1;
 
     // initialize the solution
@@ -539,7 +550,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         norm[0] = -1.0;
       } else if (x1[0] == max_T) {
         norm[0] = 1.0;
-      } else {
+      } else { 
         norm[0] = 0.0;
       }
 
@@ -559,8 +570,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       dxa[0] = dx1[0] - (dx1[0]*norm[0] + dx1[1]*norm[1])*norm[0]/scal;
       dxa[1] = dx1[1] - (dx1[0]*norm[0] + dx1[1]*norm[1])*norm[1]/scal;
 
-      if ((dxa[0]*dxa[0] + dxa[1]*dxa[1]) <
-          (nu_2DNR_eps_lim*nu_2DNR_eps_lim * (dx1[0]*dx1[0] + dx1[1]*dx1[1]))) {
+      if ((dxa[0]*dxa[0] + dxa[1]*dxa[1]) < (nu_2DNR_eps_lim*nu_2DNR_eps_lim * (dx1[0]*dx1[0] + dx1[1]*dx1[1]))) {
         KKT = true;
         ierr = 2;
         return ierr;
@@ -573,7 +583,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       while (n_cut <= nu_bis_n_cut_max && err >= err_old) {
         // the variation of x1 is divided by an powers of 2 if the
         // error is not decreasing along the gradient direction
-
+        
         x1_tmp[0] = x1[0] + (dx1[0]*fac_cut);
         x1_tmp[1] = x1[1] + (dx1[1]*fac_cut);
 
@@ -584,8 +594,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         }
 
         // tabBoundsFlag = enforceTableBounds(rho, x1_tmp[0], x1_tmp[1]);
-        x1_tmp[0] = fmin(fmax(x1_tmp[0],min_T),max_T);
-        x1_tmp[1] = fmin(fmax(x1_tmp[1],min_Y[0]),max_Y[0]);
+        // Use ternary instead of fmin/fmax: on IEEE-compliant hardware
+        // (Intel SYCL), fmax(NaN, x) = NaN, so a NaN iterate would not be
+        // clamped back to table bounds and would poison subsequent iterations.
+        x1_tmp[0] = (x1_tmp[0] > min_T) ? x1_tmp[0] : min_T;
+        x1_tmp[0] = (x1_tmp[0] < max_T) ? x1_tmp[0] : max_T;
+        x1_tmp[1] = (x1_tmp[1] > min_Y[0]) ? x1_tmp[1] : min_Y[0];
+        x1_tmp[1] = (x1_tmp[1] < max_Y[0]) ? x1_tmp[1] : max_Y[0];
 
         // assign the new point
         x1[0] = x1_tmp[0];
@@ -605,18 +620,17 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       // update the iteration
       n_iter += 1;
     }
-
+      
     if (n_iter <= nu_2DNR_n_max) {
       ierr = 0;
     } else {
       ierr = 1;
     }
-
+    
     return ierr;
   }
 
-  KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_eq, Real Yle, Real x[2],
-                                           Real y[2]) const {
+  KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_eq, Real Yle, Real x[2], Real y[2]) const {
     Real T = x[0];
 
     Real Y[MAX_SPECIES] = {0.0};
@@ -630,8 +644,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real t3 = T*T*T;
     Real t4 = t3*T;
     y[0] = Y[0] + nu_n_prefactor*t3*eta*(pi2 + eta2)/n - Yle;
-    y[1] = (e+nu_e_prefactor*t4*((nu_7pi4_60+0.5*eta2*(pi2+0.5*eta2))+nu_7pi4_30)) /
-           e_eq - 1.0;
+    y[1] = (e+nu_e_prefactor*t4*((nu_7pi4_60+0.5*eta2*(pi2+0.5*eta2))+nu_7pi4_30))/e_eq - 1.0;
 
     return;
   }
@@ -641,8 +654,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return err;
   }
 
-  KOKKOS_INLINE_FUNCTION int jacobi_eq_weak(Real n, Real e_eq, Real Yle, Real x[2],
-                                            Real J[2][2]) const {
+  KOKKOS_INLINE_FUNCTION int jacobi_eq_weak(Real n, Real e_eq, Real Yle, Real x[2], Real J[2][2]) const {
     int ierr = 0;
 
     Real T = x[0];
@@ -665,26 +677,25 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     Real detadt,detadye,dedt,dedye;
     ierr = eta_e_gradient(n,T,Y,eta,detadt,detadye,dedt,dedye);
-    if (ierr != 0) {
+    if (ierr != 0){
       return ierr;
     }
 
     Real T2 = T*T;
     Real T3 = T2*T;
-    // Real T4 = T3*T;
+    Real T4 = T3*T;
 
     J[0][0] = nu_n_prefactor/n*T2*(3.e0*eta*(pi2+eta2)+T*(pi2+3.e0*eta2)*detadt);
     J[0][1] = 1.e0+nu_n_prefactor/n*T3*(pi2+3.e0*eta2)*detadye;
 
-    J[1][0] = (dedt+nu_e_prefactor*T3*(nu_7pi4_15+nu_14pi4_15+2.e0*eta2*(pi2+0.5*eta2) +
-                                       eta*T*(pi2+eta2)*detadt))/e_eq;
-    J[1][1] = (dedye+nu_e_prefactor*T3*eta*(pi2+eta2)*detadye)/e_eq;
+    J[1][0] = (dedt+nu_e_prefactor*T3*(nu_7pi4_15+nu_14pi4_15+2.e0*eta2*(pi2+0.5*eta2)+eta*T*(pi2+eta2)*detadt))/e_eq;
+    // Below was changed to T4 from T3 to be consistent with the dimensional analysis.
+    J[1][1] = (dedye+nu_e_prefactor*T4*eta*(pi2+eta2)*detadye)/e_eq;
 
     return ierr;
   }
 
-  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta,
-      Real &deta_dT, Real &deta_dYe, Real &de_dT, Real &de_dYe) const {
+  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta, Real &deta_dT, Real &deta_dYe, Real &de_dT, Real &de_dYe) const {
     int ierr=1;
 
     const Real Ye_delta = 0.005;
@@ -693,28 +704,34 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real Y1[MAX_SPECIES] = {0.0};
     Real Y2[MAX_SPECIES] = {0.0};
 
-    Y1[0] = fmax(Y[0] - Ye_delta, min_Y[0]);
+    // Use ternary instead of fmax/fmin: on IEEE-compliant hardware (Intel
+    // SYCL), fmax(NaN, x) = NaN, so NaN inputs would propagate through.
+    Real Ye_lo = Y[0] - Ye_delta;
+    Y1[0] = (Ye_lo > min_Y[0]) ? Ye_lo : min_Y[0];
     Real mu_l1 = ElectronLeptonChemicalPotential(n, T, Y1);
     Real e1 = Energy(n, T, Y1);
 
-    Y2[0] = fmin(Y[0] + Ye_delta, max_Y[0]);
+    Real Ye_hi = Y[0] + Ye_delta;
+    Y2[0] = (Ye_hi < max_Y[0]) ? Ye_hi : max_Y[0];
     Real mu_l2 = ElectronLeptonChemicalPotential(n, T, Y2);
     Real e2 = Energy(n, T, Y2);
 
     Real dmu_l_dYe = (mu_l2-mu_l1)/(Y2[0] - Y1[0]);
     de_dYe         = (e2-e1)/(Y2[0] - Y1[0]);
 
-    Real T1 = fmax(T - T_delta, min_T);
+    Real T_lo = T - T_delta;
+    Real T1 = (T_lo > min_T) ? T_lo : min_T;
     mu_l1 = ElectronLeptonChemicalPotential(n, T1, Y);
     e1 = Energy(n, T1, Y);
 
-    Real T2 = fmin(T + T_delta, max_T);
+    Real T_hi = T + T_delta;
+    Real T2 = (T_hi < max_T) ? T_hi : max_T;
     mu_l2 = ElectronLeptonChemicalPotential(n, T2, Y);
     e2 = Energy(n, T2, Y);
 
     Real dmu_l_dT   = (mu_l2 - mu_l1)/(T2 - T1);
     de_dT          = (e2 - e1)/(T2 - T1);
-
+    
     deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV] TODO: Check
     deta_dYe = dmu_l_dYe/T;      // [-]
 
@@ -765,15 +782,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   const Real pi2      = pi*pi;                  // pi**2 [-]
   const Real pi4      = pi2*pi2;                // pi**4 [-]
 
-  // 4/3 *pi/(hc)**3 [1/MeV^3/fm^3]
-  const Real nu_n_prefactor = 4.0/3.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);
-  // 4*pi/(hc)**3    [1/MeV^3 fm^3]
-  const Real nu_e_prefactor = 4.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);
+  const Real nu_n_prefactor = 4.0/3.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm); // 4/3 *pi/(hc)**3 [1/MeV^3/fm^3]
+  const Real nu_e_prefactor = 4.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);     // 4*pi/(hc)**3    [1/MeV^3 fm^3]
 
   const Real nu_7pi4_60 = 7.0*pi4/60.0;  // 7*pi**4/60  [-]
   const Real nu_7pi4_30 = 7.0*pi4/30.0;  // 7*pi**4/30  [-]
   const Real nu_7pi4_15 = 7.0*pi4/15.0;  // 7*pi**4/15  [-]
   const Real nu_14pi4_15 = 14.0*pi4/15.0; // 14*pi**4/15 [-]
+
+
 };
 
 }; // namespace Primitive

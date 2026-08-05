@@ -23,9 +23,6 @@
 
 namespace radiation {
 
-KOKKOS_INLINE_FUNCTION
-bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root);
-
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage)
 //! \brief Add implicit radiation-fluid source terms.  Based on @c-white and @yanfeij's
@@ -396,48 +393,6 @@ TaskStatus Radiation::RadFluidCoupling(Driver *pdriver, int stage) {
   });
 
   return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  bool FourthPolyRoot
-//  \brief Exact solution for fourth order polynomial of
-//  the form coef4 * x^4 + x + tconst = 0.
-
-KOKKOS_INLINE_FUNCTION
-bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root) {
-  // Calculate real root of z^3 - 4*tconst/coef4 * z - 1/coef4^2 = 0
-  Real ccubic = tconst * tconst * tconst;
-  Real delta1 = 0.25 - 64.0 * ccubic * coef4 / 27.0;
-  if (delta1 < 0.0) {
-    return false;
-  }
-  delta1 = sqrt(delta1);
-  if (delta1 < 0.5) {
-    return false;
-  }
-  Real zroot;
-  if (delta1 > 1.0e11) {  // to avoid small number cancellation
-    zroot = pow(delta1, -2.0/3.0) / 3.0;
-  } else {
-    zroot = pow(0.5 + delta1, 1.0/3.0) - pow(-0.5 + delta1, 1.0/3.0);
-  }
-  if (zroot < 0.0) {
-    return false;
-  }
-  zroot *= pow(coef4, -2.0/3.0);
-
-  // Calculate quartic root using cubic root
-  Real rcoef = sqrt(zroot);
-  Real delta2 = -zroot + 2.0 / (coef4 * rcoef);
-  if (delta2 < 0.0) {
-    return false;
-  }
-  delta2 = sqrt(delta2);
-  root = 0.5 * (delta2 - rcoef);
-  if (root < 0.0) {
-    return false;
-  }
-  return true;
 }
 
 } // namespace radiation

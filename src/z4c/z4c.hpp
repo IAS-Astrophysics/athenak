@@ -29,6 +29,7 @@ class Driver;
 class CompactObjectTracker;
 class FastFlow;
 class HorizonDump;
+class DriftControl;
 
 namespace z4c {
 class Z4c_AMR;
@@ -189,6 +190,17 @@ class Z4c {
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
+
+    // Flag if drift control for COT should be used.
+    bool enable_driftcontrol;
+    int dc_variety;
+    int dc_tracker_index;
+    Real dc_fixed_x, dc_fixed_y, dc_fixed_z;
+    Real dc_damping_time, dc_damping_scale, dc_damping_coeff;
+    Real dc_Kp, dc_Ki, dc_Kd;
+    Real dc_relaxation_time, dc_kappa;
+    Real dc_gamma_suppress;
+    int dc_gaussian_center;
   };
   Options opt;
   Real diss;              // Dissipation parameter
@@ -266,6 +278,7 @@ class Z4c {
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
   std::vector<std::unique_ptr<FastFlow>> pfastflow;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
+  std::unique_ptr<DriftControl> pdrift_control;
 
   // TODO(@hzhu): think about how to automatically trigger common horizon
   // maybe have a horizon dump object to save all the space here

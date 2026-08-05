@@ -30,6 +30,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
@@ -113,6 +114,9 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   if (pm->pmb_pack->prad != nullptr) {
     ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
   }
+  if (pm->pmb_pack->pradm1 != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pradm1->nvarstot);
+  }
   if (pm->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
   }
@@ -183,6 +187,9 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     }
     if (pmbp->pz4c != nullptr) {
       (void) pmbp->pz4c->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->pradm1 != nullptr) {
+      (void) pmbp->pradm1->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
 
     nmb_created += nnew;
@@ -530,6 +537,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
   dyn_radiation::DynRadiation* pdynrad = pm->pmb_pack->pdynrad;
+  radiationm1::RadiationM1* pradm1 = pm->pmb_pack->pradm1;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
   if ((ndel > 0) && (pmhd != nullptr)) {
@@ -563,6 +571,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     } else if (pdynrad != nullptr) {
       DerefineCCSameRank(pdynrad->i0, pdynrad->coarse_i0);
     }
+    if (pradm1 != nullptr) {
+      DerefineCCSameRank(pradm1->u0, pradm1->coarse_u0);
+    }
     if (pz4c != nullptr) {
       DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
     }
@@ -582,6 +593,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     CopyCC(prad->i0);
   } else if (pdynrad != nullptr) {
     CopyCC(pdynrad->i0);
+  }
+  if (pradm1 != nullptr) {
+    CopyCC(pradm1->u0);
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
@@ -603,6 +617,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       CopyForRefinementCC(prad->i0, prad->coarse_i0);
     } else if (pdynrad != nullptr) {
       CopyForRefinementCC(pdynrad->i0, pdynrad->coarse_i0);
+    }
+    if (pradm1 != nullptr) {
+      CopyForRefinementCC(pradm1->u0, pradm1->coarse_u0);
     }
     if (pz4c != nullptr) {
       CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
@@ -644,6 +661,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
       RefineCC(new_to_old, prad->i0, prad->coarse_i0);
     } else if (pdynrad != nullptr) {
       RefineCC(new_to_old, pdynrad->i0, pdynrad->coarse_i0);
+    }
+    if (pradm1 != nullptr) {
+      RefineCC(new_to_old, pradm1->u0, pradm1->coarse_u0);
     }
     if (pz4c != nullptr) {
       RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0, true);

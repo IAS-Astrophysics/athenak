@@ -95,6 +95,22 @@ class ProblemGenerator {
   void DynBBHBeam(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
+  void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
+  void RadiationM1BrentTest(ParameterInput *pin, const bool restart);
+  void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);
+  void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
+  void RadiationM1LatticeTest(ParameterInput *pin, const bool restart);
+  void RadiationM1DiffusionTest(ParameterInput *pin, const bool restart);
+  void RadiationM1VelocityJumpTest(ParameterInput *pin, const bool restart);
+  void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
+  void RadiationM1PhotonThermalization(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1PhotonThermalization_(ParameterInput *pin, const bool restart);
+  void RadiationM1PhotonDiffusion(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1PhotonDiffusion_(ParameterInput *pin, const bool restart);
 
   // predefined problem generator functions for unit tests
   void EOSCompose(ParameterInput *pin, const bool restart);
@@ -111,4 +127,4 @@ class ProblemGenerator {
   Mesh* pmy_mesh_;
 };
 
-#endif // PGEN_PGEN_HPP_
+#endif  // PGEN_PGEN_HPP_

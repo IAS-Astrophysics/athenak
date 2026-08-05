@@ -23,6 +23,7 @@
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "z4c/tmunu.hpp"
@@ -170,9 +171,11 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
   using namespace numrel; // NOLINT(build/namespaces))
+  using namespace radiationm1; // NOLINT(build/namespaces)
   Z4c *pz4c = pmy_pack->pz4c;
   adm::ADM *padm = pmy_pack->padm;
   MHD *pmhd = pmy_pack->pmhd;
+  RadiationM1 *pradm1 = pmy_pack->pradm1;
   NumericalRelativity *pnr = pmy_pack->pnr;
 
   // Start task list
@@ -199,6 +202,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   if (pz4c != nullptr || calculate_tmunu) {
     pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
                    Task_Run, {MHD_CopyU});
+    if (pradm1 != nullptr) {
+      pnr->QueueTask(&RadiationM1::FloorAndCalcClosure, pradm1, M1_Closure, "M1_Closure", Task_Run);
+      pnr->QueueTask(&RadiationM1::SetTmunu, pradm1, M1_SetTmunu, "M1_SetTmunu", Task_Run, {MHD_SetTmunu});
+    }
   }
   pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux",
                  Task_Run, {MHD_Flux});
@@ -230,26 +237,42 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, {MHD_CT});
   pnr->QueueTask(&MHD::SendB, pmhd, MHD_SendB, "MHD_SendB", Task_Run, {MHD_RestB});
   pnr->QueueTask(&MHD::RecvB, pmhd, MHD_RecvB, "MHD_RecvB", Task_Run, {MHD_SendB});
-  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, {MHD_RecvB});
+  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run,
+                 {MHD_RecvB});
+  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run,
+                 {MHD_Prolong});
   //pnr->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
   //                 {MHD_RecvB});
-  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
   if (pz4c == nullptr && padm->is_dynamic == true) {
     pnr->QueueTask(&DynGRMHD::SetADMVariables, this, MHD_SetADM, "MHD_SetADM", Task_Run,
                     {MHD_ExplRK});
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
-                   "MHD_C2P", Task_Run, {MHD_Prolong, MHD_SetADM}, {Z4c_Excise});
+                   "MHD_C2P", Task_Run, {MHD_BCS, MHD_SetADM}, {Z4c_Excise});
     pnr->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, MHD_Excise, "MHD_Excise",
                    Task_Run, {MHD_SetADM});
   } else {
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
-                   "MHD_C2P", Task_Run, {MHD_Prolong}, {Z4c_Excise});
+                   "MHD_C2P", Task_Run, {MHD_BCS}, {Z4c_Excise});
   }
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
   pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
+
+  // After time integrator task list
+  if (pmy_pack->pradm1 != nullptr) {
+    pnr->QueueTask(&MHD::InitRecvU, pmhd, MHD_URecv, "MHD_URecv", Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_AfterTimeIntegrator, {MHD_RestU});
+    pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_AfterTimeIntegrator, {MHD_SendU});
+    pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_AfterTimeIntegrator, {MHD_RecvU});
+    pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_AfterTimeIntegrator, {MHD_Prolong});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_AfterTimeIntegrator, {MHD_BCS});
+    pnr->QueueTask(&MHD::ClearSendU, pmhd, MHD_ClearSU, "MHD_ClearSU", Task_AfterTimeIntegrator, {MHD_C2P});
+    pnr->QueueTask(&MHD::ClearRecvU, pmhd, MHD_ClearRU, "MHD_ClearRU", Task_AfterTimeIntegrator, {MHD_C2P});          
+  }
 }
 
 //----------------------------------------------------------------------------------------

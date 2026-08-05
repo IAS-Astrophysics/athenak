@@ -21,7 +21,7 @@
 // accumulators or host data, while the generic device reducers remain small.
 #define NHISTORY_VARIABLES 2000
 
-#define NOUTPUT_CHOICES 158
+#define NOUTPUT_CHOICES 169
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -105,7 +105,14 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "angular_momentum",
 
   // Torque (157)
-  "torque"
+  "torque",
+
+  // radiation M1 (158-167)
+  "rad_m1_N", "rad_m1_E", "rad_m1_F", "rad_m1_chi", "rad_m1_eta_0", "rad_m1_abs_0",
+  "rad_m1_eta_1", "rad_m1_abs_1", "rad_m1_scat_1", "rad_m1_vel",
+
+  // Spherical radius (168)
+  "r_sph"
 };
 
 
@@ -250,7 +257,7 @@ class BaseTypeOutput {
   // CC output data on host with dims (n,m,k,j,i) except
   // for restarts, where dims are (m,n,k,j,i)
   HostArray5D<Real> outarray;
-  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad,
+  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad, outarray_radm1,
                     outarray_force, outarray_z4c, outarray_adm;
   HostFaceFld4D<Real> outfield;  // FC output field on host
   std::vector<int> noutmbs;   // with MPI, number of output MBs across all ranks

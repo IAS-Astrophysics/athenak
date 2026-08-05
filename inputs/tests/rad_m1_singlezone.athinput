@@ -1,0 +1,115 @@
+<comment>
+problem = single zone test
+
+<job>
+basename = singlezone  # name of run
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.005    # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = 1000      # cycle limit
+tlim       = 10.0      # time limit
+
+<mesh>
+nghost = 2         # Number of ghost cells
+nx1    = 5         # Number of zones in X1-direction
+x1min  = -2.5      # minimum value of X1
+x1max  = 2.5       # maximum value of X1
+ix1_bc = periodic  # inner-X1 boundary flag
+ox1_bc = periodic  # outer-X1 boundary flag
+
+nx2    = 1         # Number of zones in X2-direction
+x2min  = -0.5      # minimum value of X2
+x2max  = 0.5       # maximum value of X2
+ix2_bc = periodic  # inner-X2 boundary flag
+ox2_bc = periodic  # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = -0.5      # minimum value of X3
+x3max  = 0.5       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 5          # Number of cells in each MeshBlock, X1-dir
+nx2       = 1            # Number of cells in each MeshBlock, X2-dir
+nx3       = 1           # Number of cells in each MeshBlock, X3-dir
+
+<adm>
+# This needs to be here
+
+<mhd>
+eos         = ideal     # EOS type
+gamma       = 2.0       # ratio of specific heats Gamma
+
+nscalars    = 1
+dyn_eos     = compose     # EOS type
+table       = DD2.athtab
+dyn_error   = reset_floor # error policy
+reconstruct = dc      # spatial reconstruction method
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.0e-16   # floor on density rho
+dthreshold  = 1.02      # Threshold for flooring
+dyn_scratch = 1
+fofc        = false
+enforce_maximum = false
+
+<coord>
+general_rel = true      # general relativity
+m           = 0.0
+a           = 0.0
+excise      = false
+
+<radiation_m1>
+closure_fun = eddington
+src_update = implicit
+opacity_type = bns-nurates
+opacity_one_dt = true # default: true
+
+gr_sources = false # default: true
+matter_sources = true # default: true
+backreact = true # false
+
+theta_limiter = false # default: false
+
+<bns_nurates>
+use_inelastic_scatt = false
+use_WM_ab = false
+use_WM_sc = false
+use_NN_medium_corr = false
+
+use_dU = false
+use_dm_eff = false
+
+use_equilibrium_distribution = true # default: true
+use_kirchoff_law = true # default: true
+
+opacity_tau_trap = 0.0
+opacity_tau_delta = 0.0
+opacity_corr_fac_max = 3.0
+
+<problem>
+pgen_name = rad_m1_singlezonetest
+rho = 1.619e-5  # initial density [code]
+temp = 50.0 # initial temperature [code, MeV]
+vx = 0.0    # x velocity
+vy = 0.0    # y velocity
+vz = 0.0    # z velocity
+Y_e = 0.1   # electron fraction
+
+<output1>
+file_type   = tab         # Binary data dump
+variable    = mhd_w       # Primitive variables
+dcycle      = 1
+
+<output2>
+file_type   = tab        # output format
+variable    = rad_m1_E    # choice of variables to output
+dcycle      = 1
+
+<output3>
+file_type   = tab        # output format
+variable    = rad_m1_eta_1    # choice of variables to output
+dcycle      = 1
+
