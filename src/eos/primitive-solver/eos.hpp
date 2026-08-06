@@ -395,6 +395,18 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return n_species;
   }
 
+  //! \fn int GetMassFractionIndex() const
+  //  \brief Index of the first species constrained by sum(X) = 1.
+  KOKKOS_INLINE_FUNCTION static constexpr int GetMassFractionIndex() {
+    return EOSPolicy::i_massfrac;
+  }
+
+  //! \fn int GetNMassFractions() const
+  //  \brief How many species are constrained by sum(X) = 1 (0 if none are).
+  KOKKOS_INLINE_FUNCTION static constexpr int GetNMassFractions() {
+    return EOSPolicy::n_massfrac;
+  }
+
   //! \fn Real GetBaryonMass() const
   //  \brief Get the baryon mass used by this EOS. Note that
   //         this factor also converts the density.

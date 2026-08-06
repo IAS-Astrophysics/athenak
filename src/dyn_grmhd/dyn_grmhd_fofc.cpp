@@ -24,6 +24,71 @@
 
 namespace dyngr {
 //----------------------------------------------------------------------------------------
+//! \fn void ScalarFluxesFOFC
+//! \brief Replace the scalar fluxes at one face with first-order upwind values.
+//!
+//! Species [imf, imf+nmf) are mass fractions of a single baryon pool, so their fluxes
+//! must keep summing to the mass flux for sum(X) = 1 to survive the update.
+//! They are replaced as a block as soon as any one of them is flagged.
+
+template<class ScalarFlag>
+KOKKOS_INLINE_FUNCTION
+void ScalarFluxesFOFC(const DvceArray5D<Real> &flx, const ScalarFlag &fofc_scal,
+                      const Real * const wl, const Real * const wr, const bool fofc_flag,
+                      const int nmhd, const int nscal, const int imf, const int nmf,
+                      const int m, const int k, const int j, const int i,
+                      const int kf, const int jf, const int iff) {
+  const Real fdn = flx(m, IDN, kf, jf, iff);
+  const bool upl = (fdn >= 0.0);
+
+  bool fofc_mf = fofc_flag;
+  for (int n = imf; n < imf + nmf; ++n) {
+    fofc_mf = fofc_mf || fofc_scal(m, n, k, j, i);
+  }
+  Real xnorm = 1.0;
+  if (fofc_mf && nmf > 0) {
+    Real xsum = 0.0;
+    for (int n = imf; n < imf + nmf; ++n) {
+      xsum += upl ? wl[PYF + n] : wr[PYF + n];
+    }
+    if (xsum > 0.0) {
+      xnorm = 1.0/xsum;
+    }
+  }
+
+  for (int n = 0; n < nscal; ++n) {
+    const bool is_mf = (n >= imf) && (n < imf + nmf);
+    if (is_mf ? fofc_mf : (fofc_flag || fofc_scal(m, n, k, j, i))) {
+      const Real x = upl ? wl[PYF + n] : wr[PYF + n];
+      flx(m, nmhd + n, kf, jf, iff) = is_mf ? fdn*x*xnorm : fdn*x;
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ShareMassFractionWeight
+//! \brief Collapse the positivity-limiter weights of the mass-fraction block to their
+//!        most restrictive value.
+//!
+//! The transition EOS limiter blends each species flux between the first- and high-order fluxes. Both
+//! sets sum to the mass flux, so a shared weight keeps the blend summing to it too; a
+//! per-species weight does not, and sum(X) = 1 is lost.
+
+KOKKOS_INLINE_FUNCTION
+void ShareMassFractionWeight(Real *wthe, const int imf, const int nmf) {
+  if (nmf <= 0) {
+    return;
+  }
+  Real wmf = wthe[imf];
+  for (int n = imf + 1; n < imf + nmf; ++n) {
+    wmf = fmin(wmf, wthe[n]);
+  }
+  for (int n = imf; n < imf + nmf; ++n) {
+    wthe[n] = wmf;
+  }
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void DynGRMHDPS::FOFC
 //! \brief Implements first-order flux-correction (FOFC) algorithm for MHD.  First an
 //! estimate of the updated conserved variables is made. This estimate is then used to
@@ -59,6 +124,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
   int &nmhd_ = pmy_pack->pmhd->nmhd;
   int &nscal_ = pmy_pack->pmhd->nscalars;
+  // Species that the EOS constrains by sum(X) = 1 (nmf_ = 0 if none are).
+  const int imf_ = eos.ps.GetEOS().GetMassFractionIndex();
+  const int nmf_ = eos.ps.GetEOS().GetNMassFractions();
 
   // Extract EOS species fraction limits onto device before the GPU kernel.
   DvceArray1D<Real> eos_min_Y("eos_min_Y", nscal_);
@@ -268,15 +336,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
 
       // Calculate fluxes of scalars
-      for (int n = 0; n < nscal_; n++) {
-        if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
-          if (flx1(m, IDN, k, j, i) >= 0.0) {
-            flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
-          } else {
-            flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wri[PYF + n];
-          }
-        }
-      }
+      ScalarFluxesFOFC(flx1, fofc_scal_, wli, wri, fofc_flag, nmhd_, nscal_,
+                       imf_, nmf_, m, k, j, i, k, j, i);
 
       if (multi_d) {
         Real wlj[NPRIM], *wrj;
@@ -309,15 +370,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
-            if (flx2(m, IDN, k, j, i) >= 0.0) {
-              flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
-            } else {
-              flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wrj[PYF + n];
-            }
-          }
-        }
+        ScalarFluxesFOFC(flx2, fofc_scal_, wlj, wrj, fofc_flag, nmhd_, nscal_,
+                         imf_, nmf_, m, k, j, i, k, j, i);
       }
 
       if (three_d) {
@@ -351,15 +405,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
-            if (flx3(m, IDN, k, j, i) >= 0.0) {
-              flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
-            } else {
-              flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wpk[PYF + n];
-            }
-          }
-        }
+        ScalarFluxesFOFC(flx3, fofc_scal_, wmk, wpk, fofc_flag, nmhd_, nscal_,
+                         imf_, nmf_, m, k, j, i, k, j, i);
       }
     }
   });
@@ -419,15 +466,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
 
       // Calculate fluxes of scalars
-      for (int n = 0; n < nscal_; n++) {
-        if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
-          if (flx1(m, IDN, k, j, i+1) >= 0.0) {
-            flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
-          } else {
-            flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wri[PYF + n];
-          }
-        }
-      }
+      ScalarFluxesFOFC(flx1, fofc_scal_, wli, wri, fofc_flag, nmhd_, nscal_,
+                       imf_, nmf_, m, k, j, i, k, j, i+1);
 
       if (multi_d) {
         Real *wlj, wrj[NPRIM];
@@ -460,15 +500,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
-            if (flx2(m, IDN, k, j+1, i) >= 0.0) {
-              flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
-            } else {
-              flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wrj[PYF + n];
-            }
-          }
-        }
+        ScalarFluxesFOFC(flx2, fofc_scal_, wlj, wrj, fofc_flag, nmhd_, nscal_,
+                         imf_, nmf_, m, k, j, i, k, j+1, i);
       }
 
       if (three_d) {
@@ -502,15 +535,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
-            if (flx3(m, IDN, k+1, j, i) >= 0.0) {
-              flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
-            } else {
-              flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wpk[PYF + n];
-            }
-          }
-        }
+        ScalarFluxesFOFC(flx3, fofc_scal_, wmk, wpk, fofc_flag, nmhd_, nscal_,
+                         imf_, nmf_, m, k, j, i, k+1, j, i);
       }
     }
   });
@@ -607,6 +633,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
       for (int n=0; n < nscal_; ++n) {
         wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
+      }
+      ShareMassFractionWeight(wthe, imf_, nmf_);
+      for (int n=0; n < nscal_; ++n) {
         flx1(m,nmhd_+n,k,j,i) = flx_llf[n]
           + wthe[n] * (flx1(m,nmhd_+n,k,j,i) - flx_llf[n]);
       }
@@ -666,6 +695,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
+        }
+        ShareMassFractionWeight(wthe, imf_, nmf_);
+        for (int n=0; n < nscal_; ++n) {
           flx2(m,nmhd_+n,k,j,i) = flx_llf[n]
             + wthe[n] * (flx2(m,nmhd_+n,k,j,i) - flx_llf[n]);
         }
@@ -727,6 +759,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
+        }
+        ShareMassFractionWeight(wthe, imf_, nmf_);
+        for (int n=0; n < nscal_; ++n) {
           flx3(m,nmhd_+n,k,j,i) = flx_llf[n]
             + wthe[n] * (flx3(m,nmhd_+n,k,j,i) - flx_llf[n]);
         }

@@ -54,6 +54,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = pmy_pack->pmhd->peos->eos_data;
   auto &dyn_eos_ = eos;
+  // Species that the EOS constrains by sum(X) = 1, as indices into the flux
+  // array (nmfrac = 0 for policies with no such constraint).
+  const int nmfrac = dyn_eos_.ps.GetEOS().GetNMassFractions();
+  const int imfrac = nhyd + dyn_eos_.ps.GetEOS().GetMassFractionIndex();
   auto &use_fofc = pmy_pack->pmhd->use_fofc;
   bool extrema = false;
   if (recon_method_ == ReconstructionMethod::ppmx) {
@@ -146,17 +150,30 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     }
     member.team_barrier();
 
-    // Calculate fluxes of scalars (if any)
+    // Calculate fluxes of scalars (if any). The whole species vector is
+    // upwinded from one side, so renormalizing that side's mass fractions to
+    // sum(X) = 1 makes the species fluxes sum exactly to the mass flux -- which
+    // is what preserves sum(X) = 1 in the evolved state.
     if (nvars > nhyd) {
-      for (int n=nhyd; n<nvars; ++n) {
-        par_for_inner(member, il, iu, [&](const int i) {
-          if (flx1(m,IDN,k,j,i) >= 0.0) {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wl(n,i);
-          } else {
-            flx1(m,n,k,j,i) = flx1(m,IDN,k,j,i)*wr(n,i);
+      par_for_inner(member, il, iu, [&](const int i) {
+        const Real fdn = flx1(m,IDN,k,j,i);
+        const bool upl = (fdn >= 0.0);
+        Real xnorm = 1.0;
+        if (nmfrac > 0) {
+          Real xsum = 0.0;
+          for (int n=imfrac; n<imfrac+nmfrac; ++n) {
+            xsum += upl ? wl(n,i) : wr(n,i);
           }
-        });
-      }
+          if (xsum > 0.0) {
+            xnorm = 1.0/xsum;
+          }
+        }
+        for (int n=nhyd; n<nvars; ++n) {
+          const Real x = upl ? wl(n,i) : wr(n,i);
+          flx1(m,n,k,j,i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
+                            fdn*x*xnorm : fdn*x;
+        }
+      });
     }
     member.team_barrier();
   });
@@ -258,17 +275,28 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         }
         member.team_barrier();
 
-        // Calculate fluxes of scalars (if any)
+        // Calculate fluxes of scalars (if any); see the i-direction block for
+        // why the upwind mass fractions are renormalized to sum(X) = 1.
         if (nvars > nhyd) {
-          for (int n=nhyd; n<nvars; ++n) {
-            par_for_inner(member, is-1, ie+1, [&](const int i) {
-              if (flx2(m,IDN,k,j,i) >= 0.0) {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wl(n,i);
-              } else {
-                flx2(m,n,k,j,i) = flx2(m,IDN,k,j,i)*wr(n,i);
+          par_for_inner(member, is-1, ie+1, [&](const int i) {
+            const Real fdn = flx2(m,IDN,k,j,i);
+            const bool upl = (fdn >= 0.0);
+            Real xnorm = 1.0;
+            if (nmfrac > 0) {
+              Real xsum = 0.0;
+              for (int n=imfrac; n<imfrac+nmfrac; ++n) {
+                xsum += upl ? wl(n,i) : wr(n,i);
               }
-            });
-          }
+              if (xsum > 0.0) {
+                xnorm = 1.0/xsum;
+              }
+            }
+            for (int n=nhyd; n<nvars; ++n) {
+              const Real x = upl ? wl(n,i) : wr(n,i);
+              flx2(m,n,k,j,i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
+                                fdn*x*xnorm : fdn*x;
+            }
+          });
         }
       } // end of loop over j
       member.team_barrier();
@@ -366,17 +394,28 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         }
         member.team_barrier();
 
-        // Calculate fluxes of scalars (if any)
+        // Calculate fluxes of scalars (if any); see the i-direction block for
+        // why the upwind mass fractions are renormalized to sum(X) = 1.
         if (nvars > nhyd) {
-          for (int n=nhyd; n<nvars; ++n) {
-            par_for_inner(member, is-1, ie+1, [&](const int i) {
-              if (flx3(m,IDN,k,j,i) >= 0.0) {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wl(n,i);
-              } else {
-                flx3(m,n,k,j,i) = flx3(m,IDN,k,j,i)*wr(n,i);
+          par_for_inner(member, is-1, ie+1, [&](const int i) {
+            const Real fdn = flx3(m,IDN,k,j,i);
+            const bool upl = (fdn >= 0.0);
+            Real xnorm = 1.0;
+            if (nmfrac > 0) {
+              Real xsum = 0.0;
+              for (int n=imfrac; n<imfrac+nmfrac; ++n) {
+                xsum += upl ? wl(n,i) : wr(n,i);
               }
-            });
-          }
+              if (xsum > 0.0) {
+                xnorm = 1.0/xsum;
+              }
+            }
+            for (int n=nhyd; n<nvars; ++n) {
+              const Real x = upl ? wl(n,i) : wr(n,i);
+              flx3(m,n,k,j,i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
+                                fdn*x*xnorm : fdn*x;
+            }
+          });
         }
       } // end of loop over j
       member.team_barrier();

@@ -39,6 +39,11 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   using LogPolicy::exp2_;
 
  protected:
+  //! Xn, Xp, Xa, Xh are the mass fractions of one baryon pool: sum(X) = 1.
+  //! Ye, Ah and E_B carry no such constraint.
+  static constexpr int i_massfrac = SCXN;
+  static constexpr int n_massfrac = 4;
+
   EOSTransition() {
     n_species = 7;
     eos_units = MakeNuclear();

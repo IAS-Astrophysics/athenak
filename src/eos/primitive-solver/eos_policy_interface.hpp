@@ -21,6 +21,12 @@ class EOSPolicyInterface {
   EOSPolicyInterface() = default;
   ~EOSPolicyInterface() = default;
 
+  /// First index and count of the species that are mass fractions of a single
+  /// baryon pool, i.e. that are constrained by sum(X) = 1. A policy whose
+  /// species carry no such constraint (the default) leaves the count at zero.
+  static constexpr int i_massfrac = 0;
+  static constexpr int n_massfrac = 0;
+
   /// Number of particle species
   int n_species;
   /// Baryon mass
