@@ -407,6 +407,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return EOSPolicy::n_massfrac;
   }
 
+  //! \fn int GetYeFractionIndex() const
+  //  \brief Index of the charge fraction, or -1 if this EOS has none.
+  KOKKOS_INLINE_FUNCTION static constexpr int GetYeFractionIndex() {
+    return EOSPolicy::i_yefrac;
+  }
+
   //! \fn Real GetBaryonMass() const
   //  \brief Get the baryon mass used by this EOS. Note that
   //         this factor also converts the density.

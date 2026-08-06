@@ -43,6 +43,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   //! Ye, Ah and E_B carry no such constraint.
   static constexpr int i_massfrac = SCXN;
   static constexpr int n_massfrac = 4;
+  static constexpr int i_yefrac = SCYE;
 
   EOSTransition() {
     n_species = 7;

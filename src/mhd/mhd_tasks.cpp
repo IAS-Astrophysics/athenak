@@ -535,6 +535,17 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
       pbval_u->ProlongateCC(u0, coarse_u0);
       pbval_b->ProlongateFC(b0, coarse_b0);
     }
+    // Ghost cells prolongated from a coarser neighbour lose the species-sum identity,
+    // since the minmod limiter in ProlongCC is applied per variable.  Restore it before
+    // the C2P that follows.
+    if (pmy_pack->pdyngr != nullptr) {
+      auto &indcs = pmy_pack->pmesh->mb_indcs;
+      int &ng = indcs.ng;
+      int n1m1 = indcs.nx1 + 2*ng - 1;
+      int n2m1 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng - 1) : 0;
+      int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
+      pmy_pack->pdyngr->EnforceSpeciesSum(u0, 0, n1m1, 0, n2m1, 0, n3m1);
+    }
   }
   return TaskStatus::complete;
 }

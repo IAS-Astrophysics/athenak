@@ -27,6 +27,10 @@ class EOSPolicyInterface {
   static constexpr int i_massfrac = 0;
   static constexpr int n_massfrac = 0;
 
+  /// Index of the charge (electron) fraction, or -1 if the policy has none. Used
+  /// to rebuild a free-nucleon composition when the mass fractions degenerate.
+  static constexpr int i_yefrac = -1;
+
   /// Number of particle species
   int n_species;
   /// Baryon mass

@@ -196,6 +196,50 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
 DynGRMHD::~DynGRMHD() {
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void DynGRMHD::EnforceSpeciesSum
+//! \brief Rescale the mass-fraction species of u0 over [il,iu]x[jl,ju]x[kl,ku] so that
+//! they sum to u0(IDN) exactly, i.e. so that sum(X) = 1 after conversion to primitives.
+void DynGRMHD::EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu,
+                                 int jl, int ju, int kl, int ku) {
+  if (nmfrac <= 0) {
+    return;
+  }
+  const int nmhd = pmy_pack->pmhd->nmhd;
+  const int imf = nmhd + imfrac;
+  const int nmf = nmfrac;
+  const int iye = (iyefrac >= 0) ? (nmhd + iyefrac) : -1;
+  const int nmb1 = pmy_pack->nmb_thispack - 1;
+
+  par_for("dyngr_species_sum", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real dens = u(m,IDN,k,j,i);
+    Real ssum = 0.0;
+    for (int n=imf; n<imf+nmf; ++n) {
+      ssum += u(m,n,k,j,i);
+    }
+    constexpr Real eps = 1.0e-30;
+    if (fabs(ssum) > eps) {
+      const Real ratio = dens/ssum;
+      for (int n=imf; n<imf+nmf; ++n) {
+        u(m,n,k,j,i) *= ratio;
+      }
+    } else if ((fabs(dens) > eps) && (iye >= 0) && (nmf >= 2)) {
+      // Degenerate landing: split into free nucleons consistent with Ye, as the
+      // q_h fallback of EOSTransition::SanitizeMassFractions does.  Assumes the
+      // first two constrained species are Xn and Xp, which holds for every policy
+      // that declares n_massfrac > 0 (currently only EOSTransition).
+      const Real sye = fmin(fmax(u(m,iye,k,j,i), 0.0), dens);
+      u(m,imf  ,k,j,i) = dens - sye;   // Xn
+      u(m,imf+1,k,j,i) = sye;          // Xp
+      for (int n=imf+2; n<imf+nmf; ++n) {
+        u(m,n,k,j,i) = 0.0;
+      }
+    }
+  });
+  return;
+}
+
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)

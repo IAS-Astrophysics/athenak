@@ -27,6 +27,7 @@
 
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation/radiation.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
@@ -149,6 +150,17 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
   // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
+
+    // Prolongation of the conserved variables onto newly refined blocks is minmod-limited
+    // per variable, so the species sum drifts from the density in their active zone.
+    // Restore it before InitBoundaryValuesAndPrimitives runs C2P on the new mesh.
+    if (pmy_mesh->pmb_pack->pdyngr != nullptr) {
+      auto &indcs = pmy_mesh->mb_indcs;
+      pmy_mesh->pmb_pack->pdyngr->EnforceSpeciesSum(pmy_mesh->pmb_pack->pmhd->u0,
+                                                    indcs.is, indcs.ie, indcs.js,
+                                                    indcs.je, indcs.ks, indcs.ke);
+    }
+
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
