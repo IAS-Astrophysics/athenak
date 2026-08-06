@@ -120,14 +120,25 @@ torch::Device ResolveDevice() {
 //! host allocator has no analogous "fraction of device memory" concept to cap.
 void CapAllocatorMemoryFraction(const torch::Device &device, double mem_fraction) {
 #if defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP)
-  // c10/cuda/CUDACachingAllocator.h:130-131 (interface), :313-314 (free-function
-  // forwarder) -- confirmed present in local LibTorch 2.12.1 headers.
+  // setMemoryFraction (c10/cuda/CUDACachingAllocator.h:130-131, free-function forwarder
+  // :313-314) requires the allocator to already be initialized for this device index;
+  // that normally happens as a side effect of the first real tensor allocation on it, but
+  // a parameter-less/buffer-less TorchScript module (e.g. the toy flavor-mixing
+  // stand-ins in scripts/make_toy_rhea_model.py, which have no learnable weights to move
+  // in RheaModuleCache::Get's model.to(device) above) never triggers one, and
+  // setMemoryFraction throws "Allocator not initialized for device" in that case. init()
+  // (:129 interface, :305-307 free-function forwarder) is the same lazy-init the
+  // allocator's own first real allocation would have performed; call it explicitly first
+  // so the cap works regardless of whether the loaded model happens to own any tensors.
+  c10::cuda::CUDACachingAllocator::init(c10::cuda::device_count());
   c10::cuda::CUDACachingAllocator::setMemoryFraction(
       mem_fraction, static_cast<c10::DeviceIndex>(device.index()));
 #elif defined(KOKKOS_ENABLE_SYCL)
   // c10/xpu/XPUCachingAllocator.h:73 -- `C10_XPU_API void setMemoryFraction(double
   // fraction, DeviceIndex device);`. Found directly in the pinned-adjacent (2.12.1)
-  // headers -- XPU has a symmetric cap to CUDA's.
+  // headers -- XPU has a symmetric cap to CUDA's, including the same init-before-cap
+  // requirement (:12 interface, :34-36 free-function forwarder).
+  c10::xpu::XPUCachingAllocator::init(c10::xpu::device_count());
   c10::xpu::XPUCachingAllocator::setMemoryFraction(
       mem_fraction, static_cast<c10::DeviceIndex>(device.index()));
 #else
