@@ -45,7 +45,7 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zstate.direction = pin->GetOrAddInteger(block_name,"direction",1);
 
   // Set zoom AMR parameters
-  zamr.nlevels = pin->GetOrAddInteger(block_name,"nlevels",4);
+  zamr.nlevels = pin->GetOrAddInteger(block_name,"nlevels",2);
   zamr.max_level = pmesh->max_level;
   zamr.min_level = zamr.max_level - zamr.nlevels + 1;
   zamr.level = zamr.max_level - zstate.zone;

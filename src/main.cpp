@@ -353,10 +353,9 @@ int main(int argc, char *argv[]) {
   // size of buffers for load balancing, refinement criteria, etc. depend on physics
   if (pmesh->multilevel) {
     pmesh->pmr = new MeshRefinement(pmesh, pinput);
+    // Initialize cyclic zoom data only if enabled
+    pmesh->AddCyclicZoom(pinput);
   }
-
-  // Initialize cyclic zoom data only if enabled (and only after MeshRefinement exists)
-  pmesh->AddCyclicZoom(pinput);
 
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
