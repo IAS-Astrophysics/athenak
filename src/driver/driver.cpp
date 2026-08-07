@@ -24,6 +24,8 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
+#include "gravity/gravity.hpp"
+#include "utils/utils.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -375,12 +377,14 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 //! until a relevant stopping criteria is found (e.g. t > tlim). Calls AMR driver, and
 //! performs outputs. Updates counters like (ncycle, time, etc.)
 
-void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdflag) {
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list(s)...\n" << std::endl;
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
+    std::cout << "\nStatic time evolution selected, solving steady-state problem...\n"
+              << std::endl;
     // TODO(@user): add work for time static problems here
   } else {
     Real elapsed_time = -1.;
@@ -390,21 +394,24 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
+      if (wdflag) {WatchDog(0);}
 
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
-
       // time-integrator tasks for each stage of integrator
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         ExecuteTaskList(pmesh, "before_stagen", stage);
+        // solve gravity at each RK stage so the potential is consistent
+        // with the current density (required for 2nd-order accuracy)
+        if (pmesh->pmb_pack->pgrav != nullptr)
+            {pmesh->pmb_pack->pgrav->pmgd->Solve(this, stage);}
         ExecuteTaskList(pmesh, "stagen", stage);
         ExecuteTaskList(pmesh, "after_stagen", stage);
       }
 
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
-
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
@@ -572,8 +579,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->ClearRecv(this, -1);
     (void) pz4c->RecvU(this, 0);
     (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-    (void) pz4c->Prolongate(this, 0);
+    (void) pz4c->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pz4c->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
@@ -591,8 +598,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) phydro->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
     (void) phydro->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
     (void) phydro->RecvU_Shr(this, 0);
-    (void) phydro->ApplyPhysicalBCs(this, 0);
-    (void) phydro->Prolongate(this, 0);
+    (void) phydro->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) phydro->ApplyPhysicalBCs(this, 0); // fine grid BCs
     (void) phydro->ConToPrim(this, 0);
   }
 
@@ -616,8 +623,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr, SendB_Shr
     (void) pmhd->RecvU_Shr(this, 0);
     (void) pmhd->RecvB_Shr(this, 0);
-    (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->Prolongate(this, 0);
+    (void) pmhd->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pmhd->ApplyPhysicalBCs(this, 0); // fine grid BCs
     if (pdyngr == nullptr) {
       (void) pmhd->ConToPrim(this, 0);
     } else {
@@ -638,8 +645,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->ClearSend(this, -1);
     (void) prad->ClearRecv(this, -1);
     (void) prad->RecvI(this, 0);
-    (void) prad->ApplyPhysicalBCs(this, 0);
-    (void) prad->Prolongate(this, 0);
+    (void) prad->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) prad->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   return;
