@@ -169,10 +169,12 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar>=152) && (ivar<160) && (pm->pmb_pack->pradm1 == nullptr)) {
+  // upper bound extended to 165 so it also covers rad_m1_abs_1/scat_1/vel and the
+  // grouped rad_m1_moments / rad_m1_opacities choices at 163-164.
+  if ((ivar>=153) && (ivar<165) && (pm->pmb_pack->pradm1 == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of radiation m1 variables requested in <output> block '"
-       << out_params.block_name << "' but particle object not constructed."
+       << out_params.block_name << "' but radiation M1 object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
@@ -713,7 +715,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 lab energy density
-  if (out_params.variable.compare("rad_m1_E") == 0) {
+  if (out_params.variable.compare("rad_m1_E") == 0 ||
+      out_params.variable.compare("rad_m1_moments") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back(
           "E:" + std::to_string(nuidx),
@@ -723,7 +726,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 lab number density
-  if (out_params.variable.compare("rad_m1_N") == 0) {
+  if (out_params.variable.compare("rad_m1_N") == 0 ||
+      out_params.variable.compare("rad_m1_moments") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back(
           "N:" + std::to_string(nuidx),
@@ -733,7 +737,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 lab energy density
-  if (out_params.variable.compare("rad_m1_F") == 0) {
+  if (out_params.variable.compare("rad_m1_F") == 0 ||
+      out_params.variable.compare("rad_m1_moments") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back(
           "Fx:" + std::to_string(nuidx),
@@ -759,7 +764,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 eta 0
-  if (out_params.variable.compare("rad_m1_eta_0") == 0) {
+  if (out_params.variable.compare("rad_m1_eta_0") == 0 ||
+      out_params.variable.compare("rad_m1_opacities") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("eta_0:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->eta_0));
@@ -767,7 +773,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 abs 0
-  if (out_params.variable.compare("rad_m1_abs_0") == 0) {
+  if (out_params.variable.compare("rad_m1_abs_0") == 0 ||
+      out_params.variable.compare("rad_m1_opacities") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("abs_0:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->abs_0));
@@ -775,7 +782,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 eta 1
-  if (out_params.variable.compare("rad_m1_eta_1") == 0) {
+  if (out_params.variable.compare("rad_m1_eta_1") == 0 ||
+      out_params.variable.compare("rad_m1_opacities") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("eta_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->eta_1));
@@ -783,7 +791,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 abs 1
-  if (out_params.variable.compare("rad_m1_abs_1") == 0) {
+  if (out_params.variable.compare("rad_m1_abs_1") == 0 ||
+      out_params.variable.compare("rad_m1_opacities") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("abs_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->abs_1));
@@ -791,7 +800,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 scat 1
-  if (out_params.variable.compare("rad_m1_scat_1") == 0) {
+  if (out_params.variable.compare("rad_m1_scat_1") == 0 ||
+      out_params.variable.compare("rad_m1_opacities") == 0) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back("scat_1:" + std::to_string(nuidx), nuidx,
                            &(pm->pmb_pack->pradm1->scat_1));
