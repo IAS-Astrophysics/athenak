@@ -1,0 +1,80 @@
+# AthenaK input file: boosted-puncture wave extraction, BITANT (z>=0, reflect) domain.
+# Regression test for bitant-aware wave extraction (SphericalGrid + Z4c::WaveExtr).
+#
+# Same physical setup as z4c_boosted_bitant_full.athinput (boost confined to x1, no
+# z-velocity/spin component -> exactly symmetric under reflection about z=0), evolved on
+# only the z>=0 half with a reflecting inner-x3 boundary. The extracted l=2 Weyl-scalar
+# mode coefficients should match the full-domain run if bitant-aware wave extraction
+# (mirrored-coordinate interpolation in SphericalGrid + imaginary-part sign correction in
+# Z4c::WaveExtr) is working correctly.
+
+<comment>
+problem   = z4c boosted puncture (bitant wave-extraction regression: bitant domain)
+reference = e.g. Cook. Living Rev. Relativ. 3, 5 (2000)
+
+<job>
+basename  = half
+
+<mesh>
+nghost    = 4
+nx1       = 32
+x1min     = -8
+x1max     =  8
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 32
+x2min     = -8
+x2max     =  8
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 16
+x3min     =  0
+x3max     =  8
+ix3_bc    = reflect
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 32
+nx2       = 32
+nx3       = 16
+
+<time>
+evolution  = dynamic
+integrator = rk4
+cfl_number = 0.4
+nlim       = 3
+tlim       = 1.0
+ndiag      = 1
+
+<z4c>
+lapse_harmonic  = 0.0
+lapse_oplog     = 2.0
+shift_eta       = 2.0
+diss            = 0.1
+chi_div_floor   = 0.00001
+damp_kappa1     = 0.02
+damp_kappa2     = 0.00
+
+slow_start_lapse = true
+ssl_damping_time = 20
+ssl_damping_amp = 0.6
+
+nco             = 1
+co_0_x          = 0.
+co_0_type = BH
+
+nrad_wave_extraction = 1
+extraction_radius_0 = 4
+extraction_nlev = 10
+waveform_dt     = 0.3
+
+<problem>
+pgen_name = z4c_boosted_puncture
+punc_ADM_mass = 1.0
+punc_velocity_x1 = 0.8660254
+
+<output1>
+file_type  = hst
+dt         = 1
