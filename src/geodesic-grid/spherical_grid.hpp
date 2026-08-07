@@ -31,9 +31,13 @@ class SphericalGrid: public GeodesicGrid {
     void InterpolateToSphere(int nvars, DvceArray5D<Real>& val);  // interpolate to sphere
     // interpolate a range of variables to a sphere
     void InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val);
+    // true if the mesh is bitant (reflect at x3min=0): points with z<0 are looked up via
+    // their z-reflected counterpart, which physically lies inside the domain
+    bool bitant() const { return bitant_; }
 
  private:
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+    bool bitant_;                    // whether the mesh is bitant about x3=0
     DualArray2D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
     DualArray3D<Real> interp_wghts;  // weights for interpolation
     void SetInterpolationCoordinates();  // set indexing for interpolation
