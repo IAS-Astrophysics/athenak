@@ -11,7 +11,7 @@ if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}" )
 endif()
 
 # Athena++ (and Kokkos) require C++17 standard as minimum
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Force flag to denote C++ standard, as deprecated c++1z is not supported by nvcc.
