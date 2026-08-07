@@ -225,6 +225,7 @@ class AthenaTensor<T, sym, ndim, 1> {
     low_ = indx1;
     high_ = indx2;
   }
+
  private:
   DvceArray5D<Real> data_;
   int low_;
