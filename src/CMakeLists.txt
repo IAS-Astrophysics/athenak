@@ -197,6 +197,16 @@ add_executable(
         z4c/cce/cce.cpp
 )
 
+# Work around an icpx (IntelLLVM) internal compiler crash (SIGSEGV, exit 139) in the
+# LLVM loop-vectorizer's HIR VPlan builder when compiling this file at the project's
+# default optimization level. Purely a compiler robustness workaround (the crash is in
+# clang's backend pass pipeline, not a diagnostic about the source) -- disabling the
+# loop vectorizer for this one translation unit avoids it without touching program logic.
+if (CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+  set_source_files_properties(multigrid/multigrid_driver.cpp PROPERTIES
+      COMPILE_OPTIONS "-fno-vectorize;-fno-slp-vectorize")
+endif()
+
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
 # pgen/ directory (not including .cpp extension)
