@@ -272,14 +272,52 @@ class PrimitiveSolver {
   //  state itself is unphysical, so any modification to the primitives
   //  also requires a modification to the conserved variables.
   //
+  //  ConToPrim never writes prim on a failure path, so prim arrives here as
+  //  whatever the caller's (uninitialized) scratch array happened to hold. It
+  //  is therefore seeded from cons before the error policy runs: a policy that
+  //  keeps any part of it -- ResetFloorTransition retains the density -- would
+  //  otherwise propagate uninitialized memory into w0 and, via PrimToCon, into
+  //  u0. Because the response zeroes the velocity, W = 1 and PrimToCon
+  //  reproduces cons[CDN] exactly from n = D/m_b, so retaining the seeded
+  //  density conserves mass. Policies that overwrite the density (ResetFloor)
+  //  are unaffected by the seeding.
+  //
   //  \param[in,out] prim  The array of primitive variables
   //  \param[in,out] cons  The array of conserved variables
   //  \param[in,out] bu    The magnetic field
   //  \param[in]     g3d   The 3x3 spatial metric
   KOKKOS_INLINE_FUNCTION void HandleFailure(Real prim[NPRIM], Real cons[NCONS],
                      Real bu[NMAG], Real g3d[NSPMETRIC]) const {
+    const int n_species = eos.GetNSpecies();
+    const Real D = cons[CDN];
+    if (isfinite(D) && D > 0.0) {
+      Real n = D/eos.GetBaryonMass();
+      eos.ApplyDensityLimits(n);
+      prim[PRH] = fmax(n, eos.GetDensityFloor());
+      for (int s = 0; s < n_species; s++) {
+        prim[PYF + s] = cons[CYD + s]/D;
+      }
+      eos.ApplySpeciesLimits(&prim[PYF]);
+    } else {
+      prim[PRH] = eos.GetDensityFloor();
+      for (int s = 0; s < n_species; s++) {
+        prim[PYF + s] = eos.GetSpeciesAtmosphere(s);
+      }
+    }
+    for (int s = n_species; s < MAX_SPECIES; s++) {
+      prim[PYF + s] = 0.0;
+    }
+    prim[PVX] = 0.0;
+    prim[PVY] = 0.0;
+    prim[PVZ] = 0.0;
+    prim[PTM] = eos.GetTemperatureFloor();
+
     bool result = eos.DoFailureResponse(prim);
     if (result) {
+      // The failure response does not set the pressure, but PrimToCon needs it
+      // for tau and the caller copies it into w0, so it is rebuilt here from
+      // whatever state the response settled on.
+      prim[PPR] = eos.GetPressure(prim[PRH], prim[PTM], &prim[PYF]);
       PrimToCon(prim, cons, bu, g3d);
     }
   }

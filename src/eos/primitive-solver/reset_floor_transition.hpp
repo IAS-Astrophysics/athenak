@@ -144,9 +144,10 @@ class ResetFloorTransition : public ErrorPolicyInterface {
     e = fmax(e_min, fmin(e_max, e));
   }
 
-  /// Policy for dealing with failed points. Mass-conserving: keep the seeded
-  /// density and species (valid when only the energy/momentum inversion
-  /// failed); a non-finite density marks an unusable state -> full reset.
+  /// Policy for dealing with failed points. Mass-conserving: keep the density
+  /// and species that PrimitiveSolver::HandleFailure seeded from the conserved
+  /// state (valid when only the energy/momentum inversion failed), so that the
+  /// PrimToCon which follows reproduces D exactly.
   KOKKOS_INLINE_FUNCTION bool FailureResponse(Real prim[NPRIM]) const {
     if (!isfinite(prim[PRH])) {
       prim[PRH] = n_atm;
