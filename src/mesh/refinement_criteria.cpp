@@ -43,6 +43,8 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
         rcrit0.rmethod = RefCritMethod::second_deriv;
       } else if (method.compare("location") == 0) {
         rcrit0.rmethod = RefCritMethod::location;
+      } else if (method.compare("cyclic_zoom") == 0) {
+        rcrit0.rmethod = RefCritMethod::cyclic_zoom;
       } else if (method.compare("user") == 0) {
         rcrit0.rmethod = RefCritMethod::user;
       } else {
@@ -50,7 +52,8 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
         Kokkos::abort("Unknown refinement criterion");
       }
       // read refinement variable only when needed
-      if ((method.compare("location")!=0) && (method.compare("user")!=0)) {
+      if ((method.compare("location")!=0) && (method.compare("cyclic_zoom")!=0)
+          && (method.compare("user")!=0)) {
         rcrit0.rvariable = pin->GetString(it->block_name,"variable");
       }
       rcrit0.rvalue_min = pin->GetOrAddReal(it->block_name,"value_min",(-FLT_MAX));
@@ -69,6 +72,10 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
     std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
     Kokkos::abort("No <amr_criterion> blocks were found in input file");
   }
+
+  // Sort criteria by rmethod
+  std::sort(rcrit.begin(), rcrit.end(), [](const RefCritData& a, const RefCritData& b)
+      { return static_cast<int>(a.rmethod) < static_cast<int>(b.rmethod);});
 
   // Error if class containing variable requested has not been initialized
   for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
@@ -123,6 +130,7 @@ void RefinementCriteria::SetRefinementData(MeshBlockPack* pmbp, bool count_deriv
   for (auto it = rcrit.begin(); it != rcrit.end(); ++it) {
     // Only load data for methods that need it
     if ((it->rmethod != RefCritMethod::location) &&
+        (it->rmethod != RefCritMethod::cyclic_zoom) &&
         (it->rmethod != RefCritMethod::user)) {
       using Kokkos::ALL;
       // hydro (lab-frame) density
@@ -382,5 +390,17 @@ void RefinementCriteria::CheckLocation(MeshBlockPack* pmbp, RefCritData crit) {
   // sync host array with device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void RefinementCriteria::CheckCyclicZoom()
+//! \brief Checks whether MeshBlock should be flagged for refinement/derefinement based on
+//! current level of CyclicZoom object
+
+void RefinementCriteria::CheckCyclicZoom(MeshBlockPack* pmbp) {
+  if (pmy_mesh->pzoom != nullptr) {
+    pmy_mesh->pzoom->CheckRefinement();
+  }
   return;
 }
