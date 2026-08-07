@@ -5,8 +5,11 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file geodesic_grid.hpp
-//  \brief definitions for GaussLegendreGrid class
+//! \file spherical_surface.hpp
+//! \brief One or more spherical surfaces sharing a common angular grid.
+//! Point ir*nangles+n is angle n on shell ir.
+//! Optional nphi / uniform_theta / ninterp extend the default Gauss-Legendre-like
+//! grid (nphi=2*ntheta, uniform cos(theta), full 2*ng stencil).
 
 #include <vector>
 
@@ -18,19 +21,25 @@ class MeshBlockPack;
 
 //----------------------------------------------------------------------------------------
 //! \class SphericalSurface
-//! \brief One or more spherical surfaces sharing a common grid. The surface
-//! contains npoints = nradii*nangles. Point ir*nangles+n is angle n on shell ir.
+
 class SphericalSurface {
  public:
-  // Single-radius surface
+  // Single-radius surface.
+  // ninterp: interpolation points per axis (SphericalGrid convention);
+  // <=0 selects the default full stencil of 2*ng points (max 2*ng+1).
+  // nphi <=0 selects the default 2*ntheta.
   SphericalSurface(MeshBlockPack *pmy_pack, int ntheta, Real rad, Real xc = 0.0,
-                   Real yc = 0.0, Real zc = 0.0);
-  // Multi-radii surface
+                   Real yc = 0.0, Real zc = 0.0, int nphi = -1,
+                   bool uniform_theta = false, int ninterp = -1);
+  // Multi-radii surface (same optional grid/interpolation controls).
   SphericalSurface(MeshBlockPack *pmy_pack, int ntheta, const std::vector<Real> &rad,
-                   Real xc = 0.0, Real yc = 0.0, Real zc = 0.0);
+                   Real xc = 0.0, Real yc = 0.0, Real zc = 0.0, int nphi = -1,
+                   bool uniform_theta = false, int ninterp = -1);
   ~SphericalSurface();
-  int nangles;  // total number of gridpoints per surface
-  int ntheta;   // number of gridpoints along theta direction, nphi = 2ntheta
+  int nangles;  // total number of gridpoints per surface (= nphi * ntheta)
+  int ntheta;   // number of gridpoints along theta direction
+  int nphi;     // number of gridpoints along phi direction
+  int ninterp;  // number of interpolation points along each dimension
   int nradii;   // number of surfaces
   int npoints;  // total number of grid points, nradii*nangles
   DualArray1D<Real> radii;        // radii of the surfaces
@@ -56,5 +65,6 @@ class SphericalSurface {
 
  private:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  bool uniform_theta_;      // true → uniform θ spacing; false → uniform cos(θ)
 };
 #endif  // UTILS_SPHERICAL_SURFACE_HPP_

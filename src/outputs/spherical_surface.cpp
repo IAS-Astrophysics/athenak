@@ -203,7 +203,7 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     ofile << "DATASET STRUCTURED_GRID" << std::endl;
     // radius varies fastest, then theta, then phi
     ofile << "DIMENSIONS " << nradii << " " << psurf->ntheta
-          << " " << 2 * psurf->ntheta << std::endl;
+          << " " << psurf->nphi << std::endl;
     ofile << "POINTS " << psurf->npoints << " float\n";
 
     for (int i = 0; i < psurf->nangles; ++i) {
