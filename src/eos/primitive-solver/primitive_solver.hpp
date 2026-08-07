@@ -314,10 +314,6 @@ class PrimitiveSolver {
 
     bool result = eos.DoFailureResponse(prim);
     if (result) {
-      // The failure response does not set the pressure, but PrimToCon needs it
-      // for tau and the caller copies it into w0, so it is rebuilt here from
-      // whatever state the response settled on.
-      prim[PPR] = eos.GetPressure(prim[PRH], prim[PTM], &prim[PYF]);
       PrimToCon(prim, cons, bu, g3d);
     }
   }
