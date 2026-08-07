@@ -248,11 +248,6 @@ target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# If CUDA is enabled, add register pressure
-if (Kokkos_ENABLE_CUDA)
-  target_compile_options(athena PRIVATE "-Xptxas" "--warn-on-spills")
-endif()
-
 configure_file(config.hpp.in config.hpp)
 
 install( TARGETS athena DESTINATION bin )
