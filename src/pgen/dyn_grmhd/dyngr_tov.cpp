@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <string>
 #include <utility>
 
 #include "athena.hpp"
@@ -32,15 +33,28 @@
 
 #include <Kokkos_Random.hpp>
 
+//! \struct TOVBFieldSeed
+//  \brief Parameters of the magnetic-field seed, selected by problem/bfield_type.
+struct TOVBFieldSeed {
+  bool dipole;    // current loop (true) or pressure poloidal (false)
+  Real pcut;      // pressure cutoff                        (pressure poloidal)
+  Real magindex;  // exponent of the (1 - rho/rhoc) taper   (pressure poloidal)
+  Real i0;        // loop current                           (current loop)
+  Real r0;        // loop radius                            (current loop)
+  Real scale;     // overall normalization applied to curl(A)
+};
+
 // Prototypes for vector potential
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3);
+static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3);
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3);
+static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3);
+KOKKOS_INLINE_FUNCTION
+static Real DipoleAphi(const TOVBFieldSeed& bf, Real x1, Real x2, Real x3);
 
 // Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
@@ -93,7 +107,6 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   // Use the TOV solver with the specified EOS.
   TOVEOS eos{pin};
   auto my_tov = tov::TOVStar::ConstructTOV(pin, eos);
-
 
   constexpr bool use_ye = tov::UsesYe<TOVEOS>;
   Real ye_atmo = pin->GetOrAddReal("mhd", "s0_atmosphere", 0.5);
@@ -238,6 +251,44 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     pcut = pcut * pmax;
   }
 
+  // Select the magnetic field seed: the interior pressure-poloidal field 
+  // or the external current-loop dipole.
+  std::string bfield_type = pin->GetOrAddString("problem", "bfield_type",
+                                                "pressure_poloidal");
+  bool dipole = (bfield_type == "current_loop");
+  if (!dipole && bfield_type != "pressure_poloidal") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Unknown problem/bfield_type '" << bfield_type << "'. "
+              << "Valid options are 'pressure_poloidal' and 'current_loop'."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // Current-loop parameters.
+  const Real gauss_cgs_to_geo = 8.3519664583273e+19;
+  Real b_max_gauss = pin->GetOrAddReal("problem", "b_max", 1e12);
+  Real b_max = b_max_gauss/gauss_cgs_to_geo;
+  Real r_0 = pin->GetOrAddReal("problem", "r_0_current",
+                               isotropic ? tov_.R_edge_iso : tov_.R_edge);
+  Real i_0 = 4.0*r_0*b_max/(23.0*M_PI);
+
+  // The current loop carries its amplitude in i_0; the pressure-poloidal potential is
+  // built with unit amplitude and rescaled by b_norm.
+  Real b_scale = dipole ? static_cast<Real>(1.0) : b_norm;
+  TOVBFieldSeed bfield{dipole, pcut, magindex, i_0, r_0, b_scale};
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "TOV magnetic field seed: " << bfield_type << std::endl;
+    if (dipole) {
+      std::cout << "  current loop: r_0 = " << r_0 << ", I_0 = " << i_0
+                << ", central B = " << b_max_gauss << " G = " << b_max
+                << " (code)" << std::endl;
+    } else {
+      std::cout << "  pressure poloidal: b_norm = " << b_norm << ", pcut = " << pcut
+                << ", magindex = " << magindex << std::endl;
+    }
+  }
+
   // compute vector potential over all faces
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*(indcs.ng)) : 2;
@@ -278,8 +329,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    a1(m,k,j,i) = A1(tov_, eos_, isotropic, pcut, magindex, x1v, x2f, x3f);
-    a2(m,k,j,i) = A2(tov_, eos_, isotropic, pcut, magindex, x1f, x2v, x3f);
+    a1(m,k,j,i) = A1(tov_, eos_, isotropic, bfield, x1v, x2f, x3f);
+    a2(m,k,j,i) = A2(tov_, eos_, isotropic, bfield, x1f, x2v, x3f);
     a3(m,k,j,i) = 0.0;
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
@@ -315,8 +366,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)))) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
-      a1(m,k,j,i) = 0.5*(A1(tov_, eos_, isotropic, pcut, magindex, xl,x2f,x3f) +
-                         A1(tov_, eos_, isotropic, pcut, magindex, xr,x2f,x3f));
+      a1(m,k,j,i) = 0.5*(A1(tov_, eos_, isotropic, bfield, xl,x2f,x3f) +
+                         A1(tov_, eos_, isotropic, bfield, xr,x2f,x3f));
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -347,8 +398,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)))) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
-      a2(m,k,j,i) = 0.5*(A2(tov_, eos_, isotropic, pcut, magindex, x1f,xl,x3f) +
-                         A2(tov_, eos_, isotropic, pcut, magindex, x1f,xr,x3f));
+      a2(m,k,j,i) = 0.5*(A2(tov_, eos_, isotropic, bfield, x1f,xl,x3f) +
+                         A2(tov_, eos_, isotropic, bfield, x1f,xr,x3f));
     }
   });
 
@@ -360,24 +411,24 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    b0.x1f(m,k,j,i) = b_norm*((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
+    b0.x1f(m,k,j,i) = b_scale*((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
                        (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
-    b0.x2f(m,k,j,i) = b_norm*((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
+    b0.x2f(m,k,j,i) = b_scale*((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
                        (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
-    b0.x3f(m,k,j,i) = b_norm*((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
+    b0.x3f(m,k,j,i) = b_scale*((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
                        (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
 
     // Include extra face-component at edge of block in each direction
     if (i==ie) {
-      b0.x1f(m,k,j,i+1) = b_norm*((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
+      b0.x1f(m,k,j,i+1) = b_scale*((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
                            (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
     }
     if (j==je) {
-      b0.x2f(m,k,j+1,i) = b_norm*((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
+      b0.x2f(m,k,j+1,i) = b_scale*((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
                            (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
     }
     if (k==ke) {
-      b0.x3f(m,k+1,j,i) = b_norm*((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
+      b0.x3f(m,k+1,j,i) = b_scale*((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
                            (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
     }
   });
@@ -476,24 +527,24 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   return;
 }
 
-template<class TOVEOS>
+//! \fn Real DipoleAphi
+//  \brief A_phi/w for a circular current loop of radius r0 carrying current i0.
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3) {
-  Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
-  Real p, rho;
-  if (!isotropic) {
-    tov_.GetPandRho(eos, r, rho, p);
-  } else {
-    tov_.GetPandRhoIso(eos, r, rho, p);
-  }
-  return -x2*fmax(p - pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,magindex);
+static Real DipoleAphi(const TOVBFieldSeed& bf, Real x1, Real x2, Real x3) {
+  Real w2 = SQR(x1) + SQR(x2);
+  Real r2 = w2 + SQR(x3);
+  Real r02 = SQR(bf.r0);
+  return M_PI*r02*bf.i0/pow(r02 + r2, 1.5)*
+         (1.0 + 15.0/8.0*r02*(r02 + w2)/SQR(r02 + r2));
 }
 
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3) {
+static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3) {
+  if (bf.dipole) {
+    return -x2*DipoleAphi(bf, x1, x2, x3);
+  }
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
   if (!isotropic) {
@@ -501,7 +552,24 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
   } else {
     tov_.GetPandRhoIso(eos, r, rho, p);
   }
-  return x1*fmax(p - pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,magindex);
+  return -x2*fmax(p - bf.pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,bf.magindex);
+}
+
+template<class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3) {
+  if (bf.dipole) {
+    return x1*DipoleAphi(bf, x1, x2, x3);
+  }
+  Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+  Real p, rho;
+  if (!isotropic) {
+    tov_.GetPandRho(eos, r, rho, p);
+  } else {
+    tov_.GetPandRhoIso(eos, r, rho, p);
+  }
+  return x1*fmax(p - bf.pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,bf.magindex);
 }
 
 // Metric update function
@@ -511,7 +579,6 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
-  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
