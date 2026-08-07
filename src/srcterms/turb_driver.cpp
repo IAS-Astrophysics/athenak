@@ -29,7 +29,6 @@
 // constructor, initializes data structures and parameters
 
 TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
-  pmy_pack(pp),
   force("force",1,1,1,1,1),
   force_tmp("force_tmp",1,1,1,1,1),
   xccc("xccc",1),xccs("xccs",1),xcsc("xcsc",1),xcss("xcss",1),
@@ -40,7 +39,8 @@ TurbulenceDriver::TurbulenceDriver(MeshBlockPack *pp, ParameterInput *pin) :
   zscc("zscc",1),zscs("zscs",1),zssc("zssc",1),zsss("zsss",1),
   kx_mode("kx_mode",1),ky_mode("ky_mode",1),kz_mode("kz_mode",1),
   xcos("xcos",1,1,1),xsin("xsin",1,1,1),ycos("ycos",1,1,1),
-  ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1) {
+  ysin("ysin",1,1,1),zcos("zcos",1,1,1),zsin("zsin",1,1,1),
+  pmy_pack(pp) {
   // allocate memory for force registers
   int nmb = pmy_pack->nmb_thispack;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -283,7 +283,7 @@ void TurbulenceDriver::Initialize() {
 void TurbulenceDriver::IncludeInitializeModesTask(std::shared_ptr<TaskList> tl,
                                                   TaskID start) {
   auto id_init = tl->AddTask(&TurbulenceDriver::InitializeModes, this, start);
-  auto id_add = tl->AddTask(&TurbulenceDriver::AddForcing, this, id_init);
+  tl->AddTask(&TurbulenceDriver::AddForcing, this, id_init);
   return;
 }
 
@@ -297,16 +297,16 @@ void TurbulenceDriver::IncludeAddForcingTask(std::shared_ptr<TaskList> tl, TaskI
   // These must be inserted after update task, but before send_u
   if (pmy_pack->pionn == nullptr) {
     if (pmy_pack->phydro != nullptr) {
-      auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                              pmy_pack->phydro->id.flux, pmy_pack->phydro->id.rkupdt);
+      tl->InsertTask(&TurbulenceDriver::AddForcing, this,
+                     pmy_pack->phydro->id.flux, pmy_pack->phydro->id.rkupdt);
     }
     if (pmy_pack->pmhd != nullptr) {
-      auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                              pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.rkupdt);
+      tl->InsertTask(&TurbulenceDriver::AddForcing, this,
+                     pmy_pack->pmhd->id.flux, pmy_pack->pmhd->id.rkupdt);
     }
   } else {
-    auto id = tl->InsertTask(&TurbulenceDriver::AddForcing, this,
-                            pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_rkupdt);
+    tl->InsertTask(&TurbulenceDriver::AddForcing, this,
+                   pmy_pack->pionn->id.n_flux, pmy_pack->pionn->id.n_rkupdt);
   }
 
   return;
@@ -837,11 +837,11 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
     gcorr = std::sqrt(1.0 - fcorr*fcorr);
   }
 
-  EquationOfState *peos;
+  EquationOfState *peos=NULL;
 
   DvceArray5D<Real> u0, u0_;
   DvceArray5D<Real> w0;
-  DvceFaceFld4D<Real> *bcc0;
+  DvceFaceFld4D<Real> *bcc0=NULL;
   if (pmy_pack->phydro != nullptr) u0 = (pmy_pack->phydro->u0);
   if (pmy_pack->phydro != nullptr) peos = (pmy_pack->phydro->peos);
   if (pmy_pack->pmhd != nullptr) u0 = (pmy_pack->pmhd->u0);
@@ -1081,11 +1081,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
 
         Real dens = u_out.d;
 
-        auto &w = u;
-
-        Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
-        Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
-
         u0(m,IDN,k,j,i) = dens;  // *uA_0*(1.-beta*betaA);
 
         // Does not require knowledge of v
@@ -1124,11 +1119,6 @@ TaskStatus TurbulenceDriver::AddForcing(Driver *pdrive, int stage) {
         Real sz = u_out.mz;
 
         Real dens = u_out.d;
-
-        auto &w = u;
-
-        Real lorentz = sqrt(1. + w.vx*w.vx + w.vy*w.vy + w.vz*w.vz);
-        Real beta = sqrt(w.vx*w.vx + w.vy*w.vy + w.vz*w.vz)/lorentz;
 
         u0(m,IDN,k,j,i) = dens;  //*uA_0*(1.-beta*betaA);
 

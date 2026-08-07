@@ -12,7 +12,6 @@
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd.hpp"
 #include "eos/primitive_solver_hyd.hpp"
-#include "reconstruct/plm.hpp"
 
 namespace dyngr {
 

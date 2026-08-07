@@ -31,6 +31,11 @@ SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int nintp
     interp_indcs("interp_indcs",1,1),
     interp_wghts("interp_wghts",1,1,1),
     interp_vals("interp_vals",1,1) {
+  // detect a bitant (reflect at x3min=0) mesh: points with z<0 then physically lie outside
+  // the domain and must be looked up via their z-reflected (in-domain) counterpart
+  bitant_ = (pmy_pack->pmesh->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::reflect) &&
+            (pmy_pack->pmesh->mesh_size.x3min == 0.0);
+
   // reallocate and set interpolation coordinates, indices, and weights
   ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
   if (ninterp > pmy_pack->pmesh->mb_indcs.ng*2+1) {
@@ -126,17 +131,25 @@ void SphericalGrid::SetInterpolationIndices() {
       Real &dx2 = size.h_view(m).dx2;
       Real &dx3 = size.h_view(m).dx3;
 
+      // on a bitant mesh, a point with z<0 lies outside the domain; look it up via its
+      // z-reflected counterpart (x,y,-z), which lies inside the domain and, by the mesh's
+      // reflection symmetry, holds the data needed to reconstruct the missing hemisphere
+      Real zcoord = rcoord.h_view(n,2);
+      if (bitant_ && zcoord < 0.0) {
+        zcoord = -zcoord;
+      }
+
       // save MeshBlock and zone indicies for nearest position to spherical patch center
       // if this angle position resides in this MeshBlock
       if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) <= x1max) &&
           (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) <= x2max) &&
-          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) <= x3max)) {
+          (zcoord >= x3min && zcoord <= x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
                                                           (x1min+offset*dx1))/dx1));
         iindcs.h_view(n,2) = static_cast<int>(std::floor((rcoord.h_view(n,1)-
                                                           (x2min+offset*dx2))/dx2));
-        iindcs.h_view(n,3) = static_cast<int>(std::floor((rcoord.h_view(n,2)-
+        iindcs.h_view(n,3) = static_cast<int>(std::floor((zcoord-
                                                           (x3min+offset*dx3))/dx3));
       }
     }
@@ -173,10 +186,15 @@ void SphericalGrid::SetInterpolationWeights() {
         iwghts.h_view(n,i,2) = 0.0;
       }
     } else {
-      // extract spherical grid positions
+      // extract spherical grid positions; on a bitant mesh, points with z<0 were located
+      // (in SetInterpolationIndices) via their z-reflected counterpart, so the weights
+      // must be computed against that same reflected z-coordinate
       Real &x0 = interp_coord.h_view(n,0);
       Real &y0 = interp_coord.h_view(n,1);
-      Real &z0 = interp_coord.h_view(n,2);
+      Real z0 = interp_coord.h_view(n,2);
+      if (bitant_ && z0 < 0.0) {
+        z0 = -z0;
+      }
 
       // extract MeshBlock bounds
       Real &x1min = size.h_view(ii0).x1min;

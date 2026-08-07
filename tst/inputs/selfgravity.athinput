@@ -1,0 +1,63 @@
+# AthenaK input file for multigrid Poisson solver tests (poisson3d)
+
+<comment>
+problem   = SelfGravity 
+
+<job>
+basename  = MGGravityTest
+
+<mesh>
+nghost    = 3
+nx1       = 128
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 128
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 128
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 64
+nx2       = 64
+nx3       = 64
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim       = 1
+tlim       = 1.0
+ndiag      = 1
+
+<hydro>
+eos         = isothermal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.4
+iso_sound_speed = 1.0
+
+<gravity>
+four_pi_G = 1.0
+threshold = 1e-8
+niteration = 1
+npresmooth = 1
+npostsmooth = 1
+full_multigrid = true
+fmg_ncycle = 1
+show_defect = 0
+
+<hydro_srcterms>
+self_gravity = true
+
+<problem>
+pgen_name   = gravity

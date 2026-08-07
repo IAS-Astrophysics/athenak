@@ -32,8 +32,8 @@
 
 //----------------------------------------------------------------------------------------
 CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int n):
-              owns_compact_object{false}, pos{NAN, NAN, NAN}, vel{NAN, NAN, NAN},
-              pmesh{pmesh}, out_every{1} {
+              owns_compact_object{false}, vel{NAN, NAN, NAN},
+              pmesh{pmesh}, out_every{1}, pos{NAN, NAN, NAN} {
   std::string nstr = std::to_string(n);
   std::string ofname = pin->GetString("job", "basename") + ".";
   ofname += pin->GetOrAddString("z4c", "filename", "co_");
@@ -206,6 +206,36 @@ void CompactObjectTracker::EvolveTracker(MeshBlockPack *pmbp) {
           break;
         }
       }
+    }
+
+    // A tracked object sitting on a reflecting symmetry plane (bitant/octant)
+    // can have its position pushed just across that plane by the walk-mode
+    // neighborhood search picking a mirrored ghost cell, or by residual
+    // velocity in ODE mode. Reflect it back onto the physical side rather
+    // than letting it fall outside every rank's domain on the next cycle.
+    if (pos[0] < pmesh->mesh_size.x1min &&
+        pmesh->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
+      pos[0] = 2.0*pmesh->mesh_size.x1min - pos[0];
+    }
+    if (pos[0] > pmesh->mesh_size.x1max &&
+        pmesh->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::reflect) {
+      pos[0] = 2.0*pmesh->mesh_size.x1max - pos[0];
+    }
+    if (pos[1] < pmesh->mesh_size.x2min &&
+        pmesh->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::reflect) {
+      pos[1] = 2.0*pmesh->mesh_size.x2min - pos[1];
+    }
+    if (pos[1] > pmesh->mesh_size.x2max &&
+        pmesh->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::reflect) {
+      pos[1] = 2.0*pmesh->mesh_size.x2max - pos[1];
+    }
+    if (pos[2] < pmesh->mesh_size.x3min &&
+        pmesh->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::reflect) {
+      pos[2] = 2.0*pmesh->mesh_size.x3min - pos[2];
+    }
+    if (pos[2] > pmesh->mesh_size.x3max &&
+        pmesh->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::reflect) {
+      pos[2] = 2.0*pmesh->mesh_size.x3max - pos[2];
     }
 #if !(MPI_PARALLEL_ENABLED)
   } else {

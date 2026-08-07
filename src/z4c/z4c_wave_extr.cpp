@@ -76,7 +76,6 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
 
   // maximum l; TODO(@hzhu): read in from input file
   int lmax = 8;
-  // bool bitant = false;
 
   Real ylmR,ylmI;
   int count = 0;
@@ -94,14 +93,14 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
             Real dataim = grids[g]->interp_vals.h_view(ip,1);
             Real weight = grids[g]->solid_angles.h_view(ip);
             swsh(&ylmR,&ylmI,l,m,theta,phi);
-            // The spherical harmonics transform as
-            // Y^s_{l m}( Pi-th, ph ) = (-1)^{l+s} Y^s_{l -m}(th, ph)
-            // but the PoisitionPolar function returns theta \in [0,\pi],
-            // so these are correct for bitant.
-            // With bitant, under reflection the imaginary part of
-            // the weyl scalar should pick a - sign,
-            // which is accounted for here.
-            // Real bitant_z_fac = (bitant && theta > M_PI/2) ? -1 : 1;
+            // On a bitant mesh, InterpolateToSphere has already reconstructed the value at
+            // (theta,phi) with theta>pi/2 from the mesh's z-reflected (in-domain) data at
+            // (pi-theta,phi). For a z-reflection-symmetric spacetime the Weyl scalar there
+            // satisfies Psi4(pi-theta,phi) = conj(Psi4(theta,phi)), so the imaginary part
+            // must be sign-flipped here to recover the true value at (theta,phi).
+            if (grids[g]->bitant() && theta > M_PI/2) {
+              dataim = -dataim;
+            }
             psilmR += weight*(datareal*ylmR + dataim*ylmI);
             psilmI += weight*(dataim*ylmR - datareal*ylmI);
           }
