@@ -251,7 +251,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     pcut = pcut * pmax;
   }
 
-  // Select the magnetic field seed: the interior pressure-poloidal field 
+  // Select the magnetic field seed: the interior pressure-poloidal field
   // or the external current-loop dipole.
   std::string bfield_type = pin->GetOrAddString("problem", "bfield_type",
                                                 "pressure_poloidal");
