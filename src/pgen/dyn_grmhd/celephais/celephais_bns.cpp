@@ -3,8 +3,8 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file kadath_bns.cpp
-//  \brief Initial data reader for binary neutron star data from the Kadath_AEI
+//! \file celephais_bns.cpp
+//  \brief Initial data reader for binary neutron star data from the Celephais
 //         GR apps `BNS` (bi-spheric symmetric) and `BNS_nosym` (no equatorial /
 //         orbital-plane symmetry).
 //
@@ -23,7 +23,7 @@
 //
 //  Select the symmetry of the source data with:
 //    <problem>
-//      initial_data_file = path/to/bns.toml   # Kadath_AEI BNS config (.toml)
+//      initial_data_file = path/to/bns.toml   # Celephais BNS config (.toml)
 //      kadath_symmetry   = sym                # "sym" -> Space_bin_ns (BNS app)
 //                                             # "nosym" -> Space_bin_ns_nosym
 //                                             #            (BNS_nosym app)
@@ -37,10 +37,10 @@
 //  warmup call before the loop initialises the summation_1d static dispatch table
 //  on the main thread, preventing a first-call race among OMP threads.
 //
-//  NOTE ON INCLUDE PATHS: the Kadath headers below use the Kadath_AEI canonical
+//  NOTE ON INCLUDE PATHS: the Kadath headers below use the Celephais canonical
 //  `For_Kadath/...` / `Hydro/...` layout (matching the in-repo exporters and the
-//  `2sacra` tools).  The AthenaK build must add the Kadath_AEI `include/`
-//  directory to its include path (`-I<kadath_aei>/include`).
+//  `2sacra` tools).  The AthenaK build must add the Celephais `include/`
+//  directory to its include path (`-I<celephais>/include`).
 
 #include <cmath>
 #include <cstdio>
@@ -71,7 +71,7 @@
 #include "utils/tov/tov_piecewise_poly.hpp"
 #include "utils/tov/tov_tabulated.hpp"
 
-// Kadath_AEI (BNS / BNS_nosym GR initial data)
+// Celephais (BNS / BNS_nosym GR initial data)
 #include "For_Kadath/Kadath_point_h/kadath_bin_ns.hpp"
 #include "For_Kadath/Kadath_point_h/kadath_bin_ns_nosym.hpp"
 #include "Hydro/EOS.hh"
@@ -86,7 +86,7 @@ void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn SetupBNS()
-//! \brief Fill the AthenaK grid from a Kadath_AEI BNS / BNS_nosym solution.
+//! \brief Fill the AthenaK grid from a Celephais BNS / BNS_nosym solution.
 //!
 //! Templated on the Kadath space type (\c Space_bin_ns for the \c BNS app,
 //! \c Space_bin_ns_nosym for the \c BNS_nosym app) and on the AthenaK 1D EOS.
@@ -147,7 +147,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   // =========================================================================
 
   if (global_variable::my_rank == 0) {
-    std::cout << "Reading Kadath_AEI BNS config from " << fname << " ..." << std::endl;
+    std::cout << "Reading Celephais BNS config from " << fname << " ..." << std::endl;
   }
 
   kadath_config<BIN_INFO> bconfig(fname);
@@ -555,7 +555,7 @@ void DispatchBNSEOS(ParameterInput *pin, Mesh *pmy_mesh_, MeshBlockPack *pmbp) {
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem()
-//! \brief Problem generator for BNS with Kadath_AEI (BNS / BNS_nosym GR apps).
+//! \brief Problem generator for BNS with Celephais (BNS / BNS_nosym GR apps).
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_dynamical_relativistic) {

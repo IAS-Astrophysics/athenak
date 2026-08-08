@@ -1,8 +1,8 @@
-# AthenaK input file for Kadath_AEI (FUKa) BNS initial data
+# AthenaK input file for Celephais (FUKa) BNS initial data
 # All coordinates and times are in geometric units (G = c = 1, M_sun = 1)
 
 <comment>
-problem   = Kadath_AEI BNS initial data
+problem   = Celephais BNS initial data
 
 <job>
 basename  = bns

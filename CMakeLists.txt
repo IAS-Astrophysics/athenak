@@ -189,34 +189,35 @@ if (${PROBLEM} MATCHES "dyn_grmhd/sgrid/*")
       ${CMAKE_SOURCE_DIR}/sgrid/lib/libsgrid.a)
 endif()
 
-if (${PROBLEM} MATCHES "^dyn_grmhd/kadath_aei/")
-  # Kadath (FUKa) BNS initial data reader; expects Kadath linked at
-  # ${CMAKE_SOURCE_DIR}/kadath_aei with libkadath.a in its lib/ directory.
+if (${PROBLEM} MATCHES "^dyn_grmhd/celephais/")
+  # Celephais (formerly Kadath_AEI/FUKA) BNS initial data reader; expects
+  # Celephais linked at ${CMAKE_SOURCE_DIR}/celephais with libcelephais.a in
+  # its lib/ directory.
   target_include_directories(athena PRIVATE
-      ${CMAKE_SOURCE_DIR}/kadath_aei/include
-      # kadath_paths.h is generated into build/, never installed to include/.
-      ${CMAKE_SOURCE_DIR}/kadath_aei/build/generated)
+      ${CMAKE_SOURCE_DIR}/celephais/include
+      # celephais_paths.h is generated into build/, never installed to include/.
+      ${CMAKE_SOURCE_DIR}/celephais/build/generated)
   target_link_libraries(athena PUBLIC
-      ${CMAKE_SOURCE_DIR}/kadath_aei/lib/libkadath.a)
-  # A raw static-lib path doesn't carry libkadath.a's PUBLIC MUMPS/PT-SCOTCH/etc.
-  # link interface, so pull it from Kadath's own build cache (KADATH_EXTRA_LIBS)
+      ${CMAKE_SOURCE_DIR}/celephais/lib/libcelephais.a)
+  # A raw static-lib path doesn't carry libcelephais.a's PUBLIC MUMPS/PT-SCOTCH/etc.
+  # link interface, so pull it from Celephais's own build cache (CELEPHAIS_EXTRA_LIBS)
   # instead of re-deriving it -- stays portable across clusters and ABI-safe.
-  load_cache(${CMAKE_SOURCE_DIR}/kadath_aei/build READ_WITH_PREFIX KADATH_IMPORT_
-      KADATH_EXTRA_LIBS)
-  if (NOT KADATH_IMPORT_KADATH_EXTRA_LIBS)
-    message(FATAL_ERROR "Could not read KADATH_EXTRA_LIBS from "
-        "${CMAKE_SOURCE_DIR}/kadath_aei/build/CMakeCache.txt -- has Kadath_AEI "
+  load_cache(${CMAKE_SOURCE_DIR}/celephais/build READ_WITH_PREFIX CELEPHAIS_IMPORT_
+      CELEPHAIS_EXTRA_LIBS)
+  if (NOT CELEPHAIS_IMPORT_CELEPHAIS_EXTRA_LIBS)
+    message(FATAL_ERROR "Could not read CELEPHAIS_EXTRA_LIBS from "
+        "${CMAKE_SOURCE_DIR}/celephais/build/CMakeCache.txt -- has Celephais "
         "been configured/built there?")
   endif()
-  # KADATH_EXTRA_LIBS names imported targets (MPI::MPI_Fortran, Threads::Threads)
+  # CELEPHAIS_EXTRA_LIBS names imported targets (MPI::MPI_Fortran, Threads::Threads)
   # that don't carry over between CMake configure runs, so recreate them here.
   enable_language(Fortran)
   find_package(MPI REQUIRED COMPONENTS Fortran)
   find_package(Threads REQUIRED)
-  # Link real FFTW3 before KADATH_EXTRA_LIBS (which pulls in MKL): MKL ships its
+  # Link real FFTW3 before CELEPHAIS_EXTRA_LIBS (which pulls in MKL): MKL ships its
   # own FFTW3-compatible wrapper exporting the same unversioned fftw_execute/
-  # fftw_plan_r2r_1d symbols Kadath's own coefficient transforms call, so linking
-  # MKL first risks silently shadowing genuine FFTW3 at runtime. Kadath's own
+  # fftw_plan_r2r_1d symbols Celephais's own coefficient transforms call, so linking
+  # MKL first risks silently shadowing genuine FFTW3 at runtime. Celephais's own
   # native build already links FFTW3 first for this exact reason.
   find_package(PkgConfig QUIET)
   if (PKG_CONFIG_FOUND)
@@ -228,16 +229,7 @@ if (${PROBLEM} MATCHES "^dyn_grmhd/kadath_aei/")
     find_library(FFTW3_LIB NAMES fftw3)
     target_link_libraries(athena PUBLIC ${FFTW3_LIB})
   endif()
-  target_link_libraries(athena PUBLIC ${KADATH_IMPORT_KADATH_EXTRA_LIBS})
-  find_package(LAPACK REQUIRED)
-  target_link_libraries(athena PUBLIC ${LAPACK_LIBRARIES})
-  find_package(GSL REQUIRED)
-  target_link_libraries(athena PUBLIC GSL::gsl GSL::gslcblas)
-  if (Athena_ENABLE_OPENMP)
-  else ()
-    find_package(OpenMP COMPONENTS CXX)
-    target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
-  endif()
+  target_link_libraries(athena PUBLIC ${CELEPHAIS_IMPORT_CELEPHAIS_EXTRA_LIBS})
 endif()
 
 if (${PROBLEM} MATCHES "^dyn_grmhd/kadath/")
