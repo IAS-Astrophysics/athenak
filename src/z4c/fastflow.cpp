@@ -104,18 +104,36 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   ah_found = pin->GetOrAddBoolean("fastflow", "ah_found_a0_" + n_str, false);
   time_first_found = pin->GetOrAddReal("fastflow", "time_first_found_" + n_str, -1.0);
 
-  // Auto excision trigger: latch (persisted across restarts) and thresholds.
+  // Auto excision trigger.  The latch is per-horizon runtime state and is persisted
+  // here alongside the other horizon state; the knobs driving it are excision policy
+  // and live in <coord> next to excision_scheme and freeze_excision.
   ah_excise_ready = pin->GetOrAddBoolean("fastflow", "ah_excise_ready_"+n_str, false);
-  excise_settle_rrate = pin->GetOrAddReal("fastflow", "excise_settle_rrate", 1.0e-3);
-  excise_settle_hrms  = pin->GetOrAddReal("fastflow", "excise_settle_hrms", 5.0e-3);
-  excise_settle_count = pin->GetOrAddInteger("fastflow", "excise_settle_count", 5);
+
+  // These knobs used to live in <fastflow>.  Reject the old spelling rather than let it
+  // silently fall back to the defaults: excise_auto would revert to false, starting
+  // excision at the first horizon find -- and, with coord/freeze_excision, latching the
+  // region there.  Old restart files carry the parfile, so this also catches restarts.
+  const char *moved[] = {"excise_auto", "excise_settle_rrate",
+                         "excise_settle_hrms", "excise_settle_count"};
+  for (const char *par : moved) {
+    if (pin->DoesParameterExist("fastflow", par)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "fastflow/" << par << " has moved to coord/" << par
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  excise_settle_rrate = pin->GetOrAddReal("coord", "excise_settle_rrate", 1.0e-3);
+  excise_settle_hrms  = pin->GetOrAddReal("coord", "excise_settle_hrms", 5.0e-3);
+  excise_settle_count = pin->GetOrAddInteger("coord", "excise_settle_count", 5);
   settle_prev_time = -1.0;
   settle_prev_radius = -1.0;
   settle_streak = 0;
   // excise_auto=false (default) disables the settle-based trigger: the horizon
   // is marked excise-ready from the start, so excision begins as soon as it is
   // found. Set excise_auto=true to wait until the horizon has settled.
-  excise_auto = pin->GetOrAddBoolean("fastflow", "excise_auto", false);
+  excise_auto = pin->GetOrAddBoolean("coord", "excise_auto", false);
   if (!excise_auto) { ah_excise_ready = true; }
 
   // Frozen excision region: latch and snapshot, both persisted across restarts.

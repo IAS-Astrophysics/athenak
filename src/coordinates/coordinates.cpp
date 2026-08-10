@@ -136,17 +136,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
                       << std::endl;
             std::exit(EXIT_FAILURE);
           }
-          // Freezing only makes sense once the horizon has stopped growing.  Without
-          // excise_auto it is excise-ready immediately, so the region would latch at the
-          // first find, while the horizon is still at its smallest.
-          if (coord_data.excision_scheme == ExcisionScheme::horizon &&
-              !(pin->GetOrAddBoolean("fastflow","excise_auto",false))) {
-            std::cout << "### WARNING in " << __FILE__ << " at line "
-                      << __LINE__ << std::endl
-                      << "freeze_excision with excise_auto=false will latch the excision"
-                      << " region at the first horizon find, while the black hole is"
-                      << " still forming.  Set fastflow/excise_auto=true." << std::endl;
-          }
           if (global_variable::my_rank == 0) {
             std::cout << "### Excision region freezing enabled: radius="
                       << (coord_data.freeze_excision_radius ? "frozen" : "tracked")

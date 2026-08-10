@@ -60,7 +60,7 @@ class FastFlow {
   bool ah_found; // Horizon found
   Real time_first_found; // Time, when horizon first found
   bool ah_excise_ready; // latched: horizon has settled -> safe to begin excision
-  // Auto excision-trigger (detects when the BH has stopped forming):
+  // Auto excision-trigger, set from <coord> (detects when the BH has stopped forming):
   bool excise_auto;         // false (default) => excise as soon as horizon found
   Real excise_settle_rrate; // max |dR/R|/dt for a find to count as "settled"
   Real excise_settle_hrms;  // max surface hrms for a find to count as "settled"
