@@ -192,6 +192,14 @@ void ZoomMesh::AssignMBLists() {
   int nmb = pzoom->pmesh->pmb_pack->nmb_thispack;
   int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
   int zmbs = gzms_eachdvce[global_variable::my_rank];
+  // initialize unused entries to -1 (0 is a valid rank/id for Allreduce MAX)
+  int lmbs = gzms_eachlevel[pzoom->zstate.zone-1];
+  int nlmb = nzmb_eachlevel[pzoom->zstate.zone-1];
+  for (int lm=0; lm<nlmb; ++lm) {
+    mbrank_eachzmb[lm+lmbs] = -1;
+    mblid_eachzmb[lm+lmbs] = -1;
+    lloc_eachzmb[lm+lmbs] = {-1, -1, -1, -1};
+  }
   for (int m=0; m<nmb; ++m) {
     int zm = zm_eachmb[m];
     if (zm >= 0) {
@@ -210,12 +218,11 @@ void ZoomMesh::AssignMBLists() {
 
 void ZoomMesh::SyncMBLists() {
 #if MPI_PARALLEL_ENABLED
-  // Gather mbrank_eachzmb
-  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, MPI_INT, mbrank_eachzmb.data(),
-                 nzmb_eachdvce, gzms_eachdvce, MPI_INT, MPI_COMM_WORLD);
-  // Gather mblid_eachzmb
-  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, MPI_INT, mblid_eachzmb.data(),
-                 nzmb_eachdvce, gzms_eachdvce, MPI_INT, MPI_COMM_WORLD);
+  // Allreduce by global ZMB index; unused entries must be -1
+  MPI_Allreduce(MPI_IN_PLACE, mbrank_eachzmb.data(), nzmb_total,
+                MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, mblid_eachzmb.data(), nzmb_total,
+                MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 #endif
   return;
 }
@@ -226,14 +233,9 @@ void ZoomMesh::SyncMBLists() {
 
 void ZoomMesh::SyncLogicalLocations() {
 #if MPI_PARALLEL_ENABLED
-  // Create MPI datatype for LogicalLocation
-  MPI_Datatype lloc_type;
-  MPI_Type_contiguous(4, MPI_INT32_T, &lloc_type);
-  MPI_Type_commit(&lloc_type);
-  // Gather lloc_eachzmb (using the custom datatype, no byte conversion needed)
-  MPI_Allgatherv(MPI_IN_PLACE, nzmb_thisdvce, lloc_type, lloc_eachzmb.data(),
-                 nzmb_eachdvce, gzms_eachdvce, lloc_type, MPI_COMM_WORLD);
-  MPI_Type_free(&lloc_type);
+  // Allreduce LogicalLocation as 4 int32s by global ZMB index
+  MPI_Allreduce(MPI_IN_PLACE, reinterpret_cast<std::int32_t*>(lloc_eachzmb.data()),
+                4*nzmb_total, MPI_INT32_T, MPI_MAX, MPI_COMM_WORLD);
 #endif
   return;
 }
@@ -271,6 +273,11 @@ void ZoomMesh::FindRegion(int zone) {
   int mbs = pzoom->pmesh->gids_eachrank[global_variable::my_rank];
   int nlmb = nzmb_eachlevel[zone]; // number of zoom MBs on previous level
   int lmbs = gzms_eachlevel[zone]; // starting gid of zoom MBs on previous level
+  // initialize unused entries to -1 for Allreduce MAX
+  for (int lm=0; lm<nlmb; ++lm) {
+    mbrank_eachzmb[lm+lmbs] = -1;
+    mblid_eachzmb[lm+lmbs] = -1;
+  }
   // note that now the zoom state has been updated
   // use the updated zoom region parameters
   int zm_count = 0;

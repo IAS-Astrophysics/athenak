@@ -98,9 +98,18 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
 
       // Calculate offset in local zdata array
       size_t data_offset = zm * zmb_size;
-      resfile.Write_any_type_at(pzdata->zdata.data() + data_offset,
-                                zmb_size, file_offset, "Real");
+      if (resfile.Write_any_type_at(pzdata->zdata.data() + data_offset,
+                                    zmb_size, file_offset, "Real") != zmb_size) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "cyclic zoom data not written correctly to rst file, "
+                  << "restart file is broken." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+#if MPI_PARALLEL_ENABLED
+    // Avoid concurrent non-contiguous writes to the same restart file
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif
   }
 
   return;
