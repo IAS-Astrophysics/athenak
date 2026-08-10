@@ -42,11 +42,13 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
+#include "globals.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
@@ -450,6 +452,16 @@ TaskStatus RadiationM1::ApplyRheaMixing(
                                  * ndens_to_invsec
                                  * code_units.TimeConversion(cgs_units);
 
+  // Counts cells where the Rhea prediction itself is non-finite (NaN/Inf) and mixing was
+  // skipped there -- see the finiteness screen in block [C] below. Newer checkpoints (e.g.
+  // model7278_cuda.pt) return NaN rather than throwing on the same Box3D edge cases the old
+  // checkpoint crashed on (exact-zero density, near-luminal flux factor -- see
+  // runs/rhea_box3d_bug_report/), and `stability` alone does not flag these cells safely:
+  // it comes back a well-defined 0.0 ("unstable"), which would otherwise route them into
+  // the mixing branch below with NaN inputs.
+  Kokkos::View<int, DevMemSpace> nan_count_dev("rhea_nan_count");
+  Kokkos::deep_copy(nan_count_dev, 0);
+
   par_for(
       "radiation_m1_apply_rhea_mixing", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -535,12 +547,28 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         //     code-unit number density (file-level NOTE 2).
         // -------------------------------------------------------------------
         Real F4_cell[2][3][4];
+        bool finite = true;
         for (int mm = 0; mm < 2; ++mm) {
           for (int f = 0; f < 3; ++f) {
             for (int mu = 0; mu < 4; ++mu) {
-              F4_cell[mm][f][mu] = static_cast<Real>(rhea_f4_out(idx, mm, f, mu));
+              const Real val = static_cast<Real>(rhea_f4_out(idx, mm, f, mu));
+              F4_cell[mm][f][mu] = val;
+              finite = finite && Kokkos::isfinite(val);
             }
           }
+        }
+        finite = finite && Kokkos::isfinite(static_cast<Real>(rhea_growthrate(idx)))
+                         && Kokkos::isfinite(static_cast<Real>(rhea_stability(idx)));
+        if (!finite) {
+          // The model's prediction for this cell is unusable (NaN/Inf) -- most likely a
+          // Box3D edge case (see runs/rhea_box3d_bug_report/). Leave u0_ untouched, i.e.
+          // treat this cell as "no mixing" this stage, rather than letting a NaN propagate
+          // through RestrictToPhysical/ReconstructMixingMatrix/the BGK relaxation below:
+          // that relaxation writes u0_ = lambda*u0_ + (1-lambda)*N_mix even when lambda=1
+          // (the "stable" no-op case), and (1-1)*NaN = NaN in IEEE754, so the existing
+          // stability-threshold branch alone would not have caught this.
+          Kokkos::atomic_increment(&nan_count_dev());
+          return;
         }
         RestrictToPhysical(F4_cell);
 
@@ -642,6 +670,13 @@ TaskStatus RadiationM1::ApplyRheaMixing(
               + (1.0 - lambda_1) * Fz_mix[s];
         }
       });  // par_for
+
+  int nan_count_host = 0;
+  Kokkos::deep_copy(nan_count_host, nan_count_dev);
+  if (nan_count_host > 0 && global_variable::my_rank == 0) {
+    std::cout << "RadiationM1::ApplyRheaMixing: WARNING - Rhea prediction non-finite at "
+              << nan_count_host << " cell(s) this stage; mixing skipped there." << std::endl;
+  }
 
   return TaskStatus::complete;
 }
