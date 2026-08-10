@@ -69,6 +69,14 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
       coord_data.rexcise =
         (pin->DoesBlockExist("radiation")) ? 1.0+sqrt(1.0-SQR(coord_data.bh_spin)) : 1.0;
 
+      // Flux excision drops to first order inside the mask.  That is applied to the
+      // hydro fluxes and, by default, to the face EMFs as well.  Setting this false
+      // keeps the first-order hydro fluxes but leaves the EMFs to the ideal CT update,
+      // so the induction equation runs one scheme everywhere.  See the comment at the
+      // EMF writes in dyn_grmhd_fofc.cpp / mhd_fofc.cpp.
+      coord_data.excision_flux_emf =
+        pin->GetOrAddBoolean("coord","excision_flux_emf",true);
+
       coord_data.excision_scheme = ExcisionScheme::fixed;
       if (is_dynamical_relativistic) {
         std::string emethod = pin->GetOrAddString("coord","excision_scheme","fixed");

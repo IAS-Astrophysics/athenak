@@ -41,6 +41,7 @@ struct CoordData {
   Real pexcise;                    // pressure inside excised region
   Real texcise;                    // temperature inside excised region (for smooth exc.)
   Real flux_excise_r;              // reduce to first-order inside this radius
+  bool excision_flux_emf = true;   // let flux excision rewrite the face EMFs too
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
   bool smooth_excision = false;    // flag to specify smooth excision (fastflow)
