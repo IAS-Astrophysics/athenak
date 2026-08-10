@@ -66,6 +66,9 @@ CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
   Kokkos::realloc(interp_indcs,nx1,nx2,nx3,4);
   Kokkos::realloc(interp_wghts,nx1,nx2,nx3,2*ng,3);
 
+  // stamp of the mesh the indices below are computed against
+  StampMesh();
+
   // Call functions to prepare CartesianGrid object for interpolation
   // SetInterpolationCoordinates();
   SetInterpolationIndices();
@@ -92,6 +95,7 @@ void CartesianGrid::ResetCenter(Real center[3]) {
 
   SetInterpolationIndices();
   SetInterpolationWeights();
+  StampMesh();
 }
 
 void CartesianGrid::ResetCenterAndExtent(Real center[3], Real extent[3]) {
@@ -117,6 +121,43 @@ void CartesianGrid::ResetCenterAndExtent(Real center[3], Real extent[3]) {
 
   SetInterpolationIndices();
   SetInterpolationWeights();
+  StampMesh();
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CartesianGrid::StampMesh
+//! \brief record the mesh generation the current interpolation indices were built against
+
+void CartesianGrid::StampMesh() {
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  amr_nmb_created = (pmr == nullptr) ? 0 : pmr->nmb_created;
+  amr_nmb_deleted = (pmr == nullptr) ? 0 : pmr->nmb_deleted;
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CartesianGrid::UpdateInterpolationOnMeshChange
+//! \brief recompute interpolation indices and weights after the mesh has changed
+//
+// interp_indcs stores the *local* MeshBlock index of the owner of each point, so any
+// refinement, derefinement or load balance invalidates it: an index can point at a
+// MeshBlock that now covers a different region, or past the end of a shrunken pack.
+// nmb_created/nmb_deleted are cumulative counters that MeshRefinement only advances when
+// blocks were actually redistributed, so comparing against them makes this a no-op on
+// the (many) outputs where the mesh did not move.
+
+void CartesianGrid::UpdateInterpolationOnMeshChange() {
+  if (!pmy_pack->pmesh->adaptive) return;
+
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  if (pmr == nullptr) return;
+  if (pmr->nmb_created == amr_nmb_created && pmr->nmb_deleted == amr_nmb_deleted) return;
+
+  SetInterpolationIndices();
+  SetInterpolationWeights();
+  StampMesh();
+
+  return;
 }
 
 void CartesianGrid::SetInterpolationIndices() {
@@ -257,11 +298,8 @@ void CartesianGrid::SetInterpolationWeights() {
 //! \brief interpolate Cartesian data to cart_grid for output
 
 void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
-  // reinitialize interpolation indices and weights if AMR
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  // reinitialize interpolation indices and weights if the mesh has changed
+  UpdateInterpolationOnMeshChange();
 
   // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;

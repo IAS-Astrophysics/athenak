@@ -41,8 +41,12 @@ class CartesianGrid {
   void SetInterpolationIndices();      // set indexing for interpolation
   void SetInterpolationWeights();      // set weights for interpolation
   void ResetCenterAndExtent(Real center[3], Real extent[3]);
+  void UpdateInterpolationOnMeshChange();  // redo both if AMR moved the mesh
 
  private:
+  void StampMesh();         // record the mesh the current indices were built against
+  int amr_nmb_created;      // mesh stamp the interpolation indices were built against
+  int amr_nmb_deleted;
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   DualArray4D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
   DualArray5D<Real> interp_wghts;  // weights for interpolation
