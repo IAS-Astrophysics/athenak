@@ -506,8 +506,8 @@ void FastFlow::InitialGuess() {
 //!
 //!        The metric derivatives are taken analytically from the Lagrange interpolant of
 //!        the ADM metric rather than from a finite-differenced grid array. The latter can
-//!        only be evaluated on MeshBlock interiors, while the interpolation stencil 
-//!        of a surface point sitting close to a MeshBlock face reaches up to NGHOST 
+//!        only be evaluated on MeshBlock interiors, while the interpolation stencil
+//!        of a surface point sitting close to a MeshBlock face reaches up to NGHOST
 //!        cells into the ghost zones.
 template <int NGHOST>
 void FastFlow::MetricInterp() {
