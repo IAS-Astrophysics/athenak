@@ -36,6 +36,7 @@ namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
 namespace radiationm1 {class RadiationM1;}
+namespace gravity {class Gravity;}
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlockPack
@@ -76,6 +77,8 @@ class MeshBlockPack {
   radiationm1::RadiationM1 *pradm1=nullptr;
   std::vector<z4c::CCE *> pz4c_cce;
   particles::Particles *ppart=nullptr;
+  gravity::Gravity *pgrav=nullptr;
+
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)
   units::Units *punit=nullptr;

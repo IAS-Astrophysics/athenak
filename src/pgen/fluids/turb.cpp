@@ -15,7 +15,7 @@
 #include "eos/eos.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 
 // User-defined history functions

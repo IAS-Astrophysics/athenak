@@ -1017,7 +1017,13 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     RadiationM1DiffusionTest(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_m1_veljumptest") == 0) {
     RadiationM1VelocityJumpTest(pin, is_restart);
-  // else, name not set on command line or input file, print warning and quit
+  } else if (pgen_fun_name.compare("gravity") == 0) {
+    SelfGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("binary_gravity") == 0) {
+    BinaryGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("be_collapse") == 0) {
+    BECollapse(pin, is_restart);
+
   // pre-defined unit tests
   } else if (pgen_fun_name.compare("eos_compose") == 0) {
     EOSCompose(pin, is_restart);

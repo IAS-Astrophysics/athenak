@@ -21,6 +21,7 @@
 #include <iterator>
 
 class Driver;
+class Multigrid;
 
 // Maximum size of TL
 #define NUMBER_TASKID_BITS 64
@@ -197,6 +198,15 @@ class TaskList {
     auto size = task_list_.size();
     TaskID id(size+1);
     task_list_.push_back(Task(id, dep, func, name));
+    return id;
+  }
+
+  template <class F, class T1>
+  TaskID AddTask(F func, T1 *obj, TaskID &dep, int mg) {
+    auto size = task_list_.size();
+    TaskID id(size+1);
+    task_list_.push_back( Task(id, dep,
+       [=](Multigrid *d) mutable -> TaskStatus {return (obj->*func)(d);}) );
     return id;
   }
 

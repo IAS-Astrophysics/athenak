@@ -8,7 +8,6 @@
 //! variables. Functions are members of MeshBoundaryValuesCC or MeshBoundaryValuesFC
 //! classes.
 
-#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>    // std::setprecision()
@@ -134,8 +133,8 @@ bool CanProlongateFCFace(const int m, const int nnghbr, const int v,
 }
 
 KOKKOS_INLINE_FUNCTION
-void StoreProlongatedFCFace(const int writer, const int m, const int nnghbr,
-                            const int v, const int k, const int j, const int i,
+void StoreProlongatedFCFace(const int m, const int nnghbr, const int v,
+                            const int k, const int j, const int i,
                             const int ox1, const int ox2, const int ox3,
                             const int my_lev, const RegionIndcs &indcs,
                             const DualArray2D<NeighborBlock> &nghbr,
@@ -143,12 +142,6 @@ void StoreProlongatedFCFace(const int writer, const int m, const int nnghbr,
   if (CanProlongateFCFace(m, nnghbr, v, k, j, i, ox1, ox2, ox3,
                           my_lev, indcs, nghbr)) {
     bf(m,k,j,i) = value;
-#ifdef ATHENAK_DEBUG_FC_AMR_OWNERSHIP
-  } else {
-    Kokkos::printf("FC AMR ownership blocked writer=%d m=%d v=%d kji=(%d,%d,%d) "
-                   "ox=(%d,%d,%d) lev=%d\n",
-                   writer, m, v, k, j, i, ox1, ox2, ox3, my_lev);
-#endif
   }
 }
 
@@ -176,16 +169,16 @@ void ProlongFCSharedX1FaceOwned(const int m, const int nnghbr,
     dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
   }
 
-  StoreProlongatedFCFace(1, m, nnghbr, 0, fk, fj, fi, ox1, ox2, ox3,
+  StoreProlongatedFCFace(m, nnghbr, 0, fk, fj, fi, ox1, ox2, ox3,
                          my_lev, indcs, nghbr, cbx1f(m,k,j,i) - dvar2 - dvar3, bx1f);
   if (multi_d) {
-    StoreProlongatedFCFace(1, m, nnghbr, 0, fk, fj+1, fi, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk, fj+1, fi, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx1f(m,k,j,i) + dvar2 - dvar3, bx1f);
   }
   if (three_d) {
-    StoreProlongatedFCFace(1, m, nnghbr, 0, fk+1, fj, fi, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk+1, fj, fi, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx1f(m,k,j,i) - dvar2 + dvar3, bx1f);
-    StoreProlongatedFCFace(1, m, nnghbr, 0, fk+1, fj+1, fi, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk+1, fj+1, fi, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx1f(m,k,j,i) + dvar2 + dvar3, bx1f);
   }
 }
@@ -211,14 +204,14 @@ void ProlongFCSharedX2FaceOwned(const int m, const int nnghbr,
     dvar3 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
   }
 
-  StoreProlongatedFCFace(1, m, nnghbr, 1, fk, fj, fi, ox1, ox2, ox3,
+  StoreProlongatedFCFace(m, nnghbr, 1, fk, fj, fi, ox1, ox2, ox3,
                          my_lev, indcs, nghbr, cbx2f(m,k,j,i) - dvar1 - dvar3, bx2f);
-  StoreProlongatedFCFace(1, m, nnghbr, 1, fk, fj, fi+1, ox1, ox2, ox3,
+  StoreProlongatedFCFace(m, nnghbr, 1, fk, fj, fi+1, ox1, ox2, ox3,
                          my_lev, indcs, nghbr, cbx2f(m,k,j,i) + dvar1 - dvar3, bx2f);
   if (three_d) {
-    StoreProlongatedFCFace(1, m, nnghbr, 1, fk+1, fj, fi, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk+1, fj, fi, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx2f(m,k,j,i) - dvar1 + dvar3, bx2f);
-    StoreProlongatedFCFace(1, m, nnghbr, 1, fk+1, fj, fi+1, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk+1, fj, fi+1, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx2f(m,k,j,i) + dvar1 + dvar3, bx2f);
   }
 }
@@ -244,14 +237,14 @@ void ProlongFCSharedX3FaceOwned(const int m, const int nnghbr,
     dvar2 = 0.125*(SIGN(dl) + SIGN(dr))*fmin(fabs(dl), fabs(dr));
   }
 
-  StoreProlongatedFCFace(1, m, nnghbr, 2, fk, fj, fi, ox1, ox2, ox3,
+  StoreProlongatedFCFace(m, nnghbr, 2, fk, fj, fi, ox1, ox2, ox3,
                          my_lev, indcs, nghbr, cbx3f(m,k,j,i) - dvar1 - dvar2, bx3f);
-  StoreProlongatedFCFace(1, m, nnghbr, 2, fk, fj, fi+1, ox1, ox2, ox3,
+  StoreProlongatedFCFace(m, nnghbr, 2, fk, fj, fi+1, ox1, ox2, ox3,
                          my_lev, indcs, nghbr, cbx3f(m,k,j,i) + dvar1 - dvar2, bx3f);
   if (multi_d) {
-    StoreProlongatedFCFace(1, m, nnghbr, 2, fk, fj+1, fi, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 2, fk, fj+1, fi, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx3f(m,k,j,i) - dvar1 + dvar2, bx3f);
-    StoreProlongatedFCFace(1, m, nnghbr, 2, fk, fj+1, fi+1, ox1, ox2, ox3,
+    StoreProlongatedFCFace(m, nnghbr, 2, fk, fj+1, fi+1, ox1, ox2, ox3,
                            my_lev, indcs, nghbr, cbx3f(m,k,j,i) + dvar1 + dvar2, bx3f);
   }
 }
@@ -289,53 +282,53 @@ void ProlongFCInternalOwned(const int m, const int nnghbr, const int fk, const i
     Uxx *= 0.125;  Vyy *= 0.125;  Wzz *= 0.125;
     Uxyz *= 0.0625; Vxyz *= 0.0625; Wxyz *= 0.0625;
 
-    StoreProlongatedFCFace(2, m, nnghbr, 0, fk, fj, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk, fj, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2))
                            + Uxx - Vxyz - Wxyz, b.x1f);
-    StoreProlongatedFCFace(2, m, nnghbr, 0, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x1f(m,fk,fj+1,fi) + b.x1f(m,fk,fj+1,fi+2))
                            + Uxx - Vxyz + Wxyz, b.x1f);
-    StoreProlongatedFCFace(2, m, nnghbr, 0, fk+1, fj, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk+1, fj, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x1f(m,fk+1,fj,fi) + b.x1f(m,fk+1,fj,fi+2))
                            + Uxx + Vxyz - Wxyz, b.x1f);
-    StoreProlongatedFCFace(2, m, nnghbr, 0, fk+1, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk+1, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x1f(m,fk+1,fj+1,fi) + b.x1f(m,fk+1,fj+1,fi+2))
                            + Uxx + Vxyz + Wxyz, b.x1f);
 
-    StoreProlongatedFCFace(2, m, nnghbr, 1, fk, fj+1, fi, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk, fj+1, fi, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x2f(m,fk,fj,fi) + b.x2f(m,fk,fj+2,fi))
                            + Vyy - Uxyz - Wxyz, b.x2f);
-    StoreProlongatedFCFace(2, m, nnghbr, 1, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x2f(m,fk,fj,fi+1) + b.x2f(m,fk,fj+2,fi+1))
                            + Vyy - Uxyz + Wxyz, b.x2f);
-    StoreProlongatedFCFace(2, m, nnghbr, 1, fk+1, fj+1, fi, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk+1, fj+1, fi, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x2f(m,fk+1,fj,fi) + b.x2f(m,fk+1,fj+2,fi))
                            + Vyy + Uxyz - Wxyz, b.x2f);
-    StoreProlongatedFCFace(2, m, nnghbr, 1, fk+1, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk+1, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x2f(m,fk+1,fj,fi+1) + b.x2f(m,fk+1,fj+2,fi+1))
                            + Vyy + Uxyz + Wxyz, b.x2f);
 
-    StoreProlongatedFCFace(2, m, nnghbr, 2, fk+1, fj, fi, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 2, fk+1, fj, fi, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x3f(m,fk+2,fj,fi) + b.x3f(m,fk,fj,fi))
                            + Wzz - Uxyz - Vxyz, b.x3f);
-    StoreProlongatedFCFace(2, m, nnghbr, 2, fk+1, fj, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 2, fk+1, fj, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x3f(m,fk+2,fj,fi+1) + b.x3f(m,fk,fj,fi+1))
                            + Wzz - Uxyz + Vxyz, b.x3f);
-    StoreProlongatedFCFace(2, m, nnghbr, 2, fk+1, fj+1, fi, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 2, fk+1, fj+1, fi, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x3f(m,fk+2,fj+1,fi) + b.x3f(m,fk,fj+1,fi))
                            + Wzz + Uxyz - Vxyz, b.x3f);
-    StoreProlongatedFCFace(2, m, nnghbr, 2, fk+1, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 2, fk+1, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x3f(m,fk+2,fj+1,fi+1) + b.x3f(m,fk,fj+1,fi+1))
                            + Wzz + Uxyz + Vxyz, b.x3f);
@@ -344,19 +337,19 @@ void ProlongFCInternalOwned(const int m, const int nnghbr, const int fk, const i
                     - b.x2f(m,fk,fj+2,fi  ) + b.x2f(m,fk,fj,  fi  ));
     Real tmp2 = 0.25*(b.x1f(m,fk,fj,  fi  ) - b.x1f(m,fk,fj,  fi+2)
                     - b.x1f(m,fk,fj+1,fi  ) + b.x1f(m,fk,fj+1,fi+2));
-    StoreProlongatedFCFace(2, m, nnghbr, 0, fk, fj, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk, fj, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2)) + tmp1,
                            b.x1f);
-    StoreProlongatedFCFace(2, m, nnghbr, 0, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 0, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x1f(m,fk,fj+1,fi) + b.x1f(m,fk,fj+1,fi+2)) + tmp1,
                            b.x1f);
-    StoreProlongatedFCFace(2, m, nnghbr, 1, fk, fj+1, fi, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk, fj+1, fi, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x2f(m,fk,fj,fi) + b.x2f(m,fk,fj+2,fi)) + tmp2,
                            b.x2f);
-    StoreProlongatedFCFace(2, m, nnghbr, 1, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
+    StoreProlongatedFCFace(m, nnghbr, 1, fk, fj+1, fi+1, ox1, ox2, ox3, my_lev,
                            indcs, nghbr,
                            0.5*(b.x2f(m,fk,fj,fi+1) + b.x2f(m,fk,fj+2,fi+1)) + tmp2,
                            b.x2f);
@@ -774,7 +767,7 @@ void MeshBoundaryValuesFC::ProlongateFC(DvceFaceFld4D<Real> &b, DvceFaceFld4D<Re
 
         if (one_d) {
           // In 1D, interior face field is trivial
-          StoreProlongatedFCFace(2, m, nnghbr, 0, fk, fj, fi+1, ox1, ox2, ox3,
+          StoreProlongatedFCFace(m, nnghbr, 0, fk, fj, fi+1, ox1, ox2, ox3,
                                  my_lev, indcs, nghbr,
                                  0.5*(b.x1f(m,fk,fj,fi) + b.x1f(m,fk,fj,fi+2)),
                                  b.x1f);

@@ -84,6 +84,9 @@ class ProblemGenerator {
   void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
   template <class EOSPolicy, class ErrorPolicy>
   void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
+  void SelfGravity(ParameterInput *pin, const bool restart);
+  void BinaryGravity(ParameterInput *pin, const bool restart);
+  void BECollapse(ParameterInput *pin, const bool restart);
 
   // predefined problem generator functions for unit tests
   void EOSCompose(ParameterInput *pin, const bool restart);

@@ -158,19 +158,20 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
   // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
+
+    // Mark one mesh-topology update event (AMR and any resulting load balancing).
+    pmy_mesh->MarkMeshUpdated();
+
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
     if (pmbp->pmhd != nullptr) {
       RepairAMRFC(pmbp->pmhd->b0);
-      if (pmbp->pdyngr == nullptr) {
-        (void) pmbp->pmhd->ConToPrim(pdriver, 0);
-      } else {
-        if (pmbp->pz4c != nullptr) {
-          (void) pmbp->pz4c->ConvertZ4cToADM(pdriver, 0);
-        }
-        (void) pmbp->pdyngr->ConToPrim(pdriver, 0);
-      }
+      // Repair changes internal faces after the first exchange finalized exterior
+      // faces. Refresh neighboring ghost fields and their primitives before the next
+      // reconstruction consumes them. This also re-exchanges M1 moments, since
+      // InitBoundaryValuesAndPrimitives covers RadiationM1 as well.
+      pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
     }
     if (pmbp->phydro != nullptr) {
       (void) pmbp->phydro->NewTimeStep(pdriver, pdriver->nexp_stages);

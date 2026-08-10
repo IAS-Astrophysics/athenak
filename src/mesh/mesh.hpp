@@ -172,9 +172,15 @@ class Mesh {
   int NumberOfMeshBlockCells() const {
     return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
   }
+  // Monotonic counter of mesh-topology update events (AMR and any resulting load
+  // balancing). Used by the rank-packed boundary communication path to detect when
+  // its cached communication metadata must be rebuilt.
+  void MarkMeshUpdated() { ++amr_lb_seq_; }
+  int GetAMRLoadBalanceUpdateSeq() const { return amr_lb_seq_; }
 
  private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
+  int amr_lb_seq_ = 0;
 };
 #endif  // MESH_MESH_HPP_
