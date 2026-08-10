@@ -198,10 +198,14 @@ void CartesianGrid::SetInterpolationIndices() {
 
           // save MeshBlock and zone indicies for nearest
           // position to spherical patch center
-          // if this angle position resides in this MeshBlock
-          if ((x1 >= x1min && x1 <= x1max) &&
-              (x2 >= x2min && x2 <= x2max) &&
-              (x3 >= x3min && x3 <= x3max)) {
+          // if this grid position resides in this MeshBlock.
+          // The upper bounds are exclusive so that a point landing exactly on a
+          // MeshBlock face is owned by exactly one block, and the search stops at the
+          // first match: interpolated values are MPI_SUM-reduced over ranks, so a point
+          // claimed twice would be counted twice.
+          if ((x1 >= x1min && x1 < x1max) &&
+              (x2 >= x2min && x2 < x2max) &&
+              (x3 >= x3min && x3 < x3max)) {
               iindcs.h_view(nx,ny,nz,0) = m;
               iindcs.h_view(nx,ny,nz,1) =
                   static_cast<int>(std::floor((x1-(x1min+dx1/2.0))/dx1));
@@ -209,6 +213,7 @@ void CartesianGrid::SetInterpolationIndices() {
                   static_cast<int>(std::floor((x2-(x2min+dx2/2.0))/dx2));
               iindcs.h_view(nx,ny,nz,3) =
                   static_cast<int>(std::floor((x3-(x3min+dx3/2.0))/dx3));
+              break;
           }
         }
       }
