@@ -10,10 +10,10 @@
 
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 #include "athena.hpp"
-#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "units/units.hpp"
@@ -132,48 +132,13 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 #if ENABLE_NN_OPACITY
     nn_model_path = pin->GetString("bns_nurates", "nn_model_path");
     nn_stats_dir  = pin->GetOrAddString("bns_nurates", "nn_stats_dir", "checkpoints");
-    bool nn_use_cuda = pin->GetOrAddBoolean("bns_nurates", "nn_use_cuda", false);
+    const bool nn_use_cuda =
+        pin->GetOrAddBoolean("bns_nurates", "nn_use_cuda", true);
+    if (!nn_use_cuda) {
+      throw std::runtime_error(
+          "NN opacity requires nn_use_cuda=true; the CPU inference path is not supported");
+    }
     nn_emulator.Load(nn_model_path, nn_stats_dir, nn_use_cuda);
-    // Optional: evaluate the network in a fused Kokkos kernel (no LibTorch at run
-    // time).  Default false -> unchanged behaviour (batched InferPrebuilt path).
-    nn_fused_kernel =
-        pin->GetOrAddBoolean("bns_nurates", "nn_fused_kernel", false);
-    nn_fused_team =
-        pin->GetOrAddBoolean("bns_nurates", "nn_fused_team", false);
-    // Direct-cuBLAS forward (cuBLAS GEMMs, no LibTorch runtime).
-    nn_cublas = pin->GetOrAddBoolean("bns_nurates", "nn_cublas", false);
-    if (nn_fused_kernel || nn_fused_team || nn_cublas) {
-      nn_emulator.ExtractWeights();  // device-resident weights for all non-torch paths
-    }
-    if (nn_fused_kernel || nn_fused_team) {
-      std::cout << "NN opacity: fused Kokkos-kernel path enabled"
-                << (nn_fused_team ? " (team/shared-memory)" : " (per-thread)")
-                << std::endl;
-    }
-    if (nn_cublas) {
-      std::cout << "NN opacity: direct-cuBLAS path enabled "
-                   "(cuBLAS GEMMs + Kokkos pointwise, no LibTorch runtime)"
-                << std::endl;
-    }
-    // Optional fixed-batch padding for the torch forward (0 = dynamic).
-    nn_batch_size = pin->GetOrAddInteger("bns_nurates", "nn_batch_size", 0);
-    if (nn_batch_size > 0 &&
-        !(nn_fused_kernel || nn_fused_team || nn_cublas)) {
-      std::cout << "NN opacity: fixed forward batch size = " << nn_batch_size
-                << " cells (padded)" << std::endl;
-    } else if (nn_batch_size > 0 && global_variable::my_rank == 0) {
-      std::cout << "NN opacity: nn_batch_size is ignored by the selected "
-                   "non-Torch forward"
-                << std::endl;
-    }
-    // Optional CUDA-graph capture/replay of the Torch forward.  InferGraph uses a
-    // fixed internal chunk, so nn_batch_size is not required.
-    nn_cuda_graph = pin->GetOrAddBoolean("bns_nurates", "nn_cuda_graph", false);
-    if (nn_cuda_graph) {
-      std::cout << "NN opacity: CUDA-graph forward enabled "
-                   "(fixed 256k-row chunk captured once, replayed over N)"
-                << std::endl;
-    }
     // Optional low-overhead profiler.  It samples one opacity call per interval,
     // records CUDA events without synchronizing, and reports the completed sample
     // on a later call together with Torch allocator counters and cross-rank
@@ -182,12 +147,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "nn_profile", false);
     const int nn_profile_interval =
         pin->GetOrAddInteger("bns_nurates", "nn_profile_interval", 100);
-    const std::string nn_profile_mode = nn_cublas ? "cublas" :
-        (nn_fused_team ? "kokkos-team" :
-         (nn_fused_kernel ? "kokkos-thread" :
-          (nn_cuda_graph ? "cuda-graph" : "torch")));
-    nn_emulator.ConfigureProfiling(nn_profile, nn_profile_interval,
-                                   nn_profile_mode);
+    nn_emulator.ConfigureProfiling(nn_profile, nn_profile_interval);
 #endif  // ENABLE_NN_OPACITY
 
     nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 6);
