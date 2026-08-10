@@ -1,0 +1,197 @@
+# AthenaK input file for Celephais (FUKa) BHNS initial data
+# All coordinates and times are in geometric units (G = c = 1, M_sun = 1)
+
+<comment>
+problem   = Celephais BHNS initial data
+
+<job>
+basename  = bhns
+
+<mesh>
+nghost     = 4        # Number of ghost cells (4 recommended for Z4c + WENOZ)
+nx1        = 96      # Number of zones in X1-direction
+x1min      = -1024    # minimum value of X1 (~25 times the separation)
+x1max      =  1024    # maximum value of X1
+ix1_bc     = diode  # Inner-X1 boundary condition
+ox1_bc     = diode  # Outer-X1 boundary condition
+
+nx2        = 96      # Number of zones in X2-direction
+x2min      = -1024    # minimum value of X2
+x2max      =  1024    # maximum value of X2
+ix2_bc     = diode  # Inner-X2 boundary condition
+ox2_bc     = diode  # Outer-X2 boundary condition
+
+nx3        = 96      # Number of zones in X3-direction
+x3min      = -1024      # minimum value of X3
+x3max      =  1024    # maximum value of X3
+ix3_bc     = diode  # Inner-X3 boundary condition
+ox3_bc     = diode  # Outer-X3 boundary condition
+
+<meshblock>
+nx1        = 32       # Number of cells in each MeshBlock, X1-dir
+nx2        = 32       # Number of cells in each MeshBlock, X2-dir
+nx3        = 32       # Number of cells in each MeshBlock, X3-dir
+
+<mesh_refinement>
+refinement          = adaptive
+max_nmb_per_rank    = 300
+num_levels          = 7
+refinement_interval = 1
+
+<amr_criterion0>
+method = user
+
+<z4c_amr>
+method = tracker
+
+# Pre-refine two regions at t=0: one around the NS, one (smaller/finer)
+# around the BH excision region. Positions are estimated from the converged
+# config's mass-weighted barycenter condition:
+#   m_NS*(x_NS-axis) + m_BH*(x_BH-axis) = 0, x_BH - x_NS ~= distance
+# using converged_BHNS_ECC_RED.dd2.40.0.0.2.4.q0.714286.0.0.09.toml's
+# com=4.2110, distance=40, madm(NS)=1.4, mch(BH)=1
+#   => x_NS ~= -12.5, x_BH ~= 27.5
+# These are approximate pre-refinement hints only (tracker_mode=walk below
+# homes in on the true density peak / horizon dynamically) -- retune from the
+# pgen's own startup diagnostics (it prints rbh) if resolution looks off.
+<refined_region1>
+level = 6
+x1min = -22.5    # NS center (~-12.5) - NS_radius (~11.6, rout of ns1)
+x1max =  -2.5    # NS center (~-12.5) + NS_radius
+x2min = -14.0
+x2max =  14.0
+x3min = -14.0
+x3max =  14.0
+
+<refined_region2>
+level = 7
+x1min =  22.5    # BH center (~27.5) - margin (finer level: horizon is tiny)
+x1max =  32.5    # BH center (~27.5) + margin
+x2min =  -5.0
+x2max =   5.0
+x3min =  -5.0
+x3max =   5.0
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk3      # time integration algorithm
+cfl_number = 0.25     # CFL number
+nlim       = -1       # cycle limit (-1 = unlimited)
+tlim       = 5000     # time limit [M_sun]
+ndiag      = 1        # cycles between diagnostic output
+
+<coord>
+general_rel = true
+excise      = false
+m           = 0.0
+a           = 0.0
+
+<mhd>
+eos         = ideal          # placeholder (unused, required by parser)
+gamma       = 2.0            # placeholder (unused, required by parser)
+
+dyn_eos     = hybrid         # PrimitiveSolver EOSPolicy — must match Kadath EOS
+dyn_error   = reset_floor    # PrimitiveSolver ErrorPolicy
+reconstruct = wenoz          # spatial reconstruction method
+rsolver     = hlle           # Riemann solver
+enforce_maximum = false
+dmp_M       = 1.2
+nscalars    = 0
+dfloor      = 3.e-15         # density floor [geometric units]
+fofc        = true
+c2p_tol     = 2.49e-13
+gamma_max   = 20.025         # Lorentz factor ceiling
+use_NQT     = false
+
+# DD2 tabulated EOS -- must match the converged BHNS data's
+# eosfile=dd2.lorene / eostype=Cold_Table.
+table = /sakura/ptmp/tlam/PyCompOSE/examples/DD2/DD2_T0.1_beta_m931.athtab
+
+<adm>
+
+<z4c>
+# 1+log lapse
+lapse_oplog     = 2.0
+lapse_harmonicf = 1.0
+lapse_harmonic  = 0.0
+lapse_advect    = 1.0
+
+# Gamma-driver shift
+shift_eta       = 0.3   # ~2/M_ADM; tune for stability
+shift_advect    = 1.0
+
+# Kreiss-Oliger dissipation
+diss            = 0.5
+chi_div_floor   = 1e-05
+
+# Constraint damping (Z4c)
+damp_kappa1     = 0.02
+damp_kappa2     = 0.0
+
+# Gravitational wave extraction
+nrad_wave_extraction = 3
+extraction_radius_1  = 200
+extraction_radius_2  = 400
+extraction_radius_3  = 600
+waveform_dt          = 2.5
+
+# Compact-object tracker: one NS, one BH (AthenaK already supports mixed
+# NS/BH tracker types -- see src/z4c/compact_object_tracker.{hpp,cpp}).
+# co_0_x / co_1_x are the same rough estimates used for <refined_region1/2>
+# above.
+nco          = 2
+co_0_type    = NS
+co_0_x       = -12.5    # estimated NS position along x-axis [M_sun]
+co_0_radius  = 14.0
+co_1_type    = BH
+co_1_x       =  27.5    # estimated BH position along x-axis [M_sun]
+co_1_radius  = 5.0
+tracker_mode = walk
+
+<problem>
+# Path to the Celephais BHNS TOML config file (kadath_config<BIN_INFO>,
+# BCO1=NS, BCO2=BH). The .dat space file must be in the same directory with
+# the same base name.
+initial_data_file = /sakura/ptmp/tlam/Kadath_release/apps/BHNS/sbatch_outputs/converged_BHNS_ECC_RED.dd2.40.0.0.2.4.q0.714286.0.0.09.toml
+kadath_symmetry   = sym    # "sym" -> Space_bhns (BHNS app)
+                            # "nosym" -> Space_bhns_nosym (BHNS_nosym app)
+user_hist         = true
+table             = /sakura/ptmp/tlam/PyCompOSE/examples/DD2/DD2_T0.1_beta_m931.athtab
+
+# BH-excision extrapolation knobs -- usually leave at defaults (match
+# apps/BHNS/src/2sacra.cpp's own tuning; "8th order suggested by Tootle").
+# bh_interpolation_offset = 1e-6
+# bh_interp_order         = 8
+# bh_delta_r_rel          = 0.3
+
+<output1>
+file_type = hst      # History output (rho-max, alpha-min)
+dt        = 0.375
+
+<output2>
+file_type = bin      # Binary data dump
+variable  = mhd_w    # MHD primitive variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output3>
+file_type = bin
+variable  = mhd_u    # MHD conserved variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output4>
+file_type = bin
+variable  = z4c      # Z4c spacetime variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output5>
+file_type = bin
+variable  = adm      # ADM variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output6>
+file_type = rst      # Restart dump
+dt        = 375.0

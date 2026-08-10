@@ -1,0 +1,164 @@
+# AthenaK input file for Celephais (FUKa) single neutron star initial data
+# All coordinates and times are in geometric units (G = c = 1, M_sun = 1)
+
+<comment>
+problem   = Celephais NS initial data
+
+<job>
+basename  = ns
+
+<mesh>
+nghost     = 4        # Number of ghost cells (4 recommended for Z4c + WENOZ)
+nx1        = 96      # Number of zones in X1-direction
+x1min      = -150     # minimum value of X1 (no orbital dynamics -- much smaller than BNS)
+x1max      =  150     # maximum value of X1
+ix1_bc     = diode  # Inner-X1 boundary condition
+ox1_bc     = diode  # Outer-X1 boundary condition
+
+nx2        = 96      # Number of zones in X2-direction
+x2min      = -150     # minimum value of X2
+x2max      =  150     # maximum value of X2
+ix2_bc     = diode  # Inner-X2 boundary condition
+ox2_bc     = diode  # Outer-X2 boundary condition
+
+nx3        = 96      # Number of zones in X3-direction
+x3min      = -150      # minimum value of X3
+x3max      =  150     # maximum value of X3
+ix3_bc     = diode  # Inner-X3 boundary condition
+ox3_bc     = diode  # Outer-X3 boundary condition
+
+<meshblock>
+nx1        = 32       # Number of cells in each MeshBlock, X1-dir
+nx2        = 32       # Number of cells in each MeshBlock, X2-dir
+nx3        = 32       # Number of cells in each MeshBlock, X3-dir
+
+# KNOWN ISSUE: <mesh_refinement>/refinement=adaptive with <z4c_amr>/method=tracker
+# and a single tracked object (<z4c>/nco=1, the single-NS case) triggers a
+# reproducible, mesh-size-independent ~194 GB/rank memory blowup during the
+# very first mesh setup (before the problem generator itself even runs) --
+# confirmed via a bisection: identical field/EOS/pgen setup with
+# refinement=none uses ~1.7 GB/rank and runs cleanly. This looks like a
+# pre-existing AthenaK AMR/tracker bug specific to nco=1 (BNS/BHNS's nco=2
+# tracker configuration is unaffected -- that's the well-exercised path).
+# Not yet root-caused; defaulting to a uniform (non-adaptive) grid here until
+# it is. If you need adaptive refinement for a real NS run, investigate
+# src/z4c/z4c_amr.cpp's tracker-refinement logic for an nco=1 edge case first.
+<mesh_refinement>
+refinement          = none
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk3      # time integration algorithm
+cfl_number = 0.25     # CFL number
+nlim       = -1       # cycle limit (-1 = unlimited)
+tlim       = 5000     # time limit [M_sun]
+ndiag      = 1        # cycles between diagnostic output
+
+<coord>
+general_rel = true
+excise      = false
+m           = 0.0
+a           = 0.0
+
+<mhd>
+eos         = ideal          # placeholder (unused, required by parser)
+gamma       = 2.0            # placeholder (unused, required by parser)
+
+dyn_eos     = piecewise_poly # PrimitiveSolver EOSPolicy — must match Kadath EOS
+dyn_error   = reset_floor    # PrimitiveSolver ErrorPolicy
+reconstruct = wenoz          # spatial reconstruction method
+rsolver     = llf            # Riemann solver
+dfloor      = 1.28e-21       # density floor [geometric units]
+tfloor      = 1.58255e-19    # temperature floor
+dthreshold  = 1.0
+dyn_scratch = 0
+fofc        = false
+c2p_tol     = 2.49e-13
+gamma_max   = 20.025         # Lorentz factor ceiling
+
+# Piecewise-polytrope EOS parameters (SLy4 -- same EOS as the res=11 test
+# data generated via apps/NS/sandbox/initial.toml, eosfile=sly4.polytrope).
+# These MUST match the EOS used to build the Kadath initial data.
+pwp_poly_rmd         = 6.172164329750898e+18
+pwp_density_pieces_0 = 0.000000000000000e+00
+pwp_density_pieces_1 = 1.136499842827129e+17
+pwp_density_pieces_2 = 5.011872336272714e+17
+pwp_density_pieces_3 = 9.999999999999999e+17
+pwp_gamma_pieces_0   = 2.000000000000000e+00
+pwp_gamma_pieces_1   = 2.000000000000000e+00
+pwp_gamma_pieces_2   = 2.000000000000000e+00
+pwp_gamma_pieces_3   = 2.000000000000000e+00
+pwp_gamma_thermal    = 1.7
+
+<adm>
+
+<z4c>
+# 1+log lapse
+lapse_oplog     = 2.0
+lapse_harmonicf = 1.0
+lapse_harmonic  = 0.0
+lapse_advect    = 1.0
+
+# Gamma-driver shift
+shift_eta       = 0.3   # ~2/M_ADM; tune for stability
+shift_advect    = 1.0
+
+# Kreiss-Oliger dissipation
+diss            = 0.5
+chi_div_floor   = 1e-05
+
+# Constraint damping (Z4c)
+damp_kappa1     = 0.02
+damp_kappa2     = 0.0
+
+# No gravitational-wave extraction: an isolated, non-orbiting equilibrium
+# star does not radiate, unlike BNS/BHNS (nrad_wave_extraction intentionally
+# omitted here).
+
+# Neutron star tracker: a single star at the coordinate origin (no COM
+# offset, unlike the binary case).
+nco         = 1
+co_0_type   = NS
+co_0_x      = 0.0      # single star sits at the coordinate origin
+co_0_radius = 16.0      # tracker search radius [M_sun] -- covers the star
+tracker_mode = walk
+
+<problem>
+# Path to the Celephais NS TOML config file (kadath_config<BCO_NS_INFO>).
+# The .dat space file must be in the same directory with the same base name.
+initial_data_file = path_to_id/ns_solution.toml
+kadath_symmetry   = sym    # "sym" -> Space_spheric_adapted (NS app)
+                            # "nosym" -> Space_spheric_adapted_nosym (NS_nosym app)
+user_hist         = true
+
+<output1>
+file_type = hst      # History output (rho-max, alpha-min)
+dt        = 0.375
+
+<output2>
+file_type = bin      # Binary data dump
+variable  = mhd_w    # MHD primitive variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output3>
+file_type = bin
+variable  = mhd_u    # MHD conserved variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output4>
+file_type = bin
+variable  = z4c      # Z4c spacetime variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output5>
+file_type = bin
+variable  = adm      # ADM variables
+dt        = 1.5
+slice_x3  = 0.0
+
+<output6>
+file_type = rst      # Restart dump
+dt        = 375.0
