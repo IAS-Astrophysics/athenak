@@ -11,6 +11,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
 #include "cartesian_ks.hpp"
@@ -106,6 +107,54 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
         coord_data.smooth_excision = pin->GetOrAddBoolean("coord","smooth_excision",
                                                               false);
         coord_data.tdamp = pin->GetOrAddReal("coord","tdamp",1.0);
+
+        // Frozen excision region: snapshot each horizon's center and radius the first
+        // time excision becomes active.  Freezing the radius stops the region wobbling
+        // and shrinking with rr_min.  Freezing the center too pins the region in space,
+        // so puncture drift walks it off the horizon -- hence tracking it by default.
+        coord_data.freeze_excision = pin->GetOrAddBoolean("coord","freeze_excision",
+                                                              false);
+        coord_data.freeze_excision_radius =
+            pin->GetOrAddBoolean("coord","freeze_excision_radius",true);
+        coord_data.freeze_excision_center =
+            pin->GetOrAddBoolean("coord","freeze_excision_center",false);
+        if (coord_data.freeze_excision) {
+          if (!coord_data.freeze_excision_radius &&
+              !coord_data.freeze_excision_center) {
+            std::cout << "### WARNING in " << __FILE__ << " at line "
+                      << __LINE__ << std::endl
+                      << "freeze_excision=true but both freeze_excision_radius and"
+                      << " freeze_excision_center are false: nothing is frozen."
+                      << std::endl;
+          }
+          if (coord_data.excision_scheme == ExcisionScheme::lapse) {
+            // A lapse-derived mask is not reducible to a few numbers, so it cannot be
+            // restored when Coordinates is rebuilt on remesh.
+            std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                      << __LINE__ << std::endl
+                      << "freeze_excision is not supported with excision_scheme=lapse"
+                      << std::endl;
+            std::exit(EXIT_FAILURE);
+          }
+          // Freezing only makes sense once the horizon has stopped growing.  Without
+          // excise_auto it is excise-ready immediately, so the region would latch at the
+          // first find, while the horizon is still at its smallest.
+          if (coord_data.excision_scheme == ExcisionScheme::horizon &&
+              !(pin->GetOrAddBoolean("fastflow","excise_auto",false))) {
+            std::cout << "### WARNING in " << __FILE__ << " at line "
+                      << __LINE__ << std::endl
+                      << "freeze_excision with excise_auto=false will latch the excision"
+                      << " region at the first horizon find, while the black hole is"
+                      << " still forming.  Set fastflow/excise_auto=true." << std::endl;
+          }
+          if (global_variable::my_rank == 0) {
+            std::cout << "### Excision region freezing enabled: radius="
+                      << (coord_data.freeze_excision_radius ? "frozen" : "tracked")
+                      << ", center="
+                      << (coord_data.freeze_excision_center ? "frozen" : "tracked")
+                      << std::endl;
+          }
+        }
       }
 
       // boolean masks allocation

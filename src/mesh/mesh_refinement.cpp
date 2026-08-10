@@ -680,6 +680,17 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
 
+  // The new masks are allocated but empty, and Z4c::UpdateExcisionMasks only runs at the
+  // last stage of a cycle, so excision would be off until the end of the next cycle.
+  // Horizon masks depend only on the center/radius held by FastFlow, which survives the
+  // remesh, so they can be rebuilt now.  Lapse masks are not: they read ADM data that is
+  // not yet guaranteed to be valid here.
+  if (pm->pmb_pack->pcoord->coord_data.bh_excise &&
+      pm->pmb_pack->pcoord->coord_data.excision_scheme == ExcisionScheme::horizon &&
+      pm->pmb_pack->pz4c != nullptr) {
+    pm->pmb_pack->pcoord->UpdateExcisionMasks();
+  }
+
   Kokkos::realloc(fc_amr_repair, new_nmb_total);
   for (int m=0; m<new_nmb_total; ++m) {
     fc_amr_repair.h_view(m) = (refine_flag.h_view(newtoold[m]) != 0) ? 1 : 0;
