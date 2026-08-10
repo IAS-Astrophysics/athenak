@@ -118,6 +118,13 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   excise_auto = pin->GetOrAddBoolean("fastflow", "excise_auto", false);
   if (!excise_auto) { ah_excise_ready = true; }
 
+  // Frozen excision region: latch and snapshot, both persisted across restarts.
+  ah_frozen = pin->GetOrAddBoolean("fastflow", "ah_frozen_" + n_str, false);
+  frozen_center[0] = pin->GetOrAddReal("fastflow", "frozen_center_x_" + n_str, 0.0);
+  frozen_center[1] = pin->GetOrAddReal("fastflow", "frozen_center_y_" + n_str, 0.0);
+  frozen_center[2] = pin->GetOrAddReal("fastflow", "frozen_center_z_" + n_str, 0.0);
+  frozen_radius = pin->GetOrAddReal("fastflow", "frozen_radius_" + n_str, -1.0);
+
   // Center
   center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
   center[1] = pin->GetOrAddReal("fastflow", "center_y_" + n_str, 0.0);
@@ -475,6 +482,36 @@ void FastFlow::Find(int iter, Real time) {
                         ah_excise_ready);
       }
     }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FastFlow::FreezeExcisionRegion(Real time)
+//! \brief Latch the excision region at the current horizon center and minimum radius.
+//! Called from Coordinates::UpdateExcisionMasks when coord/freeze_excision is set.  The
+//! snapshot is persisted into restarts and never re-taken.  All quantities used are
+//! identical across MPI ranks, so every rank latches the same values in the same cycle.
+void FastFlow::FreezeExcisionRegion(Real latch_time) {
+  if (ah_frozen) return;
+
+  frozen_center[0] = center[0];
+  frozen_center[1] = center[1];
+  frozen_center[2] = center[2];
+  frozen_radius = rr_min;
+  ah_frozen = true;
+
+  std::string n_str = std::to_string(nh);
+  pin->SetBoolean("fastflow", "ah_frozen_" + n_str, ah_frozen);
+  pin->SetReal("fastflow", "frozen_center_x_" + n_str, frozen_center[0]);
+  pin->SetReal("fastflow", "frozen_center_y_" + n_str, frozen_center[1]);
+  pin->SetReal("fastflow", "frozen_center_z_" + n_str, frozen_center[2]);
+  pin->SetReal("fastflow", "frozen_radius_" + n_str, frozen_radius);
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "### Excision region frozen for horizon " << nh
+              << " at time = " << latch_time
+              << ": center = (" << frozen_center[0] << ", " << frozen_center[1] << ", "
+              << frozen_center[2] << "), radius = " << frozen_radius << std::endl;
   }
 }
 

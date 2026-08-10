@@ -47,6 +47,9 @@ struct CoordData {
   bool smooth_excision = false;    // flag to specify smooth excision (fastflow)
   Real horizon_factor;             // factor to muliply the horizon factor by (fastflow)
   Real tdamp;                      // damping time (needed for smooth excision)
+  bool freeze_excision = false;    // fix excision region when first activated (fastflow)
+  bool freeze_excision_radius = true;   // freeze the size of the region (freeze_excision)
+  bool freeze_excision_center = false;  // pin it in space instead of tracking the BH
 };
 
 //----------------------------------------------------------------------------------------
