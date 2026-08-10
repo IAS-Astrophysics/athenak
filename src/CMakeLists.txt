@@ -241,6 +241,18 @@ if (ENABLE_NN_OPACITY)
             radiation_m1/radiation_m1_nn_emulator.cpp
             radiation_m1/radiation_m1_calc_opacities_nn.cpp
     )
+    # radiation_m1_nn_emulator.cpp is the ONLY LibTorch translation unit and has no
+    # device code (its CUDA stream is injected via SetStream(), so it needs no
+    # Kokkos headers).  Compiling torch's enormous templated headers through nvcc is
+    # ~10x slower than the host compiler and makes this file dominate the build.
+    # When building with Kokkos+CUDA (compiler chain is nvcc_wrapper), hand just this
+    # file to the host C++ compiler via nvcc_wrapper's --host-only, which also drops
+    # the nvcc-only flags (-arch, -extended-lambda, ...) for this TU.
+    if (Kokkos_ENABLE_CUDA)
+        set_source_files_properties(
+            radiation_m1/radiation_m1_nn_emulator.cpp
+            PROPERTIES COMPILE_OPTIONS "--host-only")
+    endif()
 endif()
 
 # custom problem generator to be included in compile

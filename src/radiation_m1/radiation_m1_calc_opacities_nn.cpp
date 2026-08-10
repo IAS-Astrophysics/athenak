@@ -18,12 +18,9 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
 #include "radiation_m1/radiation_m1.hpp"
-#include "radiation_m1/radiation_m1_nn_forward.hpp"  // fused-kernel forward (optional)
 #include "radiation_m1/radiation_m1_nurates.hpp"
 
 #include <vector>
-#include <ATen/cuda/CUDAContext.h>   // at::cuda::getCurrentCUDAStream
-#include <c10/cuda/CUDAStream.h>
 
 namespace radiationm1 {
 
@@ -132,32 +129,25 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   // Grow-only persistent scratch: (re)allocate only when the local cell count
   // exceeds the current capacity, then reuse across steps.  This removes the
   // per-step cudaMalloc/cudaFree calls that can serialize the device.  Active
-  // rows are fully written before use; padded rows are independent and ignored,
-  // so no per-step zero-initialisation is needed.
-  // Optional fixed batch for runs whose local cell count changes.  Do not use it
-  // for strong-scaling measurements: padding deliberately imposes a constant-work
-  // floor.  Only the forward is padded; gather/readout use N_total, and padded
-  // output rows [N_total, nn_infer_N) are ignored.
-  const bool nn_uses_torch_forward =
-      !(nn_cublas || nn_fused_team || nn_fused_kernel);
-  const int nn_infer_N =
-      (nn_uses_torch_forward && nn_batch_size > 0 &&
-       N_total <= nn_batch_size) ? nn_batch_size : N_total;
+  // rows are fully written before use, so no per-step zero-initialisation is needed.
+  // Dynamic batch: the forward runs on all N_total local cells (no padding).
+  // Inject the Kokkos CUDA stream so the LibTorch forward and the profiler events
+  // run on it (the emulator TU is kept free of Kokkos headers for build speed).
+  nn_emulator.SetStream(static_cast<void *>(Kokkos::Cuda().cuda_stream()));
   nn_emulator.ProfilePollAndReport();
-  const bool nn_scratch_will_grow = nn_infer_N > nn_scratch_capacity_;
-  const size_t nn_scratch_bytes = static_cast<size_t>(nn_infer_N) *
+  const bool nn_scratch_will_grow = N_total > nn_scratch_capacity_;
+  const size_t nn_scratch_bytes = static_cast<size_t>(N_total) *
       (static_cast<size_t>(NN_NEOS + NN_NIN + NN_NOUT) * sizeof(float) +
        sizeof(bool) + static_cast<size_t>(8 + 16) * sizeof(Real));
-  nn_emulator.ProfileBegin(N_total, nn_infer_N, nn_scratch_will_grow,
-                           nn_scratch_bytes);
-  if (nn_infer_N > nn_scratch_capacity_) {
-    Kokkos::realloc(nn_eos_dev_,    nn_infer_N, NN_NEOS);
-    Kokkos::realloc(nn_x_full_dev_, nn_infer_N, NN_NIN);
-    Kokkos::realloc(nn_valid_view_, nn_infer_N);
-    Kokkos::realloc(nn_view_,       static_cast<size_t>(nn_infer_N) * NN_NOUT);
-    Kokkos::realloc(nn_m1_moments_, nn_infer_N, 8);
-    Kokkos::realloc(nn_non_th_buf_, nn_infer_N, 16);
-    nn_scratch_capacity_ = nn_infer_N;
+  nn_emulator.ProfileBegin(N_total, nn_scratch_will_grow, nn_scratch_bytes);
+  if (N_total > nn_scratch_capacity_) {
+    Kokkos::realloc(nn_eos_dev_,    N_total, NN_NEOS);
+    Kokkos::realloc(nn_x_full_dev_, N_total, NN_NIN);
+    Kokkos::realloc(nn_valid_view_, N_total);
+    Kokkos::realloc(nn_view_,       static_cast<size_t>(N_total) * NN_NOUT);
+    Kokkos::realloc(nn_m1_moments_, N_total, 8);
+    Kokkos::realloc(nn_non_th_buf_, N_total, 16);
+    nn_scratch_capacity_ = N_total;
   }
   // Local handle-copies (share the persistent storage; NOT captured via `this`).
   auto eos_dev    = nn_eos_dev_;
@@ -234,85 +224,10 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   auto nn_view = nn_view_;   // persistent (grow-only) buffer, N_total × 32 in use
 
   Kokkos::Profiling::pushRegion("NN::InferPrebuilt");
-  if (nn_cublas) {
-    // ── Direct-cuBLAS forward (cuBLAS-speed GEMMs, no LibTorch runtime) ─────────
-    // cublasSgemm (TF32) for the matmuls + tiny Kokkos kernels for the pointwise
-    // ops, all on the Kokkos stream.  This removes LibTorch dispatch/allocation
-    // from the steady-state forward while retaining GEMM throughput.  Dynamic
-    // N_total — no padding.
-    nn_emulator.InferCublas(x_full_dev.data(), nn_view.data(), N_total);
-  } else if (nn_fused_team) {
-    // ── Team / shared-memory fused Kokkos MLP (pure Kokkos) ───────────────────
-    // One thread-block per cell; the H-length activations live in team scratch
-    // (shared memory) and the hidden units are parallelised across the team.  No
-    // LibTorch, so this path is useful for separating framework overhead from
-    // the efficiency of the MLP implementation itself.
-    const NNWeights nnw = nn_emulator.GetWeights();
-    auto x_in_ = x_full_dev;
-    auto nn_out_ = nn_view;
-    using ScrView = Kokkos::View<float *, DevExeSpace::scratch_memory_space,
-                                 Kokkos::MemoryTraits<Kokkos::Unmanaged>>;
-    const int H = NN_FWD_HIDDEN;
-    const size_t scr_bytes = 3 * ScrView::shmem_size(H);
-    Kokkos::TeamPolicy<DevExeSpace> policy(N_total, Kokkos::AUTO);
-    policy.set_scratch_size(0, Kokkos::PerTeam(scr_bytes));
-    Kokkos::parallel_for(
-        "radiation_m1_nn_fused_team", policy,
-        KOKKOS_LAMBDA(const Kokkos::TeamPolicy<DevExeSpace>::member_type &team) {
-          const int f = team.league_rank();
-          ScrView z(team.team_scratch(0), H);
-          ScrView a(team.team_scratch(0), H);
-          ScrView h(team.team_scratch(0), H);
-          float xin[NN_NIN];
-          for (int c = 0; c < NN_NIN; ++c) xin[c] = x_in_(f, c);
-          nn_forward_team(team, nnw, xin, z.data(), a.data(), h.data(),
-                          nn_out_.data() + static_cast<size_t>(f) * NN_NOUT);
-        });
-  } else if (nn_fused_kernel) {
-    // ── Optional fused Kokkos MLP path ─────────────────────────────────────────
-    // Evaluate the network in a single Kokkos kernel with device-resident weights
-    // (no LibTorch, no second allocator, no second CUDA stream, no per-step
-    // cudaMalloc).  Runs on the Kokkos execution space, so the readout below sees
-    // the results with NO extra synchronisation (no CUDA event needed).  Produces
-    // the SAME 32 normalised outputs as InferPrebuilt — denormalisation still
-    // happens in the readout kernel, so everything downstream is unchanged.
-    const NNWeights nnw = nn_emulator.GetWeights();
-    auto x_in_ = x_full_dev;
-    auto nn_out_ = nn_view;
-    par_for("radiation_m1_nn_fused_forward", DevExeSpace(), 0, N_total - 1,
-            KOKKOS_LAMBDA(const int f) {
-              float xin[NN_NIN];
-              for (int c = 0; c < NN_NIN; ++c) xin[c] = x_in_(f, c);
-              float o32[NN_NOUT];
-              nn_forward(nnw, xin, o32);
-              for (int p = 0; p < NN_NOUT; ++p) {
-                nn_out_(f * NN_NOUT + p) = o32[p];
-              }
-            });
-  } else {
-    // Fixed-shape forward (nn_infer_N) when nn_batch_size>0, else dynamic N_total.
-    if (nn_cuda_graph) {
-      // Captured-graph replay: cuBLAS speed with no per-step cudaMalloc/sync.
-      nn_emulator.InferGraph(x_full_dev.data(), nn_view.data(), nn_infer_N);
-    } else {
-      nn_emulator.InferPrebuilt(x_full_dev.data(), nn_view.data(), nn_infer_N);
-    }
-
-    // SCALING FIX: cross-stream event handshake removed.  InferPrebuilt now runs
-    // the forward on the Kokkos stream, so the readout kernel below is already
-    // ordered after it on the same stream.  The old handshake (kept for
-    // reference) supplied the required dependency when two streams were used:
-    // {
-    //   cudaEvent_t ev;
-    //   cudaEventCreateWithFlags(&ev, cudaEventDisableTiming);
-    //   cudaStream_t lt_stream =
-    //       at::cuda::getCurrentCUDAStream(nn_emulator.DeviceIndex()).stream();
-    //   cudaEventRecord(ev, lt_stream);
-    //   cudaStream_t kokkos_stream = Kokkos::Cuda().cuda_stream();
-    //   cudaStreamWaitEvent(kokkos_stream, ev, 0);
-    //   cudaEventDestroy(ev);
-    // }
-  }
+  // GPU-resident LibTorch forward on the Kokkos CUDA stream (dynamic N_total,
+  // zero-copy input).  Runs in-line with the gather (before) and readout (after)
+  // on the shared stream, so no cross-stream fence/event handshake is needed.
+  nn_emulator.InferPrebuilt(x_full_dev.data(), nn_view.data(), N_total);
   nn_emulator.ProfileMark(NNProfilePoint::forward);
   Kokkos::Profiling::popRegion();
 
