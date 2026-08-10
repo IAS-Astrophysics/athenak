@@ -76,6 +76,27 @@ void Hydro::AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> 
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&Hydro::ClearRecv, this, id.csend);
 
+  if (has_any_sts_diffusion) {
+    tl["before_parabolic_stagen"]->AddTask(&Hydro::InitRecvParabolic, this, none);
+
+    TaskID pclearf = tl["parabolic_stagen"]->AddTask(&Hydro::ClearSTSFlux, this, none);
+    TaskID pflux = tl["parabolic_stagen"]->AddTask(&Hydro::STSFluxes, this, pclearf);
+    TaskID psendf = tl["parabolic_stagen"]->AddTask(&Hydro::SendFlux, this, pflux);
+    TaskID precvf = tl["parabolic_stagen"]->AddTask(&Hydro::RecvFlux, this, psendf);
+    TaskID pupdt = tl["parabolic_stagen"]->AddTask(&Hydro::STSUpdate, this, precvf);
+    TaskID prestu = tl["parabolic_stagen"]->AddTask(&Hydro::RestrictU, this, pupdt);
+    TaskID psendu = tl["parabolic_stagen"]->AddTask(&Hydro::SendU, this, prestu);
+    TaskID precvu = tl["parabolic_stagen"]->AddTask(&Hydro::RecvU, this, psendu);
+    TaskID pprol = tl["parabolic_stagen"]->AddTask(&Hydro::Prolongate, this, precvu);
+    TaskID pbcs =
+        tl["parabolic_stagen"]->AddTask(&Hydro::ApplyPhysicalBCs, this, pprol);
+    TaskID pc2p = tl["parabolic_stagen"]->AddTask(&Hydro::ConToPrim, this, pbcs);
+    (void) tl["parabolic_stagen"]->AddTask(&Hydro::STSRefreshTimeStep, this, pc2p);
+
+    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&Hydro::ClearSend, this, none);
+    (void) tl["after_parabolic_stagen"]->AddTask(&Hydro::ClearRecv, this, pcsend);
+  }
+
   return;
 }
 
@@ -119,6 +140,21 @@ TaskStatus Hydro::InitRecv(Driver *pdrive, int stage) {
     }
   }
 
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Hydro::InitRecvParabolic
+//! \brief Post receive operations required for one STS parabolic stage.
+
+TaskStatus Hydro::InitRecvParabolic(Driver *pdrive, int stage) {
+  (void) pdrive;
+  (void) stage;
+  TaskStatus tstat = pbval_u->InitRecv(nhydro+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+  if (pmy_pack->pmesh->multilevel) {
+    tstat = pbval_u->InitFluxRecv(nhydro+nscalars);
+  }
   return tstat;
 }
 
@@ -180,13 +216,8 @@ TaskStatus Hydro::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<Hydro_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add diffusion fluxes
-  if (pcond != nullptr) {
-    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
-  }
-  if (pvisc != nullptr) {
-    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
-  }
+  // Terms selected for STS are advanced only in the parabolic half-sweeps.
+  AddSelectedDiffusionFluxes(parabolic::DiffusionSelection::explicit_only);
 
   // call FOFC if necessary
   if (use_fofc) {
