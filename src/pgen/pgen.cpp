@@ -1025,6 +1025,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
   // pre-defined unit tests
   } else if (pgen_fun_name.compare("eos_compose") == 0) {
     EOSCompose(pin, is_restart);
+  } else if (pgen_fun_name.compare("eos_transition") == 0) {
+    EOSTransition(pin, is_restart);
   } else if (pgen_fun_name.compare("gauss_legendre") == 0) {
     GaussLegendre(pin, is_restart);
   } else {

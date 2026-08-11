@@ -16,8 +16,10 @@
 
 enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr};   // Riemann solvers for dynamical GR
 enum class DynGRMHD_EOS {eos_ideal, eos_piecewise_poly,
-                      eos_compose, eos_hybrid};        // EOS policies for dynamical GR
-enum class DynGRMHD_Error {reset_floor};               // Error policies for dynamical GR
+                      eos_compose, eos_hybrid,
+                      eos_transition};                 // EOS policies for dynamical GR
+enum class DynGRMHD_Error {reset_floor,
+                      reset_floor_transition};         // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------
 //! \struct DynGRMHDTaskIDs
@@ -102,6 +104,10 @@ class DynGRMHD {
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
 
+  // Rescale the mass-fraction species in u0 so that they sum to u0(IDN) exactly.
+  void EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu, int jl, int ju,
+                         int kl, int ku);
+
   // DynGRMHD policies
   DynGRMHD_RSolver rsolver_method;
   DynGRMHD_RSolver fofc_method;
@@ -110,6 +116,13 @@ class DynGRMHD {
 
   // Storage for temperature
   DvceArray5D<Real> temperature;
+
+  // Species that the EOS policy constrains by sum(X) = 1, as indices into the scalar
+  // block (add nmhd to index u0/w0), plus the index of the charge fraction (-1 if the
+  // policy has none).
+  int imfrac = 0;
+  int nmfrac = 0;
+  int iyefrac = -1;
 
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
@@ -124,7 +137,12 @@ template<class EOSPolicy, class ErrorPolicy>
 class DynGRMHDPS : public DynGRMHD {
  public:
   DynGRMHDPS(MeshBlockPack *ppack, ParameterInput *pin) :
-      DynGRMHD(ppack, pin), eos("mhd", ppack, pin) {}
+      DynGRMHD(ppack, pin), eos("mhd", ppack, pin) {
+    // Copy the sum(X) = 1 species layout out of the EOS policy for non-templated use.
+    nmfrac = eos.ps.GetEOS().GetNMassFractions();
+    imfrac = eos.ps.GetEOS().GetMassFractionIndex();
+    iyefrac = eos.ps.GetEOS().GetYeFractionIndex();
+  }
   virtual ~DynGRMHDPS() {}
 
   // Dynamical EOS

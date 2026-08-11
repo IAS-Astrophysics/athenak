@@ -25,6 +25,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "rhine/rhine.hpp"
 #include "gravity/gravity.hpp"
 #include "utils/utils.hpp"
 #include "z4c/z4c.hpp"
@@ -487,6 +488,12 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
       (void) pmesh->pmb_pack->pradm1->NewTimeStep(this, nexp_stages);
     }
     pmesh->NewTimeStep(tlim);
+
+    // NSE composition resync + RHINE diagnostics for the t = 0 output; needs dt.
+    if (pmesh->pmb_pack->prhine != nullptr) {
+      (void) pmesh->pmb_pack->prhine->PostStep(this, nexp_stages);
+    }
+
     RefreshSTSCycleState(pmesh);
   }
 

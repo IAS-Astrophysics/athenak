@@ -29,6 +29,7 @@
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
+#include "rhine/rhine.hpp"
 
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
@@ -72,6 +73,16 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
                                 ErrorPolicy>(ppack, pin);
       }
       break;
+    case DynGRMHD_EOS::eos_transition:
+      use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
+      if (use_NQT) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                                ErrorPolicy>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                                ErrorPolicy>(ppack, pin);
+      }
+      break;
   }
   return dyn_gr;
 }
@@ -90,6 +101,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGRMHD_EOS::eos_compose;
   } else if (eos_string.compare("hybrid") == 0) {
     eos_policy = DynGRMHD_EOS::eos_hybrid;
+  } else if (eos_string.compare("transition") == 0) {
+    eos_policy = DynGRMHD_EOS::eos_transition;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_eos = '" << eos_string
@@ -98,6 +111,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   }
   if (error_string.compare("reset_floor") == 0) {
     error_policy = DynGRMHD_Error::reset_floor;
+  } else if (error_string.compare("reset_floor_transition") == 0) {
+    error_policy = DynGRMHD_Error::reset_floor_transition;
   } else {
     std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
               << std::endl << "<mhd> dyn_error = '" << error_string
@@ -110,6 +125,23 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
   switch (error_policy) {
     case DynGRMHD_Error::reset_floor:
       dyn_gr = SelectDynGRMHDEOS<Primitive::ResetFloor>(ppack, pin, eos_policy);
+      break;
+    case DynGRMHD_Error::reset_floor_transition:
+      // The transition error policy is only meaningful with the transition EOS,
+      // so instantiate that combination directly instead of the full matrix.
+      if (eos_policy != DynGRMHD_EOS::eos_transition) {
+        std::cout << "### FATAL ERROR in " <<__FILE__ << " at line " << __LINE__
+                  << std::endl << "<mhd> dyn_error = 'reset_floor_transition' requires "
+                  << "dyn_eos = 'transition'" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (pin->GetOrAddBoolean("mhd", "use_NQT", false)) {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                                Primitive::ResetFloorTransition>(ppack, pin);
+      } else {
+        dyn_gr = new DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                                Primitive::ResetFloorTransition>(ppack, pin);
+      }
       break;
   }
 
@@ -165,6 +197,50 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
 DynGRMHD::~DynGRMHD() {
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void DynGRMHD::EnforceSpeciesSum
+//! \brief Rescale the mass-fraction species of u0 over [il,iu]x[jl,ju]x[kl,ku] so that
+//! they sum to u0(IDN) exactly, i.e. so that sum(X) = 1 after conversion to primitives.
+void DynGRMHD::EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu,
+                                 int jl, int ju, int kl, int ku) {
+  if (nmfrac <= 0) {
+    return;
+  }
+  const int nmhd = pmy_pack->pmhd->nmhd;
+  const int imf = nmhd + imfrac;
+  const int nmf = nmfrac;
+  const int iye = (iyefrac >= 0) ? (nmhd + iyefrac) : -1;
+  const int nmb1 = pmy_pack->nmb_thispack - 1;
+
+  par_for("dyngr_species_sum", DevExeSpace(), 0, nmb1, kl, ku, jl, ju, il, iu,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real dens = u(m,IDN,k,j,i);
+    Real ssum = 0.0;
+    for (int n=imf; n<imf+nmf; ++n) {
+      ssum += u(m,n,k,j,i);
+    }
+    constexpr Real eps = 1.0e-30;
+    if (fabs(ssum) > eps) {
+      const Real ratio = dens/ssum;
+      for (int n=imf; n<imf+nmf; ++n) {
+        u(m,n,k,j,i) *= ratio;
+      }
+    } else if ((fabs(dens) > eps) && (iye >= 0) && (nmf >= 2)) {
+      // Degenerate landing: split into free nucleons consistent with Ye, as the
+      // q_h fallback of EOSTransition::SanitizeMassFractions does.  Assumes the
+      // first two constrained species are Xn and Xp, which holds for every policy
+      // that declares n_massfrac > 0 (currently only EOSTransition).
+      const Real sye = fmin(fmax(u(m,iye,k,j,i), 0.0), dens);
+      u(m,imf  ,k,j,i) = dens - sye;   // Xn
+      u(m,imf+1,k,j,i) = sye;          // Xp
+      for (int n=imf+2; n<imf+nmf; ++n) {
+        u(m,n,k,j,i) = 0.0;
+      }
+    }
+  });
+  return;
+}
+
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
@@ -217,8 +293,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
                    {MHD_RecvFlux});
   }
+  TaskName src_dep = MHD_ExplRK;
+  if (pmy_pack->prhine != nullptr) {
+    pnr->QueueTask(&rhine::RHINE::AddSources, pmy_pack->prhine, MHD_RhineSrc,
+                   "MHD_RhineSrc", Task_Run, {MHD_ExplRK});
+    src_dep = MHD_RhineSrc;
+  }
   pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, MHD_AddSrc, "MHD_AddSrc", Task_Run,
-                 {MHD_ExplRK});
+                 {src_dep});
   pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_AddSrc});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
@@ -249,6 +331,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
+  if (pmy_pack->prhine != nullptr) {
+    pnr->QueueTask(&rhine::RHINE::PostStep, pmy_pack->prhine, MHD_RhinePost,
+                   "MHD_RhinePost", Task_End);
+  }
   pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
 
@@ -717,6 +803,14 @@ template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
                           Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
                           Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                          Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NormalLogs>,
+                          Primitive::ResetFloorTransition>;
+template class DynGRMHDPS<Primitive::EOSTransition<Primitive::NQTLogs>,
+                          Primitive::ResetFloorTransition>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \
@@ -738,6 +832,14 @@ INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NormalLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NQTLogs>,
+                        Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NormalLogs>,
+                        Primitive::ResetFloorTransition);
+INSTANTIATE_COORD_TERMS(Primitive::EOSTransition<Primitive::NQTLogs>,
+                        Primitive::ResetFloorTransition);
 INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor);

@@ -27,7 +27,10 @@
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/eos_compose.hpp"
 #include "eos/primitive-solver/eos_hybrid.hpp"
+#include "eos/primitive-solver/eos_helmholtz.hpp"
+#include "eos/primitive-solver/eos_transition.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
+#include "eos/primitive-solver/reset_floor_transition.hpp"
 #include "eos/primitive-solver/logs.hpp"
 
 // AthenaK headers
@@ -118,6 +121,67 @@ class PrimitiveSolverHydro {
 
       // Ensure table was read properly
       assert(ps.GetEOSMutable().IsInitialized());
+    }
+    // Parameters for the transition (CompOSE + Helmholtz) EOS
+    if constexpr (
+         std::is_same_v<Primitive::EOSTransition<Primitive::NormalLogs>, EOSPolicy> ||
+         std::is_same_v<Primitive::EOSTransition<Primitive::NQTLogs>, EOSPolicy>) {
+      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", 7));
+      std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
+      if (!units.compare("geometric_solar")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());
+      } else if (!units.compare("geometric_kilometer")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricKilometer());
+      } else if (!units.compare("nuclear")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeNuclear());
+      } else if (!units.compare("cgs")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeCGS());
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Unknown unit system " << units << " requested."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+      // Optional Helmholtz cutoffs and validity-ramp widths (set before init).
+      if (pin->DoesParameterExist(block, "helm_n_max")) {
+        ps.GetEOSMutable().SetHelmholtzNMax(pin->GetReal(block, "helm_n_max"));
+      }
+      if (pin->DoesParameterExist(block, "helm_T_max")) {
+        ps.GetEOSMutable().SetHelmholtzTMax(pin->GetReal(block, "helm_T_max"));
+      }
+      if (pin->DoesParameterExist(block, "helm_n_ramp_dec") ||
+          pin->DoesParameterExist(block, "helm_T_ramp_dec")) {
+        ps.GetEOSMutable().SetHelmholtzRampDecades(
+            pin->GetOrAddReal(block, "helm_n_ramp_dec", 1.0),
+            pin->GetOrAddReal(block, "helm_T_ramp_dec", 0.5));
+      }
+
+      // Optional explicit transition strip (else defaults are used).
+      if (pin->DoesParameterExist(block, "transition_n_start")) {
+        ps.GetEOSMutable().SetTransition(
+            pin->GetReal(block, "transition_n_start"),
+            pin->GetReal(block, "transition_n_end"),
+            pin->GetReal(block, "transition_T_start"),
+            pin->GetReal(block, "transition_T_end"));
+      }
+
+      // Read the CompOSE (NSE) and Helmholtz (out-of-NSE) tables.
+      std::string fname = pin->GetString(block, "table");
+      std::string helm_fname = pin->GetString(block, "helm_table");
+      // Reference baryon mass; the default is the Fe-56 mass per baryon, so that
+      // E_B = 0 is the most bound state (GR-Athena++ hydro/bmass).
+      Real bmass = pin->GetOrAddReal(block, "bmass", 930.4117);
+      ps.GetEOSMutable().InitializeTables(fname, helm_fname, bmass);
+
+      assert(ps.GetEOSMutable().IsInitialized());
+
+      // Hand the table validity edges to the transition-aware error policy.
+      if constexpr (std::is_same_v<Primitive::ResetFloorTransition, ErrorPolicy>) {
+        Real ld_n, hd_n, ld_t, hd_t;
+        ps.GetEOS().GetTableBoundaries(ld_n, hd_n, ld_t, hd_t);
+        ps.GetEOSMutable().SetTableBoundaries(ld_n, hd_n, ld_t, hd_t);
+      }
     }
   }
 

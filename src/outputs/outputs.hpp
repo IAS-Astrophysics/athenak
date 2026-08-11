@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 175
+#define NOUTPUT_CHOICES 176
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -127,6 +127,9 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 
   // Spherical radius (174)
   "r_sph",
+
+  // RHINE / transition-EOS diagnostics (175)
+  "rhine_aux"
 };
 
 

@@ -105,6 +105,68 @@ class Root {
 
   // }}}
 
+  // FalsePositionModified {{{
+
+  //! \brief False position with separate absolute-x and functional tolerances.
+  //
+  // Anderson-Bjorck false position using a robust relative-x tolerance
+  // (xtol) that degenerates to absolute tolerance as x -> 0, plus an
+  // independent functional tolerance (ftol) on |f|. Used by the transition
+  // EOS strip solver, whose root variable is a cell weight in [0, 1].
+  template<class Functor, class ... Types>
+  KOKKOS_INLINE_FUNCTION
+  bool FalsePositionModified(Functor&& f, Real &lb, Real &ub, Real& x,
+                             Real xtol, Real ftol, Types ... args) const {
+    int side = 0;
+    Real ftest;
+    unsigned int count = 0;
+    Real flb = f(lb, args...);
+    Real fub = f(ub, args...);
+    Real xold;
+    x = lb;
+    if (fabs(flb) <= ftol) {
+      x = lb;
+      return true;
+    } else if (fabs(fub) <= ftol) {
+      x = ub;
+      return true;
+    }
+    if (flb*fub > 0) {
+      return false;
+    }
+    do {
+      xold = x;
+      x = (fub*lb - flb*ub)/(fub - flb);
+      count++;
+      if (fabs(x - xold) <= xtol*(fabs(x) + xtol)) {
+        return true;
+      }
+      ftest = f(x, args...);
+      if (fabs(ftest) <= ftol) {
+        return true;
+      }
+      if (ftest*flb >= 0) {
+        flb = ftest;
+        lb = x;
+        if (side == 1) {
+          fub /= 2.0;
+        }
+        side = 1;
+      } else {
+        fub = ftest;
+        ub = x;
+        if (side == -1) {
+          flb /= 2.0;
+        }
+        side = -1;
+      }
+    } while (count < iterations);
+
+    return fabs(x - xold) <= xtol*(fabs(x) + xtol) || fabs(ftest) <= ftol;
+  }
+
+  // }}}
+
   // Chandrupatla {{{
 
   //! \brief Find the root of a functor f using Chandrupatla's method

@@ -87,6 +87,11 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &adm_   = pmy_pack->padm->adm;
   bool use_fofc = pmy_pack->pmhd->use_fofc;
 
+  // Species that the EOS constrains by sum(X) = 1, as indices into the flux
+  // array (nmfrac = 0 for policies with no such constraint).
+  const int nmfrac = dyn_eos_.ps.GetEOS().GetNMassFractions();
+  const int imfrac = nhyd + dyn_eos_.ps.GetEOS().GetMassFractionIndex();
+
   auto wl_ = pmy_pack->pmhd->wl3d;
   auto wr_ = pmy_pack->pmhd->wr3d;
   auto bl_ = pmy_pack->pmhd->bl3d;
@@ -135,17 +140,30 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                                              flx, eyl, ezl);
       });
 
-    // Scalar fluxes (upwind from sign of mass flux)
+    // Scalar fluxes (upwind from sign of mass flux).  The whole species vector is
+    // upwinded from one side, so renormalizing that side's mass fractions to
+    // sum(X) = 1 makes the species fluxes sum exactly to the mass flux -- which is
+    // what preserves sum(X) = 1 in the evolved state.
     if (nvars > nhyd) {
       par_for("dyngrflux_x1_scalars", DevExeSpace(),
         0, nmb1, kl, ku, jl, ju, il, iu,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
-          for (int n = nhyd; n < nvars; ++n) {
-            if (flx1(m, IDN, k, j, i) >= 0.0) {
-              flx1(m, n, k, j, i) = flx1(m, IDN, k, j, i) * wl_(m, n, k, j, i);
-            } else {
-              flx1(m, n, k, j, i) = flx1(m, IDN, k, j, i) * wr_(m, n, k, j, i);
+          const Real fdn = flx1(m, IDN, k, j, i);
+          const bool upl = (fdn >= 0.0);
+          Real xnorm = 1.0;
+          if (nmfrac > 0) {
+            Real xsum = 0.0;
+            for (int n = imfrac; n < imfrac+nmfrac; ++n) {
+              xsum += upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
             }
+            if (xsum > 0.0) {
+              xnorm = 1.0/xsum;
+            }
+          }
+          for (int n = nhyd; n < nvars; ++n) {
+            const Real x = upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
+            flx1(m, n, k, j, i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
+                                  fdn*x*xnorm : fdn*x;
           }
         });
     }
@@ -187,16 +205,27 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                                              flx, eyl, ezl);
       });
 
+    // See the x1 block for why the upwind mass fractions are renormalized to sum(X)=1.
     if (nvars > nhyd) {
       par_for("dyngrflux_x2_scalars", DevExeSpace(),
         0, nmb1, kl, ku, jl, ju, is-1, ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
-          for (int n = nhyd; n < nvars; ++n) {
-            if (flx2(m, IDN, k, j, i) >= 0.0) {
-              flx2(m, n, k, j, i) = flx2(m, IDN, k, j, i) * wl_(m, n, k, j, i);
-            } else {
-              flx2(m, n, k, j, i) = flx2(m, IDN, k, j, i) * wr_(m, n, k, j, i);
+          const Real fdn = flx2(m, IDN, k, j, i);
+          const bool upl = (fdn >= 0.0);
+          Real xnorm = 1.0;
+          if (nmfrac > 0) {
+            Real xsum = 0.0;
+            for (int n = imfrac; n < imfrac+nmfrac; ++n) {
+              xsum += upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
             }
+            if (xsum > 0.0) {
+              xnorm = 1.0/xsum;
+            }
+          }
+          for (int n = nhyd; n < nvars; ++n) {
+            const Real x = upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
+            flx2(m, n, k, j, i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
+                                  fdn*x*xnorm : fdn*x;
           }
         });
     }
@@ -236,16 +265,27 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                                              flx, eyl, ezl);
       });
 
+    // See the x1 block for why the upwind mass fractions are renormalized to sum(X)=1.
     if (nvars > nhyd) {
       par_for("dyngrflux_x3_scalars", DevExeSpace(),
         0, nmb1, kl, ku, js-1, je+1, is-1, ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
-          for (int n = nhyd; n < nvars; ++n) {
-            if (flx3(m, IDN, k, j, i) >= 0.0) {
-              flx3(m, n, k, j, i) = flx3(m, IDN, k, j, i) * wl_(m, n, k, j, i);
-            } else {
-              flx3(m, n, k, j, i) = flx3(m, IDN, k, j, i) * wr_(m, n, k, j, i);
+          const Real fdn = flx3(m, IDN, k, j, i);
+          const bool upl = (fdn >= 0.0);
+          Real xnorm = 1.0;
+          if (nmfrac > 0) {
+            Real xsum = 0.0;
+            for (int n = imfrac; n < imfrac+nmfrac; ++n) {
+              xsum += upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
             }
+            if (xsum > 0.0) {
+              xnorm = 1.0/xsum;
+            }
+          }
+          for (int n = nhyd; n < nvars; ++n) {
+            const Real x = upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
+            flx3(m, n, k, j, i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
+                                  fdn*x*xnorm : fdn*x;
           }
         });
     }
@@ -275,6 +315,14 @@ INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE<Primitive::NormalLogs>,
                         Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE<Primitive::NQTLogs>,
                         Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSTransition<Primitive::NormalLogs>,
+                        Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSTransition<Primitive::NQTLogs>,
+                        Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSTransition<Primitive::NormalLogs>,
+                        Primitive::ResetFloorTransition)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSTransition<Primitive::NQTLogs>,
+                        Primitive::ResetFloorTransition)
 INSTANTIATE_CALC_FLUXES(Primitive::EOSHybrid<Primitive::NormalLogs>,
                         Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::EOSHybrid<Primitive::NQTLogs>,

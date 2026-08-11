@@ -184,25 +184,153 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    { // Read proton fraction -> Y[p]
-      Real * table_yq = table["Y[p]"];
-      for (size_t in=0; in<m_nn; ++in) {
-        for (size_t iy=0; iy<m_ny; ++iy) {
-          for (size_t it=0; it<m_nt; ++it) {
-            size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYP,in,iy,it) = table_yq[iflat];
+    // Composition channels: needed only by the transition EOS / RHINE. A plain compose
+    // run does not use them, so a table lacking them loads with m_has_composition =
+    // false; EOSTransition::InitializeTables is what rejects such a table.
+    auto clamp01 = [](Real x) { return fmax(0.0, fmin(x, 1.0)); };
+
+    const char *comp_fields[6] = {"Y[n]", "Y[p]", "Y[He4]", "A[N]", "Z[N]", "Y[N]"};
+    m_has_composition = true;
+    std::string missing;
+    for (int l = 0; l < 6; ++l) {
+      if (!table.HasField(comp_fields[l])) {
+        m_has_composition = false;
+        missing += (missing.empty() ? "" : ", ");
+        missing += comp_fields[l];
+      }
+    }
+    // Y[n]/Y[p] are consumed on their own by ProtonFraction/NeutronFraction, which do
+    // not need the heavy-nucleus channels. All HasField queries precede any operator[].
+    const bool has_yn = table.HasField("Y[n]");
+    const bool has_yp = table.HasField("Y[p]");
+    if (m_has_composition) {
+      std::string opt;
+      for (const char *f : {"Y[H2]", "Y[H3]", "Y[He3]", "dU"}) {
+        if (table.HasField(f)) {
+          opt += (opt.empty() ? "" : ", ");
+          opt += f;
+        }
+      }
+      std::cout << "CompOSE table " << fname << ": composition channels present"
+                << (opt.empty() ? "; no optional channels" : "; optional: " + opt)
+                << std::endl;
+    } else {
+      std::cout << "CompOSE table " << fname << ": composition channels absent ("
+                << missing << "); NSE composition unavailable." << std::endl;
+      for (int v : {ECXA, ECXH, ECAN, ECZN}) {
+        for (size_t in=0; in<m_nn; ++in) {
+          for (size_t iy=0; iy<m_ny; ++iy) {
+            for (size_t it=0; it<m_nt; ++it) {
+              host_table(v,in,iy,it) = (v == ECAN) ? 1.0 : 0.0;
+            }
           }
         }
       }
     }
 
-    { // Read neutron fraction -> Y[n]
-      Real * table_yq = table["Y[n]"];
+    { // Y[n] -> ECYN
+      Real * d = has_yn ? table["Y[n]"] : nullptr;
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYN,in,iy,it) = table_yq[iflat];
+            host_table(ECYN,in,iy,it) = has_yn ? clamp01(d[iflat]) : 0.0;
+          }
+        }
+      }
+    }
+
+    { // Y[p] -> ECYP
+      Real * d = has_yp ? table["Y[p]"] : nullptr;
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECYP,in,iy,it) = has_yp ? clamp01(d[iflat]) : 0.0;
+          }
+        }
+      }
+    }
+
+    if (m_has_composition) { // Y[He4] -> ECXA, plus optional light nuclei H2/H3/He3
+      Real * d = table["Y[He4]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECXA,in,iy,it) = clamp01(d[iflat]*4.0);
+          }
+        }
+      }
+      const char* light[3] = {"Y[H2]", "Y[H3]", "Y[He3]"};
+      const Real amass[3] = {2.0, 3.0, 3.0};
+      for (int l = 0; l < 3; ++l) {
+        if (!table.HasField(light[l])) { continue; }
+        Real * dl = table[light[l]];
+        for (size_t in=0; in<m_nn; ++in) {
+          for (size_t iy=0; iy<m_ny; ++iy) {
+            for (size_t it=0; it<m_nt; ++it) {
+              size_t iflat = it + m_nt*(iy + m_ny*in);
+              host_table(ECXA,in,iy,it) += clamp01(dl[iflat]*amass[l]);
+            }
+          }
+        }
+      }
+    }
+
+    if (m_has_composition) { // A[N] -> ECAN
+      Real * d = table["A[N]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECAN,in,iy,it) = fmax(1.0, d[iflat]);
+          }
+        }
+      }
+    }
+
+    if (m_has_composition) { // Z[N] -> ECZN
+      Real * d = table["Z[N]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECZN,in,iy,it) = d[iflat];
+          }
+        }
+      }
+    }
+
+    if (table.HasField("dU")) { // optional dU -> ECDU
+      Real * d = table["dU"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECDU,in,iy,it) = d[iflat];
+          }
+        }
+      }
+      m_has_dU = true;
+    } else {
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            host_table(ECDU,in,iy,it) = 0.0;
+          }
+        }
+      }
+      m_has_dU = false;
+    }
+
+    if (m_has_composition) { // Y[N] with A[N] -> ECXH = A_N * Y_N
+      Real * d = table["Y[N]"];
+      for (size_t in=0; in<m_nn; ++in) {
+        for (size_t iy=0; iy<m_ny; ++iy) {
+          for (size_t it=0; it<m_nt; ++it) {
+            size_t iflat = it + m_nt*(iy + m_ny*in);
+            host_table(ECXH,in,iy,it) = clamp01(host_table(ECAN,in,iy,it)*d[iflat]);
           }
         }
       }

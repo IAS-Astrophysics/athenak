@@ -12,6 +12,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <string>
 #include <utility>
 
 #include "athena.hpp"
@@ -25,6 +26,7 @@
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "rhine/rhine.hpp"
 #include "utils/tov/tov.hpp"
 #include "utils/tov/tov_polytrope.hpp"
 #include "utils/tov/tov_tabulated.hpp"
@@ -32,15 +34,28 @@
 
 #include <Kokkos_Random.hpp>
 
+//! \struct TOVBFieldSeed
+//  \brief Parameters of the magnetic-field seed, selected by problem/bfield_type.
+struct TOVBFieldSeed {
+  bool dipole;    // current loop (true) or pressure poloidal (false)
+  Real pcut;      // pressure cutoff                        (pressure poloidal)
+  Real magindex;  // exponent of the (1 - rho/rhoc) taper   (pressure poloidal)
+  Real i0;        // loop current                           (current loop)
+  Real r0;        // loop radius                            (current loop)
+  Real scale;     // overall normalization applied to curl(A)
+};
+
 // Prototypes for vector potential
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3);
+static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3);
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3);
+static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3);
+KOKKOS_INLINE_FUNCTION
+static Real DipoleAphi(const TOVBFieldSeed& bf, Real x1, Real x2, Real x3);
 
 // Prototypes for user-defined BCs and history
 void TOVHistory(HistoryData *pdata, Mesh *pm);
@@ -94,7 +109,6 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   TOVEOS eos{pin};
   auto my_tov = tov::TOVStar::ConstructTOV(pin, eos);
 
-
   constexpr bool use_ye = tov::UsesYe<TOVEOS>;
   Real ye_atmo = pin->GetOrAddReal("mhd", "s0_atmosphere", 0.5);
 
@@ -144,10 +158,12 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real vr = 0.;
     Real p_pert = 0.;
     Real ye = ye_atmo;
+    bool in_star = false;
     auto &use_ye_ = use_ye;
     if (!isotropic) {
       tov_.GetPrimitivesAtPoint(eos_, r, rho, p, mass, alp);
       if (r <= tov_.R_edge) {
+        in_star = true;
         Real x = r/tov_.R_edge;
         vr = 0.5*v_pert*(3.0*x - x*x*x);
         auto rand_gen = rand_pool64.get_state();
@@ -161,6 +177,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
       tov_.GetPrimitivesAtIsoPoint(eos_, r, rho, p, mass, alp);
       r_schw = tov_.FindSchwarzschildR(r, mass);
       if (r_schw <= tov_.R_edge) {
+        in_star = true;
         Real x = r_schw/tov_.R_edge;
         vr = 0.5*v_pert*(3.0*x - x*x*x);
         auto rand_gen = rand_pool64.get_state();
@@ -184,6 +201,29 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     auto &nscal = nscal_;
     if (use_ye && nscal >= 1) {
       w0_(m,nvars,k,j,i) = ye;
+    }
+    // Transition-EOS composition seed (Xn, Xp, Xa, Xh, Ah, E_B), as GR-Athena++:
+    // from the cold table as a function of rho, renormalized to sum(X) = 1, with
+    // E_B = 0 (the most-bound reference of the transition EOS's baryon mass).
+    // Free nucleons consistent with Ye outside the star / for tables without it.
+    if (nscal >= 7) {
+      Real xn = 1.0 - ye, xp = ye, xa = 0.0, xh = 0.0, ah = 1.0;
+      if constexpr (tov::UsesComposition<TOVEOS>) {
+        Real cn, cp, ca, ch, cah;
+        if (in_star && eos_.template GetCompositionFromRho<tov::LocationTag::Device>(
+                rho, cn, cp, ca, ch, cah)) {
+          Real sumX = cn + cp + ca + ch;
+          if (sumX > 0.0) {
+            xn = cn/sumX; xp = cp/sumX; xa = ca/sumX; xh = ch/sumX; ah = cah;
+          }
+        }
+      }
+      w0_(m,nvars+1,k,j,i) = xn;
+      w0_(m,nvars+2,k,j,i) = xp;
+      w0_(m,nvars+3,k,j,i) = xa;
+      w0_(m,nvars+4,k,j,i) = xh;
+      w0_(m,nvars+5,k,j,i) = ah;
+      w0_(m,nvars+6,k,j,i) = 0.0;
     }
 
     // Set ADM variables
@@ -238,6 +278,44 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     pcut = pcut * pmax;
   }
 
+  // Select the magnetic field seed: the interior pressure-poloidal field 
+  // or the external current-loop dipole.
+  std::string bfield_type = pin->GetOrAddString("problem", "bfield_type",
+                                                "pressure_poloidal");
+  bool dipole = (bfield_type == "current_loop");
+  if (!dipole && bfield_type != "pressure_poloidal") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "Unknown problem/bfield_type '" << bfield_type << "'. "
+              << "Valid options are 'pressure_poloidal' and 'current_loop'."
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // Current-loop parameters.
+  const Real gauss_cgs_to_geo = 8.3519664583273e+19;
+  Real b_max_gauss = pin->GetOrAddReal("problem", "b_max", 1e12);
+  Real b_max = b_max_gauss/gauss_cgs_to_geo;
+  Real r_0 = pin->GetOrAddReal("problem", "r_0_current",
+                               isotropic ? tov_.R_edge_iso : tov_.R_edge);
+  Real i_0 = 4.0*r_0*b_max/(23.0*M_PI);
+
+  // The current loop carries its amplitude in i_0; the pressure-poloidal potential is
+  // built with unit amplitude and rescaled by b_norm.
+  Real b_scale = dipole ? static_cast<Real>(1.0) : b_norm;
+  TOVBFieldSeed bfield{dipole, pcut, magindex, i_0, r_0, b_scale};
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "TOV magnetic field seed: " << bfield_type << std::endl;
+    if (dipole) {
+      std::cout << "  current loop: r_0 = " << r_0 << ", I_0 = " << i_0
+                << ", central B = " << b_max_gauss << " G = " << b_max
+                << " (code)" << std::endl;
+    } else {
+      std::cout << "  pressure poloidal: b_norm = " << b_norm << ", pcut = " << pcut
+                << ", magindex = " << magindex << std::endl;
+    }
+  }
+
   // compute vector potential over all faces
   int ncells1 = indcs.nx1 + 2*(indcs.ng);
   int ncells2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*(indcs.ng)) : 2;
@@ -278,8 +356,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    a1(m,k,j,i) = A1(tov_, eos_, isotropic, pcut, magindex, x1v, x2f, x3f);
-    a2(m,k,j,i) = A2(tov_, eos_, isotropic, pcut, magindex, x1f, x2v, x3f);
+    a1(m,k,j,i) = A1(tov_, eos_, isotropic, bfield, x1v, x2f, x3f);
+    a2(m,k,j,i) = A2(tov_, eos_, isotropic, bfield, x1f, x2v, x3f);
     a3(m,k,j,i) = 0.0;
 
     // When neighboring MeshBock is at finer level, compute vector potential as sum of
@@ -315,8 +393,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)))) {
       Real xl = x1v + 0.25*dx1;
       Real xr = x1v - 0.25*dx1;
-      a1(m,k,j,i) = 0.5*(A1(tov_, eos_, isotropic, pcut, magindex, xl,x2f,x3f) +
-                         A1(tov_, eos_, isotropic, pcut, magindex, xr,x2f,x3f));
+      a1(m,k,j,i) = 0.5*(A1(tov_, eos_, isotropic, bfield, xl,x2f,x3f) +
+                         A1(tov_, eos_, isotropic, bfield, xr,x2f,x3f));
     }
 
     // Correct A2 at x1-faces, x3-faces, and x1x3-edges
@@ -347,8 +425,8 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)))) {
       Real xl = x2v + 0.25*dx2;
       Real xr = x2v - 0.25*dx2;
-      a2(m,k,j,i) = 0.5*(A2(tov_, eos_, isotropic, pcut, magindex, x1f,xl,x3f) +
-                         A2(tov_, eos_, isotropic, pcut, magindex, x1f,xr,x3f));
+      a2(m,k,j,i) = 0.5*(A2(tov_, eos_, isotropic, bfield, x1f,xl,x3f) +
+                         A2(tov_, eos_, isotropic, bfield, x1f,xr,x3f));
     }
   });
 
@@ -360,24 +438,24 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     Real dx2 = size.d_view(m).dx2;
     Real dx3 = size.d_view(m).dx3;
 
-    b0.x1f(m,k,j,i) = b_norm*((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
+    b0.x1f(m,k,j,i) = b_scale*((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
                        (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
-    b0.x2f(m,k,j,i) = b_norm*((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
+    b0.x2f(m,k,j,i) = b_scale*((a1(m,k+1,j,i) - a1(m,k,j,i))/dx3 -
                        (a3(m,k,j,i+1) - a3(m,k,j,i))/dx1);
-    b0.x3f(m,k,j,i) = b_norm*((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
+    b0.x3f(m,k,j,i) = b_scale*((a2(m,k,j,i+1) - a2(m,k,j,i))/dx1 -
                        (a1(m,k,j+1,i) - a1(m,k,j,i))/dx2);
 
     // Include extra face-component at edge of block in each direction
     if (i==ie) {
-      b0.x1f(m,k,j,i+1) = b_norm*((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
+      b0.x1f(m,k,j,i+1) = b_scale*((a3(m,k,j+1,i+1) - a3(m,k,j,i+1))/dx2 -
                            (a2(m,k+1,j,i+1) - a2(m,k,j,i+1))/dx3);
     }
     if (j==je) {
-      b0.x2f(m,k,j+1,i) = b_norm*((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
+      b0.x2f(m,k,j+1,i) = b_scale*((a1(m,k+1,j+1,i) - a1(m,k,j+1,i))/dx3 -
                            (a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1);
     }
     if (k==ke) {
-      b0.x3f(m,k+1,j,i) = b_norm*((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
+      b0.x3f(m,k+1,j,i) = b_scale*((a2(m,k+1,j,i+1) - a2(m,k+1,j,i))/dx1 -
                            (a1(m,k+1,j+1,i) - a1(m,k+1,j,i))/dx2);
     }
   });
@@ -427,6 +505,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
     } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
       SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+    } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_transition) {
+      SolveTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
     } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
       SolveTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
     }
@@ -439,6 +519,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_compose) {
     SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_hybrid) {
+    SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
+  } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_transition) {
     SetupTOV<tov::TabulatedEOS>(pin, pmy_mesh_);
   } else if (pmbp->pdyngr->eos_policy == DynGRMHD_EOS::eos_piecewise_poly) {
     SetupTOV<tov::PiecewisePolytropeEOS>(pin, pmy_mesh_);
@@ -476,24 +558,24 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   return;
 }
 
-template<class TOVEOS>
+//! \fn Real DipoleAphi
+//  \brief A_phi/w for a circular current loop of radius r0 carrying current i0.
 KOKKOS_INLINE_FUNCTION
-static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3) {
-  Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
-  Real p, rho;
-  if (!isotropic) {
-    tov_.GetPandRho(eos, r, rho, p);
-  } else {
-    tov_.GetPandRhoIso(eos, r, rho, p);
-  }
-  return -x2*fmax(p - pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,magindex);
+static Real DipoleAphi(const TOVBFieldSeed& bf, Real x1, Real x2, Real x3) {
+  Real w2 = SQR(x1) + SQR(x2);
+  Real r2 = w2 + SQR(x3);
+  Real r02 = SQR(bf.r0);
+  return M_PI*r02*bf.i0/pow(r02 + r2, 1.5)*
+         (1.0 + 15.0/8.0*r02*(r02 + w2)/SQR(r02 + r2));
 }
 
 template<class TOVEOS>
 KOKKOS_INLINE_FUNCTION
-static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real pcut,
-               Real magindex, Real x1, Real x2, Real x3) {
+static Real A1(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3) {
+  if (bf.dipole) {
+    return -x2*DipoleAphi(bf, x1, x2, x3);
+  }
   Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
   Real p, rho;
   if (!isotropic) {
@@ -501,7 +583,24 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
   } else {
     tov_.GetPandRhoIso(eos, r, rho, p);
   }
-  return x1*fmax(p - pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,magindex);
+  return -x2*fmax(p - bf.pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,bf.magindex);
+}
+
+template<class TOVEOS>
+KOKKOS_INLINE_FUNCTION
+static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic,
+               const TOVBFieldSeed& bf, Real x1, Real x2, Real x3) {
+  if (bf.dipole) {
+    return x1*DipoleAphi(bf, x1, x2, x3);
+  }
+  Real r = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
+  Real p, rho;
+  if (!isotropic) {
+    tov_.GetPandRho(eos, r, rho, p);
+  } else {
+    tov_.GetPandRhoIso(eos, r, rho, p);
+  }
+  return x1*fmax(p - bf.pcut, 0.0)*pow(1.0 - rho/tov_.rhoc,bf.magindex);
 }
 
 // Metric update function
@@ -511,7 +610,6 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
   auto &indcs = pmbp->pmesh->mb_indcs;
   int &ng = indcs.ng;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
-  int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
@@ -600,14 +698,36 @@ void FinalizeTOV(ParameterInput *pin, Mesh *pm) {
 
 // History function
 void TOVHistory(HistoryData *pdata, Mesh *pm) {
-  // Select the number of outputs and create labels for them.
-  pdata->nhist = 2;
-  pdata->label[0] = "rho-max";
-  pdata->label[1] = "alpha-min";
-
   // capture class variables for kernel
   auto &w0_ = pm->pmb_pack->pmhd->w0;
+  auto &u0_ = pm->pmb_pack->pmhd->u0;
   auto &adm = pm->pmb_pack->padm->adm;
+  auto &size = pm->pmb_pack->pmb->mb_size;
+  const int nmhd_ = pm->pmb_pack->pmhd->nmhd;
+
+  // Optional channels: composition needs Ye,Xn,Xp,Xa,Xh; the heating rates need
+  // the RHINE module. Runs without either simply do not get those columns.
+  const bool has_x = (pm->pmb_pack->pmhd->nscalars >= 5);
+  auto *pdyngr = pm->pmb_pack->pdyngr;
+  const bool has_T = (pdyngr != nullptr);
+  auto temp_ = has_T ? pdyngr->temperature : DvceArray5D<Real>();
+  auto *prhine = pm->pmb_pack->prhine;
+  const bool has_rhine = (prhine != nullptr);
+  auto aux_ = has_rhine ? prhine->aux : DvceArray5D<Real>();
+
+  // Select the number of outputs and create labels for them.
+  int nh = 0;
+  pdata->label[nh++] = "rho-max";
+  pdata->label[nh++] = "alpha-min";
+  if (has_T)     { pdata->label[nh++] = "T-max"; }
+  if (has_x)     { pdata->label[nh++] = "Xsum-err"; }
+  pdata->label[nh++] = "m-ej-bern";
+  pdata->label[nh++] = "m-ej-geod";
+  if (has_rhine) {
+    pdata->label[nh++] = "rhine-qdot";
+    pdata->label[nh++] = "rhine-Lfnu";
+  }
+  pdata->nhist = nh;
 
   // loop over all MeshBlocks in this pack
   auto &indcs = pm->pmb_pack->pmesh->mb_indcs;
@@ -619,8 +739,12 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   Real rho_max = std::numeric_limits<Real>::max();
   Real alpha_min = -rho_max;
-  Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min) {
+  Real T_max = -rho_max;
+  Real xerr_max = -rho_max;
+  Kokkos::parallel_reduce("TOVHistExtrema",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_max, Real &mb_alp_min, Real &mb_T_max,
+                Real &mb_xerr_max) {
     // compute n,k,j,i indices of thread
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
@@ -631,7 +755,60 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
 
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min));
+    if (has_T) {
+      mb_T_max = fmax(mb_T_max, temp_(m,0,k,j,i));
+    }
+    if (has_x) {
+      Real xsum = w0_(m,nmhd_+1,k,j,i) + w0_(m,nmhd_+2,k,j,i)
+                + w0_(m,nmhd_+3,k,j,i) + w0_(m,nmhd_+4,k,j,i);
+      mb_xerr_max = fmax(mb_xerr_max, fabs(xsum - 1.0));
+    }
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min),
+     Kokkos::Max<Real>(T_max), Kokkos::Max<Real>(xerr_max));
+
+  // Volume-integrated quantities. These are plain sums, so the history machinery's
+  // own MPI_SUM over ranks completes them.
+  Real qdot = 0.0, lnu = 0.0, mej_b = 0.0, mej_g = 0.0;
+  Kokkos::parallel_reduce("TOVHistSums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &mb_qdot, Real &mb_lnu, Real &mb_ejb,
+                Real &mb_ejg) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+
+    if (has_rhine) {
+      mb_qdot += vol*aux_(m, rhine::A_QDOT, k, j, i);
+      mb_lnu  += vol*aux_(m, rhine::A_LNU,  k, j, i);
+    }
+
+    // Unbound-mass criteria. u_i = W v_i, -u_t = alpha W - beta^i u_i, and
+    // h W = (tau + D + sqrt(gamma) p)/D since u0 is densitized but w0 is not.
+    const Real g11 = adm.g_dd(m,0,0,k,j,i), g12 = adm.g_dd(m,0,1,k,j,i);
+    const Real g13 = adm.g_dd(m,0,2,k,j,i), g22 = adm.g_dd(m,1,1,k,j,i);
+    const Real g23 = adm.g_dd(m,1,2,k,j,i), g33 = adm.g_dd(m,2,2,k,j,i);
+    const Real wv1 = w0_(m,IVX,k,j,i);
+    const Real wv2 = w0_(m,IVY,k,j,i);
+    const Real wv3 = w0_(m,IVZ,k,j,i);
+    const Real Wvsq = g11*wv1*wv1 + g22*wv2*wv2 + g33*wv3*wv3
+                    + 2.0*(g12*wv1*wv2 + g13*wv1*wv3 + g23*wv2*wv3);
+    const Real W = sqrt(1.0 + Wvsq);
+    const Real u_d1 = g11*wv1 + g12*wv2 + g13*wv3;
+    const Real u_d2 = g12*wv1 + g22*wv2 + g23*wv3;
+    const Real u_d3 = g13*wv1 + g23*wv2 + g33*wv3;
+    const Real bu = adm.beta_u(m,0,k,j,i)*u_d1 + adm.beta_u(m,1,k,j,i)*u_d2
+                  + adm.beta_u(m,2,k,j,i)*u_d3;
+    const Real mut = adm.alpha(m,k,j,i)*W - bu;   // -u_t
+    const Real D = u0_(m,IDN,k,j,i);
+    const Real sdetg = sqrt(adm::SpatialDet(g11, g12, g13, g22, g23, g33));
+    const Real hW = (u0_(m,IEN,k,j,i) + D + w0_(m,IPR,k,j,i)*sdetg)/D;
+
+    if (mut > 1.0) { mb_ejg += vol*D; }
+    if (hW*mut/W > 1.0) { mb_ejb += vol*D; }
+  }, qdot, lnu, mej_b, mej_g);
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
@@ -639,15 +816,30 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
   if (global_variable::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &T_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &xerr_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&rho_max, &rho_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     MPI_Reduce(&alpha_min, &alpha_min, 1, MPI_ATHENA_REAL, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&T_max, &T_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&xerr_max, &xerr_max, 1, MPI_ATHENA_REAL, MPI_MAX, 0, MPI_COMM_WORLD);
     rho_max = 0.;
     alpha_min = 0.;
+    T_max = 0.;
+    xerr_max = 0.;
   }
 #endif
 
   // store data in hdata array
-  pdata->hdata[0] = rho_max;
-  pdata->hdata[1] = alpha_min;
+  int n = 0;
+  pdata->hdata[n++] = rho_max;
+  pdata->hdata[n++] = alpha_min;
+  if (has_T)     { pdata->hdata[n++] = T_max; }
+  if (has_x)     { pdata->hdata[n++] = xerr_max; }
+  pdata->hdata[n++] = mej_b;
+  pdata->hdata[n++] = mej_g;
+  if (has_rhine) {
+    pdata->hdata[n++] = qdot;
+    pdata->hdata[n++] = lnu;
+  }
 }

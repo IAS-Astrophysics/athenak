@@ -47,6 +47,22 @@ constexpr bool UsesYe<
   >
 > = true;
 
+// Same construction for `GetCompositionFromRho`, which supplies the mass fractions
+// needed to seed the transition EOS's composition scalars.
+template<class TOVEOS, class = void>
+constexpr bool UsesComposition = false;
+
+template<class TOVEOS>
+constexpr bool UsesComposition<
+  TOVEOS,
+  std::void_t<
+    decltype(std::declval<TOVEOS>().
+             template GetCompositionFromRho<LocationTag::Host>(
+               std::declval<Real>(), std::declval<Real&>(), std::declval<Real&>(),
+               std::declval<Real&>(), std::declval<Real&>(), std::declval<Real&>()))
+  >
+> = true;
+
 
 } // namespace tov
 

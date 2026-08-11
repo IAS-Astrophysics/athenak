@@ -162,6 +162,16 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     // Mark one mesh-topology update event (AMR and any resulting load balancing).
     pmy_mesh->MarkMeshUpdated();
 
+    // Prolongation of the conserved variables onto newly refined blocks is minmod-limited
+    // per variable, so the species sum drifts from the density in their active zone.
+    // Restore it before InitBoundaryValuesAndPrimitives runs C2P on the new mesh.
+    if (pmy_mesh->pmb_pack->pdyngr != nullptr) {
+      auto &indcs = pmy_mesh->mb_indcs;
+      pmy_mesh->pmb_pack->pdyngr->EnforceSpeciesSum(pmy_mesh->pmb_pack->pmhd->u0,
+                                                    indcs.is, indcs.ie, indcs.js,
+                                                    indcs.je, indcs.ks, indcs.ke);
+    }
+
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;

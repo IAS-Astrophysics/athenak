@@ -54,6 +54,8 @@ add_executable(
         eos/ideal_grmhd.cpp
         eos/noop_dyngrmhd.cpp
         eos/primitive-solver/eos_compose.cpp
+        eos/primitive-solver/eos_helmholtz.cpp
+        eos/primitive-solver/eos_transition.cpp
         eos/primitive-solver/eos_hybrid.cpp
         eos/primitive-solver/piecewise_polytrope.cpp
         eos/primitive-solver/unit_system.cpp
@@ -146,6 +148,7 @@ add_executable(
         pgen/tests/be_collapse.cpp
 
         pgen/unit_tests/eos_compose.cpp
+        pgen/unit_tests/eos_transition.cpp
         pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
@@ -165,6 +168,8 @@ add_executable(
         shearing_box/shearing_box_fc.cpp
         shearing_box/shearing_box_srcterms.cpp
         shearing_box/shearing_box_tasks.cpp
+
+        rhine/rhine.cpp
 
         srcterms/srcterms.cpp
         srcterms/srcterms_newdt.cpp
