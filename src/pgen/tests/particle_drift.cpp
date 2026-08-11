@@ -154,10 +154,10 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (pmbp->ppart->nprtcl_thispack != kExpectedParticles) {
+  if (pmy_mesh_->nprtcl_total != kExpectedParticles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Particle drift test expected " << kExpectedParticles
-              << " particles, but initialized " << pmbp->ppart->nprtcl_thispack << "."
+              << " particles globally, but initialized " << pmy_mesh_->nprtcl_total << "."
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -167,12 +167,14 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   auto &mbsize = pmbp->pmb->mb_size;
   const int gids = pmbp->gids;
   const int nmb = pmbp->nmb_thispack;
+  const int npart = pmbp->ppart->nprtcl_thispack;
   const bool migration = migration_test;
-  par_for("particle_drift_init", DevExeSpace(), 0, (kExpectedParticles - 1),
+  par_for("particle_drift_init", DevExeSpace(), 0, (npart - 1),
   KOKKOS_LAMBDA(const int p) {
-    const Real x = InitialX(p, migration);
-    const Real y = InitialY(p);
-    const Real z = InitialZ(p);
+    const int id = pi(PTAG,p);
+    const Real x = InitialX(id, migration);
+    const Real y = InitialY(id);
+    const Real z = InitialZ(id);
     int owner_gid = gids;
     for (int m=0; m<nmb; ++m) {
       auto size = mbsize.d_view(m);
@@ -186,9 +188,9 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
     pr(IPX,p) = x;
     pr(IPY,p) = y;
     pr(IPZ,p) = z;
-    pr(IPVX,p) = VelocityX(p, migration);
-    pr(IPVY,p) = VelocityY(p);
-    pr(IPVZ,p) = VelocityZ(p);
+    pr(IPVX,p) = VelocityX(id, migration);
+    pr(IPVY,p) = VelocityY(id);
+    pr(IPVZ,p) = VelocityZ(id);
   });
 
   pmbp->ppart->dtnew = 0.125;

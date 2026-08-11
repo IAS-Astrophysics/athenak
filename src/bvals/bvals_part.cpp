@@ -61,11 +61,17 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto &nghbr = pmy_part->pmy_pack->pmb->nghbr;
   auto &psendl = sendlist;
   int counter=0;
-  int *pcounter = &counter;
+#if MPI_PARALLEL_ENABLED
+  Kokkos::View<int> atom_count("particle_send_count");
+  Kokkos::deep_copy(atom_count, counter);
+  int *pcounter = atom_count.data();
+#else
+  int *pcounter = nullptr;
+#endif
   bool &multi_d = pmy_part->pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_part->pmy_pack->pmesh->three_d;
 
-  Kokkos::realloc(sendlist, static_cast<int>(0.1*npart));
+  Kokkos::realloc(sendlist, npart);
   par_for("part_update",DevExeSpace(),0,(npart-1), KOKKOS_LAMBDA(const int p) {
     int m = pi(PGID,p) - gids;
     int mylevel = mblev.d_view(m);
@@ -170,6 +176,9 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       }
     }
   });
+#if MPI_PARALLEL_ENABLED
+  Kokkos::deep_copy(counter, atom_count);
+#endif
   nprtcl_send = counter;
   Kokkos::resize(sendlist, nprtcl_send);
   // sync sendlist device array with host
