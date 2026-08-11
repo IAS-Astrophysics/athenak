@@ -937,6 +937,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     MRI3d(pin, is_restart);
   } else if (pgen_fun_name.compare("orszag_tang") == 0) {
     OrszagTang(pin, is_restart);
+  } else if (pgen_fun_name.compare("particle_drift") == 0) {
+    ParticleDrift(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_beam") == 0) {
