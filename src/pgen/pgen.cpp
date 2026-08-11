@@ -997,8 +997,6 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_m1_beamtest") == 0) {
     RadiationM1BeamTest(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_m1_latticetest") == 0) {
