@@ -1,0 +1,66 @@
+# AthenaK input file: Z4c linear wave with OUTFLOW boundaries + AMR.
+# Regression test for the fine/coarse boundary fix (coarse-array physical BCs applied in
+# Z4c::Prolongate before prolongation).
+#
+# With outflow boundaries and AMR, a fine/coarse boundary coincides with a physical
+# boundary. Without the fix, prolongation reads unfilled coarse ghost zones there and
+# corrupts the metric near the boundary.
+
+<comment>
+problem   = z4c linear wave (AMR outflow-boundary regression)
+reference = e.g. Daverio et al. arXiv:1810.12346 (2018)
+
+<job>
+basename  = lwave_z4c_bc
+
+<mesh>
+nghost    = 4
+nx1       = 32
+x1min     = -0.5
+x1max     =  0.5
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 32
+x2min     = -0.5
+x2max     =  0.5
+ix2_bc    = outflow
+ox2_bc    = outflow
+
+nx3       = 32
+x3min     = -0.5
+x3max     =  0.5
+ix3_bc    = outflow
+ox3_bc    = outflow
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 8
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = -1
+tlim       = 0.1
+ndiag      = 1
+
+<mesh_refinement>
+refinement       = adaptive
+max_nmb_per_rank = 512
+num_levels       = 2
+refinement_interval = 1
+
+<amr_criterion0>
+method = user
+
+<z4c>
+diss       = 1
+
+<problem>
+pgen_name = z4c_linear_wave
+amp       = 1.0e-8
+kx1  = 1
+kx2  = 1
+kx3  = 0

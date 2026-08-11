@@ -10,6 +10,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <algorithm>
 #include <utility>
 
 #include "athena.hpp"
@@ -53,6 +54,16 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
   auto &rbuf = recvbuf;
   auto &is_z4c = is_z4c_;
   auto &multilevel = pmy_pack->pmesh->multilevel;
+#if MPI_PARALLEL_ENABLED
+  // Build (or refresh) the rank-packed metadata BEFORE packing so the kernel can
+  // write off-rank data straight into the aggregate buffer (fused pack/aggregate).
+  if (rank_packed_bvals_nvars_ != nvar ||
+      rank_packed_mesh_seq_ != pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq()) {
+    BuildRankPackedVarMetadata(nvar);
+  }
+  auto aggsbuf = rank_sendbuf_vars_;
+  auto sendoff = send_agg_offset_;
+#endif
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   int nmnv = nmb*nnghbr*nvar;
   Kokkos::TeamPolicy<> policy(DevExeSpace(), nmnv, Kokkos::AUTO);
@@ -126,6 +137,22 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
         // else copy into send buffer for MPI communication below
 
         } else {
+#if MPI_PARALLEL_ENABLED
+          // off-rank: write straight into the rank-packed aggregate send buffer
+          // at this entry's base offset (fuses the former RankPackAgg kernel).
+          int base = sendoff(m*nnghbr + n);
+          if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i) {
+              aggsbuf(base + (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = a(m,v,k,j,i);
+            });
+          } else {
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i) {
+              aggsbuf(base + (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
+            });
+          }
+#else
           // if neighbor is at same or finer level, load data from u0
           if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
@@ -139,6 +166,7 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
               sbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) ) = ca(m,v,k,j,i);
             });
           }
+#endif
         }
       });
     } // end if-neighbor-exists block
@@ -190,11 +218,19 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
 
           // else copy into send buffer for MPI communication below
           } else {
+#if MPI_PARALLEL_ENABLED
+            int base = sendoff(m*nnghbr + n);
+            Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
+            [&](const int i) {
+              aggsbuf(base+ndat+ (i-il + ni*(j-jl + nj*(k-kl + nk*v))) )=ca(m,v,k,j,i);
+            });
+#else
             // load data from coarse_u0
             Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
             [&](const int i) {
               sbuf[n].vars(m,ndat+ (i-il + ni*(j-jl + nj*(k-kl + nk*v))) )=ca(m,v,k,j,i);
             });
+#endif
           }
         });
       }
@@ -204,44 +240,21 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendCC(DvceArray5D<Real> &a,
   }
 
 #if MPI_PARALLEL_ENABLED
-  // Send boundary buffer to neighboring MeshBlocks using MPI
+  // Send boundary buffer to neighboring MeshBlocks using MPI. The SendBuff kernel
+  // above already wrote every off-rank payload directly into rank_sendbuf_vars_,
+  // so this single fence (which guarantees that kernel has completed) is all that
+  // is needed before posting the sends.
   Kokkos::fence();
-  auto &is_z4c = is_z4c_;
-  int my_rank = global_variable::my_rank;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
-        // index and rank of destination Neighbor
-        int dn = nghbr.h_view(m,n).dest;
-        int drank = nghbr.h_view(m,n).rank;
-        if (drank != my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
-          int tag = CreateBvals_MPI_Tag(lid, dn);
+  bool no_errors = true;
+  std::fill(send_var_reqs_.begin(), send_var_reqs_.end(), MPI_REQUEST_NULL);
 
-          // get ptr to send buffer when neighbor is at coarser/same/fine level
-          int data_size = nvar;
-          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= sendbuf[n].icoar_ndat;
-          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            if (is_z4c) {
-              data_size *= sendbuf[n].isame_z4c_ndat;
-            } else {
-              data_size *= sendbuf[n].isame_ndat;
-            }
-          } else {
-            data_size *= sendbuf[n].ifine_ndat;
-          }
-          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
-
-          int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_vars, &(sendbuf[n].vars_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-        }
-      }
-    }
+  // Payload-only Isend: the receiver already knows the layout of this payload
+  // from the one-shot header exchange done during BuildRankPackedVarMetadata.
+  for (std::size_t i = 0; i < send_var_msgs_.size(); ++i) {
+    const auto &msg = send_var_msgs_[i];
+    int ierr = MPI_Isend(rank_sendbuf_vars_.data() + msg.offset, msg.data_size,
+                     MPI_ATHENA_REAL, msg.rank, 1, comm_vars, &send_var_reqs_[i]);
+    if (ierr != MPI_SUCCESS) no_errors = false;
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -271,18 +284,12 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
 
   bool bflag = false;
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) { // neighbor exists and not a physical boundary
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          int test;
-          int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-          if (!(static_cast<bool>(test))) {
-            bflag = true;
-          }
-        }
-      }
+  for (std::size_t i = 0; i < recv_var_reqs_.size(); ++i) {
+    int test;
+    int ierr = MPI_Test(&recv_var_reqs_[i], &test, MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (!(static_cast<bool>(test))) {
+      bflag = true;
     }
   }
   // Quit if MPI error detected
@@ -297,9 +304,16 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack
+  // Off-rank payloads are read directly out of the rank-packed aggregate recv
+  // buffer (fuses the former RankUnpackScatter kernel); on-rank payloads remain
+  // in their per-neighbour recv buffers, written there directly by the sender.
 
   int nvar = a.extent_int(1);  // TODO(@user): 2nd index from L of in array must be NVAR
   auto &mblev = pmy_pack->pmb->mb_lev;
+#if MPI_PARALLEL_ENABLED
+  auto aggrbuf = rank_recvbuf_vars_;
+  auto recvoff = recv_agg_offset_;
+#endif
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
@@ -341,6 +355,11 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
       int nk = ku - kl + 1;
       int nkj  = nk*nj;
 
+      // base offset of this (m,n) payload in the aggregate buffer; -1 == on-rank
+#if MPI_PARALLEL_ENABLED
+      const int base = recvoff(m*nnghbr + n);
+#endif
+
       // Middle loop over k,j
       Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
         int k = idx / nj;
@@ -351,14 +370,24 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
         if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
-            a(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
+            const int bi = (i-il + ni*(j-jl + nj*(k-kl + nk*v)));
+#if MPI_PARALLEL_ENABLED
+            a(m,v,k,j,i) = (base >= 0) ? aggrbuf(base + bi) : rbuf[n].vars(m, bi);
+#else
+            a(m,v,k,j,i) = rbuf[n].vars(m, bi);
+#endif
           });
 
         // if neighbor is at coarser level, load data into coarse_u0
         } else {
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
-            ca(m,v,k,j,i) = rbuf[n].vars(m, (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
+            const int bi = (i-il + ni*(j-jl + nj*(k-kl + nk*v)));
+#if MPI_PARALLEL_ENABLED
+            ca(m,v,k,j,i) = (base >= 0) ? aggrbuf(base + bi) : rbuf[n].vars(m, bi);
+#else
+            ca(m,v,k,j,i) = rbuf[n].vars(m, bi);
+#endif
           });
         }
       });
@@ -388,6 +417,9 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
         int nk = ku - kl + 1;
         int nkj  = nk*nj;
         int ndat = nvar*rbuf[n].isame_ndat; // size of same level data packed in buff
+#if MPI_PARALLEL_ENABLED
+        const int base = recvoff(m*nnghbr + n);
+#endif
 
         // Middle loop over k,j
         Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkj), [&](const int idx) {
@@ -398,7 +430,12 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackCC(DvceArray5D<Real> &a,
           // load data into coarse_u0
           Kokkos::parallel_for(Kokkos::ThreadVectorRange(tmember,il,iu+1),
           [&](const int i) {
-            ca(m,v,k,j,i) = rbuf[n].vars(m,ndat + (i-il + ni*(j-jl + nj*(k-kl + nk*v))) );
+            const int bi = ndat + (i-il + ni*(j-jl + nj*(k-kl + nk*v)));
+#if MPI_PARALLEL_ENABLED
+            ca(m,v,k,j,i) = (base >= 0) ? aggrbuf(base + bi) : rbuf[n].vars(m, bi);
+#else
+            ca(m,v,k,j,i) = rbuf[n].vars(m, bi);
+#endif
           });
         });
       }

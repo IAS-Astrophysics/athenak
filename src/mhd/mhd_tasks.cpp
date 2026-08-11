@@ -69,9 +69,9 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.recvb     = tl["stagen"]->AddTask(&MHD::RecvB, this, id.sendb);
   id.sendb_shr = tl["stagen"]->AddTask(&MHD::SendB_Shr, this, id.recvb);
   id.recvb_shr = tl["stagen"]->AddTask(&MHD::RecvB_Shr, this, id.sendb_shr);
-  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.recvb_shr);
-  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.bcs);
-  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.prol);
+  id.prol      = tl["stagen"]->AddTask(&MHD::Prolongate, this, id.recvb_shr);
+  id.bcs       = tl["stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, id.prol);
+  id.c2p       = tl["stagen"]->AddTask(&MHD::ConToPrim, this, id.bcs);
   id.newdt     = tl["stagen"]->AddTask(&MHD::NewTimeStep, this, id.c2p);
 
   // assemble "after_stagen" task list
@@ -79,6 +79,47 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   // although RecvFlux/U/E/B functions check that all recvs complete, add ClearRecv to
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
+
+  if (has_any_sts_diffusion) {
+    tl["before_parabolic_stagen"]->AddTask(&MHD::InitRecvParabolic, this, none);
+
+    TaskID pclearf = tl["parabolic_stagen"]->AddTask(&MHD::ClearSTSFlux, this, none);
+    TaskID pflux = tl["parabolic_stagen"]->AddTask(&MHD::STSFluxes, this, pclearf);
+    TaskID psendf = tl["parabolic_stagen"]->AddTask(&MHD::SendFlux, this, pflux);
+    TaskID precvf = tl["parabolic_stagen"]->AddTask(&MHD::RecvFlux, this, psendf);
+    TaskID update_dependency = precvf;
+    if (has_any_sts_field_update) {
+      TaskID pcleare = tl["parabolic_stagen"]->AddTask(&MHD::ClearSTSEField,
+                                                       this, precvf);
+      TaskID pefld = tl["parabolic_stagen"]->AddTask(&MHD::STSEField, this, pcleare);
+      TaskID psende = tl["parabolic_stagen"]->AddTask(&MHD::SendE, this, pefld);
+      update_dependency = tl["parabolic_stagen"]->AddTask(&MHD::RecvE, this, psende);
+    }
+    TaskID pupdt = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateU, this,
+                                                   update_dependency);
+    TaskID state_dependency = pupdt;
+    if (has_any_sts_field_update) {
+      state_dependency = tl["parabolic_stagen"]->AddTask(&MHD::STSUpdateB, this, pupdt);
+    }
+    TaskID prestu = tl["parabolic_stagen"]->AddTask(&MHD::RestrictU, this,
+                                                    state_dependency);
+    TaskID psendu = tl["parabolic_stagen"]->AddTask(&MHD::SendU, this, prestu);
+    TaskID precvu = tl["parabolic_stagen"]->AddTask(&MHD::RecvU, this, psendu);
+    TaskID boundary_dependency = precvu;
+    if (has_any_sts_field_update) {
+      TaskID prestb = tl["parabolic_stagen"]->AddTask(&MHD::RestrictB, this, precvu);
+      TaskID psendb = tl["parabolic_stagen"]->AddTask(&MHD::SendB, this, prestb);
+      boundary_dependency = tl["parabolic_stagen"]->AddTask(&MHD::RecvB, this, psendb);
+    }
+    TaskID pprol = tl["parabolic_stagen"]->AddTask(&MHD::Prolongate, this,
+                                                   boundary_dependency);
+    TaskID pbcs = tl["parabolic_stagen"]->AddTask(&MHD::ApplyPhysicalBCs, this, pprol);
+    TaskID pc2p = tl["parabolic_stagen"]->AddTask(&MHD::ConToPrim, this, pbcs);
+    (void) tl["parabolic_stagen"]->AddTask(&MHD::STSRefreshTimeStep, this, pc2p);
+
+    TaskID pcsend = tl["after_parabolic_stagen"]->AddTask(&MHD::ClearSend, this, none);
+    (void) tl["after_parabolic_stagen"]->AddTask(&MHD::ClearRecv, this, pcsend);
+  }
 
   return;
 }
@@ -156,6 +197,26 @@ TaskStatus MHD::InitRecv(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \brief Post receives required for one STS parabolic stage.
+
+TaskStatus MHD::InitRecvParabolic(Driver *pdrive, int stage) {
+  (void) pdrive;
+  (void) stage;
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+  if (pmy_pack->pmesh->multilevel) {
+    tstat = pbval_u->InitFluxRecv(nmhd+nscalars);
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+  if (has_any_sts_field_update) {
+    tstat = pbval_b->InitRecv(3);
+    if (tstat != TaskStatus::complete) return tstat;
+    tstat = pbval_b->InitFluxRecv(3);
+  }
+  return tstat;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus MHD::CopyCons
 //! \brief Simple task list function that copies u0 --> u1, and b0 --> b1 in first stage
 
@@ -194,16 +255,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     CalculateFluxes<MHD_RSolver::hlle_gr>(pdrive, stage);
   }
 
-  // Add diffusive fluxes
-  if (pcond != nullptr) {
-    pcond->AddHeatFluxes(w0, peos->eos_data, uflx);
-  }
-  if (pvisc != nullptr) {
-    pvisc->AddViscousFluxes(w0, peos->eos_data, uflx);
-  }
-  if ((presist != nullptr) && (peos->eos_data.is_ideal)) {
-    presist->AddResistiveFluxes(b0, uflx);
-  }
+  // STS-selected diffusion is advanced only in the parabolic half-sweeps.
+  AddSelectedDiffusionFluxes(parabolic::DiffusionSelection::explicit_only);
 
   // call FOFC if necessary
   if (use_fofc) {
@@ -377,11 +430,7 @@ TaskStatus MHD::EField(Driver *pdrive, int stage) {
   // Use CT to compute corner E
   CornerE(pdrive, stage);
 
-  // Add resistive electric field (if needed)
-  if (presist != nullptr) {
-    presist->AddResistiveEMFs(b0, efld);
-  }
-  // TODO(@user): Add more resistive effects here
+  AddSelectedDiffusionEMF(parabolic::DiffusionSelection::explicit_only);
 
   if (psbox_b != nullptr) {
     // only execute when (2D)
@@ -505,7 +554,9 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
   if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
 
-  // physical BCs
+  // Step 3: apply physical BCs to the fine array. This is called *after* prolongation,
+  //         so that the corner ghost zones between a coarse neighbor and a physical
+  //         boundary read valid data.
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);
   pbval_b->BFieldBCs((pmy_pack), (pbval_b->b_in), b0);
 
@@ -526,12 +577,21 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     pbval_u->FillCoarseInBndryCC(u0, coarse_u0);
     pbval_b->FillCoarseInBndryFC(b0, coarse_b0);
+
+    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
+    //         reads valid data in coarse ghost zones that sit at a physical boundary.
+    if (!(pmy_pack->pmesh->strictly_periodic)) {
+      pbval_u->HydroBCsCoarse((pmy_pack), (pbval_u->u_in), coarse_u0);
+      pbval_b->BFieldBCsCoarse((pmy_pack), (pbval_b->b_in), coarse_b0);
+    }
+
     if (pmy_pack->pmesh->pmr->prolong_prims) {
       pbval_u->ConsToPrimCoarseBndry(coarse_u0, coarse_b0, coarse_w0);
       pbval_u->ProlongateCC(w0, coarse_w0);
       pbval_b->ProlongateFC(b0, coarse_b0);
       pbval_u->PrimToConsFineBndry(w0, b0, u0);
     } else {
+      // Step 2: prolongate fine ghost zones from the coarse array.
       pbval_u->ProlongateCC(u0, coarse_u0);
       pbval_b->ProlongateFC(b0, coarse_b0);
     }

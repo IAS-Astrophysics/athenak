@@ -29,6 +29,7 @@
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "gravity/gravity.hpp"
 #include "outputs.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -169,7 +170,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==153) && (pm->pmb_pack->prhine == nullptr)) {
+  if (ivar==153 && (pm->pmb_pack->pgrav == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of gravity potential requested in <output> block '"
+       << out_params.block_name << "' but gravity object not constructed."
+       << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==154) && (pm->pmb_pack->prhine == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of rhine_aux requested in <output> block '"
        << out_params.block_name << "' but RHINE object not constructed."
@@ -633,6 +641,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("force1",0,&(pm->pmb_pack->pturb->force));
       outvars.emplace_back("force2",1,&(pm->pmb_pack->pturb->force));
       outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
+    }
+
+    // gravity potential
+    if (variable.compare("grav_phi") == 0) {
+      outvars.emplace_back("grav_phi",0,&(pm->pmb_pack->pgrav->phi));
     }
 
     // ADM variables, excluding gauge
