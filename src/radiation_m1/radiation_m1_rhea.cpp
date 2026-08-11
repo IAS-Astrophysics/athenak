@@ -19,9 +19,9 @@
 //! implementations, but the CUDA/HIP/SYCL code paths below were never compiled or
 //! executed on real hardware in this environment -- only the `#else` (CPU/Serial/OpenMP)
 //! path was. Do not read "structurally validated" as "confirmed working."  Concretely:
-//! the first icpx/SYCL compile on Aurora (2026-07-29) caught a mis-transcribed device-index
-//! accessor in ResolveDevice() that the CUDA and HIP branches shared, so treat the
-//! remaining uncompiled CUDA/HIP branches with the same suspicion.
+//! the first icpx/SYCL compile on Aurora (2026-07-29) caught a mis-transcribed
+//! device-index accessor in ResolveDevice() that the CUDA and HIP branches shared, so
+//! treat the remaining uncompiled CUDA/HIP branches with the same suspicion.
 
 #include "radiation_m1/radiation_m1_rhea.hpp"
 
@@ -103,9 +103,10 @@ torch::Device ResolveDevice() {
 #elif defined(KOKKOS_ENABLE_SYCL)
   // Kokkos::SYCL exposes no public device-index accessor (only
   // impl_internal_space_instance()->m_syclDev), so go through the backend-agnostic
-  // Kokkos_Core.hpp:106 `int device_id() noexcept`, whose SYCL branch returns exactly that
-  // same Impl::SYCLInternal::m_syclDev (Kokkos_Core.cpp:187-188). m_syclDev is `static`,
-  // i.e. one SYCL device per process, so there is no instance to disambiguate anyway.
+  // Kokkos_Core.hpp:106 `int device_id() noexcept`, whose SYCL branch returns exactly
+  // that same Impl::SYCLInternal::m_syclDev (Kokkos_Core.cpp:187-188). m_syclDev is
+  // `static`, i.e. one SYCL device per process, so there is no instance to disambiguate
+  // anyway.
   int const dev = Kokkos::device_id();
   return torch::Device(torch::kXPU, static_cast<c10::DeviceIndex>(dev));
 #else

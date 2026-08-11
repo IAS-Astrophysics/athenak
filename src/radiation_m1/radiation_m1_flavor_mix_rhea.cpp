@@ -453,9 +453,9 @@ TaskStatus RadiationM1::ApplyRheaMixing(
                                  * code_units.TimeConversion(cgs_units);
 
   // Counts cells where the Rhea prediction itself is non-finite (NaN/Inf) and mixing was
-  // skipped there -- see the finiteness screen in block [C] below. Newer checkpoints (e.g.
-  // model7278_cuda.pt) return NaN rather than throwing on the same Box3D edge cases the old
-  // checkpoint crashed on (exact-zero density, near-luminal flux factor -- see
+  // skipped there -- see the finiteness screen in block [C] below. Newer checkpoints
+  // (e.g. model7278_cuda.pt) return NaN rather than throwing on the same Box3D edge cases
+  // the old checkpoint crashed on (exact-zero density, near-luminal flux factor -- see
   // runs/rhea_box3d_bug_report/), and `stability` alone does not flag these cells safely:
   // it comes back a well-defined 0.0 ("unstable"), which would otherwise route them into
   // the mixing branch below with NaN inputs.
@@ -562,8 +562,9 @@ TaskStatus RadiationM1::ApplyRheaMixing(
         if (!finite) {
           // The model's prediction for this cell is unusable (NaN/Inf) -- most likely a
           // Box3D edge case (see runs/rhea_box3d_bug_report/). Leave u0_ untouched, i.e.
-          // treat this cell as "no mixing" this stage, rather than letting a NaN propagate
-          // through RestrictToPhysical/ReconstructMixingMatrix/the BGK relaxation below:
+          // treat this cell as "no mixing" this stage, rather than letting a NaN
+          // propagate through RestrictToPhysical/ReconstructMixingMatrix/the BGK
+          // relaxation below:
           // that relaxation writes u0_ = lambda*u0_ + (1-lambda)*N_mix even when lambda=1
           // (the "stable" no-op case), and (1-1)*NaN = NaN in IEEE754, so the existing
           // stability-threshold branch alone would not have caught this.
@@ -675,7 +676,8 @@ TaskStatus RadiationM1::ApplyRheaMixing(
   Kokkos::deep_copy(nan_count_host, nan_count_dev);
   if (nan_count_host > 0 && global_variable::my_rank == 0) {
     std::cout << "RadiationM1::ApplyRheaMixing: WARNING - Rhea prediction non-finite at "
-              << nan_count_host << " cell(s) this stage; mixing skipped there." << std::endl;
+              << nan_count_host << " cell(s) this stage; mixing skipped there."
+              << std::endl;
   }
 
   return TaskStatus::complete;

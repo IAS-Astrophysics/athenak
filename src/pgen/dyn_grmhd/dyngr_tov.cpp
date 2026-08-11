@@ -635,7 +635,8 @@ void TOVHistory(HistoryData *pdata, Mesh *pm) {
     mb_max = fmax(mb_max, w0_(m,IDN,k,j,i));
     mb_alp_min = fmin(mb_alp_min, adm.alpha(m, k, j, i));
     mb_temp_max = fmax(mb_temp_max, temperature_(m,0,k,j,i));
-  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min), Kokkos::Max<Real>(temp_max));
+  }, Kokkos::Max<Real>(rho_max), Kokkos::Min<Real>(alpha_min),
+     Kokkos::Max<Real>(temp_max));
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we need MPI_MAX
   // and MPI_MIN operations instead. This is a cheap hack to make it work as intended.
