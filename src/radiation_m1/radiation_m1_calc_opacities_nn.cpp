@@ -20,6 +20,8 @@
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_nurates.hpp"
 
+#include <cstdlib>   // std::exit, EXIT_FAILURE
+#include <iostream>  // std::cout (device-mismatch fatal error)
 #include <vector>
 
 namespace radiationm1 {
@@ -154,12 +156,41 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   //          x_full_dev(flat, col)  col = normalized EOS (8, no one-hot)
   // Grow-only persistent scratch: (re)allocate only when the local cell count
   // exceeds the current capacity, then reuse across steps.  This removes the
-  // per-step cudaMalloc/cudaFree calls that can serialize the device.  Active
+  // per-step device malloc/free calls that can serialize the device.  Active
   // rows are fully written before use, so no per-step zero-initialisation is needed.
   // Dynamic batch: the forward runs on all N_total local cells (no padding).
-  // Inject the Kokkos CUDA stream so the LibTorch forward and the profiler events
-  // run on it (the emulator TU is kept free of Kokkos headers for build speed).
-  nn_emulator.SetStream(static_cast<void *>(Kokkos::Cuda().cuda_stream()));
+  // Inject the Kokkos stream/queue so the LibTorch forward and the profiler events run
+  // on it (the emulator TU is kept free of Kokkos headers for build speed, so this is
+  // the Kokkos-side half of that split and the only place the backend is named).
+  // Note the two handles differ in kind, not just type: cudaStream_t is itself a
+  // pointer and is passed by value, whereas c10::xpu::getStreamFromExternal wants a
+  // sycl::queue*, so the SYCL branch passes the ADDRESS of Kokkos's queue.  That
+  // reference is stable for the run -- Kokkos owns the queue, we only borrow it.
+  // DevExeSpace() rather than Kokkos::Cuda(): it is the same singleton instance, but
+  // going through the alias keeps this consistent with how the rest of AthenaK names
+  // the device space.
+  // Torch was given a device index at Load(); the stream/queue below comes from Kokkos.
+  // Nothing else checks that those two name the SAME physical device, and a mismatch is
+  // silent-but-wrong: work would be submitted to one tile while the tensors live on
+  // another.  On Aurora they agree because gpu_tile_compact.sh sets one ZE_AFFINITY_MASK
+  // per rank (so Kokkos sees a single device, index 0), but that is an assumption about
+  // the launcher, not something the code enforces -- so enforce it here.  An int compare
+  // per step is free next to the forward pass.
+  if (nn_emulator.DeviceIndex() != Kokkos::device_id()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "NN opacity: Torch device index (" << nn_emulator.DeviceIndex()
+              << ") != Kokkos::device_id() (" << Kokkos::device_id() << ")." << std::endl
+              << "The model and the borrowed stream are on different devices."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+#if defined(KOKKOS_ENABLE_CUDA)
+  nn_emulator.SetStream(static_cast<void *>(DevExeSpace().cuda_stream()));
+#elif defined(KOKKOS_ENABLE_SYCL)
+  nn_emulator.SetStream(static_cast<void *>(&DevExeSpace().sycl_queue()));
+#else
+#error "NN opacity requires a GPU-backed Kokkos build (Kokkos_ENABLE_CUDA or _SYCL)."
+#endif
   nn_emulator.ProfilePollAndReport();
   const bool nn_scratch_will_grow = N_total > nn_scratch_capacity_;
   const size_t nn_scratch_bytes = static_cast<size_t>(N_total) *
@@ -249,7 +280,7 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   auto nn_view = nn_view_;   // persistent (grow-only) buffer, N_total × 32 in use
 
   Kokkos::Profiling::pushRegion("NN::InferPrebuilt");
-  // GPU-resident LibTorch forward on the Kokkos CUDA stream (dynamic N_total,
+  // GPU-resident LibTorch forward on the Kokkos stream/queue (dynamic N_total,
   // zero-copy input).  Runs in-line with the gather (before) and readout (after)
   // on the shared stream, so no cross-stream fence/event handshake is needed.
   nn_emulator.InferPrebuilt(x_full_dev.data(), nn_view.data(), N_total);
@@ -851,7 +882,7 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
       });  // par_for kirchhoff
   nn_emulator.ProfileMark(NNProfilePoint::kirchhoff);
   // Do not fence here.  Every NN path and all downstream RadiationM1 kernels use
-  // the same Kokkos CUDA stream, so stream ordering supplies the data dependency.
+  // the same Kokkos stream/queue, so stream ordering supplies the data dependency.
   // The normal nurates opacity task likewise returns asynchronously.  A global
   // Kokkos::fence() here stalled the task scheduler and all Kokkos execution
   // instances, undoing the stream/allocation fixes above.

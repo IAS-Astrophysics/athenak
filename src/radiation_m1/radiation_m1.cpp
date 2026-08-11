@@ -135,15 +135,26 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 #if ENABLE_NN_OPACITY
     nn_model_path = pin->GetString("bns_nurates", "nn_model_path");
     nn_stats_dir  = pin->GetOrAddString("bns_nurates", "nn_stats_dir", "checkpoints");
-    const bool nn_use_cuda =
-        pin->GetOrAddBoolean("bns_nurates", "nn_use_cuda", true);
-    if (!nn_use_cuda) {
+    // Renamed from nn_use_cuda now that the emulator also runs on Intel XPU; fail
+    // loudly on the old key rather than silently ignoring a deliberate `false`.
+    if (pin->DoesParameterExist("bns_nurates", "nn_use_cuda")) {
       throw std::runtime_error(
-          "NN opacity requires nn_use_cuda=true; the CPU inference path is not supported");
+          "bns_nurates/nn_use_cuda was renamed to nn_use_gpu (the NN emulator is no "
+          "longer CUDA-only); please update the input file");
     }
-    nn_emulator.Load(nn_model_path, nn_stats_dir, nn_use_cuda);
+    const bool nn_use_gpu =
+        pin->GetOrAddBoolean("bns_nurates", "nn_use_gpu", true);
+    if (!nn_use_gpu) {
+      throw std::runtime_error(
+          "NN opacity requires nn_use_gpu=true; the CPU inference path is not supported");
+    }
+    // Hand the emulator the device index Kokkos itself resolved to.  Never compute one
+    // independently (from the MPI rank, or the launcher's environment): AthenaK has no
+    // explicit rank-to-GPU binding in src/, so this is the only way Torch and Kokkos are
+    // guaranteed to land on the same physical device however the launcher bound them.
+    nn_emulator.Load(nn_model_path, nn_stats_dir, Kokkos::device_id());
     // Optional low-overhead profiler.  It samples one opacity call per interval,
-    // records CUDA events without synchronizing, and reports the completed sample
+    // records device events without synchronizing, and reports the completed sample
     // on a later call together with Torch allocator counters and cross-rank
     // min/mean/max.  Disabled by default: the normal path pays only no-op branches.
     const bool nn_profile =

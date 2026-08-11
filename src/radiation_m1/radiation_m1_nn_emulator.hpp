@@ -16,8 +16,9 @@
 
 namespace radiationm1 {
 
-// CUDA-event checkpoints used by the opt-in, asynchronously collected NN profiler.
-// Keep the enum here (rather than exposing CUDA types) so radiation_m1.hpp stays light.
+// Device-event checkpoints used by the opt-in, asynchronously collected NN profiler.
+// Keep the enum here (rather than exposing cudaEvent_t / c10::xpu::XPUEvent) so
+// radiation_m1.hpp stays light and backend-agnostic.
 enum class NNProfilePoint : int {
   start = 0,
   gather,
@@ -72,14 +73,32 @@ class NNOpacityEmulator {
   NNOpacityEmulator(NNOpacityEmulator &&) noexcept;
   NNOpacityEmulator &operator=(NNOpacityEmulator &&) noexcept;
 
+  // device_index MUST be the index Kokkos itself resolved to (Kokkos::device_id()),
+  // never one computed independently from the MPI rank or the launcher environment:
+  // AthenaK has no explicit rank-to-GPU binding anywhere in src/, so querying Kokkos
+  // is the only way Torch and Kokkos are guaranteed to agree on the physical device.
   void Load(const std::string &model_path, const std::string &stats_dir,
-            bool use_cuda);
+            int device_index);
 
-  // Provide the CUDA stream the forward and profiler events run on.  Passed as an
-  // opaque void* (reinterpreted as cudaStream_t in the .cpp) so this header — and
-  // the ~32 TUs that include radiation_m1.hpp — stay free of Kokkos/CUDA headers.
-  // The caller (a Kokkos TU) passes (void*)Kokkos::Cuda().cuda_stream().  Must be
-  // called before InferPrebuilt / ProfileBegin each step.
+  // Device index the model was actually loaded onto (-1 before Load).  Exposed so the
+  // Kokkos-side caller can assert it still matches Kokkos::device_id() before handing
+  // over a stream: nothing else checks that the Torch device and the borrowed Kokkos
+  // queue refer to the same physical tile, and a mismatch would submit work to one tile
+  // while reading memory resident on another.
+  int DeviceIndex() const;
+
+  // Provide the device queue/stream the forward and profiler events run on.  Passed
+  // as an opaque void* so this header — and the ~32 TUs that include
+  // radiation_m1.hpp — stay free of Kokkos/CUDA/SYCL headers.  What the caller
+  // (a Kokkos TU) must pass differs per backend, because the two runtimes' handles
+  // differ in kind, not just in type:
+  //   CUDA: (void*)DevExeSpace().cuda_stream()   — cudaStream_t IS a pointer, passed
+  //                                                by value
+  //   SYCL: (void*)&DevExeSpace().sycl_queue()   — a POINTER TO the Kokkos-owned
+  //                                                sycl::queue, which must outlive
+  //                                                every InferPrebuilt call (it does:
+  //                                                Kokkos owns it for the run)
+  // Must be called before InferPrebuilt / ProfileBegin each step.
   void SetStream(void *stream) const;
 
   void InferPrebuilt(const float *x_full_ptr, float *nn_out_ptr, int N) const;
@@ -90,10 +109,12 @@ class NNOpacityEmulator {
   const float *HostOutStd() const;
 
   // Opt-in sampled profiler.  Each hook is a predictable branch when disabled.
-  // Samples use CUDA events on the Kokkos stream and are collected on
-  // a later opacity call with cudaEventQuery(), never a fence/synchronize.  At the
-  // reporting interval, min/mean/max phase times and allocator deltas are reduced
-  // across ranks and printed by rank zero.
+  // Samples use device events recorded on the Kokkos stream/queue and are collected
+  // on a later opacity call with a non-blocking query, never a fence/synchronize.
+  // At the reporting interval, min/mean/max phase times and allocator deltas are
+  // reduced across ranks and printed by rank zero.
+  // ConfigureProfiling() silently declines (with a rank-0 warning) on a backend or
+  // device that cannot time events — see NN_PROFILE support notes in the .cpp.
   void ConfigureProfiling(bool enabled, int interval);
   void ProfilePollAndReport() const;
   void ProfileBegin(int n_cells, bool kokkos_scratch_grew,
