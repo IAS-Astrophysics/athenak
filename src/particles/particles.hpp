@@ -82,6 +82,9 @@ class Particles {
   TaskStatus ClearSend(Driver *pdriver, int stage);
   TaskStatus ClearRecv(Driver *pdriver, int stage);
 
+  // particle pusher implementations
+  TaskStatus PushDrift(Driver *pdriver, int stage);
+
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
 };
