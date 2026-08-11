@@ -1,0 +1,51 @@
+# Deterministic two-block particle migration regression test.
+
+<job>
+basename = particle_migration_gpu
+
+<mesh>
+nghost = 2
+nx1 = 8
+x1min = -1.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 8
+x2min = -1.0
+x2max = 1.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 8
+x3min = -1.0
+x3max = 1.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 4
+nx2 = 8
+nx3 = 8
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.8
+nlim = 1
+tlim = 0.1
+ndiag = 1
+
+<particles>
+particle_type = cosmic_ray
+ppc = 0.015625
+pusher = drift
+
+<problem>
+pgen_name = particle_drift
+migration_test = true
+user_hist = true
+
+<output1>
+file_type = hst
+data_format = %24.16e
+dcycle = 1
+user_hist_only = true

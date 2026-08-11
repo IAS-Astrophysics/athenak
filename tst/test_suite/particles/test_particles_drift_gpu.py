@@ -16,7 +16,9 @@ def test_particle_drift_gpu():
     """Drift known particles on CUDA without changing their count or identifiers."""
     try:
         HISTORY.unlink(missing_ok=True)
-        assert testutils.run("inputs/particle_drift.athinput"), "particle drift run failed"
+        assert testutils.run(
+            "inputs/particle_drift.athinput"
+        ), "particle drift run failed"
 
         if not HISTORY.exists():
             pytest.fail(f"particle drift history was not written: {HISTORY}")
