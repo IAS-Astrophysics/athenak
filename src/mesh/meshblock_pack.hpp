@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "coordinates/coordinates.hpp"
+#include "diffusion/parabolic_process.hpp"
 #include "driver/driver.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
@@ -85,11 +86,15 @@ class MeshBlockPack {
 
   // map for task lists which operate over all MeshBlocks in this MeshBlockPack
   std::map<std::string, std::shared_ptr<TaskList>> tl_map;
+  std::vector<parabolic::ParabolicProcessDescriptor> parabolic_processes;
 
   // functions
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocks(ParameterInput *pin);
   void AddCoordinates(ParameterInput *pin);
+  void RegisterParabolicProcess(parabolic::ParabolicProcessDescriptor process) {
+    parabolic_processes.push_back(process);
+  }
 
  private:
   // data

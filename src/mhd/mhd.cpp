@@ -36,7 +36,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_w0("cprim",1,1,1,1,1),
     coarse_b0("cB_fc",1,1,1,1),
     u1("cons1",1,1,1,1,1),
+    u_sts0("u_sts0",1,1,1,1,1),
+    u_sts1("u_sts1",1,1,1,1,1),
+    u_sts2("u_sts2",1,1,1,1,1),
+    u_sts_rhs("u_sts_rhs",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
+    b_sts0("b_sts0",1,1,1,1),
+    b_sts1("b_sts1",1,1,1,1),
+    b_sts2("b_sts2",1,1,1,1),
+    b_sts_rhs("b_sts_rhs",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
     e3x1("e3x1",1,1,1,1),
@@ -104,6 +112,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesParameterExist("mhd","nu_iso") ||
       pin->DoesParameterExist("mhd","nu_aniso")) {
     pvisc = new Viscosity("mhd", ppack, pin);
+    const bool active = (pvisc->nu_iso != 0.0 || pvisc->nu_aniso != 0.0);
+    has_sts_viscosity = active &&
+        (pvisc->mode == parabolic::DiffusionSelection::sts_only);
+    has_explicit_viscosity = active &&
+        (pvisc->mode == parabolic::DiffusionSelection::explicit_only);
+    if (active) {
+      ppack->RegisterParabolicProcess({"mhd/viscosity",
+                                       parabolic::ParabolicProcessOwner::mhd,
+                                       pvisc->mode, &(pvisc->dtnew)});
+    }
   } else {
     pvisc = nullptr;
   }
@@ -114,6 +132,16 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesParameterExist("mhd","eta_ohm") ||
       pin->DoesParameterExist("mhd","eta_ad")) {
     presist = new Resistivity(ppack, pin);
+    const bool active = (presist->eta_ohm != 0.0 || presist->eta_ad != 0.0);
+    has_sts_resistivity = active &&
+        (presist->mode == parabolic::DiffusionSelection::sts_only);
+    has_explicit_resistivity = active &&
+        (presist->mode == parabolic::DiffusionSelection::explicit_only);
+    if (active) {
+      ppack->RegisterParabolicProcess({"mhd/resistivity",
+                                       parabolic::ParabolicProcessOwner::mhd,
+                                       presist->mode, &(presist->dtnew)});
+    }
   } else {
     presist = nullptr;
   }
@@ -124,6 +152,17 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       pin->DoesParameterExist("mhd","alpha_spitzer")) {
     if (peos->eos_data.is_ideal) {
       pcond = new Conduction("mhd", ppack, pin);
+      const bool active = (pcond->alpha_iso != 0.0 || pcond->alpha_aniso != 0.0 ||
+                           pcond->alpha_spitzer);
+      has_sts_conduction = active &&
+          (pcond->mode == parabolic::DiffusionSelection::sts_only);
+      has_explicit_conduction = active &&
+          (pcond->mode == parabolic::DiffusionSelection::explicit_only);
+      if (active) {
+        ppack->RegisterParabolicProcess({"mhd/conduction",
+                                         parabolic::ParabolicProcessOwner::mhd,
+                                         pcond->mode, &(pcond->dtnew)});
+      }
     } else {
       std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
                 << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
@@ -132,6 +171,11 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   } else {
     pcond = nullptr;
   }
+
+  has_any_sts_cell_update = (has_sts_viscosity || has_sts_conduction ||
+                             (has_sts_resistivity && peos->eos_data.is_ideal));
+  has_any_sts_field_update = has_sts_resistivity;
+  has_any_sts_diffusion = (has_any_sts_cell_update || has_any_sts_field_update);
 
   // Source terms (if needed)
   if (pin->DoesBlockExist("mhd_srcterms")) {
@@ -333,9 +377,29 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      if (has_any_sts_cell_update) {
+        Kokkos::realloc(u_sts0,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts1,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts2,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts_rhs, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
+      }
       Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
       Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);
       Kokkos::realloc(b1.x3f, nmb, ncells3+1, ncells2, ncells1);
+      if (has_any_sts_field_update) {
+        Kokkos::realloc(b_sts0.x1f,    nmb, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(b_sts0.x2f,    nmb, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(b_sts0.x3f,    nmb, ncells3+1, ncells2, ncells1);
+        Kokkos::realloc(b_sts1.x1f,    nmb, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(b_sts1.x2f,    nmb, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(b_sts1.x3f,    nmb, ncells3+1, ncells2, ncells1);
+        Kokkos::realloc(b_sts2.x1f,    nmb, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(b_sts2.x2f,    nmb, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(b_sts2.x3f,    nmb, ncells3+1, ncells2, ncells1);
+        Kokkos::realloc(b_sts_rhs.x1f, nmb, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(b_sts_rhs.x2f, nmb, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(b_sts_rhs.x3f, nmb, ncells3+1, ncells2, ncells1);
+      }
 
       // allocate fluxes, electric fields
       Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1+1);

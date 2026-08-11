@@ -10,6 +10,8 @@
 
 #include <float.h>
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <iostream>
 #include <string> // string
@@ -21,6 +23,27 @@
 #include "eos/eos.hpp"
 #include "viscosity.hpp"
 
+namespace {
+
+parabolic::DiffusionSelection ParseViscosityIntegrator(const std::string &block,
+                                                        ParameterInput *pin) {
+  std::string integrator =
+      pin->GetOrAddString(block, "viscosity_integrator", "explicit");
+  if (integrator == "explicit") {
+    return parabolic::DiffusionSelection::explicit_only;
+  }
+  if (integrator == "sts") {
+    return parabolic::DiffusionSelection::sts_only;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<" << block << ">/viscosity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 // ctor:
 // Note first argument passes string ("hydro" or "mhd") denoting in which class this
@@ -29,9 +52,18 @@
 
 Viscosity::Viscosity(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
+  dtnew = static_cast<Real>(std::numeric_limits<float>::max());
   // Read parameters for viscosity (if any)
   nu_iso = pin->GetOrAddReal(block,"nu_iso",0.0);
   nu_aniso = pin->GetOrAddReal(block,"nu_aniso",0.0);
+  mode = ParseViscosityIntegrator(block, pin);
+  if (mode == parabolic::DiffusionSelection::sts_only &&
+      (!std::isfinite(nu_iso) || !std::isfinite(nu_aniso) || nu_iso <= 0.0 ||
+       nu_aniso != 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "STS requires positive constant isotropic viscosity" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -229,23 +261,23 @@ void Viscosity::AddViscousFluxAniso(const DvceArray5D<Real> &w0, const EOS_Data 
 void Viscosity::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
   // viscous timestep on MeshBlock(s) in this pack for constant isotropic viscosity
   dtnew = std::numeric_limits<float>::max();
+  if (nu_iso <= 0.0) return;
   auto size = pmy_pack->pmb->mb_size;
-  Real fac;
-  if (pmy_pack->pmesh->three_d) {
-    fac = 1.0/6.0;
-  } else if (pmy_pack->pmesh->two_d) {
-    fac = 0.25;
-  } else {
-    fac = 0.5;
-  }
   for (int m=0; m<(pmy_pack->nmb_thispack); ++m) {
-    dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx1)/nu_iso);
+    Real inv_dx2_sum = 1.0/SQR(size.h_view(m).dx1);
+    Real inv_dx2_max = inv_dx2_sum;
     if (pmy_pack->pmesh->multi_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx2)/nu_iso);
+      Real inv_dx2 = 1.0/SQR(size.h_view(m).dx2);
+      inv_dx2_sum += inv_dx2;
+      inv_dx2_max = std::max(inv_dx2_max, inv_dx2);
     }
     if (pmy_pack->pmesh->three_d) {
-      dtnew = std::min(dtnew, fac*SQR(size.h_view(m).dx3)/nu_iso);
+      Real inv_dx2 = 1.0/SQR(size.h_view(m).dx3);
+      inv_dx2_sum += inv_dx2;
+      inv_dx2_max = std::max(inv_dx2_max, inv_dx2);
     }
+    Real rate = 2.0*nu_iso*(inv_dx2_sum + inv_dx2_max/3.0);
+    dtnew = std::min(dtnew, 1.0/rate);
   }
   return;
 }
