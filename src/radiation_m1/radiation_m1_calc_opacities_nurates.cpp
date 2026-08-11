@@ -191,6 +191,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             assemble_rT(n_d, E, F_d, P_dd, T_dd);
 
             J[nuidx] = calc_J_from_rT(T_dd, u_u);
+            AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
+            calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
+            apply_floor(g_uu, J[nuidx], H_d, m1_params_);
             Real Gamma =
                 compute_Gamma(w_lorentz, v_u, J[nuidx], E, F_d, m1_params_);
             rnnu[nuidx] =
