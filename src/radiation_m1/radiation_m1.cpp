@@ -58,7 +58,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
-  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-77);
+  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-27);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-30);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
   params.source_epsabs = pin->GetOrAddReal("radiation_m1", "source_epsabs", 1e-15);
@@ -89,6 +89,26 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     std::cerr << "Error: Unknown choice for closure: " << closure_fun << std::endl;
     exit(EXIT_FAILURE);
   }
+
+  // set closure rootfinder (default: brent). "newton" = pure Newton-Raphson with
+  // analytic derivative and the relativistic-aberration initial guess.
+  std::string closure_solver =
+      pin->GetOrAddString("radiation_m1", "closure_solver", "brent");
+  if (closure_solver == "brent") {
+    params.closure_solver = ClosureBrent;
+  } else if (closure_solver == "newton") {
+    params.closure_solver = ClosureNewton;
+  } else {
+    std::cerr << "Error: Unknown choice for closure_solver: " << closure_solver
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  // Safeguard the Newton closure with a [0,1] bracket (rtsafe).  Default true:
+  // the Minerbo residual is bimodal in the optically-thick-but-advected regime,
+  // where pure Newton can converge to the spurious streaming root.  Set false
+  // for pure Newton (faster, but only safe where the guess is in the right basin).
+  params.closure_newton_bracket =
+      pin->GetOrAddBoolean("radiation_m1", "closure_newton_bracket", true);
 
   // set source update strategy (default: implicit)
   std::string src_update = pin->GetOrAddString("radiation_m1", "src_update", "implicit");
@@ -130,7 +150,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_WM_ab = pin->GetOrAddBoolean("bns_nurates", "use_WM_ab", true);
     nurates_params.use_WM_sc = pin->GetOrAddBoolean("bns_nurates", "use_WM_sc", true);
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
-    nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", true);
+    nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", false);
     nurates_params.use_equilibrium_distribution =
         pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", true);
     nurates_params.use_kirchhoff_law =
@@ -141,9 +161,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
     nurates_params.neglect_blocking =
         pin->GetOrAddBoolean("bns_nurates", "neglect_blocking", false);
-    nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", false);
+    nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", true);
     nurates_params.use_BRT_brem =
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
+    nurates_params.eq_warmup_cycles =
+        pin->GetOrAddInteger("bns_nurates", "eq_warmup_cycles", 1);
 
     nurates_params.quadrature.nx = nurates_params.quad_nx;
     nurates_params.quadrature.dim = 1;

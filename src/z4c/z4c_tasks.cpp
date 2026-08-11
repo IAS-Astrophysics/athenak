@@ -19,6 +19,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/driftcontrol/driftcontrol.hpp"
 #include "z4c/fastflow.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
@@ -72,10 +73,12 @@ void Z4c::QueueZ4cTasks() {
   }
   pnr->QueueTask(&Z4c::SendU, this, Z4c_SendU, "Z4c_SendU", Task_Run, {Z4c_RestU});
   pnr->QueueTask(&Z4c::RecvU, this, Z4c_RecvU, "Z4c_RecvU", Task_Run, {Z4c_SendU});
-  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run, {Z4c_RecvU});
-  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run, {Z4c_BCS});
-  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
+  pnr->QueueTask(&Z4c::Prolongate, this, Z4c_Prolong, "Z4c_Prolong", Task_Run,
+                 {Z4c_RecvU});
+  pnr->QueueTask(&Z4c::ApplyPhysicalBCs, this, Z4c_BCS, "Z4c_BCS", Task_Run,
                  {Z4c_Prolong});
+  pnr->QueueTask(&Z4c::EnforceAlgConstr, this, Z4c_AlgC, "Z4c_AlgC", Task_Run,
+                 {Z4c_BCS});
   pnr->QueueTask(&Z4c::ConvertZ4cToADM, this, Z4c_Z4c2ADM, "Z4c_Z4c2ADM",
                  Task_Run, {Z4c_AlgC});
   if (pmy_pack->pdyngr != nullptr) {
@@ -270,7 +273,18 @@ TaskStatus Z4c::RestrictU(Driver *pdrive, int stage) {
 
 TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
-//    pbval_u->FillCoarseInBndryCC(u0, coarse_u0, true);
+    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
+    //         reads valid data in coarse ghost zones that sit at a physical boundary.
+    if (!(pmy_pack->pmesh->strictly_periodic)) {
+      pbval_u->Z4cBCsCoarse(pmy_pack, pbval_u->u_in, coarse_u0);
+    }
+
+    // Note: FillCoarseInBndryCC is intentionally not called here. For Z4c the
+    // coarse-array data in same-level boundary regions (including edges and
+    // corners) is communicated directly via the isame_z4c buffers in
+    // Send/RecvU, so restricting it again would be redundant.
+
+    // Step 2: prolongate fine ghost zones from the coarse array.
     pbval_u->ProlongateCC(u0, coarse_u0, true);
   }
   return TaskStatus::complete;
@@ -283,8 +297,10 @@ TaskStatus Z4c::Prolongate(Driver *pdrive, int stage) {
 TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // only apply BCs if domain is not strictly periodic
   if (!(pmy_pack->pmesh->strictly_periodic)) {
-    // physical BCs
-    pbval_u->Z4cBCs((pmy_pack), (pbval_u->u_in), u0, coarse_u0);
+    // Step 3: apply physical BCs to the fine array. This is called *after* prolongation,
+    //         so that the corner ghost zones between a coarse neighbor and a physical
+    //         boundary read valid data.
+    pbval_u->Z4cBCs((pmy_pack), (pbval_u->u_in), u0);
 
     // user BCs
     if (pmy_pack->pmesh->pgen->user_bcs) {
@@ -301,21 +317,17 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
       pt->EvolveTracker(pmy_pack);
       pt->WriteTracker();
     }
+    if (pmy_pack->pz4c->opt.enable_driftcontrol) {
+      pdrift_control->EvolveDriftControl();
+      pdrift_control->WriteDriftControl();
+    }
   }
   return TaskStatus::complete;
 }
 
 TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
   Real time = pmy_pack->pmesh->time;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
-    for (auto & pahf : pfastflow) {
-      switch (indcs.ng) {
-        case 2: pahf->MetricDerivatives<2>(time); break;
-        case 3: pahf->MetricDerivatives<3>(time); break;
-        case 4: pahf->MetricDerivatives<4>(time); break;
-      }
-    }
     for (auto & pahf : pfastflow) {
       pahf->Find(stage, time);
       pahf->Write(stage, time);

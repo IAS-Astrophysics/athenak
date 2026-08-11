@@ -11,7 +11,9 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <iostream>
 #include <sstream>
@@ -38,9 +40,7 @@
 //! \fn FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput * pin, int n)
 //! \brief Constructor for FastFlow class.
 FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
-  pmbp(pmbp),
-  pin(pin),
-  Y0("Y0",1,1), Ys("Ys",1,1), Yc("Yc",1,1),
+  Y0("Y0",1,1), Yc("Yc",1,1), Ys("Ys",1,1),
   dY0dth("dY0dth",1,1), dYcdth("dYcdth",1,1),
   dYsdth("dYsdth",1,1), dYcdph("dYcdph",1,1),
   dYsdph("dYsdph",1,1), dY0dth2("dY0dth2",1,1),
@@ -49,8 +49,9 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
   a0("a0",1), ac("ac",1), as("as",1),
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
-  rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
-  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1) {
+  rho("rho",1), g_interp("g_interp",1,1),
+  K_interp("K_interp",1,1), dg_interp("dg_interp",1,1),
+  pmbp(pmbp), pin(pin) {
   nh = n; // The n-th horizon
   std::string n_str = std::to_string(nh);
 
@@ -91,13 +92,56 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   root = pin->GetOrAddInteger("fastflow", "mpi_root", 0);
   merger_distance = pin->GetOrAddReal("fastflow", "merger_distance", 0.1);
-  use_stored_metric_drvts = pin->GetBoolean("fastflow", "store_metric_drvts");
 
   // Initial guess
   initial_radius = pin->GetOrAddReal("fastflow", "initial_radius_" + n_str, 1.0);
   rr_min = -1.0;
 
   expand_guess = pin->GetOrAddReal("fastflow", "expand_guess", 1.0);
+
+  // If surface was found prior to checkpoint, read it as warm-up guess
+  last_a0 = pin->GetOrAddReal("fastflow", "last_a0_" + n_str, -1.0);
+  ah_found = pin->GetOrAddBoolean("fastflow", "ah_found_a0_" + n_str, false);
+  time_first_found = pin->GetOrAddReal("fastflow", "time_first_found_" + n_str, -1.0);
+
+  // Auto excision trigger.  The latch is per-horizon runtime state and is persisted
+  // here alongside the other horizon state; the knobs driving it are excision policy
+  // and live in <coord> next to excision_scheme and freeze_excision.
+  ah_excise_ready = pin->GetOrAddBoolean("fastflow", "ah_excise_ready_"+n_str, false);
+
+  // These knobs used to live in <fastflow>.  Reject the old spelling rather than let it
+  // silently fall back to the defaults: excise_auto would revert to false, starting
+  // excision at the first horizon find -- and, with coord/freeze_excision, latching the
+  // region there.  Old restart files carry the parfile, so this also catches restarts.
+  const char *moved[] = {"excise_auto", "excise_settle_rrate",
+                         "excise_settle_hrms", "excise_settle_count"};
+  for (const char *par : moved) {
+    if (pin->DoesParameterExist("fastflow", par)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "fastflow/" << par << " has moved to coord/" << par
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  excise_settle_rrate = pin->GetOrAddReal("coord", "excise_settle_rrate", 1.0e-3);
+  excise_settle_hrms  = pin->GetOrAddReal("coord", "excise_settle_hrms", 5.0e-3);
+  excise_settle_count = pin->GetOrAddInteger("coord", "excise_settle_count", 5);
+  settle_prev_time = -1.0;
+  settle_prev_radius = -1.0;
+  settle_streak = 0;
+  // excise_auto=false (default) disables the settle-based trigger: the horizon
+  // is marked excise-ready from the start, so excision begins as soon as it is
+  // found. Set excise_auto=true to wait until the horizon has settled.
+  excise_auto = pin->GetOrAddBoolean("coord", "excise_auto", false);
+  if (!excise_auto) { ah_excise_ready = true; }
+
+  // Frozen excision region: latch and snapshot, both persisted across restarts.
+  ah_frozen = pin->GetOrAddBoolean("fastflow", "ah_frozen_" + n_str, false);
+  frozen_center[0] = pin->GetOrAddReal("fastflow", "frozen_center_x_" + n_str, 0.0);
+  frozen_center[1] = pin->GetOrAddReal("fastflow", "frozen_center_y_" + n_str, 0.0);
+  frozen_center[2] = pin->GetOrAddReal("fastflow", "frozen_center_z_" + n_str, 0.0);
+  frozen_radius = pin->GetOrAddReal("fastflow", "frozen_radius_" + n_str, -1.0);
 
   // Center
   center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
@@ -172,14 +216,6 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(K_interp, (NEXCURV), nangles);
   Kokkos::realloc(dg_interp, (NDRVSSPMETRIC), nangles);
 
-  // Allocate memory for the array holding the metric derivatives
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  int nmb = pmbp->nmb_thispack;
-  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
-  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
-  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
-  Kokkos::realloc(dg, nmb, (NDRVSSPMETRIC), ncells3, ncells2, ncells1);
-
   // Array computed in surface integrals.
   Kokkos::realloc(rho, nangles);
 
@@ -243,9 +279,22 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
       exit(EXIT_FAILURE);
     }
     if (new_file) {
-      fprintf(pofile_summary, "# 1:iter 2:time 3:mass 4:Sx 5:Sy 6:Sz 7:S 8:area"
+      fprintf(pofile_summary, "# 1:iter 2:time 3:mass 4:Sx 5:Sy 6:Sz 7:S 8:area "
                                "9:hrms 10:hmean 11:meanradius 12:minradius\n");
       fflush(pofile_summary);
+    }
+
+    // Shape file: open once and keep open (closed in the destructor), like the
+    // summary/verbose files. Opening in append mode ("a") preserves existing
+    // contents on restart. This avoids a per-write fopen(), which can fail
+    // transiently on a busy parallel filesystem and abort a long run.
+    pofile_shape = fopen(ofname_shape.c_str(), "a");
+    if (NULL == pofile_shape) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "Could not open file '" << ofname_shape << "' for writing! "
+            << std::strerror(errno) << std::endl;
+      exit(EXIT_FAILURE);
     }
 
     if (output_grid) {
@@ -347,6 +396,7 @@ FastFlow::~FastFlow() {
   // Close files
   if (ioproc) {
     fclose(pofile_summary);
+    fclose(pofile_shape);
     if (verbose) {
       fclose(pofile_verbose);
     }
@@ -378,14 +428,8 @@ void FastFlow::Write(int iter, Real time) {
     fflush(pofile_summary);
 
     if (ah_found) {
-      // Shape file (coefficients).
-      pofile_shape = fopen(ofname_shape.c_str(), "a");
-      if (NULL == pofile_shape) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl
-            << "Could not open file '" << pofile_shape << "' for writing!" << std::endl;
-        exit(EXIT_FAILURE);
-      }
+      // Shape file (coefficients). File is opened once in the constructor and
+      // kept open, so here we only append and flush.
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
       for (int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0.h_view(l));
@@ -397,7 +441,7 @@ void FastFlow::Write(int iter, Real time) {
         }
       }
       fprintf(pofile_shape,"\n");
-      fclose(pofile_shape);
+      fflush(pofile_shape);
     }
   }
 
@@ -431,6 +475,61 @@ void FastFlow::Find(int iter, Real time) {
 
     parname = "ah_found_a0_" + std::to_string(nh);
     pin->SetBoolean("fastflow", parname, ah_found);
+
+    // Auto-detect when the black hole has finished forming: the horizon must
+    // have stopped growing (small relative change of the mean coordinate radius)
+    // and be smooth (low hrms) for excise_settle_count consecutive finds. Once
+    // that holds, latch ah_excise_ready so horizon excision may begin. All
+    // quantities used here (ah_prop, time) are consistent across MPI ranks, and
+    // the latch is persisted into restarts. It never un-latches.
+    if (!ah_excise_ready) {
+      Real R = ah_prop[hmeanradius];
+      bool smooth = (ah_prop[hhrms] < excise_settle_hrms);
+      bool slow = false;
+      if (settle_prev_radius > 0.0 && R > 0.0 && time > settle_prev_time) {
+        Real rrate = fabs(R - settle_prev_radius)
+                     / ((time - settle_prev_time) * R);
+        slow = (rrate < excise_settle_rrate);
+      }
+      settle_streak = (slow && smooth) ? (settle_streak + 1) : 0;
+      settle_prev_time = time;
+      settle_prev_radius = R;
+      if (settle_streak >= excise_settle_count) {
+        ah_excise_ready = true;
+        pin->SetBoolean("fastflow", "ah_excise_ready_" + std::to_string(nh),
+                        ah_excise_ready);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FastFlow::FreezeExcisionRegion(Real time)
+//! \brief Latch the excision region at the current horizon center and minimum radius.
+//! Called from Coordinates::UpdateExcisionMasks when coord/freeze_excision is set.  The
+//! snapshot is persisted into restarts and never re-taken.  All quantities used are
+//! identical across MPI ranks, so every rank latches the same values in the same cycle.
+void FastFlow::FreezeExcisionRegion(Real latch_time) {
+  if (ah_frozen) return;
+
+  frozen_center[0] = center[0];
+  frozen_center[1] = center[1];
+  frozen_center[2] = center[2];
+  frozen_radius = rr_min;
+  ah_frozen = true;
+
+  std::string n_str = std::to_string(nh);
+  pin->SetBoolean("fastflow", "ah_frozen_" + n_str, ah_frozen);
+  pin->SetReal("fastflow", "frozen_center_x_" + n_str, frozen_center[0]);
+  pin->SetReal("fastflow", "frozen_center_y_" + n_str, frozen_center[1]);
+  pin->SetReal("fastflow", "frozen_center_z_" + n_str, frozen_center[2]);
+  pin->SetReal("fastflow", "frozen_radius_" + n_str, frozen_radius);
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "### Excision region frozen for horizon " << nh
+              << " at time = " << latch_time
+              << ": center = (" << frozen_center[0] << ", " << frozen_center[1] << ", "
+              << frozen_center[2] << "), radius = " << frozen_radius << std::endl;
   }
 }
 
@@ -497,66 +596,17 @@ void FastFlow::InitialGuess() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void FastFlow::MetricDerivatives(Real time)
-//! \brief Compute drvts of ADM metric at MB level.
-template <int NGHOST>
-void FastFlow::MetricDerivatives(Real time) {
-  // Check whether derivatives have to be computed
-  if (use_stored_metric_drvts) return;
-  if((time < start_time) || (time > stop_time)) return;
-  if (wait_until_punc_are_close && !(PuncAreClose())) return;
-
-  // Explicitely capture the variables for the Kokkos kernel.
-  auto &adm = pmbp->padm->adm;
-  auto &dg_ = dg;
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
-  int nmb = pmbp->nmb_thispack;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
-
-  par_for("FastFlow_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    // Grid spacing
-    Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2,
-                  1.0 / size.d_view(m).dx3};
-
-    // x-derivative
-    dg_(m,D1S11,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D1S12,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D1S13,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D1S22,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D1S23,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D1S33,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 2, 2, k, j, i);
-
-    // y-derivative
-    dg_(m,D2S11,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D2S12,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D2S13,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D2S22,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D2S23,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D2S33,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 2, 2, k, j, i);
-
-    // z-derivative
-    dg_(m,D3S11,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D3S12,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D3S13,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D3S22,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D3S23,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D3S33,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 2, 2, k, j, i);
-  });
-
-  return;
-}
-template void FastFlow::MetricDerivatives<2>(Real time);
-template void FastFlow::MetricDerivatives<3>(Real time);
-template void FastFlow::MetricDerivatives<4>(Real time);
-
-//----------------------------------------------------------------------------------------
 //! \fn void FastFlow::MetricInterp(MeshBlock *pmb)
-//! \brief Interpolate metric on the surface n.
+//! \brief Interpolate metric, extrinsic curvature and metric derivatives on surface n.
 //!        Flag here the surface points contained (on this rank).
+//!
+//!        The metric derivatives are taken analytically from the Lagrange interpolant of
+//!        the ADM metric rather than from a finite-differenced grid array. The latter can
+//!        only be evaluated on MeshBlock interiors (a centred stencil does not fit in the
+//!        ghosts), while the interpolation stencil of a surface point sitting close to a
+//!        MeshBlock face reaches up to NGHOST cells into the ghost zones -- which for
+//!        such an array are never filled by any exchange. u_adm, by contrast, is set
+//!        over the full ghosted range by Z4cToADM(), so every value read here is valid.
 template <int NGHOST>
 void FastFlow::MetricInterp() {
   // In MetricInterp() we'll flag the surface points on this mesh
@@ -580,7 +630,6 @@ void FastFlow::MetricInterp() {
   // Explicitely capture the variables for the Kokkos kernel.
   auto &polar_pos = gl_grid->polar_pos;
   auto &u_adm = pmbp->padm->u_adm;
-  auto &dg_ = dg;
   auto &gi_ = g_interp;
   auto &Ki_ = K_interp;
   auto &dgi_ = dg_interp;
@@ -637,9 +686,15 @@ void FastFlow::MetricInterp() {
         Ki_(b,p) = InterpolateLagrange<NGHOST>(u_adm, Kind[b], indcs, ind_and_wghts);
       }
 
-      // Metric derivatives
-      for (int c = 0; c < NDRVSSPMETRIC; ++c) {
-        dgi_(c,p) = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
+      // Metric derivatives, obtained by differentiating the same Lagrange
+      // interpolant used above. Ordering matches SpatialMetricDrvsIndex:
+      // component `a` of the derivative along `d` sits at d*NSPMETRIC + a.
+      for (int d = 0; d < 3; ++d) {
+        for (int a = 0; a < NSPMETRIC; ++a) {
+          dgi_(d*NSPMETRIC + a,p) = InterpolateLagrangeDeriv<NGHOST>(u_adm, gind[a],
+                                                                    indcs, ind_and_wghts,
+                                                                    d);
+        }
       }
     }
   });
@@ -934,7 +989,7 @@ void FastFlow::RadiiFromSphericalHarmonics() {
   // Step 2: Compute the global minimum.
   rr_min = std::numeric_limits<Real>::infinity();
   Kokkos::parallel_reduce("FastFlow_sphradii",
-  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles),
   KOKKOS_LAMBDA(const int &p, Real &lmin) {
     lmin = Kokkos::min(lmin, rr_(p));
   }, Kokkos::Min<Real>(rr_min));
@@ -1033,7 +1088,7 @@ void FastFlow::SurfaceIntegrals() {
 
   // Loop over surface points
   Kokkos::parallel_reduce("FastFlow_surfintegrals",
-  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles),
   KOKKOS_LAMBDA(const int &p,
                 Real& area,
                 Real& coarea,

@@ -59,12 +59,6 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     Real &x3min = size.d_view(m).x3min;
     Real &x3max = size.d_view(m).x3max;
 
-    // We calculate the distance to the corner to make sure that only cells completely
-    // inside the horizon are excised.
-    Real &dx1 = size.d_view(m).dx1;
-    Real &dx2 = size.d_view(m).dx2;
-    Real &dx3 = size.d_view(m).dx3;
-
     Real x1v   = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
     Real x1vm1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
     Real x1vp1 = CellCenterX(i+1-is, indcs.nx1, x1min, x1max);
@@ -212,12 +206,35 @@ void Coordinates::UpdateExcisionMasks() {
     DualArray2D<bool> hfound("hfound", hsize, 1);
 
     // fill horizon arrays on host
+    bool freeze_r = (coord_data.freeze_excision && coord_data.freeze_excision_radius);
+    bool freeze_c = (coord_data.freeze_excision && coord_data.freeze_excision_center);
+    Real mesh_time = pmy_pack->pmesh->time;
     for (int h = 0; h < hsize; ++h) {
-      hcenter.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->center[0]; // center x-coord.
-      hcenter.h_view(h,1) = pmy_pack->pz4c->pfastflow[h]->center[1]; // center y-coord.
-      hcenter.h_view(h,2) = pmy_pack->pz4c->pfastflow[h]->center[2]; // center z-coord.
-      hradius.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->rr_min; // minimum radius
-      hfound.h_view(h,0) = pmy_pack->pz4c->pfastflow[h]->ah_found; // found/not found
+      auto &pahf = pmy_pack->pz4c->pfastflow[h];
+      // Excise only once the horizon finder has flagged this horizon as settled
+      // (ah_excise_ready, auto-detected in FastFlow::Find once the BH has stopped
+      // forming, and latched across restarts).
+      bool active = (pahf->ah_found && pahf->ah_excise_ready);
+      // Latch the snapshot the first time excision becomes active.  rr_min is reset to
+      // -1 by the constructor and not carried through restarts, so wait for a find in
+      // this execution to set it -- otherwise a restart would freeze a garbage radius.
+      if ((freeze_r || freeze_c) &&
+          (pahf->ah_frozen || (active && pahf->rr_min > 0.0))) {
+        pahf->FreezeExcisionRegion(mesh_time);
+      }
+      bool frozen_r = (freeze_r && pahf->ah_frozen);
+      bool frozen_c = (freeze_c && pahf->ah_frozen);
+
+      // The tracked center comes from the compact object tracker, so it stays valid in
+      // cycles where the horizon find does not converge.
+      hcenter.h_view(h,0) = frozen_c ? pahf->frozen_center[0] : pahf->center[0];
+      hcenter.h_view(h,1) = frozen_c ? pahf->frozen_center[1] : pahf->center[1];
+      hcenter.h_view(h,2) = frozen_c ? pahf->frozen_center[2] : pahf->center[2];
+
+      // rr_min is the only part needing a converged find, so once frozen the region
+      // stays excised even when ah_found is false.
+      hradius.h_view(h,0) = frozen_r ? pahf->frozen_radius : pahf->rr_min;
+      hfound.h_view(h,0) = frozen_r ? true : active;
     }
 
     // sync to device

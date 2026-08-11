@@ -120,8 +120,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
 }
 
 DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
-    pmy_pack(pp),
-    temperature("temperature",1,1,1,1,1) {
+    temperature("temperature",1,1,1,1,1),
+    pmy_pack(pp) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -231,20 +231,22 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, {MHD_CT});
   pnr->QueueTask(&MHD::SendB, pmhd, MHD_SendB, "MHD_SendB", Task_Run, {MHD_RestB});
   pnr->QueueTask(&MHD::RecvB, pmhd, MHD_RecvB, "MHD_RecvB", Task_Run, {MHD_SendB});
-  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run, {MHD_RecvB});
+  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run,
+                 {MHD_RecvB});
+  pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_Run,
+                 {MHD_Prolong});
   //pnr->QueueTask(&DynGRMHD::ApplyPhysicalBCs, this, MHD_BCS, "MHD_BCS", Task_Run,
   //                 {MHD_RecvB});
-  pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_Run, {MHD_BCS});
   if (pz4c == nullptr && padm->is_dynamic == true) {
     pnr->QueueTask(&DynGRMHD::SetADMVariables, this, MHD_SetADM, "MHD_SetADM", Task_Run,
                     {MHD_ExplRK});
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
-                   "MHD_C2P", Task_Run, {MHD_Prolong, MHD_SetADM}, {Z4c_Excise});
+                   "MHD_C2P", Task_Run, {MHD_BCS, MHD_SetADM}, {Z4c_Excise});
     pnr->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, MHD_Excise, "MHD_Excise",
                    Task_Run, {MHD_SetADM});
   } else {
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
-                   "MHD_C2P", Task_Run, {MHD_Prolong}, {Z4c_Excise});
+                   "MHD_C2P", Task_Run, {MHD_BCS}, {Z4c_Excise});
   }
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
@@ -262,12 +264,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
                    {MHD_RestU});
     pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_AfterTimeIntegrator,
                    {MHD_SendU});
-    pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS",
-                   Task_AfterTimeIntegrator, {MHD_RecvU});
     pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong",
-                   Task_AfterTimeIntegrator, {MHD_BCS});
+                   Task_AfterTimeIntegrator, {MHD_RecvU});
+    pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS",
+                   Task_AfterTimeIntegrator, {MHD_Prolong});
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
-                   "MHD_C2P", Task_AfterTimeIntegrator, {MHD_Prolong});
+                   "MHD_C2P", Task_AfterTimeIntegrator, {MHD_BCS});
     pnr->QueueTask(&MHD::ClearSendU, pmhd, MHD_ClearSU, "MHD_ClearSU",
                    Task_AfterTimeIntegrator, {MHD_C2P});
     pnr->QueueTask(&MHD::ClearRecvU, pmhd, MHD_ClearRU, "MHD_ClearRU",
@@ -549,7 +551,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
   bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
   auto &floor = pmy_pack->pcoord->excision_floor;
   Real &dexcise = pmy_pack->pcoord->coord_data.dexcise;
-  Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
+  // Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
   Real &texcise = pmy_pack->pcoord->coord_data.texcise;
   Real &tdamp = pmy_pack->pcoord->coord_data.tdamp;
 
@@ -580,8 +582,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
                            adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),
                            adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)};
     const Real& alpha = adm.alpha(m, k, j, i);
-    Real beta_u[3] = {adm.beta_u(m,0,k,j,i),
-                      adm.beta_u(m,1,k,j,i), adm.beta_u(m,2,k,j,i)};
     Real detg = adm::SpatialDet(g3d[S11], g3d[S12], g3d[S13],
                                 g3d[S22], g3d[S23], g3d[S33]);
     Real vol = sqrt(detg);
@@ -595,13 +595,13 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
     for (int a = 0; a < ndim; a++) {
       dalpha_d[a] = Dx<NGHOST>(a, idx, adm.alpha, m, k, j, i);
     }
-    Real dbeta_du[3][3] = {0.};
+    Real dbeta_du[3][3] = {};
     for (int a = 0; a < 3; a++) {
       for (int b = 0; b < ndim; b++) {
         dbeta_du[b][a] = Dx<NGHOST>(b, idx, adm.beta_u, m, a, k, j, i);
       }
     }
-    Real dg_ddd[3][3][3] = {0.};
+    Real dg_ddd[3][3][3] = {};
     for (int a = 0; a < 3; ++a) {
       for (int b = 0; b < 3; ++b) {
         for (int c = 0; c < ndim; ++c) {
@@ -645,15 +645,6 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
     Real E = (H*Wsq + Bsq) - prim_pt[PPR] - 0.5*bsq;
     //Real E = tmunu.E(m,k,j,i);
-
-    // D = rho*W and tau = E-D are needed for the smooth damping terms
-    // inside excised regions, if existing.
-    Real D = prim(m, IDN, k, j, i) * W;
-    Real tau = E - D;
-
-    // Compute the excised value for the energy.
-    Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
-                  + Bsq - pexcise - 0.5*bsq - dexcise;
 
     Real S_d[3] = {0.0};
     for (int a = 0; a < 3; a++) {
@@ -701,6 +692,17 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
     // Assemble damping source terms
     if (smoothing) {
+      // D = rho*W and tau = E-D are needed for the smooth damping terms
+      // inside excised regions, if existing.
+      Real D = prim(m, IDN, k, j, i) * W;
+      Real tau = E - D;
+
+      // Compute the excised value for the energy.
+      // Real tau_ex = (dexcise*eos_.GetEnthalpy(dexcise/mb, texcise, &prim_pt[PYF]))
+      //               + Bsq - pexcise - 0.5*bsq - dexcise;
+      Real tau_ex = eos_.GetEnergy(dexcise/mb, texcise, &prim_pt[PYF])
+                                    + 0.5*Bsq - dexcise;
+
       rhs(m, IDN, k, j, i) -= (dt*vol*floor(m,k,j,i)*(D-dexcise))/tdamp;
       rhs(m, IM1, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[0])/tdamp;
       rhs(m, IM2, k, j, i) -= (dt*floor(m,k,j,i)*vol*S_d[1])/tdamp;

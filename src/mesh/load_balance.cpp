@@ -128,7 +128,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
   if (nmb_recv == 0) return;  // nothing to do
 
-  // allocate array of recv buffers
+  // allocate array of recv buffer metadata
   Kokkos::realloc(recvbuf, nmb_recv);
   recv_req = new MPI_Request[nmb_recv];
   for (int n=0; n<nmb_recv; ++n) {
@@ -157,7 +157,7 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
 
   // Step 2. (InitRecvAMR)
-  // loop over new MBs on this rank, initialize recv buffers
+  // loop over new MBs on this rank, initialize recv buffer metadata
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -263,13 +263,10 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       }
     }
   }
-  // Sync dual array, reallocate receive data array
+  // Sync dual array
   recvbuf.template modify<HostMemSpace>();
   recvbuf.template sync<DevExeSpace>();
-  {
-    int ndata = recvbuf.h_view((nmb_recv-1)).offset + recvbuf.h_view((nmb_recv-1)).cnt;
-    Kokkos::realloc(recv_data, ndata);
-  }
+  // Note: No need to reallocate recv_data buffer as it is fixed length
 
   // Step 3. (InitRecvAMR)
   // loop over new MBs on this rank, post non-blocking recvs
@@ -386,7 +383,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
 
   if (nmb_send == 0) return;  // nothing to do
 
-  // allocate array of send buffers
+  // allocate array of send buffer metadata
   Kokkos::realloc(sendbuf, nmb_send);
   send_req = new MPI_Request[nmb_send];
   for (int n=0; n<nmb_send; ++n) {
@@ -415,7 +412,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   }
 
   // Step 2. (PackAndSendAMR)
-  // loop over old MBs on this rank, initialize send buffers
+  // loop over old MBs on this rank, initialize send buffer metadata
   auto &indcs = pmy_mesh->mb_indcs;
   auto &is = indcs.is, &ie = indcs.ie;
   auto &js = indcs.js, &je = indcs.je;
@@ -523,13 +520,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       }
     }
   }
-  // Sync dual array, reallocate send data array
+  // Sync dual array
   sendbuf.template modify<HostMemSpace>();
   sendbuf.template sync<DevExeSpace>();
-  {
-    int ndata = sendbuf.h_view((nmb_send-1)).offset + sendbuf.h_view((nmb_send-1)).cnt;
-    Kokkos::realloc(send_data, ndata);
-  }
+  // Note: No need to reallocate send_date as it is fixed length
 
   // Step 3. (PackAndSendAMR)
   // Pack data into send buffers in parallel
@@ -857,10 +851,10 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
     UnpackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_recv, nfc_recv);
     ncc_recv += pz4c->nz4c;
   }
-  // Release GPU memory for recv buffers after unpacking is complete, so that on the
-  // next AMR cycle the realloc only needs the new size (not old+new simultaneously),
-  // preventing OOM errors when GPU memory is tight.
-  Kokkos::realloc(recv_data, 1);
+  // recv_data is a fixed-length buffer (allocated once in the MeshRefinement ctor and
+  // reused every AMR cycle), so it must NOT be shrunk here -- doing so leaves it at size
+  // 1 for the next cross-rank migration, which then receives out of bounds. recvbuf is
+  // resized to nmb_recv each cycle in InitRecvAMR, so releasing it here is fine.
   Kokkos::realloc(recvbuf, 1);
 #endif
   return;
@@ -1047,9 +1041,10 @@ void MeshRefinement::ClearSendAMR() {
     std::exit(EXIT_FAILURE);
   }
   delete [] send_req;
-  // Release GPU memory for send buffers so that on the next AMR cycle the realloc only
-  // needs to allocate the new size (not old+new simultaneously), preventing OOM errors.
-  Kokkos::realloc(send_data, 1);
+  // send_data is a fixed-length buffer (allocated once in the MeshRefinement ctor and
+  // reused every AMR cycle), so it must NOT be shrunk here -- doing so leaves it at size
+  // 1 for the next cross-rank migration, which then packs/sends out of bounds. sendbuf is
+  // resized to nmb_send each cycle in PackAndSendAMR, so releasing it here is fine.
   Kokkos::realloc(sendbuf, 1);
 #endif
   return;

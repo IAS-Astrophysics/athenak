@@ -36,9 +36,12 @@ class SphericalGrid: public GeodesicGrid {
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
     DualArray2D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
     DualArray3D<Real> interp_wghts;  // weights for interpolation
+    int amr_nmb_created;      // mesh stamp the interpolation indices were built against
+    int amr_nmb_deleted;
     void SetInterpolationCoordinates();  // set indexing for interpolation
     void SetInterpolationIndices();      // set indexing for interpolation
     void SetInterpolationWeights();      // set weights for interpolation
+    void UpdateInterpolationOnMeshChange();  // redo both if AMR moved the mesh
 };
 
 #endif // GEODESIC_GRID_SPHERICAL_GRID_HPP_

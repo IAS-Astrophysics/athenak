@@ -340,7 +340,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -355,7 +355,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -376,7 +376,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -391,7 +391,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
                                       single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -410,7 +410,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       if (m < noutmbs_min) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        int fldcnt = x1fptr.size();
+        size_t fldcnt = x1fptr.size();
         if (resfile.Write_any_type_at_all(x1fptr.data(),fldcnt,myoffset,"Real",
                                           single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -450,7 +450,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       } else if (m < pm->nmb_thisrank) {
         // get ptr to x1-face field
         auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        int fldcnt = x1fptr.size();
+        size_t fldcnt = x1fptr.size();
         if (resfile.Write_any_type_at(x1fptr.data(),fldcnt,myoffset,"Real",
                                       single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -500,7 +500,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -515,7 +515,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(),mbcnt,myoffset,"Real",
                                       single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -574,7 +574,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -589,7 +589,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
                                       single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -611,7 +611,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -626,7 +626,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
                                       single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -646,7 +646,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to cell-centered MeshBlock data
         auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -661,7 +661,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         // get ptr to MeshBlock data
         auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
                                      Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
+        size_t mbcnt = mbptr.size();
         if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
                                       single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

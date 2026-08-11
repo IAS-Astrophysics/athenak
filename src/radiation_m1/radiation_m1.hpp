@@ -22,7 +22,7 @@
 #include "radiation_m1/radiation_m1_toy.hpp"
 #include "tasklist/task_list.hpp"
 
-#ifdef ENABLE_NURATES
+#if ENABLE_NURATES
 #include "bns_nurates/include/bns_nurates.hpp"
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif

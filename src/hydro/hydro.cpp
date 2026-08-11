@@ -27,15 +27,21 @@ namespace hydro {
 // constructor, initializes data structures and parameters
 
 Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
-    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     coarse_u0("ccons",1,1,1,1,1),
     coarse_w0("cprim",1,1,1,1,1),
     u1("cons1",1,1,1,1,1),
+    u_sts0("u_sts0",1,1,1,1,1),
+    u_sts1("u_sts1",1,1,1,1,1),
+    u_sts2("u_sts2",1,1,1,1,1),
+    u_sts_rhs("u_sts_rhs",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    wl3d("wl3d",1,1,1,1,1),
+    wr3d("wr3d",1,1,1,1,1),
+    fofc("fofc",1,1,1,1),
     utest("utest",1,1,1,1,1),
-    fofc("fofc",1,1,1,1) {
+    pmy_pack(ppack) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -73,16 +79,45 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("hydro","nscalars",0);
 
   // Viscosity (if requested in input file)
-  if (pin->DoesParameterExist("hydro","viscosity")) {
+  if (pin->DoesParameterExist("hydro","nu_iso") ||
+      pin->DoesParameterExist("hydro","nu_aniso")) {
     pvisc = new Viscosity("hydro", ppack, pin);
+    const bool active = (pvisc->nu_iso != 0.0 || pvisc->nu_aniso != 0.0);
+    has_explicit_viscosity =
+        active && pvisc->mode == parabolic::DiffusionSelection::explicit_only;
+    has_sts_viscosity =
+        active && pvisc->mode == parabolic::DiffusionSelection::sts_only;
+    if (active) {
+      ppack->RegisterParabolicProcess(
+          {"hydro/viscosity", parabolic::ParabolicProcessOwner::hydro,
+           pvisc->mode, &(pvisc->dtnew)});
+    }
   } else {
     pvisc = nullptr;
   }
 
   // Thermal conduction (if requested in input file)
-  if (pin->DoesParameterExist("hydro","conductivity") ||
-      pin->DoesParameterExist("hydro","tdep_conductivity")) {
-    pcond = new Conduction("hydro", ppack, pin);
+  if (pin->DoesParameterExist("hydro","alpha_iso") ||
+      pin->DoesParameterExist("hydro","alpha_aniso") ||
+      pin->DoesParameterExist("hydro","alpha_spitzer")) {
+    if (peos->eos_data.is_ideal) {
+      pcond = new Conduction("hydro", ppack, pin);
+      const bool active =
+          (pcond->alpha_iso != 0.0 || pcond->alpha_aniso != 0.0 || pcond->alpha_spitzer);
+      has_explicit_conduction =
+          active && pcond->mode == parabolic::DiffusionSelection::explicit_only;
+      has_sts_conduction =
+          active && pcond->mode == parabolic::DiffusionSelection::sts_only;
+      if (active) {
+        ppack->RegisterParabolicProcess(
+            {"hydro/conductivity", parabolic::ParabolicProcessOwner::hydro,
+             pcond->mode, &(pcond->dtnew)});
+      }
+    } else {
+      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
+                << "Thermal conduction in hydro requires ideal gas EOS" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   } else {
     pcond = nullptr;
   }
@@ -91,6 +126,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
   if (pin->DoesBlockExist("hydro_srcterms")) {
     psrc = new SourceTerms("hydro_srcterms", ppack, pin);
   }
+
+  has_any_sts_diffusion = has_sts_viscosity || has_sts_conduction;
 
   // (3) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
@@ -133,7 +170,13 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
-    // determine if FOFC is enabled
+    // The split-kernel flux path supports every reconstruction method (DC/PLM/PPM4/
+    // PPMX/WENOZ/TENO) and all Newtonian (Advect/LLF/HLLE/HLLC/Roe) and relativistic
+    // (LLF/HLLE/HLLC SR; LLF/HLLE GR) Riemann solvers.
+
+    // FOFC: the split-kernel main flux kernels extend their face-normal range by one cell
+    // when FOFC is enabled, so the self-contained first-order flux correction
+    // (hydro_fofc.cpp) has the fluxes it needs over the [is-1,ie+2] etc. range.
     use_fofc = pin->GetOrAddBoolean("hydro","fofc",false);
 
     // select reconstruction method (default PLM)
@@ -142,7 +185,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       recon_method = ReconstructionMethod::dc;
     } else if (xorder.compare("plm") == 0) {
       recon_method = ReconstructionMethod::plm;
-      // check that nghost > 2 with PLM+FOFC
+      // check that nghost > 2 with PLM+FOFC (FOFC extends recon by one cell)
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (use_fofc && indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -152,8 +195,9 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       }
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
+               xorder.compare("teno") == 0 ||
                xorder.compare("wenoz") == 0) {
-      // check that nghost > 2
+      // check that nghost > 2 (the +/-2 stencil requires at least 3 ghost zones)
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -161,7 +205,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
           << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      // check that nghost > 3 with PPM4(or PPMX or WENOZ)+FOFC
+      // check that nghost > 3 with PPM4(or PPMX or WENOZ or TENO)+FOFC
       if (use_fofc && indcs.ng < 4) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "FOFC and " << xorder << " reconstruction requires at "
@@ -174,6 +218,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::ppmx;
       } else if (xorder.compare("wenoz") == 0) {
         recon_method = ReconstructionMethod::wenoz;
+      } else if (xorder.compare("teno") == 0) {
+        recon_method = ReconstructionMethod::teno;
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -193,7 +239,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
           rsolver_method = Hydro_RSolver::hlle_sr;
         } else if (rsolver.compare("hllc") == 0) {
           rsolver_method = Hydro_RSolver::hllc_sr;
-        // Error for anything else
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "<hydro> rsolver = '" << rsolver
@@ -213,7 +258,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
           rsolver_method = Hydro_RSolver::llf_gr;
         } else if (rsolver.compare("hlle") == 0) {
           rsolver_method = Hydro_RSolver::hlle_gr;
-        // Error for anything else
         } else {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "<hydro> rsolver = '" << rsolver
@@ -228,13 +272,10 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // Non-relativistic dynamic solvers
     } else if (evolution_t.compare("dynamic") == 0) {
-      // LLF solver
       if (rsolver.compare("llf") == 0) {
         rsolver_method = Hydro_RSolver::llf;
-      // HLLE solver
       } else if (rsolver.compare("hlle") == 0) {
         rsolver_method = Hydro_RSolver::hlle;
-      // HLLC solver
       } else if (rsolver.compare("hllc") == 0) {
         if (peos->eos_data.is_ideal) {
           rsolver_method = Hydro_RSolver::hllc;
@@ -244,10 +285,8 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
                     << "isothermal EOS" << std::endl;
           std::exit(EXIT_FAILURE);
         }
-      // Roe solver
       } else if (rsolver.compare("roe") == 0) {
         rsolver_method = Hydro_RSolver::roe;
-      // Error for anything else
       } else {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "<hydro> rsolver = '" << rsolver << "' not implemented"
@@ -257,7 +296,6 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
 
     // Non-relativistic kinematic solvers
     } else {
-      // Advect solver
       if (rsolver.compare("advect") == 0) {
         rsolver_method = Hydro_RSolver::advect;
       } else {
@@ -276,15 +314,21 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(u1,       nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      if (has_any_sts_diffusion) {
+        Kokkos::realloc(u_sts0,    nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts1,    nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts2,    nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+        Kokkos::realloc(u_sts_rhs, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      }
       Kokkos::realloc(uflx.x1f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
       Kokkos::realloc(uflx.x2f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
       Kokkos::realloc(uflx.x3f, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
 
-      // allocate array of flags used with FOFC
-      if (use_fofc) {
-        Kokkos::realloc(fofc,  nmb, ncells3, ncells2, ncells1);
-        Kokkos::realloc(utest, nmb, nhydro, ncells3, ncells2, ncells1);
-      }
+      // allocate global per-face L/R buffers for the split-kernel flux path.
+      // Indexed by the GLOBAL cell/face index (m,n,k,j,i), so sized to the full
+      // cell range (including ghost zones) in every dimension.
+      Kokkos::realloc(wl3d, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
+      Kokkos::realloc(wr3d, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     }
   }
 }

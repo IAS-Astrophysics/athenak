@@ -189,8 +189,8 @@ class PrimitiveSolverHydro {
     // FIXME(JF): Is this needed if the first-order flux correction is enabled?
     prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromP(prim_pt[PRH],
                                         prim_pt[PPR], &prim_pt[PYF]);
-    bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
-                                         prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
+    ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+                                    prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
     ps.PrimToCon(prim_pt, cons_pt, bin, g3d);
 
@@ -321,7 +321,7 @@ class PrimitiveSolverHydro {
     auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
     auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
     auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
-    auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+    auto &texcise_ = pmy_pack->pcoord->coord_data.texcise;
 
     auto &adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
@@ -348,7 +348,7 @@ class PrimitiveSolverHydro {
     Real mb = eos_.GetBaryonMass();
 
     // FIXME: This only works for a flooring policy that has these functions!
-    bool prim_failure, cons_failure;
+    bool prim_failure=false, cons_failure=false;
     if (floors_only) {
       prim_failure = ps.GetEOSMutable().IsPrimitiveFlooringFailure();
       cons_failure = ps.GetEOSMutable().IsConservedFlooringFailure();
@@ -432,14 +432,13 @@ class PrimitiveSolverHydro {
             prim_pt[PVX] = 0.0;
             prim_pt[PVY] = 0.0;
             prim_pt[PVZ] = 0.0;
-            prim_pt[PPR] = pexcise_;
             for (int n = 0; n < nscal; n++) {
               // FIXME: Particle abundances should probably be set to a
               // default inside an excised region.
               prim_pt[PYF + n] = cons_pt[CYD]/cons_pt[CDN];
             }
-            prim_pt[PTM] =
-              eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+            prim_pt[PPR] = eos_.GetPressure(prim_pt[PRH], texcise_, &prim_pt[PYF]);
+            prim_pt[PTM] = texcise_;
             result.error = Primitive::Error::SUCCESS;
             result.iterations = 0;
             result.cons_floor = false;
@@ -603,9 +602,9 @@ class PrimitiveSolverHydro {
     Real cmsq = csq + vasq - csq*vasq;
 
     // Set fast magnetosonic speed in appropriate coordinates
-    Real a = u0*u0 - (g00 + u0*u0)*cmsq;
-    Real b = -2.0 * (u0 * u1 - (g01 + u0 * u1) *cmsq);
-    Real c = u1*u1 - (g11 + u1*u1)*cmsq;
+    Real a = u0*u0*(1.0 - cmsq) - g00*cmsq;
+    Real b = -2.0*(u0*u1*(1.0 - cmsq) - g01*cmsq);
+    Real c = u1*u1*(1.0 - cmsq) - g11*cmsq;
     Real a1 = b / a;
     Real a0 = c / a;
     Real s = fmax(a1*a1 - 4.0 * a0, 0.0);

@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 164
+#define NOUTPUT_CHOICES 175
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -100,11 +100,32 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Particles (151-152)
   "prtcl_all", "prtcl_d",
 
-  // radiation M1 (153-162)
+  // Gravity (153)
+  "grav_phi",
+
+  // radiation M1 (154-165)
   "rad_m1_N", "rad_m1_E", "rad_m1_F", "rad_m1_chi", "rad_m1_eta_0", "rad_m1_abs_0",
   "rad_m1_eta_1", "rad_m1_abs_1", "rad_m1_scat_1", "rad_m1_vel",
+  // Grouped M1 outputs (164-165). These write SEVERAL M1 fields into ONE file, to
+  // cut the number of files per output event (file count, not volume, dominates
+  // output cost on a contended parallel filesystem). The per-variable labels
+  // inside the file are UNCHANGED ("E:0", "N:0", "Fx:0", "eta_0:0", ...), so any
+  // reader that selects by variable label keeps working; only the filename differs.
+  //   rad_m1_moments   -> E, N, Fx, Fy, Fz                    (all species)
+  //   rad_m1_opacities -> eta_0, abs_0, eta_1, abs_1, scat_1  (all species)
+  "rad_m1_moments", "rad_m1_opacities",
 
-  // Spherical radius (163)
+  // radiation M1 fluid-frame derived quantities (166-171)
+  "rad_m1_J", "rad_m1_H", "rad_m1_n", "rad_m1_fnu",
+  "rad_m1_e", "rad_m1_absF",
+
+  // lower time-component of the fluid four-velocity (172)
+  "u_t",
+
+  // WinNet velocity (173)
+  "win_Vi",
+
+  // Spherical radius (174)
   "r_sph",
 };
 

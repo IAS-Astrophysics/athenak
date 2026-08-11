@@ -22,6 +22,7 @@
 #include "bvals/bvals.hpp"
 #include "z4c/fastflow.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/driftcontrol/driftcontrol.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
@@ -59,16 +60,16 @@ char const * const Z4c::Constraint_names[Z4c::ncon] = {
 // constructor, initializes data structures and parameters
 
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
-  pmy_pack(ppack),
   u_con("u_con",1,1,1,1,1),
   //u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
-  coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1),
+  coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
   coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
-  pamr(new Z4c_AMR(pin)) {
+  pamr(new Z4c_AMR(pin)),
+  pmy_pack(ppack) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -156,6 +157,26 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
 
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
+
+  // DriftControl parameters
+  opt.enable_driftcontrol = pin->GetOrAddBoolean("z4c", "enable_driftcontrol", false);
+  opt.dc_tracker_index    = pin->GetOrAddInteger("z4c", "dc_tracker_index", 0);
+  opt.dc_fixed_x          = pin->GetOrAddReal("z4c", "dc_fixed_x", 0.0);
+  opt.dc_fixed_y          = pin->GetOrAddReal("z4c", "dc_fixed_y", 0.0);
+  opt.dc_fixed_z          = pin->GetOrAddReal("z4c", "dc_fixed_z", 0.0);
+  opt.dc_damping_time     = pin->GetOrAddReal("z4c", "dc_damping_time", 0.5);
+  opt.dc_damping_scale    = pin->GetOrAddReal("z4c", "dc_damping_scale", 10.0);
+  opt.dc_damping_coeff    = pin->GetOrAddReal("z4c", "dc_damping_coeff", 1.0);
+  opt.dc_variety          = DriftControl::VarietyFromString(
+      pin->GetOrAddString("z4c", "dc_variety", "oscillator"));
+  opt.dc_Kp               = pin->GetOrAddReal("z4c", "dc_Kp", 1.0);
+  opt.dc_Ki               = pin->GetOrAddReal("z4c", "dc_Ki", 0.1);
+  opt.dc_Kd               = pin->GetOrAddReal("z4c", "dc_Kd", 2.0);
+  opt.dc_relaxation_time  = pin->GetOrAddReal("z4c", "dc_relaxation_time", 1.0);
+  opt.dc_kappa            = pin->GetOrAddReal("z4c", "dc_kappa", 1.0);
+  opt.dc_gamma_suppress   = pin->GetOrAddReal("z4c", "dc_gamma_suppress", 0.0);
+  opt.dc_gaussian_center  = DriftControl::CenterFromString(
+      pin->GetOrAddString("z4c", "dc_gaussian_center", "fixed"));
   }
 
   // allocate memory for conserved variables on coarse mesh
@@ -212,6 +233,20 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
+  // Construct the drift control (needs the trackers to already exist)
+  if (opt.enable_driftcontrol) {
+    if (opt.dc_tracker_index < 0 ||
+        static_cast<std::size_t>(opt.dc_tracker_index) >= ptracker.size()) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                << __LINE__ << std::endl;
+      std::cout << "enable_driftcontrol is set but dc_tracker_index "
+                << opt.dc_tracker_index << " is out of range for "
+                << ptracker.size() << " compact object trackers." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pdrift_control = std::make_unique<DriftControl>(pmy_pack->pmesh, pin);
+  }
+
   // Construct the apparent horizon finders
   n = 0;
   while (n < pin->GetOrAddInteger("fastflow", "num_horizons", 0)) {

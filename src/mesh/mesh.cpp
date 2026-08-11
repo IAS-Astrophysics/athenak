@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <cstdio> // fclose
@@ -45,16 +46,37 @@
 //! only after the Mesh constructor has finished.
 
 Mesh::Mesh(ParameterInput *pin) :
+  strictly_periodic(true),
   one_d(false),
   two_d(false),
   three_d(false),
   multi_d(false),
-  strictly_periodic(true),
-  nmb_packs_thisrank(1),
   nprtcl_thisrank(0),
   nprtcl_total(0),
   dtold(0.),
-  dt_last_completed(0.) {
+  dt_last_completed(0.),
+  dt_parabolic_sts(std::numeric_limits<float>::max()),
+  sts_max_dt_ratio(-1.0),
+  sts_integrator(parabolic::STSIntegrator::none),
+  nmb_packs_thisrank(1) {
+  std::string sts_method = pin->GetOrAddString("time", "sts_integrator", "none");
+  if (sts_method == "rkl2") {
+    sts_integrator = parabolic::STSIntegrator::rkl2;
+  } else if (sts_method != "none") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<time>/sts_integrator = '" << sts_method
+              << "' must be 'none' or 'rkl2'" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  sts_max_dt_ratio = pin->GetOrAddReal("time", "sts_max_dt_ratio", -1.0);
+  if (!std::isfinite(sts_max_dt_ratio) ||
+      (sts_max_dt_ratio != -1.0 && sts_max_dt_ratio <= 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "<time>/sts_max_dt_ratio must be -1.0 or a positive real" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Set physical size and number of cells in mesh (root level)
   mesh_size.x1min = pin->GetReal("mesh", "x1min");
   mesh_size.x1max = pin->GetReal("mesh", "x1max");
@@ -367,8 +389,8 @@ void Mesh::PrintMeshDiagnostics() {
 
   // if more than one physical level: compute/output # of blocks and cost per level
   if ((max_level - root_level) > 1) {
-    int nb_per_plevel[max_level];      // NOLINT(runtime/arrays)
-    float cost_per_plevel[max_level];  // NOLINT(runtime/arrays)
+    int *nb_per_plevel = new int[max_level];
+    float *cost_per_plevel = new float[max_level];
     for (int i=0; i<max_level; ++i) {
       nb_per_plevel[i] = 0;
       cost_per_plevel[i] = 0.0;
@@ -384,13 +406,15 @@ void Mesh::PrintMeshDiagnostics() {
                   << cost_per_plevel[i-root_level] <<  std::endl;
       }
     }
+    delete[] nb_per_plevel;
+    delete[] cost_per_plevel;
   }
 
   std::cout << "Number of parallel ranks = " << global_variable::nranks << std::endl;
   // if more than one rank: compute/output # of blocks and cost per rank
   if (global_variable::nranks > 1) {
-    int nb_per_rank[global_variable::nranks];    // NOLINT(runtime/arrays)
-    int cost_per_rank[global_variable::nranks];  // NOLINT(runtime/arrays)
+    int *nb_per_rank = new int[global_variable::nranks];
+    float *cost_per_rank = new float[global_variable::nranks];
     for (int i=0; i<global_variable::nranks; ++i) {
       nb_per_rank[i] = 0;
       cost_per_rank[i] = 0;
@@ -399,8 +423,8 @@ void Mesh::PrintMeshDiagnostics() {
       nb_per_rank[rank_eachmb[i]]++;
       cost_per_rank[rank_eachmb[i]] += cost_eachmb[i];
     }
-    int mincost = std::numeric_limits<int>::max();
-    int maxcost = 0, totalcost = 0;
+    float mincost = std::numeric_limits<float>::max();
+    float maxcost = 0.0, totalcost = 0.0;
     for (int i=0; i<global_variable::nranks; ++i) {
       std::cout << "  Rank = " << i << ": " << nb_per_rank[i] <<" MeshBlocks, cost = "
                 << cost_per_rank[i] << std::endl;
@@ -411,10 +435,11 @@ void Mesh::PrintMeshDiagnostics() {
 
     // output normalized costs per rank
     std::cout << "Load Balancing:" << std::endl;
-    std::cout << "  Maximum normalized cost = "
-      << static_cast<float>(maxcost)/static_cast<float>(mincost) << ", Average = "
-      << static_cast<float>(totalcost)/static_cast<float>(global_variable::nranks*mincost)
+    std::cout << "  Maximum normalized cost = " << maxcost/mincost
+      << ", Average = " << totalcost/(global_variable::nranks*mincost)
       << std::endl;
+    delete[] nb_per_rank;
+    delete[] cost_per_rank;
   }
 }
 
@@ -575,58 +600,53 @@ void Mesh::NewTimeStep(const Real tlim) {
     dtold = 0.;
   }
 
-  // cycle over all MeshBlocks on this rank and find minimum dt
-  // Requires at least ONE of the physics modules to be defined.
-  // limit increase in timestep to 2x old value
-  dt = 2.0*dt;
+  // Cycle over all MeshBlocks on this rank and find the minimum cycle timestep,
+  // excluding diffusion processes selected for STS. Limit its increase to 2x.
+  Real dt_cycle = 2.0*dt;
+  dt_parabolic_sts = std::numeric_limits<float>::max();
+  Real sts_inverse_dt = 0.0;
 
   // Hydro timestep
   if (pmb_pack->phydro != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->phydro->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pvisc->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->phydro->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->pcond->dtnew) );
-    }
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->phydro->dtnew) );
     // source terms timestep
     if (pmb_pack->phydro->psrc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
+      dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->phydro->psrc->dtnew) );
     }
   }
   // MHD timestep
   if (pmb_pack->pmhd != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->dtnew) );
-    // viscosity timestep
-    if (pmb_pack->pmhd->pvisc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pvisc->dtnew) );
-    }
-    // resistivity timestep
-    if (pmb_pack->pmhd->presist != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->presist->dtnew) );
-    }
-    // thermal conduction timestep
-    if (pmb_pack->pmhd->pcond != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->pcond->dtnew) );
-    }
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pmhd->dtnew) );
     // source terms timestep
     if (pmb_pack->pmhd->psrc != nullptr) {
-      dt = std::min(dt, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
+      dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pmhd->psrc->dtnew) );
     }
+  }
+  // Diffusion-process timestep budgets
+  for (const auto &process : pmb_pack->parabolic_processes) {
+    Real process_dt = (cfl_no)*(process.ExplicitDt());
+    if (process.UsesSTS()) {
+      if (process_dt < std::numeric_limits<float>::max()) {
+        sts_inverse_dt += 1.0/process_dt;
+      }
+    } else {
+      dt_cycle = std::min(dt_cycle, process_dt);
+    }
+  }
+  if (sts_inverse_dt > 0.0) {
+    dt_parabolic_sts = 1.0/sts_inverse_dt;
   }
   // z4c timestep
   if (pmb_pack->pz4c != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pz4c->dtnew) );
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pz4c->dtnew) );
   }
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->prad->dtnew) );
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
-    dt = std::min(dt, (pmb_pack->ppart->dtnew) );
+    dt_cycle = std::min(dt_cycle, (pmb_pack->ppart->dtnew) );
   }
 
   // Radiation M1 timestep
@@ -634,14 +654,48 @@ void Mesh::NewTimeStep(const Real tlim) {
     dt = std::min(dt, (cfl_no)*(pmb_pack->pradm1->dtnew) );
   }
 #if MPI_PARALLEL_ENABLED
-  // get minimum dt over all MPI ranks
-  MPI_Allreduce(MPI_IN_PLACE, &dt, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  // get minimum cycle and parabolic timesteps over all MPI ranks
+  Real dt_reduction[2] = {dt_cycle, dt_parabolic_sts};
+  MPI_Allreduce(MPI_IN_PLACE, dt_reduction, 2, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+  dt_cycle = dt_reduction[0];
+  dt_parabolic_sts = dt_reduction[1];
 #endif
+
+  if (sts_integrator != parabolic::STSIntegrator::none && sts_max_dt_ratio > 0.0 &&
+      dt_parabolic_sts < std::numeric_limits<float>::max()) {
+    dt_cycle = std::min(dt_cycle, sts_max_dt_ratio*dt_parabolic_sts);
+  }
+  dt = dt_cycle;
 
   // limit last time step to stop at tlim *exactly*
   if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::RefreshSTSParabolicTimeStep()
+// \brief Refresh the globally minimum explicit timestep for STS processes.
+
+void Mesh::RefreshSTSParabolicTimeStep() {
+  dt_parabolic_sts = std::numeric_limits<float>::max();
+  Real sts_inverse_dt = 0.0;
+  for (const auto &process : pmb_pack->parabolic_processes) {
+    if (process.UsesSTS()) {
+      Real process_dt = (cfl_no)*(process.ExplicitDt());
+      if (process_dt < std::numeric_limits<float>::max()) {
+        sts_inverse_dt += 1.0/process_dt;
+      }
+    }
+  }
+  if (sts_inverse_dt > 0.0) {
+    dt_parabolic_sts = 1.0/sts_inverse_dt;
+  }
+
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &dt_parabolic_sts, 1, MPI_ATHENA_REAL, MPI_MIN,
+                MPI_COMM_WORLD);
+#endif
 }
 
 //----------------------------------------------------------------------------------------
@@ -674,11 +728,5 @@ void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
     if (pmb_pack->ppart != nullptr) {
       pmb_pack->ppart->CreateParticleTags(pinput);
     }
-  }
-
-  // Call RefinementCriteria constructor to enroll various criteria
-  // can only be done after the physics modules have been constructed
-  if (adaptive) {
-    pmr->pmrc = new RefinementCriteria(this, pinput);
   }
 }

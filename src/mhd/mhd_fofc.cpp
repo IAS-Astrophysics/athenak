@@ -120,6 +120,7 @@ void MHD::FOFC(Driver *pdriver, int stage) {
   auto fofc_ = fofc;
   auto &use_excise_ = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+  auto &excision_flux_emf_ = pmy_pack->pcoord->coord_data.excision_flux_emf;
   auto &w0_ = w0;
   auto &b0_ = b0;
 
@@ -141,6 +142,11 @@ void MHD::FOFC(Driver *pdriver, int stage) {
     if (is_gr) {
       if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
     }
+
+    // Whether the face EMFs are rewritten along with the hydro fluxes.  In a mask cell
+    // this is a deliberate choice (excision_flux_emf), not a consequence of how the cell
+    // came to be flagged.  See coordinates.cpp.
+    bool fofc_emf = fofc_excision ? excision_flux_emf_ : fofc_flag;
 
     // Apply FOFC
     if (fofc_flag || fofc_excision) {
@@ -193,8 +199,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         flx1(m,IM2,k,j,i) = flux.my;
         flx1(m,IM3,k,j,i) = flux.mz;
         if (eos.is_ideal) {flx1(m,IEN,k,j,i) = flux.e;}
-        e3x1_(m,k,j,i) = flux.by;
-        e2x1_(m,k,j,i) = flux.bz;
+        if (fofc_emf) {
+          e3x1_(m,k,j,i) = flux.by;
+          e2x1_(m,k,j,i) = flux.bz;
+        }
       }
 
       if (multi_d) {
@@ -246,8 +254,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         flx2(m,IM3,k,j,i) = flux.my;
         flx2(m,IM1,k,j,i) = flux.mz;
         if (eos.is_ideal) {flx2(m,IEN,k,j,i) = flux.e;}
-        e1x2_(m,k,j,i) = flux.by;
-        e3x2_(m,k,j,i) = flux.bz;
+        if (fofc_emf) {
+          e1x2_(m,k,j,i) = flux.by;
+          e3x2_(m,k,j,i) = flux.bz;
+        }
       }
 
       if (three_d) {
@@ -299,8 +309,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         flx3(m,IM1,k,j,i) = flux.my;
         flx3(m,IM2,k,j,i) = flux.mz;
         if (eos.is_ideal) {flx3(m,IEN,k,j,i) = flux.e;}
-        e2x3_(m,k,j,i) = flux.by;
-        e1x3_(m,k,j,i) = flux.bz;
+        if (fofc_emf) {
+          e2x3_(m,k,j,i) = flux.by;
+          e1x3_(m,k,j,i) = flux.bz;
+        }
       }
     }
   });
@@ -318,6 +330,11 @@ void MHD::FOFC(Driver *pdriver, int stage) {
     if (is_gr) {
       if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
     }
+
+    // Whether the face EMFs are rewritten along with the hydro fluxes.  In a mask cell
+    // this is a deliberate choice (excision_flux_emf), not a consequence of how the cell
+    // came to be flagged.  See coordinates.cpp.
+    bool fofc_emf = fofc_excision ? excision_flux_emf_ : fofc_flag;
 
     // Apply FOFC
     if (fofc_flag || fofc_excision) {
@@ -370,8 +387,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         flx1(m,IM2,k,j,i+1) = flux.my;
         flx1(m,IM3,k,j,i+1) = flux.mz;
         if (eos.is_ideal) {flx1(m,IEN,k,j,i+1) = flux.e;}
-        e3x1_(m,k,j,i+1) = flux.by;
-        e2x1_(m,k,j,i+1) = flux.bz;
+        if (fofc_emf) {
+          e3x1_(m,k,j,i+1) = flux.by;
+          e2x1_(m,k,j,i+1) = flux.bz;
+        }
       }
 
       if (multi_d) {
@@ -423,8 +442,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         flx2(m,IM3,k,j+1,i) = flux.my;
         flx2(m,IM1,k,j+1,i) = flux.mz;
         if (eos.is_ideal) {flx2(m,IEN,k,j+1,i) = flux.e;}
-        e1x2_(m,k,j+1,i) = flux.by;
-        e3x2_(m,k,j+1,i) = flux.bz;
+        if (fofc_emf) {
+          e1x2_(m,k,j+1,i) = flux.by;
+          e3x2_(m,k,j+1,i) = flux.bz;
+        }
       }
 
       if (three_d) {
@@ -476,8 +497,10 @@ void MHD::FOFC(Driver *pdriver, int stage) {
         flx3(m,IM1,k+1,j,i) = flux.my;
         flx3(m,IM2,k+1,j,i) = flux.mz;
         if (eos.is_ideal) {flx3(m,IEN,k+1,j,i) = flux.e;}
-        e2x3_(m,k+1,j,i) = flux.by;
-        e1x3_(m,k+1,j,i) = flux.bz;
+        if (fofc_emf) {
+          e2x3_(m,k+1,j,i) = flux.by;
+          e1x3_(m,k+1,j,i) = flux.bz;
+        }
       }
     }
   });

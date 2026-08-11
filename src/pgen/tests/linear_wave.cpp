@@ -361,7 +361,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // Calculate linear wave perturbations in hydro
     Real rem[5][5], ev[5];
-    Real lambda, delta_rho, delta_pgas, delta_v[4];
+    Real lambda, delta_v[4];
+    Real delta_rho = 0.0, delta_pgas = 0.0;
     if (relativistic) {
       // Calculate background 4-vectors
       Real u[4];
@@ -482,7 +483,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
 
     // Calculate linear wave perturbations in MHD
     Real rem[7][7], ev[7];
-    Real lambda, delta_rho, delta_pgas,u[4],delta_u[4],delta_b[4];
+    Real lambda, u[4],delta_u[4],delta_b[4];
+    Real delta_rho = 0.0, delta_pgas = 0.0;
     if (relativistic) {
       // Calculate background 4-vectors
       Real v_sq = SQR(lwv.vx_0) + SQR(lwv.vy_0) + SQR(lwv.vz_0);
@@ -573,15 +575,17 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
       // faces is identical.
 
       // Correct A1 at x2-faces, x3-faces, and x2x3-edges
-      if ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+      if ((indcs.nx2 > 1 &&
+          ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
           (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
           (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
-          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1))) ||
+          (indcs.nx3 > 1 &&
+          ((nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
@@ -596,7 +600,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
           (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
           (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
-          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
+          (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)))) {
         Real xl = x1v + 0.25*dx1;
         Real xr = x1v - 0.25*dx1;
         a1(m,k,j,i) = 0.5*(A1(xl,x2f,x3f,lwv) + A1(xr,x2f,x3f,lwv));
@@ -611,7 +615,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+          (indcs.nx3 > 1 &&
+          ((nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
           (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
@@ -626,7 +631,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,36).lev > mblev.d_view(m) && i==is && k==ke+1) ||
           (nghbr.d_view(m,37).lev > mblev.d_view(m) && i==is && k==ke+1) ||
           (nghbr.d_view(m,38).lev > mblev.d_view(m) && i==ie+1 && k==ke+1) ||
-          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
+          (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)))) {
         Real xl = x2v + 0.25*dx2;
         Real xr = x2v - 0.25*dx2;
         a2(m,k,j,i) = 0.5*(A2(x1f,xl,x3f,lwv) + A2(x1f,xr,x3f,lwv));
@@ -641,7 +646,8 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
           (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-          (nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+          (indcs.nx2 > 1 &&
+          ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
           (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
@@ -656,7 +662,7 @@ void ProblemGenerator::LinearWave(ParameterInput *pin, const bool restart) {
           (nghbr.d_view(m,20).lev > mblev.d_view(m) && i==is && j==je+1) ||
           (nghbr.d_view(m,21).lev > mblev.d_view(m) && i==is && j==je+1) ||
           (nghbr.d_view(m,22).lev > mblev.d_view(m) && i==ie+1 && j==je+1) ||
-          (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)) {
+          (nghbr.d_view(m,23).lev > mblev.d_view(m) && i==ie+1 && j==je+1)))) {
         Real xl = x3v + 0.25*dx3;
         Real xr = x3v - 0.25*dx3;
         a3(m,k,j,i) = 0.5*(A3(x1f,x2f,xl,lwv) + A3(x1f,x2f,xr,lwv));
@@ -789,8 +795,6 @@ void HydroEigensystemPrim(const Real d, const Real v1, const Real v2, const Real
                           Real eigenvalues[5], Real right_eigenmatrix[5][5]) {
   //--- Ideal Gas Hydrodynamics ---
   if (eos.is_ideal) {
-    Real vsq = v1*v1 + v2*v2 + v3*v3;
-    Real h = (p/(eos.gamma - 1.0) + 0.5*d*vsq + p)/d;
     Real a = std::sqrt(eos.gamma*p/d);
 
     // Compute eigenvalues (eq. B2)
@@ -889,12 +893,9 @@ void MHDEigensystemPrim(const Real d, const Real v1, const Real v2, const Real v
 
   //--- Ideal Gas MHD ---
   if (eos.is_ideal) {
-    Real vsq = v1*v1 + v2*v2 + v3*v3;
     Real gm1 = eos.gamma - 1.0;
-    Real h = (p/gm1 + 0.5*d*vsq + p + b1*b1 + btsq)/d;
     Real bt_starsq = (gm1 - (gm1 - 1.0)*y)*btsq;
     Real vaxsq = b1*b1/d;
-    Real hp = h - (vaxsq + btsq/d);
 
     // Compute fast- and slow-magnetosonic speeds (eq. A10)
     Real ct2 = bt_starsq/d;
@@ -907,13 +908,6 @@ void MHDEigensystemPrim(const Real d, const Real v1, const Real v2, const Real v
 
     Real cssq = asq*vaxsq/cfsq;
     Real cs = std::sqrt(cssq);
-
-    // Compute beta(s) (eqs. A17)
-    Real bt_star = std::sqrt(bt_starsq);
-    Real bet2_star = bet2/std::sqrt(gm1 - (gm1-1.0)*y);
-    Real bet3_star = bet3/std::sqrt(gm1 - (gm1-1.0)*y);
-    Real bet_starsq = bet2_star*bet2_star + bet3_star*bet3_star;
-    Real vbet = v2*bet2_star + v3*bet3_star;
 
     // Compute alpha(s) (eq. A16)
     Real alpha_f,alpha_s;
@@ -967,10 +961,6 @@ void MHDEigensystemPrim(const Real d, const Real v1, const Real v2, const Real v
     right_eigenmatrix[1][5] = 0.0;
     right_eigenmatrix[1][6] = cf*alpha_f;
 
-    Real qa = alpha_f*v2;
-    Real qb = alpha_s*v2;
-    Real qc = qs*bet2_star;
-    Real qd = qf*bet2_star;
     right_eigenmatrix[2][0] = qs*bet2;
     right_eigenmatrix[2][1] = -bet3;
     right_eigenmatrix[2][2] = -qf*bet2;
@@ -979,10 +969,6 @@ void MHDEigensystemPrim(const Real d, const Real v1, const Real v2, const Real v
     right_eigenmatrix[2][5] = bet3;
     right_eigenmatrix[2][6] = -qs*bet2;
 
-    qa = alpha_f*v3;
-    qb = alpha_s*v3;
-    qc = qs*bet3_star;
-    qd = qf*bet3_star;
     right_eigenmatrix[3][0] = qs*bet3;
     right_eigenmatrix[3][1] = bet2;
     right_eigenmatrix[3][2] = -qf*bet3;
@@ -1195,7 +1181,6 @@ void RelMHDPerturbations(LinWaveVariables lwv, Real u[4], Real b[4],
      Real &lambda, Real &delta_rho, Real &delta_pgas, Real delta_u[4], Real delta_b[4]) {
   Real b_sq = -SQR(b[0]) + SQR(b[1]) + SQR(b[2]) + SQR(b[3]);
   Real wtot = lwv.wgas + b_sq;
-  Real cs = std::sqrt(lwv.cs_sq);
   switch (lwv.wave_flag) {
     case 3: {  // entropy (A 46)
       lambda = lwv.vx_0;
@@ -1283,7 +1268,7 @@ void RelMHDPerturbations(LinWaveVariables lwv, Real u[4], Real b[4],
       Real lambda_fl, lambda_sl, lambda_sr, lambda_fr;
       QuarticRoots(coeff_3/coeff_4, coeff_2/coeff_4, coeff_1/coeff_4, coeff_0/coeff_4,
                    &lambda_fl, &lambda_sl, &lambda_sr, &lambda_fr);
-      Real lambda_other_ms;
+      Real lambda_other_ms=0.0;
       if (lwv.wave_flag == 0) {
         lambda = lambda_fl;
         lambda_other_ms = lambda_sl;

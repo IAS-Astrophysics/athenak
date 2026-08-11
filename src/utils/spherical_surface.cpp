@@ -11,6 +11,7 @@
 #include <cmath>
 #include <iostream>
 #include <list>
+#include <vector>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -24,27 +25,52 @@
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
                                    Real rad, Real xc, Real yc, Real zc)
-    : pmy_pack(pmy_pack),
-      radius(rad),
+    : SphericalSurface(pmy_pack, ntheta, std::vector<Real>{rad}, xc, yc, zc) {}
+
+SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
+                                   const std::vector<Real> &rad, Real xc, Real yc,
+                                   Real zc)
+    : ntheta(ntheta),
+      nradii(static_cast<int>(rad.size())),
+      radii("radii", 1),
       xc(xc),
       yc(yc),
       zc(zc),
-      ntheta(ntheta),
       int_weights("int_weights", 1),
-      polar_pos("polar_pos", 1, 1),
       cart_pos("cart_pos", 1, 1),
+      polar_pos("polar_pos", 1, 1),
+      interp_vals("interp_vals", 1),
       interp_indcs("interp_indcs", 1, 1),
       interp_wghts("interp_wghts", 1, 1, 1),
-      interp_vals("interp_vals", 1) {
+      pmy_pack(pmy_pack) {
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
   nangles = 2 * ntheta * ntheta;
+  npoints = nradii * nangles;
+
+  // Allocate memory for the radii DualArray1D<Real>
+  // and subsequently fill the array with the specified
+  // radii.
+  Kokkos::realloc(radii, nradii);
+  for (int r = 0; r < nradii; ++r) {
+    radii.h_view(r) = rad[r];
+  }
+
+  // Sync to GPU.
+  radii.template modify<HostMemSpace>();
+  radii.template sync<DevExeSpace>();
 
   Kokkos::realloc(int_weights, nangles);
   Kokkos::realloc(polar_pos, nangles, 2);
-  Kokkos::realloc(cart_pos, nangles, 3);
-  Kokkos::realloc(interp_indcs, nangles, 4);
-  Kokkos::realloc(interp_wghts, nangles, 2 * ng, 3);
+  Kokkos::realloc(cart_pos, npoints, 3);
+  Kokkos::realloc(interp_vals, npoints);
+  Kokkos::realloc(interp_indcs, npoints, 4);
+  Kokkos::realloc(interp_wghts, npoints, 2 * ng, 3);
+
+  // stamp of the mesh the indices below are computed against
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  amr_nmb_created = (pmr == nullptr) ? 0 : pmr->nmb_created;
+  amr_nmb_deleted = (pmr == nullptr) ? 0 : pmr->nmb_deleted;
 
   InitializeAngleAndWeights();
   InitializeRadius();
@@ -80,12 +106,16 @@ void SphericalSurface::InitializeAngleAndWeights() {
 }
 
 void SphericalSurface::InitializeRadius() {
-  for (int n = 0; n < nangles; ++n) {
-    Real &theta = polar_pos.h_view(n, 0);
-    Real &phi = polar_pos.h_view(n, 1);
-    cart_pos.h_view(n, 0) = radius * cos(phi) * sin(theta) + xc;
-    cart_pos.h_view(n, 1) = radius * sin(phi) * sin(theta) + yc;
-    cart_pos.h_view(n, 2) = radius * cos(theta) + zc;
+  for (int r = 0; r < nradii; ++r) {
+    Real &rad = radii.h_view(r);
+    for (int n = 0; n < nangles; ++n) {
+      Real &theta = polar_pos.h_view(n, 0);
+      Real &phi = polar_pos.h_view(n, 1);
+      int p = r * nangles + n;
+      cart_pos.h_view(p, 0) = rad * cos(phi) * sin(theta) + xc;
+      cart_pos.h_view(p, 1) = rad * sin(phi) * sin(theta) + yc;
+      cart_pos.h_view(p, 2) = rad * cos(theta) + zc;
+    }
   }
   cart_pos.template modify<HostMemSpace>();
   cart_pos.template sync<DevExeSpace>();
@@ -101,7 +131,7 @@ void SphericalSurface::SetInterpolationIndices() {
   auto &size = pmy_pack->pmb->mb_size;
 
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  int nang1 = nangles - 1;
+  int nang1 = npoints - 1;
   auto &rcoord = cart_pos;
   auto &iindcs = interp_indcs;
   for (int n = 0; n <= nang1; ++n) {
@@ -136,6 +166,8 @@ void SphericalSurface::SetInterpolationIndices() {
             std::floor((rcoord.h_view(n, 1) - (x2min + dx2 / 2.0)) / dx2));
         iindcs.h_view(n, 3) = static_cast<int>(
             std::floor((rcoord.h_view(n, 2) - (x3min + dx3 / 2.0)) / dx3));
+        // MeshBlock bounds half-open; no other block can own this points
+        break;
       }
     }
   }
@@ -143,6 +175,32 @@ void SphericalSurface::SetInterpolationIndices() {
   // sync dual arrays
   interp_indcs.template modify<HostMemSpace>();
   interp_indcs.template sync<DevExeSpace>();
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SphericalSurface::UpdateInterpolationOnMeshChange
+//! \brief recompute interpolation indices and weights after the mesh has changed
+//
+// interp_indcs stores the *local* MeshBlock index of the owner of each point, so any
+// refinement, derefinement or load balance invalidates it: an index can point at a
+// MeshBlock that now covers a different region, or past the end of a shrunken pack.
+// nmb_created/nmb_deleted are cumulative counters that MeshRefinement only advances when
+// blocks were actually redistributed, so comparing against them makes this a no-op on
+// the (many) outputs where the mesh did not move.
+
+void SphericalSurface::UpdateInterpolationOnMeshChange() {
+  if (!pmy_pack->pmesh->adaptive) return;
+
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  if (pmr == nullptr) return;
+  if (pmr->nmb_created == amr_nmb_created && pmr->nmb_deleted == amr_nmb_deleted) return;
+
+  amr_nmb_created = pmr->nmb_created;
+  amr_nmb_deleted = pmr->nmb_deleted;
+  SetInterpolationIndices();
+  SetInterpolationWeights();
 
   return;
 }
@@ -158,7 +216,7 @@ void SphericalSurface::SetInterpolationWeights() {
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
-  for (int n = 0; n < nangles; ++n) {
+  for (int n = 0; n < npoints; ++n) {
     // extract indices
     int &ii0 = iindcs.h_view(n, 0);
     int &ii1 = iindcs.h_view(n, 1);
@@ -225,21 +283,18 @@ void SphericalSurface::SetInterpolationWeights() {
 
 void SphericalSurface::InterpolateToSphere(int var_ind,
                                            DvceArray5D<Real> &val) {
-  // reinitialize interpolation indices and weights if AMR
-  // if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  // reinitialize interpolation indices and weights if the mesh has changed
+  UpdateInterpolationOnMeshChange();
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is;
   int &js = indcs.js;
   int &ks = indcs.ks;
   int &ng = indcs.ng;
-  int nang1 = nangles - 1;
+  int nang1 = npoints - 1;
   int v = var_ind;
 
   // reallocate container
-  Kokkos::realloc(interp_vals, nangles);
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
   auto &ivals = interp_vals;
