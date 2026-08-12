@@ -57,7 +57,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
-  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-77);
+  params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-27);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-30);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
   params.source_epsabs = pin->GetOrAddReal("radiation_m1", "source_epsabs", 1e-15);
@@ -147,7 +147,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_WM_ab = pin->GetOrAddBoolean("bns_nurates", "use_WM_ab", true);
     nurates_params.use_WM_sc = pin->GetOrAddBoolean("bns_nurates", "use_WM_sc", true);
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
-    nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", true);
+    nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", false);
     nurates_params.use_equilibrium_distribution =
         pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", true);
     nurates_params.use_kirchhoff_law =
@@ -158,7 +158,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
     nurates_params.neglect_blocking =
         pin->GetOrAddBoolean("bns_nurates", "neglect_blocking", false);
-    nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", false);
+    nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", true);
     nurates_params.use_BRT_brem =
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
     nurates_params.eq_warmup_cycles =

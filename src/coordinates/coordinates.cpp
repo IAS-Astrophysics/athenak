@@ -136,13 +136,6 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
                       << std::endl;
             std::exit(EXIT_FAILURE);
           }
-          if (global_variable::my_rank == 0) {
-            std::cout << "### Excision region freezing enabled: radius="
-                      << (coord_data.freeze_excision_radius ? "frozen" : "tracked")
-                      << ", center="
-                      << (coord_data.freeze_excision_center ? "frozen" : "tracked")
-                      << std::endl;
-          }
         }
       }
 
