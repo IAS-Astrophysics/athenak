@@ -46,9 +46,11 @@
 #include <cstdio>
 
 #include <array>
+#include <chrono>
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -80,6 +82,7 @@
 #include "For_Kadath/Utilities/exporter_utilities.hpp"
 #include "For_Kadath/Utilities/Exporters/bco_geometry.hpp"
 #include "For_Kadath/IO/be_file_source.hpp"
+#include "Apps/Formalism/Shared/scalar_point_batch.hpp"
 
 void KadathBNSHistory(HistoryData *pdata, Mesh *pm);
 void KadathBNSRefinementCondition(MeshBlockPack *pmbp);
@@ -127,6 +130,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   int &ke             = indcs.ke;
 
   std::string fname = pin->GetString("problem", "initial_data_file");
+  const bool batch_fields = pin->GetOrAddBoolean("problem", "batch_fields", true);
 
   int ncells1      = indcs.nx1 + 2 * (indcs.ng);
   int ncells2      = indcs.nx2 + 2 * (indcs.ng);
@@ -322,9 +326,13 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   quants[UY] = std::cref(vel_kad(2));
   quants[UZ] = std::cref(vel_kad(3));
 
-  // Force spectral-coefficient transform for every field once (serial, one-time).
+  std::array<const Scalar*, NUM_QUANTS> quant_fields{};
   for (int kq = 0; kq < NUM_QUANTS; ++kq)
-    quants[kq].get().coef();
+    quant_fields[kq] = &quants[kq].get();
+  bns_field_transfer::scalar_source_batch quant_batch(
+      std::span<const Scalar* const>(quant_fields.data(), quant_fields.size()));
+  // Prepare all mutable coefficient state before the host-parallel fill.
+  quant_batch.prepare_coefficients();
 
   if (global_variable::my_rank == 0) {
     std::cout << "Kadath system assembled. Starting per-point interpolation..."
@@ -365,6 +373,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     (void)quants[PSI].get().val_point(pt_warm);
   }
 
+  const auto interpolation_start = std::chrono::steady_clock::now();
   Kokkos::parallel_for("kadath_fill",
       Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
       [&](const int idx) {
@@ -391,8 +400,12 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
     // Evaluate all spectral quantities at this point.
     double qv[NUM_QUANTS];
-    for (int kq = 0; kq < NUM_QUANTS; ++kq) {
-      qv[kq] = quants[kq].get().val_point(pt);
+    if (batch_fields) {
+      const auto located = quant_batch.locate(pt);
+      quant_batch.values(located, std::span<double>(qv, NUM_QUANTS));
+    } else {
+      for (int kq = 0; kq < NUM_QUANTS; ++kq)
+        qv[kq] = quants[kq].get().val_point(pt);
     }
 
     // Conformal factor and derived powers.
@@ -478,7 +491,22 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   });
   Kokkos::fence();
 
+  const double interpolation_seconds = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - interpolation_start).count();
+  double interpolation_max_seconds = interpolation_seconds;
+#if MPI_PARALLEL_ENABLED
   if (global_variable::my_rank == 0) {
+    MPI_Reduce(MPI_IN_PLACE, &interpolation_max_seconds, 1, MPI_DOUBLE, MPI_MAX, 0,
+               MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(&interpolation_seconds, &interpolation_max_seconds, 1, MPI_DOUBLE,
+               MPI_MAX, 0, MPI_COMM_WORLD);
+  }
+#endif
+
+  if (global_variable::my_rank == 0) {
+    std::printf("[celephais-timing] batch_fields=%s kadath_fill_max_seconds=%.9f\n",
+                batch_fields ? "true" : "false", interpolation_max_seconds);
     std::cout << "Per-point interpolation complete. Copying to device..." << std::endl;
   }
 

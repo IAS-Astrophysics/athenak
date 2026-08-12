@@ -9,32 +9,32 @@ basename  = bns
 
 <mesh>
 nghost     = 4        # Number of ghost cells (4 recommended for Z4c + WENOZ)
-nx1        = 96      # Number of zones in X1-direction
+nx1        = 48      # Number of zones in X1-direction
 x1min      = -1024    # minimum value of X1 (~10 times the separation)
 x1max      =  1024    # maximum value of X1
 ix1_bc     = diode  # Inner-X1 boundary condition
 ox1_bc     = diode  # Outer-X1 boundary condition
 
-nx2        = 96      # Number of zones in X2-direction
+nx2        = 48      # Number of zones in X2-direction
 x2min      = -1024    # minimum value of X2
 x2max      =  1024    # maximum value of X2
 ix2_bc     = diode  # Inner-X2 boundary condition
 ox2_bc     = diode  # Outer-X2 boundary condition
 
-nx3        = 96      # Number of zones in X3-direction
+nx3        = 48      # Number of zones in X3-direction
 x3min      = -1024      # minimum value of X3
 x3max      =  1024    # maximum value of X3
 ix3_bc     = diode  # Inner-X3 boundary condition
 ox3_bc     = diode  # Outer-X3 boundary condition
 
 <meshblock>
-nx1        = 32       # Number of cells in each MeshBlock, X1-dir
-nx2        = 32       # Number of cells in each MeshBlock, X2-dir
-nx3        = 32       # Number of cells in each MeshBlock, X3-dir
+nx1        = 16       # Number of cells in each MeshBlock, X1-dir
+nx2        = 16       # Number of cells in each MeshBlock, X2-dir
+nx3        = 16       # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
 refinement          = adaptive
-max_nmb_per_rank    = 100
+max_nmb_per_rank    = 32
 num_levels          = 7
 refinement_interval = 1
 
@@ -49,8 +49,8 @@ method = tracker
 # co_0_x / co_1_x below (in <z4c>) give the NS centers.
 <refined_region1>
 level = 6
-x1min =   4.0    # co_0_x - NS_radius
-x1max =  24.0    # co_0_x + NS_radius
+x1min =   7.5    # co_0_x - NS_radius
+x1max =  27.5    # co_0_x + NS_radius
 x2min = -10.0
 x2max =  10.0
 x3min = -10.0
@@ -58,8 +58,8 @@ x3max =  10.0
 
 <refined_region2>
 level = 6
-x1min = -24.0    # co_1_x - NS_radius
-x1max = - 4.0    # co_1_x + NS_radius
+x1min = -27.5    # co_1_x - NS_radius
+x1max = - 7.5    # co_1_x + NS_radius
 x2min = -10.0
 x2max =  10.0
 x3min = -10.0
@@ -83,30 +83,20 @@ a           = 0.0
 eos         = ideal          # placeholder (unused, required by parser)
 gamma       = 2.0            # placeholder (unused, required by parser)
 
-dyn_eos     = piecewise_poly # PrimitiveSolver EOSPolicy — must match Kadath EOS
+dyn_eos     = hybrid         # PrimitiveSolver EOSPolicy — matches the DD2 data
 dyn_error   = reset_floor    # PrimitiveSolver ErrorPolicy
 reconstruct = wenoz          # spatial reconstruction method
-rsolver     = llf            # Riemann solver
-dfloor      = 1.28e-21       # density floor [geometric units]
-tfloor      = 1.58255e-19    # temperature floor
-dthreshold  = 1.0
-dyn_scratch = 0
-fofc        = false
+rsolver     = hlle           # Riemann solver
+enforce_maximum = false
+dmp_M       = 1.2
+nscalars    = 0
+dfloor      = 3.e-15         # density floor [geometric units]
+fofc        = true
 c2p_tol     = 2.49e-13
 gamma_max   = 20.025         # Lorentz factor ceiling
+use_NQT     = false
 
-# Piecewise-polytrope EOS parameters (SLy4 example).
-# These MUST match the EOS used to build the Kadath initial data.
-pwp_poly_rmd         = 6.172164329750898e+18
-pwp_density_pieces_0 = 0.000000000000000e+00
-pwp_density_pieces_1 = 1.136499842827129e+17
-pwp_density_pieces_2 = 5.011872336272714e+17
-pwp_density_pieces_3 = 9.999999999999999e+17
-pwp_gamma_pieces_0   = 2.000000000000000e+00
-pwp_gamma_pieces_1   = 2.000000000000000e+00
-pwp_gamma_pieces_2   = 2.000000000000000e+00
-pwp_gamma_pieces_3   = 2.000000000000000e+00
-pwp_gamma_thermal    = 1.7
+table = /pfs/10/project/bw25h005/DD2_T0.1_beta_m931.athtab
 
 <adm>
 
@@ -139,22 +129,25 @@ waveform_dt          = 2.5
 # Neutron star tracker.
 # co_0_x / co_1_x: initial NS positions in the inertial frame [M_sun].
 # For a symmetric q=1 binary at separation d, use ±d/2.
-# Read DIST from the Kadath .info file and note that Kadath places
+# Read DIST from the Celephais TOML file and note that Kadath places
 # the COM at x=axis (bconfig(COM)); both stars sit at x = axis ± d/2.
 nco         = 2
 co_0_type   = NS
-co_0_x      = 14.0      # position of NS1 along x-axis [M_sun] — set from .info DIST/2
+co_0_x      = 17.5      # position of NS1 along x-axis [M_sun] — set from TOML DIST/2
 co_0_radius = 8.0       # tracker search radius [M_sun]
 co_1_type   = NS
-co_1_x      = -14.0     # position of NS2 along x-axis [M_sun] — set from .info -DIST/2
+co_1_x      = -17.5     # position of NS2 along x-axis [M_sun] — set from TOML -DIST/2
 co_1_radius = 8.0
 tracker_mode = walk
 
 <problem>
-# Path to the Kadath .info config file.
+# Path to the Celephais TOML config file.
 # The .dat space file must be in the same directory with the same base name.
-initial_data_file = path_to_id/bns_solution.info
+initial_data_file = /pfs/10/project/bw25h005/res19_imbal/converged_BNS_NOSYM_QUASI_EQUIL.dd2.35.0.3.z30.0.z0.2.8.q1.0.0.0.15.toml
 user_hist         = true
+table             = /pfs/10/project/bw25h005/DD2_T0.1_beta_m931.athtab
+kadath_symmetry   = nosym
+batch_fields      = true
 
 <output1>
 file_type = hst      # History output (rho-max, alpha-min)
