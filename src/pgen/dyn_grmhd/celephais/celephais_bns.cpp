@@ -30,12 +30,11 @@
 //  The Kadath space/field file must reside next to the config file (same stem,
 //  resolved through `kadath_config::space_filename()`).
 //
-//  NOTE ON PARALLELISM: Kadath's MemoryMapper and coef_1d scratch pools are
-//  thread_local (patched in memory.hpp/.cpp and coef_1d.cpp), so val_point() and
-//  Point() are safe to call concurrently.  The per-point loop runs via
-//  Kokkos::parallel_for on DefaultHostExecutionSpace (OpenMP threads).  A serial
+//  NOTE ON PARALLELISM: all mutable spectral coefficients are prepared before
+//  the fill, and spectral summation uses worker-local scratch.  The per-point
+//  loop runs via Kokkos::parallel_for on DefaultHostExecutionSpace.  A serial
 //  warmup call before the loop initialises the summation_1d static dispatch table
-//  on the main thread, preventing a first-call race among OMP threads.
+//  on the main thread, preventing a first-call race among host threads.
 //
 //  NOTE ON INCLUDE PATHS: the Kadath headers below use the Celephais canonical
 //  `For_Kadath/...` / `Hydro/...` layout (matching the in-repo exporters and the
@@ -47,7 +46,9 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -377,13 +378,75 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   const auto interpolation_start = std::chrono::steady_clock::now();
+
+  // Ghost zones of rank-local MeshBlocks can visit exactly the same Cartesian
+  // point.  Identify those points by their shifted IEEE-754 coordinate bits,
+  // retain the first visit as the canonical destination, and evaluate it once.
+  // Keeping signed-zero bits distinct avoids changing odd-basis behaviour.
+  struct CoordinateVisit {
+    std::array<std::uint64_t, 3> coordinate_bits;
+    int visit;
+  };
+  std::vector<CoordinateVisit> sorted_visits(static_cast<std::size_t>(width));
+  for (int idx = 0; idx < width; ++idx) {
+    const int m = idx / ncells_per_mb;
+    int rem = idx - m * ncells_per_mb;
+    const int k = rem / (ncells2 * ncells1);
+    rem -= k * ncells2 * ncells1;
+    const int j = rem / ncells1;
+    const int i = rem % ncells1;
+    const double x = static_cast<double>(CellCenterX(
+        i - is, indcs.nx1, size.h_view(m).x1min, size.h_view(m).x1max)) - axis;
+    const double y = static_cast<double>(CellCenterX(
+        j - js, indcs.nx2, size.h_view(m).x2min, size.h_view(m).x2max)) - yaxis;
+    const double z = static_cast<double>(CellCenterX(
+        k - ks, indcs.nx3, size.h_view(m).x3min, size.h_view(m).x3max));
+    sorted_visits[static_cast<std::size_t>(idx)] = {
+        {std::bit_cast<std::uint64_t>(x), std::bit_cast<std::uint64_t>(y),
+         std::bit_cast<std::uint64_t>(z)}, idx};
+  }
+  std::sort(sorted_visits.begin(), sorted_visits.end(),
+            [](const CoordinateVisit &lhs, const CoordinateVisit &rhs) {
+              return lhs.coordinate_bits < rhs.coordinate_bits;
+            });
+
+  std::vector<int> canonical_for_visit(static_cast<std::size_t>(width), -1);
+  for (std::size_t begin = 0; begin < sorted_visits.size();) {
+    std::size_t end = begin + 1;
+    int canonical = sorted_visits[begin].visit;
+    while (end < sorted_visits.size() &&
+           sorted_visits[end].coordinate_bits == sorted_visits[begin].coordinate_bits) {
+      canonical = std::min(canonical, sorted_visits[end].visit);
+      ++end;
+    }
+    for (std::size_t visit = begin; visit < end; ++visit)
+      canonical_for_visit[static_cast<std::size_t>(sorted_visits[visit].visit)] = canonical;
+    begin = end;
+  }
+
+  std::vector<int> canonical_visits;
+  std::vector<std::array<int, 2>> duplicate_visits;
+  canonical_visits.reserve(static_cast<std::size_t>(width));
+  duplicate_visits.reserve(static_cast<std::size_t>(width));
+  for (int idx = 0; idx < width; ++idx) {
+    const int canonical = canonical_for_visit[static_cast<std::size_t>(idx)];
+    if (canonical == idx)
+      canonical_visits.push_back(idx);
+    else
+      duplicate_visits.push_back({canonical, idx});
+  }
+  std::vector<CoordinateVisit>().swap(sorted_visits);
+  std::vector<int>().swap(canonical_for_visit);
+  const auto interpolation_plan_end = std::chrono::steady_clock::now();
+
   constexpr int point_lane_width = 4;
-  const int point_tiles = (width + point_lane_width - 1) / point_lane_width;
+  const int canonical_count = static_cast<int>(canonical_visits.size());
+  const int point_tiles = (canonical_count + point_lane_width - 1) / point_lane_width;
   Kokkos::parallel_for("celephais_fill",
       Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, point_tiles),
       [&](const int tile) {
     const int first_idx = tile * point_lane_width;
-    const int lane_count = std::min(point_lane_width, width - first_idx);
+    const int lane_count = std::min(point_lane_width, canonical_count - first_idx);
     std::array<int, point_lane_width> m_values{};
     std::array<int, point_lane_width> k_values{};
     std::array<int, point_lane_width> j_values{};
@@ -391,7 +454,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::array<Point, point_lane_width> points{
         Point(3), Point(3), Point(3), Point(3)};
     for (int lane = 0; lane < point_lane_width; ++lane) {
-      const int idx = first_idx + std::min(lane, lane_count - 1);
+      const int canonical_lane = first_idx + std::min(lane, lane_count - 1);
+      const int idx = canonical_visits[static_cast<std::size_t>(canonical_lane)];
       int m = idx / ncells_per_mb;
       int rem = idx - m * ncells_per_mb;
       int k = rem / (ncells2 * ncells1);
@@ -546,40 +610,141 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   });
   Kokkos::fence();
 
+  const auto interpolation_evaluation_end = std::chrono::steady_clock::now();
+  const int duplicate_count = static_cast<int>(duplicate_visits.size());
+  Kokkos::parallel_for("celephais_scatter_duplicates",
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, duplicate_count),
+      [&](const int duplicate) {
+    const std::array<int, 2> visits =
+        duplicate_visits[static_cast<std::size_t>(duplicate)];
+    std::array<int, 2> m_values{};
+    std::array<int, 2> k_values{};
+    std::array<int, 2> j_values{};
+    std::array<int, 2> i_values{};
+    for (int endpoint = 0; endpoint < 2; ++endpoint) {
+      const int idx = visits[endpoint];
+      const int m = idx / ncells_per_mb;
+      int rem = idx - m * ncells_per_mb;
+      const int k = rem / (ncells2 * ncells1);
+      rem -= k * ncells2 * ncells1;
+      m_values[endpoint] = m;
+      k_values[endpoint] = k;
+      j_values[endpoint] = rem / ncells1;
+      i_values[endpoint] = rem % ncells1;
+    }
+
+    const int src_m = m_values[0];
+    const int src_k = k_values[0];
+    const int src_j = j_values[0];
+    const int src_i = i_values[0];
+    const int dst_m = m_values[1];
+    const int dst_k = k_values[1];
+    const int dst_j = j_values[1];
+    const int dst_i = i_values[1];
+    host_adm.alpha(dst_m, dst_k, dst_j, dst_i) =
+        host_adm.alpha(src_m, src_k, src_j, src_i);
+    for (int component = 0; component < 3; ++component)
+      host_adm.beta_u(dst_m, component, dst_k, dst_j, dst_i) =
+          host_adm.beta_u(src_m, component, src_k, src_j, src_i);
+    for (int row = 0; row < 3; ++row) {
+      for (int column = row; column < 3; ++column) {
+        host_adm.g_dd(dst_m, row, column, dst_k, dst_j, dst_i) =
+            host_adm.g_dd(src_m, row, column, src_k, src_j, src_i);
+        host_adm.vK_dd(dst_m, row, column, dst_k, dst_j, dst_i) =
+            host_adm.vK_dd(src_m, row, column, src_k, src_j, src_i);
+      }
+    }
+    host_w0(dst_m, IDN, dst_k, dst_j, dst_i) =
+        host_w0(src_m, IDN, src_k, src_j, src_i);
+    host_w0(dst_m, IPR, dst_k, dst_j, dst_i) =
+        host_w0(src_m, IPR, src_k, src_j, src_i);
+    if constexpr (use_ye) {
+      if (read_ye)
+        host_w0(dst_m, IYF, dst_k, dst_j, dst_i) =
+            host_w0(src_m, IYF, src_k, src_j, src_i);
+    }
+    for (int component = 0; component < 3; ++component)
+      host_w0(dst_m, IVX + component, dst_k, dst_j, dst_i) =
+          host_w0(src_m, IVX + component, src_k, src_j, src_i);
+  });
+  Kokkos::fence();
+
+  const auto interpolation_end = std::chrono::steady_clock::now();
   const double interpolation_seconds = std::chrono::duration<double>(
-      std::chrono::steady_clock::now() - interpolation_start).count();
+      interpolation_end - interpolation_start).count();
+  const double interpolation_plan_seconds = std::chrono::duration<double>(
+      interpolation_plan_end - interpolation_start).count();
+  const double interpolation_evaluation_seconds = std::chrono::duration<double>(
+      interpolation_evaluation_end - interpolation_plan_end).count();
+  const double interpolation_scatter_seconds = std::chrono::duration<double>(
+      interpolation_end - interpolation_evaluation_end).count();
   double interpolation_min_seconds = interpolation_seconds;
   double interpolation_mean_seconds = interpolation_seconds;
   double interpolation_max_seconds = interpolation_seconds;
+  double interpolation_plan_mean_seconds = interpolation_plan_seconds;
+  double interpolation_plan_max_seconds = interpolation_plan_seconds;
+  double interpolation_evaluation_mean_seconds = interpolation_evaluation_seconds;
+  double interpolation_evaluation_max_seconds = interpolation_evaluation_seconds;
+  double interpolation_scatter_mean_seconds = interpolation_scatter_seconds;
+  double interpolation_scatter_max_seconds = interpolation_scatter_seconds;
   int interpolation_max_rank = 0;
   int interpolation_max_rank_blocks = nmb;
   int interpolation_max_rank_points = width;
+  int interpolation_max_rank_canonical_points = canonical_count;
 #if MPI_PARALLEL_ENABLED
-  const std::array<double, 3> local_fill_data = {
-      interpolation_seconds, static_cast<double>(nmb), static_cast<double>(width)};
+  constexpr int fill_data_width = 7;
+  const std::array<double, fill_data_width> local_fill_data = {
+      interpolation_seconds, interpolation_plan_seconds,
+      interpolation_evaluation_seconds, interpolation_scatter_seconds,
+      static_cast<double>(nmb), static_cast<double>(width),
+      static_cast<double>(canonical_count)};
   std::vector<double> all_fill_data;
   if (global_variable::my_rank == 0)
-    all_fill_data.resize(3 * global_variable::nranks);
-  MPI_Gather(local_fill_data.data(), 3, MPI_DOUBLE, all_fill_data.data(), 3,
-             MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    all_fill_data.resize(fill_data_width * global_variable::nranks);
+  MPI_Gather(local_fill_data.data(), fill_data_width, MPI_DOUBLE,
+             all_fill_data.data(), fill_data_width, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
   if (global_variable::my_rank == 0) {
     interpolation_min_seconds = std::numeric_limits<double>::max();
     interpolation_max_seconds = std::numeric_limits<double>::lowest();
     double interpolation_sum_seconds = 0.0;
+    double interpolation_plan_sum_seconds = 0.0;
+    double interpolation_evaluation_sum_seconds = 0.0;
+    double interpolation_scatter_sum_seconds = 0.0;
+    interpolation_plan_max_seconds = 0.0;
+    interpolation_evaluation_max_seconds = 0.0;
+    interpolation_scatter_max_seconds = 0.0;
     for (int rank = 0; rank < global_variable::nranks; ++rank) {
-      const double rank_seconds = all_fill_data[3 * rank];
+      const int offset = fill_data_width * rank;
+      const double rank_seconds = all_fill_data[offset];
       interpolation_min_seconds = std::min(interpolation_min_seconds, rank_seconds);
       interpolation_sum_seconds += rank_seconds;
+      interpolation_plan_sum_seconds += all_fill_data[offset + 1];
+      interpolation_evaluation_sum_seconds += all_fill_data[offset + 2];
+      interpolation_scatter_sum_seconds += all_fill_data[offset + 3];
+      interpolation_plan_max_seconds =
+          std::max(interpolation_plan_max_seconds, all_fill_data[offset + 1]);
+      interpolation_evaluation_max_seconds =
+          std::max(interpolation_evaluation_max_seconds, all_fill_data[offset + 2]);
+      interpolation_scatter_max_seconds =
+          std::max(interpolation_scatter_max_seconds, all_fill_data[offset + 3]);
       if (rank_seconds > interpolation_max_seconds) {
         interpolation_max_seconds = rank_seconds;
         interpolation_max_rank = rank;
-        interpolation_max_rank_blocks = static_cast<int>(all_fill_data[3 * rank + 1]);
-        interpolation_max_rank_points = static_cast<int>(all_fill_data[3 * rank + 2]);
+        interpolation_max_rank_blocks = static_cast<int>(all_fill_data[offset + 4]);
+        interpolation_max_rank_points = static_cast<int>(all_fill_data[offset + 5]);
+        interpolation_max_rank_canonical_points =
+            static_cast<int>(all_fill_data[offset + 6]);
       }
     }
     interpolation_mean_seconds =
         interpolation_sum_seconds / static_cast<double>(global_variable::nranks);
+    interpolation_plan_mean_seconds =
+        interpolation_plan_sum_seconds / static_cast<double>(global_variable::nranks);
+    interpolation_evaluation_mean_seconds =
+        interpolation_evaluation_sum_seconds / static_cast<double>(global_variable::nranks);
+    interpolation_scatter_mean_seconds =
+        interpolation_scatter_sum_seconds / static_cast<double>(global_variable::nranks);
   }
 #endif
 
@@ -587,12 +752,25 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     std::printf("[celephais-timing] batch_fields=%s skip_vacuum_velocity=%s "
                 "celephais_fill_min_seconds=%.9f celephais_fill_mean_seconds=%.9f "
                 "celephais_fill_max_seconds=%.9f celephais_fill_max_rank=%d "
-                "celephais_fill_max_rank_blocks=%d celephais_fill_max_rank_points=%d\n",
+                "celephais_fill_max_rank_blocks=%d celephais_fill_max_rank_points=%d "
+                "celephais_fill_max_rank_canonical_points=%d "
+                "celephais_fill_plan_mean_seconds=%.9f "
+                "celephais_fill_plan_max_seconds=%.9f "
+                "celephais_fill_evaluation_mean_seconds=%.9f "
+                "celephais_fill_evaluation_max_seconds=%.9f "
+                "celephais_fill_scatter_mean_seconds=%.9f "
+                "celephais_fill_scatter_max_seconds=%.9f\n",
                 batch_fields ? "true" : "false",
                 skip_vacuum_velocity ? "true" : "false",
                 interpolation_min_seconds, interpolation_mean_seconds,
                 interpolation_max_seconds, interpolation_max_rank,
-                interpolation_max_rank_blocks, interpolation_max_rank_points);
+                interpolation_max_rank_blocks, interpolation_max_rank_points,
+                interpolation_max_rank_canonical_points,
+                interpolation_plan_mean_seconds, interpolation_plan_max_seconds,
+                interpolation_evaluation_mean_seconds,
+                interpolation_evaluation_max_seconds,
+                interpolation_scatter_mean_seconds,
+                interpolation_scatter_max_seconds);
     std::cout << "Per-point interpolation complete. Copying to device..." << std::endl;
   }
 
