@@ -15,6 +15,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "cosmic_ray.hpp"
 #include "particles.hpp"
 
 namespace particles {
@@ -75,10 +76,8 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   switch (particle_type) {
     case ParticleType::cosmic_ray:
       {
-        int ndim=4;
-        if (pmy_pack->pmesh->three_d) {ndim+=2;}
-        nrdata = ndim;
-        nidata = 2;
+        nrdata = cosmic_ray::NREAL;
+        nidata = cosmic_ray::NINT;
         break;
       }
     default:
@@ -88,6 +87,8 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   }
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
+  auto status = Kokkos::subview(prtcl_idata, static_cast<int>(PSTATUS), Kokkos::ALL);
+  Kokkos::deep_copy(status, static_cast<int>(PACTIVE));
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);

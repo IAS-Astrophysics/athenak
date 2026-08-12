@@ -58,8 +58,8 @@ class Particles {
 //  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
 //  DvceArray2D<Real> prtcl_pos;     // positions
 //  DvceArray2D<Real> prtcl_vel;     // velocities
-  DvceArray2D<Real> prtcl_rdata;   // real number properties each particle (x,v,etc.)
-  DvceArray2D<int>  prtcl_idata;   // integer properties each particle (gid, tag, etc.)
+  DvceArray2D<Real> prtcl_rdata;   // positions followed by type-specific real properties
+  DvceArray2D<int>  prtcl_idata;   // gid, tag, status, then type-specific properties
   Real dtnew;
 
   ParticlesPusher pusher;

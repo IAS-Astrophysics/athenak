@@ -14,6 +14,7 @@
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "parameter_input.hpp"
+#include "particles/cosmic_ray.hpp"
 #include "particles/particles.hpp"
 #include "pgen/pgen.hpp"
 
@@ -188,9 +189,9 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
     pr(IPX,p) = x;
     pr(IPY,p) = y;
     pr(IPZ,p) = z;
-    pr(IPVX,p) = VelocityX(id, migration);
-    pr(IPVY,p) = VelocityY(id);
-    pr(IPVZ,p) = VelocityZ(id);
+    pr(particles::cosmic_ray::IPVX,p) = VelocityX(id, migration);
+    pr(particles::cosmic_ray::IPVY,p) = VelocityY(id);
+    pr(particles::cosmic_ray::IPVZ,p) = VelocityZ(id);
   });
 
   pmbp->ppart->dtnew = 0.125;

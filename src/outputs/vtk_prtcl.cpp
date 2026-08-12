@@ -199,6 +199,9 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     } else if (n == static_cast<int>(PTAG)) {
       msg << std::endl << "SCALARS ptag float" << std::endl
           << "LOOKUP_TABLE default" << std::endl;
+    } else if (n == static_cast<int>(PSTATUS)) {
+      msg << std::endl << "SCALARS status float" << std::endl
+          << "LOOKUP_TABLE default" << std::endl;
     }
 
     if (global_variable::my_rank == 0) {

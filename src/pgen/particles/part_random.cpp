@@ -14,6 +14,7 @@
 #include "parameter_input.hpp"
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "particles/cosmic_ray.hpp"
 #include "particles/particles.hpp"
 
 #include <Kokkos_Random.hpp>
@@ -65,9 +66,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     pr(IPZ,p) = fmin(pr(IPZ,p),mbsize.d_view(m).x3max);
     pr(IPZ,p) = fmax(pr(IPZ,p),mbsize.d_view(m).x3min);
 
-    pr(IPVX,p) = 2.0*(rand_gen.frand() - 0.5);
-    pr(IPVY,p) = 2.0*(rand_gen.frand() - 0.5);
-    pr(IPVZ,p) = 2.0*(rand_gen.frand() - 0.5);
+    pr(particles::cosmic_ray::IPVX,p) = 2.0*(rand_gen.frand() - 0.5);
+    pr(particles::cosmic_ray::IPVY,p) = 2.0*(rand_gen.frand() - 0.5);
+    pr(particles::cosmic_ray::IPVZ,p) = 2.0*(rand_gen.frand() - 0.5);
 
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
   });

@@ -20,6 +20,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
+#include "particles/cosmic_ray.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 
@@ -58,9 +59,9 @@ void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
       tracked_prtcl.d_view(index).x   = pr(IPX,p);
       tracked_prtcl.d_view(index).y   = pr(IPY,p);
       tracked_prtcl.d_view(index).z   = pr(IPZ,p);
-      tracked_prtcl.d_view(index).vx  = pr(IPVX,p);
-      tracked_prtcl.d_view(index).vy  = pr(IPVY,p);
-      tracked_prtcl.d_view(index).vz  = pr(IPVZ,p);
+      tracked_prtcl.d_view(index).vx  = pr(particles::cosmic_ray::IPVX,p);
+      tracked_prtcl.d_view(index).vy  = pr(particles::cosmic_ray::IPVY,p);
+      tracked_prtcl.d_view(index).vz  = pr(particles::cosmic_ray::IPVZ,p);
     }
   });
   npout = counter;

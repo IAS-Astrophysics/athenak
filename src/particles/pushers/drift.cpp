@@ -8,6 +8,7 @@
 
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
+#include "particles/cosmic_ray.hpp"
 #include "particles/particles.hpp"
 
 namespace particles {
@@ -23,14 +24,14 @@ TaskStatus Particles::PushDrift(Driver*, int) {
 
   par_for("part_update", DevExeSpace(), 0, (nprtcl_thispack - 1),
   KOKKOS_LAMBDA(const int p) {
-    pr(IPX,p) += 0.5*dt_*pr(IPVX,p);
+    pr(IPX,p) += 0.5*dt_*pr(cosmic_ray::IPVX,p);
 
     if (multi_d) {
-      pr(IPY,p) += 0.5*dt_*pr(IPVY,p);
+      pr(IPY,p) += 0.5*dt_*pr(cosmic_ray::IPVY,p);
     }
 
     if (three_d) {
-      pr(IPZ,p) += 0.5*dt_*pr(IPVZ,p);
+      pr(IPZ,p) += 0.5*dt_*pr(cosmic_ray::IPVZ,p);
     }
   });
 
