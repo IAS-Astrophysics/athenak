@@ -148,6 +148,7 @@ user_hist         = true
 table             = /pfs/10/project/bw25h005/DD2_T0.1_beta_m931.athtab
 kadath_symmetry   = nosym
 batch_fields      = true
+skip_vacuum_velocity = true
 
 <output1>
 file_type = hst      # History output (rho-max, alpha-min)

@@ -45,6 +45,7 @@
 #include <cmath>
 #include <cstdio>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <functional>
@@ -131,6 +132,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   std::string fname = pin->GetString("problem", "initial_data_file");
   const bool batch_fields = pin->GetOrAddBoolean("problem", "batch_fields", true);
+  const bool skip_vacuum_velocity =
+      pin->GetOrAddBoolean("problem", "skip_vacuum_velocity", true);
 
   int ncells1      = indcs.nx1 + 2 * (indcs.ng);
   int ncells2      = indcs.nx2 + 2 * (indcs.ng);
@@ -398,11 +401,26 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     pt.set(2) = static_cast<double>(y) - yaxis;
     pt.set(3) = static_cast<double>(z);
 
-    // Evaluate all spectral quantities at this point.
+    // Evaluate spectral quantities at this point.  The batched skip path locates
+    // the point once, then avoids the three velocity summations in vacuum.
     double qv[NUM_QUANTS];
+    double h_enth;
+    bool is_vacuum;
     if (batch_fields) {
       const auto located = quant_batch.locate(pt);
-      quant_batch.values(located, std::span<double>(qv, NUM_QUANTS));
+      if (skip_vacuum_velocity) {
+        for (int kq = PSI; kq <= H; ++kq)
+          qv[kq] = quant_batch.value(located, kq);
+
+        h_enth = Kokkos::exp(qv[H]);
+        is_vacuum = (h_enth <= 1.);
+        if (!is_vacuum) {
+          for (int kq = UX; kq <= UZ; ++kq)
+            qv[kq] = quant_batch.value(located, kq);
+        }
+      } else {
+        quant_batch.values(located, std::span<double>(qv, NUM_QUANTS));
+      }
     } else {
       for (int kq = 0; kq < NUM_QUANTS; ++kq)
         qv[kq] = quants[kq].get().val_point(pt);
@@ -436,8 +454,11 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     host_adm.vK_dd(m, 2, 2, k, j, i) = qv[AZZ] * psi4;
 
     // Hydro: qv[H] = log(h), h = specific enthalpy.
-    const double h_enth = Kokkos::exp(qv[H]);
-    if (h_enth <= 1.) {
+    if (!batch_fields || !skip_vacuum_velocity) {
+      h_enth = Kokkos::exp(qv[H]);
+      is_vacuum = (h_enth <= 1.);
+    }
+    if (is_vacuum) {
       // Vacuum: set to atmosphere values.
       host_w0(m, IDN, k, j, i) = 0.0;
       host_w0(m, IPR, k, j, i) = 0.0;
@@ -465,7 +486,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
     // Velocity: qv[UX..UZ] is the Eulerian three-velocity U^i; vacuum -> 0.
     Real vu[3];
-    if (h_enth <= 1.) {
+    if (is_vacuum) {
       vu[0] = 0.0;
       vu[1] = 0.0;
       vu[2] = 0.0;
@@ -493,20 +514,51 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   const double interpolation_seconds = std::chrono::duration<double>(
       std::chrono::steady_clock::now() - interpolation_start).count();
+  double interpolation_min_seconds = interpolation_seconds;
+  double interpolation_mean_seconds = interpolation_seconds;
   double interpolation_max_seconds = interpolation_seconds;
+  int interpolation_max_rank = 0;
+  int interpolation_max_rank_blocks = nmb;
+  int interpolation_max_rank_points = width;
 #if MPI_PARALLEL_ENABLED
+  const std::array<double, 3> local_fill_data = {
+      interpolation_seconds, static_cast<double>(nmb), static_cast<double>(width)};
+  std::vector<double> all_fill_data;
+  if (global_variable::my_rank == 0)
+    all_fill_data.resize(3 * global_variable::nranks);
+  MPI_Gather(local_fill_data.data(), 3, MPI_DOUBLE, all_fill_data.data(), 3,
+             MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
   if (global_variable::my_rank == 0) {
-    MPI_Reduce(MPI_IN_PLACE, &interpolation_max_seconds, 1, MPI_DOUBLE, MPI_MAX, 0,
-               MPI_COMM_WORLD);
-  } else {
-    MPI_Reduce(&interpolation_seconds, &interpolation_max_seconds, 1, MPI_DOUBLE,
-               MPI_MAX, 0, MPI_COMM_WORLD);
+    interpolation_min_seconds = std::numeric_limits<double>::max();
+    interpolation_max_seconds = std::numeric_limits<double>::lowest();
+    double interpolation_sum_seconds = 0.0;
+    for (int rank = 0; rank < global_variable::nranks; ++rank) {
+      const double rank_seconds = all_fill_data[3 * rank];
+      interpolation_min_seconds = std::min(interpolation_min_seconds, rank_seconds);
+      interpolation_sum_seconds += rank_seconds;
+      if (rank_seconds > interpolation_max_seconds) {
+        interpolation_max_seconds = rank_seconds;
+        interpolation_max_rank = rank;
+        interpolation_max_rank_blocks = static_cast<int>(all_fill_data[3 * rank + 1]);
+        interpolation_max_rank_points = static_cast<int>(all_fill_data[3 * rank + 2]);
+      }
+    }
+    interpolation_mean_seconds =
+        interpolation_sum_seconds / static_cast<double>(global_variable::nranks);
   }
 #endif
 
   if (global_variable::my_rank == 0) {
-    std::printf("[celephais-timing] batch_fields=%s kadath_fill_max_seconds=%.9f\n",
-                batch_fields ? "true" : "false", interpolation_max_seconds);
+    std::printf("[celephais-timing] batch_fields=%s skip_vacuum_velocity=%s "
+                "kadath_fill_min_seconds=%.9f kadath_fill_mean_seconds=%.9f "
+                "kadath_fill_max_seconds=%.9f kadath_fill_max_rank=%d "
+                "kadath_fill_max_rank_blocks=%d kadath_fill_max_rank_points=%d\n",
+                batch_fields ? "true" : "false",
+                skip_vacuum_velocity ? "true" : "false",
+                interpolation_min_seconds, interpolation_mean_seconds,
+                interpolation_max_seconds, interpolation_max_rank,
+                interpolation_max_rank_blocks, interpolation_max_rank_points);
     std::cout << "Per-point interpolation complete. Copying to device..." << std::endl;
   }
 
