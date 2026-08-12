@@ -168,9 +168,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   const double omega    = bconfig(GOMEGA);
   const bool is_corotating = bconfig.control(COROT_BIN);
   double &ome1     = bconfig(OMEGA, BCO1);
-  double &ang1     = bconfig(DEG,   BCO1);
+  const double ang1_rad = bconfig(DEG, BCO1) * M_PI / 180.;
   double &ome2     = bconfig(OMEGA, BCO2);
-  double &ang2     = bconfig(DEG,   BCO2);
+  const double ang2_rad = bconfig(DEG, BCO2) * M_PI / 180.;
   const double axis     = bconfig(COM);
   double yaxis = 0.;
   if (!std::isnan(bconfig.set(COMY)))
@@ -242,8 +242,8 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   syst.add_cst("omes1", ome1);
   syst.add_cst("omes2", ome2);
-  syst.add_cst("angs1", ang1);
-  syst.add_cst("angs2", ang2);
+  syst.add_cst("angs1", ang1_rad);
+  syst.add_cst("angs2", ang2_rad);
 
   syst.add_cst("mg",  *coord_vectors[to_int(coord_vector::GLOBAL_ROT)]);
   syst.add_cst("mmx", *coord_vectors[to_int(coord_vector::BCO1_ROTx)]);
