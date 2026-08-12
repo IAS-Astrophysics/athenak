@@ -126,6 +126,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
 
   static constexpr bool supports_entropy = std::is_base_of_v<SupportsEntropy, EOSPolicy>;
   static constexpr bool supports_potentials = std::is_base_of_v<SupportsChemicalPotentials, EOSPolicy>;
+  static constexpr bool supports_transition = std::is_base_of_v<SupportsTransition, EOSPolicy>;
 
  public:
   //! \fn EOS()
@@ -405,6 +406,22 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     }
 
     return;
+  }
+
+  //! \fn Real GetTransitionWeight(Real n, Real T)
+  //  \brief NSE weight of the cell: 1 in NSE, 0 where the out-of-NSE half of a
+  //         transition EOS applies. Identically 1 for EOSs with no such split,
+  //         so callers can gate NSE-only physics without knowing the policy.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  KOKKOS_INLINE_FUNCTION Real GetTransitionWeight(Real n, Real T) const {
+    if constexpr (supports_transition) {
+      return EOSPolicy::GetTransitionFactor(
+          n, T*code_units.TemperatureConversion(eos_units));
+    } else {
+      return 1.0;
+    }
   }
 
   //! \fn int GetNSpecies() const

@@ -39,5 +39,8 @@ enum SpatialMetricIndex{S11=0, S12=1, S13=2, S22=3, S23=4, S33=5, NSPMETRIC=6};
 
 class SupportsEntropy{};
 class SupportsChemicalPotentials{};
+// Marks an EOS that blends an NSE table with an out-of-NSE half, so that
+// consumers can ask whether a cell is in NSE (see EOS::GetTransitionWeight).
+class SupportsTransition{};
 
 #endif  // EOS_PRIMITIVE_SOLVER_PS_TYPES_HPP_

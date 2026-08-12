@@ -11,10 +11,13 @@
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/primitive-solver/eos_transition.hpp"
+#include "eos/primitive-solver/reset_floor_transition.hpp"
 #include "globals.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_helpers.hpp"
+#include "radiation_m1_macro.hpp"
 #include "radiation_m1_nurates.hpp"
 #include "radiation_m1_sources.hpp"
 #include "radiation_m1_closure.hpp"
@@ -26,46 +29,20 @@ TaskStatus RadiationM1::TimeUpdate(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
 
   // Here we are using dynamic_cast to infer which derived type pdyngr is
-  auto *ptest_nqt =
-      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                     Primitive::ResetFloor> *>(
-          pmy_pack->pdyngr);
-  if (ptest_nqt != nullptr) {
-    switch (indcs.ng) {
-      case 2:
-        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 2>(pdrive, stage);
-        break;
-      case 3:
-        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 3>(pdrive, stage);
-        break;
-      case 4:
-        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                           Primitive::ResetFloor, 4>(pdrive, stage);
-        break;
-    }
+#define M1_DISPATCH(EOS_T, ERR_T)                                              \
+  if (dynamic_cast<dyngr::DynGRMHDPS<EOS_T, ERR_T> *>(pmy_pack->pdyngr) !=     \
+      nullptr) {                                                               \
+    switch (indcs.ng) {                                                        \
+      case 2:                                                                  \
+        return TimeUpdate_<EOS_T, ERR_T, 2>(pdrive, stage);                    \
+      case 3:                                                                  \
+        return TimeUpdate_<EOS_T, ERR_T, 3>(pdrive, stage);                    \
+      case 4:                                                                  \
+        return TimeUpdate_<EOS_T, ERR_T, 4>(pdrive, stage);                    \
+    }                                                                          \
   }
-
-  auto *ptest_nlog = dynamic_cast<dyngr::DynGRMHDPS<
-      Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
-      pmy_pack->pdyngr);
-  if (ptest_nlog != nullptr) {
-    switch (indcs.ng) {
-      case 2:
-        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                           Primitive::ResetFloor, 2>(pdrive, stage);
-        break;
-      case 3:
-        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                           Primitive::ResetFloor, 3>(pdrive, stage);
-        break;
-      case 4:
-        return TimeUpdate_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                           Primitive::ResetFloor, 4>(pdrive, stage);
-        break;
-    }
-  }
+  M1_FOREACH_EOS(M1_DISPATCH)
+#undef M1_DISPATCH
 
   if (!ismhd && !ishydro) {
     switch (indcs.ng) {

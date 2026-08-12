@@ -33,7 +33,8 @@ namespace Primitive {
 
 template<typename LogPolicy>
 class EOSTransition : public EOSPolicyInterface, public LogPolicy,
-                      public SupportsEntropy, public SupportsChemicalPotentials {
+                      public SupportsEntropy, public SupportsChemicalPotentials,
+                      public SupportsTransition {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
@@ -231,6 +232,33 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (w == 0.0) { return helmholtz_eos.ElectronLeptonChemicalPotential(n, T, Yn); }
     return helmholtz_eos.ElectronLeptonChemicalPotential(n, T, Yn)*(1 - w) +
            compose_eos.ElectronLeptonChemicalPotential(n, T, Yn)*w;
+  }
+
+  //--------------------------------------------------------------------------
+  // Free-nucleon fractions seen by the weak rates. The compose half is NSE, so
+  // out of NSE it hides the free neutrons RHINE is tracking; blend to the
+  // advected values, which agree with the table at w = 1 after the resync.
+  //--------------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION Real ProtonFraction(Real n, Real T, Real *Y) const {
+    Real yq;
+    if (InteriorYq(n, Y, yq)) { return compose_eos.ProtonFraction(n, T, &yq); }
+    Real Yn[SCNVAR];
+    SanitizeMassFractions(Y, Yn);
+    Real w = TransitionFactor(n, T);
+    if (w == 1.0) { return compose_eos.ProtonFraction(n, T, Yn); }
+    if (w == 0.0) { return Yn[SCXP]; }
+    return Yn[SCXP]*(1 - w) + compose_eos.ProtonFraction(n, T, Yn)*w;
+  }
+
+  KOKKOS_INLINE_FUNCTION Real NeutronFraction(Real n, Real T, Real *Y) const {
+    Real yq;
+    if (InteriorYq(n, Y, yq)) { return compose_eos.NeutronFraction(n, T, &yq); }
+    Real Yn[SCNVAR];
+    SanitizeMassFractions(Y, Yn);
+    Real w = TransitionFactor(n, T);
+    if (w == 1.0) { return compose_eos.NeutronFraction(n, T, Yn); }
+    if (w == 0.0) { return Yn[SCXN]; }
+    return Yn[SCXN]*(1 - w) + compose_eos.NeutronFraction(n, T, Yn)*w;
   }
 
   //--------------------------------------------------------------------------

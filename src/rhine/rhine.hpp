@@ -82,6 +82,10 @@ class RHINE {
   int  pmode;
   bool apply;        // back-react on the conserved variables (else diagnostics only)
   bool use_nqt;      // EOS LogPolicy selector (mirrors <mhd> use_NQT)
+  // Set when PostStep is queued in Task_AfterTimeIntegrator (i.e. behind the
+  // operator-split M1 step), which already runs once per step and is invoked
+  // with stage = 1, so the final-stage gate must not apply there.
+  bool post_after_integrator = false;
 
   // Diagnostic array (nmb, N_RHINE_AUX, nc3, nc2, nc1).
   DvceArray5D<Real> aux;

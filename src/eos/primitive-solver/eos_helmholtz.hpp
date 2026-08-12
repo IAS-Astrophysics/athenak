@@ -139,13 +139,16 @@ class EOSHelmholtz : public EOSPolicyInterface {
     return Kokkos::sqrt(gam1/z);
   }
 
+  // Yn/Yp are floored: min_Y[SCXN] is 0 and frozen-out ejecta legitimately
+  // reach it, which would send mu -> -inf and overflow the nurates degeneracy
+  // parameters. The floor is far below any composition the rates resolve.
   KOKKOS_INLINE_FUNCTION Real NeutronChemicalPotential(Real n, Real T, Real *Y) const {
-    Real Yn = Y[SCXN];
+    Real Yn = Kokkos::fmax(Y[SCXN], min_Y_free);
     return mn + T*Kokkos::log(n*Yn/2*Kokkos::pow(sac_const/(mn*T), 1.5));
   }
 
   KOKKOS_INLINE_FUNCTION Real ProtonChemicalPotential(Real n, Real T, Real *Y) const {
-    Real Yp = Y[SCXP];
+    Real Yp = Kokkos::fmax(Y[SCXP], min_Y_free);
     return mp + T*Kokkos::log(n*Yp/2*Kokkos::pow(sac_const/(mp*T), 1.5));
   }
 
@@ -394,6 +397,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
  public:
   static constexpr Real hbarc = 197.3269804;  // MeV fm
   static constexpr Real asol = M_PI*M_PI/(15.0*hbarc*hbarc*hbarc);  // (MeV fm)^-3
+  static constexpr Real min_Y_free = 1.0e-30;  // floor for Yn/Yp in log()
   static constexpr Real sac_const = hbarc*hbarc*2.0*M_PI;           // (MeV fm)^2
   static constexpr Real me = 0.5109989461;   // MeV
   static constexpr Real mn = 939.5654133;    // MeV

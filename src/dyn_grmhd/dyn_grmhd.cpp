@@ -331,7 +331,11 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::NewTimeStep, pmhd, MHD_Newdt, "MHD_Newdt", Task_Run, {MHD_C2P});
 
   // End task list
-  if (pmy_pack->prhine != nullptr) {
+  // With M1 the poststep pass has to wait for the operator-split radiation step:
+  // the NSE resync rewrites the composition and E_B at the current Ye, so running
+  // it before M1 updates Ye leaves the two inconsistent for a full step. It is
+  // queued in Task_AfterTimeIntegrator below instead.
+  if (pmy_pack->prhine != nullptr && pmy_pack->pradm1 == nullptr) {
     pnr->QueueTask(&rhine::RHINE::PostStep, pmy_pack->prhine, MHD_RhinePost,
                    "MHD_RhinePost", Task_End);
   }
@@ -349,7 +353,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
                    "MHD_C2P", Task_AfterTimeIntegrator, {MHD_BCS});
     pnr->QueueTask(&MHD::ClearSendU, pmhd, MHD_ClearSU, "MHD_ClearSU", Task_AfterTimeIntegrator, {MHD_C2P});
-    pnr->QueueTask(&MHD::ClearRecvU, pmhd, MHD_ClearRU, "MHD_ClearRU", Task_AfterTimeIntegrator, {MHD_C2P});          
+    pnr->QueueTask(&MHD::ClearRecvU, pmhd, MHD_ClearRU, "MHD_ClearRU", Task_AfterTimeIntegrator, {MHD_C2P});
+    if (pmy_pack->prhine != nullptr) {
+      pmy_pack->prhine->post_after_integrator = true;
+      pnr->QueueTask(&rhine::RHINE::PostStep, pmy_pack->prhine, MHD_RhinePost,
+                     "MHD_RhinePost", Task_AfterTimeIntegrator, {MHD_C2P});
+    }
   }
 }
 

@@ -10,7 +10,10 @@
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
+#include "eos/primitive-solver/eos_transition.hpp"
+#include "eos/primitive-solver/reset_floor_transition.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_macro.hpp"
 #include "radiation_m1/radiation_m1_nurates.hpp"
 
 namespace radiationm1 {
@@ -22,22 +25,13 @@ TaskStatus RadiationM1::CalcOpacityNurates(Driver *pdrive, int stage) {
   }
 
   // Here we are using dynamic_cast to infer which derived type pdyngr is
-  auto *ptest_nqt =
-      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                     Primitive::ResetFloor> *>(
-          pmy_pack->pdyngr);
-  if (ptest_nqt != nullptr) {
-    return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                               Primitive::ResetFloor>(pdrive, stage);
+#define M1_DISPATCH(EOS_T, ERR_T)                                              \
+  if (dynamic_cast<dyngr::DynGRMHDPS<EOS_T, ERR_T> *>(pmy_pack->pdyngr) !=     \
+      nullptr) {                                                               \
+    return CalcOpacityNurates_<EOS_T, ERR_T>(pdrive, stage);                   \
   }
-
-  auto *ptest_nlog = dynamic_cast<dyngr::DynGRMHDPS<
-      Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
-      pmy_pack->pdyngr);
-  if (ptest_nlog != nullptr) {
-    return CalcOpacityNurates_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                               Primitive::ResetFloor>(pdrive, stage);
-  }
+  M1_FOREACH_EOS(M1_DISPATCH)
+#undef M1_DISPATCH
 
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl;
@@ -93,6 +87,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
           ->eos.ps.GetEOSMutable();
   const Real mb = eos.GetBaryonMass();
+  const int nscal_ = eos.GetNSpecies();
+  auto &temp_ = pmy_pack->pdyngr->temperature;
 
   // conversion factors from cgs to code units
   auto code_units = eos.GetCodeUnitSystem();
@@ -208,16 +204,23 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             chi_loc[nuidx] = chi_(m, nuidx, k, j, i);
           }
 
-          // fluid quantities
+          // fluid quantities. Y must carry every species the EOS indexes: the
+          // transition EOS reads Y[SCYE..SCEB], so a one-element array would
+          // read out of bounds. w0 is (m, var, k, j, i), so the species are not
+          // contiguous and have to be gathered.
           Real nb = w0_(m, IDN, k, j, i) / mb;
-          Real p = w0_(m, IPR, k, j, i);
-          Real Y = w0_(m, IYF, k, j, i);
-          Real T = eos.GetTemperatureFromP(nb, p, &Y);
-          Real yp = eos.GetProtonFraction(nb, T, &Y);
-          Real yn = eos.GetNeutronFraction(nb, T, &Y);
-          Real mu_b = eos.GetBaryonChemicalPotential(nb, T, &Y);
-          Real mu_q = eos.GetChargeChemicalPotential(nb, T, &Y);
-          Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, T, &Y);
+          Real Y[MAX_SPECIES] = {0.0};
+          for (int s = 0; s < nscal_; ++s) {
+            Y[s] = w0_(m, IYF + s, k, j, i);
+          }
+          // The last C2P already inverted this cell; re-inverting p costs a root
+          // solve per cell and can land on a different branch.
+          Real T = temp_(m, 0, k, j, i);
+          Real yp = eos.GetProtonFraction(nb, T, Y);
+          Real yn = eos.GetNeutronFraction(nb, T, Y);
+          Real mu_b = eos.GetBaryonChemicalPotential(nb, T, Y);
+          Real mu_q = eos.GetChargeChemicalPotential(nb, T, Y);
+          Real mu_le = eos.GetElectronLeptonChemicalPotential(nb, T, Y);
 
           Real mu_n = mu_b;
           Real mu_p = mu_b + mu_q;
@@ -297,45 +300,56 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                                            (abs_1_loc[1] + scat_1_loc[1]))) *
                   dt_;
 
-            // compute neutrino black body function assuming trapped neutrinos
+            // compute neutrino black body function assuming trapped neutrinos.
+            // This is a beta-equilibrium construction and is only meaningful in
+            // NSE, so it is also gated on the transition weight (identically 1
+            // for EOSs without an out-of-NSE half).
             if (nurates_params_.opacity_tau_trap >= 0 &&
-                tau > nurates_params_.opacity_tau_trap) {
+                tau > nurates_params_.opacity_tau_trap &&
+                eos.GetTransitionWeight(nb, T) >= 1.0) {
               // fluid frame number densities for nue, anue, numu, anumu, nutau,
               // anutau factor of 1/2 appears because we evolve mu and tau
               // species together
               Real n_nu[6] = {nudens_0[0],      nudens_0[1],      nudens_0[2] / 2.,
                               nudens_0[3] / 2., nudens_0[2] / 2., nudens_0[3] / 2.};
-              Real Y_part[3] = {Y, 0., 0.};  // only ye is used
+              // GetLeptonFractions indexes [0..2] as the e/mu/tau lepton
+              // fractions, which is not what Y[1..] holds for a multi-species
+              // EOS, so it gets its own array.
+              Real Y_lep_in[3] = {Y[0], 0., 0.};
 
               Real Y_lep[3]{};
-              eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
+              eos.GetLeptonFractions(nb, Y_lep_in, n_nu, Y_lep);
               Real Y_guess[3] = {Y_lep[0], Y_lep[1], Y_lep[2]};
 
-              Real e = eos.GetEnergy(nb, T, Y_part) +
+              Real e = eos.GetEnergy(nb, T, Y) +
                        nudens_1[0] + nudens_1[1] + nudens_1[2] + nudens_1[3];
 
-              Real temperature_trap{}, Y_e_trap[3]{};
+              // Seeded with the current composition: BetaEquilibriumTrapped
+              // only rewrites the Ye slot, and the chemical potentials below
+              // need the remaining species.
+              Real temperature_trap{}, Y_eq[MAX_SPECIES];
+              for (int s = 0; s < MAX_SPECIES; ++s) { Y_eq[s] = Y[s]; }
               bool ok = eos.GetBetaEquilibriumTrapped(
-                  nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_guess);
+                  nb, e, Y_lep, temperature_trap, Y_eq, T, Y_guess);
 
               if (!ok) {
                 // trying to recompute weak equilibrium neglecting current
                 // neutrino data
-                Real e_zero = eos.GetEnergy(nb, T, Y_part);
+                Real e_zero = eos.GetEnergy(nb, T, Y);
                 ok = eos.GetBetaEquilibriumTrapped(
-                    nb, e_zero, Y_part, temperature_trap, &Y_e_trap[0], T,
-                    Y_part);
+                    nb, e_zero, Y_lep_in, temperature_trap, Y_eq, T,
+                    Y_lep_in);
                 if (!ok) {
                    Kokkos::printf("WARNING: Failed to find the weak equilibrium\n");
                 }
               }
 
               Real mu_b_eq = eos.GetBaryonChemicalPotential(
-                  nb, temperature_trap, &Y_e_trap[0]);
+                  nb, temperature_trap, Y_eq);
               Real mu_q_eq = eos.GetChargeChemicalPotential(
-                  nb, temperature_trap, &Y_e_trap[0]);
+                  nb, temperature_trap, Y_eq);
               Real mu_le_eq = eos.GetElectronLeptonChemicalPotential(
-                  nb, temperature_trap, &Y_e_trap[0]);
+                  nb, temperature_trap, Y_eq);
 
               Real mu_n_eq = mu_b_eq;
               Real mu_p_eq = mu_b_eq + mu_q_eq;

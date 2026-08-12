@@ -17,4 +17,17 @@
 
 #define M1_MULTIROOTS_DIM 4
 
+// The (EOS policy, error policy) pairs M1 supports. Every dispatch site expands
+// this same list, so a new EOS is registered here once rather than at each site.
+// Requires "dyn_grmhd/dyn_grmhd.hpp" and the EOS headers to be included first.
+#define M1_FOREACH_EOS(DO)                                     \
+  DO(Primitive::EOSCompOSE<Primitive::NQTLogs>,                \
+     Primitive::ResetFloor)                                    \
+  DO(Primitive::EOSCompOSE<Primitive::NormalLogs>,             \
+     Primitive::ResetFloor)                                    \
+  DO(Primitive::EOSTransition<Primitive::NQTLogs>,             \
+     Primitive::ResetFloorTransition)                          \
+  DO(Primitive::EOSTransition<Primitive::NormalLogs>,          \
+     Primitive::ResetFloorTransition)
+
 #endif // RADIATION_M1_MACRO_HPP

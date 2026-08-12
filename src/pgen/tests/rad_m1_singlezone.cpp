@@ -14,11 +14,14 @@
 #include "driver/driver.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/eos.hpp"
+#include "eos/primitive-solver/eos_transition.hpp"
+#include "eos/primitive-solver/reset_floor_transition.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 #include "radiation_m1/radiation_m1_helpers.hpp"
+#include "radiation_m1/radiation_m1_macro.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)
@@ -27,21 +30,13 @@ void ProblemGenerator::RadiationM1SingleZoneTest(ParameterInput *pin,
                                                  const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   // Here we are using dynamic_cast to infer which derived type pdyngr is
-  auto *ptest_nqt =
-      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                     Primitive::ResetFloor> *>(pmbp->pdyngr);
-  if (ptest_nqt != nullptr) {
-    return RadiationM1SingleZoneTest_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                      Primitive::ResetFloor>(pin, restart);
+#define M1_DISPATCH(EOS_T, ERR_T)                                              \
+  if (dynamic_cast<dyngr::DynGRMHDPS<EOS_T, ERR_T> *>(pmbp->pdyngr) !=         \
+      nullptr) {                                                               \
+    return RadiationM1SingleZoneTest_<EOS_T, ERR_T>(pin, restart);             \
   }
-
-  auto *ptest_nlog =
-      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                                     Primitive::ResetFloor> *>(pmbp->pdyngr);
-  if (ptest_nlog != nullptr) {
-    return RadiationM1SingleZoneTest_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                                      Primitive::ResetFloor>(pin, restart);
-  }
+  M1_FOREACH_EOS(M1_DISPATCH)
+#undef M1_DISPATCH
 
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl;
   std::cout << "Unsupported EOS type!\n";

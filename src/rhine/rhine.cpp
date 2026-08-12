@@ -124,7 +124,9 @@ TaskStatus RHINE::AddSources(Driver *pdrive, int stage) {
 //! \fn TaskStatus RHINE::PostStep(Driver *pdrive, int stage)
 //! \brief Once-per-step pass; a no-op except after the final RK stage.
 TaskStatus RHINE::PostStep(Driver *pdrive, int stage) {
-  if (stage != pdrive->nexp_stages) { return TaskStatus::complete; }
+  if (!post_after_integrator && stage != pdrive->nexp_stages) {
+    return TaskStatus::complete;
+  }
   return Dispatch(pdrive, stage, RhinePass::poststep);
 }
 

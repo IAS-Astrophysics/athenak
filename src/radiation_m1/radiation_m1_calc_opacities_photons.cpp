@@ -10,10 +10,13 @@
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/eos.hpp"
+#include "eos/primitive-solver/eos_transition.hpp"
+#include "eos/primitive-solver/reset_floor_transition.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
 #include "hydro/hydro.hpp"
 #include "radiation/radiation_opacities.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_macro.hpp"
 #include "units/units.hpp"
 
 namespace radiationm1 {
@@ -25,22 +28,13 @@ TaskStatus RadiationM1::CalcOpacityPhotons(Driver *pdrive, int stage) {
   }
 
   // Here we are using dynamic_cast to infer which derived type pdyngr is
-  auto *ptest_nqt =
-      dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                                     Primitive::ResetFloor> *>(
-          pmy_pack->pdyngr);
-  if (ptest_nqt != nullptr) {
-    return CalcOpacityPhotons_<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                               Primitive::ResetFloor>(pdrive, stage);
+#define M1_DISPATCH(EOS_T, ERR_T)                                              \
+  if (dynamic_cast<dyngr::DynGRMHDPS<EOS_T, ERR_T> *>(pmy_pack->pdyngr) !=     \
+      nullptr) {                                                               \
+    return CalcOpacityPhotons_<EOS_T, ERR_T>(pdrive, stage);                   \
   }
-
-  auto *ptest_nlog = dynamic_cast<dyngr::DynGRMHDPS<
-      Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor> *>(
-      pmy_pack->pdyngr);
-  if (ptest_nlog != nullptr) {
-    return CalcOpacityPhotons_<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                               Primitive::ResetFloor>(pdrive, stage);
-  }
+  M1_FOREACH_EOS(M1_DISPATCH)
+#undef M1_DISPATCH
 
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl;
