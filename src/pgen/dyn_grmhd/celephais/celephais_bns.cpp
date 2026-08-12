@@ -377,138 +377,172 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   const auto interpolation_start = std::chrono::steady_clock::now();
+  constexpr int point_lane_width = 4;
+  const int point_tiles = (width + point_lane_width - 1) / point_lane_width;
   Kokkos::parallel_for("celephais_fill",
-      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
-      [&](const int idx) {
-    int m   = idx / ncells_per_mb;
-    int rem = idx - m * ncells_per_mb;
-    int k   = rem / (ncells2 * ncells1);
-    rem    -= k * ncells2 * ncells1;
-    int j   = rem / ncells1;
-    int i   = rem % ncells1;
+      Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, point_tiles),
+      [&](const int tile) {
+    const int first_idx = tile * point_lane_width;
+    const int lane_count = std::min(point_lane_width, width - first_idx);
+    std::array<int, point_lane_width> m_values{};
+    std::array<int, point_lane_width> k_values{};
+    std::array<int, point_lane_width> j_values{};
+    std::array<int, point_lane_width> i_values{};
+    std::array<Point, point_lane_width> points{
+        Point(3), Point(3), Point(3), Point(3)};
+    for (int lane = 0; lane < point_lane_width; ++lane) {
+      const int idx = first_idx + std::min(lane, lane_count - 1);
+      int m = idx / ncells_per_mb;
+      int rem = idx - m * ncells_per_mb;
+      int k = rem / (ncells2 * ncells1);
+      rem -= k * ncells2 * ncells1;
+      int j = rem / ncells1;
+      int i = rem % ncells1;
+      m_values[lane] = m;
+      k_values[lane] = k;
+      j_values[lane] = j;
+      i_values[lane] = i;
 
-    // Cell-centre coordinates.
-    Real x = CellCenterX(i - is, indcs.nx1,
-                          size.h_view(m).x1min, size.h_view(m).x1max);
-    Real y = CellCenterX(j - js, indcs.nx2,
-                          size.h_view(m).x2min, size.h_view(m).x2max);
-    Real z = CellCenterX(k - ks, indcs.nx3,
-                          size.h_view(m).x3min, size.h_view(m).x3max);
+      const Real x = CellCenterX(i - is, indcs.nx1,
+                                 size.h_view(m).x1min, size.h_view(m).x1max);
+      const Real y = CellCenterX(j - js, indcs.nx2,
+                                 size.h_view(m).x2min, size.h_view(m).x2max);
+      const Real z = CellCenterX(k - ks, indcs.nx3,
+                                 size.h_view(m).x3min, size.h_view(m).x3max);
+      points[lane].set(1) = static_cast<double>(x) - axis;
+      points[lane].set(2) = static_cast<double>(y) - yaxis;
+      points[lane].set(3) = static_cast<double>(z);
+    }
 
-    // Kadath point shifted to the centre-of-mass frame.
-    Point pt(3);
-    pt.set(1) = static_cast<double>(x) - axis;
-    pt.set(2) = static_cast<double>(y) - yaxis;
-    pt.set(3) = static_cast<double>(z);
-
-    // Evaluate spectral quantities at this point.  The batched skip path locates
-    // the point once, then avoids the three velocity summations in vacuum.
-    double qv[NUM_QUANTS];
-    double h_enth;
-    bool is_vacuum;
+    // Evaluate one field at four adjacent Cartesian points. Same-domain tiles
+    // share the coefficient stream and expose four independent recurrences;
+    // domain-crossing tiles retain exact scalar evaluation.
+    std::array<std::array<double, NUM_QUANTS>, point_lane_width> qv{};
+    std::array<double, point_lane_width> h_enth{};
+    std::array<bool, point_lane_width> is_vacuum{};
     if (batch_fields) {
-      const auto located = quant_batch.locate(pt);
+      std::array<bns_field_transfer::located_source_point, point_lane_width> located{
+          quant_batch.locate(points[0]), quant_batch.locate(points[1]),
+          quant_batch.locate(points[2]), quant_batch.locate(points[3])};
+      const std::array<const bns_field_transfer::located_source_point*, point_lane_width>
+          located_ptrs{&located[0], &located[1], &located[2], &located[3]};
+      std::array<double, point_lane_width> field_values{};
       if (skip_vacuum_velocity) {
-        for (int kq = PSI; kq <= H; ++kq)
-          qv[kq] = quant_batch.value(located, kq);
-
-        h_enth = Kokkos::exp(qv[H]);
-        is_vacuum = (h_enth <= 1.);
-        if (!is_vacuum) {
-          for (int kq = UX; kq <= UZ; ++kq)
-            qv[kq] = quant_batch.value(located, kq);
+        for (int kq = PSI; kq <= H; ++kq) {
+          quant_batch.value_points4(located_ptrs, kq, field_values);
+          for (int lane = 0; lane < point_lane_width; ++lane)
+            qv[lane][kq] = field_values[lane];
+        }
+        for (int lane = 0; lane < lane_count; ++lane) {
+          h_enth[lane] = Kokkos::exp(qv[lane][H]);
+          is_vacuum[lane] = (h_enth[lane] <= 1.);
+          if (!is_vacuum[lane]) {
+            for (int kq = UX; kq <= UZ; ++kq)
+              qv[lane][kq] = quant_batch.value(located[lane], kq);
+          }
         }
       } else {
-        quant_batch.values(located, std::span<double>(qv, NUM_QUANTS));
+        for (int kq = 0; kq < NUM_QUANTS; ++kq) {
+          quant_batch.value_points4(located_ptrs, kq, field_values);
+          for (int lane = 0; lane < point_lane_width; ++lane)
+            qv[lane][kq] = field_values[lane];
+        }
       }
     } else {
-      for (int kq = 0; kq < NUM_QUANTS; ++kq)
-        qv[kq] = quants[kq].get().val_point(pt);
+      for (int lane = 0; lane < lane_count; ++lane)
+        for (int kq = 0; kq < NUM_QUANTS; ++kq)
+          qv[lane][kq] = quants[kq].get().val_point(points[lane]);
     }
 
-    // Conformal factor and derived powers.
-    const double psi  = qv[PSI];
-    const double psi4 = psi * psi * psi * psi;
+    for (int lane = 0; lane < lane_count; ++lane) {
+      const int m = m_values[lane];
+      const int k = k_values[lane];
+      const int j = j_values[lane];
+      const int i = i_values[lane];
 
-    // Lapse and shift.
-    host_adm.alpha(m, k, j, i)     = qv[ALP];
-    host_adm.beta_u(m, 0, k, j, i) = qv[BETX];
-    host_adm.beta_u(m, 1, k, j, i) = qv[BETY];
-    host_adm.beta_u(m, 2, k, j, i) = qv[BETZ];
+      // Conformal factor and derived powers.
+      const double psi  = qv[lane][PSI];
+      const double psi4 = psi * psi * psi * psi;
 
-    // Spatial metric: g_ij = psi^4 * delta_ij
-    Real g3d[NSPMETRIC];
-    host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = static_cast<Real>(psi4);
-    host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = 0.0;
-    host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = 0.0;
-    host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = static_cast<Real>(psi4);
-    host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = 0.0;
-    host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = static_cast<Real>(psi4);
+      // Lapse and shift.
+      host_adm.alpha(m, k, j, i)      = qv[lane][ALP];
+      host_adm.beta_u(m, 0, k, j, i) = qv[lane][BETX];
+      host_adm.beta_u(m, 1, k, j, i) = qv[lane][BETY];
+      host_adm.beta_u(m, 2, k, j, i) = qv[lane][BETZ];
 
-    // Extrinsic curvature: K_ij = psi^4 * A_ij
-    host_adm.vK_dd(m, 0, 0, k, j, i) = qv[AXX] * psi4;
-    host_adm.vK_dd(m, 0, 1, k, j, i) = qv[AXY] * psi4;
-    host_adm.vK_dd(m, 0, 2, k, j, i) = qv[AXZ] * psi4;
-    host_adm.vK_dd(m, 1, 1, k, j, i) = qv[AYY] * psi4;
-    host_adm.vK_dd(m, 1, 2, k, j, i) = qv[AYZ] * psi4;
-    host_adm.vK_dd(m, 2, 2, k, j, i) = qv[AZZ] * psi4;
+      // Spatial metric: g_ij = psi^4 * delta_ij
+      Real g3d[NSPMETRIC];
+      host_adm.g_dd(m, 0, 0, k, j, i) = g3d[S11] = static_cast<Real>(psi4);
+      host_adm.g_dd(m, 0, 1, k, j, i) = g3d[S12] = 0.0;
+      host_adm.g_dd(m, 0, 2, k, j, i) = g3d[S13] = 0.0;
+      host_adm.g_dd(m, 1, 1, k, j, i) = g3d[S22] = static_cast<Real>(psi4);
+      host_adm.g_dd(m, 1, 2, k, j, i) = g3d[S23] = 0.0;
+      host_adm.g_dd(m, 2, 2, k, j, i) = g3d[S33] = static_cast<Real>(psi4);
 
-    // Hydro: qv[H] = log(h), h = specific enthalpy.
-    if (!batch_fields || !skip_vacuum_velocity) {
-      h_enth = Kokkos::exp(qv[H]);
-      is_vacuum = (h_enth <= 1.);
-    }
-    if (is_vacuum) {
-      // Vacuum: set to atmosphere values.
-      host_w0(m, IDN, k, j, i) = 0.0;
-      host_w0(m, IPR, k, j, i) = 0.0;
-    } else {
-      if (use_cold_table) {
-        using namespace Kadath::Margherita;
-        using eos_t = Kadath::Margherita::Cold_Table;
-        host_w0(m, IDN, k, j, i) = EOS<eos_t, eos_var_t::DENSITY>::get(h_enth);
-        host_w0(m, IPR, k, j, i) = EOS<eos_t, eos_var_t::PRESSURE>::get(h_enth);
-      } else if (use_cold_pwpoly) {
-        using namespace Kadath::Margherita;
-        using eos_t = Kadath::Margherita::Cold_PWPoly;
-        host_w0(m, IDN, k, j, i) = EOS<eos_t, eos_var_t::DENSITY>::get(h_enth);
-        host_w0(m, IPR, k, j, i) = EOS<eos_t, eos_var_t::PRESSURE>::get(h_enth);
+      // Extrinsic curvature: K_ij = psi^4 * A_ij
+      host_adm.vK_dd(m, 0, 0, k, j, i) = qv[lane][AXX] * psi4;
+      host_adm.vK_dd(m, 0, 1, k, j, i) = qv[lane][AXY] * psi4;
+      host_adm.vK_dd(m, 0, 2, k, j, i) = qv[lane][AXZ] * psi4;
+      host_adm.vK_dd(m, 1, 1, k, j, i) = qv[lane][AYY] * psi4;
+      host_adm.vK_dd(m, 1, 2, k, j, i) = qv[lane][AYZ] * psi4;
+      host_adm.vK_dd(m, 2, 2, k, j, i) = qv[lane][AZZ] * psi4;
+
+      // Hydro: qv[H] = log(h), h = specific enthalpy.
+      if (!batch_fields || !skip_vacuum_velocity) {
+        h_enth[lane] = Kokkos::exp(qv[lane][H]);
+        is_vacuum[lane] = (h_enth[lane] <= 1.);
       }
-    }
-
-    if constexpr (use_ye) {
-      if (read_ye) {
-        Real& rho = host_w0(m, IDN, k, j, i);
-        host_w0(m, IYF, k, j, i) = eos.template
-                                   GetYeFromRho<tov::LocationTag::Host>(rho);
+      if (is_vacuum[lane]) {
+        host_w0(m, IDN, k, j, i) = 0.0;
+        host_w0(m, IPR, k, j, i) = 0.0;
+      } else {
+        if (use_cold_table) {
+          using namespace Kadath::Margherita;
+          using eos_t = Kadath::Margherita::Cold_Table;
+          host_w0(m, IDN, k, j, i) = EOS<eos_t, eos_var_t::DENSITY>::get(h_enth[lane]);
+          host_w0(m, IPR, k, j, i) = EOS<eos_t, eos_var_t::PRESSURE>::get(h_enth[lane]);
+        } else if (use_cold_pwpoly) {
+          using namespace Kadath::Margherita;
+          using eos_t = Kadath::Margherita::Cold_PWPoly;
+          host_w0(m, IDN, k, j, i) = EOS<eos_t, eos_var_t::DENSITY>::get(h_enth[lane]);
+          host_w0(m, IPR, k, j, i) = EOS<eos_t, eos_var_t::PRESSURE>::get(h_enth[lane]);
+        }
       }
-    }
 
-    // Velocity: qv[UX..UZ] is the Eulerian three-velocity U^i; vacuum -> 0.
-    Real vu[3];
-    if (is_vacuum) {
-      vu[0] = 0.0;
-      vu[1] = 0.0;
-      vu[2] = 0.0;
-    } else {
-      vu[0] = static_cast<Real>(qv[UX]);
-      vu[1] = static_cast<Real>(qv[UY]);
-      vu[2] = static_cast<Real>(qv[UZ]);
-    }
+      if constexpr (use_ye) {
+        if (read_ye) {
+          Real& rho = host_w0(m, IDN, k, j, i);
+          host_w0(m, IYF, k, j, i) = eos.template
+                                     GetYeFromRho<tov::LocationTag::Host>(rho);
+        }
+      }
 
-    Real vsq = Primitive::SquareVector(vu, g3d);
-    if (1.0 - vsq <= 0.0) {
-      Real fac = sqrt((1.0 - 1e-15) / vsq);
-      vu[0] *= fac;
-      vu[1] *= fac;
-      vu[2] *= fac;
-      vsq = 1.0 - 1.0e-15;
-    }
+      // Velocity: qv[UX..UZ] is the Eulerian three-velocity U^i; vacuum -> 0.
+      Real vu[3];
+      if (is_vacuum[lane]) {
+        vu[0] = 0.0;
+        vu[1] = 0.0;
+        vu[2] = 0.0;
+      } else {
+        vu[0] = static_cast<Real>(qv[lane][UX]);
+        vu[1] = static_cast<Real>(qv[lane][UY]);
+        vu[2] = static_cast<Real>(qv[lane][UZ]);
+      }
 
-    Real W = sqrt(1.0 / (1.0 - vsq));
-    host_w0(m, IVX, k, j, i) = W * vu[0];
-    host_w0(m, IVY, k, j, i) = W * vu[1];
-    host_w0(m, IVZ, k, j, i) = W * vu[2];
+      Real vsq = Primitive::SquareVector(vu, g3d);
+      if (1.0 - vsq <= 0.0) {
+        Real fac = sqrt((1.0 - 1e-15) / vsq);
+        vu[0] *= fac;
+        vu[1] *= fac;
+        vu[2] *= fac;
+        vsq = 1.0 - 1.0e-15;
+      }
+
+      Real W = sqrt(1.0 / (1.0 - vsq));
+      host_w0(m, IVX, k, j, i) = W * vu[0];
+      host_w0(m, IVY, k, j, i) = W * vu[1];
+      host_w0(m, IVZ, k, j, i) = W * vu[2];
+    }
   });
   Kokkos::fence();
 
