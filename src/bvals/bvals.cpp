@@ -464,4 +464,7 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
 // destructor
 
 particles::ParticlesBoundaryValues::~ParticlesBoundaryValues() {
+#if MPI_PARALLEL_ENABLED
+  MPI_Comm_free(&mpi_comm_part);
+#endif
 }

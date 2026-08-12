@@ -60,8 +60,8 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
       pusher = ParticlesPusher::drift;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Particle pusher must be specified in <particles> block"
-                <<std::endl;
+                << std::endl << "Particle pusher = '" << ppush << "' not recognized"
+                << std::endl;
       std::exit(EXIT_FAILURE);
     }
   }
@@ -82,7 +82,9 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
         break;
       }
     default:
-      break;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle type has no storage definition" << std::endl;
+      std::exit(EXIT_FAILURE);
   }
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
@@ -95,6 +97,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 Particles::~Particles() {
+  delete pbval_part;
 }
 
 //----------------------------------------------------------------------------------------

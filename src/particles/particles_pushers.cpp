@@ -6,6 +6,9 @@
 //! \file particles_pushers.cpp
 //! \brief dispatch to the particle pusher selected from the input file
 
+#include <cstdlib>
+#include <iostream>
+
 #include "athena.hpp"
 #include "driver/driver.hpp"
 #include "particles.hpp"
@@ -20,9 +23,9 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
     case ParticlesPusher::drift:
       return PushDrift(pdriver, stage);
     default:
-      break;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle pusher has no implementation" << std::endl;
+      std::exit(EXIT_FAILURE);
   }
-
-  return TaskStatus::complete;
 }
 } // namespace particles
