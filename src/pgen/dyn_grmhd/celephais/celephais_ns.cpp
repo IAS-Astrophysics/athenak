@@ -324,7 +324,7 @@ void SetupNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     (void)quants[PSI].get().val_point(pt_warm);
   }
 
-  Kokkos::parallel_for("kadath_fill",
+  Kokkos::parallel_for("celephais_fill",
       Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
       [&](const int idx) {
     int m   = idx / ncells_per_mb;
