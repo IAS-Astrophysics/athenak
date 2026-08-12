@@ -9,32 +9,32 @@ basename  = bns
 
 <mesh>
 nghost     = 4        # Number of ghost cells (4 recommended for Z4c + WENOZ)
-nx1        = 48      # Number of zones in X1-direction
+nx1        = 96      # Number of zones in X1-direction
 x1min      = -1024    # minimum value of X1 (~10 times the separation)
 x1max      =  1024    # maximum value of X1
 ix1_bc     = diode  # Inner-X1 boundary condition
 ox1_bc     = diode  # Outer-X1 boundary condition
 
-nx2        = 48      # Number of zones in X2-direction
+nx2        = 96      # Number of zones in X2-direction
 x2min      = -1024    # minimum value of X2
 x2max      =  1024    # maximum value of X2
 ix2_bc     = diode  # Inner-X2 boundary condition
 ox2_bc     = diode  # Outer-X2 boundary condition
 
-nx3        = 48      # Number of zones in X3-direction
+nx3        = 96      # Number of zones in X3-direction
 x3min      = -1024      # minimum value of X3
 x3max      =  1024    # maximum value of X3
 ix3_bc     = diode  # Inner-X3 boundary condition
 ox3_bc     = diode  # Outer-X3 boundary condition
 
 <meshblock>
-nx1        = 16       # Number of cells in each MeshBlock, X1-dir
-nx2        = 16       # Number of cells in each MeshBlock, X2-dir
-nx3        = 16       # Number of cells in each MeshBlock, X3-dir
+nx1        = 32       # Number of cells in each MeshBlock, X1-dir
+nx2        = 32       # Number of cells in each MeshBlock, X2-dir
+nx3        = 32       # Number of cells in each MeshBlock, X3-dir
 
 <mesh_refinement>
 refinement          = adaptive
-max_nmb_per_rank    = 32
+max_nmb_per_rank    = 16
 num_levels          = 7
 refinement_interval = 1
 

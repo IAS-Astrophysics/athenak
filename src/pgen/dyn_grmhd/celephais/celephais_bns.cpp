@@ -377,7 +377,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   }
 
   const auto interpolation_start = std::chrono::steady_clock::now();
-  Kokkos::parallel_for("kadath_fill",
+  Kokkos::parallel_for("celephais_fill",
       Kokkos::RangePolicy<Kokkos::DefaultHostExecutionSpace>(0, width),
       [&](const int idx) {
     int m   = idx / ncells_per_mb;
@@ -551,9 +551,9 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   if (global_variable::my_rank == 0) {
     std::printf("[celephais-timing] batch_fields=%s skip_vacuum_velocity=%s "
-                "kadath_fill_min_seconds=%.9f kadath_fill_mean_seconds=%.9f "
-                "kadath_fill_max_seconds=%.9f kadath_fill_max_rank=%d "
-                "kadath_fill_max_rank_blocks=%d kadath_fill_max_rank_points=%d\n",
+                "celephais_fill_min_seconds=%.9f celephais_fill_mean_seconds=%.9f "
+                "celephais_fill_max_seconds=%.9f celephais_fill_max_rank=%d "
+                "celephais_fill_max_rank_blocks=%d celephais_fill_max_rank_points=%d\n",
                 batch_fields ? "true" : "false",
                 skip_vacuum_velocity ? "true" : "false",
                 interpolation_min_seconds, interpolation_mean_seconds,
