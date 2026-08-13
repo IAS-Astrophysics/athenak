@@ -459,6 +459,7 @@ class SphericalSurfaceOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
  private:
   SphericalSurface *psurf;
+  bool dump_weights;  // write the quadrature weight of each point to file
 };
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput
