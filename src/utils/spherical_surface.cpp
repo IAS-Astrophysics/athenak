@@ -9,6 +9,7 @@
 #include "spherical_surface.hpp"
 
 #include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <list>
 #include <vector>
@@ -24,14 +25,18 @@
 // constructor, initializes data structures and parameters
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
-                                   Real rad, Real xc, Real yc, Real zc)
-    : SphericalSurface(pmy_pack, ntheta, std::vector<Real>{rad}, xc, yc, zc) {}
+                                   Real rad, Real xc, Real yc, Real zc,
+                                   const AngleOptions &aopt)
+    : SphericalSurface(pmy_pack, ntheta, std::vector<Real>{rad}, xc, yc, zc, aopt) {}
 
 SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
                                    const std::vector<Real> &rad, Real xc, Real yc,
-                                   Real zc)
+                                   Real zc, const AngleOptions &aopt)
     : ntheta(ntheta),
+      nphi((aopt.nphi < 0) ? 2 * ntheta : aopt.nphi),
       nradii(static_cast<int>(rad.size())),
+      theta_spacing(aopt.theta_spacing),
+      theta_centering(aopt.theta_centering),
       radii("radii", 1),
       xc(xc),
       yc(yc),
@@ -45,7 +50,23 @@ SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
       pmy_pack(pmy_pack) {
   // reallocate and set interpolation coordinates, indices, and weights
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
-  nangles = 2 * ntheta * ntheta;
+
+  if (ntheta < 1 || nphi < 1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "SphericalSurface requires ntheta >= 1 and nphi >= 1, got "
+              << "ntheta = " << ntheta << ", nphi = " << nphi << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  // node centering places points on both poles, so the ntheta points span ntheta-1
+  // intervals and at least two of them are needed
+  if (theta_centering == SphThetaCentering::node && ntheta < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "SphericalSurface requires ntheta >= 2 for node centering"
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  nangles = ntheta * nphi;
   npoints = nradii * nangles;
 
   // Allocate memory for the radii DualArray1D<Real>
@@ -84,14 +105,47 @@ SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
 
 SphericalSurface::~SphericalSurface() {}
 
+//----------------------------------------------------------------------------------------
+//! \fn void SphericalSurface::InitializeAngleAndWeights
+//! \brief set the (theta,phi) of every angle and the solid angle it represents
+//
+// theta increases with the angle index for both spacings, so index 0 is the point
+// closest to (cell centering) or on (node centering) the north pole. phi is periodic and
+// always starts at phi=0 with spacing 2*pi/nphi.
+//
+// The weight of an angle is the solid angle of the cell it owns,
+//   w = dphi * [cos(theta_minus) - cos(theta_plus)],
+// with the cell edges theta_minus/theta_plus clipped to [0,pi]. Node centered grids
+// therefore automatically get half weights on the poles, and the weights sum to 4*pi
+// exactly for every combination of spacing and centering.
+
 void SphericalSurface::InitializeAngleAndWeights() {
+  const Real dphi = 2.0 * M_PI / nphi;
+  const bool node = (theta_centering == SphThetaCentering::node);
+  // points on both poles span one interval less than there are points
+  const Real nspan = static_cast<Real>(node ? ntheta - 1 : ntheta);
+
   int n = 0;
-  for (int i = 0; i < 2 * ntheta; ++i) {
-    Real phi = M_PI / ntheta * i;
+  for (int i = 0; i < nphi; ++i) {
+    Real phi = dphi * i;
     for (int j = 0; j < ntheta; ++j) {
-      Real mu = -1.0 + 2.0 / (ntheta - 1) * j;
-      int_weights.h_view(n) = (M_PI / ntheta) * (2.0 / ntheta);
-      polar_pos.h_view(n, 0) = acos(mu);
+      Real theta, dcos;
+      if (theta_spacing == SphThetaSpacing::uniform_theta) {
+        Real dth = M_PI / nspan;
+        theta = node ? j * dth : (j + 0.5) * dth;
+        Real thm = fmax(theta - 0.5 * dth, 0.0);
+        Real thp = fmin(theta + 0.5 * dth, M_PI);
+        dcos = cos(thm) - cos(thp);
+      } else {
+        // mu = cos(theta) decreases with j so that theta still increases with j
+        Real dmu = 2.0 / nspan;
+        Real mu = node ? 1.0 - j * dmu : 1.0 - (j + 0.5) * dmu;
+        // roundoff can push mu on the poles just outside of [-1,1]
+        theta = acos(fmin(fmax(mu, -1.0), 1.0));
+        dcos = fmin(mu + 0.5 * dmu, 1.0) - fmax(mu - 0.5 * dmu, -1.0);
+      }
+      int_weights.h_view(n) = dphi * dcos;
+      polar_pos.h_view(n, 0) = theta;
       polar_pos.h_view(n, 1) = phi;
       n++;
     }
@@ -330,3 +384,4 @@ void SphericalSurface::InterpolateToSphere(int var_ind,
 
   return;
 }
+
