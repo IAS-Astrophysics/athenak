@@ -42,6 +42,7 @@ pusher = drift
 <problem>
 pgen_name = particle_drift
 migration_test = true
+delete_tag = -1
 user_hist = true
 
 <output1>

@@ -58,13 +58,14 @@ KOKKOS_INLINE_FUNCTION
 Real VelocityZ(const int id) { return 0.03 - 0.002*id; }
 
 void DriftHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = 6;
+  pdata->nhist = 7;
   pdata->label[0] = "max_err";
   pdata->label[1] = "npart";
   pdata->label[2] = "tag_sum";
   pdata->label[3] = "owner_err";
   pdata->label[4] = "migrated";
   pdata->label[5] = "status_err";
+  pdata->label[6] = "count_err";
 
   auto &particles = pm->pmb_pack->ppart;
   auto pr = particles->prtcl_rdata;
@@ -162,6 +163,10 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[3] = owner_errors;
   pdata->hdata[4] = migrated;
   pdata->hdata[5] = status_errors;
+  const int expected_total = kExpectedParticles - (deleted >= 0 ? 1 : 0);
+  pdata->hdata[6] = static_cast<Real>(
+      std::abs(pm->nprtcl_thisrank - npart) +
+      std::abs(pm->nprtcl_total - expected_total));
 }
 
 } // namespace
