@@ -25,6 +25,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "particles/particles.hpp"
 #include "driver.hpp"
 #include "gravity/gravity.hpp"
 #include "utils/utils.hpp"
@@ -468,6 +469,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  particles::Particles *ppart = pmesh->pmb_pack->ppart;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -480,6 +482,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
+    }
+    if (ppart != nullptr) {
+      (void) pmesh->pmb_pack->ppart->NewTimeStep(this, nexp_stages);
     }
 
     pmesh->NewTimeStep(tlim);

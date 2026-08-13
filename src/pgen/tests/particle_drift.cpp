@@ -25,6 +25,8 @@ bool migration_test = false;
 int frozen_tag = -1;
 int delete_tag = -1;
 
+Real ParticleDriftTimestep(MeshBlockPack*) { return 0.125; }
+
 KOKKOS_INLINE_FUNCTION
 Real InitialX(const int id, const bool migration) {
   if (migration) {
@@ -173,6 +175,7 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
 
 void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   user_hist_func = DriftHistory;
+  user_particle_dt_func = ParticleDriftTimestep;
   migration_test = pin->GetOrAddBoolean("problem", "migration_test", false);
   frozen_tag = pin->GetOrAddInteger("problem", "frozen_tag", -1);
   delete_tag = pin->GetOrAddInteger("problem", "delete_tag", -1);
@@ -246,6 +249,4 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
     pr(particles::cosmic_ray::IPVY,p) = VelocityY(id);
     pr(particles::cosmic_ray::IPVZ,p) = VelocityZ(id);
   });
-
-  pmbp->ppart->dtnew = 0.125;
 }

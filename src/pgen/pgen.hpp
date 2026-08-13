@@ -20,6 +20,7 @@ using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
+using UserParticleTimestepFnPtr = Real (*)(MeshBlockPack *pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -53,6 +54,8 @@ class ProblemGenerator {
   UserSrctermFnPtr user_srcs_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
+  // Optional additional particle limit; enroll before returning on restart.
+  UserParticleTimestepFnPtr user_particle_dt_func=nullptr;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);

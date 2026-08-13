@@ -73,12 +73,5 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     rand_pool64.free_state(rand_gen);  // free state for use by other threads
   });
 
-  // set timestep (which will remain constant for entire run
-  // Assumes uniform mesh (no SMR or AMR)
-  // Assumes velocities normalized to one, so dt=min(dx)
-  Real &dtnew_ = pmbp->ppart->dtnew;
-  dtnew_ = std::min(mbsize.h_view(0).dx1, mbsize.h_view(0).dx2);
-  dtnew_ = std::min(dtnew_, mbsize.h_view(0).dx3);
-
   return;
 }

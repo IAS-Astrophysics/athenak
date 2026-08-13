@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -23,6 +24,7 @@ namespace particles {
 // constructor, initializes data structures and parameters
 
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
+    dtnew(std::numeric_limits<float>::max()),
     pmy_pack(ppack) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {

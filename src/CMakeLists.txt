@@ -117,6 +117,7 @@ add_executable(
         outputs/vtk_prtcl.cpp
 
         particles/particles.cpp
+        particles/particles_newdt.cpp
         particles/particles_pushers.cpp
         particles/pushers/drift.cpp
         particles/particles_tasks.cpp

@@ -39,6 +39,9 @@ void Particles::AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> t
   id.crecv  = tl["before_timeintegrator"]->AddTask(&Particles::ClearRecv, this, id.recvp);
   id.csend  = tl["before_timeintegrator"]->AddTask(&Particles::ClearSend, this, id.crecv);
 
+  // Refresh the particle limit after particle communication and fluid integration.
+  id.newdt = tl["after_timeintegrator"]->AddTask(&Particles::NewTimeStep, this, none);
+
   return;
 }
 
