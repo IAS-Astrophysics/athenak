@@ -12,6 +12,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -29,6 +30,7 @@ class Conduction {
   Real alpha_aniso;     // anisotropic thermal diffusivity
   bool alpha_spitzer;   // switch to turn on Spitzer conductivity
   Real q_limit;         // saturated heat flux limit
+  parabolic::DiffusionSelection mode = parabolic::DiffusionSelection::explicit_only;
 
   // functions
   void AddHeatFluxes(const DvceArray5D<Real> &w, const EOS_Data &eos,

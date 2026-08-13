@@ -10,6 +10,8 @@
 
 #include <float.h>
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <iostream> // cout
@@ -23,6 +25,27 @@
 #include "eos/eos.hpp"
 #include "conduction.hpp"
 #include "units/units.hpp"
+
+namespace {
+
+parabolic::DiffusionSelection ParseConductivityIntegrator(const std::string &block,
+                                                           ParameterInput *pin) {
+  std::string integrator =
+      pin->GetOrAddString(block, "conductivity_integrator", "explicit");
+  if (integrator == "explicit") {
+    return parabolic::DiffusionSelection::explicit_only;
+  }
+  if (integrator == "sts") {
+    return parabolic::DiffusionSelection::sts_only;
+  }
+
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "<" << block << ">/conductivity_integrator = '" << integrator
+            << "' must be 'explicit' or 'sts'" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
 
 // VanLeer Limiter which takes 2 slopes
 KOKKOS_INLINE_FUNCTION
@@ -64,6 +87,7 @@ Real TempDepKappa(Real temp, Real limit) {
 
 Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
     pmy_pack(pp) {
+  dtnew = static_cast<Real>(std::numeric_limits<float>::max());
   // Read parameters for thermal diffusivity (if any)
   alpha_iso = pin->GetOrAddReal(block,"alpha_iso", 0.0);
   alpha_aniso = pin->GetOrAddReal(block,"alpha_aniso", 0.0);
@@ -71,6 +95,15 @@ Conduction::Conduction(std::string block, MeshBlockPack *pp, ParameterInput *pin
   // Limit on thermal heat flux (saturated conduction)
   q_limit = pin->GetOrAddReal(block,"q_limit",
                      static_cast<Real>(std::numeric_limits<float>::max()));
+  mode = ParseConductivityIntegrator(block, pin);
+  if (mode == parabolic::DiffusionSelection::sts_only &&
+      (!std::isfinite(alpha_iso) || !std::isfinite(alpha_aniso) || alpha_iso <= 0.0 ||
+       alpha_aniso != 0.0 || alpha_spitzer)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "STS requires positive constant isotropic thermal conduction"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -313,14 +346,6 @@ void Conduction::AddHeatFluxSpitzer(const DvceArray5D<Real> &w0, const EOS_Data 
 
 void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_data) {
   dtnew = static_cast<Real>(std::numeric_limits<float>::max());
-  Real fac;
-  if (pmy_pack->pmesh->three_d) {
-    fac = 1.0/6.0;
-  } else if (pmy_pack->pmesh->two_d) {
-    fac = 0.25;
-  } else {
-    fac = 0.5;
-  }
 //  if (sat_hflux == true) {
 //    dtnew = static_cast<Real>(std::numeric_limits<float>::max());
 //    return;
@@ -359,21 +384,26 @@ void Conduction::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
     k += ks;
     j += js;
 
-    Real alpha_ = alpha0;
+    Real row_sum = 0.5*(w0_(m,IDN,k,j,i-1) + 2.0*w0_(m,IDN,k,j,i) +
+                        w0_(m,IDN,k,j,i+1))/SQR(size.d_view(m).dx1);
+    if (multi_d) {
+      row_sum += 0.5*(w0_(m,IDN,k,j-1,i) + 2.0*w0_(m,IDN,k,j,i) +
+                     w0_(m,IDN,k,j+1,i))/SQR(size.d_view(m).dx2);
+    }
+    if (three_d) {
+      row_sum += 0.5*(w0_(m,IDN,k-1,j,i) + 2.0*w0_(m,IDN,k,j,i) +
+                     w0_(m,IDN,k+1,j,i))/SQR(size.d_view(m).dx3);
+    }
 //    if (spitzer_) {
 //      Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
 //      kappa_ = TempDepKappa(temp*temp_unit, limit_)/kappa_unit;
 //    }
 
-    min_dt = fmin(min_dt, SQR(size.d_view(m).dx1)/alpha_*w0_(m,IDN,k,j,i)/gm1);
-    if (multi_d) {
-      min_dt = fmin(min_dt, SQR(size.d_view(m).dx2)/alpha_*w0_(m,IDN,k,j,i)/gm1);
-    }
-    if (three_d) {
-      min_dt = fmin(min_dt, SQR(size.d_view(m).dx3)/alpha_*w0_(m,IDN,k,j,i)/gm1);
+    Real rate = alpha0*gm1*row_sum/w0_(m,IDN,k,j,i);
+    if (rate > 0.0) {
+      min_dt = fmin(min_dt, 1.0/rate);
     }
   }, Kokkos::Min<Real>(dtnew));
-  dtnew *= fac;
 
   return;
 }

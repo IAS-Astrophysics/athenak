@@ -10,12 +10,14 @@
 #include <iomanip>    // std::setprecision()
 #include <limits>
 #include <algorithm>
+#include <cstdlib>
 #include <string> // string
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/coordinates.hpp"
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
@@ -24,10 +26,22 @@
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
 #include "driver.hpp"
+#include "gravity/gravity.hpp"
+#include "utils/utils.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
+
+namespace {
+
+[[noreturn]] void DriverFatalError(const char *file, int line, const std::string &msg) {
+  std::cout << "### FATAL ERROR in " << file << " at line " << line << std::endl
+            << msg << std::endl;
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
@@ -276,7 +290,143 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
          << "Valid choices are [rk1,rk2,rk3,rk4,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
+
+    ValidateSTSConfiguration(pmesh);
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::ResetSTSController()
+//! \brief Clear cycle-local STS controller state.
+
+void Driver::ResetSTSController() {
+  sts.enabled = false;
+  sts.integrator = parabolic::STSIntegrator::none;
+  sts.sweep = STSSweep::none;
+  sts.dt_cycle = 0.0;
+  sts.dt_sweep = 0.0;
+  sts.dt_parabolic_min = std::numeric_limits<float>::max();
+  sts.nstages = 0;
+  sts.current_stage = 0;
+  sts.coeffs = parabolic::RKL2Coefficients{};
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::ValidateSTSConfiguration()
+//! \brief Validate global STS settings against registered diffusion processes.
+
+void Driver::ValidateSTSConfiguration(Mesh *pm) {
+  int nsts_processes = 0;
+  const parabolic::ParabolicProcessDescriptor *first_sts_process = nullptr;
+  bool has_hydro_sts = false;
+  bool has_mhd_sts = false;
+
+  for (const auto &process : pm->pmb_pack->parabolic_processes) {
+    if (!process.UsesSTS()) {
+      continue;
+    }
+    ++nsts_processes;
+    if (first_sts_process == nullptr) {
+      first_sts_process = &process;
+    }
+    has_hydro_sts |= process.owner == parabolic::ParabolicProcessOwner::hydro;
+    has_mhd_sts |= process.owner == parabolic::ParabolicProcessOwner::mhd;
+  }
+
+  if (pm->sts_integrator == parabolic::STSIntegrator::none) {
+    if (first_sts_process != nullptr) {
+      DriverFatalError(__FILE__, __LINE__,
+                       "Parabolic process '" + first_sts_process->name +
+                       "' selects STS, but <time>/sts_integrator = none");
+    }
+    return;
+  }
+
+  if (nsts_processes == 0) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "<time>/sts_integrator = rkl2 requires at least one active "
+                     "diffusion process with *_integrator = sts");
+  }
+  if (pm->pmb_pack->pionn != nullptr) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "STS is not supported with <ion-neutral> physics");
+  }
+  if (pm->pmb_pack->prad != nullptr) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "Hydro/MHD STS diffusion is not supported with <radiation> physics");
+  }
+  if (pm->pmb_pack->pcoord->is_special_relativistic ||
+      pm->pmb_pack->pcoord->is_general_relativistic ||
+      pm->pmb_pack->pcoord->is_dynamical_relativistic) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "STS diffusion currently supports only Newtonian Hydro and MHD");
+  }
+
+  hydro::Hydro *phydro = pm->pmb_pack->phydro;
+  if (has_hydro_sts && phydro != nullptr &&
+      (phydro->porb_u != nullptr || phydro->psbox_u != nullptr)) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "Hydro STS is not supported with shearing-box or orbital advection");
+  }
+
+  mhd::MHD *pmhd = pm->pmb_pack->pmhd;
+  if (has_mhd_sts && pmhd != nullptr &&
+      (pmhd->porb_u != nullptr || pmhd->porb_b != nullptr ||
+       pmhd->psbox_u != nullptr || pmhd->psbox_b != nullptr)) {
+    DriverFatalError(__FILE__, __LINE__,
+                     "MHD STS is not supported with shearing-box or orbital advection");
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::RefreshSTSCycleState()
+//! \brief Refresh cycle-local STS controller data from the Mesh timestep budget.
+
+void Driver::RefreshSTSCycleState(Mesh *pm) {
+  ResetSTSController();
+  sts.integrator = pm->sts_integrator;
+  sts.dt_cycle = pm->dt;
+  sts.dt_parabolic_min = pm->dt_parabolic_sts;
+
+  if (sts.integrator == parabolic::STSIntegrator::none || sts.dt_cycle <= 0.0 ||
+      sts.dt_parabolic_min >= std::numeric_limits<float>::max()) {
+    return;
+  }
+
+  sts.dt_sweep = 0.5*sts.dt_cycle;
+  sts.nstages = parabolic::ComputeRKL2StageCount(sts.dt_sweep,
+                                                 sts.dt_parabolic_min);
+  sts.enabled = sts.nstages > 0;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::BeginSTSSweep()
+//! \brief Initialize the controller for one pre- or post-RK parabolic sweep.
+
+void Driver::BeginSTSSweep(Mesh *pm, STSSweep sweep) {
+  RefreshSTSCycleState(pm);
+  if (sts.enabled) {
+    sts.sweep = sweep;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::SetSTSStage()
+//! \brief Set the coefficients for one RKL2 stage.
+
+void Driver::SetSTSStage(int stage) {
+  sts.current_stage = stage;
+  sts.coeffs = parabolic::ComputeRKL2Coefficients(stage, sts.nstages);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Driver::EndSTSSweep()
+//! \brief Clear sweep-local state.
+
+void Driver::EndSTSSweep() {
+  sts.sweep = STSSweep::none;
+  sts.current_stage = 0;
+  sts.coeffs = parabolic::RKL2Coefficients{};
 }
 
 //----------------------------------------------------------------------------------------
@@ -333,6 +483,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
 
     pmesh->NewTimeStep(tlim);
+    RefreshSTSCycleState(pmesh);
   }
 
   //---- Step 3.  Cycle through output Types and load data / write files.
@@ -375,12 +526,14 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
 //! until a relevant stopping criteria is found (e.g. t > tlim). Calls AMR driver, and
 //! performs outputs. Updates counters like (ncycle, time, etc.)
 
-void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
+void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdflag) {
   if (global_variable::my_rank == 0) {
     std::cout << "\nSetup complete, executing task list(s)...\n" << std::endl;
   }
 
   if (time_evolution == TimeEvolution::tstatic) {
+    std::cout << "\nStatic time evolution selected, solving steady-state problem...\n"
+              << std::endl;
     // TODO(@user): add work for time static problems here
   } else {
     Real elapsed_time = -1.;
@@ -390,20 +543,51 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
     while ((pmesh->time < tlim) && (pmesh->ncycle < nlim || nlim < 0) &&
            (elapsed_time < wall_time)) {
       if (global_variable::my_rank == 0) {OutputCycleDiagnostics(pmesh);}
+      if (wdflag) {WatchDog(0);}
+
+      if (sts.enabled) {
+        BeginSTSSweep(pmesh, STSSweep::pre);
+        for (int sts_stage=1; sts_stage<=sts.nstages; ++sts_stage) {
+          SetSTSStage(sts_stage);
+          ExecuteTaskList(pmesh, "before_parabolic_stagen", sts_stage);
+          ExecuteTaskList(pmesh, "parabolic_stagen", sts_stage);
+          ExecuteTaskList(pmesh, "after_parabolic_stagen", sts_stage);
+        }
+        EndSTSSweep();
+      }
 
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
-
       // time-integrator tasks for each stage of integrator
       for (int stage=1; stage<=(nexp_stages); ++stage) {
         ExecuteTaskList(pmesh, "before_stagen", stage);
+        // solve gravity at each RK stage so the potential is consistent
+        // with the current density (required for 2nd-order accuracy)
+        if (pmesh->pmb_pack->pgrav != nullptr)
+            {pmesh->pmb_pack->pgrav->pmgd->Solve(this, stage);}
         ExecuteTaskList(pmesh, "stagen", stage);
         ExecuteTaskList(pmesh, "after_stagen", stage);
       }
 
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
+
+      // Diffusion coefficients may depend on the post-RK state. Refresh the global
+      // stability bound before choosing the second Strang-split half-sweep.
+      if (pmesh->sts_integrator != parabolic::STSIntegrator::none) {
+        pmesh->RefreshSTSParabolicTimeStep();
+        BeginSTSSweep(pmesh, STSSweep::post);
+        if (sts.enabled) {
+          for (int sts_stage=1; sts_stage<=sts.nstages; ++sts_stage) {
+            SetSTSStage(sts_stage);
+            ExecuteTaskList(pmesh, "before_parabolic_stagen", sts_stage);
+            ExecuteTaskList(pmesh, "parabolic_stagen", sts_stage);
+            ExecuteTaskList(pmesh, "after_parabolic_stagen", sts_stage);
+          }
+          EndSTSSweep();
+        }
+      }
 
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
@@ -441,6 +625,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
       if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
       // compute new timestep AFTER all Meshblocks refined/derefined
       pmesh->NewTimeStep(tlim);
+      RefreshSTSCycleState(pmesh);
 
       // Update wall clock time if needed.
       if (wall_time > 0.) {
@@ -572,8 +757,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->ClearRecv(this, -1);
     (void) pz4c->RecvU(this, 0);
     (void) pz4c->Z4cBoundaryRHS(this, 0);
-    (void) pz4c->ApplyPhysicalBCs(this, 0);
-    (void) pz4c->Prolongate(this, 0);
+    (void) pz4c->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pz4c->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
@@ -591,8 +776,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) phydro->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
     (void) phydro->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
     (void) phydro->RecvU_Shr(this, 0);
-    (void) phydro->ApplyPhysicalBCs(this, 0);
-    (void) phydro->Prolongate(this, 0);
+    (void) phydro->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) phydro->ApplyPhysicalBCs(this, 0); // fine grid BCs
     (void) phydro->ConToPrim(this, 0);
   }
 
@@ -616,8 +801,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pmhd->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr, SendB_Shr
     (void) pmhd->RecvU_Shr(this, 0);
     (void) pmhd->RecvB_Shr(this, 0);
-    (void) pmhd->ApplyPhysicalBCs(this, 0);
-    (void) pmhd->Prolongate(this, 0);
+    (void) pmhd->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pmhd->ApplyPhysicalBCs(this, 0); // fine grid BCs
     if (pdyngr == nullptr) {
       (void) pmhd->ConToPrim(this, 0);
     } else {
@@ -638,8 +823,8 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->ClearSend(this, -1);
     (void) prad->ClearRecv(this, -1);
     (void) prad->RecvI(this, 0);
-    (void) prad->ApplyPhysicalBCs(this, 0);
-    (void) prad->Prolongate(this, 0);
+    (void) prad->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) prad->ApplyPhysicalBCs(this, 0); // fine grid BCs
   }
 
   return;
