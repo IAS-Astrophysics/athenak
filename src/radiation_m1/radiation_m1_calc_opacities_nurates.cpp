@@ -53,6 +53,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
+  auto &size = pmy_pack->pmb->mb_size;
+  const int rank = global_variable::my_rank;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &nspecies_ = nspecies;
@@ -240,6 +242,52 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                       eta_0_non_th_loc, abs_0_non_th_loc,
                       nurates_params_, code_units, eos_units,
                       nurates_units);
+
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            const bool bad_rates =
+                !Kokkos::isfinite(eta_0_loc[nuidx]) ||
+                !Kokkos::isfinite(eta_1_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_0_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_1_loc[nuidx]) ||
+                !Kokkos::isfinite(scat_0_loc[nuidx]) ||
+                !Kokkos::isfinite(scat_1_loc[nuidx]) ||
+                !Kokkos::isfinite(eta_0_non_th_loc[nuidx]) ||
+                !Kokkos::isfinite(eta_1_non_th_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_0_non_th_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_1_non_th_loc[nuidx]);
+            if (bad_rates) {
+              const Real x1v = CellCenterX(i-is, indcs.nx1, size.d_view(m).x1min,
+                                           size.d_view(m).x1max);
+              const Real x2v = CellCenterX(j-js, indcs.nx2, size.d_view(m).x2min,
+                                           size.d_view(m).x2max);
+              const Real x3v = CellCenterX(k-ks, indcs.nx3, size.d_view(m).x3min,
+                                           size.d_view(m).x3max);
+              Kokkos::printf(
+                  "An error occurred during the NuRates calculation: NANS_IN_RATES\n"
+                  "  Location: (%d, %d, %d, %d)\n"
+                  "            (%.17g, %.17g, %.17g)\n"
+                  "  Rank/species: rank=%d nuidx=%d\n"
+                  "  M1: E=%.17g F=(%.17g, %.17g, %.17g) N=%.17g chi=%.17g\n"
+                  "      J=%.17g rnnu=%.17g nudens_0=%.17g nudens_1=%.17g\n"
+                  "  Fluid: nb=%.17g T=%.17g Y=%.17g yp=%.17g yn=%.17g\n"
+                  "         mu_n=%.17g mu_p=%.17g mu_e=%.17g\n"
+                  "  Rates: eta_0=%.17g eta_1=%.17g abs_0=%.17g abs_1=%.17g\n"
+                  "         scat_0=%.17g scat_1=%.17g\n"
+                  "  Nonthermal: eta_0=%.17g eta_1=%.17g abs_0=%.17g abs_1=%.17g\n",
+                  m, k, j, i, x1v, x2v, x3v, rank, nuidx,
+                  u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i),
+                  u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
+                  u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
+                  u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
+                  u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i),
+                  chi_loc[nuidx], J[nuidx], rnnu[nuidx], nudens_0[nuidx],
+                  nudens_1[nuidx], nb, T, Y, yp, yn, mu_n, mu_p, mu_e,
+                  eta_0_loc[nuidx], eta_1_loc[nuidx], abs_0_loc[nuidx],
+                  abs_1_loc[nuidx], scat_0_loc[nuidx], scat_1_loc[nuidx],
+                  eta_0_non_th_loc[nuidx], eta_1_non_th_loc[nuidx],
+                  abs_0_non_th_loc[nuidx], abs_1_non_th_loc[nuidx]);
+            }
+          }
 
           assert(Kokkos::isfinite(eta_0_loc[0]));
           assert(Kokkos::isfinite(eta_0_loc[1]));
