@@ -84,9 +84,15 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
     dc_prev_error[a] = 0.0;
   }
 
+  // Register on every rank. ParameterDump() feeds the header offset written by
+  // the binary output, while each rank places its MeshBlocks using its own dump
+  // length, so a parameter held by rank 0 alone corrupts the header/data
+  // boundary of every .bin file.
+  std::string dc_file = pin->GetOrAddString("z4c", "dc_filename", "drift_control");
+
   if (0 == global_variable::my_rank) {
     std::string ofname = pin->GetString("job", "basename") + ".";
-    ofname += pin->GetOrAddString("z4c", "dc_filename", "drift_control");
+    ofname += dc_file;
     ofname += ".txt";
     ofile.open(ofname.c_str());
     ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:ix 10:iy 11:iz\n";
