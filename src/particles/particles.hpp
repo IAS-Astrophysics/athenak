@@ -31,6 +31,7 @@ enum class ParticleType {cosmic_ray};
 
 struct ParticlesTaskIDs {
   TaskID push;
+  TaskID purge;
   TaskID newgid;
   TaskID count;
   TaskID irecv;
@@ -74,6 +75,7 @@ class Particles {
   void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
+  TaskStatus PurgeDeleted(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
   TaskStatus SendCnt(Driver *pdriver, int stage);
   TaskStatus InitRecv(Driver *pdriver, int stage);

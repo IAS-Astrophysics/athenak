@@ -530,6 +530,11 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
   pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
   MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
                 MPI_INT,MPI_COMM_WORLD);
+  pmy_part->pmy_pack->pmesh->nprtcl_total = 0;
+  for (int n=0; n<global_variable::nranks; ++n) {
+    pmy_part->pmy_pack->pmesh->nprtcl_total +=
+        pmy_part->pmy_pack->pmesh->nprtcl_eachrank[n];
+  }
 #endif
   return TaskStatus::complete;
 }

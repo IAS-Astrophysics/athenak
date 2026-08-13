@@ -20,18 +20,21 @@ TaskStatus Particles::PushDrift(Driver*, int) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &pr = prtcl_rdata;
+  auto &pi = prtcl_idata;
   auto dt_ = pmy_pack->pmesh->dt;
 
   par_for("part_update", DevExeSpace(), 0, (nprtcl_thispack - 1),
   KOKKOS_LAMBDA(const int p) {
-    pr(IPX,p) += 0.5*dt_*pr(cosmic_ray::IPVX,p);
+    if (pi(PSTATUS,p) == PACTIVE) {
+      pr(IPX,p) += 0.5*dt_*pr(cosmic_ray::IPVX,p);
 
-    if (multi_d) {
-      pr(IPY,p) += 0.5*dt_*pr(cosmic_ray::IPVY,p);
-    }
+      if (multi_d) {
+        pr(IPY,p) += 0.5*dt_*pr(cosmic_ray::IPVY,p);
+      }
 
-    if (three_d) {
-      pr(IPZ,p) += 0.5*dt_*pr(cosmic_ray::IPVZ,p);
+      if (three_d) {
+        pr(IPZ,p) += 0.5*dt_*pr(cosmic_ray::IPVZ,p);
+      }
     }
   });
 

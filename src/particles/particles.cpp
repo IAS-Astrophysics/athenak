@@ -102,6 +102,62 @@ Particles::~Particles() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskStatus Particles::PurgeDeleted
+//! \brief Remove particles marked for deletion and compact all particle data arrays.
+
+TaskStatus Particles::PurgeDeleted(Driver*, int) {
+  const int npart = nprtcl_thispack;
+  if (npart == 0) return TaskStatus::complete;
+
+  auto pi = prtcl_idata;
+  int ndelete = 0;
+  Kokkos::parallel_reduce(
+      "particle_count_deleted", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, int &count) {
+        if (pi(PSTATUS,p) == PDELETE_PENDING) ++count;
+      }, ndelete);
+  if (ndelete == 0) return TaskStatus::complete;
+
+  const int new_npart = npart - ndelete;
+  auto pr = prtcl_rdata;
+  DvceArray2D<Real> new_pr("particle_rdata_compact", nrdata, new_npart);
+  DvceArray2D<int> new_pi("particle_idata_compact", nidata, new_npart);
+
+  const int nr = nrdata;
+  const int ni = nidata;
+  int ncopy = 0;
+  Kokkos::parallel_scan(
+      "particle_compact", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, int &offset, const bool final) {
+        if (pi(PSTATUS,p) != PDELETE_PENDING) {
+          if (final) {
+            for (int n=0; n<nr; ++n) new_pr(n,offset) = pr(n,p);
+            for (int n=0; n<ni; ++n) new_pi(n,offset) = pi(n,p);
+          }
+          ++offset;
+        }
+      }, ncopy);
+
+  if (ncopy != new_npart) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle compaction copied an unexpected number of particles"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  prtcl_rdata = new_pr;
+  prtcl_idata = new_pi;
+  nprtcl_thispack = new_npart;
+
+  Mesh *pm = pmy_pack->pmesh;
+  pm->nprtcl_thisrank = new_npart;
+  pm->nprtcl_eachrank[global_variable::my_rank] = new_npart;
+  if (global_variable::nranks == 1) pm->nprtcl_total = new_npart;
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 // CreateParticleTags()
 // Assigns tags to particles (unique integer).  Note that tracked particles are always
 // those with tag numbers less than ntrack.

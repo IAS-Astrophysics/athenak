@@ -22,6 +22,8 @@ namespace {
 
 constexpr int kExpectedParticles = 8;
 bool migration_test = false;
+int frozen_tag = -1;
+int delete_tag = -1;
 
 KOKKOS_INLINE_FUNCTION
 Real InitialX(const int id, const bool migration) {
@@ -56,12 +58,13 @@ KOKKOS_INLINE_FUNCTION
 Real VelocityZ(const int id) { return 0.03 - 0.002*id; }
 
 void DriftHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = 5;
+  pdata->nhist = 6;
   pdata->label[0] = "max_err";
   pdata->label[1] = "npart";
   pdata->label[2] = "tag_sum";
   pdata->label[3] = "owner_err";
   pdata->label[4] = "migrated";
+  pdata->label[5] = "status_err";
 
   auto &particles = pm->pmb_pack->ppart;
   auto pr = particles->prtcl_rdata;
@@ -71,6 +74,8 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   const int gids = pm->pmb_pack->gids;
   const int nmb = pm->pmb_pack->nmb_thispack;
   const bool migration = migration_test;
+  const int frozen = frozen_tag;
+  const int deleted = delete_tag;
   const Real drift_time = 0.5*pm->time;
 
   Real max_error = 0.0;
@@ -78,12 +83,17 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
       "particle_drift_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_max) {
         const int id = pi(PTAG,p);
-        const Real ex = InitialX(id, migration) + drift_time*VelocityX(id, migration);
-        const Real ey = InitialY(id) + drift_time*VelocityY(id);
-        const Real ez = InitialZ(id) + drift_time*VelocityZ(id);
+        const Real move_time = (id == frozen || id == deleted) ? 0.0 : drift_time;
+        const Real ex = InitialX(id, migration) + move_time*VelocityX(id, migration);
+        const Real ey = InitialY(id) + move_time*VelocityY(id);
+        const Real ez = InitialZ(id) + move_time*VelocityZ(id);
         Real error = fabs(pr(IPX,p) - ex);
         error = fmax(error, fabs(pr(IPY,p) - ey));
         error = fmax(error, fabs(pr(IPZ,p) - ez));
+        error = fmax(error, fabs(pr(particles::cosmic_ray::IPVX,p) -
+                                 VelocityX(id, migration)));
+        error = fmax(error, fabs(pr(particles::cosmic_ray::IPVY,p) - VelocityY(id)));
+        error = fmax(error, fabs(pr(particles::cosmic_ray::IPVZ,p) - VelocityZ(id)));
         local_max = fmax(local_max, error);
       }, Kokkos::Max<Real>(max_error));
 
@@ -99,9 +109,10 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
       "particle_drift_owner_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
         const int id = pi(PTAG,p);
-        const Real ex = InitialX(id, migration) + drift_time*VelocityX(id, migration);
-        const Real ey = InitialY(id) + drift_time*VelocityY(id);
-        const Real ez = InitialZ(id) + drift_time*VelocityZ(id);
+        const Real move_time = (id == frozen || id == deleted) ? 0.0 : drift_time;
+        const Real ex = InitialX(id, migration) + move_time*VelocityX(id, migration);
+        const Real ey = InitialY(id) + move_time*VelocityY(id);
+        const Real ez = InitialZ(id) + move_time*VelocityZ(id);
         int expected_gid = -1;
         for (int m=0; m<nmb; ++m) {
           auto size = mbsize.d_view(m);
@@ -134,11 +145,23 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
         if (pi(PGID,p) != initial_gid) local_sum += 1.0;
       }, migrated);
 
+  Real status_errors = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_drift_status_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        const int id = pi(PTAG,p);
+        int expected_status = PACTIVE;
+        if (id == frozen) expected_status = PFROZEN;
+        if (id == deleted) expected_status = PDELETE_PENDING;
+        if (pi(PSTATUS,p) != expected_status) local_sum += 1.0;
+      }, status_errors);
+
   pdata->hdata[0] = max_error;
   pdata->hdata[1] = static_cast<Real>(npart);
   pdata->hdata[2] = tag_sum;
   pdata->hdata[3] = owner_errors;
   pdata->hdata[4] = migrated;
+  pdata->hdata[5] = status_errors;
 }
 
 } // namespace
@@ -146,6 +169,26 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
 void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   user_hist_func = DriftHistory;
   migration_test = pin->GetOrAddBoolean("problem", "migration_test", false);
+  frozen_tag = pin->GetOrAddInteger("problem", "frozen_tag", -1);
+  delete_tag = pin->GetOrAddInteger("problem", "delete_tag", -1);
+  if (frozen_tag < -1 || frozen_tag >= kExpectedParticles) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle drift test frozen_tag must be -1 or between 0 and "
+              << (kExpectedParticles - 1) << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (delete_tag < -1 || delete_tag >= kExpectedParticles) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle drift test delete_tag must be -1 or between 0 and "
+              << (kExpectedParticles - 1) << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (delete_tag >= 0 && delete_tag == frozen_tag) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle drift test cannot freeze and delete the same tag."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (restart) return;
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
@@ -170,6 +213,8 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   const int nmb = pmbp->nmb_thispack;
   const int npart = pmbp->ppart->nprtcl_thispack;
   const bool migration = migration_test;
+  const int frozen = frozen_tag;
+  const int deleted = delete_tag;
   par_for("particle_drift_init", DevExeSpace(), 0, (npart - 1),
   KOKKOS_LAMBDA(const int p) {
     const int id = pi(PTAG,p);
@@ -186,6 +231,9 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
       }
     }
     pi(PGID,p) = owner_gid;
+    pi(PSTATUS,p) = PACTIVE;
+    if (id == frozen) pi(PSTATUS,p) = PFROZEN;
+    if (id == deleted) pi(PSTATUS,p) = PDELETE_PENDING;
     pr(IPX,p) = x;
     pr(IPY,p) = y;
     pr(IPZ,p) = z;
