@@ -64,6 +64,11 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &radiation_mask_ = radiation_mask;
 
   auto &m1_params_ = params;
+  // Device-side counter capping how many detailed diagnostics get printed.
+  // Allocated per call, so the cap applies per rank per cycle.
+  DvceArray1D<int> nurates_nerrs_("nurates_nerrs", 1);
+  Kokkos::deep_copy(nurates_nerrs_, 0);
+  constexpr int nurates_errcap = 100;
   // Force the equilibrium distribution for the first eq_warmup_cycles cycles.
   // On a fresh (neutrinoless) start the M1 moments are floored, so
   // reconstructing the distribution from them (use_equilibrium_distribution =
@@ -174,32 +179,42 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           calc_proj(u_d, u_u, proj_ud);
 
           // Compute lab frame energy density and number density
-          Real J[4]{}, rnnu[4]{};
+          Real m1_E[4]{}, m1_Fx[4]{}, m1_Fy[4]{}, m1_Fz[4]{}, m1_N[4]{};
+          Real J[4]{}, m1_H2[4]{}, m1_Gamma[4]{}, rnnu[4]{};
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            m1_E[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
+            m1_Fx[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i);
+            m1_Fy[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i);
+            m1_Fz[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i);
+            m1_N[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                      adm.beta_u(m, 2, k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
-                     F_d);
-            const Real E =
-                u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
+                     m1_Fx[nuidx], m1_Fy[nuidx], m1_Fz[nuidx], F_d);
+
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
-                          chi_(m, nuidx, k, j, i), P_dd, m1_params_);
+            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
+                          m1_E[nuidx], F_d, chi_(m, nuidx, k, j, i),
+                          P_dd, m1_params_);
 
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
-            assemble_rT(n_d, E, F_d, P_dd, T_dd);
+            assemble_rT(n_d, m1_E[nuidx], F_d, P_dd, T_dd);
 
             J[nuidx] = calc_J_from_rT(T_dd, u_u);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
             calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
             apply_floor(g_uu, J[nuidx], H_d, m1_params_);
-            Real Gamma =
-                compute_Gamma(w_lorentz, v_u, J[nuidx], E, F_d, m1_params_);
-            rnnu[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
+            m1_H2[nuidx] = tensor_dot(g_uu, H_d, H_d);
+            m1_Gamma[nuidx] =
+                compute_Gamma(w_lorentz, v_u, J[nuidx],
+                              m1_E[nuidx], F_d, m1_params_);
+            rnnu[nuidx] = m1_N[nuidx] / m1_Gamma[nuidx];
           }
 
           // local undensitized neutrino quantities
@@ -244,6 +259,20 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                       nurates_units);
 
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            const bool bad_m1 =
+                !Kokkos::isfinite(m1_E[nuidx]) ||
+                !Kokkos::isfinite(m1_Fx[nuidx]) ||
+                !Kokkos::isfinite(m1_Fy[nuidx]) ||
+                !Kokkos::isfinite(m1_Fz[nuidx]) ||
+                !Kokkos::isfinite(m1_N[nuidx]) ||
+                !Kokkos::isfinite(chi_loc[nuidx]) ||
+                !Kokkos::isfinite(J[nuidx]) ||
+                !Kokkos::isfinite(m1_H2[nuidx]) ||
+                !Kokkos::isfinite(m1_Gamma[nuidx]) ||
+                !Kokkos::isfinite(rnnu[nuidx]) ||
+                !Kokkos::isfinite(nudens_0[nuidx]) ||
+                !Kokkos::isfinite(nudens_1[nuidx]);
+
             const bool bad_rates =
                 !Kokkos::isfinite(eta_0_loc[nuidx]) ||
                 !Kokkos::isfinite(eta_1_loc[nuidx]) ||
@@ -255,37 +284,90 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 !Kokkos::isfinite(eta_1_non_th_loc[nuidx]) ||
                 !Kokkos::isfinite(abs_0_non_th_loc[nuidx]) ||
                 !Kokkos::isfinite(abs_1_non_th_loc[nuidx]);
-            if (bad_rates) {
-              const Real x1v = CellCenterX(i-is, indcs.nx1, size.d_view(m).x1min,
-                                           size.d_view(m).x1max);
-              const Real x2v = CellCenterX(j-js, indcs.nx2, size.d_view(m).x2min,
-                                           size.d_view(m).x2max);
-              const Real x3v = CellCenterX(k-ks, indcs.nx3, size.d_view(m).x3min,
-                                           size.d_view(m).x3max);
+
+            if (bad_m1 || bad_rates) {
+              const int error_index =
+                  Kokkos::atomic_fetch_add(&nurates_nerrs_(0), 1);
+
+              if (error_index >= nurates_errcap) {
+                continue;
+              }
+
+              const Real x1v =
+                  CellCenterX(i-is, indcs.nx1, size.d_view(m).x1min,
+                              size.d_view(m).x1max);
+              const Real x2v =
+                  CellCenterX(j-js, indcs.nx2, size.d_view(m).x2min,
+                              size.d_view(m).x2max);
+              const Real x3v =
+                  CellCenterX(k-ks, indcs.nx3, size.d_view(m).x3min,
+                              size.d_view(m).x3max);
+
               Kokkos::printf(
-                  "An error occurred during the NuRates calculation: NANS_IN_RATES\n"
+                  "Non-finite values detected around the NuRates calculation\n"
                   "  Location: (%d, %d, %d, %d)\n"
                   "            (%.17g, %.17g, %.17g)\n"
-                  "  Rank/species: rank=%d nuidx=%d\n"
-                  "  M1: E=%.17g F=(%.17g, %.17g, %.17g) N=%.17g chi=%.17g\n"
-                  "      J=%.17g rnnu=%.17g nudens_0=%.17g nudens_1=%.17g\n"
-                  "  Fluid: nb=%.17g T=%.17g Y=%.17g yp=%.17g yn=%.17g\n"
-                  "         mu_n=%.17g mu_p=%.17g mu_e=%.17g\n"
-                  "  Rates: eta_0=%.17g eta_1=%.17g abs_0=%.17g abs_1=%.17g\n"
-                  "         scat_0=%.17g scat_1=%.17g\n"
-                  "  Nonthermal: eta_0=%.17g eta_1=%.17g abs_0=%.17g abs_1=%.17g\n",
+                  "  Rank/species:\n"
+                  "    rank      = %d\n"
+                  "    nuidx     = %d\n"
+                  "    bad_m1    = %d\n"
+                  "    bad_rates = %d\n"
+                  "  M1 vars:\n"
+                  "    E        = %.17g\n"
+                  "    Fx       = %.17g\n"
+                  "    Fy       = %.17g\n"
+                  "    Fz       = %.17g\n"
+                  "    N        = %.17g\n"
+                  "    chi      = %.17g\n"
+                  "    J        = %.17g\n"
+                  "    H2       = %.17g\n"
+                  "    Gamma    = %.17g\n"
+                  "    rnnu     = %.17g\n"
+                  "    nudens_0 = %.17g\n"
+                  "    nudens_1 = %.17g\n"
+                  "  Fluid vars:\n"
+                  "    nb   = %.17g\n"
+                  "    T    = %.17g\n"
+                  "    Y    = %.17g\n"
+                  "    yp   = %.17g\n"
+                  "    yn   = %.17g\n"
+                  "    mu_n = %.17g\n"
+                  "    mu_p = %.17g\n"
+                  "    mu_e = %.17g\n"
+                  "  Rates:\n"
+                  "    eta_0  = %.17g\n"
+                  "    eta_1  = %.17g\n"
+                  "    abs_0  = %.17g\n"
+                  "    abs_1  = %.17g\n"
+                  "    scat_0 = %.17g\n"
+                  "    scat_1 = %.17g\n"
+                  "  Nonthermal rates:\n"
+                  "    eta_0 = %.17g\n"
+                  "    eta_1 = %.17g\n"
+                  "    abs_0 = %.17g\n"
+                  "    abs_1 = %.17g\n",
                   m, k, j, i, x1v, x2v, x3v, rank, nuidx,
-                  u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i),
-                  u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
-                  u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                  u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
-                  u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i),
-                  chi_loc[nuidx], J[nuidx], rnnu[nuidx], nudens_0[nuidx],
-                  nudens_1[nuidx], nb, T, Y, yp, yn, mu_n, mu_p, mu_e,
-                  eta_0_loc[nuidx], eta_1_loc[nuidx], abs_0_loc[nuidx],
-                  abs_1_loc[nuidx], scat_0_loc[nuidx], scat_1_loc[nuidx],
-                  eta_0_non_th_loc[nuidx], eta_1_non_th_loc[nuidx],
-                  abs_0_non_th_loc[nuidx], abs_1_non_th_loc[nuidx]);
+                  static_cast<int>(bad_m1), static_cast<int>(bad_rates),
+                  m1_E[nuidx], m1_Fx[nuidx], m1_Fy[nuidx],
+                  m1_Fz[nuidx], m1_N[nuidx], chi_loc[nuidx],
+                  J[nuidx], m1_H2[nuidx], m1_Gamma[nuidx],
+                  rnnu[nuidx], nudens_0[nuidx], nudens_1[nuidx],
+                  nb, T, Y, yp, yn, mu_n, mu_p, mu_e,
+                  eta_0_loc[nuidx], eta_1_loc[nuidx],
+                  abs_0_loc[nuidx], abs_1_loc[nuidx],
+                  scat_0_loc[nuidx], scat_1_loc[nuidx],
+                  eta_0_non_th_loc[nuidx],
+                  eta_1_non_th_loc[nuidx],
+                  abs_0_non_th_loc[nuidx],
+                  abs_1_non_th_loc[nuidx]);
+
+              if (error_index + 1 == nurates_errcap) {
+                Kokkos::printf(
+                    "%d NuRates diagnostics have been printed on rank %d. "
+                    "Further NuRates diagnostics on this rank will be "
+                    "suppressed for the rest of this cycle.\n",
+                    nurates_errcap, rank);
+              }
             }
           }
 
