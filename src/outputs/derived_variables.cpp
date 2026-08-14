@@ -24,6 +24,8 @@
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/primitive-solver/unit_system.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
@@ -1259,6 +1261,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // M1 fluid-frame neutrino quanities: fluid frame energy density
   // J = u_a u_b T^{ab}, fluid-frame flux H^i = -proj^i_a u_b T^{ab}, and
   // comoving number density n = N/Gamma.
+  //
+  // The evolved N is carried in EOS number density units (fm^-3 for a nuclear
+  // EOS) whereas E and F_i are in code units, so J and H are rescaled into EOS
+  // energy density units (MeV/fm^3) on output. This keeps every dimensional
+  // quantity here in the same (nuclear) system and makes <e> = J/n come out in
+  // MeV rather than in a mixed code/nuclear hybrid.
   if (name.compare("rad_m1_J") == 0 ||
       name.compare("rad_m1_H") == 0 ||
       name.compare("rad_m1_n") == 0 ||
@@ -1285,6 +1293,14 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto chi_ = pradm1->chi;
     auto &adm = pm->pmb_pack->padm->adm;
     RadiationM1Params params_ = pradm1->params;
+
+    // Code energy density -> EOS energy density (MeV/fm^3 for a nuclear EOS).
+    Real ene_conv = 1.0;
+    if (pm->pmb_pack->pdyngr != nullptr) {
+      Primitive::UnitSystem code_units = pm->pmb_pack->pdyngr->GetCodeUnitSystem();
+      Primitive::UnitSystem eos_units  = pm->pmb_pack->pdyngr->GetEOSUnitSystem();
+      ene_conv = code_units.EnergyDensityConversion(eos_units);
+    }
 
     // M1 requires dyn_grmhd primitives (fall back to hydro/mhd)
     DvceArray5D<Real> w0_;
@@ -1370,13 +1386,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         apply_floor(g_uu, J, H_d, params_);
 
         if (mode == 0) {
-          dv(m,nuidx,k,j,i) = J;
+          dv(m,nuidx,k,j,i) = J * ene_conv;
         } else if (mode == 1) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u{};
           tensor_contract(g_uu, H_d, H_u);
-          dv(m,3*nuidx+0,k,j,i) = H_u(1);
-          dv(m,3*nuidx+1,k,j,i) = H_u(2);
-          dv(m,3*nuidx+2,k,j,i) = H_u(3);
+          dv(m,3*nuidx+0,k,j,i) = H_u(1) * ene_conv;
+          dv(m,3*nuidx+1,k,j,i) = H_u(2) * ene_conv;
+          dv(m,3*nuidx+2,k,j,i) = H_u(3) * ene_conv;
         } else if (mode == 3) {
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u{};
           AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> fnu_u{};
@@ -1393,7 +1409,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
             const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
             nnu = N / Gamma;
           }
-          dv(m,nuidx,k,j,i) = (nnu > 0.0) ? J / nnu : 0.0;
+          dv(m,nuidx,k,j,i) = (nnu > params_.rad_N_floor) ? J * ene_conv / nnu : 0.0;
         } else if (mode == 5) {
           Real nnu = 0.0;
           if (nvars_ > M1_N_IDX) {
