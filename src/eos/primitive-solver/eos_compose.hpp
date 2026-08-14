@@ -50,6 +50,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     ECNVARS = 9
   };
 
+  //! Where a BetaEquilibriumTrapped answer came from, reported through that
+  //! function's optional status argument.
+  enum NeutrinoEquilibriumStatus {
+    NUEQ_INTERIOR    = 0,  //! interior solution of the full 2D system
+    NUEQ_CONSTRAINED = 1,  //! solution constrained to a table edge (KKT point)
+    NUEQ_ENERGY_ONLY = 2,  //! energy equation alone, solved for T at frozen Y_e
+    NUEQ_FAILED      = 3   //! no solution; T_eq is a clamped endpoint or the guess
+  };
+
  protected:
   /// Constructor
   EOSCompOSE() :
@@ -83,6 +92,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     nu_2DNR_eps_lim  = 1.e-7;
     nu_2DNR_n_max    = 100;
     nu_bis_n_cut_max = 8;
+    nu_grad_cells    = 1.0;
+    nu_1D_bis_n_max  = 60;
   }
 
 /*
@@ -190,9 +201,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   }
 
   /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
+  //
+  //  If status is not null, it receives one of NeutrinoEquilibriumStatus telling the
+  //  caller where the answer came from. A constrained (table edge) solution and the
+  //  energy-only fallback both count as success, so a nonzero return means no usable
+  //  equilibrium was found at all.
   KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq,
                                                      Real *Y_eq, Real T_guess,
-                                                     Real *Y_guess) const {
+                                                     Real *Y_guess,
+                                                     int *status = nullptr) const {
     const int n_at = 16;
     Real vec_guess[n_at][2] = {
       {1.00e0, 1.00e0},
@@ -216,26 +233,62 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // ierr = 0    Equilibrium found
     // ierr = 1    Equilibrium not found
     int ierr = 1;
-    int na = 0; // counter for the number of attempts
+    int eq_status = NUEQ_FAILED;
 
     Real x0[2], x1[2]; // T,Ye guess and T,Ye result
 
-    while (ierr!=0 && na<n_at) {
+    // A constrained (table edge) solution found along the way, kept as a fallback in
+    // case no interior solution turns up.
+    bool have_kkt = false;
+    Real x_kkt[2] = {0.0};
+
+    for (int na = 0; na < n_at; ++na) {
       x0[0] = vec_guess[na][0] * T_guess;
       x0[1] = vec_guess[na][1] * Y_guess[0];
 
-      ierr = trapped_equilibrium_2DNR(n, e, Yl[0], x0, x1);
+      int ierr_try = trapped_equilibrium_2DNR(n, e, Yl[0], x0, x1);
 
-      na += 1;
+      if (ierr_try == 0) {
+        ierr = 0;
+        eq_status = NUEQ_INTERIOR;
+        break;
+      }
+      // ierr = 2 is a KKT point: the iterate is pinned to a table boundary and the
+      // Newton step points out of the domain, so this is a legitimate constrained
+      // solution rather than a failure. Keep the first one, but let the remaining
+      // guesses look for an interior root.
+      if (ierr_try == 2 && !have_kkt) {
+        x_kkt[0] = x1[0];
+        x_kkt[1] = x1[1];
+        have_kkt = true;
+      }
     }
 
-    if (ierr==0) { // Success
+    if (ierr == 0) {          // Success: interior solution
       T_eq = x1[0];
       // Maybe in the future we could explicitly conserve the lepton numbers
       Y_eq[0] = x1[1];
-    } else {      // Failure
-      T_eq = T_guess;       // Set results to guesses
+    } else if (have_kkt) {    // Success: constrained solution on a table edge
+      T_eq = x_kkt[0];
+      Y_eq[0] = x_kkt[1];
+      ierr = 0;
+      eq_status = NUEQ_CONSTRAINED;
+    } else {
+      // The 2D solve failed from every guess. Do not simply return (T_guess,
+      // Y_guess): that is the *unequilibrated* matter state, and this function is only
+      // called where the local blackbody is already known to be a bad description, so
+      // handing it back gives an emissivity that can be off by any factor, in either
+      // direction, depending on the sign of the energy imbalance. Freeze Y_e instead
+      // and solve the energy equation alone for T, which bisection can always do
+      // provided the state is inside the table.
+      T_eq = T_guess;
       Y_eq[0] = Y_guess[0];
+      ierr = trapped_equilibrium_1D(n, e, Y_guess[0], T_eq);
+      eq_status = (ierr == 0) ? NUEQ_ENERGY_ONLY : NUEQ_FAILED;
+    }
+
+    if (status != nullptr) {
+      *status = eq_status;
     }
 
     return ierr;
@@ -592,19 +645,26 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         return ierr;
       }
 
-      int n_cut = 0;
+      // Backtracking line search along the Newton direction. Every trial point must
+      // be measured from the iterate as it was on entry: advancing x1 inside the loop
+      // makes each pass step *further* along dx1 rather than retreating, visiting
+      // x + dx, x + 1.5 dx, x + 1.75 dx, ... -> x + 2 dx. That safeguard only engages
+      // once the full step has already failed to reduce the residual, i.e. exactly
+      // when a genuine backtrack is needed, and if no pass improves the error the loop
+      // leaves x1 at the last and worst trial point.
+      const Real x_in[2] = {x1[0], x1[1]};
+      const Real err_old = err;
       Real fac_cut = 1.0;
-      Real err_old = err;
+      bool improved = false;
 
-      while (n_cut <= nu_bis_n_cut_max && err >= err_old) {
-        // the variation of x1 is divided by an powers of 2 if the
+      for (int n_cut = 0; n_cut <= nu_bis_n_cut_max; ++n_cut, fac_cut *= 0.5) {
+        // the variation of x1 is divided by a power of 2 if the
         // error is not decreasing along the gradient direction
-
-        x1_tmp[0] = x1[0] + (dx1[0]*fac_cut);
-        x1_tmp[1] = x1[1] + (dx1[1]*fac_cut);
+        x1_tmp[0] = x_in[0] + (dx1[0]*fac_cut);
+        x1_tmp[1] = x_in[1] + (dx1[1]*fac_cut);
 
         // check if the next step calculation had problems
-        if (isnan(x1_tmp[0])) {
+        if (isnan(x1_tmp[0]) || isnan(x1_tmp[1])) {
           ierr = 1;
           return ierr;
         }
@@ -618,32 +678,103 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         x1_tmp[1] = (x1_tmp[1] > min_Y[0]) ? x1_tmp[1] : min_Y[0];
         x1_tmp[1] = (x1_tmp[1] < max_Y[0]) ? x1_tmp[1] : max_Y[0];
 
-        // assign the new point
-        x1[0] = x1_tmp[0];
-        x1[1] = x1_tmp[1];
+        // compute the residuals and the error for the trial point
+        Real y_tmp[2] = {0.0};
+        func_eq_weak(n,e,Yle,x1_tmp,y_tmp);
+        Real err_tmp = error_func_eq_weak(Yle,e,y_tmp);
 
-        // compute the residuals for the new point
-        func_eq_weak(n,e,Yle,x1,y);
+        // accept the first cut that makes progress
+        if (err_tmp < err_old) {
+          x1[0] = x1_tmp[0];
+          x1[1] = x1_tmp[1];
+          y[0] = y_tmp[0];
+          y[1] = y_tmp[1];
+          err = err_tmp;
+          improved = true;
+          break;
+        }
+      }
 
-        // compute the error
-        err = error_func_eq_weak(Yle,e,y);
-
-        // update the bisection cut along the gradient
-        n_cut += 1;
-        fac_cut *= 0.5;
+      if (!improved) {
+        // No cut along the Newton direction reduces the residual. Leave x1 at the
+        // iterate that got here and let the caller's restart ladder try a different
+        // initial guess, rather than accepting a worse point.
+        ierr = 1;
+        return ierr;
       }
 
       // update the iteration
       n_iter += 1;
     }
 
-    if (n_iter <= nu_2DNR_n_max) {
+    if (err <= nu_2DNR_eps_lim) {
       ierr = 0;
     } else {
       ierr = 1;
     }
 
     return ierr;
+  }
+
+  /// Energy residual of the trapped equilibrium at fixed Y_e. This is the second
+  /// component of func_eq_weak, which does not depend on Yle.
+  KOKKOS_INLINE_FUNCTION Real energy_eq_weak(Real n, Real e_eq, Real T, Real Ye) const {
+    Real x[2] = {T, Ye};
+    Real y[2] = {0.0};
+    // Yle enters y[0] only, so its value is irrelevant here
+    func_eq_weak(n, e_eq, 1.0, x, y);
+    return y[1];
+  }
+
+  /// Fallback for when the 2D Newton solve fails from every guess: freeze Y_e and
+  /// solve the energy equation alone for T, by bisection in log2(T) -- the variable
+  /// the table is uniform in. Bisection needs only a sign change, not monotonicity,
+  /// so it cannot fail as long as the state is inside the table.
+  ///
+  /// Returns 0 if a root was bracketed and refined. Returns 1 if the residual has no
+  /// sign change across the table, in which case the state is out of range and T_eq
+  /// is set to whichever endpoint comes closest, or if the endpoint residuals are
+  /// NaN, in which case T_eq is left as the caller set it.
+  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_1D(Real n, Real e_eq, Real Ye,
+                                                     Real &T_eq) const {
+    Real ya = energy_eq_weak(n, e_eq, min_T, Ye);
+    Real yb = energy_eq_weak(n, e_eq, max_T, Ye);
+
+    if (isnan(ya) || isnan(yb)) {
+      return 1;
+    }
+
+    if (ya*yb > 0.0) {
+      T_eq = (abs(ya) < abs(yb)) ? min_T : max_T;
+      return 1;
+    }
+
+    Real la = log2_(min_T);
+    Real lb = log2_(max_T);
+
+    for (int n_bis = 0; n_bis < nu_1D_bis_n_max; ++n_bis) {
+      Real lm = 0.5*(la + lb);
+      Real Tm = exp2_(lm);
+      Real ym = energy_eq_weak(n, e_eq, Tm, Ye);
+
+      if (isnan(ym)) {
+        break;
+      }
+      if (abs(ym) <= nu_2DNR_eps_lim) {
+        T_eq = Tm;
+        return 0;
+      }
+      if (ya*ym <= 0.0) {
+        lb = lm;
+        yb = ym;
+      } else {
+        la = lm;
+        ya = ym;
+      }
+    }
+
+    T_eq = exp2_(0.5*(la + lb));
+    return 0;
   }
 
   KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_eq, Real Yle, Real x[2],
@@ -720,8 +851,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                                              Real &de_dYe) const {
     int ierr=1;
 
-    const Real Ye_delta = 0.005;
-    const Real T_delta = 0.01;
+    // Tie the finite-difference steps to the table spacing. The interpolation is
+    // trilinear in (log2 nb, Yq, log2 T), so a step narrower than one cell just
+    // returns that cell's slope: the derivative comes out piecewise constant, with an
+    // O(10%) jump at every cell boundary, and Newton sees a non-Lipschitz Jacobian. A
+    // secant of fixed width in the table's own variables is continuous and piecewise
+    // linear in the evaluation point instead, because the interpolant is continuous.
+    // The narrower step buys precision the table does not contain.
+    const Real Ye_delta = 0.5*nu_grad_cells/m_id_yq;
+    const Real T_fac = Kokkos::exp2(0.5*nu_grad_cells/m_id_log_t);
 
     Real Y1[MAX_SPECIES] = {0.0};
     Real Y2[MAX_SPECIES] = {0.0};
@@ -741,12 +879,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real dmu_l_dYe = (mu_l2-mu_l1)/(Y2[0] - Y1[0]);
     de_dYe         = (e2-e1)/(Y2[0] - Y1[0]);
 
-    Real T_lo = T - T_delta;
+    // The secant is symmetric in log2(T), and the divisions below use the actual
+    // T2 - T1, so clamping at a table edge degrades gracefully to a one-sided
+    // difference of the correct width.
+    Real T_lo = T/T_fac;
     Real T1 = (T_lo > min_T) ? T_lo : min_T;
     mu_l1 = ElectronLeptonChemicalPotential(n, T1, Y);
     e1 = Energy(n, T1, Y);
 
-    Real T_hi = T + T_delta;
+    Real T_hi = T*T_fac;
     Real T2 = (T_hi < max_T) ? T_hi : max_T;
     mu_l2 = ElectronLeptonChemicalPotential(n, T2, Y);
     e2 = Energy(n, T2, Y);
@@ -754,7 +895,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real dmu_l_dT   = (mu_l2 - mu_l1)/(T2 - T1);
     de_dT          = (e2 - e1)/(T2 - T1);
 
-    deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV] TODO: Check
+    // eta = mu_le/T, so d(eta)/dT = (1/T) dmu_le/dT - mu_le/T^2 = (dmu_le/dT - eta)/T
+    deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV]
     deta_dYe = dmu_l_dYe/T;      // [-]
 
     if (isnan(deta_dT)||isnan(deta_dYe)||isnan(de_dT)||isnan(de_dYe)) {
@@ -797,6 +939,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   Real nu_2DNR_eps_lim; // tolerance in 2D NR (required for 1e-12 err in T)
   int nu_2DNR_n_max;    // Newton-Raphson max number of iterations
   int nu_bis_n_cut_max; // Bisection max number of iterations
+  // Width of the Jacobian finite differences, in table cells. One cell is the
+  // resolution of the interpolant itself; see eta_e_gradient.
+  Real nu_grad_cells;
+  // Max bisections in the 1D energy-only fallback. 60 halvings of the log2(T) range
+  // take the interval below double round-off, so this is a hard backstop, not a
+  // tolerance: the loop normally exits on the residual.
+  int nu_1D_bis_n_max;
 
   // Neutrino equilibrium physical constants
   const Real hc_mevfm = 1.23984172e3;           // hc    [MeV fm] (not reduced)

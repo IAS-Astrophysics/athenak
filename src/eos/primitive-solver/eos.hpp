@@ -363,16 +363,20 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[inout] Y_eq    The equilibrium particle fractions.
   //  \param[in]    T_guess Initial guess for the temperature.
   //  \param[in]    Y_guess Initial guesses for the particle fractions.
+  //  \param[out]   status  If not null, receives an EOSPolicy-defined code saying where
+  //                        the answer came from (interior solution, table edge, or a
+  //                        fallback), for callers that need to treat them differently.
   //  \return Whether the equilibrium was successfully found.
   KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl,
                                                          Real &T_eq, Real *Y_eq,
                                                          Real T_guess,
-                                                         Real *Y_guess) const {
+                                                         Real *Y_guess,
+                                                         int *status = nullptr) const {
     if constexpr (supports_potentials) {
       int ierr = EOSPolicy::BetaEquilibriumTrapped(
           n, e*code_units.PressureConversion(eos_units), Yl,
           T_eq, Y_eq,
-          T_guess*code_units.TemperatureConversion(eos_units), Y_guess);
+          T_guess*code_units.TemperatureConversion(eos_units), Y_guess, status);
 
       T_eq = T_eq*eos_units.TemperatureConversion(code_units);
 

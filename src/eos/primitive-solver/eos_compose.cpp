@@ -184,25 +184,31 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
     }
 
-    { // Read proton fraction -> Y[p]
-      Real * table_yq = table["Y[p]"];
-      for (size_t in=0; in<m_nn; ++in) {
-        for (size_t iy=0; iy<m_ny; ++iy) {
-          for (size_t it=0; it<m_nt; ++it) {
-            size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYP,in,iy,it) = table_yq[iflat];
-          }
-        }
+    { // Read proton and neutron fractions -> Y[p], Y[n]
+      // Tables written before these two fields became mandatory do not carry them, and
+      // TableReader::operator[] returns a null pointer for a field that is absent. Fall
+      // back on free npe matter, Y[p] = Yq and Y[n] = 1 - Yq, which keeps such a table
+      // usable: exact where there are no nuclei, wrong where there are, so say so.
+      // Only the bns_nurates opacities read these two variables.
+      const bool has_yp = table.HasField("Y[p]");
+      const bool has_yn = table.HasField("Y[n]");
+      if (!has_yp || !has_yn) {
+        std::cout << "### WARNING in " << __FILE__ << std::endl
+                  << "The EOS table does not provide "
+                  << (has_yp ? "Y[n]" : (has_yn ? "Y[p]" : "Y[p] or Y[n]"))
+                  << ". Approximating the nucleon fractions as free npe matter,"
+                  << " Y[p] = Yq and Y[n] = 1 - Yq. That is only exact where no nuclei"
+                  << " are present: regenerate the table before using it with"
+                  << " bns_nurates.\n";
       }
-    }
-
-    { // Read neutron fraction -> Y[n]
-      Real * table_yq = table["Y[n]"];
+      Real * table_yp = has_yp ? table["Y[p]"] : nullptr;
+      Real * table_yn = has_yn ? table["Y[n]"] : nullptr;
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYN,in,iy,it) = table_yq[iflat];
+            host_table(ECYP,in,iy,it) = has_yp ? table_yp[iflat] : host_yq(iy);
+            host_table(ECYN,in,iy,it) = has_yn ? table_yn[iflat] : 1.0 - host_yq(iy);
           }
         }
       }
