@@ -43,6 +43,7 @@ struct HydroTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
+  TaskID accumf;
   TaskID rkupdt;
   TaskID srctrms;
   TaskID sendu_oa;
@@ -102,6 +103,8 @@ class Hydro {
   DvceArray5D<Real> u_sts2;   // second previous STS stage state
   DvceArray5D<Real> u_sts_rhs;  // cached first-stage RKL2 operator contribution
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
+  DvceFaceFld4D<Real> density_flux_integral;  // RK-integrated IDN flux divided by dx
+  bool density_flux_integral_enabled = false;
   Real dtnew;
 
   bool has_explicit_viscosity = false;
@@ -132,6 +135,7 @@ class Hydro {
   HydroTaskIDs id;
 
   // functions...
+  void EnableDensityFluxIntegral();
   void AssembleHydroTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver *d, int stage);
@@ -141,6 +145,7 @@ class Hydro {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
+  TaskStatus AccumulateDensityFlux(Driver *d, int stage);
   TaskStatus RKUpdate(Driver *d, int stage);
   TaskStatus HydroSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);

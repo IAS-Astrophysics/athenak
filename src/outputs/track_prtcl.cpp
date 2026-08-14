@@ -30,6 +30,12 @@
 TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
                                              OutputParameters op) :
   BaseTypeOutput(pin, pm, op) {
+  if (pm->pmb_pack->ppart->particle_type != ParticleType::cosmic_ray) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Tracked particle output currently supports only "
+              << "cosmic-ray particles" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   // create new directory for this output. Comments in binary.cpp constructor explain why
   mkdir("trk",0775);
   // allocate arrays

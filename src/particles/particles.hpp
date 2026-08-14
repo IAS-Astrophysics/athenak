@@ -8,6 +8,7 @@
 //! \file particles.hpp
 //  \brief definitions for Particles class
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -23,7 +24,7 @@
 enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 
 // constants that enumerate ParticleTypes
-enum class ParticleType {cosmic_ray};
+enum class ParticleType {cosmic_ray, lagrangian_mc};
 
 //----------------------------------------------------------------------------------------
 //! \struct ParticlesTaskIDs
@@ -88,9 +89,11 @@ class Particles {
 
   // particle pusher implementations
   TaskStatus PushDrift(Driver *pdriver, int stage);
+  TaskStatus PushLagrangianMC(Driver *pdriver, int stage);
   Real EstimateTimestepDrift();
 
  private:
+  std::uint64_t lmc_random_seed;
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
 };
 

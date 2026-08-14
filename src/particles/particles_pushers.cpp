@@ -22,6 +22,8 @@ TaskStatus Particles::Push(Driver *pdriver, int stage) {
   switch (pusher) {
     case ParticlesPusher::drift:
       return PushDrift(pdriver, stage);
+    case ParticlesPusher::lagrangian_mc:
+      return PushLagrangianMC(pdriver, stage);
     default:
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher has no implementation" << std::endl;

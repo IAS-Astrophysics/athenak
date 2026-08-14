@@ -1,0 +1,57 @@
+# Deterministic two-block Lagrangian Monte Carlo particle regression test.
+
+<job>
+basename = particle_lagrangian_mc_gpu
+
+<mesh>
+nghost = 2
+nx1 = 8
+x1min = 0.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 4
+x2min = 0.0
+x2max = 1.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 4
+nx2 = 4
+nx3 = 1
+
+<time>
+evolution = kinematic
+integrator = rk2
+cfl_number = 0.4
+nlim = 1
+tlim = 0.05
+ndiag = 1
+
+<hydro>
+eos = isothermal
+iso_sound_speed = 1.0
+reconstruct = dc
+rsolver = advect
+
+<particles>
+particle_type = lagrangian_mc
+ppc = 0.25
+pusher = lagrangian_mc
+random_seed = 5
+
+<problem>
+pgen_name = particle_lagrangian_mc
+user_hist = true
+
+<output1>
+file_type = hst
+data_format = %24.16e
+dcycle = 1
+user_hist_only = true

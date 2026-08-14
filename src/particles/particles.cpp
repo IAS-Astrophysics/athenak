@@ -16,7 +16,9 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "hydro/hydro.hpp"
 #include "cosmic_ray.hpp"
+#include "lagrangian_mc.hpp"
 #include "particles.hpp"
 
 namespace particles {
@@ -25,6 +27,7 @@ namespace particles {
 
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     dtnew(std::numeric_limits<float>::max()),
+    lmc_random_seed(0),
     pmy_pack(ppack) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {
@@ -48,6 +51,8 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
     std::string ptype = pin->GetString("particles","particle_type");
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
+    } else if (ptype.compare("lagrangian_mc") == 0) {
+      particle_type = ParticleType::lagrangian_mc;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle type = '" << ptype << "' not recognized"
@@ -60,7 +65,57 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   {
     std::string ppush = pin->GetString("particles","pusher");
     if (ppush.compare("drift") == 0) {
+      if (particle_type != ParticleType::cosmic_ray) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Particle pusher 'drift' requires particle type "
+                  << "'cosmic_ray'" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       pusher = ParticlesPusher::drift;
+    } else if (ppush.compare("lagrangian_mc") == 0) {
+      if (particle_type != ParticleType::lagrangian_mc) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Particle pusher 'lagrangian_mc' requires particle type "
+                  << "'lagrangian_mc'" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (pmy_pack->phydro == nullptr || pmy_pack->pmhd != nullptr ||
+          pmy_pack->pionn != nullptr || pmy_pack->prad != nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently require "
+                  << "single-fluid Hydro" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (pmy_pack->pmesh->multilevel || pmy_pack->phydro->porb_u != nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently require a "
+                  << "uniform mesh without orbital advection" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::string evolution = pin->GetString("time", "evolution");
+      if (evolution.compare("dynamic") != 0 && evolution.compare("kinematic") != 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles require time-evolving Hydro"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::string integrator = pin->GetOrAddString("time", "integrator", "rk2");
+      if (integrator.compare("rk2") != 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently require RK2"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      int random_seed = pin->GetOrAddInteger("particles", "random_seed", 0);
+      if (random_seed < 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "particles/random_seed must be non-negative"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      lmc_random_seed = static_cast<std::uint64_t>(random_seed);
+      pusher = ParticlesPusher::lagrangian_mc;
+      pmy_pack->phydro->EnableDensityFluxIntegral();
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher = '" << ppush << "' not recognized"
@@ -82,6 +137,12 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
         nidata = cosmic_ray::NINT;
         break;
       }
+    case ParticleType::lagrangian_mc:
+      {
+        nrdata = lagrangian_mc::NREAL;
+        nidata = lagrangian_mc::NINT;
+        break;
+      }
     default:
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle type has no storage definition" << std::endl;
@@ -91,6 +152,11 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
   auto status = Kokkos::subview(prtcl_idata, static_cast<int>(PSTATUS), Kokkos::ALL);
   Kokkos::deep_copy(status, static_cast<int>(PACTIVE));
+  if (particle_type == ParticleType::lagrangian_mc) {
+    auto last_move = Kokkos::subview(
+        prtcl_idata, static_cast<int>(lagrangian_mc::PLASTMOVE), Kokkos::ALL);
+    Kokkos::deep_copy(last_move, 0);
+  }
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);

@@ -23,6 +23,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
+#include "particles/lagrangian_mc.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 
@@ -201,6 +202,10 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           << "LOOKUP_TABLE default" << std::endl;
     } else if (n == static_cast<int>(PSTATUS)) {
       msg << std::endl << "SCALARS status float" << std::endl
+          << "LOOKUP_TABLE default" << std::endl;
+    } else if (pm->pmb_pack->ppart->particle_type == ParticleType::lagrangian_mc &&
+               n == static_cast<int>(particles::lagrangian_mc::PLASTMOVE)) {
+      msg << std::endl << "SCALARS last_move float" << std::endl
           << "LOOKUP_TABLE default" << std::endl;
     }
 

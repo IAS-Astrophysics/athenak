@@ -28,6 +28,9 @@ TaskStatus Particles::NewTimeStep(Driver*, int) {
     case ParticlesPusher::drift:
       model_dt = EstimateTimestepDrift();
       break;
+    case ParticlesPusher::lagrangian_mc:
+      // Lagrangian MC transport follows the fluid CFL limit.
+      break;
     default:
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher has no timestep implementation"
