@@ -27,6 +27,9 @@
 template<class LogPolicy>
 void PerformTests(Mesh* pmesh, ParameterInput *pin);
 
+template<class LogPolicy>
+void PerformNuEqTests(Mesh* pmesh, ParameterInput *pin);
+
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::EOSCompose()
 //! \brief Runs EOS compose unit tests
@@ -52,8 +55,10 @@ void ProblemGenerator::EOSCompose(ParameterInput *pin, const bool restart) {
 
   if (use_NQT) {
     PerformTests<Primitive::NQTLogs>(pmy_mesh_, pin);
+    PerformNuEqTests<Primitive::NQTLogs>(pmy_mesh_, pin);
   } else {
     PerformTests<Primitive::NormalLogs>(pmy_mesh_, pin);
+    PerformNuEqTests<Primitive::NormalLogs>(pmy_mesh_, pin);
   }
 
   std::cout << "Test Passed!\n";
@@ -249,6 +254,363 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
   global_success = global_success && pert_success;
 
   if (!global_success) {
+    std::cout << "The test was not successful...\n";
+    exit(EXIT_FAILURE);
+  }
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void PerformNuEqTests()
+//! \brief Tests the trapped weak-equilibrium solver through the public EOS interface.
+//!
+//!   A. Round trip. Given (n, T, Y_e), GetTrappedNeutrinos supplies the equilibrium
+//!      neutrino content, from which (Y_le, e) follow, so (T, Y_e) is by construction an
+//!      exact solution. GetBetaEquilibriumTrapped must recover it from a deliberately
+//!      poor initial guess -- which is where a line search that amplifies rather than
+//!      damps the Newton step shows up.
+//!   B. Inconsistent states. With Y_le pushed far out of reach of the given energy the
+//!      2D system has no solution, and the solver must still return a usable answer
+//!      rather than the unequilibrated guess: either a constrained solution on a table
+//!      edge or the energy-only fallback, which must leave Y_e untouched and satisfy the
+//!      energy equation.
+//!   C. Gradient step width. The Jacobian's temperature derivatives are secants of the
+//!      trilinear interpolant, so their smoothness is set by the step width: one table
+//!      cell is continuous in T, anything narrower returns the local cell slope and
+//!      jumps at every cell boundary. eta_e_gradient itself is private, so what is
+//!      measured here is the property of the two candidate widths that motivates it.
+//!
+//! Energies here are always in code units, since they come from GetEnergy and
+//! GetTrappedNeutrinos and go straight back into GetBetaEquilibriumTrapped. The
+//! temperature bounds, however, are documented as EOS units, so the test assumes the
+//! code temperature unit is also MeV -- true of both unit systems used with a table
+//! (nuclear and geometric_solar). Under any other choice the sampled states land outside
+//! the table and the test fails loudly rather than passing quietly.
+
+template<class LogPolicy>
+void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
+  MeshBlockPack *pmbp = pmesh->pmb_pack;
+
+  // Commit a crime against humanity to get access to the EOS
+  Primitive::EOS<Primitive::EOSCompOSE<LogPolicy>, Primitive::ResetFloor>& eos =
+    static_cast<
+      dyngr::DynGRMHDPS<
+        Primitive::EOSCompOSE<LogPolicy>,
+        Primitive::ResetFloor
+      >*
+    >(pmbp->pdyngr)->eos.ps.GetEOSMutable();
+
+  const Real nmin = eos.GetMinimumDensity();
+  const Real nmax = eos.GetMaximumDensity();
+  const Real Ymin = eos.GetMinimumSpeciesFraction(0);
+  const Real Ymax = eos.GetMaximumSpeciesFraction(0);
+  const Real Tmin = eos.GetMinimumTemperature();
+  const Real Tmax = eos.GetMaximumTemperature();
+
+  // Sample conditions where trapped neutrinos are a sensible description at all: a few
+  // times nuclear density downwards, several MeV upwards, and neutron rich. The high-Yq
+  // corner of a table is deliberately excluded -- matter that proton rich does not hold
+  // trapped neutrinos -- as are the table edges, where a constrained solution on the
+  // boundary is the correct answer rather than an interior one.
+  LogPolicy logs;
+  const Real ln_lo = logs.log2_((0.02 > nmin) ? 0.02 : 2.0*nmin);
+  const Real ln_hi = logs.log2_((0.4 < nmax) ? 0.4 : 0.5*nmax);
+  const Real lT_lo = logs.log2_((2.0 > Tmin) ? 2.0 : 2.0*Tmin);
+  const Real lT_hi = logs.log2_((40.0 < Tmax) ? 40.0 : 0.5*Tmax);
+  const Real Y_lo = (0.05 > Ymin) ? 0.05 : Ymin + 0.05*(Ymax - Ymin);
+  const Real Y_hi = (0.3 < Ymax) ? 0.3 : Ymax - 0.05*(Ymax - Ymin);
+
+  const int nn = 8;
+  const int nY = 8;
+  const int nT = 16;
+  const Real dln = (ln_hi - ln_lo)/(nn - 1);
+  const Real dY = (Y_hi - Y_lo)/(nY - 1);
+  const Real dlT = (lT_hi - lT_lo)/(nT - 1);
+  const int nstates = nn*nY*nT;
+
+  bool success = true;
+
+  // ------------------------------------------------------------------------------
+  // A. round trip on constructed exact equilibria
+  // ------------------------------------------------------------------------------
+  int n_fail = 0;
+  int n_not_interior = 0;
+  Real err_T_max = 0.0;
+  Real err_Y_max = 0.0;
+  Real res_max = 0.0;
+
+  Kokkos::parallel_reduce("nueq_roundtrip",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nstates),
+  KOKKOS_LAMBDA(const int &idx, int &nf, int &nni, Real &eT, Real &eY, Real &rmax) {
+    const int in = idx/(nY*nT);
+    const int iY = (idx - in*nY*nT)/nT;
+    const int iT = idx - in*nY*nT - iY*nT;
+
+    const Real n = logs.exp2_(ln_lo + in*dln);
+    const Real T = logs.exp2_(lT_lo + iT*dlT);
+    Real Y[MAX_SPECIES] = {0.0};
+    Y[0] = Y_lo + iY*dY;
+
+    // Build a state for which (T, Y[0]) is an exact weak equilibrium
+    Real n_nu[3], e_nu[3];
+    eos.GetTrappedNeutrinos(n, T, Y, n_nu, e_nu);
+    Real Yl[MAX_SPECIES] = {0.0};
+    Yl[0] = Y[0] + n_nu[0]/n;
+    const Real e_tot = eos.GetEnergy(n, T, Y) + e_nu[0] + e_nu[1] + e_nu[2];
+
+    // Start well away from the answer
+    Real T_guess = 1.4*T;
+    Real Y_guess[MAX_SPECIES] = {0.0};
+    Y_guess[0] = 0.7*Y[0];
+
+    Real T_eq = 0.0;
+    Real Y_eq[MAX_SPECIES] = {0.0};
+    int status = -1;
+    bool ok = eos.GetBetaEquilibriumTrapped(n, e_tot, Yl, T_eq, Y_eq,
+                                            T_guess, Y_guess, &status);
+
+    if (!ok) {
+      Kokkos::printf("GetBetaEquilibriumTrapped failed on an exact equilibrium:\n"
+                     "  n = %20.17g\n  T = %20.17g\n  Ye = %20.17g\n"
+                     "  status = %d\n", n, T, Y[0], status);
+      nf += 1;
+      return;
+    }
+
+    Real err_T = Kokkos::fabs(T_eq/T - 1.0);
+    Real err_Y = Kokkos::fabs(Y_eq[0] - Y[0]);
+    eT = (err_T > eT) ? err_T : eT;
+    eY = (err_Y > eY) ? err_Y : eY;
+    if (status != Primitive::EOSCompOSE<LogPolicy>::NUEQ_INTERIOR) {
+      nni += 1;
+    }
+
+    // What the solver actually promises is a small residual, not a small error in T:
+    // at low temperature the thermal part of the energy is a tiny fraction of the
+    // total, so a converged energy residual still leaves a much larger error in T.
+    // Rebuild the residual it converged on and check that instead.
+    Real n_nu_eq[3], e_nu_eq[3];
+    eos.GetTrappedNeutrinos(n, T_eq, Y_eq, n_nu_eq, e_nu_eq);
+    Real res = Kokkos::fabs((Y_eq[0] + n_nu_eq[0]/n - Yl[0])/Yl[0]) +
+               Kokkos::fabs((eos.GetEnergy(n, T_eq, Y_eq) + e_nu_eq[0] + e_nu_eq[1] +
+                             e_nu_eq[2])/e_tot - 1.0);
+    rmax = (res > rmax) ? res : rmax;
+  }, Kokkos::Sum<int>(n_fail), Kokkos::Sum<int>(n_not_interior),
+     Kokkos::Max<Real>(err_T_max), Kokkos::Max<Real>(err_Y_max),
+     Kokkos::Max<Real>(res_max));
+
+  // The solver's own convergence criterion is 1e-7 on this residual; allow a little
+  // room for the round trip through code units.
+  const Real tol_res = 1.0e-6;
+  // Loose bounds on the recovered state, to catch a converged but wrong root.
+  const Real tol_T = 1.0e-2;
+  const Real tol_Y = 1.0e-4;
+
+  std::cout << "Trapped weak equilibrium, " << nstates << " exact states:\n"
+            << "  failures                : " << n_fail << "\n"
+            << "  non-interior solutions  : " << n_not_interior << "\n"
+            << "  max residual            : " << res_max << "\n"
+            << "  max |T_eq/T - 1|        : " << err_T_max << "\n"
+            << "  max |Y_eq - Y_e|        : " << err_Y_max << "\n";
+
+  if (n_fail != 0 || n_not_interior != 0) {
+    success = false;
+  }
+  if (!(res_max < tol_res)) {
+    std::cout << "The solver returned points that do not satisfy its own convergence "
+              << "criterion (tolerance " << tol_res << ").\n";
+    success = false;
+  }
+  if (!(err_T_max < tol_T) || !(err_Y_max < tol_Y)) {
+    std::cout << "The recovered equilibrium is too far from the state it was built "
+              << "from (tolerances " << tol_T << " on T, " << tol_Y << " on Y_e).\n";
+    success = false;
+  }
+
+  // ------------------------------------------------------------------------------
+  // B. states for which no equilibrium exists
+  // ------------------------------------------------------------------------------
+  // Every one of these runs the restart ladder to exhaustion, so use a coarse subgrid
+  // rather than the full one.
+  const int nn_b = 2;
+  const int nY_b = 3;
+  const int nT_b = 4;
+  const int nbad = 4;
+  const int nstates_b = nn_b*nY_b*nT_b;
+  const Real dln_b = (ln_hi - ln_lo)/(nn_b - 1);
+  const Real dY_b = (Y_hi - Y_lo)/(nY_b - 1);
+  const Real dlT_b = (lT_hi - lT_lo)/(nT_b - 1);
+
+  int n_unusable = 0;
+  int n_constrained = 0;
+  int n_energy_only = 0;
+  int n_Ye_moved = 0;
+  Real res_e_max = 0.0;
+  Real res_guess_min = 1.0e30;
+  Real dT_max = 0.0;
+
+  Kokkos::parallel_reduce("nueq_inconsistent",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nstates_b*nbad),
+  KOKKOS_LAMBDA(const int &idx, int &nu, int &nc, int &neo, int &nym, Real &rmax,
+                Real &rgmin, Real &dTmax) {
+    const int ib = idx/nstates_b;
+    const int is = idx - ib*nstates_b;
+    const int in = is/(nY_b*nT_b);
+    const int iY = (is - in*nY_b*nT_b)/nT_b;
+    const int iT = is - in*nY_b*nT_b - iY*nT_b;
+
+    const Real n = logs.exp2_(ln_lo + in*dln_b);
+    const Real T = logs.exp2_(lT_lo + iT*dlT_b);
+    Real Y[MAX_SPECIES] = {0.0};
+    Y[0] = Y_lo + iY*dY_b;
+
+    // A matter state carrying three times the equilibrium neutrino energy, so that the
+    // guess (T, Y[0]) is *not* a solution of the energy equation either. This is the
+    // situation in the M1 solver: the guess is the current matter temperature and the
+    // energy includes whatever the radiation field actually holds.
+    Real n_nu[3], e_nu[3];
+    eos.GetTrappedNeutrinos(n, T, Y, n_nu, e_nu);
+    const Real e_mat = eos.GetEnergy(n, T, Y);
+    const Real e_tot = e_mat + 3.0*(e_nu[0] + e_nu[1] + e_nu[2]);
+
+    // Y_le far out of reach of this energy, in both directions
+    const Real Yl_bad[nbad] = {Y[0] + 1.0, Y[0] + 5.0, Y[0] - 1.0, Y[0] - 5.0};
+    Real Yl[MAX_SPECIES] = {0.0};
+    Yl[0] = Yl_bad[ib];
+
+    Real T_eq = 0.0;
+    Real Y_eq[MAX_SPECIES] = {0.0};
+    Real Y_guess[MAX_SPECIES] = {0.0};
+    Y_guess[0] = Y[0];
+    int status = -1;
+    bool ok = eos.GetBetaEquilibriumTrapped(n, e_tot, Yl, T_eq, Y_eq, T, Y_guess,
+                                            &status);
+
+    if (!ok) {
+      nu += 1;
+      return;
+    }
+
+    if (status == Primitive::EOSCompOSE<LogPolicy>::NUEQ_CONSTRAINED) {
+      nc += 1;
+    } else if (status == Primitive::EOSCompOSE<LogPolicy>::NUEQ_ENERGY_ONLY) {
+      neo += 1;
+      // the fallback must leave Y_e alone ...
+      if (Y_eq[0] != Y_guess[0]) {
+        nym += 1;
+      }
+      // ... and satisfy the energy equation it solved
+      Real n_nu_eq[3], e_nu_eq[3];
+      eos.GetTrappedNeutrinos(n, T_eq, Y_eq, n_nu_eq, e_nu_eq);
+      Real res = Kokkos::fabs((eos.GetEnergy(n, T_eq, Y_eq) + e_nu_eq[0] + e_nu_eq[1] +
+                               e_nu_eq[2])/e_tot - 1.0);
+      rmax = (res > rmax) ? res : rmax;
+
+      // For scale: the residual carried by the guess, which is what the solver used to
+      // return here, and how far the equilibrium temperature actually is from it. Note
+      // the residual can be small while the temperature shift is enormous -- the
+      // thermal part of the energy is a small fraction of the total -- and that its
+      // sign, hence the sign of the emissivity error, depends on whether the radiation
+      // field holds more or less energy than equilibrium would.
+      Real res_guess = Kokkos::fabs((e_mat + e_nu[0] + e_nu[1] + e_nu[2])/e_tot - 1.0);
+      rgmin = (res_guess < rgmin) ? res_guess : rgmin;
+      Real dT = Kokkos::fabs(T_eq/T - 1.0);
+      dTmax = (dT > dTmax) ? dT : dTmax;
+    }
+  }, Kokkos::Sum<int>(n_unusable), Kokkos::Sum<int>(n_constrained),
+     Kokkos::Sum<int>(n_energy_only), Kokkos::Sum<int>(n_Ye_moved),
+     Kokkos::Max<Real>(res_e_max), Kokkos::Min<Real>(res_guess_min),
+     Kokkos::Max<Real>(dT_max));
+
+  std::cout << "Inconsistent states, " << nstates_b*nbad << " with Y_le out of reach:\n"
+            << "  no usable answer        : " << n_unusable << "\n"
+            << "  constrained solutions   : " << n_constrained << "\n"
+            << "  energy-only fallbacks   : " << n_energy_only << "\n"
+            << "  solved anyway           : "
+            << nstates_b*nbad - n_unusable - n_constrained - n_energy_only << "\n"
+            << "  Y_e moved by fallback   : " << n_Ye_moved << "\n"
+            << "  max energy residual     : " << res_e_max << "\n"
+            << "  min residual at guess   : " << res_guess_min << "\n"
+            << "  max |T_eq/T_guess - 1|  : " << dT_max << "\n";
+
+  if (n_unusable != 0) {
+    std::cout << "Some inconsistent states returned no usable equilibrium at all; the "
+              << "1D energy-only fallback should have caught them.\n";
+    success = false;
+  }
+  if (n_Ye_moved != 0) {
+    std::cout << "The energy-only fallback changed Y_e, which it must not do.\n";
+    success = false;
+  }
+  if (n_energy_only == 0) {
+    std::cout << "No state exercised the energy-only fallback, so this test is not "
+              << "discriminating.\n";
+    success = false;
+  } else if (!(res_e_max < 1.0e-6)) {
+    std::cout << "The energy-only fallback does not satisfy the energy equation.\n";
+    success = false;
+  } else if (!(dT_max > 0.1)) {
+    // The point of the fallback is that the guess it replaces is nowhere near a
+    // solution. Judge that on the temperature, not on the residual: because the thermal
+    // part of the energy is a small fraction of the total, the guess can sit at a
+    // residual of 1e-6 while its temperature is out by an order of magnitude, and it is
+    // the temperature that sets the emissivity.
+    std::cout << "The energy-only fallback returned essentially the temperature it was "
+              << "given, so it is not being tested against anything.\n";
+    success = false;
+  }
+
+  // ------------------------------------------------------------------------------
+  // C. width of the Jacobian's temperature secant
+  // ------------------------------------------------------------------------------
+  const Real T_delta_narrow = 0.01;   // MeV: the width the solver used to use
+  const int nscan = 2000;
+  const Real n_scan = logs.exp2_(0.5*(ln_lo + ln_hi));
+  const Real Y_scan = 0.5*(Y_lo + Y_hi);
+  const Real dlT_scan = (lT_hi - lT_lo)/nscan;
+  auto log_T_grid = eos.GetRawLogTemperature();
+
+  Real jump_cell = 0.0;
+  Real jump_narrow = 0.0;
+
+  Kokkos::parallel_reduce("nueq_gradient",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nscan),
+  KOKKOS_LAMBDA(const int &i, Real &jc, Real &jn) {
+    Real Y[MAX_SPECIES] = {0.0};
+    Y[0] = Y_scan;
+
+    // half a table cell in log2(T)
+    const Real T_fac = logs.exp2_(0.5*(log_T_grid(1) - log_T_grid(0)));
+
+    Real cv_cell[2] = {0.0};
+    Real cv_narrow[2] = {0.0};
+    for (int s = 0; s < 2; ++s) {
+      const Real T = logs.exp2_(lT_lo + (i + s)*dlT_scan);
+      cv_cell[s] = (eos.GetEnergy(n_scan, T*T_fac, Y) -
+                    eos.GetEnergy(n_scan, T/T_fac, Y))/(T*T_fac - T/T_fac);
+      cv_narrow[s] = (eos.GetEnergy(n_scan, T + T_delta_narrow, Y) -
+                      eos.GetEnergy(n_scan, T - T_delta_narrow, Y))/(2.0*T_delta_narrow);
+    }
+
+    Real dc = Kokkos::fabs(cv_cell[1]/cv_cell[0] - 1.0);
+    Real dn = Kokkos::fabs(cv_narrow[1]/cv_narrow[0] - 1.0);
+    jc = (dc > jc) ? dc : jc;
+    jn = (dn > jn) ? dn : jn;
+  }, Kokkos::Max<Real>(jump_cell), Kokkos::Max<Real>(jump_narrow));
+
+  std::cout << "de_dT secant, T scan at n = " << n_scan << ", Y_e = " << Y_scan << ":\n"
+            << "  max relative jump, one table cell : " << jump_cell << "\n"
+            << "  max relative jump, 0.01 MeV step  : " << jump_narrow << "\n";
+
+  if (!(jump_cell < 0.1*jump_narrow)) {
+    std::cout << "A cell-wide secant is not much smoother in T than a sub-cell one, so "
+              << "the premise of the eta_e_gradient step width does not hold for this "
+              << "table.\n";
+    success = false;
+  }
+
+  if (!success) {
     std::cout << "The test was not successful...\n";
     exit(EXIT_FAILURE);
   }
