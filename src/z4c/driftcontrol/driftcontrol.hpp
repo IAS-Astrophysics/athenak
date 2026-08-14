@@ -65,6 +65,7 @@ class DriftControl {
 
  private:
   Mesh const *pmesh;
+  ParameterInput *pin;
   Variety dc_variety;
   int dc_tracker_index;
   Real dc_fixed[3];

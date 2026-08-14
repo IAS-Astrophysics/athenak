@@ -315,7 +315,7 @@ class AthenaPointTensor<T, sym, ndim, 1> {
   }
 
  private:
-  Real data_[4];
+  Real data_[ndim];
 };
 
 //----------------------------------------------------------------------------------------
