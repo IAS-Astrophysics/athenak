@@ -90,20 +90,27 @@ class EOSHelmholtz : public EOSPolicyInterface {
     return TemperatureFromEps(n, e/(mb*n) - 1.0, Y);
   }
 
-  KOKKOS_INLINE_FUNCTION Real TemperatureFromEps(Real n, Real eps, Real *Y) const {
+  //! Temperature from specific internal energy. guess_it, when given,
+  //! warm-starts the bracket hunt with the table index found by a previous
+  //! call (the c2p iteration hot path).
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromEps(Real n, Real eps, Real *Y,
+                                                 int *guess_it = nullptr) const {
+    // Lazy bounds: floor-clamped states (the atmosphere) hit the min early-out
+    // and never pay for the max bound.
     Real eps_min = MinimumInternalEnergy(n, Y);
+    if (eps <= eps_min) { return min_T; }
     Real eps_max = MaximumInternalEnergy(n, Y);
-    return (eps <= eps_min) ? min_T
-         : (eps >= eps_max) ? max_T
-                            : temperature_from_var(ECLOGEPS, Kokkos::log(eps), n, Y);
+    if (eps >= eps_max) { return max_T; }
+    return temperature_from_var(ECLOGEPS, Kokkos::log(eps), n, Y, guess_it);
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
+    // Lazy bounds, as in TemperatureFromEps.
     Real p_min = MinimumPressure(n, Y);
+    if (p <= p_min) { return min_T; }
     Real p_max = MaximumPressure(n, Y);
-    return (p <= p_min) ? min_T
-         : (p >= p_max) ? max_T
-                        : temperature_from_var(ECLOGP, Kokkos::log(p), n, Y);
+    if (p >= p_max) { return max_T; }
+    return temperature_from_var(ECLOGP, Kokkos::log(p), n, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromEntropy(Real n, Real s, Real *Y) const {
@@ -319,7 +326,8 @@ class EOSHelmholtz : public EOSPolicyInterface {
   /// bracketing failure. The analytic terms make f nonlinear in log T inside a
   /// cell, so refine with a false-position (Anderson-Bjorck) iteration.
   KOKKOS_INLINE_FUNCTION Real temperature_from_var(int iv, Real var, Real n,
-                                                   const Real *Y) const {
+                                                   const Real *Y,
+                                                   int *guess_it = nullptr) const {
     int in;
     Real wn0, wn1;
     weight_idx_ln(&wn0, &wn1, &in, Kokkos::log(n*Y[SCYE]));
@@ -332,14 +340,44 @@ class EOSHelmholtz : public EOSPolicyInterface {
 
     int ilo = 0;
     int ihi = m_nt - 1;
-    Real flo = f(ilo);
-    Real fhi = f(ihi);
-    while (flo*fhi > 0) {
-      if (ilo == ihi - 1) {
-        break;
-      } else {
-        ilo += 1;
-        flo = f(ilo);
+    Real flo, fhi;
+    bool bracketed = false;
+
+    // Hunt locally around the warm-start index first. f = var - var_pt is
+    // monotone in it for these channels, so f < 0 puts the root to the left.
+    // A miss (stale index, or one left behind by another call) fails the sign
+    // check and falls through to the full search below, so any int is safe.
+    if (guess_it != nullptr && *guess_it >= 0 && *guess_it < m_nt - 1) {
+      int itg = *guess_it;
+      Real fl = f(itg);
+      Real fh = f(itg + 1);
+      if (fl*fh <= 0) {
+        ilo = itg; ihi = itg + 1; flo = fl; fhi = fh; bracketed = true;
+      } else if (fl < 0 && itg > 0) {              // try shifting left
+        Real fl_minus = f(itg - 1);
+        if (fl_minus*fl <= 0) {
+          ilo = itg - 1; ihi = itg; flo = fl_minus; fhi = fl; bracketed = true;
+        }
+      } else if (fh > 0 && itg + 2 < m_nt) {       // try shifting right
+        Real fh_plus = f(itg + 2);
+        if (fh*fh_plus <= 0) {
+          ilo = itg + 1; ihi = itg + 2; flo = fh; fhi = fh_plus; bracketed = true;
+        }
+      }
+    }
+
+    if (!bracketed) {
+      ilo = 0;
+      ihi = m_nt - 1;
+      flo = f(ilo);
+      fhi = f(ihi);
+      while (flo*fhi > 0) {
+        if (ilo == ihi - 1) {
+          break;
+        } else {
+          ilo += 1;
+          flo = f(ilo);
+        }
       }
     }
     if (flo*fhi > 0) {
@@ -356,6 +394,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
         flo = fp;
       }
     }
+    if (guess_it != nullptr) { *guess_it = ilo; }
     Real lthi = m_log_t(ihi);
     Real ltlo = m_log_t(ilo);
     if (flo == 0) { return Kokkos::exp(ltlo); }

@@ -89,7 +89,8 @@ class PrimitiveSolver {
    public:
     KOKKOS_INLINE_FUNCTION
     Real operator()(Real mu, Real D, Real q, Real bsq, Real rsq, Real rbsq, Real *Y,
-        const EOS<EOSPolicy, ErrorPolicy> * peos, Real* n, Real* T, Real* P) const {
+        const EOS<EOSPolicy, ErrorPolicy> * peos, Real* n, Real* T, Real* P,
+        int* t_guess) const {
       // We need to get some utility quantities first.
       const Real x = 1.0/(1.0 + mu*bsq);
       const Real xsq = x*x;
@@ -130,7 +131,7 @@ class PrimitiveSolver {
 
       // Now we can get an estimate of the temperature, and from that, the pressure and
       // enthalpy.
-      Real That = peos->GetTemperatureFromE(nhat, ehat, Y);
+      Real That = peos->GetTemperatureFromE(nhat, ehat, Y, t_guess);
       peos->ApplyTemperatureLimits(That);
       ehat = peos->GetEnergy(nhat, That, Y);
       Real Phat = peos->GetPressure(nhat, That, Y);
@@ -524,10 +525,15 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   }
 
 
-  // Do the root solve.
+  // Do the root solve. t_guess warm-starts the EOS's temperature-bracket
+  // search across the iterations of this one cell's root find; it is a local
+  // (not a member of the solver, which is shared across threads) so the reuse
+  // is thread-private by construction.
   Real n, P, T, mu;
+  int t_guess = -1;
   bool result = root.FalsePosition(RootFunction, mul, muh, mu, tol,
-                                   D, q, bsqr, rsqr, rbsqr, Y, &eos, &n, &T, &P);
+                                   D, q, bsqr, rsqr, rbsqr, Y, &eos, &n, &T, &P,
+                                   &t_guess);
   // WARNING: the reported number of iterations is not thread-safe and should only be
   // trusted on single-thread benchmarks.
   solver_result.iterations = root.iterations;

@@ -159,6 +159,28 @@ class EOS : public EOSPolicy, public ErrorPolicy {
            eos_units.TemperatureConversion(code_units);
   }
 
+  //! \fn Real GetTemperatureFromE(Real n, Real e, Real *Y, int *guess_it)
+  //  \brief As above, but warm-starting the table-inversion bracket with the
+  //         index a previous call left in *guess_it. Only the transition EOS
+  //         consumes it; every other policy ignores the hint, so the caller
+  //         needs no knowledge of the policy.
+  //
+  //  \param[in]     n         The number density
+  //  \param[in]     e         The energy density
+  //  \param[in]     Y         Particle fractions, of size n_species
+  //  \param[in,out] guess_it  Table index hint; pass a caller-local int
+  //                           initialized to -1 and reuse it across iterations.
+  KOKKOS_INLINE_FUNCTION Real GetTemperatureFromE(Real n, Real e, Real *Y,
+                                                  int *guess_it) const {
+    if constexpr (supports_transition) {
+      return TemperatureFromE(n, e*code_units.PressureConversion(eos_units), Y,
+                              guess_it) *
+             eos_units.TemperatureConversion(code_units);
+    } else {
+      return GetTemperatureFromE(n, e, Y);
+    }
+  }
+
   //! \fn Real GetTemperatureFromP(Real n, Real p, Real *Y)
   //  \brief Calculate the temperature from number density, pressure, and
   //         particle fractions.
@@ -278,7 +300,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return std::numeric_limits<Real>::quiet_NaN();
    }
   }
-  
+
     //! \fn Real GetChargeChemicalPotential(Real n, Real T, Real *Y)
   //  \brief Get the charge chemical potential from the number density, temperature,
   //         and particle fractions.
@@ -295,7 +317,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return std::numeric_limits<Real>::quiet_NaN();
    }
   }
-  
+
     //! \fn Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y)
   //  \brief Get the electron-lepton chemical potential from the number density, temperature,
   //         and particle fractions.
@@ -345,7 +367,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     }
   }
 
-    //! \fn Real GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) 
+    //! \fn Real GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess)
   // \brief Get the equilibrium temperature and species fractions from the energy and total lepton fractions
   //
   //  \param[in]    n       The number density
@@ -359,18 +381,18 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
    if constexpr (supports_potentials) {
     int ierr = EOSPolicy::BetaEquilibriumTrapped(n, e*code_units.PressureConversion(eos_units), Yl,
-                                      T_eq, Y_eq, 
+                                      T_eq, Y_eq,
                                       T_guess*code_units.TemperatureConversion(eos_units), Y_guess);
 
     T_eq = T_eq*eos_units.TemperatureConversion(code_units);
-    
+
     return ierr==0;
    } else {
     return false;
    }
   }
 
-    //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) 
+    //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3])
   // \brief Get the trapped neutrino net number and energy densities.
   //
   //  \param[in]    n    The number density

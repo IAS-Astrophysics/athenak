@@ -138,24 +138,43 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   }
 
   //--------------------------------------------------------------------------
+  // Hot-path composition guard, used by the public accessors in place of
+  // SanitizeMassFractions. Live cells pass their advected mass fractions
+  // through untouched: the clamp, the normalization and the charge remap are
+  // no-ops on every cell whose EOS output survives, while the accessors run
+  // O(100) times per zone-cycle inside the c2p root find. Only a degenerate
+  // Xsum <= 0, i.e. a floor-overwritten cell is repaired.
+  //--------------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION Real *GuardMassFractions(const Real *Y, Real *Y_fb) const {
+    if (Y[SCXN] + Y[SCXP] + Y[SCXA] + Y[SCXH] > 0.0) {
+      return const_cast<Real *>(Y);
+    }
+    for (int i = 0; i < SCNVAR; ++i) {
+      Y_fb[i] = Y[i];
+    }
+    Y_fb[SCYE] = 0.5;
+    Y_fb[SCXN] = 0.5;
+    Y_fb[SCXP] = 0.5;
+    Y_fb[SCXA] = 0.0;
+    Y_fb[SCXH] = 0.0;
+    return Y_fb;
+  }
+
+  //--------------------------------------------------------------------------
   // Thermodynamic quantities (blended).
   //--------------------------------------------------------------------------
   KOKKOS_INLINE_FUNCTION Real Pressure(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.Pressure(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
-    Real w = TransitionFactor(n, T);
-    if (w == 1.0) { return compose_eos.Pressure(n, T, Yn); }
-    if (w == 0.0) { return helmholtz_eos.Pressure(n, T, Yn); }
-    return helmholtz_eos.Pressure(n, T, Yn)*(1 - w) + compose_eos.Pressure(n, T, Yn)*w;
+    Real Y_fb[SCNVAR];
+    return PressureSanitized(n, T, GuardMassFractions(Y, Y_fb));
   }
 
   KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.Entropy(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.Entropy(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.Entropy(n, T, Yn); }
@@ -166,13 +185,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
                                                      const Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.SpecificInternalEnergy(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
-    Real w = TransitionFactor(n, T);
-    if (w == 1.0) { return compose_eos.SpecificInternalEnergy(n, T, Yn); }
-    if (w == 0.0) { return helmholtz_eos.SpecificInternalEnergy(n, T, Yn); }
-    return helmholtz_eos.SpecificInternalEnergy(n, T, Yn)*(1 - w) +
-           compose_eos.SpecificInternalEnergy(n, T, Yn)*w;
+    Real Y_fb[SCNVAR];
+    return SpecificInternalEnergySanitized(n, T, GuardMassFractions(Y, Y_fb));
   }
 
   KOKKOS_INLINE_FUNCTION Real Energy(Real n, Real T, const Real *Y) const {
@@ -186,8 +200,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   KOKKOS_INLINE_FUNCTION Real SoundSpeed(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.SoundSpeed(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.SoundSpeed(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.SoundSpeed(n, T, Yn); }
@@ -198,8 +212,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.BaryonChemicalPotential(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.BaryonChemicalPotential(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.BaryonChemicalPotential(n, T, Yn); }
@@ -210,8 +224,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   KOKKOS_INLINE_FUNCTION Real ChargeChemicalPotential(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.ChargeChemicalPotential(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.ChargeChemicalPotential(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.ChargeChemicalPotential(n, T, Yn); }
@@ -225,8 +239,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) {
       return compose_eos.ElectronLeptonChemicalPotential(n, T, &yq);
     }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.ElectronLeptonChemicalPotential(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.ElectronLeptonChemicalPotential(n, T, Yn); }
@@ -242,8 +256,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   KOKKOS_INLINE_FUNCTION Real ProtonFraction(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.ProtonFraction(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.ProtonFraction(n, T, Yn); }
     if (w == 0.0) { return Yn[SCXP]; }
@@ -253,8 +267,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   KOKKOS_INLINE_FUNCTION Real NeutronFraction(Real n, Real T, Real *Y) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.NeutronFraction(n, T, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+    Real Y_fb[SCNVAR];
+    Real *Yn = GuardMassFractions(Y, Y_fb);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.NeutronFraction(n, T, Yn); }
     if (w == 0.0) { return Yn[SCXN]; }
@@ -264,26 +278,89 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   //--------------------------------------------------------------------------
   // Temperature inversions.
   //--------------------------------------------------------------------------
-  KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
+  //! guess_it, when given, warm-starts the Helmholtz-branch temperature
+  //! bracket across c2p iterations. It is validated inside
+  //! EOSHelmholtz::temperature_from_var, so a stale index (or one written
+  //! while the iterate was on the other side of the cutoff) is harmless.
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y,
+                                               int *guess_it = nullptr) const {
     if (n > m_helm_n_max) { return compose_eos.TemperatureFromE(n, e, Y); }
-    return TemperatureFromEps(n, e/(mb*n) - 1.0, Y);
+    return TemperatureFromEps(n, e/(mb*n) - 1.0, Y, guess_it);
   }
 
-  KOKKOS_INLINE_FUNCTION Real TemperatureFromEps(Real n, Real eps, Real *Y) const {
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromEps(Real n, Real eps, Real *Y,
+                                                 int *guess_it = nullptr) const {
     Real yq;
     if (InteriorYq(n, Y, yq)) { return compose_eos.TemperatureFromEps(n, eps, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
-    if (n < compose_eos.min_n) { return helmholtz_eos.TemperatureFromEps(n, eps, Yn); }
-    Real eps_min = MinimumSpecificInternalEnergy(n, Yn);
-    Real eps_max = MaximumSpecificInternalEnergy(n, Yn);
+    Real Y_fb[SCNVAR];
+    return TemperatureFromEpsSanitized(n, eps, GuardMassFractions(Y, Y_fb), guess_it);
+  }
+
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
+    Real yq;
+    if (InteriorYq(n, Y, yq)) { return compose_eos.TemperatureFromP(n, p, &yq); }
+    Real Y_fb[SCNVAR];
+    return TemperatureFromPSanitized(n, p, GuardMassFractions(Y, Y_fb));
+  }
+
+  //--------------------------------------------------------------------------
+  // Internal variants that assume Y_norm has already been through
+  // GuardMassFractions. The public accessors guard exactly once and route
+  // here; nested calls (the bounds inside the temperature inversions) reuse
+  // that composition instead of re-deriving it at every level. (The
+  // `Sanitized` suffix is GR-Athena++'s and predates the guard, which
+  // replaced the full sanitize on this path -- kept for greppability.)
+  //--------------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION Real PressureSanitized(Real n, Real T, Real *Yn) const {
+    Real w = TransitionFactor(n, T);
+    if (w == 1.0) { return compose_eos.Pressure(n, T, Yn); }
+    if (w == 0.0) { return helmholtz_eos.Pressure(n, T, Yn); }
+    return helmholtz_eos.Pressure(n, T, Yn)*(1 - w) + compose_eos.Pressure(n, T, Yn)*w;
+  }
+
+  KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergySanitized(Real n, Real T,
+                                                              Real *Yn) const {
+    Real w = TransitionFactor(n, T);
+    if (w == 1.0) { return compose_eos.SpecificInternalEnergy(n, T, Yn); }
+    if (w == 0.0) { return helmholtz_eos.SpecificInternalEnergy(n, T, Yn); }
+    return helmholtz_eos.SpecificInternalEnergy(n, T, Yn)*(1 - w) +
+           compose_eos.SpecificInternalEnergy(n, T, Yn)*w;
+  }
+
+  KOKKOS_INLINE_FUNCTION Real MinimumPressureSanitized(Real n, Real *Yn) const {
+    return PressureSanitized(n, (Kokkos::log(n) >= m_ln_n_h0) ? compose_eos.min_T
+                                                              : min_T, Yn);
+  }
+  KOKKOS_INLINE_FUNCTION Real MaximumPressureSanitized(Real n, Real *Yn) const {
+    return PressureSanitized(n, max_T, Yn);
+  }
+  KOKKOS_INLINE_FUNCTION Real MinimumSpecificInternalEnergySanitized(Real n,
+                                                                     Real *Yn) const {
+    return SpecificInternalEnergySanitized(
+        n, (Kokkos::log(n) >= m_ln_n_h0) ? compose_eos.min_T : min_T, Yn);
+  }
+  KOKKOS_INLINE_FUNCTION Real MaximumSpecificInternalEnergySanitized(Real n,
+                                                                     Real *Yn) const {
+    return SpecificInternalEnergySanitized(n, max_T, Yn);
+  }
+
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromEpsSanitized(Real n, Real eps,
+                                                          Real *Yn,
+                                                          int *guess_it = nullptr) const {
+    if (n < compose_eos.min_n) {
+      return helmholtz_eos.TemperatureFromEps(n, eps, Yn, guess_it);
+    }
+    // Bounds are evaluated lazily: floor-clamped states (the atmosphere) hit
+    // the eps_min early-out, so the max bound is only computed when needed.
+    Real eps_min = MinimumSpecificInternalEnergySanitized(n, Yn);
     if (eps <= eps_min) {
       return (Kokkos::log(n) >= m_ln_n_h0) ? compose_eos.min_T : min_T;
     }
+    Real eps_max = MaximumSpecificInternalEnergySanitized(n, Yn);
     if (eps >= eps_max) { return max_T; }
 
     if (Kokkos::log(n) < m_ln_n_h0) {
-      Real T_h = helmholtz_eos.TemperatureFromEps(n, eps, Yn);
+      Real T_h = helmholtz_eos.TemperatureFromEps(n, eps, Yn, guess_it);
       if (TransitionFactor(n, T_h) == 0.0) { return T_h; }
     }
     Real T_b = temperature_from_var_trans(EOSCompOSE<LogPolicy>::ECLOGE,
@@ -293,17 +370,15 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     return T_c;
   }
 
-  KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
-    Real yq;
-    if (InteriorYq(n, Y, yq)) { return compose_eos.TemperatureFromP(n, p, &yq); }
-    Real Yn[SCNVAR];
-    SanitizeMassFractions(Y, Yn);
+  KOKKOS_INLINE_FUNCTION Real TemperatureFromPSanitized(Real n, Real p,
+                                                        Real *Yn) const {
     if (n < compose_eos.min_n) { return helmholtz_eos.TemperatureFromP(n, p, Yn); }
-    Real p_min = MinimumPressure(n, Yn);
-    Real p_max = MaximumPressure(n, Yn);
+    // Lazy bounds, as in TemperatureFromEpsSanitized.
+    Real p_min = MinimumPressureSanitized(n, Yn);
     if (p <= p_min) {
       return (Kokkos::log(n) >= m_ln_n_h0) ? compose_eos.min_T : min_T;
     }
+    Real p_max = MaximumPressureSanitized(n, Yn);
     if (p >= p_max) { return max_T; }
 
     if (Kokkos::log(n) < m_ln_n_h0) {
