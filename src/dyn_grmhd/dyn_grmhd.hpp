@@ -104,6 +104,11 @@ class DynGRMHD {
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
 
+  // Fill dv(m, i_dv+{0,1,2}, k, j, i) with the baryon, charge and
+  // electron-lepton chemical potentials in code units, evaluated from the
+  // current w0 and temperature.
+  virtual void ChemicalPotentials(DvceArray5D<Real> &dv, int i_dv) = 0;
+
   // Rescale the mass-fraction species in u0 so that they sum to u0(IDN) exactly.
   void EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu, int jl, int ju,
                          int kl, int ku);
@@ -166,6 +171,8 @@ class DynGRMHDPS : public DynGRMHD {
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost);
+
+  virtual void ChemicalPotentials(DvceArray5D<Real> &dv, int i_dv);
 
   template<int NGHOST>
   void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,

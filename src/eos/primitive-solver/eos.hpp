@@ -424,6 +424,24 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     }
   }
 
+  //! \fn Real GetMassExcessPerYe()
+  //  \brief d(E_B)/d(Ye) for the free-nucleon transfer that mirrors a
+  //         charged-current change in Ye (dXn = -dYe, dXp = +dYe).
+  //
+  //  Only meaningful for an EOS that carries the composition's mass excess in
+  //  an advected scalar, i.e. the transition EOS: there the mass per baryon is
+  //  mb*(1 + E_B), so converting neutrons into (atomic) hydrogen changes it by
+  //  mp + me - mn per unit Ye. For every other policy the Q-value is implicit in
+  //  e(n, T, Ye) and the c2p supplies it, so this is identically zero and the
+  //  caller's mirror is a no-op.
+  KOKKOS_INLINE_FUNCTION Real GetMassExcessPerYe() const {
+    if constexpr (supports_transition) {
+      return EOSPolicy::GetNeutronProtonMassExcess();
+    } else {
+      return 0.0;
+    }
+  }
+
   //! \fn int GetNSpecies() const
   //  \brief Get the number of particle species in this EOS.
   KOKKOS_INLINE_FUNCTION int GetNSpecies() const {

@@ -187,6 +187,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if ((ivar==176) && (pm->pmb_pack->pdyngr == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of mhd_mu requested in <output> block '"
+       << out_params.block_name << "' but DynGRMHD object not constructed."
+       << std::endl << "Chemical potentials come from the dynamical-GR EOS policy."
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
   if ((ivar==175) && (pm->pmb_pack->prhine == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of rhine_aux requested in <output> block '"
@@ -517,6 +525,18 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         ((variable.compare("mhd_w") == 0 ||
           variable.compare("mhd_w_bcc") == 0) && pm->pmb_pack->pdyngr !=nullptr)) {
       outvars.emplace_back("temperature",0,&(pm->pmb_pack->pdyngr->temperature));
+    }
+
+    // DynGRMHD chemical potentials (code units). mu_n = mu_b, mu_p = mu_b + mu_q
+    // and mu_e = mu_le - mu_q are what the weak rates consume, so these three
+    // make the compose and transition halves of a blended EOS comparable.
+    if (variable.compare("mhd_mu") == 0) {
+      out_params.contains_derived = true;
+      out_params.n_derived += 3;
+      int i_derived = out_params.n_derived - 3;
+      outvars.emplace_back("mu_b", i_derived + 0, &(derived_var));
+      outvars.emplace_back("mu_q", i_derived + 1, &(derived_var));
+      outvars.emplace_back("mu_le", i_derived + 2, &(derived_var));
     }
 
     // hydro/mhd z-component of vorticity (useful in 2D)

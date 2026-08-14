@@ -47,13 +47,17 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     // @TODO phydro are only partially implemented
     exit(EXIT_FAILURE);
   }
-  
+
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
   params.matter_sources = pin->GetOrAddBoolean("radiation_m1", "matter_sources", true);
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", true);
   params.backreact_tmunu = pin->GetOrAddBoolean("radiation_m1", "backreact_tmunu", true);
+  // Carry the charged-current Ye back-reaction into the advected composition
+  // (dXn = -dYe, dXp = +dYe) and its mass excess (E_B).
+  params.mirror_composition =
+      pin->GetOrAddBoolean("radiation_m1", "mirror_composition", true);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
@@ -73,7 +77,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
-  
+
   // set closure (default: minerbo)
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {

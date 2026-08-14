@@ -6,6 +6,8 @@
 //! \file radiation_m1_update.cpp
 //! \brief beam time update for grey M1
 
+#include <type_traits>
+
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
@@ -115,13 +117,28 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
   auto &HybridsjFunc_ = pmy_pack->pradm1->HybridsjFunc;
 
   Real mb{};
+  // Charged-current mirror (see below): number of MHD scalars, and the mass
+  // excess the n <-> p transfer moves per unit Ye. Zero unless the EOS carries
+  // the composition's mass excess in an advected scalar.
+  int nscal_ = 0;
+  Real dEB_dYe = 0.0;
   if (ismhd || ishydro) {
     Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
         static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(
             pmy_pack->pdyngr)
             ->eos.ps.GetEOSMutable();
     mb = eos.GetBaryonMass();
+    dEB_dYe = eos.GetMassExcessPerYe();
   }
+  if (ismhd) {
+    nscal_ = pmy_pack->pmhd->nscalars;
+  }
+  // Compile-time: only an EOS with an out-of-NSE half advects the composition,
+  // and only there do SCXN/SCXP/SCEB mean what the mirror assumes.
+  constexpr bool mirror_composition =
+      std::is_base_of_v<SupportsTransition, EOSPolicy>;
+  const bool do_mirror = mirror_composition && (nscal_ >= SCNVAR) &&
+                         pmy_pack->pradm1->params.mirror_composition;
 
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
@@ -272,7 +289,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
         // [E] Compute contribution from flux and geometric sources
         Real rEFN[M1_TOTAL_NUM_SPECIES][5];
-        Real DDxp[M1_TOTAL_NUM_SPECIES];
+        Real DDxp[M1_TOTAL_NUM_SPECIES]{};
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           // [E.1: Contribution from fluxes]
           for (int var = 0; var < nvars_; ++var) {
@@ -608,6 +625,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         }  // if (params_.matter_sources)
 
         // [H] Update fields
+        Real dDYe_tot = 0.0;   // summed over species, for the mirror below
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           Real Ef = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
                     beta_dt * rEFN[nuidx][M1_E_IDX] +
@@ -644,8 +662,49 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];
             umhd0_(m, IM3, k, j, i) -= theta * DrEFN[nuidx][M1_FZ_IDX];
             if (nspecies_ > 1) {
-              umhd0_(m, IYF, k, j, i) += theta * DDxp[nuidx];
+              const Real dDYe = theta * DDxp[nuidx];
+              umhd0_(m, IYF, k, j, i) += dDYe;
+              dDYe_tot += dDYe;
             }
+          }
+        }
+
+        // Mirror the charged-current Ye change into the advected composition.
+        //
+        // Captures convert free neutrons <-> protons, so the mass fractions
+        // must follow Ye where matter is out of NSE; in NSE the RHINE resync
+        // overwrites them, so no gating on the transition weight is needed.
+        //
+        // E_B is the composition's mass excess per baryon in units of mb
+        // (mbar = mb*(1 + E_B)). Out of NSE nothing else in the energy depends
+        // on it, so without this term the c2p turns the reaction's Q-value
+        // straight into temperature. An electron capture (dYe < 0) raises
+        // E_B and cools.
+        if (do_mirror && params_.backreact && stage == 2 && ismhd_ &&
+            nspecies_ > 1 && dDYe_tot != 0.0) {
+          umhd0_(m, IYF + SCXN, k, j, i) -= dDYe_tot;
+          umhd0_(m, IYF + SCXP, k, j, i) += dDYe_tot;
+          umhd0_(m, IYF + SCEB, k, j, i) += dEB_dYe * dDYe_tot;
+
+          // The transfer itself conserves sum(X) exactly, but it can drive Xn
+          // or Xp negative in matter that has almost none of one of them --
+          // and ApplySpeciesLimits would then clamp at zero *without*
+          // compensating, which is what actually breaks sum(X) = 1. Move any
+          // deficit onto the largest species instead.
+          const int sp[4] = {IYF + SCXN, IYF + SCXP, IYF + SCXA, IYF + SCXH};
+          Real Xs[4];
+          int lmax = 0;
+          bool neg = false;
+          for (int l = 0; l < 4; ++l) {
+            Xs[l] = umhd0_(m, sp[l], k, j, i);
+            if (Xs[l] < 0.0) { neg = true; }
+            if (Xs[l] > Xs[lmax]) { lmax = l; }
+          }
+          if (neg) {
+            for (int l = 0; l < 4; ++l) {
+              if (Xs[l] < 0.0) { Xs[lmax] += Xs[l]; Xs[l] = 0.0; }
+            }
+            for (int l = 0; l < 4; ++l) { umhd0_(m, sp[l], k, j, i) = Xs[l]; }
           }
         }
       });

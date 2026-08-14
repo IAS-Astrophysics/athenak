@@ -376,6 +376,30 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   //! Raw baryon mass in EOS (nuclear, MeV) units, for per-baryon energetics.
   KOKKOS_INLINE_FUNCTION Real GetBaryonMassMeV() const { return mb; }
 
+  //! Physical nucleon masses [MeV] as carried by the compose table. Names
+  //! follow EOSCompOSE so that table-aware consumers work against either
+  //! policy unchanged.
+  KOKKOS_INLINE_FUNCTION Real GetTableNeutronMass() const {
+    return compose_eos.GetTableNeutronMass();
+  }
+  KOKKOS_INLINE_FUNCTION Real GetTableProtonMass() const {
+    return compose_eos.GetTableProtonMass();
+  }
+
+  //! \brief Mass per baryon transferred by n <-> p, in units of mb.
+  //!
+  //! The advected E_B is the mass-excess per baryon, mbar = mb*(1 + E_B), and
+  //! GetNSEBindingEnergy builds mbar from ATOMIC masses (1H = mp + me, alpha =
+  //! (ma + 2me)/4, atomic 56Fe) -- consistent because charge neutrality gives
+  //! exactly Ye electrons per baryon, and because the Helmholtz electron
+  //! channel carries no rest mass (its eps -> 1.5T as T -> 0). Converting one
+  //! neutron into one atomic hydrogen therefore changes mbar by
+  //! mp + me - mn = -0.782 MeV, so a mirror that moves dYe from Xn into Xp
+  //! must add dYe times this number to E_B. Negative by construction.
+  KOKKOS_INLINE_FUNCTION Real GetNeutronProtonMassExcess() const {
+    return (helmholtz_eos.mp + me - helmholtz_eos.mn)/mb;
+  }
+
   //--------------------------------------------------------------------------
   // Composition accessors (NSE composition where w==1, advected otherwise).
   //--------------------------------------------------------------------------
@@ -428,7 +452,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
               ? (Y_NSE[SCYE] - Y_NSE[SCXP] - Y_NSE[SCXA]/2)/Y_NSE[SCXH]*Y_NSE[SCAH]
               : 0.0;
     Real Ah = Y_NSE[SCAH];
-    Real const mH   = mp + me;
+    Real const mn   = helmholtz_eos.mn;
+    Real const mH   = helmholtz_eos.mp + me;  // atomic 1H
     Real const yq_h = (Ah > 0) ? Zh/Ah : 0.5;
     Real min_EB = (Y_NSE[SCXN]*mn + Y_NSE[SCXP]*mH + Y_NSE[SCXA]*(ma + 2*me)/4 +
                    Y_NSE[SCXH]*mFe/56.0)/mb - 1;
@@ -467,7 +492,19 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   }
 
  private:
+  /// Set the baryon mass.
   void SetBaryonMass(Real new_mb);
+
+  /// Adopt the nucleon masses carried by the compose table.
+  ///
+  /// The table energies and chemical potentials were built with the table's
+  /// own mn, mp, so the Helmholtz half of the blend must use the same pair,
+  /// otherwise mu_q = mu_p - mu_n (which carries mp - mn explicitly) has a
+  /// different zero point on either side of the transition ramp. The table
+  /// wins; a deviation from the CODATA defaults of 1e-3 MeV or more is
+  /// reported but not treated as an error.
+  void SyncNucleonMasses();
+
   void update_bounds();
 
   //--------------------------------------------------------------------------
@@ -585,8 +622,9 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   NumTools::Root root;
   RootFunctor RootFunction;
 
-  static constexpr Real mn  = EOSHelmholtz::mn;
-  static constexpr Real mp  = EOSHelmholtz::mp;
+  // Physical masses. The nucleon pair lives in EOSHelmholtz (single source of
+  // truth, table-synced by SyncNucleonMasses); read it as helmholtz_eos.mn/.mp.
+  // The remaining masses have no table counterpart.
   static constexpr Real ma  = EOSHelmholtz::ma;
   static constexpr Real me  = EOSHelmholtz::me;
   static constexpr Real mFe = 52103.06261020851;  // atomic mass of 56Fe [MeV]

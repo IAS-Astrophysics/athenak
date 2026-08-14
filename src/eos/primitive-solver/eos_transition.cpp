@@ -54,10 +54,43 @@ template<typename LogPolicy>
 void EOSTransition<LogPolicy>::SetBaryonMass(Real new_mb) {
   helmholtz_eos.SetBaryonMass(new_mb);
   compose_eos.SetBaryonMass(new_mb);
-  min_Y[SCEB] = mFe/(56.0*new_mb) - 1.0;  // most bound nucleus is Fe-56
-  max_Y[SCEB] = mn/new_mb - 1.0;          // free neutron limit
+  min_Y[SCEB] = mFe/(56.0*new_mb) - 1.0;      // most bound nucleus is Fe-56
+  max_Y[SCEB] = helmholtz_eos.mn/new_mb - 1.0;  // free neutron limit
   m_min_h     = mFe/56.0;
   mb          = new_mb;
+}
+
+template<typename LogPolicy>
+void EOSTransition<LogPolicy>::SyncNucleonMasses() {
+  // Deviation from the CODATA defaults that is worth reporting. Real tables sit
+  // ~1e-4 MeV away; anything larger suggests a different convention in the
+  // table (CompOSE stores the baryon mass in the same "mn" dataset).
+  constexpr Real tol = 1e-3;  // MeV
+
+  Real const table_mn = compose_eos.GetTableNeutronMass();
+  Real const table_mp = compose_eos.GetTableProtonMass();
+
+  if (std::isnan(table_mn) || std::isnan(table_mp)) {
+    std::cout << "EOSTransition: compose table carries no nucleon masses, keeping "
+              << "CODATA (mn = " << EOSHelmholtz::mn_codata
+              << ", mp = " << EOSHelmholtz::mp_codata << " MeV)" << std::endl;
+    return;
+  }
+
+  if (std::abs(table_mn - EOSHelmholtz::mn_codata) >= tol ||
+      std::abs(table_mp - EOSHelmholtz::mp_codata) >= tol) {
+    std::cout << "EOSTransition: compose table nucleon masses deviate from CODATA by "
+              << "more than " << tol << " MeV, using the table values.\n"
+              << "  mn:  table " << table_mn << " vs CODATA "
+              << EOSHelmholtz::mn_codata << " MeV\n"
+              << "  mp:  table " << table_mp << " vs CODATA "
+              << EOSHelmholtz::mp_codata << " MeV\n"
+              << "  Qnp = mn - mp: table " << table_mn - table_mp << " vs CODATA "
+              << EOSHelmholtz::mn_codata - EOSHelmholtz::mp_codata << " MeV"
+              << std::endl;
+  }
+
+  helmholtz_eos.SetNucleonMasses(table_mn, table_mp);
 }
 
 template<typename LogPolicy>
@@ -159,9 +192,17 @@ void EOSTransition<LogPolicy>::InitializeTables(std::string fname,
   if (std::isnan(m_trans_T_width) || std::isnan(m_trans_ln_width)) {
     SetTransition(10.0*compose_eos.min_n, compose_eos.min_n, 0.6, 0.5);
   }
+  // Before SetBaryonMass: max_Y[SCEB] is built from the neutron mass.
+  SyncNucleonMasses();
   SetBaryonMass(baryon_mass);
   update_bounds();
   m_initialized = true;
+
+  std::cout << "EOSTransition: mb = " << mb << " MeV (convention), mn = "
+            << helmholtz_eos.mn << ", mp = " << helmholtz_eos.mp
+            << " MeV (Qnp = " << helmholtz_eos.mn - helmholtz_eos.mp << ")\n"
+            << "  E_B window = [" << min_Y[SCEB] << ", " << max_Y[SCEB] << "]"
+            << std::endl;
 }
 
 template class EOSTransition<NormalLogs>;

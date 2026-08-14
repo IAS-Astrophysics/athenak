@@ -65,7 +65,8 @@ struct RadiationM1Params {
   bool beam_sources;    // include beam sources
   bool backreact;
   bool backreact_tmunu;
-  
+  bool mirror_composition;  // carry the Ye back-reaction into Xn/Xp/E_B
+
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
   int closure_maxiter;       // maximum number of iterations in closure root finder

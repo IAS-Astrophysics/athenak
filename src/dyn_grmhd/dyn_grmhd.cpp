@@ -241,6 +241,57 @@ void DynGRMHD::EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu,
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void DynGRMHDPS::ChemicalPotentials
+//! \brief Evaluate mu_b, mu_q and mu_le (code units) from the current w0 and
+//! temperature into dv(m, i_dv + {0,1,2}, ...).
+//!
+//! These are the inputs the weak rates are built from -- nurates takes
+//! mu_n = mu_b, mu_p = mu_b + mu_q, mu_e = mu_le - mu_q -- so dumping them makes
+//! the compose and transition halves of the blend directly comparable across the
+//! transition ramp. Policies without chemical potentials yield NaN.
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::ChemicalPotentials(DvceArray5D<Real> &dv,
+                                                            int i_dv) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie;
+  int &js = indcs.js, &je = indcs.je;
+  int &ks = indcs.ks, &ke = indcs.ke;
+  const int nmb1 = pmy_pack->nmb_thispack - 1;
+
+  auto &w0_ = pmy_pack->pmhd->w0;
+  auto &temp_ = temperature;
+  const int nmhd = pmy_pack->pmhd->nmhd;
+  const int nscal = pmy_pack->pmhd->nscalars;
+  auto eos_ = eos.ps.GetEOS();   // by value: captured into a device lambda
+  const Real mb = eos_.GetBaryonMass();
+
+  par_for("dyngr_chemical_potentials", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    // Y must carry every species the EOS indexes; w0 is (m, var, k, j, i), so the
+    // species are not contiguous and have to be gathered (cf. the M1 opacity
+    // kernel).
+    Real Y[MAX_SPECIES] = {0.0};
+    for (int s = 0; s < nscal; ++s) {
+      Y[s] = w0_(m, nmhd + s, k, j, i);
+    }
+    const Real nb = w0_(m, IDN, k, j, i)/mb;
+    const Real T = temp_(m, 0, k, j, i);
+    if (T > 0.0) {
+      dv(m, i_dv + 0, k, j, i) = eos_.GetBaryonChemicalPotential(nb, T, Y);
+      dv(m, i_dv + 1, k, j, i) = eos_.GetChargeChemicalPotential(nb, T, Y);
+      dv(m, i_dv + 2, k, j, i) = eos_.GetElectronLeptonChemicalPotential(nb, T, Y);
+    } else {
+      // T = 0 has no chemical potential to speak of and would send the
+      // Sackur-Tetrode logs to -inf; report 0 rather than pollute the dump.
+      dv(m, i_dv + 0, k, j, i) = 0.0;
+      dv(m, i_dv + 1, k, j, i) = 0.0;
+      dv(m, i_dv + 2, k, j, i) = 0.0;
+    }
+  });
+  return;
+}
+
 template<class EOSPolicy, class ErrorPolicy>
 void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)

@@ -56,6 +56,8 @@ class EOSHelmholtz : public EOSPolicyInterface {
     m_id_log_t  = std::numeric_limits<Real>::quiet_NaN();
     m_nn = 0;
     m_nt = 0;
+    mn = mn_codata;
+    mp = mp_codata;
 
     min_Y[SCYE] = 0.0;  min_Y[SCXN] = 0.0;  min_Y[SCXP] = 0.0;
     min_Y[SCXA] = 0.0;  min_Y[SCXH] = 0.0;  min_Y[SCAH] = 1.0;
@@ -66,7 +68,21 @@ class EOSHelmholtz : public EOSPolicyInterface {
   /// Reads the table file (host only). Ye range comes from the compose table.
   void ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye);
 
+  /// Set the baryon mass.
+  ///
+  /// N.B. mb is a convention, not a physical mass: the reference mass per
+  /// baryon that defines rho = mb*n and the rest-mass/eps split.
   KOKKOS_INLINE_FUNCTION void SetBaryonMass(Real new_mb) { mb = new_mb; }
+
+  /// Set the physical nucleon masses [MeV].
+  ///
+  /// Used by EOSTransition to adopt the values carried by the compose table so
+  /// that both halves of the blend build their chemical potentials and
+  /// rest-mass zero points from the same constants.
+  KOKKOS_INLINE_FUNCTION void SetNucleonMasses(Real new_mn, Real new_mp) {
+    mn = new_mn;
+    mp = new_mp;
+  }
 
   KOKKOS_INLINE_FUNCTION bool IsInitialized() const { return m_initialized; }
 
@@ -400,8 +416,13 @@ class EOSHelmholtz : public EOSPolicyInterface {
   static constexpr Real min_Y_free = 1.0e-30;  // floor for Yn/Yp in log()
   static constexpr Real sac_const = hbarc*hbarc*2.0*M_PI;           // (MeV fm)^2
   static constexpr Real me = 0.5109989461;   // MeV
-  static constexpr Real mn = 939.5654133;    // MeV
-  static constexpr Real mp = 938.2720813;    // MeV
+  // Physical nucleon masses [MeV]. The CODATA values are the defaults; when the
+  // Helmholtz EOS is driven by EOSTransition these are replaced by the values
+  // carried by the compose table (SetNucleonMasses), since the table energies
+  // and chemical potentials were built with them.
+  static constexpr Real mn_codata = 939.5654133;  // MeV
+  static constexpr Real mp_codata = 938.2720813;  // MeV
+  Real mn, mp;                                    // MeV
   static constexpr Real ma = 3727.379378;    // MeV
   static constexpr int g_n = 2;
   static constexpr int g_p = 2;

@@ -79,6 +79,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     m_ny = 0;
     m_min_h = std::numeric_limits<Real>::max();
     mb =    std::numeric_limits<Real>::quiet_NaN();
+    m_table_mn = std::numeric_limits<Real>::quiet_NaN();
+    m_table_mp = std::numeric_limits<Real>::quiet_NaN();
     min_n = std::numeric_limits<Real>::quiet_NaN();
     max_n = std::numeric_limits<Real>::quiet_NaN();
     min_T = std::numeric_limits<Real>::quiet_NaN();
@@ -230,7 +232,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Calculate hot (neutrino trapped) beta equilibrium T_eq and Y_eq given n, e, and Yl
   KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
     const int n_at = 16;
-    Real vec_guess[n_at][2] = { 
+    Real vec_guess[n_at][2] = {
       {1.00e0, 1.00e0},
       {0.90e0, 1.25e0},
       {0.90e0, 1.10e0},
@@ -345,6 +347,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Set the baryon mass. The table stores total energy and baryon number
   /// density, so no rescaling of the table is required.
   KOKKOS_INLINE_FUNCTION void SetBaryonMass(Real new_mb) { mb = new_mb; }
+
+  /// Physical nucleon masses [MeV] as carried by the table's scalar block, or
+  /// NaN when the table does not supply them. N.B. these are *not* mb: mb is a
+  /// convention, whereas these are the masses the table's own energies
+  /// and chemical potentials were built with.
+  KOKKOS_INLINE_FUNCTION Real GetTableNeutronMass() const { return m_table_mn; }
+  KOKKOS_INLINE_FUNCTION Real GetTableProtonMass() const { return m_table_mp; }
 
   /// Get the raw number density
   KOKKOS_INLINE_FUNCTION DvceArray1D<Real> const GetRawLogNumberDensity() const {
@@ -496,7 +505,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         flo = f(ilo);
       }
     }
-    
+
     if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE)) {
       /*if (iv == ECLOGE) {
         Real vlo = eval_at_nty(iv,n,min_T,Yq);
@@ -516,7 +525,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         return max_T;
       }
     }
-    
+
     if (flo*fhi > 0) {
       int imin = 0;
       Real fmin = f(imin);
@@ -606,7 +615,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         norm[0] = -1.0;
       } else if (x1[0] == max_T) {
         norm[0] = 1.0;
-      } else { 
+      } else {
         norm[0] = 0.0;
       }
 
@@ -639,7 +648,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       while (n_cut <= nu_bis_n_cut_max && err >= err_old) {
         // the variation of x1 is divided by an powers of 2 if the
         // error is not decreasing along the gradient direction
-        
+
         x1_tmp[0] = x1[0] + (dx1[0]*fac_cut);
         x1_tmp[1] = x1[1] + (dx1[1]*fac_cut);
 
@@ -676,13 +685,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       // update the iteration
       n_iter += 1;
     }
-      
+
     if (n_iter <= nu_2DNR_n_max) {
       ierr = 0;
     } else {
       ierr = 1;
     }
-    
+
     return ierr;
   }
 
@@ -787,7 +796,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     Real dmu_l_dT   = (mu_l2 - mu_l1)/(T2 - T1);
     de_dT          = (e2 - e1)/(T2 - T1);
-    
+
     deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV] TODO: Check
     deta_dYe = dmu_l_dYe/T;      // [-]
 
@@ -815,6 +824,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   size_t m_nn, m_nt, m_ny;
   // Minimum enthalpy per baryon
   Real m_min_h;
+  // Physical nucleon masses carried by the table [MeV], NaN if not supplied.
+  Real m_table_mn, m_table_mp;
 
   // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
