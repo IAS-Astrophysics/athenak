@@ -31,6 +31,11 @@
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_macros.hpp"
 
+namespace {
+// Parameter keys under which the PID integral is checkpointed.
+char const *const integral_key[3] = {"dc_integral_x", "dc_integral_y", "dc_integral_z"};
+} // namespace
+
 //----------------------------------------------------------------------------------------
 DriftControl::Variety DriftControl::VarietyFromString(std::string const &str) {
   if (str.compare("oscillator") == 0) {
@@ -61,7 +66,7 @@ DriftControl::Center DriftControl::CenterFromString(std::string const &str) {
 
 //----------------------------------------------------------------------------------------
 DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
-  pmesh(pmesh) {
+  pmesh(pmesh), pin(pin) {
   // Initialize drift control
   dc_variety = VarietyFromString(
       pin->GetOrAddString("z4c", "dc_variety", "oscillator"));
@@ -76,23 +81,19 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
   dc_fixed[1]      = pin->GetOrAddReal("z4c", "dc_fixed_y", 0.0);
   dc_fixed[2]      = pin->GetOrAddReal("z4c", "dc_fixed_z", 0.0);
 
+  // The PID integral holds the controller's entire steady-state authority;
+  // restore it across restarts
   for (int a = 0; a < NDIM; ++a) {
     dc_pos[a]        = dc_fixed[a];
     dc_pos_old[a]    = dc_fixed[a];
     dc_vel[a]        = 0.0;
-    dc_integral[a]   = 0.0;
+    dc_integral[a]   = pin->GetOrAddReal("z4c", integral_key[a], 0.0);
     dc_prev_error[a] = 0.0;
   }
 
-  // Register on every rank. ParameterDump() feeds the header offset written by
-  // the binary output, while each rank places its MeshBlocks using its own dump
-  // length, so a parameter held by rank 0 alone corrupts the header/data
-  // boundary of every .bin file.
-  std::string dc_file = pin->GetOrAddString("z4c", "dc_filename", "drift_control");
-
   if (0 == global_variable::my_rank) {
     std::string ofname = pin->GetString("job", "basename") + ".";
-    ofname += dc_file;
+    ofname += pin->GetOrAddString("z4c", "dc_filename", "drift_control");
     ofname += ".txt";
     ofile.open(ofname.c_str());
     ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:ix 10:iy 11:iz\n";
@@ -127,9 +128,9 @@ void DriftControl::EvolveDriftControl() {
   Real const dt = pmesh->dt;
 
   if (dc_first_step || dt <= 0.0) {
+    // Suppress the velocity term only. dc_integral is restored from restart.
     for (int a = 0; a < NDIM; ++a) {
       dc_vel[a]        = 0.0;
-      dc_integral[a]   = 0.0;
       dc_prev_error[a] = dc_pos[a] - dc_fixed[a];
     }
     dc_first_step = false;
@@ -157,6 +158,12 @@ void DriftControl::EvolveDriftControl() {
 
 //----------------------------------------------------------------------------------------
 void DriftControl::WriteDriftControl() {
+  // Snapshot the integral into the parameter set so it is carried by the next
+  // restart dump.
+  for (int a = 0; a < NDIM; ++a) {
+    pin->SetReal("z4c", integral_key[a], dc_integral[a]);
+  }
+
   if (0 == global_variable::my_rank && 0 == pmesh->ncycle % out_every) {
     ofile << pmesh->ncycle << " "
           << pmesh->time << " "
