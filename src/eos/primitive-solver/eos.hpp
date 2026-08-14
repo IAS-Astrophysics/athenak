@@ -232,7 +232,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return EOSPolicy::Entropy(n, T*code_units.TemperatureConversion(eos_units), Y)/mb *
            eos_units.EntropyConversion(code_units)/eos_units.MassConversion(code_units);
    } else {
-    return std::numeric_limits<Real>::quiet_NaN();
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
    }
   }
 
@@ -297,7 +297,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return EOSPolicy::BaryonChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
             eos_units.ChemicalPotentialConversion(code_units);
    } else {
-    return std::numeric_limits<Real>::quiet_NaN();
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
    }
   }
 
@@ -314,7 +314,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return EOSPolicy::ChargeChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
             eos_units.ChemicalPotentialConversion(code_units);
    } else {
-    return std::numeric_limits<Real>::quiet_NaN();
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
    }
   }
 
@@ -331,7 +331,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return EOSPolicy::ElectronLeptonChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
             eos_units.ChemicalPotentialConversion(code_units);
    } else {
-    return std::numeric_limits<Real>::quiet_NaN();
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
    }
   }
 
@@ -347,7 +347,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
    if constexpr (supports_potentials) {
     return EOSPolicy::ProtonFraction(n, T*code_units.TemperatureConversion(eos_units), Y);
     } else {
-    return std::numeric_limits<Real>::quiet_NaN();
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
     }
   }
 
@@ -363,7 +363,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
    if constexpr (supports_potentials) {
     return EOSPolicy::NeutronFraction(n, T*code_units.TemperatureConversion(eos_units), Y);
     } else {
-    return std::numeric_limits<Real>::quiet_NaN();
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
     }
   }
 
