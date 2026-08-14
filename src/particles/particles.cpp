@@ -106,6 +106,18 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
                   << std::endl;
         std::exit(EXIT_FAILURE);
       }
+      // Hydro limits each directional Courant number; one-hop LMC transport requires
+      // their sum to be no larger than one.
+      const int ndim = pmy_pack->pmesh->three_d ? 3 : 2;
+      const Real cfl_number = pin->GetReal("time", "cfl_number");
+      const Real max_cfl_number = 1.0/static_cast<Real>(ndim);
+      if (!(cfl_number <= max_cfl_number)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles require time/cfl_number <= 1/"
+                  << ndim << " in " << ndim << "D, but received " << cfl_number
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       int random_seed = pin->GetOrAddInteger("particles", "random_seed", 0);
       if (random_seed < 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -16,13 +17,27 @@
 #include "mesh/mesh.hpp"
 #include "outputs/outputs.hpp"
 #include "parameter_input.hpp"
+#include "particles/lagrangian_mc.hpp"
 #include "particles/particles.hpp"
 #include "pgen/pgen.hpp"
 
 namespace {
 
 constexpr int kExpectedParticles = 8;
+constexpr int kExtendedParticles = 16;
 constexpr int kRandomSeed = 5;
+constexpr Real kDirectionX = 0.1875;
+constexpr Real kDirectionY = 0.375;
+constexpr Real kDirectionZ = 0.375;
+constexpr Real kReproX = 0.4375;
+constexpr Real kReproY = 0.125;
+constexpr Real kReproZ = 0.5;
+
+enum class LMCRegression {baseline, directions, guard, reproducibility};
+
+LMCRegression regression = LMCRegression::baseline;
+int direction_sign = 1;
+bool reverse_particle_order = false;
 
 KOKKOS_INLINE_FUNCTION
 int CellForTag(const int tag) {
@@ -49,7 +64,7 @@ Real InitialX(const int tag) {
   return (static_cast<Real>(CellForTag(tag)) + 0.5)/kExpectedParticles;
 }
 
-void LagrangianMCHistory(HistoryData *pdata, Mesh *pm) {
+void BaselineHistory(HistoryData *pdata, Mesh *pm) {
   pdata->nhist = 10;
   pdata->label[0] = "fluid_err";
   pdata->label[1] = "flux_err";
@@ -218,10 +233,277 @@ void LagrangianMCHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[9] = status_errors;
 }
 
+void DirectionHistory(HistoryData *pdata, Mesh *pm) {
+  pdata->nhist = 12;
+  pdata->label[0] = "none";
+  pdata->label[1] = "x1_left";
+  pdata->label[2] = "x1_right";
+  pdata->label[3] = "x2_left";
+  pdata->label[4] = "x2_right";
+  pdata->label[5] = "x3_left";
+  pdata->label[6] = "x3_right";
+  pdata->label[7] = "pos_err";
+  pdata->label[8] = "owner_err";
+  pdata->label[9] = "status_err";
+  pdata->label[10] = "npart";
+  pdata->label[11] = "tag_sum";
+
+  auto ppart = pm->pmb_pack->ppart;
+  auto pr = ppart->prtcl_rdata;
+  auto pi = ppart->prtcl_idata;
+  auto &mbsize = pm->pmb_pack->pmb->mb_size;
+  const int npart = ppart->nprtcl_thispack;
+  const int gids = pm->pmb_pack->gids;
+  const int nmb = pm->pmb_pack->nmb_thispack;
+  const Real dx1 = (pm->mesh_size.x1max - pm->mesh_size.x1min)/pm->mesh_indcs.nx1;
+  const Real dx2 = (pm->mesh_size.x2max - pm->mesh_size.x2min)/pm->mesh_indcs.nx2;
+  const Real dx3 = (pm->mesh_size.x3max - pm->mesh_size.x3min)/pm->mesh_indcs.nx3;
+
+  for (int move=particles::lagrangian_mc::PMOVE_NONE;
+       move<=particles::lagrangian_mc::PMOVE_X3_RIGHT; ++move) {
+    Real count = 0.0;
+    Kokkos::parallel_reduce(
+        "particle_lmc_direction_count", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+        KOKKOS_LAMBDA(const int p, Real &local_sum) {
+          if (pi(particles::lagrangian_mc::PLASTMOVE,p) == move) local_sum += 1.0;
+        }, count);
+    pdata->hdata[move] = count;
+  }
+
+  Real position_error = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_direction_position_error",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_max) {
+        Real expected_x = kDirectionX;
+        Real expected_y = kDirectionY;
+        Real expected_z = kDirectionZ;
+        const int move = pi(particles::lagrangian_mc::PLASTMOVE,p);
+        if (move == particles::lagrangian_mc::PMOVE_X1_LEFT) expected_x -= dx1;
+        if (move == particles::lagrangian_mc::PMOVE_X1_RIGHT) expected_x += dx1;
+        if (move == particles::lagrangian_mc::PMOVE_X2_LEFT) expected_y -= dx2;
+        if (move == particles::lagrangian_mc::PMOVE_X2_RIGHT) expected_y += dx2;
+        if (move == particles::lagrangian_mc::PMOVE_X3_LEFT) expected_z -= dx3;
+        if (move == particles::lagrangian_mc::PMOVE_X3_RIGHT) expected_z += dx3;
+        Real error = fabs(pr(IPX,p) - expected_x);
+        error = fmax(error, fabs(pr(IPY,p) - expected_y));
+        error = fmax(error, fabs(pr(IPZ,p) - expected_z));
+        if (move < particles::lagrangian_mc::PMOVE_NONE ||
+            move > particles::lagrangian_mc::PMOVE_X3_RIGHT) {
+          error = fmax(error, 1.0);
+        }
+        local_max = fmax(local_max, error);
+      }, Kokkos::Max<Real>(position_error));
+
+  Real owner_errors = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_direction_owner_error",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        int expected_gid = -1;
+        for (int m=0; m<nmb; ++m) {
+          auto size = mbsize.d_view(m);
+          if (pr(IPX,p) >= size.x1min && pr(IPX,p) < size.x1max &&
+              pr(IPY,p) >= size.x2min && pr(IPY,p) < size.x2max &&
+              pr(IPZ,p) >= size.x3min && pr(IPZ,p) < size.x3max) {
+            expected_gid = gids + m;
+          }
+        }
+        if (pi(PGID,p) != expected_gid) local_sum += 1.0;
+      }, owner_errors);
+
+  Real status_errors = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_direction_status_error",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        if (pi(PSTATUS,p) != PACTIVE) local_sum += 1.0;
+      }, status_errors);
+
+  Real tag_sum = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_direction_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        local_sum += static_cast<Real>(pi(PTAG,p));
+      }, tag_sum);
+
+  pdata->hdata[7] = position_error;
+  pdata->hdata[8] = owner_errors;
+  pdata->hdata[9] = status_errors;
+  pdata->hdata[10] = static_cast<Real>(npart);
+  pdata->hdata[11] = tag_sum;
+}
+
+void ReproducibilityHistory(HistoryData *pdata, Mesh *pm) {
+  pdata->nhist = 20;
+  auto ppart = pm->pmb_pack->ppart;
+  auto pr = ppart->prtcl_rdata;
+  auto pi = ppart->prtcl_idata;
+  auto &mbsize = pm->pmb_pack->pmb->mb_size;
+  const int npart = ppart->nprtcl_thispack;
+  const int gids = pm->pmb_pack->gids;
+  const int nmb = pm->pmb_pack->nmb_thispack;
+
+  for (int tag=0; tag<kExtendedParticles; ++tag) {
+    pdata->label[tag] = "x" + std::to_string(tag);
+    Real position = 0.0;
+    Kokkos::parallel_reduce(
+        "particle_lmc_repro_position", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+        KOKKOS_LAMBDA(const int p, Real &local_sum) {
+          if (pi(PTAG,p) == tag) local_sum += pr(IPX,p);
+        }, position);
+    pdata->hdata[tag] = position;
+  }
+
+  Real owner_errors = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_repro_owner_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        int expected_gid = -1;
+        for (int m=0; m<nmb; ++m) {
+          auto size = mbsize.d_view(m);
+          if (pr(IPX,p) >= size.x1min && pr(IPX,p) < size.x1max &&
+              pr(IPY,p) >= size.x2min && pr(IPY,p) < size.x2max &&
+              pr(IPZ,p) >= size.x3min && pr(IPZ,p) < size.x3max) {
+            expected_gid = gids + m;
+          }
+        }
+        if (pi(PGID,p) != expected_gid) local_sum += 1.0;
+      }, owner_errors);
+
+  Real migrated = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_repro_migrated", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        int initial_gid = -1;
+        for (int m=0; m<nmb; ++m) {
+          auto size = mbsize.d_view(m);
+          if (kReproX >= size.x1min && kReproX < size.x1max &&
+              kReproY >= size.x2min && kReproY < size.x2max &&
+              kReproZ >= size.x3min && kReproZ < size.x3max) {
+            initial_gid = gids + m;
+          }
+        }
+        if (pi(PGID,p) != initial_gid) local_sum += 1.0;
+      }, migrated);
+
+  Real tag_sum = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_repro_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_sum) {
+        local_sum += static_cast<Real>(pi(PTAG,p));
+      }, tag_sum);
+
+  pdata->label[16] = "owner_err";
+  pdata->label[17] = "migrated";
+  pdata->label[18] = "npart";
+  pdata->label[19] = "tag_sum";
+  pdata->hdata[16] = owner_errors;
+  pdata->hdata[17] = migrated;
+  pdata->hdata[18] = static_cast<Real>(npart);
+  pdata->hdata[19] = tag_sum;
+}
+
+void LagrangianMCHistory(HistoryData *pdata, Mesh *pm) {
+  if (regression == LMCRegression::directions) {
+    DirectionHistory(pdata, pm);
+  } else if (regression == LMCRegression::reproducibility) {
+    ReproducibilityHistory(pdata, pm);
+  } else {
+    BaselineHistory(pdata, pm);
+  }
+}
+
+void InjectInvalidFluxIntegral(Mesh *pm, const Real) {
+  auto &integral = pm->pmb_pack->phydro->density_flux_integral;
+  Kokkos::deep_copy(integral.x1f, 4.0);
+  Kokkos::deep_copy(integral.x2f, 0.0);
+  Kokkos::deep_copy(integral.x3f, 0.0);
+}
+
+void InitializeUniformRegression(Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  auto &indcs = pm->mb_indcs;
+  const int is = indcs.is;
+  const int ie = indcs.ie;
+  const int js = indcs.js;
+  const int je = indcs.je;
+  const int ks = indcs.ks;
+  const int ke = indcs.ke;
+  const bool directions = regression == LMCRegression::directions;
+  const bool reverse = reverse_particle_order;
+  const Real sign = static_cast<Real>(direction_sign);
+  auto &mbsize = pmbp->pmb->mb_size;
+  auto u0 = pmbp->phydro->u0;
+  par_for("particle_lmc_uniform_fluid_init", DevExeSpace(),
+          0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    auto size = mbsize.d_view(m);
+    u0(m,IDN,k,j,i) = 1.0;
+    u0(m,IM1,k,j,i) = directions ? sign*size.dx1 : 1.0;
+    u0(m,IM2,k,j,i) = directions ? sign*size.dx2 : 0.0;
+    u0(m,IM3,k,j,i) = directions ? sign*size.dx3 : 0.0;
+  });
+
+  auto ppart = pmbp->ppart;
+  auto pr = ppart->prtcl_rdata;
+  auto pi = ppart->prtcl_idata;
+  const int npart = ppart->nprtcl_thispack;
+  const int gids = pmbp->gids;
+  const int nmb = pmbp->nmb_thispack;
+  par_for("particle_lmc_uniform_particle_init", DevExeSpace(), 0, (npart - 1),
+  KOKKOS_LAMBDA(const int p) {
+    if (!directions && reverse) pi(PTAG,p) = npart - 1 - p;
+    const Real x = directions ? kDirectionX : kReproX;
+    const Real y = directions ? kDirectionY : kReproY;
+    const Real z = directions ? kDirectionZ : kReproZ;
+    int owner_gid = -1;
+    for (int m=0; m<nmb; ++m) {
+      auto size = mbsize.d_view(m);
+      if (x >= size.x1min && x < size.x1max &&
+          y >= size.x2min && y < size.x2max &&
+          z >= size.x3min && z < size.x3max) {
+        owner_gid = gids + m;
+      }
+    }
+    pi(PGID,p) = owner_gid;
+    pi(PSTATUS,p) = PACTIVE;
+    pr(IPX,p) = x;
+    pr(IPY,p) = y;
+    pr(IPZ,p) = z;
+  });
+}
+
 } // namespace
 
 void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool restart) {
   user_hist_func = LagrangianMCHistory;
+  const std::string test_case = pin->GetOrAddString("problem", "test_case", "baseline");
+  if (test_case == "baseline") {
+    regression = LMCRegression::baseline;
+  } else if (test_case == "directions") {
+    regression = LMCRegression::directions;
+  } else if (test_case == "guard") {
+    regression = LMCRegression::guard;
+    if (!user_srcs) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Lagrangian MC guard test requires problem/user_srcs = true"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    user_srcs_func = InjectInvalidFluxIntegral;
+  } else if (test_case == "reproducibility") {
+    regression = LMCRegression::reproducibility;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Lagrangian MC test_case = '" << test_case
+              << "' not recognized" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  direction_sign = pin->GetOrAddInteger("problem", "direction_sign", 1);
+  reverse_particle_order = pin->GetOrAddBoolean(
+      "problem", "reverse_particle_order", false);
   if (restart) return;
 
   if (pin->GetInteger("particles", "random_seed") != kRandomSeed) {
@@ -238,12 +520,36 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (pmy_mesh_->nprtcl_total != kExpectedParticles) {
+  const int expected_particles =
+      (regression == LMCRegression::directions ||
+       regression == LMCRegression::reproducibility) ? kExtendedParticles :
+                                                        kExpectedParticles;
+  if (pmy_mesh_->nprtcl_total != expected_particles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Lagrangian MC test expected " << kExpectedParticles
+              << std::endl << "Lagrangian MC test expected " << expected_particles
               << " particles globally, but initialized " << pmy_mesh_->nprtcl_total << "."
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  if (regression == LMCRegression::directions) {
+    if (!pmy_mesh_->three_d || (direction_sign != -1 && direction_sign != 1)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Lagrangian MC direction test requires 3D and "
+                << "problem/direction_sign = -1 or 1" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    InitializeUniformRegression(pmy_mesh_);
+    return;
+  }
+  if (regression == LMCRegression::reproducibility) {
+    if (pmbp->nmb_thispack < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Lagrangian MC reproducibility test requires at least "
+                << "two MeshBlocks" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    InitializeUniformRegression(pmy_mesh_);
+    return;
   }
 
   auto &indcs = pmy_mesh_->mb_indcs;
