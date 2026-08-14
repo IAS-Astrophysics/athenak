@@ -651,20 +651,28 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             // Non-thermal (NEPS) components stored from NN readout kernel.
             // The 1D β-processes added in step 3b are thermal+CC, so they belong
             // in the thermal bucket: thermal = (total in arrays) - (NN non-th).
+            // NOTE: NEPS = inelastic scattering, which CONSERVES neutrino number.
+            // So the non-thermal parts belong ONLY in the energy channels
+            // (abs_1/eta_1); the number channels (abs_0/eta_0) must exclude them.
+            // This matches radiation_m1_calc_opacities_nurates.cpp exactly — the
+            // pure-nurates path drops NEPS from the number moment.  (Previously
+            // this kernel added them back, injecting a spurious, nue/anue-asymmetric
+            // number source that biased the ejecta Ye vs the reference run.)
             Real abs_0_non_th = non_th_buf(flat, nuidx);
             Real abs_1_non_th = non_th_buf(flat, 4 + nuidx);
-            Real eta_0_non_th = non_th_buf(flat, 8 + nuidx);
             Real eta_1_non_th = non_th_buf(flat, 12 + nuidx);
-            // Apply corr_ae only to the thermal part; NEPS is left unchanged.
+            // Apply corr_ae only to the thermal part.
             Real abs_0_th_corr =
                 Kokkos::fmax(abs_0_loc[nuidx] - abs_0_non_th, 0.0) * corr_ae;
             Real abs_1_th_corr =
                 Kokkos::fmax(abs_1_loc[nuidx] - abs_1_non_th, 0.0) * corr_ae;
-            abs_0_(m, nuidx, k, j, i) = abs_0_th_corr + abs_0_non_th;
+            // NUMBER: thermal only (NEPS excluded — scattering conserves number).
+            abs_0_(m, nuidx, k, j, i) = abs_0_th_corr;
+            // ENERGY: thermal + NEPS (scattering exchanges energy).
             abs_1_(m, nuidx, k, j, i) = abs_1_th_corr + abs_1_non_th;
-            // Kirchhoff on thermal part; non-thermal emissivity kept separate.
+            // Kirchhoff on thermal part; NEPS energy emissivity kept separate.
             eta_0_(m, nuidx, k, j, i) = (abs_0_th_corr > 0)
-                ? abs_0_th_corr * my_nudens_0 + eta_0_non_th
+                ? abs_0_th_corr * my_nudens_0
                 : eta_0_loc[nuidx];
             eta_1_(m, nuidx, k, j, i) = (abs_1_th_corr > 0)
                 ? abs_1_th_corr * my_nudens_1 + eta_1_non_th
