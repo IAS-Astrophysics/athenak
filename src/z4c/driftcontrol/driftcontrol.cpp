@@ -34,11 +34,8 @@
 namespace {
 // Parameter keys under which the PID integral is checkpointed.
 char const *const integral_key[3] = {"dc_integral_x", "dc_integral_y", "dc_integral_z"};
-<<<<<<< HEAD
-=======
 // Parameter keys under which the DOB observer state is checkpointed.
 char const *const dob_key[3] = {"dc_dob_px", "dc_dob_py", "dc_dob_pz"};
->>>>>>> remotes/origin/driftcontrol
 } // namespace
 
 //----------------------------------------------------------------------------------------
@@ -89,14 +86,11 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
   dc_fixed[1]      = pin->GetOrAddReal("z4c", "dc_fixed_y", 0.0);
   dc_fixed[2]      = pin->GetOrAddReal("z4c", "dc_fixed_z", 0.0);
 
-<<<<<<< HEAD
-=======
   // DOB gains.
   dc_omega_c       = pin->GetOrAddReal("z4c", "dc_omega_c", 0.2);
   dc_omega_o       = pin->GetOrAddReal("z4c", "dc_omega_o", 1.0);
   dc_zeta          = pin->GetOrAddReal("z4c", "dc_zeta", 1.0);
 
->>>>>>> remotes/origin/driftcontrol
   // The PID integral holds the controller's entire steady-state authority;
   // restore it across restarts
   for (int a = 0; a < NDIM; ++a) {
@@ -109,18 +103,12 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
     dc_fhat[a]       = dc_p[a];  // v is suppressed on the first step
   }
 
-<<<<<<< HEAD
-  if (0 == global_variable::my_rank) {
-    std::string ofname = pin->GetString("job", "basename") + ".";
-    ofname += pin->GetOrAddString("z4c", "dc_filename", "drift_control");
-=======
   std::string const dc_fname =
       pin->GetOrAddString("z4c", "dc_filename", "drift_control");
 
   if (0 == global_variable::my_rank) {
     std::string ofname = pin->GetString("job", "basename") + ".";
     ofname += dc_fname;
->>>>>>> remotes/origin/driftcontrol
     ofname += ".txt";
     ofile.open(ofname.c_str());
     if (dc_variety == DOB) {
@@ -173,11 +161,7 @@ void DriftControl::EvolveDriftControl() {
   }
 
   if (dc_first_step || dt <= 0.0) {
-<<<<<<< HEAD
-    // Suppress the velocity term only. dc_integral is restored from restart.
-=======
     // Suppress the velocity term only. dc_integral and dc_p are restored from restart.
->>>>>>> remotes/origin/driftcontrol
     for (int a = 0; a < NDIM; ++a) {
       dc_vel[a]        = 0.0;
       dc_prev_error[a] = dc_pos[a] - dc_fixed[a];
@@ -222,16 +206,9 @@ void DriftControl::EvolveDriftControl() {
 
 //----------------------------------------------------------------------------------------
 void DriftControl::WriteDriftControl() {
-<<<<<<< HEAD
-  // Snapshot the integral into the parameter set so it is carried by the next
-  // restart dump.
-  for (int a = 0; a < NDIM; ++a) {
-    pin->SetReal("z4c", integral_key[a], dc_integral[a]);
-=======
   for (int a = 0; a < NDIM; ++a) {
     pin->SetReal("z4c", integral_key[a], dc_integral[a]);
     pin->SetReal("z4c", dob_key[a], dc_p[a]);
->>>>>>> remotes/origin/driftcontrol
   }
 
   if (0 == global_variable::my_rank && 0 == pmesh->ncycle % out_every) {
