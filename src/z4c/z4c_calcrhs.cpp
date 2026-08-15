@@ -81,6 +81,15 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         dc_corr[a] = -(opt.dc_Kp * e + opt.dc_Ki * pdc->GetIntegral(a)
                      + opt.dc_Kd * pdc->GetVel(a));
       }
+    } else if (dc_variety == DriftControl::DOB) {
+      Real const wc2  = SQR(opt.dc_omega_c);
+      Real const twzc = 2.0 * opt.dc_zeta * opt.dc_omega_c;
+      for (int a = 0; a < 3; ++a) {
+        Real const e    = pdc->GetPos(a) - fixed[a];
+        Real const v    = pdc->GetVel(a);
+        Real const fhat = pdc->GetP(a) + opt.dc_omega_o * v;
+        dc_corr[a] = -(wc2 * e + twzc * v + fhat);
+      }
     } else {
       Real const tau      = opt.dc_damping_time;
       Real const zeta     = opt.dc_damping_coeff;

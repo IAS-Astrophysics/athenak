@@ -172,6 +172,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.dc_Kp               = pin->GetOrAddReal("z4c", "dc_Kp", 1.0);
   opt.dc_Ki               = pin->GetOrAddReal("z4c", "dc_Ki", 0.1);
   opt.dc_Kd               = pin->GetOrAddReal("z4c", "dc_Kd", 2.0);
+  opt.dc_omega_c          = pin->GetOrAddReal("z4c", "dc_omega_c", 0.2);
+  opt.dc_omega_o          = pin->GetOrAddReal("z4c", "dc_omega_o", 1.0);
+  opt.dc_zeta             = pin->GetOrAddReal("z4c", "dc_zeta", 1.0);
   opt.dc_relaxation_time  = pin->GetOrAddReal("z4c", "dc_relaxation_time", 1.0);
   opt.dc_kappa            = pin->GetOrAddReal("z4c", "dc_kappa", 1.0);
   opt.dc_gamma_suppress   = pin->GetOrAddReal("z4c", "dc_gamma_suppress", 0.0);
