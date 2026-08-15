@@ -29,7 +29,7 @@ class ParameterInput;
 //! desired origin.
 class DriftControl {
  public:
-  enum Variety { Oscillator, PID, Relaxation };
+  enum Variety { Oscillator, PID, Relaxation, DOB };
   enum Center { CenterFixed, CenterTracker };
 
   static Variety VarietyFromString(std::string const &str);
@@ -54,6 +54,14 @@ class DriftControl {
   inline Real GetIntegral(int a) const {
     return dc_integral[a];
   }
+  //! Get the DOB observer state p (fhat = p + omega_o v)
+  inline Real GetP(int a) const {
+    return dc_p[a];
+  }
+  //! Get the DOB estimate of the ambient drive f
+  inline Real GetFhat(int a) const {
+    return dc_fhat[a];
+  }
   //! Get the position at which the object is being held
   inline Real GetFixed(int a) const {
     return dc_fixed[a];
@@ -74,7 +82,13 @@ class DriftControl {
   Real dc_vel[3];
   Real dc_integral[3];
   Real dc_prev_error[3];
+  Real dc_p[3];        // DOB observer state
+  Real dc_fhat[3];     // DOB estimate of the ambient drive (diagnostic; RHS recomputes)
+  Real dc_omega_c;     // closed-loop PD bandwidth
+  Real dc_omega_o;     // observer bandwidth
+  Real dc_zeta;        // PD damping ratio
   bool dc_first_step;
+  bool dc_dt_warned;   // one-shot guard against omega_o dt beyond the explicit limit
   Real dc_vel_cap;
   Real dc_integral_cap;
   int out_every;
