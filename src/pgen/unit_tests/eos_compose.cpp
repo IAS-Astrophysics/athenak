@@ -280,6 +280,11 @@ void PerformTests(Mesh *pmesh, ParameterInput *pin) {
 //!      cell is continuous in T, anything narrower returns the local cell slope and
 //!      jumps at every cell boundary. eta_e_gradient itself is private, so what is
 //!      measured here is the property of the two candidate widths that motivates it.
+//!   D. Weight endpoints. GetBetaEquilibriumPartial is the same solve with one weight
+//!      per neutrino channel, and its two endpoints are fixed in advance: unit weights
+//!      must reproduce GetBetaEquilibriumTrapped bit for bit, and zero weights must
+//!      return the matter state the right-hand sides were built from, from any guess.
+//!      The interior of the family has no closed-form answer to test against.
 //!
 //! Energies here are always in code units, since they come from GetEnergy and
 //! GetTrappedNeutrinos and go straight back into GetBetaEquilibriumTrapped. The
@@ -607,6 +612,101 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
     std::cout << "A cell-wide secant is not much smoother in T than a sub-cell one, so "
               << "the premise of the eta_e_gradient step width does not hold for this "
               << "table.\n";
+    success = false;
+  }
+
+  // ------------------------------------------------------------------------------
+  // D. the two endpoints of the weight family
+  // ------------------------------------------------------------------------------
+  // BetaEquilibriumPartial carries one weight per neutrino channel and reduces to the
+  // trapped solve at 1 and to no solve at all at 0. Only those two endpoints have an
+  // answer known in advance, and they are the two the generalisation has to get exactly
+  // right; they are also what distinguishes weights that reach the arithmetic from
+  // weights that are merely passed around.
+  int n_w1_differs = 0;
+  int n_w0_fail = 0;
+  Real err_w0_T_max = 0.0;
+  Real err_w0_Y_max = 0.0;
+  Real res_w0_max = 0.0;
+
+  Kokkos::parallel_reduce("nueq_weights",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nstates),
+  KOKKOS_LAMBDA(const int &idx, int &nd, int &nf, Real &eT, Real &eY, Real &rmax) {
+    const int in = idx/(nY*nT);
+    const int iY = (idx - in*nY*nT)/nT;
+    const int iT = idx - in*nY*nT - iY*nT;
+
+    const Real n = logs.exp2_(ln_lo + in*dln);
+    const Real T = logs.exp2_(lT_lo + iT*dlT);
+    Real Y[MAX_SPECIES] = {0.0};
+    Y[0] = Y_lo + iY*dY;
+
+    Real n_nu[3], e_nu[3];
+    eos.GetTrappedNeutrinos(n, T, Y, n_nu, e_nu);
+    Real Yl[MAX_SPECIES] = {0.0};
+    Yl[0] = Y[0] + n_nu[0]/n;
+    const Real e_mat = eos.GetEnergy(n, T, Y);
+    const Real e_tot = e_mat + e_nu[0] + e_nu[1] + e_nu[2];
+
+    const Real T_guess = 1.4*T;
+    Real Y_guess[MAX_SPECIES] = {0.0};
+    Y_guess[0] = 0.7*Y[0];
+
+    // All weights 1 must reproduce GetBetaEquilibriumTrapped bit for bit, not merely to
+    // a tolerance: it is the same arithmetic, and the weights are written into it so
+    // that multiplying by an exact 1.0 is a no-op. Anything else means the expressions
+    // were regrouped, which would move the whole Newton path.
+    Real T_ref = 0.0;
+    Real T_w1 = 0.0;
+    Real Y_ref[MAX_SPECIES] = {0.0};
+    Real Y_w1[MAX_SPECIES] = {0.0};
+    bool ok_ref = eos.GetBetaEquilibriumTrapped(n, e_tot, Yl, T_ref, Y_ref,
+                                                T_guess, Y_guess);
+    bool ok_w1 = eos.GetBetaEquilibriumPartial(n, e_tot, Yl, 1.0, 1.0, 1.0,
+                                               T_w1, Y_w1, T_guess, Y_guess);
+    if (ok_ref != ok_w1 || T_w1 != T_ref || Y_w1[0] != Y_ref[0]) {
+      nd += 1;
+    }
+
+    // All weights 0 removes every neutrino term from both residuals, so the right-hand
+    // sides are the bare matter state and the solution is that state itself -- however
+    // poor the initial guess.
+    Real Yl0[MAX_SPECIES] = {0.0};
+    Yl0[0] = Y[0];
+    Real T_w0 = 0.0;
+    Real Y_w0[MAX_SPECIES] = {0.0};
+    bool ok_w0 = eos.GetBetaEquilibriumPartial(n, e_mat, Yl0, 0.0, 0.0, 0.0,
+                                               T_w0, Y_w0, T_guess, Y_guess);
+    if (!ok_w0) {
+      nf += 1;
+      return;
+    }
+
+    Real err_T = Kokkos::fabs(T_w0/T - 1.0);
+    Real err_Y = Kokkos::fabs(Y_w0[0] - Y[0]);
+    Real res = Kokkos::fabs(eos.GetEnergy(n, T_w0, Y_w0)/e_mat - 1.0);
+    eT = (err_T > eT) ? err_T : eT;
+    eY = (err_Y > eY) ? err_Y : eY;
+    rmax = (res > rmax) ? res : rmax;
+  }, Kokkos::Sum<int>(n_w1_differs), Kokkos::Sum<int>(n_w0_fail),
+     Kokkos::Max<Real>(err_w0_T_max), Kokkos::Max<Real>(err_w0_Y_max),
+     Kokkos::Max<Real>(res_w0_max));
+
+  std::cout << "Partial equilibrium endpoints, " << nstates << " states:\n"
+            << "  w = 1 differs from trapped : " << n_w1_differs << "\n"
+            << "  w = 0 failures             : " << n_w0_fail << "\n"
+            << "  w = 0 max residual         : " << res_w0_max << "\n"
+            << "  w = 0 max |T_eq/T - 1|     : " << err_w0_T_max << "\n"
+            << "  w = 0 max |Y_eq - Y_e|     : " << err_w0_Y_max << "\n";
+
+  if (n_w1_differs != 0) {
+    std::cout << "Unit weights do not reproduce the trapped equilibrium exactly.\n";
+    success = false;
+  }
+  if (n_w0_fail != 0 || !(res_w0_max < tol_res) || !(err_w0_T_max < tol_T) ||
+      !(err_w0_Y_max < tol_Y)) {
+    std::cout << "Zero weights do not return the matter state (tolerances " << tol_res
+              << " on the residual, " << tol_T << " on T, " << tol_Y << " on Y_e).\n";
     success = false;
   }
 

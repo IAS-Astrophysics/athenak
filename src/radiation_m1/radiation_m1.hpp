@@ -93,6 +93,40 @@ class RadiationM1 {
   DvceArray5D<Real> abs_1;           // energy absorptivity coefficient
   DvceArray5D<Real> scat_1;          // energy scattering coefficient
 
+  //! Diagnostics of the partially-equilibrated (T*, Ye*) predictor, written by
+  //! CalcOpacityNurates and output as "rad_m1_peq". Sized zero unless
+  //! nurates_params.use_partial_equilibrium is set, so it costs nothing when off.
+  //! These are diagnostics of the path the kernel actually took, not of a shadow
+  //! calculation, so they can be checked against an independent implementation.
+  enum PeqDiagnostic {
+    PEQ_W1E    = 0,  //! weight of the nu_e pair energy channel
+    PEQ_W1X    = 1,  //! weight of the heavy pair energy channel
+    PEQ_W0E    = 2,  //! weight of the lepton number channel
+    PEQ_DTAU   = 3,  //! alpha*dt/W, the proper time the weights were built from
+    PEQ_TSTAR  = 4,  //! predicted temperature (= T when the cell is gated out)
+    PEQ_YESTAR = 5,  //! predicted electron fraction (= Y_e when gated out)
+    PEQ_RUNG   = 6,  //! which rung of the fallback ladder answered; see PeqRung
+    PEQ_STATUS = 7,  //! EOSCompOSE::NeutrinoEquilibriumStatus, or -1 if never called
+    //! max_x |J^eq_x(T*,Ye*)/J^eq_x(T,Ye) - 1|, i.e. eta^corr/eta^n - 1 on the THERMAL
+    //! channel; the stored eta_1 also carries eta_1_non_th, so the two coincide only
+    //! where the NEPS emissivity vanishes
+    PEQ_RATIO  = 8,
+    PEQ_NDIAG  = 9
+  };
+  //! How a cell's answer was arrived at, stored in PEQ_RUNG.
+  enum PeqRung {
+    PEQ_GATE_W    = 0,  //! tier-0: every weight below peq_w_floor
+    PEQ_GATE_DTOL = 1,  //! tier-1: predicted excursion below both tolerances
+    PEQ_SOLVED    = 2,  //! solved at the cell's own weights, inside the trust region
+    PEQ_SOFTENED  = 3,  //! solved after halving the weights one or more times
+    PEQ_UNUSABLE  = 4,  //! no accepted solution; the state is left at (T, Y_e)
+    //! a weight, c_v, or the predicted blackbody was non-finite or unusable, so the
+    //! local blackbody stands. Unlike PEQ_UNUSABLE, where only the root was rejected,
+    //! this says an input to the scheme was not a number.
+    PEQ_NONFINITE = 5
+  };
+  DvceArray5D<Real> peq_diag;        // partial-equilibrium predictor diagnostics
+
   MeshBoundaryValuesCC* pbval_u;  // Communication buffers and functions for u
   RadiationM1TaskIDs id;          // container to hold names of TaskIDs
   Real dtnew{};

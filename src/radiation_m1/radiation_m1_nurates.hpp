@@ -30,8 +30,6 @@
 namespace radiationm1 {
 
 struct NuratesParams {
-  Real opacity_tau_trap;   // incl. effects of neutrino trapping above this optical depth
-  Real opacity_tau_delta;  // range of optical depths over which trapping is introduced
   Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
   Real nb_min;
   Real temp_min_mev;
@@ -59,6 +57,16 @@ struct NuratesParams {
                          // this-many cycles on a fresh start, to avoid
                          // reconstructing the distribution from the floored,
                          // neutrinoless initial field
+
+  // Partially-equilibrated (T*, Ye*) emissivity predictor: the equilibrium Kirchhoff's
+  // law is handed. The trapped weak equilibrium is the w -> 1 endpoint of a
+  // one-parameter family in w = a/(1+a), a = dtau*kappa_abs, and the local blackbody is
+  // the w -> 0 one; the predictor evaluates the family at the w the cell actually has.
+  // Off, only the w -> 0 end is available.
+  bool use_partial_equilibrium;  // master switch; on by default
+  Real peq_w_floor;              // skip the cell below this weight (tier-0 gate)
+  Real peq_dlnT_tol;             // skip below this predicted |dlnT| (tier-1 gate)
+  Real peq_dYe_tol;              // skip below this predicted |dYe|  (tier-1 gate)
 
   int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
   MyQuadrature quadrature;
@@ -147,7 +155,6 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
                  Real scat_1[4],
                  Real eta_1_non_th[4],
                  Real abs_1_non_th[4],
-                 Real eta_0_non_th[4],
                  Real abs_0_non_th[4],
                  NuratesParams const &nurates_params,
                  Primitive::UnitSystem const &code_units,
@@ -205,11 +212,10 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   Real & sigma_1_non_th_anue = abs_1_non_th[1];
   Real & sigma_1_non_th_nux = abs_1_non_th[2];
   Real & sigma_1_non_th_anux = abs_1_non_th[3];
-  // Non-thermal (NEPS) NUMBER emissivity and absorption (same convention).
-  Real & R_non_th_nue = eta_0_non_th[0];
-  Real & R_non_th_anue = eta_0_non_th[1];
-  Real & R_non_th_nux = eta_0_non_th[2];
-  Real & R_non_th_anux = eta_0_non_th[3];
+  // Non-thermal (NEPS) NUMBER absorption (same convention). There is deliberately no
+  // number-emissivity counterpart: the caller subtracts the NEPS part out of abs_0 and
+  // applies Kirchhoff's law to the thermal remainder alone, so NEPS is kept out of the
+  // number channel entirely -- unlike the energy channel, which adds eta_1_non_th back.
   Real & sigma_0_non_th_nue = abs_0_non_th[0];
   Real & sigma_0_non_th_anue = abs_0_non_th[1];
   Real & sigma_0_non_th_nux = abs_0_non_th[2];
@@ -223,10 +229,6 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   sigma_1_non_th_anue = 0.;
   sigma_1_non_th_nux = 0.;
   sigma_1_non_th_anux = 0.;
-  R_non_th_nue = 0.;
-  R_non_th_anue = 0.;
-  R_non_th_nux = 0.;
-  R_non_th_anux = 0.;
   sigma_0_non_th_nue = 0.;
   sigma_0_non_th_anue = 0.;
   sigma_0_non_th_nux = 0.;
@@ -371,12 +373,6 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     Q_non_th_nux = opacities.eta_non_th[id_nux] * 2.;
     Q_non_th_anux = opacities.eta_non_th[id_anux] * 2.;
 
-    // non-thermal (NEPS) NUMBER emissivity, same convention as R above (x2 heavy)
-    R_non_th_nue = opacities.eta_0_non_th[id_nue];
-    R_non_th_anue = opacities.eta_0_non_th[id_anue];
-    R_non_th_nux = opacities.eta_0_non_th[id_nux] * 2.;
-    R_non_th_anux = opacities.eta_0_non_th[id_anux] * 2.;
-
     // extract absorption inverse mean-free path (number abs = thermal + non-thermal)
     sigma_0_nue = opacities.kappa_0_a_th[id_nue] + opacities.kappa_0_a_non_th[id_nue];
     sigma_0_anue = opacities.kappa_0_a_th[id_anue] + opacities.kappa_0_a_non_th[id_anue];
@@ -501,10 +497,6 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   sigma_1_non_th_anue = sigma_1_non_th_anue * unit_length;
   sigma_1_non_th_nux = sigma_1_non_th_nux * unit_length;
   sigma_1_non_th_anux = sigma_1_non_th_anux * unit_length;
-  R_non_th_nue = R_non_th_nue / unit_num_dens_dot;
-  R_non_th_anue = R_non_th_anue / unit_num_dens_dot;
-  R_non_th_nux = R_non_th_nux / unit_num_dens_dot;
-  R_non_th_anux = R_non_th_anux / unit_num_dens_dot;
   sigma_0_non_th_nue = sigma_0_non_th_nue * unit_length;
   sigma_0_non_th_anue = sigma_0_non_th_anue * unit_length;
   sigma_0_non_th_nux = sigma_0_non_th_nux * unit_length;

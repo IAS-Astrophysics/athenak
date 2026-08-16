@@ -177,9 +177,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  // upper bound extended to 166 so it also covers rad_m1_abs_1/scat_1/vel and the
-  // grouped rad_m1_moments / rad_m1_opacities choices at 164-165.
-  if ((ivar>=154) && (ivar<166) && (pm->pmb_pack->pradm1 == nullptr)) {
+  // 154-171 is the whole contiguous rad_m1_* run, from rad_m1_N through rad_m1_absF;
+  // 172-174 (u_t, win_Vi, r_sph) are not radiation variables, and rad_m1_peq at 175 is
+  // appended past them. Every one of these dereferences pradm1 below, so the bound must
+  // track the table in outputs.hpp -- it previously stopped at 166 and left
+  // rad_m1_J/H/n/fnu/e/absF to segfault instead.
+  if ((((ivar>=154) && (ivar<172)) || (ivar==175)) &&
+      (pm->pmb_pack->pradm1 == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of radiation m1 variables requested in <output> block '"
        << out_params.block_name << "' but radiation M1 object not constructed."
@@ -821,8 +825,29 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
-  // radiation m1 fluid-frame energy density J = u_a u_b T^{ab} (per species),
-  // in EOS energy density units (MeV/fm^3 for a nuclear EOS)
+  // partial-equilibrium predictor diagnostics. The array is sized zero unless
+  // <bns_nurates>/use_partial_equilibrium is set, so asking for this output without
+  // it would read past the end; refuse instead.
+  if (out_params.variable.compare("rad_m1_peq") == 0) {
+    static const char *peq_labels[radiationm1::RadiationM1::PEQ_NDIAG] = {
+      "w_1e", "w_1x", "w_0e", "dtau", "T_star", "Ye_star", "rung", "status", "ratio"
+    };
+    if (pm->pmb_pack->pradm1->peq_diag.extent(1) !=
+        radiationm1::RadiationM1::PEQ_NDIAG) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Output of rad_m1_peq requested in <output> block '"
+                << out_params.block_name << "' but the partial-equilibrium predictor "
+                << "is off." << std::endl
+                << "Set <bns_nurates>/use_partial_equilibrium = true." << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    for (int d = 0; d < radiationm1::RadiationM1::PEQ_NDIAG; ++d) {
+      outvars.emplace_back(std::string("peq_") + peq_labels[d], d,
+                           &(pm->pmb_pack->pradm1->peq_diag));
+    }
+  }
+
+  // radiation m1 fluid-frame energy density J = u_a u_b T^{ab} (per species)
   if (out_params.variable.compare("rad_m1_J") == 0) {
     int nspec = pm->pmb_pack->pradm1->nspecies;
     out_params.contains_derived = true;

@@ -13,6 +13,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "units/units.hpp"
@@ -32,6 +33,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       eta_1("eta_1", 1, 1, 1, 1, 1),
       abs_1("abs_1", 1, 1, 1, 1, 1),
       scat_1("scat_1", 1, 1, 1, 1, 1),
+      peq_diag("peq_diag", 1, 1, 1, 1, 1),
       chi("chi", 1, 1, 1, 1, 1),
       uflx("rad_uflx", 1, 1, 1, 1, 1) {
   // set up parameters and flags
@@ -55,6 +57,10 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.backreact = pin->GetOrAddBoolean("radiation_m1", "backreact", true);
   params.backreact_tmunu = pin->GetOrAddBoolean("radiation_m1", "backreact_tmunu", true);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
+  params.theta_limiter_diagnostic =
+      pin->GetOrAddBoolean("radiation_m1", "theta_limiter_diagnostic", false);
+  params.theta_limiter_diagnostic_rho =
+      pin->GetOrAddReal("radiation_m1", "theta_limiter_diagnostic_rho", 0.0);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
   params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-27);
@@ -129,11 +135,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     params.opacity_type = BnsNurates;
 
     nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 6);
-    nurates_params.quad_nx_2 = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
-    nurates_params.opacity_tau_trap =
-        pin->GetOrAddReal("bns_nurates", "opacity_tau_trap", 1.0);
-    nurates_params.opacity_tau_delta =
-        pin->GetOrAddReal("bns_nurates", "opacity_tau_delta", 1.0);
+    nurates_params.quad_nx_2 =
+        pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
     nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.); // in bns_nurates()
@@ -163,6 +166,52 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
     nurates_params.eq_warmup_cycles =
         pin->GetOrAddInteger("bns_nurates", "eq_warmup_cycles", 1);
+
+    // Partially-equilibrated emissivity predictor. On by default: it is the scheme,
+    // not an option on top of one. Off, Kirchhoff's law gets the local blackbody --
+    // the predictor's own dt -> 0 limit -- and nothing else, which is a real fallback
+    // but is wrong wherever the neutrinos are trapped.
+    // Asked for by name, or inherited? GetOrAddBoolean writes the default into the
+    // input, so this has to be read before it, not after.
+    const bool peq_requested =
+        pin->DoesParameterExist("bns_nurates", "use_partial_equilibrium");
+    nurates_params.use_partial_equilibrium =
+        pin->GetOrAddBoolean("bns_nurates", "use_partial_equilibrium", true);
+    nurates_params.peq_w_floor =
+        pin->GetOrAddReal("bns_nurates", "peq_w_floor", 1e-3);
+    nurates_params.peq_dlnT_tol =
+        pin->GetOrAddReal("bns_nurates", "peq_dlnT_tol", 1e-4);
+    nurates_params.peq_dYe_tol =
+        pin->GetOrAddReal("bns_nurates", "peq_dYe_tol", 1e-4);
+
+    // The block that computes the equilibrium distribution -- the predictor's only
+    // output -- is skipped when neither of these is set, so the predictor has nothing
+    // to supply and cannot run. Asking for it by name in that configuration is an
+    // error; inheriting the default there is not, since "no equilibrium closure at
+    // all" is a legitimate thing to configure and it would be rude to make it a
+    // startup failure for the sake of a line the user never wrote. Turn it off
+    // instead, and say so -- silently allocating peq_diag and filling rad_m1_peq with
+    // zeros would be the worse outcome.
+    if (nurates_params.use_partial_equilibrium &&
+        !(nurates_params.use_kirchhoff_law ||
+          nurates_params.use_equilibrium_distribution)) {
+      if (peq_requested) {
+        std::cerr << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "<bns_nurates>/use_partial_equilibrium = true requires at least "
+                     "one of use_kirchhoff_law or use_equilibrium_distribution to be "
+                     "true; with both false there is no equilibrium distribution for "
+                     "the predictor to supply and it would be a no-op." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      nurates_params.use_partial_equilibrium = false;
+      if (global_variable::my_rank == 0) {
+        std::cout << "### WARNING: <bns_nurates>/use_partial_equilibrium defaults to "
+                     "true but both use_kirchhoff_law and use_equilibrium_distribution "
+                     "are false, so there is no equilibrium distribution for it to "
+                     "supply. Turning it off." << std::endl;
+      }
+    }
 
     nurates_params.quadrature.nx = nurates_params.quad_nx;
     nurates_params.quadrature.dim = 1;
@@ -255,6 +304,14 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   Kokkos::realloc(eta_1, nmb, nspecies, ncells3, ncells2, ncells1);
   Kokkos::realloc(abs_1, nmb, nspecies, ncells3, ncells2, ncells1);
   Kokkos::realloc(scat_1, nmb, nspecies, ncells3, ncells2, ncells1);
+
+  // partial-equilibrium predictor diagnostics, only when the predictor is on
+#if ENABLE_NURATES
+  if (nurates_params.use_partial_equilibrium) {
+    Kokkos::realloc(peq_diag, nmb, PEQ_NDIAG, ncells3, ncells2, ncells1);
+    Kokkos::deep_copy(peq_diag, 0.0);
+  }
+#endif
 
   // radiation mask
   Kokkos::realloc(radiation_mask, nmb, ncells3, ncells2, ncells1);

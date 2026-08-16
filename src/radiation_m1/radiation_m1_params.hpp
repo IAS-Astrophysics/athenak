@@ -62,6 +62,9 @@ struct RadiationM1Params {
   bool gr_sources;      // include GR sources
   bool matter_sources;  // include matter sources
   bool theta_limiter;   // activate theta limiter
+  bool theta_limiter_diagnostic;  // report how often the theta limiter binds
+  Real theta_limiter_diagnostic_rho;  // ... and again above this density, so that the
+                                      // atmosphere does not swamp the number
   bool beam_sources;    // include beam sources
   bool backreact;
   bool backreact_tmunu;
