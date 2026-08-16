@@ -65,8 +65,6 @@ excise      = false
 closure_fun = eddington
 src_update = implicit
 opacity_type = bns-nurates
-opacity_one_dt = true # default: true
-
 gr_sources = false # default: true
 matter_sources = true # default: true
 backreact = true # false
@@ -83,10 +81,8 @@ use_dU = false
 use_dm_eff = false
 
 use_equilibrium_distribution = true # default: true
-use_kirchoff_law = true # default: true
+use_kirchhoff_law = true # default: true
 
-opacity_tau_trap = 0.0
-opacity_tau_delta = 0.0
 opacity_corr_fac_max = 3.0
 
 <problem>

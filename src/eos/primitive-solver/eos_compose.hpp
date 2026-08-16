@@ -210,6 +210,36 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                                                      Real *Y_eq, Real T_guess,
                                                      Real *Y_guess,
                                                      int *status = nullptr) const {
+    return BetaEquilibriumPartial(n, e, Yl, 1.0, 1.0, 1.0, T_eq, Y_eq,
+                                  T_guess, Y_guess, status);
+  }
+
+  /// Calculate partially-equilibrated T_eq and Y_eq: the one-parameter family of which
+  /// BetaEquilibriumTrapped is the fully-trapped endpoint.
+  //
+  //  The three weights multiply the neutrino terms of the two residuals, one per
+  //  channel -- w_E_e the nu_e + nubar_e pair energy density, w_E_x the heavy pairs',
+  //  w_L the net electron lepton number. They are dimensionless and belong in [0, 1].
+  //  All three equal to 1 reproduces the trapped equilibrium exactly, bit for bit; all
+  //  three equal to 0 leaves the matter state untouched.
+  //
+  //  The caller must build the right-hand sides with the *same* weights it passes here,
+  //
+  //      e_rhs   = e_matter + w_E_e*J_e + w_E_x*J_x
+  //      Yl_rhs  = Y_e      + w_L*N_L/n
+  //
+  //  where J and N_L are the neutrino energy and net lepton number densities the matter
+  //  is currently in contact with. Weights and right-hand sides that disagree solve a
+  //  problem that is not on the family and has no physical interpretation.
+  //
+  //  Note the argument order w_E_e, w_E_x, w_L is fixed and shared by every function
+  //  below that takes them: all three have the same type and no compiler can catch a
+  //  transposition.
+  KOKKOS_INLINE_FUNCTION int BetaEquilibriumPartial(Real n, Real e_rhs, Real *Yl_rhs,
+                                                     Real w_E_e, Real w_E_x, Real w_L,
+                                                     Real &T_eq, Real *Y_eq,
+                                                     Real T_guess, Real *Y_guess,
+                                                     int *status = nullptr) const {
     const int n_at = 16;
     Real vec_guess[n_at][2] = {
       {1.00e0, 1.00e0},
@@ -246,7 +276,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       x0[0] = vec_guess[na][0] * T_guess;
       x0[1] = vec_guess[na][1] * Y_guess[0];
 
-      int ierr_try = trapped_equilibrium_2DNR(n, e, Yl[0], x0, x1);
+      int ierr_try = trapped_equilibrium_2DNR(n, e_rhs, Yl_rhs[0],
+                                              w_E_e, w_E_x, w_L, x0, x1);
 
       if (ierr_try == 0) {
         ierr = 0;
@@ -283,7 +314,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       // provided the state is inside the table.
       T_eq = T_guess;
       Y_eq[0] = Y_guess[0];
-      ierr = trapped_equilibrium_1D(n, e, Y_guess[0], T_eq);
+      ierr = trapped_equilibrium_1D(n, e_rhs, w_E_e, w_E_x, Y_guess[0], T_eq);
       eq_status = (ierr == 0) ? NUEQ_ENERGY_ONLY : NUEQ_FAILED;
     }
 
@@ -564,8 +595,11 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return exp2_(lt);
   }
 
-  /// Low level functions for neutrino equilibrium, not intended for outside use
-  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_2DNR(Real n, Real e, Real Yle,
+  /// Low level functions for neutrino equilibrium, not intended for outside use.
+  /// See BetaEquilibriumPartial for what the three weights mean and for the order they
+  /// are passed in.
+  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_2DNR(Real n, Real e_rhs, Real Yle_rhs,
+                                                       Real w_E_e, Real w_E_x, Real w_L,
                                                        Real x0[2], Real x1[2]) const {
     int ierr = 1;
 
@@ -576,10 +610,10 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     //compute the initial residuals
     Real y[2] = {0.0};
-    func_eq_weak(n,e,Yle,x1,y);
+    func_eq_weak(n,e_rhs,Yle_rhs,w_E_e,w_E_x,w_L,x1,y);
 
     // compute the error from the residuals
-    Real err = error_func_eq_weak(Yle,e,y);
+    Real err = error_func_eq_weak(Yle_rhs,y);
 
     // initialize the iteration variables
     int n_iter = 0;
@@ -594,7 +628,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // large number of steps has been performed
     while (err>nu_2DNR_eps_lim && n_iter<=nu_2DNR_n_max && !KKT) {
       // compute the Jacobian
-      ierr = jacobi_eq_weak(n,e,Yle,x1,J);
+      ierr = jacobi_eq_weak(n,e_rhs,Yle_rhs,w_E_e,w_E_x,w_L,x1,J);
       if (ierr != 0) {
         return ierr;
       }
@@ -680,8 +714,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
         // compute the residuals and the error for the trial point
         Real y_tmp[2] = {0.0};
-        func_eq_weak(n,e,Yle,x1_tmp,y_tmp);
-        Real err_tmp = error_func_eq_weak(Yle,e,y_tmp);
+        func_eq_weak(n,e_rhs,Yle_rhs,w_E_e,w_E_x,w_L,x1_tmp,y_tmp);
+        Real err_tmp = error_func_eq_weak(Yle_rhs,y_tmp);
 
         // accept the first cut that makes progress
         if (err_tmp < err_old) {
@@ -716,13 +750,14 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return ierr;
   }
 
-  /// Energy residual of the trapped equilibrium at fixed Y_e. This is the second
-  /// component of func_eq_weak, which does not depend on Yle.
-  KOKKOS_INLINE_FUNCTION Real energy_eq_weak(Real n, Real e_eq, Real T, Real Ye) const {
+  /// Energy residual of the partial equilibrium at fixed Y_e. This is the second
+  /// component of func_eq_weak, which depends on neither Yle_rhs nor w_L.
+  KOKKOS_INLINE_FUNCTION Real energy_eq_weak(Real n, Real e_rhs, Real w_E_e, Real w_E_x,
+                                              Real T, Real Ye) const {
     Real x[2] = {T, Ye};
     Real y[2] = {0.0};
-    // Yle enters y[0] only, so its value is irrelevant here
-    func_eq_weak(n, e_eq, 1.0, x, y);
+    // Yle_rhs and w_L enter y[0] only, so their values are irrelevant here
+    func_eq_weak(n, e_rhs, 1.0, w_E_e, w_E_x, 1.0, x, y);
     return y[1];
   }
 
@@ -735,10 +770,11 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// sign change across the table, in which case the state is out of range and T_eq
   /// is set to whichever endpoint comes closest, or if the endpoint residuals are
   /// NaN, in which case T_eq is left as the caller set it.
-  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_1D(Real n, Real e_eq, Real Ye,
+  KOKKOS_INLINE_FUNCTION int trapped_equilibrium_1D(Real n, Real e_rhs, Real w_E_e,
+                                                     Real w_E_x, Real Ye,
                                                      Real &T_eq) const {
-    Real ya = energy_eq_weak(n, e_eq, min_T, Ye);
-    Real yb = energy_eq_weak(n, e_eq, max_T, Ye);
+    Real ya = energy_eq_weak(n, e_rhs, w_E_e, w_E_x, min_T, Ye);
+    Real yb = energy_eq_weak(n, e_rhs, w_E_e, w_E_x, max_T, Ye);
 
     if (isnan(ya) || isnan(yb)) {
       return 1;
@@ -755,7 +791,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     for (int n_bis = 0; n_bis < nu_1D_bis_n_max; ++n_bis) {
       Real lm = 0.5*(la + lb);
       Real Tm = exp2_(lm);
-      Real ym = energy_eq_weak(n, e_eq, Tm, Ye);
+      Real ym = energy_eq_weak(n, e_rhs, w_E_e, w_E_x, Tm, Ye);
 
       if (isnan(ym)) {
         break;
@@ -777,8 +813,17 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return 0;
   }
 
-  KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_eq, Real Yle, Real x[2],
-                                            Real y[2]) const {
+  // The weights below multiply the neutrino terms only, so that all three set to 1
+  // reproduces the fully trapped equilibrium. They are written into the existing
+  // expressions in the one grouping that keeps that reduction *bit for bit* rather than
+  // merely algebraic: each weight sits leftmost in its own product, where multiplying by
+  // an exact 1.0 is a no-op, and the terms are summed in the order they were summed
+  // before. Floating-point addition does not associate, so splitting nu_7pi4_15 from
+  // nu_14pi4_15 in jacobi_eq_weak -- they belong to different weights -- would otherwise
+  // move the last bits of the Jacobian and, through it, the whole Newton path.
+  KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_rhs, Real Yle_rhs,
+                                            Real w_E_e, Real w_E_x, Real w_L,
+                                            Real x[2], Real y[2]) const {
     Real T = x[0];
 
     Real Y[MAX_SPECIES] = {0.0};
@@ -791,20 +836,23 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     Real t3 = T*T*T;
     Real t4 = t3*T;
-    y[0] = Y[0] + nu_n_prefactor*t3*eta*(pi2 + eta2)/n - Yle;
-    y[1] = (e+nu_e_prefactor*t4*((nu_7pi4_60+0.5*eta2*(pi2+0.5*eta2))+nu_7pi4_30))/e_eq -
-           1.0;
+    y[0] = Y[0] + w_L*nu_n_prefactor*t3*eta*(pi2 + eta2)/n - Yle_rhs;
+    y[1] = (e+nu_e_prefactor*t4*(w_E_e*(nu_7pi4_60+0.5*eta2*(pi2+0.5*eta2))+
+            w_E_x*nu_7pi4_30))/e_rhs - 1.0;
 
     return;
   }
 
-  KOKKOS_INLINE_FUNCTION Real error_func_eq_weak(Real Yle, Real e_eq, Real y[2]) const {
-    Real err = abs(y[0]/Yle) + abs(y[1]/1.0);
+  /// Scalar error the Newton iteration converges on. The energy residual is already
+  /// relative, the lepton one is not, hence the division by Yle_rhs on that alone.
+  KOKKOS_INLINE_FUNCTION Real error_func_eq_weak(Real Yle_rhs, Real y[2]) const {
+    Real err = abs(y[0]/Yle_rhs) + abs(y[1]);
     return err;
   }
 
-  KOKKOS_INLINE_FUNCTION int jacobi_eq_weak(Real n, Real e_eq, Real Yle, Real x[2],
-                                             Real J[2][2]) const {
+  KOKKOS_INLINE_FUNCTION int jacobi_eq_weak(Real n, Real e_rhs, Real Yle_rhs,
+                                             Real w_E_e, Real w_E_x, Real w_L,
+                                             Real x[2], Real J[2][2]) const {
     int ierr = 0;
 
     Real T = x[0];
@@ -835,13 +883,17 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real T3 = T2*T;
     Real T4 = T3*T;
 
-    J[0][0] = nu_n_prefactor/n*T2*(3.e0*eta*(pi2+eta2)+T*(pi2+3.e0*eta2)*detadt);
-    J[0][1] = 1.e0+nu_n_prefactor/n*T3*(pi2+3.e0*eta2)*detadye;
+    J[0][0] = w_L*nu_n_prefactor/n*T2*(3.e0*eta*(pi2+eta2)+T*(pi2+3.e0*eta2)*detadt);
+    J[0][1] = 1.e0+w_L*nu_n_prefactor/n*T3*(pi2+3.e0*eta2)*detadye;
 
-    J[1][0] = (dedt+nu_e_prefactor*T3*(nu_7pi4_15+nu_14pi4_15+2.e0*eta2*(pi2+0.5*eta2)+
-               eta*T*(pi2+eta2)*detadt))/e_eq;
+    // nu_7pi4_15 is 4x the nu_e pair term and nu_14pi4_15 is 4x the heavy pair term, so
+    // they take w_E_e and w_E_x respectively; the eta-dependent terms are the nu_e
+    // pair's alone.
+    J[1][0] = (dedt+nu_e_prefactor*T3*(w_E_e*nu_7pi4_15+w_E_x*nu_14pi4_15+
+               w_E_e*2.e0*eta2*(pi2+0.5*eta2)+
+               w_E_e*eta*T*(pi2+eta2)*detadt))/e_rhs;
     // Below was changed to T4 from T3 to be consistent with the dimensional analysis.
-    J[1][1] = (dedye+nu_e_prefactor*T4*eta*(pi2+eta2)*detadye)/e_eq;
+    J[1][1] = (dedye+w_E_e*nu_e_prefactor*T4*eta*(pi2+eta2)*detadye)/e_rhs;
 
     return ierr;
   }

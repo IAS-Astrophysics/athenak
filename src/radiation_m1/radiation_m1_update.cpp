@@ -8,6 +8,10 @@
 
 #include <iostream>
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
@@ -155,6 +159,23 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   bool ismhd_ = ismhd;
   bool ishydro_ = ishydro;
+
+  // How often the source limiter binds. Off by default: it costs an atomic per
+  // cell, which is nothing when nobody asks and contended when they do. [0]/[1]
+  // count theta < 1 and the cells that got as far as being asked -- masked cells
+  // return above and are in neither. [2]/[3] are the same restricted to
+  // rho > theta_limiter_diagnostic_rho, because the limiter binds essentially
+  // everywhere in a near-vacuum atmosphere, which in a star-in-a-box swamps the
+  // number one actually wants. A threshold of 0 makes the two pairs identical.
+  const bool theta_diag_ = params_.theta_limiter_diagnostic;
+  const Real theta_diag_rho_ = params_.theta_limiter_diagnostic_rho;
+  // Left unallocated when off, rather than allocated and ignored: this runs once per
+  // RK stage. The lambda captures it either way, which is fine so long as nothing
+  // dereferences it, and nothing does.
+  Kokkos::View<int[4], DevMemSpace> theta_count_dev;
+  if (theta_diag_) {
+    theta_count_dev = Kokkos::View<int[4], DevMemSpace>("m1_theta_count");
+  }
 
   par_for(
       "radiation_m1_update", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -632,6 +653,20 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           theta = 0.0;
         }  // if (params_.matter_sources)
 
+        if (theta_diag_) {
+          if (theta < 1.0) {
+            Kokkos::atomic_inc(&theta_count_dev(0));
+          }
+          Kokkos::atomic_inc(&theta_count_dev(1));
+          if ((ismhd_ || ishydro_) &&
+              w0_(m, IDN, k, j, i) > theta_diag_rho_) {
+            if (theta < 1.0) {
+              Kokkos::atomic_inc(&theta_count_dev(2));
+            }
+            Kokkos::atomic_inc(&theta_count_dev(3));
+          }
+        }
+
         // [H] Update fields
         for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
           Real Ef = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
@@ -674,6 +709,25 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           }
         }
       });
+
+  if (theta_diag_) {
+    Kokkos::View<int[4], DevMemSpace>::HostMirror theta_count_host =
+        Kokkos::create_mirror_view(theta_count_dev);
+    Kokkos::deep_copy(theta_count_host, theta_count_dev);
+    int c[4] = {theta_count_host(0), theta_count_host(1),
+                theta_count_host(2), theta_count_host(3)};
+#if MPI_PARALLEL_ENABLED
+    MPI_Allreduce(MPI_IN_PLACE, c, 4, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+#endif
+    if (global_variable::my_rank == 0) {
+      std::cout << "RadiationM1::TimeUpdate: theta<1 in " << c[0] << " of " << c[1]
+                << " cells (" << (c[1] > 0 ? 100.0*c[0]/c[1] : 0.0) << "%), and "
+                << c[2] << " of " << c[3] << " above rho=" << theta_diag_rho_
+                << " (" << (c[3] > 0 ? 100.0*c[2]/c[3] : 0.0) << "%), cycle "
+                << pmy_pack->pmesh->ncycle << " stage " << stage << std::endl;
+    }
+  }
+
   is_chi_updated = false;
   return TaskStatus::complete;
 }
