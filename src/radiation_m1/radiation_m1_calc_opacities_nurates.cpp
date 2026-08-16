@@ -80,9 +80,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &abs_1_ = abs_1;
   auto &scat_1_ = scat_1;
 
-  // Partial-equilibrium predictor. peq_diag is sized zero unless the switch is on,
-  // so peq_on_ gates the writes as well as the work.
-  auto &peq_diag_ = peq_diag;
   const bool peq_on_ = nurates_params_.use_partial_equilibrium;
   // Half-width of the tier-1 c_v secant, relative to T; a gate, not a Jacobian,
   // so a crude c_v is enough.
@@ -124,11 +121,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             abs_1_(m, nuidx, k, j, i) = 0;
             eta_1_(m, nuidx, k, j, i) = 0;
             scat_1_(m, nuidx, k, j, i) = 0;
-          }
-          if (peq_on_) {
-            for (int d = 0; d < RadiationM1::PEQ_NDIAG; ++d) {
-              peq_diag_(m, d, k, j, i) = 0;
-            }
           }
         } else {
           Real garr_dd[16];
@@ -430,9 +422,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
               Real T_star = T;
               Real Ye_star = Y;
-              int rung = RadiationM1::PEQ_GATE_W;
-              int eq_status = -1;
-              Real ratio = 0.0;
 
               // Tier-0 gate: no EOS calls at all. An optically thin cell has
               // nothing to equilibrate with and must cost nothing. Ternaries not
@@ -444,9 +433,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               Real w_max = (w_1e > w_1x) ? w_1e : w_1x;
               w_max = (w_max > w_0e) ? w_max : w_0e;
 
-              if (!w_finite) {
-                rung = RadiationM1::PEQ_NONFINITE;
-              } else if (w_max >= nurates_params_.peq_w_floor) {
+              if (w_finite && w_max >= nurates_params_.peq_w_floor) {
                 Real Y_part[3] = {Y, 0.0, 0.0};
 
                 // Tier-1 gate: first-order bounds on the excursion the solve
@@ -483,14 +470,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                           : 0.0;
                 const Real dYe_hat = w_0e*Kokkos::fabs(N_L_eq - N_L)/nb;
 
-                if (!cv_ok) {
-                  // A bad c_v removes the gate and the trust region both --
-                  // everything below divides by T*cv. Predict nothing instead.
-                  rung = RadiationM1::PEQ_NONFINITE;
-                } else if (dlnT_hat < nurates_params_.peq_dlnT_tol &&
-                           dYe_hat < nurates_params_.peq_dYe_tol) {
-                  rung = RadiationM1::PEQ_GATE_DTOL;
-                } else {
+                // A bad c_v removes the gate and the trust region both --
+                // everything below divides by T*cv. Predict nothing instead.
+                if (cv_ok && !(dlnT_hat < nurates_params_.peq_dlnT_tol &&
+                               dYe_hat < nurates_params_.peq_dYe_tol)) {
                   // Trust region. The gate estimates do double duty: a root far
                   // outside the linear bound is a converged-but-wrong root --
                   // the failure mode that matters, since a small energy residual
@@ -512,7 +495,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                   // On failure, halve all three weights and retry: that slides
                   // the problem along the same one-parameter family toward the
                   // trivial one, so every intermediate point is a valid scheme.
-                  rung = RadiationM1::PEQ_UNUSABLE;
+                  // A cell that never produces an accepted root keeps (T, Y_e).
                   Real f_soft = 1.0;
                   for (int n_soft = 0; n_soft <= peq_max_halvings;
                        ++n_soft, f_soft *= 0.5) {
@@ -525,21 +508,16 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
                     Real T_try = T;
                     Real Ye_try[3] = {Y, 0.0, 0.0};
-                    int status_try = -1;
                     bool ok = eos.GetBetaEquilibriumPartial(
                         nb, e_rhs, Yl_rhs, u_1e, u_1x, u_0e, T_try, &Ye_try[0],
-                        T, Y_part, &status_try);
+                        T, Y_part);
 
                     if (ok && Kokkos::fabs(Kokkos::log(T_try/T)) <= dlnT_max &&
                         Kokkos::fabs(Ye_try[0] - Y) <= dYe_max) {
                       T_star = T_try;
                       Ye_star = Ye_try[0];
-                      eq_status = status_try;
-                      rung = (n_soft == 0) ? RadiationM1::PEQ_SOLVED
-                                           : RadiationM1::PEQ_SOFTENED;
                       break;
                     }
-                    eq_status = status_try;
                   }
                 }
               }
@@ -572,8 +550,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // trapped branch carried (and -DNDEBUG removes). Nothing
               // downstream catches this: abs_*_th * my_nudens_* would carry a
               // NaN into eta_* and on into the source term. Fall back to the
-              // local blackbody, the w -> 0 answer, and record it rather than
-              // substitute silently.
+              // local blackbody, the w -> 0 answer.
               bool peq_finite = true;
               for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
                 peq_finite = peq_finite &&
@@ -587,29 +564,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 }
                 T_star = T;
                 Ye_star = Y;
-                rung = RadiationM1::PEQ_NONFINITE;
               }
-
-              // What the predictor hands Kirchhoff's law against what the
-              // explicit treatment would. Opacities are held at t^n either way,
-              // so this is eta^corr/eta^n - 1 on the thermal channel.
-              for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-                if (nudens_1_thin[nuidx] > 0.0) {
-                  const Real r = Kokkos::fabs(
-                      nudens_1_peq[nuidx]/nudens_1_thin[nuidx] - 1.0);
-                  ratio = (r > ratio) ? r : ratio;
-                }
-              }
-
-              peq_diag_(m, RadiationM1::PEQ_W1E, k, j, i) = w_1e;
-              peq_diag_(m, RadiationM1::PEQ_W1X, k, j, i) = w_1x;
-              peq_diag_(m, RadiationM1::PEQ_W0E, k, j, i) = w_0e;
-              peq_diag_(m, RadiationM1::PEQ_DTAU, k, j, i) = dtau;
-              peq_diag_(m, RadiationM1::PEQ_TSTAR, k, j, i) = T_star;
-              peq_diag_(m, RadiationM1::PEQ_YESTAR, k, j, i) = Ye_star;
-              peq_diag_(m, RadiationM1::PEQ_RUNG, k, j, i) = rung;
-              peq_diag_(m, RadiationM1::PEQ_STATUS, k, j, i) = eq_status;
-              peq_diag_(m, RadiationM1::PEQ_RATIO, k, j, i) = ratio;
             }
           }
 

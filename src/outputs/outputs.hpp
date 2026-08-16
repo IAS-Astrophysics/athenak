@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 176
+#define NOUTPUT_CHOICES 175
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -127,12 +127,6 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 
   // Spherical radius (174)
   "r_sph",
-
-  // Partial-equilibrium predictor diagnostics (175). Appended rather than filed with
-  // the other rad_m1 entries on purpose: the index ranges above are hard-coded in
-  // basetype_output.cpp's object checks, so inserting in the middle silently
-  // renumbers them.
-  "rad_m1_peq",
 };
 
 
