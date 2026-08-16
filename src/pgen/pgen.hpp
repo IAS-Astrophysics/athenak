@@ -90,6 +90,7 @@ class ProblemGenerator {
   void RadiationCrossingBeams(ParameterInput *pin, const bool restart);
   void RadiationKerrOrbitBeam(ParameterInput *pin, const bool restart);
   void RadiationFLRWRedshift(ParameterInput *pin, const bool restart);
+  void RadiationM1FLRWRedshift(ParameterInput *pin, const bool restart);
   void RadiationLapseGradient(ParameterInput *pin, const bool restart);
   void RadiationMomentumSource(ParameterInput *pin, const bool restart);
   void DynBBHBeam(ParameterInput *pin, const bool restart);

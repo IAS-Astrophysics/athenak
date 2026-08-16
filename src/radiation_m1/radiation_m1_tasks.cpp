@@ -14,6 +14,7 @@
 
 #include "athena.hpp"
 #include "bvals/bvals.hpp"
+#include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "eos/eos.hpp"
 #include "globals.hpp"
@@ -55,8 +56,10 @@ void RadiationM1::AssembleRadiationM1Tasks(
 
   // assemble "stagen" task list
   id.M1_copyu = tl["opsplit_stagen"]->AddTask(&RadiationM1::CopyCons, this, none, "RadiationM1::CopyU");
+  id.M1_refresh_adm =
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::RefreshADM, this, id.M1_copyu, "RadiationM1::RefreshADM");
   id.M1_setmask =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::SetMask, this, id.M1_copyu, "RadiationM1::SetMask");
+      tl["opsplit_stagen"]->AddTask(&RadiationM1::SetMask, this, id.M1_refresh_adm, "RadiationM1::SetMask");
   id.M1_closure =
       tl["opsplit_stagen"]->AddTask(&RadiationM1::FloorAndCalcClosure, this, id.M1_setmask, "RadiationM1::FloorAndCalcClosure");
 
@@ -140,6 +143,15 @@ TaskStatus RadiationM1::InitRecv(Driver *pdrive, int stage) {
 TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void RadiationM1::RefreshADM
+TaskStatus RadiationM1::RefreshADM(Driver *pdrive, int stage) {
+  if (refresh_adm && stage == 1) {
+    pmy_pack->padm->SetADMVariables(pmy_pack);
   }
   return TaskStatus::complete;
 }

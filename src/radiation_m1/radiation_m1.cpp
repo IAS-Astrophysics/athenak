@@ -40,6 +40,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   ismhd = pin->DoesBlockExist("mhd");
   isadm = pin->DoesBlockExist("adm");
   is_chi_updated = false;
+  refresh_adm = false;
 
   if (!isadm) {
     std::cerr << "Error: radiation_m1 is only supported with "

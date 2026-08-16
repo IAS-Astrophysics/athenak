@@ -35,6 +35,7 @@ namespace radiationm1 {
 struct RadiationM1TaskIDs {
   TaskID M1_irecv;
   TaskID M1_copyu;
+  TaskID M1_refresh_adm;
   TaskID M1_setmask;
   TaskID M1_closure;
   TaskID M1_flux;
@@ -75,6 +76,7 @@ class RadiationM1 {
   bool isadm;                              // flag to check if <adm> present
 
   bool is_chi_updated;                     // true if the closure is already up to date
+  bool refresh_adm;                        // refresh ADM from SetADMVariables
   
   RadiationM1Params params{};              // user parameters for grey M1
   PhotonOpacityParams photon_op_params{};  // params for photon opacities
@@ -109,6 +111,7 @@ class RadiationM1 {
   TaskStatus InitRecv(Driver* d, int stage);
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver* d, int stage);
+  TaskStatus RefreshADM(Driver* d, int stage);
   TaskStatus SetMask(Driver* d, int stage);
   TaskStatus FloorAndCalcClosure(Driver* d, int stage);
   TaskStatus CalculateFluxes(Driver* d, int stage);

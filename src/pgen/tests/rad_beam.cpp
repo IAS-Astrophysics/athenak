@@ -31,6 +31,7 @@
 #include "radiation/radiation_tetrad.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
 #include "pgen/pgen.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 
 // Prototypes for user-defined BCs
 void ZeroIntensity(Mesh *pm);
@@ -38,6 +39,7 @@ void CrossingBeamBoundary(Mesh *pm);
 void KerrOrbitBeamSource(Mesh *pm, const Real bdt);
 void DynRadPositivityFloorCheck(ParameterInput *pin, Mesh *pm);
 void DynRadFLRWRedshiftCheck(ParameterInput *pin, Mesh *pm);
+void RadM1FLRWRedshiftCheck(ParameterInput *pin, Mesh *pm);
 void DynRadLapseGradientCheck(ParameterInput *pin, Mesh *pm);
 void DynRadMomentumSourceCheck(ParameterInput *pin, Mesh *pm);
 
@@ -1144,6 +1146,48 @@ void ProblemGenerator::RadiationFLRWRedshift(ParameterInput *pin, const bool res
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void MeshBlock::RadiationM1FLRWRedshift(ParameterInput *pin)
+//! \brief Homogeneous isotropic radiation in an analytic flat FLRW ADM background.
+void ProblemGenerator::RadiationM1FLRWRedshift(ParameterInput *pin, const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (pmbp->pradm1 == nullptr || pmbp->padm == nullptr) {
+    throw std::runtime_error("rad_m1_flrw_redshift requires ADM radiation_m1");
+  }
+  adm_formal_test.flrw_h = pin->GetOrAddReal("problem", "hubble", 0.2);
+  adm_formal_test.flrw_t0 = pin->GetOrAddReal("problem", "t0", 0.0);
+  pmbp->padm->SetADMVariables = &SetADMVariablesToFLRWRedshift;
+  pmbp->padm->SetADMVariables(pmbp);
+  pmbp->pradm1->refresh_adm = true;
+  pgen_final_func = RadM1FLRWRedshiftCheck;
+  if (restart) {
+    return;
+  }
+
+  auto &indcs = pmy_mesh_->mb_indcs;
+  const int ng = indcs.ng;
+  const int n1 = indcs.nx1 + 2*ng;
+  const int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2*ng) : 1;
+  const int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
+  const int nmb1 = pmbp->nmb_thispack - 1;
+  const Real erad = pin->GetOrAddReal("problem", "erad", 1.0);
+  auto &u0 = pmbp->pradm1->u0;
+  auto &nvars = pmbp->pradm1->nvars;
+  auto &adm = pmbp->padm->adm;
+  par_for("rad_m1_flrw_redshift_init", DevExeSpace(),
+          0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    const Real volform = sqrt(adm::SpatialDet(
+        adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+        adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)));
+    u0(m, radiationm1::CombinedIdx(0, M1_E_IDX, nvars), k, j, i) = volform*erad;
+    u0(m, radiationm1::CombinedIdx(0, M1_FX_IDX, nvars), k, j, i) = 0.0;
+    u0(m, radiationm1::CombinedIdx(0, M1_FY_IDX, nvars), k, j, i) = 0.0;
+    u0(m, radiationm1::CombinedIdx(0, M1_FZ_IDX, nvars), k, j, i) = 0.0;
+  });
+  Kokkos::fence();
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::RadiationLapseGradient(ParameterInput *pin)
 //! \brief Uniform anisotropic radiation in a static periodic lapse gradient.
 
@@ -1366,6 +1410,80 @@ void DynRadFLRWRedshiftCheck(ParameterInput *pin, Mesh *pm) {
       e += (i0(m,n,k,j,i)/sqrt_detg(m,k,j,i))*solid_angles.d_view(n);
     }
     thread_e += e;
+    thread_u += u;
+    thread_cells += 1.0;
+  }, Kokkos::Sum<Real>(sum_e), Kokkos::Sum<Real>(sum_u),
+     Kokkos::Sum<Real>(sum_cells));
+
+  const Real mean_e = sum_e/sum_cells;
+  const Real mean_u = sum_u/sum_cells;
+  const Real rel_e = fabs(mean_e - exact_e)/fmax(fabs(exact_e), 1.0e-300);
+  const Real rel_u = fabs(mean_u - exact_u)/fmax(fabs(exact_u), 1.0e-300);
+  std::cout << std::setprecision(16)
+            << "ADM_FORMAL_TEST flrw"
+            << " a=" << a
+            << " mean_E=" << mean_e
+            << " exact_E=" << exact_e
+            << " rel_E=" << rel_e
+            << " mean_U=" << mean_u
+            << " exact_U=" << exact_u
+            << " rel_U=" << rel_u << std::endl;
+  if (rel_e > tol || rel_u > tol) {
+    std::cout << "### FATAL ERROR in FLRW redshift test" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn RadM1FLRWRedshiftCheck
+//! \brief Check homogeneous redshift E ~ a^-4 and sqrt(gamma)E ~ a^-1.
+
+void RadM1FLRWRedshiftCheck(ParameterInput *pin, Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  const Real erad = pin->GetOrAddReal("problem", "erad", 1.0);
+  const Real tol = pin->GetOrAddReal("problem", "redshift_tolerance", 5.0e-3);
+  const Real h = pin->GetOrAddReal("problem", "hubble", adm_formal_test.flrw_h);
+  const Real t0 = pin->GetOrAddReal("problem", "t0", adm_formal_test.flrw_t0);
+  adm_formal_test.flrw_h = h;
+  adm_formal_test.flrw_t0 = t0;
+  if (pmbp->padm != nullptr) {
+    pmbp->padm->SetADMVariables(pmbp);
+  }
+  const Real a = 1.0 + h*(pm->time - t0);
+  const Real exact_e = erad/std::pow(a, 4);
+  const Real exact_u = erad/a;
+
+  auto &indcs = pm->mb_indcs;
+  const int nx1 = indcs.nx1;
+  const int nx2 = indcs.nx2;
+  const int nx3 = indcs.nx3;
+  const int is = indcs.is;
+  const int js = indcs.js;
+  const int ks = indcs.ks;
+  const int nmkji = pmbp->nmb_thispack*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+
+  auto &u0 = pmbp->pradm1->u0;
+  auto &nvars = pmbp->pradm1->nvars;
+  auto &adm = pmbp->padm->adm;
+  Real sum_e = 0.0;
+  Real sum_u = 0.0;
+  Real sum_cells = 0.0;
+  Kokkos::parallel_reduce("rad_m1_flrw_redshift_check",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &thread_e, Real &thread_u, Real &thread_cells) {
+    int m = idx/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+    const Real volform = sqrt(adm::SpatialDet(
+        adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+        adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i), adm.g_dd(m,2,2,k,j,i)));
+    const Real u = u0(m, radiationm1::CombinedIdx(0, M1_E_IDX, nvars), k, j, i);
+    thread_e += u/volform;
     thread_u += u;
     thread_cells += 1.0;
   }, Kokkos::Sum<Real>(sum_e), Kokkos::Sum<Real>(sum_u),
