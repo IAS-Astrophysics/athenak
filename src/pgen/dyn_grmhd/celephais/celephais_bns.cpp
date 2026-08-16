@@ -163,6 +163,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
   const double h_cut      = bconfig.eos<double>(HCUT, BCO1);
   const std::string eos_file = bconfig.eos<std::string>(EOSFILE, BCO1);
   const std::string eos_type = bconfig.eos<std::string>(EOSTYPE, BCO1);
+  const double mnuc_cgs   = bconfig.eos<double>(MNUC_CGS, BCO1);
 
   const double units    = 4.0 * M_PI;
   const double omega    = bconfig(GOMEGA);
@@ -222,7 +223,7 @@ void SetupBNS(ParameterInput *pin, Mesh* pmy_mesh_) {
     using eos_t = Kadath::Margherita::Cold_Table;
     const int interp_pts = (bconfig.eos<int>(INTERP_PTS, BCO1) == 0)
                            ? 2000 : bconfig.eos<int>(INTERP_PTS, BCO1);
-    EOS<eos_t, eos_var_t::PRESSURE>::init(eos_file, h_cut, interp_pts);
+    EOS<eos_t, eos_var_t::PRESSURE>::init(eos_file, h_cut, interp_pts, mnuc_cgs);
     syst.add_ope("eps",   &EOS<eos_t, eos_var_t::EPSILON>::action,  &p);
     syst.add_ope("press", &EOS<eos_t, eos_var_t::PRESSURE>::action, &p);
     syst.add_ope("rho",   &EOS<eos_t, eos_var_t::DENSITY>::action,  &p);
