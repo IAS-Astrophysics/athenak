@@ -71,6 +71,10 @@ class DriftControl {
     return dc_variety;
   }
 
+  //! Scale factor applied to the whole correction, ramping 1 -> 0 over
+  //! [dc_ramp_start, dc_ramp_start + dc_ramp_time]. Returns 1 when disabled.
+  Real RampFactor(Real time) const;
+
  private:
   Mesh const *pmesh;
   ParameterInput *pin;
@@ -91,6 +95,10 @@ class DriftControl {
   bool dc_dt_warned;   // one-shot guard against omega_o dt beyond the explicit limit
   Real dc_vel_cap;
   Real dc_integral_cap;
+  Real dc_ramp_start;  // time at which the ramp-down begins; < 0 disables the ramp
+  Real dc_ramp_time;   // ramp duration; <= 0 with a valid start means an instant cut
+  bool dc_ramp_begun;  // one-shot log guards
+  bool dc_ramp_done;
   int out_every;
   std::ofstream ofile;
 };

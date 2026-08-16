@@ -99,6 +99,17 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                      + (pdc->GetPos(a) - fixed[a])) * inv_tau2;
       }
     }
+
+    // Optional ramp-down, applied to everything the controller injects. The factor is
+    // 1 unless dc_ramp_start >= 0, so this is a no-op for every existing parfile.
+    Real const dc_ramp = pdc->RampFactor(time);
+    if (dc_ramp < 1.0) {
+      for (int a = 0; a < 3; ++a) {
+        dc_corr[a]  *= dc_ramp;
+        dc_gsupp[a] *= dc_ramp;
+      }
+      dc_inv_tau *= dc_ramp;
+    }
   }
 
   bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;

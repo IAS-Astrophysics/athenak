@@ -82,6 +82,13 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
   dc_integral_cap  = pin->GetOrAddReal("z4c", "dc_integral_cap", 5.0);
   out_every        = pin->GetOrAddInteger("z4c", "dc_out_every", 1);
 
+  // Ramp-down. Defaults leave the controller running forever, i.e. behaviour is
+  // unchanged for every parfile that does not set these.
+  dc_ramp_start    = pin->GetOrAddReal("z4c", "dc_ramp_start", -1.0);
+  dc_ramp_time     = pin->GetOrAddReal("z4c", "dc_ramp_time", 0.0);
+  dc_ramp_begun    = false;
+  dc_ramp_done     = false;
+
   dc_fixed[0]      = pin->GetOrAddReal("z4c", "dc_fixed_x", 0.0);
   dc_fixed[1]      = pin->GetOrAddReal("z4c", "dc_fixed_y", 0.0);
   dc_fixed[2]      = pin->GetOrAddReal("z4c", "dc_fixed_z", 0.0);
@@ -126,6 +133,24 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
 DriftControl::~DriftControl() { }
 
 //----------------------------------------------------------------------------------------
+//! \brief Smooth 1 -> 0 taper on the applied correction. See the header for why an
+//! abrupt cut is not an option.
+Real DriftControl::RampFactor(Real time) const {
+  if (dc_ramp_start < 0.0) {
+    return 1.0;                       // ramp disabled: unchanged behaviour
+  }
+  if (time <= dc_ramp_start) {
+    return 1.0;
+  }
+  if (dc_ramp_time <= 0.0 || time >= dc_ramp_start + dc_ramp_time) {
+    return 0.0;
+  }
+  // Raised cosine: C^1 at both ends, so neither the force nor its derivative jumps.
+  Real const s = (time - dc_ramp_start) / dc_ramp_time;
+  return 0.5 * (1.0 + std::cos(M_PI * s));
+}
+
+//----------------------------------------------------------------------------------------
 void DriftControl::EvolveDriftControl() {
   int const idx = dc_tracker_index;
   auto &ptracker = pmesh->pmb_pack->pz4c->ptracker;
@@ -146,6 +171,27 @@ void DriftControl::EvolveDriftControl() {
   }
 
   Real const dt = pmesh->dt;
+
+  // Once the ramp has begun the loop is being opened on purpose: the RHS applies only
+  // w*u while e and v grow, so letting the observer/integrator keep accumulating would
+  // wind the state up against the ramp and partly cancel it. Freeze the state instead;
+  // the applied force is then w times a fixed quantity and goes to zero as w does.
+  Real const ramp = RampFactor(pmesh->time);
+  bool const ramping = (ramp < 1.0);
+
+  if (dc_ramp_start >= 0.0 && 0 == global_variable::my_rank) {
+    if (!dc_ramp_begun && ramping) {
+      dc_ramp_begun = true;
+      std::cout << "### Drift control ramp-down begun at time = " << pmesh->time
+                << "; correction reaches zero at "
+                << dc_ramp_start + dc_ramp_time << "." << std::endl;
+    }
+    if (!dc_ramp_done && ramp <= 0.0) {
+      dc_ramp_done = true;
+      std::cout << "### Drift control ramp-down complete at time = " << pmesh->time
+                << "; the applied correction is now zero." << std::endl;
+    }
+  }
 
   // The observer pole sits at -omega_o and is integrated explicitly, so omega_o dt is
   // the binding numerical constraint on the DOB branch.
@@ -178,14 +224,18 @@ void DriftControl::EvolveDriftControl() {
       dc_prev_error[a]   = e;
 
       // pdot = omega_o (u - fhat) = omega_o (omega_c^2 e + 2 zeta omega_c v)
-      dc_p[a]   += dt * dc_omega_o * (wc2 * e + twzc * dc_vel[a]);
+      if (!ramping) {
+        dc_p[a] += dt * dc_omega_o * (wc2 * e + twzc * dc_vel[a]);
+      }
       // Recorded after the update so the logged fhat is what the next RHS applies.
       dc_fhat[a] = dc_p[a] + dc_omega_o * dc_vel[a];
     }
   } else if (dc_variety == PID) {
     for (int a = 0; a < NDIM; ++a) {
       Real const e = dc_pos[a] - dc_fixed[a];
-      dc_integral[a] += e * dt;
+      if (!ramping) {
+        dc_integral[a] += e * dt;
+      }
 
       // Clamp dc_integral/dc_vel to a limited range given by the
       // cap. If out this range, return the minimum.
