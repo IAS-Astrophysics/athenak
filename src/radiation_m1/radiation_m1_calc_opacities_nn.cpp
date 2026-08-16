@@ -562,7 +562,12 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
             Real Y_lep[3]{};
             eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
-            Real Y_guess[3] = {Y_lep[0], Y_lep[1], Y_lep[2]};
+            // The guess is for Y_e, so it is Y, not the total lepton fraction
+            // Y_le = Y_e + Y_nu: the latter is both a worse starting point and,
+            // if the solve fails, a fallback value too high by Y_nu.
+            // (mirrors the upstream trapped-solver fix in
+            //  radiation_m1_calc_opacities_nurates.cpp)
+            Real Y_guess[3] = {Y, Y_lep[1], Y_lep[2]};
 
             Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
 
