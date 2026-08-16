@@ -65,6 +65,7 @@ struct RadiationM1Params {
   bool beam_sources;    // include beam sources
   bool backreact;
   bool backreact_tmunu;
+  bool photon_coupled_sources;
   
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure

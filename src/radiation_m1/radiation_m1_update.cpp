@@ -6,12 +6,17 @@
 //! \file radiation_m1_update.cpp
 //! \brief beam time update for grey M1
 
+#include <type_traits>
+
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/eos.hpp"
 #include "globals.hpp"
+#include "hydro/hydro.hpp"
+#include "radiation/radiation_opacities.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_helpers.hpp"
@@ -164,6 +169,16 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   Real beta[2] = {0.5, 1.};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
+
+  const bool coupled_photons =
+      params.photon_coupled_sources && params.opacity_type == Photons &&
+      (ismhd || ishydro) && std::is_same_v<EOSPolicy, Primitive::IdealGas>;
+  Real gm1{}, arad{};
+  if (coupled_photons) {
+    gm1 = (ismhd ? pmy_pack->pmhd->peos->eos_data.gamma
+                 : pmy_pack->phydro->peos->eos_data.gamma) - 1.0;
+    arad = photon_op_params.arad;
+  }
 
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
 
@@ -475,7 +490,29 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
               // Estimate interaction with matter
               const Real dtau = beta_dt * (adm.alpha(m, k, j, i) / w_lorentz);
-              Real Jnew = (Jstar + dtau * eta_1_(m, nuidx, k, j, i) * volform) /
+              Real eta = eta_1_(m, nuidx, k, j, i);
+              if (coupled_photons) {
+                const Real kap = abs_1_(m, nuidx, k, j, i);
+                const Real kscat = scat_1_(m, nuidx, k, j, i);
+                const Real wdn = w0_(m, IDN, k, j, i);
+                const Real tgas = w0_(m, IPR, k, j, i) / wdn;
+                const Real jfac = (beta_dt * kap < 1 && beta_dt * kscat < 1)
+                                      ? 1. : 1. + dtau * kap;
+                const Real fac = dtau * kap * gm1 / (wdn * jfac);
+                const Real coef1 = fac * arad;
+                const Real coef0 = -tgas - fac * Jstar / volform;
+                Real tgasnew = tgas;
+                bool flag = true;
+                if (Kokkos::fabs(coef1) > 1.0e-20) {
+                  flag = FourthPolyRoot(coef1, coef0, tgasnew);
+                } else {
+                  tgasnew = -coef0;
+                }
+                if (flag && Kokkos::isfinite(tgasnew) && tgasnew > 0.) {
+                  eta = kap * arad * SQR(SQR(tgasnew));
+                }
+              }
+              Real Jnew = (Jstar + dtau * eta * volform) /
                           (1. + dtau * abs_1_(m, nuidx, k, j, i));
 
               // Only three components of H^a are independent H^0 is found by
@@ -519,8 +556,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               auto src_signal = source_update(
                   BrentFunc_, HybridsjFunc_, beta_dt, adm.alpha(m, k, j, i),
                   g_dd, g_uu, n_d, n_u, gamma_ud, u_d, u_u, v_d, v_u, proj_ud,
-                  w_lorentz, Estar, Fstar_d, Estar, Fstar_d,
-                  volform * eta_1_(m, nuidx, k, j, i),
+                  w_lorentz, Estar, Fstar_d, Estar, Fstar_d, volform * eta,
                   abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i),
                   chi_(m, nuidx, k, j, i), Enew, Fnew_d, params_,
                   params_.closure_type);
