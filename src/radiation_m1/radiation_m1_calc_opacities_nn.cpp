@@ -83,8 +83,6 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
     w0_ = pmy_pack->pmhd->w0;
   }
 
-  Real beta[2] = {0.5, 1.};
-  Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
       static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
@@ -117,7 +115,7 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   const Real unit_num_dens_dot_ = unit_num_dens_dot;
   const Real unit_ene_dens_dot_ = unit_ene_dens_dot;
   const Real unit_num_dens_     = unit_num_dens;
-  const Real beta_dt_           = beta_dt;
+  const Real dt_full_           = pmy_pack->pmesh->dt;  // full step for the peq dtau
   const Real mb_                = mb;
 
   // ── 1. Device gather: EOS inputs (8 features per cell, no species tiling) ────
@@ -138,14 +136,14 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   const bool nn_scratch_will_grow = N_total > nn_scratch_capacity_;
   const size_t nn_scratch_bytes = static_cast<size_t>(N_total) *
       (static_cast<size_t>(NN_NEOS + NN_NIN + NN_NOUT) * sizeof(float) +
-       sizeof(bool) + static_cast<size_t>(8 + 16) * sizeof(Real));
+       sizeof(bool) + static_cast<size_t>(9 + 16) * sizeof(Real));
   nn_emulator.ProfileBegin(N_total, nn_scratch_will_grow, nn_scratch_bytes);
   if (N_total > nn_scratch_capacity_) {
     Kokkos::realloc(nn_eos_dev_,    N_total, NN_NEOS);
     Kokkos::realloc(nn_x_full_dev_, N_total, NN_NIN);
     Kokkos::realloc(nn_valid_view_, N_total);
     Kokkos::realloc(nn_view_,       static_cast<size_t>(N_total) * NN_NOUT);
-    Kokkos::realloc(nn_m1_moments_, N_total, 8);
+    Kokkos::realloc(nn_m1_moments_, N_total, 9);  // 0-3 J/vf, 4-7 rnnu/vf, 8 dtau
     Kokkos::realloc(nn_non_th_buf_, N_total, 16);
     nn_scratch_capacity_ = N_total;
   }
@@ -275,7 +273,7 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             eta_1_(m, nuidx, k, j, i) = 0;
             scat_1_(m, nuidx, k, j, i) = 0;
           }
-          for (int c = 0; c < 8; ++c) m1_moments(flat, c) = 0.0;
+          for (int c = 0; c < 9; ++c) m1_moments(flat, c) = 0.0;
           return;
         }
 
@@ -367,6 +365,9 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           m1_moments(flat, s)     = J[s] / volform;
           m1_moments(flat, 4 + s) = rnnu[s] / volform;
         }
+        // Per-cell diffusion step for the partial-equilibrium predictor
+        // (a FULL step; W = Lorentz factor).  Read back in the Kirchhoff kernel.
+        m1_moments(flat, 8) = dt_full_ * adm.alpha(m, k, j, i) / w_lorentz;
 
         // ── denormalize all 32 NN outputs and map to M1 opacity fields ──
         // physical = 10^(y_norm * std + mean) = exp(LN10 * (y_norm*std + mean))
@@ -496,9 +497,15 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   }
   nn_emulator.ProfileMark(NNProfilePoint::exact_1d);
 
-  // ── 4. Kirchhoff / corr_fac / NeutrinoDens ───────────────────────────────────
-  // Reads raw opacities and undensitized radiation moments, then applies
-  // NeutrinoDens + corr_fac + Kirchhoff in-place.
+  // ── 4. Kirchhoff / corr_fac / partial-equilibrium (T*,Ye*) / NeutrinoDens ─────
+  // Reads raw opacities and undensitized radiation moments, then applies the
+  // non-LTE correction, the partial-equilibrium predictor, and Kirchhoff's law
+  // in-place.  Ported verbatim (adapted to the NN cached-value layout) from the
+  // partial-equilibrium route in radiation_m1_calc_opacities_nurates.cpp.
+  const bool peq_on_       = nurates_params_.use_partial_equilibrium;
+  const Real peq_cv_eps_   = 1.0e-2;   // c_v secant half-width (matches nurates)
+  const Real peq_trust_c_  = 10.0;     // trust-region multiple of the tier-1 bound
+  const int  peq_max_halvings_ = 4;    // weight halvings on a rejected root
   Kokkos::Profiling::pushRegion("NN::kirchhoff");
   par_for(
       "radiation_m1_nn_kirchhoff", DevExeSpace(), 0, nmb1, ks, ke, js, je,
@@ -537,172 +544,260 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
         const Real mu_p= static_cast<Real>(eos_dev(flat, 6));
         const Real mu_e= static_cast<Real>(eos_dev(flat, 7));
 
-        // ── NeutrinoDens + corr_fac + Kirchhoff ────────────────────────────
-        Real tau{}, nudens_0_trap[4]{}, nudens_1_trap[4]{},
-            nudens_0_thin[4]{}, nudens_1_thin[4]{};
+        // ── local blackbody + non-LTE corr + (T*,Ye*) predictor + Kirchhoff ──
+        // Undensitized M1 moments nudens_0/nudens_1 and the per-cell dtau come
+        // from the readout kernel; opacities are NN(2D) + exact-1D(beta+iso).
+        Real nudens_0_thin[4]{}, nudens_1_thin[4]{},
+             nudens_0_peq[4]{},  nudens_1_peq[4]{};
+        // Thermal absorption after the non-LTE correction (Kirchhoff multiplies
+        // it) and the correction factor itself.  Default to a no-op if skipped.
+        Real abs_0_th[4]{}, abs_1_th[4]{};
+        Real corr_ae[4] = {1.0, 1.0, 1.0, 1.0};
 
         if (nurates_params_.use_kirchhoff_law ||
             nurates_params_.use_equilibrium_distribution) {
-          tau =
-              Kokkos::min(
-                  Kokkos::sqrt(abs_1_loc[0] * (abs_1_loc[0] + scat_1_loc[0])),
-                  Kokkos::sqrt(abs_1_loc[1] *
-                               (abs_1_loc[1] + scat_1_loc[1]))) *
-              beta_dt_;
-
-          if (nurates_params_.opacity_tau_trap >= 0 &&
-              tau > nurates_params_.opacity_tau_trap) {
-            Real n_nu[6] = {nudens_0[0],      nudens_0[1],
-                            nudens_0[2] / 2., nudens_0[3] / 2.,
-                            nudens_0[2] / 2., nudens_0[3] / 2.};
-            Real Y_part[3] = {Y, 0., 0.};
-
-            Real Y_lep[3]{};
-            eos.GetLeptonFractions(nb, Y_part, n_nu, Y_lep);
-            // The guess is for Y_e, so it is Y, not the total lepton fraction
-            // Y_le = Y_e + Y_nu: the latter is both a worse starting point and,
-            // if the solve fails, a fallback value too high by Y_nu.
-            // (mirrors the upstream trapped-solver fix in
-            //  radiation_m1_calc_opacities_nurates.cpp)
-            Real Y_guess[3] = {Y, Y_lep[1], Y_lep[2]};
-
-            Real e = eos.GetEnergy(nb, T, Y_part) + nudens_1[0] +
-                     nudens_1[1] + nudens_1[2] + nudens_1[3];
-
-            Real temperature_trap{}, Y_e_trap[3]{};
-            bool ok = eos.GetBetaEquilibriumTrapped(
-                nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_guess);
-
-            if (!ok) {
-              // Retry without the current neutrino contribution, matching the
-              // normal NuRates path.
-              Real e_zero = eos.GetEnergy(nb, T, Y_part);
-              ok = eos.GetBetaEquilibriumTrapped(
-                  nb, e_zero, Y_part, temperature_trap, &Y_e_trap[0], T,
-                  Y_part);
-              if (!ok) {
-                Kokkos::printf("WARNING: Failed to find the weak equilibrium\n");
-              }
-            }
-
-            Real mu_b_eq = eos.GetBaryonChemicalPotential(
-                nb, temperature_trap, &Y_e_trap[0]);
-            Real mu_q_eq = eos.GetChargeChemicalPotential(
-                nb, temperature_trap, &Y_e_trap[0]);
-            Real mu_le_eq = eos.GetElectronLeptonChemicalPotential(
-                nb, temperature_trap, &Y_e_trap[0]);
-
-            NeutrinoDens(mu_b_eq, mu_b_eq + mu_q_eq, mu_le_eq - mu_q_eq,
-                         temperature_trap,
-                         nudens_0_trap[0], nudens_0_trap[1], nudens_0_trap[2],
-                         nudens_1_trap[0], nudens_1_trap[1], nudens_1_trap[2],
-                         nurates_params_, code_units, eos_units, nurates_units);
-
-            nudens_0_trap[2] *= 0.5;
-            nudens_1_trap[2] *= 0.5;
-            nudens_0_trap[3] = nudens_0_trap[2];
-            nudens_1_trap[3] = nudens_1_trap[2];
-          }
-
-          NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0],
-                       nudens_0_thin[1], nudens_0_thin[2], nudens_1_thin[0],
-                       nudens_1_thin[1], nudens_1_thin[2], nurates_params_,
-                       code_units, eos_units, nurates_units);
-
+          // local blackbody at (T^n, Ye^n)
+          NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0], nudens_0_thin[1],
+                       nudens_0_thin[2], nudens_1_thin[0], nudens_1_thin[1],
+                       nudens_1_thin[2], nurates_params_, code_units, eos_units,
+                       nurates_units);
           nudens_0_thin[2] *= 0.5;
           nudens_1_thin[2] *= 0.5;
           nudens_0_thin[3] = nudens_0_thin[2];
           nudens_1_thin[3] = nudens_1_thin[2];
+
+          // Non-LTE correction (kappa ~ E_nu^2) from the LOCAL blackbody, not the
+          // equilibrium the predictor settles on (the weights below are built
+          // from kappa_abs, so the other choice would make kappa depend on the
+          // weights that depend on kappa).  NEPS excluded from the number channel
+          // (scattering conserves number); kept in the energy channel.
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            Real corr_fac = 1.0;
+            if (nurates_params_.use_equilibrium_distribution) {
+              corr_fac = (nudens_1[nuidx] / nudens_0[nuidx]) *
+                         (nudens_0_thin[nuidx] / nudens_1_thin[nuidx]);
+              if (!Kokkos::isfinite(corr_fac)) corr_fac = 1.0;
+              corr_fac *= corr_fac;
+              corr_fac = Kokkos::fmax(
+                  1.0 / nurates_params_.opacity_corr_fac_max,
+                  Kokkos::fmin(corr_fac, nurates_params_.opacity_corr_fac_max));
+            }
+            corr_ae[nuidx] = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
+            scat_1_loc[nuidx] *= corr_fac;
+
+            Real abs_0_non_th = non_th_buf(flat, nuidx);
+            Real abs_1_non_th = non_th_buf(flat, 4 + nuidx);
+            abs_0_th[nuidx] = Kokkos::fmax(
+                abs_0_loc[nuidx] - abs_0_non_th, 0.0) * corr_ae[nuidx];
+            abs_1_th[nuidx] = Kokkos::fmax(
+                abs_1_loc[nuidx] - abs_1_non_th, 0.0) * corr_ae[nuidx];
+            abs_0_loc[nuidx] = abs_0_th[nuidx];                     // thermal only
+            abs_1_loc[nuidx] = abs_1_th[nuidx] + abs_1_non_th;      // thermal+NEPS
+          }
+
+          // Partially-equilibrated (T*, Ye*) predictor: a one-parameter family in
+          // w = a/(1+a), a = dtau*kappa_abs, per channel (nu_e pair energy, heavy
+          // pair energy, net lepton number).  w=1 -> trapped weak equilibrium,
+          // w=0 -> local blackbody, continuous between.
+          if (peq_on_) {
+            const Real dtau = m1_moments(flat, 8);  // dt * alpha / W (full step)
+
+            const Real J_e = nudens_1[0] + nudens_1[1];
+            const Real n_e = nudens_0[0] + nudens_0[1];
+            const Real N_L = nudens_0[0] - nudens_0[1];
+
+            Real J_x  = nudens_1[2];
+            Real kJ_x = abs_1_loc[2] * nudens_1[2];
+            Real ks_x = abs_1_loc[2];
+            int  n_x  = 1;
+            if (nspecies_ > 3) {
+              J_x  += nudens_1[3];
+              kJ_x += abs_1_loc[3] * nudens_1[3];
+              ks_x += abs_1_loc[3];
+              n_x   = 2;
+            }
+            // J-weighted mean absorption per channel (arithmetic mean if empty).
+            const Real kbar_1e =
+                (J_e > 0.0)
+                    ? (abs_1_loc[0]*nudens_1[0] + abs_1_loc[1]*nudens_1[1])/J_e
+                    : 0.5*(abs_1_loc[0] + abs_1_loc[1]);
+            const Real kbar_1x = (J_x > 0.0) ? kJ_x/J_x : ks_x/n_x;
+            const Real kbar_0e =
+                (n_e > 0.0)
+                    ? (abs_0_loc[0]*nudens_0[0] + abs_0_loc[1]*nudens_0[1])/n_e
+                    : 0.5*(abs_0_loc[0] + abs_0_loc[1]);
+
+            const Real a_1e = dtau*kbar_1e;
+            const Real a_1x = dtau*kbar_1x;
+            const Real a_0e = dtau*kbar_0e;
+            const Real w_1e = a_1e/(1.0 + a_1e);
+            const Real w_1x = a_1x/(1.0 + a_1x);
+            const Real w_0e = a_0e/(1.0 + a_0e);
+
+            Real T_star = T;
+            Real Ye_star = Y;
+
+            // Tier-0 gate: no EOS calls.  Ternaries (not fmax) so a NaN weight
+            // gates the cell out deliberately.
+            const bool w_finite = Kokkos::isfinite(w_1e) &&
+                                  Kokkos::isfinite(w_1x) &&
+                                  Kokkos::isfinite(w_0e);
+            Real w_max = (w_1e > w_1x) ? w_1e : w_1x;
+            w_max = (w_max > w_0e) ? w_max : w_0e;
+
+            if (w_finite && w_max >= nurates_params_.peq_w_floor) {
+              Real Y_part[3] = {Y, 0.0, 0.0};
+
+              // Tier-1 gate: first-order bound on the excursion, from the
+              // blackbody in hand and c_v.  T clamped to the table range.
+              const Real T_tab_min = eos.GetMinimumTemperature()*
+                                     eos_units.TemperatureConversion(code_units);
+              const Real T_tab_max = eos.GetMaximumTemperature()*
+                                     eos_units.TemperatureConversion(code_units);
+              Real T_lo = T*(1.0 - peq_cv_eps_);
+              Real T_hi = T*(1.0 + peq_cv_eps_);
+              T_lo = (T_lo > T_tab_min) ? T_lo : T_tab_min;
+              T_hi = (T_hi < T_tab_max) ? T_hi : T_tab_max;
+              const Real cv = (T_hi > T_lo)
+                  ? (eos.GetEnergy(nb, T_hi, Y_part) -
+                     eos.GetEnergy(nb, T_lo, Y_part))/(T_hi - T_lo)
+                  : 0.0;
+              const bool cv_ok = Kokkos::isfinite(cv) && cv > 0.0;
+
+              const Real J_e_eq = nudens_1_thin[0] + nudens_1_thin[1];
+              Real J_x_eq = nudens_1_thin[2];
+              if (nspecies_ > 3) {
+                J_x_eq += nudens_1_thin[3];
+              }
+              const Real N_L_eq = nudens_0_thin[0] - nudens_0_thin[1];
+
+              const Real dlnT_hat =
+                  cv_ok ? (w_1e*Kokkos::fabs(J_e_eq - J_e) +
+                           w_1x*Kokkos::fabs(J_x_eq - J_x))/(T*cv)
+                        : 0.0;
+              const Real dYe_hat = w_0e*Kokkos::fabs(N_L_eq - N_L)/nb;
+
+              if (cv_ok && !(dlnT_hat < nurates_params_.peq_dlnT_tol &&
+                             dYe_hat < nurates_params_.peq_dYe_tol)) {
+                // Trust region: a root far outside the linear bound is a
+                // converged-but-wrong root.  Retry with halved weights on reject.
+                const Real dlnT_trust = peq_trust_c_*dlnT_hat;
+                const Real dYe_trust  = peq_trust_c_*dYe_hat;
+                const Real dlnT_max =
+                    (dlnT_trust > nurates_params_.peq_dlnT_tol)
+                        ? dlnT_trust : nurates_params_.peq_dlnT_tol;
+                const Real dYe_max =
+                    (dYe_trust > nurates_params_.peq_dYe_tol)
+                        ? dYe_trust : nurates_params_.peq_dYe_tol;
+
+                const Real e_mat = eos.GetEnergy(nb, T, Y_part);
+
+                Real f_soft = 1.0;
+                for (int n_soft = 0; n_soft <= peq_max_halvings_;
+                     ++n_soft, f_soft *= 0.5) {
+                  const Real u_1e = f_soft*w_1e;
+                  const Real u_1x = f_soft*w_1x;
+                  const Real u_0e = f_soft*w_0e;
+
+                  const Real e_rhs = e_mat + u_1e*J_e + u_1x*J_x;
+                  Real Yl_rhs[3] = {Y + u_0e*N_L/nb, 0.0, 0.0};
+
+                  Real T_try = T;
+                  Real Ye_try[3] = {Y, 0.0, 0.0};
+                  bool ok = eos.GetBetaEquilibriumPartial(
+                      nb, e_rhs, Yl_rhs, u_1e, u_1x, u_0e, T_try, &Ye_try[0],
+                      T, Y_part);
+
+                  if (ok && Kokkos::fabs(Kokkos::log(T_try/T)) <= dlnT_max &&
+                      Kokkos::fabs(Ye_try[0] - Y) <= dYe_max) {
+                    T_star = T_try;
+                    Ye_star = Ye_try[0];
+                    break;
+                  }
+                }
+              }
+            }
+
+            // Equilibrium the cell radiates towards.  Evaluated unconditionally:
+            // a gated/unusable cell has (T*,Ye*) = (T,Y), reproducing the thin
+            // limit, so the w -> 0 case needs no special path.
+            Real Ye_arr[3] = {Ye_star, 0.0, 0.0};
+            Real mu_b_s  = eos.GetBaryonChemicalPotential(nb, T_star, Ye_arr);
+            Real mu_q_s  = eos.GetChargeChemicalPotential(nb, T_star, Ye_arr);
+            Real mu_le_s = eos.GetElectronLeptonChemicalPotential(nb, T_star,
+                                                                  Ye_arr);
+            NeutrinoDens(mu_b_s, mu_b_s + mu_q_s, mu_le_s - mu_q_s, T_star,
+                         nudens_0_peq[0], nudens_0_peq[1], nudens_0_peq[2],
+                         nudens_1_peq[0], nudens_1_peq[1], nudens_1_peq[2],
+                         nurates_params_, code_units, eos_units, nurates_units);
+            nudens_0_peq[2] *= 0.5;
+            nudens_1_peq[2] *= 0.5;
+            nudens_0_peq[3] = nudens_0_peq[2];
+            nudens_1_peq[3] = nudens_1_peq[2];
+
+            // Finiteness screen: a NaN here would ride abs_*_th * my_nudens into
+            // the source term.  Fall back to the local blackbody (w -> 0).
+            bool peq_finite = true;
+            for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+              peq_finite = peq_finite &&
+                           Kokkos::isfinite(nudens_0_peq[nuidx]) &&
+                           Kokkos::isfinite(nudens_1_peq[nuidx]);
+            }
+            if (!peq_finite) {
+              for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+                nudens_0_peq[nuidx] = nudens_0_thin[nuidx];
+                nudens_1_peq[nuidx] = nudens_1_thin[nuidx];
+              }
+            }
+          }
         }
 
         for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-          Real my_nudens_0{}, my_nudens_1{}, corr_fac{1};
+          // store corrected opacities + default (bns_nurates) emissivities
+          scat_1_(m, nuidx, k, j, i) = scat_1_loc[nuidx];
+          abs_0_(m, nuidx, k, j, i)  = abs_0_loc[nuidx];
+          abs_1_(m, nuidx, k, j, i)  = abs_1_loc[nuidx];
+          eta_0_(m, nuidx, k, j, i)  = eta_0_loc[nuidx];
+          eta_1_(m, nuidx, k, j, i)  = eta_1_loc[nuidx];
+
+          Real my_nudens_0{}, my_nudens_1{};
           if (nurates_params_.use_kirchhoff_law ||
               nurates_params_.use_equilibrium_distribution) {
-            if (nurates_params_.opacity_tau_trap < 0 ||
-                tau <= nurates_params_.opacity_tau_trap) {
+            if (peq_on_) {
+              my_nudens_0 = nudens_0_peq[nuidx];
+              my_nudens_1 = nudens_1_peq[nuidx];
+            } else {
               my_nudens_0 = nudens_0_thin[nuidx];
               my_nudens_1 = nudens_1_thin[nuidx];
-            } else if (tau > nurates_params_.opacity_tau_trap +
-                               nurates_params_.opacity_tau_delta) {
-              my_nudens_0 = nudens_0_trap[nuidx];
-              my_nudens_1 = nudens_1_trap[nuidx];
-            } else {
-              Real const lam = (tau - nurates_params_.opacity_tau_trap) /
-                               nurates_params_.opacity_tau_delta;
-              my_nudens_0 = lam * nudens_0_trap[nuidx] +
-                            (1 - lam) * nudens_0_thin[nuidx];
-              my_nudens_1 = lam * nudens_1_trap[nuidx] +
-                            (1 - lam) * nudens_1_thin[nuidx];
             }
           }
 
-          corr_fac = 1.0;
+          // Limit NEPS in-scattering by the actual M1 occupation (only suppresses
+          // over-emission in the decoupling region; never amplifies).
+          Real eta_1_non_th = non_th_buf(flat, 12 + nuidx);
           if (nurates_params_.use_equilibrium_distribution) {
-            corr_fac = (nudens_1[nuidx] / nudens_0[nuidx]) *
-                       (my_nudens_0 / my_nudens_1);
-            if (!Kokkos::isfinite(corr_fac)) corr_fac = 1.0;
-            corr_fac *= corr_fac;
-            corr_fac = Kokkos::max(
-                1.0 / nurates_params_.opacity_corr_fac_max,
-                Kokkos::min(corr_fac, nurates_params_.opacity_corr_fac_max));
+            Real f_occ_0 = (my_nudens_0 > 0.0) ? nudens_0[nuidx] / my_nudens_0
+                                               : 1.0;
+            if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
+            f_occ_0 = Kokkos::fmin(f_occ_0, 1.0);
+            eta_1_non_th *= f_occ_0;
           }
 
-          // Scattering correction: applied to ALL flavors.
-          scat_1_(m, nuidx, k, j, i) = scat_1_loc[nuidx] * corr_fac;
-
-          // CC correction (kappa ~ E^2): only charged-current species nue(0)/anue(1).
-          // Heavy leptons (nux=2, anux=3) have no CC absorption, corr_ae stays 1.
-          Real corr_ae = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
-
+          // Kirchhoff derives the emissivities from the corrected THERMAL
+          // opacity and the equilibrium distribution; NEPS energy emission is
+          // added back afterwards.  NUMBER excludes NEPS (scattering conserves
+          // number).  Without Kirchhoff, bns_nurates' own emissivities stand,
+          // scaled by corr_ae like the opacities.
           if (nurates_params_.use_kirchhoff_law) {
-            // Non-thermal (NEPS) components stored from NN readout kernel.
-            // The 1D β-processes added in step 3b are thermal+CC, so they belong
-            // in the thermal bucket: thermal = (total in arrays) - (NN non-th).
-            // NOTE: NEPS = inelastic scattering, which CONSERVES neutrino number.
-            // So the non-thermal parts belong ONLY in the energy channels
-            // (abs_1/eta_1); the number channels (abs_0/eta_0) must exclude them.
-            // This matches radiation_m1_calc_opacities_nurates.cpp exactly — the
-            // pure-nurates path drops NEPS from the number moment.  (Previously
-            // this kernel added them back, injecting a spurious, nue/anue-asymmetric
-            // number source that biased the ejecta Ye vs the reference run.)
-            Real abs_0_non_th = non_th_buf(flat, nuidx);
-            Real abs_1_non_th = non_th_buf(flat, 4 + nuidx);
-            Real eta_1_non_th = non_th_buf(flat, 12 + nuidx);
-            // Limit NEPS in-scattering by the actual M1 occupation, matching
-            // the normal NuRates path. This only suppresses over-emission in
-            // the decoupling region; it never amplifies the NN result.
-            if (nurates_params_.use_equilibrium_distribution) {
-              Real f_occ_0 = (my_nudens_0 > 0.0)
-                                 ? nudens_0[nuidx] / my_nudens_0
-                                 : 1.0;
-              if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
-              f_occ_0 = Kokkos::fmin(f_occ_0, 1.0);
-              eta_1_non_th *= f_occ_0;
-            }
-            // Apply corr_ae only to the thermal part.
-            Real abs_0_th_corr =
-                Kokkos::fmax(abs_0_loc[nuidx] - abs_0_non_th, 0.0) * corr_ae;
-            Real abs_1_th_corr =
-                Kokkos::fmax(abs_1_loc[nuidx] - abs_1_non_th, 0.0) * corr_ae;
-            // NUMBER: thermal only (NEPS excluded — scattering conserves number).
-            abs_0_(m, nuidx, k, j, i) = abs_0_th_corr;
-            // ENERGY: thermal + NEPS (scattering exchanges energy).
-            abs_1_(m, nuidx, k, j, i) = abs_1_th_corr + abs_1_non_th;
-            // Kirchhoff on thermal part; NEPS energy emissivity kept separate.
-            eta_0_(m, nuidx, k, j, i) = (abs_0_th_corr > 0)
-                ? abs_0_th_corr * my_nudens_0
+            eta_0_(m, nuidx, k, j, i) = (abs_0_th[nuidx] > 0)
+                ? abs_0_th[nuidx] * my_nudens_0
                 : eta_0_loc[nuidx];
-            eta_1_(m, nuidx, k, j, i) = (abs_1_th_corr > 0)
-                ? abs_1_th_corr * my_nudens_1 + eta_1_non_th
+            eta_1_(m, nuidx, k, j, i) = (abs_1_th[nuidx] > 0)
+                ? abs_1_th[nuidx] * my_nudens_1 + eta_1_non_th
                 : eta_1_loc[nuidx];
           } else {
-            if (nuidx == 0 || nuidx == 1) {
-              abs_0_(m, nuidx, k, j, i) = abs_0_loc[nuidx] * corr_fac;
-              abs_1_(m, nuidx, k, j, i) = abs_1_loc[nuidx] * corr_fac;
-              eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx] * corr_fac;
-              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx] * corr_fac;
-            }
+            eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx] * corr_ae[nuidx];
+            eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx] * corr_ae[nuidx];
           }
         }
       });  // par_for kirchhoff
