@@ -687,7 +687,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         x1_tmp[1] = x_in[1] + (dx1[1]*fac_cut);
 
         // check if the next step calculation had problems
-        if (isnan(x1_tmp[0]) || isnan(x1_tmp[1])) {
+        if (Kokkos::isnan(x1_tmp[0]) || Kokkos::isnan(x1_tmp[1])) {
           ierr = 1;
           return ierr;
         }
@@ -764,12 +764,12 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real ya = energy_eq_weak(n, e_rhs, w_E_e, w_E_x, min_T, Ye);
     Real yb = energy_eq_weak(n, e_rhs, w_E_e, w_E_x, max_T, Ye);
 
-    if (isnan(ya) || isnan(yb)) {
+    if (Kokkos::isnan(ya) || Kokkos::isnan(yb)) {
       return 1;
     }
 
     if (ya*yb > 0.0) {
-      T_eq = (abs(ya) < abs(yb)) ? min_T : max_T;
+      T_eq = (Kokkos::fabs(ya) < Kokkos::fabs(yb)) ? min_T : max_T;
       return 1;
     }
 
@@ -781,10 +781,10 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       Real Tm = exp2_(lm);
       Real ym = energy_eq_weak(n, e_rhs, w_E_e, w_E_x, Tm, Ye);
 
-      if (isnan(ym)) {
+      if (Kokkos::isnan(ym)) {
         break;
       }
-      if (abs(ym) <= nu_2DNR_eps_lim) {
+      if (Kokkos::fabs(ym) <= nu_2DNR_eps_lim) {
         T_eq = Tm;
         return 0;
       }
@@ -834,7 +834,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   /// Scalar error the Newton iteration converges on. The energy residual is already
   /// relative, the lepton one is not, hence the division by Yle_rhs on that alone.
   KOKKOS_INLINE_FUNCTION Real error_func_eq_weak(Real Yle_rhs, Real y[2]) const {
-    Real err = abs(y[0]/Yle_rhs) + abs(y[1]);
+    Real err = Kokkos::fabs(y[0]/Yle_rhs) + Kokkos::fabs(y[1]);
     return err;
   }
 
@@ -847,7 +847,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real Y[MAX_SPECIES] = {0.0};
     Y[0] = x[1];
 
-    if (isnan(T)) {
+    if (Kokkos::isnan(T)) {
       ierr = 1;
       return ierr;
     }
@@ -856,7 +856,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real eta = mu_l/T;
     Real eta2 = eta*eta;
 
-    if (isnan(eta)) {
+    if (Kokkos::isnan(eta)) {
       ierr = 1;
       return ierr;
     }
@@ -936,7 +936,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV]
     deta_dYe = dmu_l_dYe/T;      // [-]
 
-    if (isnan(deta_dT)||isnan(deta_dYe)||isnan(de_dT)||isnan(de_dYe)) {
+    if (Kokkos::isnan(deta_dT)||Kokkos::isnan(deta_dYe)||Kokkos::isnan(de_dT)||Kokkos::isnan(de_dYe)) {
       ierr = 1;
     } else {
       ierr = 0;
