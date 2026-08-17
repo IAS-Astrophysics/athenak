@@ -231,10 +231,11 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   nn_emulator.ProfileMark(NNProfilePoint::forward);
   Kokkos::Profiling::popRegion();
 
-  // ── 3. Readout: metric reconstruction + J/rnnu + NN→code conversion ──────────
-  // Intermediate buffer storing J[0..3] and rnnu[0..3] per cell so the
-  // Kirchhoff kernel does not need to redo the metric/closure computation.
-  // Layout: m1_moments(flat, 0..3) = J[s], m1_moments(flat, 4..7) = rnnu[s]
+  // ── 3. Readout: metric reconstruction + M1 moments + NN→code conversion ──────
+  // Intermediate buffer storing undensitized fluid-frame energy and number
+  // densities so later kernels do not need to redo the metric/closure work.
+  // Layout: m1_moments(flat, 0..3) = J[s]/volform,
+  //         m1_moments(flat, 4..7) = rnnu[s]/volform
   auto m1_moments = nn_m1_moments_;   // persistent (grow-only) buffer
 
   // Non-thermal (NEPS) components from NN, needed by the Kirchhoff kernel to
@@ -352,16 +353,19 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
           assemble_rT(n_d, E, F_d, P_dd, T_dd);
           J[nuidx] = calc_J_from_rT(T_dd, u_u);
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
+          calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
+          apply_floor(g_uu, J[nuidx], H_d, m1_params_);
           Real Gamma =
               compute_Gamma(w_lorentz, v_u, J[nuidx], E, F_d, m1_params_);
           rnnu[nuidx] =
               u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
         }
 
-        // Store J and rnnu for the Kirchhoff kernel (avoids redoing metric).
+        // Store undensitized moments for the exact-1D and Kirchhoff kernels.
         for (int s = 0; s < nspecies_; ++s) {
-          m1_moments(flat, s)     = J[s];
-          m1_moments(flat, 4 + s) = rnnu[s];
+          m1_moments(flat, s)     = J[s] / volform;
+          m1_moments(flat, 4 + s) = rnnu[s] / volform;
         }
 
         // ── denormalize all 32 NN outputs and map to M1 opacity fields ──
@@ -406,7 +410,6 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           non_th_buf(flat, 8 + s)  = fac * nn_phys[sb + NN_CH_ETA_0_NON_TH] / unit_num_dens_dot_;
           non_th_buf(flat, 12 + s) = fac * nn_phys[sb + NN_CH_ETA_NON_TH]   / unit_ene_dens_dot_;
         }
-        (void)volform;
       });
   nn_emulator.ProfileMark(NNProfilePoint::readout);
   // SCALING FIX: profiling fence removed for comm/compute overlap; the next
@@ -441,13 +444,6 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
                            + (i - is_);
             if (!valid_view(flat)) return;
 
-            // Spatial determinant for undensitizing M1 moments
-            Real gam = adm::SpatialDet(
-                adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
-                adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
-                adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
-            Real inv_volform = 1.0 / Kokkos::sqrt(gam);
-
             // EOS state (read from gather-kernel cache; same layout as Kirchhoff)
             Real nb   = static_cast<Real>(eos_dev(flat, 0)) / unit_num_dens_;
             Real T    = static_cast<Real>(eos_dev(flat, 1));
@@ -460,8 +456,8 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             // Fluid-frame radiation moments (undensitized, code units)
             Real nudens_0[4]{}, nudens_1[4]{}, chi_loc[4]{};
             for (int s = 0; s < nspecies_; ++s) {
-              nudens_1[s] = m1_moments(flat, s)     * inv_volform;  // J/volform
-              nudens_0[s] = m1_moments(flat, 4 + s) * inv_volform;  // rnnu/volform
+              nudens_1[s] = m1_moments(flat, s);
+              nudens_0[s] = m1_moments(flat, 4 + s);
               chi_loc[s]  = chi_(m, s, k, j, i);
             }
 
@@ -501,8 +497,8 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   nn_emulator.ProfileMark(NNProfilePoint::exact_1d);
 
   // ── 4. Kirchhoff / corr_fac / NeutrinoDens ───────────────────────────────────
-  // Reads raw opacities from output arrays + J/rnnu from m1_moments.
-  // Applies NeutrinoDens + corr_fac + Kirchhoff in-place.
+  // Reads raw opacities and undensitized radiation moments, then applies
+  // NeutrinoDens + corr_fac + Kirchhoff in-place.
   Kokkos::Profiling::pushRegion("NN::kirchhoff");
   par_for(
       "radiation_m1_nn_kirchhoff", DevExeSpace(), 0, nmb1, ks, ke, js, je,
@@ -515,11 +511,11 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
         if (!valid_view(flat)) return;
 
-        // Restore J and rnnu from intermediate buffer.
-        Real J[4]{}, rnnu[4]{};
+        // Restore undensitized radiation moments from the intermediate buffer.
+        Real nudens_0[4]{}, nudens_1[4]{};
         for (int s = 0; s < nspecies_; ++s) {
-          J[s]    = m1_moments(flat, s);
-          rnnu[s] = m1_moments(flat, 4 + s);
+          nudens_1[s] = m1_moments(flat, s);
+          nudens_0[s] = m1_moments(flat, 4 + s);
         }
 
         // Read raw opacities written by the readout kernel.
@@ -556,8 +552,9 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
           if (nurates_params_.opacity_tau_trap >= 0 &&
               tau > nurates_params_.opacity_tau_trap) {
-            Real n_nu[6] = {rnnu[0],      rnnu[1],      rnnu[2] / 2.,
-                            rnnu[3] / 2., rnnu[2] / 2., rnnu[3] / 2.};
+            Real n_nu[6] = {nudens_0[0],      nudens_0[1],
+                            nudens_0[2] / 2., nudens_0[3] / 2.,
+                            nudens_0[2] / 2., nudens_0[3] / 2.};
             Real Y_part[3] = {Y, 0., 0.};
 
             Real Y_lep[3]{};
@@ -569,18 +566,23 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             //  radiation_m1_calc_opacities_nurates.cpp)
             Real Y_guess[3] = {Y, Y_lep[1], Y_lep[2]};
 
-            Real e = eos.GetEnergy(nb, T, Y_part) + J[0] + J[1] + J[2] + J[3];
+            Real e = eos.GetEnergy(nb, T, Y_part) + nudens_1[0] +
+                     nudens_1[1] + nudens_1[2] + nudens_1[3];
 
             Real temperature_trap{}, Y_e_trap[3]{};
-            bool res = eos.GetBetaEquilibriumTrapped(
+            bool ok = eos.GetBetaEquilibriumTrapped(
                 nb, e, Y_lep, temperature_trap, &Y_e_trap[0], T, Y_guess);
 
-            if (res) {
+            if (!ok) {
+              // Retry without the current neutrino contribution, matching the
+              // normal NuRates path.
               Real e_zero = eos.GetEnergy(nb, T, Y_part);
-              bool res2 = eos.GetBetaEquilibriumTrapped(
+              ok = eos.GetBetaEquilibriumTrapped(
                   nb, e_zero, Y_part, temperature_trap, &Y_e_trap[0], T,
                   Y_part);
-              (void)res2;
+              if (!ok) {
+                Kokkos::printf("WARNING: Failed to find the weak equilibrium\n");
+              }
             }
 
             Real mu_b_eq = eos.GetBaryonChemicalPotential(
@@ -637,7 +639,8 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
           corr_fac = 1.0;
           if (nurates_params_.use_equilibrium_distribution) {
-            corr_fac = (J[nuidx] / rnnu[nuidx]) * (my_nudens_0 / my_nudens_1);
+            corr_fac = (nudens_1[nuidx] / nudens_0[nuidx]) *
+                       (my_nudens_0 / my_nudens_1);
             if (!Kokkos::isfinite(corr_fac)) corr_fac = 1.0;
             corr_fac *= corr_fac;
             corr_fac = Kokkos::max(
@@ -666,6 +669,17 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             Real abs_0_non_th = non_th_buf(flat, nuidx);
             Real abs_1_non_th = non_th_buf(flat, 4 + nuidx);
             Real eta_1_non_th = non_th_buf(flat, 12 + nuidx);
+            // Limit NEPS in-scattering by the actual M1 occupation, matching
+            // the normal NuRates path. This only suppresses over-emission in
+            // the decoupling region; it never amplifies the NN result.
+            if (nurates_params_.use_equilibrium_distribution) {
+              Real f_occ_0 = (my_nudens_0 > 0.0)
+                                 ? nudens_0[nuidx] / my_nudens_0
+                                 : 1.0;
+              if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
+              f_occ_0 = Kokkos::fmin(f_occ_0, 1.0);
+              eta_1_non_th *= f_occ_0;
+            }
             // Apply corr_ae only to the thermal part.
             Real abs_0_th_corr =
                 Kokkos::fmax(abs_0_loc[nuidx] - abs_0_non_th, 0.0) * corr_ae;
