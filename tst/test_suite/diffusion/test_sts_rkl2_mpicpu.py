@@ -130,9 +130,10 @@ def test_sts_cycle_boundary_restart(tmp_path):
     shutil.rmtree("rst", ignore_errors=True)
     try:
         direct = "sts_restart_direct"
-        assert testutils.run(
+        assert testutils.mpi_run(
             _mhd_input(tmp_path),
             [f"job/basename={direct}", "time/nlim=4"] + common,
+            threads=1,
         )
         direct_error = np.array(
             athena_read.error_dat(f"{direct}-errs.dat")[0], copy=True
@@ -140,7 +141,7 @@ def test_sts_cycle_boundary_restart(tmp_path):
         testutils.cleanup()
 
         split = "sts_restart_split"
-        assert testutils.run(
+        assert testutils.mpi_run(
             _mhd_input(tmp_path),
             [
                 f"job/basename={split}",
@@ -148,6 +149,7 @@ def test_sts_cycle_boundary_restart(tmp_path):
                 "output1/dcycle=2",
             ]
             + common,
+            threads=1,
         )
         restart_file = Path("rst") / f"{split}.00001.rst"
         assert restart_file.exists()
@@ -156,6 +158,9 @@ def test_sts_cycle_boundary_restart(tmp_path):
         resumed = "sts_restart_resumed"
         results = testutils.run_command(
             [
+                "mpirun",
+                "-np",
+                "1",
                 "./athena",
                 "-r",
                 str(restart_file),
