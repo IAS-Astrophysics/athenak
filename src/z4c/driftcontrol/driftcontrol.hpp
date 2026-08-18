@@ -88,6 +88,7 @@ class DriftControl {
   Real dc_prev_error[3];
   Real dc_p[3];        // DOB observer state
   Real dc_fhat[3];     // DOB estimate of the ambient drive (diagnostic; RHS recomputes)
+  Real dc_gain[3];     // per-axis gain on the applied correction; 0 = axis is open loop
   Real dc_omega_c;     // closed-loop PD bandwidth
   Real dc_omega_o;     // observer bandwidth
   Real dc_zeta;        // PD damping ratio

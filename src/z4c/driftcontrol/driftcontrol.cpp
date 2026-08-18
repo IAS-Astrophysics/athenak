@@ -113,11 +113,49 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
   std::string const dc_fname =
       pin->GetOrAddString("z4c", "dc_filename", "drift_control");
 
+  // Per-axis gain on the applied correction.
+  dc_gain[0] = pin->GetOrAddReal("z4c", "dc_gain_x", 1.0);
+  dc_gain[1] = pin->GetOrAddReal("z4c", "dc_gain_y", 1.0);
+  dc_gain[2] = pin->GetOrAddReal("z4c", "dc_gain_z", 1.0);
+
+  if (0 == global_variable::my_rank) {
+    for (int a = 0; a < NDIM; ++a) {
+      if (dc_gain[a] == 0.0) {
+        std::cout << "### Drift control: axis " << a << " is open loop (dc_gain = 0); "
+                  << "its integrator/observer state is frozen." << std::endl;
+      } else if (dc_variety == DOB && dc_gain[a] != 1.0) {
+        std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "dc_variety = dob with dc_gain[" << a << "] = " << dc_gain[a]
+                  << ". The observer assumes the full correction is applied, so fhat "
+                  << "is biased for any gain other than 0 or 1. Use the pid or "
+                  << "oscillator variety for a partial gain." << std::endl;
+      }
+    }
+  }
+
   if (0 == global_variable::my_rank) {
     std::string ofname = pin->GetString("job", "basename") + ".";
     ofname += dc_fname;
     ofname += ".txt";
     ofile.open(ofname.c_str());
+    ofile << "# variety=" << pin->GetString("z4c", "dc_variety")
+          << " fixed=(" << dc_fixed[0] << "," << dc_fixed[1] << "," << dc_fixed[2] << ")"
+          << " gain=(" << dc_gain[0] << "," << dc_gain[1] << "," << dc_gain[2] << ")";
+    if (dc_variety == PID) {
+      ofile << " Kp=" << pin->GetOrAddReal("z4c", "dc_Kp", 1.0)
+            << " Ki=" << pin->GetOrAddReal("z4c", "dc_Ki", 0.1)
+            << " Kd=" << pin->GetOrAddReal("z4c", "dc_Kd", 2.0)
+            << " integral_cap=" << dc_integral_cap;
+    } else if (dc_variety == DOB) {
+      ofile << " omega_c=" << dc_omega_c << " omega_o=" << dc_omega_o
+            << " zeta=" << dc_zeta;
+    } else if (dc_variety == Oscillator) {
+      ofile << " tau=" << pin->GetOrAddReal("z4c", "dc_damping_time", 0.5)
+            << " zeta=" << pin->GetOrAddReal("z4c", "dc_damping_coeff", 1.0);
+    }
+    ofile << " scale=" << pin->GetOrAddReal("z4c", "dc_damping_scale", 10.0)
+          << " ramp_start=" << dc_ramp_start << " ramp_time=" << dc_ramp_time << "\n";
     if (dc_variety == DOB) {
       ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
                " 12:fhatx 13:fhaty 14:fhatz\n";
@@ -223,8 +261,7 @@ void DriftControl::EvolveDriftControl() {
       dc_vel[a]          = std::clamp(vel_raw, -dc_vel_cap, dc_vel_cap);
       dc_prev_error[a]   = e;
 
-      // pdot = omega_o (u - fhat) = omega_o (omega_c^2 e + 2 zeta omega_c v)
-      if (!ramping) {
+      if (!ramping && dc_gain[a] != 0.0) {
         dc_p[a] += dt * dc_omega_o * (wc2 * e + twzc * dc_vel[a]);
       }
       // Recorded after the update so the logged fhat is what the next RHS applies.
@@ -233,7 +270,7 @@ void DriftControl::EvolveDriftControl() {
   } else if (dc_variety == PID) {
     for (int a = 0; a < NDIM; ++a) {
       Real const e = dc_pos[a] - dc_fixed[a];
-      if (!ramping) {
+      if (!ramping && dc_gain[a] != 0.0) {
         dc_integral[a] += e * dt;
       }
 
