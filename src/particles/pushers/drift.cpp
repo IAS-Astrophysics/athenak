@@ -29,15 +29,15 @@ TaskStatus ParticlePopulation::PushDrift(Driver*, int) {
 
   par_for("part_update", DevExeSpace(), 0, (nprtcl_thispack - 1),
   KOKKOS_LAMBDA(const int p) {
-    if (pi(PSTATUS,p) == PACTIVE) {
-      pr(IPX,p) += 0.5*dt_*pr(cosmic_ray::IPVX,p);
+    if (pi(cosmic_ray::PSTATUS,p) == PACTIVE) {
+      pr(cosmic_ray::IPX,p) += 0.5*dt_*pr(cosmic_ray::IPVX,p);
 
       if (multi_d) {
-        pr(IPY,p) += 0.5*dt_*pr(cosmic_ray::IPVY,p);
+        pr(cosmic_ray::IPY,p) += 0.5*dt_*pr(cosmic_ray::IPVY,p);
       }
 
       if (three_d) {
-        pr(IPZ,p) += 0.5*dt_*pr(cosmic_ray::IPVZ,p);
+        pr(cosmic_ray::IPZ,p) += 0.5*dt_*pr(cosmic_ray::IPVZ,p);
       }
     }
   });
@@ -63,9 +63,9 @@ Real ParticlePopulation::EstimateTimestepDrift() {
   Kokkos::parallel_reduce(
       "particle_drift_newdt", Kokkos::RangePolicy<>(DevExeSpace(), 0, nprtcl_thispack),
       KOKKOS_LAMBDA(const int p, Real &min_dt) {
-        if (pi(PSTATUS,p) != PACTIVE) return;
+        if (pi(cosmic_ray::PSTATUS,p) != PACTIVE) return;
 
-        const int m = pi(PGID,p) - gids;
+        const int m = pi(cosmic_ray::PGID,p) - gids;
         const Real vx = fabs(pr(cosmic_ray::IPVX,p));
         if (vx > 0.0) min_dt = fmin(min_dt, mbsize.d_view(m).dx1/vx);
 

@@ -50,22 +50,31 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     auto rand_gen = rand_pool64.get_state();  // get random number state this thread
     // choose parent MeshBlock randomly
     int m = static_cast<int>(rand_gen.frand()*(gide - gids + 1.0));
-    pi(PGID,p) = gids + m;
+    pi(particles::cosmic_ray::PGID,p) = gids + m;
 
     Real rand = rand_gen.frand();
-    pr(IPX,p) = (1. - rand)*mbsize.d_view(m).x1min + rand*mbsize.d_view(m).x1max;
-    pr(IPX,p) = fmin(pr(IPX,p),mbsize.d_view(m).x1max);
-    pr(IPX,p) = fmax(pr(IPX,p),mbsize.d_view(m).x1min);
+    pr(particles::cosmic_ray::IPX,p) =
+        (1. - rand)*mbsize.d_view(m).x1min + rand*mbsize.d_view(m).x1max;
+    pr(particles::cosmic_ray::IPX,p) =
+        fmin(pr(particles::cosmic_ray::IPX,p),mbsize.d_view(m).x1max);
+    pr(particles::cosmic_ray::IPX,p) =
+        fmax(pr(particles::cosmic_ray::IPX,p),mbsize.d_view(m).x1min);
 
     rand = rand_gen.frand();
-    pr(IPY,p) = (1. - rand)*mbsize.d_view(m).x2min + rand*mbsize.d_view(m).x2max;
-    pr(IPY,p) = fmin(pr(IPY,p),mbsize.d_view(m).x2max);
-    pr(IPY,p) = fmax(pr(IPY,p),mbsize.d_view(m).x2min);
+    pr(particles::cosmic_ray::IPY,p) =
+        (1. - rand)*mbsize.d_view(m).x2min + rand*mbsize.d_view(m).x2max;
+    pr(particles::cosmic_ray::IPY,p) =
+        fmin(pr(particles::cosmic_ray::IPY,p),mbsize.d_view(m).x2max);
+    pr(particles::cosmic_ray::IPY,p) =
+        fmax(pr(particles::cosmic_ray::IPY,p),mbsize.d_view(m).x2min);
 
     rand = rand_gen.frand();
-    pr(IPZ,p) = (1. - rand)*mbsize.d_view(m).x3min + rand*mbsize.d_view(m).x3max;
-    pr(IPZ,p) = fmin(pr(IPZ,p),mbsize.d_view(m).x3max);
-    pr(IPZ,p) = fmax(pr(IPZ,p),mbsize.d_view(m).x3min);
+    pr(particles::cosmic_ray::IPZ,p) =
+        (1. - rand)*mbsize.d_view(m).x3min + rand*mbsize.d_view(m).x3max;
+    pr(particles::cosmic_ray::IPZ,p) =
+        fmin(pr(particles::cosmic_ray::IPZ,p),mbsize.d_view(m).x3max);
+    pr(particles::cosmic_ray::IPZ,p) =
+        fmax(pr(particles::cosmic_ray::IPZ,p),mbsize.d_view(m).x3min);
 
     pr(particles::cosmic_ray::IPVX,p) = 2.0*(rand_gen.frand() - 0.5);
     pr(particles::cosmic_ray::IPVY,p) = 2.0*(rand_gen.frand() - 0.5);

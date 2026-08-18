@@ -137,15 +137,16 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
 
   par_for("particle_lmc_move", DevExeSpace(), 0, npart-1,
   KOKKOS_LAMBDA(const int p) {
-    if (pi(PSTATUS,p) != PACTIVE) return;
+    if (pi(lagrangian_mc::PSTATUS,p) != PACTIVE) return;
 
-    const int m = pi(PGID,p) - gids;
+    const int m = pi(lagrangian_mc::PGID,p) - gids;
     auto size = mbsize.d_view(m);
-    const int i = static_cast<int>((pr(IPX,p) - size.x1min)/size.dx1) + is;
+    const int i =
+        static_cast<int>((pr(lagrangian_mc::IPX,p) - size.x1min)/size.dx1) + is;
     const int j = multi_d ?
-        static_cast<int>((pr(IPY,p) - size.x2min)/size.dx2) + js : js;
+        static_cast<int>((pr(lagrangian_mc::IPY,p) - size.x2min)/size.dx2) + js : js;
     const int k = three_d ?
-        static_cast<int>((pr(IPZ,p) - size.x3min)/size.dx3) + ks : ks;
+        static_cast<int>((pr(lagrangian_mc::IPZ,p) - size.x3min)/size.dx3) + ks : ks;
     const Real start_density = start_u(m,IDN,k,j,i);
 
     pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_NONE;
@@ -157,25 +158,25 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
     const Real x2r = multi_d ? fmax( intflx2(m,k,j+1,i), 0.0)/start_density : 0.0;
     const Real x3l = three_d ? fmax(-intflx3(m,k,j,i), 0.0)/start_density : 0.0;
     const Real x3r = three_d ? fmax( intflx3(m,k+1,j,i), 0.0)/start_density : 0.0;
-    const Real draw = LagrangianMCRandom(seed, pi(PTAG,p), cycle);
+    const Real draw = LagrangianMCRandom(seed, pi(lagrangian_mc::PTAG,p), cycle);
 
     if (draw < x1l) {
-      pr(IPX,p) -= size.dx1;
+      pr(lagrangian_mc::IPX,p) -= size.dx1;
       pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_X1_LEFT;
     } else if (draw < x1l + x1r) {
-      pr(IPX,p) += size.dx1;
+      pr(lagrangian_mc::IPX,p) += size.dx1;
       pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_X1_RIGHT;
     } else if (draw < x1l + x1r + x2l) {
-      pr(IPY,p) -= size.dx2;
+      pr(lagrangian_mc::IPY,p) -= size.dx2;
       pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_X2_LEFT;
     } else if (draw < x1l + x1r + x2l + x2r) {
-      pr(IPY,p) += size.dx2;
+      pr(lagrangian_mc::IPY,p) += size.dx2;
       pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_X2_RIGHT;
     } else if (draw < x1l + x1r + x2l + x2r + x3l) {
-      pr(IPZ,p) -= size.dx3;
+      pr(lagrangian_mc::IPZ,p) -= size.dx3;
       pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_X3_LEFT;
     } else if (draw < x1l + x1r + x2l + x2r + x3l + x3r) {
-      pr(IPZ,p) += size.dx3;
+      pr(lagrangian_mc::IPZ,p) += size.dx3;
       pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_X3_RIGHT;
     }
   });

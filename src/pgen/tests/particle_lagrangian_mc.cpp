@@ -21,6 +21,8 @@
 #include "particles/particles.hpp"
 #include "pgen/pgen.hpp"
 
+namespace lagrangian_mc = particles::lagrangian_mc;
+
 namespace {
 
 constexpr int kExpectedParticles = 8;
@@ -145,12 +147,12 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
   Kokkos::parallel_reduce(
       "particle_lmc_position_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_max) {
-        const int tag = pi(PTAG,p);
+        const int tag = pi(lagrangian_mc::PTAG,p);
         Real expected_x = InitialX(tag);
         if (final_state && ExpectedMove(tag)) expected_x += dx;
-        Real error = fabs(pr(IPX,p) - expected_x);
-        error = fmax(error, fabs(pr(IPY,p) - y0));
-        error = fmax(error, fabs(pr(IPZ,p) - z0));
+        Real error = fabs(pr(lagrangian_mc::IPX,p) - expected_x);
+        error = fmax(error, fabs(pr(lagrangian_mc::IPY,p) - y0));
+        error = fmax(error, fabs(pr(lagrangian_mc::IPZ,p) - z0));
         local_max = fmax(local_max, error);
       }, Kokkos::Max<Real>(position_error));
 
@@ -158,7 +160,7 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
   Kokkos::parallel_reduce(
       "particle_lmc_owner_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const int tag = pi(PTAG,p);
+        const int tag = pi(lagrangian_mc::PTAG,p);
         Real expected_x = InitialX(tag);
         if (final_state && ExpectedMove(tag)) expected_x += dx;
         int expected_gid = -1;
@@ -170,22 +172,25 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
             expected_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != expected_gid) local_sum += 1.0;
+        if (pi(lagrangian_mc::PGID,p) != expected_gid) local_sum += 1.0;
       }, owner_errors);
 
   Real moved = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_moved", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        if (fabs(pr(IPX,p) - InitialX(pi(PTAG,p))) > 0.5*dx) local_sum += 1.0;
+        if (fabs(pr(lagrangian_mc::IPX,p) -
+                 InitialX(pi(lagrangian_mc::PTAG,p))) > 0.5*dx) {
+          local_sum += 1.0;
+        }
       }, moved);
 
   Real moved_tag_sum = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_moved_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const int tag = pi(PTAG,p);
-        if (fabs(pr(IPX,p) - InitialX(tag)) > 0.5*dx) {
+        const int tag = pi(lagrangian_mc::PTAG,p);
+        if (fabs(pr(lagrangian_mc::IPX,p) - InitialX(tag)) > 0.5*dx) {
           local_sum += static_cast<Real>(tag);
         }
       }, moved_tag_sum);
@@ -194,7 +199,7 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
   Kokkos::parallel_reduce(
       "particle_lmc_migrated", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const Real initial_x = InitialX(pi(PTAG,p));
+        const Real initial_x = InitialX(pi(lagrangian_mc::PTAG,p));
         int initial_gid = -1;
         for (int m=0; m<nmb; ++m) {
           auto size = mbsize.d_view(m);
@@ -204,21 +209,21 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
             initial_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != initial_gid) local_sum += 1.0;
+        if (pi(lagrangian_mc::PGID,p) != initial_gid) local_sum += 1.0;
       }, migrated);
 
   Real tag_sum = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        local_sum += static_cast<Real>(pi(PTAG,p));
+        local_sum += static_cast<Real>(pi(lagrangian_mc::PTAG,p));
       }, tag_sum);
 
   Real status_errors = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_status_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        if (pi(PSTATUS,p) != PACTIVE) local_sum += 1.0;
+        if (pi(lagrangian_mc::PSTATUS,p) != PACTIVE) local_sum += 1.0;
       }, status_errors);
 
   pdata->hdata[0] = fluid_error;
@@ -285,9 +290,9 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
         if (move == particles::lagrangian_mc::PMOVE_X2_RIGHT) expected_y += dx2;
         if (move == particles::lagrangian_mc::PMOVE_X3_LEFT) expected_z -= dx3;
         if (move == particles::lagrangian_mc::PMOVE_X3_RIGHT) expected_z += dx3;
-        Real error = fabs(pr(IPX,p) - expected_x);
-        error = fmax(error, fabs(pr(IPY,p) - expected_y));
-        error = fmax(error, fabs(pr(IPZ,p) - expected_z));
+        Real error = fabs(pr(lagrangian_mc::IPX,p) - expected_x);
+        error = fmax(error, fabs(pr(lagrangian_mc::IPY,p) - expected_y));
+        error = fmax(error, fabs(pr(lagrangian_mc::IPZ,p) - expected_z));
         if (move < particles::lagrangian_mc::PMOVE_NONE ||
             move > particles::lagrangian_mc::PMOVE_X3_RIGHT) {
           error = fmax(error, 1.0);
@@ -303,13 +308,16 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
         int expected_gid = -1;
         for (int m=0; m<nmb; ++m) {
           auto size = mbsize.d_view(m);
-          if (pr(IPX,p) >= size.x1min && pr(IPX,p) < size.x1max &&
-              pr(IPY,p) >= size.x2min && pr(IPY,p) < size.x2max &&
-              pr(IPZ,p) >= size.x3min && pr(IPZ,p) < size.x3max) {
+          if (pr(lagrangian_mc::IPX,p) >= size.x1min &&
+              pr(lagrangian_mc::IPX,p) < size.x1max &&
+              pr(lagrangian_mc::IPY,p) >= size.x2min &&
+              pr(lagrangian_mc::IPY,p) < size.x2max &&
+              pr(lagrangian_mc::IPZ,p) >= size.x3min &&
+              pr(lagrangian_mc::IPZ,p) < size.x3max) {
             expected_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != expected_gid) local_sum += 1.0;
+        if (pi(lagrangian_mc::PGID,p) != expected_gid) local_sum += 1.0;
       }, owner_errors);
 
   Real status_errors = 0.0;
@@ -317,14 +325,14 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
       "particle_lmc_direction_status_error",
       Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        if (pi(PSTATUS,p) != PACTIVE) local_sum += 1.0;
+        if (pi(lagrangian_mc::PSTATUS,p) != PACTIVE) local_sum += 1.0;
       }, status_errors);
 
   Real tag_sum = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_direction_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        local_sum += static_cast<Real>(pi(PTAG,p));
+        local_sum += static_cast<Real>(pi(lagrangian_mc::PTAG,p));
       }, tag_sum);
 
   pdata->hdata[7] = position_error;
@@ -350,7 +358,9 @@ void ReproducibilityHistory(HistoryData *pdata, Mesh *pm) {
     Kokkos::parallel_reduce(
         "particle_lmc_repro_position", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
         KOKKOS_LAMBDA(const int p, Real &local_sum) {
-          if (pi(PTAG,p) == tag) local_sum += pr(IPX,p);
+          if (pi(lagrangian_mc::PTAG,p) == tag) {
+            local_sum += pr(lagrangian_mc::IPX,p);
+          }
         }, position);
     pdata->hdata[tag] = position;
   }
@@ -362,13 +372,16 @@ void ReproducibilityHistory(HistoryData *pdata, Mesh *pm) {
         int expected_gid = -1;
         for (int m=0; m<nmb; ++m) {
           auto size = mbsize.d_view(m);
-          if (pr(IPX,p) >= size.x1min && pr(IPX,p) < size.x1max &&
-              pr(IPY,p) >= size.x2min && pr(IPY,p) < size.x2max &&
-              pr(IPZ,p) >= size.x3min && pr(IPZ,p) < size.x3max) {
+          if (pr(lagrangian_mc::IPX,p) >= size.x1min &&
+              pr(lagrangian_mc::IPX,p) < size.x1max &&
+              pr(lagrangian_mc::IPY,p) >= size.x2min &&
+              pr(lagrangian_mc::IPY,p) < size.x2max &&
+              pr(lagrangian_mc::IPZ,p) >= size.x3min &&
+              pr(lagrangian_mc::IPZ,p) < size.x3max) {
             expected_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != expected_gid) local_sum += 1.0;
+        if (pi(lagrangian_mc::PGID,p) != expected_gid) local_sum += 1.0;
       }, owner_errors);
 
   Real migrated = 0.0;
@@ -384,14 +397,14 @@ void ReproducibilityHistory(HistoryData *pdata, Mesh *pm) {
             initial_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != initial_gid) local_sum += 1.0;
+        if (pi(lagrangian_mc::PGID,p) != initial_gid) local_sum += 1.0;
       }, migrated);
 
   Real tag_sum = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_repro_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        local_sum += static_cast<Real>(pi(PTAG,p));
+        local_sum += static_cast<Real>(pi(lagrangian_mc::PTAG,p));
       }, tag_sum);
 
   pdata->label[16] = "owner_err";
@@ -453,7 +466,7 @@ void InitializeUniformRegression(Mesh *pm) {
   const int nmb = pmbp->nmb_thispack;
   par_for("particle_lmc_uniform_particle_init", DevExeSpace(), 0, (npart - 1),
   KOKKOS_LAMBDA(const int p) {
-    if (!directions && reverse) pi(PTAG,p) = npart - 1 - p;
+    if (!directions && reverse) pi(lagrangian_mc::PTAG,p) = npart - 1 - p;
     const Real x = directions ? kDirectionX : kReproX;
     const Real y = directions ? kDirectionY : kReproY;
     const Real z = directions ? kDirectionZ : kReproZ;
@@ -466,11 +479,11 @@ void InitializeUniformRegression(Mesh *pm) {
         owner_gid = gids + m;
       }
     }
-    pi(PGID,p) = owner_gid;
-    pi(PSTATUS,p) = PACTIVE;
-    pr(IPX,p) = x;
-    pr(IPY,p) = y;
-    pr(IPZ,p) = z;
+    pi(lagrangian_mc::PGID,p) = owner_gid;
+    pi(lagrangian_mc::PSTATUS,p) = PACTIVE;
+    pr(lagrangian_mc::IPX,p) = x;
+    pr(lagrangian_mc::IPY,p) = y;
+    pr(lagrangian_mc::IPZ,p) = z;
   });
 }
 
@@ -583,7 +596,7 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
   const int nmb = pmbp->nmb_thispack;
   par_for("particle_lmc_init", DevExeSpace(), 0, (npart - 1),
   KOKKOS_LAMBDA(const int p) {
-    const int tag = pi(PTAG,p);
+    const int tag = pi(lagrangian_mc::PTAG,p);
     const Real x = InitialX(tag);
     constexpr Real y = 0.125;
     constexpr Real z = 0.5;
@@ -596,10 +609,10 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
         owner_gid = gids + m;
       }
     }
-    pi(PGID,p) = owner_gid;
-    pi(PSTATUS,p) = PACTIVE;
-    pr(IPX,p) = x;
-    pr(IPY,p) = y;
-    pr(IPZ,p) = z;
+    pi(lagrangian_mc::PGID,p) = owner_gid;
+    pi(lagrangian_mc::PSTATUS,p) = PACTIVE;
+    pr(lagrangian_mc::IPX,p) = x;
+    pr(lagrangian_mc::IPY,p) = y;
+    pr(lagrangian_mc::IPZ,p) = z;
   });
 }

@@ -85,14 +85,14 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   Kokkos::parallel_reduce(
       "particle_drift_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_max) {
-        const int id = pi(PTAG,p);
+        const int id = pi(particles::cosmic_ray::PTAG,p);
         const Real move_time = (id == frozen || id == deleted) ? 0.0 : drift_time;
         const Real ex = InitialX(id, migration) + move_time*VelocityX(id, migration);
         const Real ey = InitialY(id) + move_time*VelocityY(id);
         const Real ez = InitialZ(id) + move_time*VelocityZ(id);
-        Real error = fabs(pr(IPX,p) - ex);
-        error = fmax(error, fabs(pr(IPY,p) - ey));
-        error = fmax(error, fabs(pr(IPZ,p) - ez));
+        Real error = fabs(pr(particles::cosmic_ray::IPX,p) - ex);
+        error = fmax(error, fabs(pr(particles::cosmic_ray::IPY,p) - ey));
+        error = fmax(error, fabs(pr(particles::cosmic_ray::IPZ,p) - ez));
         error = fmax(error, fabs(pr(particles::cosmic_ray::IPVX,p) -
                                  VelocityX(id, migration)));
         error = fmax(error, fabs(pr(particles::cosmic_ray::IPVY,p) - VelocityY(id)));
@@ -104,14 +104,14 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   Kokkos::parallel_reduce(
       "particle_drift_tag_sum", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        local_sum += static_cast<Real>(pi(PTAG,p));
+        local_sum += static_cast<Real>(pi(particles::cosmic_ray::PTAG,p));
       }, tag_sum);
 
   Real owner_errors = 0.0;
   Kokkos::parallel_reduce(
       "particle_drift_owner_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const int id = pi(PTAG,p);
+        const int id = pi(particles::cosmic_ray::PTAG,p);
         const Real move_time = (id == frozen || id == deleted) ? 0.0 : drift_time;
         const Real ex = InitialX(id, migration) + move_time*VelocityX(id, migration);
         const Real ey = InitialY(id) + move_time*VelocityY(id);
@@ -125,14 +125,14 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
             expected_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != expected_gid) local_sum += 1.0;
+        if (pi(particles::cosmic_ray::PGID,p) != expected_gid) local_sum += 1.0;
       }, owner_errors);
 
   Real migrated = 0.0;
   Kokkos::parallel_reduce(
       "particle_drift_migrated", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const int id = pi(PTAG,p);
+        const int id = pi(particles::cosmic_ray::PTAG,p);
         const Real ix = InitialX(id, migration);
         const Real iy = InitialY(id);
         const Real iz = InitialZ(id);
@@ -145,18 +145,18 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
             initial_gid = gids + m;
           }
         }
-        if (pi(PGID,p) != initial_gid) local_sum += 1.0;
+        if (pi(particles::cosmic_ray::PGID,p) != initial_gid) local_sum += 1.0;
       }, migrated);
 
   Real status_errors = 0.0;
   Kokkos::parallel_reduce(
       "particle_drift_status_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const int id = pi(PTAG,p);
+        const int id = pi(particles::cosmic_ray::PTAG,p);
         int expected_status = PACTIVE;
         if (id == frozen) expected_status = PFROZEN;
         if (id == deleted) expected_status = PDELETE_PENDING;
-        if (pi(PSTATUS,p) != expected_status) local_sum += 1.0;
+        if (pi(particles::cosmic_ray::PSTATUS,p) != expected_status) local_sum += 1.0;
       }, status_errors);
 
   pdata->hdata[0] = max_error;
@@ -226,7 +226,7 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   const int deleted = delete_tag;
   par_for("particle_drift_init", DevExeSpace(), 0, (npart - 1),
   KOKKOS_LAMBDA(const int p) {
-    const int id = pi(PTAG,p);
+    const int id = pi(particles::cosmic_ray::PTAG,p);
     const Real x = InitialX(id, migration);
     const Real y = InitialY(id);
     const Real z = InitialZ(id);
@@ -239,13 +239,13 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
         owner_gid = gids + m;
       }
     }
-    pi(PGID,p) = owner_gid;
-    pi(PSTATUS,p) = PACTIVE;
-    if (id == frozen) pi(PSTATUS,p) = PFROZEN;
-    if (id == deleted) pi(PSTATUS,p) = PDELETE_PENDING;
-    pr(IPX,p) = x;
-    pr(IPY,p) = y;
-    pr(IPZ,p) = z;
+    pi(particles::cosmic_ray::PGID,p) = owner_gid;
+    pi(particles::cosmic_ray::PSTATUS,p) = PACTIVE;
+    if (id == frozen) pi(particles::cosmic_ray::PSTATUS,p) = PFROZEN;
+    if (id == deleted) pi(particles::cosmic_ray::PSTATUS,p) = PDELETE_PENDING;
+    pr(particles::cosmic_ray::IPX,p) = x;
+    pr(particles::cosmic_ray::IPY,p) = y;
+    pr(particles::cosmic_ray::IPZ,p) = z;
     pr(particles::cosmic_ray::IPVX,p) = VelocityX(id, migration);
     pr(particles::cosmic_ray::IPVY,p) = VelocityY(id);
     pr(particles::cosmic_ray::IPVZ,p) = VelocityZ(id);

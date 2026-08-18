@@ -27,6 +27,13 @@ enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 // constants that enumerate ParticleTypes
 enum class ParticleType {cosmic_ray, lagrangian_mc};
 
+// common array indices used by type-independent particle machinery
+enum ParticleRealIndex {IPX=0, IPY=1, IPZ=2};
+enum ParticleIntIndex {PGID=0, PTAG=1, PSTATUS=2};
+
+// common particle lifecycle states
+enum ParticleStatus {PACTIVE=0, PFROZEN=1, PDELETE_PENDING=2};
+
 //----------------------------------------------------------------------------------------
 //! \struct ParticleTaskIDs
 //  \brief container to hold TaskIDs of all particles tasks

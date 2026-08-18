@@ -68,10 +68,6 @@ enum BFieldIndex {IBX=0, IBY=1, IBZ=2, NMAG=3};
 // array indices for metric matrices in GR
 enum MetricIndex {I00=0, I01=1, I02=2, I03=3, I11=4, I12=5, I13=6, I22=7, I23=8, I33=9,
                   NMETRIC=10};
-// common array indices for all particle types
-enum ParticleRealIndex {IPX=0, IPY=1, IPZ=2, NPARTICLE_REAL_COMMON=3};
-enum ParticleIntIndex {PGID=0, PTAG=1, PSTATUS=2, NPARTICLE_INT_COMMON=3};
-enum ParticleStatus {PACTIVE=0, PFROZEN=1, PDELETE_PENDING=2};
 
 // integer constants to specify spatial reconstruction methods
 enum ReconstructionMethod {dc, plm, ppm4, ppmx, wenoz, teno};
