@@ -48,7 +48,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   bool dc_on        = opt.enable_driftcontrol;
   int  dc_variety   = opt.dc_variety;
   Real dc_inv_s2    = 0.0;             // 1/damping_scale^2
-  Real dc_inv_tau   = 0.0;             // relaxation rate
+  Real dc_inv_tau[3] = {0.0, 0.0, 0.0}; // relaxation rate, per axis
   Real dc_c[3]      = {0.0, 0.0, 0.0};  // centre of the Gaussian weight
   Real dc_corr[3]   = {0.0, 0.0, 0.0};  // oscillator/PID shift RHS increment
   Real dc_target[3] = {0.0, 0.0, 0.0};  // relaxation target shift
@@ -65,8 +65,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
 
     if (dc_variety == DriftControl::Relaxation) {
-      dc_inv_tau = 1.0 / opt.dc_relaxation_time;
       for (int a = 0; a < 3; ++a) {
+        dc_inv_tau[a] = 1.0 / opt.dc_relaxation_time;
         Real const e = pdc->GetPos(a) - fixed[a];
         dc_target[a] = opt.dc_kappa * e;
         if (opt.dc_gamma_suppress > 0.0) {
@@ -100,15 +100,23 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
+    // Per-axis gain on the applied correction.
+    Real const dc_gain[3] = {opt.dc_gain_x, opt.dc_gain_y, opt.dc_gain_z};
+    for (int a = 0; a < 3; ++a) {
+      dc_corr[a]    *= dc_gain[a];
+      dc_gsupp[a]   *= dc_gain[a];
+      dc_inv_tau[a] *= dc_gain[a];
+    }
+
     // Optional ramp-down, applied to everything the controller injects. The factor is
     // 1 unless dc_ramp_start >= 0, so this is a no-op for every existing parfile.
     Real const dc_ramp = pdc->RampFactor(time);
     if (dc_ramp < 1.0) {
       for (int a = 0; a < 3; ++a) {
-        dc_corr[a]  *= dc_ramp;
-        dc_gsupp[a] *= dc_ramp;
+        dc_corr[a]    *= dc_ramp;
+        dc_gsupp[a]   *= dc_ramp;
+        dc_inv_tau[a] *= dc_ramp;
       }
-      dc_inv_tau *= dc_ramp;
     }
   }
 
@@ -655,7 +663,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
       if (dc_variety == DriftControl::Relaxation) {
         for (int a = 0; a < 3; ++a) {
-          rhs.beta_u(m,a,k,j,i) -= dc_inv_tau
+          rhs.beta_u(m,a,k,j,i) -= dc_inv_tau[a]
                                  * (z4c.beta_u(m,a,k,j,i) - dc_target[a]) * g;
           rhs.beta_u(m,a,k,j,i) -= dc_gsupp[a] * z4c.vGam_u(m,a,k,j,i) * g;
         }
