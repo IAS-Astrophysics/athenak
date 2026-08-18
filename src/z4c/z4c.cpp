@@ -178,6 +178,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.dc_relaxation_time  = pin->GetOrAddReal("z4c", "dc_relaxation_time", 1.0);
   opt.dc_kappa            = pin->GetOrAddReal("z4c", "dc_kappa", 1.0);
   opt.dc_gamma_suppress   = pin->GetOrAddReal("z4c", "dc_gamma_suppress", 0.0);
+  opt.dc_gain_x           = pin->GetOrAddReal("z4c", "dc_gain_x", 1.0);
+  opt.dc_gain_y           = pin->GetOrAddReal("z4c", "dc_gain_y", 1.0);
+  opt.dc_gain_z           = pin->GetOrAddReal("z4c", "dc_gain_z", 1.0);
   opt.dc_gaussian_center  = DriftControl::CenterFromString(
       pin->GetOrAddString("z4c", "dc_gaussian_center", "fixed"));
   }

@@ -190,6 +190,7 @@ class Z4c {
     Real dc_omega_c, dc_omega_o, dc_zeta;
     Real dc_relaxation_time, dc_kappa;
     Real dc_gamma_suppress;
+    Real dc_gain_x, dc_gain_y, dc_gain_z;
     int dc_gaussian_center;
   };
   Options opt;
