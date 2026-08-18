@@ -42,7 +42,8 @@ ParticleVTKOutput::ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParame
 // Copies real and integer particle data to host for outputs
 
 void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
-  particles::Particles *pp = pm->pmb_pack->ppart;
+  particles::ParticlePopulation *pp =
+      pm->pmb_pack->ppart->FindPopulation("particles");
   npout_thisrank = pm->nprtcl_thisrank;
   npout_total = pm->nprtcl_total;
   Kokkos::realloc(outpart_rdata, pp->nrdata, npout_thisrank);
@@ -77,6 +78,8 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
 //!  7. Arbitrary number of VECTORS data at each point (BINARY format)
 
 void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
+  const particles::ParticlePopulation *pp =
+      pm->pmb_pack->ppart->FindPopulation("particles");
   int big_end = IsBigEndian(); // =1 on big endian machine
 
   // create filename: "vtk/file_basename"."file_id"."XXXXX".part.vtk
@@ -186,7 +189,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   bool have_written_pointdata_header = false;
 
   // Write gid of points
-  for (int n=0; n<(pm->pmb_pack->ppart->nidata); ++n) {
+  for (int n=0; n<pp->nidata; ++n) {
     std::stringstream msg;
 
     if (!have_written_pointdata_header) {
@@ -203,7 +206,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     } else if (n == static_cast<int>(PSTATUS)) {
       msg << std::endl << "SCALARS status float" << std::endl
           << "LOOKUP_TABLE default" << std::endl;
-    } else if (pm->pmb_pack->ppart->particle_type == ParticleType::lagrangian_mc &&
+    } else if (pp->particle_type == ParticleType::lagrangian_mc &&
                n == static_cast<int>(particles::lagrangian_mc::PLASTMOVE)) {
       msg << std::endl << "SCALARS last_move float" << std::endl
           << "LOOKUP_TABLE default" << std::endl;

@@ -15,10 +15,10 @@
 
 namespace particles {
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus Particles::Push
+//! \fn TaskStatus ParticlePopulation::Push
 //! \brief Dispatch to the selected particle pusher.
 
-TaskStatus Particles::Push(Driver *pdriver, int stage) {
+TaskStatus ParticlePopulation::Push(Driver *pdriver, int stage) {
   switch (pusher) {
     case ParticlesPusher::drift:
       return PushDrift(pdriver, stage);

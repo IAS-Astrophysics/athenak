@@ -525,16 +525,9 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     Kokkos::resize(pmy_part->prtcl_rdata, pmy_part->nrdata, new_npart);
   }
 
-  // Update nparticles_thisrank.  Update cost array (use npart_thismb[nmb]?)
+  // Update this population, then refresh aggregate particle counts.
   pmy_part->nprtcl_thispack = new_npart;
-  pmy_part->pmy_pack->pmesh->nprtcl_thisrank = new_npart;
-  MPI_Allgather(&new_npart,1,MPI_INT,(pmy_part->pmy_pack->pmesh->nprtcl_eachrank),1,
-                MPI_INT,MPI_COMM_WORLD);
-  pmy_part->pmy_pack->pmesh->nprtcl_total = 0;
-  for (int n=0; n<global_variable::nranks; ++n) {
-    pmy_part->pmy_pack->pmesh->nprtcl_total +=
-        pmy_part->pmy_pack->pmesh->nprtcl_eachrank[n];
-  }
+  pmy_part->pmy_pack->pmesh->UpdateParticleCounts();
 #endif
   return TaskStatus::complete;
 }

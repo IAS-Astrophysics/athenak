@@ -17,10 +17,10 @@
 
 namespace particles {
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus Particles::PushDrift
+//! \fn TaskStatus ParticlePopulation::PushDrift
 //! \brief Push particles using their stored velocities.
 
-TaskStatus Particles::PushDrift(Driver*, int) {
+TaskStatus ParticlePopulation::PushDrift(Driver*, int) {
   bool &multi_d = pmy_pack->pmesh->multi_d;
   bool &three_d = pmy_pack->pmesh->three_d;
   auto &pr = prtcl_rdata;
@@ -46,10 +46,10 @@ TaskStatus Particles::PushDrift(Driver*, int) {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn Real Particles::EstimateTimestepDrift
+//! \fn Real ParticlePopulation::EstimateTimestepDrift
 //! \brief Return the minimum cell-crossing limit over active particles.
 
-Real Particles::EstimateTimestepDrift() {
+Real ParticlePopulation::EstimateTimestepDrift() {
   if (nprtcl_thispack == 0) return std::numeric_limits<float>::max();
 
   auto &pr = prtcl_rdata;

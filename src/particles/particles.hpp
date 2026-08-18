@@ -6,12 +6,13 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file particles.hpp
-//  \brief definitions for Particles class
+//  \brief definitions for the particle manager and particle populations
 
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -27,10 +28,10 @@ enum class ParticlesPusher {drift, leap_frog, lagrangian_tracer, lagrangian_mc};
 enum class ParticleType {cosmic_ray, lagrangian_mc};
 
 //----------------------------------------------------------------------------------------
-//! \struct ParticlesTaskIDs
+//! \struct ParticleTaskIDs
 //  \brief container to hold TaskIDs of all particles tasks
 
-struct ParticlesTaskIDs {
+struct ParticleTaskIDs {
   TaskID push;
   TaskID purge;
   TaskID newgid;
@@ -46,15 +47,19 @@ struct ParticlesTaskIDs {
 namespace particles {
 
 //----------------------------------------------------------------------------------------
-//! \class Particles
+//! \class ParticlePopulation
+//! \brief Homogeneous particle storage, physics, and communication state.
 
-class Particles {
+class ParticlePopulation {
   friend class ParticlesBoundaryValues;
  public:
-  Particles(MeshBlockPack *ppack, ParameterInput *pin);
-  ~Particles();
+  ParticlePopulation(const std::string &population_name,
+                     const std::string &input_block,
+                     MeshBlockPack *ppack, ParameterInput *pin);
+  ~ParticlePopulation();
 
   // data
+  std::string name;
   ParticleType particle_type;
   int nprtcl_thispack;             // number of particles this MeshBlockPack
   int nrdata, nidata;
@@ -71,10 +76,9 @@ class Particles {
   ParticlesBoundaryValues *pbval_part;
 
   // container to hold names of TaskIDs
-  ParticlesTaskIDs id;
+  ParticleTaskIDs id;
 
   // functions...
-  void CreateParticleTags(ParameterInput *pin);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus PurgeDeleted(Driver *pdriver, int stage);
@@ -93,8 +97,32 @@ class Particles {
   Real EstimateTimestepDrift();
 
  private:
+  std::string input_block_;
   std::uint64_t lmc_random_seed;
-  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Particles
+  MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this population
+};
+
+//----------------------------------------------------------------------------------------
+//! \class Particles
+//! \brief Owns and coordinates all particle populations on a MeshBlockPack.
+
+class Particles {
+ public:
+  Particles(MeshBlockPack *ppack, ParameterInput *pin);
+  ~Particles();
+
+  ParticlePopulation* FindPopulation(const std::string &name);
+  const ParticlePopulation* FindPopulation(const std::string &name) const;
+
+  int GetLocalCount() const;
+  Real GetTimestep() const;
+  void CreateParticleTags(ParameterInput *pin);
+  void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
+  TaskStatus NewTimeStep(Driver *pdriver, int stage);
+
+ private:
+  std::vector<ParticlePopulation*> populations_;
+  MeshBlockPack *pmy_pack_;
 };
 
 } // namespace particles

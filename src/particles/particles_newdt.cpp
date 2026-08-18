@@ -20,9 +20,21 @@
 namespace particles {
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Particles::NewTimeStep
+//! \brief Refresh timestep estimates for every particle population.
+
+TaskStatus Particles::NewTimeStep(Driver *pdriver, int stage) {
+  for (auto *population : populations_) {
+    TaskStatus status = population->NewTimeStep(pdriver, stage);
+    if (status != TaskStatus::complete) return status;
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus ParticlePopulation::NewTimeStep
 //! \brief Combine the model and optional user-enrolled particle timestep limits.
 
-TaskStatus Particles::NewTimeStep(Driver*, int) {
+TaskStatus ParticlePopulation::NewTimeStep(Driver*, int) {
   Real model_dt = std::numeric_limits<float>::max();
   switch (pusher) {
     case ParticlesPusher::drift:

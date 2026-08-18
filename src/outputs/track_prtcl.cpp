@@ -30,7 +30,8 @@
 TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
                                              OutputParameters op) :
   BaseTypeOutput(pin, pm, op) {
-  if (pm->pmb_pack->ppart->particle_type != ParticleType::cosmic_ray) {
+  const auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
+  if (population->particle_type != ParticleType::cosmic_ray) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Tracked particle output currently supports only "
               << "cosmic-ray particles" << std::endl;
@@ -50,11 +51,12 @@ TrackedParticleOutput::TrackedParticleOutput(ParameterInput *pin, Mesh *pm,
 // Copies data for tracked particles on this rank to host outpart array
 
 void TrackedParticleOutput::LoadOutputData(Mesh *pm) {
+  auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
   // Load data for tracked particles on this rank into new device array
   DualArray1D<TrackedParticleData> tracked_prtcl("d_trked",ntrack_thisrank);
   int npart = pm->nprtcl_thisrank;
-  auto &pr = pm->pmb_pack->ppart->prtcl_rdata;
-  auto &pi = pm->pmb_pack->ppart->prtcl_idata;
+  auto &pr = population->prtcl_rdata;
+  auto &pi = population->prtcl_idata;
   int counter=0;
   int *pcounter = &counter;
   int ntrack_ = ntrack;

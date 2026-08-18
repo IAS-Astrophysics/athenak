@@ -44,10 +44,10 @@ Real LagrangianMCRandom(const std::uint64_t seed, const int tag, const int cycle
 
 } // namespace
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus Particles::PushLagrangianMC
+//! \fn TaskStatus ParticlePopulation::PushLagrangianMC
 //! \brief Validate the outgoing mass budget before moving Lagrangian MC particles.
 
-TaskStatus Particles::PushLagrangianMC(Driver*, int) {
+TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int is = indcs.is;
   const int js = indcs.js;

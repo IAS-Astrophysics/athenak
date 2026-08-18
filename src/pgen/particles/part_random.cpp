@@ -33,12 +33,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << std::endl;
     exit(EXIT_FAILURE);
   }
+  auto *population = pmbp->ppart->FindPopulation("particles");
 
   // capture variables for the kernel
   auto &mbsize = pmbp->pmb->mb_size;
-  auto &pr = pmbp->ppart->prtcl_rdata;
-  auto &pi = pmbp->ppart->prtcl_idata;
-  auto &npart = pmbp->ppart->nprtcl_thispack;
+  auto &pr = population->prtcl_rdata;
+  auto &pi = population->prtcl_idata;
+  auto &npart = population->nprtcl_thispack;
   auto gids = pmbp->gids;
   auto gide = pmbp->gide;
 

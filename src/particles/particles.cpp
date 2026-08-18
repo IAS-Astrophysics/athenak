@@ -4,7 +4,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file particles.cpp
-//! \brief implementation of Particles class constructor and assorted other functions
+//! \brief implementation of the particle manager and population lifecycle
 
 #include <iostream>
 #include <string>
@@ -23,10 +23,69 @@
 
 namespace particles {
 //----------------------------------------------------------------------------------------
-// constructor, initializes data structures and parameters
+// Particles constructor
 
-Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
+Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) : pmy_pack_(ppack) {
+  populations_.emplace_back(new ParticlePopulation("particles", "particles", ppack, pin));
+}
+
+//----------------------------------------------------------------------------------------
+// Particles destructor
+
+Particles::~Particles() {
+  for (auto *population : populations_) {
+    delete population;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Return a population by its stable name, or nullptr when it is not present.
+
+ParticlePopulation* Particles::FindPopulation(const std::string &name) {
+  for (auto *population : populations_) {
+    if (population->name == name) return population;
+  }
+  return nullptr;
+}
+
+const ParticlePopulation* Particles::FindPopulation(const std::string &name) const {
+  for (const auto *population : populations_) {
+    if (population->name == name) return population;
+  }
+  return nullptr;
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Return the aggregate local particle count over all populations.
+
+int Particles::GetLocalCount() const {
+  int count = 0;
+  for (const auto *population : populations_) {
+    count += population->nprtcl_thispack;
+  }
+  return count;
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Return the tightest timestep estimate over all populations.
+
+Real Particles::GetTimestep() const {
+  Real dt = std::numeric_limits<float>::max();
+  for (const auto *population : populations_) {
+    dt = std::min(dt, population->dtnew);
+  }
+  return dt;
+}
+
+//----------------------------------------------------------------------------------------
+// ParticlePopulation constructor, initializes data structures and parameters
+
+ParticlePopulation::ParticlePopulation(const std::string &population_name,
+                                       const std::string &input_block,
+                                       MeshBlockPack *ppack, ParameterInput *pin) :
+    name(population_name),
     dtnew(std::numeric_limits<float>::max()),
+    input_block_(input_block),
     lmc_random_seed(0),
     pmy_pack(ppack) {
   // check this is at least a 2D problem
@@ -37,7 +96,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // read number of particles per cell, and calculate number of particles this pack
-  Real ppc = pin->GetOrAddReal("particles","ppc",1.0);
+  Real ppc = pin->GetOrAddReal(input_block_,"ppc",1.0);
 
   // compute number of particles as real number, since ppc can be < 1
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -48,7 +107,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // select particle type
   {
-    std::string ptype = pin->GetString("particles","particle_type");
+    std::string ptype = pin->GetString(input_block_,"particle_type");
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
     } else if (ptype.compare("lagrangian_mc") == 0) {
@@ -63,7 +122,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // select pusher algorithm
   {
-    std::string ppush = pin->GetString("particles","pusher");
+    std::string ppush = pin->GetString(input_block_,"pusher");
     if (ppush.compare("drift") == 0) {
       if (particle_type != ParticleType::cosmic_ray) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -118,7 +177,7 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
                   << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      int random_seed = pin->GetOrAddInteger("particles", "random_seed", 0);
+      int random_seed = pin->GetOrAddInteger(input_block_, "random_seed", 0);
       if (random_seed < 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "particles/random_seed must be non-negative"
@@ -177,15 +236,15 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 //----------------------------------------------------------------------------------------
 // destructor
 
-Particles::~Particles() {
+ParticlePopulation::~ParticlePopulation() {
   delete pbval_part;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn TaskStatus Particles::PurgeDeleted
+//! \fn TaskStatus ParticlePopulation::PurgeDeleted
 //! \brief Remove particles marked for deletion and compact all particle data arrays.
 
-TaskStatus Particles::PurgeDeleted(Driver*, int) {
+TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
   const int npart = nprtcl_thispack;
   if (npart == 0) return TaskStatus::complete;
 
@@ -229,16 +288,15 @@ TaskStatus Particles::PurgeDeleted(Driver*, int) {
   prtcl_idata = new_pi;
   nprtcl_thispack = new_npart;
 
-  Mesh *pm = pmy_pack->pmesh;
-  pm->nprtcl_thisrank = new_npart;
-  pm->nprtcl_eachrank[global_variable::my_rank] = new_npart;
-  if (global_variable::nranks == 1) pm->nprtcl_total = new_npart;
+#if !MPI_PARALLEL_ENABLED
+  pmy_pack->pmesh->UpdateParticleCounts();
+#endif
 
   return TaskStatus::complete;
 }
 
 //----------------------------------------------------------------------------------------
-// CreateParticleTags()
+// Particles::CreateParticleTags()
 // Assigns tags to particles (unique integer).  Note that tracked particles are always
 // those with tag numbers less than ntrack.
 
@@ -249,24 +307,36 @@ void Particles::CreateParticleTags(ParameterInput *pin) {
   if (assign.compare("index_order") == 0) {
     int tagstart = 0;
     for (int n=1; n<=global_variable::my_rank; ++n) {
-      tagstart += pmy_pack->pmesh->nprtcl_eachrank[n-1];
+      tagstart += pmy_pack_->pmesh->nprtcl_eachrank[n-1];
     }
 
-    auto &pi = prtcl_idata;
-    par_for("ptags",DevExeSpace(),0,(nprtcl_thispack-1),
-    KOKKOS_LAMBDA(const int p) {
-      pi(PTAG,p) = tagstart + p;
-    });
+    int population_offset = 0;
+    for (auto *population : populations_) {
+      auto &pi = population->prtcl_idata;
+      const int offset = population_offset;
+      const int npart = population->nprtcl_thispack;
+      par_for("ptags",DevExeSpace(),0,(npart-1),
+      KOKKOS_LAMBDA(const int p) {
+        pi(PTAG,p) = tagstart + offset + p;
+      });
+      population_offset += npart;
+    }
 
   // tags are assigned sequentially across ranks
   } else if (assign.compare("rank_order") == 0) {
     int myrank = global_variable::my_rank;
     int nranks = global_variable::nranks;
-    auto &pi = prtcl_idata;
-    par_for("ptags",DevExeSpace(),0,(nprtcl_thispack-1),
-    KOKKOS_LAMBDA(const int p) {
-      pi(PTAG,p) = myrank + nranks*p;
-    });
+    int population_offset = 0;
+    for (auto *population : populations_) {
+      auto &pi = population->prtcl_idata;
+      const int offset = population_offset;
+      const int npart = population->nprtcl_thispack;
+      par_for("ptags",DevExeSpace(),0,(npart-1),
+      KOKKOS_LAMBDA(const int p) {
+        pi(PTAG,p) = myrank + nranks*(offset + p);
+      });
+      population_offset += npart;
+    }
 
   // tag algorithm not recognized, so quit with error
   } else {

@@ -131,10 +131,10 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
         local_max = fmax(local_max, fabs(intflx1(m,k,j,i+1) - expected));
       }, Kokkos::Max<Real>(flux_error));
 
-  auto particles = pmbp->ppart;
-  auto pr = particles->prtcl_rdata;
-  auto pi = particles->prtcl_idata;
-  const int npart = particles->nprtcl_thispack;
+  auto *population = pmbp->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
+  const int npart = population->nprtcl_thispack;
   const int gids = pmbp->gids;
   const int nmb = pmbp->nmb_thispack;
   constexpr Real y0 = 0.125;
@@ -248,11 +248,11 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
   pdata->label[10] = "npart";
   pdata->label[11] = "tag_sum";
 
-  auto ppart = pm->pmb_pack->ppart;
-  auto pr = ppart->prtcl_rdata;
-  auto pi = ppart->prtcl_idata;
+  auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
   auto &mbsize = pm->pmb_pack->pmb->mb_size;
-  const int npart = ppart->nprtcl_thispack;
+  const int npart = population->nprtcl_thispack;
   const int gids = pm->pmb_pack->gids;
   const int nmb = pm->pmb_pack->nmb_thispack;
   const Real dx1 = (pm->mesh_size.x1max - pm->mesh_size.x1min)/pm->mesh_indcs.nx1;
@@ -336,11 +336,11 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
 
 void ReproducibilityHistory(HistoryData *pdata, Mesh *pm) {
   pdata->nhist = 20;
-  auto ppart = pm->pmb_pack->ppart;
-  auto pr = ppart->prtcl_rdata;
-  auto pi = ppart->prtcl_idata;
+  auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
   auto &mbsize = pm->pmb_pack->pmb->mb_size;
-  const int npart = ppart->nprtcl_thispack;
+  const int npart = population->nprtcl_thispack;
   const int gids = pm->pmb_pack->gids;
   const int nmb = pm->pmb_pack->nmb_thispack;
 
@@ -445,10 +445,10 @@ void InitializeUniformRegression(Mesh *pm) {
     u0(m,IM3,k,j,i) = directions ? sign*size.dx3 : 0.0;
   });
 
-  auto ppart = pmbp->ppart;
-  auto pr = ppart->prtcl_rdata;
-  auto pi = ppart->prtcl_idata;
-  const int npart = ppart->nprtcl_thispack;
+  auto *population = pmbp->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
+  const int npart = population->nprtcl_thispack;
   const int gids = pmbp->gids;
   const int nmb = pmbp->nmb_thispack;
   par_for("particle_lmc_uniform_particle_init", DevExeSpace(), 0, (npart - 1),
@@ -575,10 +575,10 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
     u0(m,IM3,k,j,i) = 0.0;
   });
 
-  auto particles = pmbp->ppart;
-  auto pr = particles->prtcl_rdata;
-  auto pi = particles->prtcl_idata;
-  const int npart = particles->nprtcl_thispack;
+  auto *population = pmbp->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
+  const int npart = population->nprtcl_thispack;
   const int gids = pmbp->gids;
   const int nmb = pmbp->nmb_thispack;
   par_for("particle_lmc_init", DevExeSpace(), 0, (npart - 1),

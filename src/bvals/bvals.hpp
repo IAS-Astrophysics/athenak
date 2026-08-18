@@ -32,7 +32,7 @@ enum class BoundaryFlag {undef=-1,block, reflect, inflow, outflow, diode, user, 
 // Forward declarations
 class MeshBlockPack;
 namespace particles {
-class Particles;
+class ParticlePopulation;
 }
 
 //----------------------------------------------------------------------------------------
@@ -305,7 +305,7 @@ struct ParticleMessageData {
 namespace particles {
 class ParticlesBoundaryValues {
  public:
-  ParticlesBoundaryValues(particles::Particles *ppart, ParameterInput *pin);
+  ParticlesBoundaryValues(particles::ParticlePopulation *ppart, ParameterInput *pin);
   ~ParticlesBoundaryValues();
 
   int nprtcl_send, nprtcl_recv;
@@ -337,7 +337,7 @@ class ParticlesBoundaryValues {
   TaskStatus RecvAndUnpackPrtcls();
 
  protected:
-  particles::Particles* pmy_part;
+  particles::ParticlePopulation* pmy_part;
 };
 } // namespace particles
 

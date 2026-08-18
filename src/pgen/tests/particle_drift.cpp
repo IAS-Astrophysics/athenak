@@ -69,11 +69,11 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   pdata->label[5] = "status_err";
   pdata->label[6] = "count_err";
 
-  auto &particles = pm->pmb_pack->ppart;
-  auto pr = particles->prtcl_rdata;
-  auto pi = particles->prtcl_idata;
+  auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
   auto &mbsize = pm->pmb_pack->pmb->mb_size;
-  const int npart = particles->nprtcl_thispack;
+  const int npart = population->nprtcl_thispack;
   const int gids = pm->pmb_pack->gids;
   const int nmb = pm->pmb_pack->nmb_thispack;
   const bool migration = migration_test;
@@ -214,12 +214,13 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
     std::exit(EXIT_FAILURE);
   }
 
-  auto pr = pmbp->ppart->prtcl_rdata;
-  auto pi = pmbp->ppart->prtcl_idata;
+  auto *population = pmbp->ppart->FindPopulation("particles");
+  auto pr = population->prtcl_rdata;
+  auto pi = population->prtcl_idata;
   auto &mbsize = pmbp->pmb->mb_size;
   const int gids = pmbp->gids;
   const int nmb = pmbp->nmb_thispack;
-  const int npart = pmbp->ppart->nprtcl_thispack;
+  const int npart = population->nprtcl_thispack;
   const bool migration = migration_test;
   const int frozen = frozen_tag;
   const int deleted = delete_tag;
