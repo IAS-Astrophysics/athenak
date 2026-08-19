@@ -352,9 +352,11 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // Apply limits to Y to ensure a physical state
   bool Y_adjusted = eos.ApplySpeciesLimits(Y);
 
+  const Real Bsq = SquareVector(B_u, g3d);
+
   // Check the conserved variables for consistency and do whatever
   // the EOSPolicy wants us to.
-  bool floored = eos.ApplyConservedFloor(D, S_d, tau, Y, SquareVector(B_u, g3d));
+  bool floored = eos.ApplyConservedFloor(D, S_d, tau, Y, Bsq);
   solver_result.cons_floor = floored;
   if (floored && eos.IsConservedFlooringFailure()) {
     HandleFailure(prim, cons, b, g3d);
@@ -406,10 +408,9 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
     solver_result.cons_adjusted = true;
     // If b_u is rescaled, we also need to adjust D, which means we'll
     // have to adjust all our other rescalings, too.
-    Real Bsq = SquareVector(B_u, g3d);
     D = Bsq/bsqr;
     r_d[0] = S_d[0]/D; r_d[1] = S_d[1]/D; r_d[2] = S_d[2]/D;
-    RaiseForm(r_u, r_d, g3d);
+    RaiseForm(r_u, r_d, g3u);
     rb = Contract(b_u, r_d);
     rbsqr = rb*rb;
     q = tau/D;
