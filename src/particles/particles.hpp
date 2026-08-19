@@ -62,7 +62,7 @@ class ParticlePopulation {
  public:
   ParticlePopulation(const std::string &population_name,
                      const std::string &input_block,
-                     MeshBlockPack *ppack, ParameterInput *pin);
+                     MeshBlockPack *ppack, ParameterInput *pin, bool is_restart);
   ~ParticlePopulation();
 
   // data
@@ -103,6 +103,10 @@ class ParticlePopulation {
   TaskStatus PushLagrangianMC(Driver *pdriver, int stage);
   Real EstimateTimestepDrift();
 
+  int RestartLayoutVersion() const;
+  std::vector<char> RestartMetadata() const;
+  void ValidateRestartMetadata(const std::vector<char> &metadata) const;
+
  private:
   std::string input_block_;
   std::uint64_t lmc_random_seed;
@@ -115,7 +119,7 @@ class ParticlePopulation {
 
 class Particles {
  public:
-  Particles(MeshBlockPack *ppack, ParameterInput *pin);
+  Particles(MeshBlockPack *ppack, ParameterInput *pin, bool is_restart);
   ~Particles();
 
   ParticlePopulation* FindPopulation(const std::string &name);
@@ -123,12 +127,16 @@ class Particles {
 
   int GetLocalCount() const;
   Real GetTimestep() const;
-  void CreateParticleTags(ParameterInput *pin);
+  void CreateParticleTags();
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus NewTimeStep(Driver *pdriver, int stage);
+  void WriteRestart(const std::string &filename) const;
+  void LoadRestart(const std::string &filename);
 
  private:
   std::vector<ParticlePopulation*> populations_;
+  std::string tag_assignment_;
+  bool restart_sort_by_tag_;
   MeshBlockPack *pmy_pack_;
 };
 

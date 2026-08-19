@@ -16,6 +16,7 @@ namespace cosmic_ray {
 // and lifecycle status.
 enum RealIndex {IPX=0, IPY=1, IPZ=2, IPVX=3, IPVY=4, IPVZ=5, NREAL=6};
 enum IntIndex {PGID=0, PTAG=1, PSTATUS=2, NINT=3};
+constexpr int RESTART_LAYOUT_VERSION = 1;
 
 } // namespace cosmic_ray
 } // namespace particles

@@ -59,7 +59,7 @@
 //! \brief Athena main program
 
 int main(int argc, char *argv[]) {
-  std::string input_file, restart_file, run_dir;
+  std::string input_file, restart_file, particle_restart_file, run_dir;
   bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
@@ -164,6 +164,9 @@ int main(int argc, char *argv[]) {
           restart_file.assign(argv[++i]);
           res_flag = true;
           break;
+        case 'p':                      // -p <particle_restart_file>
+          particle_restart_file.assign(argv[++i]);
+          break;
         case 'd':                      // -d <run_directory>
           run_dir.assign(argv[++i]);
           break;
@@ -202,6 +205,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Options:" << std::endl;
             std::cout << "  -i <file>       specify input file [athinput]\n";
             std::cout << "  -r <file>       restart with this file\n";
+            std::cout << "  -p <file>       restart particles with this file\n";
             std::cout << "  -d <directory>  specify run dir [current dir]\n";
             std::cout << "  -n              parse input file and quit\n";
             std::cout << "  -c              show configuration and quit\n";
@@ -347,11 +351,12 @@ int main(int argc, char *argv[]) {
   // Note these steps must occur after Mesh (including MeshBlocks and MeshBlockPack)
   // is fully constructed.
 
-  pmesh->AddCoordinatesAndPhysics(pinput);
+  pmesh->AddCoordinatesAndPhysics(pinput, res_flag);
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput, pmesh);
   } else {
+    pmesh->LoadParticlesFromRestart(particle_restart_file);
     // read ICs from restart file using ProblemGenerator constructor for restarts
     pmesh->pgen = std::make_unique<ProblemGenerator>(pinput,
                                                      pmesh,

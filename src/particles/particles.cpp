@@ -25,8 +25,13 @@ namespace particles {
 //----------------------------------------------------------------------------------------
 // Particles constructor
 
-Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) : pmy_pack_(ppack) {
-  populations_.emplace_back(new ParticlePopulation("particles", "particles", ppack, pin));
+Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin, bool is_restart) :
+    tag_assignment_(pin->GetOrAddString("particles","assign_tag","index_order")),
+    restart_sort_by_tag_(
+        pin->GetOrAddBoolean("particles","restart_sort_by_tag",false)),
+    pmy_pack_(ppack) {
+  populations_.emplace_back(
+      new ParticlePopulation("particles", "particles", ppack, pin, is_restart));
 }
 
 //----------------------------------------------------------------------------------------
@@ -82,7 +87,8 @@ Real Particles::GetTimestep() const {
 
 ParticlePopulation::ParticlePopulation(const std::string &population_name,
                                        const std::string &input_block,
-                                       MeshBlockPack *ppack, ParameterInput *pin) :
+                                       MeshBlockPack *ppack, ParameterInput *pin,
+                                       bool is_restart) :
     name(population_name),
     dtnew(std::numeric_limits<float>::max()),
     input_block_(input_block),
@@ -95,15 +101,17 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
     std::exit(EXIT_FAILURE);
   }
 
-  // read number of particles per cell, and calculate number of particles this pack
+  nprtcl_thispack = 0;
+  // read number of particles per cell on both fresh starts and restarts
   Real ppc = pin->GetOrAddReal(input_block_,"ppc",1.0);
-
-  // compute number of particles as real number, since ppc can be < 1
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int ncells = indcs.nx1*indcs.nx2*indcs.nx3;
-  Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
-  // then cast to integer
-  nprtcl_thispack = static_cast<int>(r_npart);
+  if (!is_restart) {
+    // calculate number of particles in this pack
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    int ncells = indcs.nx1*indcs.nx2*indcs.nx3;
+    Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
+    // then cast to integer
+    nprtcl_thispack = static_cast<int>(r_npart);
+  }
 
   // select particle type
   {
@@ -300,11 +308,9 @@ TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
 // Assigns tags to particles (unique integer).  Note that tracked particles are always
 // those with tag numbers less than ntrack.
 
-void Particles::CreateParticleTags(ParameterInput *pin) {
-  std::string assign = pin->GetOrAddString("particles","assign_tag","index_order");
-
+void Particles::CreateParticleTags() {
   // tags are assigned sequentially within this rank, starting at 0 with rank=0
-  if (assign.compare("index_order") == 0) {
+  if (tag_assignment_.compare("index_order") == 0) {
     int tagstart = 0;
     for (int n=1; n<=global_variable::my_rank; ++n) {
       tagstart += pmy_pack_->pmesh->nprtcl_eachrank[n-1];
@@ -323,7 +329,7 @@ void Particles::CreateParticleTags(ParameterInput *pin) {
     }
 
   // tags are assigned sequentially across ranks
-  } else if (assign.compare("rank_order") == 0) {
+  } else if (tag_assignment_.compare("rank_order") == 0) {
     int myrank = global_variable::my_rank;
     int nranks = global_variable::nranks;
     int population_offset = 0;
@@ -341,7 +347,7 @@ void Particles::CreateParticleTags(ParameterInput *pin) {
   // tag algorithm not recognized, so quit with error
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Particle tag assignment type = '" << assign << "' not recognized"
+              << "Particle tag assignment type = '" << tag_assignment_ << "' not recognized"
               << std::endl;
     std::exit(EXIT_FAILURE);
   }

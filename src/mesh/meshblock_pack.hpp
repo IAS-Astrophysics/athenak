@@ -87,7 +87,7 @@ class MeshBlockPack {
   std::vector<parabolic::ParabolicProcessDescriptor> parabolic_processes;
 
   // functions
-  void AddPhysics(ParameterInput *pin);
+  void AddPhysics(ParameterInput *pin, bool is_restart);
   void AddMeshBlocks(ParameterInput *pin);
   void AddCoordinates(ParameterInput *pin);
   void RegisterParabolicProcess(parabolic::ParabolicProcessDescriptor process) {

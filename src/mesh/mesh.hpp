@@ -157,7 +157,8 @@ class Mesh {
   void NewTimeStep(const Real tlim);
   void RefreshSTSParabolicTimeStep();
   void UpdateParticleCounts();
-  void AddCoordinatesAndPhysics(ParameterInput *pinput);
+  void AddCoordinatesAndPhysics(ParameterInput *pinput, bool is_restart);
+  void LoadParticlesFromRestart(const std::string &particle_restart_filename);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 
