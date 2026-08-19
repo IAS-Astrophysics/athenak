@@ -33,6 +33,32 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     }
   }
 
+  // Check for unimplemented physics or a 1D/2D mesh
+  MeshBlockPack *pmbp = pmesh->pmb_pack;
+  const char *err = nullptr;
+  if (!(pmesh->three_d)) {
+    err = "Cyclic zoom requires a 3D mesh";
+  } else if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
+    err = "Cyclic zoom requires hydro, MHD, and/or radiation";
+  } else if (pmbp->pionn != nullptr) {
+    err = "Cyclic zoom is not implemented for ion-neutral (two-fluid) MHD";
+  } else if (pmbp->ppart != nullptr) {
+    err = "Cyclic zoom is not implemented for particles";
+  } else if (pmbp->pgrav != nullptr) {
+    err = "Cyclic zoom is not implemented for self-gravity";
+  } else if (pmbp->pturb != nullptr) {
+    err = "Cyclic zoom is not implemented for turbulence driving";
+  } else if (pmbp->pz4c != nullptr || pmbp->padm != nullptr || pmbp->pdyngr != nullptr) {
+    err = "Cyclic zoom is not implemented for Z4c, ADM, or dynamical GRMHD";
+  } else if (pin->DoesBlockExist("shearing_box")) {
+    err = "Cyclic zoom is not implemented for the shearing box";
+  }
+  if (err != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << err << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Set basic parameters
   verbose = pin->GetOrAddBoolean("cyclic_zoom","verbose",false);
   read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);

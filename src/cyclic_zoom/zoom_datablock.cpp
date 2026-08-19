@@ -401,8 +401,6 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   }
   if (pmbp->pmhd != nullptr) {
     ApplyPrimSameLevel(m, zm, zregion);
-    // TODO(@mhguo): may update magnetic fields using finer data
-    // UpdateBFields(m, zm);
   }
   if (pmbp->prad != nullptr) {
     ApplyCCDataSameLevel(m, pmbp->prad->i0, zm, i0, zregion);
@@ -427,8 +425,6 @@ void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
   }
   if (pmbp->pmhd != nullptr) {
     ApplyPrimFromFiner(m, zm, zregion);
-    // TODO(@mhguo): may update magnetic fields using finer data
-    // UpdateBFields(m, zm);
   }
   if (pmbp->prad != nullptr) {
     ApplyCCDataFromFiner(m, pmbp->prad->i0, zm, coarse_i0, zregion);
