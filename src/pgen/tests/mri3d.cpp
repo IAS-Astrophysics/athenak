@@ -88,7 +88,7 @@ void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   Real gm1 = eos.gamma - 1.0;
   if (eos.is_ideal && (is_strat)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Stratified shearing box only works with isothernal EOS" << std::endl;
+              << "Stratified shearing box only works with isothermal EOS" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -103,9 +103,12 @@ void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   Real p0,hs;
   if (eos.is_ideal) {
     p0 = pin->GetReal("problem","pres");
+    // scale height using adiabatic speed of sound
+    hs = std::sqrt(eos.gamma*p0/d0)/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);
   } else {
     p0 = d0*SQR(eos.iso_cs);
-    hs = eos.iso_cs/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);   // scale height
+    // scale height using isothermal speed of sound
+    hs = eos.iso_cs/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);
   }
   Real binit = std::sqrt(2.0*p0/beta);
 

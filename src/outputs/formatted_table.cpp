@@ -99,7 +99,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::fclose(pfile);   // don't forget to close the output file
   }
 #if MPI_PARALLEL_ENABLED
-  int ierr = MPI_Barrier(MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD);
 #endif
 
   // now all ranks open file and append data
@@ -174,7 +174,7 @@ void FormattedTableOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
     std::fflush(pfile);
 #if MPI_PARALLEL_ENABLED
-    int ierr = MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
 #endif
   }
 
