@@ -39,6 +39,27 @@ spheres use `flux_horizon1`, `flux_horizon2`, `flux_radius1`, and
 `flux_radius2`; their centers are refreshed from the analytic or tabulated
 trajectory before every history evaluation.
 
-The user history initially reports `mdot_<surface>` (positive for inward rest
-mass flux) and `area_<surface>` (proper area).  Surface objects are owned by the
-problem generator and rebuilt after AMR changes without static view lifetimes.
+For each surface, the user history reports inward-positive rest-mass and energy
+fluxes; outward linear- and angular-momentum fluxes, each split into fluid and
+electromagnetic parts; unsigned magnetic flux; and proper area.  The ordered
+labels are `mdot`, `edot_f`, `edot_em`, `pxdot_f`, `pydot_f`, `pzdot_f`,
+`pxdot_em`, `pydot_em`, `pzdot_em`, `lxdot_f`, `lydot_f`, `lzdot_f`,
+`lxdot_em`, `lydot_em`, `lzdot_em`, `phiB`, and `area`, followed by the
+surface label.  Magnetic flux uses `0.5 integral |B^i dSigma_i|`.  Surface
+objects are owned by the problem generator and rebuilt after AMR changes
+without static view lifetimes.
+
+## Angular momentum and torque outputs
+
+`variable = angular_momentum` writes six densitized volume integrands:
+`Jx`, `Jy`, `Jz` for the fluid and `JEMx`, `JEMy`, `JEMz` for the
+electromagnetic field.  They use the covariant Eulerian momentum density,
+`sqrt(gamma) epsilon_(alm) x^l S_m`, which is the Cartesian rotation charge.
+
+`variable = torque` writes `Tx`, `Ty`, and `Tz`.  These include both the
+cross product of position with the ADM momentum source and the product-rule
+term from the spatial momentum flux.  Both outputs require ADM, MHD, and
+DynGRMHD objects and assume the gamma-law EOS used by this problem.  Primitive
+velocities are interpreted as `W v^i`; cell-centered magnetic fields are
+interpreted as the densitized `sqrt(gamma) B^i` representation used by
+DynGRMHD.

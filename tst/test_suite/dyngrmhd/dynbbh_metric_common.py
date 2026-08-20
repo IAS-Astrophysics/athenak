@@ -220,10 +220,57 @@ def run_surface_check():
         "meshblock/nx1=12", "meshblock/nx2=12", "meshblock/nx3=12",
     ]
     subprocess.check_call(args)
-    values = np.loadtxt(f"{basename}.user.hst", comments="#", ndmin=2)[-1]
-    mdot, area = values[-2], values[-1]
+    history = Path(f"{basename}.user.hst")
+    header = [
+        line for line in history.read_text(encoding="utf-8").splitlines()
+        if line.startswith("#  [1]=")
+    ][-1]
+    labels = [token.split("=", 1)[1] for token in header.split() if "=" in token]
+    expected = (
+        "time", "dt", "mdot_r100", "edot_f_r100", "edot_em_r100",
+        "pxdot_f_r100", "pydot_f_r100", "pzdot_f_r100",
+        "pxdot_em_r100", "pydot_em_r100", "pzdot_em_r100",
+        "lxdot_f_r100", "lydot_f_r100", "lzdot_f_r100",
+        "lxdot_em_r100", "lydot_em_r100", "lzdot_em_r100",
+        "phiB_r100", "area_r100",
+    )
+    assert tuple(labels) == tuple(label[:10] for label in expected), labels
+    data_line = [
+        line for line in history.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#")
+    ][-1]
+    values = np.fromstring(data_line, sep=" ")
+    assert values.shape == (19,) and np.all(np.isfinite(values)), values
+    mdot, area = values[2], values[-1]
     flat_area = 4.0*math.pi*radius*radius
     assert abs(area/flat_area - 1.0) < 0.02, (area, flat_area)
     # At r=100 the moving metric's shift leaves an O(M/r) coordinate flux;
     # its closed-sphere integral must nevertheless remain correspondingly small.
     assert abs(mdot) < 0.03*area*1.0e-10, (mdot, area)
+    # The regression atmosphere is unmagnetized, so all EM and magnetic-flux
+    # diagnostics must vanish exactly.  Angular and linear fluid fluxes remain
+    # finite; their closed-surface residuals are covered by the area/flux check.
+    np.testing.assert_array_equal(values[[4, 8, 9, 10, 14, 15, 16, 17]], 0.0)
+
+
+def run_volume_diagnostics_check():
+    """Exercise both new derived-output kernels on the live dynbbh metric."""
+    results = {}
+    for variable in ("angular_momentum", "torque"):
+        basename = f"dynbbh_{variable}_regression"
+        subprocess.check_call([
+            "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+            f"output1/variable={variable}",
+        ])
+        table = Path("tab") / f"{basename}.{variable}.00000.tab"
+        results[variable] = np.loadtxt(table, comments="#", ndmin=2)
+
+    angular = results["angular_momentum"][:, 3:]
+    torque = results["torque"][:, 3:]
+    assert angular.shape[1] == 6 and torque.shape[1] == 3
+    assert np.all(np.isfinite(angular)) and np.all(np.isfinite(torque))
+    # The initialized atmosphere is at rest and unmagnetized.
+    np.testing.assert_array_equal(angular, 0.0)
+    # The nonaxisymmetric moving-binary metric supplies a small but resolved
+    # gravitational torque even for the pressure-floor atmosphere.
+    assert np.max(np.abs(torque)) > 1.0e-16, torque

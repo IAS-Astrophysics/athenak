@@ -704,6 +704,25 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 
+  if (out_params.variable.compare("angular_momentum") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 6;
+    outvars.emplace_back("Jx",0,&(derived_var));
+    outvars.emplace_back("Jy",1,&(derived_var));
+    outvars.emplace_back("Jz",2,&(derived_var));
+    outvars.emplace_back("JEMx",3,&(derived_var));
+    outvars.emplace_back("JEMy",4,&(derived_var));
+    outvars.emplace_back("JEMz",5,&(derived_var));
+  }
+
+  if (out_params.variable.compare("torque") == 0) {
+    out_params.contains_derived = true;
+    out_params.n_derived += 3;
+    outvars.emplace_back("Tx",0,&(derived_var));
+    outvars.emplace_back("Ty",1,&(derived_var));
+    outvars.emplace_back("Tz",2,&(derived_var));
+  }
+
   // initialize vector containing number of output MBs per rank
   noutmbs.assign(global_variable::nranks, 0);
 }
