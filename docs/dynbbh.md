@@ -142,3 +142,8 @@ ghost zones.  Cells with a non-finite or non-positive spatial determinant, or
 with invalid primitive state, are written as zero rather than NaN; the
 simulation's floor/event diagnostics should be consulted when this occurs.
 These vector-valued diagnostics cannot be used directly as scalar PDF axes.
+
+The maintained native-output post-processing workflow is documented in
+[`cbd_diagnostics.md`](cbd_diagnostics.md).  It produces AMR-aware radial
+profiles, rest-mass and angular-momentum budgets, torque summaries, and radial
+or moving-horizon flux time series without hard-coded run paths.
