@@ -36,6 +36,36 @@ namespace {
 char const *const integral_key[3] = {"dc_integral_x", "dc_integral_y", "dc_integral_z"};
 // Parameter keys under which the DOB observer state is checkpointed.
 char const *const dob_key[3] = {"dc_dob_px", "dc_dob_py", "dc_dob_pz"};
+// Parameter keys under which the BDOB applied correction is checkpointed.
+char const *const bdob_u_key[3] = {"dc_bdob_ux", "dc_bdob_uy", "dc_bdob_uz"};
+// Parameter keys under which the spent effort budget is checkpointed.
+char const *const budget_key[3] = {"dc_budget_dx", "dc_budget_dy", "dc_budget_dz"};
+
+//! \brief Smooth, strictly bounded soft limiter,
+Real SoftLimit(Real u, Real umax, int n) {
+  if (umax < 0.0) {
+    return u;                                  // limiter disabled
+  }
+  if (umax == 0.0) {
+    return 0.0;                                // zero authority, same as gain = 0
+  }
+  Real const q = std::fabs(u) / umax;
+  if (q > 1.0e3) {
+    return (u > 0.0) ? umax : -umax;           // saturated to better than 1e-9 relative
+  }
+  Real const pw = 2.0 * static_cast<Real>(n);
+  return u / std::pow(1.0 + std::pow(q, pw), 1.0 / pw);
+}
+
+//! \brief Symmetric slew limit on the applied correction. Guarantees that a mid-chain
+//! change of umax, of a per-axis gain, or of the variety cannot step dbeta/dt.
+Real SlewLimit(Real u, Real u_prev, Real max_rate, Real dt) {
+  if (max_rate < 0.0 || dt <= 0.0) {
+    return u;
+  }
+  Real const du = max_rate * dt;
+  return std::clamp(u, u_prev - du, u_prev + du);
+}
 } // namespace
 
 //----------------------------------------------------------------------------------------
@@ -48,6 +78,8 @@ DriftControl::Variety DriftControl::VarietyFromString(std::string const &str) {
     return Relaxation;
   } else if (str.compare("dob") == 0) {
     return DOB;
+  } else if (str.compare("bdob") == 0) {
+    return BDOB;
   }
   std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
             << __LINE__ << std::endl;
@@ -98,6 +130,30 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
   dc_omega_o       = pin->GetOrAddReal("z4c", "dc_omega_o", 1.0);
   dc_zeta          = pin->GetOrAddReal("z4c", "dc_zeta", 1.0);
 
+  // BDOB effort budget. The defaults disable the limiter, so dc_variety = bdob with
+  // nothing else set is dc_variety = dob.
+  dc_umax[0]       = pin->GetOrAddReal("z4c", "dc_umax_x", -1.0);
+  dc_umax[1]       = pin->GetOrAddReal("z4c", "dc_umax_y", -1.0);
+  dc_umax[2]       = pin->GetOrAddReal("z4c", "dc_umax_z", -1.0);
+  dc_urate         = pin->GetOrAddReal("z4c", "dc_urate", -1.0);
+  dc_sat_order     = pin->GetOrAddInteger("z4c", "dc_sat_order", 4);
+  if (dc_sat_order < 1) {
+    dc_sat_order = 1;
+  }
+
+  // Self-scheduling effort budget.
+  dc_budget[0]     = pin->GetOrAddReal("z4c", "dc_budget_x", -1.0);
+  dc_budget[1]     = pin->GetOrAddReal("z4c", "dc_budget_y", -1.0);
+  dc_budget[2]     = pin->GetOrAddReal("z4c", "dc_budget_z", -1.0);
+  dc_budget_c      = pin->GetOrAddReal("z4c", "dc_budget_c", 0.025);
+  dc_budget_tend   = pin->GetOrAddReal("z4c", "dc_budget_tend",
+                                       pin->GetOrAddReal("time", "tlim", 0.0));
+
+  // Velocity-budget schedule on omega_c. Negative disables it and omega_c is constant.
+  dc_vmax          = pin->GetOrAddReal("z4c", "dc_vmax", -1.0);
+  dc_sched_C       = pin->GetOrAddReal("z4c", "dc_sched_C", 0.341);
+  dc_omega_c_eff   = dc_omega_c;
+
   // The PID integral holds the controller's entire steady-state authority;
   // restore it across restarts
   for (int a = 0; a < NDIM; ++a) {
@@ -108,6 +164,9 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
     dc_prev_error[a] = 0.0;
     dc_p[a]          = pin->GetOrAddReal("z4c", dob_key[a], 0.0);
     dc_fhat[a]       = dc_p[a];  // v is suppressed on the first step
+    dc_u[a]          = pin->GetOrAddReal("z4c", bdob_u_key[a], 0.0);
+    dc_budget_used[a] = pin->GetOrAddReal("z4c", budget_key[a], 0.0);
+    dc_umax_eff[a]   = dc_umax[a];
   }
 
   std::string const dc_fname =
@@ -122,7 +181,18 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
     for (int a = 0; a < NDIM; ++a) {
       if (dc_gain[a] == 0.0) {
         std::cout << "### Drift control: axis " << a << " is open loop (dc_gain = 0); "
-                  << "its integrator/observer state is frozen." << std::endl;
+                  << (dc_variety == BDOB
+                      ? "its observer keeps tracking f, which is correct with the loop "
+                        "open and makes re-enabling the axis bumpless."
+                      : "its integrator/observer state is frozen.") << std::endl;
+      } else if (dc_variety == BDOB && dc_budget[a] >= 0.0) {
+        std::cout << "### Drift control: axis " << a << " on an effort budget of "
+                  << dc_budget[a] << " M of differential displacement to t = "
+                  << dc_budget_tend << " (" << dc_budget_used[a]
+                  << " M already spent, c = " << dc_budget_c << ")." << std::endl;
+      } else if (dc_variety == BDOB && dc_umax[a] >= 0.0) {
+        std::cout << "### Drift control: axis " << a << " effort ceiling |u| < "
+                  << dc_umax[a] << " (soft, order " << dc_sat_order << ")." << std::endl;
       } else if (dc_variety == DOB && dc_gain[a] != 1.0) {
         std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__
                   << std::endl
@@ -147,16 +217,28 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
             << " Ki=" << pin->GetOrAddReal("z4c", "dc_Ki", 0.1)
             << " Kd=" << pin->GetOrAddReal("z4c", "dc_Kd", 2.0)
             << " integral_cap=" << dc_integral_cap;
-    } else if (dc_variety == DOB) {
+    } else if (dc_variety == DOB || dc_variety == BDOB) {
       ofile << " omega_c=" << dc_omega_c << " omega_o=" << dc_omega_o
             << " zeta=" << dc_zeta;
+      if (dc_variety == BDOB) {
+        ofile << " umax=(" << dc_umax[0] << "," << dc_umax[1] << "," << dc_umax[2] << ")"
+              << " sat_order=" << dc_sat_order << " urate=" << dc_urate
+              << " budget=(" << dc_budget[0] << "," << dc_budget[1] << ","
+              << dc_budget[2] << ")"
+              << " budget_c=" << dc_budget_c << " budget_tend=" << dc_budget_tend
+              << " vmax=" << dc_vmax;
+      }
     } else if (dc_variety == Oscillator) {
       ofile << " tau=" << pin->GetOrAddReal("z4c", "dc_damping_time", 0.5)
             << " zeta=" << pin->GetOrAddReal("z4c", "dc_damping_coeff", 1.0);
     }
     ofile << " scale=" << pin->GetOrAddReal("z4c", "dc_damping_scale", 10.0)
           << " ramp_start=" << dc_ramp_start << " ramp_time=" << dc_ramp_time << "\n";
-    if (dc_variety == DOB) {
+    if (dc_variety == BDOB) {
+      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
+               " 12:fhatx 13:fhaty 14:fhatz 15:ux 16:uy 17:uz"
+               " 18:Dx 19:Dy 20:Dz 21:umaxx 22:umaxy 23:umaxz 24:omega_c\n";
+    } else if (dc_variety == DOB) {
       ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
                " 12:fhatx 13:fhaty 14:fhatz\n";
     } else {
@@ -189,6 +271,55 @@ Real DriftControl::RampFactor(Real time) const {
 }
 
 //----------------------------------------------------------------------------------------
+//! \brief Advance the bounded-authority observer and form the applied correction.
+void DriftControl::UpdateBoundedObserver(Real ramp, Real dt, bool advance) {
+  dc_omega_c_eff = dc_omega_c;
+  if (dc_vmax > 0.0) {
+    Real e2 = 0.0;
+    for (int a = 0; a < NDIM; ++a) {
+      Real const ea = dc_pos[a] - dc_fixed[a];
+      e2 += ea * ea;
+    }
+    Real const enorm = std::sqrt(e2);
+    if (enorm > 0.0 && dc_sched_C > 0.0) {
+      dc_omega_c_eff = std::min(dc_omega_c, dc_vmax / (dc_sched_C * enorm));
+    }
+  }
+  Real const wc2  = dc_omega_c_eff * dc_omega_c_eff;
+  Real const twzc = 2.0 * dc_zeta * dc_omega_c_eff;
+
+  for (int a = 0; a < NDIM; ++a) {
+    Real const e     = dc_pos[a] - dc_fixed[a];
+    Real const fhat  = dc_p[a] + dc_omega_o * dc_vel[a];
+    Real const u_pd  = wc2 * e + twzc * dc_vel[a];
+    Real const u_cmd = u_pd + fhat;
+
+    // Effort ceiling in force this cycle.
+    Real umax = dc_umax[a];
+    if (dc_budget[a] >= 0.0 && dc_budget_c > 0.0) {
+      Real const left  = std::max(dc_budget[a] - dc_budget_used[a], 0.0);
+      Real const tleft = std::max(dc_budget_tend - pmesh->time, 1.0);
+      Real const ubgt  = left / (dc_budget_c * tleft);
+      umax = (umax < 0.0) ? ubgt : std::min(umax, ubgt);
+    }
+    dc_umax_eff[a] = umax;
+
+    Real u_app = dc_gain[a] * ramp * SoftLimit(u_cmd, umax, dc_sat_order);
+    u_app = SlewLimit(u_app, dc_u[a], dc_urate, dt);
+
+    if (advance) {
+      dc_p[a] += dt * dc_omega_o * (u_pd + (u_app - u_cmd));
+      // Charge the budget with the correction that was actually applied.
+      dc_budget_used[a] += dt * dc_budget_c * std::fabs(u_app);
+    }
+    // Recorded after the update so the logged fhat is the one the next RHS uses.
+    dc_fhat[a]       = dc_p[a] + dc_omega_o * dc_vel[a];
+    dc_prev_error[a] = e;
+    dc_u[a]          = u_app;
+  }
+}
+
+//----------------------------------------------------------------------------------------
 void DriftControl::EvolveDriftControl() {
   int const idx = dc_tracker_index;
   auto &ptracker = pmesh->pmb_pack->pz4c->ptracker;
@@ -210,10 +341,6 @@ void DriftControl::EvolveDriftControl() {
 
   Real const dt = pmesh->dt;
 
-  // Once the ramp has begun the loop is being opened on purpose: the RHS applies only
-  // w*u while e and v grow, so letting the observer/integrator keep accumulating would
-  // wind the state up against the ramp and partly cancel it. Freeze the state instead;
-  // the applied force is then w times a fixed quantity and goes to zero as w does.
   Real const ramp = RampFactor(pmesh->time);
   bool const ramping = (ramp < 1.0);
 
@@ -233,7 +360,8 @@ void DriftControl::EvolveDriftControl() {
 
   // The observer pole sits at -omega_o and is integrated explicitly, so omega_o dt is
   // the binding numerical constraint on the DOB branch.
-  if (dc_variety == DOB && !dc_dt_warned && dt > 0.0 && dc_omega_o * dt > 0.5) {
+  if ((dc_variety == DOB || dc_variety == BDOB) && !dc_dt_warned && dt > 0.0 &&
+      dc_omega_o * dt > 0.5) {
     dc_dt_warned = true;
     if (0 == global_variable::my_rank) {
       std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__
@@ -251,7 +379,16 @@ void DriftControl::EvolveDriftControl() {
       dc_prev_error[a] = dc_pos[a] - dc_fixed[a];
       dc_fhat[a]       = dc_p[a];
     }
+    if (dc_variety == BDOB) {
+      UpdateBoundedObserver(ramp, dt, false);
+    }
     dc_first_step = false;
+  } else if (dc_variety == BDOB) {
+    for (int a = 0; a < NDIM; ++a) {
+      Real const vel_raw = (dc_pos[a] - dc_pos_old[a]) / dt;
+      dc_vel[a] = std::clamp(vel_raw, -dc_vel_cap, dc_vel_cap);
+    }
+    UpdateBoundedObserver(ramp, dt, true);
   } else if (dc_variety == DOB) {
     Real const wc2  = dc_omega_c * dc_omega_c;
     Real const twzc = 2.0 * dc_zeta * dc_omega_c;
@@ -296,6 +433,8 @@ void DriftControl::WriteDriftControl() {
   for (int a = 0; a < NDIM; ++a) {
     pin->SetReal("z4c", integral_key[a], dc_integral[a]);
     pin->SetReal("z4c", dob_key[a], dc_p[a]);
+    pin->SetReal("z4c", bdob_u_key[a], dc_u[a]);
+    pin->SetReal("z4c", budget_key[a], dc_budget_used[a]);
   }
 
   if (0 == global_variable::my_rank && 0 == pmesh->ncycle % out_every) {
@@ -307,13 +446,22 @@ void DriftControl::WriteDriftControl() {
           << dc_vel[0] << " "
           << dc_vel[1] << " "
           << dc_vel[2] << " ";
-    if (dc_variety == DOB) {
+    if (dc_variety == DOB || dc_variety == BDOB) {
       ofile << dc_p[0] << " "
             << dc_p[1] << " "
             << dc_p[2] << " "
             << dc_fhat[0] << " "
             << dc_fhat[1] << " "
-            << dc_fhat[2] << std::endl << std::flush;
+            << dc_fhat[2];
+      if (dc_variety == BDOB) {
+        ofile << " " << dc_u[0] << " " << dc_u[1] << " " << dc_u[2]
+              << " " << dc_budget_used[0] << " " << dc_budget_used[1]
+              << " " << dc_budget_used[2]
+              << " " << dc_umax_eff[0] << " " << dc_umax_eff[1]
+              << " " << dc_umax_eff[2]
+              << " " << dc_omega_c_eff;
+      }
+      ofile << std::endl << std::flush;
     } else {
       ofile << dc_integral[0] << " "
             << dc_integral[1] << " "
