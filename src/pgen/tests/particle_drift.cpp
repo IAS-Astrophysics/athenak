@@ -20,7 +20,8 @@
 
 namespace {
 
-constexpr int kExpectedParticles = 8;
+constexpr int kDefaultParticles = 8;
+int expected_particles = kDefaultParticles;
 bool migration_test = false;
 int frozen_tag = -1;
 int delete_tag = -1;
@@ -165,7 +166,7 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[3] = owner_errors;
   pdata->hdata[4] = migrated;
   pdata->hdata[5] = status_errors;
-  const int expected_total = kExpectedParticles - (deleted >= 0 ? 1 : 0);
+  const int expected_total = expected_particles - (deleted >= 0 ? 1 : 0);
   pdata->hdata[6] = static_cast<Real>(
       std::abs(pm->nprtcl_thisrank - npart) +
       std::abs(pm->nprtcl_total - expected_total));
@@ -176,19 +177,27 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
 void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   user_hist_func = DriftHistory;
   user_particle_dt_func = ParticleDriftTimestep;
+  expected_particles = pin->GetOrAddInteger(
+      "problem", "expected_particles", kDefaultParticles);
   migration_test = pin->GetOrAddBoolean("problem", "migration_test", false);
   frozen_tag = pin->GetOrAddInteger("problem", "frozen_tag", -1);
   delete_tag = pin->GetOrAddInteger("problem", "delete_tag", -1);
-  if (frozen_tag < -1 || frozen_tag >= kExpectedParticles) {
+  if (expected_particles < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle drift test frozen_tag must be -1 or between 0 and "
-              << (kExpectedParticles - 1) << "." << std::endl;
+              << std::endl << "Particle drift test expected_particles must be positive."
+              << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (delete_tag < -1 || delete_tag >= kExpectedParticles) {
+  if (frozen_tag < -1 || frozen_tag >= expected_particles) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle drift test frozen_tag must be -1 or between 0 and "
+              << (expected_particles - 1) << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (delete_tag < -1 || delete_tag >= expected_particles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Particle drift test delete_tag must be -1 or between 0 and "
-              << (kExpectedParticles - 1) << "." << std::endl;
+              << (expected_particles - 1) << "." << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (delete_tag >= 0 && delete_tag == frozen_tag) {
@@ -206,9 +215,9 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (pmy_mesh_->nprtcl_total != kExpectedParticles) {
+  if (pmy_mesh_->nprtcl_total != expected_particles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle drift test expected " << kExpectedParticles
+              << std::endl << "Particle drift test expected " << expected_particles
               << " particles globally, but initialized " << pmy_mesh_->nprtcl_total << "."
               << std::endl;
     std::exit(EXIT_FAILURE);
