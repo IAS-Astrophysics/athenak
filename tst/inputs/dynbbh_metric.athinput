@@ -1,0 +1,96 @@
+<comment>
+problem = small dynbbh ADM metric derivative regression
+
+<job>
+basename = dynbbh_metric
+
+<mesh>
+nghost = 4
+nx1 = 8
+x1min = 60.0
+x1max = 300.0
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 5
+x2min = -2.5
+x2max = 2.5
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 5
+x3min = -2.5
+x3max = 2.5
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 8
+nx2 = 5
+nx3 = 5
+
+<mesh_refinement>
+refinement = none
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim = 0
+tlim = 0.0
+ndiag = 1
+
+<coord>
+general_rel = true
+m = 1.0
+a = 0.0
+excise = true
+excision_scheme = fixed
+dexcise = 1.0e-8
+pexcise = 3.33e-11
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+dfloor = 1.0e-10
+pfloor = 1.0e-18
+tfloor = 1.0e-8
+gamma = 1.44444444444
+fofc = true
+gamma_max = 20.0
+enforce_maximum = false
+calculate_tmunu = true
+
+<adm>
+dynamic = true
+
+<problem>
+sep = 25.0
+q = 1.0
+a1 = 0.93
+a2 = 0.88
+th_a1 = 0.645771823237902
+ph_a1 = 2.1467549799530254
+th_a2 = 1.239183768915974
+ph_a2 = -0.7155849933176751
+adjust_mass1 = 1.0
+adjust_mass2 = 1.0
+a1_buffer = 0.0
+a2_buffer = 0.0
+cutoff_floor = 1.0e-10
+metric_derivative = finite_difference
+metric_fd_step = 5.0e-5
+amr_condition = none
+radius_thr = 5.0
+alpha_thr = 0.8
+dfloor = 1.0e-10
+pfloor = 1.0e-18
+
+<output1>
+file_type = tab
+variable = adm
+data_format = %.17e
+dt = 1.0
+slice_x2 = 0.0
+slice_x3 = 0.0

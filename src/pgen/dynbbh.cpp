@@ -23,7 +23,6 @@
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
 
-#define h 5e-5
 #define D2(comp, h) ((met_p1.g).comp - (met_m1.g).comp) / (2*h)
 
 namespace {
@@ -31,6 +30,48 @@ namespace {
 enum {
   TT, XX, YY, ZZ, NDIM
 };
+
+constexpr Real kDefaultMetricFdStep = 5.0e-5;
+
+KOKKOS_INLINE_FUNCTION Real metric_sqrt(const Real x) { return sqrt(x); }
+KOKKOS_INLINE_FUNCTION Real value_of(const Real x) { return x; }
+
+struct dual1_real {
+  Real val;
+  Real deriv;
+
+  KOKKOS_INLINE_FUNCTION dual1_real() : val(0.0), deriv(0.0) {}
+  KOKKOS_INLINE_FUNCTION dual1_real(const Real value) : val(value), deriv(0.0) {}
+  KOKKOS_INLINE_FUNCTION dual1_real(const Real value, const Real derivative)
+      : val(value), deriv(derivative) {}
+};
+
+KOKKOS_INLINE_FUNCTION dual1_real operator+(const dual1_real &a,
+                                             const dual1_real &b) {
+  return dual1_real(a.val + b.val, a.deriv + b.deriv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a,
+                                             const dual1_real &b) {
+  return dual1_real(a.val - b.val, a.deriv - b.deriv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a) {
+  return dual1_real(-a.val, -a.deriv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator*(const dual1_real &a,
+                                             const dual1_real &b) {
+  return dual1_real(a.val*b.val, a.deriv*b.val + a.val*b.deriv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real operator/(const dual1_real &a,
+                                             const dual1_real &b) {
+  const Real inv = 1.0/b.val;
+  return dual1_real(a.val*inv,
+                    (a.deriv*b.val - a.val*b.deriv)*inv*inv);
+}
+KOKKOS_INLINE_FUNCTION dual1_real metric_sqrt(const dual1_real &x) {
+  const Real root = sqrt(x.val);
+  return dual1_real(root, 0.5*x.deriv/root);
+}
+KOKKOS_INLINE_FUNCTION Real value_of(const dual1_real &x) { return x.val; }
 
 enum {
   X1, Y1, Z1, X2, Y2, Z2,
@@ -79,6 +120,11 @@ struct three_metric {
   Real kzz;
 };
 
+enum class MetricDerivativeMethod {
+  finite_difference,
+  ad
+};
+
 struct bbh_pgen {
   Real sep;
   Real om;
@@ -92,14 +138,19 @@ struct bbh_pgen {
   Real a1_buffer, a2_buffer;
   Real adjust_mass1, adjust_mass2;
   Real cutoff_floor;
+  Real metric_fd_step = kDefaultMetricFdStep;
   Real alpha_thr;
   Real radius_thr;
+  MetricDerivativeMethod metric_derivative_method =
+      MetricDerivativeMethod::finite_difference;
 };
 
 struct bbh_pgen bbh;
 
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
+void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
+                            Real dtraj_array[NTRAJ]);
 
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
@@ -112,6 +163,12 @@ KOKKOS_INLINE_FUNCTION
 void get_metric(const Real t, const Real x, const Real y, const Real z,
                 struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
                 const bbh_pgen& bbh_);
+KOKKOS_INLINE_FUNCTION
+void get_metric_and_derivatives(const Real t, const Real x, const Real y,
+                                const Real z, struct four_metric &met,
+                                const Real bbh_traj_loc[NTRAJ],
+                                const Real dbbh_traj_loc[NTRAJ],
+                                const bbh_pgen& bbh_);
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_);
@@ -160,6 +217,26 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.0);
   bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.0);
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-10);
+  bbh.metric_fd_step = pin->GetOrAddReal(
+      "problem", "metric_fd_step", kDefaultMetricFdStep);
+  if (!(bbh.metric_fd_step > 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "problem/metric_fd_step must be positive" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  const std::string metric_derivative = pin->GetOrAddString(
+      "problem", "metric_derivative", "finite_difference");
+  if (metric_derivative == "finite_difference" || metric_derivative == "fd") {
+    bbh.metric_derivative_method = MetricDerivativeMethod::finite_difference;
+  } else if (metric_derivative == "ad") {
+    bbh.metric_derivative_method = MetricDerivativeMethod::ad;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unknown problem/metric_derivative='"
+              << metric_derivative
+              << "'. Use 'finite_difference' or 'ad'." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.6);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 6.0);
 
@@ -255,14 +332,15 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   Real bbh_traj_p1[NTRAJ];
   Real bbh_traj_0[NTRAJ];
   Real bbh_traj_m1[NTRAJ];
+  Real dbbh_traj_0[NTRAJ];
   auto& bbh_ = bbh;
 
   /* Load trajectories */
 
   /* Whether we load traj from a table or we compute analytical trajectories */
-  find_traj_t(tt+h, bbh_traj_p1);
-  find_traj_t(tt, bbh_traj_0);
-  find_traj_t(tt-h, bbh_traj_m1);
+  find_traj_t_with_deriv(tt, bbh_traj_0, dbbh_traj_0);
+  find_traj_t(tt + bbh_.metric_fd_step, bbh_traj_p1);
+  find_traj_t(tt - bbh_.metric_fd_step, bbh_traj_m1);
 
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
@@ -281,8 +359,13 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
     struct four_metric met4;
     struct three_metric met3;
-    numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0, bbh_traj_p1,
-                      bbh_);
+    if (bbh_.metric_derivative_method == MetricDerivativeMethod::ad) {
+      get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, bbh_traj_0,
+                                 dbbh_traj_0, bbh_);
+    } else {
+      numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0,
+                        bbh_traj_p1, bbh_);
+    }
 
     /* Transform 4D metric to 3+1 variables*/
     four_metric_to_three_metric(met4, met3);
@@ -318,67 +401,68 @@ void numerical_4metric(const Real t, const Real x, const Real y,
     const bbh_pgen& bbh_) {
   struct four_metric met_m1;
   struct four_metric met_p1;
+  const Real step = bbh_.metric_fd_step;
 
   // Time
-  get_metric(t-1*h, x, y, z, met_m1, nz_m1, bbh_);
-  get_metric(t+1*h, x, y, z, met_p1, nz_p1, bbh_);
+  get_metric(t-step, x, y, z, met_m1, nz_m1, bbh_);
+  get_metric(t+step, x, y, z, met_p1, nz_p1, bbh_);
   get_metric(t, x, y, z, outmet, nz_0, bbh_);
 
-  outmet.g_t.tt = D2(tt, h);
-  outmet.g_t.tx = D2(tx, h);
-  outmet.g_t.ty = D2(ty, h);
-  outmet.g_t.tz = D2(tz, h);
-  outmet.g_t.xx = D2(xx, h);
-  outmet.g_t.xy = D2(xy, h);
-  outmet.g_t.xz = D2(xz, h);
-  outmet.g_t.yy = D2(yy, h);
-  outmet.g_t.yz = D2(yz, h);
-  outmet.g_t.zz = D2(zz, h);
+  outmet.g_t.tt = D2(tt, step);
+  outmet.g_t.tx = D2(tx, step);
+  outmet.g_t.ty = D2(ty, step);
+  outmet.g_t.tz = D2(tz, step);
+  outmet.g_t.xx = D2(xx, step);
+  outmet.g_t.xy = D2(xy, step);
+  outmet.g_t.xz = D2(xz, step);
+  outmet.g_t.yy = D2(yy, step);
+  outmet.g_t.yz = D2(yz, step);
+  outmet.g_t.zz = D2(zz, step);
 
   // X
-  get_metric(t, x-1*h, y, z, met_m1, nz_0, bbh_);
-  get_metric(t, x+1*h, y, z, met_p1, nz_0, bbh_);
+  get_metric(t, x-step, y, z, met_m1, nz_0, bbh_);
+  get_metric(t, x+step, y, z, met_p1, nz_0, bbh_);
 
-  outmet.g_x.tt = D2(tt, h);
-  outmet.g_x.tx = D2(tx, h);
-  outmet.g_x.ty = D2(ty, h);
-  outmet.g_x.tz = D2(tz, h);
-  outmet.g_x.xx = D2(xx, h);
-  outmet.g_x.xy = D2(xy, h);
-  outmet.g_x.xz = D2(xz, h);
-  outmet.g_x.yy = D2(yy, h);
-  outmet.g_x.yz = D2(yz, h);
-  outmet.g_x.zz = D2(zz, h);
+  outmet.g_x.tt = D2(tt, step);
+  outmet.g_x.tx = D2(tx, step);
+  outmet.g_x.ty = D2(ty, step);
+  outmet.g_x.tz = D2(tz, step);
+  outmet.g_x.xx = D2(xx, step);
+  outmet.g_x.xy = D2(xy, step);
+  outmet.g_x.xz = D2(xz, step);
+  outmet.g_x.yy = D2(yy, step);
+  outmet.g_x.yz = D2(yz, step);
+  outmet.g_x.zz = D2(zz, step);
 
   // Y
-  get_metric(t, x, y-1*h, z, met_m1, nz_0, bbh_);
-  get_metric(t, x, y+1*h, z, met_p1, nz_0, bbh_);
+  get_metric(t, x, y-step, z, met_m1, nz_0, bbh_);
+  get_metric(t, x, y+step, z, met_p1, nz_0, bbh_);
 
-  outmet.g_y.tt = D2(tt, h);
-  outmet.g_y.tx = D2(tx, h);
-  outmet.g_y.ty = D2(ty, h);
-  outmet.g_y.tz = D2(tz, h);
-  outmet.g_y.xx = D2(xx, h);
-  outmet.g_y.xy = D2(xy, h);
-  outmet.g_y.xz = D2(xz, h);
-  outmet.g_y.yy = D2(yy, h);
-  outmet.g_y.yz = D2(yz, h);
-  outmet.g_y.zz = D2(zz, h);
+  outmet.g_y.tt = D2(tt, step);
+  outmet.g_y.tx = D2(tx, step);
+  outmet.g_y.ty = D2(ty, step);
+  outmet.g_y.tz = D2(tz, step);
+  outmet.g_y.xx = D2(xx, step);
+  outmet.g_y.xy = D2(xy, step);
+  outmet.g_y.xz = D2(xz, step);
+  outmet.g_y.yy = D2(yy, step);
+  outmet.g_y.yz = D2(yz, step);
+  outmet.g_y.zz = D2(zz, step);
 
   // Z
-  get_metric(t, x, y, z-1*h, met_m1, nz_0, bbh_);
-  get_metric(t, x, y, z+1*h, met_p1, nz_0, bbh_);
+  get_metric(t, x, y, z-step, met_m1, nz_0, bbh_);
+  get_metric(t, x, y, z+step, met_p1, nz_0, bbh_);
 
-  outmet.g_z.tt = D2(tt, h);
-  outmet.g_z.tx = D2(tx, h);
-  outmet.g_z.ty = D2(ty, h);
-  outmet.g_z.tz = D2(tz, h);
-  outmet.g_z.xx = D2(xx, h);
-  outmet.g_z.xy = D2(xy, h);
-  outmet.g_z.xz = D2(xz, h);
-  outmet.g_z.yy = D2(yy, h);
-  outmet.g_z.yz = D2(yz, h);
-  outmet.g_z.zz = D2(zz, h);
+  outmet.g_z.tt = D2(tt, step);
+  outmet.g_z.tx = D2(tx, step);
+  outmet.g_z.ty = D2(ty, step);
+  outmet.g_z.tz = D2(tz, step);
+  outmet.g_z.xx = D2(xx, step);
+  outmet.g_z.xy = D2(xy, step);
+  outmet.g_z.xz = D2(xz, step);
+  outmet.g_z.yy = D2(yy, step);
+  outmet.g_z.yz = D2(yz, step);
+  outmet.g_z.zz = D2(zz, step);
 
   return;
 }
@@ -612,6 +696,27 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
   bbh_t[AZ2] = bbh.a1*std::cos(bbh.th_a2);
   bbh_t[M1T] = 1.0/(bbh.q+1.0);
   bbh_t[M2T] = 1.0 - bbh_t[M1T];
+}
+
+// Analytic derivative of the legacy trajectory above.  Keep this paired with
+// find_traj_t until the trajectory model is modernized in the next feature.
+void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ],
+                            Real dbbh_t[NTRAJ]) {
+  find_traj_t(t, bbh_t);
+  const Real r1 = bbh.q/(1.0 + bbh.q)*bbh.sep;
+  const Real r2 = -bbh.sep/(1.0 + bbh.q);
+  const Real phase = bbh.om*t;
+  const Real c = std::cos(phase);
+  const Real s = std::sin(phase);
+  for (int n = 0; n < NTRAJ; ++n) dbbh_t[n] = 0.0;
+  dbbh_t[X1] = -r1*bbh.om*s;
+  dbbh_t[Y1] = r1*bbh.om*c;
+  dbbh_t[X2] = -r1*bbh.om*s;
+  dbbh_t[Y2] = r2*bbh.om*c;
+  dbbh_t[VX1] = -r1*SQR(bbh.om)*c;
+  dbbh_t[VY1] = -r1*SQR(bbh.om)*s;
+  dbbh_t[VX2] = -r2*SQR(bbh.om)*c;
+  dbbh_t[VY2] = -r2*SQR(bbh.om)*s;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -974,6 +1079,213 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
   }
 
   return;
+}
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION T LegacyBoostQ(const T v2, const T gamma) {
+  // The legacy evaluator adds 1e-40 to every velocity component, so v2 is
+  // nonzero.  The series also makes the AD path well behaved as v -> 0.
+  if (value_of(v2) < 1.0e-12) {
+    return T(0.5) + T(0.375)*v2 + T(0.3125)*v2*v2;
+  }
+  return (gamma - T(1.0))/v2;
+}
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION void LegacyBoostedCoordinates(
+    const T x, const T y, const T z, const T x0, const T y0, const T z0,
+    const T vx, const T vy, const T vz, T *xbh, T *ybh, T *zbh) {
+  const T dx = x - x0;
+  const T dy = y - y0;
+  const T dz = z - z0;
+  const T v2 = vx*vx + vy*vy + vz*vz;
+  const T gamma = T(1.0)/metric_sqrt(T(1.0) - v2);
+  const T q = LegacyBoostQ(v2, gamma);
+  const T vdotx = vx*dx + vy*dy + vz*dz;
+  *xbh = dx + q*vx*vdotx;
+  *ybh = dy + q*vy*vdotx;
+  *zbh = dz + q*vz*vdotx;
+}
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION void LegacyBoostJacobian(
+    const T vx, const T vy, const T vz, T jac[NDIM][NDIM]) {
+  const T v2 = vx*vx + vy*vy + vz*vz;
+  const T gamma = T(1.0)/metric_sqrt(T(1.0) - v2);
+  const T q = LegacyBoostQ(v2, gamma);
+  for (int a = 0; a < NDIM; ++a) {
+    for (int b = 0; b < NDIM; ++b) jac[a][b] = T(0.0);
+  }
+  jac[0][0] = gamma;
+  jac[0][1] = -gamma*vx;
+  jac[0][2] = -gamma*vy;
+  jac[0][3] = -gamma*vz;
+  jac[1][0] = jac[0][1];
+  jac[2][0] = jac[0][2];
+  jac[3][0] = jac[0][3];
+  jac[1][1] = T(1.0) + q*vx*vx;
+  jac[1][2] = q*vx*vy;
+  jac[1][3] = q*vx*vz;
+  jac[2][1] = jac[1][2];
+  jac[2][2] = T(1.0) + q*vy*vy;
+  jac[2][3] = q*vy*vz;
+  jac[3][1] = jac[1][3];
+  jac[3][2] = jac[2][3];
+  jac[3][3] = T(1.0) + q*vz*vz;
+}
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION void LegacyKerrSchildPerturbation(
+    const T x, const T y, const T z, const T ax, const T ay, const T az,
+    const T mass, T ks[NDIM][NDIM]) {
+  const T root2 = T(1.4142135623730951);
+  const T iroot2 = T(1.0)/root2;
+  const T spin2 = ax*ax + ay*ay + az*az;
+  const T radius2 = x*x + y*y + z*z;
+  const T adotx = ax*x + ay*y + az*z;
+  const T term = radius2 - spin2;
+  const T rho2 = term + metric_sqrt(T(4.0)*adotx*adotx + term*term);
+  const T rho = metric_sqrt(rho2);
+  const T fac = iroot2*rho2*rho*mass/
+      (adotx*adotx + T(0.25)*rho2*rho2);
+  const T den = spin2 + T(0.5)*rho2;
+  T ell[3];
+  ell[0] = y*az - z*ay + root2*adotx*ax/rho + rho*x*iroot2;
+  ell[1] = -x*az + z*ax + root2*adotx*ay/rho + rho*y*iroot2;
+  ell[2] = x*ay - y*ax + root2*adotx*az/rho + rho*z*iroot2;
+  for (int a = 0; a < NDIM; ++a) {
+    for (int b = 0; b < NDIM; ++b) ks[a][b] = T(0.0);
+  }
+  ks[0][0] = fac;
+  for (int a = 0; a < 3; ++a) {
+    ks[0][a + 1] = fac*ell[a]/den;
+    ks[a + 1][0] = ks[0][a + 1];
+    for (int b = a; b < 3; ++b) {
+      ks[a + 1][b + 1] = fac*ell[a]*ell[b]/(den*den);
+      ks[b + 1][a + 1] = ks[a + 1][b + 1];
+    }
+  }
+}
+
+template <typename T>
+KOKKOS_INLINE_FUNCTION void AddLegacyHole(
+    const T ks[NDIM][NDIM], const T jac[NDIM][NDIM],
+    T gcov[NDIM][NDIM]) {
+  for (int a = 0; a < NDIM; ++a) {
+    for (int b = a; b < NDIM; ++b) {
+      T sum = T(0.0);
+      for (int m = 0; m < NDIM; ++m) {
+        for (int n = 0; n < NDIM; ++n) {
+          sum = sum + jac[m][a]*jac[n][b]*ks[m][n];
+        }
+      }
+      gcov[a][b] = gcov[a][b] + sum;
+      gcov[b][a] = gcov[a][b];
+    }
+  }
+}
+
+// Compact algebraic form of the existing generated metric, used only to
+// differentiate it.  It deliberately retains the legacy BH1 spin-component
+// mapping and adjust_mass semantics; those are audited and corrected in the
+// trajectory/spin feature rather than changing the production metric here.
+template <typename T>
+KOKKOS_INLINE_FUNCTION void LegacySuperposedBBHForAD(
+    const T x, const T y, const T z, T gcov[NDIM][NDIM],
+    const T tr[NTRAJ], const bbh_pgen& b) {
+  const T v1x = tr[VX1] + T(1e-40);
+  const T v1y = tr[VY1] + T(1e-40);
+  const T v1z = tr[VZ1] + T(1e-40);
+  const T v2x = tr[VX2] + T(1e-40);
+  const T v2y = tr[VY2] + T(1e-40);
+  const T v2z = tr[VZ2] + T(1e-40);
+  const T a1x = tr[AX1];
+  const T a1y = tr[AY1];
+  const T a1z = tr[AZ1];
+  const T a2x = tr[AX2];
+  const T a2y = tr[AY2];
+  const T a2z = tr[AZ2];
+  const T mass1 = tr[M1T]*b.adjust_mass1;
+  const T mass2 = tr[M2T]*b.adjust_mass2;
+
+  T x1, y1, z1, x2, y2, z2;
+  LegacyBoostedCoordinates(x, y, z, tr[X1], tr[Y1], tr[Z1],
+                           v1x, v1y, v1z, &x1, &y1, &z1);
+  LegacyBoostedCoordinates(x, y, z, tr[X2], tr[Y2], tr[Z2],
+                           v2x, v2y, v2z, &x2, &y2, &z2);
+  const T radius1 = metric_sqrt(x1*x1 + y1*y1 + z1*z1);
+  const T radius2 = metric_sqrt(x2*x2 + y2*y2 + z2*z2);
+  const T spin1_norm = metric_sqrt(a1x*a1x + a1y*a1y + a1z*a1z + T(1e-40));
+  const T spin2_norm = metric_sqrt(a2x*a2x + a2y*a2y + a2z*a2z + T(1e-40));
+  const T cutoff1 = metric_sqrt((spin1_norm*b.adjust_mass1)*
+                                (spin1_norm*b.adjust_mass1))*
+                    (T(1.0) + b.a1_buffer) + b.cutoff_floor;
+  const T cutoff2 = metric_sqrt((spin2_norm*b.adjust_mass2)*
+                                (spin2_norm*b.adjust_mass2))*
+                    (T(1.0) + b.a2_buffer) + b.cutoff_floor;
+  if (value_of(radius1) < value_of(cutoff1)) {
+    z1 = (value_of(z1) > 0.0) ? cutoff1 : -cutoff1;
+  }
+  if (value_of(radius2) < value_of(cutoff2)) {
+    z2 = (value_of(z2) > 0.0) ? cutoff2 : -cutoff2;
+  }
+
+  T ks1[NDIM][NDIM], ks2[NDIM][NDIM];
+  T jac1[NDIM][NDIM], jac2[NDIM][NDIM];
+  // The generated legacy formula substitutes a2x for BH1's y spin.
+  LegacyKerrSchildPerturbation(x1, y1, z1, a1x, a2x, a1z, mass1, ks1);
+  LegacyKerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, mass2, ks2);
+  LegacyBoostJacobian(v1x, v1y, v1z, jac1);
+  LegacyBoostJacobian(v2x, v2y, v2z, jac2);
+  for (int a = 0; a < NDIM; ++a) {
+    for (int bidx = 0; bidx < NDIM; ++bidx) {
+      gcov[a][bidx] = (a == bidx) ? ((a == 0) ? T(-1.0) : T(1.0)) : T(0.0);
+    }
+  }
+  AddLegacyHole(ks1, jac1, gcov);
+  AddLegacyHole(ks2, jac2, gcov);
+}
+
+KOKKOS_INLINE_FUNCTION void FillMetricDerivative(
+    const dual1_real gcov[NDIM][NDIM], struct dd_sym &dg) {
+  dg.tt = gcov[TT][TT].deriv;
+  dg.tx = gcov[TT][XX].deriv;
+  dg.ty = gcov[TT][YY].deriv;
+  dg.tz = gcov[TT][ZZ].deriv;
+  dg.xx = gcov[XX][XX].deriv;
+  dg.xy = gcov[XX][YY].deriv;
+  dg.xz = gcov[XX][ZZ].deriv;
+  dg.yy = gcov[YY][YY].deriv;
+  dg.yz = gcov[YY][ZZ].deriv;
+  dg.zz = gcov[ZZ][ZZ].deriv;
+}
+
+KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
+    const Real x, const Real y, const Real z, const int direction,
+    const Real tr[NTRAJ], const Real dtr[NTRAJ], const bbh_pgen& b,
+    struct dd_sym &dg) {
+  dual1_real xd(x, direction == 1 ? 1.0 : 0.0);
+  dual1_real yd(y, direction == 2 ? 1.0 : 0.0);
+  dual1_real zd(z, direction == 3 ? 1.0 : 0.0);
+  dual1_real trd[NTRAJ];
+  for (int n = 0; n < NTRAJ; ++n) {
+    trd[n] = dual1_real(tr[n], direction == 0 ? dtr[n] : 0.0);
+  }
+  dual1_real gcov[NDIM][NDIM];
+  LegacySuperposedBBHForAD(xd, yd, zd, gcov, trd, b);
+  FillMetricDerivative(gcov, dg);
+}
+
+KOKKOS_INLINE_FUNCTION void get_metric_and_derivatives(
+    const Real t, const Real x, const Real y, const Real z,
+    struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
+    const Real dbbh_traj_loc[NTRAJ], const bbh_pgen& bbh_) {
+  // Preserve the exact existing real-valued metric evaluation.
+  get_metric(t, x, y, z, met, bbh_traj_loc, bbh_);
+  MetricDerivativeAD(x, y, z, 0, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_t);
+  MetricDerivativeAD(x, y, z, 1, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_x);
+  MetricDerivativeAD(x, y, z, 2, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_y);
+  MetricDerivativeAD(x, y, z, 3, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_z);
 }
 
 KOKKOS_INLINE_FUNCTION
