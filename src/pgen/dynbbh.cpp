@@ -18,6 +18,10 @@
 #include <memory>
 #include <vector>
 
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
 #include "parameter_input.hpp"
 #include "athena.hpp"
 #include "mesh/mesh.hpp"
@@ -27,6 +31,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "diffusion/current_density.hpp"
 #include "outputs/outputs.hpp"
 #include "utils/flux_generalized.hpp"
 
@@ -156,13 +161,47 @@ struct bbh_pgen {
   Real metric_fd_step = kDefaultMetricFdStep;
   Real alpha_thr;
   Real radius_thr;
+  Real smooth_b_damping_eta;
+  Real smooth_b_damping_cfl;
+  Real puncture_excise_rad1;
+  Real puncture_excise_rad2;
+  Real puncture_excise_shrink_timescale;
+  Real puncture_excise_shrink_start_time;
+  Real sink_radius;
+  Real sink_width;
+  Real sink_timescale;
+  Real sink_density_floor;
+  Real sink_pressure_floor;
+  Real sink_cells_per_radius;
+  Real sink_resolved_cells_across_horizon;
+  Real test_bz_gradient;
   MetricDerivativeMethod metric_derivative_method =
       MetricDerivativeMethod::finite_difference;
   bool use_traj_table = false;
   bool spin_ramp = false;
+  bool smooth_b_damping = false;
+  bool puncture_excise_cap_to_horizon = false;
+  bool puncture_excise_to_horizon = false;
+  bool puncture_excise_shrink_to_horizon = false;
+  bool require_resolved_horizon = false;
+  bool unresolved_sink = false;
 };
 
 struct bbh_pgen bbh;
+
+struct bbh_sink_hole_state {
+  Real x, y, z;
+  Real horizon_radius;
+  Real mesh_dx;
+  Real sink_radius;
+  Real sink_width;
+  int active;
+};
+
+struct bbh_sink_state {
+  bbh_sink_hole_state hole1;
+  bbh_sink_hole_state hole2;
+};
 
 struct bbh_traj_table {
   std::vector<Real> t;
@@ -180,6 +219,108 @@ void find_traj_t(Real tt, Real traj_array[NTRAJ]);
 void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
                             Real dtraj_array[NTRAJ]);
 void LoadTrajectoryTable(const std::string &fname);
+
+Real LocalFinestMeshSpacing(MeshBlockPack *pmbp) {
+  Real min_dx = std::numeric_limits<Real>::max();
+  auto &mb_size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  for (int m = 0; m < pmbp->nmb_thispack; ++m) {
+    min_dx = std::min(min_dx, mb_size.h_view(m).dx1);
+    if (indcs.nx2 > 1) min_dx = std::min(min_dx, mb_size.h_view(m).dx2);
+    if (indcs.nx3 > 1) min_dx = std::min(min_dx, mb_size.h_view(m).dx3);
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &min_dx, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
+  return min_dx;
+}
+
+Real LocalMeshSpacingAtPoint(MeshBlockPack *pmbp, Real x, Real y, Real z) {
+  Real local_dx = std::numeric_limits<Real>::max();
+  auto &mb_size = pmbp->pmb->mb_size;
+  auto &indcs = pmbp->pmesh->mb_indcs;
+  for (int m = 0; m < pmbp->nmb_thispack; ++m) {
+    auto mb = mb_size.h_view(m);
+    const Real eps = 16.0*std::numeric_limits<Real>::epsilon()*
+        std::max({1.0, std::abs(mb.x1min), std::abs(mb.x1max),
+                  std::abs(mb.x2min), std::abs(mb.x2max),
+                  std::abs(mb.x3min), std::abs(mb.x3max)});
+    bool contains = (x >= mb.x1min-eps && x <= mb.x1max+eps);
+    if (indcs.nx2 > 1) contains = contains &&
+        (y >= mb.x2min-eps && y <= mb.x2max+eps);
+    if (indcs.nx3 > 1) contains = contains &&
+        (z >= mb.x3min-eps && z <= mb.x3max+eps);
+    if (contains) {
+      Real dx = mb.dx1;
+      if (indcs.nx2 > 1) dx = std::max(dx, mb.dx2);
+      if (indcs.nx3 > 1) dx = std::max(dx, mb.dx3);
+      local_dx = std::min(local_dx, dx);
+    }
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Allreduce(MPI_IN_PLACE, &local_dx, 1, MPI_ATHENA_REAL, MPI_MIN, MPI_COMM_WORLD);
+#endif
+  return (local_dx == std::numeric_limits<Real>::max()) ?
+      LocalFinestMeshSpacing(pmbp) : local_dx;
+}
+
+Real HorizonRadiusFromMassAndChi(Real mass, Real chix, Real chiy, Real chiz) {
+  const Real chi2 = SQR(chix) + SQR(chiy) + SQR(chiz);
+  return mass*(1.0 + std::sqrt(std::max(1.0-chi2, 0.0)));
+}
+
+Real SmoothExcisionRadiusToHorizon(Real requested, Real horizon, Real elapsed,
+                                   Real timescale, bool set_to_horizon,
+                                   bool shrink_to_horizon) {
+  Real start = (requested > 0.0) ? requested : horizon;
+  if (set_to_horizon) return horizon;
+  if (!shrink_to_horizon) return start;
+  start = std::max(start, horizon);
+  Real s = std::min(std::max(elapsed/timescale, 0.0), 1.0);
+  s = s*s*(3.0 - 2.0*s);
+  return (1.0-s)*start + s*horizon;
+}
+
+Real MinDynBBHHorizonRadius() {
+  if (bbh.use_traj_table && !bbh_table.t.empty()) {
+    Real rmin = std::numeric_limits<Real>::max();
+    for (std::size_t n = 0; n < bbh_table.t.size(); ++n) {
+      rmin = std::min(rmin, HorizonRadiusFromMassAndChi(
+          bbh_table.m1[n], bbh_table.chix1[n], bbh_table.chiy1[n], bbh_table.chiz1[n]));
+      rmin = std::min(rmin, HorizonRadiusFromMassAndChi(
+          bbh_table.m2[n], bbh_table.chix2[n], bbh_table.chiy2[n], bbh_table.chiz2[n]));
+    }
+    return rmin;
+  }
+  Real q[NTRAJ];
+  find_traj_t(0.0, q);
+  return std::min(HorizonRadiusFromMassAndChi(q[M1T], q[AX1], q[AY1], q[AZ1]),
+                  HorizonRadiusFromMassAndChi(q[M2T], q[AX2], q[AY2], q[AZ2]));
+}
+
+bbh_sink_hole_state MakeSinkHoleState(MeshBlockPack *pmbp, Real x, Real y, Real z,
+                                      Real horizon) {
+  bbh_sink_hole_state h{x, y, z, horizon, LocalMeshSpacingAtPoint(pmbp, x, y, z),
+                        0.0, 0.0, 0};
+  const Real cells = 2.0*horizon/std::max(h.mesh_dx, 1.0e-300);
+  h.active = (cells < bbh.sink_resolved_cells_across_horizon) ? 1 : 0;
+  h.sink_radius = std::max(horizon, bbh.sink_cells_per_radius*h.mesh_dx);
+  if (bbh.sink_radius > 0.0) h.sink_radius = std::max(h.sink_radius, bbh.sink_radius);
+  h.sink_width = (bbh.sink_width > 0.0) ?
+      std::min(bbh.sink_width, h.sink_radius) :
+      std::max(h.mesh_dx, 0.25*h.sink_radius);
+  return h;
+}
+
+bbh_sink_state ComputeUnresolvedSinkState(MeshBlockPack *pmbp,
+                                          const Real q[NTRAJ]) {
+  bbh_sink_state state;
+  state.hole1 = MakeSinkHoleState(pmbp, q[X1], q[Y1], q[Z1],
+      HorizonRadiusFromMassAndChi(q[M1T], q[AX1], q[AY1], q[AZ1]));
+  state.hole2 = MakeSinkHoleState(pmbp, q[X2], q[Y2], q[Z2],
+      HorizonRadiusFromMassAndChi(q[M2T], q[AX2], q[AY2], q[AZ2]));
+  return state;
+}
 
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
@@ -205,6 +346,8 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
 void DynBBHFluxHistory(HistoryData *pdata, Mesh *pm);
+void AddUnresolvedBHSink(Mesh *pm, const Real bdt);
+void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
 
 } // namespace
 
@@ -271,6 +414,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.om = std::pow(bbh.sep, -1.5);
   bbh.dfloor = pin->GetOrAddReal("problem", "dfloor", (FLT_MIN));
   bbh.pfloor = pin->GetOrAddReal("problem", "pfloor", (FLT_MIN));
+  bbh.test_bz_gradient = pin->GetOrAddReal(
+      "problem", "test_bz_gradient", 0.0);
   if (pin->DoesParameterExist("problem", "adjust_mass1") ||
       pin->DoesParameterExist("problem", "adjust_mass2")) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -345,6 +490,115 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << required_start << ", " << required_end << "]" << std::endl;
       std::exit(EXIT_FAILURE);
     }
+  }
+
+  bbh.require_resolved_horizon = pin->GetOrAddBoolean(
+      "coord", "require_resolved_horizon", false);
+  bbh.puncture_excise_rad1 = pin->GetOrAddReal("coord", "excise_1_rad", -1.0);
+  bbh.puncture_excise_rad2 = pin->GetOrAddReal("coord", "excise_2_rad", -1.0);
+  bbh.puncture_excise_cap_to_horizon = pin->GetOrAddBoolean(
+      "coord", "excise_cap_to_horizon", false);
+  bbh.puncture_excise_to_horizon = pin->GetOrAddBoolean(
+      "coord", "excise_to_horizon", false);
+  bbh.puncture_excise_shrink_to_horizon = pin->GetOrAddBoolean(
+      "coord", "excise_shrink_to_horizon", false);
+  bbh.puncture_excise_shrink_timescale = pin->GetOrAddReal(
+      "coord", "excise_shrink_timescale", 50.0);
+  bbh.puncture_excise_shrink_start_time = pin->GetOrAddReal(
+      "coord", "excise_shrink_start_time", 0.0);
+  if (bbh.puncture_excise_shrink_to_horizon &&
+      !(bbh.puncture_excise_shrink_timescale > 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "excise_shrink_to_horizon requires positive "
+              << "coord/excise_shrink_timescale" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (bbh.puncture_excise_to_horizon &&
+      bbh.puncture_excise_shrink_to_horizon) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "excise_to_horizon and excise_shrink_to_horizon "
+              << "are mutually exclusive" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  bbh.smooth_b_damping = pin->GetOrAddBoolean(
+      "coord", "smooth_excision_b_damping", false);
+  bbh.smooth_b_damping_eta = pin->GetOrAddReal(
+      "coord", "smooth_excision_b_damping_eta", 0.0);
+  bbh.smooth_b_damping_cfl = pin->GetOrAddReal(
+      "coord", "smooth_excision_b_damping_cfl", 0.25);
+  if (bbh.smooth_b_damping &&
+      (!(bbh.smooth_b_damping_eta > 0.0) || bbh.smooth_b_damping_cfl < 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "smooth_excision_b_damping requires positive eta "
+              << "and non-negative cfl cap" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  bbh.unresolved_sink = pin->GetOrAddBoolean("problem", "unresolved_sink", false);
+  bbh.sink_radius = pin->GetOrAddReal("problem", "sink_radius", 0.0);
+  bbh.sink_width = pin->GetOrAddReal(
+      "problem", "sink_width", bbh.sink_radius > 0.0 ? 0.25*bbh.sink_radius : -1.0);
+  bbh.sink_timescale = pin->GetOrAddReal("problem", "sink_timescale", 0.0);
+  bbh.sink_density_floor = pin->GetOrAddReal("problem", "sink_density_floor", -1.0);
+  bbh.sink_pressure_floor = pin->GetOrAddReal("problem", "sink_pressure_floor", -1.0);
+  bbh.sink_cells_per_radius = pin->GetOrAddReal(
+      "problem", "sink_cells_per_radius", 10.0);
+  bbh.sink_resolved_cells_across_horizon = pin->GetOrAddReal(
+      "problem", "sink_resolved_cells_across_horizon", 20.0);
+  if (bbh.unresolved_sink &&
+      (!(bbh.sink_timescale > 0.0) || bbh.sink_radius < 0.0 ||
+       bbh.sink_width == 0.0 || !(bbh.sink_cells_per_radius > 0.0) ||
+       !(bbh.sink_resolved_cells_across_horizon > 0.0))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "unresolved_sink requires positive sink_timescale, "
+              << "sink_cells_per_radius, and sink_resolved_cells_across_horizon; "
+              << "sink_radius must be non-negative and sink_width nonzero" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  auto &coord_data = pmbp->pcoord->coord_data;
+  if (coord_data.bh_excise &&
+      coord_data.excision_scheme == ExcisionScheme::puncture) {
+    const Real finest_dx = LocalFinestMeshSpacing(pmbp);
+    const Real min_horizon = MinDynBBHHorizonRadius();
+    if (finest_dx > min_horizon) {
+      if (bbh.require_resolved_horizon) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "puncture excision is under-resolved: finest dx="
+                  << finest_dx << " exceeds minimum horizon radius=" << min_horizon
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      } else if (global_variable::my_rank == 0) {
+        std::cout << "WARNING: puncture excision is under-resolved: finest dx="
+                  << finest_dx << " exceeds minimum horizon radius=" << min_horizon;
+        if (bbh.unresolved_sink) {
+          std::cout << "; resolution-scaled sink fallback is enabled";
+        }
+        std::cout << std::endl;
+      }
+    }
+  }
+  if (bbh.unresolved_sink) {
+    if (pmbp->pmhd == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "unresolved_sink currently requires MHD" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    user_srcs = true;
+    user_srcs_func = AddUnresolvedBHSink;
+  }
+  if (bbh.smooth_b_damping) {
+    if (pmbp->pmhd == nullptr || !coord_data.bh_excise ||
+        !coord_data.smooth_excise ||
+        coord_data.excision_scheme != ExcisionScheme::puncture) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "smooth_excision_b_damping requires MHD and "
+                << "smooth puncture excision" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    user_efield = true;
+    user_efield_func = AddSmoothExcisionMagneticDamping;
   }
 
   if (user_hist) {
@@ -469,12 +723,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       for (int r=0; r<nscal; ++r) {
         w0(m,IYF+r,k,j,i) = 0.0;
       }
+      Real x1v = CellCenterX(i-is, indcs.nx1,
+                             size.d_view(m).x1min, size.d_view(m).x1max);
       b0.x1f(m,k,j,i) = 0.0;
       b0.x2f(m,k,j,i) = 0.0;
-      b0.x3f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = bbh_.test_bz_gradient*x1v;
+      if (i == ie) b0.x1f(m,k,j,i+1) = 0.0;
+      if (j == je) b0.x2f(m,k,j+1,i) = 0.0;
+      if (k == ke) b0.x3f(m,k+1,j,i) = bbh_.test_bz_gradient*x1v;
       bcc0(m,IBX,k,j,i) = 0.0;
       bcc0(m,IBY,k,j,i) = 0.0;
-      bcc0(m,IBZ,k,j,i) = 0.0;
+      bcc0(m,IBZ,k,j,i) = bbh_.test_bz_gradient*x1v;
     });
     // Convert primitives to conserved
     auto &u0 = pmbp->pmhd->u0;
@@ -486,6 +745,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Initialize ADM variables -------------------------------
   if (pmbp->padm != nullptr) {
     pmbp->padm->SetADMVariables(pmbp);
+    pmbp->pcoord->UpdateExcisionMasks();
     // If we're using the ADM variables, then we've got dynamic GR enabled.
     // Because we need the metric, we can't initialize the conserved variables
     // until we've filled out the ADM variables.
@@ -497,7 +757,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 namespace {
 
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
-  const Real tt = pmbp->pmesh->time;
+  const Real tt = pmbp->pcoord->coord_data.metric_time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -519,6 +779,49 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
   /* Whether we load traj from a table or we compute analytical trajectories */
   find_traj_t_with_deriv(tt, bbh_traj_0, dbbh_traj_0);
+  auto &coord = pmbp->pcoord->coord_data;
+  coord.punc_0[0] = bbh_traj_0[X1];
+  coord.punc_0[1] = bbh_traj_0[Y1];
+  coord.punc_0[2] = bbh_traj_0[Z1];
+  coord.punc_1[0] = bbh_traj_0[X2];
+  coord.punc_1[1] = bbh_traj_0[Y2];
+  coord.punc_1[2] = bbh_traj_0[Z2];
+  const Real m1 = bbh_traj_0[M1T];
+  const Real m2 = bbh_traj_0[M2T];
+  coord.punc_0_spin[0] = m1*bbh_traj_0[AX1];
+  coord.punc_0_spin[1] = m1*bbh_traj_0[AY1];
+  coord.punc_0_spin[2] = m1*bbh_traj_0[AZ1];
+  coord.punc_1_spin[0] = m2*bbh_traj_0[AX2];
+  coord.punc_1_spin[1] = m2*bbh_traj_0[AY2];
+  coord.punc_1_spin[2] = m2*bbh_traj_0[AZ2];
+  coord.punc_0_vel[0] = bbh_traj_0[VX1];
+  coord.punc_0_vel[1] = bbh_traj_0[VY1];
+  coord.punc_0_vel[2] = bbh_traj_0[VZ1];
+  coord.punc_1_vel[0] = bbh_traj_0[VX2];
+  coord.punc_1_vel[1] = bbh_traj_0[VY2];
+  coord.punc_1_vel[2] = bbh_traj_0[VZ2];
+  const Real rH1 = HorizonRadiusFromMassAndChi(
+      m1, bbh_traj_0[AX1], bbh_traj_0[AY1], bbh_traj_0[AZ1]);
+  const Real rH2 = HorizonRadiusFromMassAndChi(
+      m2, bbh_traj_0[AX2], bbh_traj_0[AY2], bbh_traj_0[AZ2]);
+  coord.punc_0_rad = SmoothExcisionRadiusToHorizon(
+      bbh_.puncture_excise_rad1, rH1,
+      tt-bbh_.puncture_excise_shrink_start_time,
+      bbh_.puncture_excise_shrink_timescale,
+      bbh_.puncture_excise_to_horizon,
+      bbh_.puncture_excise_shrink_to_horizon);
+  coord.punc_1_rad = SmoothExcisionRadiusToHorizon(
+      bbh_.puncture_excise_rad2, rH2,
+      tt-bbh_.puncture_excise_shrink_start_time,
+      bbh_.puncture_excise_shrink_timescale,
+      bbh_.puncture_excise_to_horizon,
+      bbh_.puncture_excise_shrink_to_horizon);
+  if (bbh_.puncture_excise_cap_to_horizon &&
+      !bbh_.puncture_excise_to_horizon &&
+      !bbh_.puncture_excise_shrink_to_horizon) {
+    coord.punc_0_rad = std::min(coord.punc_0_rad, rH1);
+    coord.punc_1_rad = std::min(coord.punc_1_rad, rH2);
+  }
   Real hm = bbh_.metric_fd_step;
   Real hp = bbh_.metric_fd_step;
   if (bbh_.use_traj_table) {
@@ -1482,5 +1785,240 @@ void RefineTracker(MeshBlockPack *pmbp) {
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
 }
+
+
+KOKKOS_INLINE_FUNCTION
+Real SinkSmoothStep01(const Real x) {
+  Real s = fmin(1.0, fmax(0.0, x));
+  return s*s*(3.0 - 2.0*s);
+}
+
+void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (!bbh.unresolved_sink || pmbp->pmhd == nullptr ||
+      pmbp->padm == nullptr || !(bdt > 0.0)) {
+    return;
+  }
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int nmb = pmbp->nmb_thispack;
+  int nscal = pmbp->pmhd->nscalars;
+  int nmhd = pmbp->pmhd->nmhd;
+  auto &size = pmbp->pmb->mb_size;
+  auto &u0 = pmbp->pmhd->u0;
+  auto eos = pmbp->pmhd->peos->eos_data;
+  const Real rho_target = (bbh.sink_density_floor > 0.0) ?
+      bbh.sink_density_floor : eos.dfloor;
+  const Real p_target = (bbh.sink_pressure_floor > 0.0) ?
+      bbh.sink_pressure_floor : eos.pfloor;
+  const Real e_target = p_target/(eos.gamma - 1.0);
+  const Real tau = bbh.sink_timescale;
+  Real q[NTRAJ];
+  find_traj_t(pmbp->pcoord->coord_data.metric_time, q);
+  const bbh_sink_state state = ComputeUnresolvedSinkState(pmbp, q);
+
+  par_for("dynbbh_unresolved_sink", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    Real x = CellCenterX(i-is, indcs.nx1,
+                         size.d_view(m).x1min, size.d_view(m).x1max);
+    Real y = CellCenterX(j-js, indcs.nx2,
+                         size.d_view(m).x2min, size.d_view(m).x2max);
+    Real z = CellCenterX(k-ks, indcs.nx3,
+                         size.d_view(m).x3min, size.d_view(m).x3max);
+    Real weight = 0.0;
+    if (state.hole1.active) {
+      Real radius = sqrt(SQR(x-state.hole1.x) + SQR(y-state.hole1.y) +
+                         SQR(z-state.hole1.z));
+      weight = fmax(weight, SinkSmoothStep01(
+          (state.hole1.sink_radius-radius)/state.hole1.sink_width));
+    }
+    if (state.hole2.active) {
+      Real radius = sqrt(SQR(x-state.hole2.x) + SQR(y-state.hole2.y) +
+                         SQR(z-state.hole2.z));
+      weight = fmax(weight, SinkSmoothStep01(
+          (state.hole2.sink_radius-radius)/state.hole2.sink_width));
+    }
+    if (!(weight > 0.0) || !isfinite(weight)) return;
+    Real damp = 1.0-exp(-bdt*weight/tau);
+    Real keep = 1.0-damp;
+    u0(m,IDN,k,j,i) = keep*u0(m,IDN,k,j,i) + damp*rho_target;
+    u0(m,IM1,k,j,i) *= keep;
+    u0(m,IM2,k,j,i) *= keep;
+    u0(m,IM3,k,j,i) *= keep;
+    u0(m,IEN,k,j,i) = keep*u0(m,IEN,k,j,i) + damp*e_target;
+    for (int n = 0; n < nscal; ++n) u0(m,nmhd+n,k,j,i) *= keep;
+  });
+}
+
+KOKKOS_INLINE_FUNCTION
+Real SmoothExcisionBWeight(Real w) {
+  return fmin(fmax(w, 0.0), 1.0);
+}
+
+KOKKOS_INLINE_FUNCTION
+Real StrictSmoothExcisionBWeight(const Real w0, const Real w1) {
+  if (!isfinite(w0) || !isfinite(w1)) return 0.0;
+  return SmoothExcisionBWeight(fmin(w0, w1));
+}
+
+KOKKOS_INLINE_FUNCTION
+Real StrictSmoothExcisionBWeight(const Real w0, const Real w1,
+                                 const Real w2, const Real w3) {
+  if (!isfinite(w0) || !isfinite(w1) || !isfinite(w2) || !isfinite(w3)) {
+    return 0.0;
+  }
+  return SmoothExcisionBWeight(fmin(fmin(w0, w1), fmin(w2, w3)));
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX1D(const WeightView &w, const int m,
+                                          const int k, const int j, const int i) {
+  return StrictSmoothExcisionBWeight(w(m,k,j,i), w(m,k,j,i-1));
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX1(const WeightView &w, const int m, const int k,
+                                         const int j, const int i) {
+  return StrictSmoothExcisionBWeight(w(m,k,j,i), w(m,k,j-1,i),
+                                     w(m,k-1,j,i), w(m,k-1,j-1,i));
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX2(const WeightView &w, const int m, const int k,
+                                         const int j, const int i) {
+  return StrictSmoothExcisionBWeight(w(m,k,j,i), w(m,k-1,j,i),
+                                     w(m,k,j,i-1), w(m,k-1,j,i-1));
+}
+
+template <typename WeightView>
+KOKKOS_INLINE_FUNCTION Real EdgeWeightX3(const WeightView &w, const int m, const int k,
+                                         const int j, const int i) {
+  return StrictSmoothExcisionBWeight(w(m,k,j,i), w(m,k,j-1,i),
+                                     w(m,k,j,i-1), w(m,k,j-1,i-1));
+}
+
+KOKKOS_INLINE_FUNCTION
+Real SmoothExcisionDampingEta(const RegionSize &size, const bool multi_d,
+                              const bool three_d, const Real eta0,
+                              const Real cfl_cap, const Real dt) {
+  Real eta = eta0;
+  if (cfl_cap > 0.0 && dt > 0.0) {
+    Real dxmin = size.dx1;
+    if (multi_d) dxmin = fmin(dxmin, size.dx2);
+    if (three_d) dxmin = fmin(dxmin, size.dx3);
+    eta = fmin(eta, cfl_cap*SQR(dxmin)/dt);
+  }
+  return eta;
+}
+
+//! \fn void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld)
+//! \brief Add a smooth-excision resistive EMF, E_damp = eta W curl(B), at edges.
+void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pmhd == nullptr || !(bbh.smooth_b_damping_eta > 0.0)) return;
+
+  auto &indcs = pm->mb_indcs;
+  int is = indcs.is, ie = indcs.ie;
+  int js = indcs.js, je = indcs.je;
+  int ks = indcs.ks, ke = indcs.ke;
+  int ncells1 = indcs.nx1 + 2*(indcs.ng);
+  int nmb1 = pmbp->nmb_thispack - 1;
+  auto b0 = pmbp->pmhd->b0;
+  auto weight = pmbp->pcoord->excision_weight;
+  auto e1 = efld.x1e;
+  auto e2 = efld.x2e;
+  auto e3 = efld.x3e;
+  auto &mbsize = pmbp->pmb->mb_size;
+  bool multi_d = pm->multi_d;
+  bool three_d = pm->three_d;
+  Real eta0 = bbh.smooth_b_damping_eta;
+  Real cfl_cap = bbh.smooth_b_damping_cfl;
+  Real dt = pm->dt;
+
+  int scr_level = 0;
+  size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
+
+  if (pm->one_d) {
+    par_for_outer("dynbbh_b_damp1", DevExeSpace(), scr_size, scr_level, 0, nmb1,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m) {
+      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+      auto size = mbsize.d_view(m);
+      Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+	      CurrentDensity(member, m, ks, js, is, ie+1, b0, size, j1, j2, j3);
+	      par_for_inner(member, is, ie+1, [&](const int i) {
+	        Real w = EdgeWeightX1D(weight, m, ks, js, i);
+	        if (w > 0.0 && isfinite(w)) {
+	          Real damp = eta*w;
+	          e2(m,ks,  js,i) += damp*j2(i);
+	          e2(m,ke+1,js,i) += damp*j2(i);
+	          e3(m,ks,  js,i) += damp*j3(i);
+	          e3(m,ks,je+1,i) += damp*j3(i);
+	        }
+	      });
+	    });
+    return;
+  }
+
+  if (pm->two_d) {
+    par_for_outer("dynbbh_b_damp2", DevExeSpace(), scr_size, scr_level, 0, nmb1, js, je+1,
+    KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
+      ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+      ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+      auto size = mbsize.d_view(m);
+      Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+	      CurrentDensity(member, m, ks, j, is, ie+1, b0, size, j1, j2, j3);
+	      par_for_inner(member, is, ie+1, [&](const int i) {
+	        Real w1 = StrictSmoothExcisionBWeight(weight(m,ks,j,i),
+	                                             weight(m,ks,j-1,i));
+	        if (w1 > 0.0 && isfinite(w1)) {
+	          e1(m,ks,  j,i) += eta*w1*j1(i);
+	          e1(m,ke+1,j,i) += eta*w1*j1(i);
+	        }
+	        Real w2 = EdgeWeightX1D(weight, m, ks, j, i);
+	        if (w2 > 0.0 && isfinite(w2)) {
+	          e2(m,ks,  j,i) += eta*w2*j2(i);
+	          e2(m,ke+1,j,i) += eta*w2*j2(i);
+	        }
+	        Real w3 = EdgeWeightX3(weight, m, ks, j, i);
+	        if (w3 > 0.0 && isfinite(w3)) {
+	          e3(m,ks,  j,i) += eta*w3*j3(i);
+	        }
+	      });
+	    });
+    return;
+  }
+
+  par_for_outer("dynbbh_b_damp3", DevExeSpace(), scr_size, scr_level,
+                0, nmb1, ks, ke+1, js, je+1,
+  KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
+    ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
+    ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
+    ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
+    auto size = mbsize.d_view(m);
+	    Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
+	    CurrentDensity(member, m, k, j, is, ie+1, b0, size, j1, j2, j3);
+	    par_for_inner(member, is, ie+1, [&](const int i) {
+	      Real w1 = EdgeWeightX1(weight, m, k, j, i);
+	      if (w1 > 0.0 && isfinite(w1)) {
+	        e1(m,k,j,i) += eta*w1*j1(i);
+	      }
+	      Real w2 = EdgeWeightX2(weight, m, k, j, i);
+	      if (w2 > 0.0 && isfinite(w2)) {
+	        e2(m,k,j,i) += eta*w2*j2(i);
+	      }
+	      Real w3 = EdgeWeightX3(weight, m, k, j, i);
+	      if (w3 > 0.0 && isfinite(w3)) {
+	        e3(m,k,j,i) += eta*w3*j3(i);
+	      }
+	    });
+	  });
+	}
 
 } // namespace

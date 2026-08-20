@@ -214,7 +214,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
   pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});
-  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EField});
+  pnr->QueueTask(&MHD::EFieldSrc, pmhd, MHD_EFieldSrc, "MHD_EFieldSrc", Task_Run,
+                 {MHD_EField});
+  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EFieldSrc});
   pnr->QueueTask(&MHD::RecvE, pmhd, MHD_RecvE, "MHD_RecvE", Task_Run, {MHD_SendE});
   pnr->QueueTask(&MHD::CT, pmhd, MHD_CT, "MHD_CT", Task_Run, {MHD_RecvE});
   pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, {MHD_CT});
@@ -477,6 +479,12 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
+  Real stage_fraction = 0.0;
+  for (int s = 0; s < stage; ++s) {
+    stage_fraction = pdrive->gam0[s]*stage_fraction + pdrive->beta[s];
+  }
+  pmy_pack->pcoord->coord_data.metric_time =
+      pmy_pack->pmesh->time + stage_fraction*pmy_pack->pmesh->dt;
   pmy_pack->padm->SetADMVariables(pmy_pack);
   return TaskStatus::complete;
 }
@@ -486,7 +494,7 @@ TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus DynGRMHD::UpdateExcisionMasks(Driver *pdrive, int stage) {
-  if (pmy_pack->pcoord->coord_data.bh_excise && stage == pdrive->nexp_stages) {
+  if (pmy_pack->pcoord->coord_data.bh_excise) {
     pmy_pack->pcoord->UpdateExcisionMasks();
   }
   return TaskStatus::complete;

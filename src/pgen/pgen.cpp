@@ -36,6 +36,7 @@
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -69,6 +70,13 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
       exit(EXIT_FAILURE);
     }
   }
+  // Check that a user electric-field source was enrolled if enabled
+  if (user_efield && user_efield_func == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "User electric-field source enabled, but not enrolled "
+              << "by UserProblem()." << std::endl;
+    exit(EXIT_FAILURE);
+  }
   // Check that user defined history outputs were enrolled if needed
   if (user_hist) {
     if (user_hist_func == nullptr) {
@@ -92,6 +100,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                    bool single_file_per_rank) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -636,6 +645,13 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                 << "enrolled by UserProblem()." << std::endl;
       exit(EXIT_FAILURE);
     }
+  }
+  // Check that a user electric-field source was enrolled if enabled
+  if (user_efield && user_efield_func == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "User electric-field source enabled on restart, but not "
+              << "enrolled by UserProblem()." << std::endl;
+    exit(EXIT_FAILURE);
   }
   // Check that user defined history outputs were enrolled if needed
   if (user_hist) {

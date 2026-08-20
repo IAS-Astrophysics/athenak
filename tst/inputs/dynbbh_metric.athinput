@@ -46,6 +46,27 @@ excise = true
 excision_scheme = fixed
 dexcise = 1.0e-8
 pexcise = 3.33e-11
+texcise = -1.0
+excise_1_rad = -1.0
+excise_2_rad = -1.0
+excise_cap_to_horizon = false
+excise_to_horizon = false
+excise_shrink_to_horizon = false
+excise_shrink_timescale = 50.0
+excise_shrink_start_time = 0.0
+require_resolved_horizon = false
+smooth_excision = false
+smooth_excision_width = 1.0
+smooth_excision_puncture_weight_exponent = 1.0
+smooth_excision_puncture_width_fraction = 1.0
+puncture_flux_excision_radius_factor = 1.0
+smooth_excision_sigma_max = -1.0
+smooth_excision_temp_ceil = -1.0
+smooth_excision_inflow = false
+smooth_excision_inflow_speed = 0.0
+smooth_excision_b_damping = false
+smooth_excision_b_damping_eta = 0.0
+smooth_excision_b_damping_cfl = 0.25
 
 <mhd>
 eos = ideal
@@ -100,12 +121,22 @@ radius_thr = 5.0
 alpha_thr = 0.8
 dfloor = 1.0e-10
 pfloor = 1.0e-18
+unresolved_sink = false
+sink_radius = 0.0
+sink_width = -1.0
+sink_timescale = 1.0
+sink_density_floor = -1.0
+sink_pressure_floor = -1.0
+sink_cells_per_radius = 2.0
+sink_resolved_cells_across_horizon = 8.0
+test_bz_gradient = 0.0
 
 <output1>
 file_type = tab
 variable = adm
 data_format = %.17e
 dt = 1.0
+dcycle = 1
 slice_x2 = 0.0
 slice_x3 = 0.0
 # These are ignored for tabular output but allow the hardening regression to

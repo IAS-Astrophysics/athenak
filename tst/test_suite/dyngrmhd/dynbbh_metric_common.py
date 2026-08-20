@@ -285,3 +285,126 @@ def run_diagnostic_failure_checks():
     message = result.stdout + result.stderr
     assert result.returncode != 0
     assert "multicomponent angular_momentum and torque" in message, message
+
+
+def _excision_mesh_args():
+    return [
+        "mesh/nx1=24", "mesh/x1min=-24", "mesh/x1max=24",
+        "mesh/nx2=8", "mesh/x2min=-8", "mesh/x2max=8",
+        "mesh/nx3=8", "mesh/x3min=-8", "mesh/x3max=8",
+        "meshblock/nx1=24", "meshblock/nx2=8", "meshblock/nx3=8",
+        "time/nlim=1", "time/tlim=1", "output1/dcycle=1", "output1/dt=1",
+        "coord/excision_scheme=puncture", "coord/excise_1_rad=5",
+        "coord/excise_2_rad=5",
+    ]
+
+
+def run_excision_checks():
+    """Check two-hole mask geometry, unresolved sinks, and CT divB control."""
+    common = _excision_mesh_args()
+    smooth = [
+        "coord/smooth_excision=true",
+        "coord/smooth_excision_puncture_width_fraction=1",
+        "coord/puncture_flux_excision_radius_factor=1.5",
+        "coord/smooth_excision_b_damping=true",
+        "coord/smooth_excision_b_damping_eta=0.1",
+        "problem/test_bz_gradient=1e-8",
+    ]
+    basename = "dynbbh_excision_geometry"
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        "output1/variable=mhd_w_d", *common, *smooth,
+    ])
+    initial = np.loadtxt(
+        Path("tab") / f"{basename}.mhd_w_d.00000.tab", comments="#", ndmin=2)
+    evolved = np.loadtxt(
+        Path("tab") / f"{basename}.mhd_w_d.00001.tab", comments="#", ndmin=2)
+    for data, time in ((initial, 0.0), (evolved, 0.8)):
+        tr = trajectory(time)
+        x, density = data[:, 2], data[:, 3]
+        for center in (tr["p1"][0], tr["p2"][0]):
+            assert density[np.argmin(np.abs(x-center))] > 5.0e-9
+        assert density[np.argmin(np.abs(x))] < 5.0e-10
+    transition = initial[:, 3]
+    assert np.count_nonzero((transition > 2.0e-10) &
+                            (transition < 8.0e-9)) >= 4
+
+    basename = "dynbbh_excision_divb"
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        "output1/variable=mhd_divb", *common, *smooth,
+    ])
+    divb = np.loadtxt(
+        Path("tab") / f"{basename}.mhd_divb.00001.tab", comments="#", ndmin=2)
+    assert np.max(np.abs(divb[:, 3])) < 1.0e-18
+
+    basename = "dynbbh_unresolved_sink"
+    sink_args = [
+        arg for arg in common
+        if not arg.startswith(("coord/excise_1_rad", "coord/excise_2_rad",
+                               "time/tlim"))
+    ]
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        "output1/variable=mhd_w_d", *sink_args,
+        "coord/excise_1_rad=0.2", "coord/excise_2_rad=0.2",
+        "time/tlim=0.1", "problem/dfloor=1e-8", "problem/pfloor=1e-12",
+        "problem/unresolved_sink=true", "problem/sink_timescale=0.01",
+        "problem/sink_density_floor=1e-10",
+        "problem/sink_pressure_floor=1e-18",
+        "problem/sink_cells_per_radius=2",
+        "problem/sink_resolved_cells_across_horizon=8",
+    ])
+    sink = np.loadtxt(
+        Path("tab") / f"{basename}.mhd_w_d.00001.tab", comments="#", ndmin=2)
+    x, density = sink[:, 2], sink[:, 3]
+    for center in (trajectory(0.1)["p1"][0], trajectory(0.1)["p2"][0]):
+        assert density[np.argmin(np.abs(x-center))] < 5.0e-10
+    assert density[np.argmin(np.abs(x))] > 5.0e-9
+
+    failure = subprocess.run([
+        "./athena", "-i", INPUT_FILE, "job/basename=dynbbh_unresolved_fatal",
+        *_excision_mesh_args(), "coord/require_resolved_horizon=true",
+    ], check=False, capture_output=True, text=True)
+    assert failure.returncode != 0
+    assert "puncture excision is under-resolved" in failure.stdout + failure.stderr
+
+    # A radius transition uses absolute simulation time.  Splitting the same
+    # two-cycle calculation at a restart must therefore be bitwise identical.
+    restart_common = [
+        arg for arg in common
+        if not arg.startswith(("time/nlim", "time/tlim", "output1/"))
+    ]
+    shrink = [
+        "coord/excise_shrink_to_horizon=true",
+        "coord/excise_shrink_timescale=1",
+        "coord/excise_shrink_start_time=0",
+    ]
+    basename = "dynbbh_excision_restart"
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        *restart_common, *shrink, "time/nlim=1", "time/tlim=0.8",
+        "output1/file_type=rst", "output1/dcycle=1",
+    ])
+    restart_file = Path("rst") / f"{basename}.00001.rst"
+    assert restart_file.is_file()
+    continued = f"{basename}_continued"
+    subprocess.check_call([
+        "./athena", "-r", restart_file, f"job/basename={continued}",
+        "time/nlim=2", "time/tlim=1.6", "output1/file_type=tab",
+        "output1/variable=mhd_w_d", "output1/dcycle=1",
+    ])
+    uninterrupted = f"{basename}_uninterrupted"
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={uninterrupted}",
+        *restart_common, *shrink, "time/nlim=2", "time/tlim=1.6",
+        "output1/file_type=tab", "output1/variable=mhd_w_d",
+        "output1/dcycle=1",
+    ])
+    continued_data = np.loadtxt(
+        Path("tab") / f"{continued}.mhd_w_d.00002.tab",
+        comments="#", ndmin=2)
+    uninterrupted_data = np.loadtxt(
+        Path("tab") / f"{uninterrupted}.mhd_w_d.00002.tab",
+        comments="#", ndmin=2)
+    np.testing.assert_array_equal(continued_data, uninterrupted_data)

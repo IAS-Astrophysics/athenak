@@ -30,6 +30,54 @@ dimensionless spins use linear interpolation with matching time derivatives.
 The old `adjust_mass1` and `adjust_mass2` inputs are rejected.  Table masses are
 the physical Kerr-Schild masses and are never silently rescaled.
 
+## Moving excision and sink controls
+
+Set `coord/excision_scheme = puncture` to center two excision masks on the
+instantaneous binary trajectory.  Their Kerr-shaped distances include each
+hole's physical spin vector and boost.  Positions, velocities, spins, and
+masses are refreshed at the correct explicit Runge--Kutta stage time; the mask
+is then rebuilt before that stage's primitive recovery.  This is also done
+during initialization, and `coord/excise_shrink_start_time` is an absolute
+simulation time so a restart does not restart the radius transition.
+
+`coord/excise_1_rad` and `coord/excise_2_rad` set explicit radii.  A
+non-positive radius selects the instantaneous Kerr horizon radius
+`M(1+sqrt(1-|chi|^2))`.  `excise_to_horizon` always uses that radius,
+`excise_cap_to_horizon` caps a fixed requested radius, and
+`excise_shrink_to_horizon` transitions from the requested radius to the
+horizon with a cubic smoothstep over `excise_shrink_timescale`.  The last two
+time controls are `excise_shrink_start_time` and
+`excise_shrink_timescale`.
+
+`coord/require_resolved_horizon = true` makes an under-resolved horizon a
+fatal setup error.  Otherwise the code warns.  An optional historical fallback,
+`problem/unresolved_sink = true`, exponentially relaxes conserved density,
+momentum, and energy toward configurable floors only while a hole has fewer
+than `sink_resolved_cells_across_horizon` cells across its horizon.  Its
+radius is at least `sink_cells_per_radius` local cells (and
+`sink_radius`, when positive), its transition width is `sink_width` or an
+automatic local value when negative, and its physical drain time is
+`sink_timescale`.  The fallback supplements rather than disables geometric
+excision.  It currently requires MHD.
+
+`coord/smooth_excision = true` replaces the hard primitive reset by a compact
+smooth projection toward `dexcise`, `pexcise` (or `texcise`), and the
+puncture's coordinate velocity.  The profile is controlled by
+`smooth_excision_puncture_width_fraction` and
+`smooth_excision_puncture_weight_exponent`; the first-order flux mask may be
+expanded with `puncture_flux_excision_radius_factor`.  Optional protections
+are `smooth_excision_sigma_max`, `smooth_excision_temp_ceil`, and a minimum
+puncture-frame radial inflow selected by `smooth_excision_inflow` and
+`smooth_excision_inflow_speed`.
+
+Magnetic damping is opt-in through `smooth_excision_b_damping`,
+`smooth_excision_b_damping_eta`, and `smooth_excision_b_damping_cfl`.
+It adds the resistive EMF `eta W curl(B)` on edges using the strict minimum of
+neighboring cell weights.  Magnetic face fields are never reset directly, so
+constrained transport continues to control the discrete divergence.  The
+regression-only `problem/test_bz_gradient` seeds a divergence-free linear
+field used to exercise this path; production inputs should leave it at zero.
+
 ## Flux surfaces
 
 With `problem/user_hist = true`, fixed COM-centered spheres are selected by
