@@ -16,6 +16,10 @@ namespace cosmic_ray {
 // and lifecycle status.
 enum RealIndex {IPX=0, IPY=1, IPZ=2, IPVX=3, IPVY=4, IPVZ=5, NREAL=6};
 enum IntIndex {PGID=0, PTAG=1, PSTATUS=2, NINT=3};
+inline constexpr const char *real_names[NREAL] = {"x", "y", "z", "vx", "vy", "vz"};
+inline constexpr const char *int_names[NINT] = {"gid", "ptag", "status"};
+inline constexpr bool real_output[NREAL] = {true, true, true, true, true, true};
+inline constexpr bool int_output[NINT] = {false, true, true};
 constexpr int RESTART_LAYOUT_VERSION = 1;
 
 } // namespace cosmic_ray

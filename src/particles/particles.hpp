@@ -70,6 +70,10 @@ class ParticlePopulation {
   ParticleType particle_type;
   int nprtcl_thispack;             // number of particles this MeshBlockPack
   int nrdata, nidata;
+  const char *const *real_names;   // output names in prtcl_rdata index order
+  const char *const *int_names;    // output names in prtcl_idata index order
+  const bool *real_output;         // fields included in particle snapshots
+  const bool *int_output;
 //  DvceArray1D<int>  prtcl_gid;     // GID of MeshBlock containing each par
 //  DvceArray2D<Real> prtcl_pos;     // positions
 //  DvceArray2D<Real> prtcl_vel;     // velocities

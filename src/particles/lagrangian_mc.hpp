@@ -16,6 +16,10 @@ namespace lagrangian_mc {
 // and lifecycle status.
 enum RealIndex {IPX=0, IPY=1, IPZ=2, NREAL=3};
 enum IntIndex {PGID=0, PTAG=1, PSTATUS=2, PLASTMOVE=3, NINT=4};
+inline constexpr const char *real_names[NREAL] = {"x", "y", "z"};
+inline constexpr const char *int_names[NINT] = {"gid", "ptag", "status", "last_move"};
+inline constexpr bool real_output[NREAL] = {true, true, true};
+inline constexpr bool int_output[NINT] = {false, true, true, false};
 constexpr int RESTART_LAYOUT_VERSION = 1;
 enum MoveDirection {
   PMOVE_NONE=0, PMOVE_X1_LEFT, PMOVE_X1_RIGHT, PMOVE_X2_LEFT,

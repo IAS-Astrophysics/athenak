@@ -214,12 +214,20 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
       {
         nrdata = cosmic_ray::NREAL;
         nidata = cosmic_ray::NINT;
+        real_names = cosmic_ray::real_names;
+        int_names = cosmic_ray::int_names;
+        real_output = cosmic_ray::real_output;
+        int_output = cosmic_ray::int_output;
         break;
       }
     case ParticleType::lagrangian_mc:
       {
         nrdata = lagrangian_mc::NREAL;
         nidata = lagrangian_mc::NINT;
+        real_names = lagrangian_mc::real_names;
+        int_names = lagrangian_mc::int_names;
+        real_output = lagrangian_mc::real_output;
+        int_output = lagrangian_mc::int_output;
         break;
       }
     default:
