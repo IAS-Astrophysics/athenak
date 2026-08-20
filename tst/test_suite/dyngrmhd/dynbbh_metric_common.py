@@ -1,6 +1,8 @@
 """Independent regression checks for the legacy dynbbh metric and derivatives."""
 
 import math
+import re
+import struct
 import subprocess
 from pathlib import Path
 
@@ -408,3 +410,145 @@ def run_excision_checks():
         Path("tab") / f"{uninterrupted}.mhd_w_d.00002.tab",
         comments="#", ndmin=2)
     np.testing.assert_array_equal(continued_data, uninterrupted_data)
+
+
+def _read_binary_mesh(path):
+    """Return (cycle, [(level, bounds), ...]) from an Athena binary dump."""
+    with path.open("rb") as stream:
+        metadata = {}
+        while True:
+            line = stream.readline()
+            assert line, f"truncated binary preheader in {path}"
+            text = line.decode("ascii")
+            match = re.match(r"\s*([^=]+)=(.*)", text)
+            if match:
+                metadata[match.group(1).strip()] = match.group(2).strip()
+            if text.startswith("  header offset="):
+                stream.read(int(metadata["header offset"]))
+                break
+        nvar = int(metadata["number of variables"])
+        location_size = int(metadata["size of location"])
+        real_format = "d" if location_size == 8 else "f"
+        blocks = []
+        while True:
+            raw_indices = stream.read(10*4)
+            if not raw_indices:
+                break
+            assert len(raw_indices) == 10*4
+            indices = struct.unpack("=10i", raw_indices)
+            raw_bounds = stream.read(6*location_size)
+            bounds = struct.unpack("=" + 6*real_format, raw_bounds)
+            cells = ((indices[1] - indices[0] + 1) *
+                     (indices[3] - indices[2] + 1) *
+                     (indices[5] - indices[4] + 1))
+            stream.seek(cells*nvar*4, 1)
+            blocks.append((indices[9], bounds))
+    return int(metadata["cycle"]), blocks
+
+
+def _latest_binary_mesh(basename):
+    dumps = list(Path("bin").glob(f"{basename}.mhd_w.*.bin"))
+    assert dumps, basename
+    return max((_read_binary_mesh(path) for path in dumps), key=lambda item: item[0])
+
+
+def _level_at(blocks, point):
+    matches = [level for level, bounds in blocks
+               if bounds[0] <= point[0] <= bounds[1] and
+               bounds[2] <= point[1] <= bounds[3] and
+               bounds[4] <= point[2] <= bounds[5]]
+    assert matches, point
+    return max(matches)
+
+
+def _amr_args():
+    return [
+        "mesh/nx1=16", "mesh/x1min=-4", "mesh/x1max=4",
+        "mesh/nx2=1", "mesh/x2min=-0.5", "mesh/x2max=0.5",
+        "mesh/nx3=1", "mesh/x3min=-0.5", "mesh/x3max=0.5",
+        "meshblock/nx1=4", "meshblock/nx2=1", "meshblock/nx3=1",
+        "mesh_refinement/refinement=adaptive",
+        "mesh_refinement/num_levels=3",
+        "mesh_refinement/refinement_interval=2",
+        "time/nlim=8", "time/tlim=10", "output1/dcycle=-1",
+        "output3/dcycle=1", "output3/dt=100",
+        "problem/refinement_hysteresis=1.4",
+    ]
+
+
+def _write_moving_refinement_table(path):
+    rows = []
+    for time in (-0.1, 0.0, 1.0):
+        x1 = -0.8 + 0.5*time
+        x2 = 0.8 - 0.5*time
+        rows.append([
+            time, 0.5, 0.5, x1, 0.0, 0.0, x2, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.5, 0.0, 0.0, -0.5, 0.0, 0.0,
+        ])
+    path.write_text("\n".join(" ".join(f"{value:.17e}" for value in row)
+                                for row in rows) + "\n", encoding="utf-8")
+
+
+def run_refinement_checks():
+    """Exercise moving trackers, target overlap, COM shells, and hysteresis."""
+    basename = "dynbbh_refinement_analytic"
+    result = subprocess.run([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        *_amr_args(), "problem/sep=4", "problem/q=2",
+        "problem/amr_condition=tracker", "problem/tracker_1_rad=0.45",
+        "problem/tracker_2_rad=0.45", "problem/tracker_1_reflevel=1",
+        "problem/tracker_2_reflevel=2", "problem/radius_0_rad=0.35",
+        "problem/radius_0_reflevel=1",
+    ], check=True, capture_output=True, text=True)
+    cycle, blocks = _latest_binary_mesh(basename)
+    assert cycle == 8
+    phase = 4.0**-1.5*0.8
+    hole1 = np.array([8.0/3.0*math.cos(phase), 0.0, 0.0])
+    hole2 = np.array([-4.0/3.0*math.cos(phase), 0.0, 0.0])
+    assert _level_at(blocks, hole1) >= 1
+    assert _level_at(blocks, hole2) == 2
+    assert _level_at(blocks, np.zeros(3)) >= 1
+    amr_counts = re.search(r"(\d+) MeshBlocks created, (\d+) deleted by AMR",
+                           result.stdout)
+    assert amr_counts and int(amr_counts.group(1)) > 0
+    assert int(amr_counts.group(2)) == 0, result.stdout
+
+    basename = "dynbbh_refinement_moving_overlap"
+    table = Path(f"{basename}.traj").resolve()
+    _write_moving_refinement_table(table)
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        *_amr_args(), "time/nlim=-1", "time/tlim=0.8",
+        "problem/use_traj_table=true", f"problem/traj_file={table}",
+        "problem/amr_condition=tracker", "problem/tracker_1_rad=0.6",
+        "problem/tracker_2_rad=0.6", "problem/tracker_1_reflevel=1",
+        "problem/tracker_2_reflevel=2", "problem/radius_0_rad=0.3",
+        "problem/radius_0_reflevel=1",
+    ])
+    cycle, blocks = _latest_binary_mesh(basename)
+    assert cycle > 0
+    # At t=0.8 the table places the holes at x=-0.4 and +0.4.  Both tracker
+    # spheres overlap the two central blocks, so the higher target must win.
+    assert _level_at(blocks, np.array([-0.4, 0.0, 0.0])) == 2
+    assert _level_at(blocks, np.array([0.4, 0.0, 0.0])) == 2
+    assert _level_at(blocks, np.zeros(3)) == 2
+
+    basename = "dynbbh_refinement_com_shell"
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        *_amr_args(), "mesh/nx1=32", "mesh/x1min=-8", "mesh/x1max=8",
+        "problem/amr_condition=none", "problem/radius_0_rad=0.4",
+        "problem/radius_0_reflevel=2",
+    ])
+    _, blocks = _latest_binary_mesh(basename)
+    assert _level_at(blocks, np.zeros(3)) == 2
+    assert _level_at(blocks, np.array([7.0, 0.0, 0.0])) == 0
+
+    bad = subprocess.run([
+        "./athena", "-i", INPUT_FILE, "job/basename=dynbbh_bad_refinement",
+        *_amr_args(), "mesh_refinement/num_levels=2",
+        "problem/amr_condition=tracker", "problem/tracker_1_reflevel=2",
+    ], check=False, capture_output=True, text=True)
+    assert bad.returncode != 0
+    assert "valid physical AMR levels" in bad.stdout + bad.stderr

@@ -187,7 +187,23 @@ struct bbh_pgen {
   bool unresolved_sink = false;
 };
 
+enum class RefineBasePolicy {
+  none,
+  alpha_min,
+  tracker
+};
+
+struct bbh_refine {
+  RefineBasePolicy base = RefineBasePolicy::none;
+  Real tracker_radius[2] = {0.0, 0.0};
+  int tracker_reflevel[2] = {-1, -1};
+  Real hysteresis = 1.25;
+  std::vector<Real> com_radius;
+  std::vector<int> com_reflevel;
+};
+
 struct bbh_pgen bbh;
+struct bbh_refine bbh_ref;
 
 struct bbh_sink_hole_state {
   Real x, y, z;
@@ -344,7 +360,8 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_);
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
-void RefineTracker(MeshBlockPack* pmbp);
+void RefineSpatialPolicy(MeshBlockPack* pmbp);
+void Refine(MeshBlockPack* pmbp);
 void DynBBHFluxHistory(HistoryData *pdata, Mesh *pm);
 void AddUnresolvedBHSink(Mesh *pm, const Real bdt);
 void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld);
@@ -363,12 +380,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
               << "BBH problem can only be run when GR defined in <coord> block"
               << std::endl;
     exit(EXIT_FAILURE);
-  }
-  std::string amr_cond = pin->GetOrAddString("problem", "amr_condition", "track");
-  if (amr_cond == "alpha_min") {
-    user_ref_func = RefineAlphaMin;
-  } else {
-    user_ref_func = RefineTracker;
   }
   if (pmbp->padm == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -450,6 +461,67 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.6);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 6.0);
+  const std::string amr_cond = pin->GetOrAddString(
+      "problem", "amr_condition", "track");
+  if (amr_cond == "none") {
+    bbh_ref.base = RefineBasePolicy::none;
+  } else if (amr_cond == "alpha_min") {
+    bbh_ref.base = RefineBasePolicy::alpha_min;
+  } else if (amr_cond == "tracker" || amr_cond == "track") {
+    bbh_ref.base = RefineBasePolicy::tracker;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unknown problem/amr_condition='" << amr_cond
+              << "'. Use 'none', 'alpha_min', or 'tracker'." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  const int common_tracker_level = pin->GetOrAddInteger(
+      "problem", "tracker_reflevel", -1);
+  bbh_ref.tracker_radius[0] = pin->GetOrAddReal(
+      "problem", "tracker_1_rad", bbh.radius_thr);
+  bbh_ref.tracker_radius[1] = pin->GetOrAddReal(
+      "problem", "tracker_2_rad", bbh.radius_thr);
+  bbh_ref.tracker_reflevel[0] = pin->GetOrAddInteger(
+      "problem", "tracker_1_reflevel", common_tracker_level);
+  bbh_ref.tracker_reflevel[1] = pin->GetOrAddInteger(
+      "problem", "tracker_2_reflevel", common_tracker_level);
+  bbh_ref.hysteresis = pin->GetOrAddReal(
+      "problem", "refinement_hysteresis", 1.25);
+  bbh_ref.com_radius.clear();
+  bbh_ref.com_reflevel.clear();
+  for (int nr = 0; nr < 16; ++nr) {
+    const std::string prefix = "radius_" + std::to_string(nr);
+    if (pin->DoesParameterExist("problem", prefix + "_rad")) {
+      bbh_ref.com_radius.push_back(pin->GetReal("problem", prefix + "_rad"));
+      bbh_ref.com_reflevel.push_back(pin->GetOrAddInteger(
+          "problem", prefix + "_reflevel", -1));
+    }
+  }
+  const int max_physical_level = pmbp->pmesh->max_level - pmbp->pmesh->root_level;
+  auto invalid_reflevel = [=](const int level) {
+    return level < -1 || (pmbp->pmesh->adaptive && level > max_physical_level);
+  };
+  bool invalid_refinement = !(bbh.radius_thr > 0.0) ||
+      !(bbh.alpha_thr > 0.0) || !std::isfinite(bbh.alpha_thr) ||
+      !(bbh_ref.tracker_radius[0] > 0.0) ||
+      !(bbh_ref.tracker_radius[1] > 0.0) ||
+      !(bbh_ref.hysteresis >= 1.0) || !std::isfinite(bbh_ref.hysteresis) ||
+      invalid_reflevel(bbh_ref.tracker_reflevel[0]) ||
+      invalid_reflevel(bbh_ref.tracker_reflevel[1]);
+  for (std::size_t nr = 0; nr < bbh_ref.com_radius.size(); ++nr) {
+    invalid_refinement = invalid_refinement ||
+        !(bbh_ref.com_radius[nr] > 0.0) ||
+        !std::isfinite(bbh_ref.com_radius[nr]) ||
+        invalid_reflevel(bbh_ref.com_reflevel[nr]);
+  }
+  if (invalid_refinement) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh refinement radii must be positive, "
+              << "refinement_hysteresis must be finite and >= 1, and target "
+              << "levels must be -1 or valid physical AMR levels" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  user_ref_func = Refine;
   bbh.use_traj_table = pin->GetOrAddBoolean(
       "problem", "use_traj_table", false);
   const std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
@@ -1685,6 +1757,7 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   int I_ADM_ALPHA  = pmbp->padm->I_ADM_ALPHA;
   // note: we need this to prevent capture by this in the lambda expr.
   auto &bbh_ = bbh;
+  const Real alpha_hysteresis = bbh_ref.hysteresis;
 
   par_for_outer(
   "AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
@@ -1704,8 +1777,8 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
 
     if (team_dmin < bbh_.alpha_thr) {
       refine_flag.d_view(m + mbs) = 1;
-    }
-    if (team_dmin > 1.25 * bbh_.alpha_thr) {
+    } else if (team_dmin > alpha_hysteresis * bbh_.alpha_thr &&
+               refine_flag.d_view(m + mbs) <= 0) {
       refine_flag.d_view(m + mbs) = -1;
     }
   });
@@ -1715,75 +1788,97 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   refine_flag.template sync<HostMemSpace>();
 }
 
-void RefineTracker(MeshBlockPack *pmbp) {
+Real PointToBlockDistanceSquared(const Real point[3], const RegionSize &block,
+                                 const bool multi_d, const bool three_d) {
+  const Real dx1 = std::max({block.x1min - point[0], 0.0,
+                             point[0] - block.x1max});
+  const Real dx2 = multi_d ? std::max({block.x2min - point[1], 0.0,
+                                       point[1] - block.x2max}) : 0.0;
+  const Real dx3 = three_d ? std::max({block.x3min - point[2], 0.0,
+                                       point[2] - block.x3max}) : 0.0;
+  return SQR(dx1) + SQR(dx2) + SQR(dx3);
+}
+
+void RefineSpatialPolicy(MeshBlockPack *pmbp) {
   Mesh *pmesh       = pmbp->pmesh;
   auto &refine_flag = pmesh->pmr->refine_flag;
   auto &size        = pmbp->pmb->mb_size;
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+  const bool use_tracker = bbh_ref.base == RefineBasePolicy::tracker;
+  const bool has_spatial_policy = use_tracker || !bbh_ref.com_radius.empty();
+  if (!has_spatial_policy) return;
 
-  Real bbh_traj[NTRAJ];
+  Real trajectory[NTRAJ];
+  find_traj_t(pmesh->time, trajectory);
+  const Real hole1[3] = {trajectory[X1], trajectory[Y1], trajectory[Z1]};
+  const Real hole2[3] = {trajectory[X2], trajectory[Y2], trajectory[Z2]};
+  const Real origin[3] = {0.0, 0.0, 0.0};
+  const int maximum_level = pmesh->max_level - pmesh->root_level;
 
-  Real tt = pmesh->time;
-  find_traj_t(tt, bbh_traj);
-  Real x1_BH1 = bbh_traj[X1];
-  Real x2_BH1 = bbh_traj[Y1];
-  Real x3_BH1 = bbh_traj[Z1];
-  Real x1_BH2 = bbh_traj[X2];
-  Real x2_BH2 = bbh_traj[Y2];
-  Real x3_BH2 = bbh_traj[Z2];
+  auto configured_target = [=](const int requested) {
+    return requested < 0 ? maximum_level : requested;
+  };
+
   for (int m = 0; m < nmb; ++m) {
-    // extract MeshBlock bounds
-    Real &x1min = size.h_view(m).x1min;
-    Real &x1max = size.h_view(m).x1max;
-    Real &x2min = size.h_view(m).x2min;
-    Real &x2max = size.h_view(m).x2max;
-    Real &x3min = size.h_view(m).x3min;
-    Real &x3max = size.h_view(m).x3max;
+    const int gid = m + mbs;
+    const int level = pmesh->lloc_eachmb[gid].level - pmesh->root_level;
+    const RegionSize &block = size.h_view(m);
+    int hard_target = -1;
+    int buffer_target = -1;
 
-    Real d2_bh1[8] = {
-      SQR(x1min - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1min - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3min - x3_BH1),
-      SQR(x1min - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3max - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2min - x2_BH1) + SQR(x3max - x3_BH1),
-      SQR(x1min - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3max - x3_BH1),
-      SQR(x1max - x1_BH1) + SQR(x2max - x2_BH1) + SQR(x3max - x3_BH1),
+    auto add_region = [&](const Real center[3], const Real radius,
+                          const int requested_level) {
+      const Real distance2 = PointToBlockDistanceSquared(
+          center, block, pmesh->multi_d, pmesh->three_d);
+      const int target = configured_target(requested_level);
+      if (distance2 < SQR(radius)) {
+        hard_target = std::max(hard_target, target);
+      }
+      if (distance2 < SQR(bbh_ref.hysteresis*radius)) {
+        buffer_target = std::max(buffer_target, target);
+      }
     };
 
-    Real d2_bh2[8] = {
-      SQR(x1min - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1min - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3min - x3_BH2),
-      SQR(x1min - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3max - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2min - x2_BH2) + SQR(x3max - x3_BH2),
-      SQR(x1min - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3max - x3_BH2),
-      SQR(x1max - x1_BH2) + SQR(x2max - x2_BH2) + SQR(x3max - x3_BH2),
-    };
-    Real dmin2_bh1 = *std::min_element(&d2_bh1[0], &d2_bh1[8]);
-    Real dmin2_bh2 = *std::min_element(&d2_bh2[0], &d2_bh2[8]);
-    bool iscontained_bh1 =
-      (x1_BH1 >= x1min && x1_BH1 <= x1max) &&
-      (x2_BH1 >= x2min && x2_BH1 <= x2max) &&
-      (x3_BH1 >= x3min && x3_BH1 <= x3max);
-    bool iscontained_bh2 =
-      (x1_BH2 >= x1min && x1_BH2 <= x1max) &&
-      (x2_BH2 >= x2min && x2_BH2 <= x2max) &&
-      (x3_BH2 >= x3min && x3_BH2 <= x3max);
+    if (use_tracker) {
+      add_region(hole1, bbh_ref.tracker_radius[0],
+                 bbh_ref.tracker_reflevel[0]);
+      add_region(hole2, bbh_ref.tracker_radius[1],
+                 bbh_ref.tracker_reflevel[1]);
+    }
+    for (std::size_t nr = 0; nr < bbh_ref.com_radius.size(); ++nr) {
+      add_region(origin, bbh_ref.com_radius[nr], bbh_ref.com_reflevel[nr]);
+    }
 
-    if (dmin2_bh1 < SQR(bbh.radius_thr) || dmin2_bh2 < SQR(bbh.radius_thr) ||
-        iscontained_bh1 || iscontained_bh2) {
-      refine_flag.d_view(m + mbs) = 1;
-    } else {
-      refine_flag.d_view(m + mbs) = -1;
+    int &flag = refine_flag.h_view(gid);
+    if (hard_target >= 0) {
+      if (level < hard_target) {
+        flag = 1;
+      } else if (level == hard_target) {
+        if (flag < 0) flag = 0;
+      } else if (flag <= 0) {
+        flag = -1;
+      }
+    } else if (buffer_target >= level && flag <= 0) {
+      // Retain the requested resolution until the block leaves the expanded
+      // region.  This avoids refine/derefine chatter as a puncture crosses a
+      // MeshBlock boundary.
+      flag = 0;
+    } else if (flag <= 0) {
+      flag = -1;
     }
   }
 
-  // sync host and device
   refine_flag.template modify<HostMemSpace>();
   refine_flag.template sync<DevExeSpace>();
+}
+
+// 1 refines, -1 derefines, and 0 leaves a MeshBlock unchanged.
+void Refine(MeshBlockPack *pmbp) {
+  if (bbh_ref.base == RefineBasePolicy::alpha_min) {
+    RefineAlphaMin(pmbp);
+  }
+  RefineSpatialPolicy(pmbp);
 }
 
 

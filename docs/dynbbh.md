@@ -78,6 +78,31 @@ constrained transport continues to control the discrete divergence.  The
 regression-only `problem/test_bz_gradient` seeds a divergence-free linear
 field used to exercise this path; production inputs should leave it at zero.
 
+## CBD refinement policies
+
+Adaptive runs can set `problem/amr_condition` to `tracker`, `alpha_min`, or
+`none` and enroll a user AMR criterion.  The legacy spelling `track` remains
+accepted as an alias for `tracker`; unknown values are rejected.  Tracker
+regions follow the two instantaneous analytic or tabulated puncture positions.
+Their radii are `tracker_1_rad` and `tracker_2_rad` (defaulting to the legacy
+`radius_thr`), and their target physical levels are `tracker_1_reflevel` and
+`tracker_2_reflevel`.  The common `tracker_reflevel` supplies both defaults.
+
+COM-centered spherical regions are added with `radius_N_rad` and
+`radius_N_reflevel`, for `N=0` through 15.  Regions may be nested or overlap
+the moving trackers; the highest requested level always wins.  Physical level
+zero is the root mesh and `-1` means refine to the configured maximum AMR
+level.  Explicit levels outside the configured adaptive range are rejected.
+The point-to-MeshBlock-box distance is exact, including when a puncture or the
+COM lies inside a block.
+
+`problem/refinement_hysteresis` (default 1.25, minimum 1) expands each region
+only for retention: a block at the requested level is not derefined until it
+leaves the expanded radius.  This suppresses boundary chatter without
+refining the buffer itself.  AthenaK's normal `refinement_interval` remains in
+effect.  Other refinement criteria retain priority when they request further
+refinement.
+
 ## Flux surfaces
 
 With `problem/user_hist = true`, fixed COM-centered spheres are selected by
