@@ -159,7 +159,9 @@ add_executable(
         utils/tov/tov.cpp
         utils/tr_table.cpp
         utils/cart_grid.cpp
+        utils/flux_generalized.cpp
         utils/spherical_surface.cpp
+        utils/surface_grid.cpp
 
         z4c/compact_object_tracker.cpp
         z4c/horizon_dump.cpp

@@ -29,3 +29,16 @@ dimensionless spins use linear interpolation with matching time derivatives.
 
 The old `adjust_mass1` and `adjust_mass2` inputs are rejected.  Table masses are
 the physical Kerr-Schild masses and are never silently rescaled.
+
+## Flux surfaces
+
+With `problem/user_hist = true`, fixed COM-centered spheres are selected by
+`flux_rsurf_inner`, `flux_rsurf_outer`, and `flux_dr_surf`.  The angular grid
+uses `flux_ntheta`, `flux_nphi`, and `flux_interp_order`.  Optional moving
+spheres use `flux_horizon1`, `flux_horizon2`, `flux_radius1`, and
+`flux_radius2`; their centers are refreshed from the analytic or tabulated
+trajectory before every history evaluation.
+
+The user history initially reports `mdot_<surface>` (positive for inward rest
+mass flux) and `area_<surface>` (proper area).  Surface objects are owned by the
+problem generator and rebuilt after AMR changes without static view lifetimes.

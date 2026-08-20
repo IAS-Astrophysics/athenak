@@ -205,3 +205,25 @@ def run_fd_convergence():
         errors.append(max(float(np.max(np.abs(fd[k] - ad[k]))) for k in KEYS))
     assert errors[1] < 0.4*errors[0], errors
     assert errors[2] < 0.4*errors[1], errors
+
+
+def run_surface_check():
+    radius = 100.0
+    basename = "dynbbh_flux_surface_regression"
+    args = [
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        "problem/user_hist=true", f"problem/flux_rsurf_inner={radius}",
+        f"problem/flux_rsurf_outer={radius}", "problem/flux_dr_surf=10.0",
+        "mesh/nx1=12", "mesh/x1min=-150", "mesh/x1max=150",
+        "mesh/nx2=12", "mesh/x2min=-150", "mesh/x2max=150",
+        "mesh/nx3=12", "mesh/x3min=-150", "mesh/x3max=150",
+        "meshblock/nx1=12", "meshblock/nx2=12", "meshblock/nx3=12",
+    ]
+    subprocess.check_call(args)
+    values = np.loadtxt(f"{basename}.user.hst", comments="#", ndmin=2)[-1]
+    mdot, area = values[-2], values[-1]
+    flat_area = 4.0*math.pi*radius*radius
+    assert abs(area/flat_area - 1.0) < 0.02, (area, flat_area)
+    # At r=100 the moving metric's shift leaves an O(M/r) coordinate flux;
+    # its closed-sphere integral must nevertheless remain correspondingly small.
+    assert abs(mdot) < 0.03*area*1.0e-10, (mdot, area)

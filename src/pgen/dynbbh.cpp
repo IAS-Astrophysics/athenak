@@ -15,6 +15,7 @@
 #include <string>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "parameter_input.hpp"
@@ -26,6 +27,8 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "outputs/outputs.hpp"
+#include "utils/flux_generalized.hpp"
 
 #define D2(comp, h) ((met_p1.g).comp - (met_m1.g).comp) / (2*h)
 
@@ -201,6 +204,7 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
+void DynBBHFluxHistory(HistoryData *pdata, Mesh *pm);
 
 } // namespace
 
@@ -341,6 +345,77 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                 << required_start << ", " << required_end << "]" << std::endl;
       std::exit(EXIT_FAILURE);
     }
+  }
+
+  if (user_hist) {
+    const int flux_ntheta = pin->GetOrAddInteger("problem", "flux_ntheta", 32);
+    const int flux_nphi = pin->GetOrAddInteger("problem", "flux_nphi", 64);
+    const int flux_interp_order = pin->GetOrAddInteger(
+        "problem", "flux_interp_order", 1);
+    const Real radial_inner = pin->GetOrAddReal(
+        "problem", "flux_rsurf_inner", -1.0);
+    const Real radial_outer = pin->GetOrAddReal(
+        "problem", "flux_rsurf_outer", -1.0);
+    const Real radial_step = pin->GetOrAddReal("problem", "flux_dr_surf", 1.0);
+    const bool horizon1 = pin->GetOrAddBoolean(
+        "problem", "flux_horizon1", false);
+    const bool horizon2 = pin->GetOrAddBoolean(
+        "problem", "flux_horizon2", false);
+    const Real horizon_radius1 = pin->GetOrAddReal(
+        "problem", "flux_radius1", -1.0);
+    const Real horizon_radius2 = pin->GetOrAddReal(
+        "problem", "flux_radius2", -1.0);
+    if (flux_ntheta < 3 || flux_nphi < 3 || flux_interp_order < 1 ||
+        ((radial_outer >= radial_inner && radial_inner > 0.0) &&
+         !(radial_step > 0.0)) || (horizon1 && !(horizon_radius1 > 0.0)) ||
+        (horizon2 && !(horizon_radius2 > 0.0))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "invalid dynbbh flux-surface configuration"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    surface_flux_grids.clear();
+    const Real origin[3] = {0.0, 0.0, 0.0};
+    if (radial_inner > 0.0 && radial_outer >= radial_inner) {
+      for (Real radius = radial_inner;
+           radius <= radial_outer + 16.0*std::numeric_limits<Real>::epsilon()*
+                                      std::max(1.0, radial_outer);
+           radius += radial_step) {
+        std::ostringstream label;
+        label << "r" << radius;
+        surface_flux_grids.emplace_back(std::make_unique<SphericalSurfaceGrid>(
+            pmbp, flux_ntheta, flux_nphi,
+            [radius](Real, Real) { return radius; }, label.str(), origin,
+            flux_interp_order));
+        if (2*surface_flux_grids.size() > NHISTORY_VARIABLES) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "too many dynbbh flux surfaces" << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+      }
+    }
+    Real trajectory[NTRAJ];
+    find_traj_t(pmbp->pmesh->time, trajectory);
+    if (horizon1) {
+      const Real center[3] = {trajectory[X1], trajectory[Y1], trajectory[Z1]};
+      surface_flux_grids.emplace_back(std::make_unique<SphericalSurfaceGrid>(
+          pmbp, flux_ntheta, flux_nphi,
+          [horizon_radius1](Real, Real) { return horizon_radius1; }, "h1",
+          center, flux_interp_order));
+    }
+    if (horizon2) {
+      const Real center[3] = {trajectory[X2], trajectory[Y2], trajectory[Z2]};
+      surface_flux_grids.emplace_back(std::make_unique<SphericalSurfaceGrid>(
+          pmbp, flux_ntheta, flux_nphi,
+          [horizon_radius2](Real, Real) { return horizon_radius2; }, "h2",
+          center, flux_interp_order));
+    }
+    if (2*surface_flux_grids.size() > NHISTORY_VARIABLES) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "too many dynbbh flux surfaces" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    user_hist_func = DynBBHFluxHistory;
   }
 
   if (restart) return;
@@ -1274,6 +1349,21 @@ void get_metric(const Real t,
   met.g.zz = gcov[ZZ][ZZ];
 
   return;
+}
+
+void DynBBHFluxHistory(HistoryData *pdata, Mesh *pm) {
+  Real trajectory[NTRAJ];
+  find_traj_t(pm->time, trajectory);
+  const Real center1[3] = {trajectory[X1], trajectory[Y1], trajectory[Z1]};
+  const Real center2[3] = {trajectory[X2], trajectory[Y2], trajectory[Z2]};
+  std::vector<SphericalSurfaceGrid*> surfaces;
+  surfaces.reserve(pm->pgen->surface_flux_grids.size());
+  for (const auto &owned : pm->pgen->surface_flux_grids) {
+    if (owned->Label() == "h1") owned->SetCenter(center1);
+    if (owned->Label() == "h2") owned->SetCenter(center2);
+    surfaces.push_back(owned.get());
+  }
+  TorusFluxes_General(pdata, pm->pmb_pack, surfaces);
 }
 
 // refine region within a certain distance from each compact object

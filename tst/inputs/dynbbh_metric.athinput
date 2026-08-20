@@ -84,6 +84,17 @@ traj_file = none
 spin_ramp = false
 spin_ramp_start_time = 0.0
 spin_ramp_timescale = 50.0
+user_hist = false
+flux_ntheta = 16
+flux_nphi = 32
+flux_interp_order = 1
+flux_rsurf_inner = -1.0
+flux_rsurf_outer = -1.0
+flux_dr_surf = 1.0
+flux_horizon1 = false
+flux_horizon2 = false
+flux_radius1 = -1.0
+flux_radius2 = -1.0
 amr_condition = none
 radius_thr = 5.0
 alpha_thr = 0.8
@@ -97,3 +108,7 @@ data_format = %.17e
 dt = 1.0
 slice_x2 = 0.0
 slice_x3 = 0.0
+
+<output2>
+file_type = hst
+dt = 1.0

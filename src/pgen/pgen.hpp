@@ -14,6 +14,7 @@
 
 #include "geodesic-grid/spherical_grid.hpp"
 #include "parameter_input.hpp"
+#include "utils/surface_grid.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
@@ -44,6 +45,7 @@ class ProblemGenerator {
 
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
+  std::vector<std::unique_ptr<SphericalSurfaceGrid>> surface_flux_grids;
 
   // function pointer for final work after main loop (e.g. compute errors).  Called by
   // Driver::Finalize()
