@@ -81,6 +81,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         dc_corr[a] = -(opt.dc_Kp * e + opt.dc_Ki * pdc->GetIntegral(a)
                      + opt.dc_Kd * pdc->GetVel(a));
       }
+    } else if (dc_variety == DriftControl::BDOB) {
+      for (int a = 0; a < 3; ++a) {
+        dc_corr[a] = -pdc->GetU(a);
+      }
     } else if (dc_variety == DriftControl::DOB) {
       Real const wc2  = SQR(opt.dc_omega_c);
       Real const twzc = 2.0 * opt.dc_zeta * opt.dc_omega_c;
@@ -100,22 +104,24 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // Per-axis gain on the applied correction.
-    Real const dc_gain[3] = {opt.dc_gain_x, opt.dc_gain_y, opt.dc_gain_z};
-    for (int a = 0; a < 3; ++a) {
-      dc_corr[a]    *= dc_gain[a];
-      dc_gsupp[a]   *= dc_gain[a];
-      dc_inv_tau[a] *= dc_gain[a];
-    }
-
-    // Optional ramp-down, applied to everything the controller injects. The factor is
-    // 1 unless dc_ramp_start >= 0, so this is a no-op for every existing parfile.
-    Real const dc_ramp = pdc->RampFactor(time);
-    if (dc_ramp < 1.0) {
+    if (dc_variety != DriftControl::BDOB) {
+      // Per-axis gain on the applied correction.
+      Real const dc_gain[3] = {opt.dc_gain_x, opt.dc_gain_y, opt.dc_gain_z};
       for (int a = 0; a < 3; ++a) {
-        dc_corr[a]    *= dc_ramp;
-        dc_gsupp[a]   *= dc_ramp;
-        dc_inv_tau[a] *= dc_ramp;
+        dc_corr[a]    *= dc_gain[a];
+        dc_gsupp[a]   *= dc_gain[a];
+        dc_inv_tau[a] *= dc_gain[a];
+      }
+
+      // Optional ramp-down, applied to everything the controller injects. The factor is
+      // 1 unless dc_ramp_start >= 0, so this is a no-op for every existing parfile.
+      Real const dc_ramp = pdc->RampFactor(time);
+      if (dc_ramp < 1.0) {
+        for (int a = 0; a < 3; ++a) {
+          dc_corr[a]    *= dc_ramp;
+          dc_gsupp[a]   *= dc_ramp;
+          dc_inv_tau[a] *= dc_ramp;
+        }
       }
     }
   }
