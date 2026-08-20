@@ -9,9 +9,13 @@
 #include <math.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <fstream>
 #include <sstream>
 #include <string>
 #include <iostream>
+#include <limits>
+#include <vector>
 
 #include "parameter_input.hpp"
 #include "athena.hpp"
@@ -73,6 +77,13 @@ KOKKOS_INLINE_FUNCTION dual1_real metric_sqrt(const dual1_real &x) {
 }
 KOKKOS_INLINE_FUNCTION Real value_of(const dual1_real &x) { return x.val; }
 
+template <typename T>
+KOKKOS_INLINE_FUNCTION T metric_norm3(const T x, const T y, const T z) {
+  const T radius2 = x*x + y*y + z*z;
+  if (value_of(radius2) <= 0.0) return T(0.0);
+  return metric_sqrt(radius2);
+}
+
 enum {
   X1, Y1, Z1, X2, Y2, Z2,
   VX1, VY1, VZ1, VX2, VY2, VZ2,
@@ -132,31 +143,46 @@ struct bbh_pgen {
   Real a1, a2;
   Real th_a1, th_a2;
   Real ph_a1, ph_a2;
+  Real spin_ramp_timescale;
+  Real spin_ramp_start_time;
   Real dfloor;
   Real pfloor;
   Real gamma_adi;
   Real a1_buffer, a2_buffer;
-  Real adjust_mass1, adjust_mass2;
   Real cutoff_floor;
   Real metric_fd_step = kDefaultMetricFdStep;
   Real alpha_thr;
   Real radius_thr;
   MetricDerivativeMethod metric_derivative_method =
       MetricDerivativeMethod::finite_difference;
+  bool use_traj_table = false;
+  bool spin_ramp = false;
 };
 
 struct bbh_pgen bbh;
+
+struct bbh_traj_table {
+  std::vector<Real> t;
+  std::vector<Real> x1, y1, z1, x2, y2, z2;
+  std::vector<Real> vx1, vy1, vz1, vx2, vy2, vz2;
+  std::vector<Real> chix1, chiy1, chiz1, chix2, chiy2, chiz2;
+  std::vector<Real> m1, m2;
+  std::size_t active_segment = 0;
+};
+
+bbh_traj_table bbh_table;
 
 /* Declare functions */
 void find_traj_t(Real tt, Real traj_array[NTRAJ]);
 void find_traj_t_with_deriv(Real tt, Real traj_array[NTRAJ],
                             Real dtraj_array[NTRAJ]);
+void LoadTrajectoryTable(const std::string &fname);
 
 KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
     const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ],
-    const bbh_pgen& bbh_);
+    const Real hm, const Real hp, const bbh_pgen& bbh_);
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met, struct three_metric &gam);
 KOKKOS_INLINE_FUNCTION
@@ -197,23 +223,59 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   } else {
     user_ref_func = RefineTracker;
   }
+  if (pmbp->padm == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh requires an <adm> object" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
 
-  if (restart) return;
-
   bbh.sep = pin->GetOrAddReal("problem", "sep", 20.0);
-  bbh.om = std::pow(bbh.sep, -1.5);
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
   bbh.a1 = pin->GetOrAddReal("problem", "a1", 0.0);
   bbh.a2 = pin->GetOrAddReal("problem", "a2", 0.0);
-  bbh.th_a1 = pin->GetOrAddReal("problem", "th_a1", 0.0);
-  bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0);
-  bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0);
-  bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0);
+  const Real degrees = std::acos(-1.0)/180.0;
+  bbh.th_a1 = pin->GetOrAddReal("problem", "th_a1", 0.0)*degrees;
+  bbh.th_a2 = pin->GetOrAddReal("problem", "th_a2", 0.0)*degrees;
+  bbh.ph_a1 = pin->GetOrAddReal("problem", "ph_a1", 0.0)*degrees;
+  bbh.ph_a2 = pin->GetOrAddReal("problem", "ph_a2", 0.0)*degrees;
+  bbh.spin_ramp = pin->GetOrAddBoolean("problem", "spin_ramp", false);
+  bbh.spin_ramp_timescale = pin->GetOrAddReal(
+      "problem", "spin_ramp_timescale", 50.0);
+  bbh.spin_ramp_start_time = pin->GetOrAddReal(
+      "problem", "spin_ramp_start_time", pmbp->pmesh->time);
+  if (!(bbh.sep > 0.0) || !(bbh.q > 0.0) || !std::isfinite(bbh.sep) ||
+      !std::isfinite(bbh.q) || !std::isfinite(bbh.a1) ||
+      !std::isfinite(bbh.a2) || !std::isfinite(bbh.th_a1) ||
+      !std::isfinite(bbh.th_a2) || !std::isfinite(bbh.ph_a1) ||
+      !std::isfinite(bbh.ph_a2) || bbh.a1 < 0.0 || bbh.a2 < 0.0 ||
+      bbh.a1 > 1.0 || bbh.a2 > 1.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "problem/sep and q must be positive and 0 <= a1,a2 <= 1"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (bbh.spin_ramp && (!(bbh.spin_ramp_timescale > 0.0) ||
+                        !std::isfinite(bbh.spin_ramp_start_time))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "spin_ramp requires a positive timescale and finite start time"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  bbh.om = std::pow(bbh.sep, -1.5);
   bbh.dfloor = pin->GetOrAddReal("problem", "dfloor", (FLT_MIN));
   bbh.pfloor = pin->GetOrAddReal("problem", "pfloor", (FLT_MIN));
-  bbh.adjust_mass1 = pin->GetOrAddReal("problem", "adjust_mass1", 1.0);
-  bbh.adjust_mass2 = pin->GetOrAddReal("problem", "adjust_mass2", 1.0);
+  if (pin->DoesParameterExist("problem", "adjust_mass1") ||
+      pin->DoesParameterExist("problem", "adjust_mass2")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "problem/adjust_mass1 and adjust_mass2 are no longer supported; "
+              << "trajectory masses are the physical Kerr-Schild masses"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   bbh.a1_buffer = pin->GetOrAddReal("problem", "a1_buffer", 0.0);
   bbh.a2_buffer = pin->GetOrAddReal("problem", "a2_buffer", 0.0);
   bbh.cutoff_floor = pin->GetOrAddReal("problem", "cutoff_floor", 1e-10);
@@ -239,6 +301,49 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   bbh.alpha_thr = pin->GetOrAddReal("problem", "alpha_thr", 0.6);
   bbh.radius_thr = pin->GetOrAddReal("problem", "radius_thr", 6.0);
+  bbh.use_traj_table = pin->GetOrAddBoolean(
+      "problem", "use_traj_table", false);
+  const std::string traj_file = pin->GetOrAddString("problem", "traj_file", "");
+  const Real analytic_vmax = bbh.om*bbh.sep*
+      std::max(bbh.q, 1.0)/(1.0 + bbh.q);
+  if (!bbh.use_traj_table && !(analytic_vmax < 1.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "analytic binary orbit has superluminal velocity"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (bbh.use_traj_table && bbh.spin_ramp) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "spin_ramp applies only to analytic orbits; put evolving chi "
+              << "directly in a trajectory table" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (bbh.use_traj_table) {
+    if (traj_file.empty()) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "use_traj_table=true requires problem/traj_file"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    LoadTrajectoryTable(traj_file);
+    const Real required_start = pmbp->pmesh->time;
+    const Real required_end = std::max(
+        required_start, pin->GetOrAddReal("time", "tlim", required_start));
+    const Real scale = std::max({1.0, std::abs(required_start),
+                                 std::abs(required_end)});
+    const Real tolerance = 64.0*std::numeric_limits<Real>::epsilon()*scale;
+    if (bbh_table.t.front() > required_start + tolerance ||
+        bbh_table.t.back() < required_end - tolerance) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "trajectory table [" << bbh_table.t.front()
+                << ", " << bbh_table.t.back() << "] does not cover required time ["
+                << required_start << ", " << required_end << "]" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  if (restart) return;
 
   // capture variables for the kernel
   auto &indcs = pmy_mesh_->mb_indcs;
@@ -339,8 +444,22 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
   /* Whether we load traj from a table or we compute analytical trajectories */
   find_traj_t_with_deriv(tt, bbh_traj_0, dbbh_traj_0);
-  find_traj_t(tt + bbh_.metric_fd_step, bbh_traj_p1);
-  find_traj_t(tt - bbh_.metric_fd_step, bbh_traj_m1);
+  Real hm = bbh_.metric_fd_step;
+  Real hp = bbh_.metric_fd_step;
+  if (bbh_.use_traj_table) {
+    hm = std::min(hm, std::max(tt - bbh_table.t.front(), 0.0));
+    hp = std::min(hp, std::max(bbh_table.t.back() - tt, 0.0));
+  }
+  if (hp > 0.0) {
+    find_traj_t(tt + hp, bbh_traj_p1);
+  } else {
+    for (int n = 0; n < NTRAJ; ++n) bbh_traj_p1[n] = bbh_traj_0[n];
+  }
+  if (hm > 0.0) {
+    find_traj_t(tt - hm, bbh_traj_m1);
+  } else {
+    for (int n = 0; n < NTRAJ; ++n) bbh_traj_m1[n] = bbh_traj_0[n];
+  }
 
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
@@ -364,7 +483,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
                                  dbbh_traj_0, bbh_);
     } else {
       numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0,
-                        bbh_traj_p1, bbh_);
+                        bbh_traj_p1, hm, hp, bbh_);
     }
 
     /* Transform 4D metric to 3+1 variables*/
@@ -398,26 +517,31 @@ KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
     const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ],
-    const bbh_pgen& bbh_) {
+    const Real hm, const Real hp, const bbh_pgen& bbh_) {
   struct four_metric met_m1;
   struct four_metric met_p1;
   const Real step = bbh_.metric_fd_step;
 
   // Time
-  get_metric(t-step, x, y, z, met_m1, nz_m1, bbh_);
-  get_metric(t+step, x, y, z, met_p1, nz_p1, bbh_);
   get_metric(t, x, y, z, outmet, nz_0, bbh_);
-
-  outmet.g_t.tt = D2(tt, step);
-  outmet.g_t.tx = D2(tx, step);
-  outmet.g_t.ty = D2(ty, step);
-  outmet.g_t.tz = D2(tz, step);
-  outmet.g_t.xx = D2(xx, step);
-  outmet.g_t.xy = D2(xy, step);
-  outmet.g_t.xz = D2(xz, step);
-  outmet.g_t.yy = D2(yy, step);
-  outmet.g_t.yz = D2(yz, step);
-  outmet.g_t.zz = D2(zz, step);
+  if (hm > 0.0) get_metric(t-hm, x, y, z, met_m1, nz_m1, bbh_);
+  if (hp > 0.0) get_metric(t+hp, x, y, z, met_p1, nz_p1, bbh_);
+#define DT_METRIC(comp) \
+  outmet.g_t.comp = (hm > 0.0 && hp > 0.0) ? \
+      (met_p1.g.comp - met_m1.g.comp)/(hm + hp) : \
+      ((hp > 0.0) ? (met_p1.g.comp - outmet.g.comp)/hp : \
+                    (outmet.g.comp - met_m1.g.comp)/hm)
+  DT_METRIC(tt);
+  DT_METRIC(tx);
+  DT_METRIC(ty);
+  DT_METRIC(tz);
+  DT_METRIC(xx);
+  DT_METRIC(xy);
+  DT_METRIC(xz);
+  DT_METRIC(yy);
+  DT_METRIC(yz);
+  DT_METRIC(zz);
+#undef DT_METRIC
 
   // X
   get_metric(t, x-step, y, z, met_m1, nz_0, bbh_);
@@ -672,419 +796,258 @@ int four_metric_to_three_metric(const struct four_metric &met,
   return 0;
 }
 
-// Function to calculate the position and velocity of m1 and m2 at time t
-void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
-  Real const r_BH1_0 = bbh.q/(1.0+bbh.q)*bbh.sep;
-  Real const r_BH2_0 = -bbh.sep/(1.0+bbh.q);
-  bbh_t[X1] = r_BH1_0*std::cos(bbh.om*t);
-  bbh_t[Y1] = r_BH1_0*std::sin(bbh.om*t);
-  bbh_t[Z1] = 0.0;
-  bbh_t[X2] = r_BH1_0*std::cos(bbh.om*t);
-  bbh_t[Y2] = r_BH2_0*std::sin(bbh.om*t);
-  bbh_t[Z2] = 0.0;
-  bbh_t[VX1] = -r_BH1_0*bbh.om*std::sin(bbh.om*t);
-  bbh_t[VY1] = r_BH1_0*bbh.om*std::cos(bbh.om*t);
-  bbh_t[VZ1] = 0.0;
-  bbh_t[VX2] = -r_BH2_0*bbh.om*std::sin(bbh.om*t);
-  bbh_t[VY2] = r_BH2_0*bbh.om*std::cos(bbh.om*t);
-  bbh_t[VZ2] = 0.0;
-  bbh_t[AX1] = bbh.a1*std::sin(bbh.th_a1)*std::cos(bbh.ph_a1);
-  bbh_t[AY1] = bbh.a1*std::sin(bbh.th_a1)*std::sin(bbh.ph_a1);
-  bbh_t[AZ1] = bbh.a1*std::cos(bbh.th_a1);
-  bbh_t[AX2] = bbh.a1*std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
-  bbh_t[AY2] = bbh.a1*std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
-  bbh_t[AZ2] = bbh.a1*std::cos(bbh.th_a2);
-  bbh_t[M1T] = 1.0/(bbh.q+1.0);
-  bbh_t[M2T] = 1.0 - bbh_t[M1T];
+bool SpinVectorWithinExtremality(const Real x, const Real y, const Real z) {
+  const Real magnitude2 = x*x + y*y + z*z;
+  return std::isfinite(magnitude2) && magnitude2 <= 1.0;
 }
 
-// Analytic derivative of the legacy trajectory above.  Keep this paired with
-// find_traj_t until the trajectory model is modernized in the next feature.
+Real SmoothRamp01(const Real time, const Real start, const Real timescale,
+                  Real *derivative) {
+  *derivative = 0.0;
+  if (time <= start) return 0.0;
+  if (time >= start + timescale) return 1.0;
+  const Real u = (time - start)/timescale;
+  *derivative = 6.0*u*(1.0 - u)/timescale;
+  return u*u*(3.0 - 2.0*u);
+}
+
+void LoadTrajectoryTable(const std::string &fname) {
+  std::ifstream input(fname);
+  if (!input.is_open()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "could not open trajectory file '" << fname << "'"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  bbh_table = bbh_traj_table();
+  std::string line;
+  std::size_t line_number = 0;
+  while (std::getline(input, line)) {
+    ++line_number;
+    const std::size_t first = line.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos || line[first] == '#') continue;
+    std::istringstream row(line);
+    Real value[21];
+    for (int n = 0; n < 21; ++n) {
+      if (!(row >> value[n]) || !std::isfinite(value[n])) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "invalid trajectory value in '" << fname
+                  << "' line " << line_number << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+    row >> std::ws;
+    if (!row.eof() && row.peek() != '#') {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "unexpected extra trajectory column in '" << fname
+                << "' line " << line_number << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    const Real velocity1_sq = SQR(value[15]) + SQR(value[16]) + SQR(value[17]);
+    const Real velocity2_sq = SQR(value[18]) + SQR(value[19]) + SQR(value[20]);
+    if (!(value[1] > 0.0) || !(value[2] > 0.0) ||
+        !(velocity1_sq < 1.0) || !(velocity2_sq < 1.0) ||
+        !SpinVectorWithinExtremality(value[9], value[10], value[11]) ||
+        !SpinVectorWithinExtremality(value[12], value[13], value[14])) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "trajectory masses must be positive, velocities "
+                << "subluminal, and |chi| <= 1 "
+                << "in '" << fname << "' line " << line_number << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    bbh_table.t.push_back(value[0]);
+    bbh_table.m1.push_back(value[1]);
+    bbh_table.m2.push_back(value[2]);
+    bbh_table.x1.push_back(value[3]);
+    bbh_table.y1.push_back(value[4]);
+    bbh_table.z1.push_back(value[5]);
+    bbh_table.x2.push_back(value[6]);
+    bbh_table.y2.push_back(value[7]);
+    bbh_table.z2.push_back(value[8]);
+    bbh_table.chix1.push_back(value[9]);
+    bbh_table.chiy1.push_back(value[10]);
+    bbh_table.chiz1.push_back(value[11]);
+    bbh_table.chix2.push_back(value[12]);
+    bbh_table.chiy2.push_back(value[13]);
+    bbh_table.chiz2.push_back(value[14]);
+    bbh_table.vx1.push_back(value[15]);
+    bbh_table.vy1.push_back(value[16]);
+    bbh_table.vz1.push_back(value[17]);
+    bbh_table.vx2.push_back(value[18]);
+    bbh_table.vy2.push_back(value[19]);
+    bbh_table.vz2.push_back(value[20]);
+  }
+  if (bbh_table.t.size() < 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "trajectory file must contain at least two rows"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (std::size_t n = 1; n < bbh_table.t.size(); ++n) {
+    if (!(bbh_table.t[n] > bbh_table.t[n - 1])) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "trajectory times must be strictly increasing"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if (global_variable::my_rank == 0) {
+    std::cout << "Loaded BBH trajectory table '" << fname << "' with "
+              << bbh_table.t.size() << " rows" << std::endl;
+  }
+}
+
+void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
+  Real dbbh_t[NTRAJ];
+  find_traj_t_with_deriv(t, bbh_t, dbbh_t);
+}
+
 void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ],
                             Real dbbh_t[NTRAJ]) {
-  find_traj_t(t, bbh_t);
-  const Real r1 = bbh.q/(1.0 + bbh.q)*bbh.sep;
-  const Real r2 = -bbh.sep/(1.0 + bbh.q);
-  const Real phase = bbh.om*t;
-  const Real c = std::cos(phase);
-  const Real s = std::sin(phase);
-  for (int n = 0; n < NTRAJ; ++n) dbbh_t[n] = 0.0;
-  dbbh_t[X1] = -r1*bbh.om*s;
-  dbbh_t[Y1] = r1*bbh.om*c;
-  dbbh_t[X2] = -r1*bbh.om*s;
-  dbbh_t[Y2] = r2*bbh.om*c;
-  dbbh_t[VX1] = -r1*SQR(bbh.om)*c;
-  dbbh_t[VY1] = -r1*SQR(bbh.om)*s;
-  dbbh_t[VX2] = -r2*SQR(bbh.om)*c;
-  dbbh_t[VY2] = -r2*SQR(bbh.om)*s;
-}
-
-KOKKOS_INLINE_FUNCTION
-void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
-                  Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_) {
-  /* Superposition components*/
-  Real KS1[NDIM][NDIM];
-  Real KS2[NDIM][NDIM];
-  Real J1[NDIM][NDIM];
-  Real J2[NDIM][NDIM];
-
-  /* Load trajectories */
-  Real xi1x = traj_array[X1];
-  Real xi1y = traj_array[Y1];
-  Real xi1z = traj_array[Z1];
-  Real xi2x = traj_array[X2];
-  Real xi2y = traj_array[Y2];
-  Real xi2z = traj_array[Z2];
-  Real v1x  = traj_array[VX1] + 1e-40;
-  Real v1y  = traj_array[VY1] + 1e-40;
-  Real v1z  = traj_array[VZ1] + 1e-40;
-  Real v2x =  traj_array[VX2] + 1e-40;
-  Real v2y =  traj_array[VY2] + 1e-40;
-  Real v2z =  traj_array[VZ2] + 1e-40;
-
-  Real v2  =  sqrt( v2x * v2x + v2y * v2y + v2z * v2z );
-  Real v1  =  sqrt( v1x * v1x + v1y * v1y + v1z * v1z );
-
-  Real a1x  = traj_array[AX1];
-  Real a1y  = traj_array[AY1];
-  Real a1z  = traj_array[AZ1];
-
-  Real a2x =  traj_array[AX2];
-  Real a2y =  traj_array[AY2];
-  Real a2z =  traj_array[AZ2];
-
-  Real m1_t = traj_array[M1T];
-  Real m2_t = traj_array[M2T];
-
-  Real a1_t = sqrt( a1x*a1x + a1y*a1y + a1z*a1z + 1e-40);
-  Real a2_t = sqrt( a2x*a2x + a2y*a2y + a2z*a2z + 1e-40);
-
-  /* Load coordinates */
-
-  Real oo1 = v1 * v1;
-  Real oo2 = oo1 * -1;
-  Real oo3 = 1 + oo2;
-  Real oo4 = sqrt(oo3);
-  Real oo5 = 1 / oo4;
-  Real oo6 = x * -1;
-  Real oo7 = oo6 + xi1x;
-  Real oo8 = v1x * oo7;
-  Real oo9 = y * -1;
-  Real oo10 = z * -1;
-  Real oo11 = v2 * v2;
-  Real oo12 = oo11 * -1;
-  Real oo13 = 1 + oo12;
-  Real oo14 = sqrt(oo13);
-  Real oo15 = 1 / oo14;
-  Real oo16 = oo6 + xi2x;
-  Real oo17 = v2x * oo16;
-  Real oo18 = xi1x * -1;
-  Real oo19 = 1 / oo1;
-  Real oo20 = -1 + oo4;
-  Real oo21 = xi1y * -1;
-  Real oo22 = xi1z * -1;
-  Real oo23 = xi2x * -1;
-  Real oo24 = 1 / oo11;
-  Real oo25 = -1 + oo14;
-  Real oo26 = xi2y * -1;
-  Real oo27 = xi2z * -1;
-  Real oo28 = xi1y * v1y;
-  Real oo29 = xi1z * v1z;
-  Real oo30 = v1y * (y * -1);
-  Real oo31 = v1z * (z * -1);
-  Real oo32 = oo28 + (oo29 + (oo30 + (oo31 + oo8)));
-  Real oo33 = xi2y * v2y;
-  Real oo34 = xi2z * v2z;
-  Real oo35 = v2y * (y * -1);
-  Real oo36 = v2z * (z * -1);
-  Real oo37 = oo17 + (oo33 + (oo34 + (oo35 + oo36)));
-  //Real x0BH1 = (oo8 + ((oo9 + xi1y) * v1y + (oo10 + xi1z) * v1z)) * oo5;
-  //Real x0BH2 = (oo17 + ((oo9 + xi2y) * v2y + (oo10 + xi2z) * v2z)) * oo15;
-  Real x1BH1 = (oo18 + x) - oo20 * (oo5 * (v1x * (((oo18 + x) * v1x + ((oo21 + y) * v1y +
-                                                   (oo22 + z) * v1z)) * oo19)));
-  Real x1BH2 = (oo23 + x) - oo24 * (oo25 * (v2x * (((oo23 + x) * v2x + ((oo26 + y) * v2y +
-                                                    (oo27 + z) * v2z)) * oo15)));
-  Real x2BH1 = oo21 + (oo20 * (oo32 * (oo5 * (v1y * oo19))) + y);
-  Real x2BH2 = oo26 + (oo24 * (oo25 * (oo37 * (v2y * oo15))) + y);
-  Real x3BH1 = oo22 + (oo20 * (oo32 * (oo5 * (v1z * oo19))) + z);
-  Real x3BH2 = oo27 + (oo24 * (oo25 * (oo37 * (v2z * oo15))) + z);
-
-
-  /* Adjust mass */
-  /* This is useful for reducing the effective mass of each BH */
-  /* Adjust by hand to get the correct irreducible mass of the BH */
-  Real a1 = a1_t * bbh_.adjust_mass1;
-  Real m1 = m1_t * bbh_.adjust_mass1;
-  Real a2 = a2_t * bbh_.adjust_mass2;
-  Real m2 = m2_t * bbh_.adjust_mass2;
-
-  //============================================//
-  // Regularize horizon and apply excision mask //
-  //============================================//
-
-  /* Define radius with respect to BH frame */
-  Real rBH1 = sqrt( x1BH1*x1BH1 + x2BH1*x2BH1 + x3BH1*x3BH1);
-  Real rBH2 = sqrt( x1BH2*x1BH2 + x2BH2*x2BH2 + x3BH2*x3BH2);
-
-  /* Define radius cutoff */
-  Real rBH1_Cutoff = fabs(a1) * ( 1.0 + bbh_.a1_buffer) + bbh_.cutoff_floor;
-  Real rBH2_Cutoff = fabs(a2) * ( 1.0 + bbh_.a2_buffer) + bbh_.cutoff_floor;
-
-  /* Apply excision */
-  if ((rBH1) < rBH1_Cutoff) {
-    if(x3BH1>0) {
-      x3BH1 = rBH1_Cutoff;
-    } else {
-      x3BH1 = -1.0*rBH1_Cutoff;
+  if (!bbh.use_traj_table) {
+    const Real r1 = bbh.q/(1.0 + bbh.q)*bbh.sep;
+    const Real r2 = -bbh.sep/(1.0 + bbh.q);
+    const Real phase = bbh.om*t;
+    const Real c = std::cos(phase);
+    const Real s = std::sin(phase);
+    const Real omega2 = bbh.om*bbh.om;
+    bbh_t[X1] = r1*c;
+    bbh_t[Y1] = r1*s;
+    bbh_t[Z1] = 0.0;
+    bbh_t[X2] = r2*c;
+    bbh_t[Y2] = r2*s;
+    bbh_t[Z2] = 0.0;
+    bbh_t[VX1] = -r1*bbh.om*s;
+    bbh_t[VY1] = r1*bbh.om*c;
+    bbh_t[VZ1] = 0.0;
+    bbh_t[VX2] = -r2*bbh.om*s;
+    bbh_t[VY2] = r2*bbh.om*c;
+    bbh_t[VZ2] = 0.0;
+    Real spin_factor = 1.0;
+    Real dspin_factor = 0.0;
+    if (bbh.spin_ramp) {
+      spin_factor = SmoothRamp01(t, bbh.spin_ramp_start_time,
+                                 bbh.spin_ramp_timescale, &dspin_factor);
     }
-  }
-  if ((rBH2) < rBH2_Cutoff) {
-    if(x3BH2>0) {
-      x3BH2 = rBH2_Cutoff;
-    } else {
-      x3BH2 = -1.0*rBH2_Cutoff;
-    }
+    const Real e1x = std::sin(bbh.th_a1)*std::cos(bbh.ph_a1);
+    const Real e1y = std::sin(bbh.th_a1)*std::sin(bbh.ph_a1);
+    const Real e1z = std::cos(bbh.th_a1);
+    const Real e2x = std::sin(bbh.th_a2)*std::cos(bbh.ph_a2);
+    const Real e2y = std::sin(bbh.th_a2)*std::sin(bbh.ph_a2);
+    const Real e2z = std::cos(bbh.th_a2);
+    bbh_t[AX1] = bbh.a1*spin_factor*e1x;
+    bbh_t[AY1] = bbh.a1*spin_factor*e1y;
+    bbh_t[AZ1] = bbh.a1*spin_factor*e1z;
+    bbh_t[AX2] = bbh.a2*spin_factor*e2x;
+    bbh_t[AY2] = bbh.a2*spin_factor*e2y;
+    bbh_t[AZ2] = bbh.a2*spin_factor*e2z;
+    bbh_t[M1T] = 1.0/(bbh.q + 1.0);
+    bbh_t[M2T] = 1.0 - bbh_t[M1T];
+    dbbh_t[X1] = bbh_t[VX1];
+    dbbh_t[Y1] = bbh_t[VY1];
+    dbbh_t[Z1] = 0.0;
+    dbbh_t[X2] = bbh_t[VX2];
+    dbbh_t[Y2] = bbh_t[VY2];
+    dbbh_t[Z2] = 0.0;
+    dbbh_t[VX1] = -omega2*bbh_t[X1];
+    dbbh_t[VY1] = -omega2*bbh_t[Y1];
+    dbbh_t[VZ1] = 0.0;
+    dbbh_t[VX2] = -omega2*bbh_t[X2];
+    dbbh_t[VY2] = -omega2*bbh_t[Y2];
+    dbbh_t[VZ2] = 0.0;
+    dbbh_t[AX1] = bbh.a1*dspin_factor*e1x;
+    dbbh_t[AY1] = bbh.a1*dspin_factor*e1y;
+    dbbh_t[AZ1] = bbh.a1*dspin_factor*e1z;
+    dbbh_t[AX2] = bbh.a2*dspin_factor*e2x;
+    dbbh_t[AY2] = bbh.a2*dspin_factor*e2y;
+    dbbh_t[AZ2] = bbh.a2*dspin_factor*e2z;
+    dbbh_t[M1T] = 0.0;
+    dbbh_t[M2T] = 0.0;
+    return;
   }
 
-  //=================//
-  //     Metric      //
-  //=================//
-  Real o1 = 1.4142135623730951;
-  Real o2 = 1 / o1;
-  Real o3 = a1x * a1x;
-  Real o4 = o3 * -1;
-  Real o5 = a1z * a1z;
-  Real o6 = o5 * -1;
-  Real o7 = a2x * a2x;
-  Real o8 = o7 * -1;
-  Real o9 = x1BH1 * x1BH1;
-  Real o10 = x2BH1 * x2BH1;
-  Real o11 = x3BH1 * x3BH1;
-  Real o12 = x1BH1 * a1x;
-  Real o13 = x2BH1 * a2x;
-  Real o14 = x3BH1 * a1z;
-  Real o15 = o12 + (o13 + o14);
-  Real o16 = o15 * o15;
-  Real o17 = o16 * 4;
-  Real o18 = o10 + (o11 + (o4 + (o6 + (o8 + o9))));
-  Real o19 = o18 * o18;
-  Real o20 = o17 + o19;
-  Real o21 = sqrt(o20);
-  Real o22 = o10 + (o11 + (o21 + (o4 + (o6 + (o8 + o9)))));
-  Real o23 = pow(o22, 1.5);
-  Real o24 = o22 * o22;
-  Real o25 = o24 * 0.25;
-  Real o26 = o16 + o25;
-  Real o27 = 1 / o26;
-  Real o28 = x2BH1 * a1z;
-  Real o29 = a2x * (x3BH1 * -1);
-  Real o30 = sqrt(o22);
-  Real o31 = 1 / o30;
-  Real o32 = o1 * (o15 * (o31 * a1x));
-  Real o33 = o30 * (x1BH1 * o2);
-  Real o34 = o28 + (o29 + (o32 + o33));
-  Real o35 = o22 * 0.5;
-  Real o36 = o3 + (o35 + (o5 + o7));
-  Real o37 = 1 / o36;
-  Real o38 = o2 * (o23 * (o27 * (o34 * (o37 * m1))));
-  Real o39 = a1z * (x1BH1 * -1);
-  Real o40 = x3BH1 * a1x;
-  Real o41 = o1 * (o15 * (o31 * a2x));
-  Real o42 = o30 * (x2BH1 * o2);
-  Real o43 = o39 + (o40 + (o41 + o42));
-  Real o44 = o2 * (o23 * (o27 * (o37 * (o43 * m1))));
-  Real o45 = x1BH1 * a2x;
-  Real o46 = a1x * (x2BH1 * -1);
-  Real o47 = o1 * (o15 * (o31 * a1z));
-  Real o48 = o30 * (x3BH1 * o2);
-  Real o49 = o45 + (o46 + (o47 + o48));
-  Real o50 = o2 * (o23 * (o27 * (o37 * (o49 * m1))));
-  Real o51 = o36 * o36;
-  Real o52 = 1 / o51;
-  Real o53 = o2 * (o23 * (o27 * (o34 * (o43 * (o52 * m1)))));
-  Real o54 = o2 * (o23 * (o27 * (o34 * (o49 * (o52 * m1)))));
-  Real o55 = o2 * (o23 * (o27 * (o43 * (o49 * (o52 * m1)))));
-  Real o56 = a2y * a2y;
-  Real o57 = o56 * -1;
-  Real o58 = a2z * a2z;
-  Real o59 = o58 * -1;
-  Real o60 = x1BH2 * x1BH2;
-  Real o61 = x2BH2 * x2BH2;
-  Real o62 = x3BH2 * x3BH2;
-  Real o63 = x1BH2 * a2x;
-  Real o64 = x2BH2 * a2y;
-  Real o65 = x3BH2 * a2z;
-  Real o66 = o63 + (o64 + o65);
-  Real o67 = o66 * o66;
-  Real o68 = o67 * 4;
-  Real o69 = o57 + (o59 + (o60 + (o61 + (o62 + o8))));
-  Real o70 = o69 * o69;
-  Real o71 = o68 + o70;
-  Real o72 = sqrt(o71);
-  Real o73 = o57 + (o59 + (o60 + (o61 + (o62 + (o72 + o8)))));
-  Real o74 = pow(o73, 1.5);
-  Real o75 = o73 * o73;
-  Real o76 = o75 * 0.25;
-  Real o77 = o67 + o76;
-  Real o78 = 1 / o77;
-  Real o79 = x2BH2 * a2z;
-  Real o80 = a2y * (x3BH2 * -1);
-  Real o81 = sqrt(o73);
-  Real o82 = 1 / o81;
-  Real o83 = o1 * (o66 * (o82 * a2x));
-  Real o84 = o81 * (x1BH2 * o2);
-  Real o85 = o79 + (o80 + (o83 + o84));
-  Real o86 = o73 * 0.5;
-  Real o87 = o56 + (o58 + (o7 + o86));
-  Real o88 = 1 / o87;
-  Real o89 = o2 * (o74 * (o78 * (o85 * (o88 * m2))));
-  Real o90 = a2z * (x1BH2 * -1);
-  Real o91 = x3BH2 * a2x;
-  Real o92 = o1 * (o66 * (o82 * a2y));
-  Real o93 = o81 * (x2BH2 * o2);
-  Real o94 = o90 + (o91 + (o92 + o93));
-  Real o95 = o2 * (o74 * (o78 * (o88 * (o94 * m2))));
-  Real o96 = x1BH2 * a2y;
-  Real o97 = a2x * (x2BH2 * -1);
-  Real o98 = o1 * (o66 * (o82 * a2z));
-  Real o99 = o81 * (x3BH2 * o2);
-  Real o100 = o96 + (o97 + (o98 + o99));
-  Real o101 = o100 * (o2 * (o74 * (o78 * (o88 * m2))));
-  Real o102 = o87 * o87;
-  Real o103 = 1 / o102;
-  Real o104 = o103 * (o2 * (o74 * (o78 * (o85 * (o94 * m2)))));
-  Real o105 = o100 * (o103 * (o2 * (o74 * (o78 * (o85 * m2)))));
-  Real o106 = o100 * (o103 * (o2 * (o74 * (o78 * (o94 * m2)))));
-  Real o107 = v1 * v1;
-  Real o108 = o107 * -1;
-  Real o109 = 1 + o108;
-  Real o110 = sqrt(o109);
-  Real o111 = 1 / o110;
-  Real o112 = o111 * (v1x * -1);
-  Real o113 = o111 * (v1y * -1);
-  Real o114 = o111 * (v1z * -1);
-  Real o115 = 1 / o107;
-  Real o116 = -1 + o111;
-  Real o117 = o116 * (v1x * (v1y * o115));
-  Real o118 = o116 * (v1x * (v1z * o115));
-  Real o119 = o116 * (v1y * (v1z * o115));
-  Real o120 = v2 * v2;
-  Real o121 = o120 * -1;
-  Real o122 = 1 + o121;
-  Real o123 = sqrt(o122);
-  Real o124 = 1 / o123;
-  Real o125 = o124 * (v2x * -1);
-  Real o126 = o124 * (v2y * -1);
-  Real o127 = o124 * (v2z * -1);
-  Real o128 = 1 / o120;
-  Real o129 = -1 + o124;
-  Real o130 = o129 * (v2x * (v2y * o128));
-  Real o131 = o129 * (v2x * (v2z * o128));
-  Real o132 = o129 * (v2y * (v2z * o128));
-  KS1[0][0] = o2 * (o23 * (o27 * m1));
-  KS1[0][1] = o38;
-  KS1[0][2] = o44;
-  KS1[0][3] = o50;
-  KS1[1][0] = o38;
-  KS1[1][1] = o2 * (o23 * (o27 * ((o34 * o34) * (o52 * m1))));
-  KS1[1][2] = o53;
-  KS1[1][3] = o54;
-  KS1[2][0] = o44;
-  KS1[2][1] = o53;
-  KS1[2][2] = o2 * (o23 * (o27 * ((o43 * o43) * (o52 * m1))));
-  KS1[2][3] = o55;
-  KS1[3][0] = o50;
-  KS1[3][1] = o54;
-  KS1[3][2] = o55;
-  KS1[3][3] = o2 * (o23 * (o27 * ((o49 * o49) * (o52 * m1))));
-  KS2[0][0] = o2 * (o74 * (o78 * m2));
-  KS2[0][1] = o89;
-  KS2[0][2] = o95;
-  KS2[0][3] = o101;
-  KS2[1][0] = o89;
-  KS2[1][1] = o103 * (o2 * (o74 * (o78 * ((o85 * o85) * m2))));
-  KS2[1][2] = o104;
-  KS2[1][3] = o105;
-  KS2[2][0] = o95;
-  KS2[2][1] = o104;
-  KS2[2][2] = o103 * (o2 * (o74 * (o78 * ((o94 * o94) * m2))));
-  KS2[2][3] = o106;
-  KS2[3][0] = o101;
-  KS2[3][1] = o105;
-  KS2[3][2] = o106;
-  KS2[3][3] = (o100 * o100) * (o103 * (o2 * (o74 * (o78 * m2))));
-  J1[0][0] = o111;
-  J1[0][1] = o112;
-  J1[0][2] = o113;
-  J1[0][3] = o114;
-  J1[1][0] = o112;
-  J1[1][1] = 1 + o116 * ((v1x * v1x) * o115);
-  J1[1][2] = o117;
-  J1[1][3] = o118;
-  J1[2][0] = o113;
-  J1[2][1] = o117;
-  J1[2][2] = 1 + o116 * ((v1y * v1y) * o115);
-  J1[2][3] = o119;
-  J1[3][0] = o114;
-  J1[3][1] = o118;
-  J1[3][2] = o119;
-  J1[3][3] = 1 + o116 * ((v1z * v1z) * o115);
-  J2[0][0] = o124;
-  J2[0][1] = o125;
-  J2[0][2] = o126;
-  J2[0][3] = o127;
-  J2[1][0] = o125;
-  J2[1][1] = 1 + o129 * ((v2x * v2x) * o128);
-  J2[1][2] = o130;
-  J2[1][3] = o131;
-  J2[2][0] = o126;
-  J2[2][1] = o130;
-  J2[2][2] = 1 + o129 * ((v2y * v2y) * o128);
-  J2[2][3] = o132;
-  J2[3][0] = o127;
-  J2[3][1] = o131;
-  J2[3][2] = o132;
-  J2[3][3] = 1 + o129 * ((v2z * v2z) * o128);
-  /* Initialize the flat part */
-  Real eta[4][4] = {
-    {-1,0,0,0},
-    {0,1,0,0},
-    {0,0,1,0},
-    {0,0,0,1}
+  const std::vector<Real> &times = bbh_table.t;
+  const Real span = times.back() - times.front();
+  const Real tolerance = 64.0*std::numeric_limits<Real>::epsilon()*
+      std::max({1.0, std::abs(times.front()), std::abs(times.back()), span});
+  if (t < times.front() - tolerance || t > times.back() + tolerance) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "requested time " << t
+              << " is outside the trajectory-table range" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::size_t i0;
+  std::size_t i1;
+  const std::size_t cached = std::min(bbh_table.active_segment,
+                                      times.size() - 2);
+  if (t >= times[cached] && t <= times[cached + 1]) {
+    i0 = cached;
+    i1 = cached + 1;
+  } else {
+    const auto upper = std::upper_bound(times.begin(), times.end(), t);
+    if (upper == times.begin()) {
+      i0 = 0;
+      i1 = 1;
+    } else if (upper == times.end()) {
+      i0 = times.size() - 2;
+      i1 = times.size() - 1;
+    } else {
+      i1 = static_cast<std::size_t>(upper - times.begin());
+      i0 = i1 - 1;
+    }
+    bbh_table.active_segment = i0;
+  }
+  const Real dt = times[i1] - times[i0];
+  const Real w = (t - times[i0])/dt;
+  const auto hermite = [w, dt](Real p0, Real v0, Real p1, Real v1,
+                                Real *position, Real *velocity,
+                                Real *acceleration) {
+    const Real w2 = w*w;
+    const Real w3 = w2*w;
+    *position = (2*w3 - 3*w2 + 1)*p0 + (w3 - 2*w2 + w)*dt*v0 +
+                (-2*w3 + 3*w2)*p1 + (w3 - w2)*dt*v1;
+    *velocity = ((6*w2 - 6*w)*p0 + (3*w2 - 4*w + 1)*dt*v0 +
+                 (-6*w2 + 6*w)*p1 + (3*w2 - 2*w)*dt*v1)/dt;
+    *acceleration = ((12*w - 6)*p0 + (6*w - 4)*dt*v0 +
+                     (-12*w + 6)*p1 + (6*w - 2)*dt*v1)/(dt*dt);
   };
-  for (int i=0; i < 4; i++ ) {
-    for (int j=0; j < 4; j++ ) {
-      gcov[i][j] = eta[i][j];
-    }
-  }
-
-  /* Load symmetric gcov (from chatGPT3)*/
-  for (int i = 0; i < 4; ++i) {
-    for (int j = i; j < 4; ++j) {
-      Real sum = 0.0;
-      for (int m = 0; m < 4; ++m) {
-        Real term1 = J2[m][i];
-        Real term2 = J1[m][i];
-        for (int n = 0; n < 4; ++n) {
-          Real term3 = J2[n][j];
-          Real term4 = J1[n][j];
-
-          sum += (term1 * term3 * KS2[m][n] + term2 * term4 * KS1[m][n]);
-        }
-      }
-
-      gcov[i][j] += sum;
-      gcov[j][i] = gcov[i][j];
-    }
-  }
-
-  return;
+  hermite(bbh_table.x1[i0], bbh_table.vx1[i0], bbh_table.x1[i1],
+          bbh_table.vx1[i1], &bbh_t[X1], &bbh_t[VX1], &dbbh_t[VX1]);
+  hermite(bbh_table.y1[i0], bbh_table.vy1[i0], bbh_table.y1[i1],
+          bbh_table.vy1[i1], &bbh_t[Y1], &bbh_t[VY1], &dbbh_t[VY1]);
+  hermite(bbh_table.z1[i0], bbh_table.vz1[i0], bbh_table.z1[i1],
+          bbh_table.vz1[i1], &bbh_t[Z1], &bbh_t[VZ1], &dbbh_t[VZ1]);
+  hermite(bbh_table.x2[i0], bbh_table.vx2[i0], bbh_table.x2[i1],
+          bbh_table.vx2[i1], &bbh_t[X2], &bbh_t[VX2], &dbbh_t[VX2]);
+  hermite(bbh_table.y2[i0], bbh_table.vy2[i0], bbh_table.y2[i1],
+          bbh_table.vy2[i1], &bbh_t[Y2], &bbh_t[VY2], &dbbh_t[VY2]);
+  hermite(bbh_table.z2[i0], bbh_table.vz2[i0], bbh_table.z2[i1],
+          bbh_table.vz2[i1], &bbh_t[Z2], &bbh_t[VZ2], &dbbh_t[VZ2]);
+  dbbh_t[X1] = bbh_t[VX1];
+  dbbh_t[Y1] = bbh_t[VY1];
+  dbbh_t[Z1] = bbh_t[VZ1];
+  dbbh_t[X2] = bbh_t[VX2];
+  dbbh_t[Y2] = bbh_t[VY2];
+  dbbh_t[Z2] = bbh_t[VZ2];
+  const auto linear = [w](Real a, Real b) { return (1.0 - w)*a + w*b; };
+  const auto slope = [dt](Real a, Real b) { return (b - a)/dt; };
+  const auto interpolate = [&](const std::vector<Real> &field, int index) {
+    bbh_t[index] = linear(field[i0], field[i1]);
+    dbbh_t[index] = slope(field[i0], field[i1]);
+  };
+  interpolate(bbh_table.chix1, AX1);
+  interpolate(bbh_table.chiy1, AY1);
+  interpolate(bbh_table.chiz1, AZ1);
+  interpolate(bbh_table.chix2, AX2);
+  interpolate(bbh_table.chiy2, AY2);
+  interpolate(bbh_table.chiz2, AZ2);
+  interpolate(bbh_table.m1, M1T);
+  interpolate(bbh_table.m2, M2T);
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION T LegacyBoostQ(const T v2, const T gamma) {
-  // The legacy evaluator adds 1e-40 to every velocity component, so v2 is
-  // nonzero.  The series also makes the AD path well behaved as v -> 0.
+KOKKOS_INLINE_FUNCTION T BoostGammaMinusOneOverV2(const T v2, const T gamma) {
+  // This series avoids the removable 0/0 singularity as v -> 0.
   if (value_of(v2) < 1.0e-12) {
     return T(0.5) + T(0.375)*v2 + T(0.3125)*v2*v2;
   }
@@ -1092,7 +1055,7 @@ KOKKOS_INLINE_FUNCTION T LegacyBoostQ(const T v2, const T gamma) {
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION void LegacyBoostedCoordinates(
+KOKKOS_INLINE_FUNCTION void BoostedCoordinates(
     const T x, const T y, const T z, const T x0, const T y0, const T z0,
     const T vx, const T vy, const T vz, T *xbh, T *ybh, T *zbh) {
   const T dx = x - x0;
@@ -1100,7 +1063,7 @@ KOKKOS_INLINE_FUNCTION void LegacyBoostedCoordinates(
   const T dz = z - z0;
   const T v2 = vx*vx + vy*vy + vz*vz;
   const T gamma = T(1.0)/metric_sqrt(T(1.0) - v2);
-  const T q = LegacyBoostQ(v2, gamma);
+  const T q = BoostGammaMinusOneOverV2(v2, gamma);
   const T vdotx = vx*dx + vy*dy + vz*dz;
   *xbh = dx + q*vx*vdotx;
   *ybh = dy + q*vy*vdotx;
@@ -1108,11 +1071,11 @@ KOKKOS_INLINE_FUNCTION void LegacyBoostedCoordinates(
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION void LegacyBoostJacobian(
+KOKKOS_INLINE_FUNCTION void BuildBoostJacobian(
     const T vx, const T vy, const T vz, T jac[NDIM][NDIM]) {
   const T v2 = vx*vx + vy*vy + vz*vz;
   const T gamma = T(1.0)/metric_sqrt(T(1.0) - v2);
-  const T q = LegacyBoostQ(v2, gamma);
+  const T q = BoostGammaMinusOneOverV2(v2, gamma);
   for (int a = 0; a < NDIM; ++a) {
     for (int b = 0; b < NDIM; ++b) jac[a][b] = T(0.0);
   }
@@ -1135,7 +1098,7 @@ KOKKOS_INLINE_FUNCTION void LegacyBoostJacobian(
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION void LegacyKerrSchildPerturbation(
+KOKKOS_INLINE_FUNCTION void KerrSchildPerturbation(
     const T x, const T y, const T z, const T ax, const T ay, const T az,
     const T mass, T ks[NDIM][NDIM]) {
   const T root2 = T(1.4142135623730951);
@@ -1168,7 +1131,7 @@ KOKKOS_INLINE_FUNCTION void LegacyKerrSchildPerturbation(
 }
 
 template <typename T>
-KOKKOS_INLINE_FUNCTION void AddLegacyHole(
+KOKKOS_INLINE_FUNCTION void AddBoostedHole(
     const T ks[NDIM][NDIM], const T jac[NDIM][NDIM],
     T gcov[NDIM][NDIM]) {
   for (int a = 0; a < NDIM; ++a) {
@@ -1185,44 +1148,37 @@ KOKKOS_INLINE_FUNCTION void AddLegacyHole(
   }
 }
 
-// Compact algebraic form of the existing generated metric, used only to
-// differentiate it.  It deliberately retains the legacy BH1 spin-component
-// mapping and adjust_mass semantics; those are audited and corrected in the
-// trajectory/spin feature rather than changing the production metric here.
 template <typename T>
-KOKKOS_INLINE_FUNCTION void LegacySuperposedBBHForAD(
+KOKKOS_INLINE_FUNCTION void SuperposedBBHTemplate(
     const T x, const T y, const T z, T gcov[NDIM][NDIM],
     const T tr[NTRAJ], const bbh_pgen& b) {
-  const T v1x = tr[VX1] + T(1e-40);
-  const T v1y = tr[VY1] + T(1e-40);
-  const T v1z = tr[VZ1] + T(1e-40);
-  const T v2x = tr[VX2] + T(1e-40);
-  const T v2y = tr[VY2] + T(1e-40);
-  const T v2z = tr[VZ2] + T(1e-40);
-  const T a1x = tr[AX1];
-  const T a1y = tr[AY1];
-  const T a1z = tr[AZ1];
-  const T a2x = tr[AX2];
-  const T a2y = tr[AY2];
-  const T a2z = tr[AZ2];
-  const T mass1 = tr[M1T]*b.adjust_mass1;
-  const T mass2 = tr[M2T]*b.adjust_mass2;
+  const T v1x = tr[VX1];
+  const T v1y = tr[VY1];
+  const T v1z = tr[VZ1];
+  const T v2x = tr[VX2];
+  const T v2y = tr[VY2];
+  const T v2z = tr[VZ2];
+  const T mass1 = tr[M1T];
+  const T mass2 = tr[M2T];
+  // Trajectory spins are dimensionless chi; the Kerr parameter is a=M*chi.
+  const T a1x = tr[AX1]*mass1;
+  const T a1y = tr[AY1]*mass1;
+  const T a1z = tr[AZ1]*mass1;
+  const T a2x = tr[AX2]*mass2;
+  const T a2y = tr[AY2]*mass2;
+  const T a2z = tr[AZ2]*mass2;
 
   T x1, y1, z1, x2, y2, z2;
-  LegacyBoostedCoordinates(x, y, z, tr[X1], tr[Y1], tr[Z1],
+  BoostedCoordinates(x, y, z, tr[X1], tr[Y1], tr[Z1],
                            v1x, v1y, v1z, &x1, &y1, &z1);
-  LegacyBoostedCoordinates(x, y, z, tr[X2], tr[Y2], tr[Z2],
+  BoostedCoordinates(x, y, z, tr[X2], tr[Y2], tr[Z2],
                            v2x, v2y, v2z, &x2, &y2, &z2);
-  const T radius1 = metric_sqrt(x1*x1 + y1*y1 + z1*z1);
-  const T radius2 = metric_sqrt(x2*x2 + y2*y2 + z2*z2);
+  const T radius1 = metric_norm3(x1, y1, z1);
+  const T radius2 = metric_norm3(x2, y2, z2);
   const T spin1_norm = metric_sqrt(a1x*a1x + a1y*a1y + a1z*a1z + T(1e-40));
   const T spin2_norm = metric_sqrt(a2x*a2x + a2y*a2y + a2z*a2z + T(1e-40));
-  const T cutoff1 = metric_sqrt((spin1_norm*b.adjust_mass1)*
-                                (spin1_norm*b.adjust_mass1))*
-                    (T(1.0) + b.a1_buffer) + b.cutoff_floor;
-  const T cutoff2 = metric_sqrt((spin2_norm*b.adjust_mass2)*
-                                (spin2_norm*b.adjust_mass2))*
-                    (T(1.0) + b.a2_buffer) + b.cutoff_floor;
+  const T cutoff1 = spin1_norm*(T(1.0) + b.a1_buffer) + b.cutoff_floor;
+  const T cutoff2 = spin2_norm*(T(1.0) + b.a2_buffer) + b.cutoff_floor;
   if (value_of(radius1) < value_of(cutoff1)) {
     z1 = (value_of(z1) > 0.0) ? cutoff1 : -cutoff1;
   }
@@ -1232,18 +1188,24 @@ KOKKOS_INLINE_FUNCTION void LegacySuperposedBBHForAD(
 
   T ks1[NDIM][NDIM], ks2[NDIM][NDIM];
   T jac1[NDIM][NDIM], jac2[NDIM][NDIM];
-  // The generated legacy formula substitutes a2x for BH1's y spin.
-  LegacyKerrSchildPerturbation(x1, y1, z1, a1x, a2x, a1z, mass1, ks1);
-  LegacyKerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, mass2, ks2);
-  LegacyBoostJacobian(v1x, v1y, v1z, jac1);
-  LegacyBoostJacobian(v2x, v2y, v2z, jac2);
+  KerrSchildPerturbation(x1, y1, z1, a1x, a1y, a1z, mass1, ks1);
+  KerrSchildPerturbation(x2, y2, z2, a2x, a2y, a2z, mass2, ks2);
+  BuildBoostJacobian(v1x, v1y, v1z, jac1);
+  BuildBoostJacobian(v2x, v2y, v2z, jac2);
   for (int a = 0; a < NDIM; ++a) {
     for (int bidx = 0; bidx < NDIM; ++bidx) {
       gcov[a][bidx] = (a == bidx) ? ((a == 0) ? T(-1.0) : T(1.0)) : T(0.0);
     }
   }
-  AddLegacyHole(ks1, jac1, gcov);
-  AddLegacyHole(ks2, jac2, gcov);
+  AddBoostedHole(ks1, jac1, gcov);
+  AddBoostedHole(ks2, jac2, gcov);
+}
+
+KOKKOS_INLINE_FUNCTION void SuperposedBBH(
+    const Real time, const Real x, const Real y, const Real z,
+    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_) {
+  (void)time;
+  SuperposedBBHTemplate(x, y, z, gcov, traj_array, bbh_);
 }
 
 KOKKOS_INLINE_FUNCTION void FillMetricDerivative(
@@ -1272,7 +1234,7 @@ KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
     trd[n] = dual1_real(tr[n], direction == 0 ? dtr[n] : 0.0);
   }
   dual1_real gcov[NDIM][NDIM];
-  LegacySuperposedBBHForAD(xd, yd, zd, gcov, trd, b);
+  SuperposedBBHTemplate(xd, yd, zd, gcov, trd, b);
   FillMetricDerivative(gcov, dg);
 }
 

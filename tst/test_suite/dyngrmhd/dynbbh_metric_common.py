@@ -16,9 +16,10 @@ KEYS = (
     "adm_alpha", "adm_betax", "adm_betay", "adm_betaz",
 )
 CASES = (
-    {"name": "torus", "y": 0.0, "z": 0.0, "flags": []},
+    {"name": "torus", "y": 0.0, "z": 0.0, "flags": [], "ramp": False},
     {
         "name": "strong", "y": 5.0, "z": 3.0,
+        "ramp": True,
         "flags": [
             "mesh/nx1=4", "mesh/x1min=15.0", "mesh/x1max=27.0",
             "mesh/nx2=5", "mesh/x2min=2.5", "mesh/x2max=7.5",
@@ -30,27 +31,29 @@ CASES = (
 )
 
 
-def trajectory(t):
-    """Legacy analytic state; feature 2 deliberately replaces its known defects."""
-    sep, q = 25.0, 1.0
+def trajectory(t, ramp=False):
+    """Independent analytic binary state using dimensionless spins."""
+    sep, q = 25.0, 2.0
     omega = sep**-1.5
     r1, r2 = q/(1.0 + q)*sep, -sep/(1.0 + q)
     c, s = math.cos(omega*t), math.sin(omega*t)
-    a1 = 0.93
+    a1, a2 = 0.93, 0.88
     th1, ph1 = math.radians(37.0), math.radians(123.0)
     th2, ph2 = math.radians(71.0), math.radians(-41.0)
+    spin_factor = 1.0
+    if ramp:
+        u = min(max((t + 50.0)/100.0, 0.0), 1.0)
+        spin_factor = u*u*(3.0 - 2.0*u)
     return {
         "p1": np.array([r1*c, r1*s, 0.0]),
-        # The x2=r1*c defect is intentionally the current baseline here.
-        "p2": np.array([r1*c, r2*s, 0.0]),
+        "p2": np.array([r2*c, r2*s, 0.0]),
         "v1": np.array([-r1*omega*s, r1*omega*c, 0.0]),
         "v2": np.array([-r2*omega*s, r2*omega*c, 0.0]),
-        "a1": a1*np.array([math.sin(th1)*math.cos(ph1),
-                            math.sin(th1)*math.sin(ph1), math.cos(th1)]),
-        # The baseline also uses a1 as BH2's spin magnitude.
-        "a2": a1*np.array([math.sin(th2)*math.cos(ph2),
-                            math.sin(th2)*math.sin(ph2), math.cos(th2)]),
-        "m1": 0.5, "m2": 0.5,
+        "a1": spin_factor*a1*np.array([math.sin(th1)*math.cos(ph1),
+                                        math.sin(th1)*math.sin(ph1), math.cos(th1)]),
+        "a2": spin_factor*a2*np.array([math.sin(th2)*math.cos(ph2),
+                                        math.sin(th2)*math.sin(ph2), math.cos(th2)]),
+        "m1": 1.0/(q + 1.0), "m2": q/(q + 1.0),
     }
 
 
@@ -92,29 +95,28 @@ def ks_perturbation(point, spin, mass):
     return fac*np.outer(null, null)
 
 
-def metric(t, x, y, z):
-    tr = trajectory(t)
+def metric(t, x, y, z, ramp=False):
+    tr = trajectory(t, ramp=ramp)
     point = np.array([x, y, z])
     gcov = np.diag([-1.0, 1.0, 1.0, 1.0])
-    # The generated baseline substitutes a2x for the y component of BH1 spin.
-    spin1 = np.array([tr["a1"][0], tr["a2"][0], tr["a1"][2]])
-    for suffix, spin in (("1", spin1), ("2", tr["a2"])):
-        velocity = tr[f"v{suffix}"] + 1.0e-40
+    for suffix in ("1", "2"):
+        velocity = tr[f"v{suffix}"]
         local = boosted_position(point, tr[f"p{suffix}"], velocity)
-        ks = ks_perturbation(local, spin, tr[f"m{suffix}"])
+        mass = tr[f"m{suffix}"]
+        ks = ks_perturbation(local, mass*tr[f"a{suffix}"], mass)
         jac = boost_jacobian(velocity)
         gcov += jac.T @ ks @ jac
     return gcov
 
 
-def adm_reference(t, x, y, z):
+def adm_reference(t, x, y, z, ramp=False):
     h = FD_STEP
-    gcov = metric(t, x, y, z)
+    gcov = metric(t, x, y, z, ramp=ramp)
     deriv = (
-        (metric(t+h, x, y, z) - metric(t-h, x, y, z))/(2*h),
-        (metric(t, x+h, y, z) - metric(t, x-h, y, z))/(2*h),
-        (metric(t, x, y+h, z) - metric(t, x, y-h, z))/(2*h),
-        (metric(t, x, y, z+h) - metric(t, x, y, z-h))/(2*h),
+        (metric(t+h, x, y, z, ramp) - metric(t-h, x, y, z, ramp))/(2*h),
+        (metric(t, x+h, y, z, ramp) - metric(t, x-h, y, z, ramp))/(2*h),
+        (metric(t, x, y+h, z, ramp) - metric(t, x, y-h, z, ramp))/(2*h),
+        (metric(t, x, y, z+h, ramp) - metric(t, x, y, z-h, ramp))/(2*h),
     )
     gamma = gcov[1:, 1:]
     invgamma = np.linalg.inv(gamma)
@@ -144,18 +146,36 @@ def adm_reference(t, x, y, z):
     }
 
 
-def run_case(method, case, step=FD_STEP):
-    basename = f"dynbbh_metric_{case['name']}_{method}_{step:.0e}"
+def write_trajectory_table(path, case):
+    rows = []
+    for time in (-1.0e-3, 0.0, 1.0e-3):
+        tr = trajectory(time, ramp=case["ramp"])
+        rows.append([time, tr["m1"], tr["m2"], *tr["p1"], *tr["p2"],
+                     *tr["a1"], *tr["a2"], *tr["v1"], *tr["v2"]])
+    path.write_text("\n".join(" ".join(f"{v:.17e}" for v in row)
+                              for row in rows) + "\n", encoding="utf-8")
+
+
+def run_case(method, case, step=FD_STEP, use_table=False):
+    mode = "table" if use_table else "analytic"
+    basename = f"dynbbh_metric_{case['name']}_{mode}_{method}_{step:.0e}"
     args = ["./athena", "-i", INPUT_FILE, f"job/basename={basename}",
             f"problem/metric_derivative={method}",
             f"problem/metric_fd_step={step:.17e}"] + case["flags"]
+    if use_table:
+        table = Path(f"{basename}.traj").resolve()
+        write_trajectory_table(table, case)
+        args += ["problem/use_traj_table=true", f"problem/traj_file={table}"]
+    elif case["ramp"]:
+        args += ["problem/spin_ramp=true", "problem/spin_ramp_start_time=-50.0",
+                 "problem/spin_ramp_timescale=100.0"]
     subprocess.check_call(args)
     return athena_read.tab(Path("tab") / f"{basename}.adm.00000.tab")
 
 
 def check_reference(data, case):
     for n, x in enumerate(data["x1v"]):
-        reference = adm_reference(0.0, float(x), case["y"], case["z"])
+        reference = adm_reference(0.0, float(x), case["y"], case["z"], case["ramp"])
         for key, expected in reference.items():
             atol = 3.0e-8 if not key.startswith("adm_K") else 5.0e-7
             assert np.isclose(data[key][n], expected, rtol=8.0e-7, atol=atol), (
@@ -164,12 +184,14 @@ def check_reference(data, case):
 
 def run_regression_suite():
     for case in CASES:
-        fd = run_case("finite_difference", case)
-        ad = run_case("ad", case)
-        check_reference(fd, case)
-        check_reference(ad, case)
-        for key in KEYS:
-            np.testing.assert_allclose(ad[key], fd[key], rtol=8.0e-7, atol=5.0e-9)
+        for use_table in (False, True):
+            fd = run_case("finite_difference", case, use_table=use_table)
+            ad = run_case("ad", case, use_table=use_table)
+            check_reference(fd, case)
+            check_reference(ad, case)
+            for key in KEYS:
+                np.testing.assert_allclose(ad[key], fd[key], rtol=8.0e-7,
+                                           atol=5.0e-9)
 
 
 def run_fd_convergence():
