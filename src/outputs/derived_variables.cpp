@@ -12,6 +12,8 @@
 //!   - z-component of current density Jz  [non-relativistic]
 //!   - magnitude of current density J^2  [non-relativistic]
 
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
@@ -54,6 +56,21 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // derived variable index
   int &i_dv = out_params.i_derived;
   int &n_dv = out_params.n_derived;
+  const auto ensure_derived_storage = [&](const char *diagnostic, int ncomp) {
+    if (n_dv < i_dv + ncomp) {
+      std::cerr << "### FATAL ERROR: derived-variable allocation for " << diagnostic
+                << " has " << n_dv << " components but needs at least "
+                << i_dv + ncomp << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (derived_var.extent(0) != static_cast<std::size_t>(nmb) ||
+        derived_var.extent(1) != static_cast<std::size_t>(n_dv) ||
+        derived_var.extent(2) != static_cast<std::size_t>(n3) ||
+        derived_var.extent(3) != static_cast<std::size_t>(n2) ||
+        derived_var.extent(4) != static_cast<std::size_t>(n1)) {
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    }
+  };
 
   // temperature = pressure / density
   if (name.compare("temperature") == 0) {
@@ -1216,9 +1233,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // 3-5: EM    Angular Momentum (Lx, Ly, Lz)
   if (name.compare("angular_momentum") == 0) {
     int n_comp = 6;
-    if (derived_var.extent(4) <= 1) {
-      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
-    }
+    ensure_derived_storage("angular_momentum", n_comp);
 
     auto dv   = derived_var;
     auto &adm = pm->pmb_pack->padm->adm;
@@ -1227,6 +1242,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     // Gamma-law EOS
     Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    if (!(gamma_gas > 1.0) || !std::isfinite(gamma_gas)) {
+      std::cerr << "### FATAL ERROR: angular_momentum requires a finite gamma-law "
+                << "adiabatic index greater than one" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
 
     par_for("angular_momentum", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1242,7 +1262,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // det(gamma), sqrt(gamma)
       Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
                                   g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
-      if (detg <= 0.0) {
+      if (!(detg > 0.0) || !Kokkos::isfinite(detg)) {
         for (int n = 0; n < n_comp; ++n) {
           dv(m, i_dv+n, k, j, i) = 0.0;
         }
@@ -1273,6 +1293,18 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         bcc(m, 1, k, j, i),
         bcc(m, 2, k, j, i)
       };
+      bool valid_primitives = rho > 0.0 && pres >= 0.0 &&
+          Kokkos::isfinite(rho) && Kokkos::isfinite(pres);
+      for (int n = 0; n < 3; ++n) {
+        valid_primitives = valid_primitives && Kokkos::isfinite(prim_Wv_u[n]) &&
+            Kokkos::isfinite(B_tilde_u[n]);
+      }
+      if (!valid_primitives) {
+        for (int n = 0; n < n_comp; ++n) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+        return;
+      }
 
       // --- 3. Eulerian velocity and magnetic field ---
       Real W, v_u[3], v_d[3];
@@ -1325,6 +1357,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         (x3v * S_em_d[0] - x1v * S_em_d[2]) * sqrt_gamma;
       dv(m, i_dv+5, k, j, i) =
         (x1v * S_em_d[1] - x2v * S_em_d[0]) * sqrt_gamma;
+      for (int n = 0; n < n_comp; ++n) {
+        if (!Kokkos::isfinite(dv(m, i_dv+n, k, j, i))) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+      }
     });
     i_dv += n_comp;
   }
@@ -1347,8 +1384,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // *non-densitized* (no sqrt(gamma)); we densitize only at the end.
   if (name.compare("torque") == 0) {
     int n_comp = 3;
-    if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
+    ensure_derived_storage("torque", n_comp);
+    if (ng < 3) {
+      std::cerr << "### FATAL ERROR: torque uses the Dx<4> stencil and requires "
+                << "mesh/nghost >= 3" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
 
     auto dv    = derived_var;
     auto &adm  = pm->pmb_pack->padm->adm;
@@ -1356,6 +1397,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto &bcc  = pm->pmb_pack->pmhd->bcc0;
 
     Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+    if (!(gamma_gas > 1.0) || !std::isfinite(gamma_gas)) {
+      std::cerr << "### FATAL ERROR: torque requires a finite gamma-law adiabatic "
+                << "index greater than one" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
 
     par_for("torque", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1379,7 +1425,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                                   g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
 
       // Guard against bad metric
-      if (detg <= 0.0) {
+      if (!(detg > 0.0) || !Kokkos::isfinite(detg)) {
         dv(m,i_dv+0,k,j,i) = 0.0;
         dv(m,i_dv+1,k,j,i) = 0.0;
         dv(m,i_dv+2,k,j,i) = 0.0;
@@ -1437,6 +1483,19 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         bcc(m, 1, k, j, i),
         bcc(m, 2, k, j, i)
       };
+      bool valid_primitives = rho > 0.0 && pres >= 0.0 &&
+          Kokkos::isfinite(rho) && Kokkos::isfinite(pres) &&
+          Kokkos::isfinite(alpha);
+      for (int n = 0; n < 3; ++n) {
+        valid_primitives = valid_primitives && Kokkos::isfinite(prim_Wv_u[n]) &&
+            Kokkos::isfinite(B_tilde_u[n]);
+      }
+      if (!valid_primitives) {
+        for (int n = 0; n < n_comp; ++n) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+        return;
+      }
 
       Real W, v_u[3], v_d[3];
       ValenciaPrimsToEulerianVelocity(prim_Wv_u, g_dd_1d, W, v_u, v_d);
@@ -1544,6 +1603,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,i_dv+0,k,j,i) += sqrt_gamma * miss[0];
       dv(m,i_dv+1,k,j,i) += sqrt_gamma * miss[1];
       dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
+      for (int n = 0; n < n_comp; ++n) {
+        if (!Kokkos::isfinite(dv(m, i_dv+n, k, j, i))) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+      }
     });
     i_dv += n_comp;
   }

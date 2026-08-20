@@ -63,3 +63,9 @@ DynGRMHD objects and assume the gamma-law EOS used by this problem.  Primitive
 velocities are interpreted as `W v^i`; cell-centered magnetic fields are
 interpreted as the densitized `sqrt(gamma) B^i` representation used by
 DynGRMHD.
+
+Torque uses the current `Dx<4>` stencil and therefore requires at least three
+ghost zones.  Cells with a non-finite or non-positive spatial determinant, or
+with invalid primitive state, are written as zero rather than NaN; the
+simulation's floor/event diagnostics should be consulted when this occurs.
+These vector-valued diagnostics cannot be used directly as scalar PDF axes.

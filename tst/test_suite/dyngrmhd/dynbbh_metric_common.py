@@ -274,3 +274,14 @@ def run_volume_diagnostics_check():
     # The nonaxisymmetric moving-binary metric supplies a small but resolved
     # gravitational torque even for the pressure-floor atmosphere.
     assert np.max(np.abs(torque)) > 1.0e-16, torque
+
+
+def run_diagnostic_failure_checks():
+    """Require a clear failure for unsupported multicomponent PDF axes."""
+    result = subprocess.run([
+        "./athena", "-i", INPUT_FILE, "job/basename=dynbbh_bad_diagnostic_pdf",
+        "output1/file_type=pdf", "output1/variable=angular_momentum",
+    ], check=False, capture_output=True, text=True)
+    message = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "multicomponent angular_momentum and torque" in message, message

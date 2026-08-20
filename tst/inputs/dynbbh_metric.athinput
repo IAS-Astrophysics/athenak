@@ -108,6 +108,12 @@ data_format = %.17e
 dt = 1.0
 slice_x2 = 0.0
 slice_x3 = 0.0
+# These are ignored for tabular output but allow the hardening regression to
+# switch this block to PDF output from the command line.
+bin_min = 0.0
+bin_max = 1.0
+nbin = 8
+logscale = false
 
 <output2>
 file_type = hst

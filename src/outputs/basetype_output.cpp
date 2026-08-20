@@ -160,12 +160,36 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << "Output of Tmunu variable requested in <output> block '"
        << out_params.block_name << "' but no Tmunu object has been constructed."
        << std::endl << "Input file is likely missing a <adm> block" << std::endl;
+    exit(EXIT_FAILURE);
   }
   if ((ivar>=151) && (ivar<153) && (pm->pmb_pack->ppart == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  const auto is_dynbbh_diagnostic = [](const std::string &variable) {
+    return variable == "angular_momentum" || variable == "torque";
+  };
+  const bool diagnostic_requested = is_dynbbh_diagnostic(out_params.variable) ||
+      (out_params.file_type == "pdf" && out_params.nbin2 > 1 &&
+       is_dynbbh_diagnostic(out_params.variable_2));
+  if (diagnostic_requested &&
+      (pm->pmb_pack->padm == nullptr || pm->pmb_pack->pdyngr == nullptr ||
+       pm->pmb_pack->pmhd == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "DynGRMHD angular-momentum and torque outputs require ADM, DynGRMHD, "
+       << "and MHD objects in <output> block '" << out_params.block_name << "'."
+       << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (diagnostic_requested && out_params.file_type == "pdf") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "The multicomponent angular_momentum and torque variables cannot be "
+       << "used directly as scalar PDF axes in <output> block '"
+       << out_params.block_name << "'." << std::endl;
     exit(EXIT_FAILURE);
   }
 
