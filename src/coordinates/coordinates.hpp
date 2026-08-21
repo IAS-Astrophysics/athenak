@@ -22,7 +22,8 @@ struct EOS_Data;
 enum class ExcisionScheme {
   fixed,
   lapse,
-  puncture
+  puncture,
+  horizon
 };
 
 KOKKOS_INLINE_FUNCTION
@@ -95,6 +96,9 @@ struct CoordData {
   Real smooth_excise_temp_ceil;     // optional hard p/rho ceiling inside smooth region
   bool smooth_excise_inflow;        // enforce minimum puncture-frame radial inflow
   Real smooth_excise_inflow_speed;  // coordinate radial inflow speed target
+  bool smooth_excision = false;    // flag to specify smooth excision (fastflow)
+  Real horizon_factor;             // factor to muliply the horizon factor by (fastflow)
+  Real tdamp;                      // damping time (needed for smooth excision)
 };
 
 //----------------------------------------------------------------------------------------

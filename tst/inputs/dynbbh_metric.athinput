@@ -144,6 +144,18 @@ sink_pressure_floor = -1.0
 sink_cells_per_radius = 2.0
 sink_resolved_cells_across_horizon = 8.0
 test_bz_gradient = 0.0
+initialize_torus = false
+r_edge = 400.0
+r_peak = 800.0
+rho_max = 1.0
+rho_min = 1.0e-10
+rho_pow = 0.0
+pgas_min = 1.0e-18
+pgas_pow = 0.0
+pert_amp = 0.0
+potential_beta_min = 100.0
+potential_cutoff = 0.2
+potential_rho_pow = 1.0
 
 <output1>
 file_type = tab

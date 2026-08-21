@@ -189,8 +189,8 @@ class PrimitiveSolverHydro {
     // FIXME(JF): Is this needed if the first-order flux correction is enabled?
     prim_pt[PTM] = prim_pt_old[PTM] = eos.GetTemperatureFromP(prim_pt[PRH],
                                         prim_pt[PPR], &prim_pt[PYF]);
-    bool floored = ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
-                                         prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
+    ps.GetEOS().ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+                                    prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
 
     ps.PrimToCon(prim_pt, cons_pt, bin, g3d);
 
@@ -317,6 +317,7 @@ class PrimitiveSolverHydro {
 
     // Some problem-specific parameters
     auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
+    auto &smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
     auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
     auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
     auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
@@ -371,7 +372,7 @@ class PrimitiveSolverHydro {
     Real mb = eos_.GetBaryonMass();
 
     // FIXME: This only works for a flooring policy that has these functions!
-    bool prim_failure, cons_failure;
+    bool prim_failure=false, cons_failure=false;
     if (floors_only) {
       prim_failure = ps.GetEOSMutable().IsPrimitiveFlooringFailure();
       cons_failure = ps.GetEOSMutable().IsConservedFlooringFailure();
@@ -458,7 +459,7 @@ class PrimitiveSolverHydro {
       Real excise_weight = (excise && smooth_excise_) ?
           excision_weight_(m,k,j,i) : 0.0;
       if (excise) {
-        if (excision_floor_(m,k,j,i) && !smooth_excise_) {
+        if (excision_floor_(m,k,j,i) && !smooth_excise_ && !smoothing) {
           prim_pt[PRH] = dexcise_/mb;
           prim_pt[PVX] = 0.0;
           prim_pt[PVY] = 0.0;

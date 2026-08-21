@@ -31,6 +31,7 @@ add_executable(
         coordinates/coordinates.cpp
         coordinates/excision.cpp
 
+        diffusion/ambipolar.cpp
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
         diffusion/viscosity.cpp
@@ -50,6 +51,7 @@ add_executable(
         eos/ideal_grhyd.cpp
         eos/ideal_srmhd.cpp
         eos/ideal_grmhd.cpp
+        eos/noop_dyngrmhd.cpp
         eos/primitive-solver/eos_compose.cpp
         eos/primitive-solver/eos_hybrid.cpp
         eos/primitive-solver/piecewise_polytrope.cpp
@@ -57,7 +59,10 @@ add_executable(
 
         geodesic-grid/geodesic_grid.cpp
         geodesic-grid/spherical_grid.cpp
-	geodesic-grid/gauss_legendre.cpp
+        geodesic-grid/gauss_legendre.cpp
+
+        gravity/gravity.cpp
+        gravity/mg_gravity.cpp
 
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
@@ -77,6 +82,11 @@ add_executable(
         mesh/meshblock_tree.cpp
         mesh/mesh_refinement.cpp
         mesh/refinement_criteria.cpp
+
+        multigrid/multigrid.cpp
+        multigrid/multigrid_bvals.cpp
+        multigrid/multigrid_driver.cpp
+        multigrid/multigrid_tasks.cpp
 
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
@@ -110,9 +120,9 @@ add_executable(
 
         pgen/pgen.cpp
         pgen/tests/advection.cpp
-        pgen/tests/collapse.cpp
         pgen/tests/cpaw.cpp
         pgen/tests/cshock.cpp
+        pgen/tests/divb_amr.cpp
         pgen/tests/diffusion.cpp
         pgen/tests/gr_bondi.cpp
         pgen/tests/gr_monopole.cpp
@@ -126,6 +136,12 @@ add_executable(
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
+        pgen/tests/jeans_wave.cpp
+        pgen/tests/binary_gravity.cpp
+        pgen/tests/be_collapse.cpp
+
+        pgen/unit_tests/eos_compose.cpp
+        pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
@@ -160,11 +176,14 @@ add_executable(
         utils/tr_table.cpp
         utils/cart_grid.cpp
         utils/flux_generalized.cpp
+        utils/watchdog.cpp
         utils/spherical_surface.cpp
         utils/surface_grid.cpp
 
+
         z4c/compact_object_tracker.cpp
-        z4c/horizon_dump.cpp
+        z4c/fastflow.cpp
+	    z4c/horizon_dump.cpp
         z4c/tmunu.cpp
         z4c/z4c.cpp
         z4c/z4c_adm.cpp

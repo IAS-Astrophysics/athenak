@@ -126,7 +126,8 @@ PDFOutput::PDFOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
     Kokkos::deep_copy(pdf_data.bins2, bins2_host);
     Kokkos::fence();
 
-    if (pdf_data.pdf_dimension == 2 && pdf_data.bins2.extent(0) != op.nbin2 + 1) {
+    if (pdf_data.pdf_dimension == 2 &&
+        static_cast<int>(pdf_data.bins2.extent(0)) != op.nbin2 + 1) {
       std::cerr << "Error: pdf_data.bins2 size mismatch. Expected size: "
                 << op.nbin2 + 1 << ", Actual size: " << pdf_data.bins2.extent(0)
                 << std::endl;
