@@ -10,6 +10,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #if MPI_PARALLEL_ENABLED
@@ -144,6 +145,17 @@ enum class MetricDerivativeMethod {
   ad
 };
 
+// Device kernels only need this small subset of the full problem state when
+// evaluating the binary metric.  Keeping it separate avoids copying all torus,
+// sink, and refinement parameters into every metric-kernel closure.
+struct bbh_metric_params {
+  Real a1_buffer;
+  Real a2_buffer;
+  Real cutoff_floor;
+  Real metric_fd_step;
+  MetricDerivativeMethod metric_derivative_method;
+};
+
 struct bbh_pgen {
   Real sep;
   Real om;
@@ -206,6 +218,11 @@ struct bbh_pgen {
   Real potential_rho_pow;                     // set vector potential dependence on rho
 };
 
+static_assert(std::is_trivially_copyable<bbh_metric_params>::value,
+              "metric kernel parameters must remain device-copyable");
+static_assert(std::is_trivially_copyable<bbh_pgen>::value,
+              "torus kernel parameters must remain device-copyable");
+
 enum class RefineBasePolicy {
   none,
   alpha_min,
@@ -237,6 +254,9 @@ struct bbh_sink_state {
   bbh_sink_hole_state hole1;
   bbh_sink_hole_state hole2;
 };
+
+static_assert(std::is_trivially_copyable<bbh_sink_state>::value,
+              "sink kernel state must remain device-copyable");
 
 struct bbh_traj_table {
   std::vector<Real> t;
@@ -361,22 +381,23 @@ KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
     const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ],
-    const Real hm, const Real hp, const bbh_pgen& bbh_);
+    const Real hm, const Real hp, const bbh_metric_params& metric);
 KOKKOS_INLINE_FUNCTION
 int four_metric_to_three_metric(const struct four_metric &met, struct three_metric &gam);
 KOKKOS_INLINE_FUNCTION
 void get_metric(const Real t, const Real x, const Real y, const Real z,
-	       	        struct four_metric &met, const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_);
+                struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
+                const bbh_metric_params& metric);
 KOKKOS_INLINE_FUNCTION
 void get_metric_and_derivatives(const Real t, const Real x, const Real y,
                                 const Real z, struct four_metric &met,
                                 const Real bbh_traj_loc[NTRAJ],
                                 const Real dbbh_traj_loc[NTRAJ],
-                                const bbh_pgen& bbh_);
+                                const bbh_metric_params& metric);
 KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ],
-                   const bbh_pgen& bbh_);
+                   const bbh_metric_params& metric);
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineSpatialPolicy(MeshBlockPack* pmbp);
@@ -389,50 +410,50 @@ KOKKOS_INLINE_FUNCTION
 static void GetSuperposedAndInverse(const Real t,
                             const Real x, const Real y, const Real z,
                             Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ],
-                            const bbh_pgen bbh_);
+                            const bbh_metric_params& metric);
 
 
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateCN(struct bbh_pgen pgen, Real *cparam, Real *nparam);
+static void CalculateCN(const bbh_pgen& pgen, Real *cparam, Real *nparam);
 
 KOKKOS_INLINE_FUNCTION
-static Real CalculateL(struct bbh_pgen pgen, Real r, Real sin_theta);
+static Real CalculateL(const bbh_pgen& pgen, Real r, Real sin_theta);
 
 KOKKOS_INLINE_FUNCTION
-static Real CalculateCovariantUT(struct bbh_pgen pgen, Real r, Real sin_theta, Real l);
+static Real CalculateCovariantUT(const bbh_pgen& pgen, Real r, Real sin_theta, Real l);
 
 KOKKOS_INLINE_FUNCTION
-static Real LogHAux(struct bbh_pgen pgen, Real r, Real sin_theta);
+static Real LogHAux(const bbh_pgen& pgen, Real r, Real sin_theta);
 
 KOKKOS_INLINE_FUNCTION
-static Real CalculateT(struct bbh_pgen pgen, Real rho, Real ptot_over_rho);
+static Real CalculateT(const bbh_pgen& pgen, Real rho, Real ptot_over_rho);
 
 KOKKOS_INLINE_FUNCTION
-static Real LogHAux(struct bbh_pgen pgen, Real r, Real sin_theta);
+static Real LogHAux(const bbh_pgen& pgen, Real r, Real sin_theta);
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateVelocityInTiltedTorus(struct bbh_pgen pgen,
+static void CalculateVelocityInTiltedTorus(const bbh_pgen& pgen,
                                            Real r, Real theta, Real phi, Real *pu0,
                                            Real *pu1, Real *pu2, Real *pu3);
 KOKKOS_INLINE_FUNCTION
-static void CalculateVelocityInTorus(struct bbh_pgen pgen,
+static void CalculateVelocityInTorus(const bbh_pgen& pgen,
                                      Real r, Real sin_theta, Real *pu0, Real *pu3);
 
 KOKKOS_INLINE_FUNCTION
-static void TransformVector(struct bbh_pgen pgen,
+static void TransformVector(const bbh_pgen& pgen,
                             Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3,
                             Real *pa0, Real *pa1, Real *pa2, Real *pa3);
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateVectorPotentialInTiltedTorus(struct bbh_pgen pgen,
+static void CalculateVectorPotentialInTiltedTorus(const bbh_pgen& pgen,
                                                   Real r, Real theta, Real phi,
                                                   Real *patheta, Real *paphi);
 
 
 KOKKOS_INLINE_FUNCTION
-static void GetBoyerLindquistCoordinates(struct bbh_pgen pgen,
+static void GetBoyerLindquistCoordinates(const bbh_pgen& pgen,
                                          Real x1, Real x2, Real x3,
                                          Real *pr, Real *ptheta, Real *pphi);
 
@@ -440,11 +461,11 @@ KOKKOS_INLINE_FUNCTION
 static void InvertMetric(Real gcov[][NDIM], Real gcon[][NDIM]);
 
 KOKKOS_INLINE_FUNCTION
-Real A1(struct bbh_pgen pgen, Real x1, Real x2, Real x3);
+Real A1(const bbh_pgen& pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
-Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3);
+Real A2(const bbh_pgen& pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
-Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3);
+Real A3(const bbh_pgen& pgen, Real x1, Real x2, Real x3);
 } // namespace
 
 //----------------------------------------------------------------------------------------
@@ -831,19 +852,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       "problem", "initialize_torus", true);
   if (!initialize_torus) {
     if (restart) return;
-    auto &indcs = pmy_mesh_->mb_indcs;
-    int &is = indcs.is; int &ie = indcs.ie;
-    int &js = indcs.js; int &je = indcs.je;
-    int &ks = indcs.ks; int &ke = indcs.ke;
-    auto &size = pmbp->pmb->mb_size;
+    const auto indcs = pmy_mesh_->mb_indcs;
+    const int is = indcs.is; const int ie = indcs.ie;
+    const int js = indcs.js; const int je = indcs.je;
+    const int ks = indcs.ks; const int ke = indcs.ke;
+    auto size = pmbp->pmb->mb_size.d_view;
     int nmb = pmbp->nmb_thispack;
     const Real atmosphere_dfloor = bbh.dfloor;
     const Real atmosphere_pfloor = bbh.pfloor;
     const Real test_bz_gradient = bbh.test_bz_gradient;
 
     if (pmbp->phydro != nullptr) {
-      auto &w0 = pmbp->phydro->w0;
-      auto &nscal = pmbp->phydro->nscalars;
+      auto w0 = pmbp->phydro->w0;
+      const int nscal = pmbp->phydro->nscalars;
       par_for("pgen_dynbbh_hydro_atmosphere", DevExeSpace(),
       0, nmb-1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -861,10 +882,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     }
 
     if (pmbp->pmhd != nullptr) {
-      auto &w0 = pmbp->pmhd->w0;
-      auto &b0 = pmbp->pmhd->b0;
-      auto &bcc0 = pmbp->pmhd->bcc0;
-      auto &nscal = pmbp->pmhd->nscalars;
+      auto w0 = pmbp->pmhd->w0;
+      auto b0 = pmbp->pmhd->b0;
+      auto bcc0 = pmbp->pmhd->bcc0;
+      const int nscal = pmbp->pmhd->nscalars;
       par_for("pgen_dynbbh_mhd_atmosphere", DevExeSpace(),
       0, nmb-1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -875,7 +896,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         w0(m,IPR,k,j,i) = atmosphere_pfloor;
         for (int r = 0; r < nscal; ++r) w0(m,IYF+r,k,j,i) = 0.0;
         const Real x1v = CellCenterX(i-is, indcs.nx1,
-                                     size.d_view(m).x1min, size.d_view(m).x1max);
+                                     size(m).x1min, size(m).x1max);
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = test_bz_gradient*x1v;
@@ -907,11 +928,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const bool is_radiation_enabled = (pmbp->prad != nullptr);
 
   // capture variables for the kernel
-  auto &indcs = pmy_mesh_->mb_indcs;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
-  auto &size = pmbp->pmb->mb_size;
+  const auto indcs = pmy_mesh_->mb_indcs;
+  const int is = indcs.is; const int ie = indcs.ie;
+  const int js = indcs.js; const int je = indcs.je;
+  const int ks = indcs.ks; const int ke = indcs.ke;
+  auto size = pmbp->pmb->mb_size.d_view;
   int nmb = pmbp->nmb_thispack;
   //auto bbh_ = bbh;
   auto &coord = pmbp->pcoord->coord_data;
@@ -1018,6 +1039,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // initialize primitive variables for new run ---------------------------------------
 
   auto trs = bbh;
+  const bbh_metric_params metric = {
+      bbh.a1_buffer, bbh.a2_buffer, bbh.cutoff_floor,
+      bbh.metric_fd_step, bbh.metric_derivative_method};
   Kokkos::Random_XorShift64_Pool<> rand_pool64(pmbp->gids);
   Real ptotmax = std::numeric_limits<float>::min();
   const int nmkji = (pmbp->nmb_thispack)*indcs.nx3*indcs.nx2*indcs.nx1;
@@ -1037,26 +1061,26 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     k += ks;
     j += js;
 
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
+    Real &x1min = size(m).x1min;
+    Real &x1max = size(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
+    Real &x2min = size(m).x2min;
+    Real &x2max = size(m).x2max;
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
+    Real &x3min = size(m).x3min;
+    Real &x3max = size(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    Real &dx1 = size.d_view(m).dx1;
-    Real &dx2 = size.d_view(m).dx2;
-    Real &dx3 = size.d_view(m).dx3;
+    Real &dx1 = size(m).dx1;
+    Real &dx2 = size(m).dx2;
+    Real &dx3 = size(m).dx3;
 
     // Extract metric and inverse -- presumably should get actual metric?????
     Real glower[4][4], gupper[4][4];
     GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
-                            bbh_traj_t0, trs);
+                            bbh_traj_t0, metric);
 
     // Calculate Boyer-Lindquist coordinates of cell
     Real r, theta, phi;
@@ -1143,7 +1167,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       Real glower[4][4], gupper[4][4];
       GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
-                              bbh_traj_t0, trs);
+                              bbh_traj_t0, metric);
 
       uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
       uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
@@ -1236,27 +1260,27 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     par_for("pgen_vector_potential", DevExeSpace(), 0,nmb-1,ks,ke+1,js,je+1,is,ie+1,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
       int nx1 = indcs.nx1;
       Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
       Real x1f   = LeftEdgeX(i  -is, nx1, x1min, x1max);
 
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
       int nx2 = indcs.nx2;
       Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
       Real x2f   = LeftEdgeX(j  -js, nx2, x2min, x2max);
 
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
       int nx3 = indcs.nx3;
       Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
       Real x3f   = LeftEdgeX(k  -ks, nx3, x3min, x3max);
 
-      Real dx1 = size.d_view(m).dx1;
-      Real dx2 = size.d_view(m).dx2;
-      Real dx3 = size.d_view(m).dx3;
+      Real dx1 = size(m).dx1;
+      Real dx2 = size(m).dx2;
+      Real dx3 = size(m).dx3;
 
       a1(m,k,j,i) = A1(trs, x1v, x2f, x3f);
       a2(m,k,j,i) = A2(trs, x1f, x2v, x3f);
@@ -1361,9 +1385,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     par_for("pgen_b0", DevExeSpace(), 0,nmb-1,ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Compute face-centered fields from curl(A).
-      Real dx1 = size.d_view(m).dx1;
-      Real dx2 = size.d_view(m).dx2;
-      Real dx3 = size.d_view(m).dx3;
+      Real dx1 = size(m).dx1;
+      Real dx2 = size(m).dx2;
+      Real dx3 = size(m).dx3;
 
       b0.x1f(m,k,j,i) = ((a3(m,k,j+1,i) - a3(m,k,j,i))/dx2 -
                          (a2(m,k+1,j,i) - a2(m,k,j,i))/dx3);
@@ -1387,7 +1411,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
       if (trs.test_bz_gradient != 0.0) {
         const Real x1v = CellCenterX(i-is, indcs.nx1,
-                                     size.d_view(m).x1min, size.d_view(m).x1max);
+                                     size(m).x1min, size(m).x1max);
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = trs.test_bz_gradient*x1v;
@@ -1428,20 +1452,20 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       j += js;
 
       // Extract metric components
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
       Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       Real glower[4][4], gupper[4][4];
       GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
-                              bbh_traj_t0, trs);
+                              bbh_traj_t0, metric);
 
       // Calculate Boyer-Lindquist coordinates of cell
       Real r, theta, phi;
@@ -1574,10 +1598,10 @@ namespace {
 
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   const Real tt = pmbp->pcoord->coord_data.metric_time;
-  auto &adm = pmbp->padm->adm;
-  auto &size = pmbp->pmb->mb_size;
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  int &ng = indcs.ng;
+  auto adm = pmbp->padm->adm;
+  auto size = pmbp->pmb->mb_size.d_view;
+  const auto indcs = pmbp->pmesh->mb_indcs;
+  const int ng = indcs.ng;
   int is = indcs.is, js = indcs.js, ks = indcs.ks;
   int ie = indcs.ie, je = indcs.je, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
@@ -1589,7 +1613,9 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   Real bbh_traj_0[NTRAJ];
   Real bbh_traj_m1[NTRAJ];
   Real dbbh_traj_0[NTRAJ];
-  const bbh_pgen bbh_ = bbh;
+  const bbh_metric_params metric = {
+      bbh.a1_buffer, bbh.a2_buffer, bbh.cutoff_floor,
+      bbh.metric_fd_step, bbh.metric_derivative_method};
 
   /* Load trajectories */
 
@@ -1621,26 +1647,26 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   const Real rH2 = HorizonRadiusFromMassAndChi(
       m2, bbh_traj_0[AX2], bbh_traj_0[AY2], bbh_traj_0[AZ2]);
   coord.punc_0_rad = SmoothExcisionRadiusToHorizon(
-      bbh_.puncture_excise_rad1, rH1,
-      tt-bbh_.puncture_excise_shrink_start_time,
-      bbh_.puncture_excise_shrink_timescale,
-      bbh_.puncture_excise_to_horizon,
-      bbh_.puncture_excise_shrink_to_horizon);
+      bbh.puncture_excise_rad1, rH1,
+      tt-bbh.puncture_excise_shrink_start_time,
+      bbh.puncture_excise_shrink_timescale,
+      bbh.puncture_excise_to_horizon,
+      bbh.puncture_excise_shrink_to_horizon);
   coord.punc_1_rad = SmoothExcisionRadiusToHorizon(
-      bbh_.puncture_excise_rad2, rH2,
-      tt-bbh_.puncture_excise_shrink_start_time,
-      bbh_.puncture_excise_shrink_timescale,
-      bbh_.puncture_excise_to_horizon,
-      bbh_.puncture_excise_shrink_to_horizon);
-  if (bbh_.puncture_excise_cap_to_horizon &&
-      !bbh_.puncture_excise_to_horizon &&
-      !bbh_.puncture_excise_shrink_to_horizon) {
+      bbh.puncture_excise_rad2, rH2,
+      tt-bbh.puncture_excise_shrink_start_time,
+      bbh.puncture_excise_shrink_timescale,
+      bbh.puncture_excise_to_horizon,
+      bbh.puncture_excise_shrink_to_horizon);
+  if (bbh.puncture_excise_cap_to_horizon &&
+      !bbh.puncture_excise_to_horizon &&
+      !bbh.puncture_excise_shrink_to_horizon) {
     coord.punc_0_rad = std::min(coord.punc_0_rad, rH1);
     coord.punc_1_rad = std::min(coord.punc_1_rad, rH2);
   }
-  Real hm = bbh_.metric_fd_step;
-  Real hp = bbh_.metric_fd_step;
-  if (bbh_.use_traj_table) {
+  Real hm = metric.metric_fd_step;
+  Real hp = metric.metric_fd_step;
+  if (bbh.use_traj_table) {
     hm = std::min(hm, std::max(tt - bbh_table.t.front(), 0.0));
     hp = std::min(hp, std::max(bbh_table.t.back() - tt, 0.0));
   }
@@ -1658,26 +1684,26 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
 
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
+    Real &x1min = size(m).x1min;
+    Real &x1max = size(m).x1max;
     Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
+    Real &x2min = size(m).x2min;
+    Real &x2max = size(m).x2max;
     Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
+    Real &x3min = size(m).x3min;
+    Real &x3max = size(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     struct four_metric met4;
     struct three_metric met3;
-    if (bbh_.metric_derivative_method == MetricDerivativeMethod::ad) {
+    if (metric.metric_derivative_method == MetricDerivativeMethod::ad) {
       get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, bbh_traj_0,
-                                 dbbh_traj_0, bbh_);
+                                 dbbh_traj_0, metric);
     } else {
       numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0,
-                        bbh_traj_p1, hm, hp, bbh_);
+                        bbh_traj_p1, hm, hp, metric);
     }
 
     /* Transform 4D metric to 3+1 variables*/
@@ -1713,15 +1739,15 @@ KOKKOS_INLINE_FUNCTION
 void numerical_4metric(const Real t, const Real x, const Real y,
     const Real z, struct four_metric &outmet,
     const Real nz_m1[NTRAJ], const Real nz_0[NTRAJ], const Real nz_p1[NTRAJ],
-    const Real hm, const Real hp, const bbh_pgen& bbh_) {
+    const Real hm, const Real hp, const bbh_metric_params& metric) {
   struct four_metric met_m1;
   struct four_metric met_p1;
-  const Real step = bbh_.metric_fd_step;
+  const Real step = metric.metric_fd_step;
 
   // Time
-  get_metric(t, x, y, z, outmet, nz_0, bbh_);
-  if (hm > 0.0) get_metric(t-hm, x, y, z, met_m1, nz_m1, bbh_);
-  if (hp > 0.0) get_metric(t+hp, x, y, z, met_p1, nz_p1, bbh_);
+  get_metric(t, x, y, z, outmet, nz_0, metric);
+  if (hm > 0.0) get_metric(t-hm, x, y, z, met_m1, nz_m1, metric);
+  if (hp > 0.0) get_metric(t+hp, x, y, z, met_p1, nz_p1, metric);
 #define DT_METRIC(comp) \
   outmet.g_t.comp = (hm > 0.0 && hp > 0.0) ? \
       (met_p1.g.comp - met_m1.g.comp)/(hm + hp) : \
@@ -1740,8 +1766,8 @@ void numerical_4metric(const Real t, const Real x, const Real y,
 #undef DT_METRIC
 
   // X
-  get_metric(t, x-step, y, z, met_m1, nz_0, bbh_);
-  get_metric(t, x+step, y, z, met_p1, nz_0, bbh_);
+  get_metric(t, x-step, y, z, met_m1, nz_0, metric);
+  get_metric(t, x+step, y, z, met_p1, nz_0, metric);
 
   outmet.g_x.tt = D2(tt, step);
   outmet.g_x.tx = D2(tx, step);
@@ -1755,8 +1781,8 @@ void numerical_4metric(const Real t, const Real x, const Real y,
   outmet.g_x.zz = D2(zz, step);
 
   // Y
-  get_metric(t, x, y-step, z, met_m1, nz_0, bbh_);
-  get_metric(t, x, y+step, z, met_p1, nz_0, bbh_);
+  get_metric(t, x, y-step, z, met_m1, nz_0, metric);
+  get_metric(t, x, y+step, z, met_p1, nz_0, metric);
 
   outmet.g_y.tt = D2(tt, step);
   outmet.g_y.tx = D2(tx, step);
@@ -1770,8 +1796,8 @@ void numerical_4metric(const Real t, const Real x, const Real y,
   outmet.g_y.zz = D2(zz, step);
 
   // Z
-  get_metric(t, x, y, z-step, met_m1, nz_0, bbh_);
-  get_metric(t, x, y, z+step, met_p1, nz_0, bbh_);
+  get_metric(t, x, y, z-step, met_m1, nz_0, metric);
+  get_metric(t, x, y, z+step, met_p1, nz_0, metric);
 
   outmet.g_z.tt = D2(tt, step);
   outmet.g_z.tx = D2(tx, step);
@@ -2340,7 +2366,7 @@ KOKKOS_INLINE_FUNCTION void AddBoostedHole(
 template <typename T>
 KOKKOS_INLINE_FUNCTION void SuperposedBBHTemplate(
     const T x, const T y, const T z, T gcov[NDIM][NDIM],
-    const T tr[NTRAJ], const bbh_pgen& b) {
+    const T tr[NTRAJ], const bbh_metric_params& metric) {
   const T v1x = tr[VX1];
   const T v1y = tr[VY1];
   const T v1z = tr[VZ1];
@@ -2366,8 +2392,8 @@ KOKKOS_INLINE_FUNCTION void SuperposedBBHTemplate(
   const T radius2 = metric_norm3(x2, y2, z2);
   const T spin1_norm = metric_sqrt(a1x*a1x + a1y*a1y + a1z*a1z + T(1e-40));
   const T spin2_norm = metric_sqrt(a2x*a2x + a2y*a2y + a2z*a2z + T(1e-40));
-  const T cutoff1 = spin1_norm*(T(1.0) + b.a1_buffer) + b.cutoff_floor;
-  const T cutoff2 = spin2_norm*(T(1.0) + b.a2_buffer) + b.cutoff_floor;
+  const T cutoff1 = spin1_norm*(T(1.0) + metric.a1_buffer) + metric.cutoff_floor;
+  const T cutoff2 = spin2_norm*(T(1.0) + metric.a2_buffer) + metric.cutoff_floor;
   if (value_of(radius1) < value_of(cutoff1)) {
     z1 = (value_of(z1) > 0.0) ? cutoff1 : -cutoff1;
   }
@@ -2392,9 +2418,10 @@ KOKKOS_INLINE_FUNCTION void SuperposedBBHTemplate(
 
 KOKKOS_INLINE_FUNCTION void SuperposedBBH(
     const Real time, const Real x, const Real y, const Real z,
-    Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen& bbh_) {
+    Real gcov[][NDIM], const Real traj_array[NTRAJ],
+    const bbh_metric_params& metric) {
   (void)time;
-  SuperposedBBHTemplate(x, y, z, gcov, traj_array, bbh_);
+  SuperposedBBHTemplate(x, y, z, gcov, traj_array, metric);
 }
 
 KOKKOS_INLINE_FUNCTION void FillMetricDerivative(
@@ -2413,7 +2440,8 @@ KOKKOS_INLINE_FUNCTION void FillMetricDerivative(
 
 KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
     const Real x, const Real y, const Real z, const int direction,
-    const Real tr[NTRAJ], const Real dtr[NTRAJ], const bbh_pgen& b,
+    const Real tr[NTRAJ], const Real dtr[NTRAJ],
+    const bbh_metric_params& metric,
     struct dd_sym &dg) {
   dual1_real xd(x, direction == 1 ? 1.0 : 0.0);
   dual1_real yd(y, direction == 2 ? 1.0 : 0.0);
@@ -2423,20 +2451,20 @@ KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
     trd[n] = dual1_real(tr[n], direction == 0 ? dtr[n] : 0.0);
   }
   dual1_real gcov[NDIM][NDIM];
-  SuperposedBBHTemplate(xd, yd, zd, gcov, trd, b);
+  SuperposedBBHTemplate(xd, yd, zd, gcov, trd, metric);
   FillMetricDerivative(gcov, dg);
 }
 
 KOKKOS_INLINE_FUNCTION void get_metric_and_derivatives(
     const Real t, const Real x, const Real y, const Real z,
     struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
-    const Real dbbh_traj_loc[NTRAJ], const bbh_pgen& bbh_) {
+    const Real dbbh_traj_loc[NTRAJ], const bbh_metric_params& metric) {
   // Preserve the exact existing real-valued metric evaluation.
-  get_metric(t, x, y, z, met, bbh_traj_loc, bbh_);
-  MetricDerivativeAD(x, y, z, 0, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_t);
-  MetricDerivativeAD(x, y, z, 1, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_x);
-  MetricDerivativeAD(x, y, z, 2, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_y);
-  MetricDerivativeAD(x, y, z, 3, bbh_traj_loc, dbbh_traj_loc, bbh_, met.g_z);
+  get_metric(t, x, y, z, met, bbh_traj_loc, metric);
+  MetricDerivativeAD(x, y, z, 0, bbh_traj_loc, dbbh_traj_loc, metric, met.g_t);
+  MetricDerivativeAD(x, y, z, 1, bbh_traj_loc, dbbh_traj_loc, metric, met.g_x);
+  MetricDerivativeAD(x, y, z, 2, bbh_traj_loc, dbbh_traj_loc, metric, met.g_y);
+  MetricDerivativeAD(x, y, z, 3, bbh_traj_loc, dbbh_traj_loc, metric, met.g_z);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -2445,11 +2473,11 @@ void get_metric(const Real t,
 	       	const Real y,
 	       	const Real z,
 	       	struct four_metric &met,
-          const Real bbh_traj_loc[NTRAJ], const bbh_pgen bbh_)
+          const Real bbh_traj_loc[NTRAJ], const bbh_metric_params& metric)
 {
   Real gcov[NDIM][NDIM];
 
-  SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, bbh_);
+  SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, metric);
 
   met.g.tt = gcov[TT][TT];
   met.g.tx = gcov[TT][XX];
@@ -2486,14 +2514,15 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   int nmb           = pmbp->nmb_thispack;
   int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
   auto &refine_flag = pmesh->pmr->refine_flag;
-  auto &indcs       = pmesh->mb_indcs;
-  int &is = indcs.is, nx1 = indcs.nx1;
-  int &js = indcs.js, nx2 = indcs.nx2;
-  int &ks = indcs.ks, nx3 = indcs.nx3;
+  auto refine_flag_d = refine_flag.d_view;
+  const auto indcs = pmesh->mb_indcs;
+  const int is = indcs.is, nx1 = indcs.nx1;
+  const int js = indcs.js, nx2 = indcs.nx2;
+  const int ks = indcs.ks, nx3 = indcs.nx3;
   const int nkji = nx3 * nx2 * nx1;
   const int nji  = nx2 * nx1;
-  auto &u0       = pmbp->padm->u_adm;
-  int I_ADM_ALPHA  = pmbp->padm->I_ADM_ALPHA;
+  auto u0 = pmbp->padm->u_adm;
+  const int I_ADM_ALPHA = pmbp->padm->I_ADM_ALPHA;
   const Real alpha_threshold = bbh.alpha_thr;
   const Real alpha_hysteresis = bbh_ref.hysteresis;
 
@@ -2514,10 +2543,10 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
       Kokkos::Min<Real>(team_dmin));
 
     if (team_dmin < alpha_threshold) {
-      refine_flag.d_view(m + mbs) = 1;
+      refine_flag_d(m + mbs) = 1;
     } else if (team_dmin > alpha_hysteresis * alpha_threshold &&
-               refine_flag.d_view(m + mbs) <= 0) {
-      refine_flag.d_view(m + mbs) = -1;
+               refine_flag_d(m + mbs) <= 0) {
+      refine_flag_d(m + mbs) = -1;
     }
   });
 
@@ -2633,15 +2662,15 @@ void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
     return;
   }
 
-  auto &indcs = pm->mb_indcs;
+  const auto indcs = pm->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb = pmbp->nmb_thispack;
   int nscal = pmbp->pmhd->nscalars;
   int nmhd = pmbp->pmhd->nmhd;
-  auto &size = pmbp->pmb->mb_size;
-  auto &u0 = pmbp->pmhd->u0;
+  auto size = pmbp->pmb->mb_size.d_view;
+  auto u0 = pmbp->pmhd->u0;
   auto eos = pmbp->pmhd->peos->eos_data;
   const Real rho_target = (bbh.sink_density_floor > 0.0) ?
       bbh.sink_density_floor : eos.dfloor;
@@ -2657,11 +2686,11 @@ void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
           0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real x = CellCenterX(i-is, indcs.nx1,
-                         size.d_view(m).x1min, size.d_view(m).x1max);
+                         size(m).x1min, size(m).x1max);
     Real y = CellCenterX(j-js, indcs.nx2,
-                         size.d_view(m).x2min, size.d_view(m).x2max);
+                         size(m).x2min, size(m).x2max);
     Real z = CellCenterX(k-ks, indcs.nx3,
-                         size.d_view(m).x3min, size.d_view(m).x3max);
+                         size(m).x3min, size(m).x3max);
     Real weight = 0.0;
     if (state.hole1.active) {
       Real radius = sqrt(SQR(x-state.hole1.x) + SQR(y-state.hole1.y) +
@@ -2675,7 +2704,7 @@ void AddUnresolvedBHSink(Mesh *pm, const Real bdt) {
       weight = fmax(weight, SinkSmoothStep01(
           (state.hole2.sink_radius-radius)/state.hole2.sink_width));
     }
-    if (!(weight > 0.0) || !isfinite(weight)) return;
+    if (!(weight > 0.0) || !Kokkos::isfinite(weight)) return;
     Real damp = 1.0-exp(-bdt*weight/tau);
     Real keep = 1.0-damp;
     u0(m,IDN,k,j,i) = keep*u0(m,IDN,k,j,i) + damp*rho_target;
@@ -2694,14 +2723,15 @@ Real SmoothExcisionBWeight(Real w) {
 
 KOKKOS_INLINE_FUNCTION
 Real StrictSmoothExcisionBWeight(const Real w0, const Real w1) {
-  if (!isfinite(w0) || !isfinite(w1)) return 0.0;
+  if (!Kokkos::isfinite(w0) || !Kokkos::isfinite(w1)) return 0.0;
   return SmoothExcisionBWeight(fmin(w0, w1));
 }
 
 KOKKOS_INLINE_FUNCTION
 Real StrictSmoothExcisionBWeight(const Real w0, const Real w1,
                                  const Real w2, const Real w3) {
-  if (!isfinite(w0) || !isfinite(w1) || !isfinite(w2) || !isfinite(w3)) {
+  if (!Kokkos::isfinite(w0) || !Kokkos::isfinite(w1) ||
+      !Kokkos::isfinite(w2) || !Kokkos::isfinite(w3)) {
     return 0.0;
   }
   return SmoothExcisionBWeight(fmin(fmin(w0, w1), fmin(w2, w3)));
@@ -2754,7 +2784,7 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
   MeshBlockPack *pmbp = pm->pmb_pack;
   if (pmbp->pmhd == nullptr || !(bbh.smooth_b_damping_eta > 0.0)) return;
 
-  auto &indcs = pm->mb_indcs;
+  const auto indcs = pm->mb_indcs;
   int is = indcs.is, ie = indcs.ie;
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
@@ -2765,12 +2795,12 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
   auto e1 = efld.x1e;
   auto e2 = efld.x2e;
   auto e3 = efld.x3e;
-  auto &mbsize = pmbp->pmb->mb_size;
-  bool multi_d = pm->multi_d;
-  bool three_d = pm->three_d;
-  Real eta0 = bbh.smooth_b_damping_eta;
-  Real cfl_cap = bbh.smooth_b_damping_cfl;
-  Real dt = pm->dt;
+  auto mbsize = pmbp->pmb->mb_size.d_view;
+  const bool multi_d = pm->multi_d;
+  const bool three_d = pm->three_d;
+  const Real eta0 = bbh.smooth_b_damping_eta;
+  const Real cfl_cap = bbh.smooth_b_damping_cfl;
+  const Real dt = pm->dt;
 
   int scr_level = 0;
   size_t scr_size = ScrArray1D<Real>::shmem_size(ncells1) * 3;
@@ -2781,12 +2811,12 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
       ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
-      auto size = mbsize.d_view(m);
+      auto size = mbsize(m);
       Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
 	      CurrentDensity(member, m, ks, js, is, ie+1, b0, size, j1, j2, j3);
 	      par_for_inner(member, is, ie+1, [&](const int i) {
 	        Real w = EdgeWeightX1D(weight, m, ks, js, i);
-	        if (w > 0.0 && isfinite(w)) {
+	        if (w > 0.0 && Kokkos::isfinite(w)) {
 	          Real damp = eta*w;
 	          e2(m,ks,  js,i) += damp*j2(i);
 	          e2(m,ke+1,js,i) += damp*j2(i);
@@ -2804,23 +2834,23 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
       ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
       ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
-      auto size = mbsize.d_view(m);
+      auto size = mbsize(m);
       Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
 	      CurrentDensity(member, m, ks, j, is, ie+1, b0, size, j1, j2, j3);
 	      par_for_inner(member, is, ie+1, [&](const int i) {
 	        Real w1 = StrictSmoothExcisionBWeight(weight(m,ks,j,i),
 	                                             weight(m,ks,j-1,i));
-	        if (w1 > 0.0 && isfinite(w1)) {
+	        if (w1 > 0.0 && Kokkos::isfinite(w1)) {
 	          e1(m,ks,  j,i) += eta*w1*j1(i);
 	          e1(m,ke+1,j,i) += eta*w1*j1(i);
 	        }
 	        Real w2 = EdgeWeightX1D(weight, m, ks, j, i);
-	        if (w2 > 0.0 && isfinite(w2)) {
+	        if (w2 > 0.0 && Kokkos::isfinite(w2)) {
 	          e2(m,ks,  j,i) += eta*w2*j2(i);
 	          e2(m,ke+1,j,i) += eta*w2*j2(i);
 	        }
 	        Real w3 = EdgeWeightX3(weight, m, ks, j, i);
-	        if (w3 > 0.0 && isfinite(w3)) {
+	        if (w3 > 0.0 && Kokkos::isfinite(w3)) {
 	          e3(m,ks,  j,i) += eta*w3*j3(i);
 	        }
 	      });
@@ -2834,20 +2864,20 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
     ScrArray1D<Real> j1(member.team_scratch(scr_level), ncells1);
     ScrArray1D<Real> j2(member.team_scratch(scr_level), ncells1);
     ScrArray1D<Real> j3(member.team_scratch(scr_level), ncells1);
-    auto size = mbsize.d_view(m);
+    auto size = mbsize(m);
 	    Real eta = SmoothExcisionDampingEta(size, multi_d, three_d, eta0, cfl_cap, dt);
 	    CurrentDensity(member, m, k, j, is, ie+1, b0, size, j1, j2, j3);
 	    par_for_inner(member, is, ie+1, [&](const int i) {
 	      Real w1 = EdgeWeightX1(weight, m, k, j, i);
-	      if (w1 > 0.0 && isfinite(w1)) {
+	      if (w1 > 0.0 && Kokkos::isfinite(w1)) {
 	        e1(m,k,j,i) += eta*w1*j1(i);
 	      }
 	      Real w2 = EdgeWeightX2(weight, m, k, j, i);
-	      if (w2 > 0.0 && isfinite(w2)) {
+	      if (w2 > 0.0 && Kokkos::isfinite(w2)) {
 	        e2(m,k,j,i) += eta*w2*j2(i);
 	      }
 	      Real w3 = EdgeWeightX3(weight, m, k, j, i);
-	      if (w3 > 0.0 && isfinite(w3)) {
+	      if (w3 > 0.0 && Kokkos::isfinite(w3)) {
 	        e3(m,k,j,i) += eta*w3*j3(i);
 	      }
 	    });
@@ -2855,7 +2885,7 @@ void AddSmoothExcisionMagneticDamping(Mesh *pm, DvceEdgeFld4D<Real> &efld) {
 	}
 //nere hardcoding zero spin
 KOKKOS_INLINE_FUNCTION
-static void GetBoyerLindquistCoordinates(struct bbh_pgen pgen,
+static void GetBoyerLindquistCoordinates(const bbh_pgen& pgen,
                                          Real x1, Real x2, Real x3,
                                          Real *pr, Real *ptheta, Real *pphi) {
   //Real rad = sqrt(SQR(x1) + SQR(x2) + SQR(x3));
@@ -2885,7 +2915,7 @@ static void GetBoyerLindquistCoordinates(struct bbh_pgen pgen,
 // Needs to be updated to use actual metric?
 
 KOKKOS_INLINE_FUNCTION
-static Real CalculateCovariantUT(struct bbh_pgen pgen, Real r, Real sin_theta, Real l) {
+static Real CalculateCovariantUT(const bbh_pgen& pgen, Real r, Real sin_theta, Real l) {
   // Compute BL metric components
   Real sigma = SQR(r);
   Real g_00 = -1.0 + 2.0*r/sigma;
@@ -2909,7 +2939,7 @@ static Real CalculateCovariantUT(struct bbh_pgen pgen, Real r, Real sin_theta, R
 //   references Chakrabarti, S. 1985, ApJ 288, 1
 
 KOKKOS_INLINE_FUNCTION
-static Real LogHAux(struct bbh_pgen pgen, Real r, Real sin_theta) {
+static Real LogHAux(const bbh_pgen& pgen, Real r, Real sin_theta) {
   Real logh;
   // Chakrabarti
   Real l = CalculateL(pgen, r, sin_theta);
@@ -2926,7 +2956,7 @@ static Real LogHAux(struct bbh_pgen pgen, Real r, Real sin_theta) {
     hh *= (pow(fabs(1.0 - pow(pgen.c_param, pow_c)*pow(l   , pow_l)), pow_abs) *
           pow(fabs(1.0 - pow(pgen.c_param, pow_c)*pow(l_edge, pow_l)), -1.0*pow_abs));
   }
-  if (isfinite(hh) && hh >= 1.0) {
+  if (Kokkos::isfinite(hh) && hh >= 1.0) {
     logh = log(hh);
   } else {
     logh = -1.0;
@@ -2942,7 +2972,7 @@ static Real LogHAux(struct bbh_pgen pgen, Real r, Real sin_theta) {
 //   equation has form b4 * T^4 + T + b0 = 0
 
 KOKKOS_INLINE_FUNCTION
-static Real CalculateT(struct bbh_pgen pgen, Real rho, Real ptot_over_rho) {
+static Real CalculateT(const bbh_pgen& pgen, Real rho, Real ptot_over_rho) {
   // Calculate quartic coefficients
   Real b4 = pgen.arad / (3.0 * rho);
   Real b0 = -ptot_over_rho;
@@ -2986,7 +3016,7 @@ static Real CalculateT(struct bbh_pgen pgen, Real rho, Real ptot_over_rho) {
 // such that the assumption of keplerian angular momentum at the inner edge is dropped
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateCN(struct bbh_pgen pgen, Real *cparam, Real *nparam) {
+static void CalculateCN(const bbh_pgen& pgen, Real *cparam, Real *nparam) {
   Real n_input = pgen.n_param;
   Real nn; // slope of angular momentum profile
   Real cc; // constant of angular momentum profile
@@ -3010,7 +3040,7 @@ static void CalculateCN(struct bbh_pgen pgen, Real *cparam, Real *nparam) {
 // Function for calculating l in Chakrabarti torus
 // N.B. Here assumer zero spin
 KOKKOS_INLINE_FUNCTION
-static Real CalculateL(struct bbh_pgen pgen, Real r, Real sin_theta) {
+static Real CalculateL(const bbh_pgen& pgen, Real r, Real sin_theta) {
   // Compute BL metric components
   Real sigma = SQR(r);
   Real g_00 = -1.0 + 2.0*r/sigma;
@@ -3043,7 +3073,7 @@ static Real CalculateL(struct bbh_pgen pgen, Real r, Real sin_theta) {
 }
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateVectorPotentialInTiltedTorus(struct bbh_pgen pgen,
+static void CalculateVectorPotentialInTiltedTorus(const bbh_pgen& pgen,
                                                   Real r, Real theta, Real phi,
                                                   Real *patheta, Real *paphi) {
   // Find vector potential components, accounting for tilt
@@ -3156,7 +3186,7 @@ static void CalculateVectorPotentialInTiltedTorus(struct bbh_pgen pgen,
 }
 
 KOKKOS_INLINE_FUNCTION
-Real A1(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
+Real A1(const bbh_pgen& pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
@@ -3178,7 +3208,7 @@ Real A1(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 // Function to compute 2-component of vector potential. See comments for A1.
 
 KOKKOS_INLINE_FUNCTION
-Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
+Real A2(const bbh_pgen& pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   //Real r, theta, phi;
   //GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
@@ -3203,7 +3233,7 @@ Real A2(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 // Function to compute 3-component of vector potential. See comments for A1.
 
 KOKKOS_INLINE_FUNCTION
-Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
+Real A3(const bbh_pgen& pgen, Real x1, Real x2, Real x3) {
   // BL coordinates
   Real r, theta, phi;
   GetBoyerLindquistCoordinates(pgen, x1, x2, x3, &r, &theta, &phi);
@@ -3224,7 +3254,7 @@ Real A3(struct bbh_pgen pgen, Real x1, Real x2, Real x3) {
 }
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateVelocityInTiltedTorus(struct bbh_pgen pgen,
+static void CalculateVelocityInTiltedTorus(const bbh_pgen& pgen,
                                            Real r, Real theta, Real phi, Real *pu0,
                                            Real *pu1, Real *pu2, Real *pu3) {
   // Calculate corresponding location
@@ -3283,7 +3313,7 @@ static void CalculateVelocityInTiltedTorus(struct bbh_pgen pgen,
 
 
 KOKKOS_INLINE_FUNCTION
-static void CalculateVelocityInTorus(struct bbh_pgen pgen,
+static void CalculateVelocityInTorus(const bbh_pgen& pgen,
                                     Real r, Real sin_theta, Real *pu0, Real *pu3) {
   // Compute BL metric components
   Real sin_sq_theta = SQR(sin_theta);
@@ -3322,7 +3352,7 @@ static void CalculateVelocityInTorus(struct bbh_pgen pgen,
 //   Schwarzschild coordinates match Boyer-Lindquist when a = 0
 
 KOKKOS_INLINE_FUNCTION
-static void TransformVector(struct bbh_pgen pgen,
+static void TransformVector(const bbh_pgen& pgen,
                             Real a0_bl, Real a1_bl, Real a2_bl, Real a3_bl,
                             Real x1, Real x2, Real x3,
                             Real *pa0, Real *pa1, Real *pa2, Real *pa3) {
@@ -3346,10 +3376,10 @@ KOKKOS_INLINE_FUNCTION
 static void GetSuperposedAndInverse(const Real t,
                             const Real x, const Real y, const Real z,
                             Real gcov[][NDIM], Real gcon[][NDIM], const Real bbh_traj_loc[NTRAJ],
-                            const bbh_pgen bbh_){
+                            const bbh_metric_params& metric){
   //Real gcov[NDIM][NDIM];
   //Real gcon[NDIM][NDIM];
-  SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, bbh_);
+  SuperposedBBH(t, x, y, z, gcov, bbh_traj_loc, metric);
   InvertMetric(gcov, gcon);
 
   return;

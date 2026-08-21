@@ -81,18 +81,18 @@ void ComputeUcBcFromPrimitive(const Real uu1, const Real uu2, const Real uu3,
 void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int nmb = pm->pmb_pack->nmb_thispack;
   int nmb_alloc = std::max(nmb, pm->pmb_pack->pmesh->nmb_maxperrank);
-  auto &indcs = pm->mb_indcs;
-  int &ng = indcs.ng;
+  const auto indcs = pm->mb_indcs;
+  const int ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
 
-  int &is = indcs.is;  int &ie  = indcs.ie;
-  int &js = indcs.js;  int &je  = indcs.je;
-  int &ks = indcs.ks;  int &ke  = indcs.ke;
-  auto &size = pm->pmb_pack->pmb->mb_size;
-  auto &multi_d = pm->multi_d;
-  auto &three_d = pm->three_d;
+  const int is = indcs.is;  const int ie = indcs.ie;
+  const int js = indcs.js;  const int je = indcs.je;
+  const int ks = indcs.ks;  const int ke = indcs.ke;
+  auto size = pm->pmb_pack->pmb->mb_size.d_view;
+  const bool multi_d = pm->multi_d;
+  const bool three_d = pm->three_d;
 
   // derived variable index
   int &i_dv = out_params.i_derived;
@@ -124,7 +124,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                 << "module constructed." << std::endl;
       exit(EXIT_FAILURE);
     }
-    auto &w0_ = (pm->pmb_pack->phydro != nullptr) ?
+    auto w0_ = (pm->pmb_pack->phydro != nullptr) ?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("temperature", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -140,13 +140,13 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = (name.compare("hydro_wz") == 0)?
+    auto w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("vorz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/size.d_view(m).dx1;
+      dv(m,i_dv,k,j,i) = (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/size(m).dx1;
       if (multi_d) {
-        dv(m,i_dv,k,j,i) -=(w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size.d_view(m).dx2;
+        dv(m,i_dv,k,j,i) -=(w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size(m).dx2;
       }
       dv(m,i_dv,k,j,i) *= 0.5; // accounts for divide by 2*dx
     });
@@ -160,20 +160,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = (name.compare("hydro_w2") == 0)?
+    auto w0_ = (name.compare("hydro_w2") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("vor2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real w1 = 0.0;
-      Real w2 = -(w0_(m,IVZ,k,j,i+1) - w0_(m,IVZ,k,j,i-1))/size.d_view(m).dx1;
-      Real w3 =  (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/size.d_view(m).dx1;
+      Real w2 = -(w0_(m,IVZ,k,j,i+1) - w0_(m,IVZ,k,j,i-1))/size(m).dx1;
+      Real w3 =  (w0_(m,IVY,k,j,i+1) - w0_(m,IVY,k,j,i-1))/size(m).dx1;
       if (multi_d) {
-        w1 += (w0_(m,IVZ,k,j+1,i) - w0_(m,IVZ,k,j-1,i))/size.d_view(m).dx2;
-        w3 -= (w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size.d_view(m).dx2;
+        w1 += (w0_(m,IVZ,k,j+1,i) - w0_(m,IVZ,k,j-1,i))/size(m).dx2;
+        w3 -= (w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size(m).dx2;
       }
       if (three_d) {
-        w1 -= (w0_(m,IVY,k+1,j,i) - w0_(m,IVY,k-1,j,i))/size.d_view(m).dx3;
-        w2 += (w0_(m,IVX,k+1,j,i) - w0_(m,IVX,k-1,j,i))/size.d_view(m).dx3;
+        w1 -= (w0_(m,IVY,k+1,j,i) - w0_(m,IVY,k-1,j,i))/size(m).dx3;
+        w2 += (w0_(m,IVX,k+1,j,i) - w0_(m,IVX,k-1,j,i))/size(m).dx3;
       }
       dv(m,i_dv,k,j,i) = 0.25*(w1*w1 + w2*w2 + w3*w3); // accounts for divide by 2*dx
     });
@@ -187,12 +187,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("jz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
+      dv(m,i_dv,k,j,i) = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size(m).dx1;
       if (multi_d) {
-        dv(m,i_dv,k,j,i) -=(bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
+        dv(m,i_dv,k,j,i) -=(bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size(m).dx2;
       }
       dv(m,i_dv,k,j,i) *= 0.5; // accounts for divide by 2*dx
     });
@@ -205,19 +205,19 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("j2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size.d_view(m).dx1;
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
+      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size(m).dx1;
+      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size(m).dx1;
       if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size.d_view(m).dx2;
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
+        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size(m).dx2;
+        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size(m).dx2;
       }
       if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
+        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size(m).dx3;
+        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size(m).dx3;
       }
       dv(m,i_dv,k,j,i) = 0.25*(j1*j1 + j2*j2 + j3*j3); // accounts for divide by 2*dx
     });
@@ -232,7 +232,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Calculate |B|
@@ -243,17 +243,17 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real B_mag_squared = ( Bx*Bx + By*By + Bz*Bz);
 
       // Calculate gradB tensor
-      Real dBx_dx = (bcc(m,IBX,k,j,i+1) - bcc(m,IBX,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real dBx_dy = (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      Real dBx_dz = (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size.d_view(m).dx3);
+      Real dBx_dx = (bcc(m,IBX,k,j,i+1) - bcc(m,IBX,k,j,i-1))/(2.0*size(m).dx1);
+      Real dBx_dy = (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/(2.0*size(m).dx2);
+      Real dBx_dz = (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/(2.0*size(m).dx3);
 
-      Real dBy_dx = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real dBy_dy = (bcc(m,IBY,k,j+1,i) - bcc(m,IBY,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      Real dBy_dz = (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size.d_view(m).dx3);
+      Real dBy_dx = (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/(2.0*size(m).dx1);
+      Real dBy_dy = (bcc(m,IBY,k,j+1,i) - bcc(m,IBY,k,j-1,i))/(2.0*size(m).dx2);
+      Real dBy_dz = (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/(2.0*size(m).dx3);
 
-      Real dBz_dx = (bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size.d_view(m).dx1);
-      Real dBz_dy = (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size.d_view(m).dx2);
-      Real dBz_dz = (bcc(m,IBZ,k+1,j,i) - bcc(m,IBZ,k-1,j,i))/(2.0*size.d_view(m).dx3);
+      Real dBz_dx = (bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/(2.0*size(m).dx1);
+      Real dBz_dy = (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/(2.0*size(m).dx2);
+      Real dBz_dz = (bcc(m,IBZ,k+1,j,i) - bcc(m,IBZ,k-1,j,i))/(2.0*size(m).dx3);
 
       Real BdotGradB_x = (Bx * dBx_dx + By * dBx_dy + Bz * dBx_dz);
       Real BdotGradB_y = (Bx * dBy_dx + By * dBy_dy + Bz * dBy_dz);
@@ -300,7 +300,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_alt", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // Calculate |B|
@@ -358,17 +358,17 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real b3_km1 = bcc(m,IBZ,k-1,j,i)/B_mag_km1;
 
       // Central differencing of b_hat vector
-      Real db1_dx1 = (b1_ip1 - b1_im1)/(2.0*size.d_view(m).dx1);
-      Real db2_dx1 = (b2_ip1 - b2_im1)/(2.0*size.d_view(m).dx1);
-      Real db3_dx1 = (b3_ip1 - b3_im1)/(2.0*size.d_view(m).dx1);
+      Real db1_dx1 = (b1_ip1 - b1_im1)/(2.0*size(m).dx1);
+      Real db2_dx1 = (b2_ip1 - b2_im1)/(2.0*size(m).dx1);
+      Real db3_dx1 = (b3_ip1 - b3_im1)/(2.0*size(m).dx1);
 
-      Real db1_dx2 = (b1_jp1 - b1_jm1)/(2.0*size.d_view(m).dx2);
-      Real db2_dx2 = (b2_jp1 - b2_jm1)/(2.0*size.d_view(m).dx2);
-      Real db3_dx2 = (b3_jp1 - b3_jm1)/(2.0*size.d_view(m).dx2);
+      Real db1_dx2 = (b1_jp1 - b1_jm1)/(2.0*size(m).dx2);
+      Real db2_dx2 = (b2_jp1 - b2_jm1)/(2.0*size(m).dx2);
+      Real db3_dx2 = (b3_jp1 - b3_jm1)/(2.0*size(m).dx2);
 
-      Real db1_dx3 = (b1_kp1 - b1_km1)/(2.0*size.d_view(m).dx3);
-      Real db2_dx3 = (b2_kp1 - b2_km1)/(2.0*size.d_view(m).dx3);
-      Real db3_dx3 = (b3_kp1 - b3_km1)/(2.0*size.d_view(m).dx3);
+      Real db1_dx3 = (b1_kp1 - b1_km1)/(2.0*size(m).dx3);
+      Real db2_dx3 = (b2_kp1 - b2_km1)/(2.0*size(m).dx3);
+      Real db3_dx3 = (b3_kp1 - b3_km1)/(2.0*size(m).dx3);
 
       // Calculate curvature = |b_hat dot nabla b_hat|
       Real curv1 = b1*db1_dx1 + b2*db1_dx2 + b3*db1_dx3;
@@ -387,9 +387,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto jcon = derived_var;
 
     // Coordinates
-    auto &coord = pm->pmb_pack->pcoord->coord_data;
-    bool &flat = coord.is_minkowski;
-    auto &spin = coord.bh_spin;
+    const bool flat = pm->pmb_pack->pcoord->coord_data.is_minkowski;
+    const Real spin = pm->pmb_pack->pcoord->coord_data.bh_spin;
 
     const Real dt_last = pm->dt_last_completed;
     const bool have_prior = (pm->pmb_pack->pmhd->wbcc_saved && dt_last > 0.);
@@ -413,20 +412,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         return;
       }
 
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
       Real x1v_ip1 = CellCenterX(i+1-is, indcs.nx1, x1min, x1max);
       Real x1v_im1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
       Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
       Real x2v_jp1 = CellCenterX(j+1-js, indcs.nx2, x2min, x2max);
       Real x2v_jm1 = CellCenterX(j-1-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       Real x3v_kp1 = CellCenterX(k+1-ks, indcs.nx3, x3min, x3max);
       Real x3v_km1 = CellCenterX(k-1-ks, indcs.nx3, x3min, x3max);
@@ -534,9 +533,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         const Real gF3m = (three_d) ? get_detg_Fcon(mu, 3, ucov_km1, bcov_km1) : 0.;
 
         const Real dgF0 = (gF0p - gF0m) / dt_last;
-        const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
-        const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
-        const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
+        const Real dgF1 = (gF1p - gF1m) / (2 * size(m).dx1);
+        const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size(m).dx2) : 0.;
+        const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size(m).dx3) : 0.;
 
         const Real detg = 1.;
         jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
@@ -550,7 +549,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     Kokkos::realloc(derived_var, nmb_alloc, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->pmhd->u0;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real rho = u0_(m,IDN,k,j,i);
@@ -679,8 +678,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     int n_moments = 8;
     Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = pm->pmb_pack->pmhd->w0;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto w0_ = pm->pmb_pack->pmhd->w0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_v_B_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real v = sqrt(w0_(m,IVX,k,j,i)*w0_(m,IVX,k,j,i)
@@ -707,8 +706,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     int n_moments = 24;
     Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = pm->pmb_pack->pmhd->w0;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto w0_ = pm->pmb_pack->pmhd->w0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_vi_Bi_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real vx = w0_(m,IVX,k,j,i);
@@ -751,7 +750,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     int n_moments = 4;
     Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = pm->pmb_pack->phydro->w0;
+    auto w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_v_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real v = sqrt(w0_(m,IVX,k,j,i)*w0_(m,IVX,k,j,i)
@@ -770,7 +769,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     int n_moments = 12;
     Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
     auto dv = derived_var;
-    auto &w0_ = pm->pmb_pack->phydro->w0;
+    auto w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real vx = w0_(m,IVX,k,j,i);
@@ -801,20 +800,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_k_jxb", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // calculate j
       Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size.d_view(m).dx1;
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
+      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size(m).dx1;
+      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size(m).dx1;
       if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size.d_view(m).dx2;
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
+        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size(m).dx2;
+        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size(m).dx2;
       }
       if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
+        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size(m).dx3;
+        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size(m).dx3;
       }
       // calculate B
       Real B_mag_sq =    bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
@@ -839,20 +838,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_perp", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // calculate j
       Real j1 = 0.0;
-      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size.d_view(m).dx1;
-      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size.d_view(m).dx1;
+      Real j2 = -(bcc(m,IBZ,k,j,i+1) - bcc(m,IBZ,k,j,i-1))/size(m).dx1;
+      Real j3 =  (bcc(m,IBY,k,j,i+1) - bcc(m,IBY,k,j,i-1))/size(m).dx1;
       if (multi_d) {
-        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size.d_view(m).dx2;
-        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
+        j1 += (bcc(m,IBZ,k,j+1,i) - bcc(m,IBZ,k,j-1,i))/size(m).dx2;
+        j3 -= (bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size(m).dx2;
       }
       if (three_d) {
-        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
-        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
+        j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size(m).dx3;
+        j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size(m).dx3;
       }
       // calculate B
       Real B_mag_sq =    bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
@@ -917,17 +916,17 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       Real b3_km1 = bcc(m,IBZ,k-1,j,i)/B_mag_km1;
 
       // Central differencing of b_hat vector
-      Real db1_dx1 = (b1_ip1 - b1_im1)/(2.0*size.d_view(m).dx1);
-      Real db2_dx1 = (b2_ip1 - b2_im1)/(2.0*size.d_view(m).dx1);
-      Real db3_dx1 = (b3_ip1 - b3_im1)/(2.0*size.d_view(m).dx1);
+      Real db1_dx1 = (b1_ip1 - b1_im1)/(2.0*size(m).dx1);
+      Real db2_dx1 = (b2_ip1 - b2_im1)/(2.0*size(m).dx1);
+      Real db3_dx1 = (b3_ip1 - b3_im1)/(2.0*size(m).dx1);
 
-      Real db1_dx2 = (b1_jp1 - b1_jm1)/(2.0*size.d_view(m).dx2);
-      Real db2_dx2 = (b2_jp1 - b2_jm1)/(2.0*size.d_view(m).dx2);
-      Real db3_dx2 = (b3_jp1 - b3_jm1)/(2.0*size.d_view(m).dx2);
+      Real db1_dx2 = (b1_jp1 - b1_jm1)/(2.0*size(m).dx2);
+      Real db2_dx2 = (b2_jp1 - b2_jm1)/(2.0*size(m).dx2);
+      Real db3_dx2 = (b3_jp1 - b3_jm1)/(2.0*size(m).dx2);
 
-      Real db1_dx3 = (b1_kp1 - b1_km1)/(2.0*size.d_view(m).dx3);
-      Real db2_dx3 = (b2_kp1 - b2_km1)/(2.0*size.d_view(m).dx3);
-      Real db3_dx3 = (b3_kp1 - b3_km1)/(2.0*size.d_view(m).dx3);
+      Real db1_dx3 = (b1_kp1 - b1_km1)/(2.0*size(m).dx3);
+      Real db2_dx3 = (b2_kp1 - b2_km1)/(2.0*size(m).dx3);
+      Real db3_dx3 = (b3_kp1 - b3_km1)/(2.0*size(m).dx3);
 
       // Calculate curvature = |b_hat dot nabla b_hat|
       Real curv1 = b1*db1_dx1 + b2*db1_dx2 + b3*db1_dx3;
@@ -949,7 +948,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     if (derived_var.extent(4) <= 1)
       Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("bmag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       dv(m,i_dv,k,j,i) = sqrt( bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
@@ -972,12 +971,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     // 7 = < (d_j U_i)(d_j U_i) >
     Kokkos::realloc(derived_var, nmb_alloc, 8, n3, n2, n1);
     auto dv = derived_var;
-    auto &bcc = pm->pmb_pack->pmhd->bcc0;
-    auto &b = pm->pmb_pack->pmhd->b0;
-    auto &w0_ = pm->pmb_pack->pmhd->w0;
+    auto bcc = pm->pmb_pack->pmhd->bcc0;
+    auto b = pm->pmb_pack->pmhd->b0;
+    auto w0_ = pm->pmb_pack->pmhd->w0;
     par_for("bmag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real dx_squared = size.d_view(m).dx1 * size.d_view(m).dx1;
+      Real dx_squared = size(m).dx1 * size(m).dx1;
       // 0 = < B^4 >
       Real B_mag_sq = bcc(m,IBX,k,j,i)*bcc(m,IBX,k,j,i)
                     + bcc(m,IBY,k,j,i)*bcc(m,IBY,k,j,i)
@@ -1079,12 +1078,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto b0 = pm->pmb_pack->pmhd->b0;
     par_for("divb", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, (is-ng), (ie+ng),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real divb = (b0.x1f(m,k,j,i+1) - b0.x1f(m,k,j,i))/size.d_view(m).dx1;
+      Real divb = (b0.x1f(m,k,j,i+1) - b0.x1f(m,k,j,i))/size(m).dx1;
       if (multi_d) {
-        divb += (b0.x2f(m,k,j+1,i) - b0.x2f(m,k,j,i))/size.d_view(m).dx2;
+        divb += (b0.x2f(m,k,j+1,i) - b0.x2f(m,k,j,i))/size(m).dx2;
       }
       if (three_d) {
-        divb += (b0.x3f(m,k+1,j,i) - b0.x3f(m,k,j,i))/size.d_view(m).dx3;
+        divb += (b0.x3f(m,k+1,j,i) - b0.x3f(m,k,j,i))/size(m).dx3;
       }
       dv(m,i_dv,k,j,i) = divb;
     });
@@ -1103,9 +1102,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     auto dv = derived_var;
 
     // Coordinates
-    auto &coord = pm->pmb_pack->pcoord->coord_data;
-    bool &flat = coord.is_minkowski;
-    Real &spin = coord.bh_spin;
+    const bool flat = pm->pmb_pack->pcoord->coord_data.is_minkowski;
+    const Real spin = pm->pmb_pack->pcoord->coord_data.bh_spin;
 
     // Radiation
     int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
@@ -1126,16 +1124,16 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("moments",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
 
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
       Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
 
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
       // Extract components of metric
@@ -1289,11 +1287,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     par_for("pdens", DevExeSpace(), 0, (npart-1),
     KOKKOS_LAMBDA(const int p) {
       int m = pi(PGID,p) - gids;
-      int ip = (pr(IPX,p) - size.d_view(m).x1min)/size.d_view(m).dx1 + is;
-      int jp = (pr(IPY,p) - size.d_view(m).x2min)/size.d_view(m).dx2 + js;
+      int ip = (pr(IPX,p) - size(m).x1min)/size(m).dx1 + is;
+      int jp = (pr(IPY,p) - size(m).x2min)/size(m).dx2 + js;
       int kp = ks;
       if (three_d) {
-        kp = (pr(IPZ,p) - size.d_view(m).x3min)/size.d_view(m).dx3 + ks;
+        kp = (pr(IPZ,p) - size(m).x3min)/size(m).dx3 + ks;
       }
       pdens(m,0,kp,jp,ip) += 1.0;
     });
@@ -1306,11 +1304,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("angular_momentum") == 0) {
     int n_comp = 6;
     ensure_derived_storage("angular_momentum", n_comp);
+    const int dv_start = i_dv;
 
     auto dv   = derived_var;
-    auto &adm = pm->pmb_pack->padm->adm;
-    auto &prim = pm->pmb_pack->pmhd->w0;
-    auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+    auto adm = pm->pmb_pack->padm->adm;
+    auto prim = pm->pmb_pack->pmhd->w0;
+    auto bcc  = pm->pmb_pack->pmhd->bcc0;
 
     // Gamma-law EOS
     Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
@@ -1336,7 +1335,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                                   g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
       if (!(detg > 0.0) || !Kokkos::isfinite(detg)) {
         for (int n = 0; n < n_comp; ++n) {
-          dv(m, i_dv+n, k, j, i) = 0.0;
+          dv(m, dv_start+n, k, j, i) = 0.0;
         }
         return;
       }
@@ -1373,7 +1372,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
       if (!valid_primitives) {
         for (int n = 0; n < n_comp; ++n) {
-          dv(m, i_dv+n, k, j, i) = 0.0;
+          dv(m, dv_start+n, k, j, i) = 0.0;
         }
         return;
       }
@@ -1405,33 +1404,33 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // --- 5. Coordinates (Cartesian) ---
       Real x1v = CellCenterX(i - is, indcs.nx1,
-                            size.d_view(m).x1min, size.d_view(m).x1max);
+                            size(m).x1min, size(m).x1max);
       Real x2v = CellCenterX(j - js, indcs.nx2,
-                            size.d_view(m).x2min, size.d_view(m).x2max);
+                            size(m).x2min, size(m).x2max);
       Real x3v = CellCenterX(k - ks, indcs.nx3,
-                            size.d_view(m).x3min, size.d_view(m).x3max);
+                            size(m).x3min, size(m).x3max);
 
       // --- 6. Angular momentum densities (densitized by sqrt(gamma)) ---
       // L = (r x S) * sqrt(gamma)
 
       // Fluid
-      dv(m, i_dv,   k, j, i) =
+      dv(m, dv_start,   k, j, i) =
         (x2v * S_fluid_d[2] - x3v * S_fluid_d[1]) * sqrt_gamma; // Lx
-      dv(m, i_dv+1, k, j, i) =
+      dv(m, dv_start+1, k, j, i) =
         (x3v * S_fluid_d[0] - x1v * S_fluid_d[2]) * sqrt_gamma; // Ly
-      dv(m, i_dv+2, k, j, i) =
+      dv(m, dv_start+2, k, j, i) =
         (x1v * S_fluid_d[1] - x2v * S_fluid_d[0]) * sqrt_gamma; // Lz
 
       // EM
-      dv(m, i_dv+3, k, j, i) =
+      dv(m, dv_start+3, k, j, i) =
         (x2v * S_em_d[2] - x3v * S_em_d[1]) * sqrt_gamma;
-      dv(m, i_dv+4, k, j, i) =
+      dv(m, dv_start+4, k, j, i) =
         (x3v * S_em_d[0] - x1v * S_em_d[2]) * sqrt_gamma;
-      dv(m, i_dv+5, k, j, i) =
+      dv(m, dv_start+5, k, j, i) =
         (x1v * S_em_d[1] - x2v * S_em_d[0]) * sqrt_gamma;
       for (int n = 0; n < n_comp; ++n) {
-        if (!Kokkos::isfinite(dv(m, i_dv+n, k, j, i))) {
-          dv(m, i_dv+n, k, j, i) = 0.0;
+        if (!Kokkos::isfinite(dv(m, dv_start+n, k, j, i))) {
+          dv(m, dv_start+n, k, j, i) = 0.0;
         }
       }
     });
@@ -1457,6 +1456,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("torque") == 0) {
     int n_comp = 3;
     ensure_derived_storage("torque", n_comp);
+    const int dv_start = i_dv;
     if (ng < 3) {
       std::cerr << "### FATAL ERROR: torque uses the Dx<4> stencil and requires "
                 << "mesh/nghost >= 3" << std::endl;
@@ -1464,9 +1464,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     }
 
     auto dv    = derived_var;
-    auto &adm  = pm->pmb_pack->padm->adm;
-    auto &prim = pm->pmb_pack->pmhd->w0;
-    auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+    auto adm  = pm->pmb_pack->padm->adm;
+    auto prim = pm->pmb_pack->pmhd->w0;
+    auto bcc  = pm->pmb_pack->pmhd->bcc0;
 
     Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
     if (!(gamma_gas > 1.0) || !std::isfinite(gamma_gas)) {
@@ -1479,9 +1479,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       // --- 0. Cell geometry + inverse dx ---
       Real idx[3] = {
-        1.0/size.d_view(m).dx1,
-        1.0/size.d_view(m).dx2,
-        1.0/size.d_view(m).dx3
+        1.0/size(m).dx1,
+        1.0/size(m).dx2,
+        1.0/size(m).dx3
       };
 
       // --- 1. Metric, det, inverse ---
@@ -1498,9 +1498,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // Guard against bad metric
       if (!(detg > 0.0) || !Kokkos::isfinite(detg)) {
-        dv(m,i_dv+0,k,j,i) = 0.0;
-        dv(m,i_dv+1,k,j,i) = 0.0;
-        dv(m,i_dv+2,k,j,i) = 0.0;
+        dv(m,dv_start+0,k,j,i) = 0.0;
+        dv(m,dv_start+1,k,j,i) = 0.0;
+        dv(m,dv_start+2,k,j,i) = 0.0;
         return;
       }
       Real sqrt_gamma = sqrt(detg);
@@ -1564,7 +1564,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
       if (!valid_primitives) {
         for (int n = 0; n < n_comp; ++n) {
-          dv(m, i_dv+n, k, j, i) = 0.0;
+          dv(m, dv_start+n, k, j, i) = 0.0;
         }
         return;
       }
@@ -1645,16 +1645,19 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
       // --- 6. Position and densitized torque density (r × G)_a ---
       Real x1v = CellCenterX(i - is, indcs.nx1,
-                            size.d_view(m).x1min, size.d_view(m).x1max);
+                            size(m).x1min, size(m).x1max);
       Real x2v = CellCenterX(j - js, indcs.nx2,
-                            size.d_view(m).x2min, size.d_view(m).x2max);
+                            size(m).x2min, size(m).x2max);
       Real x3v = CellCenterX(k - ks, indcs.nx3,
-                            size.d_view(m).x3min, size.d_view(m).x3max);
+                            size(m).x3min, size(m).x3max);
 
       // Start with sqrt(gamma) * (r × G)_a   (using Cartesian r × ...)
-      dv(m,i_dv+0,k,j,i) = (x2v * G_d[2] - x3v * G_d[1]) * sqrt_gamma; // tau_x
-      dv(m,i_dv+1,k,j,i) = (x3v * G_d[0] - x1v * G_d[2]) * sqrt_gamma; // tau_y
-      dv(m,i_dv+2,k,j,i) = (x1v * G_d[1] - x2v * G_d[0]) * sqrt_gamma; // tau_z
+      dv(m,dv_start+0,k,j,i) =
+          (x2v * G_d[2] - x3v * G_d[1]) * sqrt_gamma;  // tau_x
+      dv(m,dv_start+1,k,j,i) =
+          (x3v * G_d[0] - x1v * G_d[2]) * sqrt_gamma;  // tau_y
+      dv(m,dv_start+2,k,j,i) =
+          (x1v * G_d[1] - x2v * G_d[0]) * sqrt_gamma;  // tau_z
 
       // --- 7. Add the product-rule term: F^j{}_i ∂_j φ^i = F^j{}_i ε_{a j}{}^{i} ---
       // F^j{}_i = α S^j{}_i - β^j S_i
@@ -1672,12 +1675,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       miss[1] = F_ud[2][0] - F_ud[0][2]; // a = y
       miss[2] = F_ud[0][1] - F_ud[1][0]; // a = z
 
-      dv(m,i_dv+0,k,j,i) += sqrt_gamma * miss[0];
-      dv(m,i_dv+1,k,j,i) += sqrt_gamma * miss[1];
-      dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
+      dv(m,dv_start+0,k,j,i) += sqrt_gamma * miss[0];
+      dv(m,dv_start+1,k,j,i) += sqrt_gamma * miss[1];
+      dv(m,dv_start+2,k,j,i) += sqrt_gamma * miss[2];
       for (int n = 0; n < n_comp; ++n) {
-        if (!Kokkos::isfinite(dv(m, i_dv+n, k, j, i))) {
-          dv(m, i_dv+n, k, j, i) = 0.0;
+        if (!Kokkos::isfinite(dv(m, dv_start+n, k, j, i))) {
+          dv(m, dv_start+n, k, j, i) = 0.0;
         }
       }
     });

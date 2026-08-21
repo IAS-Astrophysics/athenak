@@ -310,25 +310,28 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku, bool floors_only=false) {
-    int &nhyd = pmy_pack->pmhd->nmhd;
-    int &nscal = pmy_pack->pmhd->nscalars;
-    int &nmb = pmy_pack->nmb_thispack;
-    auto &fofc_ = pmy_pack->pmhd->fofc;
+    const int nhyd = pmy_pack->pmhd->nmhd;
+    const int nscal = pmy_pack->pmhd->nscalars;
+    const int nmb = pmy_pack->nmb_thispack;
+    auto fofc_ = pmy_pack->pmhd->fofc;
 
     // Some problem-specific parameters
-    auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
-    auto &smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
-    auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
-    auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
-    auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
-    auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
-    auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
-    auto &texcise_ = pmy_pack->pcoord->coord_data.texcise;
-    auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
-    auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
-    auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
-    auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow;
-    auto &excise_inflow_speed_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
+    const bool excise = pmy_pack->pcoord->coord_data.bh_excise;
+    const bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
+    auto excision_floor_ = pmy_pack->pcoord->excision_floor;
+    auto excision_flux_ = pmy_pack->pcoord->excision_flux;
+    auto excision_weight_ = pmy_pack->pcoord->excision_weight;
+    const Real dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
+    const Real pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+    const Real texcise_ = pmy_pack->pcoord->coord_data.texcise;
+    const bool smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
+    const Real excise_sigma_max_ =
+        pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
+    const Real excise_temp_ceil_ =
+        pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
+    const bool excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow;
+    const Real excise_inflow_speed_ =
+        pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
     Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
     Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
     Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
@@ -350,15 +353,18 @@ class PrimitiveSolverHydro {
     Real p0_rad = pmy_pack->pcoord->coord_data.punc_0_rad;
     Real p1_rad = pmy_pack->pcoord->coord_data.punc_1_rad;
 
-    auto &adm  = pmy_pack->padm->adm;
+    auto adm  = pmy_pack->padm->adm;
     auto &eos_ = ps.GetEOS();
     auto &ps_  = ps;
 
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int &is = indcs.is;
-    int &js = indcs.js;
-    int &ks = indcs.ks;
-    auto &size = pmy_pack->pmb->mb_size;
+    const auto &indcs = pmy_pack->pmesh->mb_indcs;
+    const int is = indcs.is;
+    const int js = indcs.js;
+    const int ks = indcs.ks;
+    const int nx1 = indcs.nx1;
+    const int nx2 = indcs.nx2;
+    const int nx3 = indcs.nx3;
+    auto size = pmy_pack->pmb->mb_size.d_view;
 
     const int ni = (iu - il + 1);
     const int nji = (ju - jl + 1)*ni;
@@ -402,15 +408,15 @@ class PrimitiveSolverHydro {
         }
       }
 
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
+      Real x1v = CellCenterX(i-is, nx1, x1min, x1max);
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
+      Real x2v = CellCenterX(j-js, nx2, x2min, x2max);
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
+      Real x3v = CellCenterX(k-ks, nx3, x3min, x3max);
 
       // Extract the metric
       Real g3d[NSPMETRIC], g3u[NSPMETRIC], detg, sdetg;
@@ -523,7 +529,7 @@ class PrimitiveSolverHydro {
           Real ry = use_p1 ? by1 : by0;
           Real rz = use_p1 ? bz1 : bz0;
           Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
-          if (rnorm > 0.0 && isfinite(rnorm)) {
+          if (rnorm > 0.0 && Kokkos::isfinite(rnorm)) {
             Real nx = rx/rnorm;
             Real ny = ry/rnorm;
             Real nz = rz/rnorm;
@@ -532,12 +538,14 @@ class PrimitiveSolverHydro {
             Real cvy = tvy;
             Real cvz = tvz;
             if (result.error == Primitive::Error::SUCCESS &&
-                isfinite(prim_pt[PVX]) && isfinite(prim_pt[PVY]) && isfinite(prim_pt[PVZ])) {
+                Kokkos::isfinite(prim_pt[PVX]) &&
+                Kokkos::isfinite(prim_pt[PVY]) &&
+                Kokkos::isfinite(prim_pt[PVZ])) {
               Real cu2 = g3d[S11]*SQR(prim_pt[PVX]) + g3d[S22]*SQR(prim_pt[PVY]) +
                          g3d[S33]*SQR(prim_pt[PVZ]) + 2.0*g3d[S12]*prim_pt[PVX]*prim_pt[PVY] +
                          2.0*g3d[S13]*prim_pt[PVX]*prim_pt[PVZ] +
                          2.0*g3d[S23]*prim_pt[PVY]*prim_pt[PVZ];
-              if (cu2 >= 0.0 && isfinite(cu2)) {
+              if (cu2 >= 0.0 && Kokkos::isfinite(cu2)) {
                 Real cW = sqrt(1.0 + cu2);
                 cvx = prim_pt[PVX]/cW;
                 cvy = prim_pt[PVY]/cW;
@@ -560,7 +568,7 @@ class PrimitiveSolverHydro {
         Real tv2 = g3d[S11]*SQR(tvx) + g3d[S22]*SQR(tvy) + g3d[S33]*SQR(tvz) +
                    2.0*g3d[S12]*tvx*tvy + 2.0*g3d[S13]*tvx*tvz +
                    2.0*g3d[S23]*tvy*tvz;
-        if (!(tv2 >= 0.0) || !isfinite(tv2)) {
+        if (!(tv2 >= 0.0) || !Kokkos::isfinite(tv2)) {
           tvx = tvy = tvz = 0.0;
           tv2 = 0.0;
         }
@@ -588,9 +596,9 @@ class PrimitiveSolverHydro {
         }
         prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
         bool smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
-                                    isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
+                                    Kokkos::isfinite(prim_pt[PRH]) && Kokkos::isfinite(prim_pt[PPR]));
         for (int n = 0; n < PYF + nscal; ++n) {
-          smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
+          smooth_state_finite = smooth_state_finite && Kokkos::isfinite(prim_pt[n]);
         }
         if (!smooth_state_finite) {
           prim_pt[PRH] = rhotarget;
@@ -607,9 +615,9 @@ class PrimitiveSolverHydro {
           }
           prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
           smooth_state_finite = (prim_pt[PRH] > 0.0 && prim_pt[PPR] > 0.0 &&
-                                 isfinite(prim_pt[PRH]) && isfinite(prim_pt[PPR]));
+                                 Kokkos::isfinite(prim_pt[PRH]) && Kokkos::isfinite(prim_pt[PPR]));
           for (int n = 0; n < PYF + nscal; ++n) {
-            smooth_state_finite = smooth_state_finite && isfinite(prim_pt[n]);
+            smooth_state_finite = smooth_state_finite && Kokkos::isfinite(prim_pt[n]);
           }
         }
         if (smooth_state_finite) {
@@ -806,23 +814,23 @@ class PrimitiveSolverHydro {
   KOKKOS_INLINE_FUNCTION
   static int CheckForConservedNaNs(const Real cons_pt[NCONS]) {
     int nans = 0;
-    if (!isfinite(cons_pt[CDN])) {
+    if (!Kokkos::isfinite(cons_pt[CDN])) {
       Kokkos::printf("D is NaN!\n"); // NOLINT
       nans = 1;
     }
-    if (!isfinite(cons_pt[CSX])) {
+    if (!Kokkos::isfinite(cons_pt[CSX])) {
       Kokkos::printf("Sx is NaN!\n"); // NOLINT
       nans = 1;
     }
-    if (!isfinite(cons_pt[CSY])) {
+    if (!Kokkos::isfinite(cons_pt[CSY])) {
       Kokkos::printf("Sy is NaN!\n"); // NOLINT
       nans = 1;
     }
-    if (!isfinite(cons_pt[CSZ])) {
+    if (!Kokkos::isfinite(cons_pt[CSZ])) {
       Kokkos::printf("Sz is NaN!\n"); // NOLINT
       nans = 1;
     }
-    if (!isfinite(cons_pt[CTA])) {
+    if (!Kokkos::isfinite(cons_pt[CTA])) {
       Kokkos::printf("Tau is NaN!\n"); // NOLINT
       nans = 1;
     }

@@ -121,8 +121,10 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
 
   DualArray2D<Real> result("interp_vals_temp", npts, nvars);
 
-  auto &iindcs = interp_indcs;
-  auto &iwghts = interp_wghts;
+  auto iindcs = interp_indcs.d_view;
+  auto iwghts = interp_wghts.d_view;
+  auto source = source_array;
+  auto result_d = result.d_view;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int is = indcs.is, js = indcs.js, ks = indcs.ks;
 
@@ -131,51 +133,39 @@ DualArray2D<Real> SphericalSurfaceGrid::InterpolateToSurface(
 
   par_for("int2surf_block", DevExeSpace(), 0, npts-1, 0, nvars-1,
     KOKKOS_LAMBDA(const int p, const int v) {
-      const int mb_id = iindcs.d_view(p,0);
+      const int mb_id = iindcs(p,0);
       if (mb_id == -1) {
-        result.d_view(p,v) = 0.0;
+        result_d(p,v) = 0.0;
         return;
       }
-      const int i0 = iindcs.d_view(p,1), j0 = iindcs.d_view(p,2), k0 = iindcs.d_view(p,3);
+      const int i0 = iindcs(p,1), j0 = iindcs(p,2), k0 = iindcs(p,3);
       Real accum = 0.0;
 
       for (int k_sten = 0; k_sten < nsten; ++k_sten) {
         for (int j_sten = 0; j_sten < nsten; ++j_sten) {
           for (int i_sten = 0; i_sten < nsten; ++i_sten) {
-            const Real w = iwghts.d_view(p, i_sten, 0) * iwghts.d_view(p, j_sten, 1) * iwghts.d_view(p, k_sten, 2);
+            const Real w = iwghts(p, i_sten, 0) * iwghts(p, j_sten, 1) *
+                           iwghts(p, k_sten, 2);
 
             // --- FIXED: This index logic is now consistent with SetInterpolationWeights ---
             const int I = is + i0 - nleft + 1 + i_sten;
             const int J = js + j0 - nleft + 1 + j_sten;
             const int K = ks + k0 - nleft + 1 + k_sten;
-            accum += w * source_array(mb_id, start_index + v, K, J, I);
+            accum += w * source(mb_id, start_index + v, K, J, I);
           }
         }
       }
-      result.d_view(p,v) = accum;
+      result_d(p,v) = accum;
     });
 
-  Kokkos::fence();
-
   result.template modify<DevExeSpace>();
-  result.template sync<HostMemSpace>();
   return result;
 }
 
 void SphericalSurfaceGrid::InterpolateMetric() {
   const int start = adm::ADM::I_ADM_GXX;
   const int end = start + 6;
-  DualArray2D<Real> interpolated_metric = InterpolateToSurface(pmy_pack->padm->u_adm, start, end);
-
-  auto dst_view = g_dd_surf_.d_view;
-  auto src_view = interpolated_metric.d_view;
-
-  Kokkos::parallel_for("ManualMetricCopy",
-                       Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {npts, 6}),
-    KOKKOS_LAMBDA(const int p, const int v) {
-      dst_view(p, v) = src_view(p, v);
-    });
-  g_dd_surf_.template modify<DevExeSpace>();
+  g_dd_surf_ = InterpolateToSurface(pmy_pack->padm->u_adm, start, end);
   metric_is_flat_ = false;
 
   CalculateDerivedGeometry();
@@ -183,27 +173,30 @@ void SphericalSurfaceGrid::InterpolateMetric() {
 
 void SphericalSurfaceGrid::BuildSurfaceCovectors(DualArray2D<Real>& dSigma) const {
   const int np = npts;
-  Kokkos::realloc(dSigma, np, 3);
-  auto &eTh = tan_th; auto &ePh = tan_ph; auto &wq = weights;
-  auto &g_surf = g_dd_surf_;
+  if (dSigma.extent(0) != static_cast<std::size_t>(np) || dSigma.extent(1) != 3) {
+    Kokkos::realloc(dSigma, np, 3);
+  }
+  auto eTh = tan_th.d_view;
+  auto ePh = tan_ph.d_view;
+  auto wq = weights.d_view;
+  auto g_surf = g_dd_surf_.d_view;
+  auto dSigma_d = dSigma.d_view;
 
   Kokkos::parallel_for("surf_cov_curved", Kokkos::RangePolicy<DevExeSpace>(0, np),
     KOKKOS_LAMBDA(const int p) {
-      const Real gxx = g_surf.d_view(p, 0), gxy = g_surf.d_view(p, 1), gxz = g_surf.d_view(p, 2);
-      const Real gyy = g_surf.d_view(p, 3), gyz = g_surf.d_view(p, 4), gzz = g_surf.d_view(p, 5);
+      const Real gxx = g_surf(p, 0), gxy = g_surf(p, 1), gxz = g_surf(p, 2);
+      const Real gyy = g_surf(p, 3), gyz = g_surf(p, 4), gzz = g_surf(p, 5);
       const Real gamma = adm::SpatialDet(gxx, gxy, gxz, gyy, gyz, gzz);
       const Real sqrt_gamma = (gamma > 0.0) ? sqrt(gamma) : 0.0;
-      const Real s = sqrt_gamma * wq.d_view(p);
+      const Real s = sqrt_gamma * wq(p);
 
-      const Real e1x = eTh.d_view(p,0), e1y = eTh.d_view(p,1), e1z = eTh.d_view(p,2);
-      const Real e2x = ePh.d_view(p,0), e2y = ePh.d_view(p,1), e2z = ePh.d_view(p,2);
-      dSigma.d_view(p,0) = s * (e1y*e2z - e1z*e2y);
-      dSigma.d_view(p,1) = s * (e1z*e2x - e1x*e2z);
-      dSigma.d_view(p,2) = s * (e1x*e2y - e1y*e2x);
+      const Real e1x = eTh(p,0), e1y = eTh(p,1), e1z = eTh(p,2);
+      const Real e2x = ePh(p,0), e2y = ePh(p,1), e2z = ePh(p,2);
+      dSigma_d(p,0) = s * (e1y*e2z - e1z*e2y);
+      dSigma_d(p,1) = s * (e1z*e2x - e1x*e2z);
+      dSigma_d(p,2) = s * (e1x*e2y - e1y*e2x);
     }
   );
-
-  Kokkos::fence();
 
   dSigma.template modify<DevExeSpace>();
 }

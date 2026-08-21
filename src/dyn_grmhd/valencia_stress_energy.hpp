@@ -33,7 +33,7 @@ void ValenciaPrimsToEulerianVelocity(const Real prim_Wv_u[3],
                                      Real v_d[3]) {
   // u_sq = gamma_ij (W v^i)(W v^j) = W^2 v^2
   const Real u_sq = Primitive::SquareVector(prim_Wv_u, g_dd_1d);
-  W = std::sqrt(1.0 + u_sq);
+  W = Kokkos::sqrt(1.0 + u_sq);
   const Real invW = (W > 0.0) ? 1.0/W : 0.0;
 
   // v^i = (W v^i) / W
@@ -83,7 +83,7 @@ void ValenciaEulerianMagneticFromDensitized(const Real B_tilde_u[3],
     - g01*(g01*g22 - g12*g02)
     + g02*(g01*g12 - g11*g02);
 
-  sqrt_gamma = (detg > 0.0) ? std::sqrt(detg) : 0.0;
+  sqrt_gamma = (detg > 0.0) ? Kokkos::sqrt(detg) : 0.0;
   const Real inv_sqrt_gamma = (sqrt_gamma > 0.0) ? 1.0/sqrt_gamma : 0.0;
 
   // B^i = \tilde{B}^i / sqrt(gamma)
@@ -286,4 +286,3 @@ void ValenciaStressEnergyTotal(const Real rho,
 }
 
 #endif // VALENCIA_STRESS_ENERGY_HPP_
-

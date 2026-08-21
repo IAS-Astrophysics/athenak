@@ -43,20 +43,22 @@ Real PunctureSmoothWeight01(const Real x, const Real exponent) {
 void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
                                    DvceArray4D<bool> &excision_flux) {
   // capture variables for kernel
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  const auto indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
-  int &ng = indcs.ng;
+  const int ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-  auto &size = pmy_pack->pmb->mb_size;
-  auto &spin = coord_data.bh_spin;
-  auto &excision_radius = coord_data.rexcise;
-  auto &weight = excision_weight;
-  Real smooth_width = coord_data.smooth_excise_width;
+  auto size = pmy_pack->pmb->mb_size.d_view;
+  auto floor = excision_floor;
+  auto flux = excision_flux;
+  const Real spin = coord_data.bh_spin;
+  const Real excision_radius = coord_data.rexcise;
+  auto weight = excision_weight;
+  const Real smooth_width = coord_data.smooth_excise_width;
 
-  auto &flux_excise_r = coord_data.flux_excise_r;
+  const Real flux_excise_r = coord_data.flux_excise_r;
 
   // NOTE(@pdmullen):
   // excision_floor: - if r_ks evaluated at this CC is <= excision_radius, mask the cell.
@@ -67,12 +69,12 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     // NOTE(@pdmullen): In some instances, calls to x? will access coordinate information
     // for which there is *no corresponding logical counterpart*, however, the
     // LeftEdgeX/CellCenterX functions can handle "out-of-range" queries.
-    Real &x1min = size.d_view(m).x1min;
-    Real &x1max = size.d_view(m).x1max;
-    Real &x2min = size.d_view(m).x2min;
-    Real &x2max = size.d_view(m).x2max;
-    Real &x3min = size.d_view(m).x3min;
-    Real &x3max = size.d_view(m).x3max;
+    Real &x1min = size(m).x1min;
+    Real &x1max = size(m).x1max;
+    Real &x2min = size(m).x2min;
+    Real &x2max = size(m).x2max;
+    Real &x3min = size(m).x3min;
+    Real &x3max = size(m).x3max;
 
     Real x1v   = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
     Real x1vm1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
@@ -98,14 +100,14 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     Real x3fp1 = LeftEdgeX  (k+1-ks, indcs.nx3, x3min, x3max);
     Real x3fp2 = LeftEdgeX  (k+2-ks, indcs.nx3, x3min, x3max);
 
-    excision_floor(m,k,j,i) = false;
-    excision_flux(m,k,j,i) = false;
+    floor(m,k,j,i) = false;
+    flux(m,k,j,i) = false;
     weight(m,k,j,i) = 0.0;
 
     // Set excision floor mask
     Real rks = KSRX(x1v, x2v, x3v, spin);
     if (rks <= excision_radius) {
-      excision_floor(m,k,j,i) = true;
+      floor(m,k,j,i) = true;
       weight(m,k,j,i) = SmoothStep01((excision_radius - rks)/smooth_width);
     }
 
@@ -124,7 +126,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = x3v;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) flux(m,k,j,i) = true;
 
     // check face at i+1
     x1 = x1vp1;
@@ -132,7 +134,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x1 = (fabs(x1) < fabs(x1fp1)) ? x1 : x1fp1;
     x1 = (fabs(x1) < fabs(x1f))   ? x1 : x1f;
     x1 = (fabs(x1) < fabs(x1fp2)) ? x1 : x1fp2;
-    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) flux(m,k,j,i) = true;
 
     // Check face at j
     x1 = x1v;
@@ -146,7 +148,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = x3v;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) flux(m,k,j,i) = true;
 
     // Check face at j+1
     x2 = x2vp1;
@@ -154,7 +156,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x2 = (fabs(x2) < fabs(x2fp1)) ? x2 : x2fp1;
     x2 = (fabs(x2) < fabs(x2f))   ? x2 : x2f;
     x2 = (fabs(x2) < fabs(x2fp2)) ? x2 : x2fp2;
-    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) flux(m,k,j,i) = true;
 
     // Check face at k
     x1 = x1v;
@@ -168,7 +170,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fm1)) ? x3 : x3fm1;
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
-    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) flux(m,k,j,i) = true;
 
     // Check face at k+1
     x3 = x3vp1;
@@ -176,7 +178,7 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
     x3 = (fabs(x3) < fabs(x3fp1)) ? x3 : x3fp1;
     x3 = (fabs(x3) < fabs(x3f))   ? x3 : x3f;
     x3 = (fabs(x3) < fabs(x3fp2)) ? x3 : x3fp2;
-    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) excision_flux(m,k,j,i) = true;
+    if (KSRX(x1,x2,x3,spin) <= flux_excise_r) flux(m,k,j,i) = true;
   });
 
   return;
@@ -185,20 +187,21 @@ void Coordinates::SetExcisionMasks(DvceArray4D<bool> &excision_floor,
 void Coordinates::UpdateExcisionMasks() {
   if (coord_data.excision_scheme == ExcisionScheme::lapse) {
     // capture variables for kernel
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int &ng = indcs.ng;
+    const auto indcs = pmy_pack->pmesh->mb_indcs;
+    const int ng = indcs.ng;
     int n1 = indcs.nx1 + 2*ng;
     int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
     int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
     int nmb1 = pmy_pack->nmb_thispack - 1;
-    auto &adm = pmy_pack->padm->adm;
-    auto &floor = excision_floor;
-    auto &flux = excision_flux;
-    auto &weight = excision_weight;
+    auto adm = pmy_pack->padm->adm;
+    auto floor = excision_floor;
+    auto flux = excision_flux;
+    auto weight = excision_weight;
 
-    Real &excise_lapse = coord_data.excise_lapse;
-    Real lapse_width = coord_data.smooth_excise_lapse_width;
-    Real flux_lapse = coord_data.smooth_excise ? excise_lapse + lapse_width : excise_lapse;
+    const Real excise_lapse = coord_data.excise_lapse;
+    const Real lapse_width = coord_data.smooth_excise_lapse_width;
+    const Real flux_lapse = coord_data.smooth_excise ? excise_lapse + lapse_width :
+                                                       excise_lapse;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -211,17 +214,17 @@ void Coordinates::UpdateExcisionMasks() {
     });
   } else if (coord_data.excision_scheme == ExcisionScheme::puncture) {
     // capture variables for kernel
-    auto &size = pmy_pack->pmb->mb_size;
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int &ng = indcs.ng;
+    auto size = pmy_pack->pmb->mb_size.d_view;
+    const auto indcs = pmy_pack->pmesh->mb_indcs;
+    const int ng = indcs.ng;
     int n1 = indcs.nx1 + 2*ng;
     int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
     int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
     int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
     int nmb1 = pmy_pack->nmb_thispack - 1;
-    auto &floor = excision_floor;
-    auto &flux = excision_flux;
-    auto &weight = excision_weight;
+    auto floor = excision_floor;
+    auto flux = excision_flux;
+    auto weight = excision_weight;
 
     Real p0_x = coord_data.punc_0[0];
     Real p0_y = coord_data.punc_0[1];
@@ -243,20 +246,20 @@ void Coordinates::UpdateExcisionMasks() {
     Real p1_vy = coord_data.punc_1_vel[1];
     Real p1_vz = coord_data.punc_1_vel[2];
 
-    Real &punc_0_r = coord_data.punc_0_rad;
-    Real &punc_1_r = coord_data.punc_1_rad;
-    Real width_fraction = coord_data.smooth_excise_puncture_width_fraction;
-    Real flux_rad_factor = coord_data.punc_flux_rad_factor;
-    Real weight_exponent = coord_data.smooth_excise_puncture_weight_exponent;
+    const Real punc_0_r = coord_data.punc_0_rad;
+    const Real punc_1_r = coord_data.punc_1_rad;
+    const Real width_fraction = coord_data.smooth_excise_puncture_width_fraction;
+    const Real flux_rad_factor = coord_data.punc_flux_rad_factor;
+    const Real weight_exponent = coord_data.smooth_excise_puncture_weight_exponent;
 
     par_for("set_excision", DevExeSpace(), 0, nmb1, 0, (n3-1), 0, (n2-1), 0, (n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
 
       Real x1v   = CellCenterX(i  -is, indcs.nx1, x1min, x1max);
       Real x2v   = CellCenterX(j  -js, indcs.nx2, x2min, x2max);
@@ -288,19 +291,19 @@ void Coordinates::UpdateExcisionMasks() {
 
   if (coord_data.excision_scheme == ExcisionScheme::horizon) {
     // capture variables for kernel
-    auto &indcs = pmy_pack->pmesh->mb_indcs;
-    auto &size = pmy_pack->pmb->mb_size;
-    int &ng = indcs.ng;
+    const auto indcs = pmy_pack->pmesh->mb_indcs;
+    auto size = pmy_pack->pmb->mb_size.d_view;
+    const int ng = indcs.ng;
     int is = indcs.is; int js = indcs.js; int ks = indcs.ks;
     int n1 = indcs.nx1 + 2 * ng;
     int n2 = (indcs.nx2 > 1) ? (indcs.nx2 + 2 * ng) : 1;
     int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2 * ng) : 1;
     int nmb1 = pmy_pack->nmb_thispack - 1;
-    auto &floor = excision_floor;
-    auto &flux = excision_flux;
+    auto floor = excision_floor;
+    auto flux = excision_flux;
 
     // set up arrays to hold horizon information
-    Real &horizon_factor = coord_data.horizon_factor;
+    const Real horizon_factor = coord_data.horizon_factor;
     int hsize = pmy_pack->pz4c->pfastflow.size();
     DualArray2D<Real> hcenter("hcenter", hsize, 3);
     DualArray2D<Real> hradius("hradius", hsize, 1);
@@ -322,16 +325,19 @@ void Coordinates::UpdateExcisionMasks() {
     hradius.template sync<DevExeSpace>();
     hfound.template modify<HostMemSpace>();
     hfound.template sync<DevExeSpace>();
+    auto hcenter_d = hcenter.d_view;
+    auto hradius_d = hradius.d_view;
+    auto hfound_d = hfound.d_view;
 
     par_for("set_excision_horizon", DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
       // Set MB specifics
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
+      Real &x1min = size(m).x1min;
+      Real &x1max = size(m).x1max;
+      Real &x2min = size(m).x2min;
+      Real &x2max = size(m).x2max;
+      Real &x3min = size(m).x3min;
+      Real &x3max = size(m).x3max;
 
       Real x1 = CellCenterX(i - is, indcs.nx1, x1min, x1max);
       Real x2 = CellCenterX(j - js, indcs.nx2, x2min, x2max);
@@ -339,13 +345,13 @@ void Coordinates::UpdateExcisionMasks() {
 
       bool excise = false;
       for (int h = 0; h < hsize; ++h) {
-        if (!hfound.d_view(h,0)) continue;
+        if (!hfound_d(h,0)) continue;
 
-        const Real r2 = SQR(x1 - hcenter.d_view(h,0)) +
-                        SQR(x2 - hcenter.d_view(h,1)) +
-                        SQR(x3 - hcenter.d_view(h,2));
+        const Real r2 = SQR(x1 - hcenter_d(h,0)) +
+                        SQR(x2 - hcenter_d(h,1)) +
+                        SQR(x3 - hcenter_d(h,2));
 
-        if (r2 < SQR(hradius.d_view(h,0) * horizon_factor)) {
+        if (r2 < SQR(hradius_d(h,0) * horizon_factor)) {
           excise = true;
           break;
         }
