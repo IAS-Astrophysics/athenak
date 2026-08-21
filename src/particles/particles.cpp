@@ -116,6 +116,7 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
   // select particle type
   {
     std::string ptype = pin->GetString(input_block_,"particle_type");
+    type_name = ptype;
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
     } else if (ptype.compare("lagrangian_mc") == 0) {
@@ -313,8 +314,7 @@ TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
 
 //----------------------------------------------------------------------------------------
 // Particles::CreateParticleTags()
-// Assigns tags to particles (unique integer).  Note that tracked particles are always
-// those with tag numbers less than ntrack.
+// Assigns unique integer tags to particles.
 
 void Particles::CreateParticleTags() {
   // tags are assigned sequentially within this rank, starting at 0 with rank=0

@@ -89,10 +89,14 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
 
       // set output variable and optional file id (default is output variable name)
       // but only for those output types that use them
-      if (opar.file_type.compare("hst") != 0 &&
+      if (opar.file_type.compare("particle_track") == 0) {
+        opar.variable = "particles";
+        std::string population =
+            pin->GetOrAddString(opar.block_name, "population", "particles");
+        opar.file_id = pin->GetOrAddString(opar.block_name, "id", population);
+      } else if (opar.file_type.compare("hst") != 0 &&
           opar.file_type.compare("rst") != 0 &&
-          opar.file_type.compare("log") != 0 &&
-          opar.file_type.compare("trk") != 0) {
+          opar.file_type.compare("log") != 0) {
         opar.variable = pin->GetString(opar.block_name, "variable");
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
@@ -182,7 +186,8 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       // set output variable and optional file id (default is output variable name)
       if (opar.file_type.compare("hst") != 0 &&
           opar.file_type.compare("rst") != 0 &&
-          opar.file_type.compare("log") != 0) {
+          opar.file_type.compare("log") != 0 &&
+          opar.file_type.compare("particle_track") != 0) {
         opar.variable = pin->GetString(opar.block_name, "variable");
         opar.file_id = pin->GetOrAddString(opar.block_name,"id",opar.variable);
       }
@@ -238,8 +243,8 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       } else if (opar.file_type.compare("pvtk") == 0) {
         pnode = new ParticleVTKOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
-      } else if (opar.file_type.compare("trk") == 0) {
-        pnode = new TrackedParticleOutput(pin,pm,opar);
+      } else if (opar.file_type.compare("particle_track") == 0) {
+        pnode = new ParticleTrackOutput(pin,pm,opar);
         pout_list.insert(pout_list.begin(),pnode);
       } else if (opar.file_type.compare("cbin") == 0) {
         opar.single_file_per_rank = pin->GetOrAddBoolean(opar.block_name,

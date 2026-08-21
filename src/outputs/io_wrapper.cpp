@@ -34,6 +34,9 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
     case FileMode::append:
       mode = "ab";
       break;
+    case FileMode::read_write:
+      mode = "r+b";
+      break;
     default:
       return false;
   }
@@ -51,6 +54,9 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
         break;
       case FileMode::append:
         mpi_mode = MPI_MODE_WRONLY | MPI_MODE_APPEND;
+        break;
+      case FileMode::read_write:
+        mpi_mode = MPI_MODE_RDWR;
         break;
       default:
         return false;
