@@ -203,9 +203,14 @@ TaskStatus RHINE::NSEResyncEOS() {
   auto eos = static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy>*>(
                  pmy_pack->pdyngr)->eos.ps.GetEOS();
 
+  // Excised cells hold no physical matter (see NetworkStepEOS).
+  const bool excise_ = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
+
   par_for("rhine_nse", DevExeSpace(), 0, pmy_pack->nmb_thispack-1,
           0, n3m1, 0, n2m1, 0, n1m1,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (excise_ && excision_floor_(m, k, j, i)) { return; }
     const Real n_fm3 = w0(m, IDN, k, j, i) / eos.GetBaryonMass();
     const Real T = temp(m, 0, k, j, i);
     if (eos.GetTransitionFactor(n_fm3, T) < 1.0) { return; }
@@ -272,6 +277,10 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
 
+  // BH excision.
+  const bool excise_ = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
+
   RhineNets nets_ = nets;
   const int  pmode_ = pmode;
 
@@ -281,6 +290,10 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
 
   par_for("rhine_src", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    if (excise_ && excision_floor_(m, k, j, i)) {
+      for (int l = 0; l < N_RHINE_AUX; ++l) { aux_(m, l, k, j, i) = 0.0; }
+      return;
+    }
     const Real mb_conv = eos.GetBaryonMass();     // combined mass+density factor
     const Real mb_MeV  = eos.GetBaryonMassMeV();   // raw baryon mass [MeV]
     const Real n_fm3   = w0(m, IDN, k, j, i) / mb_conv;
