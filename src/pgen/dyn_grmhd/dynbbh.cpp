@@ -2438,11 +2438,25 @@ KOKKOS_INLINE_FUNCTION void FillMetricDerivative(
   dg.zz = gcov[ZZ][ZZ].deriv;
 }
 
+KOKKOS_INLINE_FUNCTION void FillMetricValue(
+    const dual1_real gcov[NDIM][NDIM], struct dd_sym &g) {
+  g.tt = gcov[TT][TT].val;
+  g.tx = gcov[TT][XX].val;
+  g.ty = gcov[TT][YY].val;
+  g.tz = gcov[TT][ZZ].val;
+  g.xx = gcov[XX][XX].val;
+  g.xy = gcov[XX][YY].val;
+  g.xz = gcov[XX][ZZ].val;
+  g.yy = gcov[YY][YY].val;
+  g.yz = gcov[YY][ZZ].val;
+  g.zz = gcov[ZZ][ZZ].val;
+}
+
 KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
     const Real x, const Real y, const Real z, const int direction,
     const Real tr[NTRAJ], const Real dtr[NTRAJ],
     const bbh_metric_params& metric,
-    struct dd_sym &dg) {
+    struct dd_sym &dg, struct dd_sym *g) {
   dual1_real xd(x, direction == 1 ? 1.0 : 0.0);
   dual1_real yd(y, direction == 2 ? 1.0 : 0.0);
   dual1_real zd(z, direction == 3 ? 1.0 : 0.0);
@@ -2452,6 +2466,7 @@ KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
   }
   dual1_real gcov[NDIM][NDIM];
   SuperposedBBHTemplate(xd, yd, zd, gcov, trd, metric);
+  if (g != nullptr) FillMetricValue(gcov, *g);
   FillMetricDerivative(gcov, dg);
 }
 
@@ -2459,12 +2474,17 @@ KOKKOS_INLINE_FUNCTION void get_metric_and_derivatives(
     const Real t, const Real x, const Real y, const Real z,
     struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
     const Real dbbh_traj_loc[NTRAJ], const bbh_metric_params& metric) {
-  // Preserve the exact existing real-valued metric evaluation.
-  get_metric(t, x, y, z, met, bbh_traj_loc, metric);
-  MetricDerivativeAD(x, y, z, 0, bbh_traj_loc, dbbh_traj_loc, metric, met.g_t);
-  MetricDerivativeAD(x, y, z, 1, bbh_traj_loc, dbbh_traj_loc, metric, met.g_x);
-  MetricDerivativeAD(x, y, z, 2, bbh_traj_loc, dbbh_traj_loc, metric, met.g_y);
-  MetricDerivativeAD(x, y, z, 3, bbh_traj_loc, dbbh_traj_loc, metric, met.g_z);
+  (void)t;
+  // The time-seeded dual evaluation already contains the metric values, so
+  // reuse them instead of evaluating the full metric a fifth time.
+  MetricDerivativeAD(x, y, z, 0, bbh_traj_loc, dbbh_traj_loc, metric,
+                     met.g_t, &met.g);
+  MetricDerivativeAD(x, y, z, 1, bbh_traj_loc, dbbh_traj_loc, metric,
+                     met.g_x, nullptr);
+  MetricDerivativeAD(x, y, z, 2, bbh_traj_loc, dbbh_traj_loc, metric,
+                     met.g_y, nullptr);
+  MetricDerivativeAD(x, y, z, 3, bbh_traj_loc, dbbh_traj_loc, metric,
+                     met.g_z, nullptr);
 }
 
 KOKKOS_INLINE_FUNCTION
