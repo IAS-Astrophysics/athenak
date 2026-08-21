@@ -837,7 +837,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     int &ks = indcs.ks; int &ke = indcs.ke;
     auto &size = pmbp->pmb->mb_size;
     int nmb = pmbp->nmb_thispack;
-    auto &bbh_ = bbh;
+    const Real atmosphere_dfloor = bbh.dfloor;
+    const Real atmosphere_pfloor = bbh.pfloor;
+    const Real test_bz_gradient = bbh.test_bz_gradient;
 
     if (pmbp->phydro != nullptr) {
       auto &w0 = pmbp->phydro->w0;
@@ -845,11 +847,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       par_for("pgen_dynbbh_hydro_atmosphere", DevExeSpace(),
       0, nmb-1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        w0(m,IDN,k,j,i) = bbh_.dfloor;
+        w0(m,IDN,k,j,i) = atmosphere_dfloor;
         w0(m,IVX,k,j,i) = 0.0;
         w0(m,IVY,k,j,i) = 0.0;
         w0(m,IVZ,k,j,i) = 0.0;
-        w0(m,IPR,k,j,i) = bbh_.pfloor;
+        w0(m,IPR,k,j,i) = atmosphere_pfloor;
         for (int r = 0; r < nscal; ++r) w0(m,IYF+r,k,j,i) = 0.0;
       });
       if (pmbp->padm == nullptr) {
@@ -866,23 +868,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       par_for("pgen_dynbbh_mhd_atmosphere", DevExeSpace(),
       0, nmb-1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(int m, int k, int j, int i) {
-        w0(m,IDN,k,j,i) = bbh_.dfloor;
+        w0(m,IDN,k,j,i) = atmosphere_dfloor;
         w0(m,IVX,k,j,i) = 0.0;
         w0(m,IVY,k,j,i) = 0.0;
         w0(m,IVZ,k,j,i) = 0.0;
-        w0(m,IPR,k,j,i) = bbh_.pfloor;
+        w0(m,IPR,k,j,i) = atmosphere_pfloor;
         for (int r = 0; r < nscal; ++r) w0(m,IYF+r,k,j,i) = 0.0;
         const Real x1v = CellCenterX(i-is, indcs.nx1,
                                      size.d_view(m).x1min, size.d_view(m).x1max);
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
-        b0.x3f(m,k,j,i) = bbh_.test_bz_gradient*x1v;
+        b0.x3f(m,k,j,i) = test_bz_gradient*x1v;
         if (i == ie) b0.x1f(m,k,j,i+1) = 0.0;
         if (j == je) b0.x2f(m,k,j+1,i) = 0.0;
-        if (k == ke) b0.x3f(m,k+1,j,i) = bbh_.test_bz_gradient*x1v;
+        if (k == ke) b0.x3f(m,k+1,j,i) = test_bz_gradient*x1v;
         bcc0(m,IBX,k,j,i) = 0.0;
         bcc0(m,IBY,k,j,i) = 0.0;
-        bcc0(m,IBZ,k,j,i) = bbh_.test_bz_gradient*x1v;
+        bcc0(m,IBZ,k,j,i) = test_bz_gradient*x1v;
       });
       if (!pmbp->pcoord->is_dynamical_relativistic) {
         pmbp->pmhd->peos->PrimToCons(
@@ -1024,7 +1026,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   Real bbh_traj_t0[NTRAJ];
   find_traj_t(0.0, bbh_traj_t0);
-  auto& bbh_traj_ = bbh_traj_t0;
 
   Kokkos::parallel_reduce("pgen_torus1", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
   KOKKOS_LAMBDA(const int &idx, Real &max_ptot) {
@@ -1054,7 +1055,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     // Extract metric and inverse -- presumably should get actual metric?????
     Real glower[4][4], gupper[4][4];
-    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
+    GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
+                            bbh_traj_t0, trs);
 
     // Calculate Boyer-Lindquist coordinates of cell
     Real r, theta, phi;
@@ -1140,7 +1142,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
                       x1v, x2v, x3v, &u0, &u1, &u2, &u3);
 
       Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
+      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
+                              bbh_traj_t0, trs);
 
       uu1 = u1 - gupper[0][1]/gupper[0][0] * u0;
       uu2 = u2 - gupper[0][2]/gupper[0][0] * u0;
@@ -1437,7 +1440,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
       Real glower[4][4], gupper[4][4];
-      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper, bbh_traj_, trs);
+      GetSuperposedAndInverse(0.0, x1v, x2v, x3v, glower, gupper,
+                              bbh_traj_t0, trs);
 
       // Calculate Boyer-Lindquist coordinates of cell
       Real r, theta, phi;
@@ -1585,7 +1589,7 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   Real bbh_traj_0[NTRAJ];
   Real bbh_traj_m1[NTRAJ];
   Real dbbh_traj_0[NTRAJ];
-  auto& bbh_ = bbh;
+  const bbh_pgen bbh_ = bbh;
 
   /* Load trajectories */
 
@@ -2490,8 +2494,7 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
   const int nji  = nx2 * nx1;
   auto &u0       = pmbp->padm->u_adm;
   int I_ADM_ALPHA  = pmbp->padm->I_ADM_ALPHA;
-  // note: we need this to prevent capture by this in the lambda expr.
-  auto &bbh_ = bbh;
+  const Real alpha_threshold = bbh.alpha_thr;
   const Real alpha_hysteresis = bbh_ref.hysteresis;
 
   par_for_outer(
@@ -2510,9 +2513,9 @@ void RefineAlphaMin(MeshBlockPack *pmbp) {
       },
       Kokkos::Min<Real>(team_dmin));
 
-    if (team_dmin < bbh_.alpha_thr) {
+    if (team_dmin < alpha_threshold) {
       refine_flag.d_view(m + mbs) = 1;
-    } else if (team_dmin > alpha_hysteresis * bbh_.alpha_thr &&
+    } else if (team_dmin > alpha_hysteresis * alpha_threshold &&
                refine_flag.d_view(m + mbs) <= 0) {
       refine_flag.d_view(m + mbs) = -1;
     }
