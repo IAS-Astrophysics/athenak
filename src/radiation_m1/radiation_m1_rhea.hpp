@@ -81,15 +81,7 @@ class RheaModel {
   //! not only exactly n_capacity, because a regrid can shrink the live nmb_thispack below
   //! the capacity this instance/its scratch buffer were sized at without requiring
   //! RheaModel to be reconstructed.
-  //!
-  //! mem_fraction: Torch caching-allocator cap, fraction of device memory, CUDA/HIP/XPU
-  //! only (no-op on CPU). Applied first-call-wins PER DEVICE by the process-global module
-  //! cache (RheaModuleCache, radiation_m1_rhea.cpp): the cap is an allocator-level, not a
-  //! per-instance, concept, so a second RheaModel construction targeting a device that
-  //! has already been capped does not recap it, even if given a different mem_fraction
-  //! here. Default is a conservatively small value for the rhea_mem_fraction input
-  //! parameter.
-  RheaModel(const std::string &model_path, int n_capacity, double mem_fraction = 0.05);
+  RheaModel(const std::string &model_path, int n_capacity);
   ~RheaModel();
 
   // Backend/stream/device state below makes this non-copyable; moving is not needed

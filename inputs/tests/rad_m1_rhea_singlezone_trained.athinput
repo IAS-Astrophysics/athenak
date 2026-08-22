@@ -129,7 +129,6 @@ rhea_model_path = /var/home/dradice/Projects/NeuOscillations/data/model_exp21_8x
 rhea_stability_threshold = 0.5
 rhea_tau_0_factor = 1.0   # physical rate; see RATE NOTE above
 rhea_tau_1_factor = 1.0
-rhea_mem_fraction = 0.05
 
 <problem>
 pgen_name = rad_m1_rhea_singlezonetest

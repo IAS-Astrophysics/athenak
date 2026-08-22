@@ -264,11 +264,10 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   }
 
   // Flavor mixing parameters.
-  // rhea_model_path/rhea_mem_fraction are host-only config (never on RadiationM1Params)
-  // -- parsed here if flavor_mix=rhea, used further down in this constructor to build
-  // prhea/rhea_f4_in_scratch (needs nmb_thispack/indcs, computed later below).
+  // rhea_model_path is host-only config (never on RadiationM1Params) -- parsed here if
+  // flavor_mix=rhea, used further down in this constructor to build prhea/
+  // rhea_f4_in_scratch (needs nmb_thispack/indcs, computed later below).
   std::string rhea_model_path;
-  Real rhea_mem_fraction = 0.05;
   std::string flavor_mix = pin->GetOrAddString("radiation_m1", "flavor_mix", "none");
   if (flavor_mix == "equilibrium") {
     params.flavor_mix_type = FlavMixEquilibrium;
@@ -293,7 +292,6 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
                 << std::endl;
       exit(EXIT_FAILURE);
     }
-    rhea_mem_fraction = pin->GetOrAddReal("radiation_m1", "rhea_mem_fraction", 0.05);
 #else
     std::cerr << "Error: To use flavor_mix = rhea, executable must be compiled with "
                  "-DAthena_ENABLE_TORCH=ON"
@@ -388,7 +386,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   if (params.flavor_mix_type == FlavMixRhea) {
     int n_capacity = nmb * indcs.nx1 * indcs.nx2 * indcs.nx3;
     Kokkos::realloc(rhea_f4_in_scratch, n_capacity, 2, RheaModel::kNumFlavors, 4);
-    prhea = std::make_unique<RheaModel>(rhea_model_path, n_capacity, rhea_mem_fraction);
+    prhea = std::make_unique<RheaModel>(rhea_model_path, n_capacity);
   }
 #endif
 }

@@ -51,14 +51,12 @@
                   // approval; this codebase already requires C++17 throughout (Kokkos),
                   // and std::mutex is exactly what RheaModuleCache needs (it is
                   // explicitly mutex-guarded below).
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #if defined(KOKKOS_ENABLE_CUDA)
 #include <c10/cuda/CUDAGuard.h>
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <c10/cuda/CUDAStream.h>
 #elif defined(KOKKOS_ENABLE_HIP)
 // HIP masquerades as CUDA in LibTorch's public API (official ROCm PyTorch builds
@@ -66,11 +64,9 @@
 // code path to write here). We therefore pull in the same c10::cuda headers CUDA uses;
 // only the Kokkos-side accessor differs (DevExeSpace().hip_stream()/hip_device() below).
 #include <c10/cuda/CUDAGuard.h>
-#include <c10/cuda/CUDACachingAllocator.h>
 #include <c10/cuda/CUDAStream.h>
 #elif defined(KOKKOS_ENABLE_SYCL)
 #include <c10/core/StreamGuard.h>
-#include <c10/xpu/XPUCachingAllocator.h>
 #include <c10/xpu/XPUStream.h>
 #endif
 
@@ -111,40 +107,6 @@ torch::Device ResolveDevice() {
   return torch::Device(torch::kXPU, static_cast<c10::DeviceIndex>(dev));
 #else
   return torch::Device(torch::kCPU);
-#endif
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void CapAllocatorMemoryFraction(const torch::Device &device, double mem_fraction)
-//! \brief Cap Torch's caching allocator as a safety margin (not because growth is
-//! expected -- batch extents are deterministic and preallocated). No-op on CPU: the
-//! host allocator has no analogous "fraction of device memory" concept to cap.
-void CapAllocatorMemoryFraction(const torch::Device &device, double mem_fraction) {
-#if defined(KOKKOS_ENABLE_CUDA) || defined(KOKKOS_ENABLE_HIP)
-  // setMemoryFraction (c10/cuda/CUDACachingAllocator.h:130-131, free-function forwarder
-  // :313-314) requires the allocator to already be initialized for this device index;
-  // that normally happens as a side effect of the first real tensor allocation on it, but
-  // a parameter-less/buffer-less TorchScript module (e.g. the toy flavor-mixing
-  // stand-ins in scripts/make_toy_rhea_model.py, which have no learnable weights to move
-  // in RheaModuleCache::Get's model.to(device) above) never triggers one, and
-  // setMemoryFraction throws "Allocator not initialized for device" in that case. init()
-  // (:129 interface, :305-307 free-function forwarder) is the same lazy-init the
-  // allocator's own first real allocation would have performed; call it explicitly first
-  // so the cap works regardless of whether the loaded model happens to own any tensors.
-  c10::cuda::CUDACachingAllocator::init(c10::cuda::device_count());
-  c10::cuda::CUDACachingAllocator::setMemoryFraction(
-      mem_fraction, static_cast<c10::DeviceIndex>(device.index()));
-#elif defined(KOKKOS_ENABLE_SYCL)
-  // c10/xpu/XPUCachingAllocator.h:73 -- `C10_XPU_API void setMemoryFraction(double
-  // fraction, DeviceIndex device);`. Found directly in the pinned-adjacent (2.12.1)
-  // headers -- XPU has a symmetric cap to CUDA's, including the same init-before-cap
-  // requirement (:12 interface, :34-36 free-function forwarder).
-  c10::xpu::XPUCachingAllocator::init(c10::xpu::device_count());
-  c10::xpu::XPUCachingAllocator::setMemoryFraction(
-      mem_fraction, static_cast<c10::DeviceIndex>(device.index()));
-#else
-  (void)device;
-  (void)mem_fraction;
 #endif
 }
 
@@ -191,10 +153,9 @@ class RheaModuleCache {
 
   // Returns a cheap-to-copy handle to the loaded+frozen module for (model_path, device),
   // doing the one-shot load/freeze work only the first time this exact (canonicalized
-  // path, device index) key is requested, and the one-shot threading/allocator-cap work
-  // only the first time ever / first time this device index is seen, respectively.
-  torch::jit::Module Get(const std::string &model_path, const torch::Device &device,
-                         double mem_fraction) {
+  // path, device index) key is requested, and the one-shot threading configuration only
+  // the first time ever.
+  torch::jit::Module Get(const std::string &model_path, const torch::Device &device) {
     // std::filesystem::canonical requires the path to exist -- true here regardless,
     // since torch::jit::load below would fail on a missing file anyway; this merely
     // fails slightly earlier, with a clearer error.
@@ -259,14 +220,6 @@ class RheaModuleCache {
       it = modules_.emplace(key, std::move(model)).first;
     }
 
-    // Allocator memory-fraction cap: first-call-wins PER DEVICE -- keyed on device_index
-    // alone, not the full (path, device) key, since the cap is an allocator-level
-    // concept, not a per-model one. A second model loaded onto an already-capped device
-    // does not recap it, even if called with a different mem_fraction argument.
-    if (capped_devices_.insert(device_index).second) {
-      CapAllocatorMemoryFraction(device, mem_fraction);
-    }
-
     return it->second;
   }
 
@@ -278,7 +231,6 @@ class RheaModuleCache {
 
   std::mutex mutex_;
   std::map<Key, torch::jit::Module> modules_;
-  std::set<int> capped_devices_;
   bool threading_configured_ = false;
 };
 
@@ -349,9 +301,9 @@ c10::StreamGuard MakeXpuStreamGuard(c10::DeviceIndex device_index) {
 //! constructed for this (model_path, device) pair in this process. n_capacity is stored
 //! only for Predict()'s extent(0) <= n_capacity_ bounds check; it plays no
 //! role in what the cache loads, since none of the cached one-shot work depends on it.
-RheaModel::RheaModel(const std::string &model_path, int n_capacity, double mem_fraction)
+RheaModel::RheaModel(const std::string &model_path, int n_capacity)
     : device_(ResolveDevice()), n_capacity_(n_capacity) {
-  model_ = RheaModuleCache::Instance().Get(model_path, device_, mem_fraction);
+  model_ = RheaModuleCache::Instance().Get(model_path, device_);
 }
 
 //----------------------------------------------------------------------------------------
