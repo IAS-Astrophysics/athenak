@@ -460,6 +460,8 @@ class SphericalSurfaceOutput : public BaseTypeOutput {
  private:
   SphericalSurface *psurf;
   bool dump_weights;  // write the quadrature weight of each point to file
+  int center_tracker;  // compact object to follow, or -1 to stay at a fixed center
+  Real xc_off, yc_off, zc_off;  // center offset from the tracked object's position
 };
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput

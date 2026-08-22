@@ -11,6 +11,11 @@
 //!   ntheta, nphi, theta_spacing, theta_centering        angular grid, see
 //!                                                       ParseAngleOptions
 //!   xc, yc, zc                                          center of the surfaces
+//!   center_tracker                                      index of a compact object
+//!                                                       tracker to follow, or -1
+//!                                                       (default) for a fixed center.
+//!                                                       xc/yc/zc are then an offset
+//!                                                       from the tracked position.
 //!   weights                                             write the surface element of
 //!                                                       each point (default true)
 //!
@@ -25,6 +30,7 @@
 #include <cmath>
 #include <cstdio>  // snprintf
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -35,6 +41,8 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "outputs.hpp"
+#include "z4c/z4c.hpp"
+#include "z4c/compact_object_tracker.hpp"
 
 namespace {
 //! \fn std::vector<Real> ParseRadii(ParameterInput *pin, const OutputParameters &op)
@@ -192,6 +200,27 @@ SphericalSurfaceOutput::SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm,
   Real xc = pin->GetOrAddReal(op.block_name, "xc", 0.0);
   Real yc = pin->GetOrAddReal(op.block_name, "yc", 0.0);
   Real zc = pin->GetOrAddReal(op.block_name, "zc", 0.0);
+  center_tracker = pin->GetOrAddInteger(op.block_name, "center_tracker", -1);
+  xc_off = xc;
+  yc_off = yc;
+  zc_off = zc;
+  if (center_tracker >= 0) {
+    z4c::Z4c *pz4c = pm->pmb_pack->pz4c;
+    if (pz4c == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "center_tracker = " << center_tracker
+                << " in output block '" << op.block_name
+                << "' requires z4c, which is not enabled" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    if (static_cast<std::size_t>(center_tracker) >= pz4c->ptracker.size()) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "center_tracker = " << center_tracker
+                << " in output block '" << op.block_name << "' is out of range for "
+                << pz4c->ptracker.size() << " compact object tracker(s)" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
   // the quadrature weights are only useful when integrating over the surface, so they
   // can be switched off if not needed
   dump_weights = pin->GetOrAddBoolean(op.block_name, "weights", true);
@@ -201,8 +230,15 @@ SphericalSurfaceOutput::SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm,
 SphericalSurfaceOutput::~SphericalSurfaceOutput() { delete psurf; }
 
 void SphericalSurfaceOutput::LoadOutputData(Mesh *pm) {
+  bool recentered = false;
+  if (center_tracker >= 0) {
+    CompactObjectTracker *pt = pm->pmb_pack->pz4c->ptracker[center_tracker].get();
+    recentered = psurf->SetCenter(pt->GetPos(0) + xc_off, pt->GetPos(1) + yc_off,
+                                  pt->GetPos(2) + zc_off);
+  }
+
   // If AMR is enabled we need to reset the CartesianGrid
-  if (pm->adaptive) {
+  if (pm->adaptive && !recentered) {
     psurf->SetInterpolationIndices();
     psurf->SetInterpolationWeights();
   }
@@ -260,11 +296,14 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::ofstream ofile(fname, std::ios::binary);
 
     ofile << "# vtk DataFile Version 3.0" << std::endl;
+    const std::streamsize hdr_prec = ofile.precision();
     ofile << "# AthenaK data at time=" << pm->time
           << " cycle=" << pm->ncycle << " nradii=" << nradii
           << " rmin=" << psurf->radii.h_view(0)
           << " rmax=" << psurf->radii.h_view(nradii-1)
-          << " xc=" << psurf->xc << " yc=" << psurf->yc << " zc=" << psurf->zc
+          << " xc=" << std::setprecision(17) << psurf->xc
+          << " yc=" << psurf->yc << " zc=" << psurf->zc
+          << std::setprecision(hdr_prec)
           << " theta_spacing=" << SpacingName(psurf->theta_spacing)
           << " theta_centering=" << CenteringName(psurf->theta_centering)
           << std::endl;
