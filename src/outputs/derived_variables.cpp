@@ -1409,7 +1409,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
             const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
             nnu = N / Gamma;
           }
-          dv(m,nuidx,k,j,i) = (nnu > params_.rad_N_floor) ? J * ene_conv / nnu : 0.0;
+          bool j_ok = Kokkos::isfinite(J) && J > params_.rad_E_floor;
+          Real e_val = (j_ok && nnu > params_.rad_N_floor) ? J * ene_conv / nnu : 0.0;
+          dv(m,nuidx,k,j,i) = Kokkos::isfinite(e_val) ? e_val : 0.0;
         } else if (mode == 5) {
           Real nnu = 0.0;
           if (nvars_ > M1_N_IDX) {
@@ -1537,6 +1539,17 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
       pdens(m,0,kp,jp,ip) += 1.0;
     });
+  }
+
+  // DynGRMHD chemical potentials mu_b, mu_q, mu_le (code units). Evaluated from
+  // w0 and the temperature of the last C2P through the EOS policy, so that the
+  // weak-rate inputs can be compared across EOS policies and, for the transition
+  // EOS, across the NSE ramp.
+  if (name.compare("mhd_mu") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+    pm->pmb_pack->pdyngr->ChemicalPotentials(derived_var, i_dv);
+    i_dv += 3; // increment derived variable index
   }
 
   // spherical coordinate radius r = sqrt(x^2 + y^2 + z^2) from cell centers
