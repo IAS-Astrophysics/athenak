@@ -1409,7 +1409,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
             const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
             nnu = N / Gamma;
           }
-          dv(m,nuidx,k,j,i) = (nnu > params_.rad_N_floor) ? J * ene_conv / nnu : 0.0;
+          bool j_ok = Kokkos::isfinite(J) && J > params_.rad_E_floor;
+          Real e_val = (j_ok && nnu > params_.rad_N_floor) ? J * ene_conv / nnu : 0.0;
+          dv(m,nuidx,k,j,i) = Kokkos::isfinite(e_val) ? e_val : 0.0;
         } else if (mode == 5) {
           Real nnu = 0.0;
           if (nvars_ > M1_N_IDX) {
