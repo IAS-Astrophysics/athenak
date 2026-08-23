@@ -464,12 +464,16 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   //---- Step 1.  Set conserved variables in ghost zones for all physics
   InitBoundaryValuesAndPrimitives(pmesh);
 
+  particles::Particles *ppart = pmesh->pmb_pack->ppart;
+  if (!res_flag && ppart != nullptr) {
+    ppart->InitialParticleInjection();
+  }
+
   //---- Step 2.  Compute time step (if problem involves time evolution)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
-  particles::Particles *ppart = pmesh->pmb_pack->ppart;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -609,6 +613,12 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
         }
         lb_efficiency_ += static_cast<float>(minnmb*(global_variable::nranks))/
             static_cast<float>(pmesh->nmb_total);
+      }
+
+      // Passive particles created here appear in this cycle's output and first move
+      // during the following cycle.
+      if (pmesh->pmb_pack->ppart != nullptr) {
+        pmesh->pmb_pack->ppart->InjectParticles(this);
       }
 
       // Test for/make outputs

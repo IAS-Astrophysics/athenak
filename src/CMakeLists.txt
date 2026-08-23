@@ -117,6 +117,7 @@ add_executable(
         outputs/vtk_prtcl.cpp
 
         particles/particles.cpp
+        particles/particles_creation.cpp
         particles/particles_restart.cpp
         particles/particles_newdt.cpp
         particles/particles_pushers.cpp
@@ -140,6 +141,7 @@ add_executable(
         pgen/tests/shock_tube.cpp
         pgen/tests/shwave.cpp
         pgen/tests/particle_drift.cpp
+        pgen/tests/particle_injection.cpp
         pgen/tests/particle_lagrangian_mc.cpp
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp

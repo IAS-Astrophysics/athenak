@@ -26,6 +26,7 @@ namespace particles {
 // Particles constructor
 
 Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin, bool is_restart) :
+    next_tag_(0),
     tag_assignment_(pin->GetOrAddString("particles","assign_tag","index_order")),
     restart_sort_by_tag_(
         pin->GetOrAddBoolean("particles","restart_sort_by_tag",false)),
@@ -314,7 +315,7 @@ TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
 
 //----------------------------------------------------------------------------------------
 // Particles::CreateParticleTags()
-// Assigns unique integer tags to particles.
+// Assigns unique integer tags to particles and initializes the persistent high-water mark.
 
 void Particles::CreateParticleTags() {
   // tags are assigned sequentially within this rank, starting at 0 with rank=0
@@ -359,6 +360,7 @@ void Particles::CreateParticleTags() {
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  next_tag_ = NextTagFromParticles();
 }
 
 } // namespace particles

@@ -9,6 +9,7 @@ import athena_read
 import numpy as np
 
 import test_suite.testutils as testutils
+from test_suite.particles.test_particles_snapshot_gpu import _read_particle_vtk
 
 
 def _restart_input(tmp_path):
@@ -45,6 +46,21 @@ dcycle = 0
     return str(path)
 
 
+def _injection_restart_input(tmp_path):
+    """Add a restart output to the particle injection input."""
+    path = tmp_path / "particle_injection_restart.athinput"
+    path.write_text(
+        Path("inputs/particle_injection.athinput").read_text()
+        + """
+
+<output2>
+file_type = rst
+dcycle = 1
+"""
+    )
+    return str(path)
+
+
 def _sidecar_layout(path):
     """Return the payload layout of the current single-population sidecar."""
     contents = bytearray(path.read_bytes())
@@ -57,7 +73,7 @@ def _sidecar_layout(path):
     assert npop == 1
     nmb = struct.unpack_from("=Q", contents, 28)[0]
 
-    entry_offset = 36
+    entry_offset = 44
     _, _, nrdata, nidata, metadata_size = struct.unpack_from(
         "=4IQ", contents, entry_offset + 64
     )
@@ -198,7 +214,8 @@ def test_particle_restart_custom_distribution_gpu(tmp_path):
     upper_face = "particle_restart_upper_face_gpu"
     empty = "particle_restart_empty_gpu"
     histories = [
-        Path(f"{name}.user.hst") for name in (split, invalid, upper_face, empty)
+        Path(f"{name}.user.hst")
+        for name in (split, invalid, upper_face, empty)
     ]
     shutil.rmtree("rst", ignore_errors=True)
     for history in histories:
@@ -364,3 +381,44 @@ def test_particle_lagrangian_mc_restart_gpu(tmp_path):
         shutil.rmtree("rst", ignore_errors=True)
         for history in histories:
             history.unlink(missing_ok=True)
+
+
+def test_particle_injection_tag_high_water_gpu(tmp_path):
+    """Restarted injection must not reuse tags removed from a custom sidecar."""
+    split = "particle_injection_restart_split_gpu"
+    resumed = "particle_injection_restart_resumed_gpu"
+    shutil.rmtree("pvtk", ignore_errors=True)
+    shutil.rmtree("rst", ignore_errors=True)
+    try:
+        input_file = _injection_restart_input(tmp_path)
+        assert testutils.run(
+            input_file,
+            [f"job/basename={split}"],
+        ), "particle injection checkpoint run failed"
+
+        fluid_restart = Path("rst") / f"{split}.00001.rst"
+        particle_restart = Path("rst") / f"{split}.00001.part_rst"
+        empty_restart = tmp_path / "empty_injection.part_rst"
+        _write_empty_sidecar(particle_restart, empty_restart)
+
+        assert testutils.run_command(
+            [
+                "./athena",
+                "-r",
+                str(fluid_restart),
+                "-p",
+                str(empty_restart),
+                f"job/basename={resumed}",
+                "problem/injection_cycle=2",
+                "time/nlim=2",
+                "output2/dcycle=0",
+            ]
+        ), "particle injection restart run failed"
+
+        snapshot = Path(f"pvtk/{resumed}.prtcl_all.00002.part.vtk")
+        _, fields, _ = _read_particle_vtk(snapshot)
+        np.testing.assert_array_equal(fields["ptag"], [2])
+        np.testing.assert_array_equal(fields["status"], [0])
+    finally:
+        shutil.rmtree("pvtk", ignore_errors=True)
+        shutil.rmtree("rst", ignore_errors=True)

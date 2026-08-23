@@ -15,12 +15,18 @@
 #include "geodesic-grid/spherical_grid.hpp"
 #include "parameter_input.hpp"
 
+namespace particles {
+class ParticleCreation;
+}
+
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 using UserParticleTimestepFnPtr = Real (*)(MeshBlockPack *pmbp);
+using UserParticleInjectionFnPtr = void (*)(MeshBlockPack *pmbp,
+                                            particles::ParticleCreation *creation);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -56,6 +62,10 @@ class ProblemGenerator {
   UserHistoryFnPtr user_hist_func=nullptr;
   // Optional additional particle limit; enroll before returning on restart.
   UserParticleTimestepFnPtr user_particle_dt_func=nullptr;
+  // Optional passive particle creation hooks. Runtime injection occurs after a
+  // completed step; enroll user_particle_injection_func on restarts as well.
+  UserParticleInjectionFnPtr user_initial_particle_injection_func=nullptr;
+  UserParticleInjectionFnPtr user_particle_injection_func=nullptr;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);
@@ -71,6 +81,7 @@ class ProblemGenerator {
   void MRI3d(ParameterInput *pin, const bool restart);
   void OrszagTang(ParameterInput *pin, const bool restart);
   void ParticleDrift(ParameterInput *pin, const bool restart);
+  void ParticleInjection(ParameterInput *pin, const bool restart);
   void ParticleLagrangianMC(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void Shwave(ParameterInput *pin, const bool restart);

@@ -939,6 +939,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     OrszagTang(pin, is_restart);
   } else if (pgen_fun_name.compare("particle_drift") == 0) {
     ParticleDrift(pin, is_restart);
+  } else if (pgen_fun_name.compare("particle_injection") == 0) {
+    ParticleInjection(pin, is_restart);
   } else if (pgen_fun_name.compare("particle_lagrangian_mc") == 0) {
     ParticleLagrangianMC(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {

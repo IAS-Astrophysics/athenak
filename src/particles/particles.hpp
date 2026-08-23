@@ -119,6 +119,26 @@ class ParticlePopulation {
 };
 
 //----------------------------------------------------------------------------------------
+//! \class ParticleCreation
+//! \brief Temporary device storage filled by a particle creation function.
+
+class ParticleCreation {
+ public:
+  explicit ParticleCreation(ParticlePopulation *population);
+
+  void Resize(int count);
+  int GetCount() const {return nprtcl_;}
+  ParticlePopulation* GetPopulation() const {return population_;}
+
+  DvceArray2D<Real> prtcl_rdata;
+  DvceArray2D<int> prtcl_idata;
+
+ private:
+  ParticlePopulation *population_;
+  int nprtcl_;
+};
+
+//----------------------------------------------------------------------------------------
 //! \class Particles
 //! \brief Owns and coordinates all particle populations on a MeshBlockPack.
 
@@ -133,13 +153,19 @@ class Particles {
   int GetLocalCount() const;
   Real GetTimestep() const;
   void CreateParticleTags();
+  void InitialParticleInjection();
+  void InjectParticles(Driver *pdriver);
+  std::int64_t AppendParticles(ParticleCreation &creation);
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus NewTimeStep(Driver *pdriver, int stage);
   void WriteRestart(const std::string &filename) const;
   void LoadRestart(const std::string &filename);
 
  private:
+  std::int64_t RunParticleInjection(bool initial);
+  std::int64_t NextTagFromParticles() const;
   std::vector<ParticlePopulation*> populations_;
+  std::int64_t next_tag_;
   std::string tag_assignment_;
   bool restart_sort_by_tag_;
   MeshBlockPack *pmy_pack_;

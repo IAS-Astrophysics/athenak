@@ -38,7 +38,7 @@ constexpr std::uint32_t restart_format_version = 1;
 constexpr std::uint32_t endian_marker = 0x01020304;
 constexpr std::size_t population_name_size = 64;
 constexpr std::uint64_t restart_header_size =
-    8 + 5*sizeof(std::uint32_t) + sizeof(std::uint64_t);
+    8 + 5*sizeof(std::uint32_t) + 2*sizeof(std::uint64_t);
 constexpr std::uint64_t population_entry_size =
     population_name_size + 4*sizeof(std::uint32_t) + sizeof(std::uint64_t);
 constexpr std::uint64_t block_entry_size = sizeof(std::uint64_t);
@@ -335,6 +335,7 @@ void Particles::WriteRestart(const std::string &filename) const {
   AppendUInt32(header, static_cast<std::uint32_t>(sizeof(int)));
   AppendUInt32(header, static_cast<std::uint32_t>(npop));
   AppendUInt64(header, static_cast<std::uint64_t>(nmb));
+  AppendUInt64(header, static_cast<std::uint64_t>(next_tag_));
   if (header.size() != restart_header_size) {
     RestartError("Internal particle restart header size is inconsistent.");
   }
@@ -427,6 +428,7 @@ void Particles::LoadRestart(const std::string &filename) {
   const std::uint32_t int_size = ReadUInt32(header, offset);
   const std::uint32_t npop = ReadUInt32(header, offset);
   const std::uint64_t nmb = ReadUInt64(header, offset);
+  const std::uint64_t stored_next_tag = ReadUInt64(header, offset);
 
   const Mesh *pm = pmy_pack_->pmesh;
   if (format_version != restart_format_version || stored_endian != endian_marker ||
@@ -584,6 +586,15 @@ void Particles::LoadRestart(const std::string &filename) {
     Kokkos::deep_copy(population->prtcl_rdata, rdata);
     Kokkos::deep_copy(population->prtcl_idata, idata);
   }
+
+  const std::int64_t minimum_next_tag = NextTagFromParticles();
+  const std::uint64_t max_next_tag =
+      static_cast<std::uint64_t>(std::numeric_limits<int>::max()) + 1;
+  if (stored_next_tag > max_next_tag ||
+      stored_next_tag < static_cast<std::uint64_t>(minimum_next_tag)) {
+    RestartError("Particle restart next-tag value is inconsistent with its particles.");
+  }
+  next_tag_ = static_cast<std::int64_t>(stored_next_tag);
   file.Close();
 }
 
