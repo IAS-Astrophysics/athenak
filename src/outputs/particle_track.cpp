@@ -24,6 +24,7 @@
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "particles/particles.hpp"
+#include "pgen/pgen.hpp"
 #include "outputs.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -465,6 +466,23 @@ ParticleTrackOutput::ParticleTrackOutput(ParameterInput *pin, Mesh *pm,
   for (int n=0; n<population->nrdata; ++n) {
     if (population->real_output[n]) real_fields.push_back(n);
   }
+  if (pm->pgen != nullptr) {
+    for (const auto &variable : pm->pgen->user_particle_output_variables) {
+      for (int field : int_fields) {
+        if (variable.name == population->int_names[field]) {
+          FatalTrackOutput("user particle output variable '" + variable.name +
+                           "' conflicts with a stored particle field");
+        }
+      }
+      for (int field : real_fields) {
+        if (variable.name == population->real_names[field]) {
+          FatalTrackOutput("user particle output variable '" + variable.name +
+                           "' conflicts with a stored particle field");
+        }
+      }
+      user_real_names.push_back(variable.name);
+    }
+  }
   npout_eachrank.resize(global_variable::nranks);
 
   // Missing explicit tags remain valid and will be written if they are created later.
@@ -505,7 +523,7 @@ void ParticleTrackOutput::LoadOutputData(Mesh *pm) {
 
   Kokkos::realloc(outpart_idata, population->nidata, npout_thisrank);
   Kokkos::realloc(outpart_rdata, population->nrdata, npout_thisrank);
-  if (npout_thisrank == 0) return;
+  Kokkos::realloc(outpart_user_rdata, user_real_names.size(), npout_thisrank);
 
   DvceArray2D<int> device_idata("particle_track_idata", population->nidata,
                                 npout_thisrank);
@@ -514,22 +532,53 @@ void ParticleTrackOutput::LoadOutputData(Mesh *pm) {
   const int ni = population->nidata;
   const int nr = population->nrdata;
   int ngathered = 0;
-  Kokkos::parallel_scan(
-      "particle_track_gather", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
-      KOKKOS_LAMBDA(const int p, int &offset, const bool final) {
-        if (TagIsSelected(pi(PTAG,p), mode, start, stop, step, has_stop, tags)) {
-          if (final) {
-            for (int n=0; n<ni; ++n) device_idata(n,offset) = pi(n,p);
-            for (int n=0; n<nr; ++n) device_rdata(n,offset) = pr(n,p);
+  if (npout_thisrank > 0) {
+    Kokkos::parallel_scan(
+        "particle_track_gather", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+        KOKKOS_LAMBDA(const int p, int &offset, const bool final) {
+          if (TagIsSelected(pi(PTAG,p), mode, start, stop, step, has_stop, tags)) {
+            if (final) {
+              for (int n=0; n<ni; ++n) device_idata(n,offset) = pi(n,p);
+              for (int n=0; n<nr; ++n) device_rdata(n,offset) = pr(n,p);
+            }
+            ++offset;
           }
-          ++offset;
-        }
-      }, ngathered);
+        }, ngathered);
+  }
   if (ngathered != npout_thisrank) {
     FatalTrackOutput("particle selection changed while gathering output data");
   }
-  Kokkos::deep_copy(outpart_idata, device_idata);
-  Kokkos::deep_copy(outpart_rdata, device_rdata);
+
+  const std::size_t registered_user_fields = (pm->pgen == nullptr) ? 0 :
+      pm->pgen->user_particle_output_variables.size();
+  if (registered_user_fields != user_real_names.size()) {
+    FatalTrackOutput("user particle output registry changed after output setup");
+  }
+  if (!user_real_names.empty()) {
+    DvceArray2D<Real> device_user_rdata(
+        "particle_track_user_rdata", user_real_names.size(), npout_thisrank);
+    if (npout_thisrank > 0) {
+      Kokkos::deep_copy(device_user_rdata,
+                        std::numeric_limits<Real>::quiet_NaN());
+    }
+    for (std::size_t n=0; n<user_real_names.size(); ++n) {
+      const auto &variable = pm->pgen->user_particle_output_variables[n];
+      if (variable.name != user_real_names[n] || variable.function == nullptr) {
+        FatalTrackOutput("user particle output registry changed after output setup");
+      }
+      particles::ParticleOutputData output(
+          pm->pmb_pack, population, device_rdata, device_idata,
+          device_user_rdata, static_cast<int>(n), npout_thisrank);
+      variable.function(&output);
+    }
+    if (npout_thisrank > 0) {
+      Kokkos::deep_copy(outpart_user_rdata, device_user_rdata);
+    }
+  }
+  if (npout_thisrank > 0) {
+    Kokkos::deep_copy(outpart_idata, device_idata);
+    Kokkos::deep_copy(outpart_rdata, device_rdata);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -542,9 +591,11 @@ void ParticleTrackOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   std::vector<std::string> real_names;
   for (int field : int_fields) int_names.emplace_back(population->int_names[field]);
   for (int field : real_fields) real_names.emplace_back(population->real_names[field]);
+  real_names.insert(real_names.end(), user_real_names.begin(), user_real_names.end());
 
   const int int_per_record = static_cast<int>(int_fields.size());
-  const int real_per_record = static_cast<int>(real_fields.size());
+  const int real_per_record =
+      static_cast<int>(real_fields.size() + user_real_names.size());
   std::vector<int> local_ints(
       std::max(static_cast<int>(npout_thisrank*int_per_record), 1));
   std::vector<Real> local_reals(
@@ -554,7 +605,12 @@ void ParticleTrackOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       local_ints[int_per_record*p+n] = outpart_idata(int_fields[n],p);
     }
     for (int n=0; n<real_per_record; ++n) {
-      local_reals[real_per_record*p+n] = outpart_rdata(real_fields[n],p);
+      if (n < static_cast<int>(real_fields.size())) {
+        local_reals[real_per_record*p+n] = outpart_rdata(real_fields[n],p);
+      } else {
+        local_reals[real_per_record*p+n] =
+            outpart_user_rdata(n-static_cast<int>(real_fields.size()),p);
+      }
     }
   }
 

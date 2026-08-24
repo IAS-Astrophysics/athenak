@@ -40,7 +40,7 @@ def _sorted(data):
 
 
 def test_particle_track_gpu(tmp_path):
-    """Select tags by list/slice/all and use each type's output field metadata."""
+    """Select tags, preserve empty output, and evaluate a pgen callback on the GPU."""
     shutil.rmtree("particle_track", ignore_errors=True)
     histories = [
         Path("particle_track_cosmic_ray.user.hst"),
@@ -54,7 +54,12 @@ def test_particle_track_gpu(tmp_path):
             tmp_path,
             "inputs/particle_drift.athinput",
             "cosmic_ray_track",
-            [("list", "1,2,3,19"), ("slice", "::2"), ("all", "all")],
+            [
+                ("list", "1,2,3,19"),
+                ("slice", "::2"),
+                ("all", "all"),
+                ("missing", "19"),
+            ],
         )
         log_path = Path(testutils.LOG_FILE_PATH)
         log_offset = log_path.stat().st_size if log_path.exists() else 0
@@ -69,8 +74,14 @@ def test_particle_track_gpu(tmp_path):
 
         expected_columns = [
             "time", "cycle", "ptag", "status", "x", "y", "z", "vx", "vy", "vz",
+            "radius_squared",
         ]
-        expected_tags = {"list": [1, 2, 3], "slice": [0, 2, 4, 6], "all": range(8)}
+        expected_tags = {
+            "list": [1, 2, 3],
+            "slice": [0, 2, 4, 6],
+            "all": range(8),
+            "missing": [],
+        }
         for output_id, tags in expected_tags.items():
             path = Path(
                 f"particle_track/particle_track_cosmic_ray.{output_id}.part_track"
@@ -88,6 +99,9 @@ def test_particle_track_gpu(tmp_path):
             np.testing.assert_allclose(data["vx"], 0.10 + 0.01*data["ptag"])
             np.testing.assert_allclose(data["vy"], -0.08 + 0.005*data["ptag"])
             np.testing.assert_allclose(data["vz"], 0.03 - 0.002*data["ptag"])
+            np.testing.assert_allclose(
+                data["radius_squared"], data["x"]**2 + data["y"]**2 + data["z"]**2
+            )
 
         input_file = _track_input(
             tmp_path,

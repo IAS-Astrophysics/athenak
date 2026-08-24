@@ -28,6 +28,18 @@ int delete_tag = -1;
 
 Real ParticleDriftTimestep(MeshBlockPack*) { return 0.125; }
 
+void ParticleRadiusSquared(particles::ParticleOutputData *output) {
+  auto pr = output->prtcl_rdata;
+  auto values = output->output_data;
+  const int field = output->field_index;
+  const int npart = output->nprtcl;
+  if (npart == 0) return;
+  par_for("particle_output_radius_squared", DevExeSpace(), 0, npart-1,
+  KOKKOS_LAMBDA(const int p) {
+    values(field,p) = SQR(pr(IPX,p)) + SQR(pr(IPY,p)) + SQR(pr(IPZ,p));
+  });
+}
+
 KOKKOS_INLINE_FUNCTION
 Real InitialX(const int id, const bool migration) {
   if (migration) {
@@ -177,6 +189,7 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
 void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   user_hist_func = DriftHistory;
   user_particle_dt_func = ParticleDriftTimestep;
+  EnrollParticleOutputVariable("radius_squared", ParticleRadiusSquared);
   expected_particles = pin->GetOrAddInteger(
       "problem", "expected_particles", kDefaultParticles);
   migration_test = pin->GetOrAddBoolean("problem", "migration_test", false);

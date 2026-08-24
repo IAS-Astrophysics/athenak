@@ -461,9 +461,11 @@ class ParticleTrackOutput : public BaseTypeOutput {
   std::vector<int> explicit_tags;
   DvceArray1D<int> selected_tags;
   std::vector<int> int_fields, real_fields;
+  std::vector<std::string> user_real_names;
   std::vector<int> npout_eachrank;
   HostArray2D<int> outpart_idata;
   HostArray2D<Real> outpart_rdata;
+  HostArray2D<Real> outpart_user_rdata;
 };
 
 //----------------------------------------------------------------------------------------

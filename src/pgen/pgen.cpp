@@ -12,6 +12,8 @@
 #include <string>
 #include <utility>
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstdio>
 
 #include "athena.hpp"
@@ -668,6 +670,43 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       exit(EXIT_FAILURE);
     }
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::EnrollParticleOutputVariable()
+//! \brief Register one named, output-only particle quantity supplied by the pgen.
+
+void ProblemGenerator::EnrollParticleOutputVariable(
+    const std::string &name, UserParticleOutputFnPtr function) {
+  if (name.empty() || name == "time" || name == "cycle") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle output variable name '" << name
+              << "' is empty or reserved." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (const char c : name) {
+    if (std::isspace(static_cast<unsigned char>(c))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle output variable name '" << name
+                << "' cannot contain whitespace." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if (function == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle output variable '" << name
+              << "' has a null callback." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (const auto &variable : user_particle_output_variables) {
+    if (variable.name == name) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle output variable '" << name
+                << "' was enrolled more than once." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  user_particle_output_variables.push_back({name, function});
 }
 
 //----------------------------------------------------------------------------------------

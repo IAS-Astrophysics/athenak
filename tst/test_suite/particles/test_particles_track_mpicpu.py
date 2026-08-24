@@ -53,6 +53,10 @@ def test_particle_track_mpicpu(tmp_path):
         np.testing.assert_allclose(final["vx"][order], vx)
         np.testing.assert_allclose(final["vy"][order], -0.08 + 0.005*tags)
         np.testing.assert_allclose(final["vz"][order], 0.03 - 0.002*tags)
+        np.testing.assert_allclose(
+            final["radius_squared"][order],
+            final["x"][order]**2 + final["y"][order]**2 + final["z"][order]**2,
+        )
     finally:
         shutil.rmtree("particle_track", ignore_errors=True)
         history.unlink(missing_ok=True)

@@ -10,6 +10,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "geodesic-grid/spherical_grid.hpp"
@@ -17,6 +18,7 @@
 
 namespace particles {
 class ParticleCreation;
+struct ParticleOutputData;
 }
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
@@ -27,6 +29,12 @@ using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 using UserParticleTimestepFnPtr = Real (*)(MeshBlockPack *pmbp);
 using UserParticleInjectionFnPtr = void (*)(MeshBlockPack *pmbp,
                                             particles::ParticleCreation *creation);
+using UserParticleOutputFnPtr = void (*)(particles::ParticleOutputData *output);
+
+struct UserParticleOutputVariable {
+  std::string name;
+  UserParticleOutputFnPtr function;
+};
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -66,6 +74,12 @@ class ProblemGenerator {
   // completed step; enroll user_particle_injection_func on restarts as well.
   UserParticleInjectionFnPtr user_initial_particle_injection_func=nullptr;
   UserParticleInjectionFnPtr user_particle_injection_func=nullptr;
+  // Output-only particle quantities appended to particle-track output. Enroll them again
+  // when restarting.
+  std::vector<UserParticleOutputVariable> user_particle_output_variables;
+
+  void EnrollParticleOutputVariable(const std::string &name,
+                                    UserParticleOutputFnPtr function);
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);

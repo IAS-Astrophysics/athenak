@@ -119,6 +119,29 @@ class ParticlePopulation {
 };
 
 //----------------------------------------------------------------------------------------
+//! \struct ParticleOutputData
+//! \brief Device-resident particle data supplied to one pgen output callback.
+
+struct ParticleOutputData {
+  ParticleOutputData(MeshBlockPack *ppack, ParticlePopulation *ppopulation,
+                     DvceArray2D<Real> rdata, DvceArray2D<int> idata,
+                     DvceArray2D<Real> output_data, int output_field, int count) :
+      pmbp(ppack), population(ppopulation), prtcl_rdata(rdata), prtcl_idata(idata),
+      output_data(output_data), field_index(output_field), nprtcl(count) {}
+
+  MeshBlockPack *pmbp;
+  ParticlePopulation *population;
+  // These are output snapshots. Callbacks must treat them as read-only and copy the
+  // views/indices they need before launching device work; this host descriptor is
+  // temporary.
+  DvceArray2D<Real> prtcl_rdata;
+  DvceArray2D<int> prtcl_idata;
+  DvceArray2D<Real> output_data;
+  int field_index;
+  int nprtcl;  // may be zero; the callback is still invoked on every rank
+};
+
+//----------------------------------------------------------------------------------------
 //! \class ParticleCreation
 //! \brief Temporary device storage filled by a particle creation function.
 
