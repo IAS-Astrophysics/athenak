@@ -40,6 +40,30 @@ void ParticleRadiusSquared(particles::ParticleOutputData *output) {
   });
 }
 
+void ParticleTrackX(particles::ParticleOutputData *output) {
+  auto pr = output->prtcl_rdata;
+  auto values = output->output_data;
+  const int field = output->field_index;
+  const int npart = output->nprtcl;
+  if (npart == 0) return;
+  par_for("particle_track_output_x", DevExeSpace(), 0, npart-1,
+  KOKKOS_LAMBDA(const int p) {
+    values(field,p) = pr(IPX,p);
+  });
+}
+
+void ParticleVTKY(particles::ParticleOutputData *output) {
+  auto pr = output->prtcl_rdata;
+  auto values = output->output_data;
+  const int field = output->field_index;
+  const int npart = output->nprtcl;
+  if (npart == 0) return;
+  par_for("particle_vtk_output_y", DevExeSpace(), 0, npart-1,
+  KOKKOS_LAMBDA(const int p) {
+    values(field,p) = pr(IPY,p);
+  });
+}
+
 KOKKOS_INLINE_FUNCTION
 Real InitialX(const int id, const bool migration) {
   if (migration) {
@@ -190,6 +214,8 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   user_hist_func = DriftHistory;
   user_particle_dt_func = ParticleDriftTimestep;
   EnrollParticleOutputVariable("radius_squared", ParticleRadiusSquared);
+  EnrollParticleTrackOutputVariable("track_x", ParticleTrackX);
+  EnrollParticleVTKOutputVariable("vtk_y", ParticleVTKY);
   expected_particles = pin->GetOrAddInteger(
       "problem", "expected_particles", kDefaultParticles);
   migration_test = pin->GetOrAddBoolean("problem", "migration_test", false);

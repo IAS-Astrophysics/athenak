@@ -355,8 +355,10 @@ class ParticleVTKOutput : public BaseTypeOutput {
  protected:
   int npout_thisrank;
   int npout_total;
+  std::vector<std::string> user_real_names;
   HostArray2D<Real> outpart_rdata;
   HostArray2D<int>  outpart_idata;
+  HostArray2D<Real> outpart_user_rdata;
 };
 
 //----------------------------------------------------------------------------------------

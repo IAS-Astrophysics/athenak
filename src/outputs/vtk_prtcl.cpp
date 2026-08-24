@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -24,21 +25,66 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "particles/particles.hpp"
+#include "pgen/pgen.hpp"
 #include "outputs.hpp"
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+
+namespace {
+
+[[noreturn]] void FatalParticleVTKOutput(const std::string &message) {
+  std::cout << "### FATAL ERROR in vtk_prtcl.cpp" << std::endl
+            << message << std::endl;
+#if MPI_PARALLEL_ENABLED
+  MPI_Abort(MPI_COMM_WORLD, 1);
+#endif
+  std::exit(EXIT_FAILURE);
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // ctor: also calls BaseTypeOutput base class constructor
 // Checks compatibility options for VTK outputs
 
 ParticleVTKOutput::ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
-  BaseTypeOutput(pin, pm, op) {
+  BaseTypeOutput(pin, pm, op), npout_thisrank(0), npout_total(0) {
   // create new directory for this output. Comments in binary.cpp constructor explain why
   mkdir("pvtk",0775);
+  if (pm->pmb_pack->ppart == nullptr) {
+    FatalParticleVTKOutput("file_type=pvtk requires particles");
+  }
+  particles::ParticlePopulation *population =
+      pm->pmb_pack->ppart->FindPopulation("particles");
+  if (population == nullptr) {
+    FatalParticleVTKOutput("particle population 'particles' was not found");
+  }
+  if (pm->pgen != nullptr) {
+    for (const auto &variable : pm->pgen->user_particle_vtk_output_variables) {
+      for (int n=0; n<population->nidata; ++n) {
+        if (population->int_output[n] && variable.name == population->int_names[n]) {
+          FatalParticleVTKOutput("user particle VTK output variable '" +
+                                 variable.name +
+                                 "' conflicts with a stored particle field");
+        }
+      }
+      for (int n=0; n<population->nrdata; ++n) {
+        if (population->real_output[n] && variable.name == population->real_names[n]) {
+          FatalParticleVTKOutput("user particle VTK output variable '" +
+                                 variable.name +
+                                 "' conflicts with a stored particle field");
+        }
+      }
+      user_real_names.push_back(variable.name);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
 // ParticleVTKOutput::LoadOutputData()
-// Copies real and integer particle data to host for outputs
+// Copies particle data to host and evaluates output callbacks on the live device views.
 
 void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
   particles::ParticlePopulation *pp =
@@ -47,18 +93,45 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
   npout_total = pm->nprtcl_total;
   Kokkos::realloc(outpart_rdata, pp->nrdata, npout_thisrank);
   Kokkos::realloc(outpart_idata, pp->nidata, npout_thisrank);
+  Kokkos::realloc(outpart_user_rdata, user_real_names.size(), npout_thisrank);
 
-  // Create mirror view on device of host view of output particle real/int data
-  auto d_outpart_rdata = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
+  // Copy the live device particle views through host-accessible mirrors.
+  auto h_outpart_rdata = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
                                                     outpart_rdata);
-  auto d_outpart_idata = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
+  auto h_outpart_idata = Kokkos::create_mirror_view(Kokkos::DefaultHostExecutionSpace(),
                                                     outpart_idata);
-  // Copy particle positions into device mirrors
-  Kokkos::deep_copy(d_outpart_rdata, pp->prtcl_rdata);
-  Kokkos::deep_copy(d_outpart_idata, pp->prtcl_idata);
-  // Copy particle positions from device mirror to host output array
-  Kokkos::deep_copy(outpart_rdata, d_outpart_rdata);
-  Kokkos::deep_copy(outpart_idata, d_outpart_idata);
+  Kokkos::deep_copy(h_outpart_rdata, pp->prtcl_rdata);
+  Kokkos::deep_copy(h_outpart_idata, pp->prtcl_idata);
+  Kokkos::deep_copy(outpart_rdata, h_outpart_rdata);
+  Kokkos::deep_copy(outpart_idata, h_outpart_idata);
+
+  const std::size_t registered_user_fields = (pm->pgen == nullptr) ? 0 :
+      pm->pgen->user_particle_vtk_output_variables.size();
+  if (registered_user_fields != user_real_names.size()) {
+    FatalParticleVTKOutput("user particle VTK output registry changed after output setup");
+  }
+  if (!user_real_names.empty()) {
+    DvceArray2D<Real> device_user_rdata(
+        "particle_vtk_user_rdata", user_real_names.size(), npout_thisrank);
+    if (npout_thisrank > 0) {
+      Kokkos::deep_copy(device_user_rdata,
+                        std::numeric_limits<Real>::quiet_NaN());
+    }
+    for (std::size_t n=0; n<user_real_names.size(); ++n) {
+      const auto &variable = pm->pgen->user_particle_vtk_output_variables[n];
+      if (variable.name != user_real_names[n] || variable.function == nullptr) {
+        FatalParticleVTKOutput(
+            "user particle VTK output registry changed after output setup");
+      }
+      particles::ParticleOutputData output(
+          pm->pmb_pack, pp, pp->prtcl_rdata, pp->prtcl_idata, device_user_rdata,
+          static_cast<int>(n), npout_thisrank);
+      variable.function(&output);
+    }
+    if (npout_thisrank > 0) {
+      Kokkos::deep_copy(outpart_user_rdata, device_user_rdata);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -245,15 +318,24 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   delete[] idata;
 
-  // Positions are already stored as VTK points. Write all remaining real particle data.
+  // Positions are already stored as VTK points. Write all remaining real particle data,
+  // followed by pgen-supplied output quantities.
+  std::vector<int> real_fields;
   for (int n=3; n<pp->nrdata; ++n) {
-    if (!pp->real_output[n]) continue;
+    if (pp->real_output[n]) real_fields.push_back(n);
+  }
+  const int nstored_real = static_cast<int>(real_fields.size());
+  const int noutput_real = nstored_real + static_cast<int>(user_real_names.size());
+  for (int output_field=0; output_field<noutput_real; ++output_field) {
+    const bool is_user_field = (output_field >= nstored_real);
+    const int n = is_user_field ? output_field-nstored_real : real_fields[output_field];
+    const std::string name = is_user_field ? user_real_names[n] : pp->real_names[n];
     std::stringstream msg;
     if (!have_written_pointdata_header) {
       have_written_pointdata_header = true;
       msg << std::endl << std::endl << "POINT_DATA " << npout_total << std::endl;
     }
-    msg << std::endl << "SCALARS " << pp->real_names[n] << " float" << std::endl
+    msg << std::endl << "SCALARS " << name << " float" << std::endl
         << "LOOKUP_TABLE default" << std::endl;
 
     if (global_variable::my_rank == 0) {
@@ -262,7 +344,8 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     header_offset += msg.str().size();
 
     for (int p=0; p<npout_thisrank; ++p) {
-      data[p] = static_cast<float>(outpart_rdata(n,p));
+      data[p] = static_cast<float>(is_user_field ? outpart_user_rdata(n,p) :
+                                                   outpart_rdata(n,p));
     }
     if (!big_end) {
       for (int i=0; i<npout_thisrank; ++i) { Swap4Bytes(&data[i]); }

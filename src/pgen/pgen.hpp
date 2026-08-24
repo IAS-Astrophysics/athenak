@@ -74,12 +74,17 @@ class ProblemGenerator {
   // completed step; enroll user_particle_injection_func on restarts as well.
   UserParticleInjectionFnPtr user_initial_particle_injection_func=nullptr;
   UserParticleInjectionFnPtr user_particle_injection_func=nullptr;
-  // Output-only particle quantities appended to particle-track output. Enroll them again
-  // when restarting.
-  std::vector<UserParticleOutputVariable> user_particle_output_variables;
+  // Output-only particle quantities. Generic enrollment adds to both registries;
+  // format-specific enrollment adds only to the named registry. Enroll on restarts too.
+  std::vector<UserParticleOutputVariable> user_particle_track_output_variables;
+  std::vector<UserParticleOutputVariable> user_particle_vtk_output_variables;
 
   void EnrollParticleOutputVariable(const std::string &name,
                                     UserParticleOutputFnPtr function);
+  void EnrollParticleTrackOutputVariable(const std::string &name,
+                                         UserParticleOutputFnPtr function);
+  void EnrollParticleVTKOutputVariable(const std::string &name,
+                                       UserParticleOutputFnPtr function);
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);

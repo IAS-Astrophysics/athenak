@@ -31,6 +31,43 @@
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
+namespace {
+
+void AddParticleOutputVariable(
+    std::vector<UserParticleOutputVariable> &variables, const std::string &format,
+    const std::string &name, UserParticleOutputFnPtr function) {
+  if (name.empty() || name == "time" || name == "cycle") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle " << format << " output variable name '" << name
+              << "' is empty or reserved." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (const char c : name) {
+    if (std::isspace(static_cast<unsigned char>(c))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle " << format << " output variable name '"
+                << name << "' cannot contain whitespace." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if (function == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle " << format << " output variable '" << name
+              << "' has a null callback." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (const auto &variable : variables) {
+    if (variable.name == name) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle " << format << " output variable '" << name
+                << "' was enrolled more than once." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  variables.push_back({name, function});
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // default constructor, calls pgen function.
@@ -674,39 +711,32 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
 //----------------------------------------------------------------------------------------
 //! \fn void ProblemGenerator::EnrollParticleOutputVariable()
-//! \brief Register one named, output-only particle quantity supplied by the pgen.
+//! \brief Register one named pgen quantity for particle-track and particle-VTK output.
 
 void ProblemGenerator::EnrollParticleOutputVariable(
     const std::string &name, UserParticleOutputFnPtr function) {
-  if (name.empty() || name == "time" || name == "cycle") {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle output variable name '" << name
-              << "' is empty or reserved." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  for (const char c : name) {
-    if (std::isspace(static_cast<unsigned char>(c))) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Particle output variable name '" << name
-                << "' cannot contain whitespace." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  if (function == nullptr) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle output variable '" << name
-              << "' has a null callback." << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  for (const auto &variable : user_particle_output_variables) {
-    if (variable.name == name) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Particle output variable '" << name
-                << "' was enrolled more than once." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  user_particle_output_variables.push_back({name, function});
+  EnrollParticleTrackOutputVariable(name, function);
+  EnrollParticleVTKOutputVariable(name, function);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::EnrollParticleTrackOutputVariable()
+//! \brief Register one named pgen quantity only for particle-track output.
+
+void ProblemGenerator::EnrollParticleTrackOutputVariable(
+    const std::string &name, UserParticleOutputFnPtr function) {
+  AddParticleOutputVariable(
+      user_particle_track_output_variables, "track", name, function);
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ProblemGenerator::EnrollParticleVTKOutputVariable()
+//! \brief Register one named pgen quantity only for particle-VTK output.
+
+void ProblemGenerator::EnrollParticleVTKOutputVariable(
+    const std::string &name, UserParticleOutputFnPtr function) {
+  AddParticleOutputVariable(
+      user_particle_vtk_output_variables, "VTK", name, function);
 }
 
 //----------------------------------------------------------------------------------------

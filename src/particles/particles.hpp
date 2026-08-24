@@ -131,9 +131,8 @@ struct ParticleOutputData {
 
   MeshBlockPack *pmbp;
   ParticlePopulation *population;
-  // These are output snapshots. Callbacks must treat them as read-only and copy the
-  // views/indices they need before launching device work; this host descriptor is
-  // temporary.
+  // Callbacks must treat particle views as read-only and copy the views/indices they need
+  // before launching device work; this host descriptor is temporary.
   DvceArray2D<Real> prtcl_rdata;
   DvceArray2D<int> prtcl_idata;
   DvceArray2D<Real> output_data;

@@ -68,7 +68,7 @@ def _read_particle_vtk(path):
 
 
 def test_particle_snapshot_gpu(tmp_path):
-    """Write each selected field with its type-local name."""
+    """Write stored, shared-callback, and VTK-only fields with their local names."""
     shutil.rmtree("pvtk", ignore_errors=True)
     histories = [
         Path("particle_snapshot_cosmic_ray.user.hst"),
@@ -90,19 +90,25 @@ def test_particle_snapshot_gpu(tmp_path):
         assert cosmic_path.exists(), "cosmic-ray particle snapshot was not written"
         points, fields, types = _read_particle_vtk(cosmic_path)
         assert points.shape == (8, 3)
-        assert list(fields) == ["ptag", "status", "vx", "vy", "vz"]
+        assert list(fields) == [
+            "ptag", "status", "vx", "vy", "vz", "radius_squared", "vtk_y",
+        ]
         assert types == {
             "ptag": "int",
             "status": "int",
             "vx": "float",
             "vy": "float",
             "vz": "float",
+            "radius_squared": "float",
+            "vtk_y": "float",
         }
         np.testing.assert_array_equal(np.sort(fields["ptag"]), np.arange(8))
         np.testing.assert_array_equal(fields["status"], np.zeros(8, dtype=np.int32))
         np.testing.assert_allclose(fields["vx"], 0.10 + 0.01*fields["ptag"])
         np.testing.assert_allclose(fields["vy"], -0.08 + 0.005*fields["ptag"])
         np.testing.assert_allclose(fields["vz"], 0.03 - 0.002*fields["ptag"])
+        np.testing.assert_allclose(fields["radius_squared"], np.sum(points**2, axis=1))
+        np.testing.assert_allclose(fields["vtk_y"], points[:, 1])
 
         shutil.rmtree("pvtk")
         lmc_input = _snapshot_input(

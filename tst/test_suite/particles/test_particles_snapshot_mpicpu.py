@@ -34,13 +34,17 @@ def test_particle_snapshot_mpicpu(tmp_path):
         points, fields, types = _read_particle_vtk(snapshot)
 
         assert points.shape == (7, 3)
-        assert list(fields) == ["ptag", "status", "vx", "vy", "vz"]
+        assert list(fields) == [
+            "ptag", "status", "vx", "vy", "vz", "radius_squared", "vtk_y",
+        ]
         assert types == {
             "ptag": "int",
             "status": "int",
             "vx": "float",
             "vy": "float",
             "vz": "float",
+            "radius_squared": "float",
+            "vtk_y": "float",
         }
 
         order = np.argsort(fields["ptag"])
@@ -62,6 +66,10 @@ def test_particle_snapshot_mpicpu(tmp_path):
         np.testing.assert_allclose(points[order, 0], initial_x + move_time*vx)
         np.testing.assert_allclose(points[order, 1], -0.20 + 0.04*tags + move_time*vy)
         np.testing.assert_allclose(points[order, 2], -0.10 + 0.02*tags + move_time*vz)
+        np.testing.assert_allclose(
+            fields["radius_squared"][order], np.sum(points[order]**2, axis=1), atol=1e-7
+        )
+        np.testing.assert_allclose(fields["vtk_y"][order], points[order, 1])
     finally:
         shutil.rmtree("pvtk", ignore_errors=True)
         history.unlink(missing_ok=True)
@@ -107,13 +115,17 @@ def test_particle_snapshot_empty_rank_mpicpu(tmp_path):
         points, fields, types = _read_particle_vtk(snapshot)
 
         assert points.shape == (1, 3)
-        assert list(fields) == ["ptag", "status", "vx", "vy", "vz"]
+        assert list(fields) == [
+            "ptag", "status", "vx", "vy", "vz", "radius_squared", "vtk_y",
+        ]
         assert types == {
             "ptag": "int",
             "status": "int",
             "vx": "float",
             "vy": "float",
             "vz": "float",
+            "radius_squared": "float",
+            "vtk_y": "float",
         }
         np.testing.assert_array_equal(fields["ptag"], [0])
         np.testing.assert_array_equal(fields["status"], [0])
@@ -121,6 +133,8 @@ def test_particle_snapshot_empty_rank_mpicpu(tmp_path):
         np.testing.assert_allclose(fields["vy"], [-0.08])
         np.testing.assert_allclose(fields["vz"], [0.03])
         np.testing.assert_allclose(points, [[-0.35, -0.20, -0.10]])
+        np.testing.assert_allclose(fields["radius_squared"], np.sum(points**2, axis=1))
+        np.testing.assert_allclose(fields["vtk_y"], points[:, 1])
     finally:
         shutil.rmtree("pvtk", ignore_errors=True)
         history.unlink(missing_ok=True)

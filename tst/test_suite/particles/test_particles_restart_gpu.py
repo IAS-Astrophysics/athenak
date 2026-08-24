@@ -22,6 +22,11 @@ def _restart_input(tmp_path):
 <output2>
 file_type = rst
 dcycle = 0
+
+<output3>
+file_type = pvtk
+variable = prtcl_all
+dcycle = 0
 """
     )
     return str(path)
@@ -153,6 +158,7 @@ def test_particle_drift_restart_gpu(tmp_path):
     split = "particle_restart_split_gpu"
     resumed = "particle_restart_resumed_gpu"
     histories = [Path(f"{name}.user.hst") for name in (direct, split, resumed)]
+    shutil.rmtree("pvtk", ignore_errors=True)
     shutil.rmtree("rst", ignore_errors=True)
     for history in histories:
         history.unlink(missing_ok=True)
@@ -197,11 +203,19 @@ def test_particle_drift_restart_gpu(tmp_path):
                 "time/nlim=2",
                 "time/tlim=1.0",
                 "output2/dcycle=0",
+                "output3/dcycle=1",
             ]
         ), "particle drift restart run failed"
 
         np.testing.assert_array_equal(_final_history(resumed), direct_state)
+        snapshots = sorted(Path("pvtk").glob(f"{resumed}.prtcl_all.*.part.vtk"))
+        assert snapshots, "restarted particle output was not written"
+        points, fields, _ = _read_particle_vtk(snapshots[-1])
+        np.testing.assert_allclose(fields["radius_squared"], np.sum(points**2, axis=1))
+        np.testing.assert_allclose(fields["vtk_y"], points[:, 1])
+        assert "track_x" not in fields
     finally:
+        shutil.rmtree("pvtk", ignore_errors=True)
         shutil.rmtree("rst", ignore_errors=True)
         for history in histories:
             history.unlink(missing_ok=True)

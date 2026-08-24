@@ -467,7 +467,7 @@ ParticleTrackOutput::ParticleTrackOutput(ParameterInput *pin, Mesh *pm,
     if (population->real_output[n]) real_fields.push_back(n);
   }
   if (pm->pgen != nullptr) {
-    for (const auto &variable : pm->pgen->user_particle_output_variables) {
+    for (const auto &variable : pm->pgen->user_particle_track_output_variables) {
       for (int field : int_fields) {
         if (variable.name == population->int_names[field]) {
           FatalTrackOutput("user particle output variable '" + variable.name +
@@ -550,7 +550,7 @@ void ParticleTrackOutput::LoadOutputData(Mesh *pm) {
   }
 
   const std::size_t registered_user_fields = (pm->pgen == nullptr) ? 0 :
-      pm->pgen->user_particle_output_variables.size();
+      pm->pgen->user_particle_track_output_variables.size();
   if (registered_user_fields != user_real_names.size()) {
     FatalTrackOutput("user particle output registry changed after output setup");
   }
@@ -562,7 +562,7 @@ void ParticleTrackOutput::LoadOutputData(Mesh *pm) {
                         std::numeric_limits<Real>::quiet_NaN());
     }
     for (std::size_t n=0; n<user_real_names.size(); ++n) {
-      const auto &variable = pm->pgen->user_particle_output_variables[n];
+      const auto &variable = pm->pgen->user_particle_track_output_variables[n];
       if (variable.name != user_real_names[n] || variable.function == nullptr) {
         FatalTrackOutput("user particle output registry changed after output setup");
       }

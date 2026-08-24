@@ -40,7 +40,7 @@ def _sorted(data):
 
 
 def test_particle_track_gpu(tmp_path):
-    """Select tags, preserve empty output, and evaluate a pgen callback on the GPU."""
+    """Select tags, preserve empty output, and evaluate shared and track-only callbacks."""
     shutil.rmtree("particle_track", ignore_errors=True)
     histories = [
         Path("particle_track_cosmic_ray.user.hst"),
@@ -74,7 +74,7 @@ def test_particle_track_gpu(tmp_path):
 
         expected_columns = [
             "time", "cycle", "ptag", "status", "x", "y", "z", "vx", "vy", "vz",
-            "radius_squared",
+            "radius_squared", "track_x",
         ]
         expected_tags = {
             "list": [1, 2, 3],
@@ -102,6 +102,7 @@ def test_particle_track_gpu(tmp_path):
             np.testing.assert_allclose(
                 data["radius_squared"], data["x"]**2 + data["y"]**2 + data["z"]**2
             )
+            np.testing.assert_allclose(data["track_x"], data["x"])
 
         input_file = _track_input(
             tmp_path,
