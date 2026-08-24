@@ -49,42 +49,52 @@ constexpr Real kDefaultMetricFdStep = 5.0e-5;
 KOKKOS_INLINE_FUNCTION Real metric_sqrt(const Real x) { return sqrt(x); }
 KOKKOS_INLINE_FUNCTION Real value_of(const Real x) { return x; }
 
-struct dual1_real {
+struct dual2_real {
   Real val;
-  Real deriv;
+  Real deriv0;
+  Real deriv1;
 
-  KOKKOS_INLINE_FUNCTION dual1_real() : val(0.0), deriv(0.0) {}
-  KOKKOS_INLINE_FUNCTION dual1_real(const Real value) : val(value), deriv(0.0) {}
-  KOKKOS_INLINE_FUNCTION dual1_real(const Real value, const Real derivative)
-      : val(value), deriv(derivative) {}
+  KOKKOS_INLINE_FUNCTION dual2_real()
+      : val(0.0), deriv0(0.0), deriv1(0.0) {}
+  KOKKOS_INLINE_FUNCTION dual2_real(const Real value)
+      : val(value), deriv0(0.0), deriv1(0.0) {}
+  KOKKOS_INLINE_FUNCTION dual2_real(const Real value, const Real derivative0,
+                                    const Real derivative1)
+      : val(value), deriv0(derivative0), deriv1(derivative1) {}
 };
 
-KOKKOS_INLINE_FUNCTION dual1_real operator+(const dual1_real &a,
-                                             const dual1_real &b) {
-  return dual1_real(a.val + b.val, a.deriv + b.deriv);
+KOKKOS_INLINE_FUNCTION dual2_real operator+(const dual2_real &a,
+                                             const dual2_real &b) {
+  return dual2_real(a.val + b.val, a.deriv0 + b.deriv0,
+                    a.deriv1 + b.deriv1);
 }
-KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a,
-                                             const dual1_real &b) {
-  return dual1_real(a.val - b.val, a.deriv - b.deriv);
+KOKKOS_INLINE_FUNCTION dual2_real operator-(const dual2_real &a,
+                                             const dual2_real &b) {
+  return dual2_real(a.val - b.val, a.deriv0 - b.deriv0,
+                    a.deriv1 - b.deriv1);
 }
-KOKKOS_INLINE_FUNCTION dual1_real operator-(const dual1_real &a) {
-  return dual1_real(-a.val, -a.deriv);
+KOKKOS_INLINE_FUNCTION dual2_real operator-(const dual2_real &a) {
+  return dual2_real(-a.val, -a.deriv0, -a.deriv1);
 }
-KOKKOS_INLINE_FUNCTION dual1_real operator*(const dual1_real &a,
-                                             const dual1_real &b) {
-  return dual1_real(a.val*b.val, a.deriv*b.val + a.val*b.deriv);
+KOKKOS_INLINE_FUNCTION dual2_real operator*(const dual2_real &a,
+                                             const dual2_real &b) {
+  return dual2_real(a.val*b.val,
+                    a.deriv0*b.val + a.val*b.deriv0,
+                    a.deriv1*b.val + a.val*b.deriv1);
 }
-KOKKOS_INLINE_FUNCTION dual1_real operator/(const dual1_real &a,
-                                             const dual1_real &b) {
+KOKKOS_INLINE_FUNCTION dual2_real operator/(const dual2_real &a,
+                                             const dual2_real &b) {
   const Real inv = 1.0/b.val;
-  return dual1_real(a.val*inv,
-                    (a.deriv*b.val - a.val*b.deriv)*inv*inv);
+  return dual2_real(a.val*inv,
+                    (a.deriv0*b.val - a.val*b.deriv0)*inv*inv,
+                    (a.deriv1*b.val - a.val*b.deriv1)*inv*inv);
 }
-KOKKOS_INLINE_FUNCTION dual1_real metric_sqrt(const dual1_real &x) {
+KOKKOS_INLINE_FUNCTION dual2_real metric_sqrt(const dual2_real &x) {
   const Real root = sqrt(x.val);
-  return dual1_real(root, 0.5*x.deriv/root);
+  const Real factor = 0.5/root;
+  return dual2_real(root, factor*x.deriv0, factor*x.deriv1);
 }
-KOKKOS_INLINE_FUNCTION Real value_of(const dual1_real &x) { return x.val; }
+KOKKOS_INLINE_FUNCTION Real value_of(const dual2_real &x) { return x.val; }
 
 template <typename T>
 KOKKOS_INLINE_FUNCTION T metric_norm3(const T x, const T y, const T z) {
@@ -389,8 +399,8 @@ void get_metric(const Real t, const Real x, const Real y, const Real z,
                 struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
                 const bbh_metric_params& metric);
 KOKKOS_INLINE_FUNCTION
-void get_metric_and_derivatives(const Real t, const Real x, const Real y,
-                                const Real z, struct four_metric &met,
+void get_adm_and_derivatives_ad(const Real t, const Real x, const Real y,
+                                const Real z, struct three_metric &gam,
                                 const Real bbh_traj_loc[NTRAJ],
                                 const Real dbbh_traj_loc[NTRAJ],
                                 const bbh_metric_params& metric);
@@ -1696,18 +1706,16 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
     Real &x3max = size(m).x3max;
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-    struct four_metric met4;
     struct three_metric met3;
     if (metric.metric_derivative_method == MetricDerivativeMethod::ad) {
-      get_metric_and_derivatives(tt, x1v, x2v, x3v, met4, bbh_traj_0,
+      get_adm_and_derivatives_ad(tt, x1v, x2v, x3v, met3, bbh_traj_0,
                                  dbbh_traj_0, metric);
     } else {
+      struct four_metric met4;
       numerical_4metric(tt, x1v, x2v, x3v, met4, bbh_traj_m1, bbh_traj_0,
                         bbh_traj_p1, hm, hp, metric);
+      four_metric_to_three_metric(met4, met3);
     }
-
-    /* Transform 4D metric to 3+1 variables*/
-    four_metric_to_three_metric(met4, met3);
 
     /* Load (Cartesian) components of the metric and curvature */
 
@@ -1750,7 +1758,9 @@ void numerical_4metric(const Real t, const Real x, const Real y,
   if (hp > 0.0) get_metric(t+hp, x, y, z, met_p1, nz_p1, metric);
 #define DT_METRIC(comp) \
   outmet.g_t.comp = (hm > 0.0 && hp > 0.0) ? \
-      (met_p1.g.comp - met_m1.g.comp)/(hm + hp) : \
+      (-hp*met_m1.g.comp/(hm*(hm + hp)) \
+       + (hp - hm)*outmet.g.comp/(hm*hp) \
+       + hm*met_p1.g.comp/(hp*(hm + hp))) : \
       ((hp > 0.0) ? (met_p1.g.comp - outmet.g.comp)/hp : \
                     (outmet.g.comp - met_m1.g.comp)/hm)
   DT_METRIC(tt);
@@ -2195,7 +2205,13 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ],
   std::size_t i1;
   const std::size_t cached = std::min(bbh_table.active_segment,
                                       times.size() - 2);
-  if (t >= times[cached] && t <= times[cached + 1]) {
+  const bool cached_is_last = (cached + 1 == times.size() - 1);
+  // Use half-open intervals at interior knots so the derivative is selected
+  // deterministically from the segment to the right.  The final segment is
+  // closed at its upper endpoint so the last tabulated time remains valid.
+  if (t >= times[cached] &&
+      (t < times[cached + 1] ||
+       (cached_is_last && t <= times[cached + 1]))) {
     i0 = cached;
     i1 = cached + 1;
   } else {
@@ -2244,6 +2260,17 @@ void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ],
   dbbh_t[X2] = bbh_t[VX2];
   dbbh_t[Y2] = bbh_t[VY2];
   dbbh_t[Z2] = bbh_t[VZ2];
+  const Real v1_sq = SQR(bbh_t[VX1]) + SQR(bbh_t[VY1]) + SQR(bbh_t[VZ1]);
+  const Real v2_sq = SQR(bbh_t[VX2]) + SQR(bbh_t[VY2]) + SQR(bbh_t[VZ2]);
+  if (!std::isfinite(v1_sq) || !std::isfinite(v2_sq) ||
+      v1_sq >= 1.0 || v2_sq >= 1.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "interpolated trajectory velocity must be finite "
+              << "and subluminal at time " << t << " in segment ["
+              << times[i0] << ", " << times[i1] << "]: |v1|^2=" << v1_sq
+              << ", |v2|^2=" << v2_sq << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   const auto linear = [w](Real a, Real b) { return (1.0 - w)*a + w*b; };
   const auto slope = [dt](Real a, Real b) { return (b - a)/dt; };
   const auto interpolate = [&](const std::vector<Real> &field, int index) {
@@ -2424,22 +2451,23 @@ KOKKOS_INLINE_FUNCTION void SuperposedBBH(
   SuperposedBBHTemplate(x, y, z, gcov, traj_array, metric);
 }
 
-KOKKOS_INLINE_FUNCTION void FillMetricDerivative(
-    const dual1_real gcov[NDIM][NDIM], struct dd_sym &dg) {
-  dg.tt = gcov[TT][TT].deriv;
-  dg.tx = gcov[TT][XX].deriv;
-  dg.ty = gcov[TT][YY].deriv;
-  dg.tz = gcov[TT][ZZ].deriv;
-  dg.xx = gcov[XX][XX].deriv;
-  dg.xy = gcov[XX][YY].deriv;
-  dg.xz = gcov[XX][ZZ].deriv;
-  dg.yy = gcov[YY][YY].deriv;
-  dg.yz = gcov[YY][ZZ].deriv;
-  dg.zz = gcov[ZZ][ZZ].deriv;
+KOKKOS_INLINE_FUNCTION void FillMetricDerivatives(
+    const dual2_real gcov[NDIM][NDIM], struct dd_sym &dg0,
+    struct dd_sym &dg1) {
+  dg0.tt = gcov[TT][TT].deriv0; dg1.tt = gcov[TT][TT].deriv1;
+  dg0.tx = gcov[TT][XX].deriv0; dg1.tx = gcov[TT][XX].deriv1;
+  dg0.ty = gcov[TT][YY].deriv0; dg1.ty = gcov[TT][YY].deriv1;
+  dg0.tz = gcov[TT][ZZ].deriv0; dg1.tz = gcov[TT][ZZ].deriv1;
+  dg0.xx = gcov[XX][XX].deriv0; dg1.xx = gcov[XX][XX].deriv1;
+  dg0.xy = gcov[XX][YY].deriv0; dg1.xy = gcov[XX][YY].deriv1;
+  dg0.xz = gcov[XX][ZZ].deriv0; dg1.xz = gcov[XX][ZZ].deriv1;
+  dg0.yy = gcov[YY][YY].deriv0; dg1.yy = gcov[YY][YY].deriv1;
+  dg0.yz = gcov[YY][ZZ].deriv0; dg1.yz = gcov[YY][ZZ].deriv1;
+  dg0.zz = gcov[ZZ][ZZ].deriv0; dg1.zz = gcov[ZZ][ZZ].deriv1;
 }
 
 KOKKOS_INLINE_FUNCTION void FillMetricValue(
-    const dual1_real gcov[NDIM][NDIM], struct dd_sym &g) {
+    const dual2_real gcov[NDIM][NDIM], struct dd_sym &g) {
   g.tt = gcov[TT][TT].val;
   g.tx = gcov[TT][XX].val;
   g.ty = gcov[TT][YY].val;
@@ -2452,39 +2480,128 @@ KOKKOS_INLINE_FUNCTION void FillMetricValue(
   g.zz = gcov[ZZ][ZZ].val;
 }
 
-KOKKOS_INLINE_FUNCTION void MetricDerivativeAD(
-    const Real x, const Real y, const Real z, const int direction,
-    const Real tr[NTRAJ], const Real dtr[NTRAJ],
-    const bbh_metric_params& metric,
-    struct dd_sym &dg, struct dd_sym *g) {
-  dual1_real xd(x, direction == 1 ? 1.0 : 0.0);
-  dual1_real yd(y, direction == 2 ? 1.0 : 0.0);
-  dual1_real zd(z, direction == 3 ? 1.0 : 0.0);
-  dual1_real trd[NTRAJ];
+KOKKOS_INLINE_FUNCTION void MetricDerivativesAD2(
+    const Real x, const Real y, const Real z, const int direction0,
+    const int direction1, const Real tr[NTRAJ], const Real dtr[NTRAJ],
+    const bbh_metric_params& metric, struct dd_sym &dg0,
+    struct dd_sym &dg1, struct dd_sym *g) {
+  dual2_real xd(x, direction0 == 1 ? 1.0 : 0.0,
+                direction1 == 1 ? 1.0 : 0.0);
+  dual2_real yd(y, direction0 == 2 ? 1.0 : 0.0,
+                direction1 == 2 ? 1.0 : 0.0);
+  dual2_real zd(z, direction0 == 3 ? 1.0 : 0.0,
+                direction1 == 3 ? 1.0 : 0.0);
+  dual2_real trd[NTRAJ];
   for (int n = 0; n < NTRAJ; ++n) {
-    trd[n] = dual1_real(tr[n], direction == 0 ? dtr[n] : 0.0);
+    trd[n] = dual2_real(tr[n], direction0 == 0 ? dtr[n] : 0.0,
+                       direction1 == 0 ? dtr[n] : 0.0);
   }
-  dual1_real gcov[NDIM][NDIM];
+  dual2_real gcov[NDIM][NDIM];
   SuperposedBBHTemplate(xd, yd, zd, gcov, trd, metric);
   if (g != nullptr) FillMetricValue(gcov, *g);
-  FillMetricDerivative(gcov, dg);
+  FillMetricDerivatives(gcov, dg0, dg1);
 }
 
-KOKKOS_INLINE_FUNCTION void get_metric_and_derivatives(
+KOKKOS_INLINE_FUNCTION void get_adm_and_derivatives_ad(
     const Real t, const Real x, const Real y, const Real z,
-    struct four_metric &met, const Real bbh_traj_loc[NTRAJ],
+    struct three_metric &gam, const Real bbh_traj_loc[NTRAJ],
     const Real dbbh_traj_loc[NTRAJ], const bbh_metric_params& metric) {
   (void)t;
-  // The time-seeded dual evaluation already contains the metric values, so
-  // reuse them instead of evaluating the full metric a fifth time.
-  MetricDerivativeAD(x, y, z, 0, bbh_traj_loc, dbbh_traj_loc, metric,
-                     met.g_t, &met.g);
-  MetricDerivativeAD(x, y, z, 1, bbh_traj_loc, dbbh_traj_loc, metric,
-                     met.g_x, nullptr);
-  MetricDerivativeAD(x, y, z, 2, bbh_traj_loc, dbbh_traj_loc, metric,
-                     met.g_y, nullptr);
-  MetricDerivativeAD(x, y, z, 3, bbh_traj_loc, dbbh_traj_loc, metric,
-                     met.g_z, nullptr);
+  struct dd_sym g;
+  struct dd_sym dg0;
+  struct dd_sym dg1;
+  MetricDerivativesAD2(x, y, z, 0, 1, bbh_traj_loc, dbbh_traj_loc, metric,
+                       dg0, dg1, &g);
+
+  gam.gxx = g.xx;
+  gam.gxy = g.xy;
+  gam.gxz = g.xz;
+  gam.gyy = g.yy;
+  gam.gyz = g.yz;
+  gam.gzz = g.zz;
+  const Real det = adm::SpatialDet(gam.gxx, gam.gxy, gam.gxz,
+                                   gam.gyy, gam.gyz, gam.gzz);
+  if (!(det > 0.0)) {
+    gam.gxx = 1.0;
+    gam.gxy = 0.0;
+    gam.gxz = 0.0;
+    gam.gyy = 1.0;
+    gam.gyz = 0.0;
+    gam.gzz = 1.0;
+    gam.alpha = 1.0;
+    gam.betax = 0.0;
+    gam.betay = 0.0;
+    gam.betaz = 0.0;
+    gam.kxx = 0.0;
+    gam.kxy = 0.0;
+    gam.kxz = 0.0;
+    gam.kyy = 0.0;
+    gam.kyz = 0.0;
+    gam.kzz = 0.0;
+    return;
+  }
+
+  const Real idetgxx = -gam.gyz*gam.gyz + gam.gyy*gam.gzz;
+  const Real idetgxy = gam.gxz*gam.gyz - gam.gxy*gam.gzz;
+  const Real idetgxz = -gam.gxz*gam.gyy + gam.gxy*gam.gyz;
+  const Real idetgyy = -gam.gxz*gam.gxz + gam.gxx*gam.gzz;
+  const Real idetgyz = gam.gxy*gam.gxz - gam.gxx*gam.gyz;
+  const Real idetgzz = -gam.gxy*gam.gxy + gam.gxx*gam.gyy;
+  const Real invgxx = idetgxx/det;
+  const Real invgxy = idetgxy/det;
+  const Real invgxz = idetgxz/det;
+  const Real invgyy = idetgyy/det;
+  const Real invgyz = idetgyz/det;
+  const Real invgzz = idetgzz/det;
+
+  gam.betax = g.tx*invgxx + g.ty*invgxy + g.tz*invgxz;
+  gam.betay = g.tx*invgxy + g.ty*invgyy + g.tz*invgyz;
+  gam.betaz = g.tx*invgxz + g.ty*invgyz + g.tz*invgzz;
+  const Real b2 = g.tx*gam.betax + g.ty*gam.betay + g.tz*gam.betaz;
+  gam.alpha = sqrt(fabs(b2 - g.tt));
+
+  // Accumulate the six K_ij numerators from two paired dual evaluations rather
+  // than retaining a four_metric with all 40 derivative components.
+  Real kxx = dg0.xx;
+  Real kxy = dg0.xy;
+  Real kxz = dg0.xz;
+  Real kyy = dg0.yy;
+  Real kyz = dg0.yz;
+  Real kzz = dg0.zz;
+
+  kxx += -2.0*dg1.tx + gam.betax*dg1.xx + 2.0*gam.betay*dg1.xy
+       + 2.0*gam.betaz*dg1.xz;
+  kxy += -dg1.ty + gam.betay*dg1.yy + gam.betaz*dg1.yz;
+  kxz += -dg1.tz + gam.betay*dg1.yz + gam.betaz*dg1.zz;
+  kyy += -gam.betax*dg1.yy;
+  kyz += -gam.betax*dg1.yz;
+  kzz += -gam.betax*dg1.zz;
+
+  MetricDerivativesAD2(x, y, z, 2, 3, bbh_traj_loc, dbbh_traj_loc, metric,
+                       dg0, dg1, nullptr);
+  kxx += -gam.betay*dg0.xx;
+  kxy += -dg0.tx + gam.betax*dg0.xx + gam.betaz*dg0.xz;
+  kxz += -gam.betay*dg0.xz;
+  kyy += -2.0*dg0.ty + 2.0*gam.betax*dg0.xy + gam.betay*dg0.yy
+       + 2.0*gam.betaz*dg0.yz;
+  kyz += -dg0.tz + gam.betax*dg0.xz + gam.betaz*dg0.zz;
+  kzz += -gam.betay*dg0.zz;
+
+  kxx += -gam.betaz*dg1.xx;
+  kxy += -gam.betaz*dg1.xy;
+  kxz += -dg1.tx + gam.betax*dg1.xx + gam.betay*dg1.xy;
+  kyy += -gam.betaz*dg1.yy;
+  kyz += -dg1.ty + gam.betax*dg1.xy + gam.betay*dg1.yy;
+  kzz += -2.0*dg1.tz + 2.0*gam.betax*dg1.xz
+       + 2.0*gam.betay*dg1.yz + gam.betaz*dg1.zz;
+
+  const Real factor = -0.5/gam.alpha;
+  gam.kxx = factor*kxx;
+  gam.kxy = factor*kxy;
+  gam.kxz = factor*kxz;
+  gam.kyy = factor*kyy;
+  gam.kyz = factor*kyz;
+  gam.kzz = factor*kzz;
 }
 
 KOKKOS_INLINE_FUNCTION

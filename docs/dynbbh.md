@@ -26,6 +26,12 @@ through `time/tlim`.  Positions use cubic Hermite interpolation with the
 supplied velocities; the interpolated velocities and accelerations are the
 exact first and second derivatives of that polynomial.  Masses and
 dimensionless spins use linear interpolation with matching time derivatives.
+At an interior table knot, derivatives are taken from the segment to the
+right; the final endpoint uses the last segment.  Endpoint and evaluated
+interpolated velocities must remain subluminal.  For smooth AD/FD agreement,
+tables should avoid jumps in acceleration or in the mass/spin slopes at knots.
+A minimal five-row elliptical-orbit example with tilted spins is provided in
+[`tst/inputs/dynbbh_elliptical_spin.traj`](../tst/inputs/dynbbh_elliptical_spin.traj).
 
 The old `adjust_mass1` and `adjust_mass2` inputs are rejected.  Table masses are
 the physical Kerr-Schild masses and are never silently rescaled.

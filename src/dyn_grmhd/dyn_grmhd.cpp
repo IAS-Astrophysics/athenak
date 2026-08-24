@@ -231,10 +231,11 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   if (pz4c == nullptr && padm->is_dynamic == true) {
     pnr->QueueTask(&DynGRMHD::SetADMVariables, this, MHD_SetADM, "MHD_SetADM", Task_Run,
                     {MHD_ExplRK});
-    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
-                   "MHD_C2P", Task_Run, {MHD_BCS, MHD_SetADM}, {Z4c_Excise});
     pnr->QueueTask(&DynGRMHD::UpdateExcisionMasks, this, MHD_Excise, "MHD_Excise",
                    Task_Run, {MHD_SetADM});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_Run, {MHD_BCS, MHD_SetADM, MHD_Excise},
+                   {Z4c_Excise});
   } else {
     pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
                    "MHD_C2P", Task_Run, {MHD_BCS}, {Z4c_Excise});

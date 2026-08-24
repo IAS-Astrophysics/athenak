@@ -158,6 +158,28 @@ def write_trajectory_table(path, case):
                               for row in rows) + "\n", encoding="utf-8")
 
 
+def write_trajectory_rows(path, rows):
+    path.write_text("\n".join(" ".join(f"{v:.17e}" for v in row)
+                              for row in rows) + "\n", encoding="utf-8")
+
+
+def trajectory_row(time, m1, m2, p1, p2, chi1, chi2, v1=(0.0, 0.0, 0.0),
+                   v2=(0.0, 0.0, 0.0)):
+    return [time, m1, m2, *p1, *p2, *chi1, *chi2, *v1, *v2]
+
+
+def run_custom_table(method, basename, rows, step=FD_STEP, flags=()):
+    table = Path(f"{basename}.traj").resolve()
+    write_trajectory_rows(table, rows)
+    args = ["./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+            f"problem/metric_derivative={method}",
+            f"problem/metric_fd_step={step:.17e}",
+            "problem/use_traj_table=true", f"problem/traj_file={table}",
+            *flags]
+    subprocess.check_call(args)
+    return athena_read.tab(Path("tab") / f"{basename}.adm.00000.tab")
+
+
 def run_case(method, case, step=FD_STEP, use_table=False):
     mode = "table" if use_table else "analytic"
     basename = f"dynbbh_metric_{case['name']}_{mode}_{method}_{step:.0e}"
@@ -184,6 +206,69 @@ def check_reference(data, case):
                 key, x, data[key][n], expected)
 
 
+def run_trajectory_edge_checks():
+    flags = CASES[1]["flags"]
+    p1, p2 = (8.0, 0.0, 0.0), (-8.0, 0.0, 0.0)
+    chi1 = (0.25, -0.15, 0.35)
+    chi2 = (-0.20, 0.30, 0.10)
+
+    # An interior knot must use the segment on its right regardless of the
+    # interpolation cache's previous segment.  Moving that knot infinitesimally
+    # to the past leaves the state and its right derivative at t=0 unchanged.
+    knot_rows = [
+        trajectory_row(-1.0, 0.20, 0.80, p1, p2,
+                       (0.05, -0.05, 0.10), (-0.05, 0.10, 0.05)),
+        trajectory_row(0.0, 0.40, 0.60, p1, p2, chi1, chi2),
+        trajectory_row(1.0, 0.40, 0.60, p1, p2, chi1, chi2),
+    ]
+    shifted_rows = [knot_rows[0],
+                    trajectory_row(-1.0e-12, 0.40, 0.60, p1, p2, chi1, chi2),
+                    knot_rows[2]]
+    at_knot = run_custom_table("ad", "dynbbh_table_knot", knot_rows,
+                               flags=flags)
+    right_limit = run_custom_table("ad", "dynbbh_table_knot_right",
+                                   shifted_rows, flags=flags)
+    for key in KEYS:
+        np.testing.assert_allclose(at_knot[key], right_limit[key],
+                                   rtol=2.0e-12, atol=2.0e-12)
+
+    # Exercise an asymmetrically clipped FD stencil near the first table time.
+    # Rapid (but valid) mass evolution makes the first-order bias of a plain
+    # secant visible while the nonuniform three-point stencil remains close to AD.
+    boundary_rows = [
+        trajectory_row(-2.0e-5, 0.25, 0.75, p1, p2, chi1, chi2),
+        trajectory_row(1.0e-3, 0.75, 0.25, p1, p2, chi1, chi2),
+    ]
+    boundary_ad = run_custom_table("ad", "dynbbh_table_boundary_ad",
+                                   boundary_rows, flags=flags)
+    boundary_fd = run_custom_table("finite_difference",
+                                   "dynbbh_table_boundary_fd", boundary_rows,
+                                   flags=flags)
+    for key in KEYS:
+        np.testing.assert_allclose(boundary_fd[key], boundary_ad[key],
+                                   rtol=5.0e-6, atol=2.0e-5)
+
+    # Endpoint velocities alone do not bound a cubic Hermite segment's
+    # interior speed.  Reject an interpolated superluminal boost explicitly.
+    bad_rows = [
+        trajectory_row(-1.0, 0.40, 0.60, (-10.0, 0.0, 0.0), p2,
+                       chi1, chi2),
+        trajectory_row(1.0, 0.40, 0.60, (10.0, 0.0, 0.0), p2,
+                       chi1, chi2),
+    ]
+    basename = "dynbbh_table_superluminal"
+    table = Path(f"{basename}.traj").resolve()
+    write_trajectory_rows(table, bad_rows)
+    result = subprocess.run(
+        ["./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+         "problem/metric_derivative=ad", "problem/use_traj_table=true",
+         f"problem/traj_file={table}", *flags],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        check=False)
+    assert result.returncode != 0, result.stdout
+    assert "interpolated trajectory velocity must be finite and subluminal" in result.stdout
+
+
 def run_regression_suite():
     for case in CASES:
         for use_table in (False, True):
@@ -194,6 +279,7 @@ def run_regression_suite():
             for key in KEYS:
                 np.testing.assert_allclose(ad[key], fd[key], rtol=8.0e-7,
                                            atol=5.0e-9)
+    run_trajectory_edge_checks()
 
 
 def run_fd_convergence():
@@ -301,9 +387,49 @@ def _excision_mesh_args():
     ]
 
 
+def _write_time_dependent_spin_table(path):
+    rows = [
+        trajectory_row(0.0, 1.0, 0.1, (0.0, 0.0, 0.0),
+                       (20.0, 0.0, 0.0), (0.95, 0.0, 0.0),
+                       (0.0, 0.0, 0.0)),
+        trajectory_row(0.1, 1.0, 0.1, (0.0, 0.0, 0.0),
+                       (20.0, 0.0, 0.0), (0.0, 0.0, 0.2),
+                       (0.0, 0.0, 0.0)),
+    ]
+    write_trajectory_rows(path, rows)
+
+
 def run_excision_checks():
     """Check two-hole mask geometry, unresolved sinks, and CT divB control."""
     common = _excision_mesh_args()
+
+    # With RK1 the only primitive recovery in the cycle must see the new
+    # stage-time mask.  This table both reduces and rotates chi, expanding the
+    # x-axis horizon across the cell centered at x=1.75.
+    basename = "dynbbh_excision_time_dependent_spin"
+    table = Path(f"{basename}.traj").resolve()
+    _write_time_dependent_spin_table(table)
+    subprocess.check_call([
+        "./athena", "-i", INPUT_FILE, f"job/basename={basename}",
+        "problem/use_traj_table=true", f"problem/traj_file={table}",
+        "problem/metric_derivative=ad", "time/integrator=rk1",
+        "time/nlim=1", "time/tlim=0.1", "output1/dcycle=1",
+        "output1/dt=1", "output1/variable=mhd_w_d",
+        "mesh/nx1=16", "mesh/x1min=-4", "mesh/x1max=4",
+        "mesh/nx2=1", "mesh/x2min=-0.5", "mesh/x2max=0.5",
+        "mesh/nx3=1", "mesh/x3min=-0.5", "mesh/x3max=0.5",
+        "meshblock/nx1=16", "meshblock/nx2=1", "meshblock/nx3=1",
+        "coord/excision_scheme=puncture", "coord/excise_to_horizon=true",
+    ])
+    initial = np.loadtxt(
+        Path("tab") / f"{basename}.mhd_w_d.00000.tab", comments="#", ndmin=2)
+    evolved = np.loadtxt(
+        Path("tab") / f"{basename}.mhd_w_d.00001.tab", comments="#", ndmin=2)
+    probe = np.argmin(np.abs(initial[:, 2] - 1.75))
+    assert np.isclose(initial[probe, 2], 1.75)
+    assert initial[probe, 3] < 5.0e-10
+    assert evolved[probe, 3] > 5.0e-9
+
     smooth = [
         "coord/smooth_excision=true",
         "coord/smooth_excision_puncture_width_fraction=1",
