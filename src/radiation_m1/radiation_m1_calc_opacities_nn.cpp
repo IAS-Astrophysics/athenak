@@ -465,17 +465,18 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             Real eta_0_loc[4]{}, eta_1_loc[4]{};
             Real abs_0_loc[4]{}, abs_1_loc[4]{};
             Real scat_0_loc[4]{}, scat_1_loc[4]{};
-            // non-thermal outputs required by the signature but unused here:
-            // β+iso have no NEPS component, so these stay zero.
+            // Non-thermal outputs required by the signature but unused here:
+            // beta+iso have no NEPS component, so these stay zero. There is no
+            // eta_0_non_th output because NEPS conserves neutrino number.
             Real eta_1_non_th[4]{}, abs_1_non_th[4]{};
-            Real eta_0_non_th[4]{}, abs_0_non_th[4]{};
+            Real abs_0_non_th[4]{};
             bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e,
                         nudens_0, nudens_1, chi_loc,
                         eta_0_loc, eta_1_loc,
                         abs_0_loc, abs_1_loc,
                         scat_0_loc, scat_1_loc,
                         eta_1_non_th, abs_1_non_th,
-                        eta_0_non_th, abs_0_non_th,
+                        abs_0_non_th,
                         params_1d_cap, code_units_cap, eos_units_cap,
                         nurates_units_cap);
 
