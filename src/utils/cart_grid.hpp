@@ -19,9 +19,16 @@ class MeshBlockPack;
 
 class CartesianGrid {
  public:
-  // Creates a geodesic grid with refinement level nlev and radius rad
+  // Creates a geodesic grid with refinement level nlev and radius rad.
+  // Set bitant_mirror to look points with z<0 up via their z-reflected counterpart on a
+  // bitant mesh (see bitant() below). It is opt-in because the value returned is the raw
+  // value at the mirrored point: only a caller that applies the reflection parity of the
+  // quantity it is interpolating gets a correct answer. A caller that does not should
+  // leave this false, so that points outside the domain stay zero rather than silently
+  // acquiring the wrong sign.
   CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                Real extend[3], int numpoints[3], bool is_cheb = false);
+                Real extend[3], int numpoints[3], bool is_cheb = false,
+                bool bitant_mirror = false);
 
   // parameters for the grid
   Real center_x1, center_x2, center_x3;   // grid centers
@@ -42,8 +49,16 @@ class CartesianGrid {
   void SetInterpolationWeights();      // set weights for interpolation
   void ResetCenterAndExtent(Real center[3], Real extent[3]);
 
+  // true if bitant_mirror was requested AND the mesh really is bitant (reflect at
+  // x3min=0). Points with z<0 are then looked up via their z-reflected counterpart, which
+  // physically lies inside the domain. The value returned by InterpolateToGrid is the raw
+  // mirrored-point value, so the caller must apply the reflection parity appropriate to
+  // the quantity being interpolated.
+  bool bitant() const { return bitant_; }
+
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
+  bool bitant_;                    // whether the mesh is bitant about x3=0
   DualArray4D<int> interp_indcs;   // indices of MeshBlock and zones therein for interp
   DualArray5D<Real> interp_wghts;  // weights for interpolation
 };

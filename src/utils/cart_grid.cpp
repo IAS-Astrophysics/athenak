@@ -22,7 +22,8 @@
 // constructor, initializes data structures and parameters
 
 CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                                    Real extent[3], int numpoints[3], bool is_cheb):
+                                    Real extent[3], int numpoints[3], bool is_cheb,
+                                    bool bitant_mirror):
     interp_vals("interp_vals",1,1,1),
     pmy_pack(pmy_pack),
     interp_indcs("interp_indcs",1,1,1,1),
@@ -30,6 +31,14 @@ CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
   // initialize parameters for the grid
   // uniform grid or spectral grid
   is_cheby = is_cheb;
+
+  // detect a bitant (reflect at x3min=0) mesh: points with z<0 then physically lie
+  // outside the domain and can be looked up via their z-reflected (in-domain)
+  // counterpart. Only done when the caller asks for it, since the caller is responsible
+  // for applying the reflection parity of whatever it interpolates.
+  bitant_ = bitant_mirror &&
+            (pmy_pack->pmesh->mesh_bcs[BoundaryFace::inner_x3] ==
+             BoundaryFlag::reflect) && (pmy_pack->pmesh->mesh_size.x3min == 0.0);
 
   // grid center
   center_x1 = center[0];
@@ -136,6 +145,12 @@ void CartesianGrid::SetInterpolationIndices() {
           x2 = center_x2 + extent_x2*std::cos(ny*M_PI/(nx2-1));
           x3 = center_x3 + extent_x3*std::cos(nz*M_PI/(nx3-1));
         }
+        // on a bitant mesh, a point with z<0 lies outside the domain; look it up via its
+        // z-reflected counterpart (x,y,-z), which lies inside the domain and, by the
+        // mesh's reflection symmetry, holds the data needed to fill the missing half
+        if (bitant_ && x3 < 0.0) {
+          x3 = -x3;
+        }
         // indices default to -1 if point does not reside in this MeshBlockPack
         iindcs.h_view(nx,ny,nz,0) = -1;
         iindcs.h_view(nx,ny,nz,1) = -1;
@@ -212,6 +227,12 @@ void CartesianGrid::SetInterpolationWeights() {
         x0 = center_x1 + extent_x1*std::cos(nx*M_PI/(nx1-1));
         y0 = center_x2 + extent_x2*std::cos(ny*M_PI/(nx2-1));
         z0 = center_x3 + extent_x3*std::cos(nz*M_PI/(nx3-1));
+      }
+      // on a bitant mesh, points with z<0 were located (in SetInterpolationIndices) via
+      // their z-reflected counterpart, so the weights must be computed against that same
+      // reflected z-coordinate
+      if (bitant_ && z0 < 0.0) {
+        z0 = -z0;
       }
       // extract MeshBlock bounds
       Real &x1min = size.h_view(ii0).x1min;

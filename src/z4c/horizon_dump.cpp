@@ -50,7 +50,7 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
   int Nx[3] = {horizon_nx,horizon_nx,horizon_nx};
-  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx);
+  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx, false, true);
 
   // Initializing variables that will be dumped
   // The order is alpha, betax, betay, betaz,
@@ -96,6 +96,17 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
   // Dynamically allocate memory for the 4D array flattened into 1D
   Real* data_out = new Real[count];
 
+  // Parity of each dumped variable under the reflection z -> -z, i.e. (-1) raised to the
+  // number of free indices equal to z. Order must match variable_to_dump above:
+  // alpha, betax, betay, betaz, gxx..gzz, Kxx..Kzz. Same convention the reflecting Z4c
+  // boundary applies, see src/bvals/physics/z4c_bcs.cpp.
+  // On a bitant mesh CartesianGrid returns the value at the z-reflected counterpart of
+  // any point with z<0, so the sign has to be restored here.
+  const int zparity[16] = {1, 1, 1, -1,          // alpha, beta^x, beta^y, beta^z
+                           1, 1, -1, 1, -1, 1,   // g_xx, g_xy, g_xz, g_yy, g_yz, g_zz
+                           1, 1, -1, 1, -1, 1};  // K_xx, K_xy, K_xz, K_yy, K_yz, K_zz
+  const bool bitant = pcat_grid->bitant();
+
   for(int nvar=0; nvar<16; nvar++) {
     // Interpolate here
     if (variable_to_dump[nvar].second) {
@@ -106,11 +117,20 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     for (int nx = 0; nx < horizon_nx; nx ++)
     for (int ny = 0; ny < horizon_nx; ny ++)
     for (int nz = 0; nz < horizon_nx; nz ++) {
+      Real val = pcat_grid->interp_vals.h_view(nx, ny, nz);
+      if (bitant) {
+        // z-coordinate of this grid point, matching CartesianGrid's own layout
+        Real z = pcat_grid->is_cheby
+               ? pcat_grid->center_x3
+                 + pcat_grid->extent_x3*std::cos(nz*M_PI/(pcat_grid->nx3-1))
+               : pcat_grid->min_x3 + nz*pcat_grid->d_x3;
+        if (z < 0.0) val *= zparity[nvar];
+      }
       data_out[nvar * horizon_nx * horizon_nx * horizon_nx +  // Section for nvar
         nx * horizon_nx * horizon_nx +                 // Slice for nx
         ny * horizon_nx +                              // Row for ny
         nz]                                            // Column for nz
-        = pcat_grid->interp_vals.h_view(nx, ny, nz);        // Value being assigned
+        = val;                                         // Value being assigned
     }
   }
 
