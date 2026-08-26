@@ -136,6 +136,22 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   // Grid and quadrature weights.
   gl_grid = new GaussLegendreGrid(pmbp, ntheta, 1.0); // unit-sphere
   nangles = gl_grid->nangles;
+  // NOTE: only polar_pos, int_weights and nangles are taken from gl_grid. FastFlow does
+  // its own mesh lookup in MetricInterp() below; gl_grid's own interp_indcs/interp_wghts
+  // are never used here (and are not bitant-aware).
+
+  // Detect a bitant (reflect at x3min=0) mesh. The quadrature spans the full sphere, so
+  // on such a mesh every surface point with z < 0 lies outside the domain; MetricInterp()
+  // reconstructs those from their z-reflected counterpart. Same detection idiom as
+  // SphericalGrid, see src/geodesic-grid/spherical_grid.cpp.
+  bitant_ = (pmbp->pmesh->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::reflect) &&
+            (pmbp->pmesh->mesh_size.x3min == 0.0);
+  if (bitant_ && center[2] < 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "fastflow: center_z_" << n_str << " = " << center[2]
+              << " lies below the bitant symmetry plane at z=0." << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Points for spherical harmonics l >= 1.
   lmpoints = lmax1 * lmax1;
@@ -615,6 +631,25 @@ void FastFlow::MetricInterp() {
     pmbp->padm->I_ADM_KZZ
   };
 
+  // Parity of each tensor component under the reflection z -> -z, i.e. (-1) raised to the
+  // number of free indices equal to z. This is the same convention the reflecting Z4c
+  // boundary applies (see src/bvals/physics/z4c_bcs.cpp, which negates exactly GXZ, GYZ,
+  // AXZ, AYZ, GAMZ, BETAZ), propagated into the ADM variables by Z4cToADM.
+  // Component order is xx, xy, xz, yy, yz, zz throughout (see NSPMETRIC in ps_types.hpp).
+  // For dg = d_k g_ij the sign is s_k s_i s_j, so the d_x and d_y blocks carry the same
+  // signs as the metric itself and the d_z block carries the opposite ones.
+  // NOTE: these must be function-local arrays, like gind[]/Kind[] above. A file-scope
+  // static/constexpr would need __device__ to be readable inside the kernel on CUDA.
+  int gpar[NSPMETRIC] = {1, 1, -1, 1, -1, 1};
+  int Kpar[NEXCURV]   = {1, 1, -1, 1, -1, 1};
+  int dgpar[NDRVSSPMETRIC] = { 1,  1, -1,  1, -1,  1,    // d_x g_ij :  s_i s_j
+                               1,  1, -1,  1, -1,  1,    // d_y g_ij :  s_i s_j
+                              -1, -1,  1, -1,  1, -1};   // d_z g_ij : -s_i s_j
+
+  // Value copy: naming the member bitant_ inside the lambda would capture `this`, a host
+  // pointer, and dereference it on the device.
+  const bool bitant = bitant_;
+
   par_for("FastFlow_interpolate", DevExeSpace(), 0, nangles-1,
   KOKKOS_LAMBDA(int p) {
     Real theta = polar_pos.d_view(p,0);
@@ -627,7 +662,16 @@ void FastFlow::MetricInterp() {
     Real z = zc + rr_(p) * Kokkos::cos(theta);
     pos[0] = x;
     pos[1] = y;
-    pos[2] = z;
+
+    // On a bitant mesh the point (x,y,z<0) lies outside the domain. Look it up at its
+    // z-reflected counterpart (x,y,-z), which lies inside the domain and, by the mesh's
+    // reflection symmetry, carries the same data up to the per-component parity signs
+    // applied below. Mirroring pos[2] before the call fixes both the index lookup and the
+    // interpolation weights, which must use the same reflected coordinate.
+    // NOTE: the mirror acts on the ABSOLUTE z, not on cos(theta): the surface center zc
+    // need not lie on the symmetry plane.
+    const bool mirror = (bitant && z < 0.0);
+    pos[2] = mirror ? -z : z;
 
     // Compute interpolation indices and weights (inline).
     auto ind_and_wghts = IndicesAndWeights<NGHOST>(indcs, size, pos, nmb);
@@ -637,17 +681,20 @@ void FastFlow::MetricInterp() {
     if (ind_and_wghts.point_exist) {
       // Metric
       for (int a = 0; a < NSPMETRIC; ++a) {
-        gi_(a,p) = InterpolateLagrange<NGHOST>(u_adm, gind[a], indcs, ind_and_wghts);
+        Real val = InterpolateLagrange<NGHOST>(u_adm, gind[a], indcs, ind_and_wghts);
+        gi_(a,p) = mirror ? gpar[a]*val : val;
       }
 
       // Extrinsic curvature
       for (int b = 0; b < NEXCURV; ++b) {
-        Ki_(b,p) = InterpolateLagrange<NGHOST>(u_adm, Kind[b], indcs, ind_and_wghts);
+        Real val = InterpolateLagrange<NGHOST>(u_adm, Kind[b], indcs, ind_and_wghts);
+        Ki_(b,p) = mirror ? Kpar[b]*val : val;
       }
 
       // Metric derivatives
       for (int c = 0; c < NDRVSSPMETRIC; ++c) {
-        dgi_(c,p) = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
+        Real val = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
+        dgi_(c,p) = mirror ? dgpar[c]*val : val;
       }
     }
   });

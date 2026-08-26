@@ -94,6 +94,10 @@ class FastFlow {
   int nh; // Counter variable
   bool wait_until_punc_are_close;
   [[maybe_unused]] bool use_stored_metric_drvts;
+  // True on a bitant mesh (reflecting inner-x3 boundary at x3min == 0). Surface points
+  // with z < 0 then lie outside the physical domain and must be interpolated from their
+  // z-reflected (in-domain) counterpart, with a parity sign applied per tensor component.
+  bool bitant_;
   int nhorizon; // Number of horizons
   std::string flow_function;
   int flowflag = 0;
