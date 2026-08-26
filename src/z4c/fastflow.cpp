@@ -47,7 +47,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
   a0("a0",1), ac("ac",1), as("as",1),
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
-  rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
+  rho("rho",1), g_interp("g_interp",1,1),
   K_interp("K_interp",1,1), dg_interp("dg_interp",1,1),
   pmbp(pmbp), pin(pin) {
   nh = n; // The n-th horizon
@@ -192,17 +192,6 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(g_interp, (NSPMETRIC), nangles);
   Kokkos::realloc(K_interp, (NEXCURV), nangles);
   Kokkos::realloc(dg_interp, (NDRVSSPMETRIC), nangles);
-
-  // The number of meshblocks on this rank (nmb_thispack) can change at runtime
-  // with adaptive mesh refinement and load balancing (e.g. a boosted puncture
-  // dragging the refined region across ranks). To prevent this allocate more
-  // memory based in the max. nmb. of MBs per rank from startup.
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  int nmb = std::max((pmbp->nmb_thispack), (pmbp->pmesh->nmb_maxperrank));
-  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
-  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
-  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
-  Kokkos::realloc(dg, nmb, (NDRVSSPMETRIC), ncells3, ncells2, ncells1);
 
   // Array computed in surface integrals.
   Kokkos::realloc(rho, nangles);
@@ -521,63 +510,6 @@ void FastFlow::InitialGuess() {
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void FastFlow::MetricDerivatives(Real time)
-//! \brief Compute drvts of ADM metric at MB level.
-template <int NGHOST>
-void FastFlow::MetricDerivatives(Real time) {
-  // Check whether derivatives have to be computed
-  // if (use_stored_metric_drvts) return;
-  if((time < start_time) || (time > stop_time)) return;
-  if (wait_until_punc_are_close && !(PuncAreClose())) return;
-
-  // Explicitely capture the variables for the Kokkos kernel.
-  auto &adm = pmbp->padm->adm;
-  auto &dg_ = dg;
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
-  int nmb = pmbp->nmb_thispack;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
-
-  par_for("FastFlow_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    // Grid spacing
-    Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2,
-                  1.0 / size.d_view(m).dx3};
-
-    // x-derivative
-    dg_(m,D1S11,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D1S12,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D1S13,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D1S22,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D1S23,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D1S33,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 2, 2, k, j, i);
-
-    // y-derivative
-    dg_(m,D2S11,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D2S12,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D2S13,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D2S22,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D2S23,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D2S33,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 2, 2, k, j, i);
-
-    // z-derivative
-    dg_(m,D3S11,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D3S12,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D3S13,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D3S22,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D3S23,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D3S33,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 2, 2, k, j, i);
-  });
-
-  return;
-}
-template void FastFlow::MetricDerivatives<2>(Real time);
-template void FastFlow::MetricDerivatives<3>(Real time);
-template void FastFlow::MetricDerivatives<4>(Real time);
-
-//----------------------------------------------------------------------------------------
 //! \fn void FastFlow::MetricInterp(MeshBlock *pmb)
 //! \brief Interpolate metric on the surface n.
 //!        Flag here the surface points contained (on this rank).
@@ -604,7 +536,6 @@ void FastFlow::MetricInterp() {
   // Explicitely capture the variables for the Kokkos kernel.
   auto &polar_pos = gl_grid->polar_pos;
   auto &u_adm = pmbp->padm->u_adm;
-  auto &dg_ = dg;
   auto &gi_ = g_interp;
   auto &Ki_ = K_interp;
   auto &dgi_ = dg_interp;
@@ -691,10 +622,16 @@ void FastFlow::MetricInterp() {
         Ki_(b,p) = mirror ? Kpar[b]*val : val;
       }
 
-      // Metric derivatives
-      for (int c = 0; c < NDRVSSPMETRIC; ++c) {
-        Real val = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
-        dgi_(c,p) = mirror ? dgpar[c]*val : val;
+      // Metric derivatives, d_k g_ij, obtained by differentiating the same Lagrange
+      // interpolant used above rather than by interpolating a precomputed derivative
+      // array. See InterpolateLagrangeDeriv() for why.
+      for (int k = 0; k < 3; ++k) {
+        for (int a = 0; a < NSPMETRIC; ++a) {
+          int c = k*NSPMETRIC + a;
+          Real val = InterpolateLagrangeDeriv<NGHOST>(u_adm, gind[a], indcs,
+                                                      ind_and_wghts, k);
+          dgi_(c,p) = mirror ? dgpar[c]*val : val;
+        }
       }
     }
   });
