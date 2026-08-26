@@ -615,8 +615,9 @@ class PrimitiveSolverHydro {
     Real cs = ps.GetEOS().GetSoundSpeed(prim[PRH], prim[PTM], &prim[PYF]);
     Real csq = cs*cs;
     Real H = ps.GetEOS().GetEnergy(prim[PRH], prim[PTM], &prim[PYF]) + prim[PPR];
-    Real vasq = bsq/(bsq + H);
-    Real cmsq = csq + vasq - csq*vasq;
+    //Real vasq = bsq/(bsq + H);
+    //Real cmsq = csq + vasq - csq*vasq;
+    Real cmsq = (bsq + csq*H)/(bsq + H);
 
     Real usq = prim[PVX]*prim[PVX] + prim[PVY]*prim[PVY] + prim[PVZ]*prim[PVZ];
     Real iWsq = 1.0/(1.0 + usq);
@@ -625,9 +626,13 @@ class PrimitiveSolverHydro {
     Real visq = prim[pvx]*prim[pvx]*iWsq;
 
     //Real sdis = cmsq*(1.0 - vsq)*(1.0 - vsq*cmsq - (1. - cmsq)*prim[pvx]*prim[pvx]);
-    Real sdis = cmsq*(1. - vsq)*(1. - visq - (vsq - visq)*cmsq);
+    //Real sdis = cmsq*(1. - vsq)*(1. - visq - (vsq - visq)*cmsq);
+    //Real sdis = cmsq*(1. - vsq)*((1. - cmsq)*(1. - visq) + (1. - vsq)*cmsq);
+    Real sdis = cmsq*iWsq*((1. - cmsq)*(1. - visq) + cmsq*iWsq);
     sdis = Kokkos::sqrt(Kokkos::fmax(sdis,0.0));
-    Real Wcsq = 1.0/(1.0 - vsq*cmsq);
+    //Real Wcsq = 1.0/(1.0 - vsq*cmsq);
+    //Real Wcsq = 1.0/((1.0 - vsq) + vsq*(1.0 - cmsq));
+    Real Wcsq = 1.0/(iWsq + vsq*(1.0 - cmsq));
     Real q = prim[pvx]*iW*(1. - cmsq);
 
     lambda_p = Wcsq*(q + sdis);

@@ -64,6 +64,59 @@ Real Dx(int const dir,
   return out*idx[dir];
 }
 
+template <int NGHOST, typename TYPE>
+KOKKOS_INLINE_FUNCTION
+Real Dxvol(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m,
+        int const k, int const j, int const i) {
+  int const shiftk = dir==2;
+  int const shiftj = dir==1;
+  int const shifti = dir==0;
+  Real out;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (  -1./2.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +1./2.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( +1./16.   * quant(m,k+(-2)*shiftk,
+                                  j+(-2)*shiftj,
+                                  i+(-2)*shifti)
+              -1./16.   * quant(m,k+( 2)*shiftk,
+                                  j+( 2)*shiftj,
+                                  i+( 2)*shifti))
+          + (  -5./8.   * quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+               +5./8.   * quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( -3./256.  * quant(m,k+(-3)*shiftk,
+                                  j+(-3)*shiftj,
+                                  i+(-3)*shifti)
+              +3./256.  * quant(m,k+( 3)*shiftk,
+                                  j+( 3)*shiftj,
+                                  i+( 3)*shifti))
+          + ( +28./256. * quant(m,k+(-2)*shiftk,
+                                  j+(-2)*shiftj,
+                                  i+(-2)*shifti)
+              -28./256. * quant(m,k+( 2)*shiftk,
+                                  j+( 2)*shiftj,
+                                  i+( 2)*shifti))
+          + ( -175./256.* quant(m,k+(-1)*shiftk,
+                                  j+(-1)*shiftj,
+                                  i+(-1)*shifti)
+              +175./256.* quant(m,k+( 1)*shiftk,
+                                  j+( 1)*shiftj,
+                                  i+( 1)*shifti));
+  }
+  return out*idx[dir];
+}
+
 
 // Reminder: this code has been generated with py/write_FD.py,
 // please do modifications there.// 1st derivative vector
@@ -120,6 +173,59 @@ Real Dx(int const dir,
   return out*idx[dir];
 }
 
+template <int NGHOST, typename TYPE>
+KOKKOS_INLINE_FUNCTION
+Real Dxvol(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a,
+        int const k, int const j, int const i) {
+  int const shiftk = dir==2;
+  int const shiftj = dir==1;
+  int const shifti = dir==0;
+  Real out;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (  -1./2.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +1./2.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( +1./16.   * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+              -1./16.   * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + (  -5./8.   * quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+               +5./8.   * quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( -3./256.  * quant(m,a,k+(-3)*shiftk,
+                                    j+(-3)*shiftj,
+                                    i+(-3)*shifti)
+              +3./256.  * quant(m,a,k+( 3)*shiftk,
+                                    j+( 3)*shiftj,
+                                    i+( 3)*shifti))
+          + ( +28./256. * quant(m,a,k+(-2)*shiftk,
+                                    j+(-2)*shiftj,
+                                    i+(-2)*shifti)
+              -28./256. * quant(m,a,k+( 2)*shiftk,
+                                    j+( 2)*shiftj,
+                                    i+( 2)*shifti))
+          + ( -175./256.* quant(m,a,k+(-1)*shiftk,
+                                    j+(-1)*shiftj,
+                                    i+(-1)*shifti)
+              +175./256.* quant(m,a,k+( 1)*shiftk,
+                                    j+( 1)*shiftj,
+                                    i+( 1)*shifti));
+  }
+  return out*idx[dir];
+}
+
 
 // Reminder: this code has been generated with py/write_FD.py,
 // please do modifications there.// 1st derivative 2D tensor
@@ -170,6 +276,59 @@ Real Dx(int const dir,
                                       j+(-1)*shiftj,
                                       i+(-1)*shifti)
                +3./4.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti));
+  }
+  return out*idx[dir];
+}
+
+template <int NGHOST, typename TYPE>
+KOKKOS_INLINE_FUNCTION
+Real Dxvol(int const dir,
+        const Real idx[], TYPE &quant,
+        int const m, int const a, int const b,
+        int const k, int const j, int const i) {
+  int const shiftk = dir==2;
+  int const shiftj = dir==1;
+  int const shifti = dir==0;
+  Real out;
+  if constexpr ( NGHOST == 2 ) {
+    out = + (  -1./2.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +1./2.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 3 ) {
+    out = + ( +1./16.   * quant(m,a,b,k+(-2)*shiftk,
+                                      j+(-2)*shiftj,
+                                      i+(-2)*shifti)
+              -1./16.   * quant(m,a,b,k+( 2)*shiftk,
+                                      j+( 2)*shiftj,
+                                      i+( 2)*shifti))
+          + (  -5./8.   * quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+               +5./8.   * quant(m,a,b,k+( 1)*shiftk,
+                                      j+( 1)*shiftj,
+                                      i+( 1)*shifti));
+  } else if constexpr ( NGHOST == 4 ) {
+    out = + ( -3./256.  * quant(m,a,b,k+(-3)*shiftk,
+                                      j+(-3)*shiftj,
+                                      i+(-3)*shifti)
+              +3./256.  * quant(m,a,b,k+( 3)*shiftk,
+                                      j+( 3)*shiftj,
+                                      i+( 3)*shifti))
+          + ( +28./256. * quant(m,a,b,k+(-2)*shiftk,
+                                      j+(-2)*shiftj,
+                                      i+(-2)*shifti)
+              -28./256. * quant(m,a,b,k+( 2)*shiftk,
+                                      j+( 2)*shiftj,
+                                      i+( 2)*shifti))
+          + ( -175./256.* quant(m,a,b,k+(-1)*shiftk,
+                                      j+(-1)*shiftj,
+                                      i+(-1)*shifti)
+              +175./256.* quant(m,a,b,k+( 1)*shiftk,
                                       j+( 1)*shiftj,
                                       i+( 1)*shifti));
   }

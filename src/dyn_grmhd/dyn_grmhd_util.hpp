@@ -86,6 +86,35 @@ Real HalfDifferenceInterface(Type& quant, int const m,
   return 0.;
 }
 
+template<int width, int dir, int sign, typename Type>
+KOKKOS_INLINE_FUNCTION
+Real InterpToInterface(Type& quant, int const m,
+    int const k, int const j, int const i) {
+  constexpr int shifti = sign*(dir == 0);
+  constexpr int shiftj = sign*(dir == 1);
+  constexpr int shiftk = sign*(dir == 2);
+  if constexpr (width == 1) {
+    // (f(i+1) - f(i))/2
+    return 0.5*(quant(m,k+shiftk,j+shiftj,i+shifti) + quant(m,k,j,i));
+  } else if (width == 2) {
+    // (-f(i-1) + 9 f(i) + 9 f(i+1) - f(i+2))/16
+    return (-(quant(m,k-shiftk,j-shiftj,i-shifti) +
+              quant(m,k+2*shiftk,j+2*shiftj,i+2*shifti)) +
+           9.0*(quant(m,k,j,i) + quant(m,k+shiftk,j+shiftj,i+shifti)))/16.0;
+  } else if (width == 3) {
+    // (-f(i-2) + 10 f(i-1) - 55 f(i) + 55(i+1) - 10 f(i+2) + f(i+3))/60
+    // (3 f(i-2) - 25 f(i-1) + 150 f(i) + 150 f(i+1) - 25 f(i+2) + 3 f(i+3))/256
+    return (3.0*(quant(m,k-2*shiftk,j-2*shiftj,i-2*shifti) +
+                 quant(m,k+3*shiftk,j+3*shiftj,i+3*shifti)) -
+            25.0*(quant(m,k-shiftk,j-shiftj,i-shifti) +
+                  quant(m,k+2*shiftk,j+2*shiftj,i+2*shifti)) +
+            150.0*(quant(m,k,j,i) + quant(m,k+shiftk,j+shiftj,i+shifti)))/256.0;
+  }
+  static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
+  return 0.;
+}
+
+
 // Finite-difference operator used for well-balancing scheme to get 1/2\partial_x q
 // at the cell interface.
 // width: half-width of stencil with respect to the interface
@@ -114,6 +143,34 @@ Real HalfDifferenceInterface(Type& quant, int const m, int const a, int const b,
                   quant(m,a,b,k+2*shiftk,j+2*shiftj,i+2*shifti)) -
             55.0*(quant(m,a,b,k,j,i) - quant(m,a,b,k+shiftk,j+shiftj,i+shifti)) +
             quant(m,a,b,k+3*shiftk,j+3*shiftj,i+3*shifti))/60.0;
+  }
+  static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
+  return 0.;
+}
+
+template<int width, int dir, int sign, typename Type>
+KOKKOS_INLINE_FUNCTION
+Real InterpToInterface(Type& quant, int const m, int const a, int const b,
+    int const k, int const j, int const i) {
+  constexpr int shifti = sign*(dir == 0);
+  constexpr int shiftj = sign*(dir == 1);
+  constexpr int shiftk = sign*(dir == 2);
+  if constexpr (width == 1) {
+    // (f(i+1) - f(i))/2
+    return 0.5*(quant(m,a,b,k+shiftk,j+shiftj,i+shifti) + quant(m,a,b,k,j,i));
+  } else if (width == 2) {
+    // (-f(i-1) + 9 f(i) + 9 f(i+1) - f(i+2))/16
+    return (-(quant(m,a,b,k-shiftk,j-shiftj,i-shifti) +
+              quant(m,a,b,k+2*shiftk,j+2*shiftj,i+2*shifti)) +
+           9.0*(quant(m,a,b,k,j,i) + quant(m,a,b,k+shiftk,j+shiftj,i+shifti)))/16.0;
+  } else if (width == 3) {
+    // (-f(i-2) + 10 f(i-1) - 55 f(i) + 55(i+1) - 10 f(i+2) + f(i+3))/60
+    // (3 f(i-2) - 25 f(i-1) + 150 f(i) + 150 f(i+1) - 25 f(i+2) + 3 f(i+3))/256
+    return (3.0*(quant(m,a,b,k-2*shiftk,j-2*shiftj,i-2*shifti) +
+                 quant(m,a,b,k+3*shiftk,j+3*shiftj,i+3*shifti)) -
+            25.0*(quant(m,a,b,k-shiftk,j-shiftj,i-shifti) +
+                  quant(m,a,b,k+2*shiftk,j+2*shiftj,i+2*shifti)) +
+            150.0*(quant(m,a,b,k,j,i) + quant(m,a,b,k+shiftk,j+shiftj,i+shifti)))/256.0;
   }
   static_assert(width >= 1 && width <= 3, "Unimplemented operator requested.");
   return 0.;
