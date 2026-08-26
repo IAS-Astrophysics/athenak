@@ -93,9 +93,9 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
             Real dataim = grids[g]->interp_vals.h_view(ip,1);
             Real weight = grids[g]->solid_angles.h_view(ip);
             swsh(&ylmR,&ylmI,l,m,theta,phi);
-            // On a bitant mesh, InterpolateToSphere has already reconstructed the value at
-            // (theta,phi) with theta>pi/2 from the mesh's z-reflected (in-domain) data at
-            // (pi-theta,phi). For a z-reflection-symmetric spacetime the Weyl scalar there
+            // On a bitant mesh, InterpolateToSphere has already reconstructed the value
+            // at (theta,phi) with theta>pi/2 from the mesh's z-reflected (in-domain)
+            // data at (pi-theta,phi). For a z-reflection-symmetric spacetime Psi4 there
             // satisfies Psi4(pi-theta,phi) = conj(Psi4(theta,phi)), so the imaginary part
             // must be sign-flipped here to recover the true value at (theta,phi).
             if (grids[g]->bitant() && theta > M_PI/2) {

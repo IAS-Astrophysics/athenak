@@ -31,10 +31,11 @@ SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int nintp
     interp_indcs("interp_indcs",1,1),
     interp_wghts("interp_wghts",1,1,1),
     interp_vals("interp_vals",1,1) {
-  // detect a bitant (reflect at x3min=0) mesh: points with z<0 then physically lie outside
-  // the domain and must be looked up via their z-reflected (in-domain) counterpart
-  bitant_ = (pmy_pack->pmesh->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::reflect) &&
-            (pmy_pack->pmesh->mesh_size.x3min == 0.0);
+  // detect a bitant (reflect at x3min=0) mesh: points with z<0 then physically lie
+  // outside the domain and must be looked up via their z-reflected (in-domain)
+  // counterpart
+  bitant_ = (pmy_pack->pmesh->mesh_bcs[BoundaryFace::inner_x3] ==
+             BoundaryFlag::reflect) && (pmy_pack->pmesh->mesh_size.x3min == 0.0);
 
   // reallocate and set interpolation coordinates, indices, and weights
   ninterp = (nintp <= 0) ? pmy_pack->pmesh->mb_indcs.ng*2 : nintp;
