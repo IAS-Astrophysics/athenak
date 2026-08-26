@@ -47,10 +47,17 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
 void TOVHistory(HistoryData *pdata, Mesh *pm);
 
 namespace {
+
+enum class Perturbation {
+  modal,
+  newtonian
+};
+
 struct TOVParams {
   tov::TOVStar my_tov;
   bool isotropic;
   bool minkowski;
+  Perturbation pert;
   Real omega;
   Real q;
   Real A;
@@ -98,6 +105,21 @@ void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
     TOVEOS eos{pin};
     auto my_tov = tov::TOVStar::ConstructTOV(pin, eos, false);
     ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau);
+  }
+
+  if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
+    std::string pert_string = pin->GetOrAddString("problem", "perturbation", "modal");
+
+    if (pert_string.compare("modal") == 0) {
+      ptov_params->pert = Perturbation::modal;
+    } else if (pert_string.compare("newtonian") == 0) {
+      ptov_params->pert = Perturbation::newtonian;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Unknown perturbation '" << pert_string << "' requested" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
 }
 
@@ -424,6 +446,21 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
     ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau);
   }
+
+  if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
+    std::string pert_string = pin->GetOrAddString("problem", "perturbation", "modal");
+
+    if (pert_string.compare("modal") == 0) {
+      ptov_params->pert = Perturbation::modal;
+    } else if (pert_string.compare("newtonian") == 0) {
+      ptov_params->pert = Perturbation::newtonian;
+    } else {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Unknown perturbation '" << pert_string << "' requested" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -558,9 +595,17 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
     A *= (x*x*(3. - 2.*x));
   }
 
+  bool modal = ptov_params->pert == Perturbation::modal;
+  bool newtonian = ptov_params->pert == Perturbation::newtonian;
+
   Real m2 = tov_.M_edge*q;
   Real Mtot = tov_.M_edge + m2;
   Real sep = Kokkos::cbrt(Mtot/(omega*omega));
+
+  Real locx = sep*Kokkos::cos(omega*t);
+  Real locy = sep*Kokkos::sin(omega*t);
+  Real epsilon = 1e-3;
+  Real r0 = 4.0*m2;
   par_for("update_adm_vars", DevExeSpace(), 0,nmb-1,0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -580,6 +625,10 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
 
     Real r = sqrt(SQR(x1v) + SQR(x2v) + SQR(x3v));
     Real s = sqrt(SQR(x1v) + SQR(x2v));
+    Real rdiff = 0.0;
+    if (newtonian) {
+      Real rdiff = sqrt(SQR(x1v - locx) + SQR(x2v - locy) + SQR(x3v));
+    }
 
     Real mass, alp, r_schw;
     if (isotropic) {
@@ -592,10 +641,22 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
     // Compute the Newtonian potential
     //Real har = (s*s + (x1v*x1v - x2v*x2v)*Kokkos::cos(2.0*omega*t) +
     //            2*x1v*x2v*Kokkos::sin(2.0*omega*t))/(2.0*r*r);
-    Real phi = Kokkos::atan2(x2v, x1v);
-    Real cospert = Kokkos::cos(phi - omega*t);
-    Real har = (1.0 - x3v*x3v/(r*r))*cospert*cospert;
-    Real U = -m2*r*r/(2.0*sep*sep*sep)*(3.0*har - 1.);
+    Real U;
+    if (modal) {
+      Real phi = Kokkos::atan2(x2v, x1v);
+      Real cospert = Kokkos::cos(phi - omega*t);
+      Real har = (1.0 - x3v*x3v/(r*r))*cospert*cospert;
+      U = -m2*r*r/(2.0*sep*sep*sep)*(3.0*har - 1.);
+    } else if (newtonian) {
+      Real reff = rdiff;
+      if (reff < r0) {
+        Real c = 2*m2 + epsilon;
+        Real a = c/(r0*r0);
+        Real b = 1.0 - 2*a*r0;
+        reff = a*(rdiff*rdiff) + b*rdiff + c;
+      }
+      U = -m2/reff;
+    }
 
     // Set ADM variables
     adm.alpha(m,k,j,i) = alp*Kokkos::sqrt(1.0 + 2.0*A*U);
