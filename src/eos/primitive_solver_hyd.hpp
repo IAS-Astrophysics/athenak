@@ -33,7 +33,6 @@
 // AthenaK headers
 #include "athena.hpp"
 #include "globals.hpp"
-#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/adm.hpp"
