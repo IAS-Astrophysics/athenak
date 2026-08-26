@@ -122,14 +122,14 @@ void ExtractPrimitives(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   Real mb = eos.ps.GetEOS().GetBaryonMass();
 
   // Extract the reconstructed primitive variables into a point state for easy access.
-  prim[PRH] = w(IDN, m, k, j, i)/mb;
-  prim[PVX] = w(IVX, m, k, j, i);
-  prim[PVY] = w(IVY, m, k, j, i);
-  prim[PVZ] = w(IVZ, m, k, j, i);
+  prim[PRH] = w(m, IDN, k, j, i)/mb;
+  prim[PVX] = w(m, IVX, k, j, i);
+  prim[PVY] = w(m, IVY, k, j, i);
+  prim[PVZ] = w(m, IVZ, k, j, i);
   for (int n = 0; n < nscal; n++) {
-    prim[PYF + n] = w(nhyd + n, m, k, j, i);
+    prim[PYF + n] = w(m, nhyd + n, k, j, i);
   }
-  prim[PPR] = w(IPR, m, k, j, i);
+  prim[PPR] = w(m, IPR, k, j, i);
 
   // Force the density and particle fractions to be physical, then compute the
   // temperature.
@@ -140,8 +140,8 @@ void ExtractPrimitives(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   // Extract the magnetic field, making sure to extract the face-centered field which
   // corresponds to the interface.
   Bu[ibx] = bx(m, k, j, i)*isdetg;
-  Bu[iby] = b(iby, m, k, j, i)*isdetg;
-  Bu[ibz] = b(ibz, m, k, j, i)*isdetg;
+  Bu[iby] = b(m, iby, k, j, i)*isdetg;
+  Bu[ibz] = b(m, ibz, k, j, i)*isdetg;
   
   // Force the primitive variables to be above the atmosphere.
   eos.ps.GetEOS().ApplyPrimitiveFloor(prim[PRH], &prim[PVX], prim[PPR], prim[PTM],
