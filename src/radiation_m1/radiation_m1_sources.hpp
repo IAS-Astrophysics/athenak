@@ -151,7 +151,8 @@ SrcSignal source_update_ll(
   }
 
   // non stiff limit, explicit update
-  if (cdt * kabs < 1 && cdt * kscat < 1) {
+  if (cdt * kabs < m1_params.source_thin_limit &&
+      cdt * kscat < m1_params.source_thin_limit) {
     prepare(BrentFunc, xold, src_params, m1_params, closure_type);
     explicit_update(src_params, Enew, Fnew_d);
 
