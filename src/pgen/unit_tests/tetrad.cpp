@@ -167,9 +167,9 @@ bool CheckConsistency(arr2D& g_dd, arr2D& eta_dd, arr2D& e_ud, arr2D& e_dd,
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn ProblemGenerator::UserProblem_()
-//! \brief Problem Generator for single puncture
-void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+//! \fn ProblemGenerator::TetradTransform()
+//! \brief Problem Generator for tetrad unit tests
+void ProblemGenerator::TetradTransform(ParameterInput *pin, const bool restart) {
   // Metric for Minkowski spacetime
   Real eta_dd[4][4] = {0.0};
   eta_dd[0][0] = -1.0;

@@ -145,6 +145,7 @@ add_executable(
 
         pgen/unit_tests/eos_compose.cpp
         pgen/unit_tests/gauss_legendre.cpp
+        pgen/unit_tests/tetrad.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp

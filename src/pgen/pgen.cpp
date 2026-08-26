@@ -963,7 +963,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     EOSCompose(pin, is_restart);
   } else if (pgen_fun_name.compare("gauss_legendre") == 0) {
     GaussLegendre(pin, is_restart);
-
+  } else if (pgen_fun_name.compare("tetrad_transform") == 0) {
+    TetradTransform(pin, is_restart);
   } else {
     // name not set on command line or input file, print warning and quit
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
