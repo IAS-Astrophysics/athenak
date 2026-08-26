@@ -115,21 +115,21 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 void ExtractPrimitives(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
-    const ScrArray2D<Real>& w, const ScrArray2D<Real>& b, const DvceArray4D<Real>& bx,
+    const DvceArray5D<Real>& w, const DvceArray5D<Real>& b, const DvceArray4D<Real>& bx,
     const Real isdetg, Real prim[NPRIM], Real Bu[NMAG],
     const int& nhyd, const int& nscal, const int m, const int k, const int j, const int i,
     const int ibx, const int iby, const int ibz) {
   Real mb = eos.ps.GetEOS().GetBaryonMass();
 
   // Extract the reconstructed primitive variables into a point state for easy access.
-  prim[PRH] = w(IDN, i)/mb;
-  prim[PVX] = w(IVX, i);
-  prim[PVY] = w(IVY, i);
-  prim[PVZ] = w(IVZ, i);
+  prim[PRH] = w(IDN, m, k, j, i)/mb;
+  prim[PVX] = w(IVX, m, k, j, i);
+  prim[PVY] = w(IVY, m, k, j, i);
+  prim[PVZ] = w(IVZ, m, k, j, i);
   for (int n = 0; n < nscal; n++) {
-    prim[PYF + n] = w(nhyd + n, i);
+    prim[PYF + n] = w(nhyd + n, m, k, j, i);
   }
-  prim[PPR] = w(IPR, i);
+  prim[PPR] = w(IPR, m, k, j, i);
 
   // Force the density and particle fractions to be physical, then compute the
   // temperature.
@@ -140,8 +140,8 @@ void ExtractPrimitives(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   // Extract the magnetic field, making sure to extract the face-centered field which
   // corresponds to the interface.
   Bu[ibx] = bx(m, k, j, i)*isdetg;
-  Bu[iby] = b(iby, i)*isdetg;
-  Bu[ibz] = b(ibz, i)*isdetg;
+  Bu[iby] = b(iby, m, k, j, i)*isdetg;
+  Bu[ibz] = b(ibz, m, k, j, i)*isdetg;
   
   // Force the primitive variables to be above the atmosphere.
   eos.ps.GetEOS().ApplyPrimitiveFloor(prim[PRH], &prim[PVX], prim[PPR], prim[PTM],
@@ -238,8 +238,8 @@ template<class arr2D>
 KOKKOS_INLINE_FUNCTION
 void TransformFluxesToGlobal(const Real cons[NCONS], const Real flux[NCONS],
                      const Real b[NMAG], const Real bflux[NMAG], const arr2D& e_td,
-                     const arr2D& e_ut, DvceArray5D<Real>& flx, DvceArray4D<Real>& ey,
-                     DvceArray4D<Real>& ez, Real vol,
+                     const arr2D& e_ut, const DvceArray5D<Real>& flx,
+                     const DvceArray4D<Real>& ey, const DvceArray4D<Real>& ez, Real vol,
                      const int m, const int k, const int j, const int i, const int ivx,
                      const int ivy, const int ivz, const int ibx, const int iby,
                      const int ibz, const int csx, const int csy, const int csz) {

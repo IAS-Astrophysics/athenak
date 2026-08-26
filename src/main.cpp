@@ -36,6 +36,7 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "mesh/mesh_refinement.hpp"
 #include "outputs/outputs.hpp"
 #include "driver/driver.hpp"
 #include "utils/utils.hpp"
@@ -62,7 +63,10 @@ int main(int argc, char *argv[]) {
   bool iarg_flag = false;  // set to true if -i <file> argument is on cmdline
   bool marg_flag = false;  // set to true if -m        argument is on cmdline
   bool narg_flag = false;  // set to true if -n        argument is on cmdline
+  bool varg_flag = false;  // set to true if -v        argument is on cmdline
   bool  res_flag = false;  // set to true if -r <file> argument is on cmdline
+  bool wdog_flag = false;  // set to true if -w ss     argument is on cmdline
+  int wdog_timeout = 0;
   Real wtlim = 0;
 
   //--- Step 1. --------------------------------------------------------------------------
@@ -84,7 +88,7 @@ int main(int argc, char *argv[]) {
   }
   if (mpiprv != MPI_THREAD_MULTIPLE) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelzation. "
+              << "MPI_THREAD_MULTIPLE must be supported for hybrid parallelization. "
               << MPI_THREAD_MULTIPLE << " : " << mpiprv
               << std::endl;
     MPI_Finalize();
@@ -132,6 +136,7 @@ int main(int argc, char *argv[]) {
         case 'h':
         case 'm':
         case 'n':
+        case 'v':
           break;
         default:
           if ((i+1 >= argc) // no argument after option
@@ -168,10 +173,17 @@ int main(int argc, char *argv[]) {
         case 'm':
           marg_flag = true;
           break;
+        case 'v':
+          varg_flag = true;
+          break;
         case 't':                      // -t <hh:mm:ss>
           int wth, wtm, wts;
           std::sscanf(argv[++i], "%d:%d:%d", &wth, &wtm, &wts);
           wtlim = static_cast<Real>(wth*3600 + wtm*60 + wts);
+          break;
+        case 'w':
+          wdog_flag = true;
+          wdog_timeout = std::atoi(argv[++i]);
           break;
         case 'c':
           if (global_variable::my_rank == 0) ShowConfig();
@@ -194,7 +206,9 @@ int main(int argc, char *argv[]) {
             std::cout << "  -n              parse input file and quit\n";
             std::cout << "  -c              show configuration and quit\n";
             std::cout << "  -m              output mesh structure and quit\n";
+            std::cout << "  -v              validate input parameters and quit\n";
             std::cout << "  -t hh:mm:ss     wall time limit for final output\n";
+            std::cout << "  -w ss           watchdog timeout in seconds\n";
             std::cout << "  -h              this help\n";
             ShowConfig();
           }
@@ -261,7 +275,6 @@ int main(int argc, char *argv[]) {
     // read parameters from restart file
     restartfile.Open(restart_file.c_str(),IOWrapper::FileMode::read,single_file_per_rank);
     pinput->LoadFromFile(restartfile, single_file_per_rank);
-    IOWrapperSizeT headeroffset = restartfile.GetPosition(single_file_per_rank);
   }
 
   // read parameters from input file.  If both -r and -i are specified, this will
@@ -290,6 +303,24 @@ int main(int argc, char *argv[]) {
   // Construct Mesh.  Then build MeshBlockTree and add MeshBlockPack containing MeshBlocks
   // on this rank.  Latter cannot be performed in Mesh constructor since it requires
   // pointer to Mesh.
+
+  // When validating (-v), collapse the root grid to a single MeshBlock and disable mesh
+  // refinement.  The Mesh, problem generator and physics classes are still fully
+  // constructed -- exercising every parameter read, the initial-data reader and the EOS
+  // table -- but on one small block instead of the full (possibly refined) grid.  Mesh
+  // refinement parameters are not read in this mode (see CheckUnusedParameters below).
+  if (varg_flag) {
+    pinput->SetInteger("mesh", "nx1",
+                       pinput->GetOrAddInteger("meshblock","nx1",
+                                               pinput->GetInteger("mesh","nx1")));
+    pinput->SetInteger("mesh", "nx2",
+                       pinput->GetOrAddInteger("meshblock","nx2",
+                                               pinput->GetInteger("mesh","nx2")));
+    pinput->SetInteger("mesh", "nx3",
+                       pinput->GetOrAddInteger("meshblock","nx3",
+                                               pinput->GetInteger("mesh","nx3")));
+    pinput->SetString("mesh_refinement", "refinement", "none");
+  }
 
   Mesh* pmesh = new Mesh(pinput);
   if (!res_flag) {
@@ -328,6 +359,13 @@ int main(int argc, char *argv[]) {
                                                      single_file_per_rank);
     restartfile.Close(single_file_per_rank);
   }
+
+  // Construct MeshRefinement object only after physics modules have been added because
+  // size of buffers for load balancing, refinement criteria, etc. depend on physics
+  if (pmesh->multilevel) {
+    pmesh->pmr = new MeshRefinement(pmesh, pinput);
+  }
+
   //--- Step 6. --------------------------------------------------------------------------
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
   // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
@@ -336,16 +374,34 @@ int main(int argc, char *argv[]) {
   Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   Outputs* pout = new Outputs(pinput, pmesh);
 
+  // All classes that read parameters have now been constructed.  Warn (on rank 0) about
+  // any input parameters that were never used, which are usually typos in optional
+  // parameters that would otherwise be silently ignored.
+  pinput->CheckUnusedParameters(std::cerr, varg_flag);
 
+  // If code was run with -v option, input validation is complete; clean up and quit.
+  if (varg_flag) {
+    delete pout;
+    delete pdriver;
+    delete pmesh;
+    delete pinput;
+    Kokkos::finalize();
+#if MPI_PARALLEL_ENABLED
+    MPI_Finalize();
+#endif
+    return(0);
+  }
 
   //--- Step 7. --------------------------------------------------------------------------
   // Execute Driver.
   //    1. Initial conditions set in Driver::Initialize()
   //    2. TaskList(s) executed in Driver::Execute()
   //    3. Any final analysis or diagnostics run in Driver::Finalize()
+  // Optionally start the WatchDog
 
+  if (wdog_flag) WatchDog(wdog_timeout);
   pdriver->Initialize(pmesh, pinput, pout, res_flag);
-  pdriver->Execute(pmesh, pinput, pout);
+  pdriver->Execute(pmesh, pinput, pout, wdog_flag);
   pdriver->Finalize(pmesh, pinput, pout);
 
   //--- Step 8. -------------------------------------------------------------------------
