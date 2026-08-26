@@ -15,6 +15,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "hydro/hydro.hpp"
 #include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
 #include "outputs/outputs.hpp"
 #include "parameter_input.hpp"
 #include "particles/lagrangian_mc.hpp"
@@ -91,7 +92,12 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
   const int nji = nx2*nx1;
   const int nmkji = pmbp->nmb_thispack*nkji;
   const bool final_state = pm->ncycle > 0;
-  auto u0 = pmbp->phydro->u0;
+  DvceArray5D<Real> u0;
+  if (pmbp->phydro != nullptr) {
+    u0 = pmbp->phydro->u0;
+  } else {
+    u0 = pmbp->pmhd->u0;
+  }
   auto &mbsize = pmbp->pmb->mb_size;
 
   Real fluid_error = 0.0;
@@ -113,7 +119,12 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
         local_max = fmax(local_max, fabs(u0(m,IDN,k,j,i) - expected));
       }, Kokkos::Max<Real>(fluid_error));
 
-  auto intflx1 = pmbp->phydro->density_flux_integral.x1f;
+  DvceArray4D<Real> intflx1;
+  if (pmbp->phydro != nullptr) {
+    intflx1 = pmbp->phydro->density_flux_integral.x1f;
+  } else {
+    intflx1 = pmbp->pmhd->density_flux_integral.x1f;
+  }
   Real flux_error = 0.0;
   Kokkos::parallel_reduce(
       "particle_lmc_flux_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
@@ -428,10 +439,21 @@ void LagrangianMCHistory(HistoryData *pdata, Mesh *pm) {
 }
 
 void InjectInvalidFluxIntegral(Mesh *pm, const Real) {
-  auto &integral = pm->pmb_pack->phydro->density_flux_integral;
-  Kokkos::deep_copy(integral.x1f, 4.0);
-  Kokkos::deep_copy(integral.x2f, 0.0);
-  Kokkos::deep_copy(integral.x3f, 0.0);
+  DvceArray4D<Real> intflx1;
+  DvceArray4D<Real> intflx2;
+  DvceArray4D<Real> intflx3;
+  if (pm->pmb_pack->phydro != nullptr) {
+    intflx1 = pm->pmb_pack->phydro->density_flux_integral.x1f;
+    intflx2 = pm->pmb_pack->phydro->density_flux_integral.x2f;
+    intflx3 = pm->pmb_pack->phydro->density_flux_integral.x3f;
+  } else {
+    intflx1 = pm->pmb_pack->pmhd->density_flux_integral.x1f;
+    intflx2 = pm->pmb_pack->pmhd->density_flux_integral.x2f;
+    intflx3 = pm->pmb_pack->pmhd->density_flux_integral.x3f;
+  }
+  Kokkos::deep_copy(intflx1, 4.0);
+  Kokkos::deep_copy(intflx2, 0.0);
+  Kokkos::deep_copy(intflx3, 0.0);
 }
 
 void InitializeUniformRegression(Mesh *pm) {
@@ -447,7 +469,12 @@ void InitializeUniformRegression(Mesh *pm) {
   const bool reverse = reverse_particle_order;
   const Real sign = static_cast<Real>(direction_sign);
   auto &mbsize = pmbp->pmb->mb_size;
-  auto u0 = pmbp->phydro->u0;
+  DvceArray5D<Real> u0;
+  if (pmbp->phydro != nullptr) {
+    u0 = pmbp->phydro->u0;
+  } else {
+    u0 = pmbp->pmhd->u0;
+  }
   par_for("particle_lmc_uniform_fluid_init", DevExeSpace(),
           0, (pmbp->nmb_thispack-1), ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -527,11 +554,36 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
   }
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (pmbp->phydro == nullptr || pmbp->ppart == nullptr) {
+  const bool has_hydro = pmbp->phydro != nullptr;
+  const bool has_mhd = pmbp->pmhd != nullptr;
+  if (pmbp->ppart == nullptr || (!has_hydro && !has_mhd) ||
+      (has_hydro && has_mhd)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Lagrangian MC test requires <hydro> and <particles> blocks."
+              << std::endl << "Lagrangian MC test requires <particles> and exactly one "
+              << "of <hydro> or <mhd>."
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  if (has_mhd) {
+    // Use a zero magnetic field so this case should match the Hydro regression.
+    auto &indcs = pmy_mesh_->mb_indcs;
+    const int is = indcs.is;
+    const int ie = indcs.ie;
+    const int js = indcs.js;
+    const int je = indcs.je;
+    const int ks = indcs.ks;
+    const int ke = indcs.ke;
+    auto &b0 = pmbp->pmhd->b0;
+    par_for("particle_lmc_magnetic_init", DevExeSpace(), 0, (pmbp->nmb_thispack-1),
+            ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      b0.x1f(m,k,j,i) = 0.0;
+      b0.x2f(m,k,j,i) = 0.0;
+      b0.x3f(m,k,j,i) = 0.0;
+      if (i == ie) b0.x1f(m,k,j,i+1) = 0.0;
+      if (j == je) b0.x2f(m,k,j+1,i) = 0.0;
+      if (k == ke) b0.x3f(m,k+1,j,i) = 0.0;
+    });
   }
   const int expected_particles =
       (regression == LMCRegression::directions ||
@@ -573,7 +625,12 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
   const int ks = indcs.ks;
   const int ke = indcs.ke;
   auto &mbsize = pmbp->pmb->mb_size;
-  auto u0 = pmbp->phydro->u0;
+  DvceArray5D<Real> u0;
+  if (has_hydro) {
+    u0 = pmbp->phydro->u0;
+  } else {
+    u0 = pmbp->pmhd->u0;
+  }
   par_for("particle_lmc_fluid_init", DevExeSpace(), 0, (pmbp->nmb_thispack-1),
           ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {

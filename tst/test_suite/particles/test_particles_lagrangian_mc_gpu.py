@@ -1,6 +1,7 @@
 """Deterministic GPU regression test for Lagrangian Monte Carlo particles."""
 
 from pathlib import Path
+import shutil
 import subprocess
 
 import athena_read
@@ -11,6 +12,25 @@ import test_suite.testutils as testutils
 
 
 HISTORY = Path("particle_lagrangian_mc_gpu.user.hst")
+
+
+def _read_mesh_vtk_scalar(path):
+    """Read the sole scalar field from an AthenaK mesh VTK output."""
+    with path.open("rb") as file:
+        while True:
+            line = file.readline()
+            if not line:
+                pytest.fail(f"CELL_DATA header not found in {path}")
+            if line.startswith(b"CELL_DATA "):
+                ncells = int(line.split()[1])
+                break
+
+        scalar_header = file.readline().split()
+        while not scalar_header:
+            scalar_header = file.readline().split()
+        assert scalar_header == [b"SCALARS", b"pdens", b"float"]
+        assert file.readline().strip() == b"LOOKUP_TABLE default"
+        return np.frombuffer(file.read(4*ncells), dtype=">f4").copy()
 
 
 def test_particle_lagrangian_mc_gpu():
@@ -50,6 +70,46 @@ def test_particle_lagrangian_mc_gpu():
                 pytest.fail(f"unexpected {field}: {data[field][-1]:g}")
     finally:
         HISTORY.unlink(missing_ok=True)
+
+
+def test_particle_lagrangian_mc_mhd_parity_gpu():
+    """Match the deterministic Hydro particle path with zero-field MHD."""
+    histories = []
+    paths = []
+    try:
+        for fluid in ("hydro", "mhd"):
+            basename = f"particle_lagrangian_mc_{fluid}_parity_gpu"
+            history = Path(f"{basename}.user.hst")
+            histories.append(history)
+            history.unlink(missing_ok=True)
+            input_name = (
+                "particle_lagrangian_mc_mhd"
+                if fluid == "mhd"
+                else "particle_lagrangian_mc"
+            )
+            assert testutils.run(
+                f"inputs/{input_name}.athinput", [f"job/basename={basename}"]
+            ), f"Lagrangian MC {fluid.upper()} parity run failed"
+            paths.append(athena_read.hst(str(history)))
+
+        hydro, mhd = paths
+        for field in (
+            "time",
+            "fluid_err",
+            "flux_err",
+            "pos_err",
+            "owner_err",
+            "moved",
+            "moved_tags",
+            "migrated",
+            "npart",
+            "tag_sum",
+            "status_err",
+        ):
+            np.testing.assert_allclose(hydro[field], mhd[field], rtol=0.0, atol=1.0e-13)
+    finally:
+        for history in histories:
+            history.unlink(missing_ok=True)
 
 
 @pytest.mark.parametrize(
@@ -227,3 +287,43 @@ def test_particle_lagrangian_mc_reproducibility_gpu():
     finally:
         for history in histories:
             history.unlink(missing_ok=True)
+
+
+def test_particle_density_output_collocated_gpu(tmp_path):
+    """Count collocated particles without losing device updates to a write race."""
+    basename = "particle_density_collocated_gpu"
+    history = Path(f"{basename}.user.hst")
+    vtk_path = Path(f"vtk/{basename}.prtcl_d.00000.vtk")
+    input_path = tmp_path / "particle_density_collocated.athinput"
+    input_path.write_text(
+        Path("inputs/particle_lagrangian_mc.athinput").read_text()
+        + """
+
+<output2>
+file_type = vtk
+variable = prtcl_d
+dcycle = 1
+"""
+    )
+
+    try:
+        shutil.rmtree("vtk", ignore_errors=True)
+        history.unlink(missing_ok=True)
+        assert testutils.run(
+            str(input_path),
+            [
+                f"job/basename={basename}",
+                "time/nlim=0",
+                "particles/ppc=0.5",
+                "problem/test_case=reproducibility",
+            ],
+        ), "collocated particle-density output run failed"
+
+        assert vtk_path.exists(), "collocated particle-density VTK was not written"
+        density = _read_mesh_vtk_scalar(vtk_path)
+        assert np.count_nonzero(density) == 1
+        assert np.max(density) == pytest.approx(16.0)
+        assert np.sum(density) == pytest.approx(16.0)
+    finally:
+        shutil.rmtree("vtk", ignore_errors=True)
+        history.unlink(missing_ok=True)

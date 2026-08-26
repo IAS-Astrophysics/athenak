@@ -14,8 +14,13 @@
 #include "athena.hpp"
 #include "hydro/hydro.hpp"
 #include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
 #include "particles/lagrangian_mc.hpp"
 #include "particles/particles.hpp"
+
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
 
 namespace particles {
 namespace {
@@ -61,10 +66,21 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
   const Real invalid_probability = std::numeric_limits<Real>::max();
-  auto start_u = pmy_pack->phydro->u1;
-  auto intflx1 = pmy_pack->phydro->density_flux_integral.x1f;
-  auto intflx2 = pmy_pack->phydro->density_flux_integral.x2f;
-  auto intflx3 = pmy_pack->phydro->density_flux_integral.x3f;
+  DvceArray5D<Real> start_u;
+  DvceArray4D<Real> intflx1;
+  DvceArray4D<Real> intflx2;
+  DvceArray4D<Real> intflx3;
+  if (pmy_pack->phydro != nullptr) {
+    start_u = pmy_pack->phydro->u1;
+    intflx1 = pmy_pack->phydro->density_flux_integral.x1f;
+    intflx2 = pmy_pack->phydro->density_flux_integral.x2f;
+    intflx3 = pmy_pack->phydro->density_flux_integral.x3f;
+  } else {
+    start_u = pmy_pack->pmhd->u1;
+    intflx1 = pmy_pack->pmhd->density_flux_integral.x1f;
+    intflx2 = pmy_pack->pmhd->density_flux_integral.x2f;
+    intflx3 = pmy_pack->pmhd->density_flux_integral.x3f;
+  }
   using MaxLoc = Kokkos::MaxLoc<Real, int>;
   MaxLoc::value_type max_probability;
 
@@ -124,6 +140,9 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
               << pmy_pack->gids + m << " cell (k,j,i)=(" << k << "," << j << ","
               << i << "). Probability must be finite and must not exceed one; "
               << "the beginning-of-step density must be non-negative." << std::endl;
+#if MPI_PARALLEL_ENABLED
+    MPI_Abort(MPI_COMM_WORLD, 1);
+#endif
     std::exit(EXIT_FAILURE);
   }
 

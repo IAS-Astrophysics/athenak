@@ -17,6 +17,7 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
 #include "cosmic_ray.hpp"
 #include "lagrangian_mc.hpp"
 #include "particles.hpp"
@@ -148,14 +149,28 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
                   << "'lagrangian_mc'" << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      if (pmy_pack->phydro == nullptr || pmy_pack->pmhd != nullptr ||
+      const bool has_hydro = pmy_pack->phydro != nullptr;
+      const bool has_mhd = pmy_pack->pmhd != nullptr;
+      if ((!has_hydro && !has_mhd) || (has_hydro && has_mhd) ||
           pmy_pack->pionn != nullptr || pmy_pack->prad != nullptr) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "Lagrangian MC particles currently require "
-                  << "single-fluid Hydro" << std::endl;
+                  << "single-fluid Hydro or MHD" << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      if (pmy_pack->pmesh->multilevel || pmy_pack->phydro->porb_u != nullptr) {
+      if (pmy_pack->pdyngr != nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently do not support "
+                  << "dynamical spacetime" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      bool orbital_advection = false;
+      if (has_hydro) {
+        orbital_advection = pmy_pack->phydro->porb_u != nullptr;
+      } else {
+        orbital_advection = pmy_pack->pmhd->porb_u != nullptr;
+      }
+      if (pmy_pack->pmesh->multilevel || orbital_advection) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "Lagrangian MC particles currently require a "
                   << "uniform mesh without orbital advection" << std::endl;
@@ -164,7 +179,7 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
       std::string evolution = pin->GetString("time", "evolution");
       if (evolution.compare("dynamic") != 0 && evolution.compare("kinematic") != 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Lagrangian MC particles require time-evolving Hydro"
+                  << std::endl << "Lagrangian MC particles require a time-evolving fluid"
                   << std::endl;
         std::exit(EXIT_FAILURE);
       }
@@ -175,7 +190,7 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
                   << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      // Hydro limits each directional Courant number; one-hop LMC transport requires
+      // The fluid solver limits each directional Courant number; one-hop transport requires
       // their sum to be no larger than one.
       const int ndim = pmy_pack->pmesh->three_d ? 3 : 2;
       const Real cfl_number = pin->GetReal("time", "cfl_number");
@@ -196,7 +211,11 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
       }
       lmc_random_seed = static_cast<std::uint64_t>(random_seed);
       pusher = ParticlesPusher::lagrangian_mc;
-      pmy_pack->phydro->EnableDensityFluxIntegral();
+      if (has_hydro) {
+        pmy_pack->phydro->EnableDensityFluxIntegral();
+      } else {
+        pmy_pack->pmhd->EnableDensityFluxIntegral();
+      }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle pusher = '" << ppush << "' not recognized"

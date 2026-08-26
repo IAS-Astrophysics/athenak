@@ -1277,7 +1277,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       if (three_d) {
         kp = (pr(IPZ,p) - size.d_view(m).x3min)/size.d_view(m).dx3 + ks;
       }
-      pdens(m,0,kp,jp,ip) += 1.0;
+      Kokkos::atomic_add(&pdens(m,0,kp,jp,ip), 1.0);
     });
   }
   i_dv = i_dv % n_dv; // reset derived variable index
