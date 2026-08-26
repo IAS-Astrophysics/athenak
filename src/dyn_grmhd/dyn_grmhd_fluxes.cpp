@@ -281,7 +281,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
       const int nkji = nx3*nx2*nx1;
       const int nji = nx2*nx1;
-      
+
       size_t sum = 0;
 
       Kokkos::parallel_reduce("HLLDFailureCount",

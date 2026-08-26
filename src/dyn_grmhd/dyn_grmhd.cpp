@@ -195,20 +195,20 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
   if (rsolver_method == DynGRMHD_RSolver::llf_dyngr) {
     pnr->QueueTask(
-           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::llf_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+       &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::llf_dyngr>,
+       this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
     pnr->QueueTask(
-           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+       &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
+       this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else if (rsolver_method == DynGRMHD_RSolver::hlle_transform) {
     pnr->QueueTask(
-           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_transform>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+       &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_transform>,
+       this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else if (rsolver_method == DynGRMHD_RSolver::hlld_dyngr) {
     pnr->QueueTask(
-           &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlld_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+       &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlld_dyngr>,
+       this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
   } else { // put more rsolvers here
     abort();
   }

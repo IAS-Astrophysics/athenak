@@ -91,7 +91,7 @@ void HLLE_TRANSFORMING(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
   eos.GetSRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsq_l, pvx);
   eos.GetSRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsq_r, pvx);
-  
+
   // Get the extremal wavespeeds
   Real lambda_l = Kokkos::fmin(lambda_ml, lambda_mr);
   Real lambda_r = Kokkos::fmax(lambda_pl, lambda_pr);

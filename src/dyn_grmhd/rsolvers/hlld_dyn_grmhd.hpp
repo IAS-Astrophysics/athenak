@@ -92,7 +92,7 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   Real lambda_pl, lambda_pr, lambda_ml, lambda_mr;
   eos.GetSRFastMagnetosonicSpeeds(lambda_pl, lambda_ml, prim_l, bsq_l, pvx);
   eos.GetSRFastMagnetosonicSpeeds(lambda_pr, lambda_mr, prim_r, bsq_r, pvx);
-  
+
   // Get the extremal wavespeeds
   Real lambda_l = Kokkos::fmin(lambda_ml, lambda_mr);
   Real lambda_r = Kokkos::fmax(lambda_pl, lambda_pr);
@@ -316,7 +316,7 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
       Ucr[csz] = (Ucr[CTA] + P)*vcr[ibz] - Bvcr*Bc[ibz];
       Ucr[CTA] -= Ucr[CDN];
 
-      
+
       // In principle the left and right normal velocities are identical across the
       // contact interface, but this will only be true up to some tolerance in our
       // root solver. Therefore, we average the left and right states together and call
@@ -365,14 +365,13 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
       /*} while (Kokkos::fabs(ptot - ptot_old) > tol*Kokkos::fabs(ptot_old - ptot_old2) &&
                count < max_iters);*/
     }
-    
+
     // STEP 4: Check for correctness and compute intermediate state if possible.
     bool fail = false;
     if (count == max_iters || !Kokkos::isfinite(ptot)) {
       // Root solver did not converge. Do nothing.
       fail = true;
-    }
-    else if (Hbl <= ptot || Hbr <= ptot || lal <= lambda_l || lar >= lambda_r) {
+    } else if (Hbl <= ptot || Hbr <= ptot || lal <= lambda_l || lar >= lambda_r) {
       // Either the interface pressure is too large or the eigenvalues are not
       // well-ordered, so return failure.
       fail = true;
@@ -432,7 +431,7 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
         b_int[ibz] = Bar[ibz];
         bfint[iby] = bflux_r[iby] + lambda_r*(Bar[iby] - Bu_r[iby]);
         bfint[ibz] = bflux_r[ibz] + lambda_r*(Bar[ibz] - Bu_r[ibz]);
-       
+
         if (vint < lar) {
           // Compute the right contact state using the RH conditions on the Alfven
           // state.
@@ -453,7 +452,7 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     }
 
     if (!Kokkos::isfinite(cons_int[CDN]) || !Kokkos::isfinite(fint[CDN])) {
-      Kokkos::printf("There's a problem with the HLLD solution!\n");
+      Kokkos::printf("There's a problem with the HLLD solution!\n"); // NOLINT
       fail = true;
     }
 

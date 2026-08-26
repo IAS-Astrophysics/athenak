@@ -34,7 +34,7 @@ void ExtractADMMetric(Real g3d[NSPMETRIC], Real& alpha, Real beta_u[3], Real& de
   g3d[S22] = g_dd[2][2];
   g3d[S23] = g_dd[2][3];
   g3d[S33] = g_dd[3][3];
-  
+
   Real g3u[NSPMETRIC];
   detg = Primitive::GetDeterminant(g3d);
   Primitive::InvertMatrix(g3u, g3d, detg);
@@ -111,7 +111,7 @@ bool CheckConsistency(arr2D& g_dd, arr2D& eta_dd, arr2D& e_ud, arr2D& e_dd,
   }
 
   err /= (6.0*det);
-  
+
   if (Kokkos::fabs(err) > tol) {
     std::cout << "Tetrad does not compute a symmetric metric.\n"
               << "  Average relative error: " << err << "\n";
@@ -262,7 +262,7 @@ void ProblemGenerator::TetradTransform(ParameterInput *pin, const bool restart) 
       mag_g += u_u[mu]*u_u[nu]*g_dd[mu][nu];
     }
   }
-  
+
   ExtractADMMetric(g3d, alpha, beta_u, detg, g_dd);
 
   dyngr::ComputeOrthonormalTetrad<1>(g3d, beta_u, alpha, 1.0/detg, e_ud, e_dd);

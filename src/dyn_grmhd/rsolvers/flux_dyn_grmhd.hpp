@@ -142,7 +142,7 @@ void ExtractPrimitives(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   Bu[ibx] = bx(m, k, j, i)*isdetg;
   Bu[iby] = b(m, iby, k, j, i)*isdetg;
   Bu[ibz] = b(m, ibz, k, j, i)*isdetg;
-  
+
   // Force the primitive variables to be above the atmosphere.
   eos.ps.GetEOS().ApplyPrimitiveFloor(prim[PRH], &prim[PVX], prim[PPR], prim[PTM],
                                       &prim[PYF]);
