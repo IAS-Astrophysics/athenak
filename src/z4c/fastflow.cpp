@@ -941,8 +941,11 @@ void FastFlow::RadiiFromSphericalHarmonics() {
 
   // Step 2: Compute the global minimum.
   rr_min = std::numeric_limits<Real>::infinity();
+  // NOTE: Kokkos::RangePolicy takes an EXCLUSIVE upper bound, unlike AthenaK's par_for
+  // (see athena.hpp), which is inclusive. The bound must therefore be nangles, not
+  // nangles-1, or the last surface point is silently skipped.
   Kokkos::parallel_reduce("FastFlow_sphradii",
-  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles),
   KOKKOS_LAMBDA(const int &p, Real &lmin) {
     lmin = Kokkos::min(lmin, rr_(p));
   }, Kokkos::Min<Real>(rr_min));
@@ -1039,9 +1042,12 @@ void FastFlow::SurfaceIntegrals() {
     }
   };
 
-  // Loop over surface points
+  // Loop over surface points.
+  // NOTE: Kokkos::RangePolicy takes an EXCLUSIVE upper bound, unlike AthenaK's par_for
+  // (see athena.hpp), which is inclusive. The bound must therefore be nangles, not
+  // nangles-1, or the last surface point contributes to none of the integrals below.
   Kokkos::parallel_reduce("FastFlow_surfintegrals",
-  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles),
   KOKKOS_LAMBDA(const int &p,
                 Real& area,
                 Real& coarea,
