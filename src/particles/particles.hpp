@@ -32,7 +32,9 @@ enum ParticleRealIndex {IPX=0, IPY=1, IPZ=2};
 enum ParticleIntIndex {PGID=0, PTAG=1, PSTATUS=2};
 
 // common particle lifecycle states
-enum ParticleStatus {PACTIVE=0, PFROZEN=1, PDELETE_PENDING=2};
+enum ParticleStatus {
+  PACTIVE=0, PFROZEN=1, PDELETE_PENDING=2, PDELETE_AFTER_SNAPSHOT=3
+};
 
 //----------------------------------------------------------------------------------------
 //! \struct ParticleTaskIDs
@@ -40,6 +42,7 @@ enum ParticleStatus {PACTIVE=0, PFROZEN=1, PDELETE_PENDING=2};
 
 struct ParticleTaskIDs {
   TaskID push;
+  TaskID lifecycle;
   TaskID purge;
   TaskID newgid;
   TaskID count;
@@ -93,6 +96,7 @@ class ParticlePopulation {
   // functions...
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
+  TaskStatus ApplyUserLifecycle(Driver *pdriver, int stage);
   TaskStatus PurgeDeleted(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
   TaskStatus SendCnt(Driver *pdriver, int stage);
@@ -108,6 +112,8 @@ class ParticlePopulation {
   TaskStatus PushLagrangianMC(Driver *pdriver, int stage);
   Real EstimateTimestepDrift();
 
+  void MarkSnapshotComplete();
+
   int RestartLayoutVersion() const;
   std::vector<char> RestartMetadata() const;
   void ValidateRestartMetadata(const std::vector<char> &metadata) const;
@@ -116,6 +122,27 @@ class ParticlePopulation {
   std::string input_block_;
   std::uint64_t lmc_random_seed;
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this population
+};
+
+//----------------------------------------------------------------------------------------
+//! \struct ParticleLifecycleData
+//! \brief Live particle data supplied to a problem-generator lifecycle callback.
+
+struct ParticleLifecycleData {
+  ParticleLifecycleData(MeshBlockPack *ppack, ParticlePopulation *ppopulation,
+                        DvceArray2D<Real> rdata, DvceArray2D<int> idata, int count) :
+      pmbp(ppack), population(ppopulation), prtcl_rdata(rdata), prtcl_idata(idata),
+      nprtcl(count) {}
+
+  MeshBlockPack *pmbp;
+  ParticlePopulation *population;
+  // The callback may update PSTATUS and type-owned fields for PACTIVE particles. It must
+  // not resize/reorder these views or change common positions, identifiers, or ownership.
+  // PGID still identifies the pre-push owner; use the normal execution space or fence any
+  // work launched on another execution instance before returning.
+  DvceArray2D<Real> prtcl_rdata;
+  DvceArray2D<int> prtcl_idata;
+  int nprtcl;  // may be zero; the callback is still invoked on every rank
 };
 
 //----------------------------------------------------------------------------------------

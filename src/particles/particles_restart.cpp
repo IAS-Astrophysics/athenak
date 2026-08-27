@@ -278,7 +278,7 @@ void Particles::WriteRestart(const std::string &filename) const {
       if (tag < 0) {
         RestartError("A particle tag is negative at checkpoint time.");
       }
-      if (status < PACTIVE || status > PDELETE_PENDING) {
+      if (status < PACTIVE || status > PDELETE_AFTER_SNAPSHOT) {
         RestartError("A particle has an invalid lifecycle status at checkpoint time.");
       }
       data.ordered_particles[gid].push_back(p);
@@ -573,7 +573,7 @@ void Particles::LoadRestart(const std::string &filename) {
         if (tag < 0) {
           RestartError("Particle restart contains a negative tag.");
         }
-        if (status < PACTIVE || status > PDELETE_PENDING) {
+        if (status < PACTIVE || status > PDELETE_AFTER_SNAPSHOT) {
           RestartError("Particle restart contains an invalid lifecycle status.");
         }
         ++local_offset;

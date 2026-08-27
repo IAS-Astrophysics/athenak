@@ -41,8 +41,11 @@ void ParticlePopulation::AssembleTasks(
 
   auto add_update_chain = [this](const std::shared_ptr<TaskList> &tasks) {
     TaskID first(0);
-    id.push   = tasks->AddTask(&ParticlePopulation::Push, this, first);
-    id.purge  = tasks->AddTask(&ParticlePopulation::PurgeDeleted, this, id.push);
+    id.push = tasks->AddTask(&ParticlePopulation::Push, this, first);
+    id.lifecycle = tasks->AddTask(
+        &ParticlePopulation::ApplyUserLifecycle, this, id.push);
+    id.purge  = tasks->AddTask(
+        &ParticlePopulation::PurgeDeleted, this, id.lifecycle);
     id.newgid = tasks->AddTask(&ParticlePopulation::NewGID, this, id.purge);
     id.count  = tasks->AddTask(&ParticlePopulation::SendCnt, this, id.newgid);
     id.irecv  = tasks->AddTask(&ParticlePopulation::InitRecv, this, id.count);

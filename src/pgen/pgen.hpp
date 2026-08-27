@@ -18,6 +18,7 @@
 
 namespace particles {
 class ParticleCreation;
+struct ParticleLifecycleData;
 struct ParticleOutputData;
 }
 
@@ -29,6 +30,7 @@ using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 using UserParticleTimestepFnPtr = Real (*)(MeshBlockPack *pmbp);
 using UserParticleInjectionFnPtr = void (*)(MeshBlockPack *pmbp,
                                             particles::ParticleCreation *creation);
+using UserParticleLifecycleFnPtr = void (*)(particles::ParticleLifecycleData *lifecycle);
 using UserParticleOutputFnPtr = void (*)(particles::ParticleOutputData *output);
 
 struct UserParticleOutputVariable {
@@ -74,6 +76,8 @@ class ProblemGenerator {
   // completed step; enroll user_particle_injection_func on restarts as well.
   UserParticleInjectionFnPtr user_initial_particle_injection_func=nullptr;
   UserParticleInjectionFnPtr user_particle_injection_func=nullptr;
+  // Optional post-push particle lifecycle hook. Enroll on restarts as well.
+  UserParticleLifecycleFnPtr user_particle_lifecycle_func=nullptr;
   // Output-only particle quantities. Generic enrollment adds to both registries;
   // format-specific enrollment adds only to the named registry. Enroll on restarts too.
   std::vector<UserParticleOutputVariable> user_particle_track_output_variables;

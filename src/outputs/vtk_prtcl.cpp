@@ -150,7 +150,7 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
 //!  7. Arbitrary number of VECTORS data at each point (BINARY format)
 
 void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
-  const particles::ParticlePopulation *pp =
+  particles::ParticlePopulation *pp =
       pm->pmb_pack->ppart->FindPopulation("particles");
   int big_end = IsBigEndian(); // =1 on big endian machine
 
@@ -376,8 +376,14 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // close the output file and clean up
-  partfile.Close();
+  if (partfile.Close() != 0) {
+    FatalParticleVTKOutput("failed to close particle VTK output file '" + fname + "'");
+  }
   delete[] data;
+
+  // The host snapshot above contains particles waiting for one final snapshot. Queue
+  // them for deletion by the next normal particle purge only after the file is complete.
+  pp->MarkSnapshotComplete();
 
   // increment counters
   out_params.file_number++;

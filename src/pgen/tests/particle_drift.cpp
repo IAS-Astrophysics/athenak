@@ -25,6 +25,7 @@ int expected_particles = kDefaultParticles;
 bool migration_test = false;
 int frozen_tag = -1;
 int delete_tag = -1;
+int delete_after_snapshot_tag = -1;
 
 Real ParticleDriftTimestep(MeshBlockPack*) { return 0.125; }
 
@@ -61,6 +62,20 @@ void ParticleVTKY(particles::ParticleOutputData *output) {
   par_for("particle_vtk_output_y", DevExeSpace(), 0, npart-1,
   KOKKOS_LAMBDA(const int p) {
     values(field,p) = pr(IPY,p);
+  });
+}
+
+void ParticleDriftLifecycle(particles::ParticleLifecycleData *lifecycle) {
+  auto pi = lifecycle->prtcl_idata;
+  const int npart = lifecycle->nprtcl;
+  const int deferred_tag = delete_after_snapshot_tag;
+  if (npart == 0 || deferred_tag < 0) return;
+  par_for("particle_drift_lifecycle", DevExeSpace(), 0, npart-1,
+  KOKKOS_LAMBDA(const int p) {
+    if (pi(particles::cosmic_ray::PSTATUS,p) != PACTIVE) return;
+    if (pi(particles::cosmic_ray::PTAG,p) == deferred_tag) {
+      pi(particles::cosmic_ray::PSTATUS,p) = PDELETE_AFTER_SNAPSHOT;
+    }
   });
 }
 
@@ -221,6 +236,11 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   migration_test = pin->GetOrAddBoolean("problem", "migration_test", false);
   frozen_tag = pin->GetOrAddInteger("problem", "frozen_tag", -1);
   delete_tag = pin->GetOrAddInteger("problem", "delete_tag", -1);
+  delete_after_snapshot_tag = pin->GetOrAddInteger(
+      "problem", "delete_after_snapshot_tag", -1);
+  if (delete_after_snapshot_tag >= 0) {
+    user_particle_lifecycle_func = ParticleDriftLifecycle;
+  }
   if (expected_particles < 1) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Particle drift test expected_particles must be positive."
@@ -239,9 +259,19 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
               << (expected_particles - 1) << "." << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if (delete_tag >= 0 && delete_tag == frozen_tag) {
+  if (delete_after_snapshot_tag < -1 ||
+      delete_after_snapshot_tag >= expected_particles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle drift test cannot freeze and delete the same tag."
+              << std::endl << "Particle drift test delete_after_snapshot_tag must be -1 "
+              << "or between 0 and " << (expected_particles - 1) << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if ((delete_tag >= 0 && delete_tag == frozen_tag) ||
+      (delete_after_snapshot_tag >= 0 &&
+       (delete_after_snapshot_tag == frozen_tag ||
+        delete_after_snapshot_tag == delete_tag))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle drift test lifecycle modes must use distinct tags."
               << std::endl;
     std::exit(EXIT_FAILURE);
   }

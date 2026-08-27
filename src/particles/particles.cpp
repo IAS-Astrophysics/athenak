@@ -18,6 +18,7 @@
 #include "bvals/bvals.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "pgen/pgen.hpp"
 #include "cosmic_ray.hpp"
 #include "lagrangian_mc.hpp"
 #include "particles.hpp"
@@ -278,6 +279,20 @@ ParticlePopulation::~ParticlePopulation() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn TaskStatus ParticlePopulation::ApplyUserLifecycle
+//! \brief Let the problem generator update particle state after the pusher.
+
+TaskStatus ParticlePopulation::ApplyUserLifecycle(Driver*, int) {
+  auto *pgen = pmy_pack->pmesh->pgen.get();
+  if (pgen != nullptr && pgen->user_particle_lifecycle_func != nullptr) {
+    ParticleLifecycleData lifecycle(
+        pmy_pack, this, prtcl_rdata, prtcl_idata, nprtcl_thispack);
+    pgen->user_particle_lifecycle_func(&lifecycle);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus ParticlePopulation::PurgeDeleted
 //! \brief Remove particles marked for deletion and compact all particle data arrays.
 
@@ -330,6 +345,23 @@ TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
 #endif
 
   return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ParticlePopulation::MarkSnapshotComplete
+//! \brief Queue deferred particles for deletion by the next purge task.
+
+void ParticlePopulation::MarkSnapshotComplete() {
+  auto pi = prtcl_idata;
+  const int npart = nprtcl_thispack;
+  if (npart > 0) {
+    par_for("particle_mark_snapshot_complete", DevExeSpace(), 0, npart-1,
+    KOKKOS_LAMBDA(const int p) {
+      if (pi(PSTATUS,p) == PDELETE_AFTER_SNAPSHOT) {
+        pi(PSTATUS,p) = PDELETE_PENDING;
+      }
+    });
+  }
 }
 
 //----------------------------------------------------------------------------------------
