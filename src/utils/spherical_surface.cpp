@@ -67,6 +67,11 @@ SphericalSurface::SphericalSurface(MeshBlockPack *pmy_pack, int ntheta,
   Kokkos::realloc(interp_indcs, npoints, 4);
   Kokkos::realloc(interp_wghts, npoints, 2 * ng, 3);
 
+  // stamp of the mesh the indices below are computed against
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  amr_nmb_created = (pmr == nullptr) ? 0 : pmr->nmb_created;
+  amr_nmb_deleted = (pmr == nullptr) ? 0 : pmr->nmb_deleted;
+
   InitializeAngleAndWeights();
   InitializeRadius();
   SetInterpolationIndices();
@@ -149,8 +154,10 @@ void SphericalSurface::SetInterpolationIndices() {
       Real &dx2 = size.h_view(m).dx2;
       Real &dx3 = size.h_view(m).dx3;
 
-      // save MeshBlock and zone indicies for nearest position to spherical
-      // patch center if this angle position resides in this MeshBlock
+      // Save MeshBlock and zone indicies for nearest position to spherical patch center
+      // if this angle position resides in this MeshBlock. NOTE: the upper bounds are
+      // exclusive so that a point landing exactly on a MeshBlock face is owned by
+      // exactly one block, and the search stops at the first match.
       if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) < x1max) &&
           (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) < x2max) &&
           (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {
@@ -170,6 +177,30 @@ void SphericalSurface::SetInterpolationIndices() {
   // sync dual arrays
   interp_indcs.template modify<HostMemSpace>();
   interp_indcs.template sync<DevExeSpace>();
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SphericalSurface::UpdateInterpolationOnMeshChange
+//! \brief recompute interpolation indices and weights after the mesh has changed
+//
+// interp_indcs stores the *local* MeshBlock index of the owner of each angle, so any
+// refinement, derefinement or load balance invalidates it: an index can point at a
+// MeshBlock that now covers a different region, or past the end of a shrunken pack.
+// Only fires, when the mesh has changed.
+
+void SphericalSurface::UpdateInterpolationOnMeshChange() {
+  if (!pmy_pack->pmesh->adaptive) return;
+
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  if (pmr == nullptr) return;
+  if (pmr->nmb_created == amr_nmb_created && pmr->nmb_deleted == amr_nmb_deleted) return;
+
+  amr_nmb_created = pmr->nmb_created;
+  amr_nmb_deleted = pmr->nmb_deleted;
+  SetInterpolationIndices();
+  SetInterpolationWeights();
 
   return;
 }
@@ -252,11 +283,9 @@ void SphericalSurface::SetInterpolationWeights() {
 
 void SphericalSurface::InterpolateToSphere(int var_ind,
                                            DvceArray5D<Real> &val) {
-  // reinitialize interpolation indices and weights if AMR
-  // if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  // reinitialize interpolation indices and weights if the mesh has changed
+  UpdateInterpolationOnMeshChange();
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is;
   int &js = indcs.js;
