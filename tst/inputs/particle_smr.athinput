@@ -59,6 +59,7 @@ particle_z = 0.0
 particle_vx = 1.0
 particle_vy = 0.0
 particle_vz = 0.0
+defer_after_push = false
 
 <output1>
 file_type = pvtk

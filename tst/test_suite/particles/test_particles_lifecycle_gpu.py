@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import sys
 
+import athena_read
 import numpy as np
 
 import test_suite.testutils as testutils
@@ -83,6 +84,16 @@ def _assert_drift_fields(points, fields):
     np.testing.assert_allclose(fields["vtk_y"], points[:, 1])
 
 
+def _physical_boundary_arguments():
+    """Place tag 7 just inside a nonperiodic x1 boundary before its first push."""
+    return [
+        "mesh/x1min=-0.785",
+        "mesh/x1max=0.215",
+        "mesh/ix1_bc=outflow",
+        "mesh/ox1_bc=outflow",
+    ]
+
+
 def test_particle_lifecycle_gpu(tmp_path):
     """Snapshot a deferred particle once, then remove it at the next purge."""
     basename = "particle_lifecycle_gpu"
@@ -133,6 +144,180 @@ def test_particle_lifecycle_gpu(tmp_path):
     finally:
         shutil.rmtree("pvtk", ignore_errors=True)
         history.unlink(missing_ok=True)
+
+
+def test_particle_boundary_delete_gpu(tmp_path):
+    """Delete a particle immediately after it crosses a nonperiodic boundary."""
+    basename = "particle_boundary_delete_gpu"
+    history = Path(f"{basename}.user.hst")
+    shutil.rmtree("pvtk", ignore_errors=True)
+    history.unlink(missing_ok=True)
+    try:
+        input_file = _lifecycle_input(
+            tmp_path, "inputs/particle_drift.athinput", "particle_boundary_delete"
+        )
+        assert testutils.run(
+            input_file,
+            [
+                f"job/basename={basename}",
+                "problem/boundary_delete_tag=7",
+                "time/nlim=1",
+                "time/tlim=1.0",
+                *_physical_boundary_arguments(),
+                "output1/dcycle=0",
+            ],
+        ), "immediate particle boundary deletion run failed"
+
+        initial_points, initial_fields, _ = _sorted_snapshot(
+            Path(f"pvtk/{basename}.prtcl_all.00000.part.vtk")
+        )
+        final_points, final_fields, _ = _sorted_snapshot(
+            Path(f"pvtk/{basename}.prtcl_all.00001.part.vtk")
+        )
+
+        np.testing.assert_array_equal(initial_fields["ptag"], np.arange(8))
+        np.testing.assert_array_equal(final_fields["ptag"], np.arange(7))
+        np.testing.assert_array_equal(
+            final_fields["status"], np.full(7, PACTIVE, dtype=np.int32)
+        )
+        assert initial_points[7, 0] < 0.215
+        assert final_points.shape == (7, 3)
+        _assert_drift_fields(final_points, final_fields)
+    finally:
+        shutil.rmtree("pvtk", ignore_errors=True)
+        history.unlink(missing_ok=True)
+
+
+def test_particle_boundary_deferred_gpu(tmp_path):
+    """Snapshot a particle once after it crosses a nonperiodic boundary, then purge it."""
+    basename = "particle_boundary_deferred_gpu"
+    history = Path(f"{basename}.user.hst")
+    shutil.rmtree("pvtk", ignore_errors=True)
+    history.unlink(missing_ok=True)
+    try:
+        input_file = _lifecycle_input(
+            tmp_path, "inputs/particle_drift.athinput", "particle_boundary_deferred"
+        )
+        assert testutils.run(
+            input_file,
+            [
+                f"job/basename={basename}",
+                "problem/delete_after_snapshot_tag=7",
+                "time/nlim=2",
+                "time/tlim=1.0",
+                *_physical_boundary_arguments(),
+            ],
+        ), "deferred particle boundary deletion run failed"
+
+        deferred_points, deferred_fields, _ = _sorted_snapshot(
+            Path(f"pvtk/{basename}.prtcl_all.00001.part.vtk")
+        )
+        _, final_fields, _ = _sorted_snapshot(
+            Path(f"pvtk/{basename}.prtcl_all.00002.part.vtk")
+        )
+
+        np.testing.assert_array_equal(deferred_fields["ptag"], np.arange(8))
+        expected_status = np.full(8, PACTIVE, dtype=np.int32)
+        expected_status[7] = PDELETE_AFTER_SNAPSHOT
+        np.testing.assert_array_equal(deferred_fields["status"], expected_status)
+        assert deferred_points[7, 0] >= 0.215
+        np.testing.assert_array_equal(final_fields["ptag"], np.arange(7))
+        np.testing.assert_array_equal(
+            final_fields["status"], np.full(7, PACTIVE, dtype=np.int32)
+        )
+        _assert_drift_fields(deferred_points, deferred_fields)
+
+        history_data = athena_read.hst(str(history))
+        for field in ("max_err", "owner_err", "status_err", "count_err"):
+            np.testing.assert_allclose(history_data[field], 0.0, atol=1.0e-13)
+    finally:
+        shutil.rmtree("pvtk", ignore_errors=True)
+        history.unlink(missing_ok=True)
+
+
+def test_particle_boundary_restart_gpu(tmp_path):
+    """Restart deferred and snapshot-acknowledged particles beyond the boundary."""
+    split = "particle_boundary_restart_split_gpu"
+    resumed = [
+        "particle_boundary_restart_deferred_gpu",
+        "particle_boundary_restart_pending_gpu",
+    ]
+    histories = [Path(f"{name}.user.hst") for name in (split, *resumed)]
+    shutil.rmtree("pvtk", ignore_errors=True)
+    shutil.rmtree("rst", ignore_errors=True)
+    for history in histories:
+        history.unlink(missing_ok=True)
+    try:
+        input_file = _lifecycle_input(
+            tmp_path,
+            "inputs/particle_drift.athinput",
+            "particle_boundary_restart",
+            pvtk_dcycle=2,
+            restart_dcycle=1,
+        )
+        assert testutils.run(
+            input_file,
+            [
+                f"job/basename={split}",
+                "problem/delete_after_snapshot_tag=7",
+                "time/nlim=1",
+                "time/tlim=1.0",
+                *_physical_boundary_arguments(),
+                "output1/dcycle=0",
+            ],
+        ), "off-mesh particle checkpoint run failed"
+
+        checkpoints = []
+        for file_number in (1, 2):
+            fluid_restart = Path("rst") / f"{split}.{file_number:05d}.rst"
+            particle_restart = Path("rst") / f"{split}.{file_number:05d}.part_rst"
+            assert fluid_restart.exists(), "fluid restart was not written"
+            assert particle_restart.exists(), "particle restart sidecar was not written"
+            checkpoints.append((fluid_restart, particle_restart))
+
+        for basename, (fluid_restart, particle_restart) in zip(resumed, checkpoints):
+            assert testutils.run_command(
+                [
+                    "./athena",
+                    "-r",
+                    str(fluid_restart),
+                    "-p",
+                    str(particle_restart),
+                    f"job/basename={basename}",
+                    "time/nlim=3",
+                    "time/tlim=1.0",
+                    "output1/dcycle=0",
+                    "output21/dcycle=1",
+                    "output30/dcycle=0",
+                ]
+            ), "off-mesh particle restart run failed"
+
+            snapshots = sorted(Path("pvtk").glob(f"{basename}.prtcl_all.*.part.vtk"))
+            assert snapshots, "restarted particle snapshot was not written"
+            _, final_fields, _ = _sorted_snapshot(snapshots[-1])
+            np.testing.assert_array_equal(final_fields["ptag"], np.arange(7))
+            np.testing.assert_array_equal(
+                final_fields["status"], np.full(7, PACTIVE, dtype=np.int32)
+            )
+
+        deferred_snapshots = sorted(
+            Path("pvtk").glob(f"{resumed[0]}.prtcl_all.*.part.vtk")
+        )
+        deferred_seen = False
+        for snapshot in deferred_snapshots:
+            _, fields, _ = _sorted_snapshot(snapshot)
+            selected = fields["ptag"] == 7
+            if np.any(selected):
+                np.testing.assert_array_equal(
+                    fields["status"][selected], [PDELETE_AFTER_SNAPSHOT]
+                )
+                deferred_seen = True
+        assert deferred_seen, "the deferred restart was not snapshotted before deletion"
+    finally:
+        shutil.rmtree("pvtk", ignore_errors=True)
+        shutil.rmtree("rst", ignore_errors=True)
+        for history in histories:
+            history.unlink(missing_ok=True)
 
 
 def test_particle_lifecycle_output_cadence_gpu(tmp_path):

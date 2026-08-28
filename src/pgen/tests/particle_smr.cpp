@@ -25,8 +25,21 @@ Real particle_z = 0.0;
 Real particle_vx = 0.0;
 Real particle_vy = 0.0;
 Real particle_vz = 0.0;
+bool defer_after_push = false;
 
 Real ParticleSMRTimestep(MeshBlockPack*) { return 0.125; }
+
+void DeferParticleAfterPush(particles::ParticleLifecycleData *lifecycle) {
+  auto pi = lifecycle->prtcl_idata;
+  const int npart = lifecycle->nprtcl;
+  if (npart == 0) return;
+  par_for("particle_smr_defer", DevExeSpace(), 0, npart-1,
+  KOKKOS_LAMBDA(const int p) {
+    if (pi(particles::cosmic_ray::PSTATUS,p) == PACTIVE) {
+      pi(particles::cosmic_ray::PSTATUS,p) = PDELETE_AFTER_SNAPSHOT;
+    }
+  });
+}
 
 void InitialParticleInjection(MeshBlockPack *pmbp,
                               particles::ParticleCreation *creation) {
@@ -152,6 +165,8 @@ void ProblemGenerator::ParticleSMR(ParameterInput *pin, const bool restart) {
   particle_vx = pin->GetOrAddReal("problem", "particle_vx", 0.0);
   particle_vy = pin->GetOrAddReal("problem", "particle_vy", 0.0);
   particle_vz = pin->GetOrAddReal("problem", "particle_vz", 0.0);
+  defer_after_push = pin->GetOrAddBoolean("problem", "defer_after_push", false);
+  if (defer_after_push) user_particle_lifecycle_func = DeferParticleAfterPush;
 
   if (!pmy_mesh_->multilevel || pmy_mesh_->adaptive) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

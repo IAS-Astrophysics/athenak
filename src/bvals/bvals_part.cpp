@@ -102,6 +102,21 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
   auto myrank = global_variable::my_rank;
   auto &nghbr = pmy_part->pmy_pack->pmb->nghbr;
   auto &psendl = sendlist;
+  auto *pmesh = pmy_part->pmy_pack->pmesh;
+  const bool ix1_periodic =
+      (pmesh->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::periodic ||
+       pmesh->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::shear_periodic);
+  const bool ox1_periodic =
+      (pmesh->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::periodic ||
+       pmesh->mesh_bcs[BoundaryFace::outer_x1] == BoundaryFlag::shear_periodic);
+  const bool ix2_periodic =
+      (pmesh->mesh_bcs[BoundaryFace::inner_x2] == BoundaryFlag::periodic);
+  const bool ox2_periodic =
+      (pmesh->mesh_bcs[BoundaryFace::outer_x2] == BoundaryFlag::periodic);
+  const bool ix3_periodic =
+      (pmesh->mesh_bcs[BoundaryFace::inner_x3] == BoundaryFlag::periodic);
+  const bool ox3_periodic =
+      (pmesh->mesh_bcs[BoundaryFace::outer_x3] == BoundaryFlag::periodic);
   int counter=0;
 #if MPI_PARALLEL_ENABLED
   Kokkos::View<int> atom_count("particle_send_count");
@@ -120,6 +135,21 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
     Real x1 = pr(IPX,p);
     Real x2 = pr(IPY,p);
     Real x3 = pr(IPZ,p);
+
+    // Handle physical-domain exits before an edge/corner lookup can select a
+    // transverse neighbor. Periodic exits continue through normal routing below.
+    const bool crossed_nonperiodic_boundary =
+        (x1 < meshsize.x1min && !ix1_periodic) ||
+        (x1 >= meshsize.x1max && !ox1_periodic) ||
+        (x2 < meshsize.x2min && !ix2_periodic) ||
+        (x2 >= meshsize.x2max && !ox2_periodic) ||
+        (x3 < meshsize.x3min && !ix3_periodic) ||
+        (x3 >= meshsize.x3max && !ox3_periodic);
+    if (crossed_nonperiodic_boundary) {
+      const int status = pi(PSTATUS,p);
+      if (status == PFROZEN || status == PDELETE_AFTER_SNAPSHOT) return;
+      Kokkos::abort("Particle crossed a nonperiodic boundary without being retired");
+    }
 
     // length of MeshBlock in each direction
     Real lx = (mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);

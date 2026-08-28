@@ -45,6 +45,7 @@ user_hist = true
 frozen_tag = -1
 delete_tag = -1
 delete_after_snapshot_tag = -1
+boundary_delete_tag = -1
 
 <output1>
 file_type = hst

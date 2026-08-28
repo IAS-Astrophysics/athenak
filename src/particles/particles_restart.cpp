@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -106,6 +107,35 @@ bool PositionInMeshBlock(Real x1, Real x2, Real x3, const RegionSize &block_size
   return (x1 >= block_size.x1min && x1 < block_size.x1max &&
           x2 >= block_size.x2min && x2 < block_size.x2max &&
           x3 >= block_size.x3min && x3 < block_size.x3max);
+}
+
+//----------------------------------------------------------------------------------------
+// Check for a retained particle beyond a nonperiodic global boundary.
+
+bool RetainedBeyondPhysicalBoundary(Real x1, Real x2, Real x3, int status,
+                                    const Mesh *pm) {
+  if (status != PFROZEN && status != PDELETE_PENDING &&
+      status != PDELETE_AFTER_SNAPSHOT) {
+    return false;
+  }
+  if (!std::isfinite(x1) || !std::isfinite(x2) || !std::isfinite(x3)) return false;
+
+  auto periodic = [](BoundaryFlag flag) {
+    return flag == BoundaryFlag::periodic || flag == BoundaryFlag::shear_periodic;
+  };
+  const RegionSize &mesh_size = pm->mesh_size;
+  return ((x1 < mesh_size.x1min &&
+           !periodic(pm->mesh_bcs[BoundaryFace::inner_x1])) ||
+          (x1 >= mesh_size.x1max &&
+           !periodic(pm->mesh_bcs[BoundaryFace::outer_x1])) ||
+          (x2 < mesh_size.x2min &&
+           !periodic(pm->mesh_bcs[BoundaryFace::inner_x2])) ||
+          (x2 >= mesh_size.x2max &&
+           !periodic(pm->mesh_bcs[BoundaryFace::outer_x2])) ||
+          (x3 < mesh_size.x3min &&
+           !periodic(pm->mesh_bcs[BoundaryFace::inner_x3])) ||
+          (x3 >= mesh_size.x3max &&
+           !periodic(pm->mesh_bcs[BoundaryFace::outer_x3])));
 }
 
 //----------------------------------------------------------------------------------------
@@ -269,17 +299,20 @@ void Particles::WriteRestart(const std::string &filename) const {
       if (gid < gids || gid > gide) {
         RestartError("A particle is not owned by a local MeshBlock at checkpoint time.");
       }
-      const RegionSize &block_size = pmy_pack_->pmb->mb_size.h_view(gid - gids);
-      if (!PositionInMeshBlock(data.rdata(IPX,p), data.rdata(IPY,p),
-                               data.rdata(IPZ,p), block_size)) {
-        RestartError("A particle position is outside its MeshBlock at checkpoint time "
-                     "(GID " + std::to_string(gid) + ").");
-      }
       if (tag < 0) {
         RestartError("A particle tag is negative at checkpoint time.");
       }
       if (status < PACTIVE || status > PDELETE_AFTER_SNAPSHOT) {
         RestartError("A particle has an invalid lifecycle status at checkpoint time.");
+      }
+      const RegionSize &block_size = pmy_pack_->pmb->mb_size.h_view(gid - gids);
+      if (!PositionInMeshBlock(data.rdata(IPX,p), data.rdata(IPY,p),
+                               data.rdata(IPZ,p), block_size) &&
+          !RetainedBeyondPhysicalBoundary(
+              data.rdata(IPX,p), data.rdata(IPY,p), data.rdata(IPZ,p), status,
+              pmy_pack_->pmesh)) {
+        RestartError("A particle position is outside its MeshBlock at checkpoint time "
+                     "(GID " + std::to_string(gid) + ").");
       }
       data.ordered_particles[gid].push_back(p);
       data.counts[gid]++;
@@ -566,15 +599,17 @@ void Particles::LoadRestart(const std::string &filename) {
         const Real x1 = rdata(IPX,local_offset);
         const Real x2 = rdata(IPY,local_offset);
         const Real x3 = rdata(IPZ,local_offset);
-        if (!PositionInMeshBlock(x1, x2, x3, block_size)) {
-          RestartError("Particle restart contains a position outside its MeshBlock "
-                       "section (GID " + std::to_string(gid) + ").");
-        }
         if (tag < 0) {
           RestartError("Particle restart contains a negative tag.");
         }
         if (status < PACTIVE || status > PDELETE_AFTER_SNAPSHOT) {
           RestartError("Particle restart contains an invalid lifecycle status.");
+        }
+        if (!PositionInMeshBlock(x1, x2, x3, block_size) &&
+            !RetainedBeyondPhysicalBoundary(x1, x2, x3, status,
+                                            pmy_pack_->pmesh)) {
+          RestartError("Particle restart contains a position outside its MeshBlock "
+                       "section (GID " + std::to_string(gid) + ").");
         }
         ++local_offset;
       }

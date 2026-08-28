@@ -26,6 +26,7 @@ bool migration_test = false;
 int frozen_tag = -1;
 int delete_tag = -1;
 int delete_after_snapshot_tag = -1;
+int boundary_delete_tag = -1;
 
 Real ParticleDriftTimestep(MeshBlockPack*) { return 0.125; }
 
@@ -66,15 +67,33 @@ void ParticleVTKY(particles::ParticleOutputData *output) {
 }
 
 void ParticleDriftLifecycle(particles::ParticleLifecycleData *lifecycle) {
+  auto pr = lifecycle->prtcl_rdata;
   auto pi = lifecycle->prtcl_idata;
   const int npart = lifecycle->nprtcl;
   const int deferred_tag = delete_after_snapshot_tag;
-  if (npart == 0 || deferred_tag < 0) return;
+  const int immediate_tag = boundary_delete_tag;
+  auto &meshsize = lifecycle->pmbp->pmesh->mesh_size;
+  const Real x1min = meshsize.x1min;
+  const Real x1max = meshsize.x1max;
+  const Real x2min = meshsize.x2min;
+  const Real x2max = meshsize.x2max;
+  const Real x3min = meshsize.x3min;
+  const Real x3max = meshsize.x3max;
+  if (npart == 0 || (deferred_tag < 0 && immediate_tag < 0)) return;
   par_for("particle_drift_lifecycle", DevExeSpace(), 0, npart-1,
   KOKKOS_LAMBDA(const int p) {
     if (pi(particles::cosmic_ray::PSTATUS,p) != PACTIVE) return;
-    if (pi(particles::cosmic_ray::PTAG,p) == deferred_tag) {
+    const int tag = pi(particles::cosmic_ray::PTAG,p);
+    if (tag == deferred_tag) {
       pi(particles::cosmic_ray::PSTATUS,p) = PDELETE_AFTER_SNAPSHOT;
+    } else if (tag == immediate_tag &&
+               (pr(particles::cosmic_ray::IPX,p) < x1min ||
+                pr(particles::cosmic_ray::IPX,p) >= x1max ||
+                pr(particles::cosmic_ray::IPY,p) < x2min ||
+                pr(particles::cosmic_ray::IPY,p) >= x2max ||
+                pr(particles::cosmic_ray::IPZ,p) < x3min ||
+                pr(particles::cosmic_ray::IPZ,p) >= x3max)) {
+      pi(particles::cosmic_ray::PSTATUS,p) = PDELETE_PENDING;
     }
   });
 }
@@ -131,13 +150,37 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   const bool migration = migration_test;
   const int frozen = frozen_tag;
   const int deleted = delete_tag;
+  const int deferred = delete_after_snapshot_tag;
+  const int boundary_deleted = boundary_delete_tag;
+  const int cycle = pm->ncycle;
   const Real drift_time = 0.5*pm->time;
+  const Real x1min = pm->mesh_size.x1min;
+  const Real x1max = pm->mesh_size.x1max;
+  const Real x2min = pm->mesh_size.x2min;
+  const Real x2max = pm->mesh_size.x2max;
+  const Real x3min = pm->mesh_size.x3min;
+  const Real x3max = pm->mesh_size.x3max;
+  const bool ix1_physical =
+      (pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::periodic &&
+       pm->mesh_bcs[BoundaryFace::inner_x1] != BoundaryFlag::shear_periodic);
+  const bool ox1_physical =
+      (pm->mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::periodic &&
+       pm->mesh_bcs[BoundaryFace::outer_x1] != BoundaryFlag::shear_periodic);
+  const bool ix2_physical =
+      (pm->mesh_bcs[BoundaryFace::inner_x2] != BoundaryFlag::periodic);
+  const bool ox2_physical =
+      (pm->mesh_bcs[BoundaryFace::outer_x2] != BoundaryFlag::periodic);
+  const bool ix3_physical =
+      (pm->mesh_bcs[BoundaryFace::inner_x3] != BoundaryFlag::periodic);
+  const bool ox3_physical =
+      (pm->mesh_bcs[BoundaryFace::outer_x3] != BoundaryFlag::periodic);
 
   Real max_error = 0.0;
   Kokkos::parallel_reduce(
       "particle_drift_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_max) {
         const int id = pi(particles::cosmic_ray::PTAG,p);
+        if (id == deferred) return;
         const Real move_time = (id == frozen || id == deleted) ? 0.0 : drift_time;
         const Real ex = InitialX(id, migration) + move_time*VelocityX(id, migration);
         const Real ey = InitialY(id) + move_time*VelocityY(id);
@@ -163,21 +206,31 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   Kokkos::parallel_reduce(
       "particle_drift_owner_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
-        const int id = pi(particles::cosmic_ray::PTAG,p);
-        const Real move_time = (id == frozen || id == deleted) ? 0.0 : drift_time;
-        const Real ex = InitialX(id, migration) + move_time*VelocityX(id, migration);
-        const Real ey = InitialY(id) + move_time*VelocityY(id);
-        const Real ez = InitialZ(id) + move_time*VelocityZ(id);
+        const Real x = pr(particles::cosmic_ray::IPX,p);
+        const Real y = pr(particles::cosmic_ray::IPY,p);
+        const Real z = pr(particles::cosmic_ray::IPZ,p);
         int expected_gid = -1;
         for (int m=0; m<nmb; ++m) {
           auto size = mbsize.d_view(m);
-          if (ex >= size.x1min && ex < size.x1max &&
-              ey >= size.x2min && ey < size.x2max &&
-              ez >= size.x3min && ez < size.x3max) {
+          if (x >= size.x1min && x < size.x1max &&
+              y >= size.x2min && y < size.x2max &&
+              z >= size.x3min && z < size.x3max) {
             expected_gid = gids + m;
           }
         }
-        if (pi(particles::cosmic_ray::PGID,p) != expected_gid) local_sum += 1.0;
+        const int status = pi(particles::cosmic_ray::PSTATUS,p);
+        const bool beyond_physical_boundary =
+            (x < x1min && ix1_physical) || (x >= x1max && ox1_physical) ||
+            (y < x2min && ix2_physical) || (y >= x2max && ox2_physical) ||
+            (z < x3min && ix3_physical) || (z >= x3max && ox3_physical);
+        const bool retained_off_mesh =
+            (expected_gid < 0 && beyond_physical_boundary &&
+             (status == PFROZEN || status == PDELETE_PENDING ||
+              status == PDELETE_AFTER_SNAPSHOT));
+        if (!retained_off_mesh &&
+            pi(particles::cosmic_ray::PGID,p) != expected_gid) {
+          local_sum += 1.0;
+        }
       }, owner_errors);
 
   Real migrated = 0.0;
@@ -205,10 +258,17 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
       "particle_drift_status_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &local_sum) {
         const int id = pi(particles::cosmic_ray::PTAG,p);
+        const int status = pi(particles::cosmic_ray::PSTATUS,p);
+        if (id == deferred) {
+          const bool valid = (cycle == 0) ? (status == PACTIVE) :
+              (status == PDELETE_AFTER_SNAPSHOT || status == PDELETE_PENDING);
+          if (!valid) local_sum += 1.0;
+          return;
+        }
         int expected_status = PACTIVE;
         if (id == frozen) expected_status = PFROZEN;
         if (id == deleted) expected_status = PDELETE_PENDING;
-        if (pi(particles::cosmic_ray::PSTATUS,p) != expected_status) local_sum += 1.0;
+        if (status != expected_status) local_sum += 1.0;
       }, status_errors);
 
   pdata->hdata[0] = max_error;
@@ -217,7 +277,23 @@ void DriftHistory(HistoryData *pdata, Mesh *pm) {
   pdata->hdata[3] = owner_errors;
   pdata->hdata[4] = migrated;
   pdata->hdata[5] = status_errors;
-  const int expected_total = expected_particles - (deleted >= 0 ? 1 : 0);
+  int expected_total = expected_particles -
+                       (deleted >= 0 && cycle > 0 ? 1 : 0);
+  if (boundary_deleted >= 0) {
+    const Real ex = InitialX(boundary_deleted, migration) +
+                    drift_time*VelocityX(boundary_deleted, migration);
+    const Real ey = InitialY(boundary_deleted) +
+                    drift_time*VelocityY(boundary_deleted);
+    const Real ez = InitialZ(boundary_deleted) +
+                    drift_time*VelocityZ(boundary_deleted);
+    auto &meshsize = pm->mesh_size;
+    if (ex < meshsize.x1min || ex >= meshsize.x1max ||
+        ey < meshsize.x2min || ey >= meshsize.x2max ||
+        ez < meshsize.x3min || ez >= meshsize.x3max) {
+      --expected_total;
+    }
+  }
+  if (deferred >= 0) expected_total = pm->nprtcl_total;
   pdata->hdata[6] = static_cast<Real>(
       std::abs(pm->nprtcl_thisrank - npart) +
       std::abs(pm->nprtcl_total - expected_total));
@@ -238,7 +314,9 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   delete_tag = pin->GetOrAddInteger("problem", "delete_tag", -1);
   delete_after_snapshot_tag = pin->GetOrAddInteger(
       "problem", "delete_after_snapshot_tag", -1);
-  if (delete_after_snapshot_tag >= 0) {
+  boundary_delete_tag = pin->GetOrAddInteger(
+      "problem", "boundary_delete_tag", -1);
+  if (delete_after_snapshot_tag >= 0 || boundary_delete_tag >= 0) {
     user_particle_lifecycle_func = ParticleDriftLifecycle;
   }
   if (expected_particles < 1) {
@@ -266,10 +344,20 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
               << "or between 0 and " << (expected_particles - 1) << "." << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (boundary_delete_tag < -1 || boundary_delete_tag >= expected_particles) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particle drift test boundary_delete_tag must be -1 or "
+              << "between 0 and " << (expected_particles - 1) << "." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if ((delete_tag >= 0 && delete_tag == frozen_tag) ||
       (delete_after_snapshot_tag >= 0 &&
        (delete_after_snapshot_tag == frozen_tag ||
-        delete_after_snapshot_tag == delete_tag))) {
+        delete_after_snapshot_tag == delete_tag)) ||
+      (boundary_delete_tag >= 0 &&
+       (boundary_delete_tag == frozen_tag ||
+        boundary_delete_tag == delete_tag ||
+        boundary_delete_tag == delete_after_snapshot_tag))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Particle drift test lifecycle modes must use distinct tags."
               << std::endl;

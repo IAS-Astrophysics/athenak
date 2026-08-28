@@ -129,3 +129,43 @@ def test_particle_smr_gpu(
         np.testing.assert_allclose(final_fields["owner_level"], [final_level])
     finally:
         shutil.rmtree("pvtk", ignore_errors=True)
+
+
+def test_particle_smr_nonperiodic_diagonal_deferred_gpu():
+    """Do not route or wrap a deferred particle exiting at an SMR corner."""
+    basename = "particle_smr_nonperiodic_diagonal_deferred_gpu"
+    shutil.rmtree("pvtk", ignore_errors=True)
+    try:
+        assert testutils.run(
+            "inputs/particle_smr.athinput",
+            [
+                f"job/basename={basename}",
+                "mesh/ix1_bc=outflow",
+                "mesh/ox1_bc=outflow",
+                "refined_region1/x2max=0.0",
+                "problem/particle_x=-3.999",
+                "problem/particle_y=-0.001",
+                "problem/particle_vx=-1.0",
+                "problem/particle_vy=1.0",
+                "problem/defer_after_push=true",
+            ],
+        ), "deferred particle SMR boundary run failed"
+
+        initial = Path(f"pvtk/{basename}.prtcl_all.00000.part.vtk")
+        final = Path(f"pvtk/{basename}.prtcl_all.00001.part.vtk")
+        initial_points, initial_fields, _ = _read_particle_vtk(initial)
+        final_points, final_fields, _ = _read_particle_vtk(final)
+
+        np.testing.assert_allclose(initial_points[0, :2], [-3.999, -0.001])
+        np.testing.assert_allclose(final_points[0, :2], [-4.0615, 0.0615])
+        np.testing.assert_array_equal(initial_fields["status"], [0])
+        np.testing.assert_array_equal(final_fields["status"], [3])
+        np.testing.assert_allclose(initial_fields["owner_error"], [0.0])
+        np.testing.assert_allclose(final_fields["owner_error"], [1.0])
+        np.testing.assert_allclose(initial_fields["owner_level"], [1.0])
+        np.testing.assert_allclose(final_fields["owner_level"], [1.0])
+        np.testing.assert_allclose(
+            initial_fields["owner_rank"], final_fields["owner_rank"]
+        )
+    finally:
+        shutil.rmtree("pvtk", ignore_errors=True)
