@@ -1012,6 +1012,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     ParticleInjection(pin, is_restart);
   } else if (pgen_fun_name.compare("particle_lagrangian_mc") == 0) {
     ParticleLagrangianMC(pin, is_restart);
+  } else if (pgen_fun_name.compare("particle_smr") == 0) {
+    ParticleSMR(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_beam") == 0) {

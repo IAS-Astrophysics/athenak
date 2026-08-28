@@ -44,6 +44,48 @@ void UpdateGID(int &newgid, NeighborBlock nghbr, int myrank, int *pcounter,
   return;
 }
 
+namespace {
+
+template <typename NeighborViewType>
+KOKKOS_INLINE_FUNCTION
+int InitializedNeighborIndex(const NeighborViewType &nghbr, const int m, int indx) {
+  const int neighbor_count = nghbr.extent_int(1);
+  int group_end = indx + 1;
+  if (indx >= 0 && indx < 16) {
+    group_end = 4*(indx/4 + 1);
+  } else if (indx >= 16 && indx < 24) {
+    group_end = 16 + 2*((indx - 16)/2 + 1);
+  } else if (indx >= 24 && indx < 32) {
+    group_end = 24 + 4*((indx - 24)/4 + 1);
+  } else if (indx >= 32 && indx < 48) {
+    group_end = 32 + 2*((indx - 32)/2 + 1);
+  }
+  if (group_end > neighbor_count) group_end = neighbor_count;
+  while (indx >= 0 && indx < group_end && nghbr(m,indx).gid < 0) ++indx;
+  return (indx >= 0 && indx < group_end) ? indx : -1;
+}
+
+template <typename NeighborViewType>
+KOKKOS_INLINE_FUNCTION
+int CoarserFaceNeighbor(const NeighborViewType &nghbr, const int m,
+                        const int mylevel, const int ix, const int iy, const int iz) {
+  if (ix != 0) {
+    int indx = InitializedNeighborIndex(nghbr, m, NeighborIndex(ix,0,0,0,0));
+    if (indx >= 0 && nghbr(m,indx).lev < mylevel) return indx;
+  }
+  if (iy != 0) {
+    int indx = InitializedNeighborIndex(nghbr, m, NeighborIndex(0,iy,0,0,0));
+    if (indx >= 0 && nghbr(m,indx).lev < mylevel) return indx;
+  }
+  if (iz != 0) {
+    int indx = InitializedNeighborIndex(nghbr, m, NeighborIndex(0,0,iz,0,0));
+    if (indx >= 0 && nghbr(m,indx).lev < mylevel) return indx;
+  }
+  return -1;
+}
+
+} // namespace
+
 //----------------------------------------------------------------------------------------
 //! \fn void ParticlesBoundaryValues::SetNewGID()
 //! \brief
@@ -98,80 +140,91 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
 
     // only update particle GID if it has crossed MeshBlock boundary
     if ((abs(ix) + abs(iy) + abs(iz)) != 0) {
+      int indx = -1;
       if (iz == 0) {
         if (iy == 0) {
           // x1 face
-          int indx = NeighborIndex(ix,0,0,0,0);           // neighbor at same level
+          indx = NeighborIndex(ix,0,0,0,0);               // neighbor at same level
           if (nghbr.d_view(m,indx).lev > mylevel) {       // neighbor at finer level
             indx = NeighborIndex(ix,0,0,fy,fz);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}  // neighbor at coarser level
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = InitializedNeighborIndex(nghbr.d_view, m, indx);
         } else if (ix == 0) {
           // x2 face
-          int indx = NeighborIndex(0,iy,0,0,0);
+          indx = NeighborIndex(0,iy,0,0,0);
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(0,iy,0,fx,fz);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = InitializedNeighborIndex(nghbr.d_view, m, indx);
         } else {
           // x1x2 edge
-          int indx = NeighborIndex(ix,iy,0,0,0);
+          indx = NeighborIndex(ix,iy,0,0,0);
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(ix,iy,0,fz,0);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = InitializedNeighborIndex(nghbr.d_view, m, indx);
+          if (indx < 0) {
+            indx = CoarserFaceNeighbor(nghbr.d_view, m, mylevel, ix, iy, 0);
+          }
         }
       } else if (iy == 0) {
         if (ix == 0) {
           // x3 face
-          int indx = NeighborIndex(0,0,iz,0,0);
+          indx = NeighborIndex(0,0,iz,0,0);
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(0,0,iz,fx,fy);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = InitializedNeighborIndex(nghbr.d_view, m, indx);
         } else {
           // x3x1 edge
-          int indx = NeighborIndex(ix,0,iz,0,0);
+          indx = NeighborIndex(ix,0,iz,0,0);
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(ix,0,iz,fy,0);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = InitializedNeighborIndex(nghbr.d_view, m, indx);
+          if (indx < 0) {
+            indx = CoarserFaceNeighbor(nghbr.d_view, m, mylevel, ix, 0, iz);
+          }
         }
       } else {
         if (ix == 0) {
           // x2x3 edge
-          int indx = NeighborIndex(0,iy,iz,0,0);
+          indx = NeighborIndex(0,iy,iz,0,0);
           if (nghbr.d_view(m,indx).lev > mylevel) {
             indx = NeighborIndex(0,iy,iz,fx,0);
           }
-          while (nghbr.d_view(m,indx).gid < 0) {indx++;}
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = InitializedNeighborIndex(nghbr.d_view, m, indx);
+          if (indx < 0) {
+            indx = CoarserFaceNeighbor(nghbr.d_view, m, mylevel, 0, iy, iz);
+          }
         } else {
           // corners
-          int indx = NeighborIndex(ix,iy,iz,0,0);
-          UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
+          indx = NeighborIndex(ix,iy,iz,0,0);
+          if (nghbr.d_view(m,indx).gid < 0) {
+            indx = CoarserFaceNeighbor(nghbr.d_view, m, mylevel, ix, iy, iz);
+          }
         }
       }
+
+      if (indx < 0) {
+        Kokkos::abort("Could not find a valid neighboring MeshBlock for particle");
+      }
+      UpdateGID(pi(PGID,p), nghbr.d_view(m,indx), myrank, pcounter, psendl, p);
 
       // reset x,y,z positions if particle crosses Mesh boundary using periodic BCs
       if (x1 < meshsize.x1min) {
         pr(IPX,p) += (meshsize.x1max - meshsize.x1min);
-      } else if (x1 > meshsize.x1max) {
+      } else if (x1 >= meshsize.x1max) {
         pr(IPX,p) -= (meshsize.x1max - meshsize.x1min);
       }
       if (x2 < meshsize.x2min) {
         pr(IPY,p) += (meshsize.x2max - meshsize.x2min);
-      } else if (x2 > meshsize.x2max) {
+      } else if (x2 >= meshsize.x2max) {
         pr(IPY,p) -= (meshsize.x2max - meshsize.x2min);
       }
       if (x3 < meshsize.x3min) {
         pr(IPZ,p) += (meshsize.x3max - meshsize.x3min);
-      } else if (x3 > meshsize.x3max) {
+      } else if (x3 >= meshsize.x3max) {
         pr(IPZ,p) -= (meshsize.x3max - meshsize.x3min);
       }
     }

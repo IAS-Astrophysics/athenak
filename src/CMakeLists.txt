@@ -143,6 +143,7 @@ add_executable(
         pgen/tests/particle_drift.cpp
         pgen/tests/particle_injection.cpp
         pgen/tests/particle_lagrangian_mc.cpp
+        pgen/tests/particle_smr.cpp
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp

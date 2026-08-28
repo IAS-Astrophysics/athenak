@@ -106,6 +106,7 @@ class ProblemGenerator {
   void ParticleDrift(ParameterInput *pin, const bool restart);
   void ParticleInjection(ParameterInput *pin, const bool restart);
   void ParticleLagrangianMC(ParameterInput *pin, const bool restart);
+  void ParticleSMR(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void Shwave(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);

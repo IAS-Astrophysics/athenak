@@ -1,0 +1,66 @@
+# Deterministic two-dimensional particle static-mesh-refinement routing test.
+
+<job>
+basename = particle_smr_gpu
+
+<mesh>
+nghost = 2
+nx1 = 8
+x1min = -4.0
+x1max = 4.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 8
+x2min = -2.0
+x2max = 2.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = -0.5
+x3max = 0.5
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 4
+nx2 = 4
+nx3 = 1
+
+<mesh_refinement>
+refinement = static
+
+<refined_region1>
+level = 1
+x1min = -4.0
+x1max = 0.0
+x2min = -2.0
+x2max = 2.0
+x3min = -0.5
+x3max = 0.5
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.8
+nlim = 1
+tlim = 1.0
+ndiag = 1
+
+<particles>
+particle_type = cosmic_ray
+ppc = 0.0
+pusher = drift
+
+<problem>
+pgen_name = particle_smr
+particle_x = -0.001
+particle_y = -0.75
+particle_z = 0.0
+particle_vx = 1.0
+particle_vy = 0.0
+particle_vz = 0.0
+
+<output1>
+file_type = pvtk
+variable = prtcl_all
+dcycle = 1
