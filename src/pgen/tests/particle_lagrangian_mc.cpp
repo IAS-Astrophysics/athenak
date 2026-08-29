@@ -250,7 +250,7 @@ void BaselineHistory(HistoryData *pdata, Mesh *pm) {
 }
 
 void DirectionHistory(HistoryData *pdata, Mesh *pm) {
-  pdata->nhist = 12;
+  pdata->nhist = 13;
   pdata->label[0] = "none";
   pdata->label[1] = "x1_left";
   pdata->label[2] = "x1_right";
@@ -263,6 +263,7 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
   pdata->label[9] = "status_err";
   pdata->label[10] = "npart";
   pdata->label[11] = "tag_sum";
+  pdata->label[12] = "min_err";
 
   auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
   auto pr = population->prtcl_rdata;
@@ -346,11 +347,44 @@ void DirectionHistory(HistoryData *pdata, Mesh *pm) {
         local_sum += static_cast<Real>(pi(lagrangian_mc::PTAG,p));
       }, tag_sum);
 
+  Real minimum_error = 0.0;
+  Kokkos::parallel_reduce(
+      "particle_lmc_direction_minimum_error",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, Real &local_max) {
+        Real final_x = kDirectionX;
+        Real final_y = kDirectionY;
+        Real final_z = kDirectionZ;
+        const int move = pi(lagrangian_mc::PLASTMOVE,p);
+        if (move == lagrangian_mc::PMOVE_X1_LEFT) final_x -= dx1;
+        if (move == lagrangian_mc::PMOVE_X1_RIGHT) final_x += dx1;
+        if (move == lagrangian_mc::PMOVE_X2_LEFT) final_y -= dx2;
+        if (move == lagrangian_mc::PMOVE_X2_RIGHT) final_y += dx2;
+        if (move == lagrangian_mc::PMOVE_X3_LEFT) final_z -= dx3;
+        if (move == lagrangian_mc::PMOVE_X3_RIGHT) final_z += dx3;
+        const Real initial_radius_sq = kDirectionX*kDirectionX +
+                                       kDirectionY*kDirectionY +
+                                       kDirectionZ*kDirectionZ;
+        const Real final_radius_sq =
+            final_x*final_x + final_y*final_y + final_z*final_z;
+        const Real expected_x = final_radius_sq < initial_radius_sq ?
+                                final_x : kDirectionX;
+        const Real expected_y = final_radius_sq < initial_radius_sq ?
+                                final_y : kDirectionY;
+        const Real expected_z = final_radius_sq < initial_radius_sq ?
+                                final_z : kDirectionZ;
+        Real error = fabs(pr(lagrangian_mc::IPXMIN,p) - expected_x);
+        error = fmax(error, fabs(pr(lagrangian_mc::IPYMIN,p) - expected_y));
+        error = fmax(error, fabs(pr(lagrangian_mc::IPZMIN,p) - expected_z));
+        local_max = fmax(local_max, error);
+      }, Kokkos::Max<Real>(minimum_error));
+
   pdata->hdata[7] = position_error;
   pdata->hdata[8] = owner_errors;
   pdata->hdata[9] = status_errors;
   pdata->hdata[10] = static_cast<Real>(npart);
   pdata->hdata[11] = tag_sum;
+  pdata->hdata[12] = minimum_error;
 }
 
 void ReproducibilityHistory(HistoryData *pdata, Mesh *pm) {
@@ -468,7 +502,9 @@ void InitializeUniformRegression(Mesh *pm) {
   const bool directions = regression == LMCRegression::directions;
   const bool reverse = reverse_particle_order;
   const Real sign = static_cast<Real>(direction_sign);
+  const Real initial_time = pm->time;
   auto &mbsize = pmbp->pmb->mb_size;
+  auto &mblev = pmbp->pmb->mb_lev;
   DvceArray5D<Real> u0;
   if (pmbp->phydro != nullptr) {
     u0 = pmbp->phydro->u0;
@@ -508,9 +544,21 @@ void InitializeUniformRegression(Mesh *pm) {
     }
     pi(lagrangian_mc::PGID,p) = owner_gid;
     pi(lagrangian_mc::PSTATUS,p) = PACTIVE;
+    pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_NONE;
+    const int owner_m = owner_gid - gids;
+    auto owner_size = mbsize.d_view(owner_m);
+    const int source_i = static_cast<int>((x-owner_size.x1min)/owner_size.dx1);
+    const int source_j = static_cast<int>((y-owner_size.x2min)/owner_size.dx2);
+    const int source_k = static_cast<int>((z-owner_size.x3min)/owner_size.dx3);
+    pi(lagrangian_mc::PSOURCECELL,p) = lagrangian_mc::EncodeSourceCell(
+        mblev.d_view(owner_m), source_i, source_j, source_k);
     pr(lagrangian_mc::IPX,p) = x;
     pr(lagrangian_mc::IPY,p) = y;
     pr(lagrangian_mc::IPZ,p) = z;
+    pr(lagrangian_mc::IPXMIN,p) = x;
+    pr(lagrangian_mc::IPYMIN,p) = y;
+    pr(lagrangian_mc::IPZMIN,p) = z;
+    pr(lagrangian_mc::IPTMIN,p) = initial_time;
   });
 }
 
@@ -651,6 +699,8 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
   const int npart = population->nprtcl_thispack;
   const int gids = pmbp->gids;
   const int nmb = pmbp->nmb_thispack;
+  const Real initial_time = pmy_mesh_->time;
+  auto &mblev = pmbp->pmb->mb_lev;
   par_for("particle_lmc_init", DevExeSpace(), 0, (npart - 1),
   KOKKOS_LAMBDA(const int p) {
     const int tag = pi(lagrangian_mc::PTAG,p);
@@ -668,8 +718,20 @@ void ProblemGenerator::ParticleLagrangianMC(ParameterInput *pin, const bool rest
     }
     pi(lagrangian_mc::PGID,p) = owner_gid;
     pi(lagrangian_mc::PSTATUS,p) = PACTIVE;
+    pi(lagrangian_mc::PLASTMOVE,p) = lagrangian_mc::PMOVE_NONE;
+    const int owner_m = owner_gid - gids;
+    auto owner_size = mbsize.d_view(owner_m);
+    const int source_i = static_cast<int>((x-owner_size.x1min)/owner_size.dx1);
+    const int source_j = static_cast<int>((y-owner_size.x2min)/owner_size.dx2);
+    const int source_k = static_cast<int>((z-owner_size.x3min)/owner_size.dx3);
+    pi(lagrangian_mc::PSOURCECELL,p) = lagrangian_mc::EncodeSourceCell(
+        mblev.d_view(owner_m), source_i, source_j, source_k);
     pr(lagrangian_mc::IPX,p) = x;
     pr(lagrangian_mc::IPY,p) = y;
     pr(lagrangian_mc::IPZ,p) = z;
+    pr(lagrangian_mc::IPXMIN,p) = x;
+    pr(lagrangian_mc::IPYMIN,p) = y;
+    pr(lagrangian_mc::IPZMIN,p) = z;
+    pr(lagrangian_mc::IPTMIN,p) = initial_time;
   });
 }

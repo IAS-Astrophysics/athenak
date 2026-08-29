@@ -38,7 +38,8 @@ def test_particle_lagrangian_mc_gpu():
     try:
         HISTORY.unlink(missing_ok=True)
         assert testutils.run(
-            "inputs/particle_lagrangian_mc.athinput"
+            "inputs/particle_lagrangian_mc.athinput",
+            ["particles/check_flux_probabilities=true"],
         ), "Lagrangian MC particle run failed"
 
         if not HISTORY.exists():
@@ -156,6 +157,7 @@ def test_particle_lagrangian_mc_cfl_gate(
                 "Lagrangian MC particles require time/cfl_number "
                 f"<= 1/{dimension} in {dimension}D"
             ) in output
+            assert "particles/check_flux_probabilities=true" in output
     finally:
         history.unlink(missing_ok=True)
 
@@ -210,7 +212,7 @@ def test_particle_lagrangian_mc_directions_gpu(direction_sign, expected_counts):
         ), "Lagrangian MC direction run failed"
 
         data = athena_read.hst(str(history))
-        for field in ("pos_err", "owner_err", "status_err"):
+        for field in ("pos_err", "owner_err", "status_err", "min_err"):
             assert np.all(np.isfinite(data[field]))
             assert data[field][-1] <= 1.0e-13
         for field, expected in expected_counts.items():
@@ -221,9 +223,9 @@ def test_particle_lagrangian_mc_directions_gpu(direction_sign, expected_counts):
         history.unlink(missing_ok=True)
 
 
-def test_particle_lagrangian_mc_runtime_guard_gpu():
-    """Reject an invalid integrated flux even when the startup CFL is legal."""
-    basename = "particle_lagrangian_mc_runtime_guard_gpu"
+def test_particle_lagrangian_mc_runtime_probability_check_gpu():
+    """Reject an invalid integrated flux when the optional check is enabled."""
+    basename = "particle_lagrangian_mc_runtime_probability_check_gpu"
     history = Path(f"{basename}.user.hst")
     try:
         result = subprocess.run(
@@ -232,6 +234,7 @@ def test_particle_lagrangian_mc_runtime_guard_gpu():
                 "-i",
                 "inputs/particle_lagrangian_mc.athinput",
                 f"job/basename={basename}",
+                "particles/check_flux_probabilities=true",
                 "problem/test_case=guard",
                 "problem/user_srcs=true",
             ],
@@ -242,6 +245,8 @@ def test_particle_lagrangian_mc_runtime_guard_gpu():
         output = result.stdout + result.stderr
         assert result.returncode != 0
         assert "Invalid Lagrangian MC outgoing probability" in output
+        assert "density=" in output
+        assert "outward fluxes=" in output
         assert "time/cfl_number <=" not in output
     finally:
         history.unlink(missing_ok=True)

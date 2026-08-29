@@ -96,6 +96,7 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
     dtnew(std::numeric_limits<float>::max()),
     input_block_(input_block),
     lmc_random_seed(0),
+    lmc_check_flux_probabilities(false),
     pmy_pack(ppack) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {
@@ -171,10 +172,10 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
       } else {
         orbital_advection = pmy_pack->pmhd->porb_u != nullptr;
       }
-      if (pmy_pack->pmesh->multilevel || orbital_advection) {
+      if (pmy_pack->pmesh->adaptive || orbital_advection) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Lagrangian MC particles currently require a "
-                  << "uniform mesh without orbital advection" << std::endl;
+                  << std::endl << "Lagrangian MC particles currently require a fixed "
+                  << "mesh without orbital advection" << std::endl;
         std::exit(EXIT_FAILURE);
       }
       std::string evolution = pin->GetString("time", "evolution");
@@ -200,9 +201,14 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                   << std::endl << "Lagrangian MC particles require time/cfl_number <= 1/"
                   << ndim << " in " << ndim << "D, but received " << cfl_number
-                  << std::endl;
+                  << ". This dimensional bound is necessary for one-cell transport, "
+                  << "but does not validate every cell's outgoing probability. Set "
+                  << input_block_ << "/check_flux_probabilities=true to enable the "
+                  << "per-step check." << std::endl;
         std::exit(EXIT_FAILURE);
       }
+      lmc_check_flux_probabilities = pin->GetOrAddBoolean(
+          input_block_, "check_flux_probabilities", false);
       int random_seed = pin->GetOrAddInteger(input_block_, "random_seed", 0);
       if (random_seed < 0) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -288,6 +294,21 @@ TaskStatus ParticlePopulation::ApplyUserLifecycle(Driver*, int) {
     ParticleLifecycleData lifecycle(
         pmy_pack, this, prtcl_rdata, prtcl_idata, nprtcl_thispack);
     pgen->user_particle_lifecycle_func(&lifecycle);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus ParticlePopulation::ApplyUserPostUpdate
+//! \brief Let the problem generator inspect final particle positions after routing and
+//! model-specific correction.
+
+TaskStatus ParticlePopulation::ApplyUserPostUpdate(Driver*, int) {
+  auto *pgen = pmy_pack->pmesh->pgen.get();
+  if (pgen != nullptr && pgen->user_particle_post_update_func != nullptr) {
+    ParticleLifecycleData lifecycle(
+        pmy_pack, this, prtcl_rdata, prtcl_idata, nprtcl_thispack);
+    pgen->user_particle_post_update_func(&lifecycle);
   }
   return TaskStatus::complete;
 }

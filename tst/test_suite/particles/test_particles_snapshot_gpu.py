@@ -127,10 +127,23 @@ def test_particle_snapshot_gpu(tmp_path):
         assert lmc_path.exists(), "Lagrangian-MC particle snapshot was not written"
         points, fields, types = _read_particle_vtk(lmc_path)
         assert points.shape == (8, 3)
-        assert list(fields) == ["ptag", "status"]
-        assert set(types.values()) == {"int"}
+        assert list(fields) == [
+            "ptag", "status", "x_min", "y_min", "z_min", "t_min",
+        ]
+        assert types == {
+            "ptag": "int",
+            "status": "int",
+            "x_min": "float",
+            "y_min": "float",
+            "z_min": "float",
+            "t_min": "float",
+        }
         np.testing.assert_array_equal(np.sort(fields["ptag"]), np.arange(8))
         np.testing.assert_array_equal(fields["status"], np.zeros(8, dtype=np.int32))
+        np.testing.assert_allclose(fields["x_min"], points[:, 0])
+        np.testing.assert_allclose(fields["y_min"], points[:, 1])
+        np.testing.assert_allclose(fields["z_min"], 0.5)
+        np.testing.assert_allclose(fields["t_min"], 0.0)
     finally:
         shutil.rmtree("pvtk", ignore_errors=True)
         for history in histories:

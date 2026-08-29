@@ -51,6 +51,8 @@ struct ParticleTaskIDs {
   TaskID recvp;
   TaskID csend;
   TaskID crecv;
+  TaskID finalize;
+  TaskID post_update;
   TaskID newdt;
 };
 
@@ -97,6 +99,7 @@ class ParticlePopulation {
   void AssembleTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   TaskStatus Push(Driver *pdriver, int stage);
   TaskStatus ApplyUserLifecycle(Driver *pdriver, int stage);
+  TaskStatus ApplyUserPostUpdate(Driver *pdriver, int stage);
   TaskStatus PurgeDeleted(Driver *pdriver, int stage);
   TaskStatus NewGID(Driver *pdriver, int stage);
   TaskStatus SendCnt(Driver *pdriver, int stage);
@@ -110,6 +113,7 @@ class ParticlePopulation {
   // particle pusher implementations
   TaskStatus PushDrift(Driver *pdriver, int stage);
   TaskStatus PushLagrangianMC(Driver *pdriver, int stage);
+  TaskStatus FinalizeLagrangianMCMove(Driver *pdriver, int stage);
   Real EstimateTimestepDrift();
 
   void MarkSnapshotComplete();
@@ -121,6 +125,7 @@ class ParticlePopulation {
  private:
   std::string input_block_;
   std::uint64_t lmc_random_seed;
+  bool lmc_check_flux_probabilities;
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this population
 };
 
@@ -138,8 +143,9 @@ struct ParticleLifecycleData {
   ParticlePopulation *population;
   // The callback may update PSTATUS and type-owned fields for PACTIVE particles. It must
   // not resize/reorder these views or change common positions, identifiers, or ownership.
-  // PGID still identifies the pre-push owner; use the normal execution space or fence any
-  // work launched on another execution instance before returning.
+  // In the pre-routing hook, PGID still identifies the pre-push owner. In the post-update
+  // hook, PGID and position identify the final owner and corrected position. Use the normal
+  // execution space or fence work launched on another execution instance before returning.
   DvceArray2D<Real> prtcl_rdata;
   DvceArray2D<int> prtcl_idata;
   int nprtcl;  // may be zero; the callback is still invoked on every rank

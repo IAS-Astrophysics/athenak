@@ -56,10 +56,20 @@ void ParticlePopulation::AssembleTasks(
     return id.csend;
   };
 
+  auto add_post_update = [this](const std::shared_ptr<TaskList> &tasks,
+                                TaskID &dependency) {
+    id.post_update = tasks->AddTask(
+        &ParticlePopulation::ApplyUserPostUpdate, this, dependency);
+    return id.post_update;
+  };
+
   switch (pusher) {
     case ParticlesPusher::drift:
       // Drift before the fluid integrator, then refresh its timestep after the fluid.
-      (void)add_update_chain(tl["before_timeintegrator"]);
+      {
+        TaskID update_done = add_update_chain(tl["before_timeintegrator"]);
+        (void)add_post_update(tl["before_timeintegrator"], update_done);
+      }
       id.newdt = tl["after_timeintegrator"]->AddTask(
           &ParticlePopulation::NewTimeStep, this, none);
       break;
@@ -67,6 +77,10 @@ void ParticlePopulation::AssembleTasks(
       {
         // Lagrangian MC consumes the completed fluid step's accumulated mass fluxes.
         TaskID update_done = add_update_chain(tl["after_timeintegrator"]);
+        id.finalize = tl["after_timeintegrator"]->AddTask(
+            &ParticlePopulation::FinalizeLagrangianMCMove, this, update_done);
+        update_done = id.finalize;
+        update_done = add_post_update(tl["after_timeintegrator"], update_done);
         id.newdt = tl["after_timeintegrator"]->AddTask(
             &ParticlePopulation::NewTimeStep, this, update_done);
         break;

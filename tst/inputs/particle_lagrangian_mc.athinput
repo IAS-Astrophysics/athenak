@@ -45,6 +45,7 @@ particle_type = lagrangian_mc
 ppc = 0.25
 pusher = lagrangian_mc
 random_seed = 5
+check_flux_probabilities = false
 
 <problem>
 pgen_name = particle_lagrangian_mc

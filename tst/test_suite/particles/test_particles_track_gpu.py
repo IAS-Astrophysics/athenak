@@ -119,9 +119,16 @@ def test_particle_track_gpu(tmp_path):
                 "particle_track/particle_track_lagrangian_mc.all.part_track"
             )
         )
-        assert list(data) == ["time", "cycle", "ptag", "status", "x", "y", "z"]
+        assert list(data) == [
+            "time", "cycle", "ptag", "status", "x", "y", "z",
+            "x_min", "y_min", "z_min", "t_min",
+        ]
         np.testing.assert_array_equal(data["ptag"], np.repeat(np.arange(8), 2))
         np.testing.assert_array_equal(data["status"], np.zeros(16, dtype=int))
+        np.testing.assert_allclose(data["x_min"], data["x"])
+        np.testing.assert_allclose(data["y_min"], data["y"])
+        np.testing.assert_allclose(data["z_min"], data["z"])
+        np.testing.assert_allclose(data["t_min"], 0.0)
     finally:
         shutil.rmtree("particle_track", ignore_errors=True)
         for history in histories:
