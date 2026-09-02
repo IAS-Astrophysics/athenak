@@ -627,7 +627,7 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
     Real s = sqrt(SQR(x1v) + SQR(x2v));
     Real rdiff = 0.0;
     if (newtonian) {
-      Real rdiff = sqrt(SQR(x1v - locx) + SQR(x2v - locy) + SQR(x3v));
+      rdiff = sqrt(SQR(x1v - locx) + SQR(x2v - locy) + SQR(x3v));
     }
 
     Real mass, alp, r_schw;
