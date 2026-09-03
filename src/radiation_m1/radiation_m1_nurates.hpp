@@ -9,6 +9,7 @@
 //! \file radiation_m1_nurates.hpp
 //  \brief structs and functions for bns_nurates
 
+#include <limits>
 #include <string>
 
 #include "config.hpp"
@@ -16,15 +17,9 @@
 #if ENABLE_NURATES
 
 #include "athena.hpp"
-#include "bns_nurates/include/bns_nurates.hpp"
-#include "bns_nurates/include/constants.hpp"
-#include "bns_nurates/include/distribution.hpp"
-#include "bns_nurates/include/functions.hpp"
-#include "bns_nurates/include/integration.hpp"
-#include "bns_nurates/include/m1_opacities.hpp"
+#include "bns_nurates_ns.hpp"
 #include "eos/primitive-solver/eos.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
-#include "radiation_m1_fermi.hpp"
 #include "radiation_m1_params.hpp"
 
 namespace radiationm1 {
@@ -69,13 +64,14 @@ struct NuratesParams {
   Real peq_dYe_tol;              // skip below this predicted |dYe|  (tier-1 gate)
 
   int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
-  MyQuadrature quadrature;
+  bns_nurates::MyQuadrature quadrature;
   int quad_nx_2;
-  MyQuadrature quadrature_2;
+  bns_nurates::MyQuadrature quadrature_2;
 };
 
-//! \fn void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p,
-//!                      Real &mu_e, Real &n_nue, Real &j_nue, Real &chi_nue,
+//! \fn void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn,
+//!                      Real &mu_n, Real &mu_p, Real &mu_e, Real &n_nue,
+//!                      Real &j_nue, Real &chi_nue,
 //!                      Real &n_anue, Real &j_anue, Real &chi_anue, Real &n_nux,
 //!                      Real &j_nux, Real &chi_nux, Real &n_anux, Real &j_anux,
 //!                      Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
@@ -143,24 +139,24 @@ struct NuratesParams {
 //   \param[in]  nurates_units   bns_nurates units
 
 KOKKOS_INLINE_FUNCTION
-void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p,
-                 Real &mu_e,
-                 Real nudens_0[4],
-                 Real nudens_1[4],
-                 Real chi[4],
-                 Real eta_0[4],
-                 Real eta_1[4],
-                 Real abs_0[4],
-                 Real abs_1[4],
-                 Real scat_0[4],
-                 Real scat_1[4],
-                 Real eta_1_non_th[4],
-                 Real abs_1_non_th[4],
-                 Real abs_0_non_th[4],
-                 NuratesParams const &nurates_params,
-                 Primitive::UnitSystem const &code_units,
-                 Primitive::UnitSystem const &eos_units,
-                 Primitive::UnitSystem const &nurates_units) {
+void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n,
+                             Real &mu_p, Real &mu_e,
+                             Real nudens_0[4],
+                             Real nudens_1[4],
+                             Real chi[4],
+                             Real eta_0[4],
+                             Real eta_1[4],
+                             Real abs_0[4],
+                             Real abs_1[4],
+                             Real scat_0[4],
+                             Real scat_1[4],
+                             Real eta_1_non_th[4],
+                             Real abs_1_non_th[4],
+                             Real abs_0_non_th[4],
+                             NuratesParams const &nurates_params,
+                             Primitive::UnitSystem const &code_units,
+                             Primitive::UnitSystem const &eos_units,
+                             Primitive::UnitSystem const &nurates_units) {
   Real const unit_length = code_units.LengthConversion(nurates_units);
   Real const unit_time = code_units.TimeConversion(nurates_units);
   // Note that the number densities are always in EOS units
@@ -264,7 +260,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   }
 
   // populate opacity params
-  GreyOpacityParams grey_op_params = {0};
+  bns_nurates::GreyOpacityParams grey_op_params = {0};
 
   // reaction flags
   grey_op_params.opacity_flags.use_abs_em = nurates_params.use_abs_em;
@@ -282,7 +278,8 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
   grey_op_params.opacity_pars.brem_implementation =
-      nurates_params.use_BRT_brem ? BREM_BRT06 : BREM_HR98;
+      nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
+                                  : bns_nurates::BREM_HR98;
 
   // populate EOS quantities
   grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
@@ -321,13 +318,14 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
         CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
   } else {
     // compute neutrino distribution parameters assuming equilibrium
-    grey_op_params.distr_pars = NuEquilibriumParams(&grey_op_params.eos_pars);
+    grey_op_params.distr_pars =
+        bns_nurates::NuEquilibriumParams(&grey_op_params.eos_pars);
 
     // compute gray neutrino number and energy densities assuming equilibrium
     // N.B.: required for normalization factor of energy-averaged opacities
-    ComputeM1DensitiesEq(&grey_op_params.eos_pars,
-                         &grey_op_params.distr_pars,
-                         &grey_op_params.m1_pars);
+    bns_nurates::ComputeM1DensitiesEq(&grey_op_params.eos_pars,
+                                      &grey_op_params.distr_pars,
+                                      &grey_op_params.m1_pars);
 
     // populate eddington factor
     grey_op_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;
@@ -354,7 +352,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     // from thermal processes. In this formalism NEPS is NOT included in the
     // number emissivity (eta_0) / absorption (kappa_0_a), and the energy
     // coefficients are split into thermal (_th) and non-thermal (_non_th) parts.
-    M1OpacitiesNonThermalSeparated opacities =
+    bns_nurates::M1OpacitiesNonThermalSeparated opacities =
         ComputeM1OpacitiesNonThermalSeparated(&nurates_params.quadrature,
                                               &nurates_params.quadrature_2,
                                               &grey_op_params);
@@ -405,7 +403,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   } else {
     // compute opacities with inelastic scattering folded into the totals
     // (NEPS included in eta_0 / kappa_0_a). Non-thermal arrays stay zero.
-    M1Opacities opacities = ComputeM1Opacities(&nurates_params.quadrature,
+    bns_nurates::M1Opacities opacities = ComputeM1Opacities(&nurates_params.quadrature,
                                                &nurates_params.quadrature_2,
                                                &grey_op_params);
 
@@ -539,25 +537,41 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
   Real eta_anue = -eta_nue;
   Real eta_nux = 0.0;
 
+  // A live screen rather than an assert, because -DNDEBUG is on in every default build
+  // (CMakeLists.txt forces CMAKE_BUILD_TYPE=Release when it is unset). FDI_p2/FDI_p3
+  // return a clean 0.0 for a non-finite argument, so without this a bad eta or
+  // temperature yields finite ZERO densities: Kirchhoff's law would emit exactly nothing
+  // for that species and the caller's finiteness screen would see nothing wrong.
+  // Propagating is what the callers are written to catch.
+  if (!Kokkos::isfinite(eta_nue) || !Kokkos::isfinite(temp)) {
+    const Real bad = std::numeric_limits<Real>::quiet_NaN();
+    n_nue = bad;
+    n_anue = bad;
+    n_nux = bad;
+    en_nue = bad;
+    en_anue = bad;
+    en_nux = bad;
+    return;
+  }
+
   const Real hc_mevnm = 1.23984172e-10 * 1e7; // hc in units of MeV*nm
   const Real hc_mevnm3 = hc_mevnm * hc_mevnm * hc_mevnm;
   const Real temp3 = temp * temp * temp;
   const Real temp4 = temp3 * temp;
 
-  n_nue = 4.0 * M_PI / hc_mevnm3 * temp3 * Fermi::fermi2(eta_nue);    // [nm^-3]
-  n_anue = 4.0 * M_PI / hc_mevnm3 * temp3 * Fermi::fermi2(eta_anue);  // [nm^-3]
-  n_nux = 16.0 * M_PI / hc_mevnm3 * temp3 * Fermi::fermi2(eta_nux);   // [nm^-3]
+  n_nue = 4.0 * M_PI / hc_mevnm3 * temp3 *
+          bns_nurates::FDI_p2(eta_nue);                                // [nm^-3]
+  n_anue = 4.0 * M_PI / hc_mevnm3 * temp3 *
+           bns_nurates::FDI_p2(eta_anue);                              // [nm^-3]
+  n_nux = 16.0 * M_PI / hc_mevnm3 * temp3 *
+          bns_nurates::FDI_p2(eta_nux);                                // [nm^-3]
 
-  en_nue = 4.0 * M_PI / hc_mevnm3 * temp4 * Fermi::fermi3(eta_nue);    // [MeV nm^-3]
-  en_anue = 4.0 * M_PI / hc_mevnm3 * temp4 * Fermi::fermi3(eta_anue);  // [MeV nm^-3]
-  en_nux = 16.0 * M_PI / hc_mevnm3 * temp4 * Fermi::fermi3(eta_nux);   // [MeV nm^-3]
-
-  assert(Kokkos::isfinite(n_nue));
-  assert(Kokkos::isfinite(n_anue));
-  assert(Kokkos::isfinite(n_nux));
-  assert(Kokkos::isfinite(en_nue));
-  assert(Kokkos::isfinite(en_anue));
-  assert(Kokkos::isfinite(en_nux));
+  en_nue = 4.0 * M_PI / hc_mevnm3 * temp4 *
+           bns_nurates::FDI_p3(eta_nue);                               // [MeV nm^-3]
+  en_anue = 4.0 * M_PI / hc_mevnm3 * temp4 *
+            bns_nurates::FDI_p3(eta_anue);                             // [MeV nm^-3]
+  en_nux = 16.0 * M_PI / hc_mevnm3 * temp4 *
+           bns_nurates::FDI_p3(eta_nux);                               // [MeV nm^-3]
 
   // Note that the number densities are always in EOS units
   Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
