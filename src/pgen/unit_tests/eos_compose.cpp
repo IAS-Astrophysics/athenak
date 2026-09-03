@@ -618,12 +618,23 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
   // ------------------------------------------------------------------------------
   // D. the two endpoints of the weight family
   // ------------------------------------------------------------------------------
-  // BetaEquilibriumPartial carries one weight per neutrino channel and reduces to the
-  // trapped solve at 1 and to no solve at all at 0. Only those two endpoints have an
-  // answer known in advance, and they are the two the generalisation has to get exactly
-  // right; they are also what distinguishes weights that reach the arithmetic from
-  // weights that are merely passed around.
+  // BetaEquilibriumPartial carries one weight per neutrino channel and reduces to no
+  // solve at all when they are 0: the right-hand sides are then the bare matter state
+  // and the answer is that state, however poor the initial guess. That is the half of
+  // this group with real content.
+  //
+  // The w = 1 half is narrow, and worth being explicit about: GetBetaEquilibriumTrapped
+  // is implemented as GetBetaEquilibriumPartial with five unit weights, so comparing
+  // them exercises the two wrappers' unit conversions and the defaulted weights, not
+  // the arithmetic underneath. What pins the w = 1 limit to the trapped physics is
+  // group A, which rebuilds the trapped residual from GetTrappedNeutrinos -- an
+  // independent evaluation of the same closed forms -- and checks it vanishes.
+  //
+  // Both halves sit at equal weights within each pair, so this group says nothing about
+  // the split electron-pair terms. Group F is the one that does.
+  const Real tol_w1 = 1.0e-10;
   int n_w1_differs = 0;
+  int n_w1_exact = 0;
   int n_w0_fail = 0;
   Real err_w0_T_max = 0.0;
   Real err_w0_Y_max = 0.0;
@@ -631,7 +642,8 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
 
   Kokkos::parallel_reduce("nueq_weights",
   Kokkos::RangePolicy<>(DevExeSpace(), 0, nstates),
-  KOKKOS_LAMBDA(const int &idx, int &nd, int &nf, Real &eT, Real &eY, Real &rmax) {
+  KOKKOS_LAMBDA(const int &idx, int &nd, int &nx, int &nf, Real &eT, Real &eY,
+                Real &rmax) {
     const int in = idx/(nY*nT);
     const int iY = (idx - in*nY*nT)/nT;
     const int iT = idx - in*nY*nT - iY*nT;
@@ -652,21 +664,24 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
     Real Y_guess[MAX_SPECIES] = {0.0};
     Y_guess[0] = 0.7*Y[0];
 
-    // All weights 1 must reproduce GetBetaEquilibriumTrapped bit for bit, not merely to
-    // a tolerance: it is the same arithmetic, and the weights are written into it so
-    // that multiplying by an exact 1.0 is a no-op. Anything else means the expressions
-    // were regrouped, which would move the whole Newton path.
     Real T_ref = 0.0;
     Real T_w1 = 0.0;
     Real Y_ref[MAX_SPECIES] = {0.0};
     Real Y_w1[MAX_SPECIES] = {0.0};
     bool ok_ref = eos.GetBetaEquilibriumTrapped(n, e_tot, Yl, T_ref, Y_ref,
                                                 T_guess, Y_guess);
-    bool ok_w1 = eos.GetBetaEquilibriumPartial(n, e_tot, Yl, 1.0, 1.0, 1.0,
+    const Real w_one[PEQ_NWEIGHTS] = {1.0, 1.0, 1.0, 1.0, 1.0};
+    bool ok_w1 = eos.GetBetaEquilibriumPartial(n, e_tot, Yl, w_one,
                                                T_w1, Y_w1, T_guess, Y_guess);
-    if (ok_ref != ok_w1 || T_w1 != T_ref || Y_w1[0] != Y_ref[0]) {
+    if (ok_ref != ok_w1 ||
+        !(Kokkos::fabs(T_w1/T_ref - 1.0) < tol_w1) ||
+        !(Kokkos::fabs(Y_w1[0] - Y_ref[0]) < tol_w1)) {
       nd += 1;
     }
+    if (T_w1 == T_ref && Y_w1[0] == Y_ref[0]) {
+      nx += 1;
+    }
+
 
     // All weights 0 removes every neutrino term from both residuals, so the right-hand
     // sides are the bare matter state and the solution is that state itself -- however
@@ -675,7 +690,8 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
     Yl0[0] = Y[0];
     Real T_w0 = 0.0;
     Real Y_w0[MAX_SPECIES] = {0.0};
-    bool ok_w0 = eos.GetBetaEquilibriumPartial(n, e_mat, Yl0, 0.0, 0.0, 0.0,
+    const Real w_zero[PEQ_NWEIGHTS] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    bool ok_w0 = eos.GetBetaEquilibriumPartial(n, e_mat, Yl0, w_zero,
                                                T_w0, Y_w0, T_guess, Y_guess);
     if (!ok_w0) {
       nf += 1;
@@ -688,21 +704,263 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
     eT = (err_T > eT) ? err_T : eT;
     eY = (err_Y > eY) ? err_Y : eY;
     rmax = (res > rmax) ? res : rmax;
-  }, Kokkos::Sum<int>(n_w1_differs), Kokkos::Sum<int>(n_w0_fail),
+  }, Kokkos::Sum<int>(n_w1_differs), Kokkos::Sum<int>(n_w1_exact),
+     Kokkos::Sum<int>(n_w0_fail),
      Kokkos::Max<Real>(err_w0_T_max), Kokkos::Max<Real>(err_w0_Y_max),
      Kokkos::Max<Real>(res_w0_max));
 
   std::cout << "Partial equilibrium endpoints, " << nstates << " states:\n"
-            << "  w = 1 differs from trapped : " << n_w1_differs << "\n"
+            << "  w = 1 vs trapped entry pt  : " << n_w1_differs
+            << " differ (tolerance " << tol_w1 << "), "
+            << n_w1_exact << " of " << nstates << " identical\n"
             << "  w = 0 failures             : " << n_w0_fail << "\n"
             << "  w = 0 max residual         : " << res_w0_max << "\n"
             << "  w = 0 max |T_eq/T - 1|     : " << err_w0_T_max << "\n"
             << "  w = 0 max |Y_eq - Y_e|     : " << err_w0_Y_max << "\n";
 
   if (n_w1_differs != 0) {
-    std::cout << "Unit weights do not reproduce the trapped equilibrium exactly.\n";
+    std::cout << "The two entry points disagree at unit weights, to " << tol_w1
+              << ": one of the wrappers converts or defaults differently.\n";
     success = false;
   }
+
+#if ENABLE_NURATES
+  // ------------------------------------------------------------------------------
+  // E. the Fermi-Dirac integrals the split weights are built on
+  // ------------------------------------------------------------------------------
+  // Pins bns_nurates' FDI_p1/p2/p3 to the mathematics rather than to functions.hpp,
+  // in the two ways that matter to eos_compose.hpp: the closed-form values at eta = 0,
+  // and the reflection identities. The reflections are the load-bearing ones -- the
+  // decomposition in ps_types.hpp works only because FDI reflects on the *same*
+  // polynomials func_eq_weak already carries, so a minimax evaluation contributes only
+  // the decaying remainder F_k(-|eta|) and leaves the exact parts exact. The recurrence
+  // F_k' = k F_{k-1} is checked too, since the Jacobian of the new terms rests on it.
+  //
+  // Absolute accuracy against a high-precision quadrature is not measured here: double
+  // arithmetic cannot supply the reference. notes/sympy_ty_perspecies_weights.py does
+  // that with mpmath.
+  const Real pi_e = 3.14159265358979323846;
+  const Real pi2_e = pi_e*pi_e;
+  const Real pi4_e = pi2_e*pi2_e;
+  const Real f1_0 = pi2_e/12.0;                    // pi^2/12
+  const Real f2_0 = 1.80308535473939143;           // 3 zeta(3)/2
+  const Real f3_0 = 7.0*pi4_e/120.0;               // 7 pi^4/120
+
+  const int neta = 241;
+  const Real eta_lo = -30.0;
+  const Real eta_hi = 30.0;
+  const Real deta = (eta_hi - eta_lo)/(neta - 1);
+
+  Real err_refl = 0.0;
+  Real err_recur = 0.0;
+
+  Kokkos::parallel_reduce("nueq_fdi",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, neta),
+  KOKKOS_LAMBDA(const int &i, Real &er, Real &ec) {
+    const Real eta = eta_lo + i*deta;
+    const Real e2 = eta*eta;
+
+    const Real f1p = bns_nurates::FDI_p1(eta);
+    const Real f1m = bns_nurates::FDI_p1(-eta);
+    const Real f2p = bns_nurates::FDI_p2(eta);
+    const Real f2m = bns_nurates::FDI_p2(-eta);
+    const Real f3p = bns_nurates::FDI_p3(eta);
+    const Real f3m = bns_nurates::FDI_p3(-eta);
+
+    // F_1(eta) + F_1(-eta) = pi^2/6 + eta^2/2
+    // F_2(eta) - F_2(-eta) = eta (pi^2 + eta^2)/3
+    // F_3(eta) + F_3(-eta) = 7 pi^4/60 + eta^2/2 (pi^2 + eta^2/2)
+    const Real r1 = pi2_e/6.0 + 0.5*e2;
+    const Real r2 = eta*(pi2_e + e2)/3.0;
+    const Real r3 = 7.0*pi4_e/60.0 + 0.5*e2*(pi2_e + 0.5*e2);
+    const Real d1 = Kokkos::fabs((f1p + f1m)/r1 - 1.0);
+    const Real d2 = (r2 != 0.0) ? Kokkos::fabs((f2p - f2m)/r2 - 1.0) : 0.0;
+    const Real d3 = Kokkos::fabs((f3p + f3m)/r3 - 1.0);
+    er = (d1 > er) ? d1 : er;
+    er = (d2 > er) ? d2 : er;
+    er = (d3 > er) ? d3 : er;
+
+    // F_k'(eta) = k F_{k-1}(eta), by a central difference wide enough that
+    // cancellation does not dominate. The heavies' eta = 0 point is included.
+    const Real h = 1.0e-4;
+    const Real c2 = Kokkos::fabs((bns_nurates::FDI_p2(eta + h) -
+                                  bns_nurates::FDI_p2(eta - h))/(2.0*h*2.0*f1p) - 1.0);
+    const Real c3 = Kokkos::fabs((bns_nurates::FDI_p3(eta + h) -
+                                  bns_nurates::FDI_p3(eta - h))/(2.0*h*3.0*f2p) - 1.0);
+    ec = (c2 > ec) ? c2 : ec;
+    ec = (c3 > ec) ? c3 : ec;
+  }, Kokkos::Max<Real>(err_refl), Kokkos::Max<Real>(err_recur));
+
+  const Real err_f1_0 = std::abs(bns_nurates::FDI_p1(0.0)/f1_0 - 1.0);
+  const Real err_f2_0 = std::abs(bns_nurates::FDI_p2(0.0)/f2_0 - 1.0);
+  const Real err_f3_0 = std::abs(bns_nurates::FDI_p3(0.0)/f3_0 - 1.0);
+
+  const Real tol_fdi = 1.0e-14;
+  const Real tol_recur = 1.0e-8;   // limited by the central difference, not by FDI
+
+  std::cout << "bns_nurates Fermi-Dirac integrals, eta in [" << eta_lo << ", "
+            << eta_hi << "]:\n"
+            << "  |F_1(0)/(pi^2/12) - 1|      : " << err_f1_0 << "\n"
+            << "  |F_2(0)/(3 zeta(3)/2) - 1|  : " << err_f2_0 << "\n"
+            << "  |F_3(0)/(7 pi^4/120) - 1|   : " << err_f3_0 << "\n"
+            << "  worst reflection identity   : " << err_refl << "\n"
+            << "  worst F_k' = k F_{k-1}      : " << err_recur << "\n";
+
+  if (!(err_f1_0 < tol_fdi) || !(err_f2_0 < tol_fdi) || !(err_f3_0 < tol_fdi)) {
+    std::cout << "FDI_p1/p2/p3 do not reproduce their closed-form values at eta = 0 "
+              << "(tolerance " << tol_fdi << ").\n";
+    success = false;
+  }
+  if (!(err_refl < tol_fdi)) {
+    std::cout << "FDI_p1/p2/p3 do not reflect on the polynomials func_eq_weak carries, "
+              << "so the split-weight decomposition would not leave the exact terms "
+              << "exact (tolerance " << tol_fdi << ").\n";
+    success = false;
+  }
+  if (!(err_recur < tol_recur)) {
+    std::cout << "F_k' = k F_{k-1} does not hold, so the Jacobian of the split terms "
+              << "is wrong (tolerance " << tol_recur << ").\n";
+    success = false;
+  }
+
+  // ------------------------------------------------------------------------------
+  // F. split electron-pair weights, dw != 0
+  // ------------------------------------------------------------------------------
+  // The only group that exercises the appended residual and Jacobian terms at all.
+  // Same construction as group A -- build a state for which (T, Y_e) is the exact root,
+  // then see whether the solver finds it from a displaced guess -- but with the two
+  // electron-flavour weights deliberately unequal.
+  //
+  // GetTrappedNeutrinos supplies the two combinations the trapped solve uses, N+ - N-
+  // and J+ + J-. Their partners come from dimensionless *ratios* rather than from
+  // absolute densities, which keeps the whole construction free of unit conversions and
+  // makes it an independent route to the same quantity:
+  //
+  //     (N+ + N-)/(N+ - N-) = 3 S_2(eta) / [eta (pi^2 + eta^2)]
+  //     (J+ - J-)/(J+ + J-) = D_3(eta) / P_3(eta)
+  //
+  // eta itself is checked against a third units-free ratio, e_nu[0]/e_nu[1], since the
+  // heavies sit at eta = 0 and so carry P_3(0) = 7 pi^4/60 alone. A wrong eta would
+  // otherwise look exactly like a wrong residual.
+  //
+  // dw = 0.15 is a little above the 0.12 the single-zone run reaches; dw = 0.30
+  // (opacity ratio 4 at the peak of the weight family) is a stress case.
+  const Real pi_f = 3.14159265358979323846;
+  const Real pi2_f = pi_f*pi_f;
+  const Real pi4_f = pi2_f*pi2_f;
+  const Real p3_zero = 7.0*pi4_f/60.0;
+
+  Primitive::UnitSystem &cunits = eos.GetCodeUnitSystem();
+  Primitive::UnitSystem &eunits = eos.GetEOSUnitSystem();
+  const Real T_c2e = cunits.TemperatureConversion(eunits);
+  const Real mu_c2e = cunits.ChemicalPotentialConversion(eunits);
+
+  // Below this the lepton ratio above is 0/0: the sum stays finite but is recovered by
+  // dividing by a vanishing difference. The grid is neutron rich by construction, so
+  // nothing should land here -- the count is reported so an all-skipped pass is visible.
+  const Real eta_floor = 1.0e-6;
+
+  const int nsplit = 2;
+  const Real w_split[nsplit][2] = {{0.95, 0.65}, {0.90, 0.30}};
+
+  for (int iw = 0; iw < nsplit; ++iw) {
+    const Real w_p = w_split[iw][0];
+    const Real w_m = w_split[iw][1];
+    const Real wbar = 0.5*(w_p + w_m);
+    const Real dw = 0.5*(w_p - w_m);
+
+    int nf_f = 0;
+    int nskip_f = 0;
+    Real eT_f = 0.0;
+    Real eY_f = 0.0;
+    Real eeta_f = 0.0;
+
+    Kokkos::parallel_reduce("nueq_split",
+    Kokkos::RangePolicy<>(DevExeSpace(), 0, nstates),
+    KOKKOS_LAMBDA(const int &idx, int &nf, int &nsk, Real &eT, Real &eY, Real &ee) {
+      const int in = idx/(nY*nT);
+      const int iY = (idx - in*nY*nT)/nT;
+      const int iT = idx - in*nY*nT - iY*nT;
+
+      const Real n = logs.exp2_(ln_lo + in*dln);
+      const Real T = logs.exp2_(lT_lo + iT*dlT);
+      Real Y[MAX_SPECIES] = {0.0};
+      Y[0] = Y_lo + iY*dY;
+
+      const Real eta = eos.GetElectronLeptonChemicalPotential(n, T, Y)*mu_c2e/
+                       (T*T_c2e);
+      if (!(Kokkos::fabs(eta) > eta_floor)) {
+        nsk += 1;
+        return;
+      }
+      const Real a = Kokkos::fabs(eta);
+      const Real a2 = a*a;
+      const Real P3 = p3_zero + 0.5*a2*(pi2_f + 0.5*a2);
+      const Real S2 = 2.0*bns_nurates::FDI_p2(-a) + a*(pi2_f + a2)/3.0;
+      const Real D3_abs = P3 - 2.0*bns_nurates::FDI_p3(-a);
+      const Real D3 = (eta < 0.0) ? -D3_abs : D3_abs;
+
+      Real n_nu[3], e_nu[3];
+      eos.GetTrappedNeutrinos(n, T, Y, n_nu, e_nu);
+
+      // e_nu[1] is the mu pair at eta = 0, so this ratio is P_3(eta)/P_3(0) and pins
+      // eta without any unit conversion entering.
+      const Real err_eta = Kokkos::fabs(e_nu[0]/e_nu[1]*p3_zero/P3 - 1.0);
+      ee = (err_eta > ee) ? err_eta : ee;
+
+      const Real ratio_L = 3.0*S2/(eta*(pi2_f + eta*eta));
+      const Real ratio_E = D3/P3;
+
+      const Real w[PEQ_NWEIGHTS] = {w_p, w_m, 1.0, w_p, w_m};
+
+      Real Yl[MAX_SPECIES] = {0.0};
+      Yl[0] = Y[0] + (wbar*n_nu[0] + dw*n_nu[0]*ratio_L)/n;
+      const Real e_rhs = eos.GetEnergy(n, T, Y) +
+                         wbar*e_nu[0] + dw*e_nu[0]*ratio_E + e_nu[1] + e_nu[2];
+
+      Real T_guess = 1.4*T;
+      Real Y_guess[MAX_SPECIES] = {0.0};
+      Y_guess[0] = 0.7*Y[0];
+
+      Real T_eq = 0.0;
+      Real Y_eq[MAX_SPECIES] = {0.0};
+      int status = -1;
+      bool ok = eos.GetBetaEquilibriumPartial(n, e_rhs, Yl, w, T_eq, Y_eq,
+                                              T_guess, Y_guess, &status);
+
+      if (!ok || status == Primitive::EOSCompOSE<LogPolicy>::NUEQ_UNSUPPORTED) {
+        nf += 1;
+        return;
+      }
+
+      Real err_T = Kokkos::fabs(T_eq/T - 1.0);
+      Real err_Y = Kokkos::fabs(Y_eq[0] - Y[0]);
+      eT = (err_T > eT) ? err_T : eT;
+      eY = (err_Y > eY) ? err_Y : eY;
+    }, Kokkos::Sum<int>(nf_f), Kokkos::Sum<int>(nskip_f),
+       Kokkos::Max<Real>(eT_f), Kokkos::Max<Real>(eY_f), Kokkos::Max<Real>(eeta_f));
+
+    std::cout << "Split electron-pair weights (" << w_p << ", " << w_m
+              << "), dw = " << dw << ", " << nstates << " states:\n"
+              << "  skipped, |eta| too small : " << nskip_f << "\n"
+              << "  failures                 : " << nf_f << "\n"
+              << "  max eta consistency err  : " << eeta_f << "\n"
+              << "  max |T_eq/T - 1|         : " << eT_f << "\n"
+              << "  max |Y_eq - Y_e|         : " << eY_f << "\n";
+
+    if (!(eeta_f < 1.0e-12)) {
+      std::cout << "eta reconstructed for the split-weight construction disagrees with "
+                << "the one the solver sees, so group F is not testing what it says.\n";
+      success = false;
+    }
+    if (nskip_f >= nstates || nf_f != 0 || !(eT_f < tol_T) || !(eY_f < tol_Y)) {
+      std::cout << "The split-weight solve does not recover its own exact equilibrium "
+                << "(tolerances " << tol_T << " on T, " << tol_Y << " on Y_e).\n";
+      success = false;
+    }
+  }
+#endif  // ENABLE_NURATES
+
   if (n_w0_fail != 0 || !(res_w0_max < tol_res) || !(err_w0_T_max < tol_T) ||
       !(err_w0_Y_max < tol_Y)) {
     std::cout << "Zero weights do not return the matter state (tolerances " << tol_res

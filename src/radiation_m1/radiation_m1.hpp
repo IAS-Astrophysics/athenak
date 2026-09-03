@@ -23,7 +23,7 @@
 #include "tasklist/task_list.hpp"
 
 #if ENABLE_NURATES
-#include "bns_nurates/include/bns_nurates.hpp"
+#include "bns_nurates_ns.hpp"
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif
 
