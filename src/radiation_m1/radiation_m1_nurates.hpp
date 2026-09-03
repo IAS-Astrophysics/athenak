@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_NURATES_HPP
-#define RADIATION_M1_NURATES_HPP
+#ifndef RADIATION_M1_RADIATION_M1_NURATES_HPP_
+#define RADIATION_M1_RADIATION_M1_NURATES_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -29,7 +29,7 @@ struct NuratesParams {
   Real nb_min;
   Real temp_min_mev;
   Real max_recon_temp;  // [MeV] fall back to the equilibrium distribution when the
-                        // reconstructed spectral temperature J/n exceeds this
+                        // reconstructed spectral temperature exceeds this
 
   bool use_abs_em;
   bool use_pair;
@@ -71,7 +71,7 @@ struct NuratesParams {
   bns_nurates::MyQuadrature quadrature_2;
 };
 
-//! \fn int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn,
+//! \fn void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn,
 //!                      Real &mu_n, Real &mu_p, Real &mu_e, Real &n_nue,
 //!                      Real &j_nue, Real &chi_nue,
 //!                      Real &n_anue, Real &j_anue, Real &chi_anue, Real &n_nux,
@@ -141,26 +141,24 @@ struct NuratesParams {
 //   \param[in]  nurates_units   bns_nurates units
 
 KOKKOS_INLINE_FUNCTION
-// Returns 1 if this cell fell back to the equilibrium distribution (see
-// max_recon_temp below), 0 otherwise.
-int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n,
-                            Real &mu_p, Real &mu_e,
-                            Real nudens_0[4],
-                            Real nudens_1[4],
-                            Real chi[4],
-                            Real eta_0[4],
-                            Real eta_1[4],
-                            Real abs_0[4],
-                            Real abs_1[4],
-                            Real scat_0[4],
-                            Real scat_1[4],
-                            Real eta_1_non_th[4],
-                            Real abs_1_non_th[4],
-                            Real abs_0_non_th[4],
-                            NuratesParams const &nurates_params,
-                            Primitive::UnitSystem const &code_units,
-                            Primitive::UnitSystem const &eos_units,
-                            Primitive::UnitSystem const &nurates_units) {
+void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n,
+                             Real &mu_p, Real &mu_e,
+                             Real nudens_0[4],
+                             Real nudens_1[4],
+                             Real chi[4],
+                             Real eta_0[4],
+                             Real eta_1[4],
+                             Real abs_0[4],
+                             Real abs_1[4],
+                             Real scat_0[4],
+                             Real scat_1[4],
+                             Real eta_1_non_th[4],
+                             Real abs_1_non_th[4],
+                             Real abs_0_non_th[4],
+                             NuratesParams const &nurates_params,
+                             Primitive::UnitSystem const &code_units,
+                             Primitive::UnitSystem const &eos_units,
+                             Primitive::UnitSystem const &nurates_units) {
   Real const unit_length = code_units.LengthConversion(nurates_units);
   Real const unit_time = code_units.TimeConversion(nurates_units);
   // Note that the number densities are always in EOS units
@@ -260,9 +258,9 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
     scat_1_anue = 0.;
     scat_1_nux = 0.;
     scat_1_anux = 0.;
-    return 0;
+    return;
   }
-      
+
   // populate opacity params
   bns_nurates::GreyOpacityParams grey_op_params = {0};
 
@@ -299,7 +297,6 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
   grey_op_params.eos_pars.dm_eff = 1.29333251;  // [MeV]
 
   // reconstruct distribution function
-  int used_fallback = 0;
   if (!nurates_params.use_equilibrium_distribution) {
     // populate M1 quantities
     // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates
@@ -328,10 +325,11 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
     // the equilibrium distribution -- identical to the use_equilibrium_
     // distribution=true branch below (matter-anchored spectrum + densities +
     // chi=1/3). temp_t/temp_f are in [MeV], directly comparable to the cap.
+    bool used_fallback = false;
     for (int s = 0; s < total_num_species; ++s) {
       if (grey_op_params.distr_pars.temp_t[s] > nurates_params.max_recon_temp ||
           grey_op_params.distr_pars.temp_f[s] > nurates_params.max_recon_temp) {
-        used_fallback = 1;
+        used_fallback = true;
         break;
       }
     }
@@ -363,9 +361,9 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
     grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
     grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
   }
-  
-  // The factors of 2 below come from the fact that bns_nurates and THC weight
-  // the heavy neutrinos differently. THC weights them with a factor of 2
+
+  // The factors of 2 below come from the fact that bns_nurates and this module weight
+  // the heavy neutrinos differently. This module weights them with a factor of 2
   // (because "nux" means "mu AND tau"), bns_nurates with a factor of 1 (because
   // "nux" means "mu OR tau"). Note: the factor of 2 is applied to the
   // emissivities (sources, summed over the two heavy species) but NOT to the
@@ -531,8 +529,6 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
   sigma_0_non_th_anue = sigma_0_non_th_anue * unit_length;
   sigma_0_non_th_nux = sigma_0_non_th_nux * unit_length;
   sigma_0_non_th_anux = sigma_0_non_th_anux * unit_length;
-
-  return used_fallback;
 }
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
@@ -620,4 +616,4 @@ void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real 
 
 }  // namespace radiationm1
 #endif  // ENABLE_NURATES
-#endif  // RADIATION_M1_NURATES_HPP
+#endif  // RADIATION_M1_RADIATION_M1_NURATES_HPP_

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "athena.hpp"
@@ -48,7 +49,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     // @TODO phydro are only partially implemented
     exit(EXIT_FAILURE);
   }
-  
+
   nspecies = M1_TOTAL_NUM_SPECIES;
 
   params.gr_sources = pin->GetOrAddBoolean("radiation_m1", "gr_sources", true);
@@ -76,7 +77,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.minmod_theta = pin->GetOrAddReal("radiation_m1", "minmod_theta", 1);
   params.source_limiter = pin->GetOrAddReal("radiation_m1", "source_limiter", 0.5);
   params.beam_sources = pin->GetOrAddBoolean("radiation_m1", "beam_sources", false);
-  
+
   // set closure (default: minerbo)
   std::string closure_fun = pin->GetOrAddString("radiation_m1", "closure_fun", "minerbo");
   if (closure_fun == "minerbo") {
@@ -266,6 +267,60 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
+  // Flavor mixing parameters.
+  // rhea_model_path is host-only config (never on RadiationM1Params) -- parsed here if
+  // flavor_mix=rhea, used further down in this constructor to build prhea/
+  // rhea_f4_in_scratch (needs nmb_thispack/indcs, computed later below).
+  std::string rhea_model_path;
+  std::string flavor_mix = pin->GetOrAddString("radiation_m1", "flavor_mix", "none");
+  if (flavor_mix == "equilibrium") {
+    params.flavor_mix_type = FlavMixEquilibrium;
+  } else if (flavor_mix == "maximal") {
+    params.flavor_mix_type = FlavMixMaximal;
+  } else if (flavor_mix == "rhea") {
+#if ENABLE_TORCH
+    params.flavor_mix_type = FlavMixRhea;
+
+    params.rhea_stability_threshold =
+        pin->GetOrAddReal("radiation_m1", "rhea_stability_threshold", 0.5);
+    params.rhea_tau_0_factor =
+        pin->GetOrAddReal("radiation_m1", "rhea_tau_0_factor", 1.0);
+    params.rhea_tau_1_factor =
+        pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
+
+    // Required, no default: startup error if unset/empty.
+    rhea_model_path = pin->GetOrAddString("radiation_m1", "rhea_model_path", "");
+    if (rhea_model_path.empty()) {
+      std::cerr << "Error: flavor_mix = rhea requires rhea_model_path to be set "
+                   "in the <radiation_m1> block (no default path exists)."
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+#else
+    std::cerr << "Error: To use flavor_mix = rhea, executable must be compiled with "
+                 "-DAthena_ENABLE_TORCH=ON"
+              << std::endl;
+    exit(EXIT_FAILURE);
+#endif
+  } else {
+    params.flavor_mix_type = FlavMixNone;
+  }
+  // BGK rates: input in 1/s if [units] block present, else in 1/code_time.
+  // Multiply by time_cgs() [s/code_time] to convert 1/s -> 1/code_time.
+  params.bgk_inv_tau_0 = pin->GetOrAddReal("radiation_m1", "bgk_inv_tau_0", 0.0);
+  params.bgk_inv_tau_1 = pin->GetOrAddReal("radiation_m1", "bgk_inv_tau_1", 0.0);
+  if (isunits) {
+    params.bgk_inv_tau_0 *= pmy_pack->punit->time_cgs();
+    params.bgk_inv_tau_1 *= pmy_pack->punit->time_cgs();
+  }
+  // Density threshold: input in g/cm^3 if [units] block present, else in code density.
+  // Divide by density_cgs() [g/cm^3 per code_density] to convert g/cm^3 -> code_density.
+  // Sentinel value -1 means mix everywhere; leave it untouched.
+  params.flavor_mix_rho = pin->GetOrAddReal("radiation_m1", "flavor_mix_rho", -1.0);
+  if (isunits && params.flavor_mix_rho >= 0.0) {
+    params.flavor_mix_rho /= pmy_pack->punit->density_cgs();
+  }
+
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -318,6 +373,26 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // allocate boundary buffers for evolved (cell-centered) variables
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers(nvarstot);
+
+#if ENABLE_TORCH
+  // RheaModel construction: constructed once per RadiationM1 instance, at startup, iff
+  // flavor_mix = rhea.
+  //
+  // n_capacity/rhea_f4_in_scratch's shape are sized at rank CAPACITY -- nmb (computed
+  // above, std::max(nmb_thispack, nmb_maxperrank)) rather than the live nmb_thispack --
+  // exactly the same pattern u0/u1/etc. already use above so they survive AMR regrids
+  // without reallocation. This buffer/RheaModel used to be sized
+  // from the live nmb_thispack directly, which was the one per-block Rhea-owned array
+  // NOT already AMR-proof; using the same `nmb` capacity variable as everything above
+  // fixes that regardless of whether AMR is actually in use for a given run. The live
+  // active batch size for a given call (<= this capacity) is computed per-call in
+  // radiation_m1_flavor_mix.cpp's FlavMixRhea branch, not here.
+  if (params.flavor_mix_type == FlavMixRhea) {
+    int n_capacity = nmb * indcs.nx1 * indcs.nx2 * indcs.nx3;
+    Kokkos::realloc(rhea_f4_in_scratch, n_capacity, 2, RheaModel::kNumFlavors, 4);
+    prhea = std::make_unique<RheaModel>(rhea_model_path, n_capacity);
+  }
+#endif
 }
 
 //----------------------------------------------------------------------------------------
