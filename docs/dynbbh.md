@@ -50,6 +50,10 @@ simulation time so a restart does not restart the radius transition.
 non-positive radius selects the instantaneous Kerr horizon radius
 `M(1+sqrt(1-|chi|^2))`.  `excise_to_horizon` always uses that radius,
 `excise_cap_to_horizon` caps a fixed requested radius, and
+`excise_horizon_fraction` (default 1, range `(0,1]`) scales the horizon target
+of the automatic, capped, direct and shrinking radius modes. This permits an
+interior target such as `0.8*rH` without changing the current mass/spin tracking.
+See [multi-stage disk zoom](dynbbh_zoom.md) for a portable restart workflow.
 `excise_shrink_to_horizon` transitions from the requested radius to the
 horizon with a cubic smoothstep over `excise_shrink_timescale`.  The last two
 time controls are `excise_shrink_start_time` and

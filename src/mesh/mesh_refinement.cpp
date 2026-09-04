@@ -691,6 +691,10 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     // With dynGRMHD, recalculate ADM variables
     if ((pz4c == nullptr) && (padm != nullptr)) {
       padm->SetADMVariables(pm->pmb_pack);
+      // Coordinates were just recreated; restore masks before the ensuing C2P.
+      if (pm->pmb_pack->pcoord->coord_data.bh_excise) {
+        pm->pmb_pack->pcoord->UpdateExcisionMasks();
+      }
     }
     // With radiation, compute tetrads and associated mesh arrays
     if (prad != nullptr) {

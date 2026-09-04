@@ -462,7 +462,10 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool res_flag) {
   //---- Step 1.  Set conserved variables in ghost zones for all physics
+  auto pdyngr = pmesh->pmb_pack->pdyngr;
+  if (pdyngr != nullptr) pdyngr->restart_primitive_recovery = res_flag;
   InitBoundaryValuesAndPrimitives(pmesh);
+  if (pdyngr != nullptr) pdyngr->restart_primitive_recovery = false;
 
   //---- Step 2.  Compute time step (if problem involves time evolution)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;

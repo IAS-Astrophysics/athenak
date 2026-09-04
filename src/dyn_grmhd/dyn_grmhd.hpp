@@ -81,6 +81,9 @@ class DynGRMHD {
   TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
+  // Startup C2P reconstructs an already projected checkpoint, not an RK update.
+  bool restart_primitive_recovery = false;
+
   // functions
 
   virtual void QueueDynGRMHDTasks() = 0;

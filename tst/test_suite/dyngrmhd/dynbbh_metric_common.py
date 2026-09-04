@@ -403,6 +403,43 @@ def run_excision_checks():
     """Check two-hole mask geometry, unresolved sinks, and CT divB control."""
     common = _excision_mesh_args()
 
+    # Fractional Kerr targets must agree across automatic, capped, direct and
+    # completed-ramp modes. Verify the actual spin-oriented mask, not just inputs.
+    table = Path("dynbbh_fraction.traj").resolve()
+    write_trajectory_rows(table, [
+        trajectory_row(t, 1.0, 0.1, (0.0, 0.0, 0.0), (20.0, 0.0, 0.0),
+                       (0.0, 0.0, 0.6), (0.0, 0.0, 0.0)) for t in (0.0, 1.0)
+    ])
+    fraction_args = [
+        "problem/use_traj_table=true", f"problem/traj_file={table}",
+        "time/nlim=0", "time/tlim=0", "output1/variable=mhd_w_d",
+        "mesh/nx1=64", "mesh/x1min=-4", "mesh/x1max=4",
+        "mesh/nx2=1", "mesh/x2min=-0.5", "mesh/x2max=0.5",
+        "mesh/nx3=1", "mesh/x3min=-0.5", "mesh/x3max=0.5",
+        "meshblock/nx1=64", "meshblock/nx2=1", "meshblock/nx3=1",
+        "coord/excision_scheme=puncture", "coord/smooth_excision=false",
+        "coord/excise_horizon_fraction=0.5",
+    ]
+    modes = [[], ["coord/excise_to_horizon=true"],
+             ["coord/excise_cap_to_horizon=true", "coord/excise_1_rad=5"],
+             ["coord/excise_shrink_to_horizon=true", "coord/excise_1_rad=5",
+              "coord/excise_shrink_start_time=-1", "coord/excise_shrink_timescale=1"]]
+    for i, mode in enumerate(modes):
+        basename = f"dynbbh_fraction_{i}"
+        subprocess.check_call(["./athena", "-i", INPUT_FILE,
+                               f"job/basename={basename}", *fraction_args, *mode])
+        data = np.loadtxt(Path("tab") / f"{basename}.mhd_w_d.00000.tab", ndmin=2)
+        # Along the equator: r_KS^2=max(x^2-a^2,0); target = .5*(1+.8)=.9.
+        expected = data[:, 2]**2 <= 0.9**2 + 0.6**2
+        np.testing.assert_array_equal(data[:, 3] > 5e-9, expected)
+    for invalid in ("0", "1.1", "nan"):
+        failure = subprocess.run([
+            "./athena", "-i", INPUT_FILE, *fraction_args,
+            f"coord/excise_horizon_fraction={invalid}",
+        ], capture_output=True, text=True)
+        assert failure.returncode != 0
+        assert "excise_horizon_fraction must be" in failure.stdout
+
     # With RK1 the only primitive recovery in the cycle must see the new
     # stage-time mask.  This table both reduces and rotates chi, expanding the
     # x-axis horizon across the cell centered at x=1.75.
@@ -505,6 +542,7 @@ def run_excision_checks():
     ]
     shrink = [
         "coord/excise_shrink_to_horizon=true",
+        "coord/excise_horizon_fraction=0.8",
         "coord/excise_shrink_timescale=1",
         "coord/excise_shrink_start_time=0",
     ]

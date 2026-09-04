@@ -309,7 +309,8 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &bcc0, DvceArray5D<Real> &prim,
                   DvceArray5D<Real> &temperature,
                   const int il, const int iu, const int jl, const int ju,
-                  const int kl, const int ku, bool floors_only=false) {
+                  const int kl, const int ku, bool floors_only=false,
+                  const bool apply_smooth_projection=true) {
     const int nhyd = pmy_pack->pmhd->nmhd;
     const int nscal = pmy_pack->pmhd->nscalars;
     const int nmb = pmy_pack->nmb_thispack;
@@ -495,7 +496,10 @@ class PrimitiveSolverHydro {
         result = ps_.ConToPrim(prim_pt, cons_pt, b3u, g3d, g3u);
       }
 
-      if (!floors_only && smooth_excise_ && excise_weight > 0.0) {
+      // A restart needs primitive reconstruction without applying the
+      // non-idempotent smooth projection again. Keep failed-recovery fallback.
+      if (!floors_only && smooth_excise_ && excise_weight > 0.0 &&
+          (apply_smooth_projection || result.error != Primitive::Error::SUCCESS)) {
         Real rhotarget = dexcise_/mb;
         if (excise_sigma_max_ > 0.0) {
           Real b2cc = SQR(bcc0(m, IBX, k, j, i)) + SQR(bcc0(m, IBY, k, j, i)) +

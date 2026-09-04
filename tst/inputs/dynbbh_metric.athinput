@@ -58,6 +58,7 @@ excise_2_rad = -1.0
 excise_cap_to_horizon = false
 excise_to_horizon = false
 excise_shrink_to_horizon = false
+excise_horizon_fraction = 1.0
 excise_shrink_timescale = 50.0
 excise_shrink_start_time = 0.0
 require_resolved_horizon = false

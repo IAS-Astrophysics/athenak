@@ -1,0 +1,21 @@
+{
+  "max_level": 5,
+  "max_nmb_per_rank": 4096,
+  "excision_radii": [4.0, 4.0],
+  "horizon_fraction": 0.8,
+  "shrink_start_time": 1600.0,
+  "shrink_timescale": 400.0,
+  "restart_dt": 20.0,
+  "stages": [
+    {"name": "outer", "end_time": 1000.0, "tracker_level": 0,
+     "tracker_radius": 3.0, "regions": [[30.0, 0]]},
+    {"name": "inner", "end_time": 1400.0, "tracker_level": 2,
+     "tracker_radius": 3.0, "regions": [[30.0, 1], [12.0, 2]]},
+    {"name": "resolve", "end_time": 1600.0, "tracker_level": 5,
+     "tracker_radius": 3.0, "regions": [[30.0, 1], [12.0, 2]]},
+    {"name": "shrink", "end_time": 2000.0, "tracker_level": 5,
+     "tracker_radius": 3.0, "regions": [[30.0, 1], [12.0, 2]]},
+    {"name": "settle", "end_time": 2400.0, "tracker_level": 5,
+     "tracker_radius": 3.0, "regions": [[30.0, 1], [12.0, 2]]}
+  ]
+}

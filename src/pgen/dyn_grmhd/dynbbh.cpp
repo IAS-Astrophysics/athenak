@@ -208,6 +208,7 @@ struct bbh_pgen {
   bool puncture_excise_cap_to_horizon = false;
   bool puncture_excise_to_horizon = false;
   bool puncture_excise_shrink_to_horizon = false;
+  Real puncture_excise_horizon_fraction = 1.0;
   bool require_resolved_horizon = false;
   bool unresolved_sink = false;
   Real spin;
@@ -694,6 +695,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       "coord", "excise_shrink_timescale", 50.0);
   bbh.puncture_excise_shrink_start_time = pin->GetOrAddReal(
       "coord", "excise_shrink_start_time", 0.0);
+  bbh.puncture_excise_horizon_fraction = pin->GetOrAddReal(
+      "coord", "excise_horizon_fraction", 1.0);
+  if (!(bbh.puncture_excise_horizon_fraction > 0.0 &&
+        bbh.puncture_excise_horizon_fraction <= 1.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "coord/excise_horizon_fraction must be in (0,1]"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (bbh.puncture_excise_shrink_to_horizon &&
       !(bbh.puncture_excise_shrink_timescale > 0.0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -906,6 +916,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
       post_restart_primitive_init_func = InitializeDynBBHRestartDynRadiation;
     }
+  }
+
+  if (restart) {
+    // Coordinates/masks are not checkpoint payloads. Restore the current
+    // puncture geometry before startup primitive recovery and timestep checks.
+    pmbp->padm->SetADMVariables(pmbp);
+    if (pmbp->pcoord->coord_data.bh_excise) pmbp->pcoord->UpdateExcisionMasks();
   }
 
   // The reconstructed problem generator initializes a Chakrabarti torus by
@@ -1797,9 +1814,10 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   coord.punc_1_vel[0] = bbh_traj_0[VX2];
   coord.punc_1_vel[1] = bbh_traj_0[VY2];
   coord.punc_1_vel[2] = bbh_traj_0[VZ2];
-  const Real rH1 = HorizonRadiusFromMassAndChi(
+  // Host-side stage-time targets; no additional device work or global capture.
+  const Real rH1 = bbh.puncture_excise_horizon_fraction*HorizonRadiusFromMassAndChi(
       m1, bbh_traj_0[AX1], bbh_traj_0[AY1], bbh_traj_0[AZ1]);
-  const Real rH2 = HorizonRadiusFromMassAndChi(
+  const Real rH2 = bbh.puncture_excise_horizon_fraction*HorizonRadiusFromMassAndChi(
       m2, bbh_traj_0[AX2], bbh_traj_0[AY2], bbh_traj_0[AZ2]);
   coord.punc_0_rad = SmoothExcisionRadiusToHorizon(
       bbh.puncture_excise_rad1, rH1,
