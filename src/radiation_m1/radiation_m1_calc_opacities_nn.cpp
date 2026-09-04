@@ -470,7 +470,12 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             // eta_0_non_th output because NEPS conserves neutrino number.
             Real eta_1_non_th[4]{}, abs_1_non_th[4]{};
             Real abs_0_non_th[4]{};
-            bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e,
+            // Renamed from bns_nurates() by the largesim-m1 merge; now returns
+            // an int fallback flag (eq-distribution fallback when reconstructed
+            // T_nu > bound). The NN path doesn't track fallback stats, so the
+            // return is intentionally ignored; the fallback + 1/H2 fix apply to
+            // this 1D pair/brem/inelastic call automatically.
+            (void)ComputeNuratesOpacities(nb, T, yp, yn, mu_n, mu_p, mu_e,
                         nudens_0, nudens_1, chi_loc,
                         eta_0_loc, eta_1_loc,
                         abs_0_loc, abs_1_loc,
