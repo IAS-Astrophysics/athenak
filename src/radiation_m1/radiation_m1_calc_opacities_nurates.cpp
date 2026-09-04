@@ -72,6 +72,12 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   DvceArray1D<int> nurates_nerrs_("nurates_nerrs", 1);
   Kokkos::deep_copy(nurates_nerrs_, 0);
   constexpr int nurates_errcap = 100;
+  // Counts cells that fell back to the equilibrium distribution this call
+  // (reconstructed T_nu > max_recon_temp). Only incremented on fallback cells,
+  // and only read back / printed below when non-zero -> no cost in the common
+  // (no-fallback) case.
+  DvceArray1D<int> nfallback_("nfallback", 1);
+  Kokkos::deep_copy(nfallback_, 0);
   // Force the equilibrium distribution for the first eq_warmup_cycles cycles.
   // On a fresh (neutrinoless) start the M1 moments are floored, so
   // reconstructing the distribution from them (use_equilibrium_distribution =
@@ -263,12 +269,16 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real abs_0_non_th_loc[4]{};
 
           // Note: everything sent and received are in code units
-          bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0, nudens_1, chi_loc,
-                      eta_0_loc, eta_1_loc, abs_0_loc, abs_1_loc, scat_0_loc,
-                      scat_1_loc, eta_1_non_th_loc, abs_1_non_th_loc,
+          const int used_fallback =
+              bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0, nudens_1,
+                      chi_loc, eta_0_loc, eta_1_loc, abs_0_loc, abs_1_loc,
+                      scat_0_loc, scat_1_loc, eta_1_non_th_loc, abs_1_non_th_loc,
                       abs_0_non_th_loc,
                       nurates_params_, code_units, eos_units,
                       nurates_units);
+          if (used_fallback) {
+            Kokkos::atomic_fetch_add(&nfallback_(0), 1);
+          }
 
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             const bool bad_m1 =
@@ -763,6 +773,18 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
         }
       });
+
+  // Report equilibrium-fallback usage only when it actually happened (one small
+  // device->host copy of a single int per call; the print is skipped entirely
+  // when there were no fallbacks).
+  auto h_nfallback = Kokkos::create_mirror_view(nfallback_);
+  Kokkos::deep_copy(h_nfallback, nfallback_);
+  if (h_nfallback(0) > 0) {
+    std::cout << "[M1 nurates] equilibrium fallback (recon T_nu > "
+              << nurates_params_.max_recon_temp << " MeV) used in "
+              << h_nfallback(0) << " cell-evals (rank " << rank << ")"
+              << std::endl;
+  }
   return TaskStatus::complete;
 }
 }  // namespace radiationm1
