@@ -6,8 +6,11 @@ from pathlib import Path
 
 import numpy as np
 
+import athena_read
+
 
 INPUT_FILE = "inputs/dynbbh_radiation.athinput"
+CBD_INPUT_FILE = "inputs/dynbbh_radiation_cbd.athinput"
 
 
 def _run(args):
@@ -119,3 +122,63 @@ def run_radiation_regression():
         for directory in (Path("tab"), Path("rst")):
             if directory.is_dir() and not any(directory.iterdir()):
                 shutil.rmtree(directory)
+
+
+def run_cbd_regression():
+    """Evolve a low-resolution radiative CBD and check coupled physical invariants."""
+    basename = "dynbbh_radiation_cbd_regression"
+    _clean_outputs(basename)
+    try:
+        _run(["-i", CBD_INPUT_FILE, f"job/basename={basename}"])
+        rad_paths = sorted(Path("tab").glob(f"{basename}.rad_coord.*.tab"))
+        mhd_paths = sorted(Path("tab").glob(f"{basename}.mhd_w_bcc.*.tab"))
+        assert len(rad_paths) >= 3, rad_paths
+        assert len(mhd_paths) >= 3, mhd_paths
+        rad_initial = athena_read.tab(rad_paths[0])
+        rad_final = athena_read.tab(rad_paths[-1])
+        mhd_initial = athena_read.tab(mhd_paths[0])
+        mhd_final = athena_read.tab(mhd_paths[-1])
+
+        for data in (rad_initial, rad_final, mhd_initial, mhd_final):
+            for key, values in data.items():
+                if isinstance(values, np.ndarray):
+                    assert np.all(np.isfinite(values)), key
+
+        assert np.min(rad_final["r00"]) >= -1.0e-12
+        assert np.max(rad_initial["r00"]) > 0.0
+        assert not np.array_equal(rad_initial["r00"], rad_final["r00"])
+        assert np.min(mhd_final["dens"]) > 0.0
+        assert np.min(mhd_final["press"]) > 0.0
+        assert not np.array_equal(mhd_initial["dens"], mhd_final["dens"])
+
+        density_sum_ratio = np.sum(mhd_final["dens"])/np.sum(mhd_initial["dens"])
+        assert 0.8 < density_sum_ratio < 1.2, density_sum_ratio
+
+        def peak_radius(data):
+            index = int(np.argmax(data["dens"]))
+            return float(abs(data["x1v"][index]))
+
+        r_initial = peak_radius(mhd_initial)
+        r_final = peak_radius(mhd_final)
+        assert abs(r_final - r_initial) < 8.0, (r_initial, r_final)
+
+        radial_velocity = np.sign(mhd_final["x1v"])*mhd_final["velx"]
+        mean_radial_velocity = np.average(radial_velocity, weights=mhd_final["dens"])
+        assert abs(mean_radial_velocity) < 0.5, mean_radial_velocity
+
+        magnetic_initial = sum(np.mean(mhd_initial[name]**2)
+                               for name in ("bcc1", "bcc2", "bcc3"))
+        magnetic_final = sum(np.mean(mhd_final[name]**2)
+                             for name in ("bcc1", "bcc2", "bcc3"))
+        if magnetic_initial > 0.0:
+            assert magnetic_final/magnetic_initial < 10.0, (
+                magnetic_initial, magnetic_final,
+            )
+        print(
+            "short radiative CBD: equatorial density-sum ratio", density_sum_ratio,
+            "density-peak radii", (r_initial, r_final),
+            "density-weighted radial velocity", mean_radial_velocity,
+            "mean B^2", (magnetic_initial, magnetic_final),
+        )
+    finally:
+        _clean_outputs(basename)

@@ -1,0 +1,133 @@
+<comment>
+problem = short low-resolution circumbinary-disk radiative GRMHD evolution
+
+<job>
+basename = dynbbh_radiation_cbd
+
+<mesh>
+nghost = 4
+nx1 = 24
+x1min = -30.0
+x1max = 30.0
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 24
+x2min = -30.0
+x2max = 30.0
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 8
+x3min = -10.0
+x3max = 10.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 4
+
+<mesh_refinement>
+refinement = none
+num_levels = 1
+max_nmb_per_rank = 64
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = 8
+tlim = 10.0
+ndiag = 1
+
+<coord>
+general_rel = true
+m = 1.0
+a = 0.0
+excise = false
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+dfloor = 1.0e-10
+pfloor = 1.0e-18
+tfloor = 1.0e-8
+gamma = 1.44444444444
+fofc = true
+gamma_max = 20.0
+enforce_maximum = false
+calculate_tmunu = false
+
+<adm>
+dynamic = true
+
+<dyn_radiation>
+geometry = adm
+rad_source = true
+kappa_a = 0.01
+kappa_s = 0.01
+kappa_p = 0.0
+arad = 1.0
+nlevel = 1
+rotate_geo = false
+angular_fluxes = true
+reconstruct = plm
+source_max_iter = 8
+source_tolerance = 1.0e-10
+
+<problem>
+sep = 4.0
+q = 1.0
+a1 = 0.2
+a2 = 0.1
+th_a1 = 25.0
+ph_a1 = 15.0
+th_a2 = 50.0
+ph_a2 = 120.0
+metric_derivative = ad
+metric_fd_step = 5.0e-5
+use_traj_table = false
+spin_ramp = false
+user_hist = false
+amr_condition = none
+dfloor = 1.0e-10
+pfloor = 1.0e-18
+unresolved_sink = false
+test_bz_gradient = 0.0
+initialize_torus = true
+r_edge = 10.0
+r_peak = 20.0
+rho_max = 1.0
+rho_min = 1.0e-5
+rho_pow = -1.5
+pgas_min = 3.33e-8
+pgas_pow = -2.5
+tilt_angle = 0.0
+pert_amp = 0.0
+potential_beta_min = 100.0
+potential_cutoff = 0.2
+potential_falloff = 0.0
+potential_r_pow = 0.0
+potential_rho_pow = 1.0
+vertical_field = false
+
+<output1>
+file_type = tab
+variable = rad_coord
+id = rad_coord
+data_format = %.17e
+dcycle = 4
+slice_x2 = 0.0
+slice_x3 = 0.0
+
+<output2>
+file_type = tab
+variable = mhd_w_bcc
+id = mhd_w_bcc
+data_format = %.17e
+dcycle = 4
+slice_x2 = 0.0
+slice_x3 = 0.0

@@ -735,53 +735,30 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
   if (pmbp->phydro != nullptr) {
     nvars = pmbp->phydro->nhydro;
 
-    auto &is_ideal_ = pmbp->phydro->peos->eos_data.is_ideal;
     auto &u0_ = pmbp->phydro->u0;
     auto &u1_ = pmbp->phydro->u1;
 
     const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    array_sum::GlobalSum sum_this_mb;
-    Kokkos::parallel_reduce("L1-err",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
-      // compute n,k,j,i indices of thread
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
-
-      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-
-      // conserved variables:
-      array_sum::GlobalSum evars;
-      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IDN]);
-      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IM1]);
-      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IM2]);
-      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IM3]);
-      if (is_ideal_) {
-        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
-        max_err = fmax(max_err, evars.the_array[IEN]);
-      }
-
-      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
-        evars.the_array[n] = 0.0;
-      }
-
-      // sum into parallel reduce
-      mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
-
-    // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
-      l1_err[n] = sum_this_mb.the_array[n];
+      Real variable_sum = 0.0;
+      Real variable_max = 0.0;
+      Kokkos::parallel_reduce("L1-err",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &sum, Real &max_err) {
+        int m = idx/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+        const Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+        const Real error = vol*fabs(u0_(m,n,k,j,i) - u1_(m,n,k,j,i));
+        sum += error;
+        max_err = fmax(max_err, error);
+      }, Kokkos::Sum<Real>(variable_sum), Kokkos::Max<Real>(variable_max));
+      l1_err[n+nprev] = variable_sum;
+      linfty_err = fmax(linfty_err, variable_max);
     }
     nprev += nvars;
   }
@@ -789,14 +766,7 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
   // compute errors for MHD  -------------------------------------------------------------
   if (pmbp->pmhd != nullptr) {
     nvars = pmbp->pmhd->nmhd + 3;  // include 3-compts of cell-centered B in errors
-    auto &is_ideal_ = pmbp->pmhd->peos->eos_data.is_ideal;
-
-    int bindx;
-    if (is_ideal_) {
-      bindx = 5;
-    } else {
-      bindx = 4;
-    }
+    const int nmhd = pmbp->pmhd->nmhd;
 
     auto &u0_ = pmbp->pmhd->u0;
     auto &u1_ = pmbp->pmhd->u1;
@@ -806,62 +776,40 @@ void ProblemGenerator::OutputErrors(ParameterInput *pin, Mesh *pm) {
     const int nmkji = (pmbp->nmb_thispack)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    array_sum::GlobalSum sum_this_mb;
-    Kokkos::parallel_reduce("L1-err-Sums",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum, Real &max_err) {
-      // compute n,k,j,i indices of thread
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
-
-      Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
-
-      // conserved variables:
-      array_sum::GlobalSum evars;
-      evars.the_array[IDN] = vol*fabs(u0_(m,IDN,k,j,i) - u1_(m,IDN,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IDN]);
-      evars.the_array[IM1] = vol*fabs(u0_(m,IM1,k,j,i) - u1_(m,IM1,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IM1]);
-      evars.the_array[IM2] = vol*fabs(u0_(m,IM2,k,j,i) - u1_(m,IM2,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IM2]);
-      evars.the_array[IM3] = vol*fabs(u0_(m,IM3,k,j,i) - u1_(m,IM3,k,j,i));
-      max_err = fmax(max_err, evars.the_array[IM3]);
-      if (is_ideal_) {
-        evars.the_array[IEN] = vol*fabs(u0_(m,IEN,k,j,i) - u1_(m,IEN,k,j,i));
-        max_err = fmax(max_err, evars.the_array[IEN]);
-      }
-
-      // cell-centered B
-      Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
-      Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
-      evars.the_array[bindx] = vol*fabs(bcc0 - bcc1);
-      max_err = fmax(max_err, evars.the_array[IEN+1]);
-
-      bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
-      bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
-      evars.the_array[bindx+1] = vol*fabs(bcc0 - bcc1);
-      max_err = fmax(max_err, evars.the_array[IEN+2]);
-
-      bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
-      bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
-      evars.the_array[bindx+2] = vol*fabs(bcc0 - bcc1);
-      max_err = fmax(max_err, evars.the_array[IEN+3]);
-
-      // fill rest of the_array with zeros, if narray < NREDUCTION_VARIABLES
-      for (int n=nvars; n<NREDUCTION_VARIABLES; ++n) {
-        evars.the_array[n] = 0.0;
-      }
-
-      // sum into parallel reduce
-      mb_sum += evars;
-    }, Kokkos::Sum<array_sum::GlobalSum>(sum_this_mb), Kokkos::Max<Real>(linfty_err));
-
-    // store data into l1_err array
     for (int n=0; n<nvars; ++n) {
-      l1_err[n+nprev] = sum_this_mb.the_array[n];
+      Real variable_sum = 0.0;
+      Real variable_max = 0.0;
+      Kokkos::parallel_reduce("L1-err-Sums",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &sum, Real &max_err) {
+        int m = idx/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+        const Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+        Real error = 0.0;
+        if (n < nmhd) {
+          error = vol*fabs(u0_(m,n,k,j,i) - u1_(m,n,k,j,i));
+        } else if (n == nmhd) {
+          const Real bcc0 = 0.5*(b0_.x1f(m,k,j,i) + b0_.x1f(m,k,j,i+1));
+          const Real bcc1 = 0.5*(b1_.x1f(m,k,j,i) + b1_.x1f(m,k,j,i+1));
+          error = vol*fabs(bcc0 - bcc1);
+        } else if (n == nmhd+1) {
+          const Real bcc0 = 0.5*(b0_.x2f(m,k,j,i) + b0_.x2f(m,k,j+1,i));
+          const Real bcc1 = 0.5*(b1_.x2f(m,k,j,i) + b1_.x2f(m,k,j+1,i));
+          error = vol*fabs(bcc0 - bcc1);
+        } else {
+          const Real bcc0 = 0.5*(b0_.x3f(m,k,j,i) + b0_.x3f(m,k+1,j,i));
+          const Real bcc1 = 0.5*(b1_.x3f(m,k,j,i) + b1_.x3f(m,k+1,j,i));
+          error = vol*fabs(bcc0 - bcc1);
+        }
+        sum += error;
+        max_err = fmax(max_err, error);
+      }, Kokkos::Sum<Real>(variable_sum), Kokkos::Max<Real>(variable_max));
+      l1_err[n+nprev] = variable_sum;
+      linfty_err = fmax(linfty_err, variable_max);
     }
     nprev += nvars;
   }
@@ -977,6 +925,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     OrszagTang(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_equilibration") == 0) {
+    RadiationEquilibration(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_beam") == 0) {
     RadiationBeam(pin, is_restart);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
