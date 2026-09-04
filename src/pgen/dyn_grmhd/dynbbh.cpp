@@ -33,6 +33,8 @@
 #include "outputs/outputs.hpp"
 #include "parameter_input.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "units/units.hpp"
 #include "utils/flux_generalized.hpp"
 
 
@@ -212,6 +214,7 @@ struct bbh_pgen {
 
   Real dexcise, pexcise;                      // excision parameters
   Real arad;                                  // radiation constant
+  Real restart_seed_erad_fraction;            // multiplier for old GRMHD restart seed
   Real r_edge, r_peak, l, rho_max;            // fixed torus parameters
   Real l_peak;                                // fixed torus parameters
   Real c_param;                               // calculated chakrabarti parameter
@@ -476,6 +479,8 @@ KOKKOS_INLINE_FUNCTION
 Real A2(const bbh_pgen& pgen, Real x1, Real x2, Real x3);
 KOKKOS_INLINE_FUNCTION
 Real A3(const bbh_pgen& pgen, Real x1, Real x2, Real x3);
+
+void InitializeDynBBHRestartDynRadiation(Mesh *pm);
 } // namespace
 
 //----------------------------------------------------------------------------------------
@@ -855,6 +860,54 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     user_hist_func = DynBBHFluxHistory;
   }
 
+  if (pmbp->prad != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh uses ADM background data and is incompatible "
+              << "with legacy <radiation>; use <dyn_radiation> instead." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmbp->pdynrad != nullptr) {
+    if (!(pmbp->pdynrad->use_adm_geometry)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "dynbbh <dyn_radiation> requires geometry='adm'."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (pmbp->pdynrad->are_units_enabled) {
+      bbh.arad = pmbp->punit->rad_constant_cgs*
+                 SQR(SQR(pmbp->punit->temperature_cgs()))/
+                 pmbp->punit->pressure_cgs();
+    } else {
+      bbh.arad = pin->GetReal("dyn_radiation", "arad");
+    }
+    if (!(bbh.arad > 0.0) || !std::isfinite(bbh.arad)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "dynbbh <dyn_radiation> requires a positive finite "
+                << "radiation constant." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    bbh.restart_seed_erad_fraction =
+        pin->GetOrAddReal("dyn_radiation", "restart_seed_erad_fraction", 1.0);
+    if (!(bbh.restart_seed_erad_fraction >= 0.0) ||
+        !std::isfinite(bbh.restart_seed_erad_fraction)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "dynbbh dyn_radiation/restart_seed_erad_fraction "
+                << "must be finite and non-negative." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    pmbp->padm->SetADMVariables(pmbp);
+    pmbp->pdynrad->PrepareADMGeometry();
+    if (restart_missing_dynrad_i0) {
+      if (pmbp->pmhd == nullptr || pmbp->pdyngr == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "dynbbh restart activation of <dyn_radiation> "
+                  << "requires Valencia GRMHD." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      post_restart_primitive_init_func = InitializeDynBBHRestartDynRadiation;
+    }
+  }
+
   // The reconstructed problem generator initializes a Chakrabarti torus by
   // default.  Retain an explicit atmosphere mode for metric, excision, and
   // refinement regressions and for compatibility with earlier dynbbh inputs.
@@ -928,6 +981,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pmbp->pcoord->UpdateExcisionMasks();
       pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
     }
+    if (pmbp->pdynrad != nullptr) {
+      Kokkos::deep_copy(pmbp->pdynrad->i0, 0.0);
+    }
     return;
   }
 
@@ -935,7 +991,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   bbh.spin = 0.0;
   bbh.d = 1.0;
-  const bool is_radiation_enabled = (pmbp->prad != nullptr);
+  const bool is_radiation_enabled = (pmbp->pdynrad != nullptr);
 
   // capture variables for the kernel
   const auto indcs = pmy_mesh_->mb_indcs;
@@ -967,15 +1023,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Extract radiation parameters if enabled
   int nangles_;
   DualArray2D<Real> nh_c_;
-  DvceArray6D<Real> norm_to_tet_, tet_c_, tetcov_c_;
+  DvceArray6D<Real> norm_to_tet_;
+  DvceArray4D<Real> sqrt_detg_c_;
   DvceArray5D<Real> i0_;
   if (is_radiation_enabled) {
-    nangles_ = pmbp->prad->prgeo->nangles;
-    nh_c_ = pmbp->prad->nh_c;
-    norm_to_tet_ = pmbp->prad->norm_to_tet;
-    tet_c_ = pmbp->prad->tet_c;
-    tetcov_c_ = pmbp->prad->tetcov_c;
-    i0_ = pmbp->prad->i0;
+    nangles_ = pmbp->pdynrad->prgeo->nangles;
+    nh_c_ = pmbp->pdynrad->nh_c;
+    norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
+    sqrt_detg_c_ = pmbp->pdynrad->sqrt_detg_c;
+    i0_ = pmbp->pdynrad->i0;
   }
 
   // Get ideal gas EOS data
@@ -985,12 +1041,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     bbh.gamma_adi = pmbp->pmhd->peos->eos_data.gamma;
   }
   Real gm1 = bbh.gamma_adi - 1.0;
-
-  // Get Radiation constant (if radiation enabled)
-  if (pmbp->prad != nullptr) {
-    bbh.arad = pmbp->prad->arad;
-  }
-
 
   // global parameters
   bbh.rho_min = pin->GetReal("problem", "rho_min");
@@ -1219,9 +1269,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         Real n0_f = u_tet_[0]*nh_c_.d_view(n,0) - un_t;
 
         // Calculate intensity in tetrad frame
-        Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-        i0_(m,n,k,j,i) = n0*n_0*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+        const Real sqrt_detg = sqrt_detg_c_(m,k,j,i);
+        Real intensity = 0.0;
+        if (Kokkos::isfinite(n0_f) && n0_f > 0.0 &&
+            Kokkos::isfinite(sqrt_detg) && sqrt_detg > 0.0 &&
+            Kokkos::isfinite(urad) && urad >= 0.0) {
+          intensity = sqrt_detg*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+          if (!(Kokkos::isfinite(intensity)) || intensity < 0.0) intensity = 0.0;
+        }
+        i0_(m,n,k,j,i) = intensity;
       }
     }
     // Compute total pressure (equal to gas pressure in non-radiating runs)
@@ -1605,6 +1661,95 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 }
 
 namespace {
+
+void InitializeDynBBHRestartDynRadiation(Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pdynrad == nullptr || pmbp->pmhd == nullptr ||
+      pmbp->pdyngr == nullptr || pmbp->padm == nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "dynbbh restart radiation initialization requires "
+              << "<dyn_radiation>, MHD, Valencia GRMHD, and ADM variables."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  pmbp->padm->SetADMVariables(pmbp);
+  pmbp->pdynrad->PrepareADMGeometry();
+  if (pmbp->pcoord->coord_data.bh_excise) {
+    pmbp->pcoord->UpdateExcisionMasks();
+  }
+  if (pmbp->nmb_thispack == 0) return;
+
+  const auto indcs = pm->mb_indcs;
+  const int is = indcs.is, ie = indcs.ie;
+  const int js = indcs.js, je = indcs.je;
+  const int ks = indcs.ks, ke = indcs.ke;
+  const int nmb1 = pmbp->nmb_thispack - 1;
+  const int nang1 = pmbp->pdynrad->prgeo->nangles - 1;
+
+  auto w0 = pmbp->pmhd->w0;
+  auto i0 = pmbp->pdynrad->i0;
+  auto nh_c = pmbp->pdynrad->nh_c;
+  auto norm_to_tet = pmbp->pdynrad->norm_to_tet;
+  auto sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+  auto adm_g_dd_c = pmbp->pdynrad->adm_g_dd_c;
+  const bool use_excise = pmbp->pcoord->coord_data.bh_excise;
+  auto excision_floor = pmbp->pcoord->excision_floor;
+
+  const Real density_floor = 10.0*pmbp->pmhd->peos->eos_data.dfloor;
+  const Real pressure_floor = pmbp->pmhd->peos->eos_data.pfloor;
+  const Real arad = bbh.arad;
+  const Real seed_erad_fraction = bbh.restart_seed_erad_fraction;
+
+  par_for("dynbbh_restart_dynrad_i0", DevExeSpace(),
+          0,nmb1,0,nang1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    Real intensity = 0.0;
+    bool seed_radiation = !(use_excise && excision_floor(m,k,j,i));
+
+    const Real rho = w0(m,IDN,k,j,i);
+    const Real pgas = w0(m,IPR,k,j,i);
+    if (!(rho > density_floor) || !(pgas > pressure_floor) ||
+        !(Kokkos::isfinite(rho)) || !(Kokkos::isfinite(pgas))) {
+      seed_radiation = false;
+    }
+
+    if (seed_radiation) {
+      const Real uu1 = w0(m,IVX,k,j,i);
+      const Real uu2 = w0(m,IVY,k,j,i);
+      const Real uu3 = w0(m,IVZ,k,j,i);
+      const Real q = adm_g_dd_c(m,0,0,k,j,i)*uu1*uu1 +
+                     2.0*adm_g_dd_c(m,0,1,k,j,i)*uu1*uu2 +
+                     2.0*adm_g_dd_c(m,0,2,k,j,i)*uu1*uu3 +
+                     adm_g_dd_c(m,1,1,k,j,i)*uu2*uu2 +
+                     2.0*adm_g_dd_c(m,1,2,k,j,i)*uu2*uu3 +
+                     adm_g_dd_c(m,2,2,k,j,i)*uu3*uu3;
+      if (Kokkos::isfinite(q) && 1.0 + q > 0.0) {
+        const Real uu0 = sqrt(1.0 + q);
+        Real u_tet[4];
+        for (int a=0; a<4; ++a) {
+          u_tet[a] = norm_to_tet(m,a,0,k,j,i)*uu0 +
+                     norm_to_tet(m,a,1,k,j,i)*uu1 +
+                     norm_to_tet(m,a,2,k,j,i)*uu2 +
+                     norm_to_tet(m,a,3,k,j,i)*uu3;
+        }
+        const Real n0_f = u_tet[0]*nh_c.d_view(n,0) -
+                          u_tet[1]*nh_c.d_view(n,1) -
+                          u_tet[2]*nh_c.d_view(n,2) -
+                          u_tet[3]*nh_c.d_view(n,3);
+        const Real temp = pgas/rho;
+        const Real urad = seed_erad_fraction*arad*SQR(SQR(temp));
+        if (Kokkos::isfinite(n0_f) && n0_f > 0.0 &&
+            Kokkos::isfinite(urad) && urad >= 0.0) {
+          intensity = sqrt_detg_c(m,k,j,i)*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+          if (!(Kokkos::isfinite(intensity)) || intensity < 0.0) intensity = 0.0;
+        }
+      }
+    }
+    i0(m,n,k,j,i) = intensity;
+  });
+  DevExeSpace().fence();
+}
 
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   const Real tt = pmbp->pcoord->coord_data.metric_time;

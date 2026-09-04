@@ -19,6 +19,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "refinement_criteria.hpp"
 #include "utils/utils.hpp"
 
@@ -83,7 +84,7 @@ RefinementCriteria::RefinementCriteria(Mesh *pm, ParameterInput *pin) :
       Kokkos::abort("MHD refinement variable used but <mhd> not defined");
     }
     if ((it->rvariable.compare(0, 3, "rad") == 0) &&
-        (pm->pmb_pack->prad == nullptr)) {
+        (pm->pmb_pack->prad == nullptr && pm->pmb_pack->pdynrad == nullptr)) {
       std::cout<<"### FATAL ERROR in "<<__FILE__<<" at line "<<__LINE__<<std::endl;
       Kokkos::abort("radiation refinement variable used but <radiation> not defined");
     }

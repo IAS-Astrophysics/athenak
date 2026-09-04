@@ -27,6 +27,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "particles/particles.hpp"
 #include "units/units.hpp"
@@ -71,6 +72,7 @@ MeshBlockPack::~MeshBlockPack() {
   }
   if (pturb  != nullptr) {delete pturb;}
   if (prad   != nullptr) {delete prad;}
+  if (pdynrad != nullptr) {delete pdynrad;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (phydro != nullptr) {delete phydro;}
   if (punit  != nullptr) {delete punit;}
@@ -121,6 +123,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("dyn_radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       phydro->AssembleHydroTasks(tl_map);
     }
@@ -134,6 +137,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("dyn_radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pmhd->AssembleMHDTasks(tl_map);
     }
@@ -169,6 +173,20 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
 
   // (5) RADIATION
   // Create radiation physics module.  Create tasklist.
+  if (pin->DoesBlockExist("radiation") && pin->DoesBlockExist("dyn_radiation")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<radiation> and <dyn_radiation> are separate solvers; "
+              << "enable only one in a run." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pin->DoesBlockExist("radiation") &&
+      (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Legacy <radiation> cannot be combined with ADM/Z4c "
+              << "backgrounds; use <dyn_radiation> for ADM radiation transport."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
@@ -228,9 +246,20 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ptmunu = new Tmunu(this, pin);
   }
 
+  // Construct dynamical-metric radiation after ADM/Z4c so its geometry is available,
+  // and before assembling the numerical-relativity task graph.
+  if (pin->DoesBlockExist("dyn_radiation")) {
+    pdynrad = new dyn_radiation::DynRadiation(this, pin);
+    nphysics++;
+  } else {
+    pdynrad = nullptr;
+  }
+
   if (pz4c != nullptr || padm != nullptr) {
     pnr = new numrel::NumericalRelativity(this, pin);
     pnr->AssembleNumericalRelativityTasks(tl_map);
+  } else if (pdynrad != nullptr) {
+    pdynrad->AssembleRadTasks(tl_map);
   }
 
   // (9) PARTICLES

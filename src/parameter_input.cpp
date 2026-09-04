@@ -107,7 +107,7 @@ void ParameterInput::CheckBlockNames() {
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
     "coord", "adm", "shearing_box",
     "time", "problem", "output", "units",
-    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
+    "hydro", "mhd", "ion-neutral", "radiation", "dyn_radiation", "z4c", "z4c_amr", "cce",
     "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles", "turb_driving",
     "gravity", "fastflow"
     };
@@ -371,6 +371,20 @@ void ParameterInput::ModifyFromCmdline(int argc, char *argv[]) {
   InputBlock *pb;
   InputLine *pl;
 
+  // An old restart cannot contain a dyn_radiation block.  Permit that one block and
+  // its parameters to be supplied on the command line only with the explicit opt-in
+  // used by the missing-intensity migration path.  All other command-line overrides
+  // retain the usual requirement that the block and parameter already exist.
+  bool allow_dynrad_restart_activation = false;
+  for (int i=1; i<argc; ++i) {
+    input_text = argv[i];
+    if (input_text == "dyn_radiation/allow_missing_restart_i0=true" ||
+        input_text == "dyn_radiation/allow_missing_restart_i0=1") {
+      allow_dynrad_restart_activation = true;
+      break;
+    }
+  }
+
   for (int i=1; i<argc; i++) {
     input_text = argv[i];
     std::size_t slash_posn = input_text.find_first_of("/");   // find "/" character
@@ -386,6 +400,11 @@ void ParameterInput::ModifyFromCmdline(int argc, char *argv[]) {
 
     // get pointer to node with same block name in linked list of InputBlocks
     pb = GetPtrToBlock(block);
+    const bool add_dynrad_parameter =
+        allow_dynrad_restart_activation && block == "dyn_radiation";
+    if (pb == nullptr && add_dynrad_parameter) {
+      pb = FindOrAddBlock(block);
+    }
     if (pb == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Block name '" << block << "' on command line not found"
@@ -395,6 +414,10 @@ void ParameterInput::ModifyFromCmdline(int argc, char *argv[]) {
 
     // get pointer to node with same parameter name in linked list of InputLines
     pl = pb->GetPtrToLine(name);
+    if (pl == nullptr && add_dynrad_parameter) {
+      AddParameter(pb, name, value, "# Added from command line");
+      continue;
+    }
     if (pl == nullptr) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Parameter '" << name << "' in block '" << block

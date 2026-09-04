@@ -26,6 +26,7 @@
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
@@ -137,6 +138,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   adm::ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad=pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad=pm->pmb_pack->pdynrad;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
   int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0;
   if (phydro != nullptr) {
@@ -147,6 +149,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  } else if (pdynrad != nullptr) {
+    nrad = pdynrad->prgeo->nangles;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
@@ -248,6 +252,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #endif
 
   IOWrapperSizeT data_size_ = 0;
+  IOWrapperSizeT radiation_data_size = 0;
   if (phydro != nullptr) {
     data_size_ += nout1*nout2*nout3*nhydro*sizeof(Real); // hydro u0
   }
@@ -257,8 +262,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*(nout2+1)*nout3*sizeof(Real);    // mhd b0.x2f
     data_size_ += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
   }
-  if (prad != nullptr) {
-    data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad i0
+  if (prad != nullptr || pdynrad != nullptr) {
+    radiation_data_size = nout1*nout2*nout3*nrad*sizeof(Real);
+    data_size_ += radiation_data_size;                    // rad i0
   }
   if (pturb != nullptr) {
     data_size_ += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
@@ -269,7 +275,16 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
 
-  if (data_size_ != data_size) {
+  bool missing_dynrad_i0 = false;
+  if (pdynrad != nullptr && prad == nullptr && radiation_data_size > 0) {
+    const bool allow_missing_i0 =
+        pin->GetOrAddBoolean("dyn_radiation", "allow_missing_restart_i0", false);
+    missing_dynrad_i0 = allow_missing_i0 && data_size < data_size_ &&
+                        data_size_ - data_size == radiation_data_size;
+  }
+  restart_missing_dynrad_i0 = missing_dynrad_i0;
+
+  if (data_size_ != data_size && !missing_dynrad_i0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro, MHD, Rad, and/or Z4c arrays, restart file is broken."
@@ -280,7 +295,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // read CC data into host array
   IOWrapperSizeT offset_myrank = headeroffset;
   if (!single_file_per_rank) {
-    offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
+    offset_myrank += data_size * pm->gids_eachrank[global_variable::my_rank];
   }
   IOWrapperSizeT myoffset = offset_myrank;
 
@@ -475,7 +490,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     myoffset = offset_myrank;
   }
 
-  if (prad != nullptr) {
+  if (missing_dynrad_i0) {
+    Kokkos::deep_copy(pdynrad->i0, 0.0);
+  } else if (prad != nullptr || pdynrad != nullptr) {
     Kokkos::realloc(ccin, nmb, nrad, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to read, so read collectively
@@ -509,9 +526,14 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         myoffset += data_size;
       }
     }
-    Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
-                      Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
-    offset_myrank += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
+    if (prad != nullptr) {
+      Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    } else {
+      Kokkos::deep_copy(Kokkos::subview(pdynrad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    }
+    offset_myrank += radiation_data_size;
     myoffset = offset_myrank;
   }
 

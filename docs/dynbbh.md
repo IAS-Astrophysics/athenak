@@ -153,3 +153,46 @@ The maintained native-output post-processing workflow is documented in
 [`cbd_diagnostics.md`](cbd_diagnostics.md).  It produces AMR-aware radial
 profiles, rest-mass and angular-momentum budgets, torque summaries, and radial
 or moving-horizon flux time series without hard-coded run paths.
+
+## Dynamical-spacetime radiation
+
+Use a `<dyn_radiation>` block, rather than the legacy `<radiation>` solver, for
+radiation transport on the time-dependent ADM background.  The dynbbh problem
+requires `geometry = adm`.  For example:
+
+```text
+<dyn_radiation>
+geometry = adm
+nlevel = 1
+angular_fluxes = true
+reconstruct = plm
+rad_source = true
+kappa_a = 0.01
+kappa_s = 0.01
+kappa_p = 0.0
+arad = 1.0
+```
+
+On a fresh run, dynbbh initializes the angular intensities to an isotropic LTE
+field in the fluid frame using the torus temperature and the instantaneous ADM
+tetrad.  The stored intensities include the `sqrt(gamma)` conservative
+normalization used by the transport solver.  Atmosphere cells and invalid
+metric or thermodynamic states are initialized to zero rather than a non-finite
+intensity.  When a `<units>` block is present, the code-unit radiation constant
+is derived from it; otherwise a positive finite `dyn_radiation/arad` is
+required.
+
+Dynamic-radiation intensities are included in normal restart files.  To enable
+radiation while reading an older restart that has no `<dyn_radiation>` block or
+intensity array, supply the new block's parameters on the restart command line,
+including `dyn_radiation/allow_missing_restart_i0=true`.  This explicit opt-in
+is the only case in which AthenaK permits a missing input block to be created by
+command-line parameters.  Dynbbh then seeds the new field after primitive
+recovery.  The optional
+`dyn_radiation/restart_seed_erad_fraction` (default one) scales that LTE seed;
+cells at the fluid floors or inside excision are left dark.
+
+The solver uses Kokkos execution spaces throughout its transport, ADM tetrad,
+geometric source, matter-coupling, AMR, and initialization kernels.  The compact
+coupled regression input is
+[`tst/inputs/dynbbh_radiation.athinput`](../tst/inputs/dynbbh_radiation.athinput).

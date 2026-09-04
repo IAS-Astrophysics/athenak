@@ -22,6 +22,7 @@ using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserEFieldFnPtr = void (*)(Mesh* pm, DvceEdgeFld4D<Real> &efld);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
+using PostRestartPrimitiveInitFnPtr = void (*)(Mesh *pm);
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -60,6 +61,10 @@ class ProblemGenerator {
   UserEFieldFnPtr user_efield_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
+  PostRestartPrimitiveInitFnPtr post_restart_primitive_init_func=nullptr;
+
+  // True when an older restart was accepted without an active dyn_radiation i0 block.
+  bool restart_missing_dynrad_i0=false;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);
