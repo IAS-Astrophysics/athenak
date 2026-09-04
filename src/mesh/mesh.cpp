@@ -706,10 +706,17 @@ void Mesh::UpdateParticleCounts() {
   MPI_Allgather(&nprtcl_thisrank, 1, MPI_INT, nprtcl_eachrank, 1, MPI_INT,
                 MPI_COMM_WORLD);
 #endif
-  nprtcl_total = 0;
+  std::int64_t total = 0;
   for (int n=0; n<global_variable::nranks; ++n) {
-    nprtcl_total += nprtcl_eachrank[n];
+    total += static_cast<std::int64_t>(nprtcl_eachrank[n]);
   }
+  if (total > std::numeric_limits<int>::max()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Global particle count exceeds the in-memory integer limit" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  nprtcl_total = static_cast<int>(total);
 }
 
 //----------------------------------------------------------------------------------------

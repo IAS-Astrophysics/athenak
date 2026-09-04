@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "athena.hpp"
@@ -104,15 +105,41 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
               << "Particle module only works in 2D/3D" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
+  for (int dir=0; dir<6; ++dir) {
+    if (pmy_pack->pmesh->mesh_bcs[dir] == BoundaryFlag::shear_periodic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Particles do not support shearing-periodic boundaries" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   nprtcl_thispack = 0;
   // read number of particles per cell on both fresh starts and restarts
   Real ppc = pin->GetOrAddReal(input_block_,"ppc",1.0);
   if (!is_restart) {
+    if (!std::isfinite(ppc) || ppc < 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << input_block_ << "/ppc must be finite and non-negative" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     // calculate number of particles in this pack
     auto &indcs = pmy_pack->pmesh->mb_indcs;
-    int ncells = indcs.nx1*indcs.nx2*indcs.nx3;
-    Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
+    std::int64_t ncells = static_cast<std::int64_t>(indcs.nx1)*indcs.nx2*indcs.nx3;
+    std::int64_t global_cells = static_cast<std::int64_t>(
+        pmy_pack->pmesh->nmb_total)*ncells;
+    double r_npart_total = static_cast<double>(ppc)*static_cast<double>(global_cells);
+    if (!std::isfinite(r_npart_total) ||
+        r_npart_total > static_cast<double>(std::numeric_limits<int>::max())) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Initial global particle count exceeds the in-memory integer limit"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    std::int64_t local_cells = static_cast<std::int64_t>(pmy_pack->nmb_thispack)*ncells;
+    double r_npart = static_cast<double>(ppc)*static_cast<double>(local_cells);
     // then cast to integer
     nprtcl_thispack = static_cast<int>(r_npart);
   }
@@ -411,6 +438,21 @@ void Particles::CreateParticleTags() {
 
   // tags are assigned sequentially across ranks
   } else if (tag_assignment_.compare("rank_order") == 0) {
+    std::int64_t max_tag = -1;
+    for (int rank=0; rank<global_variable::nranks; ++rank) {
+      int count = pmy_pack_->pmesh->nprtcl_eachrank[rank];
+      if (count > 0) {
+        std::int64_t rank_max_tag = rank + static_cast<std::int64_t>(
+            global_variable::nranks)*(count - 1);
+        max_tag = std::max(max_tag, rank_max_tag);
+      }
+    }
+    if (max_tag > std::numeric_limits<int>::max()) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Initial particle tags exceed the in-memory integer limit" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     int myrank = global_variable::my_rank;
     int nranks = global_variable::nranks;
     int population_offset = 0;

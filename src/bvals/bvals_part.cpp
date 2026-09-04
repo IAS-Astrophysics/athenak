@@ -379,7 +379,7 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
   for (int n=0; n<nrecvs; ++n) {
     // calculate amount of data to be passed, get pointer to variables
     int data_size = (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls);
-    int data_end = data_start + (pmy_part->nrdata)*(recvs_thisrank[n].nprtcls - 1);
+    int data_end = data_start + data_size;
     auto recv_ptr = Kokkos::subview(prtcl_rrecvbuf, std::make_pair(data_start, data_end));
     int drank = recvs_thisrank[n].sendrank;
     int tag = 0; // 0 for Reals, 1 for ints
@@ -395,7 +395,7 @@ TaskStatus ParticlesBoundaryValues::InitPrtclRecv() {
   for (int n=0; n<nrecvs; ++n) {
     // calculate amount of data to be passed, get pointer to variables
     int data_size = (pmy_part->nidata)*(recvs_thisrank[n].nprtcls);
-    int data_end = data_start + (pmy_part->nidata)*(recvs_thisrank[n].nprtcls - 1);
+    int data_end = data_start + data_size;
     auto recv_ptr = Kokkos::subview(prtcl_irecvbuf, std::make_pair(data_start, data_end));
     int drank = recvs_thisrank[n].sendrank;
     int tag = 1; // 0 for Reals, 1 for ints
@@ -467,7 +467,7 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
     for (int n=0; n<nsends; ++n) {
       // calculate amount of data to be passed, get pointer to variables
       int data_size = nrdata*(sends_thisrank[n].nprtcls);
-      int data_end = data_start + nrdata*(sends_thisrank[n].nprtcls - 1);
+      int data_end = data_start + data_size;
       auto send_ptr = Kokkos::subview(prtcl_rsendbuf,std::make_pair(data_start,data_end));
       int drank = sends_thisrank[n].recvrank;
       int tag = 0; // 0 for Reals, 1 for ints
@@ -483,7 +483,7 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
     for (int n=0; n<nsends; ++n) {
       // calculate amount of data to be passed, get pointer to variables
       int data_size = nidata*(sends_thisrank[n].nprtcls);
-      int data_end = data_start + nidata*(sends_thisrank[n].nprtcls - 1);
+      int data_end = data_start + data_size;
       auto send_ptr = Kokkos::subview(prtcl_isendbuf,std::make_pair(data_start,data_end));
       int drank = sends_thisrank[n].recvrank;
       int tag = 1; // 0 for Reals, 1 for ints

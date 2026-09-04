@@ -34,6 +34,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
   auto *population = pmbp->ppart->FindPopulation("particles");
+  if (population->particle_type != ParticleType::cosmic_ray) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Random particle problem generator requires particle_type=cosmic_ray"
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // capture variables for the kernel
   auto &mbsize = pmbp->pmb->mb_size;
