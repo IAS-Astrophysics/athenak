@@ -20,7 +20,7 @@
 #include "units/units.hpp"
 
 #if ENABLE_NURATES
-#include "bns_nurates/include/integration.hpp"
+#include "bns_nurates_ns.hpp"
 #endif
 
 namespace radiationm1 {
@@ -67,6 +67,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.source_maxiter = pin->GetOrAddInteger("radiation_m1", "source_maxiter", 64);
   params.source_Ye_min = pin->GetOrAddReal("radiation_m1", "source_Ye_min", 0);
   params.source_Ye_max = pin->GetOrAddReal("radiation_m1", "source_Ye_max", 0.6);
+  params.source_thin_limit =
+      pin->GetOrAddReal("radiation_m1", "source_thin_limit", 1. / 3.);
   params.source_thick_limit =
       pin->GetOrAddReal("radiation_m1", "source_thick_limit", 20.);
   params.source_therm_limit =
@@ -156,8 +158,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
-    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.); // in bns_nurates()
+    // in ComputeNuratesOpacities()
+    nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.);
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
+    nurates_params.max_recon_temp =
+        pin->GetOrAddReal("bns_nurates", "max_recon_temp_mev", 200.);
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
@@ -231,7 +236,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
 
     nurates_params.quadrature.nx = nurates_params.quad_nx;
     nurates_params.quadrature.dim = 1;
-    nurates_params.quadrature.type = kGauleg;
+    nurates_params.quadrature.type = bns_nurates::kGauleg;
     nurates_params.quadrature.x1 = 0.;
     nurates_params.quadrature.x2 = 1.;
     GaussLegendre(&nurates_params.quadrature);
@@ -241,7 +246,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     } else {
       nurates_params.quadrature_2.nx = nurates_params.quad_nx_2;
       nurates_params.quadrature_2.dim = 1;
-      nurates_params.quadrature_2.type = kGauleg;
+      nurates_params.quadrature_2.type = bns_nurates::kGauleg;
       nurates_params.quadrature_2.x1 = 0.;
       nurates_params.quadrature_2.x2 = 1.;
       GaussLegendre(&nurates_params.quadrature_2);

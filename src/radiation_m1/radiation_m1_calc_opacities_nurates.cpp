@@ -76,6 +76,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
+  auto &size = pmy_pack->pmb->mb_size;
+  const int rank = global_variable::my_rank;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &nspecies_ = nspecies;
@@ -85,6 +87,17 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &radiation_mask_ = radiation_mask;
 
   auto &m1_params_ = params;
+  // Device-side counter capping how many detailed diagnostics get printed.
+  // Allocated per call, so the cap applies per rank per cycle.
+  DvceArray1D<int> nurates_nerrs_("nurates_nerrs", 1);
+  Kokkos::deep_copy(nurates_nerrs_, 0);
+  constexpr int nurates_errcap = 100;
+  // Counts cells that fell back to the equilibrium distribution this call
+  // (reconstructed T_nu > max_recon_temp). Only incremented on fallback cells,
+  // and only read back / printed below when non-zero -> no cost in the common
+  // (no-fallback) case.
+  DvceArray1D<int> nfallback_("nfallback", 1);
+  Kokkos::deep_copy(nfallback_, 0);
   // Force the equilibrium distribution for the first eq_warmup_cycles cycles.
   // On a fresh (neutrinoless) start the M1 moments are floored, so
   // reconstructing the distribution from them (use_equilibrium_distribution =
@@ -202,32 +215,42 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           calc_proj(u_d, u_u, proj_ud);
 
           // Compute lab frame energy density and number density
-          Real J[4]{}, rnnu[4]{};
+          Real m1_E[4]{}, m1_Fx[4]{}, m1_Fy[4]{}, m1_Fz[4]{}, m1_N[4]{};
+          Real J[4]{}, m1_H2[4]{}, m1_Gamma[4]{}, rnnu[4]{};
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            m1_E[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
+            m1_Fx[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i);
+            m1_Fy[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i);
+            m1_Fz[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i);
+            m1_N[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                      adm.beta_u(m, 2, k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
-                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
-                     F_d);
-            const Real E =
-                u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
+                     m1_Fx[nuidx], m1_Fy[nuidx], m1_Fz[nuidx], F_d);
+
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
-                          chi_(m, nuidx, k, j, i), P_dd, m1_params_);
+            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
+                          m1_E[nuidx], F_d, chi_(m, nuidx, k, j, i),
+                          P_dd, m1_params_);
 
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
-            assemble_rT(n_d, E, F_d, P_dd, T_dd);
+            assemble_rT(n_d, m1_E[nuidx], F_d, P_dd, T_dd);
 
             J[nuidx] = calc_J_from_rT(T_dd, u_u);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
             calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
             apply_floor(g_uu, J[nuidx], H_d, m1_params_);
-            Real Gamma =
-                compute_Gamma(w_lorentz, v_u, J[nuidx], E, F_d, m1_params_);
-            rnnu[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
+            m1_H2[nuidx] = tensor_dot(g_uu, H_d, H_d);
+            m1_Gamma[nuidx] =
+                compute_Gamma(w_lorentz, v_u, J[nuidx],
+                              m1_E[nuidx], F_d, m1_params_);
+            rnnu[nuidx] = m1_N[nuidx] / m1_Gamma[nuidx];
           }
 
           // local undensitized neutrino quantities
@@ -266,12 +289,126 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real abs_0_non_th_loc[4]{};
 
           // Note: everything sent and received are in code units
-          bns_nurates(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0, nudens_1, chi_loc,
-                      eta_0_loc, eta_1_loc, abs_0_loc, abs_1_loc, scat_0_loc,
-                      scat_1_loc, eta_1_non_th_loc, abs_1_non_th_loc,
-                      abs_0_non_th_loc,
+          const int used_fallback =
+              ComputeNuratesOpacities(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0,
+                      nudens_1, chi_loc, eta_0_loc, eta_1_loc, abs_0_loc,
+                      abs_1_loc, scat_0_loc, scat_1_loc, eta_1_non_th_loc,
+                      abs_1_non_th_loc, abs_0_non_th_loc,
                       nurates_params_, code_units, eos_units,
                       nurates_units);
+          if (used_fallback) {
+            Kokkos::atomic_fetch_add(&nfallback_(0), 1);
+          }
+
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            const bool bad_m1 =
+                !Kokkos::isfinite(m1_E[nuidx]) ||
+                !Kokkos::isfinite(m1_Fx[nuidx]) ||
+                !Kokkos::isfinite(m1_Fy[nuidx]) ||
+                !Kokkos::isfinite(m1_Fz[nuidx]) ||
+                !Kokkos::isfinite(m1_N[nuidx]) ||
+                !Kokkos::isfinite(chi_loc[nuidx]) ||
+                !Kokkos::isfinite(J[nuidx]) ||
+                !Kokkos::isfinite(m1_H2[nuidx]) ||
+                !Kokkos::isfinite(m1_Gamma[nuidx]) ||
+                !Kokkos::isfinite(rnnu[nuidx]) ||
+                !Kokkos::isfinite(nudens_0[nuidx]) ||
+                !Kokkos::isfinite(nudens_1[nuidx]);
+
+            const bool bad_rates =
+                !Kokkos::isfinite(eta_0_loc[nuidx]) ||
+                !Kokkos::isfinite(eta_1_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_0_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_1_loc[nuidx]) ||
+                !Kokkos::isfinite(scat_0_loc[nuidx]) ||
+                !Kokkos::isfinite(scat_1_loc[nuidx]) ||
+                !Kokkos::isfinite(eta_1_non_th_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_0_non_th_loc[nuidx]) ||
+                !Kokkos::isfinite(abs_1_non_th_loc[nuidx]);
+
+            if (bad_m1 || bad_rates) {
+              const int error_index =
+                  Kokkos::atomic_fetch_add(&nurates_nerrs_(0), 1);
+
+              if (error_index >= nurates_errcap) {
+                continue;
+              }
+
+              const Real x1v =
+                  CellCenterX(i-is, indcs.nx1, size.d_view(m).x1min,
+                              size.d_view(m).x1max);
+              const Real x2v =
+                  CellCenterX(j-js, indcs.nx2, size.d_view(m).x2min,
+                              size.d_view(m).x2max);
+              const Real x3v =
+                  CellCenterX(k-ks, indcs.nx3, size.d_view(m).x3min,
+                              size.d_view(m).x3max);
+
+              Kokkos::printf(
+                  "Non-finite values detected around the NuRates calculation\n"
+                  "  Location: (%d, %d, %d, %d)\n"
+                  "            (%.17g, %.17g, %.17g)\n"
+                  "  Rank/species:\n"
+                  "    rank      = %d\n"
+                  "    nuidx     = %d\n"
+                  "    bad_m1    = %d\n"
+                  "    bad_rates = %d\n"
+                  "  M1 vars:\n"
+                  "    E        = %.17g\n"
+                  "    Fx       = %.17g\n"
+                  "    Fy       = %.17g\n"
+                  "    Fz       = %.17g\n"
+                  "    N        = %.17g\n"
+                  "    chi      = %.17g\n"
+                  "    J        = %.17g\n"
+                  "    H2       = %.17g\n"
+                  "    Gamma    = %.17g\n"
+                  "    rnnu     = %.17g\n"
+                  "    nudens_0 = %.17g\n"
+                  "    nudens_1 = %.17g\n"
+                  "  Fluid vars:\n"
+                  "    nb   = %.17g\n"
+                  "    T    = %.17g\n"
+                  "    Y    = %.17g\n"
+                  "    yp   = %.17g\n"
+                  "    yn   = %.17g\n"
+                  "    mu_n = %.17g\n"
+                  "    mu_p = %.17g\n"
+                  "    mu_e = %.17g\n"
+                  "  Rates:\n"
+                  "    eta_0  = %.17g\n"
+                  "    eta_1  = %.17g\n"
+                  "    abs_0  = %.17g\n"
+                  "    abs_1  = %.17g\n"
+                  "    scat_0 = %.17g\n"
+                  "    scat_1 = %.17g\n"
+                  "  Nonthermal rates (NEPS conserves number, no eta_0):\n"
+                  "    eta_1 = %.17g\n"
+                  "    abs_0 = %.17g\n"
+                  "    abs_1 = %.17g\n",
+                  m, k, j, i, x1v, x2v, x3v, rank, nuidx,
+                  static_cast<int>(bad_m1), static_cast<int>(bad_rates),
+                  m1_E[nuidx], m1_Fx[nuidx], m1_Fy[nuidx],
+                  m1_Fz[nuidx], m1_N[nuidx], chi_loc[nuidx],
+                  J[nuidx], m1_H2[nuidx], m1_Gamma[nuidx],
+                  rnnu[nuidx], nudens_0[nuidx], nudens_1[nuidx],
+                  nb, T, Y, yp, yn, mu_n, mu_p, mu_e,
+                  eta_0_loc[nuidx], eta_1_loc[nuidx],
+                  abs_0_loc[nuidx], abs_1_loc[nuidx],
+                  scat_0_loc[nuidx], scat_1_loc[nuidx],
+                  eta_1_non_th_loc[nuidx],
+                  abs_0_non_th_loc[nuidx],
+                  abs_1_non_th_loc[nuidx]);
+
+              if (error_index + 1 == nurates_errcap) {
+                Kokkos::printf(
+                    "%d NuRates diagnostics have been printed on rank %d. "
+                    "Further NuRates diagnostics on this rank will be "
+                    "suppressed for the rest of this cycle.\n",
+                    nurates_errcap, rank);
+              }
+            }
+          }
 
           assert(Kokkos::isfinite(eta_0_loc[0]));
           assert(Kokkos::isfinite(eta_0_loc[1]));
@@ -398,20 +535,28 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // early for stage > 1, so this emissivity serves the whole cycle.
               const Real dtau = dt_ * adm.alpha(m, k, j, i) / w_lorentz;
 
-              // Pair-averaged ABSORPTION opacities. Elastic scattering neither
-              // thermalises the energy (u_a H^a = 0) nor changes the number
-              // density, so scat_1 has no business here -- unlike the
-              // optical-depth test this replaced, which estimated a diffusion
-              // depth. The J-weighted mean makes kappa_bar*J equal the sum of
-              // the per-species kappa_x*J_x exactly at t^n; with an empty field
-              // there is nothing to weight with, so the arithmetic mean stands
-              // in. abs_0_loc is thermal-only and abs_1_loc thermal plus
-              // non-thermal (above); both are stored verbatim below, so each
-              // weight tracks the kappa its own channel integrates.
-              const Real J_e = nudens_1[0] + nudens_1[1];
-              const Real n_e = nudens_0[0] + nudens_0[1];
-              const Real N_L = nudens_0[0] - nudens_0[1];
-
+              // ABSORPTION opacities only. The weights measure thermalisation,
+              // and elastic scattering neither thermalises the energy
+              // (u_a H^a = 0) nor changes the number density, so scat_1 has no
+              // place in them. abs_0_loc is thermal-only and abs_1_loc thermal
+              // plus non-thermal (above); both are stored verbatim below, so
+              // each weight tracks the kappa its own channel integrates.
+              //
+              // The electron pair takes one weight per species, because lumping
+              // a pair under a common weight is exact only where the two terms
+              // that weight multiplies are equal -- and they differ by
+              // exp(eta), with the lepton residual their difference, so the two
+              // errors reinforce.
+              //
+              // The heavy pairs share one weight because nothing in the
+              // opacities distinguishes nu_x from its antiparticle: the two
+              // differ only numerically. That weight comes from a J-weighted
+              // kappa, so kappa_bar*J equals the sum of the per-species
+              // kappa_x*J_x at t^n, falling back to the arithmetic mean when
+              // the field is empty and there is nothing to weight with. Once
+              // the physics does distinguish them, they need splitting the same
+              // way: eta = 0 equalises their equilibrium densities but not the
+              // actual ones, so no single weight is exact for both sides.
               Real J_x = nudens_1[2];
               Real kJ_x = abs_1_loc[2] * nudens_1[2];
               Real ks_x = abs_1_loc[2];
@@ -423,22 +568,18 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 n_x = 2;
               }
 
-              const Real kbar_1e =
-                  (J_e > 0.0)
-                      ? (abs_1_loc[0]*nudens_1[0] + abs_1_loc[1]*nudens_1[1])/J_e
-                      : 0.5*(abs_1_loc[0] + abs_1_loc[1]);
               const Real kbar_1x = (J_x > 0.0) ? kJ_x/J_x : ks_x/n_x;
-              const Real kbar_0e =
-                  (n_e > 0.0)
-                      ? (abs_0_loc[0]*nudens_0[0] + abs_0_loc[1]*nudens_0[1])/n_e
-                      : 0.5*(abs_0_loc[0] + abs_0_loc[1]);
 
-              const Real a_1e = dtau*kbar_1e;
+              const Real a_1p = dtau*abs_1_loc[0];
+              const Real a_1m = dtau*abs_1_loc[1];
               const Real a_1x = dtau*kbar_1x;
-              const Real a_0e = dtau*kbar_0e;
-              const Real w_1e = a_1e/(1.0 + a_1e);
+              const Real a_0p = dtau*abs_0_loc[0];
+              const Real a_0m = dtau*abs_0_loc[1];
+              const Real w_1p = a_1p/(1.0 + a_1p);
+              const Real w_1m = a_1m/(1.0 + a_1m);
               const Real w_1x = a_1x/(1.0 + a_1x);
-              const Real w_0e = a_0e/(1.0 + a_0e);
+              const Real w_0p = a_0p/(1.0 + a_0p);
+              const Real w_0m = a_0m/(1.0 + a_0m);
 
               Real T_star = T;
               Real Ye_star = Y;
@@ -447,11 +588,15 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // nothing to equilibrate with and must cost nothing. Ternaries not
               // fmax, per eos_compose.hpp:188 (SYCL's fmax(x, NaN) = NaN), so a
               // NaN weight gates the cell out deliberately, not by luck.
-              const bool w_finite = Kokkos::isfinite(w_1e) &&
+              const bool w_finite = Kokkos::isfinite(w_1p) &&
+                                    Kokkos::isfinite(w_1m) &&
                                     Kokkos::isfinite(w_1x) &&
-                                    Kokkos::isfinite(w_0e);
-              Real w_max = (w_1e > w_1x) ? w_1e : w_1x;
-              w_max = (w_max > w_0e) ? w_max : w_0e;
+                                    Kokkos::isfinite(w_0p) &&
+                                    Kokkos::isfinite(w_0m);
+              Real w_max = (w_1p > w_1m) ? w_1p : w_1m;
+              w_max = (w_max > w_1x) ? w_max : w_1x;
+              w_max = (w_max > w_0p) ? w_max : w_0p;
+              w_max = (w_max > w_0m) ? w_max : w_0m;
 
               if (w_finite && w_max >= nurates_params_.peq_w_floor) {
                 Real Y_part[3] = {Y, 0.0, 0.0};
@@ -477,18 +622,24 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                                     : 0.0;
                 const bool cv_ok = Kokkos::isfinite(cv) && cv > 0.0;
 
-                const Real J_e_eq = nudens_1_thin[0] + nudens_1_thin[1];
                 Real J_x_eq = nudens_1_thin[2];
                 if (nspecies_ > 3) {
                   J_x_eq += nudens_1_thin[3];
                 }
-                const Real N_L_eq = nudens_0_thin[0] - nudens_0_thin[1];
 
+                // Sum of absolute per-species terms, not the absolute value of
+                // the weighted net: the gate's only job is to skip cells where
+                // nothing happens, and only the sum is guaranteed not to
+                // under-estimate the move, so only it cannot gate out a cell
+                // that would have moved.
                 const Real dlnT_hat =
-                    cv_ok ? (w_1e*Kokkos::fabs(J_e_eq - J_e) +
+                    cv_ok ? (w_1p*Kokkos::fabs(nudens_1_thin[0] - nudens_1[0]) +
+                             w_1m*Kokkos::fabs(nudens_1_thin[1] - nudens_1[1]) +
                              w_1x*Kokkos::fabs(J_x_eq - J_x))/(T*cv)
                           : 0.0;
-                const Real dYe_hat = w_0e*Kokkos::fabs(N_L_eq - N_L)/nb;
+                const Real dYe_hat =
+                    (w_0p*Kokkos::fabs(nudens_0_thin[0] - nudens_0[0]) +
+                     w_0m*Kokkos::fabs(nudens_0_thin[1] - nudens_0[1]))/nb;
 
                 // A bad c_v removes the gate and the trust region both --
                 // everything below divides by T*cv. Predict nothing instead.
@@ -512,25 +663,28 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
                   const Real e_mat = eos.GetEnergy(nb, T, Y_part);
 
-                  // On failure, halve all three weights and retry: that slides
+                  // On failure, halve all five weights and retry: that slides
                   // the problem along the same one-parameter family toward the
                   // trivial one, so every intermediate point is a valid scheme.
+                  // Scaling all five is the same as scaling the pair mean and
+                  // the half-difference, so this attacks the split terms too.
                   // A cell that never produces an accepted root keeps (T, Y_e).
                   Real f_soft = 1.0;
                   for (int n_soft = 0; n_soft <= peq_max_halvings;
                        ++n_soft, f_soft *= 0.5) {
-                    const Real u_1e = f_soft*w_1e;
-                    const Real u_1x = f_soft*w_1x;
-                    const Real u_0e = f_soft*w_0e;
+                    const Real u[PEQ_NWEIGHTS] = {
+                        f_soft*w_1p, f_soft*w_1m, f_soft*w_1x,
+                        f_soft*w_0p, f_soft*w_0m};
 
-                    const Real e_rhs = e_mat + u_1e*J_e + u_1x*J_x;
-                    Real Yl_rhs[3] = {Y + u_0e*N_L/nb, 0.0, 0.0};
+                    const Real e_rhs = e_mat + u[PEQ_W1_NUE]*nudens_1[0] +
+                                       u[PEQ_W1_ANUE]*nudens_1[1] + u[PEQ_W1_X]*J_x;
+                    Real Yl_rhs[3] = {Y + (u[PEQ_W0_NUE]*nudens_0[0] -
+                                           u[PEQ_W0_ANUE]*nudens_0[1])/nb, 0.0, 0.0};
 
                     Real T_try = T;
                     Real Ye_try[3] = {Y, 0.0, 0.0};
                     bool ok = eos.GetBetaEquilibriumPartial(
-                        nb, e_rhs, Yl_rhs, u_1e, u_1x, u_0e, T_try, &Ye_try[0],
-                        T, Y_part);
+                        nb, e_rhs, Yl_rhs, u, T_try, &Ye_try[0], T, Y_part);
 
                     if (ok && Kokkos::fabs(Kokkos::log(T_try/T)) <= dlnT_max &&
                         Kokkos::fabs(Ye_try[0] - Y) <= dYe_max) {
@@ -545,11 +699,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               // The equilibrium the cell is predicted to be radiating towards.
               // Evaluated unconditionally: a gated or unusable cell has
               // (T*, Ye*) = (T, Y_e), so this reproduces nudens_*_thin bit for
-              // bit and the w -> 0 limit costs no special case. Note the solve
-              // and this evaluation do not share a function (func_eq_weak uses
-              // exact closed forms, NeutrinoDens the Takahashi 1978 fits), so
-              // (T*, Ye*) balances the energy against a D^eq differing from this
-              // one by ~1e-3. Inherited from the trapped solve, not new here.
+              // bit and the w -> 0 limit costs no special case. The solve and
+              // this evaluation do not share a function, but they agree on the
+              // mathematics to 1-2 ulp: func_eq_weak's closed forms are exactly
+              // what FDI_p2/FDI_p3 reflect on.
               Real Ye_arr[3] = {Ye_star, 0.0, 0.0};
               Real mu_b_s = eos.GetBaryonChemicalPotential(nb, T_star, Ye_arr);
               Real mu_q_s = eos.GetChargeChemicalPotential(nb, T_star, Ye_arr);
@@ -656,6 +809,18 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           }
         }
       });
+
+  // Report equilibrium-fallback usage only when it actually happened (one small
+  // device->host copy of a single int per call; the print is skipped entirely
+  // when there were no fallbacks).
+  auto h_nfallback = Kokkos::create_mirror_view(nfallback_);
+  Kokkos::deep_copy(h_nfallback, nfallback_);
+  if (h_nfallback(0) > 0) {
+    std::cout << "[M1 nurates] equilibrium fallback (recon T_nu > "
+              << nurates_params_.max_recon_temp << " MeV) used in "
+              << h_nfallback(0) << " cell-evals (rank " << rank << ")"
+              << std::endl;
+  }
   return TaskStatus::complete;
 }
 }  // namespace radiationm1

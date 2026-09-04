@@ -115,16 +115,14 @@ TaskStatus RadiationM1::SetTmunu(Driver* pdrive, int stage) {
             calc_proj(u_d, u_u, proj_ud);
 
             for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
-              const Real E =
-                  u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
+              Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
-              AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_u{};
               pack_F_d(beta_u(1), beta_u(2), beta_u(3),
                       u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
                       u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
                       u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
                       F_d);
-              tensor_contract(g_uu, F_d, F_u);
+              apply_floor(g_uu, E, F_d, params_);
 
               // lab frame pressure
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
