@@ -33,6 +33,8 @@ struct NuratesParams {
   Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
   Real nb_min;
   Real temp_min_mev;
+  Real max_recon_temp;  // [MeV] fall back to the equilibrium distribution when the
+                        // reconstructed spectral temperature J/n exceeds this
 
   bool use_abs_em;
   bool use_pair;
@@ -143,7 +145,7 @@ struct NuratesParams {
 //   \param[in]  nurates_units   bns_nurates units
 
 KOKKOS_INLINE_FUNCTION
-void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p, Real &mu_e,
+int bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_p, Real &mu_e,
                  Real nudens_0[4],
                  Real nudens_1[4],
                  Real chi[4],
@@ -259,7 +261,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
     scat_1_anue = 0.;
     scat_1_nux = 0.;
     scat_1_anux = 0.;
-    return;
+    return 0;
   }
       
   // populate opacity params
@@ -296,6 +298,7 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   grey_op_params.eos_pars.dm_eff = 1.29333251;  // [MeV]
 
   // reconstruct distribution function
+  int used_fallback = 0;
   if (!nurates_params.use_equilibrium_distribution) {
     // populate M1 quantities
     // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates
@@ -317,6 +320,29 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
 
     grey_op_params.distr_pars =
         CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
+
+    // The reconstructed spectral temperature T_nu = J/n diverges when the
+    // number density collapses (neutral-current-only heavy neutrinos in the
+    // low-density disk). When it exceeds a physical cap, fall this cell back to
+    // the equilibrium distribution -- identical to the use_equilibrium_
+    // distribution=true branch below (matter-anchored spectrum + densities +
+    // chi=1/3). temp_t/temp_f are in [MeV], directly comparable to the cap.
+    for (int s = 0; s < total_num_species; ++s) {
+      if (grey_op_params.distr_pars.temp_t[s] > nurates_params.max_recon_temp ||
+          grey_op_params.distr_pars.temp_f[s] > nurates_params.max_recon_temp) {
+        used_fallback = 1;
+        break;
+      }
+    }
+    if (used_fallback) {
+      grey_op_params.distr_pars = NuEquilibriumParams(&grey_op_params.eos_pars);
+      ComputeM1DensitiesEq(&grey_op_params.eos_pars, &grey_op_params.distr_pars,
+                           &grey_op_params.m1_pars);
+      grey_op_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;
+      grey_op_params.m1_pars.chi[id_anue] = 0.333333333333333333333333333;
+      grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
+      grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
+    }
   } else {
     // compute neutrino distribution parameters assuming equilibrium
     grey_op_params.distr_pars = NuEquilibriumParams(&grey_op_params.eos_pars);
@@ -501,6 +527,8 @@ void bns_nurates(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n, Real &mu_
   sigma_0_non_th_anue = sigma_0_non_th_anue * unit_length;
   sigma_0_non_th_nux = sigma_0_non_th_nux * unit_length;
   sigma_0_non_th_anux = sigma_0_non_th_anux * unit_length;
+
+  return used_fallback;
 }
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,

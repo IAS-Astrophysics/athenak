@@ -6,7 +6,6 @@
 //! \file radiation_m1_update.cpp
 //! \brief beam time update for grey M1
 
-#include <cfloat>
 #include <iostream>
 
 #include "athena.hpp"
@@ -156,20 +155,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   bool ismhd_ = ismhd;
   bool ishydro_ = ishydro;
-
-  // Device-side counter capping how many detailed diagnostics get printed.
-  // Allocated per call, so the cap applies per rank per cycle.
-  DvceArray1D<int> update_nerrs_("update_nerrs", 1);
-  Kokkos::deep_copy(update_nerrs_, 0);
-  // Separate counter for the implicit-solve birthplace tracker so it never
-  // gets starved by the coarse source-update trap sharing a cap.
-  DvceArray1D<int> birth_nerrs_("birth_nerrs", 1);
-  Kokkos::deep_copy(birth_nerrs_, 0);
-  // Counter for the flux-collapse (subnormal-H2) trace.
-  DvceArray1D<int> subnrm_nerrs_("subnrm_nerrs", 1);
-  Kokkos::deep_copy(subnrm_nerrs_, 0);
-  constexpr int update_errcap = 100;
-  const int rank = global_variable::my_rank;
 
   par_for(
       "radiation_m1_update", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
@@ -463,34 +448,16 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                     params_.rad_N_floor);
               }
 
-              // ---- Birthplace tracker: record the FIRST sub-step of the
-              // implicit solve whose output is non-finite. Ordered so the
-              // reported stage pinpoints where the NaN originates. Reported
-              // once per bad cell (capped) after DrEFN is formed below.
-              int bad_stage = 0;
-              if (!Kokkos::isfinite(Estar) || !Kokkos::isfinite(Fstar_d(1)) ||
-                  !Kokkos::isfinite(Fstar_d(2)) || !Kokkos::isfinite(Fstar_d(3))) {
-                bad_stage = 1;  // advected inputs Estar/Fstar_d already non-finite
-              }
-
               // Compute quantities in the fluid frame
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
               calc_closure(BrentFunc_, g_dd, g_uu, n_d, w_lorentz, u_u, v_d,
                            proj_ud, Estar, Fstar_d, chi_(m, nuidx, k, j, i),
                            P_dd, params_, params_.closure_type);
-              if (bad_stage == 0 && !Kokkos::isfinite(chi_(m, nuidx, k, j, i))) {
-                bad_stage = 2;  // calc_closure emitted non-finite chi
-              }
               AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> rT_dd{};
               assemble_rT(n_d, Estar, Fstar_d, P_dd, rT_dd);
               Real Jstar = calc_J_from_rT(rT_dd, u_u);
               AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Hstar_d{};
               calc_H_from_rT(rT_dd, u_u, proj_ud, Hstar_d);
-              if (bad_stage == 0 &&
-                  (!Kokkos::isfinite(Jstar) || !Kokkos::isfinite(Hstar_d(1)) ||
-                   !Kokkos::isfinite(Hstar_d(2)) || !Kokkos::isfinite(Hstar_d(3)))) {
-                bad_stage = 3;  // fluid-frame J*/H* from calc_closure P_dd
-              }
 
               // Estimate interaction with matter
               const Real dtau = beta_dt * (adm.alpha(m, k, j, i) / w_lorentz);
@@ -516,56 +483,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               const Real inormH = (normH > 0. ? 1. / normH : 0.);
               const Real xi = normH*(Jnew > params_.rad_E_floor ? 1./Jnew : 0.);
               chi_(m, nuidx, k, j, i) = closure_fun(xi, params_.closure_type);
-              if (bad_stage == 0 &&
-                  (!Kokkos::isfinite(Jnew) || !Kokkos::isfinite(Hnew_d(1)) ||
-                   !Kokkos::isfinite(Hnew_d(2)) || !Kokkos::isfinite(Hnew_d(3)))) {
-                bad_stage = 4;  // Jnew / Hnew_d matter-interaction estimate
-              }
-              if (bad_stage == 0 &&
-                  (!Kokkos::isfinite(H2) || !Kokkos::isfinite(xi) ||
-                   !Kokkos::isfinite(chi_(m, nuidx, k, j, i)))) {
-                bad_stage = 5;  // inline xi = sqrt(H2)/Jnew -> chi (unguarded sqrt)
-              }
-
-              // ---- Flux-collapse trace: fires when H2 is a positive subnormal
-              // (the condition that overflowed 1/H2 before the inormH fix).
-              // Dumps the source-term drivers so we can see WHY the fluid-frame
-              // flux Hnew collapsed: compare |Fstar| (advected lab flux) and
-              // |Hstar| (fluid-frame) with |Hnew|, plus the single-step damping
-              // 1/(1+dtau*khat).  VVLR (working) never reaches this, so whatever
-              // drives it here is the real root cause.  Capped per rank per cycle.
-              if (H2 > 0. && H2 < DBL_MIN) {
-                const int e = Kokkos::atomic_fetch_add(&subnrm_nerrs_(0), 1);
-                if (e < update_errcap) {
-                  const Real chi_l = chi_(m, nuidx, k, j, i);
-                  const Real dthin_l = 1.0 - 1.5 * (1.0 - chi_l);
-                  const Real Fstar_n = Kokkos::sqrt(
-                      Kokkos::fmax(tensor_dot(g_uu, Fstar_d, Fstar_d), 0.0));
-                  const Real Hstar_n = Kokkos::sqrt(
-                      Kokkos::fmax(tensor_dot(g_uu, Hstar_d, Hstar_d), 0.0));
-                  const Real x1v = CellCenterX(i - is, indcs.nx1,
-                                               mbsize.d_view(m).x1min,
-                                               mbsize.d_view(m).x1max);
-                  const Real x2v = CellCenterX(j - js, indcs.nx2,
-                                               mbsize.d_view(m).x2min,
-                                               mbsize.d_view(m).x2max);
-                  const Real x3v = CellCenterX(k - ks, indcs.nx3,
-                                               mbsize.d_view(m).x3min,
-                                               mbsize.d_view(m).x3max);
-                  Kokkos::printf(
-                      "H2 subnormal (1/H2 would overflow pre-fix) - flux-collapse trace\n"
-                      "  Location: (%d, %d, %d, %d)\n"
-                      "            (%.6g, %.6g, %.6g)  nuidx=%d\n"
-                      "  Estar=%.6e |Fstar|=%.6e   Jstar=%.6e |Hstar|=%.6e\n"
-                      "  |Hnew|=%.6e H2=%.6e   chi=%.6f xi=%.6e dthin=%.6e\n"
-                      "  dtau=%.6e khat=%.6e abs_1=%.6e scat_1=%.6e eta_1=%.6e\n"
-                      "  damp=1/(1+dtau*khat)=%.6e\n",
-                      m, k, j, i, x1v, x2v, x3v, nuidx, Estar, Fstar_n, Jstar,
-                      Hstar_n, normH, H2, chi_l, xi, dthin_l, dtau, khat,
-                      abs_1_(m, nuidx, k, j, i), scat_1_(m, nuidx, k, j, i),
-                      eta_1_(m, nuidx, k, j, i), 1.0 / (1.0 + dtau * khat));
-                }
-              }
 
               const Real dthick = 3. * (1. - chi_(m, nuidx, k, j, i)) / 2.;
               const Real dthin = 1. - dthick;
@@ -586,11 +503,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               Real Enew = calc_J_from_rT(rT_dd, n_u);
               calc_H_from_rT(rT_dd, n_u, gamma_ud, Fnew_d);
               apply_floor(g_uu, Enew, Fnew_d, params_);
-              if (bad_stage == 0 &&
-                  (!Kokkos::isfinite(Enew) || !Kokkos::isfinite(Fnew_d(1)) ||
-                   !Kokkos::isfinite(Fnew_d(2)) || !Kokkos::isfinite(Fnew_d(3)))) {
-                bad_stage = 6;  // dthin/dthick rT reconstruction -> Enew/Fnew guess
-              }
 
               auto src_signal = source_update(
                   BrentFunc_, HybridsjFunc_, beta_dt, adm.alpha(m, k, j, i),
@@ -601,11 +513,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                   chi_(m, nuidx, k, j, i), Enew, Fnew_d, params_,
                   params_.closure_type);
               apply_floor(g_uu, Enew, Fnew_d, params_);
-              if (bad_stage == 0 &&
-                  (!Kokkos::isfinite(Enew) || !Kokkos::isfinite(Fnew_d(1)) ||
-                   !Kokkos::isfinite(Fnew_d(2)) || !Kokkos::isfinite(Fnew_d(3)))) {
-                bad_stage = 7;  // source_update implicit multiroot solve
-              }
 
               // Update closure
               apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Enew,
@@ -621,46 +528,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               DrEFN[nuidx][M1_FX_IDX] = Fnew_d(1) - Fstar_d(1);
               DrEFN[nuidx][M1_FY_IDX] = Fnew_d(2) - Fstar_d(2);
               DrEFN[nuidx][M1_FZ_IDX] = Fnew_d(3) - Fstar_d(3);
-
-              // ---- Report the first non-finite sub-step (birthplace bisection).
-              // Stages: 1 inputs, 2 calc_closure chi, 3 J*/H*, 4 Jnew/Hnew,
-              // 5 inline sqrt(H2)->xi->chi, 6 rT reconstruction Enew/Fnew,
-              // 7 source_update. Capped per rank per cycle (own counter).
-              if (bad_stage != 0) {
-                const int e = Kokkos::atomic_fetch_add(&birth_nerrs_(0), 1);
-                if (e < update_errcap) {
-                  const Real x1v = CellCenterX(i - is, indcs.nx1,
-                                               mbsize.d_view(m).x1min,
-                                               mbsize.d_view(m).x1max);
-                  const Real x2v = CellCenterX(j - js, indcs.nx2,
-                                               mbsize.d_view(m).x2min,
-                                               mbsize.d_view(m).x2max);
-                  const Real x3v = CellCenterX(k - ks, indcs.nx3,
-                                               mbsize.d_view(m).x3min,
-                                               mbsize.d_view(m).x3max);
-                  Kokkos::printf(
-                      "M1 implicit source: first non-finite sub-step\n"
-                      "  Location: (%d, %d, %d, %d)\n"
-                      "            (%.17g, %.17g, %.17g)\n"
-                      "  rank=%d nuidx=%d bad_stage=%d\n"
-                      "  stages: 1=inputs 2=calc_closure 3=J*/H* 4=Jnew/Hnew "
-                      "5=sqrt(H2)->xi->chi 6=rT-recon 7=source_update\n"
-                      "  Estar = %.17g\n"
-                      "  chi   = %.17g\n"
-                      "  Jstar = %.17g\n"
-                      "  Jnew  = %.17g\n"
-                      "  H2    = %.17g\n"
-                      "  xi    = %.17g\n"
-                      "  Enew  = %.17g\n"
-                      "  Fnew  = (%.17g, %.17g, %.17g)\n"
-                      "  DrEFN = (%.17g, %.17g, %.17g, %.17g)\n",
-                      m, k, j, i, x1v, x2v, x3v, rank, nuidx, bad_stage,
-                      Estar, chi_(m, nuidx, k, j, i), Jstar, Jnew, H2, xi,
-                      Enew, Fnew_d(1), Fnew_d(2), Fnew_d(3),
-                      DrEFN[nuidx][M1_E_IDX], DrEFN[nuidx][M1_FX_IDX],
-                      DrEFN[nuidx][M1_FY_IDX], DrEFN[nuidx][M1_FZ_IDX]);
-                }
-              }
 
               if (nspecies_ > 1) {
                 // Compute updated Gamma
@@ -796,82 +663,6 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                       theta * DrEFN[nuidx][M1_N_IDX];
             Nf = Kokkos::fmax(Nf, params_.rad_N_floor);
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
-          }
-
-          // ---- Non-finite diagnostic: the M1 source update is where the
-          // radiation four-force enters the MHD momentum/energy (via backreact
-          // below), so a NaN caught here is the first-origin candidate for the
-          // NANS_IN_CONS that con2prim reports downstream. Capped per rank per
-          // cycle. The N/DDxp channels only exist for nspecies_ > 1.
-          {
-            bool bad_src =
-                !Kokkos::isfinite(theta) ||
-                !Kokkos::isfinite(rEFN[nuidx][M1_E_IDX]) ||
-                !Kokkos::isfinite(rEFN[nuidx][M1_FX_IDX]) ||
-                !Kokkos::isfinite(rEFN[nuidx][M1_FY_IDX]) ||
-                !Kokkos::isfinite(rEFN[nuidx][M1_FZ_IDX]) ||
-                !Kokkos::isfinite(DrEFN[nuidx][M1_E_IDX]) ||
-                !Kokkos::isfinite(DrEFN[nuidx][M1_FX_IDX]) ||
-                !Kokkos::isfinite(DrEFN[nuidx][M1_FY_IDX]) ||
-                !Kokkos::isfinite(DrEFN[nuidx][M1_FZ_IDX]);
-            bool bad_fields =
-                !Kokkos::isfinite(Ef) || !Kokkos::isfinite(Ff_d(1)) ||
-                !Kokkos::isfinite(Ff_d(2)) || !Kokkos::isfinite(Ff_d(3));
-            Real N_now = 0.0;
-            if (nspecies_ > 1) {
-              N_now = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
-              bad_src = bad_src || !Kokkos::isfinite(DDxp[nuidx]) ||
-                        !Kokkos::isfinite(rEFN[nuidx][M1_N_IDX]) ||
-                        !Kokkos::isfinite(DrEFN[nuidx][M1_N_IDX]);
-              bad_fields = bad_fields || !Kokkos::isfinite(N_now);
-            }
-
-            if (bad_src || bad_fields) {
-              const int error_index =
-                  Kokkos::atomic_fetch_add(&update_nerrs_(0), 1);
-              if (error_index < update_errcap) {
-                const Real x1v = CellCenterX(i - is, indcs.nx1,
-                                             mbsize.d_view(m).x1min,
-                                             mbsize.d_view(m).x1max);
-                const Real x2v = CellCenterX(j - js, indcs.nx2,
-                                             mbsize.d_view(m).x2min,
-                                             mbsize.d_view(m).x2max);
-                const Real x3v = CellCenterX(k - ks, indcs.nx3,
-                                             mbsize.d_view(m).x3min,
-                                             mbsize.d_view(m).x3max);
-                Kokkos::printf(
-                    "Non-finite values detected in the M1 source update\n"
-                    "  Location: (%d, %d, %d, %d)\n"
-                    "            (%.17g, %.17g, %.17g)\n"
-                    "  Rank/species:\n"
-                    "    rank       = %d\n"
-                    "    nuidx      = %d\n"
-                    "    stage      = %d\n"
-                    "    bad_src    = %d\n"
-                    "    bad_fields = %d\n"
-                    "  Updated M1 fields:\n"
-                    "    E  = %.17g\n"
-                    "    Fx = %.17g\n"
-                    "    Fy = %.17g\n"
-                    "    Fz = %.17g\n"
-                    "    N  = %.17g\n"
-                    "  Limiter / Ye source:\n"
-                    "    theta = %.17g\n"
-                    "    DDxp  = %.17g\n"
-                    "  Explicit RHS  rEFN (E,Fx,Fy,Fz,N):\n"
-                    "    %.17g %.17g %.17g %.17g %.17g\n"
-                    "  Source incr  DrEFN (E,Fx,Fy,Fz,N):\n"
-                    "    %.17g %.17g %.17g %.17g %.17g\n",
-                    m, k, j, i, x1v, x2v, x3v, rank, nuidx, stage,
-                    static_cast<int>(bad_src), static_cast<int>(bad_fields),
-                    Ef, Ff_d(1), Ff_d(2), Ff_d(3), N_now, theta, DDxp[nuidx],
-                    rEFN[nuidx][M1_E_IDX], rEFN[nuidx][M1_FX_IDX],
-                    rEFN[nuidx][M1_FY_IDX], rEFN[nuidx][M1_FZ_IDX],
-                    rEFN[nuidx][M1_N_IDX], DrEFN[nuidx][M1_E_IDX],
-                    DrEFN[nuidx][M1_FX_IDX], DrEFN[nuidx][M1_FY_IDX],
-                    DrEFN[nuidx][M1_FZ_IDX], DrEFN[nuidx][M1_N_IDX]);
-              }
-            }
           }
 
           if (params_.backreact && stage == 2 && (ismhd_)) {
