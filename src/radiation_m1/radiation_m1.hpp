@@ -8,9 +8,11 @@
 //! \file radiation_m1.hpp
 //  \brief definitions for Grey M1 radiation class
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -111,6 +113,16 @@ class RadiationM1 {
   // computed and sliced out before calling RheaModel::Predict(). Deliberately float32
   // regardless of Real.
   Kokkos::View<float****, LayoutWrapper, DevMemSpace> rhea_f4_in_scratch;
+
+  // Opt-in failure-case instrumentation: when rhea_failure_dump_file is non-empty,
+  // ApplyRheaMixing appends the F4_in (and raw prediction) of each distinct cell whose
+  // Rhea prediction comes back non-finite to <rhea_failure_dump_file>.rank<NNNNN>.jsonl,
+  // up to rhea_failure_dump_max records per rank. Host-only state (like rhea_model_path),
+  // never on RadiationM1Params.
+  std::string rhea_failure_dump_file;
+  int rhea_failure_dump_max = 0;
+  int rhea_failure_dump_count = 0;
+  std::vector<std::uint64_t> rhea_failure_seen;
 #endif
 
   MeshBoundaryValuesCC* pbval_u;  // Communication buffers and functions for u
@@ -147,6 +159,15 @@ class RadiationM1 {
                               const DvceArray4D<const float>& rhea_f4_out,
                               const DvceArray1D<const float>& rhea_growthrate,
                               const DvceArray1D<const float>& rhea_stability);
+  // Append the F4_in / raw prediction of up to n_failed flagged cells (linear batch
+  // indices in nan_idx_dev) to <rhea_failure_dump_file>.rank<NNNNN>.jsonl, deduplicated
+  // and capped at rhea_failure_dump_max. Called from ApplyRheaMixing only when the dump
+  // is enabled and at least one cell was flagged non-finite.
+  void DumpRheaFailures(int stage, int n_failed,
+                         const Kokkos::View<int*, DevMemSpace>& nan_idx_dev,
+                         const DvceArray4D<const float>& rhea_f4_out,
+                         const DvceArray1D<const float>& rhea_growthrate,
+                         const DvceArray1D<const float>& rhea_stability);
 #endif
   TaskStatus RestrictU(Driver* d, int stage);
   TaskStatus SendU(Driver* d, int stage);

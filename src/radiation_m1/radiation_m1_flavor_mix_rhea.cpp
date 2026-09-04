@@ -42,7 +42,13 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -481,6 +487,15 @@ TaskStatus RadiationM1::ApplyRheaMixing(
   Kokkos::View<int, DevMemSpace> nan_count_dev("rhea_nan_count");
   Kokkos::deep_copy(nan_count_dev, 0);
 
+  // Opt-in failure dump (rhea_failure_dump_file): capture the linear batch index of each
+  // flagged cell, up to the per-rank record cap, so DumpRheaFailures can write its inputs
+  // out after the kernel. dump_cap == 0 disables the capture path entirely.
+  const bool dump_failures = !rhea_failure_dump_file.empty()
+                             && rhea_failure_dump_count < rhea_failure_dump_max;
+  const int dump_cap = dump_failures ? rhea_failure_dump_max : 0;
+  Kokkos::View<int*, DevMemSpace> nan_idx_dev(
+      "rhea_nan_idx", static_cast<std::size_t>(dump_cap > 0 ? dump_cap : 1));
+
   par_for(
       "radiation_m1_apply_rhea_mixing", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -587,7 +602,10 @@ TaskStatus RadiationM1::ApplyRheaMixing(
           // that relaxation writes u0_ = lambda*u0_ + (1-lambda)*N_mix even when lambda=1
           // (the "stable" no-op case), and (1-1)*NaN = NaN in IEEE754, so the existing
           // stability-threshold branch alone would not have caught this.
-          Kokkos::atomic_increment(&nan_count_dev());
+          const int nan_slot = Kokkos::atomic_fetch_add(&nan_count_dev(), 1);
+          if (dump_cap > 0 && nan_slot < dump_cap) {
+            nan_idx_dev(nan_slot) = idx;
+          }
           return;
         }
         RestrictToPhysical(F4_cell);
@@ -699,7 +717,153 @@ TaskStatus RadiationM1::ApplyRheaMixing(
               << std::endl;
   }
 
+  if (dump_failures && nan_count_host > 0) {
+    DumpRheaFailures(stage, Kokkos::min(nan_count_host, dump_cap), nan_idx_dev,
+                     rhea_f4_out, rhea_growthrate, rhea_stability);
+  }
+
   return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void RadiationM1::DumpRheaFailures
+//! \brief Append the packed Rhea input (and raw prediction) of each distinct flagged cell
+//! to a per-rank JSON-lines file, for augmenting runs/rhea_newmodel_failure_cases/. Each
+//! line is one object: cycle, stage, rank, F4_in ([2][3][4], matching test_cases.json's
+//! layout), F4_out (raw, pre-RestrictToPhysical), growthrate, stability, and which fields
+//! were non-finite. Records are deduplicated on a scale-invariant, coarsely-quantized
+//! signature of F4_in (predict_all is scale-invariant, so only per-slot flux factors and
+//! cross-slot density ratios matter), and the running total is capped per rank at
+//! rhea_failure_dump_max.
+void RadiationM1::DumpRheaFailures(
+    int stage, int n_failed,
+    const Kokkos::View<int*, DevMemSpace> &nan_idx_dev,
+    const DvceArray4D<const float> &rhea_f4_out,
+    const DvceArray1D<const float> &rhea_growthrate,
+    const DvceArray1D<const float> &rhea_stability) {
+  if (n_failed <= 0) return;
+
+  // Flagged batch indices -> host.
+  Kokkos::View<int*, HostMemSpace> idx_h("rhea_nan_idx_h", n_failed);
+  Kokkos::deep_copy(idx_h, Kokkos::subview(nan_idx_dev, Kokkos::make_pair(0, n_failed)));
+
+  // growthrate/stability are one float per cell -- mirror them whole (cheap). F4_in and
+  // F4_out are copied one flagged row at a time below, to avoid mirroring the full
+  // rank-batch buffer on every flagged stage.
+  auto gr_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), rhea_growthrate);
+  auto st_h = Kokkos::create_mirror_view_and_copy(HostMemSpace(), rhea_stability);
+
+  Kokkos::View<float***, HostMemSpace> row_in("rhea_row_in", 2, 3, 4);
+  Kokkos::View<float***, HostMemSpace> row_out("rhea_row_out", 2, 3, 4);
+
+  const int ncycle = pmy_pack->pmesh->ncycle;
+
+  std::ostringstream fname;
+  fname << rhea_failure_dump_file << ".rank" << std::setw(5) << std::setfill('0')
+        << global_variable::my_rank << ".jsonl";
+  std::ofstream ofs(fname.str(), std::ios::app);
+  if (!ofs) return;
+
+  auto json_float = [](std::ostream &os, double v) {
+    if (Kokkos::isnan(v)) {
+      os << "NaN";
+    } else if (Kokkos::isinf(v)) {
+      os << (v < 0 ? "-Infinity" : "Infinity");
+    } else {
+      os << std::setprecision(9) << v;
+    }
+  };
+
+  for (int t = 0; t < n_failed; ++t) {
+    if (rhea_failure_dump_count >= rhea_failure_dump_max) break;
+    const int bidx = idx_h(t);
+
+    Kokkos::deep_copy(row_in, Kokkos::subview(rhea_f4_in_scratch, bidx,
+                                              Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+    Kokkos::deep_copy(row_out, Kokkos::subview(rhea_f4_out, bidx,
+                                               Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
+    const double gr = static_cast<double>(gr_h(bidx));
+    const double st = static_cast<double>(st_h(bidx));
+
+    // Scale-invariant dedup signature: normalize by the total number density, then
+    // quantize each slot's flux factor (~1e-3) and log10 density (~0.1).
+    double ntot = 0.0;
+    for (int mm = 0; mm < 2; ++mm) {
+      for (int f = 0; f < 3; ++f) {
+        ntot += Kokkos::fabs(static_cast<double>(row_in(mm, f, 3)));
+      }
+    }
+    if (!(ntot > 0.0)) ntot = 1.0;
+    std::uint64_t key = 1469598103934665603ULL;  // FNV-1a offset basis
+    auto fnv = [&key](std::int64_t qs) {
+      std::uint64_t q = static_cast<std::uint64_t>(qs);
+      for (int n = 0; n < 8; ++n) {
+        key = (key ^ (q & 0xFFULL)) * 1099511628211ULL;
+        q >>= 8;
+      }
+    };
+    for (int mm = 0; mm < 2; ++mm) {
+      for (int f = 0; f < 3; ++f) {
+        const double nd = static_cast<double>(row_in(mm, f, 3)) / ntot;
+        const double fx = static_cast<double>(row_in(mm, f, 0)) / ntot;
+        const double fy = static_cast<double>(row_in(mm, f, 1)) / ntot;
+        const double fz = static_cast<double>(row_in(mm, f, 2)) / ntot;
+        const double nrm = Kokkos::sqrt(fx * fx + fy * fy + fz * fz);
+        const double ff = (nd > 1e-300) ? nrm / nd : 1e30;
+        fnv(static_cast<std::int64_t>(Kokkos::round(Kokkos::fmin(ff, 2.0) * 1000.0)));
+        fnv(static_cast<std::int64_t>(
+            Kokkos::round(Kokkos::log10(Kokkos::fmax(nd, 1e-300)) * 10.0)));
+      }
+    }
+    bool seen = false;
+    for (std::uint64_t k : rhea_failure_seen) {
+      if (k == key) { seen = true; break; }
+    }
+    if (seen) continue;
+    rhea_failure_seen.push_back(key);
+
+    bool nan_f4_out = false;
+    for (int mm = 0; mm < 2; ++mm) {
+      for (int f = 0; f < 3; ++f) {
+        for (int mu = 0; mu < 4; ++mu) {
+          if (!Kokkos::isfinite(static_cast<double>(row_out(mm, f, mu)))) {
+            nan_f4_out = true;
+          }
+        }
+      }
+    }
+    const bool nan_gr = !Kokkos::isfinite(gr);
+
+    ofs << "{\"cycle\": " << ncycle << ", \"stage\": " << stage
+        << ", \"rank\": " << global_variable::my_rank << ", \"F4_in\": ";
+    auto emit_f4 = [&](const Kokkos::View<float***, HostMemSpace> &r) {
+      ofs << "[";
+      for (int mm = 0; mm < 2; ++mm) {
+        ofs << (mm ? ", [" : "[");
+        for (int f = 0; f < 3; ++f) {
+          ofs << (f ? ", [" : "[");
+          for (int mu = 0; mu < 4; ++mu) {
+            if (mu) ofs << ", ";
+            json_float(ofs, static_cast<double>(r(mm, f, mu)));
+          }
+          ofs << "]";
+        }
+        ofs << "]";
+      }
+      ofs << "]";
+    };
+    emit_f4(row_in);
+    ofs << ", \"F4_out\": ";
+    emit_f4(row_out);
+    ofs << ", \"growthrate\": ";
+    json_float(ofs, gr);
+    ofs << ", \"stability\": ";
+    json_float(ofs, st);
+    ofs << ", \"nan_F4_out\": " << (nan_f4_out ? "true" : "false")
+        << ", \"nan_growthrate\": " << (nan_gr ? "true" : "false") << "}\n";
+
+    ++rhea_failure_dump_count;
+  }
 }
 
 }  // namespace radiationm1

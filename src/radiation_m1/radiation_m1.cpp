@@ -296,6 +296,13 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
                 << std::endl;
       exit(EXIT_FAILURE);
     }
+
+    // Opt-in: dump the neutrino inputs of cells whose Rhea prediction is non-finite,
+    // for augmenting runs/rhea_newmodel_failure_cases/. Empty path => disabled.
+    rhea_failure_dump_file =
+        pin->GetOrAddString("radiation_m1", "rhea_failure_dump_file", "");
+    rhea_failure_dump_max =
+        pin->GetOrAddInteger("radiation_m1", "rhea_failure_dump_max", 512);
 #else
     std::cerr << "Error: To use flavor_mix = rhea, executable must be compiled with "
                  "-DAthena_ENABLE_TORCH=ON"
