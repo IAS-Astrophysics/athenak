@@ -115,6 +115,10 @@ struct RadiationM1Params {
   Real rhea_stability_threshold;  // stability[i] < this => unstable; default 0.5
   Real rhea_tau_0_factor;         // multiplies gamma_code for inv_tau_0; default 1.0
   Real rhea_tau_1_factor;         // multiplies gamma_code for inv_tau_1; default 1.0
+  Real rhea_max_flux_factor;      // cap on each packed slot's |F|/N before Rhea;
+                                  // default 0.9999. Box3D has a pole at |F|/N = 1 and
+                                  // must stay below it with float32 headroom --
+                                  // sqrt(1 - rad_eps) rounds to exactly 1.0f.
 };
 
 enum SrcSignal {

@@ -326,6 +326,7 @@ TaskStatus RadiationM1::PackRheaInputs(Driver *pdrive, int stage) {
         //     identical and avoids double-applying it by accident.
         // -------------------------------------------------------------------
         const int idx = RheaBatchIndex(m, k, j, i, ks, js, is, nx3, nx2, nx1);
+
         for (int mm = 0; mm < 2; ++mm) {
           for (int f = 0; f < NF; ++f) {
             const int lin = NF * mm + f;
@@ -352,12 +353,30 @@ TaskStatus RadiationM1::PackRheaInputs(Driver *pdrive, int stage) {
             // Project onto the Eulerian tetrad: time leg = -n^mu N_mu (lab-
             // frame number density); spatial legs = the Gram-Schmidt triad
             // contracted with N_d's spatial components (note [1]).
-            const Real N_time = -tensor_dot(n_u, N_d);
+            Real N_time = -tensor_dot(n_u, N_d);
             Real N_space[3] = {0.0, 0.0, 0.0};
             for (int a = 0; a < 3; ++a) {
               for (int p = 0; p < 3; ++p) {
                 N_space[a] += triad[a][p] * N_d(p + 1);
               }
+            }
+
+            // Cap this slot's flux factor at rhea_max_flux_factor. Rhea's Box3D closure
+            // builds Fhat = F/|F| and the Jedynak factor Z(|F|/N), which has a pole at
+            // |F|/N = 1: a slot at or above it makes predict_all return NaN. The cap
+            // must stay strictly below 1 with float32 headroom -- a free-streaming
+            // atmosphere cell packs |N_space| ~ N_time, and sqrt(1 - rad_eps) rounds to
+            // exactly 1.0f in the float32 tensor.
+            N_time = Kokkos::max(N_time, params_.rad_N_floor);
+            const Real ff2_lim = params_.rhea_max_flux_factor
+                               * params_.rhea_max_flux_factor * N_time * N_time;
+            const Real normF2 = N_space[0] * N_space[0] + N_space[1] * N_space[1]
+                              + N_space[2] * N_space[2];
+            if (normF2 > ff2_lim) {
+              const Real s = Kokkos::sqrt(ff2_lim / normF2);
+              N_space[0] *= s;
+              N_space[1] *= s;
+              N_space[2] *= s;
             }
 
             f4_in_(idx, mm, f, 3) = static_cast<float>(N_time);

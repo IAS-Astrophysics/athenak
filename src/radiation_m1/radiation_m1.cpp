@@ -285,6 +285,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddReal("radiation_m1", "rhea_tau_0_factor", 1.0);
     params.rhea_tau_1_factor =
         pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
+    params.rhea_max_flux_factor =
+        pin->GetOrAddReal("radiation_m1", "rhea_max_flux_factor", 0.9999);
 
     // Required, no default: startup error if unset/empty.
     rhea_model_path = pin->GetOrAddString("radiation_m1", "rhea_model_path", "");
