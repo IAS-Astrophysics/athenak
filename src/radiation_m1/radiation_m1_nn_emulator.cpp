@@ -53,8 +53,8 @@ struct NNOpacityEmulator::Impl {
   };
 
   mutable torch::jit::Module module_;
-  float h_in_mean_[N_EOS] = {};
-  float h_in_std_[N_EOS] = {};
+  float h_in_mean_[N_INPUTS] = {};
+  float h_in_std_[N_INPUTS] = {};
   float h_out_mean_[N_OUTPUTS] = {};
   float h_out_std_[N_OUTPUTS] = {};
   torch::Device device_{torch::kCPU};
@@ -161,10 +161,11 @@ void NNOpacityEmulator::Load(const std::string &model_path,
   impl_->module_ = torch::jit::freeze(impl_->module_);
   impl_->module_ = torch::jit::optimize_for_inference(impl_->module_);
 
+  // Input stats are N_INPUTS-dim (3 for the reduced build, 8 otherwise).
   const torch::Tensor in_mean =
-      Impl::LoadFloat32Bin(stats_dir + "/nn2d_in_mean.bin", N_EOS);
+      Impl::LoadFloat32Bin(stats_dir + "/nn2d_in_mean.bin", N_INPUTS);
   const torch::Tensor in_std =
-      Impl::LoadFloat32Bin(stats_dir + "/nn2d_in_std.bin", N_EOS);
+      Impl::LoadFloat32Bin(stats_dir + "/nn2d_in_std.bin", N_INPUTS);
   const torch::Tensor out_mean =
       Impl::LoadFloat32Bin(stats_dir + "/nn2d_out_mean.bin", N_OUTPUTS);
   const torch::Tensor out_std =
@@ -174,7 +175,7 @@ void NNOpacityEmulator::Load(const std::string &model_path,
   const auto cpu_istd = in_std.contiguous();
   const auto cpu_omean = out_mean.contiguous();
   const auto cpu_ostd = out_std.contiguous();
-  for (int i = 0; i < N_EOS; ++i) {
+  for (int i = 0; i < N_INPUTS; ++i) {
     impl_->h_in_mean_[i] = cpu_imean.data_ptr<float>()[i];
     impl_->h_in_std_[i] = cpu_istd.data_ptr<float>()[i];
   }

@@ -47,8 +47,15 @@ static constexpr int NN_CH_KAPPA_A_NON_TH   = 7;
 static constexpr int NN_NCH  = 8;              // channels per species
 static constexpr int NN_NSP  = 4;              // species
 static constexpr int NN_NOUT = NN_NSP * NN_NCH; // 32 total outputs per cell
-static constexpr int NN_NEOS = 8;              // EOS input features
-static constexpr int NN_NIN  = NN_NEOS;        // 8 (no one-hot encoding)
+static constexpr int NN_NEOS = 8;              // EOS features gathered per cell
+// NN input width — matches NNOpacityEmulator::N_INPUTS. eos_dev always holds all
+// NN_NEOS features (the 1D/Kirchhoff reconstruction needs the chemical potentials);
+// only the network input x_full_dev is reduced.
+#if NN_REDUCED_INPUT
+static constexpr int NN_NIN  = 3;              // reduced: nb, T, Ye
+#else
+static constexpr int NN_NIN  = NN_NEOS;        // 8 (full EOS feature set)
+#endif
 
 template <class EOSPolicy, class ErrorPolicy>
 TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
@@ -67,7 +74,16 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
   auto &adm = pmy_pack->padm->adm;
   auto &radiation_mask_ = radiation_mask;
   auto &m1_params_    = params;
-  auto &nurates_params_ = nurates_params;
+  // Local copy (not a reference to the member) so the eq-distribution warmup
+  // override stays call-local.  On a fresh (neutrinoless) start the M1 moments
+  // are floored, so reconstructing the spectrum yields garbage; force the
+  // equilibrium distribution for the first eq_warmup_cycles cycles.  Feeds both
+  // the 1D ComputeNuratesOpacities call and the Kirchhoff/peq reconstruction,
+  // matching the standard nurates route (largesim-m1).
+  NuratesParams nurates_params_ = nurates_params;
+  if (pmy_pack->pmesh->ncycle < nurates_params_.eq_warmup_cycles) {
+    nurates_params_.use_equilibrium_distribution = true;
+  }
 
   auto &eta_0_ = eta_0;
   auto &abs_0_ = abs_0;
@@ -154,9 +170,10 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
   auto &radiation_mask_cap = radiation_mask_;
 
-  Kokkos::Array<float, NN_NEOS> nn_in_mean{};
-  Kokkos::Array<float, NN_NEOS> nn_in_std{};
-  for (int c = 0; c < NN_NEOS; ++c) {
+  // Input normalization stats are NN_NIN-dim (HostInMean/HostInStd hold N_INPUTS).
+  Kokkos::Array<float, NN_NIN> nn_in_mean{};
+  Kokkos::Array<float, NN_NIN> nn_in_std{};
+  for (int c = 0; c < NN_NIN; ++c) {
     nn_in_mean[c] = nn_emulator.HostInMean()[c];
     nn_in_std[c]  = nn_emulator.HostInStd()[c];
   }
@@ -173,10 +190,8 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
         if (radiation_mask_cap(m, k, j, i)) {
           valid_view(flat) = false;
-          for (int c = 0; c < NN_NIN; ++c) {
-            eos_dev(flat, c) = 0.f;
-            x_full_dev(flat, c) = 0.f;
-          }
+          for (int c = 0; c < NN_NEOS; ++c) eos_dev(flat, c) = 0.f;
+          for (int c = 0; c < NN_NIN;  ++c) x_full_dev(flat, c) = 0.f;
           return;
         }
         valid_view(flat) = true;
@@ -602,15 +617,11 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           }
 
           // Partially-equilibrated (T*, Ye*) predictor: a one-parameter family in
-          // w = a/(1+a), a = dtau*kappa_abs, per channel (nu_e pair energy, heavy
-          // pair energy, net lepton number).  w=1 -> trapped weak equilibrium,
-          // w=0 -> local blackbody, continuous between.
+          // w = a/(1+a), a = dtau*kappa_abs, per channel (nu_e energy, anue
+          // energy, heavy-pair energy, nu_e number, anue number).  w=1 -> trapped
+          // weak equilibrium, w=0 -> local blackbody, continuous between.
           if (peq_on_) {
             const Real dtau = m1_moments(flat, 8);  // dt * alpha / W (full step)
-
-            const Real J_e = nudens_1[0] + nudens_1[1];
-            const Real n_e = nudens_0[0] + nudens_0[1];
-            const Real N_L = nudens_0[0] - nudens_0[1];
 
             Real J_x  = nudens_1[2];
             Real kJ_x = abs_1_loc[2] * nudens_1[2];
@@ -622,34 +633,39 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
               ks_x += abs_1_loc[3];
               n_x   = 2;
             }
-            // J-weighted mean absorption per channel (arithmetic mean if empty).
-            const Real kbar_1e =
-                (J_e > 0.0)
-                    ? (abs_1_loc[0]*nudens_1[0] + abs_1_loc[1]*nudens_1[1])/J_e
-                    : 0.5*(abs_1_loc[0] + abs_1_loc[1]);
             const Real kbar_1x = (J_x > 0.0) ? kJ_x/J_x : ks_x/n_x;
-            const Real kbar_0e =
-                (n_e > 0.0)
-                    ? (abs_0_loc[0]*nudens_0[0] + abs_0_loc[1]*nudens_0[1])/n_e
-                    : 0.5*(abs_0_loc[0] + abs_0_loc[1]);
 
-            const Real a_1e = dtau*kbar_1e;
+            // Split electron-pair weights (one per species).  Lumping nu_e and
+            // anue under a common weight is exact only where the two paired
+            // terms are equal, but they differ by exp(eta) with the lepton
+            // residual their difference, so the errors reinforce.  The heavy
+            // pair shares one J-weighted weight.  Mirrors the standard nurates
+            // route (largesim-m1 split-weights commit).
+            const Real a_1p = dtau*abs_1_loc[0];
+            const Real a_1m = dtau*abs_1_loc[1];
             const Real a_1x = dtau*kbar_1x;
-            const Real a_0e = dtau*kbar_0e;
-            const Real w_1e = a_1e/(1.0 + a_1e);
+            const Real a_0p = dtau*abs_0_loc[0];
+            const Real a_0m = dtau*abs_0_loc[1];
+            const Real w_1p = a_1p/(1.0 + a_1p);
+            const Real w_1m = a_1m/(1.0 + a_1m);
             const Real w_1x = a_1x/(1.0 + a_1x);
-            const Real w_0e = a_0e/(1.0 + a_0e);
+            const Real w_0p = a_0p/(1.0 + a_0p);
+            const Real w_0m = a_0m/(1.0 + a_0m);
 
             Real T_star = T;
             Real Ye_star = Y;
 
             // Tier-0 gate: no EOS calls.  Ternaries (not fmax) so a NaN weight
             // gates the cell out deliberately.
-            const bool w_finite = Kokkos::isfinite(w_1e) &&
+            const bool w_finite = Kokkos::isfinite(w_1p) &&
+                                  Kokkos::isfinite(w_1m) &&
                                   Kokkos::isfinite(w_1x) &&
-                                  Kokkos::isfinite(w_0e);
-            Real w_max = (w_1e > w_1x) ? w_1e : w_1x;
-            w_max = (w_max > w_0e) ? w_max : w_0e;
+                                  Kokkos::isfinite(w_0p) &&
+                                  Kokkos::isfinite(w_0m);
+            Real w_max = (w_1p > w_1m) ? w_1p : w_1m;
+            w_max = (w_max > w_1x) ? w_max : w_1x;
+            w_max = (w_max > w_0p) ? w_max : w_0p;
+            w_max = (w_max > w_0m) ? w_max : w_0m;
 
             if (w_finite && w_max >= nurates_params_.peq_w_floor) {
               Real Y_part[3] = {Y, 0.0, 0.0};
@@ -670,18 +686,22 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
                   : 0.0;
               const bool cv_ok = Kokkos::isfinite(cv) && cv > 0.0;
 
-              const Real J_e_eq = nudens_1_thin[0] + nudens_1_thin[1];
               Real J_x_eq = nudens_1_thin[2];
               if (nspecies_ > 3) {
                 J_x_eq += nudens_1_thin[3];
               }
-              const Real N_L_eq = nudens_0_thin[0] - nudens_0_thin[1];
 
+              // Sum of absolute per-species terms (not |net|): the gate must
+              // not under-estimate the move, so it cannot gate out a cell that
+              // would have moved.  Split electron pair, matching nurates.
               const Real dlnT_hat =
-                  cv_ok ? (w_1e*Kokkos::fabs(J_e_eq - J_e) +
+                  cv_ok ? (w_1p*Kokkos::fabs(nudens_1_thin[0] - nudens_1[0]) +
+                           w_1m*Kokkos::fabs(nudens_1_thin[1] - nudens_1[1]) +
                            w_1x*Kokkos::fabs(J_x_eq - J_x))/(T*cv)
                         : 0.0;
-              const Real dYe_hat = w_0e*Kokkos::fabs(N_L_eq - N_L)/nb;
+              const Real dYe_hat =
+                  (w_0p*Kokkos::fabs(nudens_0_thin[0] - nudens_0[0]) +
+                   w_0m*Kokkos::fabs(nudens_0_thin[1] - nudens_0[1]))/nb;
 
               if (cv_ok && !(dlnT_hat < nurates_params_.peq_dlnT_tol &&
                              dYe_hat < nurates_params_.peq_dYe_tol)) {
@@ -701,18 +721,19 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
                 Real f_soft = 1.0;
                 for (int n_soft = 0; n_soft <= peq_max_halvings_;
                      ++n_soft, f_soft *= 0.5) {
-                  const Real u_1e = f_soft*w_1e;
-                  const Real u_1x = f_soft*w_1x;
-                  const Real u_0e = f_soft*w_0e;
+                  const Real u[PEQ_NWEIGHTS] = {
+                      f_soft*w_1p, f_soft*w_1m, f_soft*w_1x,
+                      f_soft*w_0p, f_soft*w_0m};
 
-                  const Real e_rhs = e_mat + u_1e*J_e + u_1x*J_x;
-                  Real Yl_rhs[3] = {Y + u_0e*N_L/nb, 0.0, 0.0};
+                  const Real e_rhs = e_mat + u[PEQ_W1_NUE]*nudens_1[0] +
+                                     u[PEQ_W1_ANUE]*nudens_1[1] + u[PEQ_W1_X]*J_x;
+                  Real Yl_rhs[3] = {Y + (u[PEQ_W0_NUE]*nudens_0[0] -
+                                         u[PEQ_W0_ANUE]*nudens_0[1])/nb, 0.0, 0.0};
 
                   Real T_try = T;
                   Real Ye_try[3] = {Y, 0.0, 0.0};
                   bool ok = eos.GetBetaEquilibriumPartial(
-                      nb, e_rhs, Yl_rhs, u_1e, u_1x, u_0e, T_try, &Ye_try[0],
-                      T, Y_part);
+                      nb, e_rhs, Yl_rhs, u, T_try, &Ye_try[0], T, Y_part);
 
                   if (ok && Kokkos::fabs(Kokkos::log(T_try/T)) <= dlnT_max &&
                       Kokkos::fabs(Ye_try[0] - Y) <= dYe_max) {

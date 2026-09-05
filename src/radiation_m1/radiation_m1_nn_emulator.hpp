@@ -38,10 +38,19 @@ enum class NNProfilePoint : int {
 //! radiation_m1_nn_emulator.cpp behind this pimpl.
 class NNOpacityEmulator {
  public:
-  static constexpr int N_EOS     = 8;    // EOS input features
+  static constexpr int N_EOS     = 8;    // EOS features gathered per cell
   static constexpr int N_SPECIES = 4;    // nue, anue, nux, anux
   static constexpr int N_CH      = 8;    // channels per species
-  static constexpr int N_INPUTS  = N_EOS;              // 8 (no one-hot)
+  // NN input width. The hybrid still gathers all N_EOS features (the 1D/Kirchhoff
+  // reconstruction needs the chemical potentials), but the *network* input can be
+  // reduced to (nb, T, Ye) since the other 5 are EOS-derived at fixed EOS.  The
+  // reduced build expects a native 3-input deploy (3-dim nn2d_in_* stats + a
+  // 3-input best_2d_nn.pt).  Default (flag off) keeps the 8-input model.
+#if NN_REDUCED_INPUT
+  static constexpr int N_INPUTS  = 3;                  // reduced: nb, T, Ye
+#else
+  static constexpr int N_INPUTS  = N_EOS;              // 8 (full EOS feature set)
+#endif
   static constexpr int N_OUTPUTS = N_SPECIES * N_CH;   // 32 (4 species × 8 channels)
   // Channel layout per species [s*N_CH + ch]:
   //   0 eta_0_th   1 kappa_0_a_th   2 eta_0_non_th   3 kappa_0_a_non_th

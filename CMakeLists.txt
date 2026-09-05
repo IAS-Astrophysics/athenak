@@ -36,6 +36,7 @@ option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
 option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
 option(Athena_ENABLE_NN_OPACITY "Replace bns_nurates with batched LibTorch NN emulator" OFF)
+option(Athena_ENABLE_NN_REDUCED_INPUT "Use the reduced 3-input (nb,T,Ye) NN model (needs a native 3-input deploy)" OFF)
 option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
@@ -99,6 +100,15 @@ else()
   if(Athena_ENABLE_NN_OPACITY AND NOT Athena_ENABLE_NURATES)
     message(WARNING "Athena_ENABLE_NN_OPACITY requires Athena_ENABLE_NURATES; NN opacity disabled.")
   endif()
+endif()
+
+# Reduced 3-input NN model (nb,T,Ye). eos_dev still gathers all 8 EOS features for
+# the hybrid 1D/Kirchhoff reconstruction; only the network input is reduced.
+if(ENABLE_NN_OPACITY AND Athena_ENABLE_NN_REDUCED_INPUT)
+  set(NN_REDUCED_INPUT 1)
+  message(STATUS "NN opacity: reduced 3-input model (nb,T,Ye) — needs a native 3-input deploy")
+else()
+  set(NN_REDUCED_INPUT 0)
 endif()
 
 #set user problem generator flag
