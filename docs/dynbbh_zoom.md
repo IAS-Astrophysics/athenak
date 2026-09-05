@@ -1,5 +1,7 @@
 # Restart-driven circumbinary disk zoom
 
+For launch commands only, see the [collaborator quick-start](dynbbh_zoom_quickstart.md).
+
 The `circumbinary_stable` strategy also works with `project/ttorus`'s
 `dyn_grmhd/dynbbh`: relax an outer disk on a coarse mesh, restart with stronger
 AMR targets, resolve the holes, then gradually shrink the puncture masks. MHD
