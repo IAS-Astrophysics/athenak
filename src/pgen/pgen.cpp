@@ -1012,6 +1012,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     ParticleInjection(pin, is_restart);
   } else if (pgen_fun_name.compare("particle_lagrangian_mc") == 0) {
     ParticleLagrangianMC(pin, is_restart);
+  } else if (pgen_fun_name.compare("particle_lagrangian_mc_counterflow") == 0) {
+    ParticleLagrangianMCCounterflow(pin, is_restart);
   } else if (pgen_fun_name.compare("particle_lagrangian_mc_mass_transport") == 0) {
     ParticleLagrangianMCMassTransport(pin, is_restart);
   } else if (pgen_fun_name.compare("particle_smr") == 0) {

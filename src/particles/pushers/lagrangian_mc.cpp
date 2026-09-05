@@ -56,6 +56,81 @@ Real LagrangianMCRandom(const std::uint64_t seed, const int tag, const int cycle
 
 } // namespace
 //----------------------------------------------------------------------------------------
+//! \brief Split completed face transfers by direction and send them to coarse neighbors.
+
+TaskStatus ParticlePopulation::SendLagrangianMCFlux(Driver*, int) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  const int is = indcs.is;
+  const int ie = indcs.ie;
+  const int js = indcs.js;
+  const int je = indcs.je;
+  const int ks = indcs.ks;
+  const int ke = indcs.ke;
+  const int nmb = pmy_pack->nmb_thispack;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+  DvceArray4D<Real> intflx1;
+  DvceArray4D<Real> intflx2;
+  DvceArray4D<Real> intflx3;
+  if (pmy_pack->phydro != nullptr) {
+    intflx1 = pmy_pack->phydro->density_flux_integral.x1f;
+    intflx2 = pmy_pack->phydro->density_flux_integral.x2f;
+    intflx3 = pmy_pack->phydro->density_flux_integral.x3f;
+  } else {
+    intflx1 = pmy_pack->pmhd->density_flux_integral.x1f;
+    intflx2 = pmy_pack->pmhd->density_flux_integral.x2f;
+    intflx3 = pmy_pack->pmhd->density_flux_integral.x3f;
+  }
+  auto flux1 = lmc_directional_flux.x1f;
+  auto flux2 = lmc_directional_flux.x2f;
+  auto flux3 = lmc_directional_flux.x3f;
+
+  // Remove the source cell's 1/dx factor before averaging fine faces onto a coarse
+  // face. The pusher divides by its local block's dx when reading these fields.
+  // Split only after time integration, matching the fine-cell destination weights.
+  // These comparisons preserve NaNs for the optional probability checker.
+  par_for("particle_lmc_split_flux_x1", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je, is, ie+1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real value = intflx1(m,k,j,i)*mbsize.d_view(m).dx1;
+    flux1(m,0,k,j,i) = (value > 0.0) ? 0.0 : -value;
+    flux1(m,1,k,j,i) = (value < 0.0) ? 0.0 : value;
+  });
+  par_for("particle_lmc_split_flux_x2", DevExeSpace(),
+          0, nmb-1, ks, ke, js, je+1, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real value = intflx2(m,k,j,i)*mbsize.d_view(m).dx2;
+    flux2(m,0,k,j,i) = (value > 0.0) ? 0.0 : -value;
+    flux2(m,1,k,j,i) = (value < 0.0) ? 0.0 : value;
+  });
+  if (pmy_pack->pmesh->three_d) {
+    par_for("particle_lmc_split_flux_x3", DevExeSpace(),
+            0, nmb-1, ks, ke+1, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      const Real value = intflx3(m,k,j,i)*mbsize.d_view(m).dx3;
+      flux3(m,0,k,j,i) = (value > 0.0) ? 0.0 : -value;
+      flux3(m,1,k,j,i) = (value < 0.0) ? 0.0 : value;
+    });
+  }
+
+  TaskStatus tstat = pbval_lmc_flux->InitFluxRecv(2);
+  if (tstat != TaskStatus::complete) return tstat;
+  return pbval_lmc_flux->PackAndSendFluxCC(lmc_directional_flux);
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Receive directional transfers before selecting Lagrangian-MC departures.
+
+TaskStatus ParticlePopulation::RecvLagrangianMCFlux(Driver*, int) {
+  TaskStatus tstat = pbval_lmc_flux->RecvAndUnpackFluxCC(lmc_directional_flux);
+  if (tstat != TaskStatus::complete) return tstat;
+  // Finish unpacking before these receive buffers can be reused on the next step.
+  Kokkos::fence();
+  tstat = pbval_lmc_flux->ClearFluxRecv();
+  if (tstat != TaskStatus::complete) return tstat;
+  return pbval_lmc_flux->ClearFluxSend();
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus ParticlePopulation::PushLagrangianMC
 //! \brief Move Lagrangian MC particles using the fluid's accumulated mass fluxes.
 
@@ -69,6 +144,11 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
   const int nx3 = indcs.nx3;
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
+  const bool multilevel = pmy_pack->pmesh->multilevel;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+  auto flux1 = lmc_directional_flux.x1f;
+  auto flux2 = lmc_directional_flux.x2f;
+  auto flux3 = lmc_directional_flux.x3f;
   DvceArray5D<Real> start_u;
   DvceArray4D<Real> intflx1;
   DvceArray4D<Real> intflx2;
@@ -119,10 +199,20 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
               !Kokkos::isfinite(x3l) || !Kokkos::isfinite(x3r)) {
             probability = invalid_probability;
           } else {
-            const Real outgoing = fmax(x1l, 0.0) + fmax(x1r, 0.0) +
-                                  fmax(x2l, 0.0) + fmax(x2r, 0.0) +
-                                  fmax(x3l, 0.0) + fmax(x3r, 0.0);
-            if (start_density > 0.0) {
+            Real outgoing = fmax(x1l, 0.0) + fmax(x1r, 0.0) +
+                            fmax(x2l, 0.0) + fmax(x2r, 0.0) +
+                            fmax(x3l, 0.0) + fmax(x3r, 0.0);
+            if (multilevel) {
+              auto size = mbsize.d_view(m);
+              outgoing = (flux1(m,0,k,j,i) + flux1(m,1,k,j,i+1))/size.dx1 +
+                         (flux2(m,0,k,j,i) + flux2(m,1,k,j+1,i))/size.dx2;
+              if (three_d) {
+                outgoing += (flux3(m,0,k,j,i) + flux3(m,1,k+1,j,i))/size.dx3;
+              }
+            }
+            if (!Kokkos::isfinite(outgoing)) {
+              probability = invalid_probability;
+            } else if (start_density > 0.0) {
               probability = outgoing/start_density;
             } else if (outgoing > 0.0) {
               probability = invalid_probability;
@@ -161,7 +251,7 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
                 << std::setprecision(17) << max_probability.val << " on rank="
                 << global_variable::my_rank << " gid=" << pmy_pack->gids + m
                 << " cell (k,j,i)=(" << k << "," << j << "," << i << "). "
-                << "density=" << bad_values_h(0) << ", outward fluxes=("
+                << "density=" << bad_values_h(0) << ", net outward fluxes=("
                 << bad_values_h(1) << "," << bad_values_h(2) << ","
                 << bad_values_h(3) << "," << bad_values_h(4) << ","
                 << bad_values_h(5) << "," << bad_values_h(6) << "). Probability "
@@ -175,12 +265,10 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
   }
   auto &pr = prtcl_rdata;
   auto &pi = prtcl_idata;
-  auto &mbsize = pmy_pack->pmb->mb_size;
   auto &mblev = pmy_pack->pmb->mb_lev;
   const int gids = pmy_pack->gids;
   const int npart = nprtcl_thispack;
   const int cycle = pmy_pack->pmesh->ncycle;
-  const bool multilevel = pmy_pack->pmesh->multilevel;
   const std::uint64_t seed = lmc_random_seed;
 
   par_for("particle_lmc_move", DevExeSpace(), 0, npart-1,
@@ -201,12 +289,21 @@ TaskStatus ParticlePopulation::PushLagrangianMC(Driver*, int) {
         mblev.d_view(m), i-is, j-js, k-ks);
 
     if (start_density != 0.0) {
-      const Real x1l = fmax(-intflx1(m,k,j,i), 0.0)/start_density;
-      const Real x1r = fmax( intflx1(m,k,j,i+1), 0.0)/start_density;
-      const Real x2l = multi_d ? fmax(-intflx2(m,k,j,i), 0.0)/start_density : 0.0;
-      const Real x2r = multi_d ? fmax( intflx2(m,k,j+1,i), 0.0)/start_density : 0.0;
-      const Real x3l = three_d ? fmax(-intflx3(m,k,j,i), 0.0)/start_density : 0.0;
-      const Real x3r = three_d ? fmax( intflx3(m,k+1,j,i), 0.0)/start_density : 0.0;
+      Real x1l = fmax(-intflx1(m,k,j,i), 0.0)/start_density;
+      Real x1r = fmax( intflx1(m,k,j,i+1), 0.0)/start_density;
+      Real x2l = multi_d ? fmax(-intflx2(m,k,j,i), 0.0)/start_density : 0.0;
+      Real x2r = multi_d ? fmax( intflx2(m,k,j+1,i), 0.0)/start_density : 0.0;
+      Real x3l = three_d ? fmax(-intflx3(m,k,j,i), 0.0)/start_density : 0.0;
+      Real x3r = three_d ? fmax( intflx3(m,k+1,j,i), 0.0)/start_density : 0.0;
+      if (multilevel) {
+        // Opposing fine-face transfers must not cancel coarse-cell departures.
+        x1l = flux1(m,0,k,j,i)/size.dx1/start_density;
+        x1r = flux1(m,1,k,j,i+1)/size.dx1/start_density;
+        x2l = flux2(m,0,k,j,i)/size.dx2/start_density;
+        x2r = flux2(m,1,k,j+1,i)/size.dx2/start_density;
+        x3l = three_d ? flux3(m,0,k,j,i)/size.dx3/start_density : 0.0;
+        x3r = three_d ? flux3(m,1,k+1,j,i)/size.dx3/start_density : 0.0;
+      }
       const Real draw = LagrangianMCRandom(
           seed, pi(lagrangian_mc::PTAG,p), cycle, kMoveDraw);
 

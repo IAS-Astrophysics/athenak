@@ -98,11 +98,19 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
     input_block_(input_block),
     lmc_random_seed(0),
     lmc_check_flux_probabilities(false),
+    lmc_directional_flux("lmc_directional_flux",0,2,0,0,0),
+    pbval_lmc_flux(nullptr),
     pmy_pack(ppack) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "Particle module only works in 2D/3D" <<std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pmy_pack->pmesh->adaptive) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particles do not support adaptive mesh refinement"
+              << std::endl;
     std::exit(EXIT_FAILURE);
   }
   for (int dir=0; dir<6; ++dir) {
@@ -199,10 +207,10 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
       } else {
         orbital_advection = pmy_pack->pmhd->porb_u != nullptr;
       }
-      if (pmy_pack->pmesh->adaptive || orbital_advection) {
+      if (orbital_advection) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Lagrangian MC particles currently require a fixed "
-                  << "mesh without orbital advection" << std::endl;
+                  << std::endl << "Lagrangian MC particles do not support orbital advection"
+                  << std::endl;
         std::exit(EXIT_FAILURE);
       }
       std::string evolution = pin->GetString("time", "evolution");
@@ -249,6 +257,20 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
         pmy_pack->phydro->EnableDensityFluxIntegral();
       } else {
         pmy_pack->pmhd->EnableDensityFluxIntegral();
+      }
+      if (pmy_pack->pmesh->multilevel) {
+        auto &indcs = pmy_pack->pmesh->mb_indcs;
+        const int nmb = std::max(pmy_pack->nmb_thispack, pmy_pack->pmesh->nmb_maxperrank);
+        const int ncells1 = indcs.nx1 + 2*indcs.ng;
+        const int ncells2 = (indcs.nx2 > 1) ? indcs.nx2 + 2*indcs.ng : 1;
+        const int ncells3 = (indcs.nx3 > 1) ? indcs.nx3 + 2*indcs.ng : 1;
+        Kokkos::realloc(lmc_directional_flux.x1f, nmb, 2, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(lmc_directional_flux.x2f, nmb, 2, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(lmc_directional_flux.x3f, nmb, 2, ncells3+1, ncells2, ncells1);
+        // Separate buffers reuse the normal fine-to-coarse flux exchange without
+        // modifying the fluid fluxes or their communication state.
+        pbval_lmc_flux = new MeshBoundaryValuesCC(pmy_pack, pin, false);
+        pbval_lmc_flux->InitializeBuffers(2);
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -309,6 +331,7 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
 
 ParticlePopulation::~ParticlePopulation() {
   delete pbval_part;
+  delete pbval_lmc_flux;
 }
 
 //----------------------------------------------------------------------------------------

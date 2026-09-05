@@ -51,6 +51,10 @@ namespace {
 
 ParticleVTKOutput::ParticleVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters op) :
   BaseTypeOutput(pin, pm, op), npout_thisrank(0), npout_total(0) {
+  if (out_params.gid >= 0) {
+    FatalParticleVTKOutput(
+        "file_type=pvtk does not support gid filtering; omit gid or use gid=-1");
+  }
   // create new directory for this output. Comments in binary.cpp constructor explain why
   mkdir("pvtk",0775);
   if (pm->pmb_pack->ppart == nullptr) {

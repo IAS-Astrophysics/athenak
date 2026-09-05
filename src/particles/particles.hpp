@@ -41,6 +41,8 @@ enum ParticleStatus {
 //  \brief container to hold TaskIDs of all particles tasks
 
 struct ParticleTaskIDs {
+  TaskID sendf;
+  TaskID recvf;
   TaskID push;
   TaskID lifecycle;
   TaskID purge;
@@ -112,6 +114,8 @@ class ParticlePopulation {
 
   // particle pusher implementations
   TaskStatus PushDrift(Driver *pdriver, int stage);
+  TaskStatus SendLagrangianMCFlux(Driver *pdriver, int stage);
+  TaskStatus RecvLagrangianMCFlux(Driver *pdriver, int stage);
   TaskStatus PushLagrangianMC(Driver *pdriver, int stage);
   TaskStatus FinalizeLagrangianMCMove(Driver *pdriver, int stage);
   Real EstimateTimestepDrift();
@@ -126,6 +130,10 @@ class ParticlePopulation {
   std::string input_block_;
   std::uint64_t lmc_random_seed;
   bool lmc_check_flux_probabilities;
+  // SMR transfers per unit face area, integrated over the completed fluid step.
+  // Components 0 and 1 carry nonnegative amounts in the negative and positive directions.
+  DvceFaceFld5D<Real> lmc_directional_flux;
+  MeshBoundaryValuesCC *pbval_lmc_flux;
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this population
 };
 

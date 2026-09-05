@@ -151,15 +151,14 @@ TaskStatus ParticlesBoundaryValues::SetNewPrtclGID() {
       Kokkos::abort("Particle crossed a nonperiodic boundary without being retired");
     }
 
-    // length of MeshBlock in each direction
-    Real lx = (mbsize.d_view(m).x1max - mbsize.d_view(m).x1min);
-    Real ly = (mbsize.d_view(m).x2max - mbsize.d_view(m).x2min);
-    Real lz = (mbsize.d_view(m).x3max - mbsize.d_view(m).x3min);
-
-    // integer offset of particle relative to center of MeshBlock (-1,0,+1)
-    int ix = static_cast<int>((x1 - mbsize.d_view(m).x1min + lx)/lx) - 1;
-    int iy = static_cast<int>((x2 - mbsize.d_view(m).x2min + ly)/ly) - 1;
-    int iz = static_cast<int>((x3 - mbsize.d_view(m).x3min + lz)/lz) - 1;
+    // Compare directly with block bounds so rounding cannot turn an interior
+    // position into a crossing. The lower face belongs to this block; the upper does not.
+    int ix = (x1 < mbsize.d_view(m).x1min) ? -1 :
+             ((x1 >= mbsize.d_view(m).x1max) ? 1 : 0);
+    int iy = (x2 < mbsize.d_view(m).x2min) ? -1 :
+             ((x2 >= mbsize.d_view(m).x2max) ? 1 : 0);
+    int iz = (x3 < mbsize.d_view(m).x3min) ? -1 :
+             ((x3 >= mbsize.d_view(m).x3max) ? 1 : 0);
 
     // sublock indices for faces and edges with S/AMR
     int fx = (x1 < 0.5*(mbsize.d_view(m).x1min + mbsize.d_view(m).x1max))? 0 : 1;
@@ -443,8 +442,9 @@ TaskStatus ParticlesBoundaryValues::PackAndSendPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rsendbuf = prtcl_rsendbuf;
     auto &isendbuf = prtcl_isendbuf;
+    auto psendl = sendlist.d_view;
     par_for("ppack",DevExeSpace(),0,(nprtcl_send-1), KOKKOS_LAMBDA(const int n) {
-      int p = sendlist.d_view(n).prtcl_indx;
+      int p = psendl(n).prtcl_indx;
       for (int i=0; i<nidata; ++i) {
         isendbuf(nidata*n + i) = pi(i,p);
       }
@@ -560,13 +560,15 @@ TaskStatus ParticlesBoundaryValues::RecvAndUnpackPrtcls() {
     auto &pi = pmy_part->prtcl_idata;
     auto &rrecvbuf = prtcl_rrecvbuf;
     auto &irecvbuf = prtcl_irecvbuf;
+    auto psendl = sendlist.d_view;
+    int nsend = nprtcl_send;
     int &npart = pmy_part->nprtcl_thispack;
     par_for("punpack",DevExeSpace(),0,(nprtcl_recv-1), KOKKOS_LAMBDA(const int n) {
       int p;
-      if (n < nprtcl_send) {
-        p = sendlist.d_view(n).prtcl_indx; // place particles in holes created by sends
+      if (n < nsend) {
+        p = psendl(n).prtcl_indx; // place particles in holes created by sends
       } else {
-        p = npart + (n - nprtcl_send);     // place particle at end of arrays
+        p = npart + (n - nsend);  // place particle at end of arrays
       }
       for (int i=0; i<nidata; ++i) {
         pi(i,p) = irecvbuf(nidata*n + i);

@@ -15,6 +15,10 @@ namespace lagrangian_mc {
 // and x3 positions, and the first three integer fields to be the owning GID, durable tag,
 // and lifecycle status. The minimum fields record the smallest Euclidean coordinate
 // radius from the origin reached by the particle.
+// Lagrangian-MC evolution requires zone-centered positions in active mesh directions:
+// refinement correction assumes this geometry. Initializers, injection callbacks, and
+// custom restart files must supply such positions; the framework does not check or
+// recenter them.
 enum RealIndex {
   IPX=0, IPY=1, IPZ=2, IPXMIN=3, IPYMIN=4, IPZMIN=5, IPTMIN=6, NREAL=7
 };

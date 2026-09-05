@@ -10,6 +10,68 @@ import test_suite.testutils as testutils
 from test_suite.particles.test_particles_snapshot_gpu import _read_particle_vtk
 
 
+def _run_particle_smr_boundary_rounding(tmp_path, monkeypatch, axis, location, mpi=False):
+    """A stationary particle must retain ownership at and beside block faces."""
+    input_file = Path("inputs/particle_smr.athinput").resolve()
+    executable = Path("athena").resolve()
+    monkeypatch.chdir(tmp_path)
+    Path("athena").symlink_to(executable)
+    basename = "particle_smr_boundary_rounding"
+    lower, internal, upper = {
+        "x": (-4.0, -2.0, 4.0),
+        "y": (-2.0, 1.0, 2.0),
+        "z": (-0.5, 0.25, 0.5),
+    }[axis]
+    coordinate = {
+        "lower": lower,
+        "inside_lower": np.nextafter(lower, np.inf),
+        "below_internal": np.nextafter(internal, -np.inf),
+        "internal": internal,
+        "above_internal": np.nextafter(internal, np.inf),
+        "inside_upper": np.nextafter(upper, -np.inf),
+    }[location]
+    position = [-3.0, -0.75, 0.0]
+    position["xyz".index(axis)] = coordinate
+    arguments = [f"job/basename={basename}"]
+    for direction, value in zip("xyz", position):
+        arguments += [
+            f"problem/particle_{direction}={value:.17g}",
+            f"problem/particle_v{direction}=0.0",
+        ]
+    if axis == "z":
+        arguments += ["mesh/nx3=8", "meshblock/nx3=4"]
+    if mpi:
+        assert testutils.mpi_run(str(input_file), arguments, threads=2)
+    else:
+        assert testutils.run(str(input_file), arguments)
+
+    expected_points = np.array([position], dtype=np.float32)
+    if axis != "z":
+        expected_points[0, 2] = -0.5  # VTK uses mesh/x3min for the inactive coordinate.
+    initial = Path(f"pvtk/{basename}.prtcl_all.00000.part.vtk")
+    _, initial_fields, _ = _read_particle_vtk(initial)
+    for number in (0, 1, 2):
+        snapshot = Path(f"pvtk/{basename}.prtcl_all.{number:05d}.part.vtk")
+        points, fields, _ = _read_particle_vtk(snapshot)
+        np.testing.assert_array_equal(points, expected_points)
+        np.testing.assert_array_equal(fields["ptag"], [0])
+        np.testing.assert_array_equal(fields["status"], [0])
+        # Float32 VTK coordinates hide one-double-spacing errors. This diagnostic
+        # checks the live particle position against its owner's bounds on the device.
+        np.testing.assert_array_equal(fields["owner_error"], [0.0])
+        np.testing.assert_array_equal(fields["owner_level"], initial_fields["owner_level"])
+        np.testing.assert_array_equal(fields["owner_rank"], initial_fields["owner_rank"])
+
+
+@pytest.mark.parametrize("axis", ("x", "y", "z"))
+@pytest.mark.parametrize("location", (
+    "lower", "inside_lower", "below_internal", "internal", "above_internal", "inside_upper",
+))
+def test_particle_smr_boundary_rounding_gpu(tmp_path, monkeypatch, axis, location):
+    """Keep stationary particles on the correct side of internal and periodic faces."""
+    _run_particle_smr_boundary_rounding(tmp_path, monkeypatch, axis, location)
+
+
 @pytest.mark.parametrize(
     "name,arguments,initial_xy,final_xy,z_values,initial_level,final_level",
     [

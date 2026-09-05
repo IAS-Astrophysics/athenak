@@ -4,9 +4,17 @@ from pathlib import Path
 import shutil
 
 import numpy as np
+import pytest
 
 import test_suite.testutils as testutils
 from test_suite.particles.test_particles_snapshot_gpu import _read_particle_vtk
+from test_suite.particles.test_particles_smr_gpu import _run_particle_smr_boundary_rounding
+
+
+@pytest.mark.parametrize("location", ("below_internal", "inside_upper"))
+def test_particle_smr_boundary_rounding_mpicpu(tmp_path, monkeypatch, location):
+    """Do not migrate a stationary particle because of boundary rounding."""
+    _run_particle_smr_boundary_rounding(tmp_path, monkeypatch, "x", location, mpi=True)
 
 
 def test_particle_smr_mpicpu():
