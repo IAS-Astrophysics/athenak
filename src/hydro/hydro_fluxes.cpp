@@ -14,7 +14,11 @@
 //! supported; the reconstruction method is chosen at runtime, the solver at compile time
 //! via the rsolver template parameter.
 
+#include <cstdlib>
+#include <iostream>
+
 #include "athena.hpp"
+#include "driver/driver.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/coordinates.hpp"
 #include "hydro.hpp"
@@ -239,5 +243,77 @@ template void Hydro::CalculateFluxes<Hydro_RSolver::hlle_sr>(Driver *pdriver, in
 template void Hydro::CalculateFluxes<Hydro_RSolver::hllc_sr>(Driver *pdriver, int stage);
 template void Hydro::CalculateFluxes<Hydro_RSolver::llf_gr>(Driver *pdriver, int stage);
 template void Hydro::CalculateFluxes<Hydro_RSolver::hlle_gr>(Driver *pdriver, int stage);
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus Hydro::AccumulateDensityFlux()
+//! \brief Accumulate the RK2 density transfer through each active face over one step.
+
+TaskStatus Hydro::AccumulateDensityFlux(Driver *pdrive, int stage) {
+  if (!density_flux_integral_enabled) return TaskStatus::complete;
+  if (pdrive->integrator != "rk2" || pdrive->nexp_stages != 2 ||
+      stage < 1 || stage > 2) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Density-flux accumulation currently requires RK2"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  const int is = indcs.is;
+  const int ie = indcs.ie;
+  const int js = indcs.js;
+  const int je = indcs.je;
+  const int ks = indcs.ks;
+  const int ke = indcs.ke;
+  const int nmb1 = pmy_pack->nmb_thispack - 1;
+  const bool first_stage = stage == 1;
+  const Real weight_dt = 0.5*pmy_pack->pmesh->dt;
+  auto &mbsize = pmy_pack->pmb->mb_size;
+  auto flx1 = uflx.x1f;
+  auto flx2 = uflx.x2f;
+  auto flx3 = uflx.x3f;
+  auto intflx1 = density_flux_integral.x1f;
+  auto intflx2 = density_flux_integral.x2f;
+  auto intflx3 = density_flux_integral.x3f;
+
+  par_for("hydro_accumulate_density_flux_x1", DevExeSpace(),
+          0, nmb1, ks, ke, js, je, is, ie+1,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    const Real value = weight_dt*flx1(m,IDN,k,j,i)/mbsize.d_view(m).dx1;
+    if (first_stage) {
+      intflx1(m,k,j,i) = value;
+    } else {
+      intflx1(m,k,j,i) += value;
+    }
+  });
+
+  if (pmy_pack->pmesh->multi_d) {
+    par_for("hydro_accumulate_density_flux_x2", DevExeSpace(),
+            0, nmb1, ks, ke, js, je+1, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      const Real value = weight_dt*flx2(m,IDN,k,j,i)/mbsize.d_view(m).dx2;
+      if (first_stage) {
+        intflx2(m,k,j,i) = value;
+      } else {
+        intflx2(m,k,j,i) += value;
+      }
+    });
+  }
+
+  if (pmy_pack->pmesh->three_d) {
+    par_for("hydro_accumulate_density_flux_x3", DevExeSpace(),
+            0, nmb1, ks, ke+1, js, je, is, ie,
+    KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+      const Real value = weight_dt*flx3(m,IDN,k,j,i)/mbsize.d_view(m).dx3;
+      if (first_stage) {
+        intflx3(m,k,j,i) = value;
+      } else {
+        intflx3(m,k,j,i) += value;
+      }
+    });
+  }
+
+  return TaskStatus::complete;
+}
 
 } // namespace hydro

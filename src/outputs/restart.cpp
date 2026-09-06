@@ -24,6 +24,7 @@
 #include "mesh/mesh.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "particles/particles.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
@@ -189,6 +190,11 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::snprintf(number, sizeof(number), ".%05d", out_params.file_number);
     fname = std::string("rst/") + out_params.file_basename + number + ".rst";
   }
+  char particle_number[7];
+  std::snprintf(particle_number, sizeof(particle_number), ".%05d",
+                out_params.file_number);
+  std::string particle_fname = std::string("rst/") + out_params.file_basename
+      + particle_number + ".part_rst";
   // increment counters now so values for *next* dump are stored in restart file
   out_params.file_number++;
   if (out_params.last_time < 0.0) {
@@ -625,6 +631,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   // close file, clean up
   resfile.Close(single_file_per_rank);
+
+  if (pm->pmb_pack->ppart != nullptr) {
+    pm->pmb_pack->ppart->WriteRestart(particle_fname);
+  }
 
   return;
 }

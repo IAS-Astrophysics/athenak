@@ -193,16 +193,6 @@ struct HistoryData {
 };
 
 //----------------------------------------------------------------------------------------
-//! \struct TrackedParticleData
-//! \brief data (tag, pos, vel) output for tracked particles
-
-struct TrackedParticleData {
-  int tag;
-  Real x,y,z;
-  Real vx,vy,vz;
-};
-
-//----------------------------------------------------------------------------------------
 // \brief abstract base class for different output types (modes/formats); node in
 //        std::list of BaseTypeOutput created & stored in the Outputs class
 
@@ -365,8 +355,10 @@ class ParticleVTKOutput : public BaseTypeOutput {
  protected:
   int npout_thisrank;
   int npout_total;
+  std::vector<std::string> user_real_names;
   HostArray2D<Real> outpart_rdata;
   HostArray2D<int>  outpart_idata;
+  HostArray2D<Real> outpart_user_rdata;
 };
 
 //----------------------------------------------------------------------------------------
@@ -451,22 +443,32 @@ class EventLogOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
 };
 
-//----------------------------------------------------------------------------------------
-//! \class TrackedParticleOutput
-//  \brief derived BaseTypeOutput class for tracked particle data in binary format
+enum class ParticleTrackSelection {all, list, slice};
 
-class TrackedParticleOutput : public BaseTypeOutput {
+//----------------------------------------------------------------------------------------
+//! \class ParticleTrackOutput
+//  \brief derived BaseTypeOutput class for particle histories in binary format
+
+class ParticleTrackOutput : public BaseTypeOutput {
  public:
-  TrackedParticleOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
+  ParticleTrackOutput(ParameterInput *pin, Mesh *pm, OutputParameters oparams);
   void LoadOutputData(Mesh *pm) override;
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
- protected:
-  int ntrack;           // total number of tracked particles across all ranks
-  int ntrack_thisrank;  // number of tracked particles this rank (guess)
-  int npout;            // number of tracked particles to be written this rank
-  bool header_written;
+ private:
+  std::string population_name;
+  std::string tag_selection;
+  ParticleTrackSelection selection_mode;
+  int slice_start, slice_stop, slice_step;
+  bool slice_has_stop;
+  int npout_thisrank, npout_total;
+  std::vector<int> explicit_tags;
+  DvceArray1D<int> selected_tags;
+  std::vector<int> int_fields, real_fields;
+  std::vector<std::string> user_real_names;
   std::vector<int> npout_eachrank;
-  HostArray1D<TrackedParticleData> outpart;
+  HostArray2D<int> outpart_idata;
+  HostArray2D<Real> outpart_rdata;
+  HostArray2D<Real> outpart_user_rdata;
 };
 
 //----------------------------------------------------------------------------------------

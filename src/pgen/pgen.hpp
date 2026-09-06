@@ -10,16 +10,33 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "geodesic-grid/spherical_grid.hpp"
 #include "parameter_input.hpp"
+
+namespace particles {
+class ParticleCreation;
+struct ParticleLifecycleData;
+struct ParticleOutputData;
+}
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
 using UserBoundaryFnPtr = void (*)(Mesh* pm);
 using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
 using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
+using UserParticleTimestepFnPtr = Real (*)(MeshBlockPack *pmbp);
+using UserParticleInjectionFnPtr = void (*)(MeshBlockPack *pmbp,
+                                            particles::ParticleCreation *creation);
+using UserParticleLifecycleFnPtr = void (*)(particles::ParticleLifecycleData *lifecycle);
+using UserParticleOutputFnPtr = void (*)(particles::ParticleOutputData *output);
+
+struct UserParticleOutputVariable {
+  std::string name;
+  UserParticleOutputFnPtr function;
+};
 
 //----------------------------------------------------------------------------------------
 //! \class ProblemGenerator
@@ -53,6 +70,27 @@ class ProblemGenerator {
   UserSrctermFnPtr user_srcs_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
+  // Optional additional particle limit; enroll before returning on restart.
+  UserParticleTimestepFnPtr user_particle_dt_func=nullptr;
+  // Optional passive particle creation hooks. Runtime injection occurs after a
+  // completed step; enroll user_particle_injection_func on restarts as well.
+  UserParticleInjectionFnPtr user_initial_particle_injection_func=nullptr;
+  UserParticleInjectionFnPtr user_particle_injection_func=nullptr;
+  // Optional post-push, pre-routing particle lifecycle hook. Enroll on restarts as well.
+  UserParticleLifecycleFnPtr user_particle_lifecycle_func=nullptr;
+  // Optional post-routing and post-correction lifecycle hook. Enroll on restarts as well.
+  UserParticleLifecycleFnPtr user_particle_post_update_func=nullptr;
+  // Output-only particle quantities. Generic enrollment adds to both registries;
+  // format-specific enrollment adds only to the named registry. Enroll on restarts too.
+  std::vector<UserParticleOutputVariable> user_particle_track_output_variables;
+  std::vector<UserParticleOutputVariable> user_particle_vtk_output_variables;
+
+  void EnrollParticleOutputVariable(const std::string &name,
+                                    UserParticleOutputFnPtr function);
+  void EnrollParticleTrackOutputVariable(const std::string &name,
+                                         UserParticleOutputFnPtr function);
+  void EnrollParticleVTKOutputVariable(const std::string &name,
+                                       UserParticleOutputFnPtr function);
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);
@@ -67,6 +105,12 @@ class ProblemGenerator {
   void Monopole(ParameterInput *pin, const bool restart);
   void MRI3d(ParameterInput *pin, const bool restart);
   void OrszagTang(ParameterInput *pin, const bool restart);
+  void ParticleDrift(ParameterInput *pin, const bool restart);
+  void ParticleInjection(ParameterInput *pin, const bool restart);
+  void ParticleLagrangianMC(ParameterInput *pin, const bool restart);
+  void ParticleLagrangianMCCounterflow(ParameterInput *pin, const bool restart);
+  void ParticleLagrangianMCMassTransport(ParameterInput *pin, const bool restart);
+  void ParticleSMR(ParameterInput *pin, const bool restart);
   void ShockTube(ParameterInput *pin, const bool restart);
   void Shwave(ParameterInput *pin, const bool restart);
   void RadiationLinearWave(ParameterInput *pin, const bool restart);

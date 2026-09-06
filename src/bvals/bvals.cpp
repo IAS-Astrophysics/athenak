@@ -442,7 +442,7 @@ void MeshBoundaryValues::InitializeBuffers(const int nvar) {
 // ParticlesBoundaryValues constructor:
 
 particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
-  particles::Particles *pp, ParameterInput *pin) :
+  particles::ParticlePopulation *pp, ParameterInput *pin) :
     sendlist("sendlist",1),
 #if MPI_PARALLEL_ENABLED
     prtcl_rsendbuf("rsend",1),
@@ -464,4 +464,7 @@ particles::ParticlesBoundaryValues::ParticlesBoundaryValues(
 // destructor
 
 particles::ParticlesBoundaryValues::~ParticlesBoundaryValues() {
+#if MPI_PARALLEL_ENABLED
+  MPI_Comm_free(&mpi_comm_part);
+#endif
 }

@@ -52,6 +52,7 @@ struct MHDTaskIDs {
   TaskID flux;
   TaskID sendf;
   TaskID recvf;
+  TaskID accumf;
   TaskID rkupdt;
   TaskID srctrms;
   TaskID sendu_oa;
@@ -135,6 +136,8 @@ class MHD {
   DvceFaceFld4D<Real> b_sts2;  // second previous STS stage fields
   DvceFaceFld4D<Real> b_sts_rhs;  // cached first-stage RKL2 operator contribution
   DvceFaceFld5D<Real> uflx;   // fluxes of conserved quantities on cell faces
+  DvceFaceFld4D<Real> density_flux_integral;  // RK-integrated IDN flux divided by dx
+  bool density_flux_integral_enabled = false;
   DvceEdgeFld4D<Real> efld;   // edge-centered electric fields (fluxes of B)
   // temporary variables used to store face-centered electric fields returned by RS
   DvceArray4D<Real> e3x1, e2x1;
@@ -171,6 +174,7 @@ class MHD {
 
   // functions...
   void SetSaveWBcc();
+  void EnableDensityFluxIntegral();
   void AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_timeintegrator" task list
   TaskStatus SaveMHDState(Driver *d, int stage);
@@ -182,6 +186,7 @@ class MHD {
   TaskStatus Fluxes(Driver *d, int stage);
   TaskStatus SendFlux(Driver *d, int stage);
   TaskStatus RecvFlux(Driver *d, int stage);
+  TaskStatus AccumulateDensityFlux(Driver *d, int stage);
   TaskStatus RKUpdate(Driver *d, int stage);
   TaskStatus MHDSrcTerms(Driver *d, int stage);
   TaskStatus SendU_OA(Driver *d, int stage);

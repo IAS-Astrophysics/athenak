@@ -645,7 +645,7 @@ void Mesh::NewTimeStep(const Real tlim) {
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
-    dt_cycle = std::min(dt_cycle, (pmb_pack->ppart->dtnew) );
+    dt_cycle = std::min(dt_cycle, pmb_pack->ppart->GetTimestep());
   }
 
 #if MPI_PARALLEL_ENABLED
@@ -694,34 +694,55 @@ void Mesh::RefreshSTSParabolicTimeStep() {
 }
 
 //----------------------------------------------------------------------------------------
+// \fn Mesh::UpdateParticleCounts
+
+void Mesh::UpdateParticleCounts() {
+  nprtcl_thisrank = 0;
+  if (pmb_pack->ppart != nullptr) {
+    nprtcl_thisrank = pmb_pack->ppart->GetLocalCount();
+  }
+  nprtcl_eachrank[global_variable::my_rank] = nprtcl_thisrank;
+#if MPI_PARALLEL_ENABLED
+  MPI_Allgather(&nprtcl_thisrank, 1, MPI_INT, nprtcl_eachrank, 1, MPI_INT,
+                MPI_COMM_WORLD);
+#endif
+  std::int64_t total = 0;
+  for (int n=0; n<global_variable::nranks; ++n) {
+    total += static_cast<std::int64_t>(nprtcl_eachrank[n]);
+  }
+  if (total > std::numeric_limits<int>::max()) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Global particle count exceeds the in-memory integer limit" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  nprtcl_total = static_cast<int>(total);
+}
+
+//----------------------------------------------------------------------------------------
 // \fn Mesh::AddCoordinatesAndPhysics
 
-void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput) {
+void Mesh::AddCoordinatesAndPhysics(ParameterInput *pinput, bool is_restart) {
   // cycle over MeshBlockPacks on this rank and add Coordinates and Physics
   for (int n=0; n<nmb_packs_thisrank; ++n) {
     pmb_pack->AddCoordinates(pinput);
-    pmb_pack->AddPhysics(pinput);
+    pmb_pack->AddPhysics(pinput, is_restart);
   }
 
   // Determine total number of particles across all ranks
-  particles::Particles *ppart = pmb_pack->ppart;
-  if (ppart != nullptr) {
-    nprtcl_thisrank = 0;
-    for (int n=0; n<nmb_packs_thisrank; ++n) {
-      nprtcl_thisrank += pmb_pack->ppart->nprtcl_thispack;
-    }
+  if (pmb_pack->ppart != nullptr) {
     nprtcl_eachrank = new int[global_variable::nranks];
-    nprtcl_eachrank[global_variable::my_rank] = nprtcl_thisrank;
-#if MPI_PARALLEL_ENABLED
-    // Share number of particles on each rank with all ranks
-    MPI_Allgather(&nprtcl_thisrank,1,MPI_INT,nprtcl_eachrank,1,MPI_INT,MPI_COMM_WORLD);
-#endif
-    for (int n=0; n<global_variable::nranks; ++n) {
-      nprtcl_total += nprtcl_eachrank[n];
-    }
-    // Assign particle IDs
-    if (pmb_pack->ppart != nullptr) {
-      pmb_pack->ppart->CreateParticleTags(pinput);
-    }
+    UpdateParticleCounts();
+    if (!is_restart) pmb_pack->ppart->CreateParticleTags();
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// \fn Mesh::LoadParticlesFromRestart
+
+void Mesh::LoadParticlesFromRestart(const std::string &particle_restart_filename) {
+  if (pmb_pack->ppart != nullptr) {
+    pmb_pack->ppart->LoadRestart(particle_restart_filename);
+    UpdateParticleCounts();
   }
 }

@@ -1,0 +1,96 @@
+# End-to-end Lagrangian Monte Carlo mass-transport test modeled on Wong,
+# Medeiros, and Stone.  The test problem supplies a smooth, inward MHD
+# flow in fixed Kerr-Schild coordinates, equal-mass tracer initialization,
+# and the spherical absorbing cutoff used by the production particle implementation.
+
+<job>
+basename = particle_lagrangian_mc_mass_transport_gpu
+
+<mesh>
+nghost = 2
+nx1 = 32
+x1min = -16.0
+x1max = 16.0
+ix1_bc = outflow
+ox1_bc = outflow
+nx2 = 32
+x2min = -16.0
+x2max = 16.0
+ix2_bc = outflow
+ox2_bc = outflow
+nx3 = 32
+x3min = -16.0
+x3max = 16.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+
+<mesh_refinement>
+refinement = static
+
+<refined_region1>
+level = 1
+x1min = -8.0
+x1max = 8.0
+x2min = -8.0
+x2max = 8.0
+x3min = -8.0
+x3max = 8.0
+
+<coord>
+general_rel = true
+a = 0.5
+excise = true
+dexcise = 1.0e-8
+pexcise = 3.333333333333333e-13
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim = 64
+tlim = 4.0
+ndiag = 1
+
+<mhd>
+eos = ideal
+gamma = 1.4444444444444444
+reconstruct = plm
+rsolver = hlle
+
+<particles>
+particle_type = lagrangian_mc
+ppc = 0.0
+pusher = lagrangian_mc
+random_seed = 2025
+
+<problem>
+pgen_name = particle_lagrangian_mc_mass_transport
+user_hist = true
+particle_target_count = 16384
+particle_sample_radius = 12.0
+particle_horizon_radius = 1.8660254037844386
+density_contrast = 16.0
+inflow_speed = 0.25
+particle_radial_bins = 8
+
+<output1>
+file_type = hst
+data_format = %24.16e
+dcycle = 1
+user_hist_only = true
+
+<output2>
+file_type = pvtk
+variable = prtcl_all
+dcycle = 1
+
+<output3>
+file_type = particle_track
+id = all
+tags = all
+dcycle = 4

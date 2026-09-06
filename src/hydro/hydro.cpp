@@ -37,6 +37,7 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
     u_sts2("u_sts2",1,1,1,1,1),
     u_sts_rhs("u_sts_rhs",1,1,1,1,1),
     uflx("uflx",1,1,1,1,1),
+    density_flux_integral("density_flux_integral",1,1,1,1),
     wl3d("wl3d",1,1,1,1,1),
     wr3d("wr3d",1,1,1,1,1),
     fofc("fofc",1,1,1,1),
@@ -331,6 +332,28 @@ Hydro::Hydro(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(wr3d, nmb, (nhydro+nscalars), ncells3, ncells2, ncells1);
     }
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void Hydro::EnableDensityFluxIntegral()
+//! \brief Allocate storage for the RK-integrated density flux on active cell faces.
+
+void Hydro::EnableDensityFluxIntegral() {
+  if (density_flux_integral_enabled) return;
+
+  int nmb = std::max(pmy_pack->nmb_thispack, pmy_pack->pmesh->nmb_maxperrank);
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int ncells1 = indcs.nx1 + 2*indcs.ng;
+  int ncells2 = (indcs.nx2 > 1) ? indcs.nx2 + 2*indcs.ng : 1;
+  int ncells3 = (indcs.nx3 > 1) ? indcs.nx3 + 2*indcs.ng : 1;
+
+  Kokkos::realloc(density_flux_integral.x1f, nmb, ncells3, ncells2, ncells1+1);
+  Kokkos::realloc(density_flux_integral.x2f, nmb, ncells3, ncells2+1, ncells1);
+  Kokkos::realloc(density_flux_integral.x3f, nmb, ncells3+1, ncells2, ncells1);
+  Kokkos::deep_copy(density_flux_integral.x1f, 0.0);
+  Kokkos::deep_copy(density_flux_integral.x2f, 0.0);
+  Kokkos::deep_copy(density_flux_integral.x3f, 0.0);
+  density_flux_integral_enabled = true;
 }
 
 //----------------------------------------------------------------------------------------

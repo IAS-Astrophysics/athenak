@@ -4,24 +4,102 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file particles.cpp
-//! \brief implementation of Particles class constructor and assorted other functions
+//! \brief implementation of the particle manager and population lifecycle
 
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include "athena.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
+#include "hydro/hydro.hpp"
+#include "mhd/mhd.hpp"
+#include "pgen/pgen.hpp"
+#include "cosmic_ray.hpp"
+#include "lagrangian_mc.hpp"
 #include "particles.hpp"
 
 namespace particles {
 //----------------------------------------------------------------------------------------
-// constructor, initializes data structures and parameters
+// Particles constructor
 
-Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
+Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin, bool is_restart) :
+    next_tag_(0),
+    tag_assignment_(pin->GetOrAddString("particles","assign_tag","index_order")),
+    restart_sort_by_tag_(
+        pin->GetOrAddBoolean("particles","restart_sort_by_tag",false)),
+    pmy_pack_(ppack) {
+  populations_.emplace_back(
+      new ParticlePopulation("particles", "particles", ppack, pin, is_restart));
+}
+
+//----------------------------------------------------------------------------------------
+// Particles destructor
+
+Particles::~Particles() {
+  for (auto *population : populations_) {
+    delete population;
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Return a population by its stable name, or nullptr when it is not present.
+
+ParticlePopulation* Particles::FindPopulation(const std::string &name) {
+  for (auto *population : populations_) {
+    if (population->name == name) return population;
+  }
+  return nullptr;
+}
+
+const ParticlePopulation* Particles::FindPopulation(const std::string &name) const {
+  for (const auto *population : populations_) {
+    if (population->name == name) return population;
+  }
+  return nullptr;
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Return the aggregate local particle count over all populations.
+
+int Particles::GetLocalCount() const {
+  int count = 0;
+  for (const auto *population : populations_) {
+    count += population->nprtcl_thispack;
+  }
+  return count;
+}
+
+//----------------------------------------------------------------------------------------
+//! \brief Return the tightest timestep estimate over all populations.
+
+Real Particles::GetTimestep() const {
+  Real dt = std::numeric_limits<float>::max();
+  for (const auto *population : populations_) {
+    dt = std::min(dt, population->dtnew);
+  }
+  return dt;
+}
+
+//----------------------------------------------------------------------------------------
+// ParticlePopulation constructor, initializes data structures and parameters
+
+ParticlePopulation::ParticlePopulation(const std::string &population_name,
+                                       const std::string &input_block,
+                                       MeshBlockPack *ppack, ParameterInput *pin,
+                                       bool is_restart) :
+    name(population_name),
+    dtnew(std::numeric_limits<float>::max()),
+    input_block_(input_block),
+    lmc_random_seed(0),
+    lmc_check_flux_probabilities(false),
+    lmc_directional_flux("lmc_directional_flux",0,2,0,0,0),
+    pbval_lmc_flux(nullptr),
     pmy_pack(ppack) {
   // check this is at least a 2D problem
   if (pmy_pack->pmesh->one_d) {
@@ -29,22 +107,59 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
               << "Particle module only works in 2D/3D" <<std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if (pmy_pack->pmesh->adaptive) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Particles do not support adaptive mesh refinement"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  for (int dir=0; dir<6; ++dir) {
+    if (pmy_pack->pmesh->mesh_bcs[dir] == BoundaryFlag::shear_periodic) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Particles do not support shearing-periodic boundaries" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
-  // read number of particles per cell, and calculate number of particles this pack
-  Real ppc = pin->GetOrAddReal("particles","ppc",1.0);
-
-  // compute number of particles as real number, since ppc can be < 1
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int ncells = indcs.nx1*indcs.nx2*indcs.nx3;
-  Real r_npart = ppc*static_cast<Real>((pmy_pack->nmb_thispack)*ncells);
-  // then cast to integer
-  nprtcl_thispack = static_cast<int>(r_npart);
+  nprtcl_thispack = 0;
+  // read number of particles per cell on both fresh starts and restarts
+  Real ppc = pin->GetOrAddReal(input_block_,"ppc",1.0);
+  if (!is_restart) {
+    if (!std::isfinite(ppc) || ppc < 0.0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << input_block_ << "/ppc must be finite and non-negative" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    // calculate number of particles in this pack
+    auto &indcs = pmy_pack->pmesh->mb_indcs;
+    std::int64_t ncells = static_cast<std::int64_t>(indcs.nx1)*indcs.nx2*indcs.nx3;
+    std::int64_t global_cells = static_cast<std::int64_t>(
+        pmy_pack->pmesh->nmb_total)*ncells;
+    double r_npart_total = static_cast<double>(ppc)*static_cast<double>(global_cells);
+    if (!std::isfinite(r_npart_total) ||
+        r_npart_total > static_cast<double>(std::numeric_limits<int>::max())) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Initial global particle count exceeds the in-memory integer limit"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    std::int64_t local_cells = static_cast<std::int64_t>(pmy_pack->nmb_thispack)*ncells;
+    double r_npart = static_cast<double>(ppc)*static_cast<double>(local_cells);
+    // then cast to integer
+    nprtcl_thispack = static_cast<int>(r_npart);
+  }
 
   // select particle type
   {
-    std::string ptype = pin->GetString("particles","particle_type");
+    std::string ptype = pin->GetString(input_block_,"particle_type");
+    type_name = ptype;
     if (ptype.compare("cosmic_ray") == 0) {
       particle_type = ParticleType::cosmic_ray;
+    } else if (ptype.compare("lagrangian_mc") == 0) {
+      particle_type = ParticleType::lagrangian_mc;
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Particle type = '" << ptype << "' not recognized"
@@ -55,13 +170,113 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // select pusher algorithm
   {
-    std::string ppush = pin->GetString("particles","pusher");
+    std::string ppush = pin->GetString(input_block_,"pusher");
     if (ppush.compare("drift") == 0) {
+      if (particle_type != ParticleType::cosmic_ray) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Particle pusher 'drift' requires particle type "
+                  << "'cosmic_ray'" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       pusher = ParticlesPusher::drift;
+    } else if (ppush.compare("lagrangian_mc") == 0) {
+      if (particle_type != ParticleType::lagrangian_mc) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Particle pusher 'lagrangian_mc' requires "
+                  << "particle type "
+                  << "'lagrangian_mc'" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      const bool has_hydro = pmy_pack->phydro != nullptr;
+      const bool has_mhd = pmy_pack->pmhd != nullptr;
+      if ((!has_hydro && !has_mhd) || (has_hydro && has_mhd) ||
+          pmy_pack->pionn != nullptr || pmy_pack->prad != nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently require "
+                  << "single-fluid Hydro or MHD" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      if (pmy_pack->pdyngr != nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently do not support "
+                  << "dynamical spacetime" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      bool orbital_advection = false;
+      if (has_hydro) {
+        orbital_advection = pmy_pack->phydro->porb_u != nullptr;
+      } else {
+        orbital_advection = pmy_pack->pmhd->porb_u != nullptr;
+      }
+      if (orbital_advection) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles do not support "
+                  << "orbital advection" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::string evolution = pin->GetString("time", "evolution");
+      if (evolution.compare("dynamic") != 0 && evolution.compare("kinematic") != 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles require a time-evolving fluid"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      std::string integrator = pin->GetOrAddString("time", "integrator", "rk2");
+      if (integrator.compare("rk2") != 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles currently require RK2"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      // The fluid solver limits each directional Courant number; one-hop
+      // transport requires their sum to be no larger than one.
+      const int ndim = pmy_pack->pmesh->three_d ? 3 : 2;
+      const Real cfl_number = pin->GetReal("time", "cfl_number");
+      const Real max_cfl_number = 1.0/static_cast<Real>(ndim);
+      if (!(cfl_number <= max_cfl_number)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Lagrangian MC particles require time/cfl_number <= 1/"
+                  << ndim << " in " << ndim << "D, but received " << cfl_number
+                  << ". This dimensional bound is necessary for one-cell transport, "
+                  << "but does not validate every cell's outgoing probability. Set "
+                  << input_block_ << "/check_flux_probabilities=true to enable the "
+                  << "per-step check." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      lmc_check_flux_probabilities = pin->GetOrAddBoolean(
+          input_block_, "check_flux_probabilities", false);
+      int random_seed = pin->GetOrAddInteger(input_block_, "random_seed", 0);
+      if (random_seed < 0) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "particles/random_seed must be non-negative"
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      lmc_random_seed = static_cast<std::uint64_t>(random_seed);
+      pusher = ParticlesPusher::lagrangian_mc;
+      if (has_hydro) {
+        pmy_pack->phydro->EnableDensityFluxIntegral();
+      } else {
+        pmy_pack->pmhd->EnableDensityFluxIntegral();
+      }
+      if (pmy_pack->pmesh->multilevel) {
+        auto &indcs = pmy_pack->pmesh->mb_indcs;
+        const int nmb = std::max(pmy_pack->nmb_thispack, pmy_pack->pmesh->nmb_maxperrank);
+        const int ncells1 = indcs.nx1 + 2*indcs.ng;
+        const int ncells2 = (indcs.nx2 > 1) ? indcs.nx2 + 2*indcs.ng : 1;
+        const int ncells3 = (indcs.nx3 > 1) ? indcs.nx3 + 2*indcs.ng : 1;
+        Kokkos::realloc(lmc_directional_flux.x1f, nmb, 2, ncells3, ncells2, ncells1+1);
+        Kokkos::realloc(lmc_directional_flux.x2f, nmb, 2, ncells3, ncells2+1, ncells1);
+        Kokkos::realloc(lmc_directional_flux.x3f, nmb, 2, ncells3+1, ncells2, ncells1);
+        // Separate buffers reuse the normal fine-to-coarse flux exchange without
+        // modifying the fluid fluxes or their communication state.
+        pbval_lmc_flux = new MeshBoundaryValuesCC(pmy_pack, pin, false);
+        pbval_lmc_flux->InitializeBuffers(2);
+      }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Particle pusher must be specified in <particles> block"
-                <<std::endl;
+                << std::endl << "Particle pusher = '" << ppush << "' not recognized"
+                << std::endl;
       std::exit(EXIT_FAILURE);
     }
   }
@@ -75,17 +290,38 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
   switch (particle_type) {
     case ParticleType::cosmic_ray:
       {
-        int ndim=4;
-        if (pmy_pack->pmesh->three_d) {ndim+=2;}
-        nrdata = ndim;
-        nidata = 2;
+        nrdata = cosmic_ray::NREAL;
+        nidata = cosmic_ray::NINT;
+        real_names = cosmic_ray::real_names;
+        int_names = cosmic_ray::int_names;
+        real_output = cosmic_ray::real_output;
+        int_output = cosmic_ray::int_output;
+        break;
+      }
+    case ParticleType::lagrangian_mc:
+      {
+        nrdata = lagrangian_mc::NREAL;
+        nidata = lagrangian_mc::NINT;
+        real_names = lagrangian_mc::real_names;
+        int_names = lagrangian_mc::int_names;
+        real_output = lagrangian_mc::real_output;
+        int_output = lagrangian_mc::int_output;
         break;
       }
     default:
-      break;
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "Particle type has no storage definition" << std::endl;
+      std::exit(EXIT_FAILURE);
   }
   Kokkos::realloc(prtcl_rdata, nrdata, nprtcl_thispack);
   Kokkos::realloc(prtcl_idata, nidata, nprtcl_thispack);
+  auto status = Kokkos::subview(prtcl_idata, static_cast<int>(PSTATUS), Kokkos::ALL);
+  Kokkos::deep_copy(status, static_cast<int>(PACTIVE));
+  if (particle_type == ParticleType::lagrangian_mc) {
+    auto last_move = Kokkos::subview(
+        prtcl_idata, static_cast<int>(lagrangian_mc::PLASTMOVE), Kokkos::ALL);
+    Kokkos::deep_copy(last_move, 0);
+  }
 
   // allocate boundary object
   pbval_part = new ParticlesBoundaryValues(this, pin);
@@ -94,47 +330,179 @@ Particles::Particles(MeshBlockPack *ppack, ParameterInput *pin) :
 //----------------------------------------------------------------------------------------
 // destructor
 
-Particles::~Particles() {
+ParticlePopulation::~ParticlePopulation() {
+  delete pbval_part;
+  delete pbval_lmc_flux;
 }
 
 //----------------------------------------------------------------------------------------
-// CreateParticleTags()
-// Assigns tags to particles (unique integer).  Note that tracked particles are always
-// those with tag numbers less than ntrack.
+//! \fn TaskStatus ParticlePopulation::ApplyUserLifecycle
+//! \brief Let the problem generator update particle state after the pusher.
 
-void Particles::CreateParticleTags(ParameterInput *pin) {
-  std::string assign = pin->GetOrAddString("particles","assign_tag","index_order");
+TaskStatus ParticlePopulation::ApplyUserLifecycle(Driver*, int) {
+  auto *pgen = pmy_pack->pmesh->pgen.get();
+  if (pgen != nullptr && pgen->user_particle_lifecycle_func != nullptr) {
+    ParticleLifecycleData lifecycle(
+        pmy_pack, this, prtcl_rdata, prtcl_idata, nprtcl_thispack);
+    pgen->user_particle_lifecycle_func(&lifecycle);
+  }
+  return TaskStatus::complete;
+}
 
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus ParticlePopulation::ApplyUserPostUpdate
+//! \brief Let the problem generator inspect final particle positions after routing and
+//! model-specific correction.
+
+TaskStatus ParticlePopulation::ApplyUserPostUpdate(Driver*, int) {
+  auto *pgen = pmy_pack->pmesh->pgen.get();
+  if (pgen != nullptr && pgen->user_particle_post_update_func != nullptr) {
+    ParticleLifecycleData lifecycle(
+        pmy_pack, this, prtcl_rdata, prtcl_idata, nprtcl_thispack);
+    pgen->user_particle_post_update_func(&lifecycle);
+  }
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn TaskStatus ParticlePopulation::PurgeDeleted
+//! \brief Remove particles marked for deletion and compact all particle data arrays.
+
+TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
+  const int npart = nprtcl_thispack;
+  if (npart == 0) return TaskStatus::complete;
+
+  auto pi = prtcl_idata;
+  int ndelete = 0;
+  Kokkos::parallel_reduce(
+      "particle_count_deleted", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, int &count) {
+        if (pi(PSTATUS,p) == PDELETE_PENDING) ++count;
+      }, ndelete);
+  if (ndelete == 0) return TaskStatus::complete;
+
+  const int new_npart = npart - ndelete;
+  auto pr = prtcl_rdata;
+  DvceArray2D<Real> new_pr("particle_rdata_compact", nrdata, new_npart);
+  DvceArray2D<int> new_pi("particle_idata_compact", nidata, new_npart);
+
+  const int nr = nrdata;
+  const int ni = nidata;
+  int ncopy = 0;
+  Kokkos::parallel_scan(
+      "particle_compact", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      KOKKOS_LAMBDA(const int p, int &offset, const bool final) {
+        if (pi(PSTATUS,p) != PDELETE_PENDING) {
+          if (final) {
+            for (int n=0; n<nr; ++n) new_pr(n,offset) = pr(n,p);
+            for (int n=0; n<ni; ++n) new_pi(n,offset) = pi(n,p);
+          }
+          ++offset;
+        }
+      }, ncopy);
+
+  if (ncopy != new_npart) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "Particle compaction copied an unexpected number of particles"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  prtcl_rdata = new_pr;
+  prtcl_idata = new_pi;
+  nprtcl_thispack = new_npart;
+
+#if !MPI_PARALLEL_ENABLED
+  pmy_pack->pmesh->UpdateParticleCounts();
+#endif
+
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ParticlePopulation::MarkSnapshotComplete
+//! \brief Queue deferred particles for deletion by the next purge task.
+
+void ParticlePopulation::MarkSnapshotComplete() {
+  auto pi = prtcl_idata;
+  const int npart = nprtcl_thispack;
+  if (npart > 0) {
+    par_for("particle_mark_snapshot_complete", DevExeSpace(), 0, npart-1,
+    KOKKOS_LAMBDA(const int p) {
+      if (pi(PSTATUS,p) == PDELETE_AFTER_SNAPSHOT) {
+        pi(PSTATUS,p) = PDELETE_PENDING;
+      }
+    });
+  }
+}
+
+//----------------------------------------------------------------------------------------
+// Particles::CreateParticleTags()
+// Assigns unique integer tags to particles and initializes the persistent
+// high-water mark.
+
+void Particles::CreateParticleTags() {
   // tags are assigned sequentially within this rank, starting at 0 with rank=0
-  if (assign.compare("index_order") == 0) {
+  if (tag_assignment_.compare("index_order") == 0) {
     int tagstart = 0;
     for (int n=1; n<=global_variable::my_rank; ++n) {
-      tagstart += pmy_pack->pmesh->nprtcl_eachrank[n-1];
+      tagstart += pmy_pack_->pmesh->nprtcl_eachrank[n-1];
     }
 
-    auto &pi = prtcl_idata;
-    par_for("ptags",DevExeSpace(),0,(nprtcl_thispack-1),
-    KOKKOS_LAMBDA(const int p) {
-      pi(PTAG,p) = tagstart + p;
-    });
+    int population_offset = 0;
+    for (auto *population : populations_) {
+      auto &pi = population->prtcl_idata;
+      const int offset = population_offset;
+      const int npart = population->nprtcl_thispack;
+      par_for("ptags",DevExeSpace(),0,(npart-1),
+      KOKKOS_LAMBDA(const int p) {
+        pi(PTAG,p) = tagstart + offset + p;
+      });
+      population_offset += npart;
+    }
 
   // tags are assigned sequentially across ranks
-  } else if (assign.compare("rank_order") == 0) {
+  } else if (tag_assignment_.compare("rank_order") == 0) {
+    std::int64_t max_tag = -1;
+    for (int rank=0; rank<global_variable::nranks; ++rank) {
+      int count = pmy_pack_->pmesh->nprtcl_eachrank[rank];
+      if (count > 0) {
+        std::int64_t rank_max_tag = rank + static_cast<std::int64_t>(
+            global_variable::nranks)*(count - 1);
+        max_tag = std::max(max_tag, rank_max_tag);
+      }
+    }
+    if (max_tag > std::numeric_limits<int>::max()) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
+                << "Initial particle tags exceed the in-memory integer limit"
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     int myrank = global_variable::my_rank;
     int nranks = global_variable::nranks;
-    auto &pi = prtcl_idata;
-    par_for("ptags",DevExeSpace(),0,(nprtcl_thispack-1),
-    KOKKOS_LAMBDA(const int p) {
-      pi(PTAG,p) = myrank + nranks*p;
-    });
+    int population_offset = 0;
+    for (auto *population : populations_) {
+      auto &pi = population->prtcl_idata;
+      const int offset = population_offset;
+      const int npart = population->nprtcl_thispack;
+      par_for("ptags",DevExeSpace(),0,(npart-1),
+      KOKKOS_LAMBDA(const int p) {
+        pi(PTAG,p) = myrank + nranks*(offset + p);
+      });
+      population_offset += npart;
+    }
 
   // tag algorithm not recognized, so quit with error
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Particle tag assignment type = '" << assign << "' not recognized"
+              << "Particle tag assignment type = '" << tag_assignment_
+              << "' not recognized"
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  next_tag_ = NextTagFromParticles();
 }
 
 } // namespace particles

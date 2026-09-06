@@ -112,12 +112,17 @@ add_executable(
         outputs/restart.cpp
         outputs/spherical_surface.cpp
         outputs/coarsened_binary.cpp
-        outputs/track_prtcl.cpp
+        outputs/particle_track.cpp
         outputs/vtk_mesh.cpp
         outputs/vtk_prtcl.cpp
 
         particles/particles.cpp
+        particles/particles_creation.cpp
+        particles/particles_restart.cpp
+        particles/particles_newdt.cpp
         particles/particles_pushers.cpp
+        particles/pushers/drift.cpp
+        particles/pushers/lagrangian_mc.cpp
         particles/particles_tasks.cpp
         outputs/pdf.cpp
 
@@ -135,6 +140,12 @@ add_executable(
         pgen/tests/mri3d.cpp
         pgen/tests/shock_tube.cpp
         pgen/tests/shwave.cpp
+        pgen/tests/particle_drift.cpp
+        pgen/tests/particle_injection.cpp
+        pgen/tests/particle_lagrangian_mc.cpp
+        pgen/tests/particle_lagrangian_mc_counterflow.cpp
+        pgen/tests/particle_lagrangian_mc_mass_transport.cpp
+        pgen/tests/particle_smr.cpp
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp

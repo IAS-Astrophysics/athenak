@@ -1257,10 +1257,12 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("prtcl_d") == 0) {
     Kokkos::realloc(derived_var, nmb_alloc, 1, n3, n2, n1);
     auto pdens = derived_var;
-    auto pr = pm->pmb_pack->ppart->prtcl_rdata;
-    auto pi = pm->pmb_pack->ppart->prtcl_idata;
-    int &npart = pm->nprtcl_thisrank;
+    auto *population = pm->pmb_pack->ppart->FindPopulation("particles");
+    auto pr = population->prtcl_rdata;
+    auto pi = population->prtcl_idata;
+    const int npart = population->nprtcl_thispack;
     int gids = pm->pmb_pack->gids;
+    int gide = pm->pmb_pack->gide;
 
     par_for("pdens0", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -1269,14 +1271,23 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("pdens", DevExeSpace(), 0, (npart-1),
     KOKKOS_LAMBDA(const int p) {
-      int m = pi(PGID,p) - gids;
-      int ip = (pr(IPX,p) - size.d_view(m).x1min)/size.d_view(m).dx1 + is;
-      int jp = (pr(IPY,p) - size.d_view(m).x2min)/size.d_view(m).dx2 + js;
+      int gid = pi(PGID,p);
+      if (gid < gids || gid > gide) return;
+      int m = gid - gids;
+      auto block_size = size.d_view(m);
+      Real x1 = pr(IPX,p);
+      Real x2 = pr(IPY,p);
+      Real x3 = pr(IPZ,p);
+      if (!(x1 >= block_size.x1min && x1 < block_size.x1max &&
+            x2 >= block_size.x2min && x2 < block_size.x2max &&
+            x3 >= block_size.x3min && x3 < block_size.x3max)) return;
+      int ip = (x1 - block_size.x1min)/block_size.dx1 + is;
+      int jp = (x2 - block_size.x2min)/block_size.dx2 + js;
       int kp = ks;
       if (three_d) {
-        kp = (pr(IPZ,p) - size.d_view(m).x3min)/size.d_view(m).dx3 + ks;
+        kp = (x3 - block_size.x3min)/block_size.dx3 + ks;
       }
-      pdens(m,0,kp,jp,ip) += 1.0;
+      Kokkos::atomic_add(&pdens(m,0,kp,jp,ip), 1.0);
     });
   }
   i_dv = i_dv % n_dv; // reset derived variable index

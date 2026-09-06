@@ -102,7 +102,7 @@ void MeshBlockPack::AddCoordinates(ParameterInput *pin) {
 // \brief construct physics modules and tasks lists in this MeshBlockPack, based on which
 // <blocks> are present in the input file.  Called from main().
 
-void MeshBlockPack::AddPhysics(ParameterInput *pin) {
+void MeshBlockPack::AddPhysics(ParameterInput *pin, bool is_restart) {
   int nphysics = 0;
   TaskID none(0);
 
@@ -236,7 +236,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // (9) PARTICLES
   // Create particles module.  Create tasklist.
   if (pin->DoesBlockExist("particles")) {
-    ppart = new particles::Particles(this, pin);
+    ppart = new particles::Particles(this, pin, is_restart);
     ppart->AssembleTasks(tl_map);
     nphysics++;
   } else {
