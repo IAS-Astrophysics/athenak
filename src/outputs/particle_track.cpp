@@ -116,8 +116,9 @@ std::vector<std::string> Split(const std::string &text, char delimiter) {
 }
 
 ParsedTagSelection ParseTagSelection(const std::string &requested) {
-  ParsedTagSelection parsed = {"all", ParticleTrackSelection::all,
-                               0, 0, 1, false, {}};
+  ParsedTagSelection parsed = {
+      "all", ParticleTrackSelection::all, 0, 0, 1, false, {}
+  };
   if (requested == "all") return parsed;
 
   if (requested.find(':') != std::string::npos) {
