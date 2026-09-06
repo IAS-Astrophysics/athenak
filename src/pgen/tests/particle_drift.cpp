@@ -327,13 +327,15 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
   }
   if (frozen_tag < -1 || frozen_tag >= expected_particles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle drift test frozen_tag must be -1 or between 0 and "
+              << std::endl
+              << "Particle drift test frozen_tag must be -1 or between 0 and "
               << (expected_particles - 1) << "." << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if (delete_tag < -1 || delete_tag >= expected_particles) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle drift test delete_tag must be -1 or between 0 and "
+              << std::endl
+              << "Particle drift test delete_tag must be -1 or between 0 and "
               << (expected_particles - 1) << "." << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -359,7 +361,8 @@ void ProblemGenerator::ParticleDrift(ParameterInput *pin, const bool restart) {
         boundary_delete_tag == delete_tag ||
         boundary_delete_tag == delete_after_snapshot_tag))) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle drift test lifecycle modes must use distinct tags."
+              << std::endl
+              << "Particle drift test lifecycle modes must use distinct tags."
               << std::endl;
     std::exit(EXIT_FAILURE);
   }

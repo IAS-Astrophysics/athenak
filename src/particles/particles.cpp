@@ -182,7 +182,8 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
     } else if (ppush.compare("lagrangian_mc") == 0) {
       if (particle_type != ParticleType::lagrangian_mc) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Particle pusher 'lagrangian_mc' requires particle type "
+                  << std::endl << "Particle pusher 'lagrangian_mc' requires "
+                  << "particle type "
                   << "'lagrangian_mc'" << std::endl;
         std::exit(EXIT_FAILURE);
       }
@@ -227,8 +228,8 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
                   << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      // The fluid solver limits each directional Courant number; one-hop transport requires
-      // their sum to be no larger than one.
+      // The fluid solver limits each directional Courant number; one-hop
+      // transport requires their sum to be no larger than one.
       const int ndim = pmy_pack->pmesh->three_d ? 3 : 2;
       const Real cfl_number = pin->GetReal("time", "cfl_number");
       const Real max_cfl_number = 1.0/static_cast<Real>(ndim);
@@ -402,7 +403,8 @@ TaskStatus ParticlePopulation::PurgeDeleted(Driver*, int) {
 
   if (ncopy != new_npart) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Particle compaction copied an unexpected number of particles"
+              << std::endl
+              << "Particle compaction copied an unexpected number of particles"
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -437,7 +439,8 @@ void ParticlePopulation::MarkSnapshotComplete() {
 
 //----------------------------------------------------------------------------------------
 // Particles::CreateParticleTags()
-// Assigns unique integer tags to particles and initializes the persistent high-water mark.
+// Assigns unique integer tags to particles and initializes the persistent
+// high-water mark.
 
 void Particles::CreateParticleTags() {
   // tags are assigned sequentially within this rank, starting at 0 with rank=0
@@ -473,7 +476,8 @@ void Particles::CreateParticleTags() {
     if (max_tag > std::numeric_limits<int>::max()) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl
-                << "Initial particle tags exceed the in-memory integer limit" << std::endl;
+                << "Initial particle tags exceed the in-memory integer limit"
+                << std::endl;
       std::exit(EXIT_FAILURE);
     }
     int myrank = global_variable::my_rank;
@@ -493,7 +497,8 @@ void Particles::CreateParticleTags() {
   // tag algorithm not recognized, so quit with error
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Particle tag assignment type = '" << tag_assignment_ << "' not recognized"
+              << "Particle tag assignment type = '" << tag_assignment_
+              << "' not recognized"
               << std::endl;
     std::exit(EXIT_FAILURE);
   }

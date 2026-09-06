@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <vector>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>

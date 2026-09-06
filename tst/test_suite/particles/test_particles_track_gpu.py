@@ -40,7 +40,7 @@ def _sorted(data):
 
 
 def test_particle_track_gpu(tmp_path):
-    """Select tags, preserve empty output, and evaluate shared and track-only callbacks."""
+    """Exercise tag selection, empty output, and particle output callbacks."""
     shutil.rmtree("particle_track", ignore_errors=True)
     histories = [
         Path("particle_track_cosmic_ray.user.hst"),

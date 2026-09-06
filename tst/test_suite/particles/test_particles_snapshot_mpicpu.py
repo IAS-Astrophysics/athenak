@@ -50,7 +50,9 @@ def test_particle_snapshot_mpicpu(tmp_path):
         order = np.argsort(fields["ptag"])
         tags = fields["ptag"][order]
         np.testing.assert_array_equal(tags, [0, 1, 2, 4, 5, 6, 7])
-        np.testing.assert_array_equal(fields["status"][order], np.zeros(7, dtype=np.int32))
+        np.testing.assert_array_equal(
+            fields["status"][order], np.zeros(7, dtype=np.int32)
+        )
 
         vx = np.full(7, 0.01)
         vx[tags == 4] = -0.20

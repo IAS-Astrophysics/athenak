@@ -92,7 +92,7 @@ int ParseNonnegativeInteger(const std::string &text, const std::string &descript
   }
   try {
     std::size_t parsed = 0;
-    const long long value = std::stoll(value_text, &parsed);
+    const std::int64_t value = std::stoll(value_text, &parsed);
     if (parsed != value_text.size() || value < 0 ||
         value > std::numeric_limits<int>::max()) {
       FatalTrackOutput(description + " must be a non-negative integer");
@@ -205,7 +205,8 @@ void WriteFileHeader(FILE *file, const TrackFileSchema &schema) {
       std::fwrite(serialized_header, sizeof(int), 10, file) != 10 ||
       (!schema.population_name.empty() &&
        std::fwrite(schema.population_name.data(), sizeof(char),
-                   schema.population_name.size(), file) != schema.population_name.size()) ||
+                   schema.population_name.size(), file) !=
+           schema.population_name.size()) ||
       (!schema.particle_type.empty() &&
        std::fwrite(schema.particle_type.data(), sizeof(char),
                    schema.particle_type.size(), file) != schema.particle_type.size()) ||
@@ -226,7 +227,8 @@ std::string ReadString(FILE *file, int size, const std::string &description) {
   if (size < 0) FatalTrackOutput("invalid " + description + " size in file header");
   std::string value(size, '\0');
   if (size > 0 &&
-      std::fread(value.data(), sizeof(char), size, file) != static_cast<std::size_t>(size)) {
+      std::fread(value.data(), sizeof(char), size, file) !=
+          static_cast<std::size_t>(size)) {
     FatalTrackOutput("existing particle track file has a truncated " + description);
   }
   return value;
@@ -245,12 +247,12 @@ bool HeadersMatch(const TrackFileHeader &left, const TrackFileHeader &right) {
          left.n_real_fields == right.n_real_fields;
 }
 
-bool EndsWithBlockFooter(FILE *file, long file_size) {
+bool EndsWithBlockFooter(FILE *file, std::int64_t file_size) {
   if (file_size < track_block_marker_size) return false;
   if (std::fseek(file, file_size-track_block_marker_size, SEEK_SET) != 0) {
     FatalTrackOutput("failed to inspect particle track output file");
   }
-  char footer[track_block_marker_size];
+  char footer[track_block_marker_size] = {};
   char expected[track_block_marker_size] = {};
   std::strncpy(expected, track_block_footer, sizeof(expected)-1);
   if (std::fread(footer, sizeof(char), sizeof(footer), file) != sizeof(footer)) {
@@ -267,9 +269,9 @@ std::uint64_t EnsureFileHeader(FILE *file, const TrackFileSchema &schema,
   if (std::fseek(file, 0, SEEK_END) != 0) {
     FatalTrackOutput("failed to seek in particle track output file");
   }
-  const long file_size = std::ftell(file);
+  const std::int64_t file_size = std::ftell(file);
   if (file_size < 0) FatalTrackOutput("failed to inspect particle track output file");
-  long header_end = 0;
+  std::int64_t header_end = 0;
   if (file_size == 0) {
     WriteFileHeader(file, schema);
   } else {
@@ -311,7 +313,7 @@ std::uint64_t EnsureFileHeader(FILE *file, const TrackFileSchema &schema,
       FatalTrackOutput("failed to seek in particle track output file");
     }
   }
-  const long position = std::ftell(file);
+  const std::int64_t position = std::ftell(file);
   if (position < 0) FatalTrackOutput("failed to inspect particle track output file");
   if (file_size > header_end && !EndsWithBlockFooter(file, position)) {
     std::cout << "### WARNING in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -632,8 +634,8 @@ void ParticleTrackOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     }
   }
 #if MPI_PARALLEL_ENABLED
-  unsigned long long shared_offset = block_offset;
-  MPI_Bcast(&shared_offset, 1, MPI_UNSIGNED_LONG_LONG, 0, MPI_COMM_WORLD);
+  std::uint64_t shared_offset = block_offset;
+  MPI_Bcast(&shared_offset, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
   block_offset = shared_offset;
 #endif
 

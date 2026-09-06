@@ -36,6 +36,8 @@ def test_particle_delete_gpu():
         if data["owner_err"][-1] != pytest.approx(0.0):
             pytest.fail(f"particle owners are incorrect: {data['owner_err'][-1]:g}")
         if data["status_err"][-1] != pytest.approx(0.0):
-            pytest.fail(f"surviving particle statuses changed: {data['status_err'][-1]:g}")
+            pytest.fail(
+                f"surviving particle statuses changed: {data['status_err'][-1]:g}"
+            )
     finally:
         HISTORY.unlink(missing_ok=True)

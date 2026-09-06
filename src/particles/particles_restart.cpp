@@ -183,7 +183,8 @@ void WriteBytesAt(IOWrapper &file, const void *data, std::uint64_t size,
   std::uint64_t written = 0;
   while (written < size) {
     std::uint64_t chunk = std::min<std::uint64_t>(size - written, INT_MAX);
-    if (file.Write_any_type_at(bytes + written, chunk, offset + written, "byte") != chunk) {
+    if (file.Write_any_type_at(bytes + written, chunk, offset + written,
+                               "byte") != chunk) {
       RestartError("Particle data were not written correctly to the restart sidecar.");
     }
     written += chunk;
@@ -255,7 +256,8 @@ std::vector<char> ParticlePopulation::RestartMetadata() const {
 //----------------------------------------------------------------------------------------
 //! \brief Validate durable model state against the configured particle model.
 
-void ParticlePopulation::ValidateRestartMetadata(const std::vector<char> &metadata) const {
+void ParticlePopulation::ValidateRestartMetadata(
+    const std::vector<char> &metadata) const {
   if (particle_type != ParticleType::cosmic_ray &&
       particle_type != ParticleType::lagrangian_mc) {
     RestartError("Particle type has no restart metadata contract.");
@@ -287,7 +289,8 @@ void Particles::WriteRestart(const std::string &filename) const {
     data.blocks.resize(nmb);
 
     const int npart = population->nprtcl_thispack;
-    data.rdata = HostArray2D<Real>("particle restart real data", population->nrdata, npart);
+    data.rdata = HostArray2D<Real>(
+        "particle restart real data", population->nrdata, npart);
     data.idata = HostArray2D<int>("particle restart int data", population->nidata, npart);
     Kokkos::deep_copy(data.rdata, population->prtcl_rdata);
     Kokkos::deep_copy(data.idata, population->prtcl_idata);
@@ -402,7 +405,8 @@ void Particles::WriteRestart(const std::string &filename) const {
         AppendUInt64(directory, count);
       }
       WriteBytesAt(file, directory.data(), directory.size(), data.directory_offset);
-      WriteBytesAt(file, data.metadata.data(), data.metadata.size(), data.metadata_offset);
+      WriteBytesAt(file, data.metadata.data(), data.metadata.size(),
+                   data.metadata_offset);
     }
   }
 

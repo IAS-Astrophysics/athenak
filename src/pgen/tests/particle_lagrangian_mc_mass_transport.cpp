@@ -147,7 +147,8 @@ void InitializeParticles(MeshBlockPack *pmbp,
   auto *population = creation->GetPopulation();
   if (population->particle_type != ParticleType::lagrangian_mc) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Lagrangian MC mass-transport test requires Lagrangian MC particles"
+              << std::endl
+              << "Lagrangian MC mass-transport test requires Lagrangian MC particles"
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -288,8 +289,8 @@ void InitializeParticles(MeshBlockPack *pmbp,
       local_coarse_mass += mass;
       local_coarse_count += cell_count.h_view(idx);
     }
-    int radial_bin = static_cast<int>(
-        cell_radius.h_view(idx)/sample_radius*static_cast<Real>(mass_transport.radial_bins));
+    int radial_bin = static_cast<int>(cell_radius.h_view(idx)/sample_radius*
+        static_cast<Real>(mass_transport.radial_bins));
     radial_bin = std::min(radial_bin, mass_transport.radial_bins - 1);
     const int bin = radial_bin + (fine ? mass_transport.radial_bins : 0);
     bin_mass[bin] += mass;
@@ -415,7 +416,8 @@ Real AccretedFluidMass(Mesh *pm) {
   auto &flux = pmbp->pmhd->density_flux_integral;
   Real accreted = 0.0;
   Kokkos::parallel_reduce(
-      "particle_mass_transport_accreted_fluid", Kokkos::RangePolicy<>(DevExeSpace(), 0, ncell),
+      "particle_mass_transport_accreted_fluid",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, ncell),
       KOKKOS_LAMBDA(const int idx, Real &sum) {
         const int m = idx/nkji;
         int k = (idx - m*nkji)/nji;
@@ -462,7 +464,8 @@ int CoarseToFineThisCycle(Mesh *pm) {
   const int npart = population->nprtcl_thispack;
   int count = 0;
   Kokkos::parallel_reduce(
-      "particle_mass_transport_coarse_to_fine", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      "particle_mass_transport_coarse_to_fine",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, int &sum) {
         const int gid = pi(lagrangian_mc::PGID,p);
         if (gid >= gids && gid <= gide &&
@@ -514,7 +517,8 @@ void MassTransportHistory(HistoryData *pdata, Mesh *pm) {
 
   Real owner_error = 0.0;
   Kokkos::parallel_reduce(
-      "particle_mass_transport_owner_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      "particle_mass_transport_owner_error",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &sum) {
         const int gid = pi(lagrangian_mc::PGID,p);
         if (gid < gids || gid > gide) {
@@ -552,7 +556,8 @@ void MassTransportHistory(HistoryData *pdata, Mesh *pm) {
 
   Real minimum_error = 0.0;
   Kokkos::parallel_reduce(
-      "particle_mass_transport_minimum_error", Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
+      "particle_mass_transport_minimum_error",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0, npart),
       KOKKOS_LAMBDA(const int p, Real &sum) {
         if (!Kokkos::isfinite(pr(lagrangian_mc::IPXMIN,p)) ||
             !Kokkos::isfinite(pr(lagrangian_mc::IPYMIN,p)) ||
@@ -594,7 +599,8 @@ void ProblemGenerator::ParticleLagrangianMCMassTransport(
       !pmbp->pcoord->coord_data.bh_excise || !pmy_mesh_->three_d ||
       !pmy_mesh_->multilevel) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-              << std::endl << "Lagrangian MC mass-transport test requires fixed-spacetime, 3D MHD "
+              << std::endl
+              << "Lagrangian MC mass-transport test requires fixed-spacetime, 3D MHD "
               << "with static refinement and particles" << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -623,7 +629,8 @@ void ProblemGenerator::ParticleLagrangianMCMassTransport(
       !(mass_transport.sample_radius > mass_transport.horizon_radius) ||
       !(mass_transport.horizon_radius > 0.0) ||
       fabs(mass_transport.horizon_radius - event_horizon) > horizon_tolerance ||
-      !(mass_transport.density_contrast >= 16.0) || !(mass_transport.inflow_speed > 0.0)) {
+      !(mass_transport.density_contrast >= 16.0) ||
+      !(mass_transport.inflow_speed > 0.0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "Lagrangian MC mass-transport test parameters are invalid"
               << std::endl;

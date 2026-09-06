@@ -41,7 +41,9 @@ def test_particle_delete_mpicpu():
         if data["migrated"][-1] != pytest.approx(1.0):
             pytest.fail(f"wrong migration count: {data['migrated'][-1]:g}")
         if data["status_err"][-1] != pytest.approx(0.0):
-            pytest.fail(f"surviving particle statuses changed: {data['status_err'][-1]:g}")
+            pytest.fail(
+                f"surviving particle statuses changed: {data['status_err'][-1]:g}"
+            )
         if data["count_err"][-1] != pytest.approx(0.0):
             pytest.fail(f"particle counts are inconsistent: {data['count_err'][-1]:g}")
     finally:

@@ -41,7 +41,8 @@ std::uint64_t SplitMix64(std::uint64_t value) {
 KOKKOS_INLINE_FUNCTION
 Real LagrangianMCRandom(const std::uint64_t seed, const int tag, const int cycle,
                         const std::uint64_t draw_id) {
-  // Key draws by durable state so particle reordering and MPI migration do not alter them.
+  // Key draws by durable state so particle reordering and MPI migration do not
+  // alter them.
   std::uint64_t key = seed;
   key ^= static_cast<std::uint64_t>(tag) * 0xd2b74407b1ce6e93ULL;
   key ^= static_cast<std::uint64_t>(cycle) * 0x9e3779b97f4a7c15ULL;

@@ -112,7 +112,8 @@ void ParticleVTKOutput::LoadOutputData(Mesh *pm) {
   const std::size_t registered_user_fields = (pm->pgen == nullptr) ? 0 :
       pm->pgen->user_particle_vtk_output_variables.size();
   if (registered_user_fields != user_real_names.size()) {
-    FatalParticleVTKOutput("user particle VTK output registry changed after output setup");
+    FatalParticleVTKOutput(
+        "user particle VTK output registry changed after output setup");
   }
   if (!user_real_names.empty()) {
     DvceArray2D<Real> device_user_rdata(
