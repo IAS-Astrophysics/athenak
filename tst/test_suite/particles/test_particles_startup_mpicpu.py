@@ -15,7 +15,9 @@ def test_particle_amr_gate_mpicpu(tmp_path, monkeypatch, input_name, refinement)
     _check_particle_amr_gate(tmp_path, monkeypatch, input_name, refinement, mpi=True)
 
 
-@pytest.mark.parametrize("gid", (None, -1, 0, 1), ids=("default", "all", "block0", "block1"))
+@pytest.mark.parametrize(
+    "gid", (None, -1, 0, 1), ids=("default", "all", "block0", "block1")
+)
 def test_particle_vtk_gid_gate_mpicpu(tmp_path, monkeypatch, gid):
     """Keep all-block snapshots working on two ranks and reject specific block IDs."""
     _check_particle_vtk_gid_gate(tmp_path, monkeypatch, gid, mpi=True)

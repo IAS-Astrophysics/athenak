@@ -78,7 +78,9 @@ def test_particle_amr_gate_gpu(tmp_path, monkeypatch, input_name, refinement):
     _check_particle_amr_gate(tmp_path, monkeypatch, input_name, refinement)
 
 
-@pytest.mark.parametrize("gid", (None, -1, 0, 1), ids=("default", "all", "block0", "block1"))
+@pytest.mark.parametrize(
+    "gid", (None, -1, 0, 1), ids=("default", "all", "block0", "block1")
+)
 def test_particle_vtk_gid_gate_gpu(tmp_path, monkeypatch, gid):
     """Reject block selections while preserving default and explicit all-block output."""
     _check_particle_vtk_gid_gate(tmp_path, monkeypatch, gid)

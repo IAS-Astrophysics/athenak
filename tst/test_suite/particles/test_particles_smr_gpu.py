@@ -59,13 +59,16 @@ def _run_particle_smr_boundary_rounding(tmp_path, monkeypatch, axis, location, m
         # Float32 VTK coordinates hide one-double-spacing errors. This diagnostic
         # checks the live particle position against its owner's bounds on the device.
         np.testing.assert_array_equal(fields["owner_error"], [0.0])
-        np.testing.assert_array_equal(fields["owner_level"], initial_fields["owner_level"])
+        np.testing.assert_array_equal(
+            fields["owner_level"], initial_fields["owner_level"]
+        )
         np.testing.assert_array_equal(fields["owner_rank"], initial_fields["owner_rank"])
 
 
 @pytest.mark.parametrize("axis", ("x", "y", "z"))
 @pytest.mark.parametrize("location", (
-    "lower", "inside_lower", "below_internal", "internal", "above_internal", "inside_upper",
+    "lower", "inside_lower", "below_internal", "internal", "above_internal",
+    "inside_upper",
 ))
 def test_particle_smr_boundary_rounding_gpu(tmp_path, monkeypatch, axis, location):
     """Keep stationary particles on the correct side of internal and periodic faces."""

@@ -209,8 +209,8 @@ ParticlePopulation::ParticlePopulation(const std::string &population_name,
       }
       if (orbital_advection) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Lagrangian MC particles do not support orbital advection"
-                  << std::endl;
+                  << std::endl << "Lagrangian MC particles do not support "
+                  << "orbital advection" << std::endl;
         std::exit(EXIT_FAILURE);
       }
       std::string evolution = pin->GetString("time", "evolution");
