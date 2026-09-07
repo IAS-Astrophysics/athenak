@@ -152,6 +152,8 @@ class Z4c {
     // Constraint damping parameters
     Real damp_kappa1;
     Real damp_kappa2;
+    Real rz4;              // Kyutoku+14 radial Z4c suppression radius; <=0 disables
+    int  rz4_mode;         // which terms the suppression touches; 0 = off. See z4c.cpp
     // Gauge conditions for the lapse
     Real lapse_oplog;
     Real lapse_harmonicf;
@@ -175,6 +177,11 @@ class Z4c {
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
+    // Extend the Sommerfeld BC to chi, g~_ab and alpha
+    bool sbc_metric;
+    // Apply the Sommerfeld condition to A_ab (stock = true).  false leaves A to its
+    // own evolution equation, so only the "position" g~ of the wave pair is conditioned.
+    bool sbc_A;
     // Boundary extrapolation order
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation

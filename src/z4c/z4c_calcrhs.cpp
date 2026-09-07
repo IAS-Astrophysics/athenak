@@ -130,6 +130,18 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
+  // Radial suppression of the Z4c terms (Kyutoku, Shibata & Taniguchi 2014,
+  // arXiv:1405.6207 Sec. II).  Active only when rz4 > 0 AND rz4_mode > 0; otherwise every
+  // derived flag below is false and the RHS is bit-identical to the unmodified code.
+  // Flags are nested: each mode adds to the one before it.  See z4c.cpp for the menu.
+  bool rz4_on      = (opt.rz4 > 0.0) && (opt.rz4_mode > 0);
+  Real rz4_inv_r2  = rz4_on ? 1.0/SQR(opt.rz4) : 0.0;
+  int  rz4_mode    = rz4_on ? opt.rz4_mode : 0;
+  bool rz4_theta   = (rz4_mode >= 1);  // Theta RHS bracket + Theta matter source
+  bool rz4_khat    = (rz4_mode >= 2);  // kappa1 in Khat eq. + Theta in the Khat source
+  bool rz4_gam     = (rz4_mode >= 3);  // kappa1 in the Gam^i damping  (paper-literal)
+  bool rz4_kglobal = (rz4_mode >= 4);  // suppressed K in Ht, chi and A_ij too
+
   // ===================================================================================
   // Main RHS calculation
   //
@@ -353,6 +365,27 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     K = z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i);
 
+    // Radial suppression factor.  Computed here rather than at the RHS assembly because
+    // mode 4 needs the suppressed K before Ht is formed further down.  r is measured from
+    // the grid origin, not a tracker: the mode this targets is seeded by the box boundary
+    // and has the symmetry of the box, not of the remnant.
+    Real rz4_fac = 1.0;
+    if (rz4_on) {
+      Real x1 = CellCenterX(i - is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2 = CellCenterX(j - js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3 = CellCenterX(k - ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      rz4_fac = Kokkos::exp(-(SQR(x1) + SQR(x2) + SQR(x3))*rz4_inv_r2);
+    }
+    // K with Theta suppressed.  Equals K exactly when the feature is off.
+    Real const K_sup = z4c.vKhat(m,k,j,i) + 2.*rz4_fac*z4c.vTheta(m,k,j,i);
+    // Which K each consumer sees, per mode.
+    Real const K_khat = rz4_khat    ? K_sup : K;   // Khat source
+    Real const K_gbl  = rz4_kglobal ? K_sup : K;   // Ht, chi, A_ij
+    // Per-equation kappa1.
+    Real const kappa1_khat = rz4_khat ? opt.damp_kappa1*rz4_fac : opt.damp_kappa1;
+    Real const kappa1_gam  = rz4_gam  ? opt.damp_kappa1*rz4_fac : opt.damp_kappa1;
+    Real const g_theta     = rz4_theta ? rz4_fac : 1.0;
+
     // -----------------------------------------------------------------------------------
     // Inverse metric
 
@@ -517,7 +550,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Note that the matter term is *not* included here; this is included explicitly when
     // calculating d_t \Theta.
-    Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
+    Ht = R + (2./3.)*SQR(K_gbl) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
 
     // -----------------------------------------------------------------------------------
     // Finalize advective (Lie) derivatives
@@ -564,31 +597,53 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
 
     // -----------------------------------------------------------------------------------
+    // Kyutoku, Shibata & Taniguchi 2014 (arXiv:1405.6207) radial Z4c suppression.
+    //
+    // Their words: "because the outer boundary of SACRA has a nonsmooth rectangular shape
+    // ... we adopt simple outgoing-wave boundary conditions rather than constraint-
+    // preserving and incoming-radiation-controlling ones ..., which require a normal vector
+    // to the boundary.  To suppress unphysical incoming modes from the boundary, we instead
+    // force the right-hand side of Eq. (28) [the Theta equation] to damp exponentially by
+    // multiplying exp[-r^2/(L/2)^2].  The same factor is also multiplied for all kappa1 ...
+    // This prescription is justified, because all the modified terms vanish for physical
+    // solutions."  They also flag the caveat that it modifies the principal part.
+    //
+    // So: the WHOLE Theta RHS (source and damping together, advection is on the LHS and is
+    // untouched) and EVERY occurrence of kappa1 are scaled.  Scaling source and damping
+    // together preserves Theta_eq = S/D and only slows the relaxation rate.
+    //
+    // Measured here on VVLR_eq against a matched control from an identical restart: boundary
+    // tau_amp 4556 -> 6483 M, but Z-norm2 grew 6.9x faster (removing the kappa1 damping of
+    // Gam^i is what costs that).  Kyutoku+14 judged the prescription on ADM mass and angular
+    // momentum conservation, not on constraint norms, which may be why the trade is not
+    // reported there.  r is measured from the grid origin, not a tracker.
+
+    // -----------------------------------------------------------------------------------
     // Assemble RHS
     //
     // Khat, chi, and Theta
     rhs.vKhat(m,k,j,i) = - Ddalpha + z4c.alpha(m,k,j,i)
-      * (AA + (1./3.)*SQR(K)) +
-      LKhat + opt.damp_kappa1*(1 - opt.damp_kappa2)
+      * (AA + (1./3.)*SQR(K_khat)) +
+      LKhat + kappa1_khat*(1 - opt.damp_kappa2)
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
     // Matter term
     if(!is_vacuum) {
       rhs.vKhat(m,k,j,i) += 4.*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
     }
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
-      chi_guarded * z4c.alpha(m,k,j,i) * K;
-    rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
+      chi_guarded * z4c.alpha(m,k,j,i) * K_gbl;
+    rhs.vTheta(m,k,j,i) = LTheta + g_theta * z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter term
     if(!is_vacuum) {
-      rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
+      rhs.vTheta(m,k,j,i) -= g_theta * 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
     }
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
-      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
+      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * kappa1_gam *
           (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
       for(int b = 0; b < 3; ++b) {
         rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
@@ -609,7 +664,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
           (-Ddalpha_dd(a,b) + z4c.alpha(m,k,j,i) * (R_dd(a,b) + Rphi_dd(a,b)));
       rhs.vA_dd(m,a,b,k,j,i) -= (1./3.) * z4c.g_dd(m,a,b,k,j,i)
                              * (-Ddalpha + z4c.alpha(m,k,j,i)*R);
-      rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K*z4c.vA_dd(m,a,b,k,j,i)
+      rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K_gbl*z4c.vA_dd(m,a,b,k,j,i)
                              - 2.*AA_dd(a,b));
       rhs.vA_dd(m,a,b,k,j,i) += LA_dd(a,b);
       // Matter term
