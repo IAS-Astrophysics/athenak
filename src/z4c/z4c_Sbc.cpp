@@ -24,6 +24,7 @@ namespace z4c {
 KOKKOS_INLINE_FUNCTION
 static void Z4cSommerfeld(const Z4c::Z4c_vars& z4c, const Z4c::Z4c_vars& rhs,
     const RegionIndcs &indcs, const DualArray1D<RegionSize> &size,
+    const bool sbc_metric, const bool sbc_A,
     const int m, const int k, const int j, const int i) {
   // -------------------------------------------------------------------------------------
   // Scratch data
@@ -33,12 +34,15 @@ static void Z4cSommerfeld(const Z4c::Z4c_vars& z4c, const Z4c::Z4c_vars& rhs,
   // Scalars
   AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
   AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;
+  AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
 
   // Vectors
   AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dGam_du;
 
   // Tensors
   AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dA_ddd;
+  AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;
 
 
   // Psuedoradial vector
@@ -64,6 +68,19 @@ static void Z4cSommerfeld(const Z4c::Z4c_vars& z4c, const Z4c::Z4c_vars& rhs,
     for (int b = a; b < 3; b++) {
       for (int c = 0; c < 3; c++) {
         dA_ddd(c, a, b) = Dx<2>(c, idx, z4c.vA_dd, m, a, b, k, j, i);
+      }
+    }
+  }
+  if (sbc_metric) {
+    for (int a = 0; a < 3; a++) {
+      dchi_d(a)   = Dx<2>(a, idx, z4c.chi,   m, k, j, i);
+      dalpha_d(a) = Dx<2>(a, idx, z4c.alpha, m, k, j, i);
+    }
+    for (int a = 0; a < 3; a++) {
+      for (int b = a; b < 3; b++) {
+        for (int c = 0; c < 3; c++) {
+          dg_ddd(c, a, b) = Dx<2>(c, idx, z4c.g_dd, m, a, b, k, j, i);
+        }
       }
     }
   }
@@ -110,11 +127,65 @@ static void Z4cSommerfeld(const Z4c::Z4c_vars& z4c, const Z4c::Z4c_vars& rhs,
   // -------------------------------------------------------------------------------------
   // Boundary RHS for A_ab
   //
-  for (int a = 0; a < 3; a++) {
-    for (int b = a; b < 3; b++) {
-      rhs.vA_dd(m,a,b,k,j,i) = - z4c.vA_dd(m,a,b,k,j,i)/r;
-      for (int c = 0; c < 3; c++) {
-        rhs.vA_dd(m,a,b,k,j,i) -= s_u(c) * dA_ddd(c,a,b);
+  // sbc_A = false leaves A_ab to its own evolution equation.  For the wave pair
+  // d_t g~ = -2 alpha A, d_t A ~ -(1/2) alpha d^2 g~, the radiative condition belongs on the
+  // "position" g~ and A = -d_t g~/(2 alpha) then follows; imposing it on BOTH is compatible
+  // for genuinely outgoing content but is one condition more than the pair requires.
+  // Stock behaviour (and every reference code) conditions A, so this defaults to true.
+  if (sbc_A) {
+    for (int a = 0; a < 3; a++) {
+      for (int b = a; b < 3; b++) {
+        rhs.vA_dd(m,a,b,k,j,i) = - z4c.vA_dd(m,a,b,k,j,i)/r;
+        for (int c = 0; c < 3; c++) {
+          rhs.vA_dd(m,a,b,k,j,i) -= s_u(c) * dA_ddd(c,a,b);
+        }
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Boundary RHS for the metric sector: chi, g_ab and alpha  (optional, sbc_metric)
+  //
+  // The four groups above are the only ones that carry a radiative condition in the
+  // unmodified code; chi, g~_ab, alpha and beta^i are left to integrate their interior RHS
+  // off extrapolated ghosts.  That is an inconsistent treatment of the WAVE PAIR
+  // (g~_ab, A_ab): schematically d_t g~ = -2 alpha A and d_t A ~ -(1/2) alpha d^2 g~, so
+  // constraining A alone does not make the pair outgoing.  g~ then accumulates the time
+  // integral of whatever A does on the boundary, and that drift feeds back into A through
+  // the Ricci term, closing an unstable loop.
+  //
+  // Measured in a long BNS postmerger (VVLR_eq, box +/-4096): at the +x face centre both
+  // g~_xx and A_xx grow with tau ~ 3900-4000 M while beta^x, Gam^x, chi and alpha grow
+  // ~6x slower (tau ~ 24000-27000 M), and the ratio |g~_xx - 1| / |A_xx| = 7778 matches
+  // 2*tau = 7834 to 0.7% -- i.e. g~ is exactly the time integral of A, as the slaving
+  // relation predicts.  The deformation is trace-free (det g~ held at 1, off-diagonal
+  // g~_xy growing at the same rate), so it is the wave sector, not a gauge or conformal
+  // mode.  Standard BSSN practice applies the radiative condition to g~_ij as well.
+  //
+  // Note this is not over-determination in any harmful sense: for genuinely outgoing
+  // content the conditions on g~ and A are satisfied by the same solution; they conflict
+  // only for the non-outgoing part, which is exactly what should be removed.  The
+  // asymptotic values are unambiguous -- chi -> 1, g~_ab -> delta_ab, alpha -> 1 -- and
+  // the 1/r form preserves a static Coulomb-like tail as well as radiation, since
+  // u - u0 ~ 1/r is a stationary solution of the condition.  EnforceAlgConstr restores
+  // det g~ = 1 at the end of every stage, so a component-wise condition on g~ is safe.
+  //
+  // beta^i is deliberately NOT included: it is a passenger here (tau ~ 25000 M) and
+  // imposing a condition on it would override the Gamma-driver at the boundary.
+  if (sbc_metric) {
+    rhs.chi(m,k,j,i)   = - (z4c.chi(m,k,j,i)   - 1.0)/r;
+    rhs.alpha(m,k,j,i) = - sqrt(2.) * (z4c.alpha(m,k,j,i) - 1.0)/r;
+    for (int a = 0; a < 3; a++) {
+      rhs.chi(m,k,j,i)   -= s_u(a) * dchi_d(a);
+      rhs.alpha(m,k,j,i) -= sqrt(2.) * s_u(a) * dalpha_d(a);
+    }
+    for (int a = 0; a < 3; a++) {
+      for (int b = a; b < 3; b++) {
+        Real const flat = (a == b) ? 1.0 : 0.0;
+        rhs.g_dd(m,a,b,k,j,i) = - (z4c.g_dd(m,a,b,k,j,i) - flat)/r;
+        for (int c = 0; c < 3; c++) {
+          rhs.g_dd(m,a,b,k,j,i) -= s_u(c) * dg_ddd(c,a,b);
+        }
       }
     }
   }
@@ -141,6 +212,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
   auto &z4c_ = z4c;
   auto &rhs_ = rhs;
   bool &user_Sbc = opt.user_Sbc;
+  bool sbc_metric_ = opt.sbc_metric;
+  bool sbc_A_ = opt.sbc_A;
 
   // We only need to apply this condition for outflow boundaries
   if (pm->mesh_bcs[BoundaryFace::inner_x1] == BoundaryFlag::outflow
@@ -158,11 +231,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
-            Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, is);
+            Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, j, is);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
-              Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, is);
+              Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, j, is);
             }
           break;
         default:
@@ -173,11 +246,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
-            Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, ie);
+            Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, j, ie);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
-              Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, ie);
+              Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, j, ie);
             }
           break;
         default:
@@ -200,11 +273,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
-            Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, js, i);
+            Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, js, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
-              Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, js, i);
+              Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, js, i);
             }
           break;
         default:
@@ -215,11 +288,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
-            Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, je, i);
+            Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, je, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
-              Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, je, i);
+              Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, k, je, i);
             }
           break;
         default:
@@ -242,11 +315,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
-            Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ks, j, i);
+            Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, ks, j, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
-              Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ks, j, i);
+              Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, ks, j, i);
             }
           break;
         default:
@@ -257,11 +330,11 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
         case BoundaryFlag::vacuum:
         case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
-            Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ke, j, i);
+            Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, ke, j, i);
           break;
         case BoundaryFlag::user:
             if (user_Sbc) {
-              Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ke, j, i);
+              Z4cSommerfeld(z4c_, rhs_, indcs, size, sbc_metric_, sbc_A_, m, ke, j, i);
             }
           break;
         default:

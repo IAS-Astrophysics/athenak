@@ -130,6 +130,44 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.eps_floor = pin->GetOrAddReal("z4c", "eps_floor", 1e-12);
   opt.damp_kappa1 = pin->GetOrAddReal("z4c", "damp_kappa1", 0.0);
   opt.damp_kappa2 = pin->GetOrAddReal("z4c", "damp_kappa2", 0.0);
+  // Radial suppression of the Z4c terms, following Kyutoku, Shibata & Taniguchi,
+  // PRD 90, 064006 (2014), arXiv:1405.6207 Sec. II; restated in Shibata et al.
+  // arXiv:2502.03223 Sec. III B 3.  Intended for a NONSMOOTH (rectangular) outer boundary,
+  // where constraint-preserving BCs cannot be used because they need a unique boundary
+  // normal.  Beyond r_Z4 the whole RHS of the Theta equation and every occurrence of
+  // kappa1 are multiplied by exp(-r^2/r_Z4^2).  The original uses r_Z4 = L/2 with L the
+  // half-width of the domain; Shibata+25 quote r_Z4 <~ L_max/6.  <=0 disables (default).
+  opt.rz4 = pin->GetOrAddReal("z4c", "rz4", 0.0);
+  // rz4_mode selects how much of the prescription is applied.  Nested: each mode adds to
+  // the previous one.  Requires rz4 > 0; mode 0 (or rz4 <= 0) is a bit-identical no-op.
+  //
+  //   0  off (default).
+  //
+  //   1  SAFEST.  Scale the Theta equation only: its whole RHS bracket (Hamiltonian source
+  //      and kappa1 damping together) plus the Theta matter source.  Scaling source and
+  //      damping together preserves Theta_eq = S/D and only slows the relaxation rate.
+  //      Nothing else in the system is touched.
+  //
+  //   2  + the Khat equation: kappa1 there, and Theta in the Khat source via
+  //      K -> Khat + 2 G Theta.  Leaves the Gam^i damping at full strength, so it avoids
+  //      the Z-norm2 regression measured for mode 3.
+  //
+  //   3  FAITHFUL to Kyutoku+14: mode 2 plus kappa1 in the Gam^i damping, i.e. "the same
+  //      factor is also multiplied for all kappa1".  Measured on VVLR_eq against a matched
+  //      control: boundary tau_amp 4556 -> 6483 M, but Z-norm2 grew 6.9x faster, because
+  //      switching kappa1 off at large r removes the only damping of the Gamma constraint
+  //      there.  Kyutoku+14 judged the scheme on ADM mass/angular momentum conservation,
+  //      not on constraint norms, which may be why that trade is not reported.
+  //
+  //   4  AGGRESSIVE, beyond the reference: mode 3 plus the suppressed K in Ht, chi and
+  //      A_ij, i.e. Theta is suppressed everywhere K = Khat + 2 Theta appears.  Note this
+  //      applies the factor twice to the Theta channel, since Ht already feeds a bracket
+  //      that is scaled as a whole.  Untested.
+  //
+  // Do NOT scale the Theta source without also scaling its damping (Theta_eq -> 0 rather
+  // than Theta decoupling): that was measured to make rms|H| in the outermost shell 16x
+  // worse while leaving the interior bit-identical.  No mode here does that.
+  opt.rz4_mode = pin->GetOrAddInteger("z4c", "rz4_mode", 0);
   // Gauge conditions (default to moving puncture gauge)
   opt.lapse_harmonicf = pin->GetOrAddReal("z4c", "lapse_harmonicf", 1.0);
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
@@ -150,6 +188,13 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
+
+  // Extend the Sommerfeld outer BC to the metric sector (chi, g~_ab, alpha).  The stock
+  // code applies it only to Theta, Khat, Gam^i and A_ab, which leaves the wave pair
+  // (g~_ab, A_ab) treated inconsistently and lets g~ accumulate the time integral of A at
+  // the boundary.  See the long comment in z4c_Sbc.cpp.  Default false = stock behaviour.
+  opt.sbc_metric = pin->GetOrAddBoolean("z4c", "sbc_metric", false);
+  opt.sbc_A      = pin->GetOrAddBoolean("z4c", "sbc_A", true);
 
   opt.excise_chi = pin->GetOrAddReal("z4c", "excise_chi", 0.0625);
 
