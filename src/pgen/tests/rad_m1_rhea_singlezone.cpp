@@ -26,17 +26,17 @@
 //! models from scripts/make_toy_rhea_model.py do not care and are exercised at the F = 0
 //! default.
 //!
-//! `integrator = rk1` (forward Euler, one explicit stage per cycle) is used deliberately,
-//! so that "successive RK stages" and "successive cycles" (the unit AthenaK's tab-file
-//! output records) coincide exactly -- this sidesteps needing any new sub-cycle output
-//! machinery to check stage-to-stage convergence at the right granularity.
+//! One mixing application per cycle is what the tab-file output records, and that is what
+//! this test measures. Note `<time>/integrator` does not control it: M1 mixing lives in
+//! the operator-split task list, whose stage count is Driver::nopsplit_stages (2, fixed
+//! in the source), and FlavorMix applies the map only on the last of those.
 //!
 //! With `flavor_mix = rhea` already wired into RadiationM1::FlavorMix's task-graph
 //! dispatch, this pgen does not need to do anything special to exercise the pipeline --
-//! PackRheaInputs -> RheaModel::Predict -> ApplyRheaMixing already runs once per stage
-//! automatically. This file's only job is to set up initial data for which the resulting
-//! fixed-point iteration is analytically tractable, and to fail loudly at startup if the
-//! run is not actually configured to exercise that path.
+//! PackRheaInputs -> RheaModel::Predict -> ApplyRheaMixing runs automatically. This
+//! file's only job is to set up initial data for which the resulting fixed-point
+//! iteration is analytically tractable, and to fail loudly at startup if the run is not
+//! actually configured to exercise that path.
 
 // C++ headers
 #include <iostream>

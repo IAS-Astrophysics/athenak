@@ -37,6 +37,7 @@
 #include "athena.hpp"
 #include "athena_tensor.hpp"
 #include "coordinates/adm.hpp"
+#include "driver/driver.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
@@ -54,10 +55,18 @@ namespace radiationm1 {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RadiationM1::FlavorMix
-//! \brief Apply neutrino flavor mixing after each time update, before ghost sync.
+//! \brief Apply neutrino flavor mixing once per timestep, on the final operator-split
+//! stage, after the time update and before the ghost sync.
 TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
   // Skip if mixing is disabled or only one species (photon transport)
   if (params.flavor_mix_type == FlavMixNone || nspecies <= 1) {
+    return TaskStatus::complete;
+  }
+
+  // The relaxation below uses the full pmesh->dt, not the stage's beta*dt, and the final
+  // opsplit stage rebuilds u0 from the stage-1 snapshot u1 -- so mixing on any earlier
+  // stage is a full-dt relaxation that the next stage discards. Apply it once, last.
+  if (stage < pdrive->nopsplit_stages) {
     return TaskStatus::complete;
   }
 

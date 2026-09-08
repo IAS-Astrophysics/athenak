@@ -102,10 +102,10 @@ namespace radiationm1 {
 //!    actually needs the flv_fac multiplier in the final formula (see [E] below); this
 //!    avoids double-applying flv_fac by accident.
 //!
-//! Unlike CalcOpacityNurates_, this kernel does NOT early-return for stage>1: the
-//! FlavMixRhea dispatch branch that calls PackRheaInputs is required to fire every RK
-//! stage, not once per timestep -- copying CalcOpacityNurates_'s stage>1 skip here would
-//! silently freeze Rhea's input on stale substage-1 data every subsequent stage.
+//! This kernel carries no stage guard of its own, and must not acquire one. Which stages
+//! mix is decided once, for the whole chain, by FlavorMix; pack and apply always run as a
+//! pair. A stage skip added here alone would leave ApplyRheaMixing consuming stale inputs
+//! from an earlier substage.
 //!
 //! Indexing: writes rhea_f4_in_scratch using RheaBatchIndex(m,k,j,i,ks,js,is,nx3,nx2,nx1)
 //! (radiation_m1_rhea_kernels.hpp) -- the exact same index ApplyRheaMixing uses to read
@@ -163,7 +163,7 @@ void BuildSpatialTriad(const Real gamma_dd[3][3], Real E[3][3]) {
 //! See the implementation notes above for the
 //! tetrad-reduction and fluid-frame-decomposition details.
 //!
-//! Runs every RK stage (no stage>1 early exit -- see note above); requires nspecies == 4
+//! Carries no stage guard of its own (see note above); requires nspecies == 4
 //! (Rhea mixing's hard prerequisite, not relaxed elsewhere).
 TaskStatus RadiationM1::PackRheaInputs(Driver *pdrive, int stage) {
   assert(nspecies == 4);
