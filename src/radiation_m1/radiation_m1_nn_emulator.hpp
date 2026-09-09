@@ -40,7 +40,16 @@ class NNOpacityEmulator {
  public:
   static constexpr int N_EOS     = 8;    // EOS features gathered per cell
   static constexpr int N_SPECIES = 4;    // nue, anue, nux, anux
-  static constexpr int N_CH      = 8;    // channels per species
+  // Channels per species. The reduced-output model drops the two NUMBER
+  // non-thermal channels (NEPS conserves number → the M1 Kirchhoff step
+  // discards them) and predicts all 4 species independently (no nux=anux copy):
+  //   6 channels = eta_0_th, kappa_0_a_th, eta_th, kappa_a_th, eta_non_th,
+  //                kappa_a_non_th   (number non-thermal absent)
+#if NN_REDUCED_OUTPUT
+  static constexpr int N_CH      = 6;
+#else
+  static constexpr int N_CH      = 8;
+#endif
   // NN input width. The hybrid still gathers all N_EOS features (the 1D/Kirchhoff
   // reconstruction needs the chemical potentials), but the *network* input can be
   // reduced to (nb, T, Ye) since the other 5 are EOS-derived at fixed EOS.  The

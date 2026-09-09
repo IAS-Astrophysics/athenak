@@ -37,6 +37,7 @@ option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
 option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
 option(Athena_ENABLE_NN_OPACITY "Replace bns_nurates with batched LibTorch NN emulator" OFF)
 option(Athena_ENABLE_NN_REDUCED_INPUT "Use the reduced 3-input (nb,T,Ye) NN model (needs a native 3-input deploy)" OFF)
+option(Athena_ENABLE_NN_REDUCED_OUTPUT "Use the reduced 24-output NN model (6 ch/species, no number non-thermal, no nux=anux copy; needs a 24-output deploy)" OFF)
 option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
@@ -109,6 +110,15 @@ if(ENABLE_NN_OPACITY AND Athena_ENABLE_NN_REDUCED_INPUT)
   message(STATUS "NN opacity: reduced 3-input model (nb,T,Ye) — needs a native 3-input deploy")
 else()
   set(NN_REDUCED_INPUT 0)
+endif()
+
+# Reduced 24-output NN model: 6 channels/species (number non-thermal dropped),
+# all 4 species predicted independently (no nux=anux copy). Needs a 24-output deploy.
+if(ENABLE_NN_OPACITY AND Athena_ENABLE_NN_REDUCED_OUTPUT)
+  set(NN_REDUCED_OUTPUT 1)
+  message(STATUS "NN opacity: reduced 24-output model (6 ch/species, no copy) — needs a 24-output deploy")
+else()
+  set(NN_REDUCED_OUTPUT 0)
 endif()
 
 #set user problem generator flag

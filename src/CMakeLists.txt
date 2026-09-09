@@ -237,6 +237,7 @@ endif()
 if (ENABLE_NN_OPACITY)
     target_compile_definitions(athena PUBLIC ENABLE_NN_OPACITY)
     target_compile_definitions(athena PUBLIC NN_REDUCED_INPUT=${NN_REDUCED_INPUT})
+    target_compile_definitions(athena PUBLIC NN_REDUCED_OUTPUT=${NN_REDUCED_OUTPUT})
     target_sources(athena
         PRIVATE
             radiation_m1/radiation_m1_nn_emulator.cpp

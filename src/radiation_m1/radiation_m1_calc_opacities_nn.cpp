@@ -36,6 +36,17 @@ namespace radiationm1 {
 //   6  eta_non_th        [MeV nm^-3 s^-1] energy emissivity, NEPS
 //   7  kappa_a_non_th    [nm^-1]        energy absorption, NEPS
 // scattering (kappa_s) is not emulated; it remains zero (iso is cheap exact).
+#if NN_REDUCED_OUTPUT
+// Reduced model: 6 channels/species, number non-thermal dropped, all 4 species
+// predicted independently (no nux=anux copy). Renumbered layout:
+static constexpr int NN_CH_ETA_0_TH         = 0;
+static constexpr int NN_CH_KAPPA_0_A_TH     = 1;
+static constexpr int NN_CH_ETA_TH           = 2;
+static constexpr int NN_CH_KAPPA_A_TH       = 3;
+static constexpr int NN_CH_ETA_NON_TH       = 4;
+static constexpr int NN_CH_KAPPA_A_NON_TH   = 5;
+static constexpr int NN_NCH  = 6;              // channels per species
+#else
 static constexpr int NN_CH_ETA_0_TH         = 0;
 static constexpr int NN_CH_KAPPA_0_A_TH     = 1;
 static constexpr int NN_CH_ETA_0_NON_TH     = 2;
@@ -45,8 +56,9 @@ static constexpr int NN_CH_KAPPA_A_TH       = 5;
 static constexpr int NN_CH_ETA_NON_TH       = 6;
 static constexpr int NN_CH_KAPPA_A_NON_TH   = 7;
 static constexpr int NN_NCH  = 8;              // channels per species
+#endif
 static constexpr int NN_NSP  = 4;              // species
-static constexpr int NN_NOUT = NN_NSP * NN_NCH; // 32 total outputs per cell
+static constexpr int NN_NOUT = NN_NSP * NN_NCH; // 32 (full) or 24 (reduced)
 static constexpr int NN_NEOS = 8;              // EOS features gathered per cell
 // NN input width — matches NNOpacityEmulator::N_INPUTS. eos_dev always holds all
 // NN_NEOS features (the 1D/Kirchhoff reconstruction needs the chemical potentials);
@@ -384,7 +396,7 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
         // (a FULL step; W = Lorentz factor).  Read back in the Kirchhoff kernel.
         m1_moments(flat, 8) = dt_full_ * adm.alpha(m, k, j, i) / w_lorentz;
 
-        // ── denormalize all 32 NN outputs and map to M1 opacity fields ──
+        // ── denormalize all NN_NOUT NN outputs and map to M1 opacity fields ──
         // physical = 10^(y_norm * std + mean) = exp(LN10 * (y_norm*std + mean))
         // Layout: nn_view[flat*32 + s*8 + ch], 8 channels per species.
         //
@@ -405,25 +417,33 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
         for (int s = 0; s < NN_NSP; ++s) {
           const int sb = s * NN_NCH;
           Real fac = ((s == 2) || (s == 3)) ? 2.0 : 1.0;  // nux/anux: mu-OR-tau → mu-AND-tau
+          // NUMBER non-thermal (NEPS) is zero for the reduced-output model
+          // (NEPS conserves number; the M1 Kirchhoff step discards it), so those
+          // two channels are absent from the network output.
+#if NN_REDUCED_OUTPUT
+          const Real kappa_0_non = 0.0;
+          const Real eta_0_non   = 0.0;
+#else
+          const Real kappa_0_non = nn_phys[sb + NN_CH_KAPPA_0_A_NON_TH];
+          const Real eta_0_non   = nn_phys[sb + NN_CH_ETA_0_NON_TH];
+#endif
           // total kappa (thermal + non-thermal), nm^-1 → code; no fac on absorption
-          abs_0_(m, s, k, j, i) = (nn_phys[sb + NN_CH_KAPPA_0_A_TH] +
-                                    nn_phys[sb + NN_CH_KAPPA_0_A_NON_TH])
+          abs_0_(m, s, k, j, i) = (nn_phys[sb + NN_CH_KAPPA_0_A_TH] + kappa_0_non)
                                    * unit_length_;
           abs_1_(m, s, k, j, i) = (nn_phys[sb + NN_CH_KAPPA_A_TH] +
                                     nn_phys[sb + NN_CH_KAPPA_A_NON_TH])
                                    * unit_length_;
           scat_1_(m, s, k, j, i) = 0.0;   // iso not in 2D model
           // total emissivity (thermal + non-thermal)
-          eta_0_(m, s, k, j, i) = fac * (nn_phys[sb + NN_CH_ETA_0_TH] +
-                                          nn_phys[sb + NN_CH_ETA_0_NON_TH])
+          eta_0_(m, s, k, j, i) = fac * (nn_phys[sb + NN_CH_ETA_0_TH] + eta_0_non)
                                    / unit_num_dens_dot_;
           eta_1_(m, s, k, j, i) = fac * (nn_phys[sb + NN_CH_ETA_TH] +
                                           nn_phys[sb + NN_CH_ETA_NON_TH])
                                    / unit_ene_dens_dot_;
           // non-thermal (NEPS) parts separately for Kirchhoff thermal/non-thermal split
-          non_th_buf(flat, s)      = nn_phys[sb + NN_CH_KAPPA_0_A_NON_TH] * unit_length_;
+          non_th_buf(flat, s)      = kappa_0_non * unit_length_;
           non_th_buf(flat, 4 + s)  = nn_phys[sb + NN_CH_KAPPA_A_NON_TH]   * unit_length_;
-          non_th_buf(flat, 8 + s)  = fac * nn_phys[sb + NN_CH_ETA_0_NON_TH] / unit_num_dens_dot_;
+          non_th_buf(flat, 8 + s)  = fac * eta_0_non / unit_num_dens_dot_;
           non_th_buf(flat, 12 + s) = fac * nn_phys[sb + NN_CH_ETA_NON_TH]   / unit_ene_dens_dot_;
         }
       });
