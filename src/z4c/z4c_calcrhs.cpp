@@ -130,17 +130,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
-  // Radial suppression of the Z4c terms (Kyutoku, Shibata & Taniguchi 2014,
-  // arXiv:1405.6207 Sec. II).  Active only when rz4 > 0 AND rz4_mode > 0; otherwise every
-  // derived flag below is false and the RHS is bit-identical to the unmodified code.
-  // Flags are nested: each mode adds to the one before it.  See z4c.cpp for the menu.
-  bool rz4_on      = (opt.rz4 > 0.0) && (opt.rz4_mode > 0);
-  Real rz4_inv_r2  = rz4_on ? 1.0/SQR(opt.rz4) : 0.0;
-  int  rz4_mode    = rz4_on ? opt.rz4_mode : 0;
-  bool rz4_theta   = (rz4_mode >= 1);  // Theta RHS bracket + Theta matter source
-  bool rz4_khat    = (rz4_mode >= 2);  // kappa1 in Khat eq. + Theta in the Khat source
-  bool rz4_gam     = (rz4_mode >= 3);  // kappa1 in the Gam^i damping  (paper-literal)
-  bool rz4_kglobal = (rz4_mode >= 4);  // suppressed K in Ht, chi and A_ij too
+  // Radial suppression of the Z4c Theta equation (Kyutoku, Shibata & Taniguchi 2014,
+  // arXiv:1405.6207 Sec. II).  
+  bool rz4_on     = (opt.rz4 > 0.0);
+  Real rz4_inv_r2 = rz4_on ? 1.0/SQR(opt.rz4) : 0.0;
 
   // ===================================================================================
   // Main RHS calculation
@@ -377,14 +370,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       rz4_fac = Kokkos::exp(-(SQR(x1) + SQR(x2) + SQR(x3))*rz4_inv_r2);
     }
     // K with Theta suppressed.  Equals K exactly when the feature is off.
-    Real const K_sup = z4c.vKhat(m,k,j,i) + 2.*rz4_fac*z4c.vTheta(m,k,j,i);
+
     // Which K each consumer sees, per mode.
-    Real const K_khat = rz4_khat    ? K_sup : K;   // Khat source
-    Real const K_gbl  = rz4_kglobal ? K_sup : K;   // Ht, chi, A_ij
+
     // Per-equation kappa1.
-    Real const kappa1_khat = rz4_khat ? opt.damp_kappa1*rz4_fac : opt.damp_kappa1;
-    Real const kappa1_gam  = rz4_gam  ? opt.damp_kappa1*rz4_fac : opt.damp_kappa1;
-    Real const g_theta     = rz4_theta ? rz4_fac : 1.0;
 
     // -----------------------------------------------------------------------------------
     // Inverse metric
@@ -550,7 +539,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Note that the matter term is *not* included here; this is included explicitly when
     // calculating d_t \Theta.
-    Ht = R + (2./3.)*SQR(K_gbl) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
+    Ht = R + (2./3.)*SQR(K) - AA;// - 16.*M_PI*tmunu.E(m,k,j,i);
 
     // -----------------------------------------------------------------------------------
     // Finalize advective (Lie) derivatives
@@ -623,27 +612,27 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Khat, chi, and Theta
     rhs.vKhat(m,k,j,i) = - Ddalpha + z4c.alpha(m,k,j,i)
-      * (AA + (1./3.)*SQR(K_khat)) +
-      LKhat + kappa1_khat*(1 - opt.damp_kappa2)
+      * (AA + (1./3.)*SQR(K)) +
+      LKhat + opt.damp_kappa1*(1 - opt.damp_kappa2)
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
     // Matter term
     if(!is_vacuum) {
       rhs.vKhat(m,k,j,i) += 4.*M_PI * z4c.alpha(m,k,j,i) * (S + tmunu.E(m,k,j,i));
     }
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
-      chi_guarded * z4c.alpha(m,k,j,i) * K_gbl;
-    rhs.vTheta(m,k,j,i) = LTheta + g_theta * z4c.alpha(m,k,j,i) * (
+      chi_guarded * z4c.alpha(m,k,j,i) * K;
+    rhs.vTheta(m,k,j,i) = LTheta + rz4_fac * z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter term
     if(!is_vacuum) {
-      rhs.vTheta(m,k,j,i) -= g_theta * 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
+      rhs.vTheta(m,k,j,i) -= rz4_fac * 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
     }
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
-      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * kappa1_gam *
+      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
           (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
       for(int b = 0; b < 3; ++b) {
         rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
@@ -664,7 +653,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
           (-Ddalpha_dd(a,b) + z4c.alpha(m,k,j,i) * (R_dd(a,b) + Rphi_dd(a,b)));
       rhs.vA_dd(m,a,b,k,j,i) -= (1./3.) * z4c.g_dd(m,a,b,k,j,i)
                              * (-Ddalpha + z4c.alpha(m,k,j,i)*R);
-      rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K_gbl*z4c.vA_dd(m,a,b,k,j,i)
+      rhs.vA_dd(m,a,b,k,j,i) += z4c.alpha(m,k,j,i) * (K*z4c.vA_dd(m,a,b,k,j,i)
                              - 2.*AA_dd(a,b));
       rhs.vA_dd(m,a,b,k,j,i) += LA_dd(a,b);
       // Matter term
