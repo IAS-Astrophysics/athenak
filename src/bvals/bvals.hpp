@@ -168,6 +168,20 @@ class MeshBoundaryValues {
   // read/write the aggregate buffer directly (fusing the former
   // RankPackAgg/RankUnpackScatter kernels into SendBuff/RecvBuff).
   DvceArray1D<int> send_agg_offset_, recv_agg_offset_;
+
+  // rank-packed flux-correction path. Mirrors the vars path above, but the set of
+  // participating (MeshBlock,neighbour) pairs is asymmetric: a block SENDS flux
+  // corrections to coarser (CC) or coarser-and-same-level (FC) neighbours, and
+  // RECEIVES from finer (CC) or finer-and-same-level (FC) ones. Sizes therefore come
+  // from iflxc_ndat/iflxs_ndat rather than the var index sets.
+  int rank_packed_flux_nvars_;
+  int rank_packed_flux_mesh_seq_;
+  std::vector<RankPackedVarEntry> send_flux_entries_, recv_flux_entries_;
+  std::vector<RankPackedVarMessage> send_flux_msgs_, recv_flux_msgs_;
+  std::vector<MPI_Request> send_flux_reqs_, recv_flux_reqs_;
+  DvceArray1D<Real> rank_sendbuf_flux_, rank_recvbuf_flux_;
+  HostArray1D<int> rank_sendhdr_flux_, rank_recvhdr_flux_;
+  DvceArray1D<int> send_flx_agg_offset_, recv_flx_agg_offset_;
 #endif
 
   //functions
@@ -208,6 +222,9 @@ class MeshBoundaryValues {
 #if MPI_PARALLEL_ENABLED
   int GetVarDataSize(const MeshBoundaryBuffer &buf, int m, int n, int nvars) const;
   void BuildRankPackedVarMetadata(const int nvars);
+  int GetFluxDataSize(const MeshBoundaryBuffer &buf, int m, int n, int nvars,
+                      bool is_fc, bool sending) const;
+  void BuildRankPackedFluxMetadata(const int nvars, const bool is_fc);
 #endif
 };
 

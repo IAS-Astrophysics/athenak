@@ -108,20 +108,11 @@ TaskStatus MeshBoundaryValues::ClearSend() {
 TaskStatus MeshBoundaryValues::ClearFluxRecv() {
   bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
-  int &nmb = pmy_pack->nmb_thispack;
-  int &nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-
-  // wait for all non-blocking receives for fluxes to finish before continuing
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >= 0) &&
-           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
-           (recvbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        int ierr = MPI_Wait(&(recvbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
-      }
-    }
+  // wait for all rank-packed non-blocking receives for fluxes to finish
+  for (std::size_t i = 0; i < recv_flux_reqs_.size(); ++i) {
+    if (recv_flux_reqs_[i] == MPI_REQUEST_NULL) continue;
+    int ierr = MPI_Wait(&recv_flux_reqs_[i], MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
 #endif
   if (no_errors) return TaskStatus::complete;
@@ -137,20 +128,11 @@ TaskStatus MeshBoundaryValues::ClearFluxRecv() {
 TaskStatus MeshBoundaryValues::ClearFluxSend() {
   bool no_errors=true;
 #if MPI_PARALLEL_ENABLED
-  int &nmb = pmy_pack->nmb_thispack;
-  int &nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-
-  // wait for all non-blocking sends for fluxes to finish before continuing
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >= 0) &&
-           (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
-           (sendbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
-        int ierr = MPI_Wait(&(sendbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
-      }
-    }
+  // wait for all rank-packed non-blocking sends for fluxes to finish
+  for (std::size_t i = 0; i < send_flux_reqs_.size(); ++i) {
+    if (send_flux_reqs_[i] == MPI_REQUEST_NULL) continue;
+    int ierr = MPI_Wait(&send_flux_reqs_[i], MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
 #endif
   if (no_errors) return TaskStatus::complete;

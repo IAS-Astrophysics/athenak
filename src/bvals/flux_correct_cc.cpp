@@ -7,6 +7,7 @@
 //! \brief functions to pack/send and recv/unpack fluxes for cell-centered variables at
 //! fine/coarse boundaries for the flux correction step.
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 
@@ -44,6 +45,11 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
   auto &rbuf = recvbuf;
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
+#if MPI_PARALLEL_ENABLED
+  // off-rank payloads are written straight into the rank-packed aggregate buffer
+  auto aggsbuf = rank_sendbuf_flux_;
+  auto sendoff = send_flx_agg_offset_;
+#endif
 
   // Outer loop over (# of MeshBlocks)*(# of neighbors)*(# of variables)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (nmb*nnghbr*nvar), Kokkos::AUTO);
@@ -95,9 +101,13 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           // copy directly into recv buffer if MeshBlocks on same rank
           if (nghbr.d_view(m,n).rank == my_rank) {
             rbuf[dn].flux(dm, (j-jl + nj*(k-kl + nk*v)) ) = rflx;
-          // else copy into send buffer for MPI communication below
+          // else copy into the rank-packed send buffer for MPI below
           } else {
+#if MPI_PARALLEL_ENABLED
+            aggsbuf(sendoff(m*nnghbr + n) + (j-jl + nj*(k-kl + nk*v))) = rflx;
+#else
             sbuf[n].flux(m, (j-jl + nj*(k-kl + nk*v)) ) = rflx;
+#endif
           }
         });
 
@@ -121,9 +131,13 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           // copy directly into recv buffer if MeshBlocks on same rank
           if (nghbr.d_view(m,n).rank == my_rank) {
             rbuf[dn].flux(dm, (i-il + ni*(k-kl + nk*v)) ) = rflx;
-          // else copy into send buffer for MPI communication below
+          // else copy into the rank-packed send buffer for MPI below
           } else {
+#if MPI_PARALLEL_ENABLED
+            aggsbuf(sendoff(m*nnghbr + n) + (i-il + ni*(k-kl + nk*v))) = rflx;
+#else
             sbuf[n].flux(m, (i-il + ni*(k-kl + nk*v)) ) = rflx;
+#endif
           }
         });
 
@@ -142,9 +156,13 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
           // copy directly into recv buffer if MeshBlocks on same rank
           if (nghbr.d_view(m,n).rank == my_rank) {
             rbuf[dn].flux(dm, (i-il + ni*(j-jl + nj*v)) ) = rflx;
-          // else copy into send buffer for MPI communication below
+          // else copy into the rank-packed send buffer for MPI below
           } else {
+#if MPI_PARALLEL_ENABLED
+            aggsbuf(sendoff(m*nnghbr + n) + (i-il + ni*(j-jl + nj*v))) = rflx;
+#else
             sbuf[n].flux(m, (i-il + ni*(j-jl + nj*v)) ) = rflx;
+#endif
           }
         });
       }
@@ -153,34 +171,17 @@ TaskStatus MeshBoundaryValuesCC::PackAndSendFluxCC(DvceFaceFld5D<Real> &flx) {
   });  // end par_for_outer
 
 #if MPI_PARALLEL_ENABLED
-  // Send boundary buffer to neighboring MeshBlocks using MPI
-  // Sends only occur to neighbors on FACES at a COARSER level
+  // Send flux corrections with one aggregated message per destination rank. The pack
+  // kernel above already wrote every off-rank payload into rank_sendbuf_flux_ at its
+  // precomputed offset, so a single fence is all that is needed before posting.
   Kokkos::fence();
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) &&
-           (nghbr.h_view(m,n).lev < mblev.h_view(m)) &&
-           ((n<16) || ((n>=24) && (n<32))) ) {
-        // index and rank of destination Neighbor
-        int dn = nghbr.h_view(m,n).dest;
-        int drank = nghbr.h_view(m,n).rank;
-
-        if (drank != my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
-          int tag = CreateBvals_MPI_Tag(lid, dn);
-
-          // get ptr to send buffer for fluxes
-          int data_size = nvar*(sendbuf[n].iflxc_ndat);
-          auto send_ptr = Kokkos::subview(sendbuf[n].flux, m, Kokkos::ALL);
-
-          int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_flux, &(sendbuf[n].flux_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-        }
-      }
-    }
+  std::fill(send_flux_reqs_.begin(), send_flux_reqs_.end(), MPI_REQUEST_NULL);
+  for (std::size_t i = 0; i < send_flux_msgs_.size(); ++i) {
+    const auto &msg = send_flux_msgs_[i];
+    int ierr = MPI_Isend(rank_sendbuf_flux_.data() + msg.offset, msg.data_size,
+                         MPI_ATHENA_REAL, msg.rank, 1, comm_flux, &send_flux_reqs_[i]);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -204,26 +205,20 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &rbuf = recvbuf;
 #if MPI_PARALLEL_ENABLED
+  // off-rank payloads arrive in the rank-packed aggregate buffer; on-rank neighbours
+  // were written directly into rbuf by the sender's pack kernel, so recvoff is -1 there
+  auto aggrbuf = rank_recvbuf_flux_;
+  auto recvoff = recv_flx_agg_offset_;
   //----- STEP 1: check that recv boundary buffer communications have all completed
   // receives only occur for neighbors on faces at a FINER level
 
   bool bflag = false;
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) &&
-           (nghbr.h_view(m,n).lev > mblev.h_view(m)) &&
-           ((n<16) || ((n>=24) && (n<32))) ) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          int test;
-          int ierr = MPI_Test(&(rbuf[n].flux_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-          if (!(static_cast<bool>(test))) {
-            bflag = true;
-          }
-        }
-      }
-    }
+  for (std::size_t i = 0; i < recv_flux_reqs_.size(); ++i) {
+    int test;
+    int ierr = MPI_Test(&recv_flux_reqs_[i], &test, MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (!(static_cast<bool>(test))) {bflag = true;}
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -269,7 +264,14 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           int k = idx / nj;
           int j = (idx - k * nj) + jl;
           k += kl;
+#if MPI_PARALLEL_ENABLED
+          const int fidx = (j-jl + nj*(k-kl + nk*v));
+          const int rbase = recvoff(m*nnghbr + n);
+          flx.x1f(m,v,k,j,il) = (rbase >= 0) ? aggrbuf(rbase + fidx)
+                                              : rbuf[n].flux(m,fidx);
+#else
           flx.x1f(m,v,k,j,il) = rbuf[n].flux(m,(j-jl + nj*(k-kl + nk*v)));
+#endif
         });
       // x2faces
       } else if (n<16) {
@@ -277,7 +279,14 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           int k = idx / ni;
           int i = (idx - k * ni) + il;
           k += kl;
+#if MPI_PARALLEL_ENABLED
+          const int fidx = (i-il + ni*(k-kl + nk*v));
+          const int rbase = recvoff(m*nnghbr + n);
+          flx.x2f(m,v,k,jl,i) = (rbase >= 0) ? aggrbuf(rbase + fidx)
+                                              : rbuf[n].flux(m,fidx);
+#else
           flx.x2f(m,v,k,jl,i) = rbuf[n].flux(m,(i-il + ni*(k-kl + nk*v)));
+#endif
         });
       // x3faces
       } else if ((n>=24) && (n<32)) {
@@ -285,7 +294,14 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
           int j = idx / ni;
           int i = (idx - j * ni) + il;
           j += jl;
+#if MPI_PARALLEL_ENABLED
+          const int fidx = (i-il + ni*(j-jl + nj*v));
+          const int rbase = recvoff(m*nnghbr + n);
+          flx.x3f(m,v,kl,j,i) = (rbase >= 0) ? aggrbuf(rbase + fidx)
+                                              : rbuf[n].flux(m,fidx);
+#else
           flx.x3f(m,v,kl,j,i) = rbuf[n].flux(m,(i-il + ni*(j-jl + nj*v)));
+#endif
         });
       }
     }  // end if-neighbor-exists block
@@ -303,38 +319,22 @@ TaskStatus MeshBoundaryValuesCC::RecvAndUnpackFluxCC(DvceFaceFld5D<Real> &flx) {
 
 TaskStatus MeshBoundaryValuesCC::InitFluxRecv(const int nvars) {
 #if MPI_PARALLEL_ENABLED
-  int &nmb = pmy_pack->nmb_thispack;
-  int &nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
+  if (rank_packed_flux_nvars_ != nvars ||
+      rank_packed_flux_mesh_seq_ != pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq()) {
+    BuildRankPackedFluxMetadata(nvars, false);
+  } else {
+    std::fill(recv_flux_reqs_.begin(), recv_flux_reqs_.end(), MPI_REQUEST_NULL);
+    std::fill(send_flux_reqs_.begin(), send_flux_reqs_.end(), MPI_REQUEST_NULL);
+  }
 
-  // Initialize communications of fluxes
+  // Payload-only Irecv: each peer's (lid,dn,data_size) pack order is already known
+  // from the one-shot header exchange in BuildRankPackedFluxMetadata.
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      // only post receives for neighbors on FACES at FINER level
-      // this is the only thing different from BoundaryValuesFC::InitRecvFlux()
-      if ( (nghbr.h_view(m,n).gid >=0) &&
-           (nghbr.h_view(m,n).lev > pmy_pack->pmb->mb_lev.h_view(m)) &&
-           ((n<16) || ((n>=24) && (n<32))) ) {
-        // rank of destination buffer
-        int drank = nghbr.h_view(m,n).rank;
-
-        // post non-blocking receive if neighboring MeshBlock on a different rank
-        if (drank != global_variable::my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateBvals_MPI_Tag(m, n);
-
-          // calculate amount of data to be passed, get pointer to variables
-          int data_size = nvars*(recvbuf[n].iflxc_ndat);
-          auto recv_ptr = Kokkos::subview(recvbuf[n].flux, m, Kokkos::ALL);
-
-          // Post non-blocking receive for this buffer on this MeshBlock
-          int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_flux, &(recvbuf[n].flux_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-        }
-      }
-    }
+  for (std::size_t i = 0; i < recv_flux_msgs_.size(); ++i) {
+    const auto &msg = recv_flux_msgs_[i];
+    int ierr = MPI_Irecv(rank_recvbuf_flux_.data() + msg.offset, msg.data_size,
+                         MPI_ATHENA_REAL, msg.rank, 1, comm_flux, &recv_flux_reqs_[i]);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
