@@ -70,10 +70,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   DvceArray1D<int> nurates_nerrs_("nurates_nerrs", 1);
   Kokkos::deep_copy(nurates_nerrs_, 0);
   constexpr int nurates_errcap = 100;
-  // Counts cells that fell back to the equilibrium distribution this call
-  // (reconstructed T_nu > max_recon_temp). Only incremented on fallback cells,
-  // and only read back / printed below when non-zero -> no cost in the common
-  // (no-fallback) case.
   DvceArray1D<int> nfallback_("nfallback", 1);
   Kokkos::deep_copy(nfallback_, 0);
   // Force the equilibrium distribution for the first eq_warmup_cycles cycles.
