@@ -479,9 +479,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
               // Update Tmunu
               const Real H2 = tensor_dot(g_uu, Hnew_d, Hnew_d);
-              const Real normH = Kokkos::sqrt(H2);
-              const Real inormH = (normH > 0. ? 1. / normH : 0.);
-              const Real xi = normH*(Jnew > params_.rad_E_floor ? 1./Jnew : 0.);
+              const Real xi = Kokkos::sqrt(H2)*(Jnew > params_.rad_E_floor ? 1./Jnew : 0.);
               chi_(m, nuidx, k, j, i) = closure_fun(xi, params_.closure_type);
 
               const Real dthick = 3. * (1. - chi_(m, nuidx, k, j, i)) / 2.;
@@ -493,7 +491,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                       Jnew * u_d(a) * u_d(b) + Hnew_d(a) * u_d(b) +
                       Hnew_d(b) * u_d(a) +
                       dthin * Jnew *
-                          ((Hnew_d(a) * inormH) * (Hnew_d(b) * inormH)) +
+                          (Hnew_d(a) * Hnew_d(b) * (H2 > 0 ? 1 / H2 : 0)) +
                       dthick * Jnew * (g_dd(a, b) + u_d(a) * u_d(b)) / 3.;
                 }
               }

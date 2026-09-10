@@ -56,8 +56,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
-  auto &size = pmy_pack->pmb->mb_size;
-  const int rank = global_variable::my_rank;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &nspecies_ = nspecies;
@@ -195,42 +193,32 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           calc_proj(u_d, u_u, proj_ud);
 
           // Compute lab frame energy density and number density
-          Real m1_E[4]{}, m1_Fx[4]{}, m1_Fy[4]{}, m1_Fz[4]{}, m1_N[4]{};
-          Real J[4]{}, m1_H2[4]{}, m1_Gamma[4]{}, rnnu[4]{};
+          Real J[4]{}, rnnu[4]{};
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-            m1_E[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
-            m1_Fx[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i);
-            m1_Fy[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i);
-            m1_Fz[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i);
-            m1_N[nuidx] =
-                u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
-
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
             pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
                      adm.beta_u(m, 2, k, j, i),
-                     m1_Fx[nuidx], m1_Fy[nuidx], m1_Fz[nuidx], F_d);
-
+                     u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
+                     u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
+                     u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i),
+                     F_d);
+            const Real E =
+                u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
-            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud,
-                          m1_E[nuidx], F_d, chi_(m, nuidx, k, j, i),
-                          P_dd, m1_params_);
+            apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                          chi_(m, nuidx, k, j, i), P_dd, m1_params_);
 
             AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
-            assemble_rT(n_d, m1_E[nuidx], F_d, P_dd, T_dd);
+            assemble_rT(n_d, E, F_d, P_dd, T_dd);
 
             J[nuidx] = calc_J_from_rT(T_dd, u_u);
             AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
             calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
             apply_floor(g_uu, J[nuidx], H_d, m1_params_);
-            m1_H2[nuidx] = tensor_dot(g_uu, H_d, H_d);
-            m1_Gamma[nuidx] =
-                compute_Gamma(w_lorentz, v_u, J[nuidx],
-                              m1_E[nuidx], F_d, m1_params_);
-            rnnu[nuidx] = m1_N[nuidx] / m1_Gamma[nuidx];
+            Real Gamma =
+                compute_Gamma(w_lorentz, v_u, J[nuidx], E, F_d, m1_params_);
+            rnnu[nuidx] =
+                u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) / Gamma;
           }
 
           // local undensitized neutrino quantities
