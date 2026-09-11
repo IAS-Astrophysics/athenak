@@ -27,7 +27,7 @@
 #include "athena.hpp"
 
 // identifiers for refinement criteria methods
-enum class RefCritMethod {min_max, slope, second_deriv, location, user};
+enum class RefCritMethod {min_max, slope, second_deriv, location, cyclic_zoom, user};
 
 using DvceArray5DnSlice = Kokkos::Subview<DvceArray5D<Real>,
                           std::remove_const_t<decltype(Kokkos::ALL)>,
@@ -69,6 +69,7 @@ class RefinementCriteria {
   void CheckSlope(MeshBlockPack* pmbp, RefCritData crit);
   void CheckSecondDeriv(MeshBlockPack* pmbp, RefCritData crit);
   void CheckLocation(MeshBlockPack* pmbp, RefCritData crit);
+  void CheckCyclicZoom(MeshBlockPack* pmbp);
 
  private:
   // data
