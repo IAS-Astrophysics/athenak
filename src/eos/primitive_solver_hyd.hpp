@@ -630,7 +630,6 @@ class PrimitiveSolverHydro {
     Real vsq = usq*iWsq;
     Real visq = prim[pvx]*prim[pvx]*iWsq;
 
-    //Real sdis = cmsq*(1.0 - vsq)*(1.0 - vsq*cmsq - (1. - cmsq)*prim[pvx]*prim[pvx]);
     Real sdis = cmsq*(1. - vsq)*(1. - visq - (vsq - visq)*cmsq);
     sdis = Kokkos::sqrt(Kokkos::fmax(sdis,0.0));
     Real Wcsq = 1.0/(1.0 - vsq*cmsq);

@@ -180,7 +180,9 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     // STEP 3: Compute pressure across contact discontinuity
     //----------------------------------------------------------------------------------
     // Initial guess for pressure
-    // FIXME(JMF): Doing a C2P here is absolutely horrible. We need something better.
+    // This should not be used in production code because the guess below is faster.
+    // However, for the time being it is left commented out in case someone wants to
+    // experiment with it or there seem to be issues with the weighted average.
     /*Real flat[NSPMETRIC] = {1.0, 0.0, 0.0, 1.0, 0.0, 1.0};
     Real prim_hll[NPRIM];
     eos.ps.ConToPrim(prim_hll, cons_int, b_int, flat, flat);
@@ -201,6 +203,9 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     // an HLL average, and it avoids an additional C2P operation.
     Real ptot_hll = (lambda_r*(prim_l[PPR] + 0.5*bsq_l) -
                      lambda_l*(prim_r[PPR] + 0.5*bsq_r))*qb;
+    // An alternative initial guess is to add lambda_r*lambda_l*(S_{x,R} - S_{x,L}) to the
+    // numerator, which acts as a diffusive term which more closely imitates the HLLE
+    // solution. It is not obvious that this performs better in practice.
     Real ptot;
     if (b_int[ibx]*b_int[ibx]/ptot_hll < 0.01) {
       // If the flow is not strongly magnetized, we can initialize it assuming Bx = 0,
@@ -324,21 +329,10 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
       vc = 0.5*(vcl[ibx] + vcr[ibx]);
 
       // Try to enforce vcl[ibx] = vcr[ibx]
-      /*Real DK = Kr[ibx] - Kl[ibx];
-      Real Yl = (1.0 - Ksql)*qfl;
-      Real Yr = (1.0 - Ksqr)*qfr;
-
-      return DK - Bc[ibx]*(Yr - Yl);*/
       return vcl[ibx] - vcr[ibx];
     };
 
     // Secant method to find intermediate pressure.
-    // We need two guesses to initialize the secant method. We choose the second guess
-    // as follows: if Ptot is less than both Pl and Pr, we take the minimum of the two.
-    // If Ptot is greater than both Pl and Pr, we choose the maximum of the two. If it
-    // sits in between, we take the average.
-    //Real ptot_old = ptot*(1.025);
-    //Real ptot_old = 0.0;
     Real fold = froot(ptot);
     const Real tol = 1e-12;
     const int max_iters = 15;
@@ -348,10 +342,12 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
         || !Kokkos::isfinite(fold)) {
       count = max_iters;
     } else if (Kokkos::fabs(fold) > tol) {
+      // We need two guesses to initialize the secant method. We perturb the first guess
+      // by 2.5% to get the second. There may be a more rigorous way to do this, but in
+      // practice this seems to work well enough.
       Real ptot_old = ptot;
       ptot *= 1.025;
       Real ptot_old2;
-      //do {
       while (Kokkos::fabs(fold) > tol && count < max_iters) {
         Real f = froot(ptot);
         count++;
@@ -361,9 +357,6 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
         ptot = (ptot_old2*f - ptot*fold)/(f - fold);
         fold = f;
       }
-      //} while (Kokkos::fabs(fold) > tol && count < max_iters);
-      /*} while (Kokkos::fabs(ptot - ptot_old) > tol*Kokkos::fabs(ptot_old - ptot_old2) &&
-               count < max_iters);*/
     }
 
     // STEP 4: Check for correctness and compute intermediate state if possible.
