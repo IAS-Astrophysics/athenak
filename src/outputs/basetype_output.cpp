@@ -189,6 +189,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
+  if ((ivar==175) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c gauge variables requested in <output> block '"
+       << out_params.block_name << "' but Z4c object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Now load STL vector of output variables
   outvars.clear();
@@ -673,6 +680,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
       if (variable.compare("z4c") == 0 ||
           variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+        outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+      }
+    }
+
+    // z4c gauge variables only (lapse + shift, no other Z4c evolved fields)
+    if (variable.compare("z4c_gauge") == 0) {
+      for (int v = z4c::Z4c::I_Z4C_ALPHA; v < z4c::Z4c::nz4c; ++v) {
         outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
       }
     }
