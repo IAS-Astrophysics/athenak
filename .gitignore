@@ -25,5 +25,8 @@ Lorene
 # bns_nurates
 src/bns_nurates/
 
+# Rhea (Athena_RHEA_DIR default)
+/rhea
+
 # python cache
 __pycache__/

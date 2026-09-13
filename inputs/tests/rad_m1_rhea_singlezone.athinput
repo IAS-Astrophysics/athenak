@@ -6,6 +6,10 @@ problem = Rhea flavor-mix single-zone fixed-point convergence test. See
           is run -- same convention as inputs/tests/rad_m1_singlezone.athinput's DD2.athtab
           dependency.
 
+          A toy TorchScript model means this input needs the LibTorch backend:
+          -DAthena_ENABLE_RHEA=ON -DAthena_ENABLE_TORCH=ON. The default Kokkos backend
+          reads .rhea files, which make_toy_rhea_model.py does not write.
+
           Generate the model with (--model swap and --gamma-code 10.0 are both the
           defaults; spelled out here because the TOV inputs use a different rate):
 

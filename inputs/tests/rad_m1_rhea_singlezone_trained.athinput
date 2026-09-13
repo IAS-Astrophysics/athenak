@@ -41,9 +41,11 @@ problem = Rhea flavor-mix single-zone test driven by a REAL trained Rhea checkpo
           absolute path (edit if your paths differ):
             - the trained checkpoint, rhea_model_path
             - a CompOSE EOS table, <mhd> table
-          Note the checkpoint is CUDA-serialized; loading it in a CPU build relies on
-          RheaModuleCache passing the resolved device to torch::jit::load
-          (src/radiation_m1/radiation_m1_rhea.cpp).
+          rhea_model_path names a .rhea for the default Kokkos backend; a build with
+          -DAthena_ENABLE_TORCH=ON wants the .pt of the same checkpoint instead. That .pt
+          is CUDA-serialized, and loading it in a CPU build relies on RheaModuleCache
+          passing the resolved device to torch::jit::load
+          (src/radiation_m1/radiation_m1_rhea_torch.cpp).
 
 <job>
 basename = rhea_singlezone_trained  # name of run
@@ -125,7 +127,7 @@ backreact = false
 theta_limiter = false # default: false
 
 flavor_mix = rhea
-rhea_model_path = /var/home/dradice/Projects/NeuOscillations/data/model_exp21_8x0e_4x10_2x2e_quadratic.pt
+rhea_model_path = /var/home/dradice/Projects/NeuOscillations/data/stage5_postfix_seed42_cuda.rhea
 rhea_stability_threshold = 0.5
 rhea_tau_0_factor = 1.0   # physical rate; see RATE NOTE above
 rhea_tau_1_factor = 1.0

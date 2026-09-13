@@ -36,7 +36,12 @@ option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
 option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
 option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
-option(Athena_ENABLE_TORCH "Compile with LibTorch (Rhea flavor mixing) enabled" OFF)
+option(Athena_ENABLE_RHEA "Compile with Rhea neutrino flavor mixing enabled" OFF)
+option(Athena_ENABLE_TORCH "Use the LibTorch backend for Rhea instead of Kokkos" OFF)
+set(Athena_RHEA_DIR "${CMAKE_SOURCE_DIR}/rhea" CACHE PATH
+    "Root of a Rhea checkout; its cpp_interface/kokkos holds the standalone evaluator")
+set(Athena_RHEA_MAX_SCRATCH "" CACHE STRING
+    "Override RHEA_MAX_SCRATCH, in floats; rhea_loader.hpp names the value a model needs")
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -90,12 +95,46 @@ else()
   set(M1_TOTAL_NUM_SPECIES 1)
 endif ()
 
-# set torch macro (true/false) and locate LibTorch (Rhea flavor mixing, radiation_m1).
-# Point CMake at an install via -DCMAKE_PREFIX_PATH=<path-to-libtorch> (standard LibTorch
-# convention) or -DTorch_DIR=<path-to-libtorch>/share/cmake/Torch.
+# set the Rhea macro (true/false) and pick its evaluator backend.
 #
-# Unlike bns_nurates above (a plain in-tree header directory with no CMake package of its
-# own), LibTorch ships a real CMake package, so find_package(Torch) is used rather than
+# Athena_ENABLE_RHEA is the feature switch: it compiles the flavor-mixing path and the
+# single-zone test pgen, and puts Rhea's standalone evaluator headers on the include path.
+# Athena_ENABLE_TORCH then only chooses WHICH evaluator backend is compiled -- the default
+# (OFF) is the Kokkos one, which needs no external library at all.
+#
+# Athena_RHEA_DIR follows the bns_nurates convention below: a checkout dropped beside the
+# source tree, headers only, no CMake package of its own. Only cpp_interface/kokkos is
+# used, and nothing in it includes LibTorch or e3nn.
+if(Athena_ENABLE_RHEA)
+  # Rhea flavor mixing hard-requires nspecies == 4, but M1_TOTAL_NUM_SPECIES is only set to
+  # 4 by Athena_ENABLE_NURATES above -- with RHEA=ON and NURATES=OFF it stays 1,
+  # RadiationM1::FlavorMix silently early-exits (nspecies <= 1), and flavor_mix = rhea would
+  # load the model and then do nothing, with no error. Fail loudly at configure time instead.
+  # (Longer-term fix is to decouple M1_TOTAL_NUM_SPECIES from nurates; for now Rhea always
+  # builds alongside nurates, which is also the only combination the port was tested against.)
+  if(NOT Athena_ENABLE_NURATES)
+    message(FATAL_ERROR
+      "Athena_ENABLE_RHEA=ON requires Athena_ENABLE_NURATES=ON: Rhea flavor mixing needs "
+      "M1_TOTAL_NUM_SPECIES=4, which is currently only set by Athena_ENABLE_NURATES. "
+      "Re-run cmake with -DAthena_ENABLE_NURATES=ON.")
+  endif()
+  if(NOT EXISTS "${Athena_RHEA_DIR}/cpp_interface/kokkos/RheaKokkos.hpp")
+    message(FATAL_ERROR
+      "Athena_ENABLE_RHEA=ON needs Rhea's standalone evaluator, but "
+      "${Athena_RHEA_DIR}/cpp_interface/kokkos/RheaKokkos.hpp does not exist. Point "
+      "-DAthena_RHEA_DIR at a Rhea checkout, or symlink one as ${CMAKE_SOURCE_DIR}/rhea.")
+  endif()
+  set(ENABLE_RHEA 1)
+  message(STATUS "Compiling with Rhea flavor mixing: ${Athena_RHEA_DIR}")
+else()
+  set(ENABLE_RHEA 0)
+endif()
+
+# The LibTorch backend. It reads the .pt checkpoint through torch::jit instead of the .rhea
+# file the Kokkos backend reads, and is kept as the cross-check the Kokkos path is validated
+# against -- build twice, run twice, diff.
+#
+# LibTorch ships a real CMake package, so find_package(Torch) is used rather than
 # reimplemented -- but this means it also injects its own CMAKE_CXX_FLAGS and
 # _GLIBCXX_USE_CXX11_ABI setting (via the imported `torch` target's
 # INTERFACE_COMPILE_OPTIONS, propagated to `athena` through target_link_libraries below).
@@ -108,24 +147,24 @@ endif ()
 # first HIP/SYCL attempt, and check the actual TORCH_CXX_FLAGS value LibTorch's
 # TorchConfig.cmake sets (it is empty for at least one CPU-only distribution -- do not
 # assume it is always empty).
+#
+# Point CMake at an install via -DCMAKE_PREFIX_PATH=<path-to-libtorch> (standard LibTorch
+# convention) or -DTorch_DIR=<path-to-libtorch>/share/cmake/Torch.
 if(Athena_ENABLE_TORCH)
-  # Rhea flavor mixing hard-requires nspecies == 4, but M1_TOTAL_NUM_SPECIES is only set to
-  # 4 by Athena_ENABLE_NURATES above -- with TORCH=ON and NURATES=OFF it stays 1,
-  # RadiationM1::FlavorMix silently early-exits (nspecies <= 1), and flavor_mix = rhea would
-  # load the model and then do nothing, with no error. Fail loudly at configure time instead.
-  # (Longer-term fix is to decouple M1_TOTAL_NUM_SPECIES from nurates; for now Rhea always
-  # builds alongside nurates, which is also the only combination the port was tested against.)
-  if(NOT Athena_ENABLE_NURATES)
+  if(NOT Athena_ENABLE_RHEA)
     message(FATAL_ERROR
-      "Athena_ENABLE_TORCH=ON requires Athena_ENABLE_NURATES=ON: Rhea flavor mixing needs "
-      "M1_TOTAL_NUM_SPECIES=4, which is currently only set by Athena_ENABLE_NURATES. "
-      "Re-run cmake with -DAthena_ENABLE_NURATES=ON.")
+      "Athena_ENABLE_TORCH=ON selects a backend for Rhea, so it requires "
+      "Athena_ENABLE_RHEA=ON. Re-run cmake with -DAthena_ENABLE_RHEA=ON, or drop "
+      "-DAthena_ENABLE_TORCH=ON to build the Kokkos backend.")
   endif()
   set(ENABLE_TORCH 1)
   find_package(Torch REQUIRED)
-  message(STATUS "Compiling with LibTorch (Rhea flavor mixing): ${TORCH_INSTALL_PREFIX}")
+  message(STATUS "Rhea evaluator backend: LibTorch (${TORCH_INSTALL_PREFIX})")
 else()
   set(ENABLE_TORCH 0)
+  if(ENABLE_RHEA)
+    message(STATUS "Rhea evaluator backend: Kokkos")
+  endif()
 endif()
 
 #set user problem generator flag
@@ -198,6 +237,14 @@ endif()
 # Optionally include bns_nurates headers
 if (ENABLE_NURATES)
   target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bns_nurates/include)
+endif()
+
+# Optionally include Rhea's standalone evaluator headers
+if (ENABLE_RHEA)
+  target_include_directories(athena PRIVATE ${Athena_RHEA_DIR}/cpp_interface/kokkos)
+  if (NOT Athena_RHEA_MAX_SCRATCH STREQUAL "")
+    target_compile_definitions(athena PRIVATE RHEA_MAX_SCRATCH=${Athena_RHEA_MAX_SCRATCH})
+  endif()
 endif()
 
 if (${PROBLEM} MATCHES "z4c/spectre/*")

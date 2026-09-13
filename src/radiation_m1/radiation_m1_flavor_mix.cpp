@@ -46,7 +46,7 @@
 #include "radiation_m1/radiation_m1_macro.hpp"
 #include "radiation_m1/radiation_m1_tensors.hpp"
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
 #include <type_traits>
 #include <utility>
 #endif
@@ -70,9 +70,9 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   }
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
   // Rhea ML flavor mixing: structurally different from the equilibrium/maximal branches
-  // below (a batched Torch call sandwiched between two Kokkos kernels, not one
+  // below (a batched model evaluation sandwiched between two Kokkos kernels, not one
   // self-contained par_for), so it dispatches to its own functions rather than being
   // inlined into the KOKKOS_LAMBDA further down. No new TaskIDs -- PackRheaInputs ->
   // prhea->Predict() -> ApplyRheaMixing run sequentially inside this one task-function
@@ -102,8 +102,9 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     // subview type-deduction is conservative, though (rank/pattern-based, not a runtime
     // contiguity check), and in general could deduce LayoutStride for a subview built
     // from a Kokkos::pair argument even when the actual strides stay contiguous -- which
-    // would make RheaModel::Predict's torch::from_blob (given only `sizes`, no explicit
-    // strides) silently wrong. This was checked empirically against the exact Kokkos
+    // would silently mis-stride the flat buffer RheaModel::Predict hands its evaluator
+    // (both backends derive strides from shape alone). This was checked empirically
+    // against the exact Kokkos
     // version vendored in this repo (its subview-type-deduction rule lives in
     // View/Kokkos_ViewMapping.hpp), via a standalone probe compiled and linked against
     // this repo's own build's libkokkoscore.a: a leading-range/ALL/ALL/ALL subview of a
@@ -117,17 +118,19 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     static_assert(
         std::is_same<decltype(f4_in_active)::array_layout, LayoutWrapper>::value,
         "Kokkos::subview over a leading-index range of rhea_f4_in_scratch no longer "
-        "deduces LayoutRight -- RheaModel::Predict's torch::from_blob call assumes "
-        "contiguous row-major strides from shape alone; either restore contiguity or "
-        "construct the argument View explicitly from a raw pointer + extents instead of "
-        "relying on Kokkos::subview's deduced type here (see the comment above).");
+        "deduces LayoutRight -- RheaModel::Predict assumes contiguous row-major strides "
+        "from shape alone; either restore contiguity or construct the argument View "
+        "explicitly from a raw pointer + extents instead of relying on Kokkos::subview's "
+        "deduced type here (see the comment above).");
 
-    // pred must stay alive as a local for the duration of ApplyRheaMixing's kernel
-    // (output-side lifetime hazard) -- do not take the Views out of it and let it go out
-    // of scope before ApplyRheaMixing runs.
+    // With the LibTorch backend, pred owns the Torch tensors its Views point into, so it
+    // must stay alive as a local for the duration of ApplyRheaMixing's kernel -- do not
+    // take the Views out of it and let it go out of scope before ApplyRheaMixing runs.
+    // (The Kokkos backend's buffers are RheaModel-owned and live for the whole run.)
     RheaModel::Prediction pred = prhea->Predict(f4_in_active);
     TaskStatus astat = ApplyRheaMixing(pdrive, stage, pred.F4_out, pred.growthrate,
                                        pred.stability);
+#if ENABLE_TORCH
     // Defensive device fence before `pred` (which owns the Torch output buffers the
     // unpack kernel reads) is destroyed at end of scope. ApplyRheaMixing only ENQUEUES
     // its par_for on DevExeSpace(), so on a device backend pred's destructor could
@@ -139,6 +142,7 @@ TaskStatus RadiationM1::FlavorMix(Driver *pdrive, int stage) {
     // No-op on CPU (Serial/OpenMP block already). If GPU profiling later shows this fence
     // matters, re-evaluate it against the same-stream-ordering argument before removing.
     Kokkos::fence();
+#endif
     return astat;
   }
 #endif

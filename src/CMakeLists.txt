@@ -234,15 +234,23 @@ if (ENABLE_NURATES)
     )
 endif()
 
-# add LibTorch (Rhea flavor mixing, radiation_m1)
-if (ENABLE_TORCH)
-    target_compile_definitions(athena PUBLIC ENABLE_TORCH)
+# add Rhea flavor mixing (radiation_m1). Exactly one evaluator backend is compiled:
+# radiation_m1_rhea_torch.cpp when ENABLE_TORCH, radiation_m1_rhea_kokkos.cpp otherwise.
+# Both implement the same RheaModel interface (radiation_m1_rhea.hpp) and everything else
+# below is backend-agnostic.
+if (ENABLE_RHEA)
+    target_compile_definitions(athena PUBLIC ENABLE_RHEA)
     target_sources(athena
         PRIVATE
-            radiation_m1/radiation_m1_rhea.cpp
             radiation_m1/radiation_m1_flavor_mix_rhea.cpp
             pgen/tests/rad_m1_rhea_singlezone.cpp
     )
+    if (ENABLE_TORCH)
+        target_compile_definitions(athena PUBLIC ENABLE_TORCH)
+        target_sources(athena PRIVATE radiation_m1/radiation_m1_rhea_torch.cpp)
+    else()
+        target_sources(athena PRIVATE radiation_m1/radiation_m1_rhea_kokkos.cpp)
+    endif()
 endif()
 
 # custom problem generator to be included in compile

@@ -1011,7 +1011,7 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
   } else if (pgen_fun_name.compare("rad_m1_singlezonetest") == 0) {
     RadiationM1SingleZoneTest(pin, is_restart);
 #endif
-#if ENABLE_TORCH
+#if ENABLE_RHEA
   } else if (pgen_fun_name.compare("rad_m1_rhea_singlezonetest") == 0) {
     RadiationM1RheaSingleZoneTest(pin, is_restart);
 #endif

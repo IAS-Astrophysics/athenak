@@ -3,11 +3,13 @@
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
-//! \file radiation_m1_rhea.cpp
-//! \brief RheaModel implementation: Kokkos <-> LibTorch interop, no M1 physics.
+//! \file radiation_m1_rhea_torch.cpp
+//! \brief RheaModel's LibTorch backend: Kokkos <-> LibTorch interop, no M1 physics.
+//! Compiled instead of radiation_m1_rhea_kokkos.cpp when ENABLE_TORCH; every LibTorch
+//! concern in radiation_m1 is confined to this translation unit.
 //!
-//! This file (together with radiation_m1_rhea.hpp) is the only place in radiation_m1
-//! allowed to branch on which Kokkos device backend is enabled. Every backend-conditional
+//! This file is the only place in radiation_m1 allowed to branch on which Kokkos device
+//! backend is enabled. Every backend-conditional
 //! block below is guarded by the same macros Kokkos itself defines
 //! (`KOKKOS_ENABLE_CUDA`/`KOKKOS_ENABLE_HIP`/`KOKKOS_ENABLE_SYCL`), so exactly one of the
 //! CUDA/HIP/SYCL/CPU code paths is ever compiled for a given build -- there is no runtime
@@ -301,8 +303,11 @@ c10::StreamGuard MakeXpuStreamGuard(c10::DeviceIndex device_index) {
 //! constructed for this (model_path, device) pair in this process. n_capacity is stored
 //! only for Predict()'s extent(0) <= n_capacity_ bounds check; it plays no
 //! role in what the cache loads, since none of the cached one-shot work depends on it.
-RheaModel::RheaModel(const std::string &model_path, int n_capacity)
-    : device_(ResolveDevice()), n_capacity_(n_capacity) {
+//!
+//! team_size is the Kokkos backend's kernel launch parameter and has no meaning here.
+RheaModel::RheaModel(const std::string &model_path, int n_capacity, int team_size)
+    : n_capacity_(n_capacity), device_(ResolveDevice()) {
+  (void)team_size;
   model_ = RheaModuleCache::Instance().Get(model_path, device_);
 }
 

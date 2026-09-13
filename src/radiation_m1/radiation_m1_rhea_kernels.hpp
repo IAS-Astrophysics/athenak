@@ -19,7 +19,7 @@
 
 #include "athena.hpp"
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
 
 namespace radiationm1 {
 

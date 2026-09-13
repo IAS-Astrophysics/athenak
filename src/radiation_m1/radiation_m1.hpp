@@ -29,7 +29,7 @@
 #include "radiation_m1/radiation_m1_nurates.hpp"
 #endif
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
 #include "radiation_m1/radiation_m1_rhea.hpp"
 #endif
 
@@ -100,7 +100,7 @@ class RadiationM1 {
   DvceArray5D<Real> abs_1;           // energy absorptivity coefficient
   DvceArray5D<Real> scat_1;          // energy scattering coefficient
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
   // Rhea ML flavor-mixing state. Null unless params.flavor_mix_type == FlavMixRhea;
   // constructed once in the RadiationM1 constructor, at startup.
   std::unique_ptr<RheaModel> prhea;
@@ -119,6 +119,10 @@ class RadiationM1 {
   // Rhea prediction comes back non-finite to <rhea_failure_dump_file>.rank<NNNNN>.jsonl,
   // up to rhea_failure_dump_max records per rank. Host-only state (like rhea_model_path),
   // never on RadiationM1Params.
+  // Kokkos-backend kernel launch parameter (rhea_team_size); host-only config, not on
+  // RadiationM1Params. 0 = the evaluator's own default.
+  int rhea_team_size = 0;
+
   std::string rhea_failure_dump_file;
   int rhea_failure_dump_max = 0;
   int rhea_failure_dump_count = 0;
@@ -150,7 +154,7 @@ class RadiationM1 {
   TaskStatus CalcOpacityPhotons(Driver* pdrive, int stage);
   TaskStatus CalcOpacityToy(Driver* pdrive, int stage);
   TaskStatus FlavorMix(Driver* d, int stage);
-#if ENABLE_TORCH
+#if ENABLE_RHEA
   // Rhea ML flavor-mixing pipeline, called sequentially from the FlavMixRhea branch of
   // FlavorMix -- no new TaskIDs (precedented by CalculateFluxes's sequential par_for
   // calls in one task body).

@@ -20,6 +20,10 @@
 #
 #   python3 scripts/make_toy_rhea_model.py toy_flavor_swap_tov.pt --gamma-code 1.0
 #
+# A toy TorchScript model means this input needs the LibTorch backend:
+# -DAthena_ENABLE_RHEA=ON -DAthena_ENABLE_TORCH=ON. The default Kokkos backend
+# reads .rhea files, which make_toy_rhea_model.py does not write.
+#
 # At this run's dt = 0.32 (constant, cfl=0.1, dx=3.2) and lapse alpha = 0.59-0.96 across the
 # star, this gives dt*alpha*inv_tau_0 = 0.19-0.31, i.e. per-step lambda = 0.74-0.83: the BGK
 # relaxation is resolved, not saturated, so the result genuinely depends on the rate rather

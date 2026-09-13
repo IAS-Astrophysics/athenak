@@ -6,44 +6,55 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file radiation_m1_rhea.hpp
-//! \brief RheaModel: the Kokkos <-> LibTorch interop boundary for the Rhea ML
-//! fast-flavor-conversion mixing model.
+//! \brief RheaModel: the model-evaluation boundary for the Rhea ML fast-flavor-conversion
+//! mixing model.
 //!
-//! This header (together with radiation_m1_rhea.cpp) is the only translation unit in
-//! radiation_m1 permitted to contain backend-conditional compilation
-//! (`#if defined(KOKKOS_ENABLE_CUDA)` / `KOKKOS_ENABLE_HIP` / `KOKKOS_ENABLE_SYCL`).
-//! RheaModel's public interface below is backend-agnostic -- callers never see
-//! torch::kCUDA vs torch::kXPU distinctions; the per-backend stream guard and
-//! device-binding logic live entirely inside radiation_m1_rhea.cpp.
+//! The interface below is backend-agnostic. Exactly one implementation is compiled
+//! (src/CMakeLists.txt):
 //!
-//! RheaModel owns nothing about M1 physics: it moves a float32 `[n <= n_capacity, 2, NF,
-//! 4]` device tensor into a loaded Rhea TorchScript module's `predict_all` method and
-//! hands back read-only Kokkos Views over the (Torch-owned) outputs.
+//!   radiation_m1_rhea_kokkos.cpp  (default)  reads a flat `.rhea` file and evaluates the
+//!       whole network for one cell inside a single Kokkos kernel. No external library.
+//!   radiation_m1_rhea_torch.cpp   (ENABLE_TORCH)  reads a TorchScript `.pt` checkpoint
+//!       and calls its `predict_all` method through LibTorch. Kept as the independent
+//!       cross-check the Kokkos backend is validated against.
 //!
-//! The loaded/frozen torch::jit::Module itself is owned by a process-global cache
-//! (`RheaModuleCache`, private to radiation_m1_rhea.cpp) keyed by (canonicalized model
-//! path, device index) -- RheaModel only holds a cheap shared-handle copy of it, so
-//! constructing more than one RheaModel for the same (path, device) does not re-read the
-//! model from disk or re-upload weights.
+//! Both read the same trained model (Rhea's export_rhea.py writes the `.rhea` from the
+//! `.pt`) and return the same three per-cell outputs in the same units, so a
+//! `rhea_model_path` naming a `.pt` or a `.rhea` is what distinguishes the two at run
+//! time.
+//!
+//! RheaModel owns nothing about M1 physics: it takes a float32 `[n <= n_capacity, 2, NF,
+//! 4]` device tensor of number 4-currents and hands back read-only Kokkos Views over the
+//! predicted 4-currents, growth rate and stability flag.
 
 #include <string>
 
 #include "config.hpp"
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
+
+#include <memory>
 
 #include "athena.hpp"
 
+#if ENABLE_TORCH
 #include <torch/script.h>  // NOLINT torch::jit::Module, torch::jit::load
 #include <torch/torch.h>   // NOLINT
+#endif
 
 namespace radiationm1 {
 
+#if !ENABLE_TORCH
+// Opaque handle to the backend's loaded model, so this header stays free of Rhea's
+// evaluator types (which live in Athena_RHEA_DIR and are only on the include path of
+// radiation_m1_rhea_kokkos.cpp).
+struct RheaKokkosImpl;
+#endif
+
 //----------------------------------------------------------------------------------------
 //! \class RheaModel
-//! \brief Owns the loaded Rhea TorchScript module and all backend-specific device/stream
-//! state. Constructed once per RadiationM1 instance, at startup, iff
-//! params.flavor_mix_type == FlavMixRhea.
+//! \brief Owns the loaded Rhea model and all backend-specific state. Constructed once per
+//! RadiationM1 instance, at startup, iff params.flavor_mix_type == FlavMixRhea.
 class RheaModel {
  public:
   //! Number of flavors Rhea's contract fixes: F4_in/F4_out axis 2 has this extent.
@@ -53,38 +64,43 @@ class RheaModel {
 
   //--------------------------------------------------------------------------------------
   //! \struct Prediction
-  //! \brief Owning handles + unmanaged device Views over the SAME memory, returned by
-  //! Predict(). The torch::Tensor members exist ONLY to keep the underlying buffers alive
-  //! -- never read through them, read through the Views. Views are `const` because
-  //! ApplyRheaMixing only ever reads them.
+  //! \brief Read-only device Views over the three outputs, valid until the next Predict()
+  //! call on the same RheaModel.
   //!
-  //! Callers (ApplyRheaMixing) must hold the whole Prediction struct as a local for the
-  //! duration of any par_for that reads these Views, not just the Views themselves --
-  //! destroying f4_out_t/growthrate_t/stability_t early can free the memory the Views
-  //! point at.
+  //! With the LibTorch backend the torch::Tensor members below are what keep the
+  //! underlying buffers alive -- never read through them, read through the Views -- and
+  //! callers (ApplyRheaMixing) must hold the whole Prediction struct as a local for the
+  //! duration of any par_for that reads these Views. The Kokkos backend's buffers are
+  //! owned by RheaModel itself and live for the whole run.
   struct Prediction {
     Kokkos::View<const float****, LayoutWrapper, DevMemSpace> F4_out;      // [n,2,NF,4]
     Kokkos::View<const float*, LayoutWrapper, DevMemSpace> growthrate;     // [n]
     Kokkos::View<const float*, LayoutWrapper, DevMemSpace> stability;      // [n]
+#if ENABLE_TORCH
     torch::Tensor f4_out_t, growthrate_t, stability_t;  // ownership only; do not read
+#endif
   };
 
   //--------------------------------------------------------------------------------------
   //! model_path: required, no default (rhea_model_path has no default and startup fails
-  //! without it; enforced by the caller, not here).
+  //! without it; enforced by the caller, not here). A `.rhea` file for the Kokkos
+  //! backend, a TorchScript `.pt` for the LibTorch one.
   //!
   //! n_capacity: batch CAPACITY, i.e. the largest extent(0) any call to Predict() on this
   //! instance will ever be given -- std::max(nmb_thispack, nmb_maxperrank) * nx1*nx2*nx3
   //! for this rank (radiation_m1.cpp), the same capacity-not-live-count sizing u0/u1/etc.
-  //! already use so they survive AMR regrids without reallocation. SUPERSEDES the old
-  //! fixed-n_batch contract: Predict() now accepts any active extent(0) <= n_capacity,
-  //! not only exactly n_capacity, because a regrid can shrink the live nmb_thispack below
-  //! the capacity this instance/its scratch buffer were sized at without requiring
-  //! RheaModel to be reconstructed.
-  RheaModel(const std::string &model_path, int n_capacity);
+  //! already use so they survive AMR regrids without reallocation. Predict() accepts any
+  //! active extent(0) <= n_capacity, so a regrid that shrinks the live nmb_thispack below
+  //! the capacity this instance was sized at does not require RheaModel to be
+  //! reconstructed.
+  //!
+  //! team_size: Kokkos backend only, the per-team thread count of the evaluation kernel
+  //! (0 = the evaluator's own default), clamped to what the backend accepts. Ignored by
+  //! the LibTorch backend.
+  RheaModel(const std::string &model_path, int n_capacity, int team_size = 0);
   ~RheaModel();
 
-  // Backend/stream/device state below makes this non-copyable; moving is not needed
+  // Backend/device state below makes this non-copyable; moving is not needed
   // (constructed once, owned by a std::unique_ptr in RadiationM1).
   RheaModel(const RheaModel &) = delete;
   RheaModel &operator=(const RheaModel &) = delete;
@@ -92,38 +108,44 @@ class RheaModel {
   RheaModel &operator=(RheaModel &&) = delete;
 
   //--------------------------------------------------------------------------------------
-  //! f4_in: [extent(0) <= n_capacity_, 2, NF, 4], float32, device-resident,
+  //! f4_in: [extent(0) <= n_capacity, 2, NF, 4], float32, device-resident,
   //! LayoutRight-contiguous. extent(0) (the ACTIVE batch size for this call) may be
   //! smaller than the capacity this RheaModel/its caller's scratch buffer were
-  //! constructed with -- a live nmb_thispack that shrinks below capacity (e.g. after an
-  //! AMR regrid) needs no RheaModel reconstruction, it simply calls Predict() with a
-  //! smaller active extent over the SAME preallocated buffer. Only extent(0) is dynamic;
-  //! extents 1-3 (2, NF, 4) stay exactly fixed. The caller
-  //! (radiation_m1_flavor_mix.cpp's FlavMixRhea branch) is responsible for slicing
-  //! rhea_f4_in_scratch down to the live active extent before calling Predict() -- see
-  //! that call site for the LayoutRight-contiguity argument this relies on (a
-  //! leading-index-range subview of a LayoutRight view stays LayoutRight-contiguous, so
-  //! from_blob below still needs no explicit strides). Returns once Torch's forward pass
-  //! has been ENQUEUED on DevExeSpace()'s stream/queue -- not necessarily complete. Safe
-  //! to immediately enqueue further DevExeSpace() kernels that consume the returned
-  //! Prediction with no explicit Kokkos::fence() in between, PROVIDED they too run on
-  //! DevExeSpace() (same-stream ordering, not a real completion guarantee).
+  //! constructed with; only extent(0) is dynamic, extents 1-3 (2, NF, 4) stay exactly
+  //! fixed. Both backends derive the flat buffer's strides from its shape alone, so the
+  //! caller (radiation_m1_flavor_mix.cpp's FlavMixRhea branch) is responsible for the
+  //! contiguity of the subview it slices out -- see the static_assert at that call site.
+  //!
+  //! Returns once the forward pass has been ENQUEUED on DevExeSpace()'s stream/queue --
+  //! not necessarily complete. Safe to immediately enqueue further DevExeSpace() kernels
+  //! that consume the returned Prediction with no explicit Kokkos::fence() in between,
+  //! PROVIDED they too run on DevExeSpace() (same-stream ordering, not a real completion
+  //! guarantee).
   Prediction Predict(Kokkos::View<const float****, LayoutWrapper, DevMemSpace> f4_in);
 
+#if ENABLE_TORCH
   //! The torch::Device Predict() runs on -- resolved once at construction from Kokkos's
   //! own device query, never independently computed. Exposed for tests (the
   //! Kokkos/Torch device-index agreement check) and diagnostics.
   const torch::Device &device() const { return device_; }
+#endif
 
  private:
+  // Batch CAPACITY (not the live per-call active count) -- see the constructor comment
+  // above and Predict()'s extent(0) <= n_capacity_ assert.
+  int n_capacity_;
+
+#if ENABLE_TORCH
   torch::jit::Module model_;
   torch::Device device_;
-  // Batch CAPACITY (not the live per-call active count) -- see the constructor comment
-  // above and Predict()'s extent(0) <= n_capacity_ assert (radiation_m1_rhea.cpp).
-  int n_capacity_;
+#else
+  // Rhea's loaded tables plus the persistent output buffers, hidden behind a pimpl so
+  // that RheaKokkos.hpp is included by radiation_m1_rhea_kokkos.cpp alone.
+  std::unique_ptr<RheaKokkosImpl> impl_;
+#endif
 };
 
 }  // namespace radiationm1
 
-#endif  // ENABLE_TORCH
+#endif  // ENABLE_RHEA
 #endif  // RADIATION_M1_RADIATION_M1_RHEA_HPP_

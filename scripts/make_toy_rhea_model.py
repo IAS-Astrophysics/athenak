@@ -1,7 +1,12 @@
 """Generate a small toy TorchScript model for the Rhea flavor-mixing test inputs.
 
+TorchScript, so the inputs that use these models need a build with
+-DAthena_ENABLE_TORCH=ON. The default Kokkos backend reads Rhea's own .rhea format
+instead, which encodes a specific e3nn architecture and cannot express these toys.
+
 Exports a predict_all(f4_in) -> (F4_out, growthrate, stability) method matching the
-contract RheaModel::Predict expects (src/radiation_m1/radiation_m1_rhea.hpp/.cpp):
+contract RheaModel::Predict expects (src/radiation_m1/radiation_m1_rhea.hpp,
+radiation_m1_rhea_torch.cpp):
 f4_in is [n, 2, 3, 4] float32; F4_out is [n, 2, 3, 4] float32; growthrate and
 stability are [n] float32.
 

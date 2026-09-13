@@ -276,7 +276,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   } else if (flavor_mix == "maximal") {
     params.flavor_mix_type = FlavMixMaximal;
   } else if (flavor_mix == "rhea") {
-#if ENABLE_TORCH
+#if ENABLE_RHEA
     params.flavor_mix_type = FlavMixRhea;
 
     params.rhea_stability_threshold =
@@ -287,6 +287,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddReal("radiation_m1", "rhea_tau_1_factor", 1.0);
     params.rhea_max_flux_factor =
         pin->GetOrAddReal("radiation_m1", "rhea_max_flux_factor", 0.9999);
+
+    // Kokkos backend only: the per-team thread count of the evaluation kernel, clamped to
+    // what the backend accepts. 0 leaves it to the evaluator's own default. Worth a sweep
+    // on new hardware -- team size is the launch's occupancy knob.
+    rhea_team_size = pin->GetOrAddInteger("radiation_m1", "rhea_team_size", 0);
 
     // Required, no default: startup error if unset/empty.
     rhea_model_path = pin->GetOrAddString("radiation_m1", "rhea_model_path", "");
@@ -305,7 +310,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddInteger("radiation_m1", "rhea_failure_dump_max", 512);
 #else
     std::cerr << "Error: To use flavor_mix = rhea, executable must be compiled with "
-                 "-DAthena_ENABLE_TORCH=ON"
+                 "-DAthena_ENABLE_RHEA=ON"
               << std::endl;
     exit(EXIT_FAILURE);
 #endif
@@ -381,7 +386,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   pbval_u = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_u->InitializeBuffers(nvarstot);
 
-#if ENABLE_TORCH
+#if ENABLE_RHEA
   // RheaModel construction: constructed once per RadiationM1 instance, at startup, iff
   // flavor_mix = rhea.
   //
@@ -397,7 +402,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   if (params.flavor_mix_type == FlavMixRhea) {
     int n_capacity = nmb * indcs.nx1 * indcs.nx2 * indcs.nx3;
     Kokkos::realloc(rhea_f4_in_scratch, n_capacity, 2, RheaModel::kNumFlavors, 4);
-    prhea = std::make_unique<RheaModel>(rhea_model_path, n_capacity);
+    prhea = std::make_unique<RheaModel>(rhea_model_path, n_capacity, rhea_team_size);
   }
 #endif
 }

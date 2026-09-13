@@ -1,9 +1,14 @@
 # Building AthenaK with LibTorch (Rhea flavor mixing)
 
-This describes the `Athena_ENABLE_TORCH` CMake option, added to support the Rhea
-ML flavor-mixing model in `radiation_m1` (`flavor_mix = rhea`). This file covers how to
-configure and build against LibTorch; see `radiation_m1_rhea.hpp`/`radiation_m1_rhea.cpp`
-for the interop layer itself.
+**LibTorch is no longer required for Rhea flavor mixing, and is no longer the default.**
+`Athena_ENABLE_RHEA=ON` is the feature switch; on its own it builds the Kokkos evaluator
+backend, which reads a `.rhea` file and links nothing outside the build.
+`Athena_ENABLE_TORCH=ON` selects the LibTorch backend instead, and is kept as the
+independent cross-check. Everything in this file is about that backend.
+
+This file covers how to configure and build against LibTorch; see
+`radiation_m1_rhea.hpp` (the backend-agnostic interface) and
+`radiation_m1_rhea_torch.cpp` (the interop layer) for the code.
 
 ## Version pin
 
@@ -86,7 +91,7 @@ misbehaves at runtime. AthenaK's own CI only exercises CUDA+`nvcc_wrapper`.
 frameworks-module torch `2.10.0a0`). Configure, compile, and link all succeeded with no
 `_GLIBCXX_USE_CXX11_ABI` override needed and no undefined `std::__cxx11::...` symbols. The
 one real portability defect the icpx build exposed was unrelated to ABI: `ResolveDevice()` in
-`radiation_m1_rhea.cpp` called `Kokkos::SYCL::device_id(exec)`, but `device_id(exec)` is a
+`radiation_m1_rhea_torch.cpp` called `Kokkos::SYCL::device_id(exec)`, but `device_id(exec)` is a
 member of `Kokkos::Tools::Experimental::DeviceTypeTraits<Space>`, not of the space classes —
 the CUDA and HIP branches had the same mistake and are now fixed too, though still uncompiled.
 Every problem found after that point was in the *launch environment*, not the code (see
@@ -98,7 +103,7 @@ set it explicitly per ABI variant).
 
 ## Validated on Aurora (2026-07-29)
 
-The SYCL/XPU interop path in `radiation_m1_rhea.cpp` was designed against documentation and
+The SYCL/XPU interop path in `radiation_m1_rhea_torch.cpp` was designed against documentation and
 headers only; it has now been **executed on real PVC hardware** (oneAPI 2025.3.1,
 frameworks-module torch `2.10.0a0+git449b176`, one node of the `debug` queue, a single tile).
 The Rhea single-zone test with the trained checkpoint reproduces the model's asymptotic
