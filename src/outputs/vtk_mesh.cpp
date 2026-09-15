@@ -195,8 +195,8 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
       // Loop over max number of MeshBlocks to be written on any rank
       // This guarantees collective MPI functions are called by all ranks
-      MPI_Datatype mygrid;
       for (int m=0; m<noutmbs_max; ++m) {
+        MPI_Datatype mygrid = MPI_DATATYPE_NULL;
         // if there is a MB to be written, set location in 3D grid of MBs in output file.
         if (m < nout_mbs) {
           LogicalLocation lloc = pm->lloc_eachmb[outmbs[m].mb_gid];
@@ -237,8 +237,10 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         } else if (m < nout_mbs) {
           MPI_File_write(fh, &(data[0]), 1, block, MPI_STATUS_IGNORE);
         }
+        if (mygrid != MPI_DATATYPE_NULL) {
+          MPI_Type_free(&mygrid);
+        }
       }  // end loop over MeshBlocks
-      MPI_Type_free(&mygrid);
 
       // reset view to stream of bytes in preparation for adding next data header
       header_size += nout1*nout2*nout3*sizeof(float);
