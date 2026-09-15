@@ -62,9 +62,10 @@ struct TOVParams {
   Real q;
   Real A;
   Real tau;
+  Real r_soft;
 
   TOVParams(tov::TOVStar& tov_star, bool isotropic_, bool minkowski_,
-            Real omega_, Real q_, Real A_, Real tau_) :
+            Real omega_, Real q_, Real A_, Real tau_, Real r_soft_) :
       my_tov(std::move(tov_star)) {
     isotropic = isotropic_;
     minkowski = minkowski_;
@@ -72,6 +73,7 @@ struct TOVParams {
     q = q_;
     A = A_;
     tau = tau_;
+    r_soft = r_soft_;
   }
 };
 
@@ -97,6 +99,9 @@ void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   // Amplitude ramping timescale in ms
   Real tau = pin->GetOrAddReal("problem", "tau", 1.0)/freq_to_geo;
 
+  // Softening radius
+  Real r_soft = pin->GetOrAddReal("problem", "r_soft", 20.0);
+
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   // If the metric is adaptive or dynamical ADM is enabled, we need to regenerate the
@@ -104,7 +109,7 @@ void SolveTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive) {
     TOVEOS eos{pin};
     auto my_tov = tov::TOVStar::ConstructTOV(pin, eos, false);
-    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau);
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau, r_soft);
   }
 
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
@@ -137,6 +142,9 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
   Real q = pin->GetOrAddReal("problem", "q", 1.0);
   Real A = pin->GetOrAddReal("problem", "amp", 1.0);
   Real tau = pin->GetOrAddReal("problem", "tau", 1.0)/freq_to_geo;
+
+  // Softening radius
+  Real r_soft = pin->GetOrAddReal("problem", "r_soft", 20.0);
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
@@ -444,7 +452,7 @@ void SetupTOV(ParameterInput *pin, Mesh* pmy_mesh_) {
 
   // Copy the TOV to another object for storage if needed.
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
-    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau);
+    ptov_params = new TOVParams(my_tov, isotropic, minkowski, omega, q, A, tau, r_soft);
   }
 
   if (pmbp->padm->is_dynamic || pmy_mesh_->adaptive == true) {
@@ -601,6 +609,7 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
   Real m2 = tov_.M_edge*q;
   Real Mtot = tov_.M_edge + m2;
   Real sep = Kokkos::cbrt(Mtot/(omega*omega));
+  Real r_soft = ptov_params->r_soft;
 
   Real locx = sep*Kokkos::cos(omega*t);
   Real locy = sep*Kokkos::sin(omega*t);
@@ -655,7 +664,19 @@ void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
         Real b = 1.0 - 2*a*r0;
         reff = a*(rdiff*rdiff) + b*rdiff + c;
       }
-      U = -m2/reff;
+      // Remove constant and linear terms from the potential.
+      U = -m2/reff + m2/sep + m2*(locx*x1v + locy*x2v)/(sep*sep*sep);
+    }
+    // Due to the linear and quadratic forcing terms, the potential can explode far away
+    // from the star and lead to unphysical alpha. We therefore soften the potential
+    // outside a radius r_soft such that it smoothly decays to zero by 2r_soft.
+    if (r >= 2*r_soft) {
+      U = 0.0;
+    } else if (r > r_soft) {
+      Real x = (2*r_soft - r)/r_soft;
+      Real f1 = Kokkos::exp(-1.0/x);
+      Real f2 = Kokkos::exp(-1.0/(1.0 - x));
+      U = U*f1/(f1 + f2);
     }
 
     // Set ADM variables
