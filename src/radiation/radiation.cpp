@@ -165,6 +165,7 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
       recon_method = ReconstructionMethod::plm;
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
+               xorder.compare("ppmep") == 0 ||
                xorder.compare("teno") == 0 ||
                xorder.compare("wenoz") == 0) {
       // check that nghost > 2
@@ -178,6 +179,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::ppm4;
       } else if (xorder.compare("ppmx") == 0) {
         recon_method = ReconstructionMethod::ppmx;
+      } else if (xorder.compare("ppmep") == 0) {
+        recon_method = ReconstructionMethod::ppmep;
       } else if (xorder.compare("wenoz") == 0) {
         recon_method = ReconstructionMethod::wenoz;
       } else if (xorder.compare("teno") == 0) {

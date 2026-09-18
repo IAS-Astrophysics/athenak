@@ -18,6 +18,7 @@
 #include "ppm.hpp"    // PPM4(), PPMX()
 #include "wenoz.hpp"  // WENOZ()
 #include "teno.hpp"  // TENO()
+#include "ppmep.hpp"  // PPMEP()
 
 //----------------------------------------------------------------------------------------
 //! \fn ReconCellT<recon,ivx>()
@@ -70,6 +71,19 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
          ql_val, qr_val);
   } else if constexpr (recon == ReconstructionMethod::ppmx) {
     PPMX(q(m, n, k - 2*dk, j - 2*dj, i - 2*di),
+         q(m, n, k -   dk, j -   dj, i -   di),
+         q(m, n, k,        j,        i),
+         q(m, n, k +   dk, j +   dj, i +   di),
+         q(m, n, k + 2*dk, j + 2*dj, i + 2*di),
+         ql_val, qr_val);
+    if (apply_floors) {
+      if (n == IDN) { ql_val = fmax(ql_val, dfloor); qr_val = fmax(qr_val, dfloor); }
+      if (eos.is_ideal && n == IEN) {
+        ql_val = fmax(ql_val, efloor); qr_val = fmax(qr_val, efloor);
+      }
+    }
+  } else if constexpr (recon == ReconstructionMethod::ppmep) {
+    PPMEP(q(m, n, k - 2*dk, j - 2*dj, i - 2*di),
          q(m, n, k -   dk, j -   dj, i -   di),
          q(m, n, k,        j,        i),
          q(m, n, k +   dk, j +   dj, i +   di),
