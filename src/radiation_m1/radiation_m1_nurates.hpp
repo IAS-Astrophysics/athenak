@@ -65,6 +65,8 @@ struct NuratesParams {
   Real peq_dlnT_tol;             // skip below this predicted |dlnT| (tier-1 gate)
   Real peq_dYe_tol;              // skip below this predicted |dYe|  (tier-1 gate)
 
+  bool corr_fac_from_peq;
+
   int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
   bns_nurates::MyQuadrature quadrature;
   int quad_nx_2;

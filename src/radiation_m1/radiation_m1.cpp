@@ -243,6 +243,20 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.peq_dYe_tol =
         pin->GetOrAddReal("bns_nurates", "peq_dYe_tol", 1e-4);
 
+    nurates_params.corr_fac_from_peq =
+        pin->GetOrAddBoolean("bns_nurates", "corr_fac_from_peq", false);
+    if (nurates_params.corr_fac_from_peq &&
+        !(nurates_params.use_partial_equilibrium &&
+          nurates_params.use_kirchhoff_law)) {
+      if (global_variable::my_rank == 0) {
+        std::cout << "### WARNING: <bns_nurates>/corr_fac_from_peq = true needs both "
+                     "use_partial_equilibrium and use_kirchhoff_law; there is no "
+                     "predictor equilibrium or no Kirchhoff emissivity to apply it "
+                     "to. Ignoring it." << std::endl;
+      }
+      nurates_params.corr_fac_from_peq = false;
+    }
+
     // The block that computes the equilibrium distribution -- the predictor's only
     // output -- is skipped when neither of these is set, so the predictor has nothing
     // to supply and cannot run. Asking for it by name in that configuration is an
