@@ -265,10 +265,12 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
 
   // Non-thermal (NEPS) components from NN, needed by the Kirchhoff kernel to
   // apply corr_fac only to the thermal part while keeping NEPS unchanged.
+  // NEPS is number-conserving, so the number-channel slots (cols 0..3, 8..11)
+  // are always zero and unused; only the energy slots feed the Kirchhoff split.
   // Layout [flat, col]:
-  //   col  0..3  abs_0_non_th[s]  number absorption,  code units
+  //   col  0..3  abs_0_non_th[s]  number absorption (unused, zero)
   //   col  4..7  abs_1_non_th[s]  energy absorption,  code units
-  //   col  8..11 eta_0_non_th[s]  number emissivity,  code units
+  //   col  8..11 eta_0_non_th[s]  number emissivity (unused, zero)
   //   col 12..15 eta_1_non_th[s]  energy emissivity,  code units
   // fac×2 for nux/anux already applied to eta columns; abs columns have no fac.
   auto non_th_buf = nn_non_th_buf_;   // persistent (grow-only) buffer
@@ -500,11 +502,11 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             Real eta_0_loc[4]{}, eta_1_loc[4]{};
             Real abs_0_loc[4]{}, abs_1_loc[4]{};
             Real scat_0_loc[4]{}, scat_1_loc[4]{};
-            // Non-thermal outputs required by the signature but unused here:
-            // beta+iso have no NEPS component, so these stay zero. There is no
-            // eta_0_non_th output because NEPS conserves neutrino number.
+            // Non-thermal ENERGY outputs required by the signature but unused
+            // here: beta+iso have no NEPS component, so these stay zero. The
+            // number channel is thermal-only (NEPS conserves neutrino number),
+            // so there is no non-thermal number output at all.
             Real eta_1_non_th[4]{}, abs_1_non_th[4]{};
-            Real abs_0_non_th[4]{};
             // Renamed from bns_nurates() by the largesim-m1 merge; now returns
             // an int fallback flag (eq-distribution fallback when reconstructed
             // T_nu > bound). The NN path doesn't track fallback stats, so the
@@ -516,7 +518,6 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
                         abs_0_loc, abs_1_loc,
                         scat_0_loc, scat_1_loc,
                         eta_1_non_th, abs_1_non_th,
-                        abs_0_non_th,
                         params_1d_cap, code_units_cap, eos_units_cap,
                         nurates_units_cap);
 
@@ -626,10 +627,10 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             corr_ae[nuidx] = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
             scat_1_loc[nuidx] *= corr_fac;
 
-            Real abs_0_non_th = non_th_buf(flat, nuidx);
             Real abs_1_non_th = non_th_buf(flat, 4 + nuidx);
-            abs_0_th[nuidx] = Kokkos::fmax(
-                abs_0_loc[nuidx] - abs_0_non_th, 0.0) * corr_ae[nuidx];
+            // Number channel is thermal-only (NEPS is number-conserving), so no
+            // non-thermal subtraction here; energy still splits thermal/NEPS.
+            abs_0_th[nuidx] = abs_0_loc[nuidx] * corr_ae[nuidx];
             abs_1_th[nuidx] = Kokkos::fmax(
                 abs_1_loc[nuidx] - abs_1_non_th, 0.0) * corr_ae[nuidx];
             abs_0_loc[nuidx] = abs_0_th[nuidx];                     // thermal only

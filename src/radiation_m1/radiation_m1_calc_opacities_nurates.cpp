@@ -280,20 +280,17 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real eta_0_loc[4]{}, eta_1_loc[4]{};
           Real abs_0_loc[4]{}, abs_1_loc[4]{};
           Real scat_0_loc[4]{}, scat_1_loc[4]{};
-          // non-thermal (inelastic scattering / NEPS) emissivity and absorption,
-          // both ENERGY (..._1_...) and NUMBER (..._0_...) channels; non-zero only
-          // when use_nonthermal_separated is set
-          // NUMBER has no emissivity counterpart: NEPS is subtracted out of abs_0
-          // and never re-enters, unlike ENERGY, where eta_1_non_th is added back.
+          // Non-thermal (inelastic scattering / NEPS) energy emissivity and
+          // absorption; the number channel contains thermal processes only
+          // (NEPS is number-conserving, so it has no number channel at all).
           Real eta_1_non_th_loc[4]{}, abs_1_non_th_loc[4]{};
-          Real abs_0_non_th_loc[4]{};
 
           // Note: everything sent and received are in code units
           const int used_fallback =
               ComputeNuratesOpacities(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0,
                       nudens_1, chi_loc, eta_0_loc, eta_1_loc, abs_0_loc,
                       abs_1_loc, scat_0_loc, scat_1_loc, eta_1_non_th_loc,
-                      abs_1_non_th_loc, abs_0_non_th_loc,
+                      abs_1_non_th_loc,
                       nurates_params_, code_units, eos_units,
                       nurates_units);
           if (used_fallback) {
@@ -323,7 +320,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 !Kokkos::isfinite(scat_0_loc[nuidx]) ||
                 !Kokkos::isfinite(scat_1_loc[nuidx]) ||
                 !Kokkos::isfinite(eta_1_non_th_loc[nuidx]) ||
-                !Kokkos::isfinite(abs_0_non_th_loc[nuidx]) ||
                 !Kokkos::isfinite(abs_1_non_th_loc[nuidx]);
 
             if (bad_m1 || bad_rates) {
@@ -382,9 +378,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                   "    abs_1  = %.17g\n"
                   "    scat_0 = %.17g\n"
                   "    scat_1 = %.17g\n"
-                  "  Nonthermal rates (NEPS conserves number, no eta_0):\n"
+                  "  Nonthermal rates (NEPS conserves number, energy only):\n"
                   "    eta_1 = %.17g\n"
-                  "    abs_0 = %.17g\n"
                   "    abs_1 = %.17g\n",
                   m, k, j, i, x1v, x2v, x3v, rank, nuidx,
                   static_cast<int>(bad_m1), static_cast<int>(bad_rates),
@@ -397,7 +392,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                   abs_0_loc[nuidx], abs_1_loc[nuidx],
                   scat_0_loc[nuidx], scat_1_loc[nuidx],
                   eta_1_non_th_loc[nuidx],
-                  abs_0_non_th_loc[nuidx],
                   abs_1_non_th_loc[nuidx]);
 
               if (error_index + 1 == nurates_errcap) {
@@ -449,8 +443,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 (eta_1_non_th_loc[nuidx] > 0) ? eta_1_non_th_loc[nuidx] : 0;
             abs_1_non_th_loc[nuidx] =
                 (abs_1_non_th_loc[nuidx] > 0) ? abs_1_non_th_loc[nuidx] : 0;
-            abs_0_non_th_loc[nuidx] =
-                (abs_0_non_th_loc[nuidx] > 0) ? abs_0_non_th_loc[nuidx] : 0;
           }
 
           Real nudens_0_thin[4]{}, nudens_1_thin[4]{},
@@ -510,12 +502,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
               scat_1_loc[nuidx] *= corr_fac;
 
-              // Asymmetry below is inherited, not chosen here: abs_1 gets its
-              // non-thermal part back, abs_0 does not. New is that the
-              // no-Kirchhoff path now takes the same split, so it also drops
-              // abs_0_non_th, on all species. Both are no-ops without NEPS.
-              abs_0_th[nuidx] = Kokkos::fmax(
-                  abs_0_loc[nuidx] - abs_0_non_th_loc[nuidx], 0.0)*corr_ae[nuidx];
+              // The number channel is thermal-only (NEPS is number-conserving and
+              // has no number contribution), so abs_0 needs no non-thermal split.
+              // abs_1 (energy) still gets its non-thermal part added back below.
+              abs_0_th[nuidx] = abs_0_loc[nuidx]*corr_ae[nuidx];
               abs_1_th[nuidx] = Kokkos::fmax(
                   abs_1_loc[nuidx] - abs_1_non_th_loc[nuidx], 0.0)*corr_ae[nuidx];
               abs_0_loc[nuidx] = abs_0_th[nuidx];
