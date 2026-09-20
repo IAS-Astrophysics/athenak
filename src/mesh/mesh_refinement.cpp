@@ -72,6 +72,15 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
+  // Primitive prolongation currently converts using the legacy MHD EOS and conserved
+  // variables. Valencia uses pressure and densitized conserved variables instead.
+  if (prolong_prims && pm->pmb_pack->pdyngr != nullptr) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << "\nValencia GRMHD does not support prolong_primitives=true."
+              << "\nSet <mesh_refinement> prolong_primitives=false." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // allocate arrays for AMR and enroll refinement criteria
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
