@@ -154,7 +154,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
                              Real scat_1[4],
                              Real eta_1_non_th[4],
                              Real abs_1_non_th[4],
-                             Real abs_0_non_th[4],
                              NuratesParams const &nurates_params,
                              Primitive::UnitSystem const &code_units,
                              Primitive::UnitSystem const &eos_units,
@@ -211,14 +210,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   Real & sigma_1_non_th_anue = abs_1_non_th[1];
   Real & sigma_1_non_th_nux = abs_1_non_th[2];
   Real & sigma_1_non_th_anux = abs_1_non_th[3];
-  // Non-thermal (NEPS) NUMBER absorption (same convention). There is deliberately no
-  // number-emissivity counterpart: the caller subtracts the NEPS part out of abs_0 and
-  // applies Kirchhoff's law to the thermal remainder alone, so NEPS is kept out of the
-  // number channel entirely -- unlike the energy channel, which adds eta_1_non_th back.
-  Real & sigma_0_non_th_nue = abs_0_non_th[0];
-  Real & sigma_0_non_th_anue = abs_0_non_th[1];
-  Real & sigma_0_non_th_nux = abs_0_non_th[2];
-  Real & sigma_0_non_th_anux = abs_0_non_th[3];
 
   Q_non_th_nue = 0.;
   Q_non_th_anue = 0.;
@@ -228,10 +219,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   sigma_1_non_th_anue = 0.;
   sigma_1_non_th_nux = 0.;
   sigma_1_non_th_anux = 0.;
-  sigma_0_non_th_nue = 0.;
-  sigma_0_non_th_anue = 0.;
-  sigma_0_non_th_nux = 0.;
-  sigma_0_non_th_anux = 0.;
 
   if ((nb < nurates_params.nb_min) || (temp < nurates_params.temp_min_mev)) {
     R_nue = 0.;
@@ -385,11 +372,11 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
                                               &nurates_params.quadrature_2,
                                               &grey_op_params);
 
-    // extract emissivities (number emissivity = thermal + non-thermal)
-    R_nue = opacities.eta_0_th[id_nue] + opacities.eta_0_non_th[id_nue];
-    R_anue = opacities.eta_0_th[id_anue] + opacities.eta_0_non_th[id_anue];
-    R_nux = (opacities.eta_0_th[id_nux] + opacities.eta_0_non_th[id_nux]) * 2.;
-    R_anux = (opacities.eta_0_th[id_anux] + opacities.eta_0_non_th[id_anux]) * 2.;
+    // Number rates contain thermal processes only; NEPS affects energy only.
+    R_nue = opacities.eta_0[id_nue];
+    R_anue = opacities.eta_0[id_anue];
+    R_nux = opacities.eta_0[id_nux] * 2.;
+    R_anux = opacities.eta_0[id_anux] * 2.;
     Q_nue = opacities.eta_th[id_nue] + opacities.eta_non_th[id_nue];
     Q_anue = opacities.eta_th[id_anue] + opacities.eta_non_th[id_anue];
     Q_nux = (opacities.eta_th[id_nux] + opacities.eta_non_th[id_nux]) * 2.;
@@ -401,11 +388,11 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     Q_non_th_nux = opacities.eta_non_th[id_nux] * 2.;
     Q_non_th_anux = opacities.eta_non_th[id_anux] * 2.;
 
-    // extract absorption inverse mean-free path (number abs = thermal + non-thermal)
-    sigma_0_nue = opacities.kappa_0_a_th[id_nue] + opacities.kappa_0_a_non_th[id_nue];
-    sigma_0_anue = opacities.kappa_0_a_th[id_anue] + opacities.kappa_0_a_non_th[id_anue];
-    sigma_0_nux = opacities.kappa_0_a_th[id_nux] + opacities.kappa_0_a_non_th[id_nux];
-    sigma_0_anux = opacities.kappa_0_a_th[id_anux] + opacities.kappa_0_a_non_th[id_anux];
+    // Number absorption also contains thermal processes only.
+    sigma_0_nue = opacities.kappa_0_a[id_nue];
+    sigma_0_anue = opacities.kappa_0_a[id_anue];
+    sigma_0_nux = opacities.kappa_0_a[id_nux];
+    sigma_0_anux = opacities.kappa_0_a[id_anux];
     sigma_1_nue = opacities.kappa_a_th[id_nue] + opacities.kappa_a_non_th[id_nue];
     sigma_1_anue = opacities.kappa_a_th[id_anue] + opacities.kappa_a_non_th[id_anue];
     sigma_1_nux = opacities.kappa_a_th[id_nux] + opacities.kappa_a_non_th[id_nux];
@@ -417,11 +404,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     sigma_1_non_th_nux = opacities.kappa_a_non_th[id_nux];
     sigma_1_non_th_anux = opacities.kappa_a_non_th[id_anux];
 
-    // non-thermal (NEPS) NUMBER absorption, same convention as sigma_0 above (no x2)
-    sigma_0_non_th_nue = opacities.kappa_0_a_non_th[id_nue];
-    sigma_0_non_th_anue = opacities.kappa_0_a_non_th[id_anue];
-    sigma_0_non_th_nux = opacities.kappa_0_a_non_th[id_nux];
-    sigma_0_non_th_anux = opacities.kappa_0_a_non_th[id_anux];
 
     // extract scattering inverse mean-free path
     scat_1_nue = opacities.kappa_s[id_nue];
@@ -525,10 +507,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   sigma_1_non_th_anue = sigma_1_non_th_anue * unit_length;
   sigma_1_non_th_nux = sigma_1_non_th_nux * unit_length;
   sigma_1_non_th_anux = sigma_1_non_th_anux * unit_length;
-  sigma_0_non_th_nue = sigma_0_non_th_nue * unit_length;
-  sigma_0_non_th_anue = sigma_0_non_th_anue * unit_length;
-  sigma_0_non_th_nux = sigma_0_non_th_nux * unit_length;
-  sigma_0_non_th_anux = sigma_0_non_th_anux * unit_length;
 }
 
 //! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
