@@ -103,6 +103,12 @@ else()
   endif()
 endif()
 
+if(ENABLE_NN_OPACITY)
+  set(Athena_NURATES_BS_N_MAX 64 CACHE STRING
+      "bns_nurates fixed quadrature bound BS_N_MAX; must satisfy 2*quad_nx <= BS_N_MAX")
+  message(STATUS "NN opacity: bns_nurates BS_N_MAX=${Athena_NURATES_BS_N_MAX} (needs 2*quad_nx; quad_nx default 30)")
+endif()
+
 # Reduced 3-input NN model (nb,T,Ye). eos_dev still gathers all 8 EOS features for
 # the hybrid 1D/Kirchhoff reconstruction; only the network input is reduced.
 if(ENABLE_NN_OPACITY AND Athena_ENABLE_NN_REDUCED_INPUT)

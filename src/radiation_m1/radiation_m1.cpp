@@ -153,9 +153,35 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nn_emulator.ConfigureProfiling(nn_profile, nn_profile_interval);
 #endif  // ENABLE_NN_OPACITY
 
-    nurates_params.quad_nx = pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", 6);
+    // The NN 2D emulator is trained at quad_nx=30, so keep the 1D hybrid part also at 30
+#if ENABLE_NN_OPACITY
+    constexpr int nurates_quad_nx_default = 30;
+#else
+    constexpr int nurates_quad_nx_default = 6;
+#endif
+    nurates_params.quad_nx =
+        pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx", nurates_quad_nx_default);
     nurates_params.quad_nx_2 =
         pin->GetOrAddInteger("bns_nurates", "nurates_quad_nx_2", -1);
+    // The quadrature arrays are fixed-size points[BS_N_MAX]/w[BS_N_MAX], and the 2D
+    // pair/brem fill indexes up to 2*quad_nx. GaussLegendre() below writes quad_nx
+    // entries, so quad_nx > BS_N_MAX (or 2*quad_nx > BS_N_MAX for the 2D path) writes
+    // out of bounds and silently corrupts the weights. Fail loudly at startup instead.
+    {
+      const int nx_needed =
+          2 * std::max(nurates_params.quad_nx,
+                       (nurates_params.quad_nx_2 == -1) ? 0 : nurates_params.quad_nx_2);
+      if (nx_needed > BS_N_MAX) {
+        std::cerr << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "<bns_nurates>/nurates_quad_nx=" << nurates_params.quad_nx
+                  << " requires 2*quad_nx=" << nx_needed
+                  << " <= BS_N_MAX, but the executable was compiled with BS_N_MAX="
+                  << BS_N_MAX << ". Rebuild with -DAthena_NURATES_BS_N_MAX>="
+                  << nx_needed << " (see CMakeLists.txt)." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
     nurates_params.opacity_corr_fac_max =
         pin->GetOrAddReal("bns_nurates", "opacity_corr_fac_max", 3.0);
     // in ComputeNuratesOpacities()
