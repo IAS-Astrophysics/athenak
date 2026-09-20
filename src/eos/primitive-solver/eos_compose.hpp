@@ -173,6 +173,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (m_initialized);
     // Use ternary instead of fmax: on IEEE-compliant hardware (Intel SYCL),
     // fmax(0, NaN) = NaN, so a NaN from the table lookup would propagate.
+    if (!m_has_nucleon_fractions) Kokkos::abort("EOS table lacks nucleon fractions");
     Real yp = eval_at_nty(ECYP, n, T, Y[0]);
     return (yp > 0.0) ? yp : 0.0;
   }
@@ -182,6 +183,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     assert (m_initialized);
     // Use ternary instead of fmax: on IEEE-compliant hardware (Intel SYCL),
     // fmax(0, NaN) = NaN, so a NaN from the table lookup would propagate.
+    if (!m_has_nucleon_fractions) Kokkos::abort("EOS table lacks nucleon fractions");
     Real yn = eval_at_nty(ECYN, n, T, Y[0]);
     return (yn > 0.0) ? yn : 0.0;
   }
@@ -763,6 +765,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
   bool m_initialized;
+  bool m_has_nucleon_fractions = false;
 
   // Table storage on DEVICE.
   DvceArray1D<Real> m_log_nb;

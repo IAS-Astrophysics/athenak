@@ -151,7 +151,11 @@ SrcSignal source_update_ll(
   }
 
   // non stiff limit, explicit update
-  if (cdt * kabs < 1 && cdt * kscat < 1) {
+  // Coupled gray photons use backward Euler at every optical depth, like
+  // dyn_radiation; switching to explicit exchange changes the comparison.
+  const bool coupled_photons = m1_params.opacity_type == Photons &&
+                               m1_params.photon_coupled_sources;
+  if (!coupled_photons && cdt * kabs < 1 && cdt * kscat < 1) {
     prepare(BrentFunc, xold, src_params, m1_params, closure_type);
     explicit_update(src_params, Enew, Fnew_d);
 
@@ -167,14 +171,15 @@ SrcSignal source_update_ll(
   }
 
   // cannot capture case tau << dt, go to equilibrium
-  if (m1_params.source_thick_limit > 0 &&
+  if (!coupled_photons && m1_params.source_thick_limit > 0 &&
       cdt * cdt * (kabs * (kabs + kscat)) >
           m1_params.source_thick_limit * m1_params.source_thick_limit) {
     return SrcEquil;
   }
 
   // scattering dominated limit
-  if (m1_params.source_scat_limit > 0 && cdt * kscat > m1_params.source_scat_limit) {
+  if (!coupled_photons && m1_params.source_scat_limit > 0 &&
+      cdt * kscat > m1_params.source_scat_limit) {
     return SrcScat;
   }
 

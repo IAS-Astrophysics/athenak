@@ -13,6 +13,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "bvals/bvals.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
@@ -141,9 +142,40 @@ TaskStatus RadiationM1::InitRecv(Driver *pdrive, int stage) {
 //! \fn  void RadiationM1::CopyCons
 //! \brief Simple task list function that copies u0 --> u1 in first stage.
 TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
+  const bool coupled = params.opacity_type == Photons && params.photon_coupled_sources;
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
+    if (coupled && ismhd && params.backreact) {
+      auto fluid = pmy_pack->pmhd->u0;
+      if (photon_fluid_start.extent(0) != fluid.extent(0) ||
+          photon_fluid_start.extent(1) != fluid.extent(1)) {
+        Kokkos::realloc(photon_fluid_start,fluid.extent(0),fluid.extent(1),
+                       fluid.extent(2),fluid.extent(3),fluid.extent(4));
+      }
+      Kokkos::deep_copy(photon_fluid_start,fluid);
+    }
+  } else if (stage == 2 && coupled) {
+    // SSPRK(2,2): the same convex combination used by dyn_radiation.
+    auto start = u1;
+    auto current = u0;
+    par_for("photon_rk_combine",DevExeSpace(),0,u0.extent_int(0)-1,
+        0,u0.extent_int(1)-1,0,u0.extent_int(2)-1,0,u0.extent_int(3)-1,
+        0,u0.extent_int(4)-1,
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      start(m,n,k,j,i) = 0.5*(start(m,n,k,j,i) + current(m,n,k,j,i));
+    });
+    if (ismhd && params.backreact) {
+      auto initial = photon_fluid_start;
+      auto fluid = pmy_pack->pmhd->u0;
+      par_for("photon_fluid_rk_combine",DevExeSpace(),0,fluid.extent_int(0)-1,
+          0,fluid.extent_int(1)-1,0,fluid.extent_int(2)-1,0,fluid.extent_int(3)-1,
+          0,fluid.extent_int(4)-1,
+      KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+        fluid(m,n,k,j,i) = 0.5*(initial(m,n,k,j,i) + fluid(m,n,k,j,i));
+      });
+    }
   }
+  if (coupled && ismhd && params.backreact) pmy_pack->pdyngr->ConToPrim(pdrive,stage);
   return TaskStatus::complete;
 }
 

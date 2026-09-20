@@ -41,9 +41,14 @@ template <class EOSPolicy, class ErrorPolicy>
 TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
   assert(nspecies == 1);
 
-  if (stage != 2) {
+  if (stage != 2 && !params.photon_coupled_sources) {
     return TaskStatus::complete;
   }
+
+  // Absorption/emission has just changed the gas conserved energy.
+  // Compton exchange must use its updated temperature.
+  if (params.backreact && ismhd) pmy_pack->pdyngr->ConToPrim(pdrive, stage);
+  auto opacity_scale = photon_opacity_scale;
 
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is, &ie = indcs.ie;
@@ -72,6 +77,7 @@ TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
   bool backreact_ = params.backreact;
 
   Real dt_ = pmy_pack->pmesh->dt;
+  if (params.photon_coupled_sources && stage == 2) dt_ *= 0.5;
 
   // opacity unit scales
   Real density_scale_ = 1.0, temperature_scale_ = 1.0, length_scale_ = 1.0;
@@ -192,6 +198,7 @@ TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
                         gm1, mean_mol_weight_, power_opacity_, rosseland_coef_,
                         planck_minus_rosseland_coef_, kappa_a_, kappa_s_, kappa_p_,
                         sigma_a, sigma_s, sigma_p);
+        sigma_s *= opacity_scale(m,k,j,i);
         if (!(sigma_s > 0.0)) {
           return;
         }
@@ -205,7 +212,14 @@ TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
         Real u0comp = u_u(0);
         Real dtcsigs = dt_ * sigma_s;
         Real dtaucsigs = dtcsigs / u0comp;
-        Real suma1 = 4.0 * dtcsigs * inv_t_electron_;
+        // Continuum angular average of D^{-1}, D = W(1-v.n), in the
+        // Boltzmann Compton temperature solve. It tends to one at rest.
+        const Real usq = fmax(w_lorentz*w_lorentz - 1.0, 0.0);
+        const Real umag = Kokkos::sqrt(usq);
+        const Real mean_inv_d = usq < 1.0e-12 ? 1.0 - usq/6.0 :
+            Kokkos::log(w_lorentz + umag)/umag;
+        Real suma1 = 4.0 * dtcsigs * inv_t_electron_ *
+                     adm.alpha(m,k,j,i) * mean_inv_d;
         Real suma2 = 4.0 * dtaucsigs * inv_t_electron_ * gm1 / wdn;
         Real jr_cm = J_phys;
 
@@ -223,13 +237,18 @@ TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
           return;
         }
 
-        Real dE = E * (ratio - 1.0);
+        // Boltzmann adds a comoving isotropic emissivity: its integrated
+        // four-force is parallel to u^mu, not to the existing radiation
+        // moments. In particular Compton exchange cannot change F_i in a
+        // stationary gas, even when the incoming radiation is anisotropic.
+        const Real impulse = volform*(Jnew_phys - J_phys)/mean_inv_d;
+        Real dE = impulse*w_lorentz;
         Real fx = u0_(m, CombinedIdx(0, M1_FX_IDX, nvars_), k, j, i);
         Real fy = u0_(m, CombinedIdx(0, M1_FY_IDX, nvars_), k, j, i);
         Real fz = u0_(m, CombinedIdx(0, M1_FZ_IDX, nvars_), k, j, i);
-        Real dFx = fx * (ratio - 1.0);
-        Real dFy = fy * (ratio - 1.0);
-        Real dFz = fz * (ratio - 1.0);
+        Real dFx = impulse*u_d(1);
+        Real dFy = impulse*u_d(2);
+        Real dFz = impulse*u_d(3);
 
         u0_(m, CombinedIdx(0, M1_E_IDX, nvars_), k, j, i) = E + dE;
         u0_(m, CombinedIdx(0, M1_FX_IDX, nvars_), k, j, i) = fx + dFx;

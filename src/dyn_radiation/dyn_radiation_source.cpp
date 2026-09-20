@@ -27,65 +27,6 @@
 
 namespace dyn_radiation {
 
-KOKKOS_INLINE_FUNCTION
-bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root);
-
-KOKKOS_INLINE_FUNCTION
-bool OpacityDensityScale(const Real wdn, const Real dfloor, const Real dfloor_opacity,
-                         const Real dens_trunc_max, const Real tau_truncation,
-                         const Real sigmoid_residual, const Real kappa_s,
-                         const Real delta_l, const Real sigma_cold,
-                         const bool use_excision_density, Real &scale) {
-  scale = 1.0;
-  if (!(wdn > 0.0) || !(dfloor > 0.0) || !(dfloor_opacity > 0.0)) {
-    return false;
-  }
-  if (use_excision_density) {
-    scale = dfloor_opacity/wdn;
-    return Kokkos::isfinite(scale);
-  }
-  if (!(delta_l > 0.0) || !(Kokkos::isfinite(delta_l))) {
-    return false;
-  }
-
-  Real dtrunc = dfloor;
-  if (kappa_s > 0.0 && tau_truncation > 0.0 && sigma_cold > 0.0) {
-    dtrunc = sigma_cold*tau_truncation/(kappa_s*delta_l);
-    if (!(Kokkos::isfinite(dtrunc)) || dtrunc <= 0.0) {
-      return false;
-    }
-    dtrunc = fmin(dens_trunc_max, fmax(dfloor, dtrunc));
-  }
-
-  const Real fac_trunc = dtrunc/dfloor;
-  const Real wdn_real = fmax(wdn - dfloor, dfloor_opacity);
-  if (!(fac_trunc > 0.0) || !(wdn_real > 0.0) || !(Kokkos::isfinite(fac_trunc))) {
-    return false;
-  }
-
-  Real wdn_opacity = wdn_real;
-  if (fabs(fac_trunc - 1.0) > 1.0e-12) {
-    const Real denom = log(1.0/sigmoid_residual - 1.0);
-    if (!(denom > 0.0)) {
-      return false;
-    }
-    const Real wid_trunc = 0.5*log10(fac_trunc)/denom;
-    if (!(wid_trunc > 0.0) || !(Kokkos::isfinite(wid_trunc))) {
-      return false;
-    }
-    const Real center = log10(dfloor) + 0.5*log10(fac_trunc);
-    const Real fac_inv = 1.0 + exp(-(log10(wdn_real) - center)/wid_trunc);
-    if (!(fac_inv > 0.0) || !(Kokkos::isfinite(fac_inv))) {
-      return false;
-    }
-    const Real del_reduce = log10(dfloor) - log10(dfloor_opacity);
-    wdn_opacity = pow(10.0, log10(wdn_real) - (1.0 - 1.0/fac_inv)*del_reduce);
-  }
-
-  scale = wdn_opacity/wdn;
-  return (scale >= 0.0 && Kokkos::isfinite(scale));
-}
-
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus DynRadiation::AddTmunu(Driver *pdriver, int stage)
 //! \brief Radiation stress-energy is intentionally metric-passive for now.
@@ -298,6 +239,16 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
       Real bccx = bcc0_(m,IBX,k,j,i);
       Real bccy = bcc0_(m,IBY,k,j,i);
       Real bccz = bcc0_(m,IBZ,k,j,i);
+      if (use_dyn_grmhd_) {
+        // Valencia stores sqrt(gamma) B^i (Eulerian); the four-vector
+        // formula below expects coordinate *F^{i0} = B^i/alpha.
+        const Real volume = sqrt(adm::SpatialDet(glower[1][1],glower[1][2],
+            glower[1][3],glower[2][2],glower[2][3],glower[3][3]));
+        const Real conversion = 1.0/(volume*alpha);
+        bccx *= conversion;
+        bccy *= conversion;
+        bccz *= conversion;
+      }
       Real b0 = u_1*bccx + u_2*bccy + u_3*bccz;
       Real b1 = (bccx + b0*u1)/u0;
       Real b2 = (bccy + b0*u2)/u0;
@@ -366,7 +317,8 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
         Real opacity_scale = 1.0;
         bool scale_ok = OpacityDensityScale(wdn, dfloor, dfloor_opacity_, dens_trunc_max_,
                                             tau_truncation_, sigmoid_residual_, kappa_s_,
-                                            delta_l, sigma_cold, excision_flux_(m,k,j,i),
+                                            delta_l, sigma_cold,
+                                            excise && excision_flux_(m,k,j,i),
                                             opacity_scale);
         if (scale_ok) {
           // Optional opacity-density regularization for floor, high-magnetization,
@@ -960,83 +912,6 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
   });
 
   return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  bool FourthPolyRoot
-//  \brief Bracketed monotone solve for fourth order polynomial of
-//  the form coef4 * x^4 + x + tconst = 0.
-
-KOKKOS_INLINE_FUNCTION
-bool FourthPolyRoot(const Real coef4, const Real tconst, Real &root) {
-  if (!(Kokkos::isfinite(coef4)) || !(Kokkos::isfinite(tconst)) || coef4 < 0.0) {
-    return false;
-  }
-  if (fabs(coef4) <= 1.0e-300) {
-    root = -tconst;
-    return (root >= 0.0 && Kokkos::isfinite(root));
-  }
-
-  // For coef4 >= 0, f(x)=coef4*x^4+x+tconst is monotone on x >= 0.
-  // A positive root exists only when f(0) <= 0.
-  if (tconst > 0.0) {
-    return false;
-  }
-
-  Real lo = 0.0;
-  Real hi = fmax(1.0, root);
-  if (!(Kokkos::isfinite(hi)) || hi <= 0.0) {
-    hi = 1.0;
-  }
-  bool bracketed = false;
-  for (int it=0; it<128; ++it) {
-    Real fhi = coef4*SQR(SQR(hi)) + hi + tconst;
-    if (!(Kokkos::isfinite(fhi))) {
-      return false;
-    }
-    if (fhi >= 0.0) {
-      bracketed = true;
-      break;
-    }
-    hi *= 2.0;
-    if (!(Kokkos::isfinite(hi))) {
-      return false;
-    }
-  }
-  if (!(bracketed)) {
-    return false;
-  }
-
-  Real x = fmin(fmax(root, lo), hi);
-  if (x <= lo || x >= hi) {
-    x = 0.5 * (lo + hi);
-  }
-  const Real ftol = 1.0e-13*(1.0 + fabs(tconst));
-  for (int it=0; it<80; ++it) {
-    const Real f = coef4*SQR(SQR(x)) + x + tconst;
-    if (!(Kokkos::isfinite(f))) {
-      return false;
-    }
-    if (fabs(f) <= ftol) {
-      root = x;
-      return true;
-    }
-    if (f > 0.0) {
-      hi = x;
-    } else {
-      lo = x;
-    }
-
-    const Real df = 4.0*coef4*x*x*x + 1.0;
-    Real xnew = x - f/df;
-    if (!(Kokkos::isfinite(xnew)) || xnew <= lo || xnew >= hi) {
-      xnew = 0.5*(lo + hi);
-    }
-    x = xnew;
-  }
-
-  root = x;
-  return (root >= 0.0 && Kokkos::isfinite(root));
 }
 
 } // namespace dyn_radiation

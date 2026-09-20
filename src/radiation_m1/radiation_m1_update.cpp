@@ -17,6 +17,7 @@
 #include "globals.hpp"
 #include "hydro/hydro.hpp"
 #include "radiation/radiation_opacities.hpp"
+#include "units/units.hpp"
 #include "radiation_m1.hpp"
 #include "radiation_m1_calc_closure.hpp"
 #include "radiation_m1_helpers.hpp"
@@ -167,7 +168,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
     mb = eos.GetBaryonMass();
   }
 
-  Real beta[2] = {0.5, 1.};
+  const bool photon_rk = params.opacity_type == Photons && params.photon_coupled_sources;
+  Real beta[2] = {photon_rk ? 1.0 : 0.5, photon_rk ? 0.5 : 1.0};
   Real beta_dt = (beta[stage - 1]) * (pmy_pack->pmesh->dt);
 
   const bool coupled_photons =
@@ -178,6 +180,19 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
     gm1 = (ismhd ? pmy_pack->pmhd->peos->eos_data.gamma
                  : pmy_pack->phydro->peos->eos_data.gamma) - 1.0;
     arad = photon_op_params.arad;
+  }
+
+  const auto photon = photon_op_params;
+  auto opacity_scale = photon_opacity_scale;
+  Real density_scale = 1.0, temperature_scale = 1.0, length_scale = 1.0;
+  Real mu = 1.0, rosseland = 1.0, planck_delta = 0.0;
+  if (isunits) {
+    density_scale = pmy_pack->punit->density_cgs();
+    temperature_scale = pmy_pack->punit->temperature_cgs();
+    length_scale = pmy_pack->punit->length_cgs();
+    mu = pmy_pack->punit->mu();
+    rosseland = pmy_pack->punit->rosseland_coef_cgs;
+    planck_delta = pmy_pack->punit->planck_minus_rosseland_coef_cgs;
   }
 
   adm::ADM::ADM_vars &adm = pmy_pack->padm->adm;
@@ -492,24 +507,36 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               const Real dtau = beta_dt * (adm.alpha(m, k, j, i) / w_lorentz);
               Real eta = eta_1_(m, nuidx, k, j, i);
               if (coupled_photons) {
-                const Real kap = abs_1_(m, nuidx, k, j, i);
-                const Real kscat = scat_1_(m, nuidx, k, j, i);
                 const Real wdn = w0_(m, IDN, k, j, i);
                 const Real tgas = w0_(m, IPR, k, j, i) / wdn;
-                const Real jfac = (beta_dt * kap < 1 && beta_dt * kscat < 1)
-                                      ? 1. : 1. + dtau * kap;
-                const Real fac = dtau * kap * gm1 / (wdn * jfac);
-                const Real coef1 = fac * arad;
-                const Real coef0 = -tgas - fac * Jstar / volform;
                 Real tgasnew = tgas;
-                bool flag = true;
-                if (Kokkos::fabs(coef1) > 1.0e-20) {
-                  flag = FourthPolyRoot(coef1, coef0, tgasnew);
-                } else {
-                  tgasnew = -coef0;
+                Real kap = abs_1_(m,nuidx,k,j,i);
+                bool valid = true;
+                for (int it=0; it<photon.source_max_iter; ++it) {
+                  if (photon.is_power_opacity) {
+                    Real sa, ss, sp;
+                    OpacityFunction(wdn,density_scale,fmax(tgasnew,1.0e-300),
+                        temperature_scale,length_scale,gm1,mu,true,rosseland,planck_delta,
+                        photon.kappa_a,photon.kappa_s,photon.kappa_p,sa,ss,sp);
+                    const Real scale = opacity_scale(m,k,j,i);
+                    kap = (sa + sp)*scale;
+                    abs_1_(m,nuidx,k,j,i) = kap;
+                    scat_1_(m,nuidx,k,j,i) = (ss - sp)*scale;
+                  }
+                  const Real fac = dtau*kap*gm1/(wdn*(1.0 + dtau*kap));
+                  const Real coef1 = fac*arad;
+                  const Real coef0 = -tgas - fac*Jstar/volform;
+                  Real next = tgasnew;
+                  valid = FourthPolyRoot(coef1,coef0,next);
+                  if (!valid || !Kokkos::isfinite(next) || next < 0.0) break;
+                  next = photon.is_power_opacity ? 0.75*tgasnew + 0.25*next : next;
+                  const Real rel = fabs(next-tgasnew)/fmax(fmax(fabs(next),fabs(tgasnew)),
+                                                         1.0e-300);
+                  tgasnew = next;
+                  if (!photon.is_power_opacity || rel <= photon.source_tolerance) break;
                 }
-                if (flag && Kokkos::isfinite(tgasnew) && tgasnew > 0.) {
-                  eta = kap * arad * SQR(SQR(tgasnew));
+                if (valid && Kokkos::isfinite(tgasnew) && tgasnew >= 0.0) {
+                  eta = kap*arad*SQR(SQR(tgasnew));
                 }
               }
               Real Jnew = (Jstar + dtau * eta * volform) /
@@ -713,7 +740,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
           }
 
-          if (params_.backreact && stage == 2 && (ismhd_)) {
+          if (params_.backreact && (photon_rk || stage == 2) && (ismhd_)) {
             umhd0_(m, IEN, k, j, i) -= theta * DrEFN[nuidx][M1_E_IDX];
             umhd0_(m, IM1, k, j, i) -= theta * DrEFN[nuidx][M1_FX_IDX];
             umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];

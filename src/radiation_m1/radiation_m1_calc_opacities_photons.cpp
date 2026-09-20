@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "athena.hpp"
+#include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/eos.hpp"
 #include "eos/primitive-solver/unit_system.hpp"
@@ -21,11 +22,7 @@
 namespace radiationm1 {
 
 TaskStatus RadiationM1::CalcOpacityPhotons(Driver *pdrive, int stage) {
-  // The opacities are constant throughout a timestep
-  if (stage > 1) {
-    return TaskStatus::complete;
-  }
-
+  // Refresh from the current fluid state at each radiation stage.
   // Here we are using dynamic_cast to infer which derived type pdyngr is
   auto *ptest_nqt =
       dynamic_cast<dyngr::DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
@@ -139,6 +136,15 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
   }
 
   auto & radiation_mask_ = radiation_mask;
+  auto opacity_scale = photon_opacity_scale;
+  const auto op = photon_op_params;
+  const Real dfloor = pmy_pack->pmhd->peos->eos_data.dfloor;
+  auto bcc = pmy_pack->pmhd->bcc0;
+  auto adm = pmy_pack->padm->adm;
+  auto size = pmy_pack->pmb->mb_size;
+  auto excision = pmy_pack->pcoord->excision_flux;
+  const bool excise = pmy_pack->pcoord->coord_data.bh_excise;
+
 
   par_for(
       "radiation_m1_calc_opacity_photons", DevExeSpace(), 0, nmb1, ks, ke, js,
@@ -168,6 +174,33 @@ TaskStatus RadiationM1::CalcOpacityPhotons_(Driver *pdrive, int stage) {
                           rosseland_coef_, planck_minus_rosseland_coef_,
                           kappa_a_, kappa_s_, kappa_p_, sigma_a, sigma_s,
                           sigma_p);
+
+          Real scale = 1.0;
+          if (op.correct_opacity) {
+            const Real volume = sqrt(adm::SpatialDet(
+                adm.g_dd(m,0,0,k,j,i),adm.g_dd(m,0,1,k,j,i),adm.g_dd(m,0,2,k,j,i),
+                adm.g_dd(m,1,1,k,j,i),adm.g_dd(m,1,2,k,j,i),adm.g_dd(m,2,2,k,j,i)));
+            Real usq = 0.0, bsq = 0.0, ub = 0.0;
+            for (int a=0; a<3; ++a) {
+              for (int b=0; b<3; ++b) {
+                const Real g = adm.g_dd(m,a,b,k,j,i);
+                usq += g*w0_(m,IVX+a,k,j,i)*w0_(m,IVX+b,k,j,i);
+                bsq += g*bcc(m,a,k,j,i)*bcc(m,b,k,j,i)/(volume*volume);
+                ub += g*w0_(m,IVX+a,k,j,i)*bcc(m,b,k,j,i)/volume;
+              }
+            }
+            const Real sigma_cold = (bsq + ub*ub)/((1.0 + usq)*wdn);
+            const Real dl = fmax(sqrt(adm.g_dd(m,0,0,k,j,i))*size.d_view(m).dx1,
+                fmax(sqrt(adm.g_dd(m,1,1,k,j,i))*size.d_view(m).dx2,
+                     sqrt(adm.g_dd(m,2,2,k,j,i))*size.d_view(m).dx3));
+            if (!OpacityDensityScale(wdn,dfloor,op.dfloor_opacity,op.dens_trunc_max,
+                  op.tau_truncation,op.sigmoid_residual,kappa_s_,dl,sigma_cold,
+                  excise && excision(m,k,j,i),scale)) scale = 1.0;
+          }
+          opacity_scale(m,k,j,i) = scale;
+          sigma_a *= scale;
+          sigma_s *= scale;
+          sigma_p *= scale;
 
           // compute opacities from sigma_a, sigma_s, sigma_p
           Real eta_1_loc = (sigma_a + sigma_p) * arad_ * (tgas * tgas * tgas * tgas);

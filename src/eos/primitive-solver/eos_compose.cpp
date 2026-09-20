@@ -36,7 +36,14 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     }
     // Make sure table has correct dimensions
     assert(table.GetNDimensions()==3);
-    // TODO(PH) check that required fields are present?
+    for (const char *field : {"nb", "yq", "t", "Q1", "Q2", "Q3",
+                              "Q4", "Q5", "Q7", "cs2"}) {
+      if (!table.HasField(field)) {
+        throw std::runtime_error(
+            std::string("EOS table missing required field: ") + field);
+      }
+    }
+    m_has_nucleon_fractions = table.HasField("Y[p]") && table.HasField("Y[n]");
 
     // Read baryon (neutron) mass
     auto& table_scalars = table.GetScalars();
@@ -190,7 +197,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYP,in,iy,it) = table_yq[iflat];
+            host_table(ECYP,in,iy,it) = table_yq == nullptr ? 0.0 : table_yq[iflat];
           }
         }
       }
@@ -202,7 +209,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYN,in,iy,it) = table_yq[iflat];
+            host_table(ECYN,in,iy,it) = table_yq == nullptr ? 0.0 : table_yq[iflat];
           }
         }
       }

@@ -199,12 +199,39 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       std::exit(EXIT_FAILURE);
     }
 
+    // Define even when power-law opacities ignore these constant coefficients.
+    photon_op_params.kappa_a = 0.0;
+    photon_op_params.kappa_p = 0.0;
     photon_op_params.kappa_s = pin->GetReal("photons", "kappa_s");
     photon_op_params.is_power_opacity =
         pin->GetOrAddBoolean("photons", "power_opacity", false);
     if (!(photon_op_params.is_power_opacity)) {
       photon_op_params.kappa_a = pin->GetReal("photons", "kappa_a");
       photon_op_params.kappa_p = pin->GetReal("photons", "kappa_p");
+    }
+    photon_op_params.correct_opacity =
+        pin->GetOrAddBoolean("photons", "correct_radsrc_opacity", false);
+    photon_op_params.dfloor_opacity =
+        pin->GetOrAddReal("photons", "dfloor_opacity", 1.0e-100);
+    photon_op_params.dens_trunc_max =
+        pin->GetOrAddReal("photons", "dens_trunc_max", 1.0e100);
+    photon_op_params.tau_truncation =
+        pin->GetOrAddReal("photons", "tau_truncation", 1.0e-100);
+    photon_op_params.sigmoid_residual =
+        pin->GetOrAddReal("photons", "sigmoid_residual", 1.0e-2);
+    photon_op_params.source_max_iter =
+        pin->GetOrAddInteger("photons", "source_max_iter", 12);
+    photon_op_params.source_tolerance =
+        pin->GetOrAddReal("photons", "source_tolerance", 1.0e-10);
+    const Real dfloor = ismhd ? pin->GetOrAddReal("mhd", "dfloor", FLT_MIN) : FLT_MIN;
+    if (!(photon_op_params.dfloor_opacity > 0.0) ||
+        !(photon_op_params.dens_trunc_max >= dfloor) ||
+        !(photon_op_params.tau_truncation >= 0.0) ||
+        !(photon_op_params.sigmoid_residual > 0.0 &&
+          photon_op_params.sigmoid_residual < 1.0/3.0) ||
+        photon_op_params.source_max_iter < 1) {
+      std::cerr << "Invalid photon source correction parameters" << std::endl;
+      std::exit(EXIT_FAILURE);
     }
     photon_op_params.is_compton = pin->GetOrAddBoolean("photons", "compton", false);
     if (photon_op_params.is_compton && !(isunits)) {
@@ -279,6 +306,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // radiation mask
   Kokkos::realloc(radiation_mask, nmb, ncells3, ncells2, ncells1);
   Kokkos::deep_copy(radiation_mask, false);
+  Kokkos::realloc(photon_opacity_scale, nmb, ncells3, ncells2, ncells1);
+  Kokkos::deep_copy(photon_opacity_scale, 1.0);
 
   nspecies = M1_TOTAL_NUM_SPECIES;
 

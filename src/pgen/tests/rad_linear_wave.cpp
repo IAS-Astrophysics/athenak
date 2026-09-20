@@ -26,6 +26,8 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "coordinates/adm.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "driver/driver.hpp"
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
@@ -252,7 +254,7 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
     nangles_ = pmbp->prad->prgeo->nangles;
   } else if (pmbp->pdynrad != nullptr) {
     nangles_ = pmbp->pdynrad->prgeo->nangles;
-  } else {
+  } else if (pmbp->pradm1 == nullptr) {
     throw std::runtime_error(
         "rad_linear_wave requires either <radiation> or <dyn_radiation>");
   }
@@ -371,6 +373,13 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
     DvceArray6D<Real> tetcov_c_;
     DvceArray4D<Real> sqrt_detg_c_;
     DvceArray5D<Real> i0;
+    const bool m1 = pmbp->pradm1 != nullptr;
+    DvceArray5D<Real> m1_u;
+    int m1_nv = 0;
+    if (m1) {
+      m1_u = pmbp->pradm1->u0;
+      m1_nv = pmbp->pradm1->nvars;
+    }
     bool use_adm_geometry_ = false;
     if (pmbp->prad != nullptr) {
       nh_c_ = pmbp->prad->nh_c;
@@ -378,7 +387,7 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
       tet_c_ = pmbp->prad->tet_c;
       tetcov_c_ = pmbp->prad->tetcov_c;
       i0 = pmbp->prad->i0;
-    } else {
+    } else if (pmbp->pdynrad != nullptr) {
       nh_c_ = pmbp->pdynrad->nh_c;
       norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
       tet_c_ = pmbp->pdynrad->tet_c;
@@ -524,6 +533,13 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
       r[3][1] = r[1][3];
       r[3][2] = r[2][3];
 
+      if (m1) {
+        for (int a=0; a<4; ++a) {
+          m1_u(m,radiationm1::CombinedIdx(0,a,m1_nv),k,j,i) = r[0][a];
+        }
+        return;
+      }
+
       // Calculate fluid-frame radiation moments
       Real lambda_f_c[4][4];
       lambda_f_c[0][0] =  u[0];
@@ -630,39 +646,77 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
 void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (restart) return;
-  if (pmbp->phydro == nullptr || (pmbp->prad == nullptr && pmbp->pdynrad == nullptr)) {
-    throw std::runtime_error("rad_equilibration requires <hydro> and a radiation solver");
+  const bool valencia = pmbp->pdyngr != nullptr;
+  const bool m1 = pmbp->pradm1 != nullptr;
+  if ((!valencia && pmbp->phydro == nullptr) ||
+      (!m1 && pmbp->prad == nullptr && pmbp->pdynrad == nullptr)) {
+    throw std::runtime_error("rad_equilibration requires fluid and radiation solvers");
   }
-
+  if (m1 && (!valencia || pmbp->pradm1->params.opacity_type != radiationm1::Photons)) {
+    throw std::runtime_error("rad_equilibration M1 requires Valencia photon transport");
+  }
   const Real rho = pin->GetOrAddReal("problem", "rho", 1.0);
   const Real tgas = pin->GetOrAddReal("problem", "tgas", 2.0);
   const Real trad = pin->GetOrAddReal("problem", "trad", 1.0);
-  const Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
-  Real arad = 1.0;
-  if (pmbp->prad != nullptr) {
-    arad = pmbp->prad->arad;
-  } else {
-    arad = pmbp->pdynrad->arad;
+  const Real flux_fraction = pin->GetOrAddReal("problem", "flux_fraction", 0.0);
+  const Real ux = pin->GetOrAddReal("problem", "ux", 0.0);
+  const bool comoving_isotropic =
+      pin->GetOrAddBoolean("problem", "comoving_isotropic", false);
+  const Real lorentz = sqrt(1.0 + ux*ux);
+  if (comoving_isotropic && (flux_fraction != 0.0 || !valencia)) {
+    throw std::runtime_error("comoving equilibration requires Valencia and zero dipole");
   }
+  if (fabs(flux_fraction) > 1.0/3.0) {
+    throw std::runtime_error("rad_equilibration dipole requires |F/E| <= 1/3");
+  }
+  const Real gm1 = (valencia ? pmbp->pmhd->peos->eos_data.gamma
+                            : pmbp->phydro->peos->eos_data.gamma) - 1.0;
+  const Real arad = m1 ? pmbp->pradm1->photon_op_params.arad :
+      (pmbp->prad != nullptr ? pmbp->prad->arad : pmbp->pdynrad->arad);
   const Real erad = arad*SQR(SQR(trad));
-
+  if (pmbp->padm != nullptr) pmbp->padm->SetADMVariables(pmbp);
+  if (pmbp->pdynrad != nullptr && pmbp->pdynrad->use_adm_geometry) {
+    pmbp->pdynrad->PrepareADMGeometry();
+  }
   auto &indcs = pmy_mesh_->mb_indcs;
-  int &ng = indcs.ng;
-  int n1 = indcs.nx1 + 2*ng;
-  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
-  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
-  int nmb1 = pmbp->nmb_thispack - 1;
-
-  auto &w0 = pmbp->phydro->w0;
-  par_for("rad_equil_hydro",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  const int ng = indcs.ng;
+  const int n1 = indcs.nx1 + 2*ng;
+  const int n2 = (indcs.nx2 > 1) ? indcs.nx2 + 2*ng : 1;
+  const int n3 = (indcs.nx3 > 1) ? indcs.nx3 + 2*ng : 1;
+  const int nmb1 = pmbp->nmb_thispack - 1;
+  auto w0 = valencia ? pmbp->pmhd->w0 : pmbp->phydro->w0;
+  if (valencia) {
+    Kokkos::deep_copy(pmbp->pmhd->bcc0, 0.0);
+    Kokkos::deep_copy(pmbp->pmhd->b0.x1f, 0.0);
+    Kokkos::deep_copy(pmbp->pmhd->b0.x2f, 0.0);
+    Kokkos::deep_copy(pmbp->pmhd->b0.x3f, 0.0);
+  }
+  par_for("rad_equil_fluid",DevExeSpace(),0,nmb1,0,n3-1,0,n2-1,0,n1-1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     w0(m,IDN,k,j,i) = rho;
-    w0(m,IVX,k,j,i) = 0.0;
+    w0(m,IVX,k,j,i) = ux;
     w0(m,IVY,k,j,i) = 0.0;
     w0(m,IVZ,k,j,i) = 0.0;
-    w0(m,IEN,k,j,i) = rho*tgas/gm1;
+    w0(m,IEN,k,j,i) = valencia ? rho*tgas : rho*tgas/gm1;
   });
-  pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+  if (valencia) {
+    pmbp->pdyngr->PrimToConInit(0,n1-1,0,n2-1,0,n3-1);
+  } else {
+    pmbp->phydro->peos->PrimToCons(w0,pmbp->phydro->u0,0,n1-1,0,n2-1,0,n3-1);
+  }
+  if (m1) {
+    auto u = pmbp->pradm1->u0;
+    const int nv = pmbp->pradm1->nvars;
+    Kokkos::deep_copy(u, 0.0);
+    par_for("rad_equil_m1",DevExeSpace(),0,nmb1,0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      u(m,radiationm1::CombinedIdx(0,M1_E_IDX,nv),k,j,i) = comoving_isotropic ?
+          erad*(4.0*lorentz*lorentz - 1.0)/3.0 : erad;
+      u(m,radiationm1::CombinedIdx(0,M1_FX_IDX,nv),k,j,i) = comoving_isotropic ?
+          erad*4.0*lorentz*ux/3.0 : flux_fraction*erad;
+    });
+    return;
+  }
 
   DvceArray5D<Real> i0;
   DualArray2D<Real> nh_c;
@@ -700,7 +754,12 @@ void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool re
       }
       norm = tet_c(m,0,0,k,j,i)*n_0;
     }
-    i0(m,n,k,j,i) = norm*erad/(4.0*M_PI);
+    i0(m,n,k,j,i) = norm*erad/(4.0*M_PI)*
+                    (1.0 + 3.0*flux_fraction*nh_c.d_view(n,1));
+    if (comoving_isotropic) {
+      const Real doppler = lorentz - ux*nh_c.d_view(n,1);
+      i0(m,n,k,j,i) = norm*erad/(4.0*M_PI*SQR(SQR(doppler)));
+    }
   });
 }
 

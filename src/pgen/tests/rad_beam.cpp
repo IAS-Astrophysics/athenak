@@ -277,7 +277,8 @@ template <typename NhView, typename SolidAngleView, typename WeightView>
 void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles,
                               WeightView weights, const int beam, const int nangles,
                               const Real qx_in, const Real qy_in, const Real qz_in,
-                              const Real flux_fraction, const char *label) {
+                              const Real flux_fraction, const char *label,
+                              const bool absolute_flux = false) {
   for (int n=0; n<nangles; ++n) {
     weights(beam,n) = 0.0;
   }
@@ -332,7 +333,11 @@ void SetAllAngleMomentWeights(NhView nh_c, SolidAngleView solid_angles,
   }
 
   const Real frac = fmin(0.999999, fmax(0.0, flux_fraction));
-  const Real target_flux = frac*best_r;
+  if (absolute_flux && frac >= best_r) {
+    throw std::runtime_error(std::string(label) +
+        " requested flux is outside the angular grid convex hull; increase nlevel");
+  }
+  const Real target_flux = absolute_flux ? frac : frac*best_r;
   const Real target[3] = {target_flux*qx, target_flux*qy, target_flux*qz};
   Real lambda[3] = {0.0, 0.0, 0.0};
   bool converged = false;
@@ -600,6 +605,39 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
   int &js = indcs.js;  int &je = indcs.je;
   int &ks = indcs.ks;  int &ke = indcs.ke;
   int nmb1 = pmbp->nmb_thispack - 1;
+
+  if (pmbp->pradm1 != nullptr) {
+    auto u = pmbp->pradm1->u0;
+    const int nv = pmbp->pradm1->nvars;
+    auto size = pmbp->pmb->mb_size;
+    auto bcs = pmbp->pmb->mb_bcs;
+    const auto beam = crossing_beams;
+    par_for("crossing_beams_m1",DevExeSpace(),0,nmb1,0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      if (boundaries_only && !(
+          (i < is && bcs.d_view(m,BoundaryFace::inner_x1) == BoundaryFlag::user) ||
+          (i > ie && bcs.d_view(m,BoundaryFace::outer_x1) == BoundaryFlag::user) ||
+          (j < js && bcs.d_view(m,BoundaryFace::inner_x2) == BoundaryFlag::user) ||
+          (j > je && bcs.d_view(m,BoundaryFace::outer_x2) == BoundaryFlag::user) ||
+          (k < ks && bcs.d_view(m,BoundaryFace::inner_x3) == BoundaryFlag::user) ||
+          (k > ke && bcs.d_view(m,BoundaryFace::outer_x3) == BoundaryFlag::user))) return;
+      const Real x = CellCenterX(i-is,indcs.nx1,
+                                 size.d_view(m).x1min,size.d_view(m).x1max);
+      const Real y = CellCenterX(j-js,indcs.nx2,
+                                 size.d_view(m).x2min,size.d_view(m).x2max);
+      const Real e1 = CrossingBeamProfile(x,y,beam.x0,beam.y_lower,
+          beam.lower_profile_qx,beam.lower_profile_qy,beam.sigma,beam.amp);
+      const Real e2 = CrossingBeamProfile(x,y,beam.x0,beam.y_upper,
+          beam.upper_profile_qx,beam.upper_profile_qy,beam.sigma,beam.amp);
+      u(m,radiationm1::CombinedIdx(0,M1_E_IDX,nv),k,j,i) = e1 + e2;
+      u(m,radiationm1::CombinedIdx(0,M1_FX_IDX,nv),k,j,i) = beam.flux_fraction *
+          (e1*beam.lower_profile_qx + e2*beam.upper_profile_qx);
+      u(m,radiationm1::CombinedIdx(0,M1_FY_IDX,nv),k,j,i) = beam.flux_fraction *
+          (e1*beam.lower_profile_qy + e2*beam.upper_profile_qy);
+      u(m,radiationm1::CombinedIdx(0,M1_FZ_IDX,nv),k,j,i) = 0.0;
+    });
+    return;
+  }
 
   int nang1 = -1;
   bool use_adm_geometry = false;
@@ -986,7 +1024,7 @@ void ProblemGenerator::RadiationCrossingBeams(ParameterInput *pin, const bool re
     nangles = pmbp->pdynrad->prgeo->nangles;
     nh_c = pmbp->pdynrad->nh_c;
     solid_angles = pmbp->pdynrad->prgeo->solid_angles;
-  } else {
+  } else if (pmbp->pradm1 == nullptr) {
     throw std::runtime_error(
         "rad_crossing_beams requires <radiation> or <dyn_radiation>");
   }
@@ -1016,6 +1054,19 @@ void ProblemGenerator::RadiationCrossingBeams(ParameterInput *pin, const bool re
   upper_tx /= upper_norm;
   upper_ty /= upper_norm;
 
+  crossing_beams.lower_profile_qx = lower_tx;
+  crossing_beams.lower_profile_qy = lower_ty;
+  crossing_beams.upper_profile_qx = upper_tx;
+  crossing_beams.upper_profile_qy = upper_ty;
+  if (pmbp->pradm1 != nullptr) {
+    if (!pmbp->pcoord->coord_data.is_minkowski || pmbp->padm == nullptr) {
+      throw std::runtime_error("M1 crossing beams require a flat ADM background");
+    }
+    pmbp->padm->SetADMVariables(pmbp);
+    if (!restart) FillCrossingBeams(pmy_mesh_, false);
+    return;
+  }
+
   if (crossing_beams.angular_weights == nullptr) {
     crossing_beams.angular_weights = new DvceArray2D<Real>();
   }
@@ -1023,10 +1074,10 @@ void ProblemGenerator::RadiationCrossingBeams(ParameterInput *pin, const bool re
   auto h_weights = Kokkos::create_mirror_view(*(crossing_beams.angular_weights));
   SetAllAngleMomentWeights(nh_c, solid_angles, h_weights,
                            0, nangles, lower_tx, lower_ty, 0.0,
-                           crossing_beams.flux_fraction, "rad_crossing_beams");
+                           crossing_beams.flux_fraction, "rad_crossing_beams", true);
   SetAllAngleMomentWeights(nh_c, solid_angles, h_weights,
                            1, nangles, upper_tx, upper_ty, 0.0,
-                           crossing_beams.flux_fraction, "rad_crossing_beams");
+                           crossing_beams.flux_fraction, "rad_crossing_beams", true);
   Kokkos::deep_copy(*(crossing_beams.angular_weights), h_weights);
   crossing_beams.lower_profile_qx = lower_tx;
   crossing_beams.lower_profile_qy = lower_ty;
@@ -1113,6 +1164,9 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
 //! \brief Homogeneous isotropic radiation in an analytic flat FLRW ADM background.
 
 void ProblemGenerator::RadiationFLRWRedshift(ParameterInput *pin, const bool restart) {
+  if (pmy_mesh_->pmb_pack->pradm1 != nullptr) {
+    return RadiationM1FLRWRedshift(pin, restart);
+  }
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (pmbp->pdynrad == nullptr || !(pmbp->pdynrad->use_adm_geometry) ||
       pmbp->padm == nullptr) {

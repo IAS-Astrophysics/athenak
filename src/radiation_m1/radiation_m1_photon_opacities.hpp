@@ -23,6 +23,10 @@ struct PhotonOpacityParams {
   Real kappa_p;           // Planck - Rosseland mean coefficient
   bool is_power_opacity;  // flag to enable Kramer's law opacity for kappa_a
   bool is_compton;        // flag to enable/disable compton
+  bool correct_opacity;
+  Real dfloor_opacity, dens_trunc_max, tau_truncation, sigmoid_residual;
+  int source_max_iter;
+  Real source_tolerance;
   Real inv_t_electron;    // 1 / (electron rest-mass temperature) in code units
 };
 

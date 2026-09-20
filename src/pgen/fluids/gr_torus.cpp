@@ -45,6 +45,7 @@
 #include "radiation/radiation.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "units/units.hpp"
 
 #include <Kokkos_Random.hpp>
@@ -170,7 +171,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // Extract BH parameters
   torus.spin = coord.bh_spin;
   const Real r_excise = coord.rexcise;
-  const bool is_radiation_enabled = (pmbp->prad != nullptr || pmbp->pdynrad != nullptr);
+  const bool is_m1 = pmbp->pradm1 != nullptr;
+  const bool is_radiation_enabled =
+      (pmbp->prad != nullptr || pmbp->pdynrad != nullptr || is_m1);
+  DvceArray5D<Real> m1_u;
+  int m1_nv = 0;
+  if (is_m1) {
+    if (!use_dyngr || pmbp->pradm1->params.opacity_type != radiationm1::Photons) {
+      throw std::runtime_error(
+          "gr_torus M1 requires Valencia GRMHD and photon opacities");
+    }
+    m1_u = pmbp->pradm1->u0;
+    m1_nv = pmbp->pradm1->nvars;
+  }
 
   // Spherical Grid for user-defined history
   auto &grids = spherical_grids;
@@ -241,13 +254,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   // Extract radiation parameters if enabled
-  int nangles_;
+  int nangles_ = 0;
   DualArray2D<Real> nh_c_;
   bool use_adm_radiation_ = false;
   DvceArray6D<Real> norm_to_tet_, tet_c_, tetcov_c_;
   DvceArray4D<Real> sqrt_detg_c_;
   DvceArray5D<Real> i0_;
-  if (is_radiation_enabled) {
+  if (is_radiation_enabled && !is_m1) {
     if (pmbp->prad != nullptr) {
       nangles_ = pmbp->prad->prgeo->nangles;
       nh_c_ = pmbp->prad->nh_c;
@@ -287,6 +300,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       torus.arad = pin->GetReal("dyn_radiation","arad");
     }
   }
+
+  if (is_m1) torus.arad = pmbp->pradm1->photon_op_params.arad;
 
   // Read problem-specific parameters from input file
   // global parameters
@@ -498,7 +513,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     w0_(m,IVZ,k,j,i) = uu3;
 
     // Set coordinate frame intensity (if radiation enabled)
-    if (is_radiation_enabled) {
+    if (is_radiation_enabled && !is_m1) {
       Real q = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2 + 2.0*glower[1][3]*uu1*uu3
              + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
              + glower[3][3]*uu3*uu3;
@@ -532,6 +547,24 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
           rad_norm = n0*n_0;
         }
         i0_(m,n,k,j,i) = rad_norm*(urad/(4.0*M_PI))/SQR(SQR(n0_f));
+      }
+    }
+
+    if (is_m1) {
+      // Isotropic comoving radiation: R^{ab} = (4J/3)u^a u^b + (J/3)g^{ab}.
+      // M1 evolves sqrt(gamma) E and sqrt(gamma) F_i.
+      const Real ucov[3] = {
+        glower[1][1]*uu1 + glower[1][2]*uu2 + glower[1][3]*uu3,
+        glower[2][1]*uu1 + glower[2][2]*uu2 + glower[2][3]*uu3,
+        glower[3][1]*uu1 + glower[3][2]*uu2 + glower[3][3]*uu3};
+      const Real w = sqrt(1.0 + uu1*ucov[0] + uu2*ucov[1] + uu3*ucov[2]);
+      const Real volume = sqrt(adm::SpatialDet(glower[1][1],glower[1][2],
+          glower[1][3],glower[2][2],glower[2][3],glower[3][3]));
+      m1_u(m,radiationm1::CombinedIdx(0,M1_E_IDX,m1_nv),k,j,i) =
+          volume*urad*(4.0*w*w - 1.0)/3.0;
+      for (int d=0; d<3; ++d) {
+        m1_u(m,radiationm1::CombinedIdx(0,M1_FX_IDX+d,m1_nv),k,j,i) =
+            volume*urad*4.0*w*ucov[d]/3.0;
       }
     }
 
