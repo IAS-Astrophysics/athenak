@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 154
+#define NOUTPUT_CHOICES 160
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -100,9 +100,14 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Particles (151-152)
   "prtcl_all", "prtcl_d",
   // Gravity (153)
-  "grav_phi"
-};
+  "grav_phi",
 
+  // SC (short-characteristics) radiation (154-159). Moments in the Σw=1 quadrature
+  // normalization (Er=J, F=H, P=K in code units; no 4π). In 2D, mu_z is unsigned, so
+  // H3/K13/K23 are not meaningful. sc_rad_src = the source S the sweep reads (= brad in
+  // LTE); sc_rad_sigma = the per-cell absorption coefficient sigma_a.
+  "sc_rad", "sc_rad_J", "sc_rad_H", "sc_rad_K", "sc_rad_src", "sc_rad_sigma"
+};
 
 // forward declarations
 class Mesh;
@@ -245,7 +250,7 @@ class BaseTypeOutput {
   // CC output data on host with dims (n,m,k,j,i) except
   // for restarts, where dims are (m,n,k,j,i)
   HostArray5D<Real> outarray;
-  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad,
+  HostArray5D<Real> outarray_hyd, outarray_mhd, outarray_rad, outarray_sc,
                     outarray_force, outarray_z4c, outarray_adm;
   HostFaceFld4D<Real> outfield;  // FC output field on host
   std::vector<int> noutmbs;   // with MPI, number of output MBs across all ranks
@@ -259,7 +264,6 @@ class BaseTypeOutput {
   // Following vector will be of length (# output variables)
   std::vector<OutputVariableInfo> outvars;
 };
-
 
 //----------------------------------------------------------------------------------------
 //! \class FormattedTableOutput
