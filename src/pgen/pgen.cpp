@@ -26,6 +26,7 @@
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
+#include "nr_radiation/nr_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
@@ -89,6 +90,33 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
                 << std::endl << "User history output specified in <problem> block, but "
                 << "not enrolled by UserProblem()." << std::endl;
       exit(EXIT_FAILURE);
+    }
+  }
+  // SC radiation: the opacity/emission sources must be complete (with a fluid: kappa_a
+  // or an opacity hook; without: both hooks). Enrollment happens inside UserProblem, so
+  // this check runs post-pgen.
+  {
+    nr_radiation::SC *pnrrad = pm->pmb_pack->pnrrad;
+    if (pnrrad != nullptr) {
+      bool fluid = pnrrad->is_hydro_enabled || pnrrad->is_mhd_enabled;
+      if (fluid && !(pnrrad->kappa_a_specified) && pnrrad->user_opacity_func == nullptr) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "<nr_radiation>/kappa_a is required with a fluid unless "
+                  << "an opacity function is enrolled via EnrollOpacityFunction()"
+                  << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      if (!fluid && (pnrrad->user_opacity_func == nullptr ||
+                     pnrrad->user_emission_func == nullptr)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "<nr_radiation> without a fluid requires both an opacity "
+                  << "and an emission function (EnrollOpacityFunction / "
+                  << "EnrollEmissionFunction), enrolled before any restart early-return"
+                  << std::endl;
+        exit(EXIT_FAILURE);
+      }
     }
   }
 }

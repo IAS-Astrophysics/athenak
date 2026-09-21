@@ -65,6 +65,20 @@ void MeshBoundaryValues::RadiationBCsCoarse(MeshBlockPack *ppack, DualArray2D<Re
   BCHelperRadiation(ppack, i_in, coarse_i0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
 }
 
+//! Flags handled here: periodic (nothing to do), outflow, inflow, diode and vacuum.
+//!
+//! diode falls through to outflow. A hydro diode copies rho, energy and the tangential
+//! velocity -- it asserts the medium continues -- and clamps only the normal velocity,
+//! which is about advecting material inward. A radiation ghost is per-ray and is read
+//! only by rays ENTERING through that face (an outgoing ray's upwind cell is interior),
+//! so there is no ghost velocity to clamp and nothing of the diode survives except its
+//! statement that the medium continues, which is outflow.
+//!
+//! vacuum writes zero: nothing enters, which is also what inflow gives with i_in = 0.
+//!
+//! reflect is NOT handled here. It is an exact permutation of the rays for an
+//! octant-structured quadrature and needs angular interpolation for a geodesic mesh, so
+//! it belongs to whichever module owns the angular grid (see SC::ApplyReflectBCs).
 void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D<Real> i0,
               int is, int ie, int js, int je, int ks, int ke, int n1, int n2, int n3) {
   // loop over all MeshBlocks in this MeshBlockPack
@@ -81,7 +95,8 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
     KOKKOS_LAMBDA(int m, int n, int k, int j) {
       // apply physical boundaries to inner_x1
       switch (mb_bcs.d_view(m,BoundaryFace::inner_x1)) {
-        case BoundaryFlag::outflow:
+        case BoundaryFlag::diode:     // see the note above: a diode's medium
+        case BoundaryFlag::outflow:   // continuing is exactly outflow for rays
           for (int i=0; i<ng; ++i) {
             i0(m,n,k,j,is-i-1) = i0(m,n,k,j,is);
           }
@@ -91,13 +106,19 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
             i0(m,n,k,j,is-i-1) = i_in.d_view(n,BoundaryFace::inner_x1);
           }
           break;
+        case BoundaryFlag::vacuum:
+          for (int i=0; i<ng; ++i) {
+            i0(m,n,k,j,is-i-1) = 0.0;
+          }
+          break;
         default:
           break;
       }
 
       // apply physical boundaries to outer_x1
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x1)) {
-        case BoundaryFlag::outflow:
+        case BoundaryFlag::diode:     // see the note above: a diode's medium
+        case BoundaryFlag::outflow:   // continuing is exactly outflow for rays
           for (int i=0; i<ng; ++i) {
             i0(m,n,k,j,ie+i+1) = i0(m,n,k,j,ie);
           }
@@ -105,6 +126,11 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
         case BoundaryFlag::inflow:
           for (int i=0; i<ng; ++i) {
             i0(m,n,k,j,ie+i+1) = i_in.d_view(n,BoundaryFace::outer_x1);
+          }
+          break;
+        case BoundaryFlag::vacuum:
+          for (int i=0; i<ng; ++i) {
+            i0(m,n,k,j,ie+i+1) = 0.0;
           }
           break;
         default:
@@ -120,7 +146,8 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
     KOKKOS_LAMBDA(int m, int n, int k, int i) {
       // apply physical boundaries to inner_x2
       switch (mb_bcs.d_view(m,BoundaryFace::inner_x2)) {
-        case BoundaryFlag::outflow:
+        case BoundaryFlag::diode:     // see the note above: a diode's medium
+        case BoundaryFlag::outflow:   // continuing is exactly outflow for rays
           for (int j=0; j<ng; ++j) {
             i0(m,n,k,js-j-1,i) = i0(m,n,k,js,i);
           }
@@ -130,13 +157,19 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
             i0(m,n,k,js-j-1,i) = i_in.d_view(n,BoundaryFace::inner_x2);
           }
           break;
+        case BoundaryFlag::vacuum:
+          for (int j=0; j<ng; ++j) {
+            i0(m,n,k,js-j-1,i) = 0.0;
+          }
+          break;
         default:
           break;
       }
 
       // apply physical boundaries to outer_x2
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x2)) {
-        case BoundaryFlag::outflow:
+        case BoundaryFlag::diode:     // see the note above: a diode's medium
+        case BoundaryFlag::outflow:   // continuing is exactly outflow for rays
           for (int j=0; j<ng; ++j) {
             i0(m,n,k,je+j+1,i) = i0(m,n,k,je,i);
           }
@@ -144,6 +177,11 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
         case BoundaryFlag::inflow:
           for (int j=0; j<ng; ++j) {
             i0(m,n,k,je+j+1,i) = i_in.d_view(n,BoundaryFace::outer_x2);
+          }
+          break;
+        case BoundaryFlag::vacuum:
+          for (int j=0; j<ng; ++j) {
+            i0(m,n,k,je+j+1,i) = 0.0;
           }
           break;
         default:
@@ -159,7 +197,8 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
   KOKKOS_LAMBDA(int m, int n, int j, int i) {
     // apply physical boundaries to inner_x3
     switch (mb_bcs.d_view(m,BoundaryFace::inner_x3)) {
-      case BoundaryFlag::outflow:
+      case BoundaryFlag::diode:     // see the note above: a diode's medium
+      case BoundaryFlag::outflow:   // continuing is exactly outflow for rays
         for (int k=0; k<ng; ++k) {
           i0(m,n,ks-k-1,j,i) = i0(m,n,ks,j,i);
         }
@@ -169,13 +208,19 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
           i0(m,n,ks-k-1,j,i) = i_in.d_view(n,BoundaryFace::inner_x3);
         }
         break;
+      case BoundaryFlag::vacuum:
+        for (int k=0; k<ng; ++k) {
+          i0(m,n,ks-k-1,j,i) = 0.0;
+        }
+        break;
       default:
         break;
     }
 
     // apply physical boundaries to outer_x3
     switch (mb_bcs.d_view(m,BoundaryFace::outer_x3)) {
-      case BoundaryFlag::outflow:
+      case BoundaryFlag::diode:     // see the note above: a diode's medium
+      case BoundaryFlag::outflow:   // continuing is exactly outflow for rays
         for (int k=0; k<ng; ++k) {
           i0(m,n,ke+k+1,j,i) = i0(m,n,ke,j,i);
         }
@@ -183,6 +228,11 @@ void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D
       case BoundaryFlag::inflow:
         for (int k=0; k<ng; ++k) {
           i0(m,n,ke+k+1,j,i) = i_in.d_view(n,BoundaryFace::outer_x3);
+        }
+        break;
+      case BoundaryFlag::vacuum:
+        for (int k=0; k<ng; ++k) {
+          i0(m,n,ke+k+1,j,i) = 0.0;
         }
         break;
       default:

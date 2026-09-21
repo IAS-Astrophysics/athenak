@@ -114,6 +114,10 @@ class Mesh {
 
   bool one_d, two_d, three_d; // flags to indicate 1D or 2D or 3D calculations
   bool multi_d;               // flag to indicate 2D and 3D calculations
+  bool equal_block_nx;        // MeshBlock has the same number of active cells in every
+                              // active dimension: nx1==nx2==nx3 in 3D, nx1==nx2 in 2D,
+                              // always true in 1D. Counts of cells, not physical size --
+                              // it says nothing about dx1:dx2:dx3
   bool multilevel;            // true for SMR and AMR
   bool adaptive;              // true only for AMR
 

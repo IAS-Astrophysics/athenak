@@ -166,6 +166,14 @@ add_executable(
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
 
+        nr_radiation/nr_radiation.cpp
+        nr_radiation/angular_grid.cpp
+        nr_radiation/sc/formal_solution.cpp
+        nr_radiation/sc/iteration.cpp
+        nr_radiation/sc/get_moments.cpp
+        nr_radiation/sc/coupling.cpp
+        nr_radiation/sc/newdt.cpp
+
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp
         shearing_box/orbital_advection_fc.cpp

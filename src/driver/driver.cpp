@@ -25,6 +25,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
+#include "nr_radiation/nr_radiation.hpp"
 #include "driver.hpp"
 #include "gravity/gravity.hpp"
 #include "utils/utils.hpp"
@@ -480,6 +481,11 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
+    }
+    nr_radiation::SC *pnrrad = pmesh->pmb_pack->pnrrad;
+    if (pnrrad != nullptr) {
+      pnrrad->UpdateOpacity();   // the relaxation rate reads sigma_a
+      (void) pnrrad->NewTimeStep(this, nexp_stages);
     }
 
     pmesh->NewTimeStep(tlim);
