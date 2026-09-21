@@ -379,12 +379,15 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
                                               &nurates_params.quadrature_2,
                                               &grey_op_params);
 
-    // Number emissivity: thermal processes only. NEPS is number-conserving and
-    // deliberately excluded from the number channel (it enters energy only).
-    R_nue = opacities.eta_0_th[id_nue];
-    R_anue = opacities.eta_0_th[id_anue];
-    R_nux = opacities.eta_0_th[id_nux] * 2.;
-    R_anux = opacities.eta_0_th[id_anux] * 2.;
+    // Number rates contain thermal processes only; NEPS affects energy only.
+    // There is no thermal/non-thermal split to make here: NEPS is
+    // number-conserving, so M1OpacitiesNonThermalSeparated carries a single
+    // eta_0 / kappa_0_a per species, which bns_nurates already builds from the
+    // thermal reactions alone.
+    R_nue = opacities.eta_0[id_nue];
+    R_anue = opacities.eta_0[id_anue];
+    R_nux = opacities.eta_0[id_nux] * 2.;
+    R_anux = opacities.eta_0[id_anux] * 2.;
     Q_nue = opacities.eta_th[id_nue] + opacities.eta_non_th[id_nue];
     Q_anue = opacities.eta_th[id_anue] + opacities.eta_non_th[id_anue];
     Q_nux = (opacities.eta_th[id_nux] + opacities.eta_non_th[id_nux]) * 2.;
@@ -396,11 +399,11 @@ int ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n
     Q_non_th_nux = opacities.eta_non_th[id_nux] * 2.;
     Q_non_th_anux = opacities.eta_non_th[id_anux] * 2.;
 
-    // Number absorption inverse mean-free path: thermal processes only (see above).
-    sigma_0_nue = opacities.kappa_0_a_th[id_nue];
-    sigma_0_anue = opacities.kappa_0_a_th[id_anue];
-    sigma_0_nux = opacities.kappa_0_a_th[id_nux];
-    sigma_0_anux = opacities.kappa_0_a_th[id_anux];
+    // Number absorption also contains thermal processes only (see above).
+    sigma_0_nue = opacities.kappa_0_a[id_nue];
+    sigma_0_anue = opacities.kappa_0_a[id_anue];
+    sigma_0_nux = opacities.kappa_0_a[id_nux];
+    sigma_0_anux = opacities.kappa_0_a[id_anux];
     sigma_1_nue = opacities.kappa_a_th[id_nue] + opacities.kappa_a_non_th[id_nue];
     sigma_1_anue = opacities.kappa_a_th[id_anue] + opacities.kappa_a_non_th[id_anue];
     sigma_1_nux = opacities.kappa_a_th[id_nux] + opacities.kappa_a_non_th[id_nux];

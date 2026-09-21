@@ -817,8 +817,20 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // derives them from the corrected THERMAL opacity and the
             // equilibrium distribution, inheriting the non-LTE correction
             // through abs_*_th; NEPS emission is added back afterwards, kept
-            // out of thermalization. Without Kirchhoff, bns_nurates' own
-            // emissivities stand, scaled like the opacities they pair with.
+            // out of thermalization.
+            //
+            // Without Kirchhoff, bns_nurates' own emissivities stand UNSCALED.
+            // The non-LTE factor rescales a GREY ABSORPTION opacity, which is
+            // an average of kappa(E) over the neutrino distribution and so
+            // depends on the spectrum actually present -- that is the whole
+            // reason it exists. A spontaneous emissivity has no such
+            // dependence: eta(E) is built from the matter state alone, and its
+            // energy integral is already what bns_nurates returns. Multiplying
+            // it by a factor derived from the radiation field gives the matter
+            // a fictitious memory of the neutrinos it is emitting into. It
+            // appears in the Kirchhoff branch only because eta = kappa*B is
+            // DERIVED from the corrected opacity there, not because
+            // emissivities carry the correction.
             if (nurates_params_.use_kirchhoff_law) {
               eta_0_(m, nuidx, k, j, i) =
                   (abs_0_th_em[nuidx] > 0)
@@ -829,8 +841,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                       ? abs_1_th_em[nuidx] * my_nudens_1 + eta_1_non_th_loc[nuidx]
                       : eta_1_loc[nuidx];
             } else {
-              eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx] * corr_ae[nuidx];
-              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx] * corr_ae[nuidx];
+              eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
+              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
             }
           }
         }

@@ -258,6 +258,34 @@ if (ENABLE_NN_OPACITY)
     endif()
 endif()
 
+# ---------------------------------------------------------------------------------
+# Per-file SYCL tuning for the heavy M1 / z4c kernels (Intel PVC).
+# Measured on Aurora (8 nodes, dyngr_tov + nurates): 2.65x on the production stack
+# (capacity queue) and 2.59x on next-eval with the Newton closure; 5.13x with Brent.
+# Per-kernel: calc_closure 29x faster, update 9x faster, and the untuned kernels
+# (mhd_update, buffer pack/unpack) stay at baseline because they keep stock flags.
+option(Athena_M1_SYCL_TUNING
+       "Per-file SYCL register/unroll tuning for heavy M1 kernels (Intel PVC)" ON)
+if (Athena_M1_SYCL_TUNING AND Kokkos_ENABLE_SYCL)
+    set(_m1_tuned_sources
+        radiation_m1/radiation_m1_calc_closure.cpp
+        radiation_m1/radiation_m1_update.cpp
+        radiation_m1/radiation_m1_calc_opacities_nurates.cpp
+        radiation_m1/radiation_m1_fluxes.cpp
+        radiation_m1/radiation_m1_tmunu.cpp
+        z4c/z4c_calcrhs.cpp)
+    if (ENABLE_NN_OPACITY)
+        # The NN opacity KERNEL benefits the same way as the nurates one.
+        # radiation_m1_nn_emulator.cpp is deliberately NOT tuned: it is the host-only
+        # LibTorch TU and has no device code (see comment above), so these device
+        # codegen options would have nothing to act on.
+        list(APPEND _m1_tuned_sources radiation_m1/radiation_m1_calc_opacities_nn.cpp)
+    endif()
+    set_source_files_properties(${_m1_tuned_sources}
+        PROPERTIES COMPILE_OPTIONS
+        "-Xclang;-mllvm;-Xclang;-sycl-opt=false;-fno-vectorize;-fno-slp-vectorize;-Xclang;-mllvm;-Xclang;-inline-threshold=5000;-Xsycl-target-backend=spir64_gen;-options -ze-opt-large-register-file")
+endif()
+
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
 # pgen/ directory (not including .cpp extension)

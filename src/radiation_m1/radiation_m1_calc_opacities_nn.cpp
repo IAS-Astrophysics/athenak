@@ -626,6 +626,11 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
         // it) and the correction factor itself.  Default to a no-op if skipped.
         Real abs_0_th[4]{}, abs_1_th[4]{};
         Real corr_ae[4] = {1.0, 1.0, 1.0, 1.0};
+        // UNCORRECTED thermal absorption, plus the thermal absorption carrying
+        // the emissivity's own non-LTE factor.  The *_em pair defaults to
+        // abs_*_th, so it is a no-op unless corr_fac_from_peq recomputes it.
+        Real abs_0_raw[4]{}, abs_1_raw_th[4]{};
+        Real abs_0_th_em[4]{}, abs_1_th_em[4]{};
 
         if (nurates_params_.use_kirchhoff_law ||
             nurates_params_.use_equilibrium_distribution) {
@@ -661,9 +666,13 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
             Real abs_1_non_th = non_th_buf(flat, 4 + nuidx);
             // Number channel is thermal-only (NEPS is number-conserving), so no
             // non-thermal subtraction here; energy still splits thermal/NEPS.
-            abs_0_th[nuidx] = abs_0_loc[nuidx] * corr_ae[nuidx];
-            abs_1_th[nuidx] = Kokkos::fmax(
-                abs_1_loc[nuidx] - abs_1_non_th, 0.0) * corr_ae[nuidx];
+            abs_0_raw[nuidx]    = abs_0_loc[nuidx];
+            abs_1_raw_th[nuidx] = Kokkos::fmax(abs_1_loc[nuidx] - abs_1_non_th,
+                                               0.0);
+            abs_0_th[nuidx] = abs_0_raw[nuidx] * corr_ae[nuidx];
+            abs_1_th[nuidx] = abs_1_raw_th[nuidx] * corr_ae[nuidx];
+            abs_0_th_em[nuidx] = abs_0_th[nuidx];
+            abs_1_th_em[nuidx] = abs_1_th[nuidx];
             abs_0_loc[nuidx] = abs_0_th[nuidx];                     // thermal only
             abs_1_loc[nuidx] = abs_1_th[nuidx] + abs_1_non_th;      // thermal+NEPS
           }
@@ -828,6 +837,29 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
                 nudens_1_peq[nuidx] = nudens_1_thin[nuidx];
               }
             }
+
+            // Give Kirchhoff's emissivity its own non-LTE factor, evaluated at
+            // the equilibrium it actually emits into (nudens_*_peq) rather than
+            // at the M1 moments the absorption factor uses.
+            if (nurates_params_.corr_fac_from_peq) {
+              for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+                Real corr_em = 1.0;
+                if (nurates_params_.use_equilibrium_distribution) {
+                  corr_em = (nudens_1_peq[nuidx] / nudens_0_peq[nuidx]) *
+                            (nudens_0_thin[nuidx] / nudens_1_thin[nuidx]);
+                  if (!Kokkos::isfinite(corr_em)) corr_em = 1.0;
+                  corr_em *= corr_em;
+                  corr_em = Kokkos::fmax(
+                      1.0 / nurates_params_.opacity_corr_fac_max,
+                      Kokkos::fmin(corr_em,
+                                   nurates_params_.opacity_corr_fac_max));
+                }
+                const Real corr_em_ae = (nuidx == 0 || nuidx == 1) ? corr_em
+                                                                   : 1.0;
+                abs_0_th_em[nuidx] = abs_0_raw[nuidx] * corr_em_ae;
+                abs_1_th_em[nuidx] = abs_1_raw_th[nuidx] * corr_em_ae;
+              }
+            }
           }
         }
 
@@ -868,15 +900,15 @@ TaskStatus RadiationM1::CalcOpacityNN_(Driver *pdrive, int stage) {
           // number).  Without Kirchhoff, bns_nurates' own emissivities stand,
           // scaled by corr_ae like the opacities.
           if (nurates_params_.use_kirchhoff_law) {
-            eta_0_(m, nuidx, k, j, i) = (abs_0_th[nuidx] > 0)
-                ? abs_0_th[nuidx] * my_nudens_0
+            eta_0_(m, nuidx, k, j, i) = (abs_0_th_em[nuidx] > 0)
+                ? abs_0_th_em[nuidx] * my_nudens_0
                 : eta_0_loc[nuidx];
-            eta_1_(m, nuidx, k, j, i) = (abs_1_th[nuidx] > 0)
-                ? abs_1_th[nuidx] * my_nudens_1 + eta_1_non_th
+            eta_1_(m, nuidx, k, j, i) = (abs_1_th_em[nuidx] > 0)
+                ? abs_1_th_em[nuidx] * my_nudens_1 + eta_1_non_th
                 : eta_1_loc[nuidx];
           } else {
-            eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx] * corr_ae[nuidx];
-            eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx] * corr_ae[nuidx];
+            eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
+            eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
           }
         }
       });  // par_for kirchhoff
