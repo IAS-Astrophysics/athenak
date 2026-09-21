@@ -479,7 +479,7 @@ void BuildADMSpatialTriadForBeam(const Real gxx, const Real gxy, const Real gxz,
 void CoordinateDirectionToADMTetrad(const Real x, const Real y, const Real z,
                                     const bool flat, const Real spin,
                                     const Real d1, const Real d2, const Real d3,
-                                    Real ell[3]) {
+                                    Real ell[3], const Real d0_given = -1.0) {
   Real alpha, beta[3], psi4, g3d[6], k_dd[6];
   ComputeADMDecomposition(x, y, z, flat, spin, &alpha,
                           &beta[0], &beta[1], &beta[2],
@@ -502,7 +502,8 @@ void CoordinateDirectionToADMTetrad(const Real x, const Real y, const Real z,
   if (disc <= 0.0) {
     throw std::runtime_error("rad_kerr_orbit_beam ADM direction is not null-realizable");
   }
-  const Real d0 = (-temp_b - sqrt(disc))/(2.0*temp_a);
+  const Real d0 = (d0_given > 0.0) ? d0_given :
+                  (-temp_b - sqrt(disc))/(2.0*temp_a);
 
   Real k_cov[4];
   const Real d[4] = {d0, d1, d2, d3};
@@ -536,7 +537,7 @@ void CoordinateDirectionToADMTetrad(const Real x, const Real y, const Real z,
 void CoordinateDirectionToTetrad(const Real x, const Real y, const Real z,
                                  const bool flat, const Real spin,
                                  const Real d1, const Real d2, const Real d3,
-                                 Real ell[3]) {
+                                 Real ell[3], const Real d0_given = -1.0) {
   Real glower[4][4], gupper[4][4];
   Real dgx[4][4], dgy[4][4], dgz[4][4];
   Real e[4][4], e_cov[4][4], omega[4][4][4];
@@ -555,7 +556,8 @@ void CoordinateDirectionToTetrad(const Real x, const Real y, const Real z,
   if (disc <= 0.0) {
     throw std::runtime_error("rad_kerr_orbit_beam direction is not null-realizable");
   }
-  const Real d0 = (-temp_b - sqrt(disc))/(2.0*temp_a);
+  const Real d0 = (d0_given > 0.0) ? d0_given :
+                  (-temp_b - sqrt(disc))/(2.0*temp_a);
 
   Real dc[4];
   for (int mu=0; mu<4; ++mu) {
@@ -1138,8 +1140,19 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
   if (flat) {
     throw std::runtime_error("rad_kerr_orbit_beam requires a Kerr-Schild metric");
   }
-  const Real default_r = CounterrotatingPhotonOrbitRadius(spin);
+  const std::string sense = pin->GetOrAddString("problem", "orbit_sense", "legacy");
+  if (sense != "legacy" && sense != "prograde" && sense != "retrograde") {
+    throw std::runtime_error("orbit_sense must be prograde, retrograde, or legacy");
+  }
+  const bool circular = sense != "legacy";
+  const Real direction = (sense == "retrograde" ? -1.0 : 1.0)*
+                         (spin < 0.0 ? -1.0 : 1.0);
+  const Real circular_r = 2.0*(1.0 + cos((2.0/3.0)*acos(-direction*spin)));
+  const Real default_r = circular ? circular_r : CounterrotatingPhotonOrbitRadius(spin);
   const Real orbit_r = pin->GetOrAddReal("problem", "orbit_r", default_r);
+  if (circular && fabs(orbit_r-circular_r) > 1.e-10) {
+    throw std::runtime_error("orbit_r must match the selected equatorial photon orbit");
+  }
   const Real orbit_R = sqrt(SQR(orbit_r) + SQR(spin));
   const Real source_phi = pin->GetOrAddReal("problem", "source_phi", 0.0);
   kerr_orbit_beam.enabled = true;
@@ -1149,19 +1162,41 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
   kerr_orbit_beam.source_y = orbit_R*sin(source_phi);
   kerr_orbit_beam.source_z = 0.0;
 
-  const Real tangent_x = -sin(source_phi);
-  const Real tangent_y =  cos(source_phi);
+  // For a circular orbit, dr=0 makes the BL and Kerr-Schild angular
+  // velocities equal. Supply k^t=1 explicitly: the quadratic null equation
+  // has two future roots inside the ergosphere, so direction alone is ambiguous.
+  const Real omega = circular ? direction/(pow(orbit_r,1.5)+direction*spin) : 0.0;
+  const Real speed = circular ? omega*orbit_R : 1.0;
+  const Real tangent_x = -speed*sin(source_phi);
+  const Real tangent_y =  speed*cos(source_phi);
+  const Real ktime = circular ? 1.0 : -1.0;
+  if (circular) {
+    Real gd[4][4], gu[4][4];
+    ComputeMetricAndInverse(kerr_orbit_beam.source_x,kerr_orbit_beam.source_y,
+                            0.0,false,spin,gd,gu);
+    const Real ray[4] = {1.0,tangent_x,tangent_y,0.0};
+    Real null_norm = 0.0;
+    for (int a=0; a<4; ++a) {
+      for (int b=0; b<4; ++b) null_norm += gd[a][b]*ray[a]*ray[b];
+    }
+    if (fabs(null_norm) > 1.e-12) {
+      throw std::runtime_error("Equatorial photon-orbit launch vector is not null");
+    }
+    std::cout << std::setprecision(16) << "PHOTON_ORBIT sense=" << sense
+              << " spin=" << spin << " r=" << orbit_r << " R=" << orbit_R
+              << " omega=" << omega << " null_norm=" << null_norm << std::endl;
+  }
   Real ell[3];
   const bool use_adm_geometry = pmbp->pradm1 != nullptr ||
       (pmbp->pdynrad != nullptr && pmbp->pdynrad->use_adm_geometry);
   if (use_adm_geometry) {
     CoordinateDirectionToADMTetrad(kerr_orbit_beam.source_x, kerr_orbit_beam.source_y,
                                    kerr_orbit_beam.source_z, flat, spin,
-                                   tangent_x, tangent_y, 0.0, ell);
+                                   tangent_x, tangent_y, 0.0, ell, ktime);
   } else {
     CoordinateDirectionToTetrad(kerr_orbit_beam.source_x, kerr_orbit_beam.source_y,
                                 kerr_orbit_beam.source_z, flat, spin,
-                                tangent_x, tangent_y, 0.0, ell);
+                                tangent_x, tangent_y, 0.0, ell, ktime);
   }
 
   if (kerr_orbit_beam.angular_weights == nullptr) {
