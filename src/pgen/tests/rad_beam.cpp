@@ -31,6 +31,8 @@
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "mhd/mhd.hpp"
 #include "pgen/pgen.hpp"
 #include "radiation_m1/radiation_m1.hpp"
 
@@ -765,6 +767,30 @@ void FLRWScaleFactor(Real time, Real &a, Real &adot) {
   }
 }
 
+// An optional transparent Valencia fluid exercises the shared fluid/radiation
+// stage graph. For an ideal gas, rho*a^3 and p*a^(3*Gamma) remain constant.
+void InitializeFLRWFluid(MeshBlockPack *pmbp) {
+  if (pmbp->pmhd == nullptr) return;
+  if (pmbp->pdyngr == nullptr) throw std::runtime_error("FLRW fluid requires Valencia");
+  const auto &indcs = pmbp->pmesh->mb_indcs;
+  const int n1 = indcs.nx1 + 2*indcs.ng;
+  const int n2 = indcs.nx2 > 1 ? indcs.nx2 + 2*indcs.ng : 1;
+  const int n3 = indcs.nx3 > 1 ? indcs.nx3 + 2*indcs.ng : 1;
+  auto w = pmbp->pmhd->w0;
+  Kokkos::deep_copy(w, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->bcc0, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->b0.x1f, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->b0.x2f, 0.0);
+  Kokkos::deep_copy(pmbp->pmhd->b0.x3f, 0.0);
+  par_for("flrw_fluid_init", DevExeSpace(), 0,pmbp->nmb_thispack-1,
+          0,n3-1,0,n2-1,0,n1-1,
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    w(m,IDN,k,j,i) = 1.0;
+    w(m,IPR,k,j,i) = 1.0;
+  });
+  pmbp->pdyngr->PrimToConInit(0,n1-1,0,n2-1,0,n3-1);
+}
+
 void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp, Real time) {
   Real a, adot;
   FLRWScaleFactor(time, a, adot);
@@ -1267,6 +1293,7 @@ void ProblemGenerator::RadiationFLRWRedshift(ParameterInput *pin, const bool res
   if (restart) {
     return;
   }
+  InitializeFLRWFluid(pmbp);
 
   auto &indcs = pmy_mesh_->mb_indcs;
   const int ng = indcs.ng;
@@ -1302,6 +1329,7 @@ void ProblemGenerator::RadiationM1FLRWRedshift(ParameterInput *pin, const bool r
   if (restart) {
     return;
   }
+  InitializeFLRWFluid(pmbp);
 
   auto &indcs = pmy_mesh_->mb_indcs;
   const int ng = indcs.ng;

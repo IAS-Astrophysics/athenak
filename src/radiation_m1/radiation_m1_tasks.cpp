@@ -37,7 +37,7 @@ void RadiationM1::QueuePhotonTasks() {
   nr->QueueTask(&RadiationM1::InitRecv, this, Rad_Recv, "M1_Recv", Task_Start);
   nr->QueueTask(&RadiationM1::CopyCons, this, Rad_CopyI, "M1_Copy", Task_Run);
   nr->QueueTask(&RadiationM1::PreparePhotonStage, this, Rad_PrepareGeom,
-                "M1_Prepare", Task_Run, {Rad_CopyI});
+                "M1_Prepare", Task_Run, {Rad_CopyI}, {MHD_PrepareADM});
   nr->QueueTask(&RadiationM1::CalculateFluxes, this, Rad_Flux,
                 "M1_Flux", Task_Run, {Rad_PrepareGeom});
   nr->QueueTask(&RadiationM1::SendFlux, this, Rad_SendFlux,

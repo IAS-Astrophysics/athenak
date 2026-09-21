@@ -469,6 +469,7 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
       if (pack->padm != nullptr && pack->pz4c == nullptr &&
           pack->padm->time_dependent) {
         pack->padm->SetADMVariables(pack);
+        if (pack->pdyngr != nullptr) pack->pdyngr->ConToPrim(this, nexp_stages);
         if (pack->pdynrad != nullptr && pack->pdynrad->use_adm_geometry) {
           pack->pdynrad->SetOrthonormalTetrad();
         }

@@ -32,6 +32,7 @@ namespace numrel {
 enum TaskName {
   MHD_Recv,
   MHD_CopyU,
+  MHD_PrepareADM,
   MHD_Flux,
   MHD_SetTmunu,
   MHD_SendFlux,

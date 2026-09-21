@@ -183,17 +183,19 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
 
   // Run task list
   pnr->QueueTask(&MHD::CopyCons, pmhd, MHD_CopyU, "MHD_CopyU", Task_Run);
+  pnr->QueueTask(&DynGRMHD::PrepareADM, this, MHD_PrepareADM, "MHD_PrepareADM",
+                 Task_Run, {MHD_CopyU});
 
   // Select which CalculateFlux function to add based on rsolver_method.
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
   if (rsolver_method == DynGRMHD_RSolver::llf_dyngr) {
     pnr->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::llf_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_PrepareADM});
   } else if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
     pnr->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_PrepareADM});
   } else { // put more rsolvers here
     abort();
   }
@@ -201,7 +203,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   // Now the rest of the MHD run tasks
   if (pz4c != nullptr || calculate_tmunu) {
     pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
-                   Task_Run, {MHD_CopyU});
+                   Task_Run, {MHD_PrepareADM});
     if (pradm1 != nullptr) {
       pnr->QueueTask(&RadiationM1::FloorAndCalcClosure, pradm1, M1_Closure, "M1_Closure", Task_Run);
       pnr->QueueTask(&RadiationM1::SetTmunu, pradm1, M1_SetTmunu, "M1_SetTmunu", Task_Run, {MHD_SetTmunu});
@@ -508,6 +510,16 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn void DynGRMHD::SetADMVariables
 //! \brief
+
+// Recover primitives with the metric at the explicit RHS time. Updating only
+// the metric would leave velocities and pressures from the preceding stage.
+TaskStatus DynGRMHD::PrepareADM(Driver *pdrive, int stage) {
+  if (pmy_pack->pz4c == nullptr && pmy_pack->padm->time_dependent) {
+    SetADMVariables(pdrive, stage);
+    return ConToPrim(pdrive, stage);
+  }
+  return TaskStatus::complete;
+}
 
 TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
   const Real t = pmy_pack->pmesh->time +

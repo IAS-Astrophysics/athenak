@@ -35,3 +35,52 @@ def test_redshift(solver, profile, tmp_path):
     else:
         assert errors[-1] < 1.e-4
         assert math.log2(errors[-2] / errors[-1]) > 1.8
+
+
+@pytest.mark.parametrize("solver", ["boltzmann", "m1"])
+def test_transparent_fluid(solver, tmp_path):
+    """Metric refresh must precede primitive recovery and both flux operators."""
+    import numpy as np
+    binary = Path(os.environ.get("ATHENA_BIN", testutils.ATHENAK_BUILD / "athena"))
+    suffix = "_m1" if solver == "m1" else ""
+    source = (testutils.ATHENAK_PATH / "tst" / "inputs" /
+              f"adm_flrw_redshift{suffix}.athinput").read_text()
+    source += """
+<adm>
+dynamic = true
+<problem>
+scale_factor = quadratic
+quadratic = .3
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+gamma = 1.6666666666666667
+<output2>
+file_type = tab
+variable = mhd_w
+slice_x2 = .5
+data_format = %.16e
+dt = 1
+"""
+    if solver == "m1":
+        source += ("\n<radiation_m1>\nopacity_type = photons\n"
+                   "photon_coupled_sources = true\nmatter_sources = false\n<photons>\n")
+    else:
+        source += "\n<dyn_radiation>\nrad_source = false\n"
+    source += "kappa_a = 0\nkappa_s = 0\nkappa_p = 0\narad = 1\n"
+    inp = tmp_path / "input.athinput"
+    inp.write_text(source)
+    errors = []
+    a = 1 + .2*.5 + .3*.5**2
+    for cfl in [.4, .2, .1]:
+        dest = tmp_path / str(cfl)
+        dest.mkdir()
+        subprocess.run([str(binary), "-i", str(inp), "-d", str(dest),
+                        f"time/cfl_number={cfl}"], capture_output=True, check=True)
+        data = np.loadtxt(sorted((dest / "tab").glob("*.mhd_w.*.tab"))[-1])
+        assert np.max(abs(data[:, 3] / a**-3 - 1)) < 1.e-11
+        errors.append(np.max(abs(data[:, 7] / a**-5 - 1)))
+    assert math.log2(errors[-2] / errors[-1]) > 1.8

@@ -183,7 +183,7 @@ void DynRadiation::QueueDynRadiationTasks() {
   pnr->QueueTask(&DynRadiation::CopyCons, this, Rad_CopyI, "Rad_CopyI", Task_Run);
 
   pnr->QueueTask(&DynRadiation::PrepareGeometryTask, this, Rad_PrepareGeom,
-                 "Rad_PrepareGeom", Task_Run, {Rad_CopyI});
+                 "Rad_PrepareGeom", Task_Run, {Rad_CopyI}, {MHD_PrepareADM});
 
   pnr->QueueTask(&DynRadiation::CalculateFluxes, this, Rad_Flux, "Rad_Flux",
                  Task_Run, {Rad_PrepareGeom});
