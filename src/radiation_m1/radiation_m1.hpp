@@ -113,6 +113,7 @@ class RadiationM1 {
   TaskStatus InitRecv(Driver* d, int stage);
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver* d, int stage);
+  TaskStatus SyncPhotonFluid(Driver* d, int stage);
   TaskStatus RefreshADM(Driver* d, int stage);
   TaskStatus SetMask(Driver* d, int stage);
   TaskStatus FloorAndCalcClosure(Driver* d, int stage);

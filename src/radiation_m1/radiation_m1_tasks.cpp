@@ -97,8 +97,10 @@ void RadiationM1::AssembleRadiationM1Tasks(
     id.M1_compton = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcComptonPhotons, this, id.M1_rkupdt, "RadiationM1::CalcComptonPhotons");
     id_compton = id.M1_compton;
   }
-  id.M1_restu =
-      tl["opsplit_stagen"]->AddTask(&RadiationM1::RestrictU, this, id_compton, "RadiationM1::RestrictU");
+  TaskID fluid_sync = tl["opsplit_stagen"]->AddTask(
+      &RadiationM1::SyncPhotonFluid, this, id_compton, "RadiationM1::SyncPhotonFluid");
+  id.M1_restu = tl["opsplit_stagen"]->AddTask(
+      &RadiationM1::RestrictU, this, fluid_sync, "RadiationM1::RestrictU");
   id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu, "RadiationM1::SendU");
   id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu, "RadiationM1::RecvU");
   id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_recvu, "RadiationM1::Prolongate");
@@ -176,6 +178,31 @@ TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
     }
   }
   if (coupled && ismhd && params.backreact) pmy_pack->pdyngr->ConToPrim(pdrive,stage);
+  return TaskStatus::complete;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void RadiationM1::SyncPhotonFluid
+//! \brief Refresh fluid ghosts between the coupled photon SSPRK stages.
+TaskStatus RadiationM1::SyncPhotonFluid(Driver *pdrive, int stage) {
+  if (stage != 1 || params.opacity_type != Photons || !params.photon_coupled_sources ||
+      !params.backreact || !ismhd) {
+    return TaskStatus::complete;
+  }
+  // The ordinary MHD stage has already cleared its communications. Source terms
+  // changed active conserved cells, so the second radiation stage must not
+  // reconstruct with the old primitive/ghost state. B is unchanged. The existing
+  // after-time-integrator task list handles synchronization after the final stage.
+  auto *pmhd = pmy_pack->pmhd;
+  (void) pmhd->RestrictU(pdrive, stage);
+  (void) pmhd->InitRecvU(pdrive, stage);
+  (void) pmhd->SendU(pdrive, stage);
+  (void) pmhd->ClearSendU(pdrive, stage);
+  (void) pmhd->ClearRecvU(pdrive, stage);
+  (void) pmhd->RecvU(pdrive, stage);
+  (void) pmhd->Prolongate(pdrive, stage);
+  (void) pmhd->ApplyPhysicalBCs(pdrive, stage);
+  (void) pmy_pack->pdyngr->ConToPrim(pdrive, stage);
   return TaskStatus::complete;
 }
 
