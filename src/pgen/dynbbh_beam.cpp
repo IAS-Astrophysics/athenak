@@ -429,7 +429,7 @@ KOKKOS_INLINE_FUNCTION
 void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ],
                    const bbh_pgen bbh_);
-void SetADMVariablesToBBH(MeshBlockPack *pmbp);
+void SetADMVariablesToBBH(MeshBlockPack *pmbp, Real time);
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
@@ -672,7 +672,8 @@ void ProblemGenerator::DynBBHBeam(ParameterInput *pin, const bool restart) {
     LoadTrajectoryTable(traj_file);
   }
 
-  pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
+  pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToBBH;
+  pmbp->padm->time_dependent = true;
   pmbp->padm->SetADMVariables(pmbp);
   if (pmbp->pcoord->coord_data.bh_excise) {
     pmbp->pcoord->UpdateExcisionMasks();
@@ -860,8 +861,8 @@ void StoreADMVariables(ADMVars adm_vars, const int m, const int k,
   adm_vars.beta_u(m,2,k,j,i) = met3.betaz;
 }
 
-void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
-  const Real tt = pmbp->pmesh->time;
+void SetADMVariablesToBBH(MeshBlockPack *pmbp, Real time) {
+  const Real tt = time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;

@@ -79,6 +79,8 @@ KerrOrbitBeamData kerr_orbit_beam;
 struct ADMFormalTestData {
   Real flrw_h = 0.2;
   Real flrw_t0 = 0.0;
+  Real flrw_quadratic = 0.3;
+  int flrw_profile = 0;  // linear, exponential, quadratic
   Real lapse_amp = 0.1;
   Real lapse_k = 2.0*M_PI;
   Real momentum_alpha_amp = 0.05;
@@ -101,9 +103,9 @@ int LocalSym3Index(const int a, const int b) {
   return 5;
 }
 
-void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp);
-void SetADMVariablesToLapseGradient(MeshBlockPack *pmbp);
-void SetADMVariablesToMomentumMetric(MeshBlockPack *pmbp);
+void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp, Real time);
+void SetADMVariablesToLapseGradient(MeshBlockPack *pmbp, Real time);
+void SetADMVariablesToMomentumMetric(MeshBlockPack *pmbp, Real time);
 
 bool SolveLinear4(Real a[4][5], Real x[4]) {
   for (int col=0; col<4; ++col) {
@@ -733,11 +735,39 @@ void FillCrossingBeams(Mesh *pm, const bool boundaries_only) {
   });
 }
 
-void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp) {
-  const Real t = pmbp->pmesh->time;
+// Independent expansion histories distinguish temporal order from cancellation
+// specific to a linear scale factor. The same background serves both solvers.
+void ConfigureFLRW(ParameterInput *pin) {
+  adm_formal_test.flrw_h = pin->GetOrAddReal("problem", "hubble", 0.2);
+  adm_formal_test.flrw_t0 = pin->GetOrAddReal("problem", "t0", 0.0);
+  adm_formal_test.flrw_quadratic = pin->GetOrAddReal("problem", "quadratic", 0.3);
+  const std::string profile = pin->GetOrAddString("problem", "scale_factor", "linear");
+  if (profile == "linear") adm_formal_test.flrw_profile = 0;
+  else if (profile == "exponential") adm_formal_test.flrw_profile = 1;
+  else if (profile == "quadratic") adm_formal_test.flrw_profile = 2;
+  else throw std::runtime_error("Unknown FLRW scale_factor: " + profile);
+}
+
+void FLRWScaleFactor(Real time, Real &a, Real &adot) {
+  const Real tau = time - adm_formal_test.flrw_t0;
   const Real h = adm_formal_test.flrw_h;
-  const Real t0 = adm_formal_test.flrw_t0;
-  const Real a = 1.0 + h*(t - t0);
+  a = 1.0 + h*tau;
+  adot = h;
+  if (adm_formal_test.flrw_profile == 1) {
+    a = std::exp(h*tau);
+    adot = h*a;
+  } else if (adm_formal_test.flrw_profile == 2) {
+    a += adm_formal_test.flrw_quadratic*tau*tau;
+    adot += 2.0*adm_formal_test.flrw_quadratic*tau;
+  }
+  if (!(a > 0.0) || !std::isfinite(a) || !std::isfinite(adot)) {
+    throw std::runtime_error("FLRW scale factor must be positive and finite");
+  }
+}
+
+void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp, Real time) {
+  Real a, adot;
+  FLRWScaleFactor(time, a, adot);
   const Real a2 = SQR(a);
   auto &adm = pmbp->padm->adm;
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -756,12 +786,12 @@ void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp) {
     adm.g_dd(m,1,2,k,j,i) = 0.0;
     adm.g_dd(m,2,2,k,j,i) = a2;
 
-    adm.vK_dd(m,0,0,k,j,i) = -a*h;
+    adm.vK_dd(m,0,0,k,j,i) = -a*adot;
     adm.vK_dd(m,0,1,k,j,i) = 0.0;
     adm.vK_dd(m,0,2,k,j,i) = 0.0;
-    adm.vK_dd(m,1,1,k,j,i) = -a*h;
+    adm.vK_dd(m,1,1,k,j,i) = -a*adot;
     adm.vK_dd(m,1,2,k,j,i) = 0.0;
-    adm.vK_dd(m,2,2,k,j,i) = -a*h;
+    adm.vK_dd(m,2,2,k,j,i) = -a*adot;
 
     adm.psi4(m,k,j,i) = a2;
     adm.alpha(m,k,j,i) = 1.0;
@@ -771,7 +801,7 @@ void SetADMVariablesToFLRWRedshift(MeshBlockPack *pmbp) {
   });
 }
 
-void SetADMVariablesToLapseGradient(MeshBlockPack *pmbp) {
+void SetADMVariablesToLapseGradient(MeshBlockPack *pmbp, Real time) {
   const Real amp = adm_formal_test.lapse_amp;
   const Real kwave = adm_formal_test.lapse_k;
   auto &adm = pmbp->padm->adm;
@@ -810,7 +840,7 @@ void SetADMVariablesToLapseGradient(MeshBlockPack *pmbp) {
   });
 }
 
-void SetADMVariablesToMomentumMetric(MeshBlockPack *pmbp) {
+void SetADMVariablesToMomentumMetric(MeshBlockPack *pmbp, Real time) {
   const Real alpha_amp = adm_formal_test.momentum_alpha_amp;
   const Real beta_amp = adm_formal_test.momentum_beta_amp;
   const Real metric_amp = adm_formal_test.momentum_metric_amp;
@@ -1228,9 +1258,9 @@ void ProblemGenerator::RadiationFLRWRedshift(ParameterInput *pin, const bool res
       pmbp->padm == nullptr) {
     throw std::runtime_error("rad_flrw_redshift requires ADM dyn_radiation");
   }
-  adm_formal_test.flrw_h = pin->GetOrAddReal("problem", "hubble", 0.2);
-  adm_formal_test.flrw_t0 = pin->GetOrAddReal("problem", "t0", 0.0);
-  pmbp->padm->SetADMVariables = &SetADMVariablesToFLRWRedshift;
+  ConfigureFLRW(pin);
+  pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToFLRWRedshift;
+  pmbp->padm->time_dependent = true;
   pmbp->padm->SetADMVariables(pmbp);
   pmbp->pdynrad->PrepareADMGeometry();
   pgen_final_func = DynRadFLRWRedshiftCheck;
@@ -1263,9 +1293,9 @@ void ProblemGenerator::RadiationM1FLRWRedshift(ParameterInput *pin, const bool r
   if (pmbp->pradm1 == nullptr || pmbp->padm == nullptr) {
     throw std::runtime_error("rad_m1_flrw_redshift requires ADM radiation_m1");
   }
-  adm_formal_test.flrw_h = pin->GetOrAddReal("problem", "hubble", 0.2);
-  adm_formal_test.flrw_t0 = pin->GetOrAddReal("problem", "t0", 0.0);
-  pmbp->padm->SetADMVariables = &SetADMVariablesToFLRWRedshift;
+  ConfigureFLRW(pin);
+  pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToFLRWRedshift;
+  pmbp->padm->time_dependent = true;
   pmbp->padm->SetADMVariables(pmbp);
   pmbp->pradm1->refresh_adm = true;
   pgen_final_func = RadM1FLRWRedshiftCheck;
@@ -1311,7 +1341,7 @@ void ProblemGenerator::RadiationLapseGradient(ParameterInput *pin, const bool re
   }
   adm_formal_test.lapse_amp = pin->GetOrAddReal("problem", "lapse_amp", 0.1);
   adm_formal_test.lapse_k = pin->GetOrAddReal("problem", "lapse_k", 2.0*M_PI);
-  pmbp->padm->SetADMVariables = &SetADMVariablesToLapseGradient;
+  pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToLapseGradient;
   pmbp->padm->SetADMVariables(pmbp);
   if (!m1) pmbp->pdynrad->PrepareADMGeometry();
   else pmbp->pradm1->refresh_adm = true;
@@ -1379,7 +1409,7 @@ void ProblemGenerator::RadiationMomentumSource(ParameterInput *pin, const bool r
   adm_formal_test.momentum_metric_amp =
       pin->GetOrAddReal("problem", "metric_amp", 0.03);
   adm_formal_test.momentum_k = pin->GetOrAddReal("problem", "metric_k", 2.0*M_PI);
-  pmbp->padm->SetADMVariables = &SetADMVariablesToMomentumMetric;
+  pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToMomentumMetric;
   pmbp->padm->SetADMVariables(pmbp);
   pmbp->pdynrad->PrepareADMGeometry();
   pgen_final_func = DynRadMomentumSourceCheck;
@@ -1500,7 +1530,8 @@ void DynRadFLRWRedshiftCheck(ParameterInput *pin, Mesh *pm) {
     pmbp->padm->SetADMVariables(pmbp);
     pmbp->pdynrad->PrepareADMGeometry();
   }
-  const Real a = 1.0 + h*(pm->time - t0);
+  Real a, adot;
+  FLRWScaleFactor(pm->time, a, adot);
   const Real exact_e = erad/std::pow(a, 4);
   const Real exact_u = erad/a;
 
@@ -1577,7 +1608,8 @@ void RadM1FLRWRedshiftCheck(ParameterInput *pin, Mesh *pm) {
   if (pmbp->padm != nullptr) {
     pmbp->padm->SetADMVariables(pmbp);
   }
-  const Real a = 1.0 + h*(pm->time - t0);
+  Real a, adot;
+  FLRWScaleFactor(pm->time, a, adot);
   const Real exact_e = erad/std::pow(a, 4);
   const Real exact_u = erad/a;
 

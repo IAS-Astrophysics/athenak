@@ -29,7 +29,7 @@
 namespace {
 
 int shk_dir;
-void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp);
+void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp, Real time);
 
 }
 
@@ -310,7 +310,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     // Assume Minkowski space for now
     bool schwarzschild = pin->GetOrAddBoolean("problem", "schwarzschild", false);
     if (schwarzschild) {
-      pmbp->padm->SetADMVariables = &SetADMVariablesToSchwarzschild;
+      pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToSchwarzschild;
     }
     pmbp->padm->SetADMVariables(pmbp);
 
@@ -326,7 +326,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
 namespace {
 
-void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp) {
+void SetADMVariablesToSchwarzschild(MeshBlockPack *pmbp, Real time) {
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;

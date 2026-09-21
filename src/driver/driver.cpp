@@ -13,6 +13,7 @@
 #include <string> // string
 
 #include "athena.hpp"
+#include "coordinates/adm.hpp"
 #include "driver.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "globals.hpp"
@@ -281,6 +282,14 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
          << "Valid choices are [rk1,rk2,rk3,rk4,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
+    // Apply the explicit low-storage recurrence to dt/dt=1. The auxiliary
+    // register is the initial state except for the four-stage 2S integrator.
+    Real c = 0.0, auxiliary_c = 0.0;
+    for (int s = 0; s < nexp_stages; ++s) {
+      stage_abscissa[s] = c;
+      if (integrator == "rk4") auxiliary_c += delta[s]*c;
+      c = gam0[s]*c + gam1[s]*auxiliary_c + beta[s];
+    }
   }
 }
 
@@ -454,6 +463,16 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
+      // Diagnostics/restarts must see geometry at the completed timestep, not
+      // the midpoint (M1) or another intermediate RK stage.
+      auto *pack = pmesh->pmb_pack;
+      if (pack->padm != nullptr && pack->pz4c == nullptr &&
+          pack->padm->time_dependent) {
+        pack->padm->SetADMVariables(pack);
+        if (pack->pdynrad != nullptr && pack->pdynrad->use_adm_geometry) {
+          pack->pdynrad->SetOrthonormalTetrad();
+        }
+      }
       pmesh->ncycle++;
       pmesh->dt_last_completed = pmesh->dt;
       nmb_updated_ += pmesh->nmb_total;

@@ -510,7 +510,9 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
 //! \brief
 
 TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
-  pmy_pack->padm->SetADMVariables(pmy_pack);
+  const Real t = pmy_pack->pmesh->time +
+      (stage > 0 ? pdrive->stage_abscissa[stage-1]*pmy_pack->pmesh->dt : 0.0);
+  pmy_pack->padm->SetADMVariablesAtTime(pmy_pack, t);
   return TaskStatus::complete;
 }
 

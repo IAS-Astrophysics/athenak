@@ -28,7 +28,7 @@ char const * const ADM::ADM_names[ADM::nadm] = {
 // constructor: initializes data structures and parameters
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
     u_adm("u_adm",1,1,1,1,1),
-    SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
+    SetADMVariablesAtTime(&ADM::SetADMVariablesToKerrSchild),
     pmy_pack(ppack) {
   is_dynamic = pin->GetOrAddBoolean("adm" , "dynamic", false);
 
@@ -59,7 +59,11 @@ ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
 ADM::~ADM() {}
 
 //----------------------------------------------------------------------------------------
-void ADM::SetADMVariablesToKerrSchild(MeshBlockPack *pmbp) {
+void ADM::SetADMVariables(MeshBlockPack *pmbp) {
+  SetADMVariablesAtTime(pmbp, pmbp->pmesh->time);
+}
+
+void ADM::SetADMVariablesToKerrSchild(MeshBlockPack *pmbp, Real time) {
   Real a = pmbp->pcoord->coord_data.bh_spin;
   bool minkowski = pmbp->pcoord->coord_data.is_minkowski;
   auto &adm = pmbp->padm->adm;

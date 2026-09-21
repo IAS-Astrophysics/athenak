@@ -13,6 +13,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "driver/driver.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
@@ -340,10 +341,16 @@ void DynRadiation::PrepareADMGeometry() {
 
 TaskStatus DynRadiation::PrepareGeometryTask(Driver *pdriver, int stage) {
   if (use_adm_geometry) {
-    if (pmy_pack->pz4c == nullptr && stage > 1) {
-      return TaskStatus::complete;
+    if (pmy_pack->pz4c == nullptr) {
+      auto *padm = pmy_pack->padm;
+      if (stage > 1 && !padm->time_dependent) return TaskStatus::complete;
+      const Real t = pmy_pack->pmesh->time +
+          pdriver->stage_abscissa[stage-1]*pmy_pack->pmesh->dt;
+      padm->SetADMVariablesAtTime(pmy_pack, t);
     }
-    PrepareADMGeometry();
+    // Z4c geometry already belongs to this stage. Do not overwrite it with an
+    // analytic callback; only rebuild the radiation geometry caches.
+    SetOrthonormalTetrad();
   }
   return TaskStatus::complete;
 }

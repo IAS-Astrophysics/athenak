@@ -260,6 +260,18 @@ TaskStatus DynRadiation::CopyCons(Driver *pdrive, int stage) {
         Kokkos::deep_copy(DevExeSpace(), phyd->u1, phyd->u0);
       }
     }
+  } else if (pdrive->integrator == "rk4") {
+    const Real weight = pdrive->delta[stage-1];
+    auto &base = i1;
+    auto &current = i0;
+    const auto &indcs = pmy_pack->pmesh->mb_indcs;
+    const int nmb = pmy_pack->nmb_thispack;
+    const int nangles = prgeo->nangles;
+    par_for("dynrad_rk4_register", DevExeSpace(), 0, nmb-1, 0, nangles-1,
+            indcs.ks, indcs.ke, indcs.js, indcs.je, indcs.is, indcs.ie,
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      base(m,n,k,j,i) += weight*current(m,n,k,j,i);
+    });
   }
   return TaskStatus::complete;
 }

@@ -13,6 +13,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "driver/driver.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "bvals/bvals.hpp"
 #include "coordinates/adm.hpp"
@@ -227,8 +228,16 @@ TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
 //----------------------------------------------------------------------------------------
 //! \fn  void RadiationM1::RefreshADM
 TaskStatus RadiationM1::RefreshADM(Driver *pdrive, int stage) {
-  if (refresh_adm && stage == 1) {
-    pmy_pack->padm->SetADMVariables(pmy_pack);
+  auto *padm = pmy_pack->padm;
+  if (refresh_adm && pmy_pack->pz4c == nullptr &&
+      (stage == 1 || padm->time_dependent)) {
+    const bool photon_rk = params.opacity_type == Photons &&
+                           params.photon_coupled_sources;
+    // Coupled photons follow the fluid SSPRK stages; vacuum M1 uses midpoint.
+    const Real c = photon_rk ? pdrive->stage_abscissa[stage-1] :
+                              (stage == 1 ? 0.0 : 0.5);
+    padm->SetADMVariablesAtTime(pmy_pack,
+                               pmy_pack->pmesh->time + c*pmy_pack->pmesh->dt);
   }
   return TaskStatus::complete;
 }

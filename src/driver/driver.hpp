@@ -42,6 +42,7 @@ class Driver {
   int nexp_stages;                 // number of explicit stages (both SSP-RK and ImEx)
   int nopsplit_stages{2};
   Real gam0[4], gam1[4], beta[4];  // weights and fractional timestep per explicit stage
+  Real stage_abscissa[4]{};        // time of explicit RHS evaluation
   Real delta[4];                   // weights for updating the intermediate stage (u1)
   Real a_twid[4][4], a_impl;       // matrix elements for implicit stages in ImEx
   Real cfl_limit;                  // maximum CFL number for integrator

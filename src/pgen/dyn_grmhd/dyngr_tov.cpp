@@ -61,7 +61,7 @@ struct TOVParams {
 TOVParams *ptov_params;
 } // namespace
 
-void SetADMVariablesToTOV(MeshBlockPack *pmbp);
+void SetADMVariablesToTOV(MeshBlockPack *pmbp, Real time);
 void FinalizeTOV(ParameterInput *pin, Mesh *pm);
 
 template<class TOVEOS>
@@ -414,7 +414,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   user_hist_func = &TOVHistory;
   pgen_final_func = &FinalizeTOV;
-  pmbp->padm->SetADMVariables = &SetADMVariablesToTOV;
+  pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToTOV;
 
   // initialize primitive variables for restart
   if (restart) {
@@ -502,7 +502,7 @@ static Real A2(const tov::TOVStar& tov_, const TOVEOS& eos, bool isotropic, Real
 }
 
 // Metric update function
-void SetADMVariablesToTOV(MeshBlockPack *pmbp) {
+void SetADMVariablesToTOV(MeshBlockPack *pmbp, Real time) {
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;

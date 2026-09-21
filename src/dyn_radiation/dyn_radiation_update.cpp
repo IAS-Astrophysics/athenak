@@ -103,7 +103,10 @@ TaskStatus DynRadiation::RKUpdate(Driver *pdriver, int stage) {
           }
         }
         Real geom = adm_alpha_c_(m,k,j,i)*kss - sdalpha;
-        i_new += i_stage*(exp(beta_dt*geom) - 1.0);
+        // The source belongs to the same explicit RHS as transport. An
+        // exponential increment inside SSPRK changes its quadratic coefficient
+        // and reduces even a constant-coefficient source to first order.
+        i_new += beta_dt*geom*i_stage;
       }
 
       i0_(m,n,k,j,i) = i_new;

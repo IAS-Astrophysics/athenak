@@ -57,9 +57,13 @@ class ADM {
   DvceArray5D<Real> u_adm;                                // adm variables
   bool is_dynamic;                                        // is the metric time dependent?
 
-  void (*SetADMVariables)(MeshBlockPack *pm);
+  // Analytic backgrounds receive their evaluation time explicitly. Evolved Z4c
+  // fields are supplied by the NR task graph, not by this callback.
+  bool time_dependent = false;
+  void (*SetADMVariablesAtTime)(MeshBlockPack *pm, Real time);
+  void SetADMVariables(MeshBlockPack *pm);
 
-  static void SetADMVariablesToKerrSchild(MeshBlockPack *pm);
+  static void SetADMVariablesToKerrSchild(MeshBlockPack *pm, Real time);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Z4c
