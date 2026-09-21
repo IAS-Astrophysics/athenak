@@ -185,6 +185,30 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     m1_nv = pmbp->pradm1->nvars;
   }
 
+  // An optional shared angular grid makes M1's initial E,F exactly the
+  // discrete moments of the Boltzmann initial intensity, including quadrature
+  // error. Only initialization uses angles; M1 evolution remains two-moment.
+  const int initial_level =
+      pin->GetOrAddInteger("problem", "radiation_initial_nlevel", -1);
+  const bool initial_rotate =
+      pin->GetOrAddBoolean("problem", "radiation_initial_rotate", false);
+  std::unique_ptr<GeodesicGrid> initial_grid;
+  DualArray2D<Real> initial_directions;
+  DualArray1D<Real> initial_weights;
+  int initial_angles = 0;
+  if (initial_level >= 0 && is_m1) {
+    initial_grid = std::make_unique<GeodesicGrid>(initial_level, initial_rotate, false);
+    initial_directions = initial_grid->cart_pos;
+    initial_weights = initial_grid->solid_angles;
+    initial_angles = initial_grid->nangles;
+  }
+  if (initial_level >= 0 && pmbp->pdynrad != nullptr &&
+      (initial_level != pin->GetInteger("dyn_radiation", "nlevel") ||
+       initial_rotate != pin->GetBoolean("dyn_radiation", "rotate_geo") ||
+       !pmbp->pdynrad->use_adm_geometry)) {
+    throw std::runtime_error("Torus initial radiation grid must match ADM Boltzmann");
+  }
+
   // Spherical Grid for user-defined history
   auto &grids = spherical_grids;
   const Real rflux =
@@ -565,6 +589,41 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       for (int d=0; d<3; ++d) {
         m1_u(m,radiationm1::CombinedIdx(0,M1_FX_IDX+d,m1_nv),k,j,i) =
             volume*urad*4.0*w*ucov[d]/3.0;
+      }
+    }
+
+    if (is_m1 && initial_angles > 0) {
+      // Same Cholesky co-triad as dyn_radiation's Eulerian angular frame.
+      const Real l00 = sqrt(fmax(glower[1][1],1.0e-30));
+      const Real l10 = glower[1][2]/l00;
+      const Real l20 = glower[1][3]/l00;
+      const Real l11 = sqrt(fmax(glower[2][2]-l10*l10,1.0e-30));
+      const Real l21 = (glower[2][3]-l20*l10)/l11;
+      const Real l22 = sqrt(fmax(glower[3][3]-l20*l20-l21*l21,1.0e-30));
+      const Real co[3][3] = {{l00,l10,l20},{0.0,l11,l21},{0.0,0.0,l22}};
+      const Real v[3] = {uu1,uu2,uu3};
+      Real uhat[3] = {};
+      for (int a=0; a<3; ++a) {
+        for (int d=0; d<3; ++d) uhat[a] += co[a][d]*v[d];
+      }
+      const Real w = sqrt(1.0 + SQR(uhat[0])+SQR(uhat[1])+SQR(uhat[2]));
+      const Real volume = l00*l11*l22;
+      Real moments[4] = {};
+      for (int n=0; n<initial_angles; ++n) {
+        Real doppler = w;
+        Real direction[3] = {};
+        for (int a=0; a<3; ++a) {
+          const Real ell = initial_directions.d_view(n,a);
+          doppler -= uhat[a]*ell;
+          for (int d=0; d<3; ++d) direction[d] += co[a][d]*ell;
+        }
+        const Real intensity = volume*urad*initial_weights.d_view(n)/
+                               (4.0*M_PI*SQR(SQR(doppler)));
+        moments[0] += intensity;
+        for (int d=0; d<3; ++d) moments[d+1] += intensity*direction[d];
+      }
+      for (int d=0; d<4; ++d) {
+        m1_u(m,radiationm1::CombinedIdx(0,d,m1_nv),k,j,i) = moments[d];
       }
     }
 
