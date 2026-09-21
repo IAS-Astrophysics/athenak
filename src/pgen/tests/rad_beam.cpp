@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <iostream>   // endl
 #include <limits>
+#include <memory>
 #include <sstream>    // stringstream
 #include <stdexcept>  // runtime_error
 #include <string>     // c_str()
@@ -63,6 +64,7 @@ struct CrossingBeamData {
 CrossingBeamData crossing_beams;
 
 struct KerrOrbitBeamData {
+  Real source_moments[4] = {};
   bool enabled = false;
   Real amp = 1.0;
   Real sigma = 0.18;
@@ -1100,6 +1102,7 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
 
   int nangles = -1;
   DualArray2D<Real> nh_c;
+  std::unique_ptr<GeodesicGrid> initial_grid;
   if (pmbp->prad != nullptr) {
     nangles = pmbp->prad->prgeo->nangles;
     nh_c = pmbp->prad->nh_c;
@@ -1112,9 +1115,21 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
     if (!(restart)) {
       Kokkos::deep_copy(pmbp->pdynrad->i0, 0.0);
     }
+  } else if (pmbp->pradm1 != nullptr) {
+    const int level = pin->GetOrAddInteger("problem", "radiation_initial_nlevel", 4);
+    const bool rotate = pin->GetOrAddBoolean("problem", "radiation_initial_rotate", true);
+    initial_grid = std::make_unique<GeodesicGrid>(level, rotate, false);
+    nangles = initial_grid->nangles;
+    Kokkos::realloc(nh_c, nangles, 4);
+    for (int n=0; n<nangles; ++n) {
+      nh_c.h_view(n,0) = 1.0;
+      for (int d=0; d<3; ++d) nh_c.h_view(n,d+1) = initial_grid->cart_pos.h_view(n,d);
+    }
+    pmbp->padm->SetADMVariables(pmbp);
+    if (!restart) Kokkos::deep_copy(pmbp->pradm1->u0, 0.0);
   } else {
     throw std::runtime_error(
-        "rad_kerr_orbit_beam requires <radiation> or <dyn_radiation>");
+        "rad_kerr_orbit_beam requires a radiation solver");
   }
 
   const auto &coord = pmbp->pcoord->coord_data;
@@ -1137,8 +1152,8 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
   const Real tangent_x = -sin(source_phi);
   const Real tangent_y =  cos(source_phi);
   Real ell[3];
-  const bool use_adm_geometry = (pmbp->pdynrad != nullptr &&
-                                 pmbp->pdynrad->use_adm_geometry);
+  const bool use_adm_geometry = pmbp->pradm1 != nullptr ||
+      (pmbp->pdynrad != nullptr && pmbp->pdynrad->use_adm_geometry);
   if (use_adm_geometry) {
     CoordinateDirectionToADMTetrad(kerr_orbit_beam.source_x, kerr_orbit_beam.source_y,
                                    kerr_orbit_beam.source_z, flat, spin,
@@ -1157,6 +1172,12 @@ void ProblemGenerator::RadiationKerrOrbitBeam(ParameterInput *pin, const bool re
   SetProjectedAngularWeights(nh_c, h_weights, 0, nangles, ell[0], ell[1], ell[2],
                              "rad_kerr_orbit_beam");
   Kokkos::deep_copy(*(kerr_orbit_beam.angular_weights), h_weights);
+  for (int d=0; d<4; ++d) {
+    kerr_orbit_beam.source_moments[d] = 0.0;
+    for (int n=0; n<nangles; ++n) {
+      kerr_orbit_beam.source_moments[d] += h_weights(0,n)*nh_c.h_view(n,d);
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -1247,17 +1268,35 @@ void ProblemGenerator::RadiationM1FLRWRedshift(ParameterInput *pin, const bool r
 
 void ProblemGenerator::RadiationLapseGradient(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
-  if (pmbp->pdynrad == nullptr || !(pmbp->pdynrad->use_adm_geometry) ||
+  const bool m1 = pmbp->pradm1 != nullptr;
+  if ((!m1 && (pmbp->pdynrad == nullptr || !pmbp->pdynrad->use_adm_geometry)) ||
       pmbp->padm == nullptr) {
-    throw std::runtime_error("rad_lapse_gradient requires ADM dyn_radiation");
+    throw std::runtime_error(
+        "rad_lapse_gradient requires ADM dyn_radiation or radiation_m1");
   }
   adm_formal_test.lapse_amp = pin->GetOrAddReal("problem", "lapse_amp", 0.1);
   adm_formal_test.lapse_k = pin->GetOrAddReal("problem", "lapse_k", 2.0*M_PI);
   pmbp->padm->SetADMVariables = &SetADMVariablesToLapseGradient;
   pmbp->padm->SetADMVariables(pmbp);
-  pmbp->pdynrad->PrepareADMGeometry();
+  if (!m1) pmbp->pdynrad->PrepareADMGeometry();
+  else pmbp->pradm1->refresh_adm = true;
   pgen_final_func = DynRadLapseGradientCheck;
   if (restart) {
+    return;
+  }
+
+  if (m1) {
+    auto u = pmbp->pradm1->u0;
+    const int nv = pmbp->pradm1->nvars;
+    const Real energy = pin->GetOrAddReal("problem", "erad", 1.0);
+    const Real flux = pin->GetOrAddReal("problem", "flux_fraction", 0.7);
+    Kokkos::deep_copy(u, 0.0);
+    par_for("m1_lapse_init",DevExeSpace(),0,u.extent_int(0)-1,
+        0,u.extent_int(2)-1,0,u.extent_int(3)-1,0,u.extent_int(4)-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      u(m,radiationm1::CombinedIdx(0,M1_E_IDX,nv),k,j,i) = energy;
+      u(m,radiationm1::CombinedIdx(0,M1_FX_IDX,nv),k,j,i) = energy*flux;
+    });
     return;
   }
 
@@ -1587,10 +1626,16 @@ void DynRadLapseGradientCheck(ParameterInput *pin, Mesh *pm) {
   const int nji = nx2*nx1;
 
   auto &size = pmbp->pmb->mb_size;
-  auto &i0 = pmbp->pdynrad->i0;
-  auto &sqrt_detg = pmbp->pdynrad->sqrt_detg_c;
-  auto &solid_angles = pmbp->pdynrad->prgeo->solid_angles;
-  const int nang1 = pmbp->pdynrad->prgeo->nangles - 1;
+  const bool m1 = pmbp->pradm1 != nullptr;
+  DvceArray5D<Real> i0 = m1 ? pmbp->pradm1->u0 : pmbp->pdynrad->i0;
+  DvceArray4D<Real> sqrt_detg;
+  DualArray1D<Real> solid_angles;
+  int nang1 = -1;
+  if (!m1) {
+    sqrt_detg = pmbp->pdynrad->sqrt_detg_c;
+    solid_angles = pmbp->pdynrad->prgeo->solid_angles;
+    nang1 = pmbp->pdynrad->prgeo->nangles - 1;
+  }
   Real err2 = 0.0;
   Real sig2 = 0.0;
   Real data2 = 0.0;
@@ -1608,7 +1653,7 @@ void DynRadLapseGradientCheck(ParameterInput *pin, Mesh *pm) {
     const Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
     const Real dalpha_dx = amp*kwave*cos(kwave*x);
     const Real expected = erad - 2.0*erad*flux_fraction*dalpha_dx*time;
-    Real e = 0.0;
+    Real e = m1 ? i0(m,0,k,j,i) : 0.0;
     for (int n=0; n<=nang1; ++n) {
       e += (i0(m,n,k,j,i)/sqrt_detg(m,k,j,i))*solid_angles.d_view(n);
     }
@@ -1766,6 +1811,43 @@ void KerrOrbitBeamSource(Mesh *pm, const Real bdt) {
   const int ke = indcs.ke;
   const int nmb1 = pmbp->nmb_thispack - 1;
 
+  if (pmbp->pradm1 != nullptr) {
+    auto u = pmbp->pradm1->u0;
+    auto adm = pmbp->padm->adm;
+    auto size = pmbp->pmb->mb_size;
+    auto mask = pmbp->pcoord->excision_floor;
+    const bool excise = pmbp->pcoord->coord_data.bh_excise;
+    const auto beam = kerr_orbit_beam;
+    const int nv = pmbp->pradm1->nvars;
+    par_for("m1_kerr_beam_source",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      if (excise && mask(m,k,j,i)) return;
+      const Real x =
+          CellCenterX(i-is,indcs.nx1,size.d_view(m).x1min,size.d_view(m).x1max);
+      const Real y =
+          CellCenterX(j-js,indcs.nx2,size.d_view(m).x2min,size.d_view(m).x2max);
+      const Real z =
+          CellCenterX(k-ks,indcs.nx3,size.d_view(m).x3min,size.d_view(m).x3max);
+      const Real l00 = sqrt(fmax(adm.g_dd(m,0,0,k,j,i),1.e-30));
+      const Real l10 = adm.g_dd(m,0,1,k,j,i)/l00;
+      const Real l20 = adm.g_dd(m,0,2,k,j,i)/l00;
+      const Real l11 = sqrt(fmax(adm.g_dd(m,1,1,k,j,i)-SQR(l10),1.e-30));
+      const Real l21 = (adm.g_dd(m,1,2,k,j,i)-l20*l10)/l11;
+      const Real l22 = sqrt(fmax(adm.g_dd(m,2,2,k,j,i)-SQR(l20)-SQR(l21),1.e-30));
+      const Real co[3][3] = {{l00,l10,l20},{0.,l11,l21},{0.,0.,l22}};
+      const Real distance =
+          SQR(x-beam.source_x)+SQR(y-beam.source_y)+SQR(z-beam.source_z);
+      const Real delta = l00*l11*l22*beam.amp*bdt*exp(-0.5*distance/SQR(beam.sigma));
+      u(m,radiationm1::CombinedIdx(0,M1_E_IDX,nv),k,j,i) += delta*beam.source_moments[0];
+      for (int d=0; d<3; ++d) {
+        Real flux = 0.0;
+        for (int a=0; a<3; ++a) flux += co[a][d]*beam.source_moments[a+1];
+        u(m,radiationm1::CombinedIdx(0,M1_FX_IDX+d,nv),k,j,i) += delta*flux;
+      }
+    });
+    return;
+  }
+
   int nang1 = -1;
   bool use_adm_geometry = false;
   DvceArray5D<Real> i0;
@@ -1856,7 +1938,8 @@ void ZeroIntensity(Mesh *pm) {
 
   // Determine if radiation is enabled
   bool is_radiation_enabled_ = (pm->pmb_pack->prad != nullptr ||
-                                pm->pmb_pack->pdynrad != nullptr);
+                                pm->pmb_pack->pdynrad != nullptr ||
+                                pm->pmb_pack->pradm1 != nullptr);
   DvceArray5D<Real> i0_; int nang1;
   if (pm->pmb_pack->prad != nullptr) {
     i0_ = pm->pmb_pack->prad->i0;
@@ -1864,6 +1947,9 @@ void ZeroIntensity(Mesh *pm) {
   } else if (pm->pmb_pack->pdynrad != nullptr) {
     i0_ = pm->pmb_pack->pdynrad->i0;
     nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
+  } else if (pm->pmb_pack->pradm1 != nullptr) {
+    i0_ = pm->pmb_pack->pradm1->u0;
+    nang1 = pm->pmb_pack->pradm1->nvarstot - 1;
   }
   int nmb = pm->pmb_pack->nmb_thispack;
 

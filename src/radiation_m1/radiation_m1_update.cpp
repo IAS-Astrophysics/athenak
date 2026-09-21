@@ -15,6 +15,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "eos/eos.hpp"
 #include "globals.hpp"
+#include "pgen/pgen.hpp"
 #include "hydro/hydro.hpp"
 #include "radiation/radiation_opacities.hpp"
 #include "units/units.hpp"
@@ -849,6 +850,11 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           }
         }
       });
+  // Vacuum radiation tests can enroll the same source callback as Boltzmann.
+  // Fluid source callbacks remain owned by the fluid task graph.
+  if (!source_only && !ismhd && !ishydro && pmy_pack->pmesh->pgen->user_srcs) {
+    pmy_pack->pmesh->pgen->user_srcs_func(pmy_pack->pmesh, beta_dt);
+  }
   is_chi_updated = false;
   return TaskStatus::complete;
 }

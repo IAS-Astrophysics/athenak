@@ -38,6 +38,21 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     return;
   }
   if (closure_type == Minerbo) {
+    // For a fluid at rest in the Eulerian frame, J=E and H_a=F_a,
+    // independently of chi. Evaluate this limit directly, including in curved
+    // coordinates. Rootfinding the squared residual near vacuum otherwise
+    // amplifies cancellation in the four-tensor transformations.
+    if (v_d(1) == 0.0 && v_d(2) == 0.0 && v_d(3) == 0.0) {
+      Real J = E;
+      auto H_d = F_d;
+      apply_floor(g_uu, J, H_d, m1_params);
+      const Real xi = Kokkos::fmin(1.0, Kokkos::sqrt(Kokkos::fmax(
+          0.0, tensor_dot(g_uu, H_d, H_d))) / J);
+      chi = closure_fun(xi, closure_type);
+      apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d, chi,
+                    P_dd, m1_params);
+      return;
+    }
     // Newton-Raphson rootfinder (opt-in via closure_solver = newton).
     // Seeded with the relativistic-aberration guess xi0 = |F - v E| / E.
     if (m1_params.closure_solver == ClosureNewton) {
