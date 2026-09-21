@@ -1,0 +1,73 @@
+# AthenaK input: Davis et al. 2012 §5.4 radiating linear waves (1D)
+# Matches Athena-C athinput.linear_wave_rad1d / Figs. 9–10.
+# opa, prat, crat are derived from Bo, tau inside the pgen (overrides below).
+
+<comment>
+problem   = SC linwave 1D Davis §5.4
+reference = Davis, Stone & Jiang 2012 Figs. 9–10
+
+<job>
+basename  = SCLinWave1D
+
+<mesh>
+nghost    = 2
+nx1       = 256
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 1
+x2min     = -0.5
+x2max     = 0.5
+
+nx3       = 1
+x3min     = -0.5
+x3max     = 0.5
+
+<meshblock>
+nx1       = 256
+
+<mesh_refinement>
+refinement       = adaptive    # the shipped linwave tests run with AMR (as the GR module's do)
+max_nmb_per_rank = 512
+num_levels       = 2
+
+<amr_criterion1>
+method    = min_max
+variable  = hydro_u_d
+value_max = 1.0000005          # refine the wave crests: amp = 1e-6
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim       = -1
+tlim       = 1.0
+ndiag      = 100
+
+<hydro>
+eos         = ideal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.6666666666666667
+
+<nr_radiation>
+nmu          = 4
+kappa_a       = 6.283185307179586   # tau = kappa_a*lambda/(2 pi) = 1
+prat          = 46.2962962962963   # Bo = 4 gamma^4/((gamma-1) crat prat) = 1
+crat          = 1.0
+affect_fluid = true
+sweep_kernel        = wavefront
+tile_size    = 0          # tiled only; the tests override both
+iter_max     = 20
+iter_tol     = 1.0e-13   # tight: the convergence ladders must not sit on the iteration floor (production default 1e-6)
+
+<problem>
+pgen_name = sc_linwave
+amp       = 1.0e-6
+vflow     = 0.0
+
+<output1>
+file_type = hst
+dt        = 0.1

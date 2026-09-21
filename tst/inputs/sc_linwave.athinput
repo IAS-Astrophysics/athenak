@@ -1,0 +1,81 @@
+# AthenaK input: LTE SC damped acoustic wave (Athena-C athinput.linear_wave_rad2d)
+
+<comment>
+problem   = SC linwave
+reference = Davis, Stone & Jiang 2012 Eq. 38
+
+<job>
+basename  = SCLinWave
+
+<mesh>
+nghost    = 2
+nx1       = 64
+x1min     = 0.0
+x1max     = 2.2360680
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 32
+x2min     = 0.0
+x2max     = 1.1180399
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 1
+x3min     = -0.5
+x3max     = 0.5
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 16
+nx2       = 8
+nx3       = 1          # the 3D test overrides mesh/nx3 and meshblock/nx3; the x3 flags stay for it
+
+<mesh_refinement>
+refinement       = adaptive    # the shipped linwave tests run with AMR (as the GR module's do)
+max_nmb_per_rank = 512
+num_levels       = 2
+
+<amr_criterion1>
+method    = min_max
+variable  = hydro_u_d
+value_max = 1.0000005          # refine the wave crests: amp = 1e-6
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim       = -1
+tlim       = 1.0
+ndiag      = 10
+
+<hydro>
+eos         = ideal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.66666666667
+
+<nr_radiation>
+nmu          = 2
+kappa_a       = 6.283185307179586   # tau = kappa_a*lambda/(2 pi) = 1 (lambda = 1 along the wave)
+prat          = 46.2962962962963   # Bo = 4 gamma^4/((gamma-1) crat prat) = 1
+crat          = 1.0
+affect_fluid = true
+sweep_kernel        = wavefront
+tile_size    = 0          # tiled only; the tests override both
+iter_max     = 20
+iter_tol     = 1.0e-13   # tight: the convergence ladders must not sit on the iteration floor (production default 1e-6)
+
+<problem>
+pgen_name = sc_linwave
+amp       = 1.0e-6
+vflow     = 0.0
+
+<output1>
+file_type = hst
+dt        = 0.1
+
+<output2>
+file_type = rst      # the restart test restarts from the t=0.5 file and must match bitwise
+dt        = 0.5

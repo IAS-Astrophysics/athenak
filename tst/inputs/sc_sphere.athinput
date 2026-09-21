@@ -1,0 +1,62 @@
+<comment>
+problem = nr_radiation SC homogeneous emitting/absorbing sphere (Davis+ 2012)
+
+# Uniform sphere (radius R, absorption sigma_a, source S=b) in vacuum, centered in the domain.
+# The faces are `inflow` with the default (zero) inflow table: nothing enters, i.e. vacuum.
+# (`outflow` would mean "the medium continues past the face", which is undetermined for
+# vacuum edge cells.)
+# No fluid: the pgen writes sigma_a and brad once and the module keeps them. One driver
+# cycle runs the production solve (exchange + sweep iterated to convergence, exact for the
+# fixed source on one block; several blocks converge to the same answer). The final check
+# compares J(r) to the analytic angular quadrature of I = b[1-exp(-sigma_a*s)] over interior
+# cells (r < r_mask*R) and writes the relative L2/L-infty errors to sc_sphere-errs.dat. The
+# pytest wrapper runs a resolution ladder (overriding the nx below) and checks the error
+# converges; tol here is only a loose NaN/blow-up crash-guard.
+
+# No <job> block: this deck writes no output files; the problem generator names its error file itself.
+
+<mesh>
+nghost = 2
+nx1    = 32
+x1min  = -1.0
+x1max  =  1.0
+ix1_bc = inflow
+ox1_bc = inflow
+nx2    = 32
+x2min  = -1.0
+x2max  =  1.0
+ix2_bc = inflow
+ox2_bc = inflow
+nx3    = 32
+x3min  = -1.0
+x3max  =  1.0
+ix3_bc = inflow
+ox3_bc = inflow
+
+<meshblock>
+nx1 = 32
+nx2 = 32
+nx3 = 32
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+nlim       = 1
+tlim       = 1.0e5
+
+<nr_radiation>
+nmu           = 3
+prat          = 1.0
+crat          = 1.0
+sweep_kernel = wavefront
+tile_size    = 0          # tiled only; the test ladder overrides both
+iter_tol      = 1.0e-12
+
+<problem>
+pgen_name = sc_sphere
+radius = 0.6
+sigma_a = 5.0
+source = 1.0
+r_mask = 0.6
+tol    = 1.0e-1

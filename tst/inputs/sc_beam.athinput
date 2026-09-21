@@ -1,0 +1,57 @@
+# AthenaK input: LTE SC pencil-beam test (Athena-C athinput.beam2d analogue)
+
+<comment>
+problem   = SC beam2d
+reference = Davis, Stone & Jiang 2012 Fig. 6 (linear interp)
+
+# No <job> block: this deck writes no output files; the problem generator names its error file itself.
+
+<mesh>
+nghost    = 2
+nx1       = 64
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = user
+ox1_bc    = user
+
+nx2       = 32
+x2min     = 0.0
+x2max     = 0.5
+ix2_bc    = user
+ox2_bc    = user
+
+nx3       = 1
+x3min     = -0.5
+x3max     = 0.5
+
+<meshblock>
+nx1       = 64
+nx2       = 32
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim       = 1
+tlim       = 1.0e5
+ndiag      = 1
+
+<nr_radiation>
+nmu          = 6
+prat         = 1.0
+crat         = 1.0
+sweep_kernel        = wavefront
+tile_size    = 0          # tiled only; the tests override both
+iter_max     = 80
+iter_tol     = 1.0e-12   # test uses tight tol; production default is 1.0e-6
+
+<problem>
+pgen_name = sc_beam
+iang      = 2
+ihor1     = 16       # beam 1: octant-0 ray iang from x = 16.5/64; the two beams cross at (0.5, 0.30)
+offbeam_margin = 16.0    # root cells from the geometric exit point beyond which J must be dark
+ihor2     = 47       # beam 2: the mirror ray (octant 1) from x = 47.5/64; both exit the top ~0.33 from the walls
+ivert1    = -1
+ivert2    = -1
+sigma_a   = 6.4e-7
+
