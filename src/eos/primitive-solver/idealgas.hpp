@@ -116,7 +116,7 @@ class IdealGas : public EOSPolicyInterface {
   /// constraint ensures that enthalpy is finite, and the upper
   /// bound keeps the sound speed causal.
   KOKKOS_INLINE_FUNCTION void SetGamma(Real g) {
-    gamma = (g <= 1.0) ? 1.00001 : ((g >= 2.0) ? 2.00001 : g);
+    gamma = (g <= 1.0) ? 1.00001 : ((g > 2.0) ? 2.0 : g);
     gammam1 = gamma - 1.0;
   }
 
