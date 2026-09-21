@@ -265,6 +265,13 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     exit(EXIT_FAILURE);
   }
 
+  if (UsesFluidStages() &&
+      (pin->GetOrAddString("time", "integrator", "rk2") != "rk2" ||
+       params.src_update != Implicit)) {
+    std::cerr << "Coupled gray photons require rk2 and implicit sources.\n";
+    std::exit(EXIT_FAILURE);
+  }
+
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -306,6 +313,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // radiation mask
   Kokkos::realloc(radiation_mask, nmb, ncells3, ncells2, ncells1);
   Kokkos::deep_copy(radiation_mask, false);
+  Kokkos::realloc(photon_source_temperature, nmb, ncells3, ncells2, ncells1);
   Kokkos::realloc(photon_opacity_scale, nmb, ncells3, ncells2, ncells1);
   Kokkos::deep_copy(photon_opacity_scale, 1.0);
 

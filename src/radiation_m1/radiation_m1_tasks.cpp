@@ -25,8 +25,72 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 #include "radiation_m1/radiation_m1_macro.hpp"
 #include "tasklist/task_list.hpp"
+#include "tasklist/numerical_relativity.hpp"
 
 namespace radiationm1 {
+// Use the same radiation slots and fluid dependencies as DynRadiation. The two
+// transport modules are alternatives, not simultaneous radiation components.
+void RadiationM1::QueuePhotonTasks() {
+  using namespace numrel;  // NOLINT(build/namespaces)
+  auto *nr = pmy_pack->pnr;
+  nr->QueueTask(&RadiationM1::InitRecv, this, Rad_Recv, "M1_Recv", Task_Start);
+  nr->QueueTask(&RadiationM1::CopyCons, this, Rad_CopyI, "M1_Copy", Task_Run);
+  nr->QueueTask(&RadiationM1::PreparePhotonStage, this, Rad_PrepareGeom,
+                "M1_Prepare", Task_Run, {Rad_CopyI});
+  nr->QueueTask(&RadiationM1::CalculateFluxes, this, Rad_Flux,
+                "M1_Flux", Task_Run, {Rad_PrepareGeom});
+  nr->QueueTask(&RadiationM1::SendFlux, this, Rad_SendFlux,
+                "M1_SendFlux", Task_Run, {Rad_Flux});
+  nr->QueueTask(&RadiationM1::RecvFlux, this, Rad_RecvFlux,
+                "M1_RecvFlux", Task_Run, {Rad_SendFlux});
+  nr->QueueTask(&RadiationM1::PhotonTransport, this, Rad_AddSrc,
+                "M1_Transport", Task_Run, {Rad_RecvFlux});
+  nr->QueueTask(&RadiationM1::PhotonCoupling, this, Rad_Couple,
+                "M1_Couple", Task_Run, {Rad_AddSrc}, {MHD_AddSrc});
+  nr->QueueTask(&RadiationM1::RestrictU, this, Rad_RestI,
+                "M1_Restrict", Task_Run, {Rad_Couple});
+  nr->QueueTask(&RadiationM1::SendU, this, Rad_SendI,
+                "M1_Send", Task_Run, {Rad_RestI});
+  nr->QueueTask(&RadiationM1::RecvU, this, Rad_RecvI,
+                "M1_RecvU", Task_Run, {Rad_SendI});
+  nr->QueueTask(&RadiationM1::ApplyPhysicalBCs, this, Rad_BCS,
+                "M1_BCS", Task_Run, {Rad_RecvI});
+  nr->QueueTask(&RadiationM1::Prolongate, this, Rad_Prolong,
+                "M1_Prolong", Task_Run, {Rad_BCS});
+  nr->QueueTask(&RadiationM1::NewTimeStep, this, Rad_Newdt,
+                "M1_Newdt", Task_Run, {Rad_Prolong}, {Z4c_Z4c2ADM});
+  nr->QueueTask(&RadiationM1::ClearSend, this, Rad_ClearS, "M1_ClearS", Task_End);
+  nr->QueueTask(&RadiationM1::ClearRecv, this, Rad_ClearR,
+                "M1_ClearR", Task_End, {Rad_ClearS});
+}
+
+TaskStatus RadiationM1::PreparePhotonStage(Driver *d, int stage) {
+  RefreshADM(d, stage);
+  SetMask(d, stage);
+  FloorAndCalcClosure(d, stage);
+  if (params.matter_sources) return CalcOpacityPhotons(d, stage);
+  return TaskStatus::complete;
+}
+
+TaskStatus RadiationM1::PhotonTransport(Driver *d, int stage) {
+  photon_update_part = 1;
+  auto status = TimeUpdate(d, stage);
+  photon_update_part = 0;
+  return status;
+}
+
+TaskStatus RadiationM1::PhotonCoupling(Driver *d, int stage) {
+  if (!params.matter_sources) return TaskStatus::complete;
+  // Like RadFluidCoupling, freeze primitives after the explicit fluid update.
+  pmy_pack->pdyngr->ConToPrim(d, stage);
+  CalcOpacityPhotons(d, stage);
+  photon_update_part = 2;
+  auto status = TimeUpdate(d, stage);
+  photon_update_part = 0;
+  if (photon_op_params.is_compton) status = CalcComptonPhotons(d, stage);
+  return status;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  void Radiation::AssembleRadiationM1Tasks
 //! \brief Adds radiatoin tasks to appropriate task lists used by time
@@ -50,6 +114,7 @@ namespace radiationm1 {
 
 void RadiationM1::AssembleRadiationM1Tasks(
     std::map<std::string, std::shared_ptr<TaskList>> tl) {
+  if (UsesFluidStages()) return;
   TaskID none(0);
 
   // assemble "before_stagen" task list
@@ -97,10 +162,8 @@ void RadiationM1::AssembleRadiationM1Tasks(
     id.M1_compton = tl["opsplit_stagen"]->AddTask(&RadiationM1::CalcComptonPhotons, this, id.M1_rkupdt, "RadiationM1::CalcComptonPhotons");
     id_compton = id.M1_compton;
   }
-  TaskID fluid_sync = tl["opsplit_stagen"]->AddTask(
-      &RadiationM1::SyncPhotonFluid, this, id_compton, "RadiationM1::SyncPhotonFluid");
   id.M1_restu = tl["opsplit_stagen"]->AddTask(
-      &RadiationM1::RestrictU, this, fluid_sync, "RadiationM1::RestrictU");
+      &RadiationM1::RestrictU, this, id_compton, "RadiationM1::RestrictU");
   id.M1_sendu = tl["opsplit_stagen"]->AddTask(&RadiationM1::SendU, this, id.M1_restu, "RadiationM1::SendU");
   id.M1_recvu = tl["opsplit_stagen"]->AddTask(&RadiationM1::RecvU, this, id.M1_sendu, "RadiationM1::RecvU");
   id.M1_prol = tl["opsplit_stagen"]->AddTask(&RadiationM1::Prolongate, this, id.M1_recvu, "RadiationM1::Prolongate");
@@ -147,15 +210,6 @@ TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
   const bool coupled = params.opacity_type == Photons && params.photon_coupled_sources;
   if (stage == 1) {
     Kokkos::deep_copy(DevExeSpace(), u1, u0);
-    if (coupled && ismhd && params.backreact) {
-      auto fluid = pmy_pack->pmhd->u0;
-      if (photon_fluid_start.extent(0) != fluid.extent(0) ||
-          photon_fluid_start.extent(1) != fluid.extent(1)) {
-        Kokkos::realloc(photon_fluid_start,fluid.extent(0),fluid.extent(1),
-                       fluid.extent(2),fluid.extent(3),fluid.extent(4));
-      }
-      Kokkos::deep_copy(photon_fluid_start,fluid);
-    }
   } else if (stage == 2 && coupled) {
     // SSPRK(2,2): the same convex combination used by dyn_radiation.
     auto start = u1;
@@ -166,43 +220,7 @@ TaskStatus RadiationM1::CopyCons(Driver *pdrive, int stage) {
     KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
       start(m,n,k,j,i) = 0.5*(start(m,n,k,j,i) + current(m,n,k,j,i));
     });
-    if (ismhd && params.backreact) {
-      auto initial = photon_fluid_start;
-      auto fluid = pmy_pack->pmhd->u0;
-      par_for("photon_fluid_rk_combine",DevExeSpace(),0,fluid.extent_int(0)-1,
-          0,fluid.extent_int(1)-1,0,fluid.extent_int(2)-1,0,fluid.extent_int(3)-1,
-          0,fluid.extent_int(4)-1,
-      KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
-        fluid(m,n,k,j,i) = 0.5*(initial(m,n,k,j,i) + fluid(m,n,k,j,i));
-      });
-    }
   }
-  if (coupled && ismhd && params.backreact) pmy_pack->pdyngr->ConToPrim(pdrive,stage);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn  void RadiationM1::SyncPhotonFluid
-//! \brief Refresh fluid ghosts between the coupled photon SSPRK stages.
-TaskStatus RadiationM1::SyncPhotonFluid(Driver *pdrive, int stage) {
-  if (stage != 1 || params.opacity_type != Photons || !params.photon_coupled_sources ||
-      !params.backreact || !ismhd) {
-    return TaskStatus::complete;
-  }
-  // The ordinary MHD stage has already cleared its communications. Source terms
-  // changed active conserved cells, so the second radiation stage must not
-  // reconstruct with the old primitive/ghost state. B is unchanged. The existing
-  // after-time-integrator task list handles synchronization after the final stage.
-  auto *pmhd = pmy_pack->pmhd;
-  (void) pmhd->RestrictU(pdrive, stage);
-  (void) pmhd->InitRecvU(pdrive, stage);
-  (void) pmhd->SendU(pdrive, stage);
-  (void) pmhd->ClearSendU(pdrive, stage);
-  (void) pmhd->ClearRecvU(pdrive, stage);
-  (void) pmhd->RecvU(pdrive, stage);
-  (void) pmhd->Prolongate(pdrive, stage);
-  (void) pmhd->ApplyPhysicalBCs(pdrive, stage);
-  (void) pmy_pack->pdyngr->ConToPrim(pdrive, stage);
   return TaskStatus::complete;
 }
 

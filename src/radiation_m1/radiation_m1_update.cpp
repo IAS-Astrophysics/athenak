@@ -129,7 +129,9 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   auto &u0_ = u0;
   auto &chi_ = chi;
-  auto &u1_ = u1;
+  const bool source_only = photon_update_part == 2;
+  const bool transport_only = photon_update_part == 1;
+  auto u1_ = source_only ? u0 : u1;
   auto flx1 = uflx.x1f;
   auto flx2 = uflx.x2f;
   auto flx3 = uflx.x3f;
@@ -184,6 +186,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
 
   const auto photon = photon_op_params;
   auto opacity_scale = photon_opacity_scale;
+  auto source_temperature = photon_source_temperature;
   Real density_scale = 1.0, temperature_scale = 1.0, length_scale = 1.0;
   Real mu = 1.0, rosseland = 1.0, planck_delta = 0.0;
   if (isunits) {
@@ -340,9 +343,9 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         calc_proj(u_d, u_u, proj_ud);
 
         // [E] Compute contribution from flux and geometric sources
-        Real rEFN[M1_TOTAL_NUM_SPECIES][5];
+        Real rEFN[M1_TOTAL_NUM_SPECIES][5]{};
         Real DDxp[M1_TOTAL_NUM_SPECIES];
-        for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
+        for (int nuidx = 0; nuidx < nspecies_ && !source_only; nuidx++) {
           // [E.1: Contribution from fluxes]
           for (int var = 0; var < nvars_; ++var) {
             rEFN[nuidx][var] =
@@ -413,7 +416,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
         // [F] Compute contribution from matter sources
         Real DrEFN[M1_TOTAL_NUM_SPECIES][5]{};
         Real theta{};
-        if (params_.matter_sources) {
+        if (params_.matter_sources && !transport_only) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
             if (params_.src_update == Explicit) {
               // radiation fields
@@ -506,6 +509,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               // Estimate interaction with matter
               const Real dtau = beta_dt * (adm.alpha(m, k, j, i) / w_lorentz);
               Real eta = eta_1_(m, nuidx, k, j, i);
+              Real partial_temperature = 0.0;
               if (coupled_photons) {
                 const Real wdn = w0_(m, IDN, k, j, i);
                 const Real tgas = w0_(m, IPR, k, j, i) / wdn;
@@ -537,6 +541,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                 }
                 if (valid && Kokkos::isfinite(tgasnew) && tgasnew >= 0.0) {
                   eta = kap*arad*SQR(SQR(tgasnew));
+                  partial_temperature = tgasnew;
                 }
               }
               Real Jnew = (Jstar + dtau * eta * volform) /
@@ -588,6 +593,99 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                   chi_(m, nuidx, k, j, i), Enew, Fnew_d, params_,
                   params_.closure_type);
               apply_floor(g_uu, Enew, Fnew_d, params_);
+
+              // The rest-frame scalar shortcut above is exact at W=1. For
+              // moving matter, use the updated J from the lab-frame implicit
+              // moment equations in the SAME frozen-velocity thermal balance
+              // used by Boltzmann: T-T0 + dt*alpha/W*kP*(gamma-1)/rho
+              //                           * (a*T^4-J_new) = 0.
+              if (coupled_photons && w_lorentz - 1.0 > 1.0e-12) {
+                const Real rho = w0_(m,IDN,k,j,i);
+                const Real t0 = w0_(m,IPR,k,j,i)/rho;
+                Real previous = partial_temperature;
+                for (int outer = 0; outer < photon.source_max_iter; ++outer) {
+                  if (photon.is_power_opacity) {
+                    Real sa, ss, sp;
+                    OpacityFunction(rho,density_scale,fmax(previous,1.0e-300),
+                        temperature_scale,length_scale,gm1,mu,true,rosseland,planck_delta,
+                        photon.kappa_a,photon.kappa_s,photon.kappa_p,sa,ss,sp);
+                    abs_1_(m,nuidx,k,j,i) = (sa+sp)*opacity_scale(m,k,j,i);
+                    scat_1_(m,nuidx,k,j,i) = (ss-sp)*opacity_scale(m,k,j,i);
+                  }
+                  const Real kap = abs_1_(m,nuidx,k,j,i);
+                  const Real thermal_dt = dtau*kap*gm1/rho;
+                  auto residual = [&](Real temperature) {
+                    eta = kap*arad*SQR(SQR(temperature));
+                    auto signal = source_update(
+                        BrentFunc_, HybridsjFunc_, beta_dt, adm.alpha(m,k,j,i),
+                        g_dd,g_uu,n_d,n_u,gamma_ud,u_d,u_u,v_d,v_u,proj_ud,
+                        w_lorentz,Estar,Fstar_d,Estar,Fstar_d,volform*eta,
+                        kap,scat_1_(m,nuidx,k,j,i),chi_(m,nuidx,k,j,i),
+                        Enew,Fnew_d,params_,params_.closure_type);
+                    if (signal == SrcFail) Kokkos::abort("Photon moment solve failed");
+                    apply_closure(g_dd,g_uu,n_d,w_lorentz,u_u,v_d,proj_ud,
+                        Enew,Fnew_d,chi_(m,nuidx,k,j,i),P_dd,params_);
+                    assemble_rT(n_d,Enew,Fnew_d,P_dd,rT_dd);
+                    const Real jnew = calc_J_from_rT(rT_dd,u_u)/volform;
+                    return temperature-t0 + thermal_dt*(arad*SQR(SQR(temperature))-jnew);
+                  };
+                  Real lo = 0.0;
+                  Real hi = fmax(fmax(t0,previous),1.0e-100);
+                  Real fhi = residual(hi);
+                  for (int expand=0; fhi < 0.0 && expand < 64; ++expand) {
+                    hi *= 2.0;
+                    fhi = residual(hi);
+                  }
+                  if (!Kokkos::isfinite(fhi) || fhi < 0.0) {
+                    Kokkos::abort("Cannot bracket coupled photon temperature");
+                  }
+                  partial_temperature = hi;
+                  const Real tolerance = photon.source_tolerance*fmax(hi,1.0e-100);
+                  if (fabs(fhi) > tolerance) {
+                    Real flo = residual(lo);
+                    if (!Kokkos::isfinite(flo) || flo > 0.0) {
+                      Kokkos::abort("Invalid lower photon temperature bracket");
+                    }
+                    bool converged = false;
+                    for (int it=0; it<80; ++it) {
+                      // Safeguarded secant: retain the positive-temperature
+                      // bracket, and bisect periodically to prevent stagnation.
+                      Real trial = (lo*fhi-hi*flo)/(fhi-flo);
+                      if (!Kokkos::isfinite(trial) || trial <= lo || trial >= hi ||
+                          it%4 == 3) trial = 0.5*(lo+hi);
+                      partial_temperature = trial;
+                      const Real value = residual(trial);
+                      if (!Kokkos::isfinite(value)) {
+                        Kokkos::abort("Nonfinite coupled photon thermal residual");
+                      }
+                      if (fabs(value) <= tolerance) {
+                        converged = true;
+                        break;
+                      }
+                      if (value > 0.0) {
+                        hi = trial;
+                        fhi = value;
+                      } else {
+                        lo = trial;
+                        flo = value;
+                      }
+                      if (hi-lo <= tolerance) {
+                        converged = true;
+                        break;
+                      }
+                    }
+                    if (!converged) {
+                      Kokkos::abort("Photon thermal solve did not converge");
+                    }
+                  }
+                  const Real relative = fabs(partial_temperature-previous)/
+                      fmax(fmax(partial_temperature,previous),1.0e-100);
+                  if (!photon.is_power_opacity ||
+                      relative <= photon.source_tolerance) break;
+                  previous = 0.75*previous + 0.25*partial_temperature;
+                }
+              }
+              if (coupled_photons) source_temperature(m,k,j,i) = partial_temperature;
 
               // Update closure
               apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, Enew,

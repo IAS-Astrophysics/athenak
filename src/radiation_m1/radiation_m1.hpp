@@ -87,7 +87,7 @@ class RadiationM1 {
   DvceArray5D<Real> u0;              // evolved variables
   DvceArray5D<Real> coarse_u0;       // evolved variables on 2x coarser grid
   DvceArray5D<Real> chi;             // Eddington factor
-  DvceArray5D<Real> photon_fluid_start;  // fluid state before photon SSPRK stages
+  DvceArray4D<Real> photon_source_temperature;  // frozen-velocity thermal solve
   DvceArray4D<Real> photon_opacity_scale;  // shared density regularization
   DvceArray4D<bool> radiation_mask;  // radiation mask
   DvceArray5D<Real> u1;              // evolved variables at intermediate step
@@ -108,12 +108,21 @@ class RadiationM1 {
   RadiationM1Beam rad_m1_beam;  // beam ID values (only needed when beams on)
 
   // functions...
+  // Coupled gray photons share the Valencia fluid RK stages.
+  bool UsesFluidStages() const {
+    return ismhd && params.opacity_type == Photons && params.photon_coupled_sources;
+  }
+  void QueuePhotonTasks();
+  TaskStatus PreparePhotonStage(Driver *d, int stage);
+  TaskStatus PhotonTransport(Driver *d, int stage);
+  TaskStatus PhotonCoupling(Driver *d, int stage);
+  // 0: original combined update; 1: explicit transport; 2: implicit coupling.
+  int photon_update_part = 0;
   void AssembleRadiationM1Tasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
   // ...in "before_stagen_tl" list
   TaskStatus InitRecv(Driver* d, int stage);
   // ...in "stagen_tl" list
   TaskStatus CopyCons(Driver* d, int stage);
-  TaskStatus SyncPhotonFluid(Driver* d, int stage);
   TaskStatus RefreshADM(Driver* d, int stage);
   TaskStatus SetMask(Driver* d, int stage);
   TaskStatus FloorAndCalcClosure(Driver* d, int stage);

@@ -662,6 +662,7 @@ void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool re
   const Real ux = pin->GetOrAddReal("problem", "ux", 0.0);
   const bool comoving_isotropic =
       pin->GetOrAddBoolean("problem", "comoving_isotropic", false);
+  const Real bfield = pin->GetOrAddReal("problem", "by", 0.0);
   const Real lorentz = sqrt(1.0 + ux*ux);
   if (comoving_isotropic && (flux_fraction != 0.0 || !valencia)) {
     throw std::runtime_error("comoving equilibration requires Valencia and zero dipole");
@@ -688,8 +689,11 @@ void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool re
   if (valencia) {
     Kokkos::deep_copy(pmbp->pmhd->bcc0, 0.0);
     Kokkos::deep_copy(pmbp->pmhd->b0.x1f, 0.0);
-    Kokkos::deep_copy(pmbp->pmhd->b0.x2f, 0.0);
+    Kokkos::deep_copy(pmbp->pmhd->b0.x2f, bfield);
     Kokkos::deep_copy(pmbp->pmhd->b0.x3f, 0.0);
+    auto bcc = pmbp->pmhd->bcc0;
+    par_for("rad_equil_magnetic",DevExeSpace(),0,nmb1,0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) { bcc(m,IBY,k,j,i) = bfield; });
   }
   par_for("rad_equil_fluid",DevExeSpace(),0,nmb1,0,n3-1,0,n2-1,0,n1-1,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {

@@ -45,9 +45,14 @@ TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   }
 
-  // Absorption/emission has just changed the gas conserved energy.
-  // Compton exchange must use its updated temperature.
-  if (params.backreact && ismhd) pmy_pack->pdyngr->ConToPrim(pdrive, stage);
+  // Coupled photons retain the velocity frozen at source entry and use the
+  // partially solved temperature, exactly as the Boltzmann source step does.
+  // The legacy split mode recovers primitives between its separate operators.
+  if (params.backreact && ismhd && !UsesFluidStages()) {
+    pmy_pack->pdyngr->ConToPrim(pdrive, stage);
+  }
+  const bool frozen_source_state = UsesFluidStages();
+  auto source_temperature = photon_source_temperature;
   auto opacity_scale = photon_opacity_scale;
 
   RegionIndcs &indcs = pmy_pack->pmesh->mb_indcs;
@@ -190,7 +195,7 @@ TaskStatus RadiationM1::CalcComptonPhotons_(Driver *pdrive, int stage) {
         // fluid quantities
         Real wdn = w0_(m, IDN, k, j, i);
         Real pgas = w0_(m, IPR, k, j, i);
-        Real tgas = pgas / wdn;
+        Real tgas = frozen_source_state ? source_temperature(m,k,j,i) : pgas / wdn;
 
         // scattering opacity
         Real sigma_a, sigma_s, sigma_p;

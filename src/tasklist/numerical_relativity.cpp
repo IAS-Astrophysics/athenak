@@ -66,7 +66,8 @@ bool NumericalRelativity::DependencyAvailable(PhysicsDependency dep) {
     case Phys_Z4c:
       return pmy_pack->pz4c != nullptr;
     case Phys_DynRad:
-      return pmy_pack->pdynrad != nullptr;
+      return pmy_pack->pdynrad != nullptr ||
+             (pmy_pack->pradm1 != nullptr && pmy_pack->pradm1->UsesFluidStages());
     default:
       std::cout << "NumericalRelativity: Unknown dependency\n";
   }
@@ -167,11 +168,19 @@ void NumericalRelativity::PrintMissingTasks(std::vector<QueuedTask> &queue) {
 void NumericalRelativity::AssembleNumericalRelativityTasks(
        std::map<std::string, std::shared_ptr<TaskList>>& tl) {
   // Assemble the task lists for all physics modules
+  if (pmy_pack->pdynrad != nullptr && pmy_pack->pradm1 != nullptr &&
+      pmy_pack->pradm1->UsesFluidStages()) {
+    std::cerr << "Select either dyn_radiation or coupled M1 photon transport.\n";
+    abort();
+  }
   if (pmy_pack->pdyngr != nullptr) {
     pmy_pack->pdyngr->QueueDynGRMHDTasks();
   }
   if (pmy_pack->pdynrad != nullptr) {
     pmy_pack->pdynrad->QueueDynRadiationTasks();
+  }
+  if (pmy_pack->pradm1 != nullptr && pmy_pack->pradm1->UsesFluidStages()) {
+    pmy_pack->pradm1->QueuePhotonTasks();
   }
   if (pmy_pack->pz4c != nullptr) {
     pmy_pack->pz4c->QueueZ4cTasks();

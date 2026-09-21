@@ -261,7 +261,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
 
   // After time integrator task list
-  if (pmy_pack->pradm1 != nullptr) {
+  if (pmy_pack->pradm1 != nullptr && !pmy_pack->pradm1->UsesFluidStages()) {
     pnr->QueueTask(&MHD::InitRecvU, pmhd, MHD_URecv, "MHD_URecv", Task_AfterTimeIntegrator);
     pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_AfterTimeIntegrator);
     pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_AfterTimeIntegrator, {MHD_RestU});
