@@ -634,8 +634,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                       ? abs_1_th[nuidx] * my_nudens_1 + eta_1_non_th_loc[nuidx]
                       : eta_1_loc[nuidx];
             } else {
-              eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx] * corr_ae[nuidx];
-              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx] * corr_ae[nuidx];
+              eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
+              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
             }
           }
         }
