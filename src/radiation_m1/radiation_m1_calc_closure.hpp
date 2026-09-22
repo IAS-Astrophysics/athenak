@@ -73,6 +73,31 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
       return;
     }
 
+    // For fixed E, F and fluid/metric fields, P is affine in the closure
+    // mixing weight. Transform its two endpoints once, not at every Brent
+    // trial (also called repeatedly inside the implicit photon source solve).
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> pressure{};
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> stress{};
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> h_thick{}, h_thin{};
+    calc_Pthick(g_dd, g_uu, n_d, w_lorentz, v_d, E, F_d, pressure);
+    assemble_rT(n_d, E, F_d, pressure, stress);
+    const Real j_thick = calc_J_from_rT(stress, u_u);
+    calc_H_from_rT(stress, u_u, proj_ud, h_thick);
+    calc_Pthin(g_uu, E, F_d, pressure);
+    assemble_rT(n_d, E, F_d, pressure, stress);
+    const Real j_thin = calc_J_from_rT(stress, u_u);
+    calc_H_from_rT(stress, u_u, proj_ud, h_thin);
+    auto residual = [&](Real xi) {
+      const Real thick = 1.5 * (1.0 - closure_fun(xi, closure_type));
+      const Real thin = 1.0 - thick;
+      Real j = thick * j_thick + thin * j_thin;
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> h{};
+      for (int a = 0; a < 4; ++a) h(a) = thick * h_thick(a) + thin * h_thin(a);
+      // Floor the trial moments, not the endpoints: flooring is nonlinear.
+      apply_floor(g_uu, j, h, m1_params);
+      return j*j*xi*xi - tensor_dot(g_uu, h, h);
+    };
+
     Real x_lo = 0.0;
     Real x_md = 0.5;
     Real x_hi = 1.0;
@@ -81,15 +106,12 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
 
     // Initialize rootfinder
     MathSignal ierr =
-        BrentInitialize(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz,
-                        u_u, v_d, proj_ud, E, F_d, m1_params, m1_params.closure_type);
+        BrentInitialize(residual, x_lo, x_hi, root, state);
 
     // no root, most likely due to high velocities, use simple approximation
     if (ierr == LinalgEinval) {
-      const Real z_ed = BrentFunc(0., g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
-                                  F_d, m1_params, closure_type);
-      const Real z_th = BrentFunc(1., g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E,
-                                  F_d, m1_params, closure_type);
+      const Real z_ed = residual(0.0);
+      const Real z_th = residual(1.0);
       if (Kokkos::abs(z_th) < Kokkos::abs(z_ed)) {
         // Kokkos::printf("LinalgEinval: set chi = 1\n");
         chi = 1.0;
@@ -106,8 +128,7 @@ KOKKOS_INLINE_FUNCTION void calc_closure(
     int iter = 0;
     do {
       ++iter;
-      ierr = BrentIterate(BrentFunc, x_lo, x_hi, root, state, g_dd, g_uu, n_d, w_lorentz,
-                          u_u, v_d, proj_ud, E, F_d, m1_params, m1_params.closure_type);
+      ierr = BrentIterate(residual, x_lo, x_hi, root, state);
 
       // Some nans in the evaluation. This should not happen.
       if (ierr != LinalgSuccess) {
