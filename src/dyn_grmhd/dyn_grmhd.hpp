@@ -103,6 +103,9 @@ class DynGRMHD {
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
 
+  // Full C2P, including temperature publication, is skipped in fixed mode.
+  bool IsFixedEvolution() const { return fixed_evolution; }
+
   // Unit systems of the EOS, exposed on the non-templated base so that code
   // which cannot see the EOS policies (e.g. derived output variables) can still
   // convert between code units and EOS (nuclear) units.

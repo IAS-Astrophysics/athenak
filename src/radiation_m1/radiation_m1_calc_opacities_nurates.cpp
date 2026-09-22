@@ -99,9 +99,12 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
   Real dt_ = pmy_pack->pmesh->dt;
 
-  Primitive::EOS<EOSPolicy, ErrorPolicy> &eos =
-      static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(pmy_pack->pdyngr)
-          ->eos.ps.GetEOSMutable();
+  auto *pdyngr = static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy> *>(
+      pmy_pack->pdyngr);
+  Primitive::EOS<EOSPolicy, ErrorPolicy> &eos = pdyngr->eos.ps.GetEOSMutable();
+  auto temperature_ = pdyngr->temperature;
+  // Fixed evolution skips full C2P, so only evolving MHD may use this array.
+  const bool use_c2p_temperature_ = !pdyngr->IsFixedEvolution();
   const Real mb = eos.GetBaryonMass();
 
   // conversion factors from cgs to code units
@@ -220,9 +223,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           // fluid quantities
           Real nb = w0_(m, IDN, k, j, i) / mb;
-          Real p = w0_(m, IPR, k, j, i);
           Real Y = w0_(m, IYF, k, j, i);
-          Real T = eos.GetTemperatureFromP(nb, p, &Y);
+          Real T = use_c2p_temperature_
+                       ? temperature_(m, 0, k, j, i)
+                       : eos.GetTemperatureFromP(nb, w0_(m, IPR, k, j, i), &Y);
           Real yp = eos.GetProtonFraction(nb, T, &Y);
           Real yn = eos.GetNeutronFraction(nb, T, &Y);
           Real mu_b = eos.GetBaryonChemicalPotential(nb, T, &Y);

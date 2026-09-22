@@ -208,6 +208,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
   auto &excision_flux_emf_ = pmy_pack->pcoord->coord_data.excision_flux_emf;
   auto &w0_ = pmy_pack->pmhd->w0;
+  auto &temperature_ = temperature;
   auto &b0_ = pmy_pack->pmhd->b0;
   auto &adm = pmy_pack->padm->adm;
 
@@ -248,8 +249,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
-      ExtractPrimitives(wli, w0_,eos_, nmhd_, nscal_, m, k, j, i-1);
-      ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
+      ExtractPrimitives(wli, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i - 1);
+      ExtractPrimitives(wri, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i);
       Real g3d[NSPMETRIC], beta_u[3], alpha;
       Real flux[NCONS], bflux[NMAG];
       if (fofc_flag || fofc_excision) {
@@ -292,7 +295,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real wlj[NPRIM], *wrj;
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
-        ExtractPrimitives(wlj, w0_, eos_, nmhd_, nscal_, m, k, j-1, i);
+        ExtractPrimitives(wlj, w0_, temperature_, eos_, nmhd_, nscal_, m, k,
+                          j - 1, i);
         wrj = &wri[0];
         if (fofc_flag || fofc_excision) {
           ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
@@ -336,7 +340,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real wmk[NPRIM], *wpk;
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
-        ExtractPrimitives(wmk, w0_, eos_, nmhd_, nscal_, m, k-1, j, i);
+        ExtractPrimitives(wmk, w0_, temperature_, eos_, nmhd_, nscal_, m, k - 1,
+                          j, i);
         wpk = &wri[0];
         if (fofc_flag || fofc_excision) {
           ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
@@ -411,8 +416,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
-      ExtractPrimitives(wli, w0_,eos_, nmhd_, nscal_, m, k, j, i);
-      ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
+      ExtractPrimitives(wli, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i);
+      ExtractPrimitives(wri, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i + 1);
       Real g3d[NSPMETRIC], beta_u[3], alpha;
       Real flux[NCONS], bflux[NMAG];
       if (fofc_flag || fofc_excision) {
@@ -457,7 +464,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         wlj = &wli[0];
-        ExtractPrimitives(wrj, w0_, eos_, nmhd_, nscal_, m, k, j+1, i);
+        ExtractPrimitives(wrj, w0_, temperature_, eos_, nmhd_, nscal_, m, k,
+                          j + 1, i);
         if (fofc_flag || fofc_excision) {
           ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
           ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
@@ -501,7 +509,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         wmk = &wli[0];
-        ExtractPrimitives(wpk, w0_, eos_, nmhd_, nscal_, m, k+1, j, i);
+        ExtractPrimitives(wpk, w0_, temperature_, eos_, nmhd_, nscal_, m, k + 1,
+                          j, i);
         if (fofc_flag || fofc_excision) {
           ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
           ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);

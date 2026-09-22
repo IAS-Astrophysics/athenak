@@ -534,6 +534,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = eos.ps.GetEOS();
+  auto &temperature_ = temperature;
   //auto &tmunu = pmy_pack->ptmunu->tmunu;
 
   // fetch flag for smooth excision and
@@ -610,7 +611,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
     }
     prim_pt[PPR] = prim(m, IPR, k, j, i);
-    prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+    // Full C2P publishes this temperature with the cell-centered primitive
+    // state.
+    prim_pt[PTM] = temperature_(m, 0, k, j, i);
 
     // Get the conserved variables. Note that we don't use PrimitiveSolver here --
     // that's because we would need to recalculate quantities used in E and S_d in order

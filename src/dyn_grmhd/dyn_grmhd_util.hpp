@@ -18,6 +18,7 @@ namespace dyngr {
 template<class EOSPolicy, class ErrorPolicy>
 KOKKOS_INLINE_FUNCTION
 void ExtractPrimitives(Real prim_pt[NPRIM], const DvceArray5D<Real>& prim,
+                       const DvceArray5D<Real>& temperature,
                        const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                        const int& nhyd, const int& nscal,
                        const int m, const int k, const int j, const int i) {
@@ -30,8 +31,8 @@ void ExtractPrimitives(Real prim_pt[NPRIM], const DvceArray5D<Real>& prim,
     prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
   }
   prim_pt[PPR] = prim(m, IPR, k, j, i);
-  prim_pt[PTM] = eos.ps.GetEOS().GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR],
-                                                     &prim_pt[PYF]);
+  // Full C2P publishes this temperature with the cell-centered primitive state.
+  prim_pt[PTM] = temperature(m, 0, k, j, i);
 }
 
 KOKKOS_INLINE_FUNCTION
