@@ -50,6 +50,10 @@ enum RadiationM1ClosureSolver {
   ClosureNewton,  // pure Newton-Raphson with analytic derivative + aberration guess
 };
 
+// Alternative algebraic organizations of the same gray photon source equations.
+// Nested remains the reference and the fallback for nonsmooth/failed solves.
+enum PhotonSourceSolver { PhotonNested, PhotonReduced, PhotonCoupled };
+
 //----------------------------------------------------------------------------------------
 //! \struct RadiationM1Params
 //  \brief parameters for the Grey M1 class
@@ -66,6 +70,8 @@ struct RadiationM1Params {
   bool backreact;
   bool backreact_tmunu;
   bool photon_coupled_sources;
+  PhotonSourceSolver photon_source_solver;
+  bool photon_source_diagnostics;
   
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure

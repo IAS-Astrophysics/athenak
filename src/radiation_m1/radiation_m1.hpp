@@ -89,6 +89,8 @@ class RadiationM1 {
   DvceArray5D<Real> chi;             // Eddington factor
   DvceArray4D<Real> photon_source_temperature;  // frozen-velocity thermal solve
   DvceArray4D<Real> photon_opacity_scale;  // shared density regularization
+  // Optional attempts/accepts/fallbacks/iterations/opacity-cap diagnostics.
+  DvceArray1D<int> photon_solver_counts;
   DvceArray4D<bool> radiation_mask;  // radiation mask
   DvceArray5D<Real> u1;              // evolved variables at intermediate step
   DvceFaceFld5D<Real> uflx;          // fluxes of evo. quantities on cell faces

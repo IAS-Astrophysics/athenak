@@ -58,6 +58,23 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.photon_coupled_sources =
       pin->GetOrAddBoolean("radiation_m1", "photon_coupled_sources", true);
+  const std::string photon_solver =
+      pin->GetOrAddString("radiation_m1", "photon_source_solver", "nested");
+  if (photon_solver == "nested") {
+    params.photon_source_solver = PhotonNested;
+  } else if (photon_solver == "reduced") {
+    params.photon_source_solver = PhotonReduced;
+  } else if (photon_solver == "coupled") {
+    params.photon_source_solver = PhotonCoupled;
+  } else {
+    std::cerr << "Unknown photon_source_solver: " << photon_solver << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  params.photon_source_diagnostics =
+      pin->GetOrAddBoolean("radiation_m1", "photon_source_diagnostics", false);
+  if (params.photon_source_diagnostics) {
+    Kokkos::realloc(photon_solver_counts, 5);
+  }
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
   params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-77);
