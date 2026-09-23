@@ -543,7 +543,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       }
     }
     
-    if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE)) {
+    if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE || iv==ECENT)) {
       /*if (iv == ECLOGE) {
         Real vlo = eval_at_nty(iv,n,min_T,Yq);
         Real vhi = eval_at_nty(iv,n,max_T,Yq);
