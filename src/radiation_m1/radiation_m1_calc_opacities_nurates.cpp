@@ -572,6 +572,20 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             }
           }
 
+          // Effective optical depth over a step, as in THC's opacity_tau_trap
+          // test: min over the electron pair of sqrt(kappa_a*kappa_transport)*dt.
+          // Below it the field has not thermalised and Kirchhoff's law does not
+          // hold, so bns_nurates' own emissivities are used instead.
+          bool use_kirchhoff = nurates_params_.use_kirchhoff_law;
+          if (use_kirchhoff && nurates_params_.kirchhoff_tau_trap >= 0.0) {
+            const Real tau_e = Kokkos::sqrt(
+                abs_1_loc[0]*(abs_1_loc[0] + scat_1_loc[0]));
+            const Real tau_a = Kokkos::sqrt(
+                abs_1_loc[1]*(abs_1_loc[1] + scat_1_loc[1]));
+            const Real tau = Kokkos::fmin(tau_e, tau_a)*dt_;
+            use_kirchhoff = (tau > nurates_params_.kirchhoff_tau_trap);
+          }
+
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
             // store opacities and emissivities
             eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
@@ -624,7 +638,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // through abs_*_th; NEPS emission is added back afterwards, kept
             // out of thermalization. Without Kirchhoff, bns_nurates' own
             // emissivities stand, scaled like the opacities they pair with.
-            if (nurates_params_.use_kirchhoff_law) {
+            if (use_kirchhoff) {
               eta_0_(m, nuidx, k, j, i) =
                   (abs_0_th[nuidx] > 0)
                       ? abs_0_th[nuidx] * my_nudens_0

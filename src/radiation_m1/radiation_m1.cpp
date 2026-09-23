@@ -183,6 +183,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddReal("bns_nurates", "peq_dlnT_tol", 1e-4);
     nurates_params.peq_dYe_tol =
         pin->GetOrAddReal("bns_nurates", "peq_dYe_tol", 1e-4);
+    nurates_params.kirchhoff_tau_trap =
+        pin->GetOrAddReal("bns_nurates", "kirchhoff_tau_trap", -1.0);
 
     // The block that computes the equilibrium distribution -- the predictor's only
     // output -- is skipped when neither of these is set, so the predictor has nothing

@@ -60,6 +60,9 @@ struct NuratesParams {
   // one-parameter family in w = a/(1+a), a = dtau*kappa_abs, and the local blackbody is
   // the w -> 0 one; the predictor evaluates the family at the w the cell actually has.
   // Off, only the w -> 0 end is available.
+  Real kirchhoff_tau_trap;  // use Kirchhoff only above this effective optical
+                            // depth; < 0 disables the test (always Kirchhoff)
+
   bool use_partial_equilibrium;  // master switch; on by default
   Real peq_w_floor;              // skip the cell below this weight (tier-0 gate)
   Real peq_dlnT_tol;             // skip below this predicted |dlnT| (tier-1 gate)
