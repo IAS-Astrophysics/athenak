@@ -188,12 +188,17 @@ void calc_H_from_rT(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &rT_dd
                     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &u_u,
                     const AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> &proj_ud,
                     AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &H_d) {
+  // Contract the stress tensor with the velocity once for all four fluxes.
+  AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> tu_d{};
+  for (int b = 0; b < 4; ++b) {
+    for (int c = 0; c < 4; ++c) {
+      tu_d(b) += u_u(c) * rT_dd(b, c);
+    }
+  }
   for (int a = 0; a < 4; ++a) {
     H_d(a) = 0.;
     for (int b = 0; b < 4; ++b) {
-      for (int c = 0; c < 4; ++c) {
-        H_d(a) -= proj_ud(b, a) * u_u(c) * rT_dd(b, c);
-      }
+      H_d(a) -= proj_ud(b, a) * tu_d(b);
     }
   }
 }
