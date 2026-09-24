@@ -27,6 +27,8 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
@@ -359,7 +361,9 @@ Mesh::Mesh(ParameterInput *pin) :
 // destructor
 
 Mesh::~Mesh() {
-  if (pmb_pack->ppart != nullptr) {delete [] nprtcl_eachrank;}
+  if (pmb_pack->ppart != nullptr) {
+    delete[] nprtcl_eachrank;
+  }
   if (multilevel) {
     delete pmr;
   }
@@ -643,11 +647,18 @@ void Mesh::NewTimeStep(const Real tlim) {
   if (pmb_pack->prad != nullptr) {
     dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->prad->dtnew) );
   }
+  if (pmb_pack->pdynrad != nullptr) {
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pdynrad->dtnew) );
+  }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
     dt_cycle = std::min(dt_cycle, (pmb_pack->ppart->dtnew) );
   }
 
+  // Radiation M1 timestep
+  if (pmb_pack->pradm1 != nullptr) {
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pradm1->dtnew) );
+  }
 #if MPI_PARALLEL_ENABLED
   // get minimum cycle and parabolic timesteps over all MPI ranks
   Real dt_reduction[2] = {dt_cycle, dt_parabolic_sts};
@@ -663,7 +674,9 @@ void Mesh::NewTimeStep(const Real tlim) {
   dt = dt_cycle;
 
   // limit last time step to stop at tlim *exactly*
-  if ( (time < tlim) && ((time + dt) > tlim) ) {dt = tlim - time;}
+  if ((time < tlim) && ((time + dt) > tlim)) {
+    dt = tlim - time;
+  }
 
   return;
 }

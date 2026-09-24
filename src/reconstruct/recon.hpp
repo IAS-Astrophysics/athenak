@@ -17,6 +17,7 @@
 #include "plm.hpp"    // PLM()
 #include "ppm.hpp"    // PPM4(), PPMX()
 #include "wenoz.hpp"  // WENOZ()
+#include "wenomz.hpp" // WENOMZ()
 #include "teno.hpp"  // TENO()
 
 //----------------------------------------------------------------------------------------
@@ -83,6 +84,19 @@ void ReconCellT(const EOS_Data &eos, const bool apply_floors,
     }
   } else if constexpr (recon == ReconstructionMethod::wenoz) {
     WENOZ(q(m, n, k - 2*dk, j - 2*dj, i - 2*di),
+          q(m, n, k -   dk, j -   dj, i -   di),
+          q(m, n, k,        j,        i),
+          q(m, n, k +   dk, j +   dj, i +   di),
+          q(m, n, k + 2*dk, j + 2*dj, i + 2*di),
+          ql_val, qr_val);
+    if (apply_floors) {
+      if (n == IDN) { ql_val = fmax(ql_val, dfloor); qr_val = fmax(qr_val, dfloor); }
+      if (eos.is_ideal && n == IEN) {
+        ql_val = fmax(ql_val, efloor); qr_val = fmax(qr_val, efloor);
+      }
+    }
+  } else if constexpr (recon == ReconstructionMethod::wenomz) {
+    WENOMZ(q(m, n, k - 2*dk, j - 2*dj, i - 2*di),
           q(m, n, k -   dk, j -   dj, i -   di),
           q(m, n, k,        j,        i),
           q(m, n, k +   dk, j +   dj, i +   di),
@@ -163,6 +177,13 @@ inline void ReconDispatch(ReconstructionMethod recon, const char *name, int nmb1
       par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
         KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
           ReconCellT<ReconstructionMethod::wenoz, ivx>(
+              eos, apply_floors, m, n, k, j, i, q, ql, qr);
+        });
+      break;
+    case ReconstructionMethod::wenomz:
+      par_for(name, DevExeSpace(), 0, nmb1, 0, nvars-1, kl, ku, jl, ju, il, iu,
+        KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+          ReconCellT<ReconstructionMethod::wenomz, ivx>(
               eos, apply_floors, m, n, k, j, i, q, ql, qr);
         });
       break;

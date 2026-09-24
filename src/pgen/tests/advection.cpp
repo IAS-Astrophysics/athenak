@@ -111,14 +111,26 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
       // iprob=2: square wave in second quarter of domain
       } else if (iprob == 2) {
         f = 1.0;
-        if (r >= 0.25 && r <= 0.5) { f += amp; }
+        if (r >= 0.25 && r <= 0.5) {
+          f += amp;
+        }
       } else if (iprob == 3) {
         f = 1.0;
-        if (r <= 0.45) { f += amp*exp((SQR(r-0.2))/-0.005); }
-        if (r >= 0.45 && r <= 0.65) { f += amp; }
-        if (r >= 0.75 && r <= 0.85) { f += amp*(10.0*r-7.5); }
-        if (r >= 0.85 && r <= 0.95) { f += amp*(9.5-10.0*r); }
-        if (r >= 0.95) { f += amp*exp((SQR(r-1.2))/-0.005); }
+        if (r <= 0.45) {
+          f += amp * exp((SQR(r - 0.2)) / -0.005);
+        }
+        if (r >= 0.45 && r <= 0.65) {
+          f += amp;
+        }
+        if (r >= 0.75 && r <= 0.85) {
+          f += amp * (10.0 * r - 7.5);
+        }
+        if (r >= 0.85 && r <= 0.95) {
+          f += amp * (9.5 - 10.0 * r);
+        }
+        if (r >= 0.95) {
+          f += amp * exp((SQR(r - 1.2)) / -0.005);
+        }
       }
 
       // now compute density  momenta, total energy
@@ -188,14 +200,26 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
       // iprob=2: square wave in second quarter of domain
       } else if (iprob == 2) {
         f = 1.0;
-        if (r >= 0.25 && r <= 0.5) { f += amp; }
+        if (r >= 0.25 && r <= 0.5) {
+          f += amp;
+        }
       } else if (iprob == 3) {
         f = 1.0;
-        if (r <= 0.45) { f += amp*exp((SQR(r-0.2))/-0.005); }
-        if (r >= 0.45 && r <= 0.65) { f += amp; }
-        if (r >= 0.75 && r <= 0.85) { f += amp*(10.0*r-7.5); }
-        if (r >= 0.85 && r <= 0.95) { f += amp*(9.5-10.0*r); }
-        if (r >= 0.95) { f += amp*exp((SQR(r-1.2))/-0.005); }
+        if (r <= 0.45) {
+          f += amp * exp((SQR(r - 0.2)) / -0.005);
+        }
+        if (r >= 0.45 && r <= 0.65) {
+          f += amp;
+        }
+        if (r >= 0.75 && r <= 0.85) {
+          f += amp * (10.0 * r - 7.5);
+        }
+        if (r >= 0.85 && r <= 0.95) {
+          f += amp * (9.5 - 10.0 * r);
+        }
+        if (r >= 0.95) {
+          f += amp * exp((SQR(r - 1.2)) / -0.005);
+        }
       }
 
       // now compute density  momenta, total energy
@@ -215,9 +239,15 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = f;
         b0.x3f(m,k,j,i) = f;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = f;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = f;}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = 0.0;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = f;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = f;
+        }
 
       // Flow in x2-direction
       } else if (flow_dir == 2) {
@@ -229,9 +259,15 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         b0.x1f(m,k,j,i) = f;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = f;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = f;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = f;}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = f;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = 0.0;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = f;
+        }
 
       // Flow in x3-direction
       } else {
@@ -243,9 +279,15 @@ void ProblemGenerator::Advection(ParameterInput *pin, const bool restart) {
         b0.x1f(m,k,j,i) = f;
         b0.x2f(m,k,j,i) = f;
         b0.x3f(m,k,j,i) = 0.0;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = f;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = f;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = f;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = f;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = 0.0;
+        }
       }
 
       // add passive scalars

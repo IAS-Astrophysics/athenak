@@ -125,17 +125,29 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = B0*std::sin(kx*x1v);
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = B0*std::sin(kx*x1v);}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = 0.0;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = 0.0;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = B0 * std::sin(kx * x1v);
+        }
       } else if (ifield == 2) {
         // constant Bz
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = B0;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = B0;}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = 0.0;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = 0.0;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = B0;
+        }
       }
 
       if (eos.is_ideal) {
@@ -190,17 +202,29 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = B0*std::sin(kx*x1v);
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = B0*std::sin(kx*x1v);}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = 0.0;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = 0.0;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = B0 * std::sin(kx * x1v);
+        }
       } else if (ifield == 2) {
         // constant Bz
         b0.x1f(m,k,j,i) = 0.0;
         b0.x2f(m,k,j,i) = 0.0;
         b0.x3f(m,k,j,i) = B0;
-        if (i==ie) {b0.x1f(m,k,j,i+1) = 0.0;}
-        if (j==je) {b0.x2f(m,k,j+1,i) = 0.0;}
-        if (k==ke) {b0.x3f(m,k+1,j,i) = B0;}
+        if (i == ie) {
+          b0.x1f(m, k, j, i + 1) = 0.0;
+        }
+        if (j == je) {
+          b0.x2f(m, k, j + 1, i) = 0.0;
+        }
+        if (k == ke) {
+          b0.x3f(m, k + 1, j, i) = B0;
+        }
       }
 
       if (eos.is_ideal) {
@@ -378,8 +402,8 @@ void TurbulentHistory(HistoryData *pdata, Mesh *pm) {
            *(w0_(m,IVZ,k,j+1,i)-w0_(m,IVZ,k,j-1,i))))
      / dx_squared)*vol;
 
-    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
-    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+    // fill the unused device-reduction slots with zeros
+    for (int n=nhist_; n<NREDUCTION_VARIABLES; ++n) {
       hvars.the_array[n] = 0.0;
     }
 

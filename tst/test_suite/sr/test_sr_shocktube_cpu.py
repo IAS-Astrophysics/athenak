@@ -17,7 +17,6 @@ import athena_read
 import numpy as np
 import test_suite.testutils as testutils
 
-
 _recon = ["plm", "ppm4", "ppmx", "wenoz"]  # do not change order
 _flux = ["llf", "hlle", "hllc"]
 _res = [256, 512]  # resolutions to test

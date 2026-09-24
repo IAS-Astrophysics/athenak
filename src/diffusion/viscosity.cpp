@@ -157,7 +157,9 @@ void Viscosity::AddViscousFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &e
       }
     });
   });
-  if (pmy_pack->pmesh->one_d) {return;}
+  if (pmy_pack->pmesh->one_d) {
+    return;
+  }
 
   // fluxes in x2-direction
   auto flx2 = flx.x2f;
@@ -202,7 +204,9 @@ void Viscosity::AddViscousFluxIso(const DvceArray5D<Real> &w0, const EOS_Data &e
       }
     });
   });
-  if (pmy_pack->pmesh->two_d) {return;}
+  if (pmy_pack->pmesh->two_d) {
+    return;
+  }
 
   // fluxes in x3-direction
   auto flx3 = flx.x3f;

@@ -58,7 +58,7 @@ ssl_damping_amp = 0.6
 # Puncture Tracker
 nco             = 1
 co_0_x          = 0.
-co_0_mass		= 1.
+co_0_mass       = 1.
 co_0_type = BH
 
 <mesh_refinement>

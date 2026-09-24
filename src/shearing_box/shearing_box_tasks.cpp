@@ -60,7 +60,11 @@ TaskStatus ShearingBox::InitRecv(Real time) {
         // ox1 boundary: receive from (target+1) through (target-1)
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l-1);} else {jshift = -(l-1-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l - 1);
+          } else {
+            jshift = -(l - 1 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
@@ -75,7 +79,9 @@ TaskStatus ShearingBox::InitRecv(Real time) {
             // Post non-blocking receive for this buffer on this MeshBlock
             int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, srank, tag,
                                  comm_sbox, &(recvbuf[n].vars_req[3*m + l]));
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -91,7 +97,11 @@ TaskStatus ShearingBox::InitRecv(Real time) {
         // ox1 boundary: receive from (target+1) through (target  )
         for (int l=0; l<2; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-1-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l);
+          } else {
+            jshift = -(l - 1 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
@@ -106,7 +116,9 @@ TaskStatus ShearingBox::InitRecv(Real time) {
             // Post non-blocking receive for this buffer on this MeshBlock
             int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, srank, tag,
                                  comm_sbox, &(recvbuf[n].vars_req[3*m + l]));
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       } else {                      //--- CASE 3
@@ -124,7 +136,11 @@ TaskStatus ShearingBox::InitRecv(Real time) {
         // ox1 boundary: send to (target-2) through (target  )
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-2-ji);}
+          if (n == 0) {
+            jshift = -(ji + l);
+          } else {
+            jshift = -(l - 2 - ji);
+          }
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
@@ -139,7 +155,9 @@ TaskStatus ShearingBox::InitRecv(Real time) {
             // Post non-blocking receive for this buffer on this MeshBlock
             int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, srank, tag,
                                  comm_sbox, &(recvbuf[n].vars_req[3*m + l]));
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       }
@@ -181,12 +199,18 @@ TaskStatus ShearingBox::ClearRecv() {
         // ox1 boundary: receive from (target+1) through (target-1)
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l-1);} else {jshift = -(l-1-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l - 1);
+          } else {
+            jshift = -(l - 1 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -194,12 +218,18 @@ TaskStatus ShearingBox::ClearRecv() {
         // ox1 boundary: receive from (target+1) through (target  )
         for (int l=0; l<2; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-1-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l);
+          } else {
+            jshift = -(l - 1 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       } else {                     //--- CASE 3
@@ -207,12 +237,18 @@ TaskStatus ShearingBox::ClearRecv() {
         // ox1 boundary: send to (target-2) through (target  )
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = -(ji+l);} else {jshift = -(l-2-ji);} // offset of sender
+          if (n == 0) {
+            jshift = -(ji + l);
+          } else {
+            jshift = -(l - 2 - ji);
+          }  // offset of sender
           int sgid, srank;
           FindTargetMB(gid,jshift,sgid,srank);
           if (srank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(recvbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       }
@@ -254,12 +290,18 @@ TaskStatus ShearingBox::ClearSend() {
         // ox1 boundary: send to (target-1) through (target+1)
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l-1;} else {jshift = l-1-ji;} // offset of target
+          if (n == 0) {
+            jshift = ji + l - 1;
+          } else {
+            jshift = l - 1 - ji;
+          }  // offset of target
           int tgid, trank;
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(sendbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       } else if (jr < (nx2-ng)) {  //--- CASE 2
@@ -267,12 +309,18 @@ TaskStatus ShearingBox::ClearSend() {
         // ox1 boundary: send to (target-1) through (target  )
         for (int l=0; l<2; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l;} else {jshift = l-1-ji;}
+          if (n == 0) {
+            jshift = ji + l;
+          } else {
+            jshift = l - 1 - ji;
+          }
           int tgid, trank;
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(sendbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       } else {                     //--- CASE 3
@@ -280,12 +328,18 @@ TaskStatus ShearingBox::ClearSend() {
         // ox1 boundary: send to (target-2) through (target  )
         for (int l=0; l<3; ++l) {
           int jshift;
-          if (n==0) {jshift = ji+l;} else {jshift = l-2-ji;}
+          if (n == 0) {
+            jshift = ji + l;
+          } else {
+            jshift = l - 2 - ji;
+          }
           int tgid, trank;
           FindTargetMB(gid,jshift,tgid,trank);
           if (trank != global_variable::my_rank) {
             int ierr = MPI_Wait(&(sendbuf[n].vars_req[3*m + l]), MPI_STATUS_IGNORE);
-            if (ierr != MPI_SUCCESS) {no_errors=false;}
+            if (ierr != MPI_SUCCESS) {
+              no_errors = false;
+            }
           }
         }
       }

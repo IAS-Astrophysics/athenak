@@ -14,15 +14,26 @@ from matplotlib.animation import FuncAnimation
 import matplotlib as mpl
 import mpl_toolkits.axes_grid1
 import athena_read
-mpl.rcParams['animation.embed_limit'] = 2**32
+
+mpl.rcParams["animation.embed_limit"] = 2**32
 
 
 # custom animation class Player
 # is derived class of FuncAnimation
 class Player(FuncAnimation):
-    def __init__(self, fig, func, frames=None, init_func=None,
-                 fargs=None, save_count=None, mini=0, maxi=100,
-                 pos=(0.125, 0.94), **kwargs):
+    def __init__(
+        self,
+        fig,
+        func,
+        frames=None,
+        init_func=None,
+        fargs=None,
+        save_count=None,
+        mini=0,
+        maxi=100,
+        pos=(0.125, 0.94),
+        **kwargs
+    ):
         self.i = 0
         self.min = mini
         self.max = maxi
@@ -31,10 +42,18 @@ class Player(FuncAnimation):
         self.fig = fig
         self.func = func
         self.setup(pos)
-        FuncAnimation.__init__(self, self.fig, self.update,
-                               frames=self.play(), init_func=init_func,
-                               fargs=None, save_count=None,
-                               interval=200, cache_frame_data=False, **kwargs)
+        FuncAnimation.__init__(
+            self,
+            self.fig,
+            self.update,
+            frames=self.play(),
+            init_func=init_func,
+            fargs=None,
+            save_count=None,
+            interval=200,
+            cache_frame_data=False,
+            **kwargs
+        )
 
     # version that stops when reaching end of plot list
     # def play(self):
@@ -55,7 +74,7 @@ class Player(FuncAnimation):
     # version that loops forever
     def play(self):
         while self.runs:
-            self.i = self.i+self.forwards-(not self.forwards)
+            self.i = self.i + self.forwards - (not self.forwards)
             if self.i > self.max:
                 self.i = self.min
             if self.i < self.min:
@@ -100,7 +119,7 @@ class Player(FuncAnimation):
 
     def onestep(self):
         if self.i > self.min and self.i < self.max:
-            self.i = self.i+self.forwards-(not self.forwards)
+            self.i = self.i + self.forwards - (not self.forwards)
         elif self.i == self.min and self.forwards:
             self.i += 1
         elif self.i == self.max and not self.forwards:
@@ -119,13 +138,13 @@ class Player(FuncAnimation):
         ffax = divider.append_axes("right", size="80%", pad=0.05)
         ofax = divider.append_axes("right", size="100%", pad=0.05)
         sliderax = divider.append_axes("right", size="500%", pad=0.07)
-        self.button_oneback = mwidgets.Button(playerax, label='$\u29CF$')
-        self.button_fastback = mwidgets.Button(fbax, label='$\u25C0\u25C0$')
-        self.button_back = mwidgets.Button(bax, label='$\u25C0$')
-        self.button_stop = mwidgets.Button(sax, label='$\u25A0$')
-        self.button_forward = mwidgets.Button(fax, label='$\u25B6$')
-        self.button_fastforward = mwidgets.Button(ffax, label='$\u25B6\u25B6$')
-        self.button_oneforward = mwidgets.Button(ofax, label='$\u29D0$')
+        self.button_oneback = mwidgets.Button(playerax, label="$\u29cf$")
+        self.button_fastback = mwidgets.Button(fbax, label="$\u25c0\u25c0$")
+        self.button_back = mwidgets.Button(bax, label="$\u25c0$")
+        self.button_stop = mwidgets.Button(sax, label="$\u25a0$")
+        self.button_forward = mwidgets.Button(fax, label="$\u25b6$")
+        self.button_fastforward = mwidgets.Button(ffax, label="$\u25b6\u25b6$")
+        self.button_oneforward = mwidgets.Button(ofax, label="$\u29d0$")
         self.button_oneback.on_clicked(self.onebackward)
         self.button_fastback.on_clicked(self.fastbackward)
         self.button_back.on_clicked(self.backward)
@@ -133,9 +152,9 @@ class Player(FuncAnimation):
         self.button_forward.on_clicked(self.forward)
         self.button_fastforward.on_clicked(self.fastforward)
         self.button_oneforward.on_clicked(self.oneforward)
-        self.slider = mwidgets.Slider(sliderax, '', self.min, self.max,
-                                      valinit=self.i, valfmt='%0.0f',
-                                      valstep=1)
+        self.slider = mwidgets.Slider(
+            sliderax, "", self.min, self.max, valinit=self.i, valfmt="%0.0f", valstep=1
+        )
         self.slider.on_changed(self.set_pos)
 
     def set_pos(self, i):
@@ -150,27 +169,28 @@ class Player(FuncAnimation):
 def main(**kwargs):
 
     # Load Python plotting modules
-    output_file = kwargs['output']
-    if output_file != 'show':
+    output_file = kwargs["output"]
+    if output_file != "show":
         import matplotlib
-        matplotlib.use('agg')
+
+        matplotlib.use("agg")
     import matplotlib.pyplot as plt
 
     # get input filename
-    input_file = kwargs['input']
-    nfiles = int(kwargs['nfiles'])
+    input_file = kwargs["input"]
+    nfiles = int(kwargs["nfiles"])
 
     fprefix = input_file[:-9]
     fnumber = int(input_file[-9:-4])
-    fnames = [fprefix+str(fnumber+i).zfill(5)+'.tab' for i in range(nfiles)]
+    fnames = [fprefix + str(fnumber + i).zfill(5) + ".tab" for i in range(nfiles)]
     data = []
     for n in range(nfiles):
         data.append(athena_read.tab(fnames[n]))
 
     # read data, get variable names and check they are valid
-    yvar = kwargs['variables']
+    yvar = kwargs["variables"]
     if yvar not in data[0]:
-        print('Invalid input variable name, valid names are:')
+        print("Invalid input variable name, valid names are:")
         for key in data[0]:
             print(key)
         raise RuntimeError
@@ -179,12 +199,12 @@ def main(**kwargs):
     x_vals = []
     for n in range(nfiles):
         y_vals.append(data[n][yvar])
-    if 'x1v' in data[0]:
-        xvar = 'x1v'
-    if 'x2v' in data[0]:
-        xvar = 'x2v'
-    if 'x3v' in data[0]:
-        xvar = 'x3v'
+    if "x1v" in data[0]:
+        xvar = "x1v"
+    if "x2v" in data[0]:
+        xvar = "x2v"
+    if "x3v" in data[0]:
+        xvar = "x3v"
     for n in range(nfiles):
         x_vals.append(data[n][xvar])
 
@@ -194,10 +214,10 @@ def main(**kwargs):
     # print(x_vals)
 
     # make single plot
-    if (nfiles == 1):
+    if nfiles == 1:
         # Plot data
         plt.figure()
-        plt.plot(x_vals[0], y_vals[0], '.')
+        plt.plot(x_vals[0], y_vals[0], ".")
         plt.show()
 
     # make animation with multiple files
@@ -207,15 +227,16 @@ def main(**kwargs):
 
         def update_func(i):
             ax.clear()
-            ax.plot(x_vals[i], y_vals[i], '.')
+            ax.plot(x_vals[i], y_vals[i], ".")
             # if xlim != (None,None):
             #     ax.set_xlim(xlim)
             # if ylim != (None,None):
             #     ax.set_ylim(ylim)
-            ax.set_title('Time=%f'%data[i]['time'])  # noqa
+            ax.set_title("Time=%f" % data[i]["time"])  # noqa
             ax.set_xlabel(xvar)
             ax.set_ylabel(yvar)
-        Player(fig, update_func, maxi=(nfiles-1))
+
+        Player(fig, update_func, maxi=(nfiles - 1))
         plt.show()
         # to save movie as mp4 use following instead of 'Player'
         # anim=FuncAnimation(fig, update_func)
@@ -225,18 +246,18 @@ def main(**kwargs):
 
 
 # Execute main function
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input',
-                        help='name of input (tab) file')
-    parser.add_argument('-o', '--output',
-                        default='show',
-                        help='image filename; omit to display to screen')
-    parser.add_argument('-v', '--variables',
-                        help='comma-separated list of variables to be plotted')
-    parser.add_argument('-n', '--nfiles',
-                        default=1,
-                        help='number of files to be plotted for animations')
+    parser.add_argument("-i", "--input", help="name of input (tab) file")
+    parser.add_argument(
+        "-o", "--output", default="show", help="image filename; omit to display to screen"
+    )
+    parser.add_argument(
+        "-v", "--variables", help="comma-separated list of variables to be plotted"
+    )
+    parser.add_argument(
+        "-n", "--nfiles", default=1, help="number of files to be plotted for animations"
+    )
 
     args = parser.parse_args()
     main(**vars(args))

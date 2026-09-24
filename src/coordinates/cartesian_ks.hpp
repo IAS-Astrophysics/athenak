@@ -51,7 +51,9 @@ void ComputeMetricAndInverse(Real x, Real y, Real z, bool minkowski, Real a,
 
   // g_nm = f*l_n*l_m + eta_nm, where eta_nm is Minkowski metric
   Real f = 2.0 * SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
-  if (minkowski) {f=0.0;}
+  if (minkowski) {
+    f = 0.0;
+  }
   glower[0][0] = f * l_lower[0]*l_lower[0] - 1.0;
   glower[0][1] = f * l_lower[0]*l_lower[1];
   glower[0][2] = f * l_lower[0]*l_lower[2];
@@ -131,7 +133,9 @@ void ComputeADMDecomposition(Real x, Real y, Real z, bool minkowski, Real a,
   //
   // g_nm = 2*H*l_n*l_m + eta_nm, where eta is the Minkowski metric
   Real H = SQR(r)*r / (SQR(SQR(r)) + SQR(a)*SQR(z));
-  if (minkowski) {H=0.0;}
+  if (minkowski) {
+    H = 0.0;
+  }
 
   *alp = 1.0/sqrt(1. + 2.*H);
   *betax = 2.*H/(1. + 2.*H)*l_u[0];

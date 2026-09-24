@@ -57,8 +57,13 @@ PERIODS = 5.0
 
 DOMAINS = {
     1: {"x1max": "1.0", "nx2": "1", "x2max": "1.0", "nx3": "1", "x3max": "1.0"},
-    2: {"x1max": str(np.sqrt(5.0)), "nx2": "HALF",
-        "x2max": str(np.sqrt(5.0) / 2.0), "nx3": "1", "x3max": "1.0"},
+    2: {
+        "x1max": str(np.sqrt(5.0)),
+        "nx2": "HALF",
+        "x2max": str(np.sqrt(5.0) / 2.0),
+        "nx3": "1",
+        "x3max": "1.0",
+    },
     3: {"x1max": "3.0", "nx2": "HALF", "x2max": "1.5", "nx3": "HALF", "x3max": "1.5"},
 }
 
@@ -140,8 +145,10 @@ def test_ambipolar_linwave(wave_flag, dim):
 
     try:
         basename = f"AmbLW_w{wave_flag}_{dim}d_{RESOLUTION}"
-        testutils.run("inputs/lwave_ambipolar.athinput",
-                      build_arguments(wave_flag, dim, RESOLUTION, basename))
+        testutils.run(
+            "inputs/lwave_ambipolar.athinput",
+            build_arguments(wave_flag, dim, RESOLUTION, basename),
+        )
         measured_rate = fit_decay_rate_from_ke(f"{basename}.mhd.hst")
         error_rel = abs(analytic_rate / measured_rate - 1.0)
         if error_rel > REL_TOL:

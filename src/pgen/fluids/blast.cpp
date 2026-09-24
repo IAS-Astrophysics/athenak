@@ -27,11 +27,11 @@
 #include "coordinates/cell_locations.hpp"
 
 namespace {
-  Real R_max0;     // Maximum radius at t=t0.
-  Real v_max;      // Maximum speed.
-  Real t0;
-  Real fac;
-  void SetADMVariablesToFLRW(MeshBlockPack *pmbp);
+Real R_max0;  // Maximum radius at t=t0.
+Real v_max;   // Maximum speed.
+Real t0;
+Real fac;
+void SetADMVariablesToFLRW(MeshBlockPack *pmbp, Real time);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -139,7 +139,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     v_max = pin->GetOrAddReal("problem", "v_max0", 1.0);
     t0 = pin->GetOrAddReal("problem", "t0", 0.0);
     fac = v_max / R_max0;
-    pmbp->padm->SetADMVariables = &SetADMVariablesToFLRW;
+    pmbp->padm->SetADMVariablesAtTime = &SetADMVariablesToFLRW;
+    pmbp->padm->time_dependent = true;
   }
 
   if (restart) return;
@@ -370,7 +371,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       if (j==je) {
         b0.x2f(m,k,j+1,i) = -(a3(m,k,j+1,i+1) - a3(m,k,j+1,i))/dx1;
       }
-      if (k==ke) {b0.x3f(m,k+1,j,i) = 0.0;}
+      if (k == ke) {
+        b0.x3f(m, k + 1, j, i) = 0.0;
+      }
     });
 
     // Compute cell-centered fields
@@ -403,8 +406,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
 namespace {
 //----------------------------------------------------------------------------------------
-void SetADMVariablesToFLRW(MeshBlockPack *pmbp) {
-  const Real t = pmbp->pmesh->time;
+void SetADMVariablesToFLRW(MeshBlockPack *pmbp, Real time) {
+  const Real t = time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;

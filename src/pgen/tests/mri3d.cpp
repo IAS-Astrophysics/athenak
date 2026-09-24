@@ -88,7 +88,7 @@ void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   Real gm1 = eos.gamma - 1.0;
   if (eos.is_ideal && (is_strat)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "Stratified shearing box only works with isothermal EOS" << std::endl;
+              << "Stratified shearing box only works with isothernal EOS" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -103,12 +103,9 @@ void ProblemGenerator::MRI3d(ParameterInput *pin, const bool restart) {
   Real p0,hs;
   if (eos.is_ideal) {
     p0 = pin->GetReal("problem","pres");
-    // scale height using adiabatic speed of sound
-    hs = std::sqrt(eos.gamma*p0/d0)/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);
   } else {
     p0 = d0*SQR(eos.iso_cs);
-    // scale height using isothermal speed of sound
-    hs = eos.iso_cs/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);
+    hs = eos.iso_cs/(pmy_mesh_->pmb_pack->pmhd->psbox_u->omega0);   // scale height
   }
   Real binit = std::sqrt(2.0*p0/beta);
 
@@ -318,8 +315,8 @@ void MRIHistory(HistoryData *pdata, Mesh *pm) {
     hvars.the_array[nmhd_+9] = vol*u0_(m,IM1,k,j,i)*u0_(m,IM2,k,j,i)/u0_(m,IDN,k,j,i);
     hvars.the_array[nmhd_+10] = -vol*bcc(m,IBX,k,j,i)*bcc(m,IBY,k,j,i);
 
-    // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
-    for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
+    // fill the unused device-reduction slots with zeros
+    for (int n=nhist_; n<NREDUCTION_VARIABLES; ++n) {
       hvars.the_array[n] = 0.0;
     }
 
@@ -417,9 +414,13 @@ void StratifiedVerticalBCs(Mesh *pm) {
       // apply boundaries to inner_x3
       for (int k=0; k<ng; ++k) {
         b0.x1f(m,ks-k-1,j,i) = b0.x1f(m,ks,j,i);
-        if (i == n1-1) {b0.x1f(m,ks-k-1,j,i+1) = b0.x1f(m,ks,j,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, ks - k - 1, j, i + 1) = b0.x1f(m, ks, j, i + 1);
+        }
         b0.x2f(m,ks-k-1,j,i) = b0.x2f(m,ks,j,i);
-        if (j == n2-1) {b0.x2f(m,ks-k-1,j+1,i) = b0.x2f(m,ks,j+1,i);}
+        if (j == n2 - 1) {
+          b0.x2f(m, ks - k - 1, j + 1, i) = b0.x2f(m, ks, j + 1, i);
+        }
         b0.x3f(m,ks-k-1,j,i) = b0.x3f(m,ks,j,i);
       }
     }
@@ -428,9 +429,13 @@ void StratifiedVerticalBCs(Mesh *pm) {
       // apply boundaries to outer_x3
       for (int k=0; k<ng; ++k) {
         b0.x1f(m,ke+k+1,j,i) = b0.x1f(m,ke,j,i);
-        if (i == n1-1) {b0.x1f(m,ke+k+1,j,i+1) = b0.x1f(m,ke,j,i+1);}
+        if (i == n1 - 1) {
+          b0.x1f(m, ke + k + 1, j, i + 1) = b0.x1f(m, ke, j, i + 1);
+        }
         b0.x2f(m,ke+k+1,j,i) = b0.x2f(m,ke,j,i);
-        if (j == n2-1) {b0.x2f(m,ke+k+1,j+1,i) = b0.x2f(m,ke,j+1,i);}
+        if (j == n2 - 1) {
+          b0.x2f(m, ke + k + 1, j + 1, i) = b0.x2f(m, ke, j + 1, i);
+        }
         b0.x3f(m,ke+k+2,j,i) = b0.x3f(m,ke+1,j,i);
       }
     }

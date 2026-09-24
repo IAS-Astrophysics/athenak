@@ -9,7 +9,6 @@ import pytest
 import test_suite.testutils as testutils
 import athena_read
 
-
 # Threshold errors for test
 errors = {("imex2"): (0.75), ("imex3"): (0.85)}
 

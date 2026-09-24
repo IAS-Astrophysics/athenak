@@ -107,9 +107,10 @@ void ParameterInput::CheckBlockNames() {
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
     "coord", "adm", "shearing_box", "cyclic_zoom",
     "time", "problem", "output", "units",
-    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
-    "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles", "turb_driving",
-    "gravity", "fastflow"
+    "hydro", "mhd", "ion-neutral", "radiation", "dyn_radiation", "radiation_m1",
+    "bns_nurates", "photons", "z4c", "z4c_amr", "cce",
+    "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles",
+    "refinement", "turb_driving", "turb_init", "turb_mhd", "fastflow", "gravity"
     };
 
   for (auto it1 = block.begin(); it1 != block.end(); ++it1) {
@@ -242,7 +243,7 @@ void ParameterInput::LoadFromFile(IOWrapper &input, bool single_file_per_rank) {
       header = loc + 10; // store the header length
       break;
     }
-    if (header > kBufSize*10) {
+    if (header > kBufSize*15) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "<par_end> is not found in the first 40KBytes."
                 << std::endl << "Probably the file is broken or the wrong file is "

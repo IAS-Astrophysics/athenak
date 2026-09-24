@@ -566,9 +566,15 @@ void GeodesicGrid::OptimalAngles(Real ang[2]) {
         Real vrx = vx*cos(zeta)+ky*vz*sin(zeta)+kx*(kx*vx+ky*vy)*(1.0-cos(zeta));
         Real vry = vy*cos(zeta)-kx*vz*sin(zeta)+ky*(kx*vx+ky*vy)*(1.0-cos(zeta));
         Real vrz = vz*cos(zeta)+(kx*vy-ky*vx)*sin(zeta);
-        if (fabs(vrx) < vmin_curr) {vmin_curr = fabs(vrx);}
-        if (fabs(vry) < vmin_curr) {vmin_curr = fabs(vry);}
-        if (fabs(vrz) < vmin_curr) {vmin_curr = fabs(vrz);}
+        if (fabs(vrx) < vmin_curr) {
+          vmin_curr = fabs(vrx);
+        }
+        if (fabs(vry) < vmin_curr) {
+          vmin_curr = fabs(vry);
+        }
+        if (fabs(vrz) < vmin_curr) {
+          vmin_curr = fabs(vrz);
+        }
       }
       if (vmin_curr > vmax) {
         vmax = vmin_curr;

@@ -26,7 +26,7 @@ def arguments(res):
         "meshblock/nx3=1",
         "problem/along_x1=true",
         "problem/along_x2=false",
-        "problem/along_x3=false"
+        "problem/along_x3=false",
     ]
 
 
@@ -53,7 +53,7 @@ def test_run():
         if (l1_rms_err1 / l1_rms_err0) > errorratio:
             pytest.fail(
                 f"1D radiation hydro wave converging too slow,"
-                f"error ratio: {(l1_rms_err1/l1_rms_err0):g}"
+                f"error ratio: {(l1_rms_err1 / l1_rms_err0):g}"
                 f"  expected ratio: {errorratio:g}"
             )
     finally:

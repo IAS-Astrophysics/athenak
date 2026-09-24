@@ -145,5 +145,3 @@ initial_lapse_psi_exponent = -2.0
 # Swap x and z coordinates when interpolating,
 # so that the black holes are separated in the z direction
 swap_xz = false
-
-

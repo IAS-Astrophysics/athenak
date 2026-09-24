@@ -13,6 +13,9 @@ tst/test_log.txt
 *.hst
 *.rst
 
+# staging scan outputs
+staging_manifests/
+
 # Mac OS metadata
 .DS_Store
 .vscode
@@ -20,6 +23,10 @@ tst/test_log.txt
 # editor temp files
 *~
 *.swp
+/Lorene/
+
+# bns_nurates
+src/bns_nurates/
 Lorene
 
 # python cache

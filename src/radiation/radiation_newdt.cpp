@@ -86,7 +86,9 @@ TaskStatus Radiation::NewTimeStep(Driver *pdriver, int stage) {
           Real adt = fmin(tmp_min_dta,(acos(x*xn+y*yn+z*zn)/fabs(na_(m,n,k,j,i,nb)/n0)));
           // set timestep limitation if not excising this cell
           if (excise) {
-            if (!(rad_mask_(m,k,j,i))) { tmp_min_dta = adt; }
+            if (!(rad_mask_(m, k, j, i))) {
+              tmp_min_dta = adt;
+            }
           } else {
             tmp_min_dta = adt;
           }
@@ -102,9 +104,15 @@ TaskStatus Radiation::NewTimeStep(Driver *pdriver, int stage) {
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
   dtnew = dt1;
-  if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
-  if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
-  if (angular_fluxes_) { dtnew = std::min(dtnew, dta); }
+  if (pmy_pack->pmesh->multi_d) {
+    dtnew = std::min(dtnew, dt2);
+  }
+  if (pmy_pack->pmesh->three_d) {
+    dtnew = std::min(dtnew, dt3);
+  }
+  if (angular_fluxes_) {
+    dtnew = std::min(dtnew, dta);
+  }
 
   return TaskStatus::complete;
 }

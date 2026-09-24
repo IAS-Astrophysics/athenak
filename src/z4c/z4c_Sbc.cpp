@@ -155,8 +155,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int k, int j) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x1)) {
-        case BoundaryFlag::diode:
         case BoundaryFlag::vacuum:
+        case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, is);
           break;
@@ -170,8 +170,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       }
       // Outer boundary
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x1)) {
-        case BoundaryFlag::diode:
         case BoundaryFlag::vacuum:
+        case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, j, ie);
           break;
@@ -197,8 +197,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int k, int i) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x2)) {
-        case BoundaryFlag::diode:
         case BoundaryFlag::vacuum:
+        case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, js, i);
           break;
@@ -212,8 +212,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       }
       // Outer boundary
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x2)) {
-        case BoundaryFlag::diode:
         case BoundaryFlag::vacuum:
+        case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, k, je, i);
           break;
@@ -239,8 +239,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
     KOKKOS_LAMBDA(int m, int j, int i) {
       // Inner boundary
       switch(mb_bcs.d_view(m,BoundaryFace::inner_x3)) {
-        case BoundaryFlag::diode:
         case BoundaryFlag::vacuum:
+        case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ks, j, i);
           break;
@@ -254,8 +254,8 @@ TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
       }
       // Outer boundary
       switch (mb_bcs.d_view(m,BoundaryFace::outer_x3)) {
-        case BoundaryFlag::diode:
         case BoundaryFlag::vacuum:
+        case BoundaryFlag::diode:
         case BoundaryFlag::outflow:
             Z4cSommerfeld(z4c_, rhs_, indcs, size, m, ke, j, i);
           break;

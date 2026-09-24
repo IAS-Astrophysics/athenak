@@ -52,7 +52,9 @@ MeshBlockTree::MeshBlockTree(MeshBlockTree *parent, int ox1, int ox2, int ox3) :
 
 MeshBlockTree::~MeshBlockTree() {
   if (pleaf_ != nullptr) {
-    for (int i=0; i<nleaf_; i++) { delete pleaf_[i]; }
+    for (int i = 0; i < nleaf_; i++) {
+      delete pleaf_[i];
+    }
     delete [] pleaf_;
   }
 }
@@ -74,7 +76,9 @@ void MeshBlockTree::CreateRootGrid() {
 
   // Otherwise create vector of leaf pointers
   pleaf_ = new MeshBlockTree*[nleaf_];
-  for (int n=0; n<nleaf_; n++) {pleaf_[n] = nullptr;}
+  for (int n = 0; n < nleaf_; n++) {
+    pleaf_[n] = nullptr;
+  }
 
   // test if any of the leaves need to be refined further
   std::int32_t levfac = 1<<(pmesh_->root_level - lloc_.level-1);
@@ -153,7 +157,9 @@ void MeshBlockTree::Refine(int &nnew) {
   if (pleaf_ != nullptr) return;
 
   pleaf_ = new MeshBlockTree*[nleaf_];
-  for (int n=0; n<nleaf_; n++) {pleaf_[n] = nullptr;}
+  for (int n = 0; n < nleaf_; n++) {
+    pleaf_[n] = nullptr;
+  }
 
   for (int n=0; n<nleaf_; n++) {
     int i = n&1, j = (n>>1)&1, k = (n>>2)&1;
@@ -310,13 +316,17 @@ void MeshBlockTree::Derefine(int &ndel) {
 //! \brief Returns the number of MeshBlocks in Tree
 
 void MeshBlockTree::CountMeshBlocks(int& count) {
-  if (lloc_.level == 0) {count = 0;}
+  if (lloc_.level == 0) {
+    count = 0;
+  }
 
   if (pleaf_ == nullptr) {
     count++;
   } else {
     for (int n=0; n<nleaf_; n++) {
-      if (pleaf_[n] != nullptr) {pleaf_[n]->CountMeshBlocks(count);}
+      if (pleaf_[n] != nullptr) {
+        pleaf_[n]->CountMeshBlocks(count);
+      }
     }
   }
   return;
@@ -334,16 +344,22 @@ void MeshBlockTree::CountMeshBlocks(int& count) {
 //! (new gid n) --> (old gid). Also returns total number of MBs in tree in third argument.
 
 void MeshBlockTree::CreateZOrderedLLList(LogicalLocation *list, int *pglist, int& count) {
-  if (lloc_.level == 0) {count=0;}
+  if (lloc_.level == 0) {
+    count = 0;
+  }
 
   if (pleaf_ == nullptr) {
     list[count]=lloc_;
-    if (pglist != nullptr) {pglist[count]=gid_;}
+    if (pglist != nullptr) {
+      pglist[count] = gid_;
+    }
     gid_=count;
     count++;
   } else {
     for (int n=0; n<nleaf_; n++) {
-      if (pleaf_[n] != nullptr) {pleaf_[n]->CreateZOrderedLLList(list, pglist, count);}
+      if (pleaf_[n] != nullptr) {
+        pleaf_[n]->CreateZOrderedLLList(list, pglist, count);
+      }
     }
   }
   return;

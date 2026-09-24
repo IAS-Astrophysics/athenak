@@ -21,9 +21,9 @@ AthenaK is targeting challenging problems that require exascale resources, and a
 
 The numerical algorithms implemented in AthenaK are all based on higher-order finite volume methods with a variety of reconstruction algorithms, Riemann solvers, and time integration methods.
 
-AthenaK was developed in conjunction with the 
+AthenaK was developed in conjunction with the
 [Parthenon AMR framework](https://github.com/parthenon-hpc-lab/parthenon) and borrows many features
-from that effort. It is also closely related to the 
+from that effort. It is also closely related to the
 [AthenaPK MHD code](https://github.com/parthenon-hpc-lab/athenapk), which is another implementation
 of Athena++ based on the Parthenon framework.
 

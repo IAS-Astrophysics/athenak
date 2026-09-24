@@ -64,6 +64,14 @@ struct DynGRMHDTaskIDs {
   TaskID zadep;
   TaskID c2pdep;
   TaskID rkdep;
+
+  TaskID postrad_restu;
+  TaskID postrad_sendu;
+  TaskID postrad_recvu;
+  TaskID postrad_bcs;
+  TaskID postrad_prol;
+  TaskID postrad_c2p;
+  TaskID postrad_clear;
 };
 
 namespace dyngr {
@@ -78,6 +86,7 @@ class DynGRMHD {
 
   TaskStatus SetTmunu(Driver *d, int stage);
   TaskStatus SetADMVariables(Driver *d, int stage);
+  TaskStatus PrepareADM(Driver *d, int stage);
   TaskStatus UpdateExcisionMasks(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
 
@@ -109,7 +118,8 @@ class DynGRMHD {
   bool enforce_maximum;     // enforce local maximum principle during FOFC
   Real dmp_M;               // threshold multiplier for discrete maximum principle.
   bool fixed_evolution;     // Disable mhd evolution
-  bool scalar_pplimiter;    // Apply positivity preserving limiter on scalar
+  bool scalar_pplimiter;    // Apply positivity-preserving limiter on passive scalars
+  bool calculate_tmunu;     // evaluate tmunu even in the absence of z4c
 };
 
 template<class EOSPolicy, class ErrorPolicy>

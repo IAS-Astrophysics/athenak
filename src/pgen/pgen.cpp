@@ -24,8 +24,11 @@
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "pgen.hpp"
 
@@ -36,6 +39,7 @@
 ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -105,6 +109,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
                                    bool single_file_per_rank) :
     user_bcs(false),
     user_srcs(false),
+    user_efield(false),
     user_hist(false),
     pmy_mesh_(pm) {
   // check for user-defined boundary conditions
@@ -128,8 +133,10 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   adm::ADM* padm = pm->pmb_pack->padm;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   radiation::Radiation* prad=pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad=pm->pmb_pack->pdynrad;
+  radiationm1::RadiationM1* pradm1=pm->pmb_pack->pradm1;
   TurbulenceDriver* pturb=pm->pmb_pack->pturb;
-  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0;
+  int nrad = 0, nhydro = 0, nmhd = 0, nforce = 3, nadm = 0, nz4c = 0, nradm1 = 0;
   if (phydro != nullptr) {
     nhydro = phydro->nhydro + phydro->nscalars;
   }
@@ -138,6 +145,11 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   }
   if (prad != nullptr) {
     nrad = prad->prgeo->nangles;
+  } else if (pdynrad != nullptr) {
+    nrad = pdynrad->prgeo->nangles;
+  }
+  if (pradm1 != nullptr) {
+    nradm1 = pradm1->nvarstot;
   }
   if (pz4c != nullptr) {
     nz4c = pz4c->nz4c;
@@ -147,7 +159,8 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 
   // root process reads z4c last_output_time and tracker data
   if (pz4c != nullptr) {
-    Real last_output_time = 0.0;
+    Real last_output_time;
+    Real cce_dump_last_output_time;
     if (global_variable::my_rank == 0 || single_file_per_rank) {
       if (resfile.Read_Reals(&last_output_time, 1,single_file_per_rank) != 1) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -156,12 +169,23 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         exit(EXIT_FAILURE);
       }
     }
+    if (global_variable::my_rank == 0 || single_file_per_rank) {
+      if (resfile.Read_Reals(&cce_dump_last_output_time, 1,single_file_per_rank) != 1) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl
+                  << "z4c::cce_dump_last_output_time data size read from restart "
+                  << "file is incorrect, restart file is broken." << std::endl;
+        exit(EXIT_FAILURE);
+      }
+    }
 #if MPI_PARALLEL_ENABLED
     if (!single_file_per_rank) {
       MPI_Bcast(&last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&cce_dump_last_output_time, sizeof(Real), MPI_CHAR, 0, MPI_COMM_WORLD);
     }
 #endif
     pz4c->last_output_time = last_output_time;
+    pz4c->cce_dump_last_output_time = cce_dump_last_output_time;
 
     for (auto &pt : pz4c->ptracker) {
       Real pos[3];
@@ -179,6 +203,24 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
       }
 #endif
       pt->SetPos(&pos[0]);
+    }
+
+    for (auto &pt : pz4c->phorizon_dump) {
+      int output_count;
+      if (global_variable::my_rank == 0 || single_file_per_rank) {
+        if (resfile.Read_Integers(&output_count, 1, single_file_per_rank) != 1) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "horizon dump data size read from restart "
+                    << "file is incorrect, restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+#if MPI_PARALLEL_ENABLED
+      if (!single_file_per_rank) {
+        MPI_Bcast(&output_count, sizeof(int), MPI_CHAR, 0, MPI_COMM_WORLD);
+      }
+#endif
+      pt->output_count = output_count;
     }
   }
 
@@ -239,6 +281,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
 #endif
 
   IOWrapperSizeT data_size_ = 0;
+  IOWrapperSizeT radiation_data_size = 0;
   if (phydro != nullptr) {
     data_size_ += nout1*nout2*nout3*nhydro*sizeof(Real); // hydro u0
   }
@@ -248,8 +291,12 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*(nout2+1)*nout3*sizeof(Real);    // mhd b0.x2f
     data_size_ += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
   }
-  if (prad != nullptr) {
-    data_size_ += nout1*nout2*nout3*nrad*sizeof(Real);   // rad i0
+  if (prad != nullptr || pdynrad != nullptr) {
+    radiation_data_size = nout1*nout2*nout3*nrad*sizeof(Real);
+    data_size_ += radiation_data_size;                    // rad i0
+  }
+  if (pradm1 != nullptr) {
+    data_size_ += nout1*nout2*nout3*nradm1*sizeof(Real);   // radm1 u0
   }
   if (pturb != nullptr) {
     data_size_ += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
@@ -260,7 +307,17 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     data_size_ += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
   }
 
-  if (data_size_ != data_size) {
+  bool missing_dynrad_i0 = false;
+  if (pdynrad != nullptr && prad == nullptr && radiation_data_size > 0) {
+    bool allow_missing_i0 =
+        pin->GetOrAddBoolean("dyn_radiation", "allow_missing_restart_i0", false);
+    missing_dynrad_i0 = (allow_missing_i0 &&
+                         data_size < data_size_ &&
+                         data_size_ - data_size == radiation_data_size);
+  }
+  restart_missing_dynrad_i0 = missing_dynrad_i0;
+
+  if (data_size_ != data_size && !(missing_dynrad_i0)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
               << std::endl << "CC data size read from restart file not equal to size "
               << "of Hydro, MHD, Rad, and/or Z4c arrays, restart file is broken."
@@ -271,7 +328,7 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // read CC data into host array
   IOWrapperSizeT offset_myrank = headeroffset;
   if (!single_file_per_rank) {
-    offset_myrank += data_size_ * pm->gids_eachrank[global_variable::my_rank];
+    offset_myrank += data_size * pm->gids_eachrank[global_variable::my_rank];
   }
   IOWrapperSizeT myoffset = offset_myrank;
 
@@ -466,7 +523,9 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
     myoffset = offset_myrank;
   }
 
-  if (prad != nullptr) {
+  if (missing_dynrad_i0) {
+    Kokkos::deep_copy(pdynrad->i0, 0.0);
+  } else if (prad != nullptr || pdynrad != nullptr) {
     Kokkos::realloc(ccin, nmb, nrad, nout3, nout2, nout1);
     for (int m=0;  m<noutmbs_max; ++m) {
       // every rank has a MB to read, so read collectively
@@ -500,9 +559,54 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
         myoffset += data_size;
       }
     }
-    Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+    if (prad != nullptr) {
+      Kokkos::deep_copy(Kokkos::subview(prad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    } else {
+      Kokkos::deep_copy(Kokkos::subview(pdynrad->i0, std::make_pair(0,nmb), Kokkos::ALL,
+                        Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
+    }
+    offset_myrank += radiation_data_size;   // radiation i0
+    myoffset = offset_myrank;
+  }
+
+  if (pradm1 != nullptr) {
+    Kokkos::realloc(ccin, nmb, nradm1, nout3, nout2, nout1);
+    for (int m=0;  m<noutmbs_max; ++m) {
+      // every rank has a MB to read, so read collectively
+      if (m < noutmbs_min) {
+        // get ptr to cell-centered MeshBlock data
+        auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Read_Reals_at_all(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "CC radm1 data not read correctly from rst file, "
+                    << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += data_size;
+
+      // some ranks are finished writing, so use non-collective write
+      } else if (m < pm->nmb_thisrank) {
+        // get ptr to MeshBlock data
+        auto mbptr = Kokkos::subview(ccin, m, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
+                                     Kokkos::ALL);
+        int mbcnt = mbptr.size();
+        if (resfile.Read_Reals_at(mbptr.data(), mbcnt, myoffset,
+                                      single_file_per_rank) != mbcnt) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "CC radm1 data not read correctly from rst file, "
+                    << "restart file is broken." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+        myoffset += data_size;
+      }
+    }
+    Kokkos::deep_copy(Kokkos::subview(pradm1->u0, std::make_pair(0,nmb), Kokkos::ALL,
                       Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), ccin);
-    offset_myrank += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
+    offset_myrank += nout1*nout2*nout3*nradm1*sizeof(Real);   // radm1 u0
     myoffset = offset_myrank;
   }
 
@@ -932,8 +1036,6 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     CShock(pin, is_restart);
   } else if (pgen_fun_name.compare("divb_amr") == 0) {
     DivBAMR(pin, is_restart);
-  } else if (pgen_fun_name.compare("diffusion") == 0) {
-    Diffusion(pin, is_restart);
   } else if (pgen_fun_name.compare("linear_wave") == 0) {
     LinearWave(pin, is_restart);
   } else if (pgen_fun_name.compare("implode") == 0) {
@@ -946,8 +1048,22 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     OrszagTang(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_linear_wave") == 0) {
     RadiationLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_equilibration") == 0) {
+    RadiationEquilibration(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_beam") == 0) {
     RadiationBeam(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_crossing_beams") == 0) {
+    RadiationCrossingBeams(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_kerr_orbit_beam") == 0) {
+    RadiationKerrOrbitBeam(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_flrw_redshift") == 0) {
+    RadiationFLRWRedshift(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_lapse_gradient") == 0) {
+    RadiationLapseGradient(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_momentum_source") == 0) {
+    RadiationMomentumSource(pin, is_restart);
+  } else if (pgen_fun_name.compare("dynbbh_beam") == 0) {
+    DynBBHBeam(pin, is_restart);
   } else if (pgen_fun_name.compare("shock_tube") == 0) {
     ShockTube(pin, is_restart);
   } else if (pgen_fun_name.compare("shwave") == 0) {
@@ -956,8 +1072,34 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     Z4cBoostedPuncture(pin, is_restart);
   } else if (pgen_fun_name.compare("z4c_linear_wave") == 0) {
     Z4cLinearWave(pin, is_restart);
+  } else if (pgen_fun_name.compare("spherical_collapse") == 0) {
+    SphericalCollapse(pin, is_restart);
   } else if (pgen_fun_name.compare("diffusion") == 0) {
     Diffusion(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_beamtest") == 0) {
+    RadiationM1BeamTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_latticetest") == 0) {
+    RadiationM1LatticeTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_brenttest") == 0) {
+    RadiationM1BrentTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_hybridsjtest") == 0) {
+    RadiationM1HybridsjTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_spheretest") == 0) {
+    RadiationM1SphereTest(pin, is_restart);
+#if ENABLE_NURATES
+  } else if (pgen_fun_name.compare("rad_m1_singlezonetest") == 0) {
+    RadiationM1SingleZoneTest(pin, is_restart);
+#endif
+  } else if (pgen_fun_name.compare("rad_m1_diffusiontest") == 0) {
+    RadiationM1DiffusionTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_veljumptest") == 0) {
+    RadiationM1VelocityJumpTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_photon_thermalization") == 0) {
+    RadiationM1PhotonThermalization(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_photon_diffusion") == 0) {
+    RadiationM1PhotonDiffusion(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_flrw_redshift") == 0) {
+    RadiationM1FLRWRedshift(pin, is_restart);
   } else if (pgen_fun_name.compare("gravity") == 0) {
     SelfGravity(pin, is_restart);
   } else if (pgen_fun_name.compare("binary_gravity") == 0) {
@@ -971,8 +1113,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
   } else if (pgen_fun_name.compare("gauss_legendre") == 0) {
     GaussLegendre(pin, is_restart);
 
+  // else, name not set on command line or input file, print warning and quit
   } else {
-    // name not set on command line or input file, print warning and quit
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
         << "Problem generator name could not be found in <problem> block in input file"
         << std::endl

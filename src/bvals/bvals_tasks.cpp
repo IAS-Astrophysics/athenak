@@ -119,7 +119,9 @@ TaskStatus MeshBoundaryValues::ClearFluxRecv() {
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (recvbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(recvbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
       }
     }
   }
@@ -148,7 +150,9 @@ TaskStatus MeshBoundaryValues::ClearFluxSend() {
            (nghbr.h_view(m,n).rank != global_variable::my_rank) &&
            (sendbuf[n].flux_req[m] != MPI_REQUEST_NULL) ) {
         int ierr = MPI_Wait(&(sendbuf[n].flux_req[m]), MPI_STATUS_IGNORE);
-        if (ierr != MPI_SUCCESS) {no_errors=false;}
+        if (ierr != MPI_SUCCESS) {
+          no_errors = false;
+        }
       }
     }
   }

@@ -135,7 +135,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real e[4][4] = {0.0}; Real e_cov[4][4] = {0.0}; Real omega[4][4][4] = {0.0};
     ComputeSnakeMetricAndTetrad(x1f,x2v,x3v,mag,kym,snake_tet,
                                 glower,gupper,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d1_x1f_   (m,d,k,j,i) = e[d][1]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d1_x1f_(m, d, k, j, i) = e[d][1];
+    }
   });
 
   // set tetrad components (subset) at x2f
@@ -159,7 +161,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real e[4][4] = {0.0}; Real e_cov[4][4] = {0.0}; Real omega[4][4][4] = {0.0};
     ComputeSnakeMetricAndTetrad(x1v,x2f,x3v,mag,kym,snake_tet,
                                 glower,gupper,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d2_x2f_(m,d,k,j,i) = e[d][2]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d2_x2f_(m, d, k, j, i) = e[d][2];
+    }
   });
 
   // set tetrad components (subset) at x3f
@@ -183,7 +187,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Real e[4][4] = {0.0}; Real e_cov[4][4] = {0.0}; Real omega[4][4][4] = {0.0};
     ComputeSnakeMetricAndTetrad(x1v,x2v,x3f,mag,kym,snake_tet,
                                 glower,gupper,e,e_cov,omega);
-    for (int d=0; d<4; ++d) { tet_d3_x3f_   (m,d,k,j,i) = e[d][3]; }
+    for (int d = 0; d < 4; ++d) {
+      tet_d3_x3f_(m, d, k, j, i) = e[d][3];
+    }
   });
 
   // set initial condition intensity and beam source mask

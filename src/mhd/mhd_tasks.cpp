@@ -49,8 +49,10 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   id.flux      = tl["stagen"]->AddTask(&MHD::Fluxes, this, id.copyu);
   id.sendf     = tl["stagen"]->AddTask(&MHD::SendFlux, this, id.flux);
   id.recvf     = tl["stagen"]->AddTask(&MHD::RecvFlux, this, id.sendf);
-  id.rkupdt    = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.recvf);
-  id.srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.rkupdt);
+  id.repairf   = tl["stagen"]->AddTask(&MHD::RepairNonFiniteFluxes, this, id.recvf);
+  id.rkupdt    = tl["stagen"]->AddTask(&MHD::RKUpdate, this, id.repairf);
+  id.repairu   = tl["stagen"]->AddTask(&MHD::RepairNonFiniteConserved, this, id.rkupdt);
+  id.srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, this, id.repairu);
   id.sendu_oa  = tl["stagen"]->AddTask(&MHD::SendU_OA, this, id.srctrms);
   id.recvu_oa  = tl["stagen"]->AddTask(&MHD::RecvU_OA, this, id.sendu_oa);
   id.restu     = tl["stagen"]->AddTask(&MHD::RestrictU, this, id.recvu_oa);
@@ -80,6 +82,17 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
   // task list anyways to catch potential bugs in MPI communication logic
   id.crecv = tl["after_stagen"]->AddTask(&MHD::ClearRecv, this, id.csend);
 
+  if (pmy_pack->pradm1 != nullptr) {
+    id.postrad_initrecvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::InitRecvU, this, id.crecv);
+    id.postrad_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.postrad_initrecvu);
+    id.postrad_sendu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::SendU, this, id.postrad_restu);
+    id.postrad_recvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RecvU, this, id.postrad_sendu);
+    id.postrad_bcs = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ApplyPhysicalBCs, this, id.postrad_recvu);
+    id.postrad_prol = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::Prolongate, this, id.postrad_bcs);
+    id.postrad_c2p = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ConToPrim, this, id.postrad_prol);
+    id.postrad_csend = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearSendU, this, id.postrad_c2p);
+    id.postrad_crecv = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearRecvU, this, id.postrad_csend);
+  }
   if (has_any_sts_diffusion) {
     tl["before_parabolic_stagen"]->AddTask(&MHD::InitRecvParabolic, this, none);
 
@@ -267,6 +280,8 @@ TaskStatus MHD::Fluxes(Driver *pdrive, int stage) {
     }
   }
 
+  if (!CheckFiniteDensityFlux("Fluxes/FOFC", pdrive, stage)) return TaskStatus::fail;
+  if (!CheckFiniteFaceEMF("Fluxes/FOFC", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -424,12 +439,18 @@ TaskStatus MHD::RecvU_Shr(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList MHD::EField
-//! \brief Wrapper task list function to compute electric field
+//! \brief Wrapper task list function to compute electric field and apply source terms
 
 TaskStatus MHD::EField(Driver *pdrive, int stage) {
-  // Use CT to compute corner E
   CornerE(pdrive, stage);
+  return EFieldSrc(pdrive, stage);
+}
 
+//----------------------------------------------------------------------------------------
+//! \fn TaskList MHD::EFieldSrc
+//! \brief Wrapper task list function to apply source terms to electric field
+
+TaskStatus MHD::EFieldSrc(Driver *pdrive, int stage) {
   AddSelectedDiffusionEMF(parabolic::DiffusionSelection::explicit_only);
 
   if (psbox_b != nullptr) {
@@ -441,6 +462,11 @@ TaskStatus MHD::EField(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->pzoom != nullptr) {
     pmy_pack->pmesh->pzoom->SourceTermsFC(efld);
   }
+  if (pmy_pack->pmesh->pgen->user_efield &&
+      pmy_pack->pmesh->pgen->user_efield_func != nullptr) {
+    (pmy_pack->pmesh->pgen->user_efield_func)(pmy_pack->pmesh, efld);
+  }
+  if (!CheckFiniteEdgeE("EFieldSrc", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -465,6 +491,8 @@ TaskStatus MHD::SendE(Driver *pdrive, int stage) {
 TaskStatus MHD::RecvE(Driver *pdrive, int stage) {
   TaskStatus tstat = TaskStatus::complete;
   tstat = pbval_b->RecvAndUnpackFluxFC(efld);
+  if (tstat == TaskStatus::complete &&
+      !CheckFiniteEdgeE("RecvE", pdrive, stage)) return TaskStatus::fail;
   return tstat;
 }
 
@@ -495,6 +523,8 @@ TaskStatus MHD::RecvB_OA(Driver *pdrive, int stage) {
     if ((stage == pdrive->nexp_stages) &&
         (pmy_pack->pmesh->three_d || porb_b->shearing_box_r_phi)) {
       tstat = porb_b->RecvAndUnpackFC(b0, recon_method);
+      if (tstat == TaskStatus::complete &&
+          !CheckFiniteFaceB("RecvB_OA", pdrive, stage)) return TaskStatus::fail;
     }
   }
   return tstat;
@@ -515,6 +545,8 @@ TaskStatus MHD::SendB(Driver *pdrive, int stage) {
 
 TaskStatus MHD::RecvB(Driver *pdrive, int stage) {
   TaskStatus tstat = pbval_b->RecvAndUnpackFC(b0, coarse_b0);
+  if (tstat == TaskStatus::complete &&
+      !CheckFiniteFaceB("RecvB", pdrive, stage)) return TaskStatus::fail;
   return tstat;
 }
 
@@ -544,6 +576,8 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
     // only execute when (3D OR 2d_r_phi)
     if (pmy_pack->pmesh->three_d || psbox_b->shearing_box_r_phi) {
       tstat = psbox_b->RecvAndUnpackFC(b0);
+      if (tstat == TaskStatus::complete &&
+          !CheckFiniteFaceB("RecvB_Shr", pdrive, stage)) return TaskStatus::fail;
     }
   }
   return tstat;
@@ -573,6 +607,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
   }
 
+  if (!CheckFiniteFaceB("ApplyPhysicalBCs", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -604,6 +639,7 @@ TaskStatus MHD::Prolongate(Driver *pdrive, int stage) {
       pbval_b->ProlongateFC(b0, coarse_b0);
     }
   }
+  if (!CheckFiniteFaceB("Prolongate", pdrive, stage)) return TaskStatus::fail;
   return TaskStatus::complete;
 }
 
@@ -749,6 +785,34 @@ TaskStatus MHD::RestrictB(Driver *pdrive, int stage) {
   // Only execute Mesh function with SMR/AMR
   if (pmy_pack->pmesh->multilevel) {
     pmy_pack->pmesh->pmr->RestrictFC(b0, coarse_b0);
+  }
+  if (!CheckFiniteFaceB("RestrictB", pdrive, stage)) return TaskStatus::fail;
+
+  return TaskStatus::complete;
+}
+
+TaskStatus MHD::InitRecvU(Driver *pdrive, int stage) {
+  // post receives for U
+  TaskStatus tstat = pbval_u->InitRecv(nmhd+nscalars);
+  if (tstat != TaskStatus::complete) return tstat;
+  return tstat;
+}
+
+TaskStatus MHD::ClearSendU(Driver *pdrive, int stage) {
+  if ((stage >= 0) || (stage == -1)) {
+    // check sends of U complete
+    TaskStatus tstat = pbval_u->ClearSend();
+    if (tstat != TaskStatus::complete) return tstat;
+  }
+  return TaskStatus::complete;
+}
+
+TaskStatus MHD::ClearRecvU(Driver *pdrive, int stage) {
+  TaskStatus tstat;
+  if ((stage >= 0) || (stage == -1)) {
+    // check receives of U complete
+    tstat = pbval_u->ClearRecv();
+    if (tstat != TaskStatus::complete) return tstat;
   }
   return TaskStatus::complete;
 }

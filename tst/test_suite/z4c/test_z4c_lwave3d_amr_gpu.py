@@ -8,7 +8,6 @@ import pytest
 import test_suite.testutils as testutils
 import athena_read
 
-
 # Threshold errors and error ratios for different finite-difference orders
 errors = {("2nd-order"): (3.5e-11, 0.25), ("6th-order"): (6.0e-12, 0.0)}
 
@@ -56,7 +55,7 @@ def test_run_2nd():
         if (l1_rms_err1 / l1_rms_err0) > errorratio:
             pytest.fail(
                 f"2nd-order Z4c wave converging too slow,"
-                f"error ratio: {(l1_rms_err1/l1_rms_err0):g}"
+                f"error ratio: {(l1_rms_err1 / l1_rms_err0):g}"
                 f"  expected ratio: {errorratio:g}"
             )
     finally:

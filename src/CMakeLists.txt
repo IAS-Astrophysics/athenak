@@ -105,6 +105,7 @@ add_executable(
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
         mhd/mhd_ct.cpp
+        mhd/mhd_diagnostics.cpp
         mhd/mhd_fluxes.cpp
         mhd/mhd_fofc.cpp
         mhd/mhd_newdt.cpp
@@ -149,7 +150,10 @@ add_executable(
         pgen/tests/shwave.cpp
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
+        pgen/tests/collapse.cpp
         pgen/tests/z4c_boosted_puncture.cpp
+        pgen/tests/rad_m1_diffusiontest.cpp
+        pgen/tests/rad_m1_velocityjump.cpp
         pgen/tests/z4c_linear_wave.cpp
         pgen/tests/jeans_wave.cpp
         pgen/tests/binary_gravity.cpp
@@ -165,6 +169,13 @@ add_executable(
         radiation/radiation_tasks.cpp
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
+        dyn_radiation/dyn_radiation.cpp
+        dyn_radiation/dyn_radiation_fluxes.cpp
+        dyn_radiation/dyn_radiation_newdt.cpp
+        dyn_radiation/dyn_radiation_source.cpp
+        dyn_radiation/dyn_radiation_tasks.cpp
+        dyn_radiation/dyn_radiation_tetrad.cpp
+        dyn_radiation/dyn_radiation_update.cpp
 
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp
@@ -192,6 +203,8 @@ add_executable(
         utils/cart_grid.cpp
         utils/watchdog.cpp
         utils/spherical_surface.cpp
+        utils/flux_generalized.cpp
+        utils/surface_grid.cpp
 
 
         z4c/compact_object_tracker.cpp
@@ -211,7 +224,40 @@ add_executable(
         z4c/z4c_amr.cpp
         z4c/cce/cce.cpp
         z4c/driftcontrol/driftcontrol.cpp
+
+        radiation_m1/radiation_m1.cpp
+        radiation_m1/radiation_m1_tasks.cpp
+        radiation_m1/radiation_m1_update.cpp
+        radiation_m1/radiation_m1_fluxes.cpp
+        radiation_m1/radiation_m1_helpers.hpp
+        radiation_m1/radiation_m1_newdt.cpp
+        radiation_m1/radiation_m1_macro.hpp
+        radiation_m1/radiation_m1_calc_closure.cpp
+        radiation_m1/radiation_m1_tmunu.cpp
+        bvals/physics/radiation_m1_bcs.cpp
+        radiation_m1/radiation_m1_beams.cpp
+        pgen/tests/rad_m1_beams.cpp
+        pgen/tests/rad_m1_brent.cpp
+        radiation_m1/radiation_m1_calc_opacities_toy.cpp
+        pgen/tests/rad_m1_latticetest.cpp
+        pgen/tests/rad_m1_spheretest.cpp
+        pgen/tests/rad_m1_hybridsj.cpp
+        radiation_m1/radiation_m1_toy.hpp
+        radiation_m1/radiation_m1_calc_opacities_photons.cpp
+        radiation_m1/radiation_m1_compton.cpp
+        pgen/tests/rad_m1_photon_thermalization.cpp
+        pgen/tests/rad_m1_photon_diffusion.cpp
 )
+
+# add bns_nurates
+if (ENABLE_NURATES)
+    target_compile_definitions(athena PUBLIC ENABLE_NURATES)
+    target_sources(athena
+        PRIVATE
+            radiation_m1/radiation_m1_calc_opacities_nurates.cpp
+            pgen/tests/rad_m1_singlezone.cpp
+    )
+endif()
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
@@ -221,6 +267,11 @@ if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
   target_sources(athena
       PRIVATE
           pgen/${PROBLEM}.cpp
+  )
+else()
+  target_sources(athena
+      PRIVATE
+          pgen/dynbbh_beam.cpp
   )
 endif()
 

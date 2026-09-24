@@ -32,7 +32,7 @@ namespace z4c {
 //! \fn  void Z4c::QueueZ4cTasks
 //! \brief queue Z4c tasks into NumericalRelativity
 void Z4c::QueueZ4cTasks() {
-  printf("AssembleZ4cTasks\n");
+  Kokkos::printf("AssembleZ4cTasks\n");
   using namespace mhd;     // NOLINT(build/namespaces)
   using namespace numrel;  // NOLINT(build/namespaces)
   NumericalRelativity *pnr = pmy_pack->pnr;
@@ -47,15 +47,15 @@ void Z4c::QueueZ4cTasks() {
   switch (indcs.ng) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, M1_SetTmunu});
       break;
     case 3:
       pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, M1_SetTmunu});
       break;
     case 4:
       pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, M1_SetTmunu});
       break;
   }
   pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,

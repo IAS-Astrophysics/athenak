@@ -1,0 +1,557 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+\usepackage{hyperref}
+
+\title{DynBBH Tabulated Trajectories, Analytic Backgrounds, and Smooth Excision}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Scope}
+
+This note summarizes the changes made to the boosted Kerr--Schild
+binary-black-hole problem generator and to the associated excision path.
+The historical circular Keplerian binary remains the default.  New behavior
+is enabled only by explicit runtime flags, chiefly the trajectory-table flag,
+smooth-excision flag, and optional magnetic-damping flag.
+
+The main additions are:
+\begin{itemize}
+  \item a tabulated black-hole trajectory/property path with masses,
+  positions, spins, and coordinate velocities;
+  \item cubic-Hermite interpolation of positions and velocities, with
+  analytic time derivatives used by the metric and extrinsic-curvature
+  calculation;
+  \item refactored boosted Kerr--Schild algebra built from reusable boost,
+  Kerr--Schild, and superposition helpers;
+  \item a smooth hydrodynamic drain inside the apparent horizons;
+  \item an optional constraint-transport-compatible magnetic damping term
+  applied through edge-centered EMFs.
+\end{itemize}
+
+The smooth hydrodynamic drain acts on primitive and conserved matter
+variables.  It does not directly rescale, zero, or window the face-centered
+magnetic field.  Direct pointwise modification of the staggered magnetic
+field can create discrete magnetic monopoles, so magnetic damping is instead
+implemented as an EMF contribution to the constrained-transport update.
+
+\section{Trajectory Tables and Analytic Derivatives}
+
+When the trajectory-table mode is disabled, the binary state is still the
+historical circular Keplerian orbit.  When it is enabled, the table columns
+are interpreted as
+\begin{equation}
+\begin{split}
+&t,\; m_1,\; m_2,\; X_1,\;Y_1,\;Z_1,\;X_2,\;Y_2,\;Z_2,\;
+\chi_{1x},\;\chi_{1y},\;\chi_{1z},\\
+&\chi_{2x},\;\chi_{2y},\;\chi_{2z},\;
+V_{1x},\;V_{1y},\;V_{1z},\;V_{2x},\;V_{2y},\;V_{2z}.
+\end{split}
+\end{equation}
+The table spin entries are dimensionless spins \(\chi_A^i\).  The Kerr
+spin vectors used by the metric and horizon shape are
+\begin{equation}
+  a_A^i = m_A\chi_A^i .
+\end{equation}
+
+For each position component \(x(t)\) on a segment
+\([t_0,t_1]\), let \(h=t_1-t_0\) and
+\(s=(t-t_0)/h\).  The interpolant is the cubic Hermite polynomial
+\begin{equation}
+\begin{split}
+  x(t) ={}&
+  (2s^3-3s^2+1)x_0
+  +(s^3-2s^2+s)h v_0\\
+  &+(-2s^3+3s^2)x_1
+  +(s^3-s^2)h v_1 .
+\end{split}
+\end{equation}
+The first derivative gives the interpolated velocity and the second
+derivative gives the acceleration used by the analytic time derivatives.
+Masses and spin components are linearly interpolated, with piecewise-constant
+time derivatives on each segment:
+\begin{equation}
+  f(t) = (1-s)f_0 + s f_1,
+  \qquad
+  \dot f(t) = \frac{f_1-f_0}{h}.
+\end{equation}
+The active table segment is cached so repeated calls at nearby times do not
+perform a full search.
+
+The metric path now evaluates the four-metric and its derivatives
+analytically through dual numbers rather than by finite-differencing metric
+evaluations in time.  In particular, the boost Jacobian has no zero-velocity
+early return.  Instead, the regular small-\(V^2\) expansion
+\begin{equation}
+  \frac{\gamma - 1}{V^2}
+  =
+  \frac{1}{2}
+  +\frac{3}{8}V^2
+  +\frac{5}{16}V^4
+  +O(V^6)
+\end{equation}
+is used.  This preserves dual-number derivatives of the boost even when an
+instantaneously stationary black hole has nonzero acceleration.
+
+\section{Boosted Kerr--Schild Superposition}
+
+Each black-hole contribution is assembled as a boosted Kerr--Schild
+perturbation and then superposed on the background.  The algebra is factored
+into helper routines for the Lorentz boost, spatial Kerr--Schild radius,
+single-hole perturbation, and final ADM conversion.  This avoids duplicating
+large expanded symbolic expressions and makes the table-driven and analytic
+Keplerian paths share the same metric assembly.
+
+For GPU safety, table states used inside Kokkos kernels are copied into
+plain by-value state objects before launching the kernel.  Device lambdas
+therefore capture POD data and Kokkos views, not host stack references.
+
+\section{Boosted Spinning Horizon Mask}
+
+For black hole \(A\), let \(X_A^i\), \(V_A^i\), \(\chi_A^i\), and \(m_A\)
+denote the position, coordinate velocity, dimensionless spin vector, and
+mass.  The Kerr spin vector used in the horizon and metric algebra is
+\begin{equation}
+  a_A^i = m_A\chi_A^i .
+\end{equation}
+For a cell center \(x^i\), define the displacement
+\begin{equation}
+  \Delta x_A^i = x^i - X_A^i .
+\end{equation}
+The displacement is mapped into the instantaneously boosted local frame by
+\begin{equation}
+  \Delta \bar{x}_A^i
+  =
+  \Delta x_A^i
+  +
+  \frac{\gamma_A - 1}{V_A^2}
+  V_A^i
+  \left(V_{A j}\Delta x_A^j\right),
+  \qquad
+  \gamma_A = \frac{1}{\sqrt{1 - V_A^2}} .
+\end{equation}
+For small \(V_A^2\), the regular expansion
+\begin{equation}
+  \frac{\gamma_A - 1}{V_A^2}
+  =
+  \frac{1}{2}
+  + \frac{3}{8} V_A^2
+  + \frac{5}{16} V_A^4
+  + O(V_A^6)
+\end{equation}
+is used to avoid loss of precision.
+
+The spinning Kerr--Schild radial coordinate is computed from
+\begin{equation}
+  r_A^2 =
+  \frac{
+    \bar{r}_A^2 - a_A^2
+    +
+    \sqrt{\left(\bar{r}_A^2-a_A^2\right)^2 + 4a_A^2 z_A^2}
+  }{2},
+\end{equation}
+where
+\begin{equation}
+  \bar{r}_A^2 = \Delta \bar{x}_{A i}\Delta \bar{x}_A^i,
+  \qquad
+  z_A = \frac{a_{A i}\Delta \bar{x}_A^i}{|a_A|}.
+\end{equation}
+If \(a_A^2=0\), this reduces to the Euclidean radius
+\(\sqrt{\Delta \bar{x}_{A i}\Delta \bar{x}_A^i}\).
+
+The isolated Kerr horizon radius is approximated by
+\begin{equation}
+  r_{H,A} = m_A + \sqrt{m_A^2 - |a_A|^2}.
+\end{equation}
+A cell is marked as geometrically excised when
+\begin{equation}
+  \min_A \left(r_A - r_{H,A}\right) \leq 0 .
+\end{equation}
+
+\section{Smooth Excision Weight}
+
+The smooth drain weight for hole \(A\) is
+\begin{equation}
+  W_A = S\!\left(\frac{r_{H,A}-r_A}{\Delta r}\right),
+\end{equation}
+where \(\Delta r\) is the configured smooth-excision width.  If no width is
+given in the input file, the code uses a conservative default
+\begin{equation}
+  \Delta r_{\rm default}
+  =
+  \max\!\left(0.25\,r_{\rm exc},\,2\Delta x_{\max}\right),
+\end{equation}
+with \(\Delta x_{\max}\) the largest active mesh spacing across all MPI
+ranks.  The local block-pack maximum is reduced with a global maximum so the
+default is rank independent on decomposed AMR or uneven MPI layouts.
+The global cell weight is
+\begin{equation}
+  W = \max_A W_A .
+\end{equation}
+The limiter \(S\) is the cubic smoothstep
+\begin{equation}
+  S(q) =
+  \begin{cases}
+    0, & q \leq 0,\\
+    3q^2 - 2q^3, & 0 < q < 1,\\
+    1, & q \geq 1.
+  \end{cases}
+\end{equation}
+Thus \(W=0\) outside the horizon and \(W\to 1\) deeper inside the excision
+region.
+
+For lapse-based excision, the same construction is applied in lapse space:
+\begin{equation}
+  W = S\!\left(\frac{\alpha_{\rm exc} - \alpha}{\Delta \alpha}\right),
+\end{equation}
+where \(\alpha_{\rm exc}\) is the excision lapse threshold and
+\(\Delta \alpha\) is the configured lapse width.
+
+The floor mask and conservative-flux mask are deliberately distinct.  For
+puncture excision, the floor mask uses \(r_A \le r_{H,A}\), while the flux
+mask uses
+\begin{equation}
+  r_A \le \max(r_{H,A}, r_{\rm flux}).
+\end{equation}
+For lapse excision with smooth excision enabled, the flux mask is buffered to
+\begin{equation}
+  \alpha < \alpha_{\rm exc} + \Delta\alpha .
+\end{equation}
+Without smooth excision, the lapse flux mask reduces to the historical
+\(\alpha < \alpha_{\rm exc}\) mask.
+
+\section{Primitive Variable Drain}
+
+Let \(A_\ast\) be the nearest black hole center to the cell.  The target
+velocity is the black-hole coordinate velocity plus an inward drain speed:
+\begin{equation}
+  v_{\rm targ}^i
+  =
+  V_{A_\ast}^i
+  -
+  v_{\rm in}
+  \frac{x^i - X_{A_\ast}^i}
+       {\sqrt{(x^j-X_{A_\ast}^j)(x_j-X_{A_\ast j})}} .
+\end{equation}
+This is a coordinate three-velocity.  The GR hydro and GRMHD primitive
+variables store the Wilson/Valencia spatial four-velocity \(Wv^i\), so the
+target is converted before blending:
+\begin{align}
+  v_{\rm targ}^2 &= \gamma_{ij}v_{\rm targ}^i v_{\rm targ}^j,\\
+  v_{\rm targ}^i &\leftarrow
+  v_{\rm targ}^i
+  \min\!\left(1,\sqrt{\frac{v_{\max}^2}{v_{\rm targ}^2}}\right),\\
+  W_{\rm targ} &= \frac{1}{\sqrt{1-v_{\rm targ}^2}},\\
+  u_{\rm targ}^i &= W_{\rm targ}v_{\rm targ}^i .
+\end{align}
+Here \(v_{\max}^2 < 1\) is chosen consistently with the local velocity
+ceiling when one is available, and otherwise with a tight subluminal cap.
+The primitive variables are blended toward an excision state,
+\begin{align}
+  \rho' &= (1-W)\rho + W\rho_{\rm targ},\\
+  u'^i &= (1-W)u^i + Wu_{\rm targ}^i,\\
+  p' &= (1-W)p + Wp_{\rm exc}.
+\end{align}
+When no magnetization cap is requested,
+\begin{equation}
+  \rho_{\rm targ} = \rho_{\rm exc}.
+\end{equation}
+
+\section{Optional Magnetization Cap}
+
+The smooth excision can optionally cap the cell-centered proxy
+\(\sigma \equiv B_{\rm cc}^2/\rho\).  This is controlled by
+\(\sigma_{\max}\).  If \(\sigma_{\max}>0\),
+\begin{equation}
+  \rho_{\rm targ}
+  =
+  \max\!\left(
+    \rho_{\rm exc},
+    \frac{B_{\rm cc}^2}{\sigma_{\max}}
+  \right).
+\end{equation}
+If \(\sigma_{\max}<0\), the cap is disabled.  The value
+\(\sigma_{\max}=0\) is rejected.
+
+The magnetic field entering the cap is the existing cell-centered average of
+the face-centered field,
+\begin{equation}
+  B_{\rm cc}^i =
+  \frac{1}{2}\left(B^i_{f,-} + B^i_{f,+}\right).
+\end{equation}
+The cap therefore changes the matter state, not the staggered magnetic
+field.  After the primitive variables are blended, the conserved fluid
+variables are recomputed using the local metric and the unchanged magnetic
+field:
+\begin{equation}
+  U'_{\rm hydro} =
+  {\rm PrimToCon}\!\left(P', B_{\rm cc}, g_{\mu\nu}\right).
+\end{equation}
+
+\section{Magnetic Constraint Preservation}
+
+The face-centered magnetic field is not directly modified by the excision
+operator:
+\begin{equation}
+  B_f' = B_f .
+\end{equation}
+All changes to \(B_f\) remain those produced by the constrained-transport
+update.  Schematically, the CT update is
+\begin{equation}
+  B_f^{n+1}
+  =
+  B_f^n
+  -
+  \Delta t\, C_h(E_e),
+\end{equation}
+where \(C_h\) is the discrete curl mapping edge-centered EMFs \(E_e\) to
+face-centered magnetic fluxes.  Applying the discrete divergence operator
+\(D_h\) gives
+\begin{equation}
+  D_h B_f^{n+1}
+  =
+  D_h B_f^n
+  -
+  \Delta t\,D_h C_h(E_e).
+\end{equation}
+On the staggered CT mesh,
+\begin{equation}
+  D_h C_h(E_e) = 0
+\end{equation}
+as a discrete identity.  Therefore
+\begin{equation}
+  D_h B_f^{n+1} = D_h B_f^n .
+\end{equation}
+
+Because the smooth excision operator never multiplies or zeros the
+face-centered magnetic field, it does not introduce a new source term in the
+discrete magnetic divergence equation.  The optional magnetization cap also
+preserves this property: it modifies \(\rho_{\rm targ}\), not \(B_f\).
+
+\section{CT-Compatible Magnetic Damping Design}
+
+Magnetic-field damping inside the horizon should be implemented through an
+edge-centered EMF contribution, not through a pointwise face-field source.
+The minimal CT-compatible form is an additional EMF
+\begin{equation}
+  E_e = E_{e,{\rm ideal}} + E_{e,{\rm damp}},
+\end{equation}
+inserted after the ideal corner EMFs are built and before EMF exchange,
+restriction, and CT.  A resistive damping choice is
+\begin{equation}
+  E_{e,{\rm damp}} = \eta_e W_e J_e,
+  \qquad
+  J = \nabla_h \times B_f ,
+\end{equation}
+where \(W_e\) is the smooth excision weight interpolated to the edge,
+\(\eta_e \ge 0\) is a damping coefficient, and \(J_e\) is a compatible
+edge-centered current built from the staggered face field.  The magnetic
+update remains
+\begin{equation}
+  B_f^{n+1}
+  =
+  B_f^n
+  -
+  \Delta t\, C_h(E_{e,{\rm ideal}} + E_{e,{\rm damp}}),
+\end{equation}
+so
+\begin{equation}
+  D_h B_f^{n+1}
+  =
+  D_h B_f^n
+  -
+  \Delta t\,D_h C_h(E_{e,{\rm ideal}} + E_{e,{\rm damp}})
+  =
+  D_h B_f^n .
+\end{equation}
+The discrete divergence remains unchanged because the added term still
+enters only through the discrete curl.
+
+For adaptive mesh refinement, the damping EMF must be part of the same
+edge-centered EMF arrays that are exchanged and corrected across coarse--fine
+interfaces.  The intended task order is therefore
+\begin{equation}
+  {\rm CornerE}
+  \rightarrow
+  {\rm AddUserDampingE}
+  \rightarrow
+  {\rm SendE/RecvE/CorrectE}
+  \rightarrow
+  {\rm CT}.
+\end{equation}
+The damping coefficient should obey the explicit diffusion stability limit,
+schematically
+\begin{equation}
+  \eta_e \lesssim C_{\rm diff}\frac{\Delta x_e^2}{\Delta t}.
+\end{equation}
+The implemented runtime controls are
+\begin{align}
+  {\tt coord/smooth\_excision\_b\_damping} &\in \{{\tt true},{\tt false}\},\\
+  {\tt coord/smooth\_excision\_b\_damping\_eta} &= \eta_0,\\
+  {\tt coord/smooth\_excision\_b\_damping\_cfl} &= C_{\rm diff}.
+\end{align}
+When \(C_{\rm diff}>0\), the active coefficient is capped as
+\begin{equation}
+  \eta_e =
+  \min\!\left(\eta_0,\,
+  C_{\rm diff}\frac{\Delta x_{\min}^2}{\Delta t}\right).
+\end{equation}
+Setting \(C_{\rm diff}=0\) disables the cap.
+This resistive term damps current-carrying structure.  If a true flux drain
+is later desired, an artificial advective EMF
+\begin{equation}
+  E_{e,{\rm adv}} = -v_{B,e}\times B_e
+\end{equation}
+can also be added at edges, with \(v_{B,e}\) directed inward inside the
+horizon.  It is also CT-compatible, but it transports magnetic flux rather
+than deleting it locally.
+
+\section{Robustness and Safety Fixes}
+
+Several implementation details were tightened during review:
+\begin{itemize}
+  \item The trajectory state captured by initialization kernels is a
+  by-value POD object, not a reference to host stack storage.
+  \item The boost Jacobian uses the small-\(V^2\) series above instead of
+  returning an identity matrix at exactly zero velocity, so analytic time
+  derivatives are retained.
+  \item The Valencia cooling source now returns immediately unless both MHD
+  and ADM storage are present, avoiding a hydro-only null dereference.
+  \item The vector-potential transformation guards the cylindrical
+  denominator \(x^2+y^2\) with a positive floor before forming
+  \(A_x\) and \(A_y\), preventing \(0/0\) on the rotation axis.
+  \item Smooth-excision drain targets are converted from coordinate velocity
+  to the primitive Wilson/Valencia variable \(Wv^i\) before blending and are
+  capped with the configured velocity ceiling.
+  \item The post-blend primitive state is checked for positivity and
+  finiteness over the active primitive/scalar slots before it is accepted.
+  \item The optional user electric-field callback is dispatched only when
+  both its enable flag and function pointer are set.
+  \item The smooth-excision width default is made MPI consistent by a global
+  maximum over the local mesh spacings.
+\end{itemize}
+
+\section{Unresolved-Horizon Sink Fallback}
+
+If the local mesh spacing around a hole is too large compared with that
+hole's horizon diameter, the puncture excision mask is formally
+under-resolved.  With the \texttt{problem/unresolved\_sink} flag, the problem
+generator keeps puncture excision enabled and applies an additional
+conservative sink over a larger radius.  This path is intended for cheap
+early inspiral evolutions where one or both holes are deliberately unresolved
+before a later AMR restart resolves the horizons.
+
+The decision is made separately for each hole.  Let
+\(\Delta x_A\) be the largest cell spacing in the active MeshBlock containing
+hole \(A\).  The hole is treated as resolved when
+\begin{equation}
+  \frac{2r_{H,A}}{\Delta x_A} \ge N_{\rm H},
+  \qquad N_{\rm H}=20 \quad \hbox{by default}.
+\end{equation}
+When this condition is satisfied, the sink for that hole is disabled.  The
+puncture excision radius is never suppressed by the sink path: excision stays
+active whenever \texttt{coord/bh\_excise=true}.  If only one hole is resolved,
+only that hole's sink is disabled; the other hole keeps its sink while both
+holes continue to use the configured excision masks.
+
+For hole \(A\), define the smooth sink weight
+\begin{equation}
+  W_A^{\rm sink}
+  =
+  S\!\left(\frac{R_{\rm sink}-|x-X_A|}{\Delta R_{\rm sink}}\right),
+  \qquad
+  W^{\rm sink} = \max_A W_A^{\rm sink},
+\end{equation}
+with the same cubic smoothstep \(S\) used by smooth excision.  The automatic
+sink radius is
+\begin{equation}
+  R_{{\rm sink},A}
+  =
+  \max\!\left(
+    N_R \Delta x_A,\;
+    R_{\rm sink,min},\;
+    r_{H,A}
+  \right),
+  \qquad N_R=10 \quad \hbox{by default},
+\end{equation}
+so the active sink is at least 20 cells wide, or 10 cells in radius.  As AMR
+refines the hole, \(\Delta x_A\) decreases and the sink radius shrinks
+automatically.  The optional configured \texttt{sink\_radius} acts as a
+minimum physical radius; setting it to zero gives a purely resolution-scaled
+sink.  Over a step \(\Delta t\), the damping fraction is
+\begin{equation}
+  f_{\rm sink}
+  =
+  1-\exp\!\left(-\frac{\Delta t\,W^{\rm sink}}{\tau_{\rm sink}}\right).
+\end{equation}
+The conservative matter variables are damped as
+\begin{align}
+  D' &= (1-f_{\rm sink})D + f_{\rm sink}D_{\rm floor},\\
+  S'_i &= (1-f_{\rm sink})S_i,\\
+  \tau' &= (1-f_{\rm sink})\tau + f_{\rm sink}\tau_{\rm floor},\\
+  (\rho Y_s)' &= (1-f_{\rm sink})(\rho Y_s),
+\end{align}
+where \(D_{\rm floor}\) and \(\tau_{\rm floor}\) are configured sink targets
+or fall back to the EOS floors.  The sink does not modify the face-centered
+magnetic field.  Avoiding a primitive-to-conserved conversion through the
+unresolved puncture metric is important: near \(r=0\), such a conversion can
+inject an artificially large conserved energy even for a small target
+pressure.
+
+This fallback is not a replacement for horizon excision.  It is a coarse-grid
+drain that removes matter and momentum smoothly while preserving the
+constrained-transport representation of \(B_f\).  On a restarted zoom run, the
+same per-hole logic continues to apply after AMR regridding: the sink radius
+follows the local resolution and each sink turns off only after that hole
+satisfies the configured cells-across-horizon criterion.
+
+\section{Device, MPI, and AMR Safety}
+
+The new Kokkos kernels capture only scalars, POD state, and Kokkos views.
+No STL containers, host arrays, or host-only pointers are dereferenced inside
+device lambdas.  The tabulated trajectory itself remains host-side; only the
+interpolated state needed by a kernel launch is copied into a device-safe
+value object.
+
+The magnetic damping is MPI and AMR compatible because it modifies the same
+edge-centered EMF arrays used by the normal CT update.  The task ordering is
+\begin{equation}
+  {\rm CornerE}
+  \rightarrow
+  {\rm EFieldSrc}
+  \rightarrow
+  {\rm SendE/RecvE/CorrectE}
+  \rightarrow
+  {\rm CT},
+\end{equation}
+so damped EMFs are exchanged across MPI boundaries and corrected across
+coarse--fine interfaces before they update \(B_f\).
+
+\section{Validation Performed}
+
+The changes were checked with serial and MPI builds of the dynbbh problem
+generator.  A two-rank smooth-excision and magnetic-damping run completed
+with finite primitive and magnetic fields.  The inspected constrained
+transport diagnostic remained at roundoff,
+\begin{equation}
+  \max |D_h B_f| \simeq 1.6\times 10^{-16}.
+\end{equation}
+A separate discrete CT damping-rate check matched the analytic one-step
+diffusion amplification to roundoff while preserving zero discrete
+divergence.  Long stronger-field runs showed the prescribed damping reduces
+the magnetic-field strength inside the excision region relative to the
+undamped run while preserving the CT divergence constraint.
+
+\section{What Is Not Included}
+
+No direct magnetic window function is included in this implementation.  The
+optional magnetic damping path modifies only edge-centered EMFs and is disabled
+by default.
+
+\end{document}

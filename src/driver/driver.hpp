@@ -58,14 +58,16 @@ class Driver {
   std::string integrator;          // integrator name (rk1, rk2, rk3)
   int nimp_stages;                 // number of implicit stages (ImEx only)
   int nexp_stages;                 // number of explicit stages (both SSP-RK and ImEx)
+  int nopsplit_stages{2};
   Real gam0[4], gam1[4], beta[4];  // weights and fractional timestep per explicit stage
+  Real stage_abscissa[4]{};        // time of explicit RHS evaluation
   Real delta[4];                   // weights for updating the intermediate stage (u1)
   Real a_twid[4][4], a_impl;       // matrix elements for implicit stages in ImEx
   Real cfl_limit;                  // maximum CFL number for integrator
   Real gamma;                      // gamma value for the IMEX_new integrator
   Kokkos::Timer* pwall_clock_;     // timer for tracking the wall clock
   Real wall_time;
-
+  bool opsplit{true};                    // flag for operator split method (used in M1)
   // functions
   void ExecuteTaskList(Mesh *pm, std::string tl, int stage);
   void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool rflag);

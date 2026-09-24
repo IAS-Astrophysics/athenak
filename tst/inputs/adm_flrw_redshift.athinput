@@ -1,0 +1,62 @@
+# AthenaK input file for ADM dyn_radiation FLRW redshift test
+
+<job>
+basename = dynrad_flrw_redshift
+
+<mesh>
+nghost = 2
+nx1 = 8
+x1min = 0.0
+x1max = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+nx2 = 4
+x2min = 0.0
+x2max = 1.0
+ix2_bc = periodic
+ox2_bc = periodic
+nx3 = 1
+x3min = 0.0
+x3max = 1.0
+ix3_bc = periodic
+ox3_bc = periodic
+
+<meshblock>
+nx1 = 8
+nx2 = 4
+nx3 = 1
+
+<coord>
+general_rel = true
+minkowski = true
+
+<adm>
+dynamic = false
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim = -1
+tlim = 0.5
+
+<dyn_radiation>
+geometry = adm
+nlevel = 2
+rotate_geo = false
+angular_fluxes = false
+reconstruct = plm
+
+<problem>
+pgen_name = rad_flrw_redshift
+erad = 1.0
+hubble = 0.2
+t0 = 0.0
+redshift_tolerance = 5.0e-3
+
+<output1>
+file_type = bin
+variable = rad_coord
+id = rad_xy
+dt = 0.05
+slice_x3 = 0.5

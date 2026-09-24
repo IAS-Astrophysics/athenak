@@ -37,11 +37,15 @@ def test_run():
         error_threshold = 0.03
         std_threshold = 0.03
 
-        if (omega_error > error_threshold):
-            pytest.fail(f"Rotation rate error too large, "
-                        f"error: {omega_error:g} threshold: {error_threshold:g}")
-        if (omega_std > std_threshold):
-            pytest.fail(f"Rotation rate standard deviation too large, "
-                        f"std: {omega_std:g} threshold: {std_threshold:g}")
+        if omega_error > error_threshold:
+            pytest.fail(
+                f"Rotation rate error too large, "
+                f"error: {omega_error:g} threshold: {error_threshold:g}"
+            )
+        if omega_std > std_threshold:
+            pytest.fail(
+                f"Rotation rate standard deviation too large, "
+                f"std: {omega_std:g} threshold: {std_threshold:g}"
+            )
     finally:
         testutils.cleanup()

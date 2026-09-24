@@ -54,17 +54,44 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   auto &use_excise = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_floor_ = pmy_pack->pcoord->excision_floor;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+  auto &excision_weight_ = pmy_pack->pcoord->excision_weight;
   auto &dexcise_ = pmy_pack->pcoord->coord_data.dexcise;
   auto &pexcise_ = pmy_pack->pcoord->coord_data.pexcise;
+  auto &smooth_excise_ = pmy_pack->pcoord->coord_data.smooth_excise;
+  auto &excise_sigma_max_ = pmy_pack->pcoord->coord_data.smooth_excise_sigma_max;
+  auto &excise_temp_ceil_ = pmy_pack->pcoord->coord_data.smooth_excise_temp_ceil;
+  auto &excise_inflow_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow;
+  auto &excise_inflow_speed_ = pmy_pack->pcoord->coord_data.smooth_excise_inflow_speed;
+  Real p0_x = pmy_pack->pcoord->coord_data.punc_0[0];
+  Real p0_y = pmy_pack->pcoord->coord_data.punc_0[1];
+  Real p0_z = pmy_pack->pcoord->coord_data.punc_0[2];
+  Real p0_ax = pmy_pack->pcoord->coord_data.punc_0_spin[0];
+  Real p0_ay = pmy_pack->pcoord->coord_data.punc_0_spin[1];
+  Real p0_az = pmy_pack->pcoord->coord_data.punc_0_spin[2];
+  Real p0_vx = pmy_pack->pcoord->coord_data.punc_0_vel[0];
+  Real p0_vy = pmy_pack->pcoord->coord_data.punc_0_vel[1];
+  Real p0_vz = pmy_pack->pcoord->coord_data.punc_0_vel[2];
+  Real p1_x = pmy_pack->pcoord->coord_data.punc_1[0];
+  Real p1_y = pmy_pack->pcoord->coord_data.punc_1[1];
+  Real p1_z = pmy_pack->pcoord->coord_data.punc_1[2];
+  Real p1_ax = pmy_pack->pcoord->coord_data.punc_1_spin[0];
+  Real p1_ay = pmy_pack->pcoord->coord_data.punc_1_spin[1];
+  Real p1_az = pmy_pack->pcoord->coord_data.punc_1_spin[2];
+  Real p1_vx = pmy_pack->pcoord->coord_data.punc_1_vel[0];
+  Real p1_vy = pmy_pack->pcoord->coord_data.punc_1_vel[1];
+  Real p1_vz = pmy_pack->pcoord->coord_data.punc_1_vel[2];
+  Real p0_rad = pmy_pack->pcoord->coord_data.punc_0_rad;
+  Real p1_rad = pmy_pack->pcoord->coord_data.punc_1_rad;
 
   const int ni   = (iu - il + 1);
   const int nji  = (ju - jl + 1)*ni;
   const int nkji = (ku - kl + 1)*nji;
   const int nmkji = nmb*nkji;
 
-  int nfloord_=0, nfloore_=0, nceilv_=0, nfail_=0, maxit_=0;
+  int nfloord_=0, nfloore_=0, nceilt_=0, nceilv_=0, nfail_=0, maxit_=0;
   Kokkos::parallel_reduce("grmhd_c2p",Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &sumv, int &sumf, int &max_it) {
+  KOKKOS_LAMBDA(const int &idx, int &sumd, int &sume, int &sumt, int &sumv,
+                int &sumf, int &max_it) {
     int m = (idx)/nkji;
     int k = (idx - m*nkji)/nji;
     int j = (idx - m*nkji - k*nji)/ni;
@@ -110,14 +137,25 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
     ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
     HydPrim1D w;
+    HydPrim1D w_prev;
+    w_prev.d  = prim(m,IDN,k,j,i);
+    w_prev.vx = prim(m,IVX,k,j,i);
+    w_prev.vy = prim(m,IVY,k,j,i);
+    w_prev.vz = prim(m,IVZ,k,j,i);
+    w_prev.e  = prim(m,IEN,k,j,i);
     bool dfloor_used=false, efloor_used=false;
+    bool temp_ceiling_used=false;
     bool vceiling_used=false, c2p_failure=false;
+    bool c2p_previous_state_used=false;
     int iter_used=0;
+    Real excise_weight = 0.0;
+    bool smooth_applied = false;
 
     // Only execute cons2prim if outside excised region
     bool excised = false;
     if (use_excise) {
-      if (excision_floor_(m,k,j,i)) {
+      excise_weight = smooth_excise_ ? excision_weight_(m,k,j,i) : 0.0;
+      if (excision_floor_(m,k,j,i) && !smooth_excise_) {
         w.d = dexcise_;
         w.vx = 0.0;
         w.vy = 0.0;
@@ -142,6 +180,25 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       // (inline function in ideal_c2p_mhd.hpp file)
       SingleC2P_IdealSRMHD(u_sr, eos, s2, b2, rpar, w,
                            dfloor_used, efloor_used, c2p_failure, iter_used);
+      if (c2p_failure && !only_testfloors && eos.c2p_failure_use_previous_state &&
+          w_prev.d <= eos.c2p_failure_previous_state_density_max &&
+          w_prev.d > 0.0 && w_prev.e > 0.0 &&
+          Kokkos::isfinite(w_prev.d) && Kokkos::isfinite(w_prev.e) &&
+          Kokkos::isfinite(w_prev.vx) && Kokkos::isfinite(w_prev.vy) &&
+          Kokkos::isfinite(w_prev.vz)) {
+        w = w_prev;
+        if (w.d < eos.dfloor) {
+          w.d = eos.dfloor;
+          dfloor_used = true;
+        }
+        Real efloor = eos.pfloor/gm1;
+        if (w.e < efloor) {
+          w.e = efloor;
+          efloor_used = true;
+        }
+        c2p_failure = false;
+        c2p_previous_state_used = true;
+      }
 
       // apply velocity ceiling if necessary
       Real tmp = glower[1][1]*SQR(w.vx)
@@ -157,6 +214,122 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         w.vy *= factor;
         w.vz *= factor;
       }
+      if (smooth_excise_ && excise_weight > 0.0 && !only_testfloors) {
+        Real dtarget = dexcise_;
+        Real etarget = pexcise_/gm1;
+        if (excise_sigma_max_ > 0.0) {
+          Real b2cc = SQR(u.bx) + SQR(u.by) + SQR(u.bz);
+          dtarget = fmax(dtarget, b2cc/excise_sigma_max_);
+        }
+        if (c2p_failure) {
+          w.d = dtarget;
+          w.e = etarget;
+          excise_weight = 1.0;
+        }
+        Real bx0, by0, bz0, bx1, by1, bz1;
+        ExcisionBoostedDisplacement(x1v, x2v, x3v, p0_x, p0_y, p0_z,
+                                    p0_vx, p0_vy, p0_vz, &bx0, &by0, &bz0);
+        ExcisionBoostedDisplacement(x1v, x2v, x3v, p1_x, p1_y, p1_z,
+                                    p1_vx, p1_vy, p1_vz, &bx1, &by1, &bz1);
+        Real rks0 = ExcisionKSRXSpin(bx0, by0, bz0, p0_ax, p0_ay, p0_az);
+        Real rks1 = ExcisionKSRXSpin(bx1, by1, bz1, p1_ax, p1_ay, p1_az);
+        bool use_p1 = (p1_rad > 0.0) &&
+                      (p0_rad <= 0.0 ||
+                       rks1 < rks0);
+        Real tvx = use_p1 ? p1_vx : p0_vx;
+        Real tvy = use_p1 ? p1_vy : p0_vy;
+        Real tvz = use_p1 ? p1_vz : p0_vz;
+        if (excise_inflow_ && excise_inflow_speed_ > 0.0) {
+          Real rx = use_p1 ? bx1 : bx0;
+          Real ry = use_p1 ? by1 : by0;
+          Real rz = use_p1 ? bz1 : bz0;
+          Real rnorm = sqrt(SQR(rx) + SQR(ry) + SQR(rz));
+          if (rnorm > 0.0 && isfinite(rnorm) &&
+              isfinite(w.vx) && isfinite(w.vy) && isfinite(w.vz)) {
+            Real nx = rx/rnorm;
+            Real ny = ry/rnorm;
+            Real nz = rz/rnorm;
+            Real u_sq = glower[1][1]*SQR(w.vx) + glower[2][2]*SQR(w.vy) +
+                        glower[3][3]*SQR(w.vz) + 2.0*glower[1][2]*w.vx*w.vy +
+                        2.0*glower[1][3]*w.vx*w.vz + 2.0*glower[2][3]*w.vy*w.vz;
+            if (u_sq >= 0.0 && isfinite(u_sq)) {
+              Real iW = 1.0/sqrt(1.0 + u_sq);
+              Real cvx = w.vx*iW;
+              Real cvy = w.vy*iW;
+              Real cvz = w.vz*iW;
+              Real vin = excise_inflow_speed_ * excise_weight;
+              Real vrad = (cvx - tvx)*nx + (cvy - tvy)*ny + (cvz - tvz)*nz;
+              if (vrad > -vin) {
+                Real dv = vrad + vin;
+                tvx = cvx - dv*nx;
+                tvy = cvy - dv*ny;
+                tvz = cvz - dv*nz;
+              } else {
+                tvx = cvx;
+                tvy = cvy;
+                tvz = cvz;
+              }
+            }
+          }
+        }
+        Real tv2 = glower[1][1]*SQR(tvx) + glower[2][2]*SQR(tvy) +
+                   glower[3][3]*SQR(tvz) + 2.0*glower[1][2]*tvx*tvy +
+                   2.0*glower[1][3]*tvx*tvz + 2.0*glower[2][3]*tvy*tvz;
+        if (!(tv2 >= 0.0) || !isfinite(tv2)) {
+          tvx = tvy = tvz = 0.0;
+          tv2 = 0.0;
+        }
+        Real gtarget = fmax(eos.gamma_max, 1.0 + 1.0e-12);
+        Real target_vmax2 = (gtarget > 1.0e12) ? 1.0 - 1.0e-12 :
+                             1.0 - 1.0/SQR(gtarget);
+        target_vmax2 = fmin(target_vmax2, 1.0 - 1.0e-12);
+        if (tv2 > target_vmax2) {
+          Real factor = sqrt(target_vmax2/tv2);
+          tvx *= factor;
+          tvy *= factor;
+          tvz *= factor;
+          tv2 = target_vmax2;
+        }
+        Real tlor = 1.0/sqrt(fmax(1.0 - tv2, 1.0e-300));
+        Real twvx = tlor*tvx;
+        Real twvy = tlor*tvy;
+        Real twvz = tlor*tvz;
+        if (c2p_failure) {
+          w.vx = twvx;
+          w.vy = twvy;
+          w.vz = twvz;
+        }
+        Real keep = 1.0 - excise_weight;
+        w.d = keep*w.d + excise_weight*dtarget;
+        w.vx = keep*w.vx + excise_weight*twvx;
+        w.vy = keep*w.vy + excise_weight*twvy;
+        w.vz = keep*w.vz + excise_weight*twvz;
+        w.e = keep*w.e + excise_weight*etarget;
+        if (excise_temp_ceil_ > 0.0) {
+          w.e = fmin(w.e, excise_temp_ceil_*w.d/gm1);
+        }
+        if (!(w.d > 0.0) || !(w.e > 0.0) || !isfinite(w.d) || !isfinite(w.e) ||
+            !isfinite(w.vx) || !isfinite(w.vy) || !isfinite(w.vz)) {
+          w.d = dtarget;
+          w.vx = twvx;
+          w.vy = twvy;
+          w.vz = twvz;
+          w.e = etarget;
+          c2p_failure = false;
+        }
+        smooth_applied = true;
+      }
+      if (eos.temp_ceiling > 0.0 && !only_testfloors &&
+          w.d <= eos.temp_ceiling_density_max && Kokkos::isfinite(w.d) &&
+          Kokkos::isfinite(w.e) && w.d > 0.0 && w.e > 0.0) {
+        Real eceil = eos.temp_ceiling*w.d/gm1;
+        Real efloor = eos.pfloor/gm1;
+        eceil = fmax(eceil, efloor);
+        if (w.e > eceil) {
+          w.e = eceil;
+          temp_ceiling_used = true;
+        }
+      }
     }
 
     // set FOFC flag and quit loop if this function called only to check floors
@@ -166,10 +339,21 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
-      if (dfloor_used) {sumd++;}
-      if (efloor_used) {sume++;}
-      if (vceiling_used) {sumv++;}
-      if (c2p_failure) {sumf++;}
+      if (dfloor_used) {
+        sumd++;
+      }
+      if (efloor_used) {
+        sume++;
+      }
+      if (temp_ceiling_used) {
+        sumt++;
+      }
+      if (vceiling_used) {
+        sumv++;
+      }
+      if (c2p_failure || c2p_previous_state_used) {
+        sumf++;
+      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
 
       // store primitive state in 3D array
@@ -185,7 +369,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
       bcc(m,IBZ,k,j,i) = u.bz;
 
       // reset conserved variables if floor, ceiling, failure, or excision encountered
-      if (dfloor_used || efloor_used || vceiling_used || c2p_failure || excised) {
+      if (dfloor_used || efloor_used || temp_ceiling_used || vceiling_used ||
+          c2p_failure || c2p_previous_state_used || excised || smooth_applied) {
         MHDPrim1D w_in;
         w_in.d  = w.d;
         w_in.vx = w.vx;
@@ -211,7 +396,8 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
         prim(m,n,k,j,i) = cons(m,n,k,j,i)/u.d;
       }
     }
-  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_), Kokkos::Sum<int>(nceilv_),
+  }, Kokkos::Sum<int>(nfloord_), Kokkos::Sum<int>(nfloore_),
+     Kokkos::Sum<int>(nceilt_), Kokkos::Sum<int>(nceilv_),
      Kokkos::Sum<int>(nfail_), Kokkos::Max<int>(maxit_));
 
   // store appropriate counters
@@ -220,6 +406,7 @@ void IdealGRMHD::ConsToPrim(DvceArray5D<Real> &cons, const DvceFaceFld4D<Real> &
   } else {
     pmy_pack->pmesh->ecounter.neos_dfloor += nfloord_;
     pmy_pack->pmesh->ecounter.neos_efloor += nfloore_;
+    pmy_pack->pmesh->ecounter.neos_tceil  += nceilt_;
     pmy_pack->pmesh->ecounter.neos_vceil  += nceilv_;
     pmy_pack->pmesh->ecounter.neos_fail   += nfail_;
     pmy_pack->pmesh->ecounter.maxit_c2p = maxit_;

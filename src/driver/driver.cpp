@@ -14,20 +14,24 @@
 #include <string> // string
 
 #include "athena.hpp"
-#include "globals.hpp"
-#include "parameter_input.hpp"
-#include "mesh/mesh.hpp"
-#include "coordinates/coordinates.hpp"
-#include "outputs/outputs.hpp"
-#include "hydro/hydro.hpp"
-#include "mhd/mhd.hpp"
-#include "z4c/z4c.hpp"
-#include "dyn_grmhd/dyn_grmhd.hpp"
-#include "ion-neutral/ion-neutral.hpp"
-#include "radiation/radiation.hpp"
+#include "coordinates/adm.hpp"
 #include "driver.hpp"
-#include "gravity/gravity.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "globals.hpp"
+#include "hydro/hydro.hpp"
+#include "ion-neutral/ion-neutral.hpp"
+#include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
+#include "outputs/outputs.hpp"
+#include "parameter_input.hpp"
+#include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "particles/particles.hpp"
 #include "utils/utils.hpp"
+#include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
+#include "coordinates/coordinates.hpp"
+#include "gravity/gravity.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -290,6 +294,14 @@ Driver::Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptim
          << "Valid choices are [rk1,rk2,rk3,rk4,imex2,imex3]." << std::endl;
       exit(EXIT_FAILURE);
     }
+    // Apply the explicit low-storage recurrence to dt/dt=1. The auxiliary
+    // register is the initial state except for the four-stage 2S integrator.
+    Real c = 0.0, auxiliary_c = 0.0;
+    for (int s = 0; s < nexp_stages; ++s) {
+      stage_abscissa[s] = c;
+      if (integrator == "rk4") auxiliary_c += delta[s]*c;
+      c = gam0[s]*c + gam1[s]*auxiliary_c + beta[s];
+    }
 
     ValidateSTSConfiguration(pmesh);
   }
@@ -351,9 +363,10 @@ void Driver::ValidateSTSConfiguration(Mesh *pm) {
     DriverFatalError(__FILE__, __LINE__,
                      "STS is not supported with <ion-neutral> physics");
   }
-  if (pm->pmb_pack->prad != nullptr) {
+  if (pm->pmb_pack->prad != nullptr || pm->pmb_pack->pdynrad != nullptr ||
+      pm->pmb_pack->pradm1 != nullptr) {
     DriverFatalError(__FILE__, __LINE__,
-                     "Hydro/MHD STS diffusion is not supported with <radiation> physics");
+                     "Hydro/MHD STS diffusion is not supported with radiation physics");
   }
   if (pm->pmb_pack->pcoord->is_special_relativistic ||
       pm->pmb_pack->pcoord->is_general_relativistic ||
@@ -438,7 +451,9 @@ void Driver::EndSTSSweep() {
 void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
   MeshBlockPack* pmbp = pm->pmb_pack;
   for (int p=0; p<(pm->nmb_packs_thisrank); ++p) {
-    if (!(pmbp->tl_map[tl]->Empty())) {pmbp->tl_map[tl]->Reset();}
+    if (!(pmbp->tl_map[tl]->Empty())) {
+      pmbp->tl_map[tl]->Reset();
+    }
   }
   int npack_left = (pm->nmb_packs_thisrank);
   while (npack_left > 0) {
@@ -447,7 +462,9 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
     } else {
       if (!pmbp->tl_map[tl]->IsComplete()) {
         auto status = pmbp->tl_map[tl]->DoAvailable(this, stage);
-        if (status == TaskListStatus::complete) { npack_left--; }
+        if (status == TaskListStatus::complete) {
+          npack_left--;
+        }
       }
     }
   }
@@ -467,7 +484,10 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
+  dyn_radiation::DynRadiation *pdynrad = pmesh->pmb_pack->pdynrad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  particles::Particles *ppart = pmesh->pmb_pack->ppart;
+  radiationm1::RadiationM1 *pradm1 = pmesh->pmb_pack->pradm1;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -478,10 +498,18 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (prad != nullptr) {
       (void) pmesh->pmb_pack->prad->NewTimeStep(this, nexp_stages);
     }
+    if (pdynrad != nullptr) {
+      (void) pmesh->pmb_pack->pdynrad->NewTimeStep(this, nexp_stages);
+    }
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
     }
-
+    if (ppart != nullptr) {
+      (void) ppart->NewTimeStep(this, nexp_stages);
+    }
+    if (pradm1 != nullptr) {
+      (void) pmesh->pmb_pack->pradm1->NewTimeStep(this, nexp_stages);
+    }
     pmesh->NewTimeStep(tlim);
     RefreshSTSCycleState(pmesh);
   }
@@ -567,11 +595,34 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
         if (pmesh->pmb_pack->pgrav != nullptr)
             {pmesh->pmb_pack->pgrav->pmgd->Solve(this, stage);}
         ExecuteTaskList(pmesh, "stagen", stage);
+        // std::cout << "stagen " << std::endl;
         ExecuteTaskList(pmesh, "after_stagen", stage);
+        // std::cout << "after_stagen " << std::endl;
       }
 
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
+#if MPI_PARALLEL_ENABLED
+      (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
+      if (opsplit) {
+        for (int stage=1; stage<=(nopsplit_stages); ++stage) {
+          ExecuteTaskList(pmesh, "opsplit_before_stagen", stage);
+          // std::cout << "opsplit_before_stagen" << std::endl;
+          ExecuteTaskList(pmesh, "opsplit_stagen", stage);
+          // std::cout << "opsplit_stagen" << std::endl;
+          ExecuteTaskList(pmesh, "opsplit_after_stagen", stage);
+          // std::cout << "opsplit_after_stagen" << std::endl;
+        }
+#if MPI_PARALLEL_ENABLED
+        (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
+        ExecuteTaskList(pmesh, "opsplit_after_timeintegrator", 1);
+        // std::cout << "opsplit_after_timeintegrator" << std::endl;
+#if MPI_PARALLEL_ENABLED
+        (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
+      }
 
       // Diffusion coefficients may depend on the post-RK state. Refresh the global
       // stability bound before choosing the second Strang-split half-sweep.
@@ -592,6 +643,17 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
       // Work outside of TaskLists:
       // increment time, ncycle, etc.
       pmesh->time = pmesh->time + pmesh->dt;
+      // Diagnostics/restarts must see geometry at the completed timestep, not
+      // the midpoint (M1) or another intermediate RK stage.
+      auto *pack = pmesh->pmb_pack;
+      if (pack->padm != nullptr && pack->pz4c == nullptr &&
+          pack->padm->time_dependent) {
+        pack->padm->SetADMVariables(pack);
+        if (pack->pdyngr != nullptr) pack->pdyngr->ConToPrim(this, nexp_stages);
+        if (pack->pdynrad != nullptr && pack->pdynrad->use_adm_geometry) {
+          pack->pdynrad->SetOrthonormalTetrad();
+        }
+      }
       pmesh->ncycle++;
       pmesh->dt_last_completed = pmesh->dt;
       nmb_updated_ += pmesh->nmb_total;
@@ -622,8 +684,13 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
       }
 
       // AMR
-      if (pmesh->adaptive) {pmesh->pmr->AdaptiveMeshRefinement(this, pin);}
+      if (pmesh->adaptive) {
+        pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+      }
       // compute new timestep AFTER all Meshblocks refined/derefined
+      if (pmesh->pmb_pack->ppart != nullptr) {
+        (void) pmesh->pmb_pack->ppart->NewTimeStep(this, nexp_stages);
+      }
       pmesh->NewTimeStep(tlim);
       RefreshSTSCycleState(pmesh);
 
@@ -759,6 +826,15 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->Prolongate(this, 0); // coarse grid BCs and prolongation
     (void) pz4c->ApplyPhysicalBCs(this, 0); // fine grid BCs
+    if (pm->pmb_pack->pdynrad != nullptr && pm->pmb_pack->pdyngr == nullptr) {
+      (void) pz4c->ConvertZ4cToADM(this, 0);
+    }
+  }
+
+  auto pre_restart_conserved_init_func = pm->pgen->pre_restart_conserved_init_func;
+  if (pre_restart_conserved_init_func != nullptr) {
+    pre_restart_conserved_init_func(pm);
+    pm->pgen->pre_restart_conserved_init_func = nullptr;
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
@@ -813,6 +889,13 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     }
   }
 
+  auto post_restart_primitive_init_func = pm->pgen->post_restart_primitive_init_func;
+  if (post_restart_primitive_init_func != nullptr) {
+    post_restart_primitive_init_func(pm);
+    pm->pgen->post_restart_primitive_init_func = nullptr;
+    pm->pgen->restart_missing_dynrad_i0 = false;
+  }
+
   // Initialize radiation: ghost zones and intensity (everywhere)
   // DOES NOT include communications for shearing box boundaries
   radiation::Radiation *prad = pm->pmb_pack->prad;
@@ -825,6 +908,33 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->RecvI(this, 0);
     (void) prad->Prolongate(this, 0); // coarse grid BCs and prolongation
     (void) prad->ApplyPhysicalBCs(this, 0); // fine grid BCs
+  }
+
+  // Initialize radiation M1: ghost zones and intensity (everywhere)
+  // DOES NOT include communications for shearing box boundaries
+  radiationm1::RadiationM1 *pradm1 = pm->pmb_pack->pradm1;
+  if (pradm1 != nullptr) {
+    (void) pradm1->RestrictU(this, 0);
+    (void) pradm1->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pradm1->SendU(this, 0);
+    (void) pradm1->ClearSend(this, -1); // stage = -1 only clear SendU
+    (void) pradm1->ClearRecv(this, -1); // stage = -1 only clear RecvU
+    (void) pradm1->RecvU(this, 0);
+    (void) pradm1->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
+    (void) pradm1->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
+    (void) pradm1->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pradm1->ApplyPhysicalBCs(this, 0); // fine grid BCs
+  }
+  dyn_radiation::DynRadiation *pdynrad = pm->pmb_pack->pdynrad;
+  if (pdynrad != nullptr) {
+    (void) pdynrad->RestrictI(this, 0);
+    (void) pdynrad->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pdynrad->SendI(this, 0);
+    (void) pdynrad->ClearSend(this, -1);
+    (void) pdynrad->ClearRecv(this, -1);
+    (void) pdynrad->RecvI(this, 0);
+    (void) pdynrad->ApplyPhysicalBCs(this, 0);
+    (void) pdynrad->Prolongate(this, 0);
   }
 
   return;

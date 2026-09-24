@@ -142,9 +142,15 @@ MeshBlock::MeshBlock(MeshBlockPack* ppack, int igids, int nmb) :
 void MeshBlock::SetNeighbors(std::unique_ptr<MeshBlockTree> &ptree, int *ranklist) {
   // min number of array elements needed to store MeshBlock neighbors withe SMR/AMR
   // Note not all buffers will be allocated for all nghbrs
-  if (pmy_pack->pmesh->one_d) {nnghbr = 8;}
-  if (pmy_pack->pmesh->two_d) {nnghbr = 24;}
-  if (pmy_pack->pmesh->three_d) {nnghbr = 56;}
+  if (pmy_pack->pmesh->one_d) {
+    nnghbr = 8;
+  }
+  if (pmy_pack->pmesh->two_d) {
+    nnghbr = 24;
+  }
+  if (pmy_pack->pmesh->three_d) {
+    nnghbr = 56;
+  }
 
   // allocate size of DualArrays
   int nmb = pmy_pack->nmb_thispack;

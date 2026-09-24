@@ -23,6 +23,7 @@
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "z4c/tmunu.hpp"
@@ -119,8 +120,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
 }
 
 DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
-    temperature("temperature",1,1,1,1,1),
-    pmy_pack(pp) {
+    pmy_pack(pp),
+    temperature("temperature",1,1,1,1,1) {
   std::string rsolver = pin->GetString("mhd", "rsolver");
   if (rsolver.compare("llf") == 0) {
     rsolver_method = DynGRMHD_RSolver::llf_dyngr;
@@ -144,7 +145,20 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
+  // Accept legacy input decks, but split flux kernels no longer use thread teams.
+  const int flux_team_size = pin->GetOrAddInteger("mhd", "dyn_flux_team_size", 0);
+  if (flux_team_size < 0) {
+    std::cerr << "<mhd>/dyn_flux_team_size must be nonnegative; "
+              << "0 disables this legacy setting."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (flux_team_size > 0 && global_variable::my_rank == 0) {
+    std::cout << "<mhd>/dyn_flux_team_size is ignored by split GRMHD flux kernels."
+              << std::endl;
+  }
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
+  calculate_tmunu = pin->GetOrAddBoolean("mhd", "calculate_tmunu", false);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
   scalar_pplimiter = pin->GetOrAddBoolean("mhd", "scalar_pplimiter", true);
 
@@ -169,9 +183,11 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
   using namespace numrel; // NOLINT(build/namespaces))
+  using namespace radiationm1; // NOLINT(build/namespaces)
   Z4c *pz4c = pmy_pack->pz4c;
   adm::ADM *padm = pmy_pack->padm;
   MHD *pmhd = pmy_pack->pmhd;
+  RadiationM1 *pradm1 = pmy_pack->pradm1;
   NumericalRelativity *pnr = pmy_pack->pnr;
 
   // Start task list
@@ -179,44 +195,57 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
 
   // Run task list
   pnr->QueueTask(&MHD::CopyCons, pmhd, MHD_CopyU, "MHD_CopyU", Task_Run);
+  pnr->QueueTask(&DynGRMHD::PrepareADM, this, MHD_PrepareADM, "MHD_PrepareADM",
+                 Task_Run, {MHD_CopyU});
 
   // Select which CalculateFlux function to add based on rsolver_method.
   // CalcFlux requires metric in flux - must happen before z4ctoadm updates the metric
   if (rsolver_method == DynGRMHD_RSolver::llf_dyngr) {
     pnr->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::llf_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_PrepareADM});
   } else if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
     pnr->QueueTask(
            &DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>,
-           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_CopyU});
+           this, MHD_Flux, "MHD_Flux", Task_Run, {MHD_PrepareADM});
   } else { // put more rsolvers here
     abort();
   }
 
   // Now the rest of the MHD run tasks
-  if (pz4c != nullptr) {
+  if (pz4c != nullptr || calculate_tmunu) {
     pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
-                   Task_Run, {MHD_CopyU});
+                   Task_Run, {MHD_PrepareADM});
+    if (pradm1 != nullptr) {
+      pnr->QueueTask(&RadiationM1::FloorAndCalcClosure, pradm1, M1_Closure, "M1_Closure", Task_Run);
+      pnr->QueueTask(&RadiationM1::SetTmunu, pradm1, M1_SetTmunu, "M1_SetTmunu", Task_Run, {MHD_SetTmunu});
+    }
   }
   pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux",
                  Task_Run, {MHD_Flux});
   pnr->QueueTask(&MHD::RecvFlux, pmhd, MHD_RecvFlux, "MHD_RecvFlux",
                  Task_Run, {MHD_SendFlux});
+  pnr->QueueTask(&MHD::RepairNonFiniteFluxes, pmhd, MHD_RepairFlux,
+                 "MHD_RepairFlux", Task_Run, {MHD_RecvFlux});
   if (pz4c != nullptr) {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
-                   {MHD_RecvFlux, MHD_SetTmunu});
+                   {MHD_RepairFlux, MHD_SetTmunu});
   } else {
     pnr->QueueTask(&MHD::RKUpdate, pmhd, MHD_ExplRK, "MHD_ExplRK", Task_Run,
-                   {MHD_RecvFlux});
+                   {MHD_RepairFlux});
   }
+  pnr->QueueTask(&MHD::RepairNonFiniteConserved, pmhd, MHD_RepairCons,
+                 "MHD_RepairCons", Task_Run, {MHD_ExplRK});
   pnr->QueueTask(&MHD::MHDSrcTerms, pmhd, MHD_AddSrc, "MHD_AddSrc", Task_Run,
-                 {MHD_ExplRK});
-  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_AddSrc});
+                 {MHD_RepairCons});
+  pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run,
+                 {MHD_AddSrc}, {Rad_Couple});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
   pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});
-  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EField});
+  pnr->QueueTask(&MHD::EFieldSrc, pmhd, MHD_EFieldSrc, "MHD_EFieldSrc", Task_Run,
+                 {MHD_EField});
+  pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EFieldSrc});
   pnr->QueueTask(&MHD::RecvE, pmhd, MHD_RecvE, "MHD_RecvE", Task_Run, {MHD_SendE});
   pnr->QueueTask(&MHD::CT, pmhd, MHD_CT, "MHD_CT", Task_Run, {MHD_RecvE});
   pnr->QueueTask(&MHD::RestrictB, pmhd, MHD_RestB, "MHD_RestB", Task_Run, {MHD_CT});
@@ -244,6 +273,20 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   // End task list
   pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
+
+  // After time integrator task list
+  if (pmy_pack->pradm1 != nullptr && !pmy_pack->pradm1->UsesFluidStages()) {
+    pnr->QueueTask(&MHD::InitRecvU, pmhd, MHD_URecv, "MHD_URecv", Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_AfterTimeIntegrator, {MHD_RestU});
+    pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_AfterTimeIntegrator, {MHD_SendU});
+    pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong", Task_AfterTimeIntegrator, {MHD_RecvU});
+    pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS", Task_AfterTimeIntegrator, {MHD_Prolong});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_AfterTimeIntegrator, {MHD_BCS});
+    pnr->QueueTask(&MHD::ClearSendU, pmhd, MHD_ClearSU, "MHD_ClearSU", Task_AfterTimeIntegrator, {MHD_C2P});
+    pnr->QueueTask(&MHD::ClearRecvU, pmhd, MHD_ClearRU, "MHD_ClearRU", Task_AfterTimeIntegrator, {MHD_C2P});          
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -480,8 +523,20 @@ TaskStatus DynGRMHD::SetTmunu(Driver *pdrive, int stage) {
 //! \fn void DynGRMHD::SetADMVariables
 //! \brief
 
+// Recover primitives with the metric at the explicit RHS time. Updating only
+// the metric would leave velocities and pressures from the preceding stage.
+TaskStatus DynGRMHD::PrepareADM(Driver *pdrive, int stage) {
+  if (pmy_pack->pz4c == nullptr && pmy_pack->padm->time_dependent) {
+    SetADMVariables(pdrive, stage);
+    return ConToPrim(pdrive, stage);
+  }
+  return TaskStatus::complete;
+}
+
 TaskStatus DynGRMHD::SetADMVariables(Driver *pdrive, int stage) {
-  pmy_pack->padm->SetADMVariables(pmy_pack);
+  const Real t = pmy_pack->pmesh->time +
+      (stage > 0 ? pdrive->stage_abscissa[stage-1]*pmy_pack->pmesh->dt : 0.0);
+  pmy_pack->padm->SetADMVariablesAtTime(pmy_pack, t);
   return TaskStatus::complete;
 }
 
@@ -517,7 +572,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
   // fetch flag for smooth excision and
   // excision mask, and target values
-  bool smoothing = pmy_pack->pcoord->coord_data.smooth_excision;
+  bool smoothing = pmy_pack->pcoord->coord_data.smooth_excise;
   auto &floor = pmy_pack->pcoord->excision_floor;
   Real &dexcise = pmy_pack->pcoord->coord_data.dexcise;
   // Real &pexcise = pmy_pack->pcoord->coord_data.pexcise;
@@ -688,14 +743,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 // Instantiated templates
 template class DynGRMHDPS<Primitive::IdealGas, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::PiecewisePolytrope, Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
-                          Primitive::ResetFloor>;
-template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
-                          Primitive::ResetFloor>;
+using NormalCompOSE = Primitive::EOSCompOSE<Primitive::NormalLogs>;
+using NQTCompOSE = Primitive::EOSCompOSE<Primitive::NQTLogs>;
+using NormalHybrid = Primitive::EOSHybrid<Primitive::NormalLogs>;
+using NQTHybrid = Primitive::EOSHybrid<Primitive::NQTLogs>;
+template class DynGRMHDPS<NormalCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<NQTCompOSE, Primitive::ResetFloor>;
+template class DynGRMHDPS<NormalHybrid, Primitive::ResetFloor>;
+template class DynGRMHDPS<NQTHybrid, Primitive::ResetFloor>;
 
 // Macro for defining CoordTerms templates
 #define INSTANTIATE_COORD_TERMS(EOSPolicy, ErrorPolicy) \

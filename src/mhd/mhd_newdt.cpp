@@ -160,8 +160,12 @@ void MHD::RecomputeTimeStepFromCurrentState(Driver *pdriver) {
 
   // compute minimum of dt1/dt2/dt3 for 1D/2D/3D problems
   dtnew = dt1;
-  if (pmy_pack->pmesh->multi_d) { dtnew = std::min(dtnew, dt2); }
-  if (pmy_pack->pmesh->three_d) { dtnew = std::min(dtnew, dt3); }
+  if (pmy_pack->pmesh->multi_d) {
+    dtnew = std::min(dtnew, dt2);
+  }
+  if (pmy_pack->pmesh->three_d) {
+    dtnew = std::min(dtnew, dt3);
+  }
 
   // compute timestep for diffusion
   if (pcond != nullptr) {

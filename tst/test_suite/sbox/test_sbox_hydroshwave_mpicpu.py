@@ -18,14 +18,14 @@ input_file = "inputs/hydro_shwave.athinput"
 def compute_error(data, amp=1.0e-4):
     # computeds analytic solution of JG05 for dVx
     t = data["time"]
-    dvx = amp*17.0/(1.0 + (1.5*t - 4.0)*(1.5*t - 4.0))
+    dvx = amp * 17.0 / (1.0 + (1.5 * t - 4.0) * (1.5 * t - 4.0))
     # plotting routines were used to test solutions was correct
     # import matplotlib.pyplot as plt
     # plt.figure
     # plt.plot(t,dvx)
     # plt.plot(t,np.sqrt(32.0*data["1-KE"]),color='red')
     # plt.show()
-    return (np.abs(np.sqrt(32.0*data["1-KE"]) - dvx)).mean()
+    return (np.abs(np.sqrt(32.0 * data["1-KE"]) - dvx)).mean()
 
 
 def arguments(res):

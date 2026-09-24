@@ -8,7 +8,7 @@
 //  Sets up different initial conditions selected by flag "iprob"
 //    - iprob=1 : tanh profile with a single mode perturbation
 //    - iprob=2 : double tanh profile with a single mode perturbation
-//    - iprob=3 : sinusoidal velocity with random perturbations
+//    - iprob=3 : sinusiodal velocity with random perturbations
 //    - iprob=4 : Lecoanet test problem ICs
 
 #include <iostream>
@@ -148,7 +148,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         scal = y0 + y1*tanh((x2v-0.5)/a_char);
       }
     } else if (iprob == 3) {
-      // sinusoidal velocity with random perts (geometry of turbulence test)
+      // sinusiodal velocity with random perts (geometry of turbulence test)
       rval = amp*2.0*(rand_gen.frand() - 0.5);
       dens = 1.0;
       pres = 1.0;

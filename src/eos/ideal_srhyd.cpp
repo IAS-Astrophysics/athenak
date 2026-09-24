@@ -111,10 +111,18 @@ void IdealSRHydro::ConsToPrim(DvceArray5D<Real> &cons, DvceArray5D<Real> &prim,
         sumd++;  // use dfloor as counter for when either is true
       }
     } else {
-      if (dfloor_used) {sumd++;}
-      if (efloor_used) {sume++;}
-      if (vceiling_used) {sumv++;}
-      if (c2p_failure) {sumf++;}
+      if (dfloor_used) {
+        sumd++;
+      }
+      if (efloor_used) {
+        sume++;
+      }
+      if (vceiling_used) {
+        sumv++;
+      }
+      if (c2p_failure) {
+        sumf++;
+      }
       max_it = (iter_used > max_it) ? iter_used : max_it;
 
       // store primitive state in 3D array

@@ -331,8 +331,12 @@ int main(int argc, char *argv[]) {
 
   //  If code was run with -m option, write mesh structure to file and quit.
   if (marg_flag) {
-    if (global_variable::my_rank == 0) {pmesh->WriteMeshStructure();}
-    if (res_flag) {restartfile.Close(single_file_per_rank);}
+    if (global_variable::my_rank == 0) {
+      pmesh->WriteMeshStructure();
+    }
+    if (res_flag) {
+      restartfile.Close(single_file_per_rank);
+    }
     delete pmesh;
     delete pinput;
     Kokkos::finalize();
@@ -347,6 +351,7 @@ int main(int argc, char *argv[]) {
   // Note these steps must occur after Mesh (including MeshBlocks and MeshBlockPack)
   // is fully constructed.
 
+  ChangeRunDir(run_dir);
   pmesh->AddCoordinatesAndPhysics(pinput);
 
   // Construct MeshRefinement object only after physics modules have been added because
@@ -373,7 +378,6 @@ int main(int argc, char *argv[]) {
   // Construct Driver and Outputs. Actual outputs (including initial conditions) are made
   // in Driver.Initialize(). Add wall clock timer to Driver if necessary.
 
-  ChangeRunDir(run_dir);
   Driver* pdriver = new Driver(pinput, pmesh, wtlim, &timer);
   Outputs* pout = new Outputs(pinput, pmesh);
 

@@ -34,6 +34,8 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
+option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
+option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -77,6 +79,16 @@ else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
 
+# set nurates macro (true/false)
+if(Athena_ENABLE_NURATES)
+  set(ENABLE_NURATES 1)
+  set(M1_TOTAL_NUM_SPECIES 4)
+  message(STATUS "Compiling with bns-nurates")
+else()
+  set(ENABLE_NURATES 0)
+  set(M1_TOTAL_NUM_SPECIES 1)
+endif ()
+
 #set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
   message(STATUS "Including user-specified problem generator file: ${PROBLEM}")
@@ -99,6 +111,7 @@ endif()
 
 # If this is a debug build, set kokkos debug on
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  add_definitions(-DDEBUG_BUILD)
   message(STATUS "Enabling Kokkos debug mode")
   set(Kokkos_ENABLE_DEBUG ON CACHE BOOL "Most general debug settings")
   set(Kokkos_ENABLE_DEBUG_BOUNDS_CHECK ON CACHE BOOL
@@ -124,7 +137,8 @@ endif()
 if (ENABLE_OPENMP)
   target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
 endif()
-if (${PROBLEM} MATCHES "z4c/two_punctures/*")
+if (${PROBLEM} MATCHES "z4c/two_punctures/*" OR
+    ${PROBLEM} STREQUAL "z4c_circumbinary")
 	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
 	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)
 	#target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/gsl/include)
@@ -135,6 +149,11 @@ if (${PROBLEM} MATCHES "z4c/two_punctures/*")
 	set(TWO_PUNCTURES 1)
 else()
 	set(TWO_PUNCTURES 0)
+endif()
+
+# Optionally include bns_nurates headers
+if (ENABLE_NURATES)
+  target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bns_nurates/include)
 endif()
 
 if (${PROBLEM} MATCHES "z4c/spectre/*")
@@ -245,6 +264,20 @@ if (${PROBLEM} MATCHES "dyn_grmhd/lorene/*")
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
 endif()
 
+if (${PROBLEM} STREQUAL "gbondi")
+  # --- HDF5 I/O (dynamic by default, static optional) --------------------------
+  #   • Set STATIC_HDF5=ON at CMake configure time to bake every HDF5 object
+  #     into the executable for easy archival or clusters that disallow .so’s.
+  #   • Leave it OFF (default) to keep the binary small and enable VOL/plugins.
+  #find_package(hdf5 COMPONENTS C HL REQUIRED)
+  #target_include_directories(athena PRIVATE
+  #    ${CMAKE_SOURCE_DIR}/hdf5/include)
+  find_package(HDF5 REQUIRED COMPONENTS C HL)
+  target_link_libraries(athena PUBLIC
+    hdf5::hdf5
+    hdf5::hdf5_hl)
+endif()
+
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -254,4 +287,3 @@ target_include_directories(athena PUBLIC
 configure_file(config.hpp.in config.hpp)
 
 install( TARGETS athena DESTINATION bin )
-

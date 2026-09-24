@@ -81,7 +81,9 @@ void SingleStateLLF_MHD(const MHDPrim1D &wl, const MHDPrim1D &wr, const Real &bx
   flux.mx = 0.5*(fsum.mx - du.mx);
   flux.my = 0.5*(fsum.my - du.my);
   flux.mz = 0.5*(fsum.mz - du.mz);
-  if (eos.is_ideal) {flux.e = 0.5*(fsum.e  - du.e);}
+  if (eos.is_ideal) {
+    flux.e = 0.5 * (fsum.e - du.e);
+  }
   flux.by = -0.5*(fsum.by - du.by);
   flux.bz =  0.5*(fsum.bz - du.bz);
 

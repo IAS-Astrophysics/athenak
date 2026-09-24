@@ -22,6 +22,7 @@
 // Forward declarations
 namespace z4c {class Z4c;}
 namespace dyngr {class DynGRMHD;}
+namespace dyn_radiation {class DynRadiation;}
 class ADM;
 class Tmunu;
 class MeshBlockPack;
@@ -31,16 +32,20 @@ namespace numrel {
 enum TaskName {
   MHD_Recv,
   MHD_CopyU,
+  MHD_PrepareADM,
   MHD_Flux,
   MHD_SetTmunu,
   MHD_SendFlux,
   MHD_RecvFlux,
+  MHD_RepairFlux,
   MHD_ExplRK,
+  MHD_RepairCons,
   MHD_AddSrc,
   MHD_RestU,
   MHD_SendU,
   MHD_RecvU,
   MHD_EField,
+  MHD_EFieldSrc,
   MHD_SendE,
   MHD_RecvE,
   MHD_CT,
@@ -55,7 +60,14 @@ enum TaskName {
   MHD_Newdt,
   MHD_ClearS,
   MHD_ClearR,
+  MHD_URecv,
+  MHD_ClearSU,
+  MHD_ClearRU,
   MHD_NTASKS,
+
+  M1_Closure,
+  M1_SetTmunu,
+  M1_NTASKS,
 
   Z4c_Recv,
   Z4c_IRecvW,
@@ -88,19 +100,42 @@ enum TaskName {
   Z4c_FastFlow,
   Z4c_CCE,
   Z4c_DumpHorizon,
-  Z4c_NTASKS
+  Z4c_NTASKS,
+
+  Rad_Recv,
+  Rad_CopyI,
+  Rad_SetTmunu,
+  Rad_PrepareGeom,
+  Rad_Flux,
+  Rad_SendFlux,
+  Rad_RecvFlux,
+  Rad_ExplRK,
+  Rad_AddSrc,
+  Rad_Couple,
+  Rad_RestI,
+  Rad_SendI,
+  Rad_RecvI,
+  Rad_BCS,
+  Rad_Prolong,
+  Rad_Newdt,
+  Rad_ClearS,
+  Rad_ClearR,
+  Rad_NTASKS
 };
 
 enum PhysicsDependency {
   Phys_None,
   Phys_MHD,
-  Phys_Z4c
+  Phys_M1,
+  Phys_Z4c,
+  Phys_DynRad
 };
 
 enum TaskLocation {
   Task_Start,
   Task_Run,
-  Task_End
+  Task_End,
+  Task_AfterTimeIntegrator
 };
 
 struct QueuedTask {
@@ -162,12 +197,12 @@ class NumericalRelativity {
 
   void AssembleNumericalRelativityTasks(
          std::map<std::string, std::shared_ptr<TaskList>>& tl);
-
  private:
   MeshBlockPack *pmy_pack;
   std::vector<QueuedTask> start_queue;
   std::vector<QueuedTask> run_queue;
   std::vector<QueuedTask> end_queue;
+  std::vector<QueuedTask> after_timeintegrator_queue;
 
   std::vector<QueuedTask>& SelectQueue(TaskLocation loc);
   PhysicsDependency NeedsPhysics(TaskName task);
