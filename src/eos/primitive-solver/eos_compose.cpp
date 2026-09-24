@@ -212,8 +212,20 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     }
     // Y[n]/Y[p] are consumed on their own by ProtonFraction/NeutronFraction, which do
     // not need the heavy-nucleus channels. All HasField queries precede any operator[].
+    // Tables written before these two fields became mandatory do not carry them. Fall
+    // back on free npe matter, Y[p] = Yq and Y[n] = 1 - Yq, which keeps such a table
+    // usable: exact where there are no nuclei, wrong where there are, so say so.
     const bool has_yn = table.HasField("Y[n]");
     const bool has_yp = table.HasField("Y[p]");
+    if (!has_yp || !has_yn) {
+      std::cout << "### WARNING in " << __FILE__ << std::endl
+                << "The EOS table does not provide "
+                << (has_yp ? "Y[n]" : (has_yn ? "Y[p]" : "Y[p] or Y[n]"))
+                << ". Approximating the nucleon fractions as free npe matter,"
+                << " Y[p] = Yq and Y[n] = 1 - Yq. That is only exact where no nuclei"
+                << " are present: regenerate the table before using it with"
+                << " bns_nurates.\n";
+    }
     if (m_has_composition) {
       std::string opt;
       for (const char *f : {"Y[H2]", "Y[H3]", "Y[He3]", "dU"}) {
@@ -245,7 +257,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYN,in,iy,it) = has_yn ? clamp01(d[iflat]) : 0.0;
+            host_table(ECYN,in,iy,it) = has_yn ? clamp01(d[iflat]) : 1.0 - host_yq(iy);
           }
         }
       }
@@ -257,7 +269,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {
             size_t iflat = it + m_nt*(iy + m_ny*in);
-            host_table(ECYP,in,iy,it) = has_yp ? clamp01(d[iflat]) : 0.0;
+            host_table(ECYP,in,iy,it) = has_yp ? clamp01(d[iflat]) : host_yq(iy);
           }
         }
       }

@@ -176,6 +176,24 @@ void SphericalSurface::InitializeRadius() {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn bool SphericalSurface::SetCenter
+//! \brief move the center of the surfaces to (xc_new,yc_new,zc_new)
+
+bool SphericalSurface::SetCenter(Real xc_new, Real yc_new, Real zc_new) {
+  if (xc_new == xc && yc_new == yc && zc_new == zc) return false;
+
+  xc = xc_new;
+  yc = yc_new;
+  zc = zc_new;
+
+  InitializeRadius();
+  SetInterpolationIndices();
+  SetInterpolationWeights();
+
+  return true;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void SphericalSurface::SetInterpolationIndices
 //! \brief determine which MeshBlocks and MeshBlock zones therein that will be
 //! used in

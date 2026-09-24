@@ -187,7 +187,9 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
                   u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, is - i - 1) = F_d(1);
                   u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, is - i - 1) = F_d(2);
                   u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) = F_d(3);
-                  u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = 1.0;
+                  if (nspecies_ > 1) {
+                    u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) = 1.0;
+                  }
                 }
               }
             }
@@ -202,8 +204,10 @@ void ApplyBeamSourcesBlackHole(Mesh *pmesh) {
                       0.0;
                   u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, is - i - 1) =
                       0.0;
-                  u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) =
-                      0.0;
+                  if (nspecies_ > 1) {
+                    u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, is - i - 1) =
+                        0.0;
+                  }
                 }
               }
             }

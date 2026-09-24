@@ -651,7 +651,7 @@ void Mesh::NewTimeStep(const Real tlim) {
 
   // Radiation M1 timestep
   if (pmb_pack->pradm1 != nullptr) {
-    dt = std::min(dt, (cfl_no)*(pmb_pack->pradm1->dtnew) );
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pradm1->dtnew) );
   }
 #if MPI_PARALLEL_ENABLED
   // get minimum cycle and parabolic timesteps over all MPI ranks

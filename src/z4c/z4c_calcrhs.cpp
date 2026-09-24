@@ -48,7 +48,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   bool dc_on        = opt.enable_driftcontrol;
   int  dc_variety   = opt.dc_variety;
   Real dc_inv_s2    = 0.0;             // 1/damping_scale^2
-  Real dc_inv_tau   = 0.0;             // relaxation rate
+  Real dc_inv_tau[3] = {0.0, 0.0, 0.0}; // relaxation rate, per axis
   Real dc_c[3]      = {0.0, 0.0, 0.0};  // centre of the Gaussian weight
   Real dc_corr[3]   = {0.0, 0.0, 0.0};  // oscillator/PID shift RHS increment
   Real dc_target[3] = {0.0, 0.0, 0.0};  // relaxation target shift
@@ -65,8 +65,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
 
     if (dc_variety == DriftControl::Relaxation) {
-      dc_inv_tau = 1.0 / opt.dc_relaxation_time;
       for (int a = 0; a < 3; ++a) {
+        dc_inv_tau[a] = 1.0 / opt.dc_relaxation_time;
         Real const e = pdc->GetPos(a) - fixed[a];
         dc_target[a] = opt.dc_kappa * e;
         if (opt.dc_gamma_suppress > 0.0) {
@@ -81,6 +81,19 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         dc_corr[a] = -(opt.dc_Kp * e + opt.dc_Ki * pdc->GetIntegral(a)
                      + opt.dc_Kd * pdc->GetVel(a));
       }
+    } else if (dc_variety == DriftControl::BDOB) {
+      for (int a = 0; a < 3; ++a) {
+        dc_corr[a] = -pdc->GetU(a);
+      }
+    } else if (dc_variety == DriftControl::DOB) {
+      Real const wc2  = SQR(opt.dc_omega_c);
+      Real const twzc = 2.0 * opt.dc_zeta * opt.dc_omega_c;
+      for (int a = 0; a < 3; ++a) {
+        Real const e    = pdc->GetPos(a) - fixed[a];
+        Real const v    = pdc->GetVel(a);
+        Real const fhat = pdc->GetP(a) + opt.dc_omega_o * v;
+        dc_corr[a] = -(wc2 * e + twzc * v + fhat);
+      }
     } else {
       Real const tau      = opt.dc_damping_time;
       Real const zeta     = opt.dc_damping_coeff;
@@ -90,11 +103,37 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                      + (pdc->GetPos(a) - fixed[a])) * inv_tau2;
       }
     }
+
+    if (dc_variety != DriftControl::BDOB) {
+      // Per-axis gain on the applied correction.
+      Real const dc_gain[3] = {opt.dc_gain_x, opt.dc_gain_y, opt.dc_gain_z};
+      for (int a = 0; a < 3; ++a) {
+        dc_corr[a]    *= dc_gain[a];
+        dc_gsupp[a]   *= dc_gain[a];
+        dc_inv_tau[a] *= dc_gain[a];
+      }
+
+      // Optional ramp-down, applied to everything the controller injects. The factor is
+      // 1 unless dc_ramp_start >= 0, so this is a no-op for every existing parfile.
+      Real const dc_ramp = pdc->RampFactor(time);
+      if (dc_ramp < 1.0) {
+        for (int a = 0; a < 3; ++a) {
+          dc_corr[a]    *= dc_ramp;
+          dc_gsupp[a]   *= dc_ramp;
+          dc_inv_tau[a] *= dc_ramp;
+        }
+      }
+    }
   }
 
   bool is_vacuum = (pmy_pack->ptmunu == nullptr) ? true : false;
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
+
+  // Radial suppression of the Z4c Theta equation (Kyutoku, Shibata & Taniguchi 2014,
+  // arXiv:1405.6207 Sec. II).  
+  bool rz4_on     = (opt.rz4 > 0.0);
+  Real rz4_inv_r2 = rz4_on ? 1.0/SQR(opt.rz4) : 0.0;
 
   // ===================================================================================
   // Main RHS calculation
@@ -319,6 +358,23 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     K = z4c.vKhat(m,k,j,i) + 2.*z4c.vTheta(m,k,j,i);
 
+    // Radial suppression factor.  Computed here rather than at the RHS assembly because
+    // mode 4 needs the suppressed K before Ht is formed further down.  r is measured from
+    // the grid origin, not a tracker: the mode this targets is seeded by the box boundary
+    // and has the symmetry of the box, not of the remnant.
+    Real rz4_fac = 1.0;
+    if (rz4_on) {
+      Real x1 = CellCenterX(i - is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2 = CellCenterX(j - js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3 = CellCenterX(k - ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+      rz4_fac = Kokkos::exp(-(SQR(x1) + SQR(x2) + SQR(x3))*rz4_inv_r2);
+    }
+    // K with Theta suppressed.  Equals K exactly when the feature is off.
+
+    // Which K each consumer sees, per mode.
+
+    // Per-equation kappa1.
+
     // -----------------------------------------------------------------------------------
     // Inverse metric
 
@@ -530,6 +586,28 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
 
     // -----------------------------------------------------------------------------------
+    // Kyutoku, Shibata & Taniguchi 2014 (arXiv:1405.6207) radial Z4c suppression.
+    //
+    // Their words: "because the outer boundary of SACRA has a nonsmooth rectangular shape
+    // ... we adopt simple outgoing-wave boundary conditions rather than constraint-
+    // preserving and incoming-radiation-controlling ones ..., which require a normal vector
+    // to the boundary.  To suppress unphysical incoming modes from the boundary, we instead
+    // force the right-hand side of Eq. (28) [the Theta equation] to damp exponentially by
+    // multiplying exp[-r^2/(L/2)^2].  The same factor is also multiplied for all kappa1 ...
+    // This prescription is justified, because all the modified terms vanish for physical
+    // solutions."  They also flag the caveat that it modifies the principal part.
+    //
+    // So: the WHOLE Theta RHS (source and damping together, advection is on the LHS and is
+    // untouched) and EVERY occurrence of kappa1 are scaled.  Scaling source and damping
+    // together preserves Theta_eq = S/D and only slows the relaxation rate.
+    //
+    // Measured here on VVLR_eq against a matched control from an identical restart: boundary
+    // tau_amp 4556 -> 6483 M, but Z-norm2 grew 6.9x faster (removing the kappa1 damping of
+    // Gam^i is what costs that).  Kyutoku+14 judged the prescription on ADM mass and angular
+    // momentum conservation, not on constraint norms, which may be why the trade is not
+    // reported there.  r is measured from the grid origin, not a tracker.
+
+    // -----------------------------------------------------------------------------------
     // Assemble RHS
     //
     // Khat, chi, and Theta
@@ -543,11 +621,11 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
       chi_guarded * z4c.alpha(m,k,j,i) * K;
-    rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
+    rhs.vTheta(m,k,j,i) = LTheta + rz4_fac * z4c.alpha(m,k,j,i) * (
         0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter term
     if(!is_vacuum) {
-      rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
+      rhs.vTheta(m,k,j,i) -= rz4_fac * 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
     }
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
@@ -635,7 +713,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
       if (dc_variety == DriftControl::Relaxation) {
         for (int a = 0; a < 3; ++a) {
-          rhs.beta_u(m,a,k,j,i) -= dc_inv_tau
+          rhs.beta_u(m,a,k,j,i) -= dc_inv_tau[a]
                                  * (z4c.beta_u(m,a,k,j,i) - dc_target[a]) * g;
           rhs.beta_u(m,a,k,j,i) -= dc_gsupp[a] * z4c.vGam_u(m,a,k,j,i) * g;
         }

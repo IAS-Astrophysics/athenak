@@ -377,12 +377,20 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[inout] Y_eq    The equilibrium particle fractions.
   //  \param[in]    T_guess Initial guess for the temperature.
   //  \param[in]    Y_guess Initial guesses for the particle fractions.
+  //  \param[out]   status  If not null, receives an EOSPolicy-defined code saying where
+  //                        the answer came from (interior solution, table edge, or a
+  //                        fallback), for callers that need to treat them differently.
   //  \return Whether the equilibrium was successfully found.
-  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl, Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
-   if constexpr (supports_potentials) {
-    int ierr = EOSPolicy::BetaEquilibriumTrapped(n, e*code_units.PressureConversion(eos_units), Yl,
-                                      T_eq, Y_eq,
-                                      T_guess*code_units.TemperatureConversion(eos_units), Y_guess);
+  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl,
+                                                         Real &T_eq, Real *Y_eq,
+                                                         Real T_guess,
+                                                         Real *Y_guess,
+                                                         int *status = nullptr) const {
+    if constexpr (supports_potentials) {
+      int ierr = EOSPolicy::BetaEquilibriumTrapped(
+          n, e*code_units.PressureConversion(eos_units), Yl,
+          T_eq, Y_eq,
+          T_guess*code_units.TemperatureConversion(eos_units), Y_guess, status);
 
     T_eq = T_eq*eos_units.TemperatureConversion(code_units);
 
@@ -392,8 +400,47 @@ class EOS : public EOSPolicy, public ErrorPolicy {
    }
   }
 
-    //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3])
-  // \brief Get the trapped neutrino net number and energy densities.
+  //! \fn Real GetBetaEquilibriumPartial(Real n, Real e_rhs, Real *Yl_rhs,
+  //!     const Real w[PEQ_NWEIGHTS], Real &T_eq, Real *Y_eq, Real T_guess,
+  //!     Real *Y_guess)
+  //  \brief Get the partially-equilibrated temperature and species fractions: the
+  //         weighted generalisation of GetBetaEquilibriumTrapped, which is the case of
+  //         all five weights equal to 1.
+  //
+  //  \param[in]    n       The number density
+  //  \param[in]    e_rhs   Matter energy density plus the *weighted* neutrino energy
+  //  \param[in]    Yl_rhs  Electron fraction plus the *weighted* neutrino lepton number
+  //  \param[in]    w       Weights of the neutrino terms, indexed by PeqWeightIndex
+  //  \param[inout] T_eq    The equilibrium temperature.
+  //  \param[inout] Y_eq    The equilibrium particle fractions.
+  //  \param[in]    T_guess Initial guess for the temperature.
+  //  \param[in]    Y_guess Initial guesses for the particle fractions.
+  //  \param[out]   status  As for GetBetaEquilibriumTrapped.
+  //  \return Whether the equilibrium was successfully found.
+  //
+  //  The weights are dimensionless, so only e_rhs and the temperatures are converted.
+  //  See EOSCompOSE::BetaEquilibriumPartial for how e_rhs and Yl_rhs must be built.
+  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumPartial(Real n, Real e_rhs, Real *Yl_rhs,
+                                                         const Real w[PEQ_NWEIGHTS],
+                                                         Real &T_eq, Real *Y_eq,
+                                                         Real T_guess, Real *Y_guess,
+                                                         int *status = nullptr) const {
+    if constexpr (supports_potentials) {
+      int ierr = EOSPolicy::BetaEquilibriumPartial(
+          n, e_rhs*code_units.PressureConversion(eos_units), Yl_rhs,
+          w, T_eq, Y_eq,
+          T_guess*code_units.TemperatureConversion(eos_units), Y_guess, status);
+
+      T_eq = T_eq*eos_units.TemperatureConversion(code_units);
+
+      return ierr==0;
+    } else {
+      return false;
+    }
+  }
+
+  //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3])
+  //  \brief Get the trapped neutrino net number and energy densities.
   //
   //  \param[in]    n    The number density
   //  \param[in]    T    The temperature

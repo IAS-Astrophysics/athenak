@@ -428,8 +428,16 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   // Neutrino equilibrium: only meaningful in the NSE interior, so delegate.
   //--------------------------------------------------------------------------
   KOKKOS_INLINE_FUNCTION int BetaEquilibriumTrapped(Real n, Real e, Real *Yl,
-      Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) const {
-    return compose_eos.BetaEquilibriumTrapped(n, e, Yl, T_eq, Y_eq, T_guess, Y_guess);
+      Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess,
+      int *status = nullptr) const {
+    return compose_eos.BetaEquilibriumTrapped(n, e, Yl, T_eq, Y_eq, T_guess, Y_guess,
+                                              status);
+  }
+  KOKKOS_INLINE_FUNCTION int BetaEquilibriumPartial(Real n, Real e_rhs, Real *Yl_rhs,
+      const Real w[PEQ_NWEIGHTS], Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess,
+      int *status = nullptr) const {
+    return compose_eos.BetaEquilibriumPartial(n, e_rhs, Yl_rhs, w, T_eq, Y_eq,
+                                              T_guess, Y_guess, status);
   }
   KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y,
       Real n_nu[3], Real e_nu[3]) const {

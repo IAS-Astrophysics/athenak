@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 177
+#define NOUTPUT_CHOICES 178
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -128,10 +128,13 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Spherical radius (174)
   "r_sph",
 
-  // RHINE / transition-EOS diagnostics (175)
+  // Z4c gauge only: lapse + shift, no other Z4c evolved fields (175)
+  "z4c_gauge",
+
+  // RHINE / transition-EOS diagnostics (176)
   "rhine_aux",
 
-  // DynGRMHD chemical potentials mu_b, mu_q, mu_le, code units (176).
+  // DynGRMHD chemical potentials mu_b, mu_q, mu_le, code units (177).
   "mhd_mu"
 };
 
@@ -466,6 +469,8 @@ class SphericalSurfaceOutput : public BaseTypeOutput {
  private:
   SphericalSurface *psurf;
   bool dump_weights;  // write the quadrature weight of each point to file
+  int center_tracker;  // compact object to follow, or -1 to stay at a fixed center
+  Real xc_off, yc_off, zc_off;  // center offset from the tracked object's position
 };
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput

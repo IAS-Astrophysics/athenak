@@ -178,16 +178,25 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  // upper bound extended to 166 so it also covers rad_m1_abs_1/scat_1/vel and the
-  // grouped rad_m1_moments / rad_m1_opacities choices at 164-165.
-  if ((ivar>=154) && (ivar<166) && (pm->pmb_pack->pradm1 == nullptr)) {
+  // 154-171 is the whole contiguous rad_m1_* run, from rad_m1_N through rad_m1_absF;
+  // 172-174 (u_t, win_Vi, r_sph) are not radiation variables. Every one of these
+  // dereferences pradm1 below, so the bound must track the table in outputs.hpp --
+  // it previously stopped at 166 and left rad_m1_J/H/n/fnu/e/absF to segfault instead.
+  if ((ivar>=154) && (ivar<172) && (pm->pmb_pack->pradm1 == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of radiation m1 variables requested in <output> block '"
        << out_params.block_name << "' but radiation M1 object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==176) && (pm->pmb_pack->pdyngr == nullptr)) {
+  if ((ivar==175) && (pm->pmb_pack->pz4c == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of Z4c gauge variables requested in <output> block '"
+       << out_params.block_name << "' but Z4c object not constructed."
+       << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if ((ivar==177) && (pm->pmb_pack->pdyngr == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of mhd_mu requested in <output> block '"
        << out_params.block_name << "' but DynGRMHD object not constructed."
@@ -195,7 +204,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl;
     exit(EXIT_FAILURE);
   }
-  if ((ivar==175) && (pm->pmb_pack->prhine == nullptr)) {
+  if ((ivar==176) && (pm->pmb_pack->prhine == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of rhine_aux requested in <output> block '"
        << out_params.block_name << "' but RHINE object not constructed."
@@ -720,6 +729,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       }
     }
 
+    // z4c gauge variables only (lapse + shift, no other Z4c evolved fields)
+    if (variable.compare("z4c_gauge") == 0) {
+      for (int v = z4c::Z4c::I_Z4C_ALPHA; v < z4c::Z4c::nz4c; ++v) {
+        outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
+      }
+    }
+
     // weyl scalars
     if (variable.compare("weyl") == 0) {
       outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
@@ -867,8 +883,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
-  // radiation m1 fluid-frame energy density J = u_a u_b T^{ab} (per species),
-  // in EOS energy density units (MeV/fm^3 for a nuclear EOS)
+  // radiation m1 fluid-frame energy density J = u_a u_b T^{ab} (per species)
   if (out_params.variable.compare("rad_m1_J") == 0) {
     int nspec = pm->pmb_pack->pradm1->nspecies;
     out_params.contains_derived = true;

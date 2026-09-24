@@ -1,0 +1,168 @@
+<comment>
+problem   = single zone test for the partially-equilibrated (T*, Ye*) predictor
+
+This is inputs/tests/rad_m1_singlezone.athinput with the predictor switched on and
+enough output to check it against an independent implementation, cell by cell and cycle
+by cycle. Two settings below are deliberate, and one non-setting is worth stating:
+
+  * every <output> block uses dcycle = 1. The opacities are computed at stage 1 from the
+    START-of-cycle state, so cycle N's emissivities have to be read against cycle N-1's
+    moments. Coarser output leaves nothing to compare against.
+
+  * data_format = %24.17e. The default %12.5e resolves five digits, which is not enough
+    to tell agreement from coincidence.
+
+  * nothing about the opacity settings is special. The non-LTE correction is now
+    computed from the local blackbody and folded into the opacities BEFORE the
+    predictor consumes them, so the stored abs_0 and abs_1 are exactly the ones its
+    weights were built from and the comparison runs against the shipped configuration.
+    That was not true of an earlier arrangement, where corr_fac came from the predicted
+    equilibrium and was applied afterwards; the signature of that mistake is
+    unmistakable, and worth recognising if it ever comes back: w_1x agrees to round-off
+    while w_1e and w_0e are out by percent, because corr_fac touches the electron
+    flavours alone.
+
+<job>
+basename = singlezone_peq
+
+<time>
+evolution  = dynamic  # dynamic/kinematic/static
+integrator = rk2      # time integration algorithm
+cfl_number = 0.005    # dt, since dx = 1 here. This is the knob the dt scan turns.
+nlim       = 60       # cycle limit
+tlim       = 10.0     # time limit
+
+<mesh>
+nghost = 2         # Number of ghost cells
+nx1    = 5         # Number of zones in X1-direction
+x1min  = -2.5      # minimum value of X1
+x1max  = 2.5       # maximum value of X1
+ix1_bc = periodic  # inner-X1 boundary flag
+ox1_bc = periodic  # outer-X1 boundary flag
+
+nx2    = 1         # Number of zones in X2-direction
+x2min  = -0.5      # minimum value of X2
+x2max  = 0.5       # maximum value of X2
+ix2_bc = periodic  # inner-X2 boundary flag
+ox2_bc = periodic  # outer-X2 boundary flag
+
+nx3    = 1         # Number of zones in X3-direction
+x3min  = -0.5      # minimum value of X3
+x3max  = 0.5       # maximum value of X3
+ix3_bc = periodic  # inner-X3 boundary flag
+ox3_bc = periodic  # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 5      # Number of cells in each MeshBlock, X1-dir
+nx2       = 1      # Number of cells in each MeshBlock, X2-dir
+nx3       = 1      # Number of cells in each MeshBlock, X3-dir
+
+<adm>
+# This needs to be here
+
+<mhd>
+eos         = ideal     # EOS type
+gamma       = 2.0       # ratio of specific heats Gamma
+
+nscalars    = 1
+dyn_eos     = compose     # EOS type
+table       = DD2.athtab
+dyn_error   = reset_floor # error policy
+reconstruct = dc      # spatial reconstruction method
+rsolver     = hlle      # Riemann solver to be used
+dfloor      = 1.0e-16   # floor on density rho
+dthreshold  = 1.02      # Threshold for flooring
+dyn_scratch = 1
+fofc        = false
+enforce_maximum = false
+
+<coord>
+general_rel = true      # general relativity
+m           = 0.0
+a           = 0.0
+excise      = false
+
+<radiation_m1>
+closure_fun = eddington
+src_update = implicit
+opacity_type = bns-nurates
+gr_sources = false # default: true
+matter_sources = true # default: true
+backreact = true # false
+
+theta_limiter = false # default: false
+
+<bns_nurates>
+use_inelastic_scatt = false
+use_WM_ab = false
+use_WM_sc = false
+use_NN_medium_corr = false
+
+use_dU = false
+use_dm_eff = false
+
+use_equilibrium_distribution = true # default: true
+use_kirchhoff_law = true # default: true
+
+opacity_corr_fac_max = 3.0
+
+# Stated although it is now also the default, because this file exists to exercise it and
+# the comparison runs override it from the command line.
+use_partial_equilibrium = true
+
+<problem>
+pgen_name = rad_m1_singlezonetest
+rho = 1.619e-5  # initial density [code]
+temp = 50.0 # initial temperature [code, MeV]
+vx = 0.0    # x velocity
+vy = 0.0    # y velocity
+vz = 0.0    # z velocity
+Y_e = 0.1   # electron fraction
+
+# Everything below is what the reference implementation reads. mhd_w supplies (nb, T,
+# Y_e), rad_m1_E and rad_m1_N the fluid-frame moments (this problem is flat, static and
+# unboosted, so J = E and n = N exactly), abs_0/abs_1 the opacities the predictor's
+# weights are built from, and eta_1 the emissivity its answer has to be read back out of,
+# since the predicted (T*, Ye*) is not itself written anywhere.
+
+<output1>
+file_type   = tab
+variable    = mhd_w
+dcycle      = 1
+data_format = %24.17e
+
+<output2>
+file_type   = tab
+variable    = rad_m1_E
+dcycle      = 1
+data_format = %24.17e
+
+<output3>
+file_type   = tab
+variable    = rad_m1_N
+dcycle      = 1
+data_format = %24.17e
+
+<output4>
+file_type   = tab
+variable    = rad_m1_eta_1
+dcycle      = 1
+data_format = %24.17e
+
+<output5>
+file_type   = tab
+variable    = rad_m1_abs_0
+dcycle      = 1
+data_format = %24.17e
+
+<output6>
+file_type   = tab
+variable    = rad_m1_abs_1
+dcycle      = 1
+data_format = %24.17e
+
+<output7>
+file_type   = tab
+variable    = rad_m1_scat_1
+dcycle      = 1
+data_format = %24.17e
