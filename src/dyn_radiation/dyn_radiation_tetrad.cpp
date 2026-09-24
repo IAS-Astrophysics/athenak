@@ -323,6 +323,8 @@ Real ADMGeodesicAngularSpeedFromCoeffs(const Real ell[3], const Real unit_flux[2
 //! \brief Set orthonormal tetrad data
 
 void DynRadiation::SetOrthonormalTetrad() {
+  // Geometry refreshes, including mesh changes, invalidate the transport CFL.
+  geometry_dt_valid = false;
   auto &size = pmy_pack->pmb->mb_size;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &ng = indcs.ng;

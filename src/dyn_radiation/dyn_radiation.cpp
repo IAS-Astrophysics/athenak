@@ -343,7 +343,9 @@ TaskStatus DynRadiation::PrepareGeometryTask(Driver *pdriver, int stage) {
   if (use_adm_geometry) {
     if (pmy_pack->pz4c == nullptr) {
       auto *padm = pmy_pack->padm;
-      if (stage > 1 && !padm->time_dependent) return TaskStatus::complete;
+      // Initialization, restart problem setup and mesh refinement explicitly
+      // refresh these caches. A stationary analytic metric needs no stage work.
+      if (!padm->time_dependent && !padm->is_dynamic) return TaskStatus::complete;
       const Real t = pmy_pack->pmesh->time +
           pdriver->stage_abscissa[stage-1]*pmy_pack->pmesh->dt;
       padm->SetADMVariablesAtTime(pmy_pack, t);

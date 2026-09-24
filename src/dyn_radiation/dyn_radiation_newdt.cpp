@@ -33,6 +33,13 @@ namespace dyn_radiation {
 //        Only computed once at beginning of calculation.
 
 TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
+  // Radiation speeds and geometric-source bounds depend only on geometry,
+  // angular mesh and excision, not on the evolved intensities or fluid state.
+  // Moving puncture masks and evolved metrics must continue to recompute them.
+  const bool stationary = use_adm_geometry && pmy_pack->pz4c == nullptr &&
+      !pmy_pack->padm->time_dependent && !pmy_pack->padm->is_dynamic &&
+      pmy_pack->pcoord->coord_data.excision_scheme != ExcisionScheme::puncture;
+  if (stationary && geometry_dt_valid) return TaskStatus::complete;
   if (use_adm_geometry && pmy_pack->pz4c != nullptr) {
     PrepareADMGeometry();
   }
@@ -221,6 +228,7 @@ TaskStatus DynRadiation::NewTimeStep(Driver *pdriver, int stage) {
     dtnew = std::min(dtnew, dtg);
   }
 
+  geometry_dt_valid = true;
   return TaskStatus::complete;
 }
 } // namespace dyn_radiation

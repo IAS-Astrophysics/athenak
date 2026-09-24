@@ -291,6 +291,29 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
     Real tgasnew = tgas;
     bool badcell = false;
 
+    // This regularization depends on stage density, geometry and magnetic
+    // state, not on the iterated gas temperature or opacity coefficients.
+    Real opacity_scale = 1.0;
+    if (correct_radsrc_opacity_) {
+      Real delta_l = fmax(fmax(size.d_view(m).dx1, size.d_view(m).dx2),
+                          size.d_view(m).dx3);
+      if (use_adm_geometry_) {
+        Real dl1 = sqrt(fmax(adm_g_dd_c_(m,0,0,k,j,i), 0.0))*size.d_view(m).dx1;
+        Real dl2 = sqrt(fmax(adm_g_dd_c_(m,1,1,k,j,i), 0.0))*size.d_view(m).dx2;
+        Real dl3 = sqrt(fmax(adm_g_dd_c_(m,2,2,k,j,i), 0.0))*size.d_view(m).dx3;
+        Real proper_l = fmax(fmax(dl1, dl2), dl3);
+        if (proper_l > 0.0 && Kokkos::isfinite(proper_l)) {
+          delta_l = proper_l;
+        }
+      }
+      bool scale_ok = OpacityDensityScale(wdn, dfloor, dfloor_opacity_, dens_trunc_max_,
+                                          tau_truncation_, sigmoid_residual_, kappa_s_,
+                                          delta_l, sigma_cold,
+                                          excise && excision_flux_(m,k,j,i),
+                                          opacity_scale);
+      if (!scale_ok) opacity_scale = 1.0;
+    }
+
     // Iterate the local nonlinear solve so temperature-dependent opacities and
     // stiff radiation-matter exchange use mutually consistent coefficients.
     bool radsrc_velocity_applied = false;
@@ -303,30 +326,9 @@ TaskStatus DynRadiation::RadFluidCoupling(Driver *pdriver, int stage) {
                       kappa_a_, kappa_s_, kappa_p_,
                       sigma_a, sigma_s, sigma_p);
       if (correct_radsrc_opacity_) {
-        Real delta_l = fmax(fmax(size.d_view(m).dx1, size.d_view(m).dx2),
-                            size.d_view(m).dx3);
-        if (use_adm_geometry_) {
-          Real dl1 = sqrt(fmax(adm_g_dd_c_(m,0,0,k,j,i), 0.0))*size.d_view(m).dx1;
-          Real dl2 = sqrt(fmax(adm_g_dd_c_(m,1,1,k,j,i), 0.0))*size.d_view(m).dx2;
-          Real dl3 = sqrt(fmax(adm_g_dd_c_(m,2,2,k,j,i), 0.0))*size.d_view(m).dx3;
-          Real proper_l = fmax(fmax(dl1, dl2), dl3);
-          if (proper_l > 0.0 && Kokkos::isfinite(proper_l)) {
-            delta_l = proper_l;
-          }
-        }
-        Real opacity_scale = 1.0;
-        bool scale_ok = OpacityDensityScale(wdn, dfloor, dfloor_opacity_, dens_trunc_max_,
-                                            tau_truncation_, sigmoid_residual_, kappa_s_,
-                                            delta_l, sigma_cold,
-                                            excise && excision_flux_(m,k,j,i),
-                                            opacity_scale);
-        if (scale_ok) {
-          // Optional opacity-density regularization for floor, high-magnetization,
-          // and flux-excised cells.
-          sigma_a *= opacity_scale;
-          sigma_s *= opacity_scale;
-          sigma_p *= opacity_scale;
-        }
+        sigma_a *= opacity_scale;
+        sigma_s *= opacity_scale;
+        sigma_p *= opacity_scale;
       }
       dtcsiga = dt_*sigma_a;
       dtcsigs = dt_*sigma_s;

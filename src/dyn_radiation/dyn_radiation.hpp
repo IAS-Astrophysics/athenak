@@ -272,6 +272,7 @@ class DynRadiation {
   DvceFaceFld5D<Real> iflx;     // spatial fluxes on zone faces
   DvceArray5D<Real> divfa;      // angular flux divergence
   Real dtnew;
+  bool geometry_dt_valid = false;
 
   // reconstruction method
   ReconstructionMethod recon_method;
