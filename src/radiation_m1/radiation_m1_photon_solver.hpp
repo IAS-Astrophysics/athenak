@@ -85,6 +85,79 @@ struct PhotonReducedSystem {
     return Kokkos::isfinite(thermal);
   }
 
+  // Derivative of Evaluate's normalized residual at the CURRENT evaluated state.
+  // Fluid/metric fields and opacity coefficients are fixed in this inner solve.
+  // No floors or clipping are differentiated: Evaluate rejects those states.
+  KOKKOS_INLINE_FUNCTION
+  bool AnalyticJacobian(const Real x[5], const Real temperature,
+                        Real jac[5][5]) const {
+    if (!coupled || p.closure_type != Minerbo) return false;
+    const Real f2 = tensor_dot(s.g_uu, s.F_d, s.F_d);
+    const Real h2 = tensor_dot(s.g_uu, s.H_d, s.H_d);
+    // Pthin has no unique directional derivative at F=0; |H| is not
+    // differentiable at H=0. Use the established numerical path nearby.
+    if (!(f2 > 1.e-24*s.E*s.E) || !(h2 > 1.e-24*s.J*s.J)) return false;
+    const Real hnorm = Kokkos::sqrt(h2);
+    const Real xi = x[4];
+    const Real chi = closure_fun(xi, Minerbo);
+    const Real thick = 1.5*(1.0-chi), thin = 1.0-thick;
+    const Real dthin = 1.5*(12.0*xi-6.0*xi*xi+24.0*xi*xi*xi)/15.0;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> pthin{}, pthick{};
+    calc_Pthin(s.g_uu, s.E, s.F_d, pthin);
+    calc_Pthick(s.g_dd, s.g_uu, s.n_d, s.W, s.v_d, s.E, s.F_d, pthick);
+    for (int col = 0; col < 5; ++col) {
+      const Real de = col == 0 ? s.Estar : 0.0;
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> df{}, dh{}, ds{};
+      pack_F_d(-s.alp*s.n_u(1), -s.alp*s.n_u(2), -s.alp*s.n_u(3),
+               col == 1 ? s.Estar : 0.0, col == 2 ? s.Estar : 0.0,
+               col == 3 ? s.Estar : 0.0, df);
+      AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> dp{}, dstress{};
+      if (col == 4) {
+        for (int a = 0; a < 4; ++a) {
+          for (int b = a; b < 4; ++b) {
+            dp(a,b) = dthin*(pthin(a,b)-pthick(a,b));
+          }
+        }
+      } else {
+        // Pthick is linear in E,F at fixed metric and velocity.
+        calc_Pthick(s.g_dd, s.g_uu, s.n_d, s.W, s.v_d, de, df, dp);
+        const Real df2 = 2.0*tensor_dot(s.g_uu, s.F_d, df);
+        for (int a = 0; a < 4; ++a) {
+          for (int b = a; b < 4; ++b) {
+            const Real dpt = (de/f2)*s.F_d(a)*s.F_d(b)
+                + (s.E/f2)*(df(a)*s.F_d(b)+s.F_d(a)*df(b))
+                - pthin(a,b)*(df2/f2);
+            dp(a,b) = thick*dp(a,b)+thin*dpt;
+          }
+        }
+      }
+      assemble_rT(s.n_d, de, df, dp, dstress);
+      const Real dj = calc_J_from_rT(dstress, s.u_u);
+      calc_H_from_rT(dstress, s.u_u, s.proj_ud, dh);
+      Real dt = de;
+      for (int a = 1; a < 4; ++a) dt -= s.v_u(a)*df(a);
+      dt *= -gm1/(rho*vol);
+      const Real demission = 4.0*s.kabs*arad*vol*
+                             temperature*temperature*temperature*dt;
+      // The four-force is linear in emission, J and H at fixed opacity/u.
+      calc_rad_sources(demission, s.kabs, s.kscat, s.u_d, dj, dh, ds);
+      jac[0][col] = (col == 0 ? 1.0 : 0.0)
+          - s.cdt*calc_rE_source(s.alp, s.n_u, ds)/s.Estar;
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> dfdot{};
+      calc_rF_source(s.alp, s.gamma_ud, ds, dfdot);
+      for (int a = 1; a < 4; ++a) {
+        jac[a][col] = (a == col ? 1.0 : 0.0)-s.cdt*dfdot(a)/s.Estar;
+      }
+      jac[4][col] = (col == 4 ? 1.0 : 0.0)
+          - tensor_dot(s.g_uu, s.H_d, dh)/(s.J*hnorm)
+          + (hnorm/s.J)*(dj/s.J);
+      for (int a = 0; a < 5; ++a) {
+        if (!Kokkos::isfinite(jac[a][col])) return false;
+      }
+    }
+    return true;
+  }
+
   KOKKOS_INLINE_FUNCTION
   Real Norm(const Real x[5], const Real r[5], Real t, Real thermal) const {
     Real norm = 0.0;
@@ -105,7 +178,7 @@ struct PhotonReducedSystem {
   }
 };
 
-// Partial-pivot elimination of a dimensionless 4x4 or 5x5 numerical Jacobian.
+// Partial-pivot elimination of a dimensionless 4x4 or 5x5 Jacobian.
 KOKKOS_INLINE_FUNCTION
 bool photon_linear_solve(Real a[5][5], Real b[5], const int n) {
   for (int k = 0; k < n; ++k) {
@@ -188,7 +261,9 @@ bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
       return true;
     }
     Real jac[5][5] = {}, step[5] = {};
-    for (int column = 0; column < n; ++column) {
+    const bool analytic = p.photon_analytic_jacobian &&
+                          system.AnalyticJacobian(x, temperature, jac);
+    for (int column = 0; !analytic && column < n; ++column) {
       const Real h = 1.0e-5*Kokkos::fmax(1.0, Kokkos::abs(x[column]));
       Real xp[5], xm[5], rp[5], rm[5], tp, cp, hp, fp;
       for (int a = 0; a < 5; ++a) xp[a] = xm[a] = x[a];

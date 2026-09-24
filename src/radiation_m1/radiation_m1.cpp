@@ -70,6 +70,15 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     std::cerr << "Unknown photon_source_solver: " << photon_solver << std::endl;
     exit(EXIT_FAILURE);
   }
+  // Analytic derivatives apply only to the smooth coupled Minerbo system.
+  // Keep numerical derivatives as the default and as the degenerate-state guard.
+  const std::string photon_jacobian =
+      pin->GetOrAddString("radiation_m1", "photon_source_jacobian", "numerical");
+  if (photon_jacobian != "numerical" && photon_jacobian != "analytic") {
+    std::cerr << "Unknown photon_source_jacobian: " << photon_jacobian << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  params.photon_analytic_jacobian = photon_jacobian == "analytic";
   params.photon_source_diagnostics =
       pin->GetOrAddBoolean("radiation_m1", "photon_source_diagnostics", false);
   if (params.photon_source_diagnostics) {
