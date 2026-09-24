@@ -642,15 +642,17 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     // faces is identical.
 
     // Correct A1 at x2-faces, x3-faces, and x2x3-edges
-    if ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
+    if ((indcs.nx2 > 1 &&
+        ((nghbr.d_view(m,8 ).lev > mblev.d_view(m) && j==js) ||
         (nghbr.d_view(m,9 ).lev > mblev.d_view(m) && j==js) ||
         (nghbr.d_view(m,10).lev > mblev.d_view(m) && j==js) ||
         (nghbr.d_view(m,11).lev > mblev.d_view(m) && j==js) ||
         (nghbr.d_view(m,12).lev > mblev.d_view(m) && j==je+1) ||
         (nghbr.d_view(m,13).lev > mblev.d_view(m) && j==je+1) ||
         (nghbr.d_view(m,14).lev > mblev.d_view(m) && j==je+1) ||
-        (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1) ||
-        (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+        (nghbr.d_view(m,15).lev > mblev.d_view(m) && j==je+1))) ||
+        (indcs.nx3 > 1 &&
+        ((nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
         (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
         (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
         (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
@@ -665,7 +667,7 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,44).lev > mblev.d_view(m) && j==js && k==ke+1) ||
         (nghbr.d_view(m,45).lev > mblev.d_view(m) && j==js && k==ke+1) ||
         (nghbr.d_view(m,46).lev > mblev.d_view(m) && j==je+1 && k==ke+1) ||
-        (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)) {
+        (nghbr.d_view(m,47).lev > mblev.d_view(m) && j==je+1 && k==ke+1)))) {
       Real xl = x1v + 0.25 * dx1;
       Real xr = x1v - 0.25 * dx1;
 
@@ -701,7 +703,8 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,5 ).lev > mblev.d_view(m) && i==ie+1) ||
         (nghbr.d_view(m,6 ).lev > mblev.d_view(m) && i==ie+1) ||
         (nghbr.d_view(m,7 ).lev > mblev.d_view(m) && i==ie+1) ||
-        (nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
+        (indcs.nx3 > 1 &&
+        ((nghbr.d_view(m,24).lev > mblev.d_view(m) && k==ks) ||
         (nghbr.d_view(m,25).lev > mblev.d_view(m) && k==ks) ||
         (nghbr.d_view(m,26).lev > mblev.d_view(m) && k==ks) ||
         (nghbr.d_view(m,27).lev > mblev.d_view(m) && k==ks) ||
@@ -716,7 +719,7 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
         (nghbr.d_view(m,36).lev > mblev.d_view(m) && i==is && k==ke+1) ||
         (nghbr.d_view(m,37).lev > mblev.d_view(m) && i==is && k==ke+1) ||
         (nghbr.d_view(m,38).lev > mblev.d_view(m) && i==ie+1 && k==ke+1) ||
-        (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)) {
+        (nghbr.d_view(m,39).lev > mblev.d_view(m) && i==ie+1 && k==ke+1)))) {
       Real xl = x2v + 0.25 * dx2;
       Real xr = x2v - 0.25 * dx2;
 

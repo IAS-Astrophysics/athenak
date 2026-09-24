@@ -21,7 +21,7 @@
 // accumulators or host data, while the generic device reducers remain small.
 #define NHISTORY_VARIABLES 2000
 
-#define NOUTPUT_CHOICES 169
+#define NOUTPUT_CHOICES 170
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -112,7 +112,10 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rad_m1_eta_1", "rad_m1_abs_1", "rad_m1_scat_1", "rad_m1_vel",
 
   // Spherical radius (168)
-  "r_sph"
+  "r_sph",
+
+  // Gravity (169)
+  "grav_phi"
 };
 
 
@@ -445,6 +448,7 @@ class SphericalSurfaceOutput : public BaseTypeOutput {
   void WriteOutputFile(Mesh *pm, ParameterInput *pin) override;
  private:
   SphericalSurface *psurf;
+  bool dump_weights;  // write the quadrature weight of each point to file
 };
 //----------------------------------------------------------------------------------------
 //! \class EventLogOutput

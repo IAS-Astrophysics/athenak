@@ -39,6 +39,8 @@ refinement       = none
 <time>
 evolution  = dynamic
 integrator = rk2
+sts_integrator = none
+sts_max_dt_ratio = -1.0
 cfl_number = 0.3
 nlim       = -1
 tlim       = 5.0
@@ -50,6 +52,7 @@ reconstruct = plm
 rsolver     = hlld
 iso_sound_speed = 1.0
 eta_ad      = 0.01
+resistivity_integrator = explicit
 
 <output1>
 file_type  = hst

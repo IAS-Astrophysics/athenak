@@ -14,6 +14,7 @@
 //  either parameter triggers construction of this class in the MHD constructor.
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 #include "mesh/meshblock.hpp"
 
@@ -31,6 +32,8 @@ class Resistivity {
   Real dtnew;
   Real eta_ohm;   // Ohmic resistivity coefficient (0 => Ohmic term off)
   Real eta_ad;    // ambipolar diffusion coefficient (0 => ambipolar term off)
+  parabolic::DiffusionSelection mode =
+      parabolic::DiffusionSelection::explicit_only;
 
   // wrapper functions: add non-ideal E-Field and energy (Poynting) flux. Each dispatches
   // to the Ohmic and/or ambipolar implementations depending on which coefficients are on.

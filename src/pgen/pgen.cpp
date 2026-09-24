@@ -735,6 +735,13 @@ ProblemGenerator::ProblemGenerator(ParameterInput *pin, Mesh *pm, IOWrapper resf
   // second argument true since this IS a restart
   CallProblemGenerator(pin, true);
 
+  // Read cyclic zoom restart data if enabled
+  if (pm->pzoom != nullptr && pm->pzoom->read_rst) {
+    // calculate offset of zoom data, i.e., after all previous data
+    IOWrapperSizeT zoom_offset = headeroffset + data_size * pm->nmb_total;
+    pm->pzoom->ReadRestartFile(resfile, zoom_offset, single_file_per_rank);
+  }
+
   // Check that user defined BCs were enrolled if needed
   if (user_bcs) {
     if (user_bcs_func == nullptr) {
@@ -1093,6 +1100,13 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     RadiationM1PhotonDiffusion(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_m1_flrw_redshift") == 0) {
     RadiationM1FLRWRedshift(pin, is_restart);
+  } else if (pgen_fun_name.compare("gravity") == 0) {
+    SelfGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("binary_gravity") == 0) {
+    BinaryGravity(pin, is_restart);
+  } else if (pgen_fun_name.compare("be_collapse") == 0) {
+    BECollapse(pin, is_restart);
+
   // pre-defined unit tests
   } else if (pgen_fun_name.compare("eos_compose") == 0) {
     EOSCompose(pin, is_restart);

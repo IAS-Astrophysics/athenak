@@ -114,7 +114,6 @@ class DynGRMHD {
 
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
-  int flux_team_size;       // 0 selects Kokkos AUTO; otherwise threads per flux team
   int scratch_level;        // GPU scratch level for flux and source calculations
   bool enforce_maximum;     // enforce local maximum principle during FOFC
   Real dmp_M;               // threshold multiplier for discrete maximum principle.

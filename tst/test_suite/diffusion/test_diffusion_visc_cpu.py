@@ -23,7 +23,7 @@ _vel_comp = {"vy": 2, "vz": 3}
 
 def arguments(iv, rv, fv, wv, res, soe, name):
     """Assemble arguments for run command"""
-    return [
+    args = [
         f"job/basename={name}",
         "time/tlim=1.0",
         "time/integrator=" + iv,
@@ -42,6 +42,16 @@ def arguments(iv, rv, fv, wv, res, soe, name):
         "hydro/nu_iso=0.25",
         "problem/amp=1.0e-6",
     ]
+    if fv == "sts":
+        args += [
+            "time/sts_integrator=rkl2",
+            "time/sts_max_dt_ratio=16.0",
+            "hydro/viscosity_integrator=sts",
+            # Exercise the combined STS stability bound with a second active process.
+            "hydro/alpha_iso=0.25",
+            "hydro/conductivity_integrator=sts",
+        ]
+    return args
 
 
 """
@@ -62,5 +72,21 @@ def test_run():
         "rk2",
         "diff",
         "none",
+        "hydro",
+    )
+
+
+def test_sts_run():
+    """Check combined RKL2 viscosity/conduction with a transverse velocity pulse."""
+    testutils.test_error_convergence(
+        "inputs/diffusion.athinput",
+        "diffusion_visc1d_sts",
+        arguments,
+        errors,
+        ["vy"],
+        _res,
+        "rk2",
+        "diff",
+        "sts",
         "hydro",
     )

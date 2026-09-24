@@ -21,7 +21,7 @@
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/srcterms.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 KOKKOS_INLINE_FUNCTION
 void ComputeSnakeMetricAndTetrad(Real x, Real y, Real z,

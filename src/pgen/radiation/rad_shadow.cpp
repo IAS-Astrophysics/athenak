@@ -27,7 +27,7 @@
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/srcterms.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void MeshBlock::UserProblem(ParameterInput *pin)

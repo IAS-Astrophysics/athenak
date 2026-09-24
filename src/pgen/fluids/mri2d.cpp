@@ -30,7 +30,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "shearing_box/shearing_box.hpp"
-#include "pgen.hpp"
+#include "pgen/pgen.hpp"
 
 #include <Kokkos_Random.hpp>
 

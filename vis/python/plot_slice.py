@@ -247,6 +247,10 @@ def main(**kwargs):
             variable_name = kwargs["variable"]
             variable_names = [variable_name]
             variable_inds = [-1]
+        elif kwargs['variable'] == 'derived:log10_rho_ratio':
+            variable_name = kwargs['variable']
+            variable_names = ['dens']
+            variable_inds = [0]
         else:
             variable_name = kwargs["variable"]
             if variable_name not in variable_names_base:
@@ -405,108 +409,31 @@ def main(**kwargs):
                 raise RuntimeError("Unable to find density unit in input file.")
 
         # Check input file metadata for relativity
-        names = (
-            "vr_nr",
-            "vth_nr",
-            "vph_nr",
-            "Br_nr",
-            "Bth_nr",
-            "Bph_nr",
-            "pmag_nr",
-            "beta_inv_nr",
-            "sigma_nr",
-            "t",
-            "x",
-            "y",
-            "z",
-            "cons_em_nr_t",
-            "cons_mhd_nr_t",
-            "cons_mhd_nr_x",
-            "cons_mhd_nr_y",
-            "cons_mhd_nr_z",
-        )
-        if kwargs["variable"] in ["derived:" + name for name in names]:
-            assert (
-                input_data["coord"]["general_rel"] == "false"
-            ), '"{0}" is only defined for non-GR data.'.format(variable_name)
-        names = (
-            "uut",
-            "ut",
-            "ux",
-            "uy",
-            "uz",
-            "ur",
-            "uth",
-            "uph",
-            "u_t",
-            "u_x",
-            "u_y",
-            "u_z",
-            "u_r",
-            "u_th",
-            "u_ph",
-            "vx",
-            "vy",
-            "vz",
-            "vr_rel",
-            "vth_rel",
-            "vph_rel",
-            "bt",
-            "bx",
-            "by",
-            "bz",
-            "br",
-            "bth",
-            "bph",
-            "b_t",
-            "b_x",
-            "b_y",
-            "b_z",
-            "b_r",
-            "b_th",
-            "b_ph",
-            "Br_rel",
-            "Bth_rel",
-            "Bph_rel",
-            "pmag_rel",
-            "beta_inv_rel",
-            "sigma_rel",
-            "sigmah_rel",
-            "va_rel",
-            "pmag_prad",
-            "wgas",
-            "wmhd",
-            "wgasrad",
-            "wmhdrad",
-            "Begas",
-            "Bemhd",
-            "Begasrad",
-            "Bemhdrad",
-            "cons_hydro_rel_t",
-            "cons_hydro_rel_x",
-            "cons_hydro_rel_y",
-            "cons_hydro_rel_z",
-            "cons_em_rel_t",
-            "cons_em_rel_x",
-            "cons_em_rel_y",
-            "cons_em_rel_z",
-            "cons_mhd_rel_t",
-            "cons_mhd_rel_x",
-            "cons_mhd_rel_y",
-            "cons_mhd_rel_z",
-        )
-        if kwargs["variable"] in ["derived:" + name for name in names]:
-            assert (
-                input_data["coord"]["general_rel"] == "true"
-            ), '"{0}" is only defined for GR data.'.format(variable_name)
-        if kwargs["horizon"] or kwargs["horizon_mask"] or kwargs["ergosphere"]:
-            assert input_data["coord"]["general_rel"] == "true", (
-                '"horizon", '
+        names = ('vr_nr', 'vth_nr', 'vph_nr', 'Br_nr', 'Bth_nr', 'Bph_nr', 'pmag_nr',
+                 'beta_inv_nr', 'sigma_nr', 't', 'x', 'y', 'z', 'cons_em_nr_t',
+                 'cons_mhd_nr_t', 'cons_mhd_nr_x', 'cons_mhd_nr_y', 'cons_mhd_nr_z')
+        if kwargs['variable'] in ['derived:' + name for name in names]:
+            assert input_data['coord']['general_rel'] == 'false', \
+                '"{0}" is only defined for non-GR data.'.format(variable_name)
+        names = ('uut', 'ut', 'ux', 'uy', 'uz', 'ur', 'uth', 'uph', 'u_t', 'u_x', 'u_y',
+                 'u_z', 'u_r', 'u_th', 'u_ph', 'vx', 'vy', 'vz', 'vr_rel', 'vth_rel',
+                 'vph_rel', 'bt', 'bx', 'by', 'bz', 'br', 'bth', 'bph', 'b_t', 'b_x',
+                 'b_y', 'b_z', 'b_r', 'b_th', 'b_ph', 'Br_rel', 'Bth_rel', 'Bph_rel',
+                 'pmag_rel', 'beta_inv_rel', 'sigma_rel', 'sigmah_rel', 'va_rel',
+                 'pmag_prad', 'wgas', 'wmhd', 'wgasrad', 'wmhdrad', 'Begas', 'Bemhd',
+                 'Begasrad', 'Bemhdrad', 'cons_hydro_rel_t', 'cons_hydro_rel_x',
+                 'cons_hydro_rel_y', 'cons_hydro_rel_z', 'cons_em_rel_t', 'cons_em_rel_x',
+                 'cons_em_rel_y', 'cons_em_rel_z', 'cons_mhd_rel_t', 'cons_mhd_rel_x',
+                 'cons_mhd_rel_y', 'cons_mhd_rel_z')
+        if kwargs['variable'] in ['derived:' + name for name in names]:
+            assert input_data['coord']['general_rel'] == 'true', \
+                '"{0}" is only defined for GR data.'.format(variable_name)
+        if kwargs['horizon'] or kwargs['horizon_mask'] or kwargs['ergosphere']:
+            assert input_data['coord']['general_rel'] == 'true', '"horizon", ' \
                 '"horizon_mask", and "ergosphere" options only pertain to GR data.'
-            )
-        names = ("velx", "vely", "velz")
-        if kwargs["variable"] in names:
-            general_rel_v = bool(input_data["coord"]["general_rel"])
+        names = ('velx', 'vely', 'velz')
+        if kwargs['variable'] in names:
+            general_rel_v = bool(input_data['coord']['general_rel'])
         else:
             general_rel_v = False
 
@@ -785,6 +712,17 @@ def main(**kwargs):
         else:
             prad = quantities["r00_ff"] / 3.0
             quantity = prad / pgas
+
+    # Calculate log10(rho/rho0)
+    if kwargs['variable'] == 'derived:log10_rho_ratio':
+        try:
+            rho0 = float(input_data['problem']['rho0'])
+        except:  # noqa: E722
+            raise RuntimeError('Unable to find rho0 in input file.')
+        with warnings.catch_warnings():
+            message = 'invalid value encountered in log10'
+            warnings.filterwarnings('ignore', message=message, category=RuntimeWarning)
+            quantity = np.log10(quantities['dens'] / rho0)
 
     # Calculate non-relativistic velocity
     names = ("vr_nr", "vth_nr", "vph_nr")
@@ -1586,6 +1524,13 @@ def main(**kwargs):
     if kwargs["variable"][:8] != "derived:":
         quantity = quantities[variable_name]
 
+    # Apply optional constant subtraction
+    if kwargs['subtract'] is not None:
+        quantity = quantity - kwargs['subtract']
+    # Apply optional scaling
+    if kwargs['scale'] is not None:
+        quantity = quantity * kwargs['scale']
+
     # Mask horizon for purposes of calculating colorbar limits
     if kwargs["horizon_mask"]:
         a2 = bh_a**2
@@ -1638,6 +1583,17 @@ def main(**kwargs):
         label = labels[variable_name]
     else:
         label = variable_name
+    if kwargs['subtract'] is not None and variable_name == 'dens':
+        label = r'$\rho - \rho_0$'
+    if (kwargs['subtract'] is not None and variable_name == 'dens'
+            and kwargs['scale'] is not None):
+        label = r'$(\rho - \rho_0)\times$' + f"{kwargs['scale']:g}"
+
+    # Optional dump of slice data
+    if kwargs['dump_npz'] is not None:
+        np.savez(kwargs['dump_npz'],
+                 quantity=quantity,
+                 extents=np.array(extents, dtype=float))
 
     # Prepare figure
     plt.figure()
@@ -1656,7 +1612,11 @@ def main(**kwargs):
         )
 
     # Make colorbar
-    plt.colorbar(label=label)
+    cbt = kwargs['colorbar_title']
+    cbar_label = cbt if cbt is not None else label
+    cbar = plt.colorbar(shrink=0.8)
+    cbar.set_label(cbar_label, fontsize=kwargs['cbar_label_size'])
+    cbar.ax.tick_params(labelsize=kwargs['tick_size'])
 
     # Mark grid
     if kwargs["grid"]:
@@ -1836,15 +1796,20 @@ def main(**kwargs):
         x2_max = kwargs["r_max"]
     plt.xlim((x1_min, x1_max))
     plt.ylim((x2_min, x2_max))
-    if kwargs["dimension"] == "x":
-        plt.xlabel("$y$", labelpad=x1_labelpad)
-        plt.ylabel("$z$", labelpad=x2_labelpad)
-    if kwargs["dimension"] == "y":
-        plt.xlabel("$x$", labelpad=x1_labelpad)
-        plt.ylabel("$z$", labelpad=x2_labelpad)
-    if kwargs["dimension"] == "z":
-        plt.xlabel("$x$", labelpad=x1_labelpad)
-        plt.ylabel("$y$", labelpad=x2_labelpad)
+    if kwargs['dimension'] == 'x':
+        plt.xlabel('$y$', labelpad=x1_labelpad, fontsize=kwargs['label_size'])
+        plt.ylabel('$z$', labelpad=x2_labelpad, fontsize=kwargs['label_size'])
+    if kwargs['dimension'] == 'y':
+        plt.xlabel('$x$', labelpad=x1_labelpad, fontsize=kwargs['label_size'])
+        plt.ylabel('$z$', labelpad=x2_labelpad, fontsize=kwargs['label_size'])
+    if kwargs['dimension'] == 'z':
+        plt.xlabel('$x$', labelpad=x1_labelpad, fontsize=kwargs['label_size'])
+        plt.ylabel('$y$', labelpad=x2_labelpad, fontsize=kwargs['label_size'])
+    plt.tick_params(labelsize=kwargs['tick_size'])
+
+    # Add optional title
+    if kwargs['title'] is not None:
+        plt.title(kwargs['title'], fontsize=kwargs['title_size'])
 
     # Adjust layout
     plt.tight_layout()
@@ -1859,8 +1824,9 @@ def main(**kwargs):
 # Function that defines dependencies for derived quantities
 def set_derived_dependencies():
     derived_dependencies = {}
-    derived_dependencies["pgas"] = ("eint",)
-    names = ("pgas_rho", "T")
+    derived_dependencies['log10_rho_ratio'] = ('dens',)
+    derived_dependencies['pgas'] = ('eint',)
+    names = ('pgas_rho', 'T')
     for name in names:
         derived_dependencies[name] = ("dens", "eint")
     derived_dependencies["prad_pgas"] = ("eint", "r00_ff")
@@ -2433,96 +2399,65 @@ def cks_to_sks_tens_con(axx, axy, axz, ayx, ayy, ayz, azx, azy, azz, a, x, y, z)
 # Parse inputs and execute main function
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("data_file", help="name of input file, possibly including path")
-    parser.add_argument(
-        "variable",
-        help="name of variable to be plotted, any valid"
-        'derived quantity prefaced by "derived:"',
-    )
-    parser.add_argument(
-        "output_file",
-        help="name of output to be (over)written; use "
-        '"show" to show interactive plot instead',
-    )
-    parser.add_argument(
-        "-d",
-        "--dimension",
-        choices=("x", "y", "z", "1", "2", "3"),
-        help="dimension orthogonal to slice for 3D data",
-    )
-    parser.add_argument(
-        "-l",
-        "--location",
-        type=float,
-        default=0.0,
-        help="coordinate value along which slice is to be taken " "(default: 0)",
-    )
-    parser.add_argument(
-        "--r_max",
-        type=float,
-        help="half-width of plot in both coordinates, centered at the " "origin",
-    )
-    parser.add_argument(
-        "--x1_min", type=float, help="horizontal coordinate of left edge of plot"
-    )
-    parser.add_argument(
-        "--x1_max", type=float, help="horizontal coordinate of right edge of plot"
-    )
-    parser.add_argument(
-        "--x2_min", type=float, help="vertical coordinate of bottom edge of plot"
-    )
-    parser.add_argument(
-        "--x2_max", type=float, help="vertical coordinate of top edge of plot"
-    )
-    parser.add_argument("-c", "--cmap", help="name of Matplotlib colormap to use")
-    parser.add_argument("-n", "--norm", help="name of Matplotlib norm to use")
-    parser.add_argument("--vmin", type=float, help="colormap minimum")
-    parser.add_argument("--vmax", type=float, help="colormap maximum")
-    parser.add_argument(
-        "--grid",
-        action="store_true",
-        help="flag indicating domain decomposition should be overlaid",
-    )
-    parser.add_argument(
-        "--grid_color", default="gray", help="color string for grid overlay"
-    )
-    parser.add_argument(
-        "--grid_alpha", type=float, default=0.5, help="opacity of grid overlay"
-    )
-    parser.add_argument(
-        "--horizon",
-        action="store_true",
-        help="flag indicating black hole event horizon should be marked",
-    )
-    parser.add_argument(
-        "--horizon_color", default="k", help="color string for event horizon marker"
-    )
-    parser.add_argument(
-        "--horizon_mask",
-        action="store_true",
-        help="flag indicating black hole event horizon should be masked",
-    )
-    parser.add_argument(
-        "--horizon_mask_color", default="k", help="color string for event horizon mask"
-    )
-    parser.add_argument(
-        "--ergosphere",
-        action="store_true",
-        help="flag indicating black hole ergosphere should be marked",
-    )
-    parser.add_argument(
-        "--ergosphere_color", default="gray", help="color string for ergosphere marker"
-    )
-    parser.add_argument(
-        "--notex",
-        action="store_true",
-        help="flag indicating Latex integration is not to be used",
-    )
-    parser.add_argument(
-        "--dpi",
-        type=float,
-        default=300,
-        help="resolution of output figure (default: 300)",
-    )
+    parser.add_argument('data_file', help='name of input file, possibly including path')
+    parser.add_argument('variable', help='name of variable to be plotted, any valid'
+                                         'derived quantity prefaced by "derived:"')
+    parser.add_argument('output_file', help='name of output to be (over)written; use '
+                        '"show" to show interactive plot instead')
+    parser.add_argument('-d', '--dimension', choices=('x', 'y', 'z', '1', '2', '3'),
+                        help='dimension orthogonal to slice for 3D data')
+    parser.add_argument('-l', '--location', type=float, default=0.0,
+                        help='coordinate value along which slice is to be taken '
+                             '(default: 0)')
+    parser.add_argument('--r_max', type=float,
+                        help='half-width of plot in both coordinates, centered at the '
+                             'origin')
+    parser.add_argument('--x1_min', type=float,
+                        help='horizontal coordinate of left edge of plot')
+    parser.add_argument('--x1_max', type=float,
+                        help='horizontal coordinate of right edge of plot')
+    parser.add_argument('--x2_min', type=float,
+                        help='vertical coordinate of bottom edge of plot')
+    parser.add_argument('--x2_max', type=float,
+                        help='vertical coordinate of top edge of plot')
+    parser.add_argument('-c', '--cmap', help='name of Matplotlib colormap to use')
+    parser.add_argument('-n', '--norm', help='name of Matplotlib norm to use')
+    parser.add_argument('--vmin', type=float, help='colormap minimum')
+    parser.add_argument('--vmax', type=float, help='colormap maximum')
+    parser.add_argument('--subtract', type=float, help='constant to subtract from data')
+    parser.add_argument('--scale', type=float, help='constant scale to apply to data')
+    parser.add_argument('--title', help='plot title')
+    parser.add_argument('--colorbar-title', help='override colorbar label')
+    parser.add_argument('--title-size', type=float, default=18,
+                        help='font size for the plot title')
+    parser.add_argument('--label-size', type=float, default=16,
+                        help='font size for axis labels')
+    parser.add_argument('--tick-size', type=float, default=14,
+                        help='font size for tick labels')
+    parser.add_argument('--cbar-label-size', type=float, default=16,
+                        help='font size for colorbar label')
+    parser.add_argument('--dump-npz', help='optional path to save slice data as npz')
+    parser.add_argument('--grid', action='store_true',
+                        help='flag indicating domain decomposition should be overlaid')
+    parser.add_argument('--grid_color', default='gray',
+                        help='color string for grid overlay')
+    parser.add_argument('--grid_alpha', type=float, default=0.5,
+                        help='opacity of grid overlay')
+    parser.add_argument('--horizon', action='store_true',
+                        help='flag indicating black hole event horizon should be marked')
+    parser.add_argument('--horizon_color', default='k',
+                        help='color string for event horizon marker')
+    parser.add_argument('--horizon_mask', action='store_true',
+                        help='flag indicating black hole event horizon should be masked')
+    parser.add_argument('--horizon_mask_color', default='k',
+                        help='color string for event horizon mask')
+    parser.add_argument('--ergosphere', action='store_true',
+                        help='flag indicating black hole ergosphere should be marked')
+    parser.add_argument('--ergosphere_color', default='gray',
+                        help='color string for ergosphere marker')
+    parser.add_argument('--notex', action='store_true',
+                        help='flag indicating Latex integration is not to be used')
+    parser.add_argument('--dpi', type=float, default=300,
+                        help='resolution of output figure (default: 300)')
     args = parser.parse_args()
     main(**vars(args))

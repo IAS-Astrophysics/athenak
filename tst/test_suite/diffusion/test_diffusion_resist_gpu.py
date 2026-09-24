@@ -41,9 +41,9 @@ def arguments(iv, rv, fv, wv, res, soe, name):
     mbx = {1: res // 2, 2: res // 2, 3: res // 2}
     nx[p["thin"]] = _NTHIN
     mbx[p["thin"]] = _NTHIN
-    return [
+    args = [
         f"job/basename={name}",
-        "time/tlim=1.0",
+        "time/tlim=" + ("0.05" if fv == "sts" else "1.0"),
         "time/integrator=" + iv,
         "mesh/nx1=" + repr(nx[1]),
         "mesh/nx2=" + repr(nx[2]),
@@ -59,6 +59,13 @@ def arguments(iv, rv, fv, wv, res, soe, name):
         "mhd/eta_ohm=0.25",
         "problem/amp=1.0e-6",
     ]
+    if fv == "sts":
+        args += [
+            "time/sts_integrator=rkl2",
+            "time/sts_max_dt_ratio=16.0",
+            "mhd/resistivity_integrator=sts",
+        ]
+    return args
 
 
 def test_run():
@@ -75,3 +82,14 @@ def test_run():
         "none",
         "mhd",
     )
+
+
+def test_sts_smoke():
+    """Exercise the RKL2 cell/CT update kernels in a small GPU run."""
+    try:
+        testutils.run(
+            "inputs/diffusion_mhd.athinput",
+            arguments("rk2", "diff", "sts", "xy", 32, "mhd", "diffusion_sts_gpu"),
+        )
+    finally:
+        testutils.cleanup()

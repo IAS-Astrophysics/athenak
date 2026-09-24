@@ -28,7 +28,7 @@ def arguments(iv, rv, fv, wv, res, soe, name):
     ndim = _ndim[wv]
     nx2 = res if ndim >= 2 else 1
     mbx2 = res // 2 if ndim >= 2 else 1
-    return [
+    args = [
         f"job/basename={name}",
         "time/tlim=1.0",
         "time/integrator=" + iv,
@@ -46,6 +46,16 @@ def arguments(iv, rv, fv, wv, res, soe, name):
         "hydro/alpha_iso=0.5",
         "problem/amp=1.0e-6",
     ]
+    if fv == "sts":
+        args += [
+            "time/sts_integrator=rkl2",
+            "time/sts_max_dt_ratio=16.0",
+            "hydro/conductivity_integrator=sts",
+            # Keep a harmless explicit process active to cover mixed scheduling.
+            "hydro/nu_iso=1.0e-6",
+            "hydro/viscosity_integrator=explicit",
+        ]
+    return args
 
 
 """
@@ -66,5 +76,21 @@ def test_run():
         "rk2",
         "diff",
         "none",
+        "hydro",
+    )
+
+
+def test_sts_run():
+    """Check RKL2 conduction convergence with an explicit viscosity process present."""
+    testutils.test_error_convergence(
+        "inputs/diffusion.athinput",
+        "diffusion_heat_sts",
+        arguments,
+        errors,
+        ["1d"],
+        _res,
+        "rk2",
+        "diff",
+        "sts",
         "hydro",
     )

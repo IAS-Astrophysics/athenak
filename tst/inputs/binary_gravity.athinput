@@ -1,0 +1,123 @@
+# AthenaK input file: binary potential test (two spherical mass blobs)
+# Validates multigrid Poisson solver against analytical two-sphere potential.
+# Spheres at (x1,y1,z1) and (x2,y2,z2) with masses m1, m2 and radius r.
+#
+# Convergence note: Two compact spheres give a very peaked source (vs smooth
+# jeans_wave). If the defect stalls, try: larger radius (more cells with mass),
+# more smoothing (npresmooth/npostsmooth = 2 or 3), or refinement = none.
+
+<job>
+basename  = binary_gravity
+
+<mesh>
+nghost    = 4
+nx1       = 64
+x1min     = -0.5
+x1max     = 0.5
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 64
+x2min     = -0.5
+x2max     = 0.5
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 64
+x3min     = -0.5
+x3max     = 0.5
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 32
+nx2       = 32
+nx3       = 32
+
+<mesh_refinement>
+refinement = static
+
+
+<refined_region1>
+level = 1
+x1min = -0.25
+x1max = 0.25
+x2min = -0.25
+x2max = 0.25
+x3min = -0.25
+x3max = 0.25
+
+<refined_region2>
+level = 2
+x1min = -0.125
+x1max = 0.125
+x2min = -0.125
+x2max = 0.125
+x3min = -0.125
+x3max = 0.125
+
+<refined_region3>
+level = 3
+x1min = -0.0625
+x1max = 0.0625
+x2min = -0.0625
+x2max = 0.0625
+x3min = -0.0625
+x3max = 0.0625
+
+<refined_region4>
+level = 4
+x1min = -0.03125
+x1max = 0.03125
+x2min = -0.03125
+x2max = 0.03125
+x3min = -0.03125
+x3max = 0.03125
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim       = 1
+tlim       = 1.0
+ndiag      = 1
+
+<hydro>
+eos         = isothermal
+reconstruct = plm
+rsolver     = llf
+gamma       = 1.4
+iso_sound_speed = 1.0
+
+<gravity>
+four_pi_G = 1.0
+# Use threshold-based convergence and show defect to diagnose convergence
+threshold = -1
+niteration = 20
+npresmooth = 1
+npostsmooth = 1
+full_multigrid = true
+fmg_ncycle = 1
+show_defect = 0
+mg_verbose = 0
+mg_nghost = 1
+root_on_host = false
+
+<hydro_srcterms>
+self_gravity = true
+
+<problem>
+pgen_name   = binary_gravity
+four_pi_G   = 1.0
+rho0        = 1.0
+# sphere 1 (default: 6/1024, 0, 0), mass 2
+x1          = 0.005859375
+y1          = 0.0
+z1          = 0.0
+# sphere 2 (default: -12/1024, 0, 0), mass 1
+x2          = -0.01171875
+y2          = 0.0
+z2          = 0.0
+radius      = 0.005859375
+m1          = 2.0
+m2          = 1.0

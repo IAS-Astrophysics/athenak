@@ -167,8 +167,9 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
       recon_method = ReconstructionMethod::plm;
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
-               xorder.compare("wenoz") == 0 ||
-               xorder.compare("wenomz") == 0) {
+               xorder.compare("teno") == 0 ||
+               xorder.compare("wenomz") == 0 ||
+               xorder.compare("wenoz") == 0) {
       // check that nghost > 2
       if (indcs.ng < 3) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -184,6 +185,8 @@ Radiation::Radiation(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::wenoz;
       } else if (xorder.compare("wenomz") == 0) {
         recon_method = ReconstructionMethod::wenomz;
+      } else if (xorder.compare("teno") == 0) {
+        recon_method = ReconstructionMethod::teno;
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__

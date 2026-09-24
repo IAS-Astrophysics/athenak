@@ -31,9 +31,22 @@ add_executable(
         coordinates/coordinates.cpp
         coordinates/excision.cpp
 
+        cyclic_zoom/cyclic_zoom.cpp
+        cyclic_zoom/zoom_criteria.cpp
+        cyclic_zoom/zoom_data.cpp
+        cyclic_zoom/zoom_datablock.cpp
+        cyclic_zoom/zoom_fluxes.cpp
+        cyclic_zoom/zoom_loadbalance.cpp
+        cyclic_zoom/zoom_mesh.cpp
+        cyclic_zoom/zoom_refinement.cpp
+        cyclic_zoom/zoom_region.cpp
+        cyclic_zoom/zoom_restart.cpp
+        cyclic_zoom/zoom_srcterms.cpp
+
         diffusion/ambipolar.cpp
         diffusion/conduction.cpp
         diffusion/resistivity.cpp
+        diffusion/sts_rkl2.cpp
         diffusion/viscosity.cpp
 
         driver/driver.cpp
@@ -61,10 +74,14 @@ add_executable(
         geodesic-grid/spherical_grid.cpp
         geodesic-grid/gauss_legendre.cpp
 
+        gravity/gravity.cpp
+        gravity/mg_gravity.cpp
+
         hydro/hydro.cpp
         hydro/hydro_fluxes.cpp
         hydro/hydro_fofc.cpp
         hydro/hydro_newdt.cpp
+        hydro/hydro_sts.cpp
         hydro/hydro_tasks.cpp
         hydro/hydro_update.cpp
 
@@ -80,6 +97,11 @@ add_executable(
         mesh/mesh_refinement.cpp
         mesh/refinement_criteria.cpp
 
+        multigrid/multigrid.cpp
+        multigrid/multigrid_bvals.cpp
+        multigrid/multigrid_driver.cpp
+        multigrid/multigrid_tasks.cpp
+
         mhd/mhd.cpp
         mhd/mhd_corner_e.cpp
         mhd/mhd_ct.cpp
@@ -87,6 +109,7 @@ add_executable(
         mhd/mhd_fluxes.cpp
         mhd/mhd_fofc.cpp
         mhd/mhd_newdt.cpp
+        mhd/mhd_sts.cpp
         mhd/mhd_tasks.cpp
         mhd/mhd_update.cpp
 
@@ -132,6 +155,9 @@ add_executable(
         pgen/tests/rad_m1_diffusiontest.cpp
         pgen/tests/rad_m1_velocityjump.cpp
         pgen/tests/z4c_linear_wave.cpp
+        pgen/tests/jeans_wave.cpp
+        pgen/tests/binary_gravity.cpp
+        pgen/tests/be_collapse.cpp
 
         pgen/unit_tests/eos_compose.cpp
         pgen/unit_tests/gauss_legendre.cpp
@@ -179,6 +205,7 @@ add_executable(
         utils/spherical_surface.cpp
         utils/flux_generalized.cpp
         utils/surface_grid.cpp
+
 
         z4c/compact_object_tracker.cpp
         z4c/fastflow.cpp

@@ -27,3 +27,7 @@ staging_manifests/
 
 # bns_nurates
 src/bns_nurates/
+Lorene
+
+# python cache
+__pycache__/

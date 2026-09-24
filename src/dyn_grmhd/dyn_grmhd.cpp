@@ -145,11 +145,17 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
-  flux_team_size = pin->GetOrAddInteger("mhd", "dyn_flux_team_size", 0);
+  // Accept legacy input decks, but split flux kernels no longer use thread teams.
+  const int flux_team_size = pin->GetOrAddInteger("mhd", "dyn_flux_team_size", 0);
   if (flux_team_size < 0) {
-    std::cerr << "<mhd>/dyn_flux_team_size must be nonnegative (0 selects AUTO)."
+    std::cerr << "<mhd>/dyn_flux_team_size must be nonnegative; "
+              << "0 disables this legacy setting."
               << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  if (flux_team_size > 0 && global_variable::my_rank == 0) {
+    std::cout << "<mhd>/dyn_flux_team_size is ignored by split GRMHD flux kernels."
+              << std::endl;
   }
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   calculate_tmunu = pin->GetOrAddBoolean("mhd", "calculate_tmunu", false);
