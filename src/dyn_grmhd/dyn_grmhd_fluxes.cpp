@@ -166,7 +166,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       }
     }
     member.team_barrier();
-  });
+  }, flux_team_size);
 
   //--------------------------------------------------------------------------------------
   // j-direction
@@ -285,7 +285,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         }
       } // end of loop over j
       member.team_barrier();
-    });
+    }, flux_team_size);
   }
 
   //--------------------------------------------------------------------------------------
@@ -399,7 +399,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         }
       } // end of loop over j
       member.team_barrier();
-    });
+    }, flux_team_size);
   }
 
   // Call FOFC if necessary

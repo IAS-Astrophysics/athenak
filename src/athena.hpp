@@ -367,11 +367,12 @@ template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int kl, const int ku, const int jl, const int ju,
-                          const Function &function) {
+                          const Function &function, const int team_size = 0) {
   const int nk = ku - kl + 1;
   const int nj = ju - jl + 1;
   const int nkj = nk*nj;
-  Kokkos::TeamPolicy<> policy(exec_space, nkj, Kokkos::AUTO);
+  auto policy = team_size > 0 ? Kokkos::TeamPolicy<>(exec_space, nkj, team_size)
+                             : Kokkos::TeamPolicy<>(exec_space, nkj, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
   KOKKOS_LAMBDA(TeamMember_t tmember) {
     const int k = tmember.league_rank()/nj + kl;
@@ -386,13 +387,15 @@ template <typename Function>
 inline void par_for_outer(const std::string &name, DevExeSpace exec_space,
                           size_t scr_size, const int scr_level,
                           const int nl, const int nu, const int kl, const int ku,
-                          const int jl, const int ju, const Function &function) {
+                          const int jl, const int ju, const Function &function,
+                          const int team_size = 0) {
   const int nn = nu - nl + 1;
   const int nk = ku - kl + 1;
   const int nj = ju - jl + 1;
   const int nkj  = nk*nj;
   const int nnkj = nn*nk*nj;
-  Kokkos::TeamPolicy<> policy(exec_space, nnkj, Kokkos::AUTO);
+  auto policy = team_size > 0 ? Kokkos::TeamPolicy<>(exec_space, nnkj, team_size)
+                             : Kokkos::TeamPolicy<>(exec_space, nnkj, Kokkos::AUTO);
   Kokkos::parallel_for(name, policy.set_scratch_size(scr_level,Kokkos::PerTeam(scr_size)),
   KOKKOS_LAMBDA(TeamMember_t tmember) {
     int n = (tmember.league_rank())/nkj;

@@ -145,6 +145,12 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
+  flux_team_size = pin->GetOrAddInteger("mhd", "dyn_flux_team_size", 0);
+  if (flux_team_size < 0) {
+    std::cerr << "<mhd>/dyn_flux_team_size must be nonnegative (0 selects AUTO)."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   calculate_tmunu = pin->GetOrAddBoolean("mhd", "calculate_tmunu", false);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
