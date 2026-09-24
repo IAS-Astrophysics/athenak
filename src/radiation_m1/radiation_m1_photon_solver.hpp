@@ -292,7 +292,13 @@ bool photon_reduced_solve_once(SrcParams &s, const RadiationM1Params &p,
   Real r[5], thermal, flux_factor;
   for (int iter = 0; iter < p.source_maxiter; ++iter) {
     ++iterations;
-    if (!system.Evaluate(x, r, temperature, chi, thermal, flux_factor)) return false;
+    // An accepted line-search trial already leaves s and its residual at x.
+    // Reuse that evaluation; numerical-Jacobian probes may overwrite s, but
+    // every accepted trial restores all state needed by the next iteration.
+    // Restrict reuse to the conditioned formulation: retaining evaluated state
+    // across iterations regresses the other formulations on Intel PVC GPUs.
+    if ((!system.conditioned || iter == 0) &&
+        !system.Evaluate(x, r, temperature, chi, thermal, flux_factor)) return false;
     const Real norm = system.Norm(x, r, temperature, thermal);
     if (norm <= 1.0) {
       // Check the physical closure branch with the established bracketed solve.
@@ -357,6 +363,13 @@ bool photon_reduced_solve_once(SrcParams &s, const RadiationM1Params &p,
       if (system.Evaluate(trial, rt, tt, ct, ht, ft) &&
           system.Norm(trial, rt, tt, ht) < norm*(1.0-1.0e-4*length)) {
         for (int a = 0; a < 5; ++a) x[a] = trial[a];
+        if (system.conditioned) {
+          for (int a = 0; a < 5; ++a) r[a] = rt[a];
+          temperature = tt;
+          chi = ct;
+          thermal = ht;
+          flux_factor = ft;
+        }
         accepted = true;
         break;
       }
