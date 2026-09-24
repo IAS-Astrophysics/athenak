@@ -152,7 +152,7 @@ void ShearingBoxCC::SourceTermsCC(
 //----------------------------------------------------------------------------------------
 //! \fn ShearingBoxFC::SourceTermsFC
 //  \brief Add electric field in rotating frame E = - (v_{K} x B) where v_{K} is
-//  background orbital velocity v_{K} = - q \Omega x in the toriodal (\phi or y) direction
+//  background orbital velocity v_{K} = - q \Omega x in the toroidal (\phi or y) direction
 //  See SG eqs. [49-52] (eqs for orbital advection), and [60]
 //! Only needed in 2D r-z case for Ex and Ey
 

@@ -1,0 +1,75 @@
+# AthenaK input file: Bonnor-Ebert sphere collapse with AMR
+# Tests multigrid Poisson solver compatibility with adaptive mesh refinement.
+# Isothermal hydro, self-gravity, Jeans-based AMR criterion.
+# Reference: Athena++ collapse.cpp (hydro variant)
+
+<job>
+basename  = be_collapse
+
+<mesh>
+nghost    = 4
+nx1       = 64
+x1min     = -16.0
+x1max     = 16.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 64
+x2min     = -16.0
+x2max     = 16.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 64
+x3min     = -16.0
+x3max     = 16.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 16
+nx2       = 16
+nx3       = 16
+
+<mesh_refinement>
+refinement       = adaptive
+max_nmb_per_rank = 4096
+num_levels       = 5
+
+<amr_criterion0>
+method = user
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.4
+nlim       = 100
+tlim       = 10.0
+ndiag      = 1
+
+<hydro>
+eos         = isothermal
+reconstruct = plm
+rsolver     = llf
+iso_sound_speed = 1.0
+
+<gravity>
+four_pi_G = 1.0
+threshold = 1E-4
+niteration = -1
+npresmooth = 2
+npostsmooth = 2
+full_multigrid = true
+fmg_ncycle = 1
+show_defect = 1
+mg_nghost = 1
+
+<hydro_srcterms>
+self_gravity = true
+
+<problem>
+pgen_name   = be_collapse
+f           = 1.2
+njeans      = 16
+amp         = 0.1
+omegatff    = 0.1

@@ -47,7 +47,8 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin) :
   nmb_x1bndry(1) = tmp_ox1bndry_gid.size();
 
   // allocate mbgid array and initialize GIDs to -1
-  int nmb = std::max(nmb_x1bndry(0),nmb_x1bndry(1));
+  // Ensure nmb is at least 1 to avoid zero-sized allocations
+  int nmb = std::max(1, std::max(nmb_x1bndry(0),nmb_x1bndry(1)));
   Kokkos::realloc(x1bndry_mbgid, 2, nmb);
   for (int n=0; n<2; ++n) {
     for (int m=0; m<nmb; ++m) {
@@ -73,7 +74,7 @@ ShearingBox::ShearingBox(MeshBlockPack *ppack, ParameterInput *pin) :
     if (nmb_x1bndry(n) > 0) {
       sendbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
       recvbuf[n].vars_req = new MPI_Request[3*nmb_x1bndry(n)];
-      for (int m=0; m<nmb_x1bndry(0); ++m) {
+      for (int m=0; m<nmb_x1bndry(n); ++m) {
         for (int l=0; l<3; ++l) {
           sendbuf[n].vars_req[3*m + l] = MPI_REQUEST_NULL;
           recvbuf[n].vars_req[3*m + l] = MPI_REQUEST_NULL;

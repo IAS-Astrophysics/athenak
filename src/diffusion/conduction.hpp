@@ -12,6 +12,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -25,18 +26,21 @@ class Conduction {
 
   // data
   Real dtnew;
-  Real kappa;         // thermal conductivity
-  bool tdep_kappa;    // temperature-dependent conductivity
-  Real kappa_ceiling; // ceiling of thermal conductivity
-  bool sat_hflux;     // saturtion of heat flux
+  Real alpha_iso;       // isotropic thermal diffusivity
+  Real alpha_aniso;     // anisotropic thermal diffusivity
+  bool alpha_spitzer;   // switch to turn on Spitzer conductivity
+  Real q_limit;         // saturated heat flux limit
+  parabolic::DiffusionSelection mode = parabolic::DiffusionSelection::explicit_only;
 
-  // function to add heat fluxes to Hydro and/or MHD fluxes
-  void AddHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                   DvceFaceFld5D<Real> &f);
-  void IsotropicHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                         DvceFaceFld5D<Real> &f);
-  void TempDependentHeatFlux(const DvceArray5D<Real> &w, const EOS_Data &eos,
-                             DvceFaceFld5D<Real> &f);
+  // functions
+  void AddHeatFluxes(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                     DvceFaceFld5D<Real> &f);
+  void AddHeatFluxIso(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                      DvceFaceFld5D<Real> &f);
+  void AddHeatFluxAniso(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                        DvceFaceFld5D<Real> &f);
+  void AddHeatFluxSpitzer(const DvceArray5D<Real> &w, const EOS_Data &eos,
+                          DvceFaceFld5D<Real> &f);
   void NewTimeStep(const DvceArray5D<Real> &w, const EOS_Data &eos_data);
 
  private:

@@ -31,6 +31,47 @@ class PiecewisePolytropeEOS: public Primitive::PiecewisePolytrope {
 
   template<LocationTag loc>
   KOKKOS_INLINE_FUNCTION
+  Real GetRhoFromE(Real e) const {
+    // Unfortunately, e(rho) cannot be inverted simply. Therefore, we use a Newton-Raphson
+    // solver to get this instead.
+    Real lb = 0.0;
+    Real ub = e;
+    auto f = [&](Real rho) -> Real {
+      Real nb = rho/mb;
+      int p = FindPiece(nb);
+      return GetColdEnergy(nb, p) - e;
+    };
+    auto df = [&](Real rho) -> Real {
+      Real nb = rho/mb;
+      int p = FindPiece(nb);
+      return 1.0 + eps_pieces[p] +
+             gamma_pieces[p]*GetColdPressure(nb, p)/(rho*gamma_pieces[p] - 1.0);
+    };
+    Real flb = f(lb);
+    Real fub = f(ub);
+    Real x = (fub*lb - flb*ub)/(fub - flb);
+    Real fx = f(x);
+    const Real tol = 1e-15;
+    while (Kokkos::fabs(fx) > e*tol) {
+      Real xnew = x - fx/df(x);
+      // If the guess is no good, throw it away and use bisection instead.
+      if (xnew > ub || xnew < lb) {
+        xnew = 0.5*(ub + lb);
+      }
+      fx = f(xnew);
+      if (fx > 0) {
+        ub = xnew;
+      } else {
+        lb = xnew;
+      }
+      x = xnew;
+    }
+
+    return x;
+  }
+
+  template<LocationTag loc>
+  KOKKOS_INLINE_FUNCTION
   Real GetRhoFromP(Real P) const {
     Real rhob = GetDensityFromColdPressure(P);
     return rhob;

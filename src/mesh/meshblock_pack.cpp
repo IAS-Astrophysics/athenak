@@ -31,6 +31,7 @@
 #include "particles/particles.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
+#include "gravity/gravity.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -46,22 +47,20 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   tl_map.insert(std::make_pair("before_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("after_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("before_parabolic_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("parabolic_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("after_parabolic_stagen",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
-  delete pcoord;
-  if (phydro != nullptr) {delete phydro;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (padm   != nullptr) {delete padm;}
-  if (ptmunu != nullptr) {delete ptmunu;}
-  if (prad   != nullptr) {delete prad;}
-  if (pdyngr != nullptr) {delete pdyngr;}
+  if (ppart  != nullptr) {delete ppart;}
   if (pnr    != nullptr) {delete pnr;}
-  if (pturb  != nullptr) {delete pturb;}
-  if (punit  != nullptr) {delete punit;}
+  if (pdyngr != nullptr) {delete pdyngr;}
+  if (ptmunu != nullptr) {delete ptmunu;}
+  if (padm   != nullptr) {delete padm;}
   if (pz4c   != nullptr) {
     delete pz4c;
     // cce dump
@@ -70,8 +69,12 @@ MeshBlockPack::~MeshBlockPack() {
     }
     pz4c_cce.resize(0);
   }
-  if (ppart  != nullptr) {delete ppart;}
-  // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
+  if (pturb  != nullptr) {delete pturb;}
+  if (prad   != nullptr) {delete prad;}
+  if (pmhd   != nullptr) {delete pmhd;}
+  if (phydro != nullptr) {delete phydro;}
+  if (punit  != nullptr) {delete punit;}
+  delete pcoord;
   delete pmb;
 }
 
@@ -230,7 +233,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pnr->AssembleNumericalRelativityTasks(tl_map);
   }
 
-  // (8) PARTICLES
+  // (9) PARTICLES
   // Create particles module.  Create tasklist.
   if (pin->DoesBlockExist("particles")) {
     ppart = new particles::Particles(this, pin);
@@ -240,6 +243,16 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ppart = nullptr;
   }
 
+  // (9) GRAVITY
+  // Create gravity physics module.  Create tasklist.
+  if (pin->DoesBlockExist("gravity")) {
+    // Gravity module uses Multigrid module
+    pgrav = new gravity::Gravity(this, pin);
+    //pgrav->AssembleTasks(tl_map);
+    nphysics++;
+  } else {
+    pgrav = nullptr;
+  }
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {

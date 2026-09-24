@@ -10,6 +10,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <algorithm>
 #include <utility>
 #include <iomanip>    // std::setprecision()
 
@@ -18,6 +19,28 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals.hpp"
+
+namespace {
+
+KOKKOS_INLINE_FUNCTION
+bool IsActiveFCFace(const int v, const int k, const int j, const int i,
+                    const RegionIndcs &indcs) {
+  if (v == 0) {
+    return (i >= indcs.is) && (i <= indcs.ie + 1) &&
+           (j >= indcs.js) && (j <= indcs.je) &&
+           (k >= indcs.ks) && (k <= indcs.ke);
+  } else if (v == 1) {
+    return (i >= indcs.is) && (i <= indcs.ie) &&
+           (j >= indcs.js) && (j <= indcs.je + 1) &&
+           (k >= indcs.ks) && (k <= indcs.ke);
+  } else {
+    return (i >= indcs.is) && (i <= indcs.ie) &&
+           (j >= indcs.js) && (j <= indcs.je) &&
+           (k >= indcs.ks) && (k <= indcs.ke + 1);
+  }
+}
+
+} // namespace
 
 //----------------------------------------------------------------------------------------
 // BValFC constructor:
@@ -49,6 +72,16 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = sendbuf;
   auto &rbuf = recvbuf;
+#if MPI_PARALLEL_ENABLED
+  // Build metadata before packing so off-rank data is written straight into the
+  // rank-packed aggregate buffer (fused pack/aggregate).
+  if (rank_packed_bvals_nvars_ != 3 ||
+      rank_packed_mesh_seq_ != pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq()) {
+    BuildRankPackedVarMetadata(3);
+  }
+  auto aggsbuf = rank_sendbuf_vars_;
+  auto sendoff = send_agg_offset_;
+#endif
 
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   int nmnv = 3*nmb;
@@ -141,6 +174,45 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
 
         // else copy field components into send buffer for MPI communication below
         } else {
+#if MPI_PARALLEL_ENABLED
+          // off-rank: write straight into the rank-packed aggregate send buffer
+          const int base = sendoff(m*nnghbr + n);
+          // if neighbor is at same or finer level, load data from b0
+          if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
+            [&](const int idx) {
+              int k = (idx)/nji;
+              int j = (idx - k*nji)/ni;
+              int i = (idx - k*nji - j*ni) + il;
+              k += kl;
+              j += jl;
+              if (v==0) {
+                aggsbuf(base + i-il + ni*(j-jl + nj*(k-kl))) = b.x1f(m,k,j,i);
+              } else if (v==1) {
+                aggsbuf(base + ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = b.x2f(m,k,j,i);
+              } else if (v==2) {
+                aggsbuf(base + ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = b.x3f(m,k,j,i);
+              }
+            });
+          // if neighbor is at coarser level, load data from coarse_b0
+          } else {
+            Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
+            [&](const int idx) {
+              int k = (idx)/nji;
+              int j = (idx - k*nji)/ni;
+              int i = (idx - k*nji - j*ni) + il;
+              k += kl;
+              j += jl;
+              if (v==0) {
+                aggsbuf(base + i-il + ni*(j-jl + nj*(k-kl))) = cb.x1f(m,k,j,i);
+              } else if (v==1) {
+                aggsbuf(base + ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = cb.x2f(m,k,j,i);
+              } else if (v==2) {
+                aggsbuf(base + ndat*v + i-il + ni*(j-jl + nj*(k-kl))) = cb.x3f(m,k,j,i);
+              }
+            });
+          }
+#else
           // if neighbor is at same or finer level, load data from b0
           if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember, nkji),
@@ -176,6 +248,7 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
               }
             });
           }
+#endif
         }
       } // end if-neighbor-exists block
       tmember.team_barrier();
@@ -184,41 +257,22 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFC(DvceFaceFld4D<Real> &b,
   }
 
 #if MPI_PARALLEL_ENABLED
-  // Send boundary buffer to neighboring MeshBlocks using MPI
+  // Send boundary buffer to neighboring MeshBlocks using MPI. SendBuff already
+  // wrote off-rank payloads directly into rank_sendbuf_vars_, so a single fence
+  // is all that is needed before posting the sends.
   Kokkos::fence();
-  int my_rank = global_variable::my_rank;
-  auto &nghbr = pmy_pack->pmb->nghbr;
-  bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) {  // neighbor exists and not a physical boundary
-        // index and rank of destination Neighbor
-        int dn = nghbr.h_view(m,n).dest;
-        int drank = nghbr.h_view(m,n).rank;
-        if (drank != my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
-          int tag = CreateBvals_MPI_Tag(lid, dn);
+  bool no_errors = true;
+  std::fill(send_var_reqs_.begin(), send_var_reqs_.end(), MPI_REQUEST_NULL);
 
-          // get ptr to send buffer when neighbor is at coarser/same/fine level
-          int data_size = 3;
-          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= sendbuf[n].icoar_ndat;
-          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= sendbuf[n].isame_ndat;
-          } else {
-            data_size *= sendbuf[n].ifine_ndat;
-          }
-          auto send_ptr = Kokkos::subview(sendbuf[n].vars, m, Kokkos::ALL);
-
-          int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_vars, &(sendbuf[n].vars_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-        }
-      }
-    }
+  // Payload-only Isend: layout known from the one-shot header exchange in
+  // BuildRankPackedVarMetadata.
+  for (std::size_t i = 0; i < send_var_msgs_.size(); ++i) {
+    const auto &msg = send_var_msgs_[i];
+    int ierr = MPI_Isend(rank_sendbuf_vars_.data() + msg.offset, msg.data_size,
+                     MPI_ATHENA_REAL, msg.rank, 1, comm_vars, &send_var_reqs_[i]);
+    if (ierr != MPI_SUCCESS) no_errors = false;
   }
-  // Quit if MPI error detected
+
   if (!(no_errors)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
        << std::endl << "MPI error in posting sends" << std::endl;
@@ -239,23 +293,18 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
 #if MPI_PARALLEL_ENABLED
   //----- STEP 1: check that recv boundary buffer communications have all completed
 
   bool bflag = false;
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if (nghbr.h_view(m,n).gid >= 0) { // ID != -1, so not a physical boundary
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          int test;
-          int ierr = MPI_Test(&(rbuf[n].vars_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-          if (!(static_cast<bool>(test))) {
-            bflag = true;
-          }
-        }
-      }
+  for (std::size_t i = 0; i < recv_var_reqs_.size(); ++i) {
+    int test;
+    int ierr = MPI_Test(&recv_var_reqs_[i], &test, MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (!(static_cast<bool>(test))) {
+      bflag = true;
     }
   }
   // Quit if MPI error detected
@@ -270,8 +319,15 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
 #endif
 
   //----- STEP 2: buffers have all completed, so unpack 3-components of field
+  // Off-rank payloads are read directly from the rank-packed aggregate recv
+  // buffer (fuses the former RankUnpackScatter kernel); on-rank payloads sit in
+  // their per-neighbour recv buffers, written there directly by the sender.
 
   auto &mblev = pmy_pack->pmb->mb_lev;
+#if MPI_PARALLEL_ENABLED
+  auto aggrbuf = rank_recvbuf_vars_;
+  auto recvoff = recv_agg_offset_;
+#endif
   // Outer loop over (# of MeshBlocks)*(# of buffers)*(three field components)
   Kokkos::TeamPolicy<> policy(DevExeSpace(), (3*nmb), Kokkos::AUTO);
   Kokkos::parallel_for("RecvBuff", policy, KOKKOS_LAMBDA(TeamMember_t tmember) {
@@ -316,6 +372,10 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
         const int nk = ku - kl + 1;
         const int nkji = nk*nj*ni;
         const int nji  = nj*ni;
+        // base offset of this (m,n) payload in the aggregate buffer; -1 == on-rank
+#if MPI_PARALLEL_ENABLED
+        const int base = recvoff(m*nnghbr + n);
+#endif
 
         // if neighbor is at same or finer level, load data directly into b0
         if (nghbr.d_view(m,n).lev >= mblev.d_view(m)) {
@@ -326,12 +386,21 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             int i = (idx - k*nji - j*ni) + il;
             k += kl;
             j += jl;
+            if (IsActiveFCFace(v, k, j, i, indcs)) {
+              return;
+            }
+            const int bi = ndat*v + i-il + ni*(j-jl + nj*(k-kl));
+#if MPI_PARALLEL_ENABLED
+            const Real val = (base >= 0) ? aggrbuf(base + bi) : rbuf[n].vars(m, bi);
+#else
+            const Real val = rbuf[n].vars(m, bi);
+#endif
             if (v==0) {
-              b.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
+              b.x1f(m,k,j,i) = val;
             } else if (v==1) {
-              b.x2f(m,k,j,i) = rbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl)));
+              b.x2f(m,k,j,i) = val;
             } else if (v==2) {
-              b.x3f(m,k,j,i) = rbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl)));
+              b.x3f(m,k,j,i) = val;
             }
           });
         // if neighbor is at coarser level, load data into coarse_b0
@@ -343,12 +412,18 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b,
             int i = (idx - k*nji - j*ni) + il;
             k += kl;
             j += jl;
+            const int bi = ndat*v + i-il + ni*(j-jl + nj*(k-kl));
+#if MPI_PARALLEL_ENABLED
+            const Real val = (base >= 0) ? aggrbuf(base + bi) : rbuf[n].vars(m, bi);
+#else
+            const Real val = rbuf[n].vars(m, bi);
+#endif
             if (v==0) {
-              cb.x1f(m,k,j,i) = rbuf[n].vars(m,i-il + ni*(j-jl + nj*(k-kl)));
+              cb.x1f(m,k,j,i) = val;
             } else if (v==1) {
-              cb.x2f(m,k,j,i) = rbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl)));
+              cb.x2f(m,k,j,i) = val;
             } else if (v==2) {
-              cb.x3f(m,k,j,i) = rbuf[n].vars(m,ndat*v + i-il + ni*(j-jl + nj*(k-kl)));
+              cb.x3f(m,k,j,i) = val;
             }
           });
         }

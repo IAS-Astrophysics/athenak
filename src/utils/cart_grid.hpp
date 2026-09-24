@@ -39,7 +39,7 @@ class CartesianGrid {
   // to scale out poles, r is defined from the grid center
   int r_pow;
 
-  // For simplicity, unravell all points into a 1d array
+  // For simplicity, unravel all points into a 1d array
   DualArray3D<Real> interp_vals;   // container for data interpolated to sphere
   void InterpolateToGrid(int nvars, DvceArray5D<Real> &val);  // interpolate to sphere
   void ResetCenter(Real center[3]);  // set indexing for interpolation

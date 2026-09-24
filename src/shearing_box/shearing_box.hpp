@@ -12,7 +12,6 @@
 #include "athena.hpp"
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
-#include "bvals/bvals.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \struct ShearingBoxTaskIDs
@@ -62,7 +61,7 @@ class ShearingBox {
   bool is_stratified;              // true for stratified shearing box
 
   // data buffers for shearing box BCs.  Only two x1-faces get sheared
-  // Use seperate variables for ix1/ox1 since number of MBs on each face can be different
+  // Use separate variables for ix1/ox1 since number of MBs on each face can be different
   ShearingBoxBoundaryBuffer sendbuf[2], recvbuf[2];
 
 #if MPI_PARALLEL_ENABLED

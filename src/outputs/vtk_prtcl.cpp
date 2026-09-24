@@ -160,7 +160,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::size_t myoffset=header_offset + 3*rank_offset[global_variable::my_rank]*datasize;
     // collective writes for minimum number of particles across ranks
     if (partfile.Write_any_type_at_all(&(data[0]),3*npout_min,myoffset,"float")
-          != 3*npout_min) {
+          != static_cast<size_t>(3*npout_min)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "particle data not written correctly to vtk particle file, "
           << "vtk file is broken." << std::endl;
@@ -171,7 +171,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int nremain = pm->nprtcl_thisrank - npout_min;
     if (nremain > 0) {
       if (partfile.Write_any_type_at(&(data[3*npout_min]),3*nremain,myoffset,"float")
-            != 3*nremain) {
+            != static_cast<size_t>(3*nremain)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "particle data not written correctly to vtk particle file, "
             << "vtk file is broken." << std::endl;
@@ -221,7 +221,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     std::size_t myoffset=header_offset + rank_offset[global_variable::my_rank]*datasize;
     // collective writes for minimum number of particles across ranks
     if (partfile.Write_any_type_at_all(&(data[0]),npout_min,myoffset,"float")
-          != npout_min) {
+          != static_cast<size_t>(npout_min)) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "particle data not written correctly to vtk particle file, "
           << "vtk file is broken." << std::endl;
@@ -232,7 +232,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     int nremain = pm->nprtcl_thisrank - npout_min;
     if (nremain > 0) {
       if (partfile.Write_any_type_at(&(data[npout_min]),nremain,myoffset,"float")
-            != nremain) {
+            != static_cast<size_t>(nremain)) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
             << std::endl << "particle data not written correctly to vtk particle file, "
             << "vtk file is broken." << std::endl;

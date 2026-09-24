@@ -33,7 +33,6 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
   dtnew = static_cast<Real>(std::numeric_limits<float>::max());
 
   if (ism_cooling) {
-    Real use_e = eos_data.use_e;
     Real gamma = eos_data.gamma;
     Real gm1 = gamma - 1.0;
     Real heating_rate = hrate;
@@ -58,15 +57,8 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
       j += js;
 
       // temperature in cgs unit
-      Real temp = 1.0;
-      Real eint = 1.0;
-      if (use_e) {
-        temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
-        eint = w0(m,IEN,k,j,i);
-      } else {
-        temp = temp_unit*w0(m,ITM,k,j,i);
-        eint = w0(m,ITM,k,j,i)*w0(m,IDN,k,j,i)/gm1;
-      }
+      Real temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+      Real &eint = w0(m,IEN,k,j,i);
 
       Real lambda_cooling = ISMCoolFn(temp)/cooling_unit;
       Real gamma_heating = heating_rate/heating_unit;
@@ -80,7 +72,6 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
   }
 
   if (rel_cooling) {
-    Real use_e = eos_data.use_e;
     Real gamma = eos_data.gamma;
     Real gm1 = gamma - 1.0;
     Real cooling_rate = crate_rel;
@@ -99,22 +90,13 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
       j += js;
 
       // temperature in cgs unit
-      Real temp = 1.0;
-      Real eint = 1.0;
-      if (use_e) {
-        temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
-        eint = w0(m,IEN,k,j,i);
-      } else {
-        temp = w0(m,ITM,k,j,i);
-        eint = w0(m,ITM,k,j,i)*w0(m,IDN,k,j,i)/gm1;
-      }
+      Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+      Real &eint = w0(m,IEN,k,j,i);
 
       auto &ux = w0(m, IVX, k, j, i);
       auto &uy = w0(m, IVY, k, j, i);
       auto &uz = w0(m, IVZ, k, j, i);
-
-      auto ut = 1. + ux * ux + uy * uy + uz * uz;
-      ut = sqrt(ut);
+      Real ut = sqrt(1.0 + ux * ux + uy * uy + uz * uz);
 
       // The following should be approximately correct
       // add a tiny number

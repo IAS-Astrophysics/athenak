@@ -70,12 +70,14 @@ Real Extrapolate<4>(DvceArray5D<Real> u, const int m, const int n,
 }
 
 //----------------------------------------------------------------------------------------
-// \!fn void MeshBoundaryValues::Z4cBCs()
-// \brief Apply physical boundary conditions for all Z4c variables at faces of MB which
-//  are at the edge of the computational domain
+//! \fn void MeshBoundaryValues::Z4cBCs()
+//! \brief Apply physical boundary conditions for all Z4c variables on the fine array at
+//  faces of the MB which are at the edge of the computational domain. This is applied
+//  *after* prolongation (see Z4c::Prolongate / Z4c::ApplyPhysicalBCs), so that the
+//  corner ghost zones between a coarse neighbor and a physical boundary -- which are
+//  filled by extrapolation from the coarse/fine interface ghosts -- read valid data.
 void MeshBoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
-                                DvceArray5D<Real> u0, DvceArray5D<Real> coarse_u0) {
-  auto &pm = ppack->pmesh;
+                                DvceArray5D<Real> u0) {
   auto &indcs = ppack->pmesh->mb_indcs;
   int &ng = indcs.ng;
 
@@ -101,27 +103,38 @@ void MeshBoundaryValues::Z4cBCs(MeshBlockPack *ppack, DualArray2D<Real> u_in,
       BCHelper<4>(ppack, u_in, u0, is, ie, js, je, ks, ke, n1, n2, n3);
       break;
   }
-  if (pm->multilevel) {
-    int cn1 = indcs.cnx1 + 2*ng;
-    int cn2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*ng) : 1;
-    int cn3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*ng) : 1;
-    int cis = indcs.cis;
-    int cie = indcs.cie;
-    int cjs = indcs.cjs;
-    int cje = indcs.cje;
-    int cks = indcs.cks;
-    int cke = indcs.cke;
-    switch(opt.extrap_order) {
-      case 2:
-        BCHelper<2>(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
-        break;
-      case 3:
-        BCHelper<3>(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
-        break;
-      case 4:
-        BCHelper<4>(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
-        break;
-    }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshBoundaryValues::Z4cBCsCoarse()
+//! \brief Apply physical boundary conditions for all Z4c variables on the coarse array.
+//  This must be done *before* prolongation so that the prolongation stencil has valid
+//  data in the coarse ghost zones that sit at a physical boundary.
+void MeshBoundaryValues::Z4cBCsCoarse(MeshBlockPack *ppack, DualArray2D<Real> u_in,
+                                      DvceArray5D<Real> coarse_u0) {
+  auto &indcs = ppack->pmesh->mb_indcs;
+  int &ng = indcs.ng;
+  auto &opt = ppack->pz4c->opt;
+
+  int cn1 = indcs.cnx1 + 2*ng;
+  int cn2 = (indcs.cnx2 > 1)? (indcs.cnx2 + 2*ng) : 1;
+  int cn3 = (indcs.cnx3 > 1)? (indcs.cnx3 + 2*ng) : 1;
+  int cis = indcs.cis;
+  int cie = indcs.cie;
+  int cjs = indcs.cjs;
+  int cje = indcs.cje;
+  int cks = indcs.cks;
+  int cke = indcs.cke;
+  switch(opt.extrap_order) {
+    case 2:
+      BCHelper<2>(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
+      break;
+    case 3:
+      BCHelper<3>(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
+      break;
+    case 4:
+      BCHelper<4>(ppack, u_in, coarse_u0, cis, cie, cjs, cje, cks, cke, cn1, cn2, cn3);
+      break;
   }
 }
 

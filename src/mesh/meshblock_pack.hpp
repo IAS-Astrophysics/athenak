@@ -15,6 +15,7 @@
 
 #include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
+#include "diffusion/parabolic_process.hpp"
 #include "driver/driver.hpp"
 #include "tasklist/task_list.hpp"
 
@@ -35,6 +36,7 @@ namespace z4c {class CCE;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
+namespace gravity {class Gravity;}
 
 //----------------------------------------------------------------------------------------
 //! \class MeshBlockPack
@@ -74,17 +76,23 @@ class MeshBlockPack {
   radiation::Radiation *prad=nullptr;
   std::vector<z4c::CCE *> pz4c_cce;
   particles::Particles *ppart=nullptr;
+  gravity::Gravity *pgrav=nullptr;
+
 
   // units (needed to convert code units to cgs for, e.g., cooling or radiation)
   units::Units *punit=nullptr;
 
   // map for task lists which operate over all MeshBlocks in this MeshBlockPack
   std::map<std::string, std::shared_ptr<TaskList>> tl_map;
+  std::vector<parabolic::ParabolicProcessDescriptor> parabolic_processes;
 
   // functions
   void AddPhysics(ParameterInput *pin);
   void AddMeshBlocks(ParameterInput *pin);
   void AddCoordinates(ParameterInput *pin);
+  void RegisterParabolicProcess(parabolic::ParabolicProcessDescriptor process) {
+    parabolic_processes.push_back(process);
+  }
 
  private:
   // data

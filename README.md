@@ -4,7 +4,8 @@ Block-based AMR framework with fluid, particle and numerical relativity solvers 
 
 ## Overview
 
-AthenaK is a complete rewrite of the AMR framework and fluid solvers in the [Athena++](https://github.com/PrincetonUniversity/athena) astrophysical MHD code using the [Kokkos](https://kokkos.org/) programming model.
+AthenaK is a complete rewrite of the AMR framework and fluid solvers in the [Athena++](https://github.com/PrincetonUniversity/athena) astrophysical MHD code using the [Kokkos](https://kokkos.org/) programming model.  Note that Athena++ is itself an extension of the original C-version of
+[Athena](https://github.com/PrincetonUniversity/Athena-Cversion).
 
 Using Kokkos enables *performance-portability*.  AthenaK will run on any hardware supported by Kokkos, including CPU, GPUs from various vendors, and ARM processors.
 
@@ -20,17 +21,25 @@ AthenaK is targeting challenging problems that require exascale resources, and a
 
 The numerical algorithms implemented in AthenaK are all based on higher-order finite volume methods with a variety of reconstruction algorithms, Riemann solvers, and time integration methods.
 
+AthenaK was developed in conjunction with the 
+[Parthenon AMR framework](https://github.com/parthenon-hpc-lab/parthenon) and borrows many features
+from that effort. It is also closely related to the 
+[AthenaPK MHD code](https://github.com/parthenon-hpc-lab/athenapk), which is another implementation
+of Athena++ based on the Parthenon framework.
+
 ## Getting Started
 
-The code is designed to be user-friendly with as few external dependencies as possible.
+See the [Documentation](https://ias-astrophysics.github.io/athenak-docs) to get started.
 
-Documention is permanently under construction on the [wiki](https://github.com/IAS-Astrophysics/athenak/wiki) pages.
-
-In particular, see the complete list of [requirements](https://github.com/IAS-Astrophysics/athenak/wikis/Requirements), or
-instructions on how to [download](https://github.com/IAS-Astrophysics/athenak/wikis/Download) and [build](https://github.com/IAS-Astrophysics/athenak/wikis/Build) the code for various devices.
+In particular, see the complete list of [requirements](https://ias-astrophysics.github.io/athenak-docs/requirements.html), or
+instructions on how to [download](https://ias-astrophysics.github.io/athenak-docs/download.html) and [build](https://ias-astrophysics.github.io/athenak-docs/build.html) the code for various devices.
 Other pages give instructions for running the code.
 
 Since AthenaK is very similar to Athena++, the [Athena++ documention](https://github.com/PrincetonUniversity/athena/wiki) may also be helpful.
+
+## Tutorials ##
+
+A seperate GitHUb repo contains a variety of [Tutorials](https://github.com/IAS-Astrophysics/athenak-gallery) with detailed instructions on how to use AthenaK to solve specific problems.
 
 ## Code papers
 

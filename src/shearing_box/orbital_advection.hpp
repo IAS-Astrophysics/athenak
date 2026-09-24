@@ -13,7 +13,6 @@
 #include "parameter_input.hpp"
 #include "shearing_box/shearing_box.hpp"
 #include "tasklist/task_list.hpp"
-#include "bvals/bvals.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class OrbitalAdvection

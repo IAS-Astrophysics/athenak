@@ -54,6 +54,7 @@ MeshVTKOutput::MeshVTKOutput(ParameterInput *pin, Mesh *pm, OutputParameters op)
 
 void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   int big_end = IsBigEndian(); // =1 on big endian machine
+  const int time_precision = std::numeric_limits<Real>::max_digits10 - 1;
   // create filename: "vtk/file_basename"."file_id"."gid"."XXXXX".vtk
   // where XXXXX = 5-digit file_number, and gid only added if specified
   std::string fname;
@@ -92,6 +93,7 @@ void MeshVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // Write parts 1-4: Create string with header text.
   std::stringstream msg;
   msg << "# vtk DataFile Version 2.0" << std::endl
+      << std::scientific << std::setprecision(time_precision)
       << "# Athena++ data at time= " << pm->time
       << "  level= 0"  // assuming uniform mesh
       << "  nranks= " << global_variable::nranks

@@ -8,10 +8,10 @@
 
 #include <iostream>
 #include <sstream>
-#include <string>   // std::string, to_string()
-#include <cstdio> // snprintf
+#include <string>    // std::string, to_string()
+#include <cstdio>    // snprintf
 #include <algorithm> // min_element
-#include <utility> // pair<>
+#include <utility>   // pair<>
 #include <vector>
 
 #include "athena.hpp"
@@ -28,6 +28,7 @@
 #include "z4c/z4c.hpp"
 #include "srcterms/srcterms.hpp"
 #include "srcterms/turb_driver.hpp"
+#include "gravity/gravity.hpp"
 #include "outputs.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -39,10 +40,10 @@
 // Creates vector of output variable data
 
 BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters opar) :
+    out_params(opar),
     derived_var("derived-var",1,1,1,1,1),
     outarray("cc_outvar",1,1,1,1,1),
-    outfield("fc_outvar",1,1,1,1),
-    out_params(opar) {
+    outfield("fc_outvar",1,1,1,1) {
   // exit for history, restart, or event log files
   if (out_params.file_type.compare("hst") == 0 ||
       out_params.file_type.compare("rst") == 0 ||
@@ -166,6 +167,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << "Output of particles requested in <output> block '"
        << out_params.block_name << "' but particle object not constructed."
        << std::endl << "Input file is likely missing corresponding block" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  if (ivar==156 && (pm->pmb_pack->pgrav == nullptr)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+       << "Output of gravity potential requested in <output> block '"
+       << out_params.block_name << "' but gravity object not constructed."
+       << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -609,6 +617,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("force3",2,&(pm->pmb_pack->pturb->force));
     }
 
+    // gravity potential
+    if (variable.compare("grav_phi") == 0) {
+      outvars.emplace_back("grav_phi",0,&(pm->pmb_pack->pgrav->phi));
+    }
+
     // ADM variables, excluding gauge
     for (int v = 0; v < adm::ADM::nadm - 4; ++v) {
       if (variable.compare("adm") == 0 ||
@@ -629,8 +642,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // mat z4c variables
     for (int v = 0; v < Tmunu::N_Tmunu; ++v) {
-      if (out_params.variable.compare("tmunu") == 0 ||
-          out_params.variable.compare(Tmunu::Tmunu_names[v]) == 0) {
+      if (variable.compare("tmunu") == 0 ||
+          variable.compare(Tmunu::Tmunu_names[v]) == 0) {
         outvars.emplace_back(Tmunu::Tmunu_names[v], v, &(pm->pmb_pack->ptmunu->u_tmunu));
       }
     }
@@ -645,14 +658,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
 
     // z4c variables
     for (int v = 0; v < z4c::Z4c::nz4c; ++v) {
-      if (out_params.variable.compare("z4c") == 0 ||
-          out_params.variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
+      if (variable.compare("z4c") == 0 ||
+          variable.compare(z4c::Z4c::Z4c_names[v]) == 0) {
         outvars.emplace_back(z4c::Z4c::Z4c_names[v], v, &(pm->pmb_pack->pz4c->u0));
       }
     }
 
     // weyl scalars
-    if (out_params.variable.compare("weyl") == 0) {
+    if (variable.compare("weyl") == 0) {
       outvars.emplace_back("weyl_rpsi4",0,&(pm->pmb_pack->pz4c->u_weyl));
       outvars.emplace_back("weyl_ipsi4",1,&(pm->pmb_pack->pz4c->u_weyl));
     }
@@ -700,6 +713,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // particle density binned to mesh
   if (out_params.variable.compare("prtcl_d") == 0) {
     out_params.contains_derived = true;
+    out_params.n_derived += 1;
     outvars.emplace_back("pdens",0,&(derived_var));
   }
 

@@ -91,12 +91,6 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pdyngr == nullptr) {
-    if (!(pmbp->phydro->peos->eos_data.use_e)) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl
-                << "gr_bondi test requires hydro/use_e=true" << std::endl;
-      exit(EXIT_FAILURE);
-    }
     if (!pmbp->pcoord->is_general_relativistic) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl
@@ -128,7 +122,7 @@ void ProblemGenerator::BondiAccretion(ParameterInput *pin, const bool restart) {
   }
 
   // Parameters
-  bondi.temp_min = 1.0e-2;  // lesser temperature root must be greater than this
+  bondi.temp_min = 1.0e-10; // lesser temperature root must be greater than this
   bondi.temp_max = 1.0e1;   // greater temperature root must be less than this
 
   // Get spin of black hole

@@ -17,7 +17,9 @@ Notes:
   - Scripts that run tests on GPU must have '_gpu' in name
   - For more information, check online automatic testing wiki page.
 """
+
 import os
+import pathlib
 import sys
 import pytest
 import argparse
@@ -48,6 +50,26 @@ def test(args):
         sys.exit(exit_code)
 
 
+def verify_test_files(test_paths):
+    """Determine what types of test are in test_paths"""
+    test_types = {"cpu": False, "mpicpu": False, "gpu": False}
+    for entry in test_paths:
+        path = pathlib.Path(entry)
+        if path.is_file():
+            files = [path]
+        elif path.is_dir():
+            files = list(path.rglob("*.py"))
+        else:
+            raise RuntimeError("{path} does not exist.")
+
+        for f in files:
+            for suffix in ["cpu", "mpicpu", "gpu"]:
+                if suffix in str(f):
+                    test_types[suffix] = True
+
+    return test_types
+
+
 # Set up argument parser
 parser = argparse.ArgumentParser(description="Run AthenaK test suite.")
 parser.add_argument(
@@ -64,7 +86,17 @@ parser.add_argument(
 parser.add_argument(
     "--gpu", nargs="*", help="Run test on GPU. Can add optional cmake arguments."
 )
-parser.add_argument("--test", type=str, help="Run a specific test by name.")
+parser.add_argument(
+    "--test",
+    nargs="+",
+    help=(
+        "Run a specific test or group of tests by name. You can specify a space"
+        " seperated list of python test files or directories and all the tests "
+        "specified and in the directories will run. If you also specify --gpu, "
+        "--cpu, or --mpicpu then only tests that match will run, you can specify "
+        "multiple"
+    ),
+)
 
 
 args = parser.parse_args()
@@ -81,36 +113,45 @@ if args.style:
     test(["test_suite/style"])
 
 original_dir = os.getcwd()
-tests = "test_suite/"
+tests = ["test_suite/"]
 
 if args.test is not None:
-    tests = args.test
-    for suffix in ["cpu", "mpicpu", "gpu"]:
-        if "_" + suffix in tests:
-            if getattr(args, suffix) is None:
-                setattr(args, suffix, [])
-        else:
-            setattr(args, suffix, None)
+    tests = list(args.test)
 
-    if "_cpu" not in tests and "_mpicpu" not in tests and "_gpu" not in tests:
-        print(
-            "Invalid test name. Please ensure it contains '_cpu', '_mpicpu', or '_gpu'."
-        )
-        sys.exit(1)
+    runnable_types = verify_test_files(tests)
 
-tests = os.path.abspath(tests)
+    # If a specific type of test specified then verify that there are tests to run
+    if args.cpu is not None and not runnable_types["cpu"]:
+        raise RuntimeError(f"No CPU tests were found in {tests} when requested.")
+    if args.mpicpu is not None and not runnable_types["mpicpu"]:
+        raise RuntimeError(f"No MPI-CPU tests were found in {tests} when requested.")
+    if args.gpu is not None and not runnable_types["gpu"]:
+        raise RuntimeError(f"No GPU tests were found in {tests} when requested.")
+
+    # If no test types were specified then determine the types that needs to run
+    if args.cpu is None and args.mpicpu is None and args.gpu is None:
+        for key in runnable_types:
+            if runnable_types[key]:
+                setattr(args, key, [])
+
+    if args.cpu is None and args.mpicpu is None and args.gpu is None:
+        raise RuntimeError("{test} does not contain any valid test files.")
+
+tests = [os.path.abspath(p) for p in tests]
 
 if args.cpu is not None:
     testutils.clean_make(flags=cmake_flags(args.cpu, []))
-    test([tests, "-k", "_cpu"])  # run all scripts with _cpu in name
+    test(tests + ["-k", "_cpu"])  # run all scripts with _cpu in name
+    os.chdir(original_dir)
 
 if args.mpicpu is not None:
     testutils.clean_make(flags=cmake_flags(args.mpicpu, ["-D", "Athena_ENABLE_MPI=ON"]))
-    test([tests, "-k", "_mpicpu"])  # run all scripts with _mpicpu in name
+    test(tests + ["-k", "_mpicpu"])  # run all scripts with _mpicpu in name
+    os.chdir(original_dir)
 
 if args.gpu is not None:
     testutils.clean_make(flags=cmake_flags(args.gpu, ["-D", "Kokkos_ENABLE_CUDA=On"]))
-    test([tests, "-k", "_gpu"])  # run all scripts with _gpu in name
+    test(tests + ["-k", "_gpu"])  # run all scripts with _gpu in name
+    os.chdir(original_dir)
 
-os.chdir(original_dir)
 testutils.clean()

@@ -27,8 +27,8 @@ char const * const ADM::ADM_names[ADM::nadm] = {
 //----------------------------------------------------------------------------------------
 // constructor: initializes data structures and parameters
 ADM::ADM(MeshBlockPack *ppack, ParameterInput *pin):
-    SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
     u_adm("u_adm",1,1,1,1,1),
+    SetADMVariables(&ADM::SetADMVariablesToKerrSchild),
     pmy_pack(ppack) {
   is_dynamic = pin->GetOrAddBoolean("adm" , "dynamic", false);
 

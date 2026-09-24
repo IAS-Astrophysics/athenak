@@ -51,13 +51,14 @@ damp_kappa1     = 0.02      # Constraint damping factor 1
 damp_kappa2     = 0.00
 
 # SSL Gauge Params
-slow_start_lapse = true
+slow_start_lapse = false
 ssl_damping_time = 20
 ssl_damping_amp = 0.6
 
 # Puncture Tracker
 nco             = 1
 co_0_x          = 0.
+co_0_mass		= 1.
 co_0_type = BH
 
 <mesh_refinement>
@@ -81,6 +82,31 @@ x2min = -1
 x2max = 1
 x3min = -1
 x3max = 1
+
+<fastflow>
+# Number of punctures and horizons
+npunct = 1
+num_horizons = 1
+store_metric_drvts = false
+
+# Grid points
+ntheta = 10
+lmax = 8
+
+# Puncture 0
+use_puncture_0 = 0
+center_x_0 = 0.0
+center_y_0 = 0.0
+center_z_0 = 0.0
+
+# Flow parameters puncture 0
+flow_iterations_0 = 100
+flow_alpha_beta_const_0 = 1.0
+hmean_tol_0 = 100.0
+mass_tol_0 = 1e-4
+
+start_time_0 = 0.0
+stop_time_0 = 200.0
 
 <problem>
 pgen_name = z4c_boosted_puncture

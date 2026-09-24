@@ -98,7 +98,7 @@ void ProblemGenerator::CShock(ParameterInput *pin, const bool restart) {
   // parse shock direction: {1,2,3} -> {x1,x2,x3}
   int shk_dir = pin->GetInteger("problem","shock_dir");
   if (shk_dir < 1 || shk_dir > 3) {
-    // Invaild input value for shk_dir
+    // Invalid input value for shk_dir
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
       << std::endl << "shock_dir=" <<shk_dir<< " must be either 1,2, or 3" << std::endl;
     exit(EXIT_FAILURE);

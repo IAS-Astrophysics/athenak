@@ -57,7 +57,7 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
 
     // These will be set properly when the table is read
     m_id_log_nb = std::numeric_limits<Real>::quiet_NaN();
-    m_nn = std::numeric_limits<int>::quiet_NaN();
+    m_nn = 0;
     m_min_h = std::numeric_limits<Real>::max();
     mb =    std::numeric_limits<Real>::quiet_NaN();
 
@@ -283,11 +283,11 @@ class EOSHybrid : public EOSPolicyInterface, public LogPolicy {
   // Inverse of table spacing
   Real m_id_log_nb;
   // Table size
-  int m_nn;
+  size_t m_nn;
   // Minimum enthalpy per baryon
   Real m_min_h;
 
-  // bool to protect against access of uninitialised table and prevent repeated reading
+  // bool to protect against access of uninitialized table and prevent repeated reading
   // of table
   bool m_initialized;
 

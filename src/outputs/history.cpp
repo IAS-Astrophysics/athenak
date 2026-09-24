@@ -78,12 +78,16 @@ void HistoryOutput::LoadOutputData(Mesh *pm) {
 void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
   auto &eos_data = pm->pmb_pack->phydro->peos->eos_data;
   int &nhydro_ = pm->pmb_pack->phydro->nhydro;
+  int &nscalars_ = pm->pmb_pack->phydro->nscalars;
 
   // set number of and names of history variables for hydro
   if (eos_data.is_ideal) {
     pdata->nhist = 8;
   } else {
     pdata->nhist = 7;
+  }
+  if (nscalars_>0) {
+    pdata->nhist += nscalars_;
   }
   pdata->label[IDN] = "mass";
   pdata->label[IM1] = "1-mom";
@@ -95,6 +99,11 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[nhydro_  ] = "1-KE";
   pdata->label[nhydro_+1] = "2-KE";
   pdata->label[nhydro_+2] = "3-KE";
+  for (int s=0; s<nscalars_; ++s) {
+    std::ostringstream labelSS;
+    labelSS << "scal-" << s;
+    pdata->label[nhydro_+3+s] = labelSS.str();
+  }
 
   // capture class variables for kernel
   auto &u0_ = pm->pmb_pack->phydro->u0;
@@ -136,6 +145,11 @@ void HistoryOutput::LoadHydroHistoryData(HistoryData *pdata, Mesh *pm) {
     hvars.the_array[nhydro_  ] = vol*0.5*SQR(u0_(m,IM1,k,j,i))/u0_(m,IDN,k,j,i);
     hvars.the_array[nhydro_+1] = vol*0.5*SQR(u0_(m,IM2,k,j,i))/u0_(m,IDN,k,j,i);
     hvars.the_array[nhydro_+2] = vol*0.5*SQR(u0_(m,IM3,k,j,i))/u0_(m,IDN,k,j,i);
+
+    // Scalar masses
+    for (int s=0; s<nscalars_; ++s) {
+      hvars.the_array[nhydro_+3+s] = vol*u0_(m,nhydro_+s,k,j,i);
+    }
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {
@@ -258,12 +272,16 @@ void HistoryOutput::LoadZ4cHistoryData(HistoryData *pdata, Mesh *pm) {
 void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   auto &eos_data = pm->pmb_pack->pmhd->peos->eos_data;
   int &nmhd_ = pm->pmb_pack->pmhd->nmhd;
+  int &nscalars_ = pm->pmb_pack->pmhd->nscalars;
 
   // set number of and names of history variables for mhd
   if (eos_data.is_ideal) {
     pdata->nhist = 11;
   } else {
     pdata->nhist = 10;
+  }
+  if (nscalars_>0) {
+    pdata->nhist += nscalars_;
   }
   pdata->label[IDN] = "mass";
   pdata->label[IM1] = "1-mom";
@@ -278,6 +296,12 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[nmhd_+3] = "1-ME";
   pdata->label[nmhd_+4] = "2-ME";
   pdata->label[nmhd_+5] = "3-ME";
+
+  for (int s=0; s<nscalars_; ++s) {
+    std::ostringstream labelSS;
+    labelSS << "scal-" << s;
+    pdata->label[nmhd_+6+s] = labelSS.str();
+  }
 
   // capture class variabels for kernel
   auto &u0_ = pm->pmb_pack->pmhd->u0;
@@ -327,6 +351,11 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
     hvars.the_array[nmhd_+3] = vol*0.25*(SQR(bx1f(m,k,j,i+1)) + SQR(bx1f(m,k,j,i)));
     hvars.the_array[nmhd_+4] = vol*0.25*(SQR(bx2f(m,k,j+1,i)) + SQR(bx2f(m,k,j,i)));
     hvars.the_array[nmhd_+5] = vol*0.25*(SQR(bx3f(m,k+1,j,i)) + SQR(bx3f(m,k,j,i)));
+
+    // Scalar masses
+    for (int s=0; s<nscalars_; ++s) {
+      hvars.the_array[nmhd_+6+s] = vol*u0_(m,nmhd_+s,k,j,i);
+    }
 
     // fill rest of the_array with zeros, if nhist < NHISTORY_VARIABLES
     for (int n=nhist_; n<NHISTORY_VARIABLES; ++n) {

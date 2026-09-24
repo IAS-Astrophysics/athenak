@@ -10,6 +10,7 @@
 //
 //  Convention: indices a,b,c,d are tensor indices. Indices n,i,j,k are grid indices.
 
+#include <type_traits>
 #include <cassert> // assert
 #include <utility>
 #include "athena.hpp"
@@ -183,14 +184,16 @@ class AthenaTensor<T, sym, ndim, 0> {
   // operators to access the data
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const k, int const j, int const i) const {
-    return data_(m,k,j,i);
+    return data_(m,idx_,k,j,i);
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx) {
-    data_ = Kokkos::subview(src,Kokkos::ALL,indx,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    data_ = src;
+    idx_ = indx;
   }
  private:
-  sub_DvceArray5D_0D data_;
+  DvceArray5D<Real> data_;
+  int idx_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -209,15 +212,24 @@ class AthenaTensor<T, sym, ndim, 1> {
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const a,
                              int const k, int const j, int const i) const {
-    return data_(m,a,k,j,i);
+    #if defined(KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK)
+    if (a >= ndim) {
+      Kokkos::abort("Requested variable is out of range for AthenaTensor.");
+    }
+    #endif
+    return data_(m,low_+a,k,j,i);
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
-                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    data_ = src;
+    low_ = indx1;
+    high_ = indx2;
   }
+
  private:
-  sub_DvceArray5D_1D data_;
+  DvceArray5D<Real> data_;
+  int low_;
+  int high_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -239,16 +251,33 @@ class AthenaTensor<T, sym, ndim, 2> {
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const a, int const b,
                              int const k, int const j, int const i) const {
-    return data_(m,idxmap_[a][b],k,j,i);
+    #if defined(KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK)
+    if (a >= ndim || b >= ndim) {
+      Kokkos::abort("Requested variable is out of range for AthenaTensor.");
+    }
+    #endif
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_(m,low_+(b+ndim*a),k,j,i);
+    } else if (sym == TensorSymm::SYM2 || sym == TensorSymm::ISYM2) {
+      if (b < a) {
+        return data_(m,low_+(b*(2*ndim - b + 1)/2+a-b),k,j,i);
+      } else {
+        return data_(m,low_+(a*(2*ndim - a + 1)/2+b-a),k,j,i);
+      }
+    }
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
-                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    data_ = src;
+    low_ = indx1;
+    high_ = indx2;
   }
 
  private:
-  sub_DvceArray5D_2D data_;
+  //sub_DvceArray5D_2D data_;
+  DvceArray5D<Real> data_;
+  int low_;
+  int high_;
   int idxmap_[3][3];
   int ndof_;
 };
@@ -379,6 +408,10 @@ class AthenaPointTensor<T, sym, ndim, 2> {
       } else {
         return data_[a*(2*ndim - a + 1)/2+b-a];
       }
+    } else {
+      static_assert(AthenaPointTensor<T, sym, ndim, 2>::allowed_sym,
+                    "Undefined symmetry for rank-2 AthenaPointTensor.");
+      return data_[0];
     }
     //return data_[idxmap_[a][b]];
   }
@@ -392,6 +425,10 @@ class AthenaPointTensor<T, sym, ndim, 2> {
       } else {
         return data_[a*(2*ndim - a + 1)/2+b-a];
       }
+    } else {
+      static_assert(AthenaPointTensor<T, sym, ndim, 2>::allowed_sym,
+                    "Undefined symmetry for rank-2 AthenaPointTensor.");
+      return data_[0];
     }
     //return data_[idxmap_[a][b]];
   }
@@ -404,6 +441,8 @@ class AthenaPointTensor<T, sym, ndim, 2> {
 
  private:
   Real data_[TensorDOF<sym, ndim, 2>]; // NOLINT
+  static constexpr bool allowed_sym = (sym == TensorSymm::NONE ||
+                                       sym == TensorSymm::SYM2);
 };
 
 //----------------------------------------------------------------------------------------
@@ -436,6 +475,10 @@ class AthenaPointTensor<T, sym, ndim, 3> {
       } else {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
+    } else {
+      static_assert(AthenaPointTensor<T, sym, ndim, 3>::allowed_sym,
+                    "Undefined symmetry for rank-3 AthenaPointTensor.");
+      return data_[0];
     }
   }
   KOKKOS_INLINE_FUNCTION
@@ -455,6 +498,10 @@ class AthenaPointTensor<T, sym, ndim, 3> {
       } else {
         return data_[c + ndim*(a*(2*ndim - a + 1)/2 + b - a)];
       }
+    } else {
+      static_assert(AthenaPointTensor<T, sym, ndim, 3>::allowed_sym,
+                    "Undefined symmetry for rank-3 AthenaPointTensor.");
+      return data_[0];
     }
   }
   KOKKOS_INLINE_FUNCTION
@@ -466,6 +513,9 @@ class AthenaPointTensor<T, sym, ndim, 3> {
 
  private:
   Real data_[TensorDOF<sym,ndim,3>];
+  static constexpr bool allowed_sym = (sym == TensorSymm::NONE ||
+                                       sym == TensorSymm::SYM2 ||
+                                       sym == TensorSymm::ISYM2);
 };
 
 //----------------------------------------------------------------------------------------
@@ -504,6 +554,10 @@ class AthenaPointTensor<T, sym, ndim, 4> {
         Kokkos::kokkos_swap(c, d);
       }
       return data_[(b*( 2*ndim - b +1)/2 + a - b)*ndof2_ + d*( 2*ndim - d +1)/2 + c - d];
+    } else {
+      static_assert(AthenaPointTensor<T, sym, ndim, 4>::allowed_sym,
+                    "Undefined symmetry for rank-4 AthenaPointTensor.");
+      return data_[0];
     }
   }
 
@@ -521,6 +575,10 @@ class AthenaPointTensor<T, sym, ndim, 4> {
         Kokkos::kokkos_swap(c, d);
       }
       return data_[(b*( 2*ndim - b +1)/2 + a - b)*ndof2_ + d*( 2*ndim - d +1)/2 + c - d];
+    } else {
+      static_assert(AthenaPointTensor<T, sym, ndim, 4>::allowed_sym,
+                    "Undefined symmetry for rank-4 AthenaPointTensor.");
+      return data_[0];
     }
   }
 
@@ -534,6 +592,8 @@ class AthenaPointTensor<T, sym, ndim, 4> {
  private:
   Real data_[TensorDOF<sym,ndim,4>];
   int ndof_;
+  static constexpr bool allowed_sym = (sym == TensorSymm::NONE ||
+                                       sym == TensorSymm::SYM22);
 };
 
 // Here tensors are defined as static 1D arrays, with compile-time dimension calculated as
@@ -628,11 +688,15 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
   decltype(auto) operator()(int a, int b, int i) const {
     if constexpr (sym == TensorSymm::NONE) {
       return data_(ndim * a + b, i);
-    } else {
+    } else if (sym == TensorSymm::SYM2) {
       if (a < b) {
         Kokkos::kokkos_swap(a, b);
       }
       return data_(b*( 2*ndim - b +1)/2 + a - b, i);
+    } else {
+      static_assert(AthenaScratchTensor<T, sym, ndim, 2>::allowed_sym,
+                    "Undefined symmetry for rank-2 AthenaScratchTensor.");
+      return data_[0];
     }
   }
   KOKKOS_INLINE_FUNCTION
@@ -647,6 +711,8 @@ class AthenaScratchTensor<T, sym, ndim, 2> {
  private:
   ScrArray2D<T> data_;
   int ndof_;
+  static constexpr bool allowed_sym = (sym == TensorSymm::NONE ||
+                                       sym == TensorSymm::SYM2);
 };
 
 //----------------------------------------------------------------------------------------
@@ -687,6 +753,10 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
         Kokkos::kokkos_swap(a, b);
       }
       return data_((b*(2*ndim - b +1)/2 + a - b)*ndim + c,i);
+    } else {
+      static_assert(AthenaScratchTensor<T, sym, ndim, 3>::allowed_sym,
+                    "Undefined symmetry for rank-3 AthenaScratchTensor.");
+      return data_[0];
     }
   }
   KOKKOS_INLINE_FUNCTION
@@ -701,6 +771,8 @@ class AthenaScratchTensor<T, sym, ndim, 3> {
  private:
   ScrArray2D<T> data_;
   int ndof_;
+  static constexpr bool allowed_sym = (sym == TensorSymm::NONE ||
+                                sym == TensorSymm::SYM2 || sym == TensorSymm::ISYM2);
 };
 
 //----------------------------------------------------------------------------------------
@@ -740,6 +812,10 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
       }
       return data_((b*( 2*ndim - b +1)/2 + a - b)*(ndim + 1)*ndim/2 +
                     d*( 2*ndim - d +1)/2 + c - d,i);
+    } else {
+      static_assert(AthenaScratchTensor<T, sym, ndim, 4>::allowed_sym,
+                    "Undefined symmetry for rank-4 AthenaScratchTensor.");
+      return data_[0];
     }
   }
 
@@ -755,6 +831,8 @@ class AthenaScratchTensor<T, sym, ndim, 4> {
  private:
   ScrArray2D<T> data_;
   int ndof_;
+  static constexpr bool allowed_sym = (sym == TensorSymm::NONE ||
+                                       sym == TensorSymm::SYM22);
 };
 
 #endif // ATHENA_TENSOR_HPP_

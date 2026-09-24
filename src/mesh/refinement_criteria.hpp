@@ -8,7 +8,7 @@
 //! \file refinement_criteria.hpp
 //! \brief defines RefinementCriteria class containing data and functions controlling
 //! how mesh is refined/derefined with AMR
-//! This class implementes default refinement conditions:
+//! This class implements default refinement conditions:
 //!   (1) min/max of selected variable
 //!   (2) gradient of selected variable
 //!   (3) second derivative of selected variable
@@ -27,7 +27,7 @@
 #include "athena.hpp"
 
 // identifiers for refinement criteria methods
-enum class RefCritMethod {min_max, slope, second_deriv, location, user};
+enum class RefCritMethod {min_max, slope, second_deriv, location, cyclic_zoom, user};
 
 using DvceArray5DnSlice = Kokkos::Subview<DvceArray5D<Real>,
                           std::remove_const_t<decltype(Kokkos::ALL)>,
@@ -69,6 +69,7 @@ class RefinementCriteria {
   void CheckSlope(MeshBlockPack* pmbp, RefCritData crit);
   void CheckSecondDeriv(MeshBlockPack* pmbp, RefCritData crit);
   void CheckLocation(MeshBlockPack* pmbp, RefCritData crit);
+  void CheckCyclicZoom(MeshBlockPack* pmbp);
 
  private:
   // data

@@ -21,7 +21,7 @@
 
 namespace particles {
 //----------------------------------------------------------------------------------------
-//! \fn  void Particles::AssembleHydroTasks
+//! \fn  void Particles::AssembleTasks
 //! \brief Adds hydro tasks to appropriate task lists used by time integrators.
 //! Called by MeshBlockPack::AddPhysics() function directly after Hydro constructor.
 
@@ -53,7 +53,7 @@ TaskStatus Particles::NewGID(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskList Particles::SendCnt
-//! \brief Wrapper task list function to set share number of partciles communicated with
+//! \brief Wrapper task list function to set share number of particles communicated with
 //! MPI between all ranks
 
 TaskStatus Particles::SendCnt(Driver *pdrive, int stage) {

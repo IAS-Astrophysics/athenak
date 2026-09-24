@@ -1,0 +1,73 @@
+# AthenaK input file for Gaussian-pulse diffusion tests (conduction/viscosity).
+# Mesh sizes, diffusivities (hydro/nu_iso or hydro/alpha_iso), the conduction/viscosity
+# test flags, the spread_x1/x2/x3 axes, vel_comp, tlim and job/basename are overridden
+# per test on the command line (see tst/test_suite/diffusion/).
+
+<comment>
+problem   = Gaussian-pulse diffusion
+
+<job>
+basename  = diffusion   # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3          # Number of ghost cells
+nx1       = 64         # Number of zones in X1-direction
+x1min     = -6.0       # minimum value of X1
+x1max     = 6.0        # maximum value of X1
+ix1_bc    = user       # inner-X1 boundary flag
+ox1_bc    = user       # outer-X1 boundary flag
+
+nx2       = 1          # Number of zones in X2-direction
+x2min     = -6.0       # minimum value of X2
+x2max     = 6.0        # maximum value of X2
+ix2_bc    = user       # inner-X2 boundary flag
+ox2_bc    = user       # outer-X2 boundary flag
+
+nx3       = 1          # Number of zones in X3-direction
+x3min     = -6.0       # minimum value of X3
+x3max     = 6.0        # maximum value of X3
+ix3_bc    = user       # inner-X3 boundary flag
+ox3_bc    = user       # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 64         # Number of cells in each MeshBlock, X1-dir
+nx2       = 1          # Number of cells in each MeshBlock, X2-dir
+nx3       = 1          # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = kinematic # dynamic/kinematic/static (diffusion tests require kinematic)
+integrator = rk2       # time integration algorithm
+cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit (no limit if <0)
+tlim       = 1.0       # time limit
+ndiag      = 1         # cycles between diagostic output
+
+<hydro>
+eos         = ideal    # EOS type
+reconstruct = wenoz    # spatial reconstruction method
+rsolver     = advect   # Riemann-solver to be used
+gamma       = 1.66666666667   # gamma = C_p/C_v
+nu_iso      = 0.0      # isotropic kinematic viscosity (set by viscosity tests)
+alpha_iso   = 0.0      # isotropic thermal diffusivity (set by conduction tests)
+
+<units>
+# Default (length=mass=time=mu=1) code units. Present so the thermal-conduction module
+# (which references the units class) has a valid units object.
+length_cgs = 1.0
+mass_cgs   = 1.0
+time_cgs   = 1.0
+mu         = 1.0
+
+<problem>
+pgen_name        = diffusion  # problem generator name
+amp              = 1.0e-6     # amplitude of Gaussian pulse
+x10              = 0.0        # center of Gaussian in x1
+x20              = 0.0        # center of Gaussian in x2
+x30              = 0.0        # center of Gaussian in x3
+conduction_test  = false     # set true to diffuse a temperature pulse
+viscosity_test   = false     # set true to diffuse a velocity pulse
+resistivity_test = false     # (not yet implemented)
+spread_x1        = true       # Gaussian varies along x1
+spread_x2        = false      # Gaussian varies along x2
+spread_x3        = false      # Gaussian varies along x3
+vel_comp         = 2          # velocity component carrying the viscous pulse (1/2/3)
