@@ -609,7 +609,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                 const Real saved_scat = scat_1_(m,nuidx,k,j,i);
                 const Real rho = w0_(m,IDN,k,j,i);
                 const Real t0 = w0_(m,IPR,k,j,i)/rho;
-                int iterations = 0;
+                int iterations = 0, jacobian_retries = 0;
                 if (params_.photon_source_diagnostics) {
                   Kokkos::atomic_inc(&solver_counts(0));
                 }
@@ -634,7 +634,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                         abs_1_(m,nuidx,k,j,i),scat_1_(m,nuidx,k,j,i));
                     if (!photon_reduced_solve(reduced_params,params_,photon,rho,gm1,
                         volform,t0,Enew,Fnew_d,chi_(m,nuidx,k,j,i),
-                        partial_temperature,iterations)) {
+                        partial_temperature,iterations,&jacobian_retries)) {
                       alternative_accepted = false;
                       break;
                     }
@@ -657,6 +657,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
                 if (params_.photon_source_diagnostics) {
                   Kokkos::atomic_inc(&solver_counts(alternative_accepted ? 1 : 2));
                   Kokkos::atomic_add(&solver_counts(3),iterations);
+                  Kokkos::atomic_add(&solver_counts(5),jacobian_retries);
                 }
                 if (!alternative_accepted) {
                   // A failed alternative has no observable mutation. The original
@@ -947,7 +948,8 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
               << " rank=" << global_variable::my_rank << " stage=" << stage
               << " attempts=" << counts(0) << " accepted=" << counts(1)
               << " fallback=" << counts(2) << " iterations=" << counts(3)
-              << " opacity_caps=" << counts(4) << '\n';
+              << " opacity_caps=" << counts(4)
+              << " jacobian_retries=" << counts(5) << '\n';
   }
   // Vacuum radiation tests can enroll the same source callback as Boltzmann.
   // Fluid source callbacks remain owned by the fluid task graph.

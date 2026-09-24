@@ -74,15 +74,17 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // Keep numerical derivatives as the default and as the degenerate-state guard.
   const std::string photon_jacobian =
       pin->GetOrAddString("radiation_m1", "photon_source_jacobian", "numerical");
-  if (photon_jacobian != "numerical" && photon_jacobian != "analytic") {
+  if (photon_jacobian != "numerical" && photon_jacobian != "analytic" &&
+      photon_jacobian != "conditioned") {
     std::cerr << "Unknown photon_source_jacobian: " << photon_jacobian << std::endl;
     exit(EXIT_FAILURE);
   }
-  params.photon_analytic_jacobian = photon_jacobian == "analytic";
+  params.photon_analytic_jacobian = photon_jacobian != "numerical";
+  params.photon_conditioned_jacobian = photon_jacobian == "conditioned";
   params.photon_source_diagnostics =
       pin->GetOrAddBoolean("radiation_m1", "photon_source_diagnostics", false);
   if (params.photon_source_diagnostics) {
-    Kokkos::realloc(photon_solver_counts, 5);
+    Kokkos::realloc(photon_solver_counts, 6);
   }
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
   params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);

@@ -35,6 +35,7 @@ struct PhotonReducedSystem {
   const RadiationM1Params &p;
   const Real rho, gm1, vol, t0, arad, thermal_tolerance;
   const bool coupled;
+  const bool conditioned = false;
 
   KOKKOS_INLINE_FUNCTION
   bool Evaluate(const Real x[5], Real r[5], Real &temperature, Real &chi,
@@ -54,9 +55,21 @@ struct PhotonReducedSystem {
         0.05*Kokkos::fmin(p.source_epsrel, thermal_tolerance));
     if (coupled) {
       if (!Kokkos::isfinite(x[4]) || x[4] < 0.0 || x[4] > 1.0) return false;
-      chi = closure_fun(x[4], p.closure_type);
-      apply_closure(s.g_dd, s.g_uu, s.n_d, s.W, s.u_u, s.v_d, s.proj_ud,
-                    s.E, s.F_d, chi, s.P_dd, p);
+      const Real xi = conditioned ? Kokkos::sqrt(x[4]) : x[4];
+      chi = closure_fun(xi, p.closure_type);
+      if (conditioned) {
+        // Evaluate the small thin weight without subtracting numbers near one.
+        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> pt{}, pn{};
+        calc_Pthick(s.g_dd, s.g_uu, s.n_d, s.W, s.v_d, s.E, s.F_d, pt);
+        calc_Pthin(s.g_uu, s.E, s.F_d, pn);
+        const Real d = x[4]*(6.0-2.0*xi+6.0*x[4])/10.0;
+        for (int a = 0; a < 4; ++a) {
+          for (int b = a; b < 4; ++b) s.P_dd(a,b) = pt(a,b)+d*(pn(a,b)-pt(a,b));
+        }
+      } else {
+        apply_closure(s.g_dd, s.g_uu, s.n_d, s.W, s.u_u, s.v_d, s.proj_ud,
+                      s.E, s.F_d, chi, s.P_dd, p);
+      }
     } else {
       calc_closure(BrentFunctor{}, s.g_dd, s.g_uu, s.n_d, s.W, s.u_u, s.v_d,
                    s.proj_ud, s.E, s.F_d, chi, s.P_dd, cp, p.closure_type);
@@ -76,7 +89,8 @@ struct PhotonReducedSystem {
     for (int a = 1; a < 4; ++a) {
       r[a] = (s.F_d(a)-s.Fstar_d(a)-s.cdt*s.tS_d(a))/s.Estar;
     }
-    r[4] = coupled ? x[4]-flux_factor : 0.0;
+    r[4] = coupled ? x[4]-(conditioned ?
+        Kokkos::fmax(0.0, h2)/(s.J*s.J) : flux_factor) : 0.0;
     thermal = temperature-t0 + s.cdt*s.alp/s.W*s.kabs*gm1/rho*
         (arad*SQR(SQR(temperature))-s.J/vol);
     for (int a = 0; a < 5; ++a) {
@@ -96,12 +110,22 @@ struct PhotonReducedSystem {
     const Real h2 = tensor_dot(s.g_uu, s.H_d, s.H_d);
     // Pthin has no unique directional derivative at F=0; |H| is not
     // differentiable at H=0. Use the established numerical path nearby.
-    if (!(f2 > 1.e-24*s.E*s.E) || !(h2 > 1.e-24*s.J*s.J)) return false;
-    const Real hnorm = Kokkos::sqrt(h2);
-    const Real xi = x[4];
+    if (conditioned) {
+      if (!(f2 > 1.e-24*s.E*s.E)) return false;
+    } else if (!(f2 > 1.e-24*s.E*s.E) || !(h2 > 1.e-24*s.J*s.J)) {
+      return false;
+    }
+    const Real hnorm = Kokkos::sqrt(Kokkos::fmax(0.0, h2));
+    const Real xi = conditioned ? Kokkos::sqrt(x[4]) : x[4];
     const Real chi = closure_fun(xi, Minerbo);
-    const Real thick = 1.5*(1.0-chi), thin = 1.0-thick;
-    const Real dthin = 1.5*(12.0*xi-6.0*xi*xi+24.0*xi*xi*xi)/15.0;
+    const Real thin = conditioned ? x[4]*(6.0-2.0*xi+6.0*x[4])/10.0 :
+                                   1.0-1.5*(1.0-chi);
+    const Real thick = conditioned ? 1.0-thin : 1.5*(1.0-chi);
+    const Real dthin = conditioned ? (6.0-3.0*xi+12.0*x[4])/10.0 :
+        1.5*(12.0*xi-6.0*xi*xi+24.0*xi*xi*xi)/15.0;
+    AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> direction{};
+    const Real fnorm = Kokkos::sqrt(f2);
+    for (int a = 0; a < 4; ++a) direction(a) = s.F_d(a)/fnorm;
     AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> pthin{}, pthick{};
     calc_Pthin(s.g_uu, s.E, s.F_d, pthin);
     calc_Pthick(s.g_dd, s.g_uu, s.n_d, s.W, s.v_d, s.E, s.F_d, pthick);
@@ -127,7 +151,16 @@ struct PhotonReducedSystem {
             const Real dpt = (de/f2)*s.F_d(a)*s.F_d(b)
                 + (s.E/f2)*(df(a)*s.F_d(b)+s.F_d(a)*df(b))
                 - pthin(a,b)*(df2/f2);
-            dp(a,b) = thick*dp(a,b)+thin*dpt;
+            if (conditioned) {
+              // Multiply by the small weight before dividing by |F|. This
+              // avoids large unweighted intermediates when the product is finite.
+              const Real projected = tensor_dot(s.g_uu, direction, df);
+              dp(a,b) = thick*dp(a,b)+thin*de*direction(a)*direction(b)
+                  + (thin*s.E/fnorm)*(df(a)*direction(b)+direction(a)*df(b)
+                                     -2.0*direction(a)*direction(b)*projected);
+            } else {
+              dp(a,b) = thick*dp(a,b)+thin*dpt;
+            }
           }
         }
       }
@@ -148,9 +181,17 @@ struct PhotonReducedSystem {
       for (int a = 1; a < 4; ++a) {
         jac[a][col] = (a == col ? 1.0 : 0.0)-s.cdt*dfdot(a)/s.Estar;
       }
-      jac[4][col] = (col == 4 ? 1.0 : 0.0)
-          - tensor_dot(s.g_uu, s.H_d, dh)/(s.J*hnorm)
-          + (hnorm/s.J)*(dj/s.J);
+      if (conditioned) {
+        jac[4][col] = (col == 4 ? 1.0 : 0.0);
+        if (h2 > 0.0) {
+          jac[4][col] += -2.0*tensor_dot(s.g_uu, s.H_d, dh)/(s.J*s.J)
+                        +2.0*(h2/(s.J*s.J))*(dj/s.J);
+        }
+      } else {
+        jac[4][col] = (col == 4 ? 1.0 : 0.0)
+            - tensor_dot(s.g_uu, s.H_d, dh)/(s.J*hnorm)
+            + (hnorm/s.J)*(dj/s.J);
+      }
       for (int a = 0; a < 5; ++a) {
         if (!Kokkos::isfinite(jac[a][col])) return false;
       }
@@ -171,7 +212,14 @@ struct PhotonReducedSystem {
         Kokkos::fmax(t, t0), 1.0e-100);
     norm = Kokkos::fmax(norm, Kokkos::abs(thermal)/ttol);
     if (coupled) {
-      norm = Kokkos::fmax(norm, Kokkos::abs(r[4])/
+      Real closure_error = Kokkos::abs(r[4]);
+      if (conditioned) {
+        // Certify the ORIGINAL xi residual, not a looser squared-residual test.
+        const Real denominator = Kokkos::sqrt(x[4])+
+                                 Kokkos::sqrt(Kokkos::fmax(0.0, x[4]-r[4]));
+        closure_error = denominator > 0.0 ? closure_error/denominator : 0.0;
+      }
+      norm = Kokkos::fmax(norm, closure_error/
           Kokkos::fmin(p.closure_epsilon, thermal_tolerance));
     }
     return norm;
@@ -210,7 +258,7 @@ bool photon_linear_solve(Real a[5][5], Real b[5], const int n) {
 }
 
 KOKKOS_INLINE_FUNCTION
-bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
+bool photon_reduced_solve_once(SrcParams &s, const RadiationM1Params &p,
                           const PhotonOpacityParams &photon, const Real rho,
                           const Real gm1, const Real vol, const Real t0,
                           Real &E, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F,
@@ -223,7 +271,8 @@ bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
   const bool coupled = p.photon_source_solver == PhotonCoupled &&
                        p.closure_type == Minerbo;
   PhotonReducedSystem system{s, p, rho, gm1, vol, t0, photon.arad,
-                             photon.source_tolerance, coupled};
+                             photon.source_tolerance, coupled,
+                             coupled && p.photon_conditioned_jacobian};
   const int n = coupled ? 5 : 4;
   Real x[5] = {E/s.Estar, F(1)/s.Estar, F(2)/s.Estar, F(3)/s.Estar, 0.5};
   // Seed xi from the existing physical closure, not from another root branch.
@@ -232,7 +281,7 @@ bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
                                 photon.source_tolerance, false};
     Real r[5], thermal, flux_factor, c;
     if (!reduced.Evaluate(x, r, temperature, c, thermal, flux_factor)) return false;
-    x[4] = flux_factor;
+    x[4] = system.conditioned ? flux_factor*flux_factor : flux_factor;
     return true;
   };
   if (!initialize()) {
@@ -278,12 +327,33 @@ bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
       }
     }
     for (int a = 0; a < n; ++a) step[a] = -r[a];
+    Real column_scale[5] = {1., 1., 1., 1., 1.};
+    if (system.conditioned) {
+      // Equilibrate rows and columns; this changes neither the Newton equation
+      // nor the original residual tolerances used by Norm and certification.
+      for (int a = 0; a < n; ++a) {
+        Real scale = 0.0;
+        for (int b = 0; b < n; ++b) scale = Kokkos::fmax(scale, Kokkos::abs(jac[a][b]));
+        if (!(scale > 0.0) || !Kokkos::isfinite(scale)) return false;
+        step[a] /= scale;
+        for (int b = 0; b < n; ++b) jac[a][b] /= scale;
+      }
+      for (int b = 0; b < n; ++b) {
+        Real scale = 0.0;
+        for (int a = 0; a < n; ++a) scale = Kokkos::fmax(scale, Kokkos::abs(jac[a][b]));
+        if (!(scale > 0.0) || !Kokkos::isfinite(scale)) return false;
+        column_scale[b] = 1.0/scale;
+        for (int a = 0; a < n; ++a) jac[a][b] *= column_scale[b];
+      }
+    }
     if (!photon_linear_solve(jac, step, n)) return false;
+    for (int a = 0; a < n; ++a) step[a] *= column_scale[a];
     bool accepted = false;
     Real length = 1.0;
     for (int ls = 0; ls < 24; ++ls, length *= 0.5) {
       Real trial[5], rt[5], tt, ct, ht, ft;
       for (int a = 0; a < 5; ++a) trial[a] = x[a]+length*step[a];
+      if (system.conditioned) trial[4] = Kokkos::fmax(0.0, Kokkos::fmin(1.0, trial[4]));
       if (system.Evaluate(trial, rt, tt, ct, ht, ft) &&
           system.Norm(trial, rt, tt, ht) < norm*(1.0-1.0e-4*length)) {
         for (int a = 0; a < 5; ++a) x[a] = trial[a];
@@ -294,6 +364,33 @@ bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
     if (!accepted) return false;
   }
   return false;
+}
+
+// A failed conditioned step can still benefit from the established finite-step
+// numerical Jacobian before invoking the more expensive nested source fallback.
+// This is a solver safeguard, not a change to the physical residual or its tests.
+KOKKOS_INLINE_FUNCTION
+bool photon_reduced_solve(SrcParams &s, const RadiationM1Params &p,
+                          const PhotonOpacityParams &photon, const Real rho,
+                          const Real gm1, const Real vol, const Real t0,
+                          Real &E, AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> &F,
+                          Real &chi, Real &temperature, int &iterations,
+                          int *jacobian_retries = nullptr) {
+  const Real saved_e = E, saved_chi = chi, saved_t = temperature;
+  const auto saved_f = F;
+  const int initial_iterations = iterations;
+  if (photon_reduced_solve_once(s, p, photon, rho, gm1, vol, t0,
+                                E, F, chi, temperature, iterations)) return true;
+  if (iterations == initial_iterations || !p.photon_conditioned_jacobian ||
+      p.photon_source_solver != PhotonCoupled ||
+      p.closure_type != Minerbo) return false;
+  E = saved_e; F = saved_f; chi = saved_chi; temperature = saved_t;
+  auto numerical = p;
+  numerical.photon_analytic_jacobian = false;
+  numerical.photon_conditioned_jacobian = false;
+  if (jacobian_retries != nullptr) ++(*jacobian_retries);
+  return photon_reduced_solve_once(s, numerical, photon, rho, gm1, vol, t0,
+                                   E, F, chi, temperature, iterations);
 }
 
 }  // namespace radiationm1

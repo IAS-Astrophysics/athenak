@@ -72,6 +72,7 @@ struct RadiationM1Params {
   bool photon_coupled_sources;
   PhotonSourceSolver photon_source_solver;
   bool photon_analytic_jacobian;
+  bool photon_conditioned_jacobian;
   bool photon_source_diagnostics;
   
   int nspecies;              // number of neutrino species
