@@ -23,12 +23,37 @@
 #include "z4c/fastflow.hpp"
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/BHaHAHA_horizon_finder.hpp"
+#include "z4c/horizon_finder.hpp"
 #include "z4c/driftcontrol/driftcontrol.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
 #include "coordinates/adm.hpp"
 #include "utils/cart_grid.hpp"
+
+std::unique_ptr<HorizonFinder> HorizonFinder::Create(MeshBlockPack *pmbp,
+                                                     ParameterInput *pin) {
+  std::string type = pin->GetOrAddString("z4c", "horizon_finder", "none");
+  if (type == "none") return nullptr;
+  if (type == "fastflow") return std::make_unique<FastFlowFinder>(pmbp, pin);
+  if (type == "bhahaha") {
+    auto phf = std::make_unique<BHAHAHorizonFinder>(pmbp, pin);
+    int n = phf->NumHorizons();
+    int nco = 0;
+    while (pin->DoesParameterExist("z4c", "co_" + std::to_string(nco) + "_type")) ++nco;
+    if (!(n == nco || (nco == 2 && n == 3))) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "bah_num_horizons = " << n << " is incompatible with "
+                << nco << " compact object trackers" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    return phf;
+  }
+  std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+            << "Unknown horizon_finder '" << type
+            << "', choose none, fastflow or bhahaha" << std::endl;
+  std::exit(EXIT_FAILURE);
+}
 
 namespace z4c {
 
@@ -252,13 +277,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  pahfind = new BHAHAHorizonFinder(pmy_pack, pin);
-
-  if (pahfind->max_num_horizons_!=nco || (nco==2 && pahfind->max_num_horizons_==3)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-              << "The horizon finder requires puncture tracker to be initialized." << std::endl;
-    exit(EXIT_FAILURE);
-  }
 
   // Construct the drift control (needs the trackers to already exist)
   if (opt.enable_driftcontrol) {
@@ -275,13 +293,10 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Construct the apparent horizon finders
-  int n = 0;
-  while (n < pin->GetOrAddInteger("fastflow", "num_horizons", 0)) {
-    pfastflow.push_back(std::make_unique<FastFlow>(pmy_pack, pin, n));
-    n++;
-  }
+  phfind = HorizonFinder::Create(pmy_pack, pin);
+
   // Construct the Cartesian data grid for dumping horizon data
-  n = 0;
+  int n = 0;
   while (true) {
     if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
       // phorizon_dump.emplace_back(pmy_pack, pin, n,false);
@@ -354,7 +369,6 @@ Z4c::~Z4c() {
   delete pbval_weyl;
   delete pbval_u;
   delete pamr;
-  delete pahfind;
 }
 
 } // namespace z4c

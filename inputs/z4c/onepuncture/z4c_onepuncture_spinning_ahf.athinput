@@ -38,6 +38,7 @@ cfl_number = 0.1        # The Courant, Friedrichs, & Lewy (CFL) Number
 tlim       = 1.0        # time limit
 
 <z4c>
+horizon_finder = fastflow
 # Gauge parameters
 lapse_oplog     = 2.0
 lapse_harmonicf = 1.0

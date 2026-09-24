@@ -7,21 +7,34 @@
 #include <array>
 #include <sys/time.h>
 #include "z4c/bhahaha/BHaHAHA.h"
+#include "z4c/horizon_finder.hpp"
 
 class MeshBlockPack;
 class ParameterInput;
 class ArbitraryGrid;
 
-class BHAHAHorizonFinder {
+class BHAHAHorizonFinder : public HorizonFinder {
 public:
   BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin);
   ~BHAHAHorizonFinder();
 
+  void Find(Driver *pdrive, int stage) override;
+  int NumHorizons() const override { return max_num_horizons_; }
+  bool Found(int h) const override { return found_[h] != 0; }
+  const Real *Center(int h) const override { return center_[h].data(); }
+  Real MinRadius(int h) const override { return params_data_[h].r_min_m1; }
+  Real Mass(int h) const override { return mass_[h]; }
+  const Real *Spin(int h) const override { return spin_[h].data(); }
+
   // Main entry point: find all active horizons at current timestep
   void FindHorizons();
-  int max_num_horizons_;
 
 private:
+  int max_num_horizons_;
+  std::vector<int> found_;
+  std::vector<Real> mass_;
+  std::vector<std::array<Real,3>> center_, spin_;
+
   // Initialization
   void LoadParameters();
   void checkMultigridResolutionInputs();

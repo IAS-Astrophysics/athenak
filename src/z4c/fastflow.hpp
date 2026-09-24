@@ -11,6 +11,7 @@
 
 #include <cstdio>
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,7 @@
 #include "coordinates/adm.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "z4c_macros.hpp"
+#include "z4c/horizon_finder.hpp"
 
 // Forward declaration
 class Mesh;
@@ -37,6 +39,8 @@ enum SpatialMetricDrvsIndex {D1S11=0, D1S12=1, D1S13=2, D1S22=3, D1S23=4, D1S33=
 //! \class FastFlow
 //! \brief Apparent Horizon Finder class based on fast-flow algorithm
 class FastFlow {
+  friend class FastFlowFinder;
+
  public:
   // Constructor for FastFlow object
   FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n);
@@ -46,8 +50,6 @@ class FastFlow {
 
   void Find(int iter, Real time); // main functionality for finding AH
   void Write(int iter, Real time); // function for result writing
-  template <int NGHOST>
-  void MetricDerivatives(Real time); // compute the metric derivatives
   template <int NGHOST>
   void MetricInterp();
   void ComputeSphericalHarmonics();
@@ -93,7 +95,6 @@ class FastFlow {
   int lmpoints; // lmax * lmax
   int nh; // Counter variable
   bool wait_until_punc_are_close;
-  [[maybe_unused]] bool use_stored_metric_drvts;
   int nhorizon; // Number of horizons
   std::string flow_function;
   int flowflag = 0;
@@ -144,9 +145,6 @@ class FastFlow {
   static constexpr int kHnvar = 11;
   Real ah_prop[kHnvar]; // Array of horizon quantities
 
-  // 5D Device array for the metric derivatives
-  DvceArray5D<Real> dg;
-
   // Vectors to hold the DvceArray1D interpolated values of GaussLegendreGrid
   DvceArray2D<Real> g_interp, K_interp, dg_interp;
 
@@ -181,6 +179,22 @@ class FastFlow {
   Real PuncSumMasses();
   void PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc);
   bool PuncAreClose();
+};
+
+class FastFlowFinder : public HorizonFinder {
+ public:
+  FastFlowFinder(MeshBlockPack *pmbp, ParameterInput *pin);
+  void Find(Driver *pdrive, int stage) override;
+  int NumHorizons() const override { return static_cast<int>(pff.size()); }
+  bool Found(int h) const override { return pff[h]->ah_found; }
+  const Real *Center(int h) const override { return pff[h]->center; }
+  Real MinRadius(int h) const override { return pff[h]->rr_min; }
+  Real Mass(int h) const override { return pff[h]->ah_prop[FastFlow::hmass]; }
+  const Real *Spin(int h) const override { return &pff[h]->ah_prop[FastFlow::hSx]; }
+
+ private:
+  MeshBlockPack *pmbp;
+  std::vector<std::unique_ptr<FastFlow>> pff;
 };
 
 #endif  // Z4C_FASTFLOW_HPP_

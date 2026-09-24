@@ -68,6 +68,7 @@ x3min = -0.8
 x3max = 0.8
 
 <z4c>
+horizon_finder = fastflow
 # Gauge parameters
 lapse_oplog     = 2.0
 lapse_harmonic  = 0.0
