@@ -21,45 +21,53 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ArbitraryGrid::ArbitraryGrid(MeshBlockPack *pmy_pack, std::vector<std::array<Real,3>>& cart_coord_, int rpow_):
-    pmy_pack(pmy_pack),
+ArbitraryGrid::ArbitraryGrid(MeshBlockPack *pmy_pack, std::vector<std::array<Real,3>>& cart_coord_, int rpow_,
+                             int ns_):
+    interp_vals("interp_vals",1,1),
     interp_indcs("interp_indcs",1,1),
+    pmy_pack(pmy_pack),
     interp_wghts("interp_wghts",1,1,1),
-    interp_vals("interp_vals",1),
     interp_cart_coord("interp_cart_coord", 1,1) {
 
-  // setup grid coordinate
-  cart_coord = cart_coord_;
-  npts       = static_cast<int>(cart_coord.size());
-  rpow       = rpow_;
-
-  // allocate memory for interpolation coordinates, indices, and weights
-  int &ng = pmy_pack->pmesh->mb_indcs.ng;
-  Kokkos::realloc(interp_indcs,npts,4);
-  Kokkos::realloc(interp_wghts,npts,2*ng,3);
-  Kokkos::realloc(interp_cart_coord,npts,3);
-
-  for (int npt = 0; npt < npts; npt++) {
-    interp_cart_coord.h_view(npt,0) = cart_coord[npt][0];
-    interp_cart_coord.h_view(npt,1) = cart_coord[npt][1];
-    interp_cart_coord.h_view(npt,2) = cart_coord[npt][2];
+  int ng = pmy_pack->pmesh->mb_indcs.ng;
+  ns = (ns_ > 0) ? ns_ : ng;
+  if (ns > ng || ns > kMaxHalfWidth) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ArbitraryGrid stencil half width " << ns << " exceeds min(ng, "
+              << kMaxHalfWidth << ")" << std::endl;
+    std::exit(EXIT_FAILURE);
   }
-  interp_cart_coord.template modify<HostMemSpace>();
-  interp_cart_coord.template sync<DevExeSpace>();
 
-  // Call functions to prepare ArbitraryGrid object for interpolation
-  // SetInterpolationCoordinates();
-  SetInterpolationIndices();
-  SetInterpolationWeights();
+  // setup grid coordinate
+  rpow       = rpow_;
+  npts       = 0;
+  capacity   = 0;
+
+  // allocate memory and prepare ArbitraryGrid object for interpolation
+  ResetGrid(cart_coord_);
 
   return;
 }
 
+//----------------------------------------------------------------------------------------
+//! \fn void ArbitraryGrid::ResetGrid
+//! \brief set new interpolation points. Memory is only reallocated if the number of
+//! points exceeds the largest number used so far, so the number of points can change
+//! between calls without repeated reallocation.
+
 void ArbitraryGrid::ResetGrid(std::vector<std::array<Real,3>>& cart_coord_) {
   cart_coord = cart_coord_;
-  SetInterpolationIndices();
-  SetInterpolationWeights();
+  npts       = static_cast<int>(cart_coord.size());
 
+  if (npts > capacity) {
+    capacity = npts;
+    Kokkos::realloc(interp_indcs,capacity,4);
+    Kokkos::realloc(interp_wghts,capacity,2*ns,3);
+    Kokkos::realloc(interp_cart_coord,capacity,3);
+    Kokkos::realloc(interp_vals,capacity,interp_vals.extent_int(1));
+  }
+
+  // coordinates have to be on the device before indices and weights are computed
   for (int npt = 0; npt < npts; npt++) {
     interp_cart_coord.h_view(npt,0) = cart_coord[npt][0];
     interp_cart_coord.h_view(npt,1) = cart_coord[npt][1];
@@ -67,6 +75,9 @@ void ArbitraryGrid::ResetGrid(std::vector<std::array<Real,3>>& cart_coord_) {
   }
   interp_cart_coord.template modify<HostMemSpace>();
   interp_cart_coord.template sync<DevExeSpace>();
+
+  SetInterpolationIndices();
+  SetInterpolationWeights();
 }
 
 void ArbitraryGrid::ResetCenter(Real center_x1_, Real center_x2_, Real cetner_x3_) {
@@ -79,32 +90,34 @@ void ArbitraryGrid::ResetCenter(Real center_x1_, Real center_x2_, Real cetner_x3
 void ArbitraryGrid::SetInterpolationIndices() {
   auto &size = pmy_pack->pmb->mb_size;
   int nmb1 = pmy_pack->nmb_thispack - 1;
-
+  auto &cart_coord_ = interp_cart_coord;
   auto &iindcs = interp_indcs;
-  for (int npt=0; npt<npts; ++npt) {
+
+  par_for("parfor_arbitrary_intp_indices", DevExeSpace(), 0, npts-1,
+  KOKKOS_LAMBDA(int npt) {
     // calculate x, y, z coordinate for each point
-    Real& x1 = cart_coord[npt][0];
-    Real& x2 = cart_coord[npt][1];
-    Real& x3 = cart_coord[npt][2];
+    Real& x1 = cart_coord_.d_view(npt,0);
+    Real& x2 = cart_coord_.d_view(npt,1);
+    Real& x3 = cart_coord_.d_view(npt,2);
 
     // indices default to -1 if point does not reside in this MeshBlockPack
-    iindcs.h_view(npt,0) = -1;
-    iindcs.h_view(npt,1) = -1;
-    iindcs.h_view(npt,2) = -1;
-    iindcs.h_view(npt,3) = -1;
-    for (int m=0; m<=nmb1; ++m) {
+    iindcs.d_view(npt,0) = -1;
+    iindcs.d_view(npt,1) = -1;
+    iindcs.d_view(npt,2) = -1;
+    iindcs.d_view(npt,3) = -1;
+    for (int m = 0; m <= nmb1; ++m) {
       // extract MeshBlock bounds
-      Real &x1min = size.h_view(m).x1min;
-      Real &x1max = size.h_view(m).x1max;
-      Real &x2min = size.h_view(m).x2min;
-      Real &x2max = size.h_view(m).x2max;
-      Real &x3min = size.h_view(m).x3min;
-      Real &x3max = size.h_view(m).x3max;
+      Real &x1min = size.d_view(m).x1min;
+      Real &x1max = size.d_view(m).x1max;
+      Real &x2min = size.d_view(m).x2min;
+      Real &x2max = size.d_view(m).x2max;
+      Real &x3min = size.d_view(m).x3min;
+      Real &x3max = size.d_view(m).x3max;
 
       // extract MeshBlock grid cell spacings
-      Real &dx1 = size.h_view(m).dx1;
-      Real &dx2 = size.h_view(m).dx2;
-      Real &dx3 = size.h_view(m).dx3;
+      Real &dx1 = size.d_view(m).dx1;
+      Real &dx2 = size.d_view(m).dx2;
+      Real &dx3 = size.d_view(m).dx3;
 
       // save MeshBlock and zone indicies for nearest
       // position to spherical patch center
@@ -112,20 +125,20 @@ void ArbitraryGrid::SetInterpolationIndices() {
       if ((x1 >= x1min && x1 < x1max) &&
           (x2 >= x2min && x2 < x2max) &&
           (x3 >= x3min && x3 < x3max)) {
-          iindcs.h_view(npt,0) = m;
-          iindcs.h_view(npt,1) =
-              static_cast<int>(std::floor((x1-(x1min+dx1/2.0))/dx1));
-          iindcs.h_view(npt,2) =
-              static_cast<int>(std::floor((x2-(x2min+dx2/2.0))/dx2));
-          iindcs.h_view(npt,3) =
-              static_cast<int>(std::floor((x3-(x3min+dx3/2.0))/dx3));
+          iindcs.d_view(npt,0) = m;
+          iindcs.d_view(npt,1) =
+              static_cast<int>(Kokkos::floor((x1-(x1min+dx1/2.0))/dx1));
+          iindcs.d_view(npt,2) =
+              static_cast<int>(Kokkos::floor((x2-(x2min+dx2/2.0))/dx2));
+          iindcs.d_view(npt,3) =
+              static_cast<int>(Kokkos::floor((x3-(x3min+dx3/2.0))/dx3));
       }
     }
-  }
+  });
 
   // sync dual arrays
-  interp_indcs.template modify<HostMemSpace>();
-  interp_indcs.template sync<DevExeSpace>();
+  interp_indcs.template modify<DevExeSpace>();
+  interp_indcs.template sync<HostMemSpace>();
 
   return;
 }
@@ -133,62 +146,56 @@ void ArbitraryGrid::SetInterpolationIndices() {
 void ArbitraryGrid::SetInterpolationWeights() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  int &ng = indcs.ng;
-
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int ns_ = ns;
+  auto &cart_coord_ = interp_cart_coord;
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
-  for (int npt=0; npt<npts; ++npt) {
-    // extract indices
-    int &ii0 = iindcs.h_view(npt,0);
-    int &ii1 = iindcs.h_view(npt,1);
-    int &ii2 = iindcs.h_view(npt,2);
-    int &ii3 = iindcs.h_view(npt,3);
-
-    if (ii0==-1) {  // angle not on this rank
-      for (int i=0; i<2*ng; ++i) {
-        iwghts.h_view(npt,i,0) = 0.0;
-        iwghts.h_view(npt,i,1) = 0.0;
-        iwghts.h_view(npt,i,2) = 0.0;
+  par_for("parfor_arbitrary_intp_weights", DevExeSpace(), 0, npts-1,
+  KOKKOS_LAMBDA(int npt) {
+    int m = iindcs.d_view(npt,0);
+    if (m == -1) {
+      for (int i=0; i<2*ns_; ++i) {
+        iwghts.d_view(npt,i,0) = 0.0;
+        iwghts.d_view(npt,i,1) = 0.0;
+        iwghts.d_view(npt,i,2) = 0.0;
       }
-    } else {
-      // extract cartesian grid positions
-      Real& x0 = cart_coord[npt][0];
-      Real& y0 = cart_coord[npt][1];
-      Real& z0 = cart_coord[npt][2];
+      return;
+    }
+    int ii1 = iindcs.d_view(npt,1);
+    int ii2 = iindcs.d_view(npt,2);
+    int ii3 = iindcs.d_view(npt,3);
+    Real x0 = cart_coord_.d_view(npt,0);
+    Real y0 = cart_coord_.d_view(npt,1);
+    Real z0 = cart_coord_.d_view(npt,2);
+    Real x1min = size.d_view(m).x1min, x1max = size.d_view(m).x1max;
+    Real x2min = size.d_view(m).x2min, x2max = size.d_view(m).x2max;
+    Real x3min = size.d_view(m).x3min, x3max = size.d_view(m).x3max;
 
-      // extract MeshBlock bounds
-      Real &x1min = size.h_view(ii0).x1min;
-      Real &x1max = size.h_view(ii0).x1max;
-      Real &x2min = size.h_view(ii0).x2min;
-      Real &x2max = size.h_view(ii0).x2max;
-      Real &x3min = size.h_view(ii0).x3min;
-      Real &x3max = size.h_view(ii0).x3max;
-
-      // set interpolation weights
-      for (int i=0; i<2*ng; ++i) {
-        iwghts.h_view(npt,i,0) = 1.;
-        iwghts.h_view(npt,i,1) = 1.;
-        iwghts.h_view(npt,i,2) = 1.;
-        for (int j=0; j<2*ng; ++j) {
-          if (j != i) {
-            Real x1vpi1 = CellCenterX(ii1-ng+i+1, indcs.nx1, x1min, x1max);
-            Real x1vpj1 = CellCenterX(ii1-ng+j+1, indcs.nx1, x1min, x1max);
-            iwghts.h_view(npt,i,0) *= (x0-x1vpj1)/(x1vpi1-x1vpj1);
-            Real x2vpi1 = CellCenterX(ii2-ng+i+1, indcs.nx2, x2min, x2max);
-            Real x2vpj1 = CellCenterX(ii2-ng+j+1, indcs.nx2, x2min, x2max);
-            iwghts.h_view(npt,i,1) *= (y0-x2vpj1)/(x2vpi1-x2vpj1);
-            Real x3vpi1 = CellCenterX(ii3-ng+i+1, indcs.nx3, x3min, x3max);
-            Real x3vpj1 = CellCenterX(ii3-ng+j+1, indcs.nx3, x3min, x3max);
-            iwghts.h_view(npt,i,2) *= (z0-x3vpj1)/(x3vpi1-x3vpj1);
-          }
+    Real xs[2*kMaxHalfWidth], ys[2*kMaxHalfWidth], zs[2*kMaxHalfWidth];
+    for (int s=0; s<2*ns_; ++s) {
+      xs[s] = CellCenterX(ii1-ns_+s+1, nx1, x1min, x1max);
+      ys[s] = CellCenterX(ii2-ns_+s+1, nx2, x2min, x2max);
+      zs[s] = CellCenterX(ii3-ns_+s+1, nx3, x3min, x3max);
+    }
+    for (int i=0; i<2*ns_; ++i) {
+      Real wx = 1.0, wy = 1.0, wz = 1.0;
+      for (int j=0; j<2*ns_; ++j) {
+        if (j != i) {
+          wx *= (x0-xs[j])/(xs[i]-xs[j]);
+          wy *= (y0-ys[j])/(ys[i]-ys[j]);
+          wz *= (z0-zs[j])/(zs[i]-zs[j]);
         }
       }
+      iwghts.d_view(npt,i,0) = wx;
+      iwghts.d_view(npt,i,1) = wy;
+      iwghts.d_view(npt,i,2) = wz;
     }
-  }
+  });
 
   // sync dual arrays
-  interp_wghts.template modify<HostMemSpace>();
-  interp_wghts.template sync<DevExeSpace>();
+  interp_wghts.template modify<DevExeSpace>();
+  interp_wghts.template sync<HostMemSpace>();
 
   return;
 }
@@ -197,78 +204,83 @@ void ArbitraryGrid::SetInterpolationWeights() {
 //! \fn void ArbitraryGrid::InterpolateToGrid
 //! \brief interpolate Cartesian data to cart_grid for output
 
-void ArbitraryGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
-  // reinitialize interpolation indices and weights if AMR
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+void ArbitraryGrid::InterpolateToGrid(int ind0, int nvar, DvceArray5D<Real> &val) {
+  if (nvar > kMaxVar) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "ArbitraryGrid can interpolate at most " << kMaxVar
+              << " variables at once" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (interp_vals.extent_int(0) < capacity || interp_vals.extent_int(1) < nvar) {
+    Kokkos::realloc(interp_vals, capacity, nvar);
+  }
 
-  // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
-  int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
-  int &ng = indcs.ng;
-  int index = ind;
-  int & npts_ = npts;
-
-  Real cx1 = center_x1;
-  Real cx2 = center_x2;
-  Real cx3 = center_x3;
-
-  // reallocate container
-  Kokkos::realloc(interp_vals,npts);
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  int ns_ = ns;
+  int rp_ = rpow;
+  Real cx1 = center_x1, cx2 = center_x2, cx3 = center_x3;
 
   auto &iindcs = interp_indcs;
   auto &iwghts = interp_wghts;
   auto &ivals = interp_vals;
   auto &cart = interp_cart_coord;
-  par_for("int2cart",DevExeSpace(),0,npts_-1,
-  KOKKOS_LAMBDA(int npt) {
-    int ii0 = iindcs.d_view(npt,0);
-    int ii1 = iindcs.d_view(npt,1);
-    int ii2 = iindcs.d_view(npt,2);
-    int ii3 = iindcs.d_view(npt,3);
-    if (ii0==-1) {  // point not on this rank
-      ivals.d_view(npt) = 0.0;
-    } else {
-      Real int_value = 0.0;
-      for (int i=0; i<2*ng; i++) {
-        for (int j=0; j<2*ng; j++) {
-          for (int k=0; k<2*ng; k++) {
-            Real iwght = iwghts.d_view(npt,i,0)*
-                  iwghts.d_view(npt,j,1)*iwghts.d_view(npt,k,2);
-
-            // Extract MB bounds
-            Real &x1min = size.d_view(ii0).x1min;
-            Real &x1max = size.d_view(ii0).x1max;
-            Real &x2min = size.d_view(ii0).x2min;
-            Real &x2max = size.d_view(ii0).x2max;
-            Real &x3min = size.d_view(ii0).x3min;
-            Real &x3max = size.d_view(ii0).x3max;
-
-            Real x1v = CellCenterX(ii1-(ng-i)+1, indcs.nx1, x1min, x1max);
-            Real x2v = CellCenterX(ii2-(ng-j)+1, indcs.nx2, x2min, x2max);
-            Real x3v = CellCenterX(ii3-(ng-k)+1, indcs.nx3, x3min, x3max);
-
-            x1v -= cx1;
-            x2v -= cx2;
-            x3v -= cx3;
-            Real r = sqrt(pow(x1v,2) + pow(x2v, 2) + pow(x3v, 2));
-            int_value += iwght*val(ii0,index,ii3-(ng-k-ks)+1,
-                                  ii2-(ng-j-js)+1,ii1-(ng-i-is)+1) * pow(r,rpow);
+  par_for("arb_interp", DevExeSpace(), 0, npts-1,
+  KOKKOS_LAMBDA(int n) {
+    Real acc[kMaxVar];
+    for (int v=0; v<nvar; ++v) acc[v] = 0.0;
+    int m = iindcs.d_view(n,0);
+    if (m >= 0) {
+      int ii1 = iindcs.d_view(n,1);
+      int ii2 = iindcs.d_view(n,2);
+      int ii3 = iindcs.d_view(n,3);
+      Real xs2[2*kMaxHalfWidth], ys2[2*kMaxHalfWidth], zs2[2*kMaxHalfWidth];
+      if (rp_ != 0) {
+        Real x1min = size.d_view(m).x1min, x1max = size.d_view(m).x1max;
+        Real x2min = size.d_view(m).x2min, x2max = size.d_view(m).x2max;
+        Real x3min = size.d_view(m).x3min, x3max = size.d_view(m).x3max;
+        for (int s=0; s<2*ns_; ++s) {
+          Real x = CellCenterX(ii1-ns_+s+1, nx1, x1min, x1max) - cx1;
+          Real y = CellCenterX(ii2-ns_+s+1, nx2, x2min, x2max) - cx2;
+          Real z = CellCenterX(ii3-ns_+s+1, nx3, x3min, x3max) - cx3;
+          xs2[s] = x*x;
+          ys2[s] = y*y;
+          zs2[s] = z*z;
+        }
+      }
+      int i0 = ii1-ns_+1+is, j0 = ii2-ns_+1+js, k0 = ii3-ns_+1+ks;
+      for (int k=0; k<2*ns_; ++k) {
+        Real wk = iwghts.d_view(n,k,2);
+        for (int j=0; j<2*ns_; ++j) {
+          Real wjk = wk*iwghts.d_view(n,j,1);
+          for (int i=0; i<2*ns_; ++i) {
+            Real w = wjk*iwghts.d_view(n,i,0);
+            if (rp_ != 0) {
+              Real r2 = xs2[i] + ys2[j] + zs2[k];
+              Real rp = (rp_ % 2 != 0) ? Kokkos::sqrt(r2) : 1.0;
+              for (int p=0; p<rp_/2; ++p) rp *= r2;
+              w *= rp;
+            }
+            for (int v=0; v<nvar; ++v) {
+              acc[v] += w*val(m, ind0+v, k0+k, j0+j, i0+i);
+            }
           }
         }
       }
-      // extract cartesian grid positions relative to grid center
-      Real x0 = cart.d_view(npt,0)  - cx1;
-      Real y0 = cart.d_view(npt,1) - cx2;
-      Real z0 = cart.d_view(npt,2) - cx3;
-
-      Real r0 = sqrt(pow(x0,2) + pow(y0, 2) + pow(z0, 2));
-
-      ivals.d_view(npt) = int_value / pow(r0,rpow);
+      if (rp_ != 0) {
+        Real x0 = cart.d_view(n,0) - cx1;
+        Real y0 = cart.d_view(n,1) - cx2;
+        Real z0 = cart.d_view(n,2) - cx3;
+        Real r2 = x0*x0 + y0*y0 + z0*z0;
+        Real rp = (rp_ % 2 != 0) ? Kokkos::sqrt(r2) : 1.0;
+        for (int p=0; p<rp_/2; ++p) rp *= r2;
+        Real inv = 1.0/rp;
+        for (int v=0; v<nvar; ++v) acc[v] *= inv;
+      }
     }
+    for (int v=0; v<nvar; ++v) ivals.d_view(n,v) = acc[v];
   });
 
   // sync dual arrays
@@ -277,4 +289,3 @@ void ArbitraryGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
 
   return;
 }
-

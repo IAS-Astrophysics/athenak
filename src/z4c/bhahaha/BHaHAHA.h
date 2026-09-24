@@ -241,7 +241,7 @@ int bah_find_horizon(bhahaha_params_and_data_struct *restrict bhahaha_params_and
 // (optional): Diagnostic file output, similar to AHFinderDirect output files.
 void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const bhahaha_params_and_data_struct *bhahaha_params_and_data,
                                  int N_horizons, const REAL x_center_input, const REAL y_center_input, const REAL z_center_input,
-                                 const char *output_directory);
+                                 const char *output_directory, const int write_shape);
 
 //===============================================
 // Set the number of (finite-difference) ghostzones in BHaHAHA

@@ -2,6 +2,7 @@
 #ifndef BHAHAHA_HORIZON_FINDER_HPP
 #define BHAHAHA_HORIZON_FINDER_HPP
 
+#include <memory>
 #include <vector>
 #include <array>
 #include <sys/time.h>
@@ -26,10 +27,12 @@ private:
   void checkMultigridResolutionInputs();
   void initializePersistentState();
 
-  // Persistence sync (stubbed for single-process)
-  void syncPersistentAcrossRanks();
+  // Persistence: set the search center from the trackers if no horizon history exists,
+  // and keep the BHaHAHA history in params_data_ identical on all ranks
   void readPersistentData(int h);
-  void writePersistentData(int h);
+  void broadcastHorizonState(int h);
+  int rootRank(int h) const;
+  void resetHorizonHistory(int h);
 
   // BBH mode handling
   void processBBHMode();
@@ -39,8 +42,9 @@ private:
   double timevalToSeconds(const timeval &start, const timeval &end);
 
   // Grid & interpolation
-  void SetGridCoordinates(int h);
+  void SetGridCoordinates(int h, int Nr);
   void InterpolateMetricData(int h);
+  void gatherMetricData(int h, size_t pts);
 
   // Core solver & cleanup
   void SolveHorizon(int h);
@@ -51,6 +55,11 @@ private:
 
   // User-configurable parameters
   int find_every_;
+  double dt_find_;
+  double last_find_time_;
+  int output_shape_every_;
+  int interp_half_width_;
+  int verbosity_;
   int bah_num_resolutions_multigrid_;
   std::vector<int> bah_Ntheta_array_multigrid_;
   std::vector<int> bah_Nphi_array_multigrid_;
@@ -64,21 +73,21 @@ private:
   std::array<int,3> bah_BBH_mode_inspiral_BH_idxs_;
   int bah_BBH_mode_common_horizon_idx_;
 
-  // Active flags and guess enforcement
+  // Active flags
   std::vector<int> bah_horizon_active_;
-  std::vector<int> use_fixed_radius_guess_on_full_sphere_;
 
-  // Persistent historical data
-  // center location for bh
-  std::vector<double> x_center_m1_, y_center_m1_, z_center_m1_;
-  // time at which previous horizon found
-  std::vector<double> t_m1_, t_m2_, t_m3_;
-  // range of radius to search for each hole
-  std::vector<double> r_min_m1_, r_max_m1_, r_min_m2_, r_max_m2_, r_min_m3_, r_max_m3_;
-  // location of the previous horizon, used to initialize the next finder
+  // Storage for the horizon shapes of the previous three finds. The time, center and
+  // radius history lives in params_data_ and is cycled by BHaHAHA itself.
   std::vector<std::vector<double>> prev_horizon_m1_, prev_horizon_m2_, prev_horizon_m3_;
+
+  // Center of the spherical interpolation grid used for the latest find
+  std::vector<std::array<double,3>> grid_center_;
   // guess for the mass of black hole
   std::vector<double> m_guess;
+
+  std::vector<int> nfinds_;
+  std::vector<std::vector<double>> input_buf_;
+  std::vector<double> time_interp_, time_mpi_, time_solve_;
 
   // Per-horizon parameters and data
   std::vector<bhahaha_params_and_data_struct> params_data_;
@@ -86,6 +95,8 @@ private:
   // Interpolation buffers
   std::vector<std::array<double,3>> cart_coords_;
   std::vector<double> radii_;
+  std::vector<double> sendbuf_, recvbuf_;
+  std::vector<int> recvcounts_, recvdispls_;
   std::unique_ptr<ArbitraryGrid> agrid_;
 };
 

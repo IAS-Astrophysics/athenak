@@ -9,7 +9,7 @@ void bah_diagnostics(commondata_struct *restrict commondata, griddata_struct *re
 void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict commondata, griddata_struct *restrict griddata);
 void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const bhahaha_params_and_data_struct *bhahaha_params_and_data,
                                  int N_horizons, const REAL x_center_input, const REAL y_center_input, const REAL z_center_input,
-                                 const char *output_directory);
+                                 const char *output_directory, const int write_shape);
 void bah_diagnostics_integration_weights(int Nxx1, int Nxx2, const REAL *restrict *weights, int *restrict weight_stencil_size);
 void bah_diagnostics_min_max_mean_radii_wrt_centroid(commondata_struct *restrict commondata, griddata_struct *restrict griddata);
 int bah_diagnostics_proper_circumferences(commondata_struct *restrict commondata, griddata_struct *restrict griddata);

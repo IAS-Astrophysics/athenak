@@ -24,7 +24,7 @@
  */
 void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const bhahaha_params_and_data_struct *bhahaha_params_and_data,
                                  int N_horizons, const REAL x_center_input, const REAL y_center_input, const REAL z_center_input,
-                                 const char *output_directory) {
+                                 const char *output_directory, const int write_shape) {
 
   // For safety, ensure output_directory is valid; fallback to "."
   if (!output_directory || output_directory[0] == '\0') {
@@ -135,6 +135,9 @@ void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const 
 
   fflush(fileptr);
   fclose(fileptr);
+
+  if (!write_shape)
+    return;
 
   // ----------------------------------------------
   // (2) Horizon surface data (h.t) file output

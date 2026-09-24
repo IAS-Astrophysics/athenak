@@ -28,7 +28,8 @@ void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict c
   REAL max_Theta_squared_for_Linf_norm = -1e30;
 #pragma omp parallel
   {
-#pragma omp for
+#pragma omp for reduction(+ : sum_curr_area, sum_Theta_squared_for_L2_norm, sum_x_centroid, sum_y_centroid, sum_z_centroid, sum_J_x, sum_J_y,  \
+                              sum_J_z) reduction(max : max_Theta_squared_for_Linf_norm, max_radius) reduction(min : min_radius)
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
       const REAL weight2 = weights[(i2 - NGHOSTS) % weight_stencil_size];
       const REAL xx2 = xx[2][i2];
@@ -408,26 +409,23 @@ void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict c
           const REAL J_y_integrand = cos_xx2 * Ks1 - cot_xx1 * sin_xx2 * Ks2;
           const REAL J_z_integrand = Ks2;
 
-#pragma omp critical
+          sum_curr_area += area_element * weight1 * weight2;
+          sum_Theta_squared_for_L2_norm += Theta * Theta * area_element * weight1 * weight2;
           {
-            sum_curr_area += area_element * weight1 * weight2;
-            sum_Theta_squared_for_L2_norm += Theta * Theta * area_element * weight1 * weight2;
-            {
-              const REAL tmp0 = hh * sin(xx1);
-              sum_x_centroid += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
-              sum_y_centroid += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
-              sum_z_centroid += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
-            } // END centroid sums
-            sum_J_x += J_x_integrand * area_element * weight1 * weight2;
-            sum_J_y += J_y_integrand * area_element * weight1 * weight2;
-            sum_J_z += J_z_integrand * area_element * weight1 * weight2;
-            if (Theta * Theta > max_Theta_squared_for_Linf_norm)
-              max_Theta_squared_for_Linf_norm = Theta * Theta;
-            if (hh > max_radius)
-              max_radius = hh;
-            if (hh < min_radius)
-              min_radius = hh;
-          } // END OMP CRITICAL
+            const REAL tmp0 = hh * sin(xx1);
+            sum_x_centroid += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
+            sum_y_centroid += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
+            sum_z_centroid += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
+          } // END centroid sums
+          sum_J_x += J_x_integrand * area_element * weight1 * weight2;
+          sum_J_y += J_y_integrand * area_element * weight1 * weight2;
+          sum_J_z += J_z_integrand * area_element * weight1 * weight2;
+          if (Theta * Theta > max_Theta_squared_for_Linf_norm)
+            max_Theta_squared_for_Linf_norm = Theta * Theta;
+          if (hh > max_radius)
+            max_radius = hh;
+          if (hh < min_radius)
+            min_radius = hh;
         } // END LOOP over i0
       } // END LOOP over i1
     } // END LOOP over i2
