@@ -99,7 +99,7 @@ void BHAHAHorizonFinder::LoadParameters() {
 
   m_guess.assign(max_num_horizons_,0.0);
   for (int h = 0; h < max_num_horizons_; ++h) {
-    m_guess[h] = pin_->GetOrAddInteger("z4c", "bah_mass"+std::to_string(h), 1);
+    m_guess[h] = pin_->GetOrAddReal("z4c", "bah_mass_"+std::to_string(h), 1.0);
   }
 }
 
@@ -350,7 +350,7 @@ void BHAHAHorizonFinder::SolveHorizon(int h) {
       pd.use_fixed_radius_guess_on_full_sphere = 0;
       t_m1_[h] = pmbp_->pmesh->time;
     } else {
-      std::cout << "Failed with Error Flag " << rc << std::endl; 
+      std::cout << "Failed with Error Flag " << rc << std::endl;
       // ATHENA_ERROR("Horizon %d find failed rc=%d: %s", h+1, rc, bah_error_message((bhahaha_error_codes)rc));
       pd.use_fixed_radius_guess_on_full_sphere = 1;
       t_m1_[h] = -1.0;

@@ -78,11 +78,19 @@ void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const 
     fprintf(fileptr, "# column 19 = Spin y-component (based on xy/xz)\n");
     fprintf(fileptr, "# column 20 = Spin z-component (based on xz/xy)\n");
     fprintf(fileptr, "# column 21 = Spin z-component (based on yz/xy)\n");
+    fprintf(fileptr, "# column 22 = Angular momentum J_x (K_ij-based)\n");
+    fprintf(fileptr, "# column 23 = Angular momentum J_y (K_ij-based)\n");
+    fprintf(fileptr, "# column 24 = Angular momentum J_z (K_ij-based)\n");
+    fprintf(fileptr, "# column 25 = Christodoulou mass\n");
+    fprintf(fileptr, "# column 26 = Dimensionless spin |J|/M_Chr^2\n");
     fflush(fileptr);
   } // END IF file size zero -> need to write header
 
   // Calculate irreducible mass from horizon area.
   REAL M_irr = sqrt(diags->area / (16.0 * M_PI));
+  const REAL J_mag = sqrt(diags->J_x * diags->J_x + diags->J_y * diags->J_y + diags->J_z * diags->J_z);
+  const REAL M_Chr = sqrt(M_irr * M_irr + J_mag * J_mag / (4.0 * M_irr * M_irr));
+  const REAL chi_J = J_mag / (M_Chr * M_Chr);
 
   // Assign spin magnitudes, using NaN to indicate undefined values.
   const REAL a_x_xy_over_yz_spin = (diags->spin_a_x_from_xy_over_yz_prop_circumfs != -10.0) ? diags->spin_a_x_from_xy_over_yz_prop_circumfs : NAN;
@@ -95,7 +103,8 @@ void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const 
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
           "%d\t%.3f\t%f\t%f\t%f\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
-          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
+          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
+          "%.15e\t%.15e\t%.15e\t%.15e\t%.15e\n",
           bhahaha_params_and_data->iteration_external_input, // (1) iteration
           bhahaha_params_and_data->time_external_input,      // (2) time
           bhahaha_params_and_data->x_center_m1,              // (3) centroid x
@@ -116,7 +125,12 @@ void bah_diagnostics_file_output(const bhahaha_diagnostics_struct *diags, const 
           a_y_yz_over_xz_spin,                               // (18) Spin y (yz/xz)
           a_y_xy_over_xz_spin,                               // (19) Spin y (xy/xz)
           a_z_xz_over_xy_spin,                               // (20) Spin z (xz/xy)
-          a_z_yz_over_xy_spin                                // (21) Spin z (yz/xy)
+          a_z_yz_over_xy_spin,                               // (21) Spin z (yz/xy)
+          diags->J_x,
+          diags->J_y,
+          diags->J_z,
+          M_Chr,
+          chi_J
   );
 
   fflush(fileptr);

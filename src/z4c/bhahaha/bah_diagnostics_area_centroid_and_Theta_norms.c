@@ -24,6 +24,7 @@ void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict c
   REAL sum_Theta_squared_for_L2_norm = 0.0;
   REAL sum_curr_area = 0;
   REAL sum_x_centroid = 0, sum_y_centroid = 0, sum_z_centroid = 0;
+  REAL sum_J_x = 0, sum_J_y = 0, sum_J_z = 0;
   REAL max_Theta_squared_for_Linf_norm = -1e30;
 #pragma omp parallel
   {
@@ -393,6 +394,20 @@ void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict c
                    ((FDPart3tmp0 * FDPart3tmp179 * FDPart3tmp36 + FDPart3tmp177 * hh_dD2 + FDPart3tmp178 * hh_dD1 + FDPart3tmp69 * hh_dD1 * hh_dD2) *
                     (FDPart3tmp0 * FDPart3tmp179 * FDPart3tmp36 + FDPart3tmp177 * hh_dD2 + FDPart3tmp178 * hh_dD1 + FDPart3tmp69 * hh_dD1 * hh_dD2)));
 
+          const REAL KDD01 = FDPart3tmp74 * aDD01 + FDPart3tmp7 * FDPart3tmp74 * hDD01;
+          const REAL KDD02 = FDPart3tmp0 * FDPart3tmp72 * aDD02 + FDPart3tmp27 * FDPart3tmp7 * FDPart3tmp74;
+          const REAL KDD11 = FDPart3tmp65 * aDD11 + FDPart3tmp0 * FDPart3tmp17 * FDPart3tmp7;
+          const REAL KDD12 = FDPart3tmp71 * aDD12 + FDPart3tmp7 * FDPart3tmp71 * hDD12;
+          const REAL KDD22 = FDPart3tmp0 * FDPart3tmp4 * aDD22 + FDPart3tmp0 * FDPart3tmp6 * FDPart3tmp7;
+          const REAL Ks1 = FDPart3tmp98 * (KDD01 * FDPart3tmp70 + KDD11 * FDPart3tmp68 + KDD12 * FDPart3tmp42);
+          const REAL Ks2 = FDPart3tmp98 * (KDD02 * FDPart3tmp70 + KDD12 * FDPart3tmp68 + KDD22 * FDPart3tmp42);
+          const REAL cot_xx1 = FDPart3tmp101 / FDPart3tmp2;
+          const REAL sin_xx2 = sin(xx2);
+          const REAL cos_xx2 = cos(xx2);
+          const REAL J_x_integrand = -sin_xx2 * Ks1 - cot_xx1 * cos_xx2 * Ks2;
+          const REAL J_y_integrand = cos_xx2 * Ks1 - cot_xx1 * sin_xx2 * Ks2;
+          const REAL J_z_integrand = Ks2;
+
 #pragma omp critical
           {
             sum_curr_area += area_element * weight1 * weight2;
@@ -403,6 +418,9 @@ void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict c
               sum_y_centroid += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
               sum_z_centroid += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
             } // END centroid sums
+            sum_J_x += J_x_integrand * area_element * weight1 * weight2;
+            sum_J_y += J_y_integrand * area_element * weight1 * weight2;
+            sum_J_z += J_z_integrand * area_element * weight1 * weight2;
             if (Theta * Theta > max_Theta_squared_for_Linf_norm)
               max_Theta_squared_for_Linf_norm = Theta * Theta;
             if (hh > max_radius)
@@ -442,5 +460,9 @@ void bah_diagnostics_area_centroid_and_Theta_norms(commondata_struct *restrict c
     bhahaha_diags->x_centroid_wrt_coord_origin = sum_x_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->y_centroid_wrt_coord_origin = sum_y_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->z_centroid_wrt_coord_origin = sum_z_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
+
+    bhahaha_diags->J_x = sum_J_x * params->dxx1 * params->dxx2 / (8.0 * M_PI);
+    bhahaha_diags->J_y = sum_J_y * params->dxx1 * params->dxx2 / (8.0 * M_PI);
+    bhahaha_diags->J_z = sum_J_z * params->dxx1 * params->dxx2 / (8.0 * M_PI);
   } // END store diagnostics in commondata->bhahaha_diagnostics struct.
 } // END FUNCTION bah_diagnostics_area_centroid_and_Theta_norms

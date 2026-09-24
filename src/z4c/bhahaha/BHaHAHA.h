@@ -213,6 +213,10 @@ typedef struct {
   REAL spin_a_z_from_xz_over_xy_prop_circumfs;
   REAL spin_a_z_from_yz_over_xy_prop_circumfs;
 
+  REAL J_x;
+  REAL J_y;
+  REAL J_z;
+
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
   //==========================

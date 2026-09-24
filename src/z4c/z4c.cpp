@@ -191,6 +191,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.dc_gain_z           = pin->GetOrAddReal("z4c", "dc_gain_z", 1.0);
   opt.dc_gaussian_center  = DriftControl::CenterFromString(
       pin->GetOrAddString("z4c", "dc_gaussian_center", "fixed"));
+
+  // Horizon finder switch
+  opt.horizon_finder      = pin->GetOrAddString("z4c", "horizon_finder", "none");
   }
 
   // allocate memory for conserved variables on coarse mesh

@@ -208,6 +208,9 @@ class Z4c {
     Real dc_gamma_suppress;
     Real dc_gain_x, dc_gain_y, dc_gain_z;
     int dc_gaussian_center;
+
+    // Horizon finder switch
+    std::string horizon_finder;
   };
   Options opt;
   Real diss;              // Dissipation parameter

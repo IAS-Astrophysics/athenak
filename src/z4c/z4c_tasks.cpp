@@ -347,6 +347,13 @@ TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
   return TaskStatus::complete;
 }
 
+TaskStatus Z4c::FindHorizons(Driver *pdrive, int stage) {
+  if (stage == pdrive->nexp_stages) {
+    pmy_pack->pz4c->pahfind->FindHorizons();
+  }
+  return TaskStatus::complete;
+}
+
 //----------------------------------------------------------------------------------------
 // ! \fn TaskList CCEDump
 // ! \brief CCE initial data for Pittnull code (cce dumps for Pittnull).
@@ -578,13 +585,6 @@ TaskStatus Z4c::DumpHorizons(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   }
 
-  return TaskStatus::complete;
-}
-
-TaskStatus Z4c::FindHorizons(Driver *pdrive, int stage) {
-  if (stage == pdrive->nexp_stages) {
-    pmy_pack->pz4c->pahfind->FindHorizons();
-  }
   return TaskStatus::complete;
 }
 
