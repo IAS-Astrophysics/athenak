@@ -83,8 +83,17 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   }
 
   // Convergence parameters
-  hmean_tol = pin->GetOrAddReal("fastflow", "hmean_tol_" + n_str, 100.);
-  mass_tol = pin->GetOrAddReal("fastflow", "mass_tol_" + n_str, 1e-2);
+  hmean_tol = pin->GetOrAddReal("fastflow", "hmean_tol_" + n_str, 1e-4);
+  hmean_max = pin->GetOrAddReal("fastflow", "hmean_max_" + n_str, 100.);
+  mass_tol = pin->GetOrAddReal("fastflow", "mass_tol_" + n_str, 1e-8);
+  if (hmean_tol >= hmean_max) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl
+              << "fastflow/hmean_tol_" << n_str << " is the convergence threshold on\n"
+                 "|<Theta>|*M and must be << hmean_max_" << n_str << " (the divergence\n"
+                 "guard, which hmean_tol used to serve as)." << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   // Output booleans
   verbose = pin->GetOrAddBoolean("fastflow", "verbose", false);
@@ -631,6 +640,7 @@ void FastFlow::FastFlowLoop() {
   Real Sz = 0;
   Real S = 0;
   bool failed = false;
+  const char *criterion = "";
 
   if (verbose && ioproc) {
     fprintf(pofile_verbose, "\nSearching for horizon %d\n", nh);
@@ -701,9 +711,9 @@ void FastFlow::FastFlowLoop() {
       fflush(pofile_verbose);
     }
 
-    if (Kokkos::fabs(hmean) > hmean_tol) {
+    if (Kokkos::fabs(hmean) > hmean_max) {
       if (verbose && ioproc) {
-        fprintf(pofile_verbose, "Failed, hmean > %f\n", hmean_tol);
+        fprintf(pofile_verbose, "Failed, hmean > %f\n", hmean_max);
         fflush(pofile_verbose);
       }
       failed = true;
@@ -729,9 +739,15 @@ void FastFlow::FastFlowLoop() {
       break;
     }
 
-    // End flow when mass difference is small
+    if (Kokkos::fabs(hmean)*mass/area < hmean_tol) {
+      ah_found = true;
+      criterion = "hmean";
+      break;
+    }
+
     if (Kokkos::fabs(mass_prev-mass) < mass_tol) {
       ah_found = true;
+      criterion = "mass stall";
       break;
     }
 
@@ -757,7 +773,7 @@ void FastFlow::FastFlowLoop() {
 
   if (verbose && ioproc) {
     if (ah_found) {
-      fprintf(pofile_verbose, "Found horizon %d\n", nh);
+      fprintf(pofile_verbose, "Found horizon %d (%s)\n", nh, criterion);
       fprintf(pofile_verbose, " mass_irr = %f\n", mass);
       fprintf(pofile_verbose, " meanradius = %f\n", meanradius);
       fprintf(pofile_verbose, " minradius = %f\n", rr_min);
