@@ -582,7 +582,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
                 abs_1_loc[0]*(abs_1_loc[0] + scat_1_loc[0]));
             const Real tau_a = Kokkos::sqrt(
                 abs_1_loc[1]*(abs_1_loc[1] + scat_1_loc[1]));
-            const Real tau = Kokkos::fmin(tau_e, tau_a)*dt_;
+            const Real tau = Kokkos::fmax(tau_e, tau_a) *
+                             dt_ * adm.alpha(m, k, j, i) / w_lorentz;
             use_kirchhoff = (tau > nurates_params_.kirchhoff_tau_trap);
           }
 

@@ -233,6 +233,15 @@ if (ENABLE_NURATES)
     )
 endif()
 
+# Selective large register file (256 reg) for the kernels that benefit; everything
+# else keeps the default so simple memory-bound kernels do not lose occupancy.
+if (DEFINED ATHENA_GRF_LARGE_FILES)
+  message(STATUS "large-GRF (256 reg) files: ${ATHENA_GRF_LARGE_FILES}")
+  set_source_files_properties(${ATHENA_GRF_LARGE_FILES}
+      PROPERTIES COMPILE_OPTIONS
+      "-Xsycl-target-backend=spir64_gen;-options -ze-opt-large-register-file")
+endif()
+
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in
 # pgen/ directory (not including .cpp extension)
