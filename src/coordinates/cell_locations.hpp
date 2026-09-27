@@ -49,4 +49,11 @@ static int CellCenterIndex(Real x, int n, Real xmin, Real xmax) {
   return static_cast<int>(((x-xmin)/(xmax-xmin))*static_cast<Real>(n));
 }
 
+// Give a shared face to exactly one block, including across MPI ranks. Retain
+// the outer domain face so extraction at a physical boundary remains possible.
+KOKKOS_INLINE_FUNCTION
+static bool InterpolationOwns(Real x, Real lo, Real hi, Real domain_hi) {
+  return x >= lo && (x < hi || (x == hi && hi == domain_hi));
+}
+
 #endif // COORDINATES_CELL_LOCATIONS_HPP_

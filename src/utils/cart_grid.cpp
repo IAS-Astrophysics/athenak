@@ -168,9 +168,12 @@ void CartesianGrid::SetInterpolationIndices() {
           // save MeshBlock and zone indicies for nearest
           // position to spherical patch center
           // if this angle position resides in this MeshBlock
-          if ((x1 >= x1min && x1 <= x1max) &&
-              (x2 >= x2min && x2 <= x2max) &&
-              (x3 >= x3min && x3 <= x3max)) {
+          if (InterpolationOwns(x1, x1min, x1max,
+                                pmy_pack->pmesh->mesh_size.x1max) &&
+              InterpolationOwns(x2, x2min, x2max,
+                                pmy_pack->pmesh->mesh_size.x2max) &&
+              InterpolationOwns(x3, x3min, x3max,
+                                pmy_pack->pmesh->mesh_size.x3max)) {
               iindcs.h_view(nx,ny,nz,0) = m;
               iindcs.h_view(nx,ny,nz,1) =
                   static_cast<int>(std::floor((x1-(x1min+dx1/2.0))/dx1));

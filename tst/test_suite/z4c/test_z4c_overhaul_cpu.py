@@ -209,3 +209,35 @@ pgen_name=z4c_interpolation
 nx1=16
 """)
     assert "PASS Cartesian polynomial interpolation" in result.stdout
+
+
+def test_cce_harmonics(tmp_path):
+    (tmp_path / "cce").mkdir()
+    run_case(tmp_path, """
+<problem>
+pgen_name=z4c_interpolation
+check_cce=true
+<mesh>
+nx1=16
+x1min=-1
+x1max=1
+x2min=-1
+x2max=1
+x3min=-1
+x3max=1
+<cce>
+rin_0=0.2
+rout_0=0.4
+num_l_modes=2
+num_radial_modes=3
+""")
+    path = next((tmp_path / "cce").glob("*.bin"))
+    with path.open("rb") as f:
+        nr, lmax = np.fromfile(f, dtype=np.int32, count=2)
+        time, rin, rout = np.fromfile(f, dtype=np.float64, count=3)
+        values = np.fromfile(f, dtype=np.float64).reshape(2, nr, 10, (lmax+1)**2)
+    radii = (rin+rout)/2-(rout-rin)/2*np.cos(np.pi*np.arange(1, nr+1)/(nr+1))
+    # alpha=1+y: Y00 is sqrt(4*pi); Im(a_11)=r*sqrt(2*pi/3).
+    np.testing.assert_allclose(values[0, :, 0, 0], np.sqrt(4*np.pi), atol=1e-12)
+    np.testing.assert_allclose(values[1, :, 0, 3], radii*np.sqrt(2*np.pi/3), atol=1e-12)
+    np.testing.assert_allclose(values[0, :, 0, 1:], 0, atol=1e-12)

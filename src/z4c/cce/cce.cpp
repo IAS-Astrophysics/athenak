@@ -16,7 +16,7 @@
 #include <string>
 #include <cstdio>
 
-#ifdef MPI_PARALLEL
+#if MPI_PARALLEL_ENABLED
 #include <mpi.h>
 #endif
 
@@ -46,10 +46,14 @@ CCE::CCE(Mesh *const pm, ParameterInput *const pin, int indx):
   rout = pin->GetOrAddReal("cce", "rout_" + std::to_string(index),40.);
   num_l_modes    = pin->GetOrAddInteger("cce","num_l_modes",16);
   num_n_modes    = pin->GetOrAddInteger("cce","num_radial_modes",7);
+  if (num_l_modes < 0 || num_n_modes < 1 || !std::isfinite(rin) ||
+      !std::isfinite(rout) || rin <= 0 || rout <= rin) {
+    throw std::invalid_argument("CCE requires lmax>=0, nr>=1, and 0<rin<rout");
+  }
   num_angular_modes = (num_l_modes + 1) * (num_l_modes + 1);
 
   ntheta = num_l_modes + 1;
-  nphi   = 2*num_l_modes;
+  nphi   = 2*ntheta;
   nr     = num_n_modes;
   nangle = ntheta*nphi;
   npoint = nangle*nr;
@@ -90,8 +94,10 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   // raveled shape of array & counts for mpi
   int count = 10*nr*num_angular_modes;
   // Dynamically allocate memory for the 4D array flattened into 1D
-  Real* data_real = new Real[count];
-  Real* data_imag = new Real[count];
+  std::vector<Real> real_storage(count);
+  Real *data_real = real_storage.data();
+  std::vector<Real> imag_storage(count);
+  Real *data_imag = imag_storage.data();
   for(int nvar=0; nvar<10; nvar++) {
     for (int k = 0; k < nr; ++k) {
       // Interpolate here
@@ -112,7 +118,8 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
             // calculate spherical harmonics
             SWSphericalHarm(&ylmR,&ylmI, l, m, 0, theta, phi);
             psilmR += weight*data*ylmR;
-            psilmI += weight*data*ylmI;
+            // Coefficients use the complex conjugate of Y_lm.
+            psilmI -= weight*data*ylmI;
           }
           data_real[k * 10 * num_angular_modes // first over the different radii
                     + nvar * num_angular_modes // then over the variables
@@ -145,8 +152,9 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
 
   if (0 == global_variable::my_rank) {
     std::string filename = "cce/cce_";
+    if (index > 0) filename += "shell" + std::to_string(index) + "_";
     std::stringstream strObj;
-    strObj << std::setfill('0') << std::setw(8) << pmbp->pmesh->time;
+    strObj << std::scientific << std::setprecision(17) << pmbp->pmesh->time;
     filename += strObj.str();
     filename += ".bin";
 
@@ -175,7 +183,6 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
     // Close the file
     fclose(cce_file);
   }
-  delete[] data_real;
-  delete[] data_imag;
+
 }
 } // end namespace z4c

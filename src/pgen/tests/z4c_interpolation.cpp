@@ -11,6 +11,12 @@
 #include <iostream>
 
 #include "athena.hpp"
+#if MPI_PARALLEL_ENABLED
+#include <mpi.h>
+#endif
+#include "z4c/z4c.hpp"
+#include "z4c/cce/cce.hpp"
+#include "utils/chebyshev.hpp"
 #include "mesh/mesh.hpp"
 #include "parameter_input.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -22,6 +28,29 @@ void ProblemGenerator::Z4cInterpolation(ParameterInput *pin, const bool restart)
   auto *pack = pmy_mesh_->pmb_pack;
   auto ind = pmy_mesh_->mb_indcs;
   auto size = pack->pmb->mb_size;
+  if (pin->GetOrAddBoolean("problem", "check_cce", false)) {
+    auto state = pack->pz4c->u0;
+    int alpha = pack->pz4c->I_Z4C_ALPHA;
+    par_for("CCE analytic lapse",DevExeSpace(),0,pack->nmb_thispack-1,
+        0,ind.nx3+2*ind.ng-1,0,ind.nx2+2*ind.ng-1,0,ind.nx1+2*ind.ng-1,
+        KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      auto cell=size.d_view(m);
+      Real y=CellCenterX(j-ind.js,ind.nx2,cell.x2min,cell.x2max);
+      state(m,alpha,k,j,i)=1+y;
+    });
+    z4c::CCE extraction(pmy_mesh_,pin,0);
+    extraction.InterpolateAndDecompose(pack);
+    return;
+  }
+  for (int n=1; n<=8; ++n) {
+    for (int k=0; k<n; ++k) {
+      Real x=ChebyshevSecondKindCollocationPoints(-1,1,n,k);
+      if (std::abs(ChebyshevSecondKindPolynomial(n,x))>1e-12) {
+        std::cerr << "Chebyshev collocation point is not a root" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+  }
   DvceArray5D<Real> data("interpolation polynomial",pack->nmb_thispack,1,
                        ind.nx3+2*ind.ng,ind.nx2+2*ind.ng,ind.nx1+2*ind.ng);
   par_for("fill polynomial",DevExeSpace(),0,pack->nmb_thispack-1,
@@ -50,6 +79,9 @@ void ProblemGenerator::Z4cInterpolation(ParameterInput *pin, const bool restart)
           Real z=0.5+radius*(cheb ? cos(k*M_PI/4) : -1+0.5*k);
           Real expected=1+x+2*y+3*z+x*y;
           Real actual=grid.interp_vals.h_view(i,j,k);
+#if MPI_PARALLEL_ENABLED
+          MPI_Allreduce(MPI_IN_PLACE,&actual,1,MPI_ATHENA_REAL,MPI_SUM,MPI_COMM_WORLD);
+#endif
           if (!std::isfinite(actual) || std::abs(actual-expected)>1e-8) {
             std::cerr << "Cartesian interpolation error: " << actual-expected
                       << " cheb=" << cheb << " power=" << power << std::endl;
