@@ -169,7 +169,15 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.extrap_order = fmax(2,fmin(indcs.ng,fmin(4,
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
 
-  diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
+  opt.spatial_order = pin->GetOrAddInteger("z4c", "spatial_order", 2*(indcs.ng-1));
+  opt.fd_stencil = opt.spatial_order/2+1;
+  if ((opt.spatial_order!=2 && opt.spatial_order!=4 && opt.spatial_order!=6) ||
+      indcs.ng<opt.fd_stencil) {
+    std::cerr << "spatial_order must be 2, 4, or 6 with at least order/2+1 ghosts."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  diss = opt.diss*pow(2., -2.*opt.fd_stencil)*(opt.fd_stencil % 2 == 0 ? -1. : 1.);
 
   // DriftControl parameters
   opt.enable_driftcontrol = pin->GetOrAddBoolean("z4c", "enable_driftcontrol", false);

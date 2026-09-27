@@ -81,3 +81,39 @@ variable=z4c
     assert np.max(np.abs(outputs[0]["z4c_Bx"])) == 0
     assert np.max(np.abs(outputs[1]["z4c_Bx"])) > 1e-10
     assert np.max(np.abs(outputs[1]["z4c_alpha"]-outputs[0]["z4c_alpha"])) > 1e-14
+
+
+@pytest.mark.parametrize("order,ng", [(2, 2), (4, 3), (6, 4)])
+def test_spatial_order_ghost_independence(tmp_path, order, ng):
+    outputs = []
+    for ghosts in (ng, 4):
+        directory = tmp_path / str(ghosts)
+        run_case(directory, f"""
+<mesh>
+nghost={ghosts}
+<problem>
+amp=1e-6
+<time>
+nlim=3
+cfl_number=0.01
+<z4c>
+spatial_order={order}
+<output1>
+variable=z4c
+""")
+        outputs.append(table(directory))
+    for name in outputs[0]:
+        if name.startswith("z4c_"):
+            np.testing.assert_allclose(outputs[0][name], outputs[1][name],
+                                       rtol=1e-12, atol=1e-14)
+
+
+@pytest.mark.parametrize("order,ghosts", [(3, 4), (6, 2)])
+def test_invalid_spatial_order(tmp_path, order, ghosts):
+    result = run_case(tmp_path, f"""
+<mesh>
+nghost={ghosts}
+<z4c>
+spatial_order={order}
+""", success=False)
+    assert "spatial_order must be" in result.stderr

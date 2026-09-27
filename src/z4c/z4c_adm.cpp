@@ -47,6 +47,15 @@ namespace z4c {
 // the Gamma's that can only be set in the interior of the MeshBlock.
 template <int NGHOST>
 void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
+  if (opt.fd_stencil != NGHOST) {
+    switch (opt.fd_stencil) {
+      case 2: ADMToZ4c<2>(pmbp, pin); break;
+      case 3: ADMToZ4c<3>(pmbp, pin); break;
+      case 4: ADMToZ4c<4>(pmbp, pin); break;
+    }
+    return;
+  }
+
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -250,6 +259,15 @@ void Z4c::Z4cToADM(MeshBlockPack *pmbp) {
 // of the ADM quantities are needed to compute them.
 template <int NGHOST>
 void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
+  if (opt.fd_stencil != NGHOST) {
+    switch (opt.fd_stencil) {
+      case 2: ADMConstraints<2>(pmbp); break;
+      case 3: ADMConstraints<3>(pmbp); break;
+      case 4: ADMConstraints<4>(pmbp); break;
+    }
+    return;
+  }
+
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;

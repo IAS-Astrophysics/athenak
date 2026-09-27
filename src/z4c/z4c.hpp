@@ -182,6 +182,7 @@ class Z4c {
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
+    int spatial_order, fd_stencil;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
 
