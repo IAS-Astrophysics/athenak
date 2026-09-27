@@ -128,9 +128,12 @@ void SphericalGrid::SetInterpolationIndices() {
 
       // save MeshBlock and zone indicies for nearest position to spherical patch center
       // if this angle position resides in this MeshBlock
-      if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) <= x1max) &&
-          (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) <= x2max) &&
-          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) <= x3max)) {
+      if (InterpolationOwns(rcoord.h_view(n,0), x1min, x1max,
+                             pmy_pack->pmesh->mesh_size.x1max) &&
+          InterpolationOwns(rcoord.h_view(n,1), x2min, x2max,
+                             pmy_pack->pmesh->mesh_size.x2max) &&
+          InterpolationOwns(rcoord.h_view(n,2), x3min, x3max,
+                             pmy_pack->pmesh->mesh_size.x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
                                                           (x1min+offset*dx1))/dx1));

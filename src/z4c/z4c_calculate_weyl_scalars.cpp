@@ -29,6 +29,15 @@ namespace z4c {
 // This function operates only on the interior points of the MeshBlock
 template <int NGHOST>
 void Z4c::Z4cWeyl(MeshBlockPack *pmbp) {
+  if (opt.fd_stencil != NGHOST) {
+    switch (opt.fd_stencil) {
+      case 2: Z4cWeyl<2>(pmbp); break;
+      case 3: Z4cWeyl<3>(pmbp); break;
+      case 4: Z4cWeyl<4>(pmbp); break;
+    }
+    return;
+  }
+
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;

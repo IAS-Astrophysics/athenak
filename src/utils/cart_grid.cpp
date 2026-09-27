@@ -22,7 +22,8 @@
 // constructor, initializes data structures and parameters
 
 CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                                    Real extent[3], int numpoints[3], bool is_cheb):
+                                    Real extent[3], int numpoints[3],
+                                    bool is_cheb, int rpow):
     interp_vals("interp_vals",1,1,1),
     pmy_pack(pmy_pack),
     interp_indcs("interp_indcs",1,1,1,1),
@@ -30,6 +31,12 @@ CartesianGrid::CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
   // initialize parameters for the grid
   // uniform grid or spectral grid
   is_cheby = is_cheb;
+  r_pow = rpow;
+  if (rpow<0 || numpoints[0]<2 || numpoints[1]<2 || numpoints[2]<2 ||
+      extent[0]<=0 || extent[1]<=0 || extent[2]<=0) {
+    std::cerr << "Invalid Cartesian interpolation grid." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // grid center
   center_x1 = center[0];
@@ -115,6 +122,9 @@ void CartesianGrid::ResetCenterAndExtent(Real center[3], Real extent[3]) {
   max_x2 = center_x2 + extent_x2;
   max_x3 = center_x3 + extent_x3;
 
+  d_x1 = (max_x1-min_x1)/(nx1-1);
+  d_x2 = (max_x2-min_x2)/(nx2-1);
+  d_x3 = (max_x3-min_x3)/(nx3-1);
   SetInterpolationIndices();
   SetInterpolationWeights();
 }
@@ -158,9 +168,12 @@ void CartesianGrid::SetInterpolationIndices() {
           // save MeshBlock and zone indicies for nearest
           // position to spherical patch center
           // if this angle position resides in this MeshBlock
-          if ((x1 >= x1min && x1 <= x1max) &&
-              (x2 >= x2min && x2 <= x2max) &&
-              (x3 >= x3min && x3 <= x3max)) {
+          if (InterpolationOwns(x1, x1min, x1max,
+                                pmy_pack->pmesh->mesh_size.x1max) &&
+              InterpolationOwns(x2, x2min, x2max,
+                                pmy_pack->pmesh->mesh_size.x2max) &&
+              InterpolationOwns(x3, x3min, x3max,
+                                pmy_pack->pmesh->mesh_size.x3max)) {
               iindcs.h_view(nx,ny,nz,0) = m;
               iindcs.h_view(nx,ny,nz,1) =
                   static_cast<int>(std::floor((x1-(x1min+dx1/2.0))/dx1));
@@ -258,10 +271,10 @@ void CartesianGrid::SetInterpolationWeights() {
 
 void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
   // reinitialize interpolation indices and weights if AMR
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  if (pmy_pack->pmesh->adaptive) {
+    SetInterpolationIndices();
+    SetInterpolationWeights();
+  }
 
   // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -272,6 +285,12 @@ void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
   int n_x3 = nx3 - 1;
   int index = ind;
 
+  auto size = pmy_pack->pmb->mb_size;
+  Real cx=center_x1, cy=center_x2, cz=center_x3;
+  Real ex=extent_x1, ey=extent_x2, ez=extent_x3;
+  Real dx=d_x1, dy=d_x2, dz=d_x3;
+  bool cheb=is_cheby;
+  int power=r_pow;
   // reallocate container
   Kokkos::realloc(interp_vals,nx1,nx2,nx3);
 
@@ -287,18 +306,30 @@ void CartesianGrid::InterpolateToGrid(int ind, DvceArray5D<Real> &val) {
     if (ii0==-1) {  // point not on this rank
       ivals.d_view(nx,ny,nz) = 0.0;
     } else {
+      Real tx = cheb ? ex*cos(nx*M_PI/n_x1) : -ex+nx*dx;
+      Real ty = cheb ? ey*cos(ny*M_PI/n_x2) : -ey+ny*dy;
+      Real tz = cheb ? ez*cos(nz*M_PI/n_x3) : -ez+nz*dz;
+      Real r2 = tx*tx+ty*ty+tz*tz;
+      auto cell = size.d_view(ii0);
+      // At the center the regularized quotient is 0/0; use the ordinary stencil.
+      int local_power = r2<1e-24*SQR(cell.dx1) ? 0 : power;
       Real int_value = 0.0;
       for (int i=0; i<2*ng; i++) {
         for (int j=0; j<2*ng; j++) {
           for (int k=0; k<2*ng; k++) {
             Real iwght = iwghts.d_view(nx,ny,nz,i,0)*
                   iwghts.d_view(nx,ny,nz,j,1)*iwghts.d_view(nx,ny,nz,k,2);
-            int_value += iwght*val(ii0,index,ii3-(ng-k-ks)+1,
+            Real sx = CellCenterX(ii1-(ng-i)+1,indcs.nx1,cell.x1min,cell.x1max)-cx;
+            Real sy = CellCenterX(ii2-(ng-j)+1,indcs.nx2,cell.x2min,cell.x2max)-cy;
+            Real sz = CellCenterX(ii3-(ng-k)+1,indcs.nx3,cell.x3min,cell.x3max)-cz;
+            Real factor = local_power==0 ? 1.0 : pow(sx*sx+sy*sy+sz*sz,0.5*local_power);
+            int_value += factor*iwght*val(ii0,index,ii3-(ng-k-ks)+1,
                                   ii2-(ng-j-js)+1,ii1-(ng-i-is)+1);
           }
         }
       }
-      ivals.d_view(nx,ny,nz) = int_value;
+      ivals.d_view(nx,ny,nz) = local_power==0 ? int_value :
+                              int_value/pow(r2,0.5*local_power);
     }
   });
 

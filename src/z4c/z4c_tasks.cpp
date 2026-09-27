@@ -44,7 +44,7 @@ void Z4c::QueueZ4cTasks() {
 
   // Run task list
   pnr->QueueTask(&Z4c::CopyU, this, Z4c_CopyU, "Z4c_CopyU", Task_Run);
-  switch (indcs.ng) {
+  switch (opt.fd_stencil) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
                      Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
@@ -242,7 +242,7 @@ TaskStatus Z4c::UpdateExcisionMasks(Driver *pdrive, int stage) {
 TaskStatus Z4c::ADMConstraints_(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
-    switch (indcs.ng) {
+    switch (opt.fd_stencil) {
       case 2: ADMConstraints<2>(pmy_pack);
               break;
       case 3: ADMConstraints<3>(pmy_pack);
@@ -330,7 +330,7 @@ TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   if (stage == pdrive->nexp_stages) {
     for (auto & pahf : pfastflow) {
-      switch (indcs.ng) {
+      switch (opt.fd_stencil) {
         case 2: pahf->MetricDerivatives<2>(time); break;
         case 3: pahf->MetricDerivatives<3>(time); break;
         case 4: pahf->MetricDerivatives<4>(time); break;
@@ -401,7 +401,7 @@ TaskStatus Z4c::CalcWeylScalar(Driver *pdrive, int stage) {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     if (last_output_time==time_32 && stage == pdrive->nexp_stages) {
       auto &indcs = pmy_pack->pmesh->mb_indcs;
-      switch (indcs.ng) {
+      switch (opt.fd_stencil) {
         case 2: Z4cWeyl<2>(pmy_pack);
                 break;
         case 3: Z4cWeyl<3>(pmy_pack);

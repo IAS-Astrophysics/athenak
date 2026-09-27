@@ -53,6 +53,7 @@ class Z4c {
     I_Z4C_THETA,
     I_Z4C_ALPHA,
     I_Z4C_BETAX, I_Z4C_BETAY, I_Z4C_BETAZ,
+    I_Z4C_BX, I_Z4C_BY, I_Z4C_BZ,
     nz4c
   };
   // Names of Z4c variables
@@ -114,6 +115,7 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> vTheta;  // Theta var in Z4c
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_d;   // telegraph lapse flux
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
@@ -162,6 +164,9 @@ class Z4c {
     Real ssl_damping_amp;
     Real ssl_damping_time;
     Real ssl_damping_index;
+    bool telegraph_lapse;
+    Real telegraph_tau, telegraph_kappa;
+
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
@@ -177,6 +182,7 @@ class Z4c {
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
+    int spatial_order, fd_stencil;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
 
