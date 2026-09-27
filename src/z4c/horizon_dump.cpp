@@ -34,7 +34,7 @@
 //----------------------------------------------------------------------------------------
 HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is_common):
               common_horizon{is_common}, horizon_ind{n},
-              pos{NAN, NAN, NAN}, pmbp{pmbp} {
+              horizon_last_output_time{0.0}, pos{NAN, NAN, NAN}, pmbp{pmbp} {
   std::string nstr = std::to_string(n);
 
   pos[0] = pin->GetOrAddReal("z4c", "co_" + nstr + "_x", 0.0);
@@ -50,7 +50,9 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
   int Nx[3] = {horizon_nx,horizon_nx,horizon_nx};
-  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx);
+  bool cheb = pin->GetOrAddBoolean("z4c", "co_"+nstr+"_dump_cheb", false);
+  int power = pin->GetOrAddInteger("z4c", "horizon_"+nstr+"_rn", 0);
+  pcat_grid = new CartesianGrid(pmbp, pos, extend, Nx, cheb, power);
 
   // Initializing variables that will be dumped
   // The order is alpha, betax, betay, betaz,
@@ -107,9 +109,9 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     for (int ny = 0; ny < horizon_nx; ny ++)
     for (int nz = 0; nz < horizon_nx; nz ++) {
       data_out[nvar * horizon_nx * horizon_nx * horizon_nx +  // Section for nvar
-        nx * horizon_nx * horizon_nx +                 // Slice for nx
+        nz * horizon_nx * horizon_nx +                 // Slice for nx
         ny * horizon_nx +                              // Row for ny
-        nz]                                            // Column for nz
+        nx]                                            // Column for nz
         = pcat_grid->interp_vals.h_view(nx, ny, nz);        // Value being assigned
     }
   }
@@ -148,11 +150,20 @@ void HorizonDump::SetGridAndInterpolate(Real center[NDIM]) {
     fclose(etk_output_file);
 
     // Write input script for Einstein Toolkit
-    ETK_setup_parfile();
-    output_count++;
-    // delete dataout
-    delete[] data_out;
+    if (!pcat_grid->is_cheby) ETK_setup_parfile();
+    // Chebyshev data are not a uniform ETK grid: supply their actual coordinates.
+    std::ofstream coordinates(foldername+"/coordinates.txt");
+    coordinates << std::setprecision(17);
+    for (int q=0; q<horizon_nx; ++q) {
+      Real offset = pcat_grid->is_cheby ?
+          horizon_extent*cos(q*M_PI/(horizon_nx-1)) :
+          -horizon_extent+2*horizon_extent*q/(horizon_nx-1);
+      coordinates << pos[0]+offset << " " << pos[1]+offset << " "
+                  << pos[2]+offset << "\n";
+    }
   }
+  ++output_count;
+  delete[] data_out;
 }
 
 void HorizonDump::ETK_setup_parfile() {

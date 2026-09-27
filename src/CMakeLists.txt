@@ -150,6 +150,7 @@ add_executable(
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
+        pgen/tests/z4c_interpolation.cpp
         pgen/z4c/superposed_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
         pgen/tests/jeans_wave.cpp

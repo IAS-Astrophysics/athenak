@@ -199,3 +199,13 @@ cfl_number=0.01
 """)
     data = table(tmp_path)
     assert len(np.unique(data["x1v"])) == 8*2**cap
+
+
+def test_cartesian_interpolation(tmp_path):
+    result = run_case(tmp_path, """
+<problem>
+pgen_name=z4c_interpolation
+<mesh>
+nx1=16
+""")
+    assert "PASS Cartesian polynomial interpolation" in result.stdout
