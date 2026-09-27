@@ -258,7 +258,7 @@ void Compute(Mesh *pm, DvceArray5D<Real> dv, int offset, int selected) {
     Real values[17] = {invariant,
         E_dd(0,0),E_dd(0,1),E_dd(0,2),E_dd(1,1),E_dd(1,2),E_dd(2,2),
         B_dd(0,0),B_dd(0,1),B_dd(0,2),B_dd(1,1),B_dd(1,2),B_dd(2,2),
-        P_u(0),P_u(1),P_u(2),sqrt(fmax(0.0,norm2))};
+        P_u(0),P_u(1),P_u(2),sqrt(norm2<0.0 ? 0.0 : norm2)};
     for (int v=0; v<count; ++v) {
       dv(m,offset+v,k,j,i) = values[selected<0 ? v : selected];
     }
