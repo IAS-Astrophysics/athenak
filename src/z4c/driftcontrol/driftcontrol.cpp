@@ -216,42 +216,44 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
     const bool has_header = existing.good() && existing.peek() != EOF;
     ofile.open(ofname.c_str(), std::ios::app);
     if (!has_header) {
-    ofile << "# variety=" << pin->GetString("z4c", "dc_variety")
-          << " fixed=(" << dc_fixed[0] << "," << dc_fixed[1] << "," << dc_fixed[2] << ")"
-          << " gain=(" << dc_gain[0] << "," << dc_gain[1] << "," << dc_gain[2] << ")";
-    if (dc_variety == PID) {
-      ofile << " Kp=" << pin->GetOrAddReal("z4c", "dc_Kp", 1.0)
-            << " Ki=" << pin->GetOrAddReal("z4c", "dc_Ki", 0.1)
-            << " Kd=" << pin->GetOrAddReal("z4c", "dc_Kd", 2.0)
-            << " integral_cap=" << dc_integral_cap;
-    } else if (dc_variety == DOB || dc_variety == BDOB) {
-      ofile << " omega_c=" << dc_omega_c << " omega_o=" << dc_omega_o
-            << " zeta=" << dc_zeta;
-      if (dc_variety == BDOB) {
-        ofile << " umax=(" << dc_umax[0] << "," << dc_umax[1] << "," << dc_umax[2] << ")"
-              << " sat_order=" << dc_sat_order << " urate=" << dc_urate
-              << " budget=(" << dc_budget[0] << "," << dc_budget[1] << ","
-              << dc_budget[2] << ")"
-              << " budget_c=" << dc_budget_c << " budget_tend=" << dc_budget_tend
-              << " vmax=" << dc_vmax;
+      ofile << "# variety=" << pin->GetString("z4c", "dc_variety")
+            << " fixed=(" << dc_fixed[0] << "," << dc_fixed[1] << ","
+            << dc_fixed[2] << ")"
+            << " gain=(" << dc_gain[0] << "," << dc_gain[1] << "," << dc_gain[2] << ")";
+      if (dc_variety == PID) {
+        ofile << " Kp=" << pin->GetOrAddReal("z4c", "dc_Kp", 1.0)
+              << " Ki=" << pin->GetOrAddReal("z4c", "dc_Ki", 0.1)
+              << " Kd=" << pin->GetOrAddReal("z4c", "dc_Kd", 2.0)
+              << " integral_cap=" << dc_integral_cap;
+      } else if (dc_variety == DOB || dc_variety == BDOB) {
+        ofile << " omega_c=" << dc_omega_c << " omega_o=" << dc_omega_o
+              << " zeta=" << dc_zeta;
+        if (dc_variety == BDOB) {
+          ofile << " umax=(" << dc_umax[0] << "," << dc_umax[1] << ","
+                << dc_umax[2] << ")"
+                << " sat_order=" << dc_sat_order << " urate=" << dc_urate
+                << " budget=(" << dc_budget[0] << "," << dc_budget[1] << ","
+                << dc_budget[2] << ")"
+                << " budget_c=" << dc_budget_c << " budget_tend=" << dc_budget_tend
+                << " vmax=" << dc_vmax;
+        }
+      } else if (dc_variety == Oscillator) {
+        ofile << " tau=" << pin->GetOrAddReal("z4c", "dc_damping_time", 0.5)
+              << " zeta=" << pin->GetOrAddReal("z4c", "dc_damping_coeff", 1.0);
       }
-    } else if (dc_variety == Oscillator) {
-      ofile << " tau=" << pin->GetOrAddReal("z4c", "dc_damping_time", 0.5)
-            << " zeta=" << pin->GetOrAddReal("z4c", "dc_damping_coeff", 1.0);
-    }
-    ofile << " scale=" << pin->GetOrAddReal("z4c", "dc_damping_scale", 10.0)
-          << " ramp_start=" << dc_ramp_start << " ramp_time=" << dc_ramp_time << "\n";
-    if (dc_variety == BDOB) {
-      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
-               " 12:fhatx 13:fhaty 14:fhatz 15:ux 16:uy 17:uz"
-               " 18:Dx 19:Dy 20:Dz 21:umaxx 22:umaxy 23:umaxz 24:omega_c\n";
-    } else if (dc_variety == DOB) {
-      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
-               " 12:fhatx 13:fhaty 14:fhatz\n";
-    } else {
-      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:ix 10:iy 11:iz\n";
-    }
-    ofile << std::flush;
+      ofile << " scale=" << pin->GetOrAddReal("z4c", "dc_damping_scale", 10.0)
+            << " ramp_start=" << dc_ramp_start << " ramp_time=" << dc_ramp_time << "\n";
+      if (dc_variety == BDOB) {
+        ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
+                 " 12:fhatx 13:fhaty 14:fhatz 15:ux 16:uy 17:uz"
+                 " 18:Dx 19:Dy 20:Dz 21:umaxx 22:umaxy 23:umaxz 24:omega_c\n";
+      } else if (dc_variety == DOB) {
+        ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:px 10:py 11:pz"
+                 " 12:fhatx 13:fhaty 14:fhatz\n";
+      } else {
+        ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:ix 10:iy 11:iz\n";
+      }
+      ofile << std::flush;
     }
     ofile << std::setprecision(19);
   }

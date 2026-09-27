@@ -172,8 +172,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.spatial_order = pin->GetOrAddInteger("z4c", "spatial_order", 2*(indcs.ng-1));
   opt.fd_stencil = opt.spatial_order/2+1;
   if ((opt.spatial_order!=2 && opt.spatial_order!=4 && opt.spatial_order!=6) ||
-      indcs.ng<opt.fd_stencil) {
-    std::cerr << "spatial_order must be 2, 4, or 6 with at least order/2+1 ghosts."
+      indcs.ng<opt.fd_stencil || indcs.ng>4) {
+    std::cerr << "spatial_order must be 2, 4, or 6; nghost must be order/2+1 through 4."
               << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -285,7 +285,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   while (true) {
     if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
       if (static_cast<std::size_t>(n) >= ptracker.size()) {
-        std::cerr << "Horizon dump requires its matching compact-object tracker" << std::endl;
+        std::cerr << "Horizon dump requires its matching compact-object tracker"
+                  << std::endl;
         std::exit(EXIT_FAILURE);
       }
       phorizon_dump.push_back(std::make_unique<HorizonDump>(pmy_pack, pin, n, 0));

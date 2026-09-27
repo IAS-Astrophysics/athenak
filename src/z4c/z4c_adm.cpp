@@ -292,7 +292,6 @@ void Z4c::ADMConstraints(MeshBlockPack *pmbp) {
   par_for("ADM Hamiltonian constraint loop",DevExeSpace(),
   0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
-
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> R_dd;
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> K_ud;

@@ -62,7 +62,8 @@ void ProblemGenerator::Z4cSuperposedPunctures(ParameterInput *pin, const bool re
     if (!std::isfinite(m0) || m0 <= 0 || !std::isfinite(vel) || std::abs(vel) >= 1 ||
         !std::isfinite(floor) || floor <= 0 || !std::isfinite(cx) ||
         !std::isfinite(cy) || !std::isfinite(cz)) {
-      std::cerr << "Invalid puncture mass, velocity, center, or radius floor." << std::endl;
+      std::cerr << "Invalid puncture mass, velocity, center, or radius floor."
+                << std::endl;
       std::exit(EXIT_FAILURE);
     }
     Real Gamma = 1.0/std::sqrt(1.0-vel*vel);

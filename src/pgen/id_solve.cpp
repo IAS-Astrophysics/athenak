@@ -93,7 +93,7 @@ void Load(MeshBlockPack *pack, ParameterInput *pin) {
       throw std::runtime_error("Coordinate block count/extent mismatch");
     }
     n[a] = static_cast<int>(coords[a].shape[1]);
-    if (n[a] < 5 || source_ng < 0 || 2*source_ng >= n[a]) {
+    if (n[a] < 5 || source_ng < 0 || source_ng > (n[a]-1)/2) {
       throw std::runtime_error("Need at least five coordinate points and valid ghosts");
     }
     for (std::size_t b=0; b<nb; ++b) {
@@ -201,17 +201,24 @@ void Load(MeshBlockPack *pack, ParameterInput *pin) {
       }
       double det = adm::SpatialDet(values[0],values[1],values[2],values[3],
                                    values[4],values[5]);
-      if (values[0]<=0 || values[0]*values[3]<=SQR(values[1]) || det<=0) {
+      if (values[0]<=0 || values[0]*values[3]<=SQR(values[1]) ||
+          !std::isfinite(det) || det<=0) {
         throw std::runtime_error("Interpolated spatial metric is not positive definite");
       }
       for (int c=0; c<6; ++c) {
         host(m,adm::ADM::I_ADM_GXX+c,k,j,i) = values[c];
         host(m,adm::ADM::I_ADM_KXX+c,k,j,i) = values[c+6];
       }
-      host(m,adm::ADM::I_ADM_ALPHA,k,j,i) = 1.0;
     }
   }
   Kokkos::deep_copy(pack->padm->u_adm,host);
+  // In an evolved spacetime, ADM lapse/shift alias the Z4c array; u_adm
+  // stores only metric, extrinsic curvature and psi4.
+  Kokkos::deep_copy(pack->pz4c->u0,0.0);
+  auto state = pack->pz4c->z4c;
+  par_for("id_solve initial lapse",DevExeSpace(),0,pack->nmb_thispack-1,
+      0,ind.nx3+2*ind.ng-1,0,ind.nx2+2*ind.ng-1,0,ind.nx1+2*ind.ng-1,
+      KOKKOS_LAMBDA(int m,int k,int j,int i) { state.alpha(m,k,j,i)=1.0; });
 }
 } // namespace
 

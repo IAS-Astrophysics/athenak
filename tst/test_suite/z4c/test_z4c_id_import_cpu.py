@@ -53,3 +53,34 @@ def test_invalid_hdf5(tmp_path, source, fault):
             f["metric"][:] = np.nan
     result = import_data(tmp_path / "run", source, success=False)
     assert "id_solve:" in result.stderr
+
+
+def test_active_fine_block_preference(tmp_path):
+    path = tmp_path / "overlap.h5"
+    coords = np.array([np.linspace(-1, 2, 9), np.linspace(-0.1, 1.1, 9)])
+    values = np.zeros((6, 2, 9, 9, 9))
+    values[[0, 3, 5], 0] = 10
+    values[[0, 3, 5], 1] = 2
+    with h5py.File(path, "w") as f:
+        for name in ("x1v", "x2v", "x3v"):
+            f[name] = coords
+        f["metric"] = values
+        f["extrin"] = np.zeros_like(values)
+    executable = os.environ.get("ATHENA_ID_EXE")
+    if not executable:
+        pytest.skip("Set ATHENA_ID_EXE to a PROBLEM=id_solve build")
+    run_case(tmp_path / "run", f"""
+<problem>
+id_filename={path}
+id_source_nghost=2
+""", executable=executable)
+    data = table(tmp_path / "run")
+    expected = np.where((data["x1v"] >= 0.2) & (data["x1v"] <= 0.8), 2, 10)
+    np.testing.assert_allclose(data["adm_gxx"], expected, rtol=1e-13)
+
+
+def test_nonpositive_metric(tmp_path, source):
+    with h5py.File(source, "a") as f:
+        f["metric"][0] = -1
+    result = import_data(tmp_path / "run", source, success=False)
+    assert "positive definite" in result.stderr

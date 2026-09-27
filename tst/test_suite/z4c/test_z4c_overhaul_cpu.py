@@ -108,7 +108,7 @@ variable=z4c
                                        rtol=1e-12, atol=1e-14)
 
 
-@pytest.mark.parametrize("order,ghosts", [(3, 4), (6, 2)])
+@pytest.mark.parametrize("order,ghosts", [(3, 4), (6, 2), (2, 5)])
 def test_invalid_spatial_order(tmp_path, order, ghosts):
     result = run_case(tmp_path, f"""
 <mesh>
@@ -241,3 +241,64 @@ num_radial_modes=3
     np.testing.assert_allclose(values[0, :, 0, 0], np.sqrt(4*np.pi), atol=1e-12)
     np.testing.assert_allclose(values[1, :, 0, 3], radii*np.sqrt(2*np.pi/3), atol=1e-12)
     np.testing.assert_allclose(values[0, :, 0, 1:], 0, atol=1e-12)
+
+
+def test_schwarzschild_curvature_convergence(tmp_path):
+    errors = []
+    for resolution in (8, 16):
+        directory = tmp_path / str(resolution)
+        run_case(directory, f"""
+<problem>
+pgen_name=z4c_superposed_punctures
+punc_1_rest_mass=1
+punc_2_rest_mass=1e-30
+punc_1_center_x1=0
+<mesh>
+nx1={resolution}
+nx2={resolution}
+nx3={resolution}
+x1min=2
+x1max=4
+x2min=2
+x2max=4
+x3min=2
+x3max=4
+<meshblock>
+nx1={resolution}
+nx2={resolution}
+nx3={resolution}
+<z4c>
+spatial_order=4
+<output1>
+variable=z4c_diag
+slice_x2=3
+slice_x3=3
+""")
+        data = table(directory)
+        # Stay outside boundary stencils; compare to exact vacuum Schwarzschild invariant.
+        x = data["x1v"]
+        mask = (x > 2.5) & (x < 3.5)
+        yz = 3+1/resolution
+        rho = np.sqrt(x[mask]**2+2*yz**2)
+        radius = rho*(1+0.5/rho)**2
+        exact = 48/radius**6
+        error = np.max(np.abs(data["z4c_Kretschmann"][mask]/exact-1))
+        errors.append(error)
+        assert np.max(np.abs(data["z4c_Pnorm"])) < 1e-12
+    assert errors[0] < 0.01
+    assert errors[1] < errors[0]/6
+
+
+def test_telegraph_relaxation_timestep(tmp_path):
+    import re
+    result = run_case(tmp_path, """
+<time>
+nlim=1
+cfl_number=0.2
+<z4c>
+telegraph_lapse=true
+telegraph_tau=0.0001
+telegraph_kappa=0.1
+""")
+    timesteps = [float(v) for v in re.findall(r"\bdt=([\deE+.-]+)", result.stdout)]
+    assert timesteps and max(timesteps) <= 2.000001e-5

@@ -656,7 +656,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
         }
       }
     }
-
   });
 
   par_for("z4c gauge rhs loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,

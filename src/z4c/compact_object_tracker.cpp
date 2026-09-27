@@ -79,16 +79,15 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
     const bool has_header = existing.good() && existing.peek() != EOF;
     ofile.open(ofname.c_str(), std::ios::app);
     if (!has_header) {
+      if (type == BlackHole) {
+        ofile << "# Black Hole";
+      } else {
+        ofile << "# Neutron Star";
+      }
+      ofile << std::endl;
 
-    if (type == BlackHole) {
-      ofile << "# Black Hole";
-    } else {
-      ofile << "# Neutron Star";
-    }
-    ofile << std::endl;
-
-    ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz\n";
-    ofile << std::flush;
+      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz\n";
+      ofile << std::flush;
     }
     ofile << std::setprecision(19);
   }

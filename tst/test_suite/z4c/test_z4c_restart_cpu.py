@@ -84,3 +84,43 @@ single_file_per_rank={str(per_rank).lower()}
         assert full_files
         for path in full_files:
             assert (full / path).read_bytes() == (split / path).read_bytes(), path
+
+
+def test_cce_restart_without_trackers(tmp_path):
+    settings = """
+<mesh>
+x1min=-1
+x1max=1
+x2min=-1
+x2max=1
+x3min=-1
+x3max=1
+<cce>
+num_radii=2
+rin_0=0.2
+rout_0=0.3
+rin_1=0.3
+rout_1=0.4
+num_l_modes=2
+num_radial_modes=2
+cce_dt=0.001
+<time>
+cfl_number=0.01
+tlim=1
+<output2>
+file_type=rst
+dt=0.0001
+"""
+    full, split = tmp_path / "full", tmp_path / "split"
+    run_case(full, settings + "\n<time>\nnlim=4\n")
+    run_case(split, settings + "\n<time>\nnlim=2\n")
+    checkpoint = sorted((split / "rst").glob("*.rst"))[-1]
+    executable = str(Path(os.environ.get("ATHENA_OVERHAUL_EXE", "./athena")).resolve())
+    result = subprocess.run(shlex.split(os.environ.get("ATHENA_TEST_LAUNCHER", "")) +
+                            [executable, "-r", str(checkpoint), "time/nlim=4"],
+                            cwd=split, capture_output=True, text=True, timeout=90)
+    assert result.returncode == 0, result.stdout + result.stderr
+    expected = {p.name: p.read_bytes() for p in (full / "cce").glob("*.bin")}
+    actual = {p.name: p.read_bytes() for p in (split / "cce").glob("*.bin")}
+    assert len(expected) >= 4 and any("shell1" in name for name in expected)
+    assert actual == expected

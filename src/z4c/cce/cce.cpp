@@ -15,6 +15,7 @@
 #include <utility>
 #include <string>
 #include <cstdio>
+#include <vector>
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -183,6 +184,5 @@ void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
     // Close the file
     fclose(cce_file);
   }
-
 }
 } // end namespace z4c
