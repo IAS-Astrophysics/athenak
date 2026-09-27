@@ -74,7 +74,8 @@ BHAHAHorizonFinder::BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin)
     pd.max_iterations = pin_->GetOrAddInteger("bhahaha", "bah_max_itr", 10000);
     pd.Theta_Linf_times_M_tolerance = pin_->GetOrAddReal("bhahaha", "bah_Theta_Linf_tol", 1e-2);
     pd.Theta_L2_times_M_tolerance = pin_->GetOrAddReal("bhahaha", "bah_Theta_L2_tol", 2e-5);
-    pd.enable_eta_varying_alg_for_precision_common_horizon = 0;
+    pd.enable_eta_varying_alg_for_precision_common_horizon =
+        pin_->GetOrAddBoolean("bhahaha", "bah_eta_varying_common_horizon", false);
     pd.verbosity_level = verbosity_;
     resetHorizonHistory(h);
   }
