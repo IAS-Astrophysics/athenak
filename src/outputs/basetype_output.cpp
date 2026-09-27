@@ -182,6 +182,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     std::exit(EXIT_FAILURE);
   }
 
+  if (ivar>=157 && pm->pmb_pack->ptmunu != nullptr) {
+    std::cerr << "Z4c curvature diagnostics currently require vacuum." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Now load STL vector of output variables
   outvars.clear();
 
@@ -625,6 +630,15 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     // gravity potential
     if (variable.compare("grav_phi") == 0) {
       outvars.emplace_back("grav_phi",0,&(pm->pmb_pack->pgrav->phi));
+    }
+
+    if (ivar>=157) {
+      int begin = ivar==174 ? 157 : ivar;
+      int end = ivar==174 ? 174 : ivar+1;
+      out_params.contains_derived = true;
+      for (int v=begin; v<end; ++v) {
+        outvars.emplace_back(var_choice[v], out_params.n_derived++, &derived_var);
+      }
     }
 
     // ADM variables, excluding gauge

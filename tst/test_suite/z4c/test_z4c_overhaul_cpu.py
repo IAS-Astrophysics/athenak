@@ -117,3 +117,64 @@ nghost={ghosts}
 spatial_order={order}
 """, success=False)
     assert "spatial_order must be" in result.stderr
+
+
+@pytest.mark.parametrize("order,ghosts", [(2, 2), (4, 3), (6, 4)])
+def test_flat_curvature(tmp_path, order, ghosts):
+    run_case(tmp_path, f"""
+<mesh>
+nghost={ghosts}
+<z4c>
+spatial_order={order}
+<output1>
+variable=z4c_diag
+""")
+    data = table(tmp_path)
+    for name, values in data.items():
+        if name.startswith("z4c_"):
+            assert np.max(np.abs(values)) < 1e-12
+
+
+def test_super_poynting_metric_norm(tmp_path):
+    fields = []
+    for output in ("adm", "z4c_diag"):
+        directory = tmp_path / output
+        run_case(directory, f"""
+<problem>
+pgen_name=z4c_superposed_punctures
+punc_1_velocity_x1=0.3
+punc_2_velocity_x1=-0.2
+<output1>
+variable={output}
+""")
+        fields.append(table(directory))
+    g, diag = fields
+    n = len(g["x1v"])
+    matrices = []
+    for prefix, data in (("adm_g", g), ("z4c_E", diag), ("z4c_B", diag)):
+        tensor = np.zeros((n, 3, 3))
+        for a, x in enumerate("xyz"):
+            for b, y in enumerate("xyz"):
+                tensor[:, a, b] = data[prefix+"".join(sorted(x+y))]
+        matrices.append(tensor)
+    metric, electric, magnetic = matrices
+    inverse = np.linalg.inv(metric)
+    epsilon = np.zeros((3, 3, 3))
+    epsilon[0, 1, 2] = epsilon[1, 2, 0] = epsilon[2, 0, 1] = 1
+    epsilon[0, 2, 1] = epsilon[2, 1, 0] = epsilon[1, 0, 2] = -1
+    expected_p = -np.einsum("abc,nbd,nde,nce->na", epsilon, electric,
+                            inverse, magnetic)/np.sqrt(np.linalg.det(metric))[:, None]
+    actual_p = np.array([diag["z4c_P"+a] for a in "xyz"]).T
+    np.testing.assert_allclose(actual_p, expected_p, rtol=1e-11, atol=1e-16)
+    expected_norm = np.sqrt(np.einsum("na,nab,nb->n", actual_p, metric, actual_p))
+    assert expected_norm.max() > 1e-8
+    np.testing.assert_allclose(diag["z4c_Pnorm"], expected_norm, rtol=1e-12)
+    assert np.max(np.abs(expected_norm-np.linalg.norm(actual_p, axis=1))) > 1e-8
+    # Weyl tensors must be symmetric and trace-free in the physical metric.
+    np.testing.assert_allclose(np.einsum("nab,nab->n", inverse, electric), 0, atol=1e-13)
+    np.testing.assert_allclose(np.einsum("nab,nab->n", inverse, magnetic), 0, atol=1e-13)
+
+
+def test_single_curvature_output(tmp_path):
+    run_case(tmp_path, "\n<output1>\nvariable=z4c_Pnorm\n")
+    assert np.max(np.abs(table(tmp_path)["z4c_Pnorm"])) < 1e-12
