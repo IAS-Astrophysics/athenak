@@ -178,3 +178,24 @@ variable={output}
 def test_single_curvature_output(tmp_path):
     run_case(tmp_path, "\n<output1>\nvariable=z4c_Pnorm\n")
     assert np.max(np.abs(table(tmp_path)["z4c_Pnorm"])) < 1e-12
+
+
+@pytest.mark.parametrize("cap", [0, 1])
+def test_refinement_cap(tmp_path, cap):
+    run_case(tmp_path, f"""
+<problem>
+pgen_name=z4c_superposed_punctures
+<mesh_refinement>
+refinement=adaptive
+num_levels=3
+max_nmb_per_rank=64
+<z4c_amr>
+method=chi
+chi_min=2
+max_ref_lev={cap}
+<time>
+nlim=3
+cfl_number=0.01
+""")
+    data = table(tmp_path)
+    assert len(np.unique(data["x1v"])) == 8*2**cap

@@ -25,6 +25,11 @@ namespace z4c {
 
 // set some parameters
 Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
+  max_ref_lev = pin->GetOrAddInteger("z4c_amr", "max_ref_lev", -1);
+  if (max_ref_lev < -1) {
+    std::cerr << "z4c_amr/max_ref_lev must be -1 or nonnegative." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   std::string ref_method = pin->GetOrAddString("z4c_amr", "method", "trivial");
   if (ref_method == "trivial") {
     method = Trivial;
@@ -65,6 +70,21 @@ void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
     RefineDchiMax(pmy_pack);
   }
   RefineRadii(pmy_pack);
+  // Apply the hard cap after every criterion, including tracker/radius requests.
+  if (max_ref_lev >= 0) {
+    auto *mesh = pmy_pack->pmesh;
+    auto &flags = mesh->pmr->refine_flag;
+    flags.template sync<HostMemSpace>();
+    int first = mesh->gids_eachrank[global_variable::my_rank];
+    for (int m=0; m<pmy_pack->nmb_thispack; ++m) {
+      int gid = first+m;
+      int level = mesh->lloc_eachmb[gid].level-mesh->root_level;
+      if (level>max_ref_lev) flags.h_view(gid) = -1;
+      if (level==max_ref_lev && flags.h_view(gid)>0) flags.h_view(gid) = 0;
+    }
+    flags.template modify<HostMemSpace>();
+    flags.template sync<DevExeSpace>();
+  }
 }
 
 // refine region within a certain distance from each compact object
