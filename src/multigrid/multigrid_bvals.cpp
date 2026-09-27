@@ -1104,6 +1104,32 @@ void MultigridBoundaryValues::FillCoarseMG(const DvceArray5D<Real> &u) {
     });
 }
 
+namespace {
+//! \brief Map slot s in [0,56) to a neighbour direction (ox1,ox2,ox3) and sub-face
+//! (f1,f2), enumerated in loop order: ox3, ox2, ox1, then f2, f1. Faces have 2x2
+//! sub-faces, edges 2, corners 1, so 6*4 + 12*2 + 8 = 56. nface is the number of
+//! nonzero offsets.
+KOKKOS_INLINE_FUNCTION
+void FCNeighborSlot(int s, int &ox1, int &ox2, int &ox3, int &f1, int &f2, int &nface) {
+  for (int k = -1; k <= 1; ++k) {
+    for (int j = -1; j <= 1; ++j) {
+      for (int i = -1; i <= 1; ++i) {
+        if (i == 0 && j == 0 && k == 0) continue;
+        int nf = (i != 0 ? 1 : 0) + (j != 0 ? 1 : 0) + (k != 0 ? 1 : 0);
+        int n1 = (nf <= 2) ? 2 : 1;  // sub-faces along f1
+        int n2 = (nf == 1) ? 2 : 1;  // sub-faces along f2
+        if (s < n1*n2) {
+          ox1 = i; ox2 = j; ox3 = k; f2 = s/n1; f1 = s%n1; nface = nf;
+          return;
+        }
+        s -= n1*n2;
+      }
+    }
+  }
+  ox1 = ox2 = ox3 = f1 = f2 = nface = 0;  // unreachable for s in [0,56)
+}
+}  // namespace
+
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus MultigridBoundaryValues::ProlongateFCMG()
 //! \brief Prolongate from coarse_buf_ to fine ghost cells using the same flux-conserving
@@ -1137,226 +1163,221 @@ TaskStatus MultigridBoundaryValues::ProlongateFCMG(DvceArray5D<Real> &u) {
   int half = ncells / 2;
   constexpr Real ot = 1.0/3.0;
 
-  Kokkos::parallel_for("ProlongateFCMG",
-    Kokkos::RangePolicy<DevExeSpace>(0, nmb),
-    KOKKOS_LAMBDA(const int m) {
+  // One team per MeshBlock and one thread per neighbour slot. The 56 slots write
+  // disjoint ghost regions, and no slot reads cells another slot writes (faces read
+  // interior cells, their own ghosts or coarse_buf_; edges and corners read only
+  // coarse_buf_), so the slots are independent. Each slot keeps its serial loops in the
+  // original order, which the finer-face correction relies on when mg_nghost > 1. The
+  // previous kernel ran one thread per MeshBlock over all 56 slots, which on a GPU left
+  // most of the device idle.
+  par_for_outer("ProlongateFCMG", DevExeSpace(), 0, 0, 0, nmb-1,
+    KOKKOS_LAMBDA(TeamMember_t tmember, const int m) {
       int m_lev = mblev_d(m);
       int child_x = fc_cx(m);
       int child_y = fc_cy(m);
       int child_z = fc_cz(m);
 
-      for (int ox3 = -1; ox3 <= 1; ++ox3) {
-        for (int ox2 = -1; ox2 <= 1; ++ox2) {
-          for (int ox1 = -1; ox1 <= 1; ++ox1) {
-            if (ox1 == 0 && ox2 == 0 && ox3 == 0) continue;
-            int nface = (ox1!=0?1:0) + (ox2!=0?1:0) + (ox3!=0?1:0);
-            int f2_max = (nface == 1) ? 1 : 0;
-            int f1_max = (nface <= 2) ? 1 : 0;
+      Kokkos::parallel_for(Kokkos::TeamThreadRange(tmember, 56), [&](const int s) {
+        int ox1, ox2, ox3, f1, f2, nface;
+        FCNeighborSlot(s, ox1, ox2, ox3, f1, f2, nface);
+        int n = NeighborIndex(ox1, ox2, ox3, f1, f2);
+        if (n < 0 || n >= 56) return;
+        if (nghbr_d(m, n).gid < 0) return;
+        int nlev = nghbr_d(m, n).lev;
 
-            for (int f2 = 0; f2 <= f2_max; ++f2) {
-              for (int f1 = 0; f1 <= f1_max; ++f1) {
-                int n = NeighborIndex(ox1, ox2, ox3, f1, f2);
-                if (n < 0 || n >= 56) continue;
-                if (nghbr_d(m, n).gid < 0) continue;
-                int nlev = nghbr_d(m, n).lev;
+        // From finer face neighbor: apply FC correction.
+        // Ghost cells already contain restricted face avg from unpack.
+        if (nlev > m_lev && nface == 1) {
+          int oi = (ox1 < 0) ? 1 : (ox1 > 0) ? -1 : 0;
+          int oj = (ox2 < 0) ? 1 : (ox2 > 0) ? -1 : 0;
+          int ok = (ox3 < 0) ? 1 : (ox3 > 0) ? -1 : 0;
 
-                // From finer face neighbor: apply FC correction.
-                // Ghost cells already contain restricted face avg from unpack.
-                if (nlev > m_lev && nface == 1) {
-                  int oi = (ox1 < 0) ? 1 : (ox1 > 0) ? -1 : 0;
-                  int oj = (ox2 < 0) ? 1 : (ox2 > 0) ? -1 : 0;
-                  int ok = (ox3 < 0) ? 1 : (ox3 > 0) ? -1 : 0;
+          int sub_x = 0, sub_y = 0, sub_z = 0;
+          if (ox1 != 0) {
+            sub_y = f1; sub_z = f2;
+          } else if (ox2 != 0) {
+            sub_x = f1; sub_z = f2;
+          } else {
+            sub_x = f1; sub_y = f2;
+          }
 
-                  int sub_x = 0, sub_y = 0, sub_z = 0;
-                  if (ox1 != 0) {
-                    sub_y = f1; sub_z = f2;
-                  } else if (ox2 != 0) {
-                    sub_x = f1; sub_z = f2;
-                  } else {
-                    sub_x = f1; sub_y = f2;
-                  }
+          int gis, gie, gjs, gje, gks, gke;
+          if (ox1 < 0) {
+            gis = 0; gie = ngh_l - 1;
+          } else if (ox1 > 0) {
+            gis = ngh_l + ncells_l;
+            gie = ngh_l + ncells_l + ngh_l - 1;
+          } else {
+            gis = ngh_l + sub_x*half;
+            gie = ngh_l + sub_x*half + half - 1;
+          }
+          if (ox2 < 0) {
+            gjs = 0; gje = ngh_l - 1;
+          } else if (ox2 > 0) {
+            gjs = ngh_l + ncells_l;
+            gje = ngh_l + ncells_l + ngh_l - 1;
+          } else {
+            gjs = ngh_l + sub_y*half;
+            gje = ngh_l + sub_y*half + half - 1;
+          }
+          if (ox3 < 0) {
+            gks = 0; gke = ngh_l - 1;
+          } else if (ox3 > 0) {
+            gks = ngh_l + ncells_l;
+            gke = ngh_l + ncells_l + ngh_l - 1;
+          } else {
+            gks = ngh_l + sub_z*half;
+            gke = ngh_l + sub_z*half + half - 1;
+          }
 
-                  int gis, gie, gjs, gje, gks, gke;
-                  if (ox1 < 0) {
-                    gis = 0; gie = ngh_l - 1;
-                  } else if (ox1 > 0) {
-                    gis = ngh_l + ncells_l;
-                    gie = ngh_l + ncells_l + ngh_l - 1;
-                  } else {
-                    gis = ngh_l + sub_x*half;
-                    gie = ngh_l + sub_x*half + half - 1;
-                  }
-                  if (ox2 < 0) {
-                    gjs = 0; gje = ngh_l - 1;
-                  } else if (ox2 > 0) {
-                    gjs = ngh_l + ncells_l;
-                    gje = ngh_l + ncells_l + ngh_l - 1;
-                  } else {
-                    gjs = ngh_l + sub_y*half;
-                    gje = ngh_l + sub_y*half + half - 1;
-                  }
-                  if (ox3 < 0) {
-                    gks = 0; gke = ngh_l - 1;
-                  } else if (ox3 > 0) {
-                    gks = ngh_l + ncells_l;
-                    gke = ngh_l + ncells_l + ngh_l - 1;
-                  } else {
-                    gks = ngh_l + sub_z*half;
-                    gke = ngh_l + sub_z*half + half - 1;
-                  }
-
-                  for (int v = 0; v < nvar_l; ++v) {
-                    for (int gk = gks; gk <= gke; ++gk) {
-                      for (int gj = gjs; gj <= gje; ++gj) {
-                        for (int gi = gis; gi <= gie; ++gi) {
-                          Real avg = u(m,v,gk,gj,gi);
-                          u(m,v,gk,gj,gi) =
-                              ot*(4.0*avg
-                              - u(m,v,gk+ok,gj+oj,gi+oi));
-                        }
-                      }
-                    }
-                  }
-                  continue;
+          for (int v = 0; v < nvar_l; ++v) {
+            for (int gk = gks; gk <= gke; ++gk) {
+              for (int gj = gjs; gj <= gje; ++gj) {
+                for (int gi = gis; gi <= gie; ++gi) {
+                  Real avg = u(m,v,gk,gj,gi);
+                  u(m,v,gk,gj,gi) =
+                      ot*(4.0*avg
+                      - u(m,v,gk+ok,gj+oj,gi+oi));
                 }
+              }
+            }
+          }
+          return;
+        }
 
-                if (nlev >= m_lev) continue;
+        if (nlev >= m_lev) return;
 
-                // Face neighbor from coarser: flux-conserving prolongation
-                // from coarse_buf_ into fine ghost cells of u
-                if (nface == 1) {
-                  if (ox1 != 0) {
-                    int fig = (ox1 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
-                    int fi  = (ox1 < 0) ? ngh_l : ngh_l + ncells_l - 1;
-                    int si  = (ox1 < 0) ? ngh_l - 1 : ngh_l + half;
-                    int sj0 = ngh_l;
-                    int sk0 = ngh_l;
-                    for (int v = 0; v < nvar_l; ++v) {
-                      for (int sk = sk0; sk < sk0 + half; ++sk) {
-                        for (int sj = sj0; sj < sj0 + half; ++sj) {
-                          int fj = ngh_l + 2*(sj - sj0);
-                          int fk = ngh_l + 2*(sk - sk0);
-                          Real cc = cbuf(m,v,sk,sj,si);
-                          int sjm = (sj > ngh_l) ? sj-1 : sj;
-                          int sjp = (sj < ngh_l+half-1) ? sj+1 : sj;
-                          int skm = (sk > ngh_l) ? sk-1 : sk;
-                          int skp = (sk < ngh_l+half-1) ? sk+1 : sk;
-                          Real gy = 0.125*(cbuf(m,v,sk,sjp,si)-cbuf(m,v,sk,sjm,si));
-                          Real gz = 0.125*(cbuf(m,v,skp,sj,si)-cbuf(m,v,skm,sj,si));
-                          u(m,v,fk  ,fj  ,fig)=ot*(2.0*(cc-gy-gz)+u(m,v,fk  ,fj  ,fi));
-                          u(m,v,fk  ,fj+1,fig)=ot*(2.0*(cc+gy-gz)+u(m,v,fk  ,fj+1,fi));
-                          u(m,v,fk+1,fj  ,fig)=ot*(2.0*(cc-gy+gz)+u(m,v,fk+1,fj  ,fi));
-                          u(m,v,fk+1,fj+1,fig)=ot*(2.0*(cc+gy+gz)+u(m,v,fk+1,fj+1,fi));
-                        }
-                      }
-                    }
-                  } else if (ox2 != 0) {
-                    int fjg = (ox2 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
-                    int fj  = (ox2 < 0) ? ngh_l : ngh_l + ncells_l - 1;
-                    int sj  = (ox2 < 0) ? ngh_l - 1 : ngh_l + half;
-                    int si0 = ngh_l;
-                    int sk0 = ngh_l;
-                    for (int v = 0; v < nvar_l; ++v) {
-                      for (int sk = sk0; sk < sk0 + half; ++sk) {
-                        for (int si = si0; si < si0 + half; ++si) {
-                          int fi = ngh_l + 2*(si - si0);
-                          int fk = ngh_l + 2*(sk - sk0);
-                          Real cc = cbuf(m,v,sk,sj,si);
-                          int sim = (si > ngh_l) ? si-1 : si;
-                          int sip = (si < ngh_l+half-1) ? si+1 : si;
-                          int skm = (sk > ngh_l) ? sk-1 : sk;
-                          int skp = (sk < ngh_l+half-1) ? sk+1 : sk;
-                          Real gx = 0.125*(cbuf(m,v,sk,sj,sip)-cbuf(m,v,sk,sj,sim));
-                          Real gz = 0.125*(cbuf(m,v,skp,sj,si)-cbuf(m,v,skm,sj,si));
-                          u(m,v,fk  ,fjg,fi  )=ot*(2.0*(cc-gx-gz)+u(m,v,fk  ,fj,fi  ));
-                          u(m,v,fk  ,fjg,fi+1)=ot*(2.0*(cc+gx-gz)+u(m,v,fk  ,fj,fi+1));
-                          u(m,v,fk+1,fjg,fi  )=ot*(2.0*(cc-gx+gz)+u(m,v,fk+1,fj,fi  ));
-                          u(m,v,fk+1,fjg,fi+1)=ot*(2.0*(cc+gx+gz)+u(m,v,fk+1,fj,fi+1));
-                        }
-                      }
-                    }
-                  } else {
-                    int fkg = (ox3 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
-                    int fk  = (ox3 < 0) ? ngh_l : ngh_l + ncells_l - 1;
-                    int sk  = (ox3 < 0) ? ngh_l - 1 : ngh_l + half;
-                    int si0 = ngh_l;
-                    int sj0 = ngh_l;
-                    for (int v = 0; v < nvar_l; ++v) {
-                      for (int sj = sj0; sj < sj0 + half; ++sj) {
-                        for (int si = si0; si < si0 + half; ++si) {
-                          int fi = ngh_l + 2*(si - si0);
-                          int fj = ngh_l + 2*(sj - sj0);
-                          Real cc = cbuf(m,v,sk,sj,si);
-                          int sim = (si > ngh_l) ? si-1 : si;
-                          int sip = (si < ngh_l+half-1) ? si+1 : si;
-                          int sjm = (sj > ngh_l) ? sj-1 : sj;
-                          int sjp = (sj < ngh_l+half-1) ? sj+1 : sj;
-                          Real gx = 0.125*(cbuf(m,v,sk,sj,sip)-cbuf(m,v,sk,sj,sim));
-                          Real gy = 0.125*(cbuf(m,v,sk,sjp,si)-cbuf(m,v,sk,sjm,si));
-                          u(m,v,fkg,fj  ,fi  )=ot*(2.0*(cc-gx-gy)+u(m,v,fk,fj  ,fi  ));
-                          u(m,v,fkg,fj  ,fi+1)=ot*(2.0*(cc+gx-gy)+u(m,v,fk,fj  ,fi+1));
-                          u(m,v,fkg,fj+1,fi  )=ot*(2.0*(cc-gx+gy)+u(m,v,fk,fj+1,fi  ));
-                          u(m,v,fkg,fj+1,fi+1)=ot*(2.0*(cc+gx+gy)+u(m,v,fk,fj+1,fi+1));
-                        }
-                      }
-                    }
-                  }
-                } else {
-                  int gis, gie, gjs, gje, gks, gke;
-                  if (ox1 < 0) {
-                    gis = 0; gie = ngh_l - 1;
-                  } else if (ox1 > 0) {
-                    gis = ngh_l + ncells_l;
-                    gie = ngh_l + ncells_l + ngh_l - 1;
-                  } else {
-                    gis = ngh_l;
-                    gie = ngh_l + ncells_l - 1;
-                  }
-                  if (ox2 < 0) {
-                    gjs = 0; gje = ngh_l - 1;
-                  } else if (ox2 > 0) {
-                    gjs = ngh_l + ncells_l;
-                    gje = ngh_l + ncells_l + ngh_l - 1;
-                  } else {
-                    gjs = ngh_l;
-                    gje = ngh_l + ncells_l - 1;
-                  }
-                  if (ox3 < 0) {
-                    gks = 0; gke = ngh_l - 1;
-                  } else if (ox3 > 0) {
-                    gks = ngh_l + ncells_l;
-                    gke = ngh_l + ncells_l + ngh_l - 1;
-                  } else {
-                    gks = ngh_l;
-                    gke = ngh_l + ncells_l - 1;
-                  }
+        // Face neighbor from coarser: flux-conserving prolongation
+        // from coarse_buf_ into fine ghost cells of u
+        if (nface == 1) {
+          if (ox1 != 0) {
+            int fig = (ox1 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
+            int fi  = (ox1 < 0) ? ngh_l : ngh_l + ncells_l - 1;
+            int si  = (ox1 < 0) ? ngh_l - 1 : ngh_l + half;
+            int sj0 = ngh_l;
+            int sk0 = ngh_l;
+            for (int v = 0; v < nvar_l; ++v) {
+              for (int sk = sk0; sk < sk0 + half; ++sk) {
+                for (int sj = sj0; sj < sj0 + half; ++sj) {
+                  int fj = ngh_l + 2*(sj - sj0);
+                  int fk = ngh_l + 2*(sk - sk0);
+                  Real cc = cbuf(m,v,sk,sj,si);
+                  int sjm = (sj > ngh_l) ? sj-1 : sj;
+                  int sjp = (sj < ngh_l+half-1) ? sj+1 : sj;
+                  int skm = (sk > ngh_l) ? sk-1 : sk;
+                  int skp = (sk < ngh_l+half-1) ? sk+1 : sk;
+                  Real gy = 0.125*(cbuf(m,v,sk,sjp,si)-cbuf(m,v,sk,sjm,si));
+                  Real gz = 0.125*(cbuf(m,v,skp,sj,si)-cbuf(m,v,skm,sj,si));
+                  u(m,v,fk  ,fj  ,fig)=ot*(2.0*(cc-gy-gz)+u(m,v,fk  ,fj  ,fi));
+                  u(m,v,fk  ,fj+1,fig)=ot*(2.0*(cc+gy-gz)+u(m,v,fk  ,fj+1,fi));
+                  u(m,v,fk+1,fj  ,fig)=ot*(2.0*(cc-gy+gz)+u(m,v,fk+1,fj  ,fi));
+                  u(m,v,fk+1,fj+1,fig)=ot*(2.0*(cc+gy+gz)+u(m,v,fk+1,fj+1,fi));
+                }
+              }
+            }
+          } else if (ox2 != 0) {
+            int fjg = (ox2 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
+            int fj  = (ox2 < 0) ? ngh_l : ngh_l + ncells_l - 1;
+            int sj  = (ox2 < 0) ? ngh_l - 1 : ngh_l + half;
+            int si0 = ngh_l;
+            int sk0 = ngh_l;
+            for (int v = 0; v < nvar_l; ++v) {
+              for (int sk = sk0; sk < sk0 + half; ++sk) {
+                for (int si = si0; si < si0 + half; ++si) {
+                  int fi = ngh_l + 2*(si - si0);
+                  int fk = ngh_l + 2*(sk - sk0);
+                  Real cc = cbuf(m,v,sk,sj,si);
+                  int sim = (si > ngh_l) ? si-1 : si;
+                  int sip = (si < ngh_l+half-1) ? si+1 : si;
+                  int skm = (sk > ngh_l) ? sk-1 : sk;
+                  int skp = (sk < ngh_l+half-1) ? sk+1 : sk;
+                  Real gx = 0.125*(cbuf(m,v,sk,sj,sip)-cbuf(m,v,sk,sj,sim));
+                  Real gz = 0.125*(cbuf(m,v,skp,sj,si)-cbuf(m,v,skm,sj,si));
+                  u(m,v,fk  ,fjg,fi  )=ot*(2.0*(cc-gx-gz)+u(m,v,fk  ,fj,fi  ));
+                  u(m,v,fk  ,fjg,fi+1)=ot*(2.0*(cc+gx-gz)+u(m,v,fk  ,fj,fi+1));
+                  u(m,v,fk+1,fjg,fi  )=ot*(2.0*(cc-gx+gz)+u(m,v,fk+1,fj,fi  ));
+                  u(m,v,fk+1,fjg,fi+1)=ot*(2.0*(cc+gx+gz)+u(m,v,fk+1,fj,fi+1));
+                }
+              }
+            }
+          } else {
+            int fkg = (ox3 < 0) ? ngh_l - 1 : ngh_l + ncells_l;
+            int fk  = (ox3 < 0) ? ngh_l : ngh_l + ncells_l - 1;
+            int sk  = (ox3 < 0) ? ngh_l - 1 : ngh_l + half;
+            int si0 = ngh_l;
+            int sj0 = ngh_l;
+            for (int v = 0; v < nvar_l; ++v) {
+              for (int sj = sj0; sj < sj0 + half; ++sj) {
+                for (int si = si0; si < si0 + half; ++si) {
+                  int fi = ngh_l + 2*(si - si0);
+                  int fj = ngh_l + 2*(sj - sj0);
+                  Real cc = cbuf(m,v,sk,sj,si);
+                  int sim = (si > ngh_l) ? si-1 : si;
+                  int sip = (si < ngh_l+half-1) ? si+1 : si;
+                  int sjm = (sj > ngh_l) ? sj-1 : sj;
+                  int sjp = (sj < ngh_l+half-1) ? sj+1 : sj;
+                  Real gx = 0.125*(cbuf(m,v,sk,sj,sip)-cbuf(m,v,sk,sj,sim));
+                  Real gy = 0.125*(cbuf(m,v,sk,sjp,si)-cbuf(m,v,sk,sjm,si));
+                  u(m,v,fkg,fj  ,fi  )=ot*(2.0*(cc-gx-gy)+u(m,v,fk,fj  ,fi  ));
+                  u(m,v,fkg,fj  ,fi+1)=ot*(2.0*(cc+gx-gy)+u(m,v,fk,fj  ,fi+1));
+                  u(m,v,fkg,fj+1,fi  )=ot*(2.0*(cc-gx+gy)+u(m,v,fk,fj+1,fi  ));
+                  u(m,v,fkg,fj+1,fi+1)=ot*(2.0*(cc+gx+gy)+u(m,v,fk,fj+1,fi+1));
+                }
+              }
+            }
+          }
+        } else {
+          int gis, gie, gjs, gje, gks, gke;
+          if (ox1 < 0) {
+            gis = 0; gie = ngh_l - 1;
+          } else if (ox1 > 0) {
+            gis = ngh_l + ncells_l;
+            gie = ngh_l + ncells_l + ngh_l - 1;
+          } else {
+            gis = ngh_l;
+            gie = ngh_l + ncells_l - 1;
+          }
+          if (ox2 < 0) {
+            gjs = 0; gje = ngh_l - 1;
+          } else if (ox2 > 0) {
+            gjs = ngh_l + ncells_l;
+            gje = ngh_l + ncells_l + ngh_l - 1;
+          } else {
+            gjs = ngh_l;
+            gje = ngh_l + ncells_l - 1;
+          }
+          if (ox3 < 0) {
+            gks = 0; gke = ngh_l - 1;
+          } else if (ox3 > 0) {
+            gks = ngh_l + ncells_l;
+            gke = ngh_l + ncells_l + ngh_l - 1;
+          } else {
+            gks = ngh_l;
+            gke = ngh_l + ncells_l - 1;
+          }
 
-                  for (int v = 0; v < nvar_l; ++v) {
-                    for (int gk = gks; gk <= gke; ++gk) {
-                      for (int gj = gjs; gj <= gje; ++gj) {
-                        for (int gi = gis; gi <= gie; ++gi) {
-                          int ci, cj, ck;
-                          if (ox1 < 0)      ci = ngh_l - 1;
-                          else if (ox1 > 0) ci = ngh_l + half;
-                          else              ci = ngh_l + (gi - ngh_l)/2;
-                          if (ox2 < 0)      cj = ngh_l - 1;
-                          else if (ox2 > 0) cj = ngh_l + half;
-                          else              cj = ngh_l + (gj - ngh_l)/2;
-                          if (ox3 < 0)      ck = ngh_l - 1;
-                          else if (ox3 > 0) ck = ngh_l + half;
-                          else              ck = ngh_l + (gk - ngh_l)/2;
+          for (int v = 0; v < nvar_l; ++v) {
+            for (int gk = gks; gk <= gke; ++gk) {
+              for (int gj = gjs; gj <= gje; ++gj) {
+                for (int gi = gis; gi <= gie; ++gi) {
+                  int ci, cj, ck;
+                  if (ox1 < 0)      ci = ngh_l - 1;
+                  else if (ox1 > 0) ci = ngh_l + half;
+                  else              ci = ngh_l + (gi - ngh_l)/2;
+                  if (ox2 < 0)      cj = ngh_l - 1;
+                  else if (ox2 > 0) cj = ngh_l + half;
+                  else              cj = ngh_l + (gj - ngh_l)/2;
+                  if (ox3 < 0)      ck = ngh_l - 1;
+                  else if (ox3 > 0) ck = ngh_l + half;
+                  else              ck = ngh_l + (gk - ngh_l)/2;
 
-                          u(m, v, gk, gj, gi) = cbuf(m, v, ck, cj, ci);
-                        }
-                      }
-                    }
-                  }
+                  u(m, v, gk, gj, gi) = cbuf(m, v, ck, cj, ci);
                 }
               }
             }
           }
         }
-      }
+      });
   });
 
   return TaskStatus::complete;
