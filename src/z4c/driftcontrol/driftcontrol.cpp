@@ -32,6 +32,10 @@
 #include "z4c/z4c_macros.hpp"
 
 namespace {
+// Position and velocity history are needed by the first RHS after a restart.
+char const *const pos_key[3] = {"dc_pos_x", "dc_pos_y", "dc_pos_z"};
+char const *const vel_key[3] = {"dc_vel_x", "dc_vel_y", "dc_vel_z"};
+char const *const error_key[3] = {"dc_error_x", "dc_error_y", "dc_error_z"};
 // Parameter keys under which the PID integral is checkpointed.
 char const *const integral_key[3] = {"dc_integral_x", "dc_integral_y", "dc_integral_z"};
 // Parameter keys under which the DOB observer state is checkpointed.
@@ -108,7 +112,7 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
       pin->GetOrAddString("z4c", "dc_variety", "oscillator"));
 
   dc_tracker_index = pin->GetOrAddInteger("z4c", "dc_tracker_index", 0);
-  dc_first_step    = true;
+  dc_first_step    = pin->GetOrAddBoolean("z4c", "dc_first_step", true);
   dc_dt_warned     = false;
   dc_vel_cap       = pin->GetOrAddReal("z4c", "dc_vel_cap", 1.0);
   dc_integral_cap  = pin->GetOrAddReal("z4c", "dc_integral_cap", 5.0);
@@ -157,13 +161,13 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
   // The PID integral holds the controller's entire steady-state authority;
   // restore it across restarts
   for (int a = 0; a < NDIM; ++a) {
-    dc_pos[a]        = dc_fixed[a];
-    dc_pos_old[a]    = dc_fixed[a];
-    dc_vel[a]        = 0.0;
+    dc_pos[a]        = pin->GetOrAddReal("z4c", pos_key[a], dc_fixed[a]);
+    dc_pos_old[a]    = dc_pos[a];
+    dc_vel[a]        = pin->GetOrAddReal("z4c", vel_key[a], 0.0);
     dc_integral[a]   = pin->GetOrAddReal("z4c", integral_key[a], 0.0);
-    dc_prev_error[a] = 0.0;
+    dc_prev_error[a] = pin->GetOrAddReal("z4c", error_key[a], 0.0);
     dc_p[a]          = pin->GetOrAddReal("z4c", dob_key[a], 0.0);
-    dc_fhat[a]       = dc_p[a];  // v is suppressed on the first step
+    dc_fhat[a]       = dc_p[a] + dc_omega_o * dc_vel[a];
     dc_u[a]          = pin->GetOrAddReal("z4c", bdob_u_key[a], 0.0);
     dc_budget_used[a] = pin->GetOrAddReal("z4c", budget_key[a], 0.0);
     dc_umax_eff[a]   = dc_umax[a];
@@ -208,7 +212,10 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
     std::string ofname = pin->GetString("job", "basename") + ".";
     ofname += dc_fname;
     ofname += ".txt";
-    ofile.open(ofname.c_str());
+    std::ifstream existing(ofname);
+    const bool has_header = existing.good() && existing.peek() != EOF;
+    ofile.open(ofname.c_str(), std::ios::app);
+    if (!has_header) {
     ofile << "# variety=" << pin->GetString("z4c", "dc_variety")
           << " fixed=(" << dc_fixed[0] << "," << dc_fixed[1] << "," << dc_fixed[2] << ")"
           << " gain=(" << dc_gain[0] << "," << dc_gain[1] << "," << dc_gain[2] << ")";
@@ -245,6 +252,7 @@ DriftControl::DriftControl(Mesh *pmesh, ParameterInput *pin) :
       ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz 9:ix 10:iy 11:iz\n";
     }
     ofile << std::flush;
+    }
     ofile << std::setprecision(19);
   }
 }
@@ -430,7 +438,11 @@ void DriftControl::EvolveDriftControl() {
 
 //----------------------------------------------------------------------------------------
 void DriftControl::WriteDriftControl() {
+  pin->SetBoolean("z4c", "dc_first_step", dc_first_step);
   for (int a = 0; a < NDIM; ++a) {
+    pin->SetReal("z4c", pos_key[a], dc_pos[a]);
+    pin->SetReal("z4c", vel_key[a], dc_vel[a]);
+    pin->SetReal("z4c", error_key[a], dc_prev_error[a]);
     pin->SetReal("z4c", integral_key[a], dc_integral[a]);
     pin->SetReal("z4c", dob_key[a], dc_p[a]);
     pin->SetReal("z4c", bdob_u_key[a], dc_u[a]);

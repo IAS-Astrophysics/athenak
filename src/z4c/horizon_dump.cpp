@@ -46,7 +46,8 @@ HorizonDump::HorizonDump(MeshBlockPack *pmbp, ParameterInput *pin, int n, int is
                               + nstr+"_Nx",10);
   horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1.0);
   r_guess = pin->GetOrAddReal("z4c", "horizon" + nstr + "r_guess", 0.5);
-  output_count = 0;
+  output_count = pin->GetOrAddInteger("z4c", "horizon_"+nstr+"_output_count", 0);
+  horizon_last_output_time = pin->GetOrAddReal("z4c", "horizon_"+nstr+"_last_time", 0);
 
   Real extend[3] = {horizon_extent,horizon_extent,horizon_extent};
   int Nx[3] = {horizon_nx,horizon_nx,horizon_nx};

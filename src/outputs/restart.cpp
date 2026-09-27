@@ -27,6 +27,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/compact_object_tracker.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/horizon_dump.hpp"
 #include "radiation/radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 //#include "outputs.hpp"
@@ -198,6 +199,17 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
   pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
   pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
+
+  // Store extraction state in the existing parameter header, independently of
+  // whether any compact-object trackers are enabled.
+  if (pz4c != nullptr) {
+    pin->SetReal("z4c", "cce_last_output_time", pz4c->cce_dump_last_output_time);
+    for (auto &hd : pz4c->phorizon_dump) {
+      std::string key = "horizon_" + std::to_string(hd->horizon_ind);
+      pin->SetInteger("z4c", key+"_output_count", hd->output_count);
+      pin->SetReal("z4c", key+"_last_time", hd->horizon_last_output_time);
+    }
+  }
 
   // create string holding input parameters (copy of input file)
   std::stringstream ost;

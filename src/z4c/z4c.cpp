@@ -248,7 +248,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   if (ncce > 0) {
     mkdir("cce",0775);
   }
-  cce_dump_last_output_time = -100;
+  cce_dump_last_output_time = pin->GetOrAddReal("z4c", "cce_last_output_time", -100);
 
   // Construct the compact object trackers
   int n = 0;
@@ -284,7 +284,10 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   n = 0;
   while (true) {
     if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      // phorizon_dump.emplace_back(pmy_pack, pin, n,false);
+      if (static_cast<std::size_t>(n) >= ptracker.size()) {
+        std::cerr << "Horizon dump requires its matching compact-object tracker" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       phorizon_dump.push_back(std::make_unique<HorizonDump>(pmy_pack, pin, n, 0));
       std::string foldername = "horizon_"+std::to_string(n);
       mkdir(foldername.c_str(),0775);
