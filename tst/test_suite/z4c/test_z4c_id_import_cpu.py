@@ -2,9 +2,10 @@
 import os
 import numpy as np
 import pytest
-import h5py
 
 from .overhaul_utils import run_case, table
+
+h5py = pytest.importorskip("h5py")
 
 
 @pytest.fixture

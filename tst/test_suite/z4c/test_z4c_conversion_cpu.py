@@ -1,11 +1,12 @@
 """Binary-to-HDF5 coordinates must describe the actual output cell subset."""
 import importlib.util
 
-import h5py
 import numpy as np
 import pytest
 
 from .overhaul_utils import ROOT, run_case
+
+h5py = pytest.importorskip("h5py")
 
 spec = importlib.util.spec_from_file_location("bin_convert", ROOT / "vis/python/bin_convert.py")
 converter = importlib.util.module_from_spec(spec)
