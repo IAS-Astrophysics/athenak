@@ -47,6 +47,7 @@ BHAHAHorizonFinder::BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin)
   nfinds_.assign(max_num_horizons_, 0);
   found_.assign(max_num_horizons_, 0);
   mass_.assign(max_num_horizons_, 0.0);
+  min_radius_.assign(max_num_horizons_, 0.0);
   center_.assign(max_num_horizons_, {0.0, 0.0, 0.0});
   spin_.assign(max_num_horizons_, {0.0, 0.0, 0.0});
   input_buf_.resize(max_num_horizons_);
@@ -174,8 +175,6 @@ void BHAHAHorizonFinder::FindHorizons() {
   for (int h = 0; h < max_num_horizons_; ++h) {
     if (!bah_horizon_active_[h]) continue;
     broadcastHorizonState(h);
-    auto &pd = params_data_[h];
-    center_[h] = {pd.x_center_m1, pd.y_center_m1, pd.z_center_m1};
     if (verbosity_ > 0 && global_variable::my_rank == rootRank(h)) {
       std::cout << "BHaHAHA horizon " << h << " timing [s]: interpolation "
                 << time_interp_[h] << ", MPI " << time_mpi_[h] << ", solve "
@@ -226,7 +225,7 @@ void BHAHAHorizonFinder::broadcastHorizonState(int h) {
 #if MPI_PARALLEL_ENABLED
   Kokkos::Timer timer;
   auto &pd = params_data_[h];
-  double buf[24] = {pd.t_m1, pd.t_m2, pd.t_m3,
+  double buf[28] = {pd.t_m1, pd.t_m2, pd.t_m3,
                     pd.x_center_m1, pd.x_center_m2, pd.x_center_m3,
                     pd.y_center_m1, pd.y_center_m2, pd.y_center_m3,
                     pd.z_center_m1, pd.z_center_m2, pd.z_center_m3,
@@ -234,8 +233,10 @@ void BHAHAHorizonFinder::broadcastHorizonState(int h) {
                     pd.r_max_m1, pd.r_max_m2, pd.r_max_m3,
                     static_cast<double>(pd.use_fixed_radius_guess_on_full_sphere),
                     static_cast<double>(found_[h]), mass_[h],
-                    spin_[h][0], spin_[h][1], spin_[h][2]};
-  MPI_Bcast(buf, 24, MPI_DOUBLE, rootRank(h), MPI_COMM_WORLD);
+                    spin_[h][0], spin_[h][1], spin_[h][2],
+                    min_radius_[h],
+                    center_[h][0], center_[h][1], center_[h][2]};
+  MPI_Bcast(buf, 28, MPI_DOUBLE, rootRank(h), MPI_COMM_WORLD);
   pd.t_m1 = buf[0];  pd.t_m2 = buf[1];  pd.t_m3 = buf[2];
   pd.x_center_m1 = buf[3];  pd.x_center_m2 = buf[4];  pd.x_center_m3 = buf[5];
   pd.y_center_m1 = buf[6];  pd.y_center_m2 = buf[7];  pd.y_center_m3 = buf[8];
@@ -246,6 +247,8 @@ void BHAHAHorizonFinder::broadcastHorizonState(int h) {
   found_[h] = static_cast<int>(buf[19]);
   mass_[h] = buf[20];
   spin_[h] = {buf[21], buf[22], buf[23]};
+  min_radius_[h] = buf[24];
+  center_[h] = {buf[25], buf[26], buf[27]};
   time_mpi_[h] += timer.seconds();
 #endif
 }
@@ -438,9 +441,14 @@ void BHAHAHorizonFinder::SolveHorizon(int h) {
     found_[h] = 1;
     mass_[h] = std::sqrt(diags.area/(16.0*M_PI));
     spin_[h] = {diags.J_x, diags.J_y, diags.J_z};
+    min_radius_[h] = diags.min_coord_radius_wrt_centroid;
+    center_[h] = {grid_center_[h][0] + diags.x_centroid_wrt_coord_origin,
+                  grid_center_[h][1] + diags.y_centroid_wrt_coord_origin,
+                  grid_center_[h][2] + diags.z_centroid_wrt_coord_origin};
   } else {
     std::cout << "Failed with Error Flag " << rc << std::endl;
     found_[h] = 0;
+    min_radius_[h] = 0.0;
     resetHorizonHistory(h);
   }
   pd.input_metric_data = nullptr;

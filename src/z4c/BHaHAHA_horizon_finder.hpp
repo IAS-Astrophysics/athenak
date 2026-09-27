@@ -22,7 +22,7 @@ public:
   int NumHorizons() const override { return max_num_horizons_; }
   bool Found(int h) const override { return found_[h] != 0; }
   const Real *Center(int h) const override { return center_[h].data(); }
-  Real MinRadius(int h) const override { return params_data_[h].r_min_m1; }
+  Real MinRadius(int h) const override { return min_radius_[h]; }
   Real Mass(int h) const override { return mass_[h]; }
   const Real *Spin(int h) const override { return spin_[h].data(); }
 
@@ -33,6 +33,7 @@ private:
   int max_num_horizons_;
   std::vector<int> found_;
   std::vector<Real> mass_;
+  std::vector<Real> min_radius_;
   std::vector<std::array<Real,3>> center_, spin_;
 
   // Initialization
