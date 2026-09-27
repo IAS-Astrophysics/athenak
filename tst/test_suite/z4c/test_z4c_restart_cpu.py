@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import subprocess
+import shlex
 
 import numpy as np
 import pytest
@@ -64,7 +65,8 @@ single_file_per_rank={str(per_rank).lower()}
     tracker = next(split.glob("*.co_0.txt"))
     prefix = tracker.read_text()
     executable = str(Path(os.environ.get("ATHENA_OVERHAUL_EXE", "./athena")).resolve())
-    result = subprocess.run([executable, "-r", str(checkpoint), "time/nlim=4"],
+    result = subprocess.run(shlex.split(os.environ.get("ATHENA_TEST_LAUNCHER", "")) +
+                            [executable, "-r", str(checkpoint), "time/nlim=4"],
                             cwd=split, capture_output=True, text=True, timeout=90)
     (split / "restart.log").write_text(result.stdout + result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr

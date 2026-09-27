@@ -2,13 +2,14 @@
 import os
 from pathlib import Path
 import subprocess
+import shlex
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def run_case(directory, extra="", executable=None, success=True):
+def run_case(directory, extra="", executable=None, success=True, slices=True):
     directory.mkdir(parents=True, exist_ok=True)
     executable = executable or os.environ.get("ATHENA_OVERHAUL_EXE", "./athena")
     executable = str(Path(executable).resolve())
@@ -37,10 +38,17 @@ dt=0.001
 slice_x2=0.5
 slice_x3=0.5
 data_format=%24.16e
-""" + extra
+"""
+    if not slices:
+        text = "\n".join(line for line in text.splitlines() if not line.startswith("slice_"))
+    text += extra
+    if os.environ.get("ATHENA_TEST_LAUNCHER"):
+        text += "\n<mesh>\nnx1=16\n"
+
     source = directory / "test.athinput"
     source.write_text(text)
-    result = subprocess.run([executable, "-i", str(source)], cwd=directory,
+    result = subprocess.run(shlex.split(os.environ.get("ATHENA_TEST_LAUNCHER", "")) +
+                            [executable, "-i", str(source)], cwd=directory,
                             capture_output=True, text=True, timeout=90)
     (directory / "run.log").write_text(result.stdout + result.stderr)
     assert (result.returncode == 0) == success, result.stdout + result.stderr

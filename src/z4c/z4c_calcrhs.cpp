@@ -133,19 +133,17 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   // ===================================================================================
   // Main RHS calculation
   //
-  par_for("z4c rhs loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  // Keep geometry, connection and gauge scratch separate to reduce device register
+  // pressure. These kernels read the same RK-stage state and write disjoint RHS fields.
+  par_for("z4c geometry rhs loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // Define scratch arrays to be used in the following calculations
 
     // Gamma computed from the metric
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u;
-    // Covariant derivative of A
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> DA_u;
 
     // inverse of conf. metric
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
-    // inverse of A
-    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> A_uu;
     // g^cd A_ac A_db
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> AA_dd;
     // Ricci tensor
@@ -166,16 +164,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // lapse 1st drvts
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d;
-    // 2nd "divergence" of beta
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> ddbeta_d;
     // chi 1st drvts
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dchi_d;
     // phi 1st drvts
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dphi_d;
-    // Khat 1st drvts
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dKhat_d;
-    // Theta 1st drvts
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dTheta_d;
 
     // lapse 2nd drvts
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
@@ -188,16 +180,10 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // metric 1st drvts
     AthenaPointTensor<Real, TensorSymm::SYM2,  3, 3> dg_ddd;
-    // shift 2nd drvts
-    AthenaPointTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
 
     // metric 2nd drvts
     AthenaPointTensor<Real, TensorSymm::SYM22, 3, 4> ddg_dddd;
 
-    // Lie derivative of Gamma
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
-    // Lie derivative of the shift
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
 
     // Lie derivative of conf. 3-metric
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
@@ -212,8 +198,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Scalars
 
     // auxiliary Lie derivatives along the shift vector
-    // Lie derivative of the lapse
-    Real Lalpha = 0.0;
     // Lie derivative of chi
     Real Lchi = 0.0;
     // Lie derivative of Khat
@@ -245,11 +229,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     //
     // Vectors
-    Lbeta_u.ZeroClear();
-    LGam_u.ZeroClear();
     Gamma_u.ZeroClear();
-    DA_u.ZeroClear();
-    ddbeta_d.ZeroClear();
 
     //
     // Symmetric tensors
@@ -257,7 +237,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     LA_dd.ZeroClear();
     AA_dd.ZeroClear();
     R_dd.ZeroClear();
-    A_uu.ZeroClear();
     Gamma_udd.ZeroClear();
 
     // -----------------------------------------------------------------------------------
@@ -267,8 +246,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int a = 0; a < 3; ++a) {
       dalpha_d(a) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
       dchi_d  (a) = Dx<NGHOST>(a, idx, z4c.chi,   m,k,j,i);
-      dKhat_d (a) = Dx<NGHOST>(a, idx, z4c.vKhat,  m,k,j,i);
-      dTheta_d(a) = Dx<NGHOST>(a, idx, z4c.vTheta, m,k,j,i);
     }
 
     // Vectors
@@ -299,15 +276,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
       }
     }
 
-    // Vectors
-    for(int c = 0; c < 3; ++c)
-    for(int a = 0; a < 3; ++a) {
-      ddbeta_ddu(a,a,c) = Dxx<NGHOST>(a, idx, z4c.beta_u, m,c,k,j,i);
-      for(int b = a + 1; b < 3; ++b) {
-        ddbeta_ddu(a,b,c) = Dxy<NGHOST>(a, b, idx, z4c.beta_u, m,c,k,j,i);
-      }
-    }
-
     // Tensors
     for(int c = 0; c < 3; ++c)
     for(int d = c; d < 3; ++d)
@@ -325,7 +293,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Scalars
     for(int a = 0; a < 3; ++a) {
-      Lalpha += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
       Lchi   += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.chi,   m,a,k,j,i);
       LKhat  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vKhat,  m,a,k,j,i);
       LTheta += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vTheta, m,a,k,j,i);
@@ -333,11 +300,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     //
     // Vectors
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      Lbeta_u(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
-      LGam_u(b)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u,  m,a,b,k,j,i);
-    }
 
     //
     // Tensors
@@ -486,24 +448,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int b = 0; b < 3; ++b) {
       AA += g_uu(a,b) * AA_dd(a,b);
     }
-    for(int a = 0; a < 3; ++a)
-    for(int b = a; b < 3; ++b)
-    for(int c = 0; c < 3; ++c)
-    for(int d = 0; d < 3; ++d) {
-      A_uu(a,b) += g_uu(a,c) * g_uu(b,d) * z4c.vA_dd(m,c,d,k,j,i);
-    }
-    // TODO(JMF): dchi_d/chi_guarded is opt.chi_psi_power * dphi_d.
-    for(int a = 0; a < 3; ++a) {
-      for(int b = 0; b < 3; ++b) {
-          DA_u(a) -= (3./2.) * A_uu(a,b) * dchi_d(b) / chi_guarded;
-          DA_u(a) -= (1./3.) * g_uu(a,b) * (2.*dKhat_d(b) + dTheta_d(b));
-      }
-      for(int b = 0; b < 3; ++b)
-      for(int c = 0; c < 3; ++c) {
-        DA_u(a) += Gamma_udd(a,b,c) * A_uu(b,c);
-      }
-    }
-
     // -----------------------------------------------------------------------------------
     // Ricci scalar
     //
@@ -526,24 +470,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int a = 0; a < 3; ++a) {
       dbeta += dbeta_du(a,a);
     }
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      ddbeta_d(a) += (1./3.) * ddbeta_ddu(a,b,b);
-    }
 
     // Finalize Lchi
     Lchi += (1./6.) * opt.chi_psi_power * chi_guarded * dbeta;
-
-    // Finalize LGam_u (note that this is not a real Lie derivative)
-    for(int a = 0; a < 3; ++a) {
-      LGam_u(a) += (2./3.) * Gamma_u(a) * dbeta;
-      for(int b = 0; b < 3; ++b) {
-        LGam_u(a) += g_uu(a,b) * ddbeta_d(b) - Gamma_u(b) * dbeta_du(b,a);
-        for(int c = 0; c < 3; ++c) {
-          LGam_u(a) += g_uu(b,c) * ddbeta_ddu(b,c,a);
-        }
-      }
-    }
 
     // Finalize Lg_dd and LA_dd
     for(int a = 0; a < 3; ++a)
@@ -585,21 +514,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     }
     // If BSSN is enabled, theta is disabled.
     rhs.vTheta(m,k,j,i) *= opt.use_z4c;
-    // Gamma's
-    for(int a = 0; a < 3; ++a) {
-      rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
-      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
-          (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
-      for(int b = 0; b < 3; ++b) {
-        rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
-        // Matter term
-        if(!is_vacuum) {
-          rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
-                              * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
-        }
-      }
-    }
-
     // g and A
     for(int a = 0; a < 3; ++a)
     for(int b = a; b < 3; ++b) {
@@ -618,6 +532,160 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                 (oopsi4*tmunu.S_dd(m,a,b,k,j,i) - (1./3.)*S*z4c.g_dd(m,a,b,k,j,i));
       }
     }
+  });
+
+  par_for("z4c Gamma rhs loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Gamma_u, DA_u, LGam_u, ddbeta_d;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d, dchi_d, dKhat_d, dTheta_d;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu, A_uu;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> Gamma_ddd, Gamma_udd, dg_ddd;
+    AthenaPointTensor<Real, TensorSymm::ISYM2, 3, 3> ddbeta_ddu;
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
+    Real detg = 0.0, dbeta = 0.0;
+    Real chi_guarded = fmax(z4c.chi(m,k,j,i),opt.chi_div_floor);
+    Gamma_u.ZeroClear();
+    DA_u.ZeroClear();
+    LGam_u.ZeroClear();
+    ddbeta_d.ZeroClear();
+    A_uu.ZeroClear();
+    Gamma_udd.ZeroClear();
+    for (int a=0; a<3; ++a) {
+      dalpha_d(a) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
+      dchi_d(a) = Dx<NGHOST>(a, idx, z4c.chi, m,k,j,i);
+      dKhat_d(a) = Dx<NGHOST>(a, idx, z4c.vKhat, m,k,j,i);
+      dTheta_d(a) = Dx<NGHOST>(a, idx, z4c.vTheta, m,k,j,i);
+      for (int b=0; b<3; ++b) {
+        dbeta_du(b,a) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
+        LGam_u(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u, m,a,b,k,j,i);
+      }
+    }
+    // Tensors
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c) {
+      dg_ddd(c,a,b) = Dx<NGHOST>(c, idx, z4c.g_dd, m,a,b,k,j,i);
+    }
+
+    // Vectors
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a) {
+      ddbeta_ddu(a,a,c) = Dxx<NGHOST>(a, idx, z4c.beta_u, m,c,k,j,i);
+      for(int b = a + 1; b < 3; ++b) {
+        ddbeta_ddu(a,b,c) = Dxy<NGHOST>(a, b, idx, z4c.beta_u, m,c,k,j,i);
+      }
+    }
+
+    detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                              z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
+                              z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+    adm::SpatialInv(1.0/detg,
+               z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+               z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
+               &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+               &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      Gamma_ddd(c,a,b) = 0.5*(dg_ddd(a,b,c) + dg_ddd(b,a,c) - dg_ddd(c,a,b));
+    }
+    for(int c = 0; c < 3; ++c)
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int d = 0; d < 3; ++d) {
+      Gamma_udd(c,a,b) += g_uu(c,d)*Gamma_ddd(d,a,b);
+    }
+    // Gamma's computed from the conformal metric (not evolved)
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b)
+    for(int c = 0; c < 3; ++c) {
+      Gamma_u(a) += g_uu(b,c)*Gamma_udd(a,b,c);
+    }
+
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b)
+    for(int c = 0; c < 3; ++c)
+    for(int d = 0; d < 3; ++d) {
+      A_uu(a,b) += g_uu(a,c) * g_uu(b,d) * z4c.vA_dd(m,c,d,k,j,i);
+    }
+    // TODO(JMF): dchi_d/chi_guarded is opt.chi_psi_power * dphi_d.
+    for(int a = 0; a < 3; ++a) {
+      for(int b = 0; b < 3; ++b) {
+          DA_u(a) -= (3./2.) * A_uu(a,b) * dchi_d(b) / chi_guarded;
+          DA_u(a) -= (1./3.) * g_uu(a,b) * (2.*dKhat_d(b) + dTheta_d(b));
+      }
+      for(int b = 0; b < 3; ++b)
+      for(int c = 0; c < 3; ++c) {
+        DA_u(a) += Gamma_udd(a,b,c) * A_uu(b,c);
+      }
+    }
+
+    // Shift vector contractions
+    for(int a = 0; a < 3; ++a) {
+      dbeta += dbeta_du(a,a);
+    }
+    for(int a = 0; a < 3; ++a)
+    for(int b = 0; b < 3; ++b) {
+      ddbeta_d(a) += (1./3.) * ddbeta_ddu(a,b,b);
+    }
+
+    // Finalize LGam_u (note that this is not a real Lie derivative)
+    for(int a = 0; a < 3; ++a) {
+      LGam_u(a) += (2./3.) * Gamma_u(a) * dbeta;
+      for(int b = 0; b < 3; ++b) {
+        LGam_u(a) += g_uu(a,b) * ddbeta_d(b) - Gamma_u(b) * dbeta_du(b,a);
+        for(int c = 0; c < 3; ++c) {
+          LGam_u(a) += g_uu(b,c) * ddbeta_ddu(b,c,a);
+        }
+      }
+    }
+
+    // Gamma's
+    for(int a = 0; a < 3; ++a) {
+      rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
+      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
+          (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
+      for(int b = 0; b < 3; ++b) {
+        rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
+        // Matter term
+        if(!is_vacuum) {
+          rhs.vGam_u(m,a,k,j,i) -= 16.*M_PI * z4c.alpha(m,k,j,i)
+                              * g_uu(a,b) * tmunu.S_d(m,b,k,j,i);
+        }
+      }
+    }
+
+  });
+
+  par_for("z4c gauge rhs loop",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d, dchi_d, Lbeta_u;
+    Real idx[] = {1/size.d_view(m).dx1, 1/size.d_view(m).dx2, 1/size.d_view(m).dx3};
+    Real Lalpha = 0.0;
+    Real detg = 0.0;
+    Real chi_guarded = fmax(z4c.chi(m,k,j,i),opt.chi_div_floor);
+    Real oopsi4 = pow(chi_guarded,-4./opt.chi_psi_power);
+    Lbeta_u.ZeroClear();
+    for (int a=0; a<3; ++a) {
+      dalpha_d(a) = Dx<NGHOST>(a, idx, z4c.alpha, m,k,j,i);
+      dchi_d(a) = Dx<NGHOST>(a, idx, z4c.chi, m,k,j,i);
+      Lalpha += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.alpha, m,a,k,j,i);
+      for (int b=0; b<3; ++b) {
+        Lbeta_u(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
+      }
+    }
+    detg = adm::SpatialDet(z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i),
+                              z4c.g_dd(m,0,2,k,j,i), z4c.g_dd(m,1,1,k,j,i),
+                              z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i));
+    adm::SpatialInv(1.0/detg,
+               z4c.g_dd(m,0,0,k,j,i), z4c.g_dd(m,0,1,k,j,i), z4c.g_dd(m,0,2,k,j,i),
+               z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
+               &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+               &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
     // lapse function
     Real const f = opt.lapse_oplog * opt.lapse_harmonicf
                  + opt.lapse_harmonic * z4c.alpha(m,k,j,i);
