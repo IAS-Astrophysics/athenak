@@ -40,7 +40,8 @@ slice_x3=0.5
 data_format=%24.16e
 """
     if not slices:
-        text = "\n".join(line for line in text.splitlines() if not line.startswith("slice_"))
+        text = "\n".join(line for line in text.splitlines()
+                         if not line.startswith("slice_"))
     text += extra
     if os.environ.get("ATHENA_TEST_LAUNCHER"):
         text += "\n<mesh>\nnx1=16\n"

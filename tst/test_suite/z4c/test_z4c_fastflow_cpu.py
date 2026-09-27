@@ -27,7 +27,8 @@ def test_fastflow(tmp_path):
     assert len(data) > 0 and np.isfinite(data).all()
     # Read the horizon expansion residual by name using the upstream reader.
     import importlib.util
-    spec = importlib.util.spec_from_file_location("athena_read", ROOT / "vis/python/athena_read.py")
+    spec = importlib.util.spec_from_file_location(
+        "athena_read", ROOT / "vis/python/athena_read.py")
     reader = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(reader)
     horizon = reader.horizon(str(path))

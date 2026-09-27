@@ -8,7 +8,8 @@ from .overhaul_utils import ROOT, run_case
 
 h5py = pytest.importorskip("h5py")
 
-spec = importlib.util.spec_from_file_location("bin_convert", ROOT / "vis/python/bin_convert.py")
+spec = importlib.util.spec_from_file_location(
+    "bin_convert", ROOT / "vis/python/bin_convert.py")
 converter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(converter)
 
