@@ -69,6 +69,7 @@ void Z4c::ADMToZ4c(MeshBlockPack *pmbp, ParameterInput *pin) {
   par_for("initialize z4c fields",DevExeSpace(),
   0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    for (int a=0; a<3; ++a) z4c.vB_d(m,a,k,j,i) = 0.0;
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Kt_dd;
     Real detg = adm::SpatialDet(adm.g_dd(m,0,0,k,j,i), adm.g_dd(m,0,1,k,j,i),
                                 adm.g_dd(m,0,2,k,j,i), adm.g_dd(m,1,1,k,j,i),

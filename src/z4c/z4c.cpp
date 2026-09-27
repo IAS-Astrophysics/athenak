@@ -40,6 +40,7 @@ char const * const Z4c::Z4c_names[Z4c::nz4c] = {
   "z4c_Theta",
   "z4c_alpha",
   "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c_Bx", "z4c_By", "z4c_Bz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::ncon] = {
@@ -101,6 +102,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   //mat.S_d.InitWithShallowSlice(u_mat, I_MAT_Sx, I_MAT_Sz);
   //mat.S_dd.InitWithShallowSlice(u_mat, I_MAT_Sxx, I_MAT_Szz);
 
+  z4c.vB_d.InitWithShallowSlice(u0, I_Z4C_BX, I_Z4C_BZ);
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
@@ -110,6 +112,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   z4c.g_dd.InitWithShallowSlice  (u0, I_Z4C_GXX, I_Z4C_GZZ);
   z4c.vA_dd.InitWithShallowSlice  (u0, I_Z4C_AXX, I_Z4C_AZZ);
 
+  rhs.vB_d.InitWithShallowSlice(u_rhs, I_Z4C_BX, I_Z4C_BZ);
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
@@ -139,6 +142,16 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
   opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
   opt.ssl_damping_index = pin->GetOrAddInteger("z4c", "ssl_damping_index", 1);
+
+  opt.telegraph_lapse = pin->GetOrAddBoolean("z4c", "telegraph_lapse", false);
+  opt.telegraph_tau = pin->GetOrAddReal("z4c", "telegraph_tau", 0.1);
+  opt.telegraph_kappa = pin->GetOrAddReal("z4c", "telegraph_kappa", 0.1);
+  if (opt.telegraph_lapse && (!std::isfinite(opt.telegraph_tau) ||
+      opt.telegraph_tau<=0 || !std::isfinite(opt.telegraph_kappa) ||
+      opt.telegraph_kappa<0)) {
+    std::cerr << "Telegraph lapse requires finite tau>0 and kappa>=0." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);

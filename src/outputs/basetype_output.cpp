@@ -177,6 +177,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     exit(EXIT_FAILURE);
   }
 
+  if (ivar>=154 && pm->pmb_pack->pz4c == nullptr) {
+    std::cerr << "Z4c output requires a <z4c> block." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
   // Now load STL vector of output variables
   outvars.clear();
 

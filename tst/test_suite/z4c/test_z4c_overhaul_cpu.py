@@ -49,3 +49,35 @@ punc_2_velocity_x1={sign*-0.2}
     for name in ("adm_Kxx", "adm_Kxy", "adm_Kxz", "adm_Kyy", "adm_Kzz"):
         np.testing.assert_allclose(fields[0][name], -fields[1][name], atol=1e-14)
     np.testing.assert_allclose(fields[0]["adm_gxx"], fields[1]["adm_gxx"])
+
+
+@pytest.mark.parametrize("tau,kappa", [(0, 1), (-1, 1), (1, -1)])
+def test_invalid_telegraph(tmp_path, tau, kappa):
+    result = run_case(tmp_path, f"""
+<z4c>
+telegraph_lapse=true
+telegraph_tau={tau}
+telegraph_kappa={kappa}
+""", success=False)
+    assert "Telegraph lapse requires" in result.stderr
+
+
+def test_telegraph_lapse(tmp_path):
+    outputs = []
+    for enabled in (False, True):
+        directory = tmp_path / str(enabled)
+        run_case(directory, f"""
+<problem>
+pgen_name=z4c_superposed_punctures
+<time>
+nlim=2
+cfl_number=0.01
+<z4c>
+telegraph_lapse={str(enabled).lower()}
+<output1>
+variable=z4c
+""")
+        outputs.append(table(directory))
+    assert np.max(np.abs(outputs[0]["z4c_Bx"])) == 0
+    assert np.max(np.abs(outputs[1]["z4c_Bx"])) > 1e-10
+    assert np.max(np.abs(outputs[1]["z4c_alpha"]-outputs[0]["z4c_alpha"])) > 1e-14

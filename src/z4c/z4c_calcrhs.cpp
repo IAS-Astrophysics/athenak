@@ -633,6 +633,23 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                             (opt.ssl_damping_time),2));
     }
 
+    // Telegraph lapse: partial_t B_i = advection + (kappa partial_i alpha-B_i)/tau.
+    // The lapse receives gamma^{ij} partial_i B_j (the original partial-derivative
+    // formulation, not a covariant divergence). oopsi4 supports arbitrary chi powers.
+    for (int b=0; b<3; ++b) {
+      rhs.vB_d(m,b,k,j,i) = 0.0;
+      if (opt.telegraph_lapse) {
+        Real adv = 0.0;
+        for (int a=0; a<3; ++a) {
+          adv += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vB_d, m,a,b,k,j,i);
+          rhs.alpha(m,k,j,i) += oopsi4*g_uu(a,b)*
+                               Dx<NGHOST>(a, idx, z4c.vB_d, m,b,k,j,i);
+        }
+        rhs.vB_d(m,b,k,j,i) = opt.lapse_advect*adv +
+            (opt.telegraph_kappa*dalpha_d(b)-z4c.vB_d(m,b,k,j,i))/opt.telegraph_tau;
+      }
+    }
+
     // shift vector
     for(int a = 0; a < 3; ++a) {
       rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
