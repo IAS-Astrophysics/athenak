@@ -198,16 +198,16 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     out_params.last_time += out_params.dt;
   }
   pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
-  pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
+  pin->SetRealExact(out_params.block_name, "last_time", out_params.last_time);
 
   // Store extraction state in the existing parameter header, independently of
   // whether any compact-object trackers are enabled.
   if (pz4c != nullptr) {
-    pin->SetReal("z4c", "cce_last_output_time", pz4c->cce_dump_last_output_time);
+    pin->SetRealExact("z4c", "cce_last_output_time", pz4c->cce_dump_last_output_time);
     for (auto &hd : pz4c->phorizon_dump) {
       std::string key = "horizon_" + std::to_string(hd->horizon_ind);
       pin->SetInteger("z4c", key+"_output_count", hd->output_count);
-      pin->SetReal("z4c", key+"_last_time", hd->horizon_last_output_time);
+      pin->SetRealExact("z4c", key+"_last_time", hd->horizon_last_output_time);
     }
   }
 

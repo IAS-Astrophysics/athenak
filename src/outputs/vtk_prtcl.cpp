@@ -258,7 +258,7 @@ void ParticleVTKOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     out_params.last_time += out_params.dt;
   }
   pin->SetInteger(out_params.block_name, "file_number", out_params.file_number);
-  pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
+  pin->SetRealExact(out_params.block_name, "last_time", out_params.last_time);
 
   return;
 }

@@ -89,8 +89,9 @@ remain under the upstream AMR driver.
   the upstream buggy convention. Files use full-precision scientific time names;
   shells after zero include `shellN_` to avoid overwriting another shell.
 * Restarts preserve horizon counters/cadence, CCE cadence, and complete controller
-  position/velocity/error/integral/observer/budget history. Parameter real values
-  round-trip at full floating-point precision. Tracker and controller logs append.
+  position/velocity/error/integral/observer/budget history. Checkpoint state uses `SetRealExact` to
+  round-trip at full floating-point precision. The legacy `SetReal` API retains
+  upstream initialization semantics, including wave-generator evolution times. Tracker and controller logs append.
   Shared restart files and one file per rank are supported.
 * **Restart layout changes:** the three new gauge fields increase Z4c storage from
   22 to 25 fields, even when telegraph lapse is disabled. Existing 22-field upstream
@@ -174,3 +175,20 @@ subset of `test_z4c_overhaul_cpu.py` with the launcher environment above.
 GPU executions were limited by subprocess and outer timeouts. The initial
 4096-block sixth-order allocation exceeded available shared-device memory; the
 3712-block retry completed successfully within the bounded run.
+
+### Regression correction: initialization versus checkpoint serialization
+
+The first full CPU CI run exposed 11 failures in the existing Newtonian, SR, GR,
+and dynamical-GRMHD wave regressions. Commit `8cf76b1d5` had changed `SetReal`
+globally while implementing restart precision. Wave initialization also calls
+this API to set the evolution duration; for example, the SR right-going sound
+wave's stored final time changed from `3.29308` to `3.2930752120543803`.
+That altered the evolved solution relative to the upstream regression baseline.
+
+`SetReal` now retains its upstream representation. The new `SetRealExact` API is
+used explicitly for output cadence, controller state, extraction state and
+FastFlow restart metadata. This preserves exact checkpoint state without
+changing the initialization contract. All 36 tests in the four affected CPU
+wave modules and all 12 restart/FastFlow checks pass with the corrected binary.
+No test code, input decks, acceptance criteria or CI configuration were changed
+for this correction.

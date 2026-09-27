@@ -442,13 +442,13 @@ void DriftControl::EvolveDriftControl() {
 void DriftControl::WriteDriftControl() {
   pin->SetBoolean("z4c", "dc_first_step", dc_first_step);
   for (int a = 0; a < NDIM; ++a) {
-    pin->SetReal("z4c", pos_key[a], dc_pos[a]);
-    pin->SetReal("z4c", vel_key[a], dc_vel[a]);
-    pin->SetReal("z4c", error_key[a], dc_prev_error[a]);
-    pin->SetReal("z4c", integral_key[a], dc_integral[a]);
-    pin->SetReal("z4c", dob_key[a], dc_p[a]);
-    pin->SetReal("z4c", bdob_u_key[a], dc_u[a]);
-    pin->SetReal("z4c", budget_key[a], dc_budget_used[a]);
+    pin->SetRealExact("z4c", pos_key[a], dc_pos[a]);
+    pin->SetRealExact("z4c", vel_key[a], dc_vel[a]);
+    pin->SetRealExact("z4c", error_key[a], dc_prev_error[a]);
+    pin->SetRealExact("z4c", integral_key[a], dc_integral[a]);
+    pin->SetRealExact("z4c", dob_key[a], dc_p[a]);
+    pin->SetRealExact("z4c", bdob_u_key[a], dc_u[a]);
+    pin->SetRealExact("z4c", budget_key[a], dc_budget_used[a]);
   }
 
   if (0 == global_variable::my_rank && 0 == pmesh->ncycle % out_every) {

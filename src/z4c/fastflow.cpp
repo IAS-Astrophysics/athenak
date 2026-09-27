@@ -413,7 +413,7 @@ void FastFlow::Write(int iter, Real time) {
   if (ah_found && (time_first_found < 0)) {
     std::string parname {"time_first_found_" + std::to_string(nh)};
     time_first_found = time;
-    pin->SetReal("fastflow", parname, time_first_found);
+    pin->SetRealExact("fastflow", parname, time_first_found);
   }
 }
 
@@ -435,7 +435,7 @@ void FastFlow::Find(int iter, Real time) {
     std::string parname;
     parname = "last_a0_" + std::to_string(nh); // nh: horizon index
 
-    pin->SetReal("fastflow", parname, last_a0);
+    pin->SetRealExact("fastflow", parname, last_a0);
 
     parname = "ah_found_a0_" + std::to_string(nh);
     pin->SetBoolean("fastflow", parname, ah_found);

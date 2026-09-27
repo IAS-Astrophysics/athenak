@@ -126,6 +126,6 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   } else {
     out_params.last_time += out_params.dt;
   }
-  pin->SetReal(out_params.block_name, "last_time", out_params.last_time);
+  pin->SetRealExact(out_params.block_name, "last_time", out_params.last_time);
   return;
 }
