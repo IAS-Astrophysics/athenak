@@ -53,8 +53,6 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
       break;
     }
   }
-  int max_level = pin->GetOrAddInteger("mesh_refinement", "num_levels", 1);
-  max_ref_lev = pin->GetOrAddInteger("z4c_amr","max_ref_lev",max_level);
 }
 
 // 1: refines, -1: de-refines, 0: does nothing
@@ -147,8 +145,6 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   int I_Z4C_CHI  = pmbp->pz4c->I_Z4C_CHI;
   // note: we need this to prevent capture by this in the lambda expr.
   auto chi_thresh = this->chi_thresh;
-  auto root_lev = pmesh->root_level;
-  auto max_ref_lev = this->max_ref_lev;
 
   par_for_outer(
     "Z4c_AMR::ChiMin", DevExeSpace(), 0, 0, 0, (nmb - 1),
@@ -177,24 +173,6 @@ void Z4c_AMR::RefineChiMin(MeshBlockPack *pmbp) {
   // sync host and device
   refine_flag.template modify<DevExeSpace>();
   refine_flag.template sync<HostMemSpace>();
-
-  // enforce maximum refinement level
-  for (int m = 0; m < nmb; ++m) {
-    // current refinement level
-    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
-
-    if (level > max_ref_lev) {
-      // derefine mbs above the maximum set refinement level
-      refine_flag.h_view(m + mbs) = -1;
-    } else if (level == max_ref_lev && refine_flag.h_view(m + mbs) == 1) {
-      // avoid over refining
-      refine_flag.h_view(m + mbs) = 0;
-    }
-  }
-
-  // sync host and device
-  refine_flag.template modify<HostMemSpace>();
-  refine_flag.template sync<DevExeSpace>();
 }
 
 // refine based on max{dchi}

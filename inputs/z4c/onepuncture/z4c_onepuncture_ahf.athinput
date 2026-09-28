@@ -106,7 +106,7 @@ center_z_0 = 0.0
 # Flow parameters puncture 0
 flow_iterations_0 = 100
 flow_alpha_beta_const_0 = 1.0
-hmean_tol_0 = 100.0
+hmean_max_0 = 100.0
 mass_tol_0 = 1e-2
 
 start_time_0 = 0.0

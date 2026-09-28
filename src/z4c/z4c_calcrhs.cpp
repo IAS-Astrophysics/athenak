@@ -34,6 +34,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   int &is = indcs.is; int &ie = indcs.ie;
   int &js = indcs.js; int &je = indcs.je;
   int &ks = indcs.ks; int &ke = indcs.ke;
+
   int nmb = pmy_pack->nmb_thispack;
 
   auto &z4c = pmy_pack->pz4c->z4c;
@@ -129,19 +130,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   Tmunu::Tmunu_vars tmunu;
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
-  // Gaussian roll for kappa1 (host-side; capture by value into kernels)
-
-  Real kappa1_effective = opt.damp_kappa1;
-  if (opt.roll_kappa && time >= opt.kappa_roll_start_time) {
-    // Gaussian stitch: S(t0)=1, S→0 as t→\infty
-    Real s = (time - opt.kappa_roll_start_time) / opt.roll_window;
-    Real S = exp(-2.30258509299 * s * s);  // smooth, C^\infty falloff
-    // prefactor chosen to have S=0.1 at the end of the roll_window
-    kappa1_effective = opt.target_kappa1
-                      + (opt.damp_kappa1 - opt.target_kappa1) * S;
-  }
-  const Real kappa1_eff = kappa1_effective;
-
   // ===================================================================================
   // Main RHS calculation
   //
@@ -191,8 +179,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // lapse 2nd drvts
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> ddalpha_dd;
-    // lapse heat flux or shift 2nd order reduction
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dB_dd;
     // shift 1st drvts
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du;
     // chi 2nd drvts
@@ -210,11 +196,8 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
 
     // Lie derivative of Gamma
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LGam_u;
-
     // Lie derivative of the shift
     AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> Lbeta_u;
-    // Lie derivative of the advective derivative of shift
-    AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> LB_d;
 
     // Lie derivative of conf. 3-metric
     AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> Lg_dd;
@@ -260,13 +243,9 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // d_a beta^a
     Real dbeta = 0.0;
 
-    // d^a B_a
-    Real dB = 0.0;
-
     //
     // Vectors
     Lbeta_u.ZeroClear();
-    LB_d.ZeroClear();
     LGam_u.ZeroClear();
     Gamma_u.ZeroClear();
     DA_u.ZeroClear();
@@ -297,7 +276,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int b = 0; b < 3; ++b) {
       dbeta_du(b,a) = Dx<NGHOST>(b, idx, z4c.beta_u, m,a,k,j,i);
       dGam_du(b,a) = Dx<NGHOST>(b, idx, z4c.vGam_u,  m,a,k,j,i);
-      dB_dd(b,a) = Dx<NGHOST>(b, idx, z4c.vB_d, m,a,k,j,i);
     }
 
     // Tensors
@@ -359,9 +337,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     for(int b = 0; b < 3; ++b) {
       Lbeta_u(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.beta_u, m,a,b,k,j,i);
       LGam_u(b)  += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vGam_u,  m,a,b,k,j,i);
-      if (opt.telegraph_lapse) {
-        LB_d(b) += Lx<NGHOST>(a, idx, z4c.beta_u, z4c.vB_d, m,a,b,k,j,i);
-      }
     }
 
     //
@@ -389,11 +364,6 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                z4c.g_dd(m,1,1,k,j,i), z4c.g_dd(m,1,2,k,j,i), z4c.g_dd(m,2,2,k,j,i),
                &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
                &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
-
-    for(int a = 0; a < 3; ++a)
-    for(int b = 0; b < 3; ++b) {
-      dB += g_uu(a,b)*dB_dd(a,b);
-    }
 
     // -----------------------------------------------------------------------------------
     // Christoffel symbols
@@ -599,7 +569,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Khat, chi, and Theta
     rhs.vKhat(m,k,j,i) = - Ddalpha + z4c.alpha(m,k,j,i)
       * (AA + (1./3.)*SQR(K)) +
-      LKhat + kappa1_eff*(1 - opt.damp_kappa2)
+      LKhat + opt.damp_kappa1*(1 - opt.damp_kappa2)
       * z4c.alpha(m,k,j,i) * z4c.vTheta(m,k,j,i);
     // Matter term
     if(!is_vacuum) {
@@ -608,7 +578,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     rhs.chi(m,k,j,i) = Lchi - (1./6.) * opt.chi_psi_power *
       chi_guarded * z4c.alpha(m,k,j,i) * K;
     rhs.vTheta(m,k,j,i) = LTheta + z4c.alpha(m,k,j,i) * (
-        0.5*Ht - (2. + opt.damp_kappa2) * kappa1_eff * z4c.vTheta(m,k,j,i));
+        0.5*Ht - (2. + opt.damp_kappa2) * opt.damp_kappa1 * z4c.vTheta(m,k,j,i));
     // Matter term
     if(!is_vacuum) {
       rhs.vTheta(m,k,j,i) -= 8.*M_PI * z4c.alpha(m,k,j,i) * tmunu.E(m,k,j,i);
@@ -618,7 +588,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     // Gamma's
     for(int a = 0; a < 3; ++a) {
       rhs.vGam_u(m,a,k,j,i) = 2.*z4c.alpha(m,k,j,i)*DA_u(a) + LGam_u(a);
-      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * kappa1_eff *
+      rhs.vGam_u(m,a,k,j,i) -= 2.*z4c.alpha(m,k,j,i) * opt.damp_kappa1 *
           (z4c.vGam_u(m,a,k,j,i) - Gamma_u(a));
       for(int b = 0; b < 3; ++b) {
         rhs.vGam_u(m,a,k,j,i) -= 2. * A_uu(a,b) * dalpha_d(b);
@@ -663,26 +633,15 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
                             (opt.ssl_damping_time),2));
     }
 
-    if (opt.telegraph_lapse) {
-      Real W = (z4c.chi(m,k,j,i)>0)
-              ? z4c.chi(m,k,j,i) : 0;
-      rhs.alpha(m,k,j,i) += W*dB;
-      for(int a = 0; a < 3; ++a) {
-        rhs.vB_d(m,a,k,j,i) = opt.lapse_advect * LB_d(a) + (1.0/opt.telegraph_tau)
-                              * (- z4c.vB_d(m,a,k,j,i) + opt.telegraph_kappa*dalpha_d(a));
-      }
-    }
-
     // shift vector
     for(int a = 0; a < 3; ++a) {
-      rhs.beta_u(m,a,k,j,i) = (1-opt.sss_damping_amp
-                                 *exp(-0.5*pow(time/(opt.sss_damping_time),2)))
-                              * opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
+      rhs.beta_u(m,a,k,j,i) = opt.shift_ggamma * z4c.vGam_u(m,a,k,j,i)
                             + opt.shift_advect * Lbeta_u(a);
       rhs.beta_u(m,a,k,j,i) -= opt.shift_eta * z4c.beta_u(m,a,k,j,i);
       // FORCE beta = 0
       //rhs.beta_u(m,a,k,j,i) = 0;
     }
+
     // harmonic gauge terms
     for(int a = 0; a < 3; ++a) {
       rhs.beta_u(m,a,k,j,i) += opt.shift_alpha2ggamma *

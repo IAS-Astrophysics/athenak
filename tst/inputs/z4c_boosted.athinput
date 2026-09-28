@@ -61,6 +61,8 @@ co_0_x          = 0.
 co_0_mass		= 1.
 co_0_type = BH
 
+horizon_finder = fastflow
+
 <mesh_refinement>
 refinement       = adaptive    # type of refinement
 max_nmb_per_rank = 250
@@ -102,7 +104,7 @@ center_z_0 = 0.0
 # Flow parameters puncture 0
 flow_iterations_0 = 100
 flow_alpha_beta_const_0 = 1.0
-hmean_tol_0 = 100.0
+hmean_max_0 = 100.0
 mass_tol_0 = 1e-4
 
 start_time_0 = 0.0

@@ -41,7 +41,6 @@ class Z4c_AMR {
 
   Real chi_thresh;     // chi threshold for chi refinement method
   Real dchi_thresh;    // dchi threshold for dchi refinement method
-  int max_ref_lev;   // maximum level of refinement for chi and dchi
 };
 
 } // namespace z4c

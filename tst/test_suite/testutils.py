@@ -13,7 +13,6 @@ import time
 import pytest
 import logging
 import sys
-import math
 
 sys.path.insert(0, "../vis/python")
 import athena_read  # noqa: E402
@@ -143,10 +142,7 @@ def run(inputfile: str, flags=None, **kwargs) -> bool:
 
 
 def mpi_run(
-    inputfile: str,
-    flags=None,
-    threads: int = min(16, 2 ** math.floor(math.log2(os.cpu_count()))),
-    **kwargs,
+    inputfile: str, flags=None, threads: int = min(16, os.cpu_count()), **kwargs
 ) -> bool:
     """
     Executes a test case using the AthenaK binary with MPI support.
@@ -155,7 +151,7 @@ def mpi_run(
         inputfile (str): The path to the test case input file.
         flags (list): Additional flags to pass to the AthenaK binary.
         threads (int): Number of threads to use for MPI execution (default: smallest
-            of (16) or (smallest power of two less than or equal to num of cores)).
+            of (16) or (num of cores)).
         **kwargs: Additional keyword arguments for `run_command`.
 
     Returns:
