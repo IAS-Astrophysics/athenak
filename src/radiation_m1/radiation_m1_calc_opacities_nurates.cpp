@@ -625,6 +625,9 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // -> 1. This mimics the reconstructed-distribution result without
             // reconstructing the spectrum. Only the non-thermal (NEPS) part is
             // touched; the spontaneous (beta) emissivity has no g_nu dependence.
+            // eta_1_loc is bns_nurates' TOTAL (thermal + NEPS), so the raw NEPS
+            // part is kept to swap the limited one in wherever the total is used.
+            const Real eta_1_non_th_raw = eta_1_non_th_loc[nuidx];
             if (nurates_params_.use_equilibrium_distribution) {
               Real f_occ_0 =
                   (my_nudens_0 > 0.0) ? nudens_0[nuidx] / my_nudens_0 : 1.0;
@@ -632,13 +635,16 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               f_occ_0 = Kokkos::fmin(f_occ_0, 1.0);
               eta_1_non_th_loc[nuidx] *= f_occ_0;
             }
+            const Real eta_1_tot = Kokkos::fmax(
+                eta_1_loc[nuidx] - eta_1_non_th_raw + eta_1_non_th_loc[nuidx], 0.0);
 
             // The emissivities, and the only place they are set. Kirchhoff
             // derives them from the corrected THERMAL opacity and the
             // equilibrium distribution, inheriting the non-LTE correction
             // through abs_*_th; NEPS emission is added back afterwards, kept
-            // out of thermalization. Without Kirchhoff, bns_nurates' own
-            // emissivities stand, scaled like the opacities they pair with.
+            // out of thermalization. Without Kirchhoff (off, or gated off below
+            // kirchhoff_tau_trap), bns_nurates' own emissivities stand UNSCALED,
+            // with the same occupation-limited NEPS part as the Kirchhoff branch.
             if (use_kirchhoff) {
               eta_0_(m, nuidx, k, j, i) =
                   (abs_0_th[nuidx] > 0)
@@ -647,10 +653,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
               eta_1_(m, nuidx, k, j, i) =
                   (abs_1_th[nuidx] > 0)
                       ? abs_1_th[nuidx] * my_nudens_1 + eta_1_non_th_loc[nuidx]
-                      : eta_1_loc[nuidx];
+                      : eta_1_tot;
             } else {
               eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
-              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
+              eta_1_(m, nuidx, k, j, i) = eta_1_tot;
             }
           }
         }
