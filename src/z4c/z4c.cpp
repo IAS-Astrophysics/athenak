@@ -271,7 +271,8 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   nco = 0;
   while (true) {
     if (pin->DoesParameterExist("z4c", "co_" + std::to_string(nco) + "_type")) {
-      ptracker.push_back(std::make_unique<CompactObjectTracker>(pmy_pack->pmesh, pin, nco));
+      ptracker.push_back(
+          std::make_unique<CompactObjectTracker>(pmy_pack->pmesh, pin, nco));
       nco++;
     } else {
       break;

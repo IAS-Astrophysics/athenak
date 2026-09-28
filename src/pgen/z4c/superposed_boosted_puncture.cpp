@@ -30,11 +30,12 @@ void AddBoostedPuncture(MeshBlockPack *pmbp, ParameterInput *pin, int punc);
 void RefinementCondition(MeshBlockPack* pmbp);
 
 KOKKOS_INLINE_FUNCTION
-AthenaScratchTensor<Real, TensorSymm::SYM2, 4, 2> 
+AthenaScratchTensor<Real, TensorSymm::SYM2, 4, 2>
 inverse(AthenaScratchTensor<Real, TensorSymm::SYM2, 4, 2> matrix);
 
 KOKKOS_INLINE_FUNCTION
-void LorentzBoost(Real vx1, Real vx2, Real vx3, AthenaScratchTensor<Real, TensorSymm::SYM2, 4, 2> &lambda);
+void LorentzBoost(Real vx1, Real vx2, Real vx3,
+                  AthenaScratchTensor<Real, TensorSymm::SYM2, 4, 2> &lambda);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
@@ -122,11 +123,12 @@ void AddBoostedPuncture(MeshBlockPack *pmbp, ParameterInput *pin, int punc_num) 
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
   int nmb = pmbp->nmb_thispack;
-  Real m0 = pin->GetOrAddReal("problem", "punc_" + std::to_string(punc_num) + "_rest_mass", 1.);
-  Real center_x1 = pin->GetOrAddReal("problem", "punc_" + std::to_string(punc_num) + "_center_x1", 0.);
-  Real center_x2 = pin->GetOrAddReal("problem", "punc_" + std::to_string(punc_num) + "_center_x2", 0.);
-  Real center_x3 = pin->GetOrAddReal("problem", "punc_" + std::to_string(punc_num) + "_center_x3", 0.);
-  Real vel = pin->GetOrAddReal("problem", "punc_" + std::to_string(punc_num) + "_velocity_x1", 0.); // Example velocity
+  std::string punc = "punc_" + std::to_string(punc_num);
+  Real m0 = pin->GetOrAddReal("problem", punc + "_rest_mass", 1.);
+  Real center_x1 = pin->GetOrAddReal("problem", punc + "_center_x1", 0.);
+  Real center_x2 = pin->GetOrAddReal("problem", punc + "_center_x2", 0.);
+  Real center_x3 = pin->GetOrAddReal("problem", punc + "_center_x3", 0.);
+  Real vel = pin->GetOrAddReal("problem", punc + "_velocity_x1", 0.); // Example velocity
   // Lorentz factor
   Real Gamma = 1.0 / std::sqrt(1.0 - vel * vel);
 
@@ -159,7 +161,7 @@ void AddBoostedPuncture(MeshBlockPack *pmbp, ParameterInput *pin, int punc_num) 
 
     // Coordinates in comoving frame (x0)
     // Lorentz transformation along x-direction
-    // TODO (@hzhu): Add rotation here.
+    // TODO(@hzhu): Add rotation here.
     Real x0 = Gamma * x; // At t = 0
     Real y0 = y;
     Real z0 = z;

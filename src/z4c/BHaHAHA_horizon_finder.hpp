@@ -1,11 +1,18 @@
-// BHaHAHA_horizon_finder.hpp
-#ifndef BHAHAHA_HORIZON_FINDER_HPP
-#define BHAHAHA_HORIZON_FINDER_HPP
+#ifndef Z4C_BHAHAHA_HORIZON_FINDER_HPP_
+#define Z4C_BHAHAHA_HORIZON_FINDER_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file BHaHAHA_horizon_finder.hpp
 
+#include <sys/time.h>
+
+#include <array>
 #include <memory>
 #include <vector>
-#include <array>
-#include <sys/time.h>
+
 #include "z4c/bhahaha/BHaHAHA.h"
 #include "z4c/horizon_finder.hpp"
 
@@ -14,7 +21,7 @@ class ParameterInput;
 class ArbitraryGrid;
 
 class BHAHAHorizonFinder : public HorizonFinder {
-public:
+ public:
   BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin);
   ~BHAHAHorizonFinder();
 
@@ -29,7 +36,7 @@ public:
   // Main entry point: find all active horizons at current timestep
   void FindHorizons();
 
-private:
+ private:
   int max_num_horizons_;
   std::vector<int> found_;
   std::vector<Real> mass_;
@@ -114,4 +121,4 @@ private:
   std::unique_ptr<ArbitraryGrid> agrid_;
 };
 
-#endif // BHAHAHA_HORIZON_FINDER_HPP
+#endif  // Z4C_BHAHAHA_HORIZON_FINDER_HPP_

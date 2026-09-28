@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>

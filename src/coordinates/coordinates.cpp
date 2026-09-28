@@ -84,7 +84,8 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
           } else {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
-                    << "Horizon excision needs <fastflow> or <bhahaha> block!" << std::endl;
+                    << "Horizon excision needs <fastflow> or <bhahaha> block!"
+                    << std::endl;
             std::exit(EXIT_FAILURE);
           }
         } else {

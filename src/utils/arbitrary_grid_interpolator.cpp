@@ -10,6 +10,7 @@
 #include <cmath>
 #include <iostream>
 #include <list>
+#include <vector>
 
 // AthenaK headers
 #include "athena.hpp"
@@ -21,14 +22,14 @@
 //----------------------------------------------------------------------------------------
 // constructor, initializes data structures and parameters
 
-ArbitraryGrid::ArbitraryGrid(MeshBlockPack *pmy_pack, std::vector<std::array<Real,3>>& cart_coord_, int rpow_,
+ArbitraryGrid::ArbitraryGrid(MeshBlockPack *pmy_pack,
+                             std::vector<std::array<Real,3>>& cart_coord_, int rpow_,
                              int ns_):
     interp_vals("interp_vals",1,1),
     interp_indcs("interp_indcs",1,1),
     pmy_pack(pmy_pack),
     interp_wghts("interp_wghts",1,1,1),
     interp_cart_coord("interp_cart_coord", 1,1) {
-
   int ng = pmy_pack->pmesh->mb_indcs.ng;
   ns = (ns_ > 0) ? ns_ : ng;
   if (ns > ng || ns > kMaxHalfWidth) {

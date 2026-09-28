@@ -1,3 +1,10 @@
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file BHaHAHA_horizon_finder.cpp
+
 #include <assert.h>
 #include <unistd.h>
 #include <sys/stat.h>  // mkdir
@@ -72,8 +79,10 @@ BHAHAHorizonFinder::BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin)
     pd.eta_damping_times_M = 1.6;
     pd.KO_strength = 0;
     pd.max_iterations = pin_->GetOrAddInteger("bhahaha", "bah_max_itr", 10000);
-    pd.Theta_Linf_times_M_tolerance = pin_->GetOrAddReal("bhahaha", "bah_Theta_Linf_tol", 1e-2);
-    pd.Theta_L2_times_M_tolerance = pin_->GetOrAddReal("bhahaha", "bah_Theta_L2_tol", 2e-5);
+    pd.Theta_Linf_times_M_tolerance =
+        pin_->GetOrAddReal("bhahaha", "bah_Theta_Linf_tol", 1e-2);
+    pd.Theta_L2_times_M_tolerance =
+        pin_->GetOrAddReal("bhahaha", "bah_Theta_L2_tol", 2e-5);
     pd.enable_eta_varying_alg_for_precision_common_horizon =
         pin_->GetOrAddBoolean("bhahaha", "bah_eta_varying_common_horizon", false);
     pd.verbosity_level = verbosity_;
@@ -106,7 +115,8 @@ void BHAHAHorizonFinder::LoadParameters() {
   verbosity_ = pin_->GetOrAddInteger("bhahaha", "bah_verbosity", 0);
   max_num_horizons_ = pin_->GetOrAddInteger("bhahaha", "bah_num_horizons", 1);
 
-  bah_num_resolutions_multigrid_ = pin_->GetOrAddInteger("bhahaha", "bah_num_resolutions_multigrid", 1);
+  bah_num_resolutions_multigrid_ =
+      pin_->GetOrAddInteger("bhahaha", "bah_num_resolutions_multigrid", 1);
   bah_Ntheta_array_multigrid_.resize(bah_num_resolutions_multigrid_);
   bah_Nphi_array_multigrid_.resize(bah_num_resolutions_multigrid_);
   Nr_interp_  = pin_->GetOrAddInteger("bhahaha", "bah_Nr_interp", 48);
@@ -114,8 +124,10 @@ void BHAHAHorizonFinder::LoadParameters() {
   Nphi_       = pin_->GetOrAddInteger("bhahaha", "bah_Nphi", 64);
   max_search_radius_ = pin_->GetOrAddReal("bhahaha", "bah_max_search_radius", 2);
   for (int i = 0; i < bah_num_resolutions_multigrid_; ++i) {
-    bah_Ntheta_array_multigrid_[i] = pin_->GetOrAddInteger("bhahaha", "bah_Ntheta_array_multigrid_"+std::to_string(i), Ntheta_);
-    bah_Nphi_array_multigrid_[i]   = pin_->GetOrAddInteger("bhahaha", "bah_Nphi_array_multigrid_"+std::to_string(i), Nphi_);
+    bah_Ntheta_array_multigrid_[i] = pin_->GetOrAddInteger("bhahaha",
+        "bah_Ntheta_array_multigrid_"+std::to_string(i), Ntheta_);
+    bah_Nphi_array_multigrid_[i]   = pin_->GetOrAddInteger("bhahaha",
+        "bah_Nphi_array_multigrid_"+std::to_string(i), Nphi_);
   }
   // BHaHAHA expects the input data at the resolution of the finest multigrid level
   if (bah_num_resolutions_multigrid_ > 0) {
@@ -123,9 +135,12 @@ void BHAHAHorizonFinder::LoadParameters() {
     Nphi_   = bah_Nphi_array_multigrid_[bah_num_resolutions_multigrid_ - 1];
   }
   bah_BBH_mode_enable_ = pin_->GetOrAddBoolean("bhahaha", "bah_BBH_mode_enable", false);
-  bah_BBH_mode_inspiral_BH_idxs_[0] = pin_->GetOrAddInteger("bhahaha", "bah_BBH_mode_inspiral_BH_idxs_0", 0);
-  bah_BBH_mode_inspiral_BH_idxs_[1] = pin_->GetOrAddInteger("bhahaha", "bah_BBH_mode_inspiral_BH_idxs_1", 1);
-  bah_BBH_mode_common_horizon_idx_ = pin_->GetOrAddInteger("bhahaha", "bah_BBH_mode_common_horizon_idx", 2);
+  bah_BBH_mode_inspiral_BH_idxs_[0] =
+      pin_->GetOrAddInteger("bhahaha", "bah_BBH_mode_inspiral_BH_idxs_0", 0);
+  bah_BBH_mode_inspiral_BH_idxs_[1] =
+      pin_->GetOrAddInteger("bhahaha", "bah_BBH_mode_inspiral_BH_idxs_1", 1);
+  bah_BBH_mode_common_horizon_idx_ =
+      pin_->GetOrAddInteger("bhahaha", "bah_BBH_mode_common_horizon_idx", 2);
 
   m_guess.assign(max_num_horizons_,0.0);
   for (int h = 0; h < max_num_horizons_; ++h) {
@@ -277,9 +292,12 @@ void BHAHAHorizonFinder::processBBHMode() {
       bah_horizon_active_[com] = 1;
       resetHorizonHistory(com);
       double mtot = m_guess[bh1] + m_guess[bh2];
-      pdc.x_center_m1 = (m_guess[bh1]*pd1.x_center_m1 + m_guess[bh2]*pd2.x_center_m1)/mtot;
-      pdc.y_center_m1 = (m_guess[bh1]*pd1.y_center_m1 + m_guess[bh2]*pd2.y_center_m1)/mtot;
-      pdc.z_center_m1 = (m_guess[bh1]*pd1.z_center_m1 + m_guess[bh2]*pd2.z_center_m1)/mtot;
+      pdc.x_center_m1 =
+          (m_guess[bh1]*pd1.x_center_m1 + m_guess[bh2]*pd2.x_center_m1)/mtot;
+      pdc.y_center_m1 =
+          (m_guess[bh1]*pd1.y_center_m1 + m_guess[bh2]*pd2.y_center_m1)/mtot;
+      pdc.z_center_m1 =
+          (m_guess[bh1]*pd1.z_center_m1 + m_guess[bh2]*pd2.z_center_m1)/mtot;
     }
   }
 }
@@ -329,7 +347,7 @@ void BHAHAHorizonFinder::InterpolateMetricData(int h) {
   pd.iteration_external_input = pmbp_->pmesh->ncycle;
   pd.time_external_input = pmbp_->pmesh->time;
   pd.num_resolutions_multigrid = bah_num_resolutions_multigrid_;
-  for (int i=0;i<bah_num_resolutions_multigrid_;++i) {
+  for (int i=0; i<bah_num_resolutions_multigrid_; ++i) {
     pd.Ntheta_array_multigrid[i] = bah_Ntheta_array_multigrid_[i];
     pd.Nphi_array_multigrid[i]   = bah_Nphi_array_multigrid_[i];
   }
@@ -433,7 +451,8 @@ void BHAHAHorizonFinder::SolveHorizon(int h) {
   int rc = bah_find_horizon(&pd, &diags);
   if (rc == BHAHAHA_SUCCESS) {
     std::cout << "Success" << std::endl;
-    int write_shape = (output_shape_every_ > 0) && (nfinds_[h] % output_shape_every_ == 0);
+    int write_shape = (output_shape_every_ > 0)
+                      && (nfinds_[h] % output_shape_every_ == 0);
     bah_diagnostics_file_output(&diags, &pd, max_num_horizons_, grid_center_[h][0],
                                 grid_center_[h][1], grid_center_[h][2], "./horizon",
                                 write_shape);

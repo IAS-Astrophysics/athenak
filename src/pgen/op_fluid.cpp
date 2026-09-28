@@ -1,7 +1,7 @@
 //========================================================================================
 // AthenaXXX astrophysical plasma code
-// Copyright(C) ...
-// Licensed under the 3-clause BSD License
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file z4c_one_puncture.cpp
 //  \brief Problem generator for a single puncture placed at the origin of the domain
@@ -10,10 +10,10 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
-#include <iostream>
-#include <limits>
+#include <iostream>   // endl
+#include <limits>     // numeric_limits::max()
 #include <memory>
-#include <string>
+#include <string>     // c_str(), string
 #include <vector>
 
 #include "athena.hpp"
@@ -22,23 +22,25 @@
 #include "mesh/mesh.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
+#include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 
-static void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin);
-static void RefinementCondition(MeshBlockPack* pmbp);
+
+void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin);
+void RefinementCondition(MeshBlockPack* pmbp);
 
 //----------------------------------------------------------------------------------------
 //! \fn ProblemGenerator::UserProblem_()
 //! \brief Problem Generator for single puncture
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   user_ref_func  = RefinementCondition;
-
-  if (restart)
-    return;
-
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   auto &indcs = pmy_mesh_->mb_indcs;
+  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
+  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
+  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
 
   if (pmbp->pz4c == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -47,7 +49,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
-  ADMOnePunctureBoosted(pmbp, pin);
+  ADMOnePuncture(pmbp, pin);
+  pmbp->pdyngr->PrimToConInit(
+    0, (ncells1 - 1), 0, (ncells2 - 1), 0, (ncells3 - 1)); // fluid background
+  pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
   switch (indcs.ng) {
     case 2: pmbp->pz4c->ADMToZ4c<2>(pmbp, pin);
             break;
@@ -57,7 +62,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
             break;
   }
   pmbp->pz4c->Z4cToADM(pmbp);
-  pmbp->pz4c->GaugePreCollapsedLapse(pmbp, pin);
   switch (indcs.ng) {
     case 2: pmbp->pz4c->ADMConstraints<2>(pmbp);
             break;
@@ -68,15 +72,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   std::cout<<"OnePuncture initialized."<<std::endl;
 
-
   return;
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin)
-//! \brief Initialize ADM vars to single boosted puncture (no spin), based on 1909.02997
+//! \brief Initialize ADM vars to single puncture (no spin)
 
-void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
+void ADMOnePuncture(MeshBlockPack *pmbp, ParameterInput *pin) {
   // capture variables for the kernel
   auto &indcs = pmbp->pmesh->mb_indcs;
   auto &size = pmbp->pmb->mb_size;
@@ -88,13 +91,18 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
   int jsg = js-indcs.ng; int jeg = je+indcs.ng;
   int ksg = ks-indcs.ng; int keg = ke+indcs.ng;
   int nmb = pmbp->nmb_thispack;
-  Real m0 = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
+  Real ADM_mass = pin->GetOrAddReal("problem", "punc_ADM_mass", 1.);
   Real center_x1 = pin->GetOrAddReal("problem", "punc_center_x1", 0.);
   Real center_x2 = pin->GetOrAddReal("problem", "punc_center_x2", 0.);
   Real center_x3 = pin->GetOrAddReal("problem", "punc_center_x3", 0.);
-  Real vx1 = pin->GetOrAddReal("problem", "punc_velocity_x1", 0.);
 
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
+  DvceArray5D<Real> u0_, w0_;
+  u0_ = pmbp->pmhd->u0;
+  w0_ = pmbp->pmhd->w0;
+
+  Real rho = pin->GetOrAddReal("problem", "density_bg", 0.0);
+  Real pr = pin->GetOrAddReal("problem", "pressure_bg", 0.0);
 
   par_for("pgen one puncture",
   DevExeSpace(),0,nmb-1,ksg,keg,jsg,jeg,isg,ieg,
@@ -118,60 +126,29 @@ void ADMOnePunctureBoosted(MeshBlockPack *pmbp, ParameterInput *pin) {
     x2v -= center_x2;
     x3v -= center_x3;
 
-    // velocity magnitude for now assuming only vx1 is along x! Do a rotation later
-    Real vel = vx1;
+    Real r = std::sqrt(std::pow(x3v,2) + std::pow(x2v,2) + std::pow(x1v,2));
 
-    // boost factor
-    Real Gamma = 1/std::sqrt(1-std::pow(vel,2));
-
-    // coordinate in the comoving frame (x0)
-    Real x0[4];
-    Real xinit[4] = {0,x1v,x2v,x3v};
-
-    x0[1] = xinit[1]*Gamma;
-    x0[2] = xinit[2];
-    x0[3] = xinit[3];
-
-    // radial coordinate in comoving frame
-    Real r0 = std::sqrt(std::pow(x0[1],2) + std::pow(x0[2],2) + std::pow(x0[3],2));
-
-    // conformal factor and lapse in comoving frame; equation 2 from arXiv:0810.4735
-    Real psi0 = 1.0 + 0.5*m0/r0;
-    Real alpha0 = (1 - 0.5*m0/r0)/psi0;
-
-    // B0 as in equation 4 from arXiv:0810.4735
-    Real B0 = std::sqrt(std::pow(Gamma,2)
-                        *(1-std::pow(vel,2)*std::pow(alpha0,2)*std::pow(psi0,-4)));
-
-    // adm metric in the code frame
-    for(int a = 0; a < 3; ++a) {
-      adm.g_dd(m,a,a,k,j,i) = std::pow(psi0,4);
+    // Minkowski spacetime
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      adm.g_dd(m,a,b,k,j,i) = (a == b ? 1. : 0.);
     }
-    adm.g_dd(m,0,0,k,j,i) *= std::pow(B0,2);
+    // admK_dd is automatically set to 0 when is initialized as Kokkos View
 
-    // Gauge variables in the code frame
-    // adm.alpha(m,k,j,i) = alpha0/B0;
-    // adm.beta_u(m,0,k,j,i) = (std::pow(alpha0,2)-std::pow(psi0,4))
-    //                      /(std::pow(psi0,4)-std::pow(alpha0,2)*std::pow(vel,2))*vel;
+    // ADMOnePuncture
+    adm.psi4(m,k,j,i) = std::pow(1.0 + 0.5*ADM_mass/r,4); // adm.psi4
 
-    // extrinsic curvature
-    Real alpha0p = 4*m0/std::pow(m0+2*r0,2);
-    Real second_term =
-    ((4 * std::pow(vel, 2) * std::pow((m0 - 2 * r0), 2)) / std::pow((m0 + 2 * r0), 3) +
-    (4 * std::pow(vel, 2) * (m0 - 2 * r0)) / std::pow((m0 + 2 * r0), 2) -
-    (m0 * std::pow((m0 + 2 * r0), 3)) / (4 * std::pow(r0, 5))) /
-    ((1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0))
-     * (1 + m0 / (2 * r0)) * (1 + m0 / (2 * r0)) -
-    (std::pow(vel, 2) * std::pow((m0 - 2 * r0), 2)) / std::pow((m0 + 2 * r0), 2));
+    for(int a = 0; a < 3; ++a)
+    for(int b = a; b < 3; ++b) {
+      adm.g_dd(m,a,b,k,j,i) *= adm.psi4(m,k,j,i);
+    }
 
-    adm.vK_dd(m,0,0,k,j,i) = Gamma * Gamma * B0 * x1v * vel / r0
-                             * (2 * alpha0p - alpha0 / 2 * second_term);
-    adm.vK_dd(m,1,1,k,j,i) = 2 * Gamma * Gamma * x1v * vel * alpha0
-                             * (- m0 / (2 * r0 * r0)) / (psi0 * B0 * r0);
-    adm.vK_dd(m,2,2,k,j,i) = 2 * Gamma * Gamma * x1v * vel * alpha0
-                             * (- m0 / (2 * r0 * r0)) / (psi0 * B0 * r0);
-    adm.vK_dd(m,0,1,k,j,i) = B0 * x2v * vel / r0 * (alpha0p - alpha0 / 2 * second_term);
-    adm.vK_dd(m,0,2,k,j,i) = B0 * x3v * vel / r0 * (alpha0p - alpha0 / 2 * second_term);
+    // Constant fluid background
+    w0_(m,IDN,k,j,i) = rho;
+    w0_(m,IPR,k,j,i) = pr;
+    w0_(m,IVX,k,j,i) = 0.0;
+    w0_(m,IVY,k,j,i) = 0.0;
+    w0_(m,IVZ,k,j,i) = 0.0;
   });
 }
 
