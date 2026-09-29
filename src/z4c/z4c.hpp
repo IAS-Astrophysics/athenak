@@ -152,6 +152,7 @@ class Z4c {
     // Constraint damping parameters
     Real damp_kappa1;
     Real damp_kappa2;
+    Real rz4;              // Kyutoku+14 radial Theta suppression radius; <=0 disables
     // Gauge conditions for the lapse
     Real lapse_oplog;
     Real lapse_harmonicf;
@@ -187,8 +188,10 @@ class Z4c {
     Real dc_fixed_x, dc_fixed_y, dc_fixed_z;
     Real dc_damping_time, dc_damping_scale, dc_damping_coeff;
     Real dc_Kp, dc_Ki, dc_Kd;
+    Real dc_omega_c, dc_omega_o, dc_zeta;
     Real dc_relaxation_time, dc_kappa;
     Real dc_gamma_suppress;
+    Real dc_gain_x, dc_gain_y, dc_gain_z;
     int dc_gaussian_center;
   };
   Options opt;

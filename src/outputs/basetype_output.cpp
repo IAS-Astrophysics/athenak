@@ -848,7 +848,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
-  // radiation m1 fluid frame flux H^i = -proj^i_a u_b T^{ab} (per species per comp)
+  // radiation m1 fluid frame flux H^i = -proj^i_a u_b T^{ab} (per species per comp),
+  // in EOS energy density units (MeV/fm^3 for a nuclear EOS)
   if (out_params.variable.compare("rad_m1_H") == 0) {
     int nspec = pm->pmb_pack->pradm1->nspecies;
     out_params.contains_derived = true;
@@ -860,7 +861,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
-  // radiation m1 fluid frame number density n = N/Gamma (per species)
+  // radiation m1 fluid frame number density n = N/Gamma (per species),
+  // in EOS number density units (fm^-3 for a nuclear EOS)
   if (out_params.variable.compare("rad_m1_n") == 0) {
     int nspec = pm->pmb_pack->pradm1->nspecies;
     out_params.contains_derived = true;
@@ -883,7 +885,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
-  // radiation m1 fluid frame average energy <e> = J/n (per species)
+  // radiation m1 fluid frame average energy <e> = J/n (per species),
+  // in EOS energy units (MeV for a nuclear EOS)
   if (out_params.variable.compare("rad_m1_e") == 0) {
     int nspec = pm->pmb_pack->pradm1->nspecies;
     out_params.contains_derived = true;
@@ -894,7 +897,7 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   }
 
   // radiation m1 fluid frame absolute number flux |F| = n\sqrt{H^iH_i}/J/\sqrt{\gamma}
-  // (per species)
+  // (per species), in EOS number density units (fm^-3 for a nuclear EOS)
   if (out_params.variable.compare("rad_m1_absF") == 0) {
     int nspec = pm->pmb_pack->pradm1->nspecies;
     out_params.contains_derived = true;

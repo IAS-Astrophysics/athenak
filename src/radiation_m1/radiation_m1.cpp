@@ -140,6 +140,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     // in ComputeNuratesOpacities()
     nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.);
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
+    nurates_params.max_recon_temp =
+        pin->GetOrAddReal("bns_nurates", "max_recon_temp_mev", 200.);
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
@@ -182,7 +184,8 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddReal("bns_nurates", "peq_dlnT_tol", 1e-4);
     nurates_params.peq_dYe_tol =
         pin->GetOrAddReal("bns_nurates", "peq_dYe_tol", 1e-4);
-
+    nurates_params.kirchhoff_tau_trap =
+        pin->GetOrAddReal("bns_nurates", "kirchhoff_tau_trap", -1.0);
     // The block that computes the equilibrium distribution -- the predictor's only
     // output -- is skipped when neither of these is set, so the predictor has nothing
     // to supply and cannot run. Asking for it by name in that configuration is an

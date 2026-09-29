@@ -46,7 +46,7 @@ class Coordinates;
 // virtually every library allows this limit to be exceeded. As of 2025, the Intel MPI
 // library provided the most stringent limit of 20 bits per tag. Six bits are needed to
 // store the buffer ID, leaving NUM_BITS_LID=14
-#define NUM_BITS_LID 14
+#define NUM_BITS_LID 12
 
 #define SQR(x) ( (x)*(x) )
 #define SIGN(x) ( ((x) < 0.0) ? -1.0 : 1.0 )

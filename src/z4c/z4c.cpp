@@ -130,6 +130,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.eps_floor = pin->GetOrAddReal("z4c", "eps_floor", 1e-12);
   opt.damp_kappa1 = pin->GetOrAddReal("z4c", "damp_kappa1", 0.0);
   opt.damp_kappa2 = pin->GetOrAddReal("z4c", "damp_kappa2", 0.0);
+  opt.rz4 = pin->GetOrAddReal("z4c", "rz4", 0.0);
   // Gauge conditions (default to moving puncture gauge)
   opt.lapse_harmonicf = pin->GetOrAddReal("z4c", "lapse_harmonicf", 1.0);
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
@@ -172,9 +173,15 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.dc_Kp               = pin->GetOrAddReal("z4c", "dc_Kp", 1.0);
   opt.dc_Ki               = pin->GetOrAddReal("z4c", "dc_Ki", 0.1);
   opt.dc_Kd               = pin->GetOrAddReal("z4c", "dc_Kd", 2.0);
+  opt.dc_omega_c          = pin->GetOrAddReal("z4c", "dc_omega_c", 0.2);
+  opt.dc_omega_o          = pin->GetOrAddReal("z4c", "dc_omega_o", 1.0);
+  opt.dc_zeta             = pin->GetOrAddReal("z4c", "dc_zeta", 1.0);
   opt.dc_relaxation_time  = pin->GetOrAddReal("z4c", "dc_relaxation_time", 1.0);
   opt.dc_kappa            = pin->GetOrAddReal("z4c", "dc_kappa", 1.0);
   opt.dc_gamma_suppress   = pin->GetOrAddReal("z4c", "dc_gamma_suppress", 0.0);
+  opt.dc_gain_x           = pin->GetOrAddReal("z4c", "dc_gain_x", 1.0);
+  opt.dc_gain_y           = pin->GetOrAddReal("z4c", "dc_gain_y", 1.0);
+  opt.dc_gain_z           = pin->GetOrAddReal("z4c", "dc_gain_z", 1.0);
   opt.dc_gaussian_center  = DriftControl::CenterFromString(
       pin->GetOrAddString("z4c", "dc_gaussian_center", "fixed"));
   }

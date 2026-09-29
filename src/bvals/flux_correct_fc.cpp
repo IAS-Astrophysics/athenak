@@ -7,6 +7,7 @@
 //! \brief functions to pack/send and recv/unpack fluxes (emfs) for face-centered fields
 //! (magnetic fields) at fine/coarse boundaries for the flux correction step.
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 
@@ -41,6 +42,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &sbuf = sendbuf;
   auto &rbuf = recvbuf;
+#if MPI_PARALLEL_ENABLED
+  // off-rank payloads are written straight into the rank-packed aggregate buffer
+  auto aggsbuf = rank_sendbuf_flux_;
+  auto sendoff = send_flx_agg_offset_;
+#endif
   auto &one_d = pmy_pack->pmesh->one_d;
   auto &two_d = pmy_pack->pmesh->two_d;
 
@@ -116,7 +122,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
               rbuf[dn].flux(dm, ndat*v + (j-jl + nj*(k-kl))) = rflx;
             // else copy into send buffer for MPI communication below
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + (j-jl + nj*(k-kl))) = rflx;
+#endif
             }
           } else if (v==2) {
             Real rflx;
@@ -136,7 +146,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + (j-jl + nj*(k-kl))) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + (j-jl + nj*(k-kl))) = rflx;
+#endif
             }
           }
         });
@@ -168,7 +182,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(k-kl)) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + i-il + ni*(k-kl)) = rflx;
+#endif
             }
           } else if (v==2) {
             Real rflx;
@@ -186,7 +204,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(k-kl)) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + i-il + ni*(k-kl)) = rflx;
+#endif
             }
           }
         });
@@ -217,7 +239,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + (k-kl)) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + (k-kl)) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + (k-kl)) = rflx;
+#endif
             }
           });
         }
@@ -245,7 +271,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(j-jl)) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + i-il + ni*(j-jl)) = rflx;
+#endif
             }
           } else if (v==1) {
             Real rflx;
@@ -259,7 +289,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il + ni*(j-jl)) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + i-il + ni*(j-jl)) = rflx;
+#endif
             }
           }
         });
@@ -285,7 +319,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + (j-jl)) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + (j-jl)) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + (j-jl)) = rflx;
+#endif
             }
           });
         }
@@ -311,7 +349,11 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
             if (nghbr.d_view(m,n).rank == my_rank) {
               rbuf[dn].flux(dm, ndat*v + i-il) = rflx;
             } else {
+#if MPI_PARALLEL_ENABLED
+              aggsbuf(sendoff(m*nnghbr + n) + ndat*v + i-il) = rflx;
+#else
               sbuf[n].flux(m, ndat*v + i-il) = rflx;
+#endif
             }
           });
         }
@@ -321,39 +363,17 @@ TaskStatus MeshBoundaryValuesFC::PackAndSendFluxFC(DvceEdgeFld4D<Real> &flx) {
   });  // end par_for_outer
 
 #if MPI_PARALLEL_ENABLED
-  // Send boundary buffer to neighboring MeshBlocks using MPI
-  // Sends only occur to neighbors on FACES and EDGES at COARSER or SAME level
+  // Send flux corrections with one aggregated message per destination rank. The pack
+  // kernel above already wrote every off-rank payload into rank_sendbuf_flux_ at its
+  // precomputed offset, so a single fence is all that is needed before posting.
   Kokkos::fence();
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) &&
-           (nghbr.h_view(m,n).lev <= mblev.h_view(m)) &&
-           (n<48) ) {
-        // index and rank of destination Neighbor
-        int dn = nghbr.h_view(m,n).dest;
-        int drank = nghbr.h_view(m,n).rank;
-
-        if (drank != my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
-          int tag = CreateBvals_MPI_Tag(lid, dn);
-
-          // get ptr to send buffer for fluxes
-          int data_size = 3;
-          if ( nghbr.h_view(m,n).lev < pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= sendbuf[n].iflxc_ndat;
-          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= sendbuf[n].iflxs_ndat;
-          }
-          auto send_ptr = Kokkos::subview(sendbuf[n].flux, m, Kokkos::ALL);
-
-          int ierr = MPI_Isend(send_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_flux, &(sendbuf[n].flux_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-        }
-      }
-    }
+  std::fill(send_flux_reqs_.begin(), send_flux_reqs_.end(), MPI_REQUEST_NULL);
+  for (std::size_t i = 0; i < send_flux_msgs_.size(); ++i) {
+    const auto &msg = send_flux_msgs_[i];
+    int ierr = MPI_Isend(rank_sendbuf_flux_.data() + msg.offset, msg.data_size,
+                         MPI_ATHENA_REAL, msg.rank, 1, comm_flux, &send_flux_reqs_[i]);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -384,21 +404,11 @@ TaskStatus MeshBoundaryValuesFC::RecvAndUnpackFluxFC(DvceEdgeFld4D<Real> &flx) {
 
   bool bflag = false;
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      if ( (nghbr.h_view(m,n).gid >=0) &&
-           (nghbr.h_view(m,n).lev >= mblev.h_view(m)) &&
-           (n<48) ) {
-        if (nghbr.h_view(m,n).rank != global_variable::my_rank) {
-          int test;
-          int ierr = MPI_Test(&(rbuf[n].flux_req[m]), &test, MPI_STATUS_IGNORE);
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-          if (!(static_cast<bool>(test))) {
-            bflag = true;
-          }
-        }
-      }
-    }
+  for (std::size_t i = 0; i < recv_flux_reqs_.size(); ++i) {
+    int test;
+    int ierr = MPI_Test(&recv_flux_reqs_[i], &test, MPI_STATUS_IGNORE);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
+    if (!(static_cast<bool>(test))) {bflag = true;}
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
@@ -449,6 +459,12 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
   int nnghbr = pmy_pack->pmb->nnghbr;
   auto &nghbr = pmy_pack->pmb->nghbr;
   auto &rbuf = recvbuf;
+#if MPI_PARALLEL_ENABLED
+  // off-rank payloads arrive in the rank-packed aggregate buffer; on-rank neighbours
+  // were written directly into rbuf by the sender, where recvoff is -1
+  auto aggrbuf = rank_recvbuf_flux_;
+  auto recvoff = recv_flx_agg_offset_;
+#endif
   auto &mblev = pmy_pack->pmb->mb_lev;
   auto &mbbcs = pmy_pack->pmb->mb_bcs;
 
@@ -536,9 +552,19 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int j = (idx - k * nj) + jl;
               k += kl;
               if (v==1) {
+#if MPI_PARALLEL_ENABLED
+                flx.x2e(m,k,j,il) += (recvoff(m*nnghbr + n) >= 0) ?
+                    aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) : rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+#else
                 flx.x2e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+#endif
               } else if (v==2) {
+#if MPI_PARALLEL_ENABLED
+                flx.x3e(m,k,j,il) += (recvoff(m*nnghbr + n) >= 0) ?
+                    aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) : rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+#else
                 flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+#endif
               }
             });
           }
@@ -564,9 +590,19 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             int i = (idx - k * ni) + il;
             k += kl;
             if (v==0) {
+#if MPI_PARALLEL_ENABLED
+              flx.x1e(m,k,jl,i) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+#else
               flx.x1e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+#endif
             } else if (v==2) {
+#if MPI_PARALLEL_ENABLED
+              flx.x3e(m,k,jl,i) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+#else
               flx.x3e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+#endif
             }
           });
 
@@ -580,7 +616,12 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           } else if (v==2) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nk),[&](const int idx){
               int k = idx + kl;
+#if MPI_PARALLEL_ENABLED
+              flx.x3e(m,k,jl,il) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (k-kl)) : rbuf[n].flux(m,ndat*v + (k-kl));
+#else
               flx.x3e(m,k,jl,il) += rbuf[n].flux(m,ndat*v + (k-kl));
+#endif
             });
           }
 
@@ -605,9 +646,19 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             int i = (idx - j * ni) + il;
             j += jl;
             if (v==0) {
+#if MPI_PARALLEL_ENABLED
+              flx.x1e(m,kl,j,i) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+#else
               flx.x1e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+#endif
             } else if (v==1) {
+#if MPI_PARALLEL_ENABLED
+              flx.x2e(m,kl,j,i) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+#else
               flx.x2e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+#endif
             }
           });
 
@@ -621,7 +672,12 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
           } else if (v==1) {
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,nj),[&](const int idx){
               int j = idx + jl;
+#if MPI_PARALLEL_ENABLED
+              flx.x2e(m,kl,j,il) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl)) : rbuf[n].flux(m,ndat*v + (j-jl));
+#else
               flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
+#endif
             });
           }
 
@@ -633,7 +689,12 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             });
             Kokkos::parallel_for(Kokkos::TeamThreadRange<>(tmember,ni),[&](const int idx){
               int i = idx + il;
+#if MPI_PARALLEL_ENABLED
+              flx.x1e(m,kl,jl,i) += (recvoff(m*nnghbr + n) >= 0) ?
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il) : rbuf[n].flux(m,ndat*v + i-il);
+#else
               flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
+#endif
             });
           }
         }
@@ -1044,43 +1105,22 @@ void MeshBoundaryValuesFC::AverageBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
 
 TaskStatus MeshBoundaryValuesFC::InitFluxRecv(const int nvars) {
 #if MPI_PARALLEL_ENABLED
-  int &nmb = pmy_pack->nmb_thispack;
-  int &nnghbr = pmy_pack->pmb->nnghbr;
-  auto &nghbr = pmy_pack->pmb->nghbr;
+  if (rank_packed_flux_nvars_ != nvars ||
+      rank_packed_flux_mesh_seq_ != pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq()) {
+    BuildRankPackedFluxMetadata(nvars, true);
+  } else {
+    std::fill(recv_flux_reqs_.begin(), recv_flux_reqs_.end(), MPI_REQUEST_NULL);
+    std::fill(send_flux_reqs_.begin(), send_flux_reqs_.end(), MPI_REQUEST_NULL);
+  }
 
-  // Initialize communications of fluxes
+  // Payload-only Irecv: each peer's (lid,dn,data_size) pack order is already known
+  // from the one-shot header exchange in BuildRankPackedFluxMetadata.
   bool no_errors=true;
-  for (int m=0; m<nmb; ++m) {
-    for (int n=0; n<nnghbr; ++n) {
-      // only post receives for neighbors on FACES and EDGES at FINER and SAME levels
-      // this is the only thing different from BoundaryValuesCC::InitRecvFlux()
-      if ( (nghbr.h_view(m,n).gid >=0) &&
-           (nghbr.h_view(m,n).lev >= pmy_pack->pmb->mb_lev.h_view(m)) &&
-           (n<48) ) {
-        // rank of destination buffer
-        int drank = nghbr.h_view(m,n).rank;
-
-        // post non-blocking receive if neighboring MeshBlock on a different rank
-        if (drank != global_variable::my_rank) {
-          // create tag using local ID and buffer index of *receiving* MeshBlock
-          int tag = CreateBvals_MPI_Tag(m, n);
-
-          // calculate amount of data to be passed, get pointer to variables
-          int data_size = nvars;
-          if ( nghbr.h_view(m,n).lev > pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= recvbuf[n].iflxc_ndat;
-          } else if ( nghbr.h_view(m,n).lev == pmy_pack->pmb->mb_lev.h_view(m) ) {
-            data_size *= recvbuf[n].iflxs_ndat;
-          }
-          auto recv_ptr = Kokkos::subview(recvbuf[n].flux, m, Kokkos::ALL);
-
-          // Post non-blocking receive for this buffer on this MeshBlock
-          int ierr = MPI_Irecv(recv_ptr.data(), data_size, MPI_ATHENA_REAL, drank, tag,
-                               comm_flux, &(recvbuf[n].flux_req[m]));
-          if (ierr != MPI_SUCCESS) {no_errors=false;}
-        }
-      }
-    }
+  for (std::size_t i = 0; i < recv_flux_msgs_.size(); ++i) {
+    const auto &msg = recv_flux_msgs_[i];
+    int ierr = MPI_Irecv(rank_recvbuf_flux_.data() + msg.offset, msg.data_size,
+                         MPI_ATHENA_REAL, msg.rank, 1, comm_flux, &recv_flux_reqs_[i]);
+    if (ierr != MPI_SUCCESS) {no_errors=false;}
   }
   // Quit if MPI error detected
   if (!(no_errors)) {
