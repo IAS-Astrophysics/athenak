@@ -77,6 +77,8 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
         Kokkos::printf("%.*s\n", resultlen, msg);
         MPI_Abort(comm_, 1);
       }
+      // ensure all ranks have truncated the file before writing
+      MPI_Barrier(comm_);
     }
   } else {
     FILE* local_fh;
