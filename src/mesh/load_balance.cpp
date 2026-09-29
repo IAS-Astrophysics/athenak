@@ -283,12 +283,11 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
           int ox2 = ((lloc.lx2 & 1) == 1);
           int ox3 = ((lloc.lx3 & 1) == 1);
           int vs = recvbuf.h_view(rb_idx).offset;
-          int ve = vs + recvbuf.h_view(rb_idx).cnt;
-          auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
+          Real *pdata = (amr_host_stage ? recv_data_h.data() : recv_data.data()) + vs;
           // create tag using local ID of *receiving* MeshBlock, post receive
           int tag = CreateAMR_MPI_Tag(newm-nmbs, ox1, ox2, ox3);
           // post non-blocking receive
-          int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt,
+          int ierr = MPI_Irecv(pdata, recvbuf.h_view(rb_idx).cnt,
                      MPI_ATHENA_REAL, pmy_mesh->rank_eachmb[oldm+l], tag, amr_comm,
                      &(recv_req[rb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -298,12 +297,11 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
     } else if (old_lloc.level == new_lloc.level) {   // old MB at same level
       if (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank) {
         int vs = recvbuf.h_view(rb_idx).offset;
-        int ve = vs + recvbuf.h_view(rb_idx).cnt;
-        auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
+        Real *pdata = (amr_host_stage ? recv_data_h.data() : recv_data.data()) + vs;
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         // post non-blocking receive
-        int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
+        int ierr = MPI_Irecv(pdata, recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_req[rb_idx]));
         if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -314,12 +312,11 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
       if ((new_rank_eachmb[oldtonew[oldm]] != global_variable::my_rank) ||
           (pmy_mesh->rank_eachmb[oldm] != global_variable::my_rank)) {
         int vs = recvbuf.h_view(rb_idx).offset;
-        int ve = vs + recvbuf.h_view(rb_idx).cnt;
-        auto pdata = Kokkos::subview(recv_data, std::make_pair(vs,ve));
+        Real *pdata = (amr_host_stage ? recv_data_h.data() : recv_data.data()) + vs;
         // create tag using local ID of *receiving* MeshBlock, post receive
         int tag = CreateAMR_MPI_Tag(newm-nmbs, 0, 0, 0);
         // post non-blocking receive
-        int ierr = MPI_Irecv(pdata.data(), recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
+        int ierr = MPI_Irecv(pdata, recvbuf.h_view(rb_idx).cnt, MPI_ATHENA_REAL,
                    pmy_mesh->rank_eachmb[oldm], tag, amr_comm,
                    &(recv_req[rb_idx]));
         if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -549,6 +546,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   // loop over old MBs on this rank, send data using MPI non-blocking sends
   // Send requests will only be accessed on host, so no need to sync after this step.
   Kokkos::fence();
+  if (amr_host_stage) {
+    // Everything packed by the kernels above now lives in the first ntot reals.
+    int ntot = sendbuf.h_view(nmb_send-1).offset + sendbuf.h_view(nmb_send-1).cnt;
+    Kokkos::deep_copy(Kokkos::subview(send_data_h, std::make_pair(0,ntot)),
+                      Kokkos::subview(send_data,   std::make_pair(0,ntot)));
+  }
   bool no_errors=true;
   sb_idx = 0;     // send buffer index
   for (int oldm=ombs; oldm<=ombe; oldm++) {
@@ -561,13 +564,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if ((new_rank_eachmb[newm] != global_variable::my_rank) ||
             (new_rank_eachmb[newm + l] != global_variable::my_rank)) {
           int vs = sendbuf.h_view(sb_idx).offset;
-          int ve = vs + sendbuf.h_view(sb_idx).cnt;
-          auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
+          Real *pdata = (amr_host_stage ? send_data_h.data() : send_data.data()) + vs;
           // create tag using local ID of *receiving* MeshBlock
           int lid = (newm + l) - new_gids_eachrank[new_rank_eachmb[newm+l]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send
-          int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
+          int ierr = MPI_Isend(pdata, sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm+l], tag, amr_comm,
                      &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -578,13 +580,12 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
       if (old_lloc.level == new_lloc.level) {   // old MB at same level
         if (new_rank_eachmb[newm] != global_variable::my_rank) {
           int vs = sendbuf.h_view(sb_idx).offset;
-          int ve = vs + sendbuf.h_view(sb_idx).cnt;
-          auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
+          Real *pdata = (amr_host_stage ? send_data_h.data() : send_data.data()) + vs;
           // create tag using local ID of *receiving* MeshBlock
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, 0, 0, 0);
           // post non-blocking send
-          int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
+          int ierr = MPI_Isend(pdata, sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
                      &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -595,8 +596,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
         if ((pmy_mesh->rank_eachmb[newtoold[newm]] != global_variable::my_rank) ||
             (new_rank_eachmb[newm] != global_variable::my_rank)) {
           int vs = sendbuf.h_view(sb_idx).offset;
-          int ve = vs + sendbuf.h_view(sb_idx).cnt;
-          auto pdata = Kokkos::subview(send_data, std::make_pair(vs,ve));
+          Real *pdata = (amr_host_stage ? send_data_h.data() : send_data.data()) + vs;
           // create tag using local ID of *receiving* MeshBlock
           int ox1 = ((old_lloc.lx1 & 1) == 1);
           int ox2 = ((old_lloc.lx2 & 1) == 1);
@@ -604,7 +604,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
           int lid = newm - new_gids_eachrank[new_rank_eachmb[newm]];
           int tag = CreateAMR_MPI_Tag(lid, ox1, ox2, ox3);
           // post non-blocking send
-          int ierr = MPI_Isend(pdata.data(), sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
+          int ierr = MPI_Isend(pdata, sendbuf.h_view(sb_idx).cnt, MPI_ATHENA_REAL,
                      new_rank_eachmb[newm], tag, amr_comm,
                      &(send_req[sb_idx]));
           if (ierr != MPI_SUCCESS) {no_errors=false;}
@@ -807,6 +807,12 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
     std::exit(EXIT_FAILURE);
   }
   delete [] recv_req;
+
+  if (amr_host_stage) {
+    int ntot = recvbuf.h_view(nmb_recv-1).offset + recvbuf.h_view(nmb_recv-1).cnt;
+    Kokkos::deep_copy(Kokkos::subview(recv_data,   std::make_pair(0,ntot)),
+                      Kokkos::subview(recv_data_h, std::make_pair(0,ntot)));
+  }
 
   // Unpack data
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
