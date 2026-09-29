@@ -173,13 +173,24 @@ SCRayInv ComputeSCAngleInv(Real mux, Real muy, Real muz,
   } else {
     Real lx = dx1/fabs(mux), ly = dx2/fabs(muy), lz = dx3/fabs(muz);
     Real lmin = fmin(fmin(lx,ly),lz);
-    if (lmin == lx) {
+    // An exact tie is a real case, not a guard: on cubic cells the Carlson sets tie by
+    // symmetry, and S_2 (nmu = 1) has |mux| = |muy| = |muz| bitwise, so ALL of its rays
+    // tie three ways. A tie means the characteristic crosses two or three faces at the
+    // same point, so every tied axis names the same footpoint with the same weights and
+    // the choice is free -- but only to the answer. The plane and tiled kernels sweep
+    // planes taken at a fixed index along this axis, and ir(m,angg,k,j,i) has i fastest,
+    // so an x-marching plane touches a separate cache line per cell while a z-marching
+    // one is contiguous: 16x the lines at nx1 = 192, measured 15x on a V100. Hence the
+    // test order below is z, then y, then x -- the slowest-varying index first. Reorder
+    // it only together with the ir layout.
+    const int tie_axis = (lmin == lz) ? 2 : ((lmin == ly) ? 1 : 0);
+    if (tie_axis == 0) {
       inv.axis = 0;
       Real am_r = lmin/ly, bm = lmin/lz;
       inv.c0 = (1.0-am_r)*(1.0-bm); inv.c1 = (1.0-am_r)*bm;
       inv.c2 = am_r*bm;             inv.c3 = am_r*(1.0-bm);
       inv.pdx = dx1; inv.pamu = fabs(mux);
-    } else if (lmin == ly) {
+    } else if (tie_axis == 1) {
       inv.axis = 1;
       Real am_r = lmin/lx, bm = lmin/lz;
       inv.c0 = (1.0-am_r)*(1.0-bm); inv.c1 = (1.0-am_r)*bm;
