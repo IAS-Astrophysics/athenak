@@ -45,6 +45,7 @@ BHAHAHorizonFinder::BHAHAHorizonFinder(MeshBlockPack *pmbp, ParameterInput *pin)
   : pmbp_(pmbp), pin_(pin) {
   LoadParameters();
   checkMultigridResolutionInputs();
+  mkdir("horizon", 0775);
 
   bah_horizon_active_.assign(max_num_horizons_, 1);
   prev_horizon_m1_.assign(max_num_horizons_, std::vector<double>(Ntheta_*Nphi_, 0.0));
