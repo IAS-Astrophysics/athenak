@@ -116,11 +116,11 @@ class SC {
   bool affect_fluid;
 
   // how the sweep is packaged into Kokkos kernels (same sweep, same result either way)
-  //   plane:     one launch per plane along each ray's own dominant axis, a flat
+  //   plane:     one launch per plane along each ray's own marching axis, a flat
   //              par_for over the transverse cells x rays; no tiles or teams
   //   tiled:     one launch per tile hyperplane, one team per tile x ray, each team
-  //              walking its tile's cell hyperplanes with a team barrier between them.
-  //              Tunable through tile_size and team_size.
+  //              walking its tile in planes along that ray's marching axis, with a team
+  //              barrier between them. Tunable through tile_size and team_size.
   SweepKernel sweep_kernel;
   std::string sweep_kernel_name;   // as given in the deck, for messages
   int tile_size;   // tiled only: cells per tile edge; 0 = the whole meshblock is one tile
@@ -172,10 +172,9 @@ class SC {
   // hook, else kappa_a * rho; the sweep reads the copy chi
   DvceArray5D<Real> sigma_a;
 
-  // hyperplane orderings (sc/formal_solution.cpp BuildIndices; built once in the
-  // constructor)
-  HyperplaneOrder tile_cells;    // cells of one tile: tiled, inner loop
-  HyperplaneOrder block_tiles;   // tiles of the meshblock: tiled, launch loop
+  // hyperplane ordering of the meshblock's TILES, driving the tiled kernel's launch loop
+  // (sc/formal_solution.cpp BuildIndices; built once in the constructor)
+  HyperplaneOrder block_tiles;
   // plane on a non-cubic block: rays sorted by the axis they march along, so each
   // (axis, plane) launch is sized to that axis's own transverse extent. Group g holds
   // ray_by_axis[ray_axis_start[g] .. ray_axis_start[g+1]). Empty on a cubic block, which

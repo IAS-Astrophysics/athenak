@@ -10,19 +10,23 @@
 //! bit-identical intensities; they differ only in how the work is split into launches
 //! and teams.
 //!
-//!   plane      one launch per plane along each ray's OWN dominant axis, a flat par_for
+//!   plane      one launch per plane along each ray's OWN marching axis, a flat par_for
 //!              over the transverse cells x rays. n launches per meshblock per sweep in
 //!              3D, every one of them the same full size; no tiles, teams or table.
 //!   tiled      the meshblock is cut into tiles of tile_size^3 cells (tile_size = 0: one
 //!              tile). One launch per TILE hyperplane; inside it one team per (tile,
-//!              ray), each team walking its tile's cell hyperplanes with a team barrier
-//!              between them. Every footpoint of a tile lies in the same tile or on an
-//!              earlier tile-plane, so the launch boundary is the cross-tile barrier
-//!              (Koch-Baker-Alcouffe).
+//!              ray), each team walking its tile in planes along that ray's own marching
+//!              axis with a team barrier between them. Every footpoint of a tile lies in
+//!              the same tile or on an earlier tile-plane, so the launch boundary is the
+//!              cross-tile barrier (Koch-Baker-Alcouffe).
 //!
-//! plane is the default and has no parameters; tiled trades that for tile_size and
-//! team_size. Only tiled uses HyperplaneOrder tables, built once from the meshblock and
-//! tile dims.
+//! Both sweep planes taken along the ray's marching axis and differ only in whether that
+//! is done per meshblock by a launch or per tile by a team. plane has no parameters;
+//! tiled trades that for tile_size and team_size, and wins where there are too few
+//! meshblocks to fill the device from one launch.
+//!
+//! Only tiled needs a HyperplaneOrder table, over TILES: the one place a diagonal
+//! l1+l2+l3 ordering survives. A cell plane is walked arithmetically in both.
 
 #include <algorithm>
 #include <cmath>
@@ -156,11 +160,10 @@ void AxisExtents(int march_axis, int nx1, int nx2, int nx3,
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::BuildIndices
-//! \brief Build the tiled kernel's hyperplane orderings once: the cells of one tile, and
-//! the tiles of the meshblock. The plane kernel derives its cell coordinates
-//! arithmetically and needs no cell table: over a meshblock such a table would be one int
-//! per cell, 28 MB at 192^3. On a non-cubic block it does need the ray grouping, which is
-//! one int a ray.
+//! \brief Build the tiled kernel's ordering of the meshblock's TILES, once. No kernel
+//! needs a table over cells -- both walk a cell plane arithmetically -- and over a
+//! meshblock such a table would be one int per cell, 28 MB at 192^3. On a non-cubic block
+//! the plane kernel does need the ray grouping, which is one int a ray.
 
 void SC::BuildIndices() {
   if (sweep_kernel == SweepKernel::plane) {
@@ -175,7 +178,6 @@ void SC::BuildIndices() {
   ntile1 = indcs.nx1 / tile_nx1;
   ntile2 = (ndim >= 2) ? indcs.nx2 / tile_nx2 : 1;
   ntile3 = (ndim == 3) ? indcs.nx3 / tile_nx3 : 1;
-  tile_cells  = IndexHyperplanes(tile_nx1, tile_nx2, tile_nx3, ndim);
   block_tiles = IndexHyperplanes(ntile1, ntile2, ntile3, ndim);
 }
 
@@ -211,14 +213,10 @@ void SC::FormalSolutionTiled() {
   auto chi_ = chi;
   auto srad_ = srad;
 
-  auto tcell_ = tile_cells.items;
-  auto tstart_ = tile_cells.start_dev;
   auto tpc_ = block_tiles.items;
   const int tx1 = tile_nx1, tx2 = tile_nx2, tx3 = tile_nx3;
   const int nt1 = ntile1;   // nt2 is implicit in nt12 below; see the packing comment
   const int nt12 = ntile1 * ntile2;
-  const int tx12 = tile_nx1 * tile_nx2;
-  const int nplanes_cell = tile_cells.nplanes;
   const int ts = team_size;
 
   for (int H = 0; H < block_tiles.nplanes; ++H) {
@@ -244,42 +242,45 @@ void SC::FormalSolutionTiled() {
       const int tb = tr / nt1;
       const int ta = tr - tb * nt1;
 
-      const int oct = angg / nang;
-      const int a = angg - oct * nang;
-      Real mux = mu.d_view(oct,a,0);
-      Real muy = (ndim >= 2) ? mu.d_view(oct,a,1) : 0.0;
-      Real muz = (ndim == 3) ? mu.d_view(oct,a,2) : 0.0;
-      int sx = (mux > 0.0) ? 1 : -1;
-      int sy = (ndim >= 2) ? ((muy > 0.0) ? 1 : -1) : 0;
-      int sz = (ndim == 3) ? ((muz > 0.0) ? 1 : -1) : 0;
-      Real dx1v = mbsize.d_view(m).dx1;
-      Real dx2v = mbsize.d_view(m).dx2;
-      Real dx3v = mbsize.d_view(m).dx3;
+      const SweepRay g = RayGeometry(mu.d_view, angg, nang, ndim,
+                                     mbsize.d_view(m).dx1,
+                                     mbsize.d_view(m).dx2,
+                                     mbsize.d_view(m).dx3);
 
-      const int i0 = (sx > 0) ? (is + ta*tx1) : (ie - ta*tx1);
-      const int j0 = (sy > 0) ? (js + tb*tx2) : (je - tb*tx2);
-      const int k0 = (sz > 0) ? (ks + tc*tx3) : (ke - tc*tx3);
+      // the tile's upwind corner for this ray
+      const int i0 = (g.sx > 0) ? (is + ta*tx1) : (ie - ta*tx1);
+      const int j0 = (g.sy > 0) ? (js + tb*tx2) : (je - tb*tx2);
+      const int k0 = (g.sz > 0) ? (ks + tc*tx3) : (ke - tc*tx3);
 
-      for (int h = 0; h < nplanes_cell; ++h) {
-        const int lo = tstart_(h);
-        const int cnt = tstart_(h + 1) - lo;
+      // The tile's extents resolved against this ray's marching axis. Per team, so a tile
+      // that is not cubic costs nothing: a team is one ray and teams never synchronize
+      // with each other, which is why this needs no ray grouping where the plane kernel,
+      // whose launches are shared across rays, needs PlaneSweepRaysByAxis.
+      int np, nu, nv;
+      AxisExtents(g.march_axis, tx1, tx2, tx3, np, nu, nv);
+      const int cnt = nu*nv;
+      for (int p = 0; p < np; ++p) {
         Kokkos::parallel_for(Kokkos::TeamThreadRange(tmember, cnt),
         [&](const int c) {
-          // packed tile-local index (l3*tx2+l2)*tx1+l1
-          const int lin = tcell_(lo + c);
-          const int l3 = lin / tx12;
-          const int r = lin - l3 * tx12;
-          const int l2 = r / tx1;
-          const int l1 = r - l2 * tx1;
-          const int i = (sx > 0) ? (i0 + l1) : (i0 - l1);
-          const int j = (sy > 0) ? (j0 + l2) : (j0 - l2);
-          const int k = (sz > 0) ? (k0 + l3) : (k0 - l3);
+          // u is the fast transverse index and is l1 on every axis but x, so the plane is
+          // contiguous in i there; see the tie-break in ComputeSCAngleInv, which steers
+          // rays onto those axes whenever the dominant axis is ambiguous.
+          const int u = c % nu;
+          const int v = c / nu;
+          int l1, l2, l3;
+          if (g.march_axis == 0) {
+            l1 = p; l2 = u; l3 = v;
+          } else if (g.march_axis == 1) {
+            l2 = p; l1 = u; l3 = v;
+          } else {
+            l3 = p; l1 = u; l2 = v;
+          }
+          const int i = (g.sx > 0) ? (i0 + l1) : (i0 - l1);
+          const int j = (g.sy > 0) ? (j0 + l2) : (j0 - l2);
+          const int k = (g.sz > 0) ? (k0 + l3) : (k0 - l3);
           Real a1 = 0.0;
-          Real I = UpdateCellSC(chi_,srad_,ir_,m,angg,
-                                i,j,k, sx,sy,sz,
-                                mux,muy,muz,
-                                dx1v,dx2v,dx3v, ndim,ks,js, &a1);
-          ir_(m,angg,k,j,i) = I;
+          ir_(m,angg,k,j,i) = GatherSolveSC(chi_,srad_,ir_,m,angg,i,j,k,g.inv,
+                                            ndim,ks,js,&a1);
         });
         tmember.team_barrier();
       }
@@ -334,8 +335,8 @@ void SC::FormalSolutionTiled() {
 //! along that axis: transverse coupling within a plane, such as a limiter or a diffusion
 //! term applied to the intensity being computed, which would be a data race rather than a
 //! merely different answer. Widening the transverse stencil on the upwind face is
-//! safe here, every cell still being one step upwind, but would break the i+j+k ordering
-//! tiled relies on. The verification suite pins the two kernels against each other bit
+//! safe here, every cell still being one step upwind, but would break tiled's i+j+k
+//! ordering of TILES. The verification suite pins the two kernels against each other bit
 //! for bit.
 
 void SC::FormalSolutionPlane() {
