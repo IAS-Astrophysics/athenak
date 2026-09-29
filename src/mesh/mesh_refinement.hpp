@@ -95,6 +95,9 @@ class MeshRefinement {
   DualArray1D<AMRBufferData> sendbuf, recvbuf; // send/recv buffer metadata
   MPI_Request *send_req, *recv_req;
   DvceArray1D<Real> send_data, recv_data;      // send/recv device data
+  // Optional host staging buffers for the AMR exchange
+  HostArray1D<Real> send_data_h, recv_data_h;
+  bool amr_host_stage;                         // false => MPI straight from device
 #endif
 
   // functions

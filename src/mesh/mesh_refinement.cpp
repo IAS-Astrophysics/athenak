@@ -58,6 +58,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
+  amr_host_stage(false),
 #endif
   pmy_mesh(pm) {
   if (pin->DoesBlockExist("mesh_refinement")) {
@@ -68,6 +69,10 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     if (pin->DoesParameterExist("mesh_refinement", "prolong_primitives")) {
       prolong_prims = pin->GetBoolean("mesh_refinement", "prolong_primitives");
     }
+#if MPI_PARALLEL_ENABLED
+    // read flag to stage the AMR exchange through host buffers (see .hpp)
+    amr_host_stage = pin->GetOrAddBoolean("mesh_refinement", "amr_host_staging", false);
+#endif
   }
 
   // allocate arrays for AMR, add RefinementCriteria object
@@ -123,6 +128,11 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   int ndata = nmb*(ncc_tosend + nfc_tosend)*ncells;
   Kokkos::realloc(recv_data, ndata);
   Kokkos::realloc(send_data, ndata);
+  // Host mirrors for the AMR exchange, allocated only when it is staged
+  if (amr_host_stage) {
+    Kokkos::realloc(send_data_h, ndata);
+    Kokkos::realloc(recv_data_h, ndata);
+  }
 #endif
 }
 
