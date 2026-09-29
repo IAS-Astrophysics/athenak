@@ -6,26 +6,23 @@
 //! \file formal_solution.cpp
 //! \brief Short-characteristics formal solution (Davis, Stone & Jiang 2012 Eq. 20): one
 //! ordered upwind sweep of every meshblock, for every discrete ray, packaged into Kokkos
-//! kernels by one of three schemes (<nr_radiation>/sweep_kernel). All three produce
+//! kernels by one of two schemes (<nr_radiation>/sweep_kernel). Both produce
 //! bit-identical intensities; they differ only in how the work is split into launches
 //! and teams.
 //!
-//!   wavefront  one launch per cell hyperplane h = l1+l2+l3 (l = distance from the upwind
-//!              corner), a flat par_for over the cells on that plane x all rays. 3n-2
-//!              launches per meshblock per sweep in 3D; no team structure.
+//!   plane      one launch per plane along each ray's OWN dominant axis, a flat par_for
+//!              over the transverse cells x rays. n launches per meshblock per sweep in
+//!              3D, every one of them the same full size; no tiles, teams or table.
 //!   tiled      the meshblock is cut into tiles of tile_size^3 cells (tile_size = 0: one
 //!              tile). One launch per TILE hyperplane; inside it one team per (tile,
 //!              ray), each team walking its tile's cell hyperplanes with a team barrier
 //!              between them. Every footpoint of a tile lies in the same tile or on an
 //!              earlier tile-plane, so the launch boundary is the cross-tile barrier
 //!              (Koch-Baker-Alcouffe).
-//!   plane      one launch per plane along each ray's OWN dominant axis, a flat par_for
-//!              over the transverse cells x rays. n launches per meshblock per sweep in
-//!              3D instead of wavefront's 3n-2, every one of them the same full size; no
-//!              tiles or teams.
 //!
-//! wavefront and tiled use HyperplaneOrder tables built once from the meshblock/tile
-//! dims; plane needs no table.
+//! plane is the default and has no parameters; tiled trades that for tile_size and
+//! team_size. Only tiled uses HyperplaneOrder tables, built once from the meshblock and
+//! tile dims.
 
 #include <algorithm>
 #include <cmath>
@@ -159,11 +156,11 @@ void AxisExtents(int march_axis, int nx1, int nx2, int nx3,
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::BuildIndices
-//! \brief Build the hyperplane orderings once: the meshblock's cells (wavefront; tiled at
-//! tile_size 0), and for the tiled scheme the cells of one tile and the tiles of the
-//! block. The plane kernel derives its cell coordinates arithmetically and needs no cell
-//! table: the block table alone would be one int per cell (28 MB at 192^3). On a
-//! non-cubic block it does need the ray grouping, which is one int per ray.
+//! \brief Build the tiled kernel's hyperplane orderings once: the cells of one tile, and
+//! the tiles of the meshblock. The plane kernel derives its cell coordinates
+//! arithmetically and needs no cell table: over a meshblock such a table would be one int
+//! per cell, 28 MB at 192^3. On a non-cubic block it does need the ray grouping, which is
+//! one int a ray.
 
 void SC::BuildIndices() {
   if (sweep_kernel == SweepKernel::plane) {
@@ -172,18 +169,13 @@ void SC::BuildIndices() {
   }
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   const int ndim = pang->ndim;
-  block_cells = IndexHyperplanes(indcs.nx1, indcs.nx2, indcs.nx3, ndim);
-  if (sweep_kernel != SweepKernel::tiled) return;
-
   tile_nx1 = (tile_size > 0) ? tile_size : indcs.nx1;
   tile_nx2 = (ndim >= 2) ? ((tile_size > 0) ? tile_size : indcs.nx2) : 1;
   tile_nx3 = (ndim == 3) ? ((tile_size > 0) ? tile_size : indcs.nx3) : 1;
   ntile1 = indcs.nx1 / tile_nx1;
   ntile2 = (ndim >= 2) ? indcs.nx2 / tile_nx2 : 1;
   ntile3 = (ndim == 3) ? indcs.nx3 / tile_nx3 : 1;
-  // one tile per meshblock: the tile's cell ordering IS the block's
-  tile_cells  = (tile_size > 0) ? IndexHyperplanes(tile_nx1, tile_nx2, tile_nx3, ndim)
-                                : block_cells;
+  tile_cells  = IndexHyperplanes(tile_nx1, tile_nx2, tile_nx3, ndim);
   block_tiles = IndexHyperplanes(ntile1, ntile2, ntile3, ndim);
 }
 
@@ -193,118 +185,8 @@ void SC::BuildIndices() {
 
 void SC::FormalSolution() {
   switch (sweep_kernel) {
-    case SweepKernel::wavefront: FormalSolutionWavefront(); break;
-    case SweepKernel::tiled:     FormalSolutionTiled();     break;
-    case SweepKernel::plane:     FormalSolutionPlane();     break;
-  }
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void SC::FormalSolutionWavefront
-//! \brief One launch per cell hyperplane; flat par_for over
-//! (meshblock, ray, cell on plane).
-
-void SC::FormalSolutionWavefront() {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nx1 = indcs.nx1, nx2 = indcs.nx2;
-  int nmb1 = pmy_pack->nmb_thispack - 1;
-  int ndim = pang->ndim;
-  int nang = pang->nang;
-  int nangt1 = nang_tot - 1;
-  auto &mu = pang->mu;
-  auto &mbsize = pmy_pack->pmb->mb_size;
-  auto ir_ = ir;
-  auto chi_ = chi;
-  auto srad_ = srad;
-
-  if (ndim == 1) {
-    for (int h = 0; h < nx1; ++h) {
-      par_for("sc_sweep_wavefront", DevExeSpace(), 0, nmb1, 0, nangt1,
-      KOKKOS_LAMBDA(int m, int angg) {
-        int oct = angg / nang;
-        int a = angg - oct*nang;
-        Real mux = mu.d_view(oct,a,0);
-        int sx = (mux > 0.0) ? 1 : -1;
-        int i  = (sx > 0) ? (is + h) : (ie - h);
-        Real dx1v = mbsize.d_view(m).dx1;
-        Real a1 = 0.0;
-        Real I = UpdateCellSC(chi_,srad_,ir_,m,angg,
-                              i,js,ks, sx,0,0,
-                              mux,0.0,0.0,
-                              dx1v,0.0,0.0, ndim,ks,js, &a1);
-        ir_(m,angg,ks,js,i) = I;
-      });
-    }
-  } else if (ndim == 2) {
-    auto cells = block_cells.items;
-    int nx1_ = nx1;
-    for (int h = 0; h < block_cells.nplanes; ++h) {
-      int lo = block_cells.start[h];
-      int cnt = block_cells.start[h+1] - lo;   // exact cell count on plane h
-      if (cnt <= 0) continue;
-      par_for("sc_sweep_wavefront", DevExeSpace(), 0, nmb1, 0, nangt1, 0, cnt-1,
-      KOKKOS_LAMBDA(int m, int angg, int c) {
-        int lin = cells(lo + c);
-        int li2 = lin / nx1_;
-        int li1 = lin - li2*nx1_;
-        int oct = angg / nang;
-        int a = angg - oct*nang;
-        Real mux = mu.d_view(oct,a,0);
-        Real muy = mu.d_view(oct,a,1);
-        int sx = (mux > 0.0) ? 1 : -1;
-        int sy = (muy > 0.0) ? 1 : -1;
-        int i = (sx > 0) ? (is + li1) : (ie - li1);
-        int j = (sy > 0) ? (js + li2) : (je - li2);
-        Real dx1v = mbsize.d_view(m).dx1;
-        Real dx2v = mbsize.d_view(m).dx2;
-        Real a1 = 0.0;
-        Real I = UpdateCellSC(chi_,srad_,ir_,m,angg,
-                              i,j,ks, sx,sy,0,
-                              mux,muy,0.0,
-                              dx1v,dx2v,0.0, ndim,ks,js, &a1);
-        ir_(m,angg,ks,j,i) = I;
-      });
-    }
-  } else {
-    auto cells = block_cells.items;
-    int nx1_ = nx1;
-    int nx12 = nx1*nx2;
-    for (int h = 0; h < block_cells.nplanes; ++h) {
-      int lo = block_cells.start[h];
-      int cnt = block_cells.start[h+1] - lo;   // exact cell count on plane h
-      if (cnt <= 0) continue;
-      par_for("sc_sweep_wavefront", DevExeSpace(), 0, nmb1, 0, nangt1, 0, cnt-1,
-      KOKKOS_LAMBDA(int m, int angg, int c) {
-        int lin = cells(lo + c);
-        int li3 = lin / nx12;
-        int r = lin - li3*nx12;
-        int li2 = r / nx1_;
-        int li1 = r - li2*nx1_;
-        int oct = angg / nang;
-        int a = angg - oct*nang;
-        Real mux = mu.d_view(oct,a,0);
-        Real muy = mu.d_view(oct,a,1);
-        Real muz = mu.d_view(oct,a,2);
-        int sx = (mux > 0.0) ? 1 : -1;
-        int sy = (muy > 0.0) ? 1 : -1;
-        int sz = (muz > 0.0) ? 1 : -1;
-        int i = (sx > 0) ? (is + li1) : (ie - li1);
-        int j = (sy > 0) ? (js + li2) : (je - li2);
-        int k = (sz > 0) ? (ks + li3) : (ke - li3);
-        Real dx1v = mbsize.d_view(m).dx1;
-        Real dx2v = mbsize.d_view(m).dx2;
-        Real dx3v = mbsize.d_view(m).dx3;
-        Real a1 = 0.0;
-        Real I = UpdateCellSC(chi_,srad_,ir_,m,angg,
-                              i,j,k, sx,sy,sz,
-                              mux,muy,muz,
-                              dx1v,dx2v,dx3v, ndim,ks,js, &a1);
-        ir_(m,angg,k,j,i) = I;
-      });
-    }
+    case SweepKernel::tiled: FormalSolutionTiled(); break;
+    case SweepKernel::plane: FormalSolutionPlane(); break;
   }
 }
 
@@ -413,14 +295,14 @@ void SC::FormalSolutionTiled() {
 //! and varies only the transverse indices (axis 0: every cell sits at i-sx; axis 1: at
 //! j-sy; axis 2: at k-sz), and the 2D branch does the same about its own crossed face. So
 //! the intensity on plane p of a ray depends only on plane p-1 of that ray and on nothing
-//! within plane p, and the i+j+k ordering of FormalSolutionWavefront is stricter than the
-//! stencil requires. For a 192^3 block that is 192 launches of 36864 cells, every one
-//! of them full, instead of 574 averaging 12335 and ramping from 1 up to 27648. Flat
-//! par_for, no tiles, teams or barriers, and no cell table.
+//! within plane p, so a diagonal i+j+k ordering would be stricter than the stencil
+//! requires. For a 192^3 block that is 192 launches of 36864 cells, every one of them
+//! full, instead of the 574 averaging 12335 and ramping from 1 up to 27648 that the
+//! diagonal costs. Flat par_for, no tiles, teams or barriers, and no cell table.
 //!
 //! Two launch loops implement it, and this picks between them by block shape. They sweep
 //! the same planes in the same order and differ only in thread assignment, so they
-//! are bit-identical to each other and to wavefront and tiled:
+//! are bit-identical to each other and to tiled:
 //!
 //!   PlaneSweepAllRays     one launch per plane, every ray in it, sized to axis 0's
 //!                         transverse face. Cubic blocks only: sizing one launch for
@@ -441,8 +323,8 @@ void SC::FormalSolutionTiled() {
 //! and it is why the test is exact equality of the cell counts rather than a tuned
 //! threshold. Off cubic the waste grows without bound (longest/shortest extent) while the
 //! grouping's overhead does not, so the grouped loop takes over. Measured on 36
-//! configurations across V100 and A100 MIG, this is never slower than wavefront (1.07x to
-//! 2.07x); the ungrouped loop alone falls to 0.46x on elongated blocks on the A100.
+//! configurations across V100 and A100 MIG; the ungrouped loop alone falls to 0.46x on
+//! elongated blocks on the A100.
 //!
 //! PRECONDITION: a cell may read the INTENSITY only at a strictly smaller index along its
 //! ray's marching axis. chi and srad are built before the sweep and are read-only during
@@ -453,8 +335,8 @@ void SC::FormalSolutionTiled() {
 //! term applied to the intensity being computed, which would be a data race rather than a
 //! merely different answer. Widening the transverse stencil on the upwind face is
 //! safe here, every cell still being one step upwind, but would break the i+j+k ordering
-//! wavefront and tiled rely on. The verification suite pins all three against each other
-//! bit for bit.
+//! tiled relies on. The verification suite pins the two kernels against each other bit
+//! for bit.
 
 void SC::FormalSolutionPlane() {
   // the same flag BuildIndices tested when it decided whether to build the ray grouping
@@ -633,7 +515,8 @@ void SC::BuildRayGroups() {
           << std::endl << "sweep_kernel = 'plane' needs every meshblock to agree on "
           << "each ray's marching axis, but block " << m << " puts ray " << angg
           << " on axis " << march_axis << ", the root mesh on " << axis_of[angg]
-          << ". Use sweep_kernel = 'wavefront'." << std::endl;
+          << ". Use sweep_kernel = 'tiled', which resolves the axis per meshblock."
+          << std::endl;
         std::exit(EXIT_FAILURE);
       }
     }

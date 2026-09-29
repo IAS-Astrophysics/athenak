@@ -67,17 +67,15 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
   }
 
   // Kernel scheme ---------------------------------------------------------------------
-  sweep_kernel_name = pin->GetOrAddString("nr_radiation", "sweep_kernel", "wavefront");
-  if (sweep_kernel_name == "wavefront") {
-    sweep_kernel = SweepKernel::wavefront;
-  } else if (sweep_kernel_name == "tiled") {
+  sweep_kernel_name = pin->GetOrAddString("nr_radiation", "sweep_kernel", "plane");
+  if (sweep_kernel_name == "tiled") {
     sweep_kernel = SweepKernel::tiled;
   } else if (sweep_kernel_name == "plane") {
     sweep_kernel = SweepKernel::plane;
   } else {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
       << std::endl << "<nr_radiation>/sweep_kernel = '" << sweep_kernel_name
-      << "' is not recognised; valid values are 'wavefront', 'tiled', 'plane'"
+      << "' is not recognised; valid values are 'plane', 'tiled'"
       << std::endl;
     std::exit(EXIT_FAILURE);
   }

@@ -13,7 +13,7 @@ sc_sphere-errs.dat: Nx1 Nx2 Nx3 Ncycle RMS-L1(J) L-infty(J) RMS(H)/J RMS(K)/J.
 
 Parametrized over
   ndim         2 (an infinite cylinder: rays keep their mu_z, see the pgen) and 3
-  sweep_kernel wavefront and tiled (tile_size 8): same sweep, different kernel packaging
+  sweep_kernel plane and tiled (tile_size 8): same sweep, different kernel packaging
 Each (ndim, kernel) runs a resolution ladder on ONE meshblock and asserts that J, H and K
 converge: monotone decrease, finest-grid floor, observed order > 0.8 (the bilinear sweep
 is
@@ -34,7 +34,7 @@ _COLS = {"J": 4, "H": 6, "K": 7}   # columns of sc_sphere-errs.dat
 # 2.9e-3/9.6e-4/1.7e-3 (3D), order ~1.2
 _FLOOR = {2: {"J": 4.0e-3, "H": 2.0e-3, "K": 2.0e-3},
           3: {"J": 4.0e-3, "H": 1.5e-3, "K": 2.5e-3}}
-_KERNELS = [("wavefront", 0), ("tiled", 8), ("plane", 0)]
+_KERNELS = [("plane", 0), ("tiled", 8)]
 
 
 def _args(res, ndim, blocks_per_dim, kernel, tile):

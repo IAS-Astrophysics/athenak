@@ -58,7 +58,7 @@ kappa_a       = 6.283185307179586   # tau = kappa_a*lambda/(2 pi) = 1
 prat          = 46.2962962962963   # Bo = 4 gamma^4/((gamma-1) crat prat) = 1
 crat          = 1.0
 affect_fluid = true
-sweep_kernel        = wavefront
+sweep_kernel        = plane
 tile_size    = 0          # tiled only; the tests override both
 iter_max     = 20
 iter_tol     = 1.0e-13   # tight: the convergence ladders must not sit on the iteration floor (production default 1e-6)

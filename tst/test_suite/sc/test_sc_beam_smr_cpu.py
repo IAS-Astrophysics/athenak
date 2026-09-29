@@ -50,7 +50,7 @@ import test_suite.testutils as testutils
 _INPUT = "inputs/sc_beam_smr.athinput"
 _ERRS = "sc_beam-errs.dat"
 _B1, _B2, _OFFBEAM = (3, 4), (6, 7), 9
-_KERNELS = [("wavefront", 0), ("tiled", 8), ("plane", 0)]
+_KERNELS = [("plane", 0), ("tiled", 8)]
 
 
 def test_sc_beam_smr():
@@ -80,9 +80,10 @@ def test_sc_beam_smr():
                  f"{row[_B2[1]]:.6g}")
             lines[kernel] = open(_ERRS).read().splitlines()[-1]
         # every kernel runs the same sweep, so their error lines must agree exactly
+        ref = _KERNELS[0][0]
         for kern in lines:
-            assert lines[kern] == lines["wavefront"], \
-                (f"{kern} differs from wavefront:\n  wavefront: "
-                 f"{lines['wavefront']}\n  {kern}: {lines[kern]}")
+            assert lines[kern] == lines[ref], \
+                (f"{kern} differs from {ref}:\n  {ref}: "
+                 f"{lines[ref]}\n  {kern}: {lines[kern]}")
     finally:
         testutils.cleanup()

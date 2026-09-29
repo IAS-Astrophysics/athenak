@@ -73,7 +73,7 @@ struct HyperplaneOrder {
 //! \brief how the sweep is packaged into Kokkos kernels (<nr_radiation>/sweep_kernel);
 //! same sweep and the same result whichever is chosen
 
-enum class SweepKernel {wavefront, tiled, plane};
+enum class SweepKernel {tiled, plane};
 
 //----------------------------------------------------------------------------------------
 //! \class SC
@@ -116,12 +116,11 @@ class SC {
   bool affect_fluid;
 
   // how the sweep is packaged into Kokkos kernels (same sweep, same result either way)
-  //   wavefront: one launch per cell hyperplane, flat par_for over cells x rays on it
-  //   tiled:     one launch per tile hyperplane, one team per tile x ray, each team
-  //              walking its tile's cell hyperplanes with a team barrier between them
   //   plane:     one launch per plane along each ray's own dominant axis, a flat
-  //              par_for over the transverse cells x rays. Fewer, larger and
-  //              uniformly sized launches than wavefront; no tiles or teams.
+  //              par_for over the transverse cells x rays; no tiles or teams
+  //   tiled:     one launch per tile hyperplane, one team per tile x ray, each team
+  //              walking its tile's cell hyperplanes with a team barrier between them.
+  //              Tunable through tile_size and team_size.
   SweepKernel sweep_kernel;
   std::string sweep_kernel_name;   // as given in the deck, for messages
   int tile_size;   // tiled only: cells per tile edge; 0 = the whole meshblock is one tile
@@ -174,8 +173,7 @@ class SC {
   DvceArray5D<Real> sigma_a;
 
   // hyperplane orderings (sc/formal_solution.cpp BuildIndices; built once in the
-  // constructor).  cells of the meshblock: wavefront, and tiled at tile_size 0
-  HyperplaneOrder block_cells;
+  // constructor)
   HyperplaneOrder tile_cells;    // cells of one tile: tiled, inner loop
   HyperplaneOrder block_tiles;   // tiles of the meshblock: tiled, launch loop
   // plane on a non-cubic block: rays sorted by the axis they march along, so each
@@ -238,7 +236,6 @@ class SC {
   // formal solution (sc/formal_solution.cpp): dispatch on sweep_kernel. Public because
   // Kokkos CUDA device lambdas cannot be defined inside private/protected members.
   void FormalSolution();
-  void FormalSolutionWavefront();
   void FormalSolutionTiled();
   void FormalSolutionPlane();
   void PlaneSweepAllRays();

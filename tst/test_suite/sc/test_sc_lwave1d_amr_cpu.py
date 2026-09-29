@@ -29,7 +29,7 @@ import test_suite.testutils as testutils
 _RES = [256, 512, 1024]
 _OMEGA_R, _OMEGA_I, _OMEGA_R_FIT, _OMEGA_I_FIT = 4, 5, 6, 7
 _L1_RMS = 4
-_KERNELS = [("wavefront", 0), ("tiled", 8), ("plane", 0)]
+_KERNELS = [("plane", 0), ("tiled", 8)]
 
 
 def _args(n, kernel, tile):

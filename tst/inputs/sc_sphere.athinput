@@ -49,7 +49,7 @@ tlim       = 1.0e5
 nmu           = 3
 prat          = 1.0
 crat          = 1.0
-sweep_kernel = wavefront
+sweep_kernel = plane
 tile_size    = 0          # tiled only; the test ladder overrides both
 iter_tol      = 1.0e-12
 

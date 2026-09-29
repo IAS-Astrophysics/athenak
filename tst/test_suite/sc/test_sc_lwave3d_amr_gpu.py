@@ -18,7 +18,7 @@ import test_suite.testutils as testutils
 
 _OMEGA_R, _OMEGA_I, _OMEGA_R_FIT, _OMEGA_I_FIT = 4, 5, 6, 7
 _L1_RMS = 4
-_KERNELS = [("wavefront", 0), ("tiled", 8), ("plane", 0)]
+_KERNELS = [("plane", 0), ("tiled", 8)]
 _ARGS = ["mesh/nx3=8", "meshblock/nx3=8", "mesh/x3min=0.0", "mesh/x3max=0.2795"]
 # the 2D run at this resolution gives 9.9e-9 (2026-09-11); set on the GPU
 _L1_FLOOR = 2.0e-8
