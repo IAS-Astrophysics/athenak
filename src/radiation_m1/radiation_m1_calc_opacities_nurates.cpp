@@ -56,6 +56,14 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   int &is = indcs.is, &ie = indcs.ie;
   int &js = indcs.js, &je = indcs.je;
   int &ks = indcs.ks, &ke = indcs.ke;
+  // The flux limiter averages absorption and scattering opacities across
+  // faces, so opacity must be produced one cell beyond the active range in
+  // each active dimension.
+  int const is_op = is - 1, ie_op = ie + 1;
+  int const js_op = pmy_pack->pmesh->multi_d ? js - 1 : js;
+  int const je_op = pmy_pack->pmesh->multi_d ? je + 1 : je;
+  int const ks_op = pmy_pack->pmesh->three_d ? ks - 1 : ks;
+  int const ke_op = pmy_pack->pmesh->three_d ? ke + 1 : ke;
 
   auto nmb1 = pmy_pack->nmb_thispack - 1;
   auto &nspecies_ = nspecies;
@@ -113,8 +121,8 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto nurates_units = Primitive::MakeNGS();
 
   par_for(
-      "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks, ke, js,
-      je, is, ie,
+      "radiation_m1_calc_opacity_nurates", DevExeSpace(), 0, nmb1, ks_op, ke_op,
+      js_op, je_op, is_op, ie_op,
       KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
         if (radiation_mask_(m, k, j, i)) {
           for (int nuidx = 0; nuidx < nspecies_; nuidx++) {
