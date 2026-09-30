@@ -42,6 +42,11 @@ class FastFlow {
   friend class FastFlowFinder;
 
  public:
+  enum class StepRule {fixed, monotone, bb1, bb2};
+  enum class ExitCode {success = 0, not_finite = 1, hmean_diverged = 2,
+                       meanradius_neg = 3, mass_collapse = 4, max_iters = 5,
+                       stagnated = 6};
+
   // Constructor for FastFlow object
   FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n);
 
@@ -54,7 +59,6 @@ class FastFlow {
   void MetricInterp();
   void ComputeSphericalHarmonics();
   void RadiiFromSphericalHarmonics();
-  void UpdateFlowSpectralComponents();
   void SurfaceIntegrals();
 
   // Some of the main parameters in the fast-flow algorithm
@@ -66,12 +70,29 @@ class FastFlow {
   Real center[3]; // Center around which the horizon is searched
 
   // Fast-Flow parameters
-  Real hmean_tol; // for convergence
   Real hmean_max; // divergence guard
-  Real mass_tol; // fallback for convergence
+  Real mass_tol;
+  Real spec_tol;
+  Real hrms_tol;
+  Real hrms_rel_tol;
+  Real hrms_rel_skip; // hrms*M below which the hrms_rel_tol check is skipped
   int flow_iterations; // number of flow iterations
   Real flow_alpha_beta_const; // alpha & beta constants in the iteration formula
                               // Eqs. (43) & (44) of https://arxiv.org/pdf/gr-qc/9707050
+  StepRule step_rule;
+  Real alpha_min, alpha_max, alpha_grow, alpha_shrink;
+  bool stagnation_detect;
+  int stagnation_window;
+  Real stagnation_improvement_frac;
+  int stagnation_warmup;
+  int mode_ramp_lmin;
+  int mode_ramp_iters_per_step;
+  int mode_ramp_modes_per_step;
+  bool auto_retry;
+  int max_retries;
+  Real retry_shrink;
+  Real retry_grow;
+  bool propagate_iter_coefficients;
   bool verbose;
   bool output_ylm;
   bool output_grid;
@@ -100,6 +121,10 @@ class FastFlow {
   std::string flow_function;
   int flowflag = 0;
   int fastflow_iter = 0;
+  Real spec_resid_last = -1.0;
+  Real hmean_last = 0.0;
+  Real alpha_last = -1.0;
+  ExitCode last_exit = ExitCode::max_iters;
 
   // Pointer to Gauss-Legendre object
   GaussLegendreGrid *gl_grid;
@@ -112,6 +137,7 @@ class FastFlow {
   // Arrays for spectral coefficients
   DualArray1D<Real> a0, ac, as;
   Real last_a0; // last coefficient a_00
+  std::vector<Real> last_shape; // last found coefficients, layout [a0 | ac | as]
 
   // Arrays used for the fields on the sphere
   DvceArray1D<Real> rr, rr_dth, rr_dph;
@@ -139,11 +165,13 @@ class FastFlow {
     hhmean,
     hSx, hSy, hSz, hS,
     hmass,
+    hmass_irr,
+    hchi,
     hmeanradius,
     hminradius,
     hnvar
   };
-  static constexpr int kHnvar = 11;
+  static constexpr int kHnvar = 13;
   Real ah_prop[kHnvar]; // Array of horizon quantities
 
   // Vectors to hold the DvceArray1D interpolated values of GaussLegendreGrid
@@ -153,8 +181,14 @@ class FastFlow {
   DualArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
-  void FastFlowLoop();
-  void InitialGuess();
+  void FastFlowLoop(bool warm);
+  bool InitialGuess(bool cold, Real radius_factor);
+  void ProjectExpansion(Real *spec0, Real *specc, Real *specs);
+  void RecomputeABfac(Real alpha, Real *ABfac) const;
+  void PackCoefficients(std::vector<Real> &v) const;
+  void UnpackCoefficients(const std::vector<Real> &v);
+  void SaveShape();
+  void LoadShape();
 
   // Pointers to MeshBlockPack and ParameterInput
   MeshBlockPack *pmbp;
