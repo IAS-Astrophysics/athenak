@@ -657,12 +657,23 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = Ff_d(2);
           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Ff_d(3);
 
+          Real DNf{};
           if (nspecies_ > 1) {
-            Real Nf = u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
-                      beta_dt * rEFN[nuidx][M1_N_IDX] +
-                      theta * DrEFN[nuidx][M1_N_IDX];
-            Nf = Kokkos::fmax(Nf, params_.rad_N_floor);
+            const Real Npred =
+                u1_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) +
+                beta_dt * rEFN[nuidx][M1_N_IDX];
+            Real Nf = Npred + theta * DrEFN[nuidx][M1_N_IDX];
+            Nf = Kokkos::isfinite(Nf) ? Kokkos::fmax(Nf, params_.rad_N_floor)
+                                      : params_.rad_N_floor;
             u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i) = Nf;
+            // Number change the matter source actually produced, after the floor
+            // (measured from the floored transport predictor, which is not
+            // charged). Backreacting this instead of theta*DrEFN keeps lepton
+            // number conserved when the floor clips the source.
+            const Real Nbase = Kokkos::isfinite(Npred)
+                                   ? Kokkos::fmax(Npred, params_.rad_N_floor)
+                                   : params_.rad_N_floor;
+            DNf = Nf - Nbase;
           }
 
           if (params_.backreact && stage == 2 && (ismhd_)) {
@@ -671,7 +682,7 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
             umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];
             umhd0_(m, IM3, k, j, i) -= theta * DrEFN[nuidx][M1_FZ_IDX];
             if (nspecies_ > 1) {
-              umhd0_(m, IYF, k, j, i) += theta * DDxp[nuidx];
+              umhd0_(m, IYF, k, j, i) -= mb * (DNf * (nuidx == 0) - DNf * (nuidx == 1));
             }
           }
         }
