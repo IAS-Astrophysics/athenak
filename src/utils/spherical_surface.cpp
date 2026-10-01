@@ -208,8 +208,10 @@ void SphericalSurface::SetInterpolationIndices() {
       Real &dx2 = size.h_view(m).dx2;
       Real &dx3 = size.h_view(m).dx3;
 
-      // save MeshBlock and zone indicies for nearest position to spherical
-      // patch center if this angle position resides in this MeshBlock
+      // Save MeshBlock and zone indicies for nearest position to spherical patch center
+      // if this angle position resides in this MeshBlock. NOTE: the upper bounds are
+      // exclusive so that a point landing exactly on a MeshBlock face is owned by
+      // exactly one block, and the search stops at the first match.
       if ((rcoord.h_view(n, 0) >= x1min && rcoord.h_view(n, 0) < x1max) &&
           (rcoord.h_view(n, 1) >= x2min && rcoord.h_view(n, 1) < x2max) &&
           (rcoord.h_view(n, 2) >= x3min && rcoord.h_view(n, 2) < x3max)) {
