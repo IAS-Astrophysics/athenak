@@ -195,8 +195,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e3_r1 = e3x1_(m,ks,j  ,i) - e3cc_(m,ks,j  ,i  );
       }
-      e3(m,ks,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
-             e3x2_(m,ks,j,i-1) + e3x2_(m,ks,j,i) + e3x1_(m,ks,j-1,i) + e3x1_(m,ks,j,i));
+      e3(m,ks,j,i) = 0.25*((e3_l1 + e3_r1) + (e3_l2 + e3_r2) +
+             (e3x2_(m,ks,j,i-1) + e3x2_(m,ks,j,i)) + (e3x1_(m,ks,j-1,i) + e3x1_(m,ks,j,i)));
     });
   }
 
@@ -359,8 +359,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e1_r2 = e1x2_(m,k  ,j,i) - e1cc_(m,k  ,j  ,i);
       }
-      e1(m,k,j,i) = 0.25*(e1_l3 + e1_r3 + e1_l2 + e1_r2 +
-                e1x2_(m,k-1,j,i) + e1x2_(m,k,j,i) + e1x3_(m,k,j-1,i) + e1x3_(m,k,j,i));
+      e1(m,k,j,i) = 0.25*((e1_l3 + e1_r3) + (e1_l2 + e1_r2) +
+                (e1x2_(m,k-1,j,i) + e1x2_(m,k,j,i)) + (e1x3_(m,k,j-1,i) + e1x3_(m,k,j,i)));
 
       // integrate E2 to corner using SG07
       Real e2_l3, e2_r3, e2_l1, e2_r1;
@@ -384,8 +384,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e2_r1 = e2x1_(m,k  ,j,i) - e2cc_(m,k  ,j,i  );
       }
-      e2(m,k,j,i) = 0.25*(e2_l3 + e2_r3 + e2_l1 + e2_r1 +
-                e2x3_(m,k,j,i-1) + e2x3_(m,k,j,i) + e2x1_(m,k-1,j,i) + e2x1_(m,k,j,i));
+      e2(m,k,j,i) = 0.25*((e2_l3 + e2_r3) + (e2_l1 + e2_r1) +
+                (e2x3_(m,k,j,i-1) + e2x3_(m,k,j,i)) + (e2x1_(m,k-1,j,i) + e2x1_(m,k,j,i)));
 
       // integrate E3 to corner using SG07
       Real e3_l2, e3_r2, e3_l1, e3_r1;
@@ -409,8 +409,8 @@ TaskStatus MHD::CornerE(Driver *pdriver, int stage) {
       } else {
         e3_r1 = e3x1_(m,k,j  ,i) - e3cc_(m,k,j  ,i  );
       }
-      e3(m,k,j,i) = 0.25*(e3_l1 + e3_r1 + e3_l2 + e3_r2 +
-                e3x2_(m,k,j,i-1) + e3x2_(m,k,j,i) + e3x1_(m,k,j-1,i) + e3x1_(m,k,j,i));
+      e3(m,k,j,i) = 0.25*((e3_l1 + e3_r1) + (e3_l2 + e3_r2) +
+                (e3x2_(m,k,j,i-1) + e3x2_(m,k,j,i)) + (e3x1_(m,k,j-1,i) + e3x1_(m,k,j,i)));
     });
   }
   return TaskStatus::complete;
