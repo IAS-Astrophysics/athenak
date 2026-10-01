@@ -11,12 +11,16 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdio>
+#include <cstring>
 #include <limits>
+#include <memory>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -31,6 +35,7 @@
 #include "utils/spherical_harm.hpp"
 #include "utils/lagrange_interpolator.hpp"
 #include "z4c.hpp"
+#include "driver/driver.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "utils/inline_interpolator.hpp"
 
@@ -47,7 +52,7 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   dYcdph2("dYcdph2",1,1), dYsdph2("dYsdph2",1,1),
   a0("a0",1), ac("ac",1), as("as",1),
   rr("rr",1), rr_dth("rr_dth",1), rr_dph("rr_dph",1),
-  rho("rho",1), dg("dg",1,1,1,1,1), g_interp("g_interp",1,1),
+  rho("rho",1), g_interp("g_interp",1,1),
   K_interp("K_interp",1,1), dg_interp("dg_interp",1,1),
   pmbp(pmbp), pin(pin) {
   nh = n; // The n-th horizon
@@ -80,8 +85,67 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   }
 
   // Convergence parameters
-  hmean_tol = pin->GetOrAddReal("fastflow", "hmean_tol_" + n_str, 100.);
-  mass_tol = pin->GetOrAddReal("fastflow", "mass_tol_" + n_str, 1e-2);
+  hmean_max = pin->GetOrAddReal("fastflow", "hmean_max_" + n_str, 100.);
+  mass_tol = pin->GetOrAddReal("fastflow", "mass_tol_" + n_str, 1e-3);
+  spec_tol = pin->GetOrAddReal("fastflow", "spec_tol_" + n_str, 1e-5);
+  hrms_tol = pin->GetOrAddReal("fastflow", "hrms_tol_" + n_str, 1e-1);
+  hrms_rel_tol = pin->GetOrAddReal("fastflow", "hrms_rel_tol_" + n_str, 1e-3);
+  hrms_rel_skip = pin->GetOrAddReal("fastflow", "hrms_rel_skip_" + n_str, 1e-4);
+
+  // Step size control
+  std::string sr = pin->GetOrAddString("fastflow", "step_rule_" + n_str, "monotone");
+  if (sr == "fixed") {
+    step_rule = StepRule::fixed;
+  } else if (sr == "monotone") {
+    step_rule = StepRule::monotone;
+  } else if (sr == "bb1") {
+    step_rule = StepRule::bb1;
+  } else if (sr == "bb2") {
+    step_rule = StepRule::bb2;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unknown fastflow/step_rule_" << n_str << " = '" << sr
+              << "' (fixed, monotone, bb1, bb2)" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  alpha_min = pin->GetOrAddReal("fastflow", "alpha_min_" + n_str, 0.1);
+  alpha_max = pin->GetOrAddReal("fastflow", "alpha_max_" + n_str, 4.0);
+  alpha_grow = pin->GetOrAddReal("fastflow", "alpha_grow_" + n_str, 1.1);
+  alpha_shrink = pin->GetOrAddReal("fastflow", "alpha_shrink_" + n_str, 0.5);
+
+  // Stagnation detection
+  stagnation_detect = pin->GetOrAddBoolean("fastflow", "stagnation_detect_" + n_str,
+                                           true);
+  stagnation_window = pin->GetOrAddInteger("fastflow", "stagnation_window_" + n_str, 8);
+  stagnation_improvement_frac = pin->GetOrAddReal("fastflow",
+                                "stagnation_improvement_frac_" + n_str, 0.1);
+  stagnation_warmup = pin->GetOrAddInteger("fastflow", "stagnation_warmup_" + n_str, 5);
+
+  // Mode ramp (continuation in lmax), -1 disables
+  mode_ramp_lmin = pin->GetOrAddInteger("fastflow", "mode_ramp_lmin_" + n_str, -1);
+  mode_ramp_iters_per_step = pin->GetOrAddInteger("fastflow",
+                             "mode_ramp_iters_per_step_" + n_str, 2);
+  mode_ramp_modes_per_step = pin->GetOrAddInteger("fastflow",
+                             "mode_ramp_modes_per_step_" + n_str, 2);
+  if (mode_ramp_lmin < 0 || mode_ramp_lmin > lmax) mode_ramp_lmin = lmax;
+  if (mode_ramp_iters_per_step < 1) mode_ramp_iters_per_step = 1;
+  if (mode_ramp_modes_per_step < 1) mode_ramp_modes_per_step = 1;
+
+  // Retries with rescaled initial radius
+  auto_retry = pin->GetOrAddBoolean("fastflow", "auto_retry_" + n_str, true);
+  max_retries = pin->GetOrAddInteger("fastflow", "max_retries_" + n_str, 5);
+  retry_shrink = pin->GetOrAddReal("fastflow", "retry_shrink_" + n_str, 0.5);
+  retry_grow = pin->GetOrAddReal("fastflow", "retry_grow_" + n_str, 2.0);
+  if (!(retry_shrink > 0.0 && retry_shrink < 1.0) || !(retry_grow > 1.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "fastflow/retry_shrink_" << n_str << " must be in (0,1)"
+              << " and retry_grow_" << n_str << " > 1" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  max_retries = std::min(std::max(max_retries, 0), 32);
+
+  propagate_iter_coefficients = pin->GetOrAddBoolean("fastflow",
+                                "propagate_iter_coefficients", true);
 
   // Output booleans
   verbose = pin->GetOrAddBoolean("fastflow", "verbose", false);
@@ -90,8 +154,6 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
 
   root = pin->GetOrAddInteger("fastflow", "mpi_root", 0);
   merger_distance = pin->GetOrAddReal("fastflow", "merger_distance", 0.1);
-  // use_stored_metric_drvts = pin->GetOrAddBoolean("fastflow",
-  //                                  "store_metric_drvts", false);
 
   // Initial guess
   initial_radius = pin->GetOrAddReal("fastflow", "initial_radius_" + n_str, 1.0);
@@ -177,22 +239,14 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   Kokkos::realloc(K_interp, (NEXCURV), nangles);
   Kokkos::realloc(dg_interp, (NDRVSSPMETRIC), nangles);
 
-  // The number of meshblocks on this rank (nmb_thispack) can change at runtime
-  // with adaptive mesh refinement and load balancing (e.g. a boosted puncture
-  // dragging the refined region across ranks). To prevent this allocate more
-  // memory based in the max. nmb. of MBs per rank from startup.
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  int nmb = std::max((pmbp->nmb_thispack), (pmbp->pmesh->nmb_maxperrank));
-  int ncells1 = indcs.nx1 + 2 * (indcs.ng);
-  int ncells2 = indcs.nx2 + 2 * (indcs.ng);
-  int ncells3 = indcs.nx3 + 2 * (indcs.ng);
-  Kokkos::realloc(dg, nmb, (NDRVSSPMETRIC), ncells3, ncells2, ncells1);
-
   // Array computed in surface integrals.
   Kokkos::realloc(rho, nangles);
 
   // Flag points existing on this mesh.
   Kokkos::realloc(havepoint, nangles);
+
+  last_shape.assign(lmax1 + 2*lmpoints, 0.0);
+  LoadShape();
 
   // Initialize horizon properties to NAN.
   for (int v = 0; v < hnvar; ++v) {
@@ -252,8 +306,23 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
     }
     if (new_file) {
       fprintf(pofile_summary, "# 1:iter 2:time 3:mass 4:Sx 5:Sy 6:Sz 7:S 8:area "
-                               "9:hrms 10:hmean 11:meanradius 12:minradius\n");
+                               "9:hrms 10:hmean 11:meanradius 12:minradius "
+                               "13:mass_irr 14:chi 15:exit_code 16:num_iters "
+                               "17:spec_resid\n");
       fflush(pofile_summary);
+    }
+
+    // Shape file: open once and keep open (closed in the destructor), like the
+    // summary/verbose files. Opening in append mode ("a") preserves existing
+    // contents on restart. This avoids a per-write fopen(), which can fail
+    // transiently on a busy parallel filesystem and abort a long run.
+    pofile_shape = fopen(ofname_shape.c_str(), "a");
+    if (NULL == pofile_shape) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+            << std::endl
+            << "Could not open file '" << ofname_shape << "' for writing! "
+            << std::strerror(errno) << std::endl;
+      exit(EXIT_FAILURE);
     }
 
     if (output_grid) {
@@ -355,6 +424,7 @@ FastFlow::~FastFlow() {
   // Close files
   if (ioproc) {
     fclose(pofile_summary);
+    fclose(pofile_shape);
     if (verbose) {
       fclose(pofile_verbose);
     }
@@ -382,18 +452,14 @@ void FastFlow::Write(int iter, Real time) {
         ah_prop[hhmean],
         ah_prop[hmeanradius],
         ah_prop[hminradius]);
-    fprintf(pofile_summary, "\n");
+    fprintf(pofile_summary, " %.15e %.15e %d %d %.15e\n",
+        ah_prop[hmass_irr], ah_prop[hchi], static_cast<int>(last_exit),
+        fastflow_iter + 1, spec_resid_last);
     fflush(pofile_summary);
 
     if (ah_found) {
-      // Shape file (coefficients).
-      pofile_shape = fopen(ofname_shape.c_str(), "a");
-      if (NULL == pofile_shape) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-            << std::endl
-            << "Could not open file '" << pofile_shape << "' for writing!" << std::endl;
-        exit(EXIT_FAILURE);
-      }
+      // Shape file (coefficients). File is opened once in the constructor and
+      // kept open, so here we only append and flush.
       fprintf(pofile_shape, "# iter = %d, Time = %g\n",iter,time);
       for (int l = 0; l <= lmax; l++) {
         fprintf(pofile_shape,"%e ", a0.h_view(l));
@@ -405,7 +471,7 @@ void FastFlow::Write(int iter, Real time) {
         }
       }
       fprintf(pofile_shape,"\n");
-      fclose(pofile_shape);
+      fflush(pofile_shape);
     }
   }
 
@@ -419,7 +485,7 @@ void FastFlow::Write(int iter, Real time) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::Find(int iter, Real time)
-//! \brief Search for the horizons
+//! \brief Search for the horizons, retrying with a rescaled initial radius on failure.
 void FastFlow::Find(int iter, Real time) {
   if ((time < start_time) || (time > stop_time)) return;
   if (wait_until_punc_are_close && !(PuncAreClose())) return;
@@ -427,144 +493,167 @@ void FastFlow::Find(int iter, Real time) {
     fprintf(pofile_verbose, "time=%.4f, cycle=%d\n", time, iter);
   }
 
-  InitialGuess();
-  FastFlowLoop();
+  static constexpr int alt_dir[3] = {-1, +1, -1};
+  Real factor = 1.0;
+  int alt_idx = 0;
+  bool was_warm = false;
+  const int max_attempts = (auto_retry ? max_retries : 0) + 1;
 
-  // Retain `last_a0` in restart: this serves as primary ini. guess.
+  for (int attempt = 0; attempt < max_attempts; ++attempt) {
+    // A failed warm start is first retried from the unscaled cold guess.
+    if (attempt > 0 && !was_warm) {
+      // Sign of the mean expansion tells on which side of the horizon we were.
+      int dir;
+      if (last_exit == ExitCode::mass_collapse) {
+        dir = +1;
+      } else if (Kokkos::isfinite(hmean_last) && hmean_last != 0.0) {
+        dir = (hmean_last < 0.0) ? +1 : -1;
+      } else if (last_exit == ExitCode::not_finite ||
+                 last_exit == ExitCode::hmean_diverged) {
+        dir = -1;
+      } else {
+        dir = alt_dir[alt_idx++ % 3];
+      }
+      factor *= (dir < 0) ? retry_shrink : retry_grow;
+    }
+    if (attempt > 0 && verbose && ioproc) {
+      fprintf(pofile_verbose, "Retry %d/%d (last exit %d, radius factor %.4e)\n",
+              attempt, max_retries, static_cast<int>(last_exit), factor);
+    }
+
+    was_warm = InitialGuess(attempt > 0, factor);
+    FastFlowLoop(was_warm && propagate_iter_coefficients);
+    if (last_exit == ExitCode::success) break;
+  }
+
+  // Retain the found shape in restart: this serves as primary ini. guess.
+  pin->SetBoolean("fastflow", "ah_found_a0_" + std::to_string(nh), ah_found);
   if (ah_found) {
-    std::string parname;
-    parname = "last_a0_" + std::to_string(nh); // nh: horizon index
-
-    pin->SetReal("fastflow", parname, last_a0);
-
-    parname = "ah_found_a0_" + std::to_string(nh);
-    pin->SetBoolean("fastflow", parname, ah_found);
+    pin->SetReal("fastflow", "last_a0_" + std::to_string(nh), last_a0);
+    SaveShape();
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void FastFlow::InitialGuess()
-//! \brief Initial guess for spectral coefs of horizon n
-void FastFlow::InitialGuess() {
-  // Reset Coefficients to Zero
+//! \fn bool FastFlow::InitialGuess(bool cold, Real radius_factor)
+//! \brief Initial guess for spectral coefs of horizon n. Returns true on a warm start.
+bool FastFlow::InitialGuess(bool cold, Real radius_factor) {
+  if (use_puncture >= 0) {
+    center[0] = pmbp->pz4c->ptracker[use_puncture]->GetPos(0);
+    center[1] = pmbp->pz4c->ptracker[use_puncture]->GetPos(1);
+    center[2] = pmbp->pz4c->ptracker[use_puncture]->GetPos(2);
+  }
+  if (use_puncture_massweighted_center) {
+    PuncWeightedMassCentralPoint(&center[0], &center[1], &center[2]);
+  }
+
   Kokkos::deep_copy(a0.h_view, 0.0);
   Kokkos::deep_copy(ac.h_view, 0.0);
   Kokkos::deep_copy(as.h_view, 0.0);
 
-  if (use_puncture >= 0) {
-    // Update the center to the puncture position
-    center[0] = pmbp->pz4c->ptracker[use_puncture]->GetPos(0);
-    center[1] = pmbp->pz4c->ptracker[use_puncture]->GetPos(1);
-    center[2] = pmbp->pz4c->ptracker[use_puncture]->GetPos(2);
-
-    // Update a0
+  const bool warm = !cold && ah_found && last_a0 > 0;
+  if (warm) {
+    if (propagate_iter_coefficients) {
+      UnpackCoefficients(last_shape);
+    } else {
+      a0.h_view(0) = last_a0;
+    }
+    a0.h_view(0) *= expand_guess;
+  } else if (use_puncture >= 0) {
     // For single BH in isotropic coordinates: horizon radius=m/2
     // but make sure it can surround all punctures comfortably, i.e.
     // make radius a bit larger than half the distance between any of the punctures
     Real largedist = PuncMaxDistance(use_puncture);
     Real mass = pmbp->pz4c->ptracker[use_puncture]->GetMass();
-    if (ah_found && last_a0 > 0) {
-      a0.h_view(0) = last_a0 * expand_guess;
-    } else {
-      a0.h_view(0) = Kokkos::fmax(0.5 * mass, Kokkos::fmin(mass, 0.5 * largedist));
-      a0.h_view(0) *= Kokkos::sqrt(4.0 * M_PI);
-    }
-
-    // Sync to device
-    a0.template modify<HostMemSpace>();
-    a0.template sync<DevExeSpace>();
-    ac.template modify<HostMemSpace>();
-    ac.template sync<DevExeSpace>();
-    as.template modify<HostMemSpace>();
-    as.template sync<DevExeSpace>();
-    return;
-  }
-
-  if (use_puncture_massweighted_center) {
-    // Update the center based on the mass-weighted distance
-    Real pos[3];
-    PuncWeightedMassCentralPoint(&pos[0], &pos[1], &pos[2]);
-    center[0] = pos[0];
-    center[1] = pos[1];
-    center[2] = pos[2];
-  }
-
-  // Take a0 either from previous or from input value
-  if (ah_found && last_a0 > 0) {
-    a0.h_view(0) = last_a0 * expand_guess;
+    a0.h_view(0) = Kokkos::sqrt(4.0 * M_PI) * radius_factor *
+                   Kokkos::fmax(0.5 * mass, Kokkos::fmin(mass, 0.5 * largedist));
   } else {
-    a0.h_view(0) = Kokkos::sqrt(4.0 * M_PI) * initial_radius;
+    a0.h_view(0) = Kokkos::sqrt(4.0 * M_PI) * radius_factor * initial_radius;
   }
-  // Sync to device
+
   a0.template modify<HostMemSpace>();
   a0.template sync<DevExeSpace>();
   ac.template modify<HostMemSpace>();
   ac.template sync<DevExeSpace>();
   as.template modify<HostMemSpace>();
   as.template sync<DevExeSpace>();
+  return warm;
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void FastFlow::MetricDerivatives(Real time)
-//! \brief Compute drvts of ADM metric at MB level.
-template <int NGHOST>
-void FastFlow::MetricDerivatives(Real time) {
-  // Check whether derivatives have to be computed
-  // if (use_stored_metric_drvts) return;
-  if((time < start_time) || (time > stop_time)) return;
-  if (wait_until_punc_are_close && !(PuncAreClose())) return;
-
-  // Explicitely capture the variables for the Kokkos kernel.
-  auto &adm = pmbp->padm->adm;
-  auto &dg_ = dg;
-  auto &indcs = pmbp->pmesh->mb_indcs;
-  auto &size = pmbp->pmb->mb_size;
-  int nmb = pmbp->nmb_thispack;
-  int &is = indcs.is; int &ie = indcs.ie;
-  int &js = indcs.js; int &je = indcs.je;
-  int &ks = indcs.ks; int &ke = indcs.ke;
-
-  par_for("FastFlow_metric_derivatives",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    // Grid spacing
-    Real idx[] = {1.0 / size.d_view(m).dx1, 1.0 / size.d_view(m).dx2,
-                  1.0 / size.d_view(m).dx3};
-
-    // x-derivative
-    dg_(m,D1S11,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D1S12,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D1S13,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D1S22,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D1S23,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D1S33,k,j,i) = Dx<NGHOST>(0, idx, adm.g_dd, m, 2, 2, k, j, i);
-
-    // y-derivative
-    dg_(m,D2S11,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D2S12,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D2S13,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D2S22,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D2S23,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D2S33,k,j,i) = Dx<NGHOST>(1, idx, adm.g_dd, m, 2, 2, k, j, i);
-
-    // z-derivative
-    dg_(m,D3S11,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 0, k, j, i);
-    dg_(m,D3S12,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 1, k, j, i);
-    dg_(m,D3S13,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 0, 2, k, j, i);
-    dg_(m,D3S22,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 1, k, j, i);
-    dg_(m,D3S23,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 1, 2, k, j, i);
-    dg_(m,D3S33,k,j,i) = Dx<NGHOST>(2, idx, adm.g_dd, m, 2, 2, k, j, i);
-  });
-
-  return;
+//! \fn void FastFlow::PackCoefficients / UnpackCoefficients
+//! \brief Flat coefficient layout [a0 | ac | as], matching the projection buffer.
+void FastFlow::PackCoefficients(std::vector<Real> &v) const {
+  for (int l = 0; l < lmax1; ++l) v[l] = a0.h_view(l);
+  for (int i = 0; i < lmpoints; ++i) {
+    v[lmax1 + i] = ac.h_view(i);
+    v[lmax1 + lmpoints + i] = as.h_view(i);
+  }
 }
-template void FastFlow::MetricDerivatives<2>(Real time);
-template void FastFlow::MetricDerivatives<3>(Real time);
-template void FastFlow::MetricDerivatives<4>(Real time);
+
+void FastFlow::UnpackCoefficients(const std::vector<Real> &v) {
+  for (int l = 0; l < lmax1; ++l) a0.h_view(l) = v[l];
+  for (int i = 0; i < lmpoints; ++i) {
+    ac.h_view(i) = v[lmax1 + i];
+    as.h_view(i) = v[lmax1 + lmpoints + i];
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FastFlow::SaveShape / LoadShape
+//! \brief Store the last found shape in the parameter file (and thus in restarts).
+void FastFlow::SaveShape() {
+  std::ostringstream os;
+  os.precision(12);
+  os << std::scientific;
+  for (int l = 0; l <= lmax; ++l) {
+    os << (l ? "," : "") << last_shape[l];
+  }
+  for (int l = 1; l <= lmax; ++l) {
+    for (int m = 1; m <= l; ++m) {
+      const int l1 = lmindex(l, m, lmax);
+      os << "," << last_shape[lmax1 + l1] << "," << last_shape[lmax1 + lmpoints + l1];
+    }
+  }
+  pin->SetString("fastflow", "last_shape_" + std::to_string(nh), os.str());
+}
+
+void FastFlow::LoadShape() {
+  std::string str = pin->GetOrAddString("fastflow", "last_shape_" + std::to_string(nh),
+                                        "");
+  std::vector<Real> vals;
+  std::istringstream is(str);
+  std::string tok;
+  while (std::getline(is, tok, ',')) vals.push_back(std::stod(tok));
+
+  std::fill(last_shape.begin(), last_shape.end(), 0.0);
+  if (static_cast<int>(vals.size()) == lmax1 + lmax * lmax1) {
+    int n = 0;
+    for (int l = 0; l <= lmax; ++l) last_shape[l] = vals[n++];
+    for (int l = 1; l <= lmax; ++l) {
+      for (int m = 1; m <= l; ++m) {
+        const int l1 = lmindex(l, m, lmax);
+        last_shape[lmax1 + l1] = vals[n++];
+        last_shape[lmax1 + lmpoints + l1] = vals[n++];
+      }
+    }
+  } else if (last_a0 > 0) {
+    last_shape[0] = last_a0;
+  }
+}
 
 //----------------------------------------------------------------------------------------
 //! \fn void FastFlow::MetricInterp(MeshBlock *pmb)
-//! \brief Interpolate metric on the surface n.
+//! \brief Interpolate metric, extrinsic curvature and metric derivatives on surface n.
 //!        Flag here the surface points contained (on this rank).
+//!
+//!        The metric derivatives are taken analytically from the Lagrange interpolant of
+//!        the ADM metric rather than from a finite-differenced grid array. The latter can
+//!        only be evaluated on MeshBlock interiors (a centred stencil does not fit in the
+//!        ghosts), while the interpolation stencil of a surface point sitting close to a
+//!        MeshBlock face reaches up to NGHOST cells into the ghost zones -- which for
+//!        such an array are never filled by any exchange. u_adm, by contrast, is set
+//!        over the full ghosted range by Z4cToADM(), so every value read here is valid.
 template <int NGHOST>
 void FastFlow::MetricInterp() {
   // In MetricInterp() we'll flag the surface points on this mesh
@@ -588,7 +677,6 @@ void FastFlow::MetricInterp() {
   // Explicitely capture the variables for the Kokkos kernel.
   auto &polar_pos = gl_grid->polar_pos;
   auto &u_adm = pmbp->padm->u_adm;
-  auto &dg_ = dg;
   auto &gi_ = g_interp;
   auto &Ki_ = K_interp;
   auto &dgi_ = dg_interp;
@@ -645,9 +733,15 @@ void FastFlow::MetricInterp() {
         Ki_(b,p) = InterpolateLagrange<NGHOST>(u_adm, Kind[b], indcs, ind_and_wghts);
       }
 
-      // Metric derivatives
-      for (int c = 0; c < NDRVSSPMETRIC; ++c) {
-        dgi_(c,p) = InterpolateLagrange<NGHOST>(dg_, c, indcs, ind_and_wghts);
+      // Metric derivatives, obtained by differentiating the same Lagrange
+      // interpolant used above. Ordering matches SpatialMetricDrvsIndex:
+      // component `a` of the derivative along `d` sits at d*NSPMETRIC + a.
+      for (int d = 0; d < 3; ++d) {
+        for (int a = 0; a < NSPMETRIC; ++a) {
+          dgi_(d*NSPMETRIC + a,p) = InterpolateLagrangeDeriv<NGHOST>(u_adm, gind[a],
+                                                                    indcs, ind_and_wghts,
+                                                                    d);
+        }
       }
     }
   });
@@ -661,192 +755,21 @@ template void FastFlow::MetricInterp<3>();
 template void FastFlow::MetricInterp<4>();
 
 //----------------------------------------------------------------------------------------
-//! \fn void FastFlow::FastFlowLoop()
-//! \brief Fast Flow loop for horizon n.
-void FastFlow::FastFlowLoop() {
-  ah_found = false;
-
-  Real meanradius = a0.h_view(0) / Kokkos::sqrt(4.0*M_PI);
-  Real mass = 0;
-  Real mass_prev = 0;
-  Real area = 0;
-  Real hrms = 0;
-  Real hmean = 0;
-  Real Sx = 0;
-  Real Sy = 0;
-  Real Sz = 0;
-  Real S = 0;
-  bool failed = false;
-
-  if (verbose && ioproc) {
-    fprintf(pofile_verbose, "\nSearching for horizon %d\n", nh);
-    fprintf(pofile_verbose, "center = (%f, %f, %f)\n", center[0], center[1], center[2]);
-    fprintf(pofile_verbose, "r_mean = %f\n", meanradius);
-    fprintf(pofile_verbose, " iter      area            mass         meanradius"
-                   "       minradius        hmean            Sx              Sy"
-                   "              Sz             S\n");
-  }
-
-  for (int k = 0; k < flow_iterations; k++) {
-    fastflow_iter = k;
-
-    // Step 1: Compute radius r = a_lm Y_lm.
-    RadiiFromSphericalHarmonics();
-
-    // Step 2: Interpolate metric onto the surface.
-    auto &indcs = pmbp->pmesh->mb_indcs;
-    switch (indcs.ng) {
-      case 2: MetricInterp<2>();
-              break;
-      case 3: MetricInterp<3>();
-              break;
-      case 4: MetricInterp<4>();
-              break;
-    }
-
-    // Step 3: Compute the surface integrals.
-    SurfaceIntegrals();
-
-    area  = integrals[iarea];
-    hrms  = integrals[ihrms]/area;
-    hmean = integrals[ihmean];
-    Sx = integrals[iSx] / (8 * M_PI);
-    Sy = integrals[iSy] / (8 * M_PI);
-    Sz = integrals[iSz] / (8 * M_PI);
-    S  = Kokkos::sqrt(SQR(Sx) + SQR(Sy) + SQR(Sz));
-
-    meanradius = a0.h_view(0) / Kokkos::sqrt(4.0 * M_PI);
-
-    // Step 4: Check that we get a finite result.
-    if (!(Kokkos::isfinite(area))) {
-      if (verbose && ioproc) {
-        fprintf(pofile_verbose, "Failed, Area not finite\n");
-        fflush(pofile_verbose);
-      }
-      failed = true;
-      break;
-    }
-
-    if (!(Kokkos::isfinite(hmean))) {
-      if (verbose && ioproc) {
-        fprintf(pofile_verbose, "Failed, hmean not finite\n");
-        fflush(pofile_verbose);
-      }
-      failed = true;
-      break;
-    }
-
-    // Irreducible mass
-    mass_prev = mass;
-    mass = Kokkos::sqrt(area / (16.0 * M_PI));
-
-    if (verbose && ioproc) {
-      fprintf(pofile_verbose, "%3d %15.7e %15.7e %15.7e %15.7e %15.7e"
-                              " %15.7e %15.7e %15.7e %15.7e\n",
-              k, area, mass, meanradius, rr_min, hmean, Sx, Sy, Sz, S);
-      fflush(pofile_verbose);
-    }
-
-    if (Kokkos::fabs(hmean) > hmean_tol) {
-      if (verbose && ioproc) {
-        fprintf(pofile_verbose, "Failed, hmean > %f\n", hmean_tol);
-        fflush(pofile_verbose);
-      }
-      failed = true;
-      break;
-     }
-
-    if (meanradius < 0.) {
-      if (verbose && ioproc) {
-        fprintf(pofile_verbose, "Failed, meanradius < 0\n");
-        fflush(pofile_verbose);
-      }
-      failed = true;
-      break;
-    }
-
-    // Check to prevent horizon radius blow up and mass = 0
-    if (mass < 1.0e-10) {
-      if (verbose && ioproc) {
-        fprintf(pofile_verbose, "Failed mass < 1e-10\n");
-        fflush(pofile_verbose);
-      }
-      failed = true;
-      break;
-    }
-
-    // End flow when mass difference is small
-    if (Kokkos::fabs(mass_prev-mass) < mass_tol) {
-      ah_found = true;
-      break;
-    }
-
-    // Step 5: Find new spectral components.
-    UpdateFlowSpectralComponents();
-  }
-
-  if (ah_found) {
-    last_a0 = a0.h_view(0);
-
-    ah_prop[harea] = area;
-    ah_prop[hcoarea] = integrals[icoarea];
-    ah_prop[hhrms] = hrms;
-    ah_prop[hhmean] = hmean;
-    ah_prop[hmeanradius] = meanradius;
-    ah_prop[hminradius] = rr_min;
-    ah_prop[hSx] = Sx;
-    ah_prop[hSy] = Sy;
-    ah_prop[hSz] = Sz;
-    ah_prop[hS]  = S;
-    ah_prop[hmass] = Kokkos::sqrt( SQR(mass) + 0.25*SQR(S/mass) ); // Christodoulu mass
-  }
-
-  if (verbose && ioproc) {
-    if (ah_found) {
-      fprintf(pofile_verbose, "Found horizon %d\n", nh);
-      fprintf(pofile_verbose, " mass_irr = %f\n", mass);
-      fprintf(pofile_verbose, " meanradius = %f\n", meanradius);
-      fprintf(pofile_verbose, " minradius = %f\n", rr_min);
-      fprintf(pofile_verbose, " hrms = %f\n", hrms);
-      fprintf(pofile_verbose, " hmean = %f\n", hmean);
-      fprintf(pofile_verbose, " Sx = %f\n", Sx);
-      fprintf(pofile_verbose, " Sy = %f\n", Sy);
-      fprintf(pofile_verbose, " Sz = %f\n", Sz);
-      fprintf(pofile_verbose, " S  = %f\n", S);
-    } else if (!failed && !ah_found) {
-      fprintf(pofile_verbose, "Failed, reached max iterations %d\n", flow_iterations);
-    }
-    fflush(pofile_verbose);
+//! \fn void FastFlow::RecomputeABfac(Real alpha, Real *ABfac)
+//! \brief Flow weights A/(1 + B l(l+1)) with beta = alpha/2.
+void FastFlow::RecomputeABfac(Real alpha, Real *ABfac) const {
+  const Real beta = 0.5 * alpha;
+  const Real A = alpha / (lmax * lmax1) + beta;
+  const Real B = beta / alpha;
+  for (int l = 0; l <= lmax; l++) {
+    ABfac[l] = A / (1.0 + B * l * (l + 1));
   }
 }
 
 //----------------------------------------------------------------------------------------
-//! \fn void FastFlow::UpdateFlowSpectralComponents()
-//! \brief Find new spectral components with fast-flow.
-void FastFlow::UpdateFlowSpectralComponents() {
-  const Real alpha = flow_alpha_beta_const;
-  const Real beta = 0.5 * flow_alpha_beta_const;
-  const Real A = alpha / (lmax * lmax1) + beta;
-  const Real B = beta / alpha;
-
-  Real *ABfac = new Real[lmax1];
-  Real *spec0 = new Real[lmax1];
-  Real *specc = new Real[lmpoints];
-  Real *specs = new Real[lmpoints];
-
-  // Step 1: Initialize coefficients.
-  for (int l = 0; l <= lmax; l++) {
-    spec0[l] = 0;
-    ABfac[l] = A / (1.0 + B * l * (l + 1));
-
-    for (int m = 1; m <= l; m++) {
-      int l1 = lmindex(l,m,lmax);
-      specc[l1] = 0;
-      specs[l1] = 0;
-    }
-  }
-
-  // Step 2: Build the local sums.
+//! \fn void FastFlow::ProjectExpansion(Real *spec0, Real *specc, Real *specs)
+//! \brief Local (this rank) projection of rho onto the spherical harmonics.
+void FastFlow::ProjectExpansion(Real *spec0, Real *specc, Real *specs) {
   for (int p = 0; p < nangles; p++) {
     if (!havepoint.h_view(p)) continue;
 
@@ -862,37 +785,325 @@ void FastFlow::UpdateFlowSpectralComponents() {
       }
     }
   }
+}
 
-  // Step 3: Communicate the results across ranks.
-  #if MPI_PARALLEL_ENABLED
-    MPI_Allreduce(MPI_IN_PLACE,spec0,lmax1,   MPI_ATHENA_REAL,MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE,specc,lmpoints,MPI_ATHENA_REAL,MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE,specs,lmpoints,MPI_ATHENA_REAL,MPI_SUM, MPI_COMM_WORLD);
-  #endif
+//----------------------------------------------------------------------------------------
+//! \fn void FastFlow::FastFlowLoop(bool warm)
+//! \brief Fast Flow loop for horizon n.
+void FastFlow::FastFlowLoop(bool warm) {
+  ah_found = false;
+  spec_resid_last = -1.0;
+  last_exit = ExitCode::max_iters;
 
-  // Step 4: Update the spectral coefficients.
-  for (int l = 0; l <= lmax; l++) {
-    a0.h_view(l) -= ABfac[l] * spec0[l];
+  Real meanradius = a0.h_view(0) / Kokkos::sqrt(4.0*M_PI);
+  Real mass = 0;
+  Real mass_prev = 0;
+  Real area = 0;
+  Real hrms = 0;
+  Real hrms_prev = -1.0;
+  Real hrms_best = std::numeric_limits<Real>::infinity();
+  Real spec_best = std::numeric_limits<Real>::infinity();
+  int iters_no_improve = 0;
+  Real hmean = 0;
+  hmean_last = 0.0;
+  Real Sx = 0;
+  Real Sy = 0;
+  Real Sz = 0;
+  Real S = 0;
+  bool failed = false;
 
-    for (int m = 1; m <= l; m++) {
-      int l1 = lmindex(l,m,lmax);
-      ac.h_view(l1) -= ABfac[l] * specc[l1];
-      as.h_view(l1) -= ABfac[l] * specs[l1];
-    }
+  if (verbose && ioproc) {
+    fprintf(pofile_verbose, "\nSearching for horizon %d\n", nh);
+    fprintf(pofile_verbose, "center = (%f, %f, %f)\n", center[0], center[1], center[2]);
+    fprintf(pofile_verbose, "r_mean = %f\n", meanradius);
+    fprintf(pofile_verbose, " iter      area            mass         meanradius"
+                   "       minradius        hmean            hrms             Sx"
+                   "              Sy              Sz             S"
+                   "              spec_resid       alpha   lmax_act\n");
   }
 
-  delete[] ABfac;
-  delete[] spec0;
-  delete[] specc;
-  delete[] specs;
+  const int ntotal = lmax1 + 2 * lmpoints;
+  std::vector<int> ell(ntotal);
+  for (int l = 0; l < lmax1; ++l) ell[l] = l;
+  for (int i = 0; i < lmpoints; ++i) {
+    ell[lmax1 + i] = i / lmax1;
+    ell[lmax1 + lmpoints + i] = i / lmax1;
+  }
 
-  // Sync to back to device.
-  a0.template modify<HostMemSpace>();
-  a0.template sync<DevExeSpace>();
-  ac.template modify<HostMemSpace>();
-  ac.template sync<DevExeSpace>();
-  as.template modify<HostMemSpace>();
-  as.template sync<DevExeSpace>();
+  Real alpha = (warm && step_rule != StepRule::fixed && alpha_last > 0.0)
+               ? alpha_last : flow_alpha_beta_const;
+  std::vector<Real> ABfac(lmax1);
+  RecomputeABfac(alpha, ABfac.data());
+
+  std::vector<Real> acoef(ntotal), acoef_prev(ntotal), grad_prev(ntotal);
+  Real spec_prev = -1.0;
+  const bool use_bb = (step_rule == StepRule::bb1 || step_rule == StepRule::bb2);
+
+  // Single reduction buffer: [integrals | spec0 | specc | specs]
+  std::vector<Real> buf(invar + ntotal);
+  Real *grad = buf.data() + invar;
+
+  const int ramp_lmin = warm ? lmax : mode_ramp_lmin;
+  auto lmax_active_at = [&](int k) {
+    return std::min(ramp_lmin + (k / mode_ramp_iters_per_step) * mode_ramp_modes_per_step,
+                    lmax);
+  };
+  int lmax_active = lmax_active_at(0);
+
+  if (ramp_lmin < lmax) {
+    PackCoefficients(acoef);
+    for (int i = 0; i < ntotal; ++i) {
+      if (ell[i] > ramp_lmin) acoef[i] = 0.0;
+    }
+    UnpackCoefficients(acoef);
+    a0.template modify<HostMemSpace>();
+    a0.template sync<DevExeSpace>();
+    ac.template modify<HostMemSpace>();
+    ac.template sync<DevExeSpace>();
+    as.template modify<HostMemSpace>();
+    as.template sync<DevExeSpace>();
+  }
+
+  for (int k = 0; k < flow_iterations; k++) {
+    fastflow_iter = k;
+
+    const int lmax_active_prev = lmax_active;
+    lmax_active = lmax_active_at(k);
+    const bool ramp_in_progress = (lmax_active < lmax);
+    const bool ramp_transition = (k > 0 && lmax_active != lmax_active_prev);
+    const bool ramp_just_finished = (lmax_active_prev < lmax && lmax_active >= lmax);
+
+    // Step 1: Compute radius r = a_lm Y_lm.
+    RadiiFromSphericalHarmonics();
+
+    // Step 2: Interpolate metric onto the surface.
+    auto &indcs = pmbp->pmesh->mb_indcs;
+    switch (indcs.ng) {
+      case 2: MetricInterp<2>();
+              break;
+      case 3: MetricInterp<3>();
+              break;
+      case 4: MetricInterp<4>();
+              break;
+    }
+
+    // Step 3: Local surface integrals and spectral projection, one reduction.
+    SurfaceIntegrals();
+    std::fill(buf.begin(), buf.end(), 0.0);
+    std::copy(integrals, integrals + invar, buf.begin());
+    ProjectExpansion(grad, grad + lmax1, grad + lmax1 + lmpoints);
+    #if MPI_PARALLEL_ENABLED
+      MPI_Allreduce(MPI_IN_PLACE, buf.data(), invar + ntotal, MPI_ATHENA_REAL, MPI_SUM,
+                    MPI_COMM_WORLD);
+    #endif
+    std::copy(buf.begin(), buf.begin() + invar, integrals);
+
+    for (int i = 0; i < ntotal; ++i) {
+      if (ell[i] > lmax_active) grad[i] = 0.0;
+    }
+
+    area  = integrals[iarea];
+    hrms  = Kokkos::sqrt(integrals[ihrms]/area);
+    hmean = integrals[ihmean];
+    hmean_last = hmean;
+    Sx = integrals[iSx] / (8 * M_PI);
+    Sy = integrals[iSy] / (8 * M_PI);
+    Sz = integrals[iSz] / (8 * M_PI);
+    S  = Kokkos::sqrt(SQR(Sx) + SQR(Sy) + SQR(Sz));
+
+    meanradius = a0.h_view(0) / Kokkos::sqrt(4.0 * M_PI);
+
+    // Spectral residual: norm of the bare projection relative to the coefficients.
+    PackCoefficients(acoef);
+    Real gnorm2 = 0.0, anorm2 = 0.0;
+    for (int i = 0; i < ntotal; ++i) {
+      gnorm2 += SQR(grad[i]);
+      anorm2 += SQR(acoef[i]);
+    }
+    const Real gnorm = Kokkos::sqrt(gnorm2);
+    const Real spec_resid = gnorm / Kokkos::fmax(Kokkos::sqrt(anorm2), 1e-10);
+    spec_resid_last = spec_resid;
+
+    // Step size update
+    if (k >= 1 && step_rule == StepRule::monotone) {
+      alpha = (spec_resid < spec_prev) ? Kokkos::fmin(alpha * alpha_grow, alpha_max)
+                                   : Kokkos::fmax(alpha * alpha_shrink, alpha_min);
+      RecomputeABfac(alpha, ABfac.data());
+    } else if (k >= 1 && use_bb && !ramp_transition) {
+      Real ss = 0.0, sy = 0.0, yy = 0.0;
+      for (int i = 0; i < ntotal; ++i) {
+        const Real ds = acoef[i] - acoef_prev[i];
+        const Real dy = grad[i] - grad_prev[i];
+        ss += ds * ds;
+        sy += ds * dy;
+        yy += dy * dy;
+      }
+      Real alpha_bb = alpha;
+      if (step_rule == StepRule::bb1) {
+        if (Kokkos::isfinite(sy) && Kokkos::fabs(sy) > 0.0) alpha_bb = ss / sy;
+      } else {
+        if (Kokkos::isfinite(yy) && yy > 0.0) alpha_bb = sy / yy;
+      }
+      if (Kokkos::isfinite(alpha_bb) && alpha_bb > 0.0) {
+        alpha = Kokkos::fmin(Kokkos::fmax(alpha_bb, alpha_min), alpha_max);
+        RecomputeABfac(alpha, ABfac.data());
+      }
+    }
+    spec_prev = spec_resid;
+    if (use_bb) {
+      acoef_prev = acoef;
+      std::copy(grad, grad + ntotal, grad_prev.begin());
+    }
+
+    // Step 4: Check that we get a finite result.
+    if (!(Kokkos::isfinite(area)) || !(Kokkos::isfinite(hmean))) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, area or hmean not finite\n");
+        fflush(pofile_verbose);
+      }
+      last_exit = ExitCode::not_finite;
+      failed = true;
+      break;
+    }
+
+    // Irreducible mass
+    mass_prev = mass;
+    mass = Kokkos::sqrt(area / (16.0 * M_PI));
+
+    if (verbose && ioproc) {
+      fprintf(pofile_verbose, "%3d %15.7e %15.7e %15.7e %15.7e %15.7e %15.7e"
+                              " %15.7e %15.7e %15.7e %15.7e %15.7e %10.4e %3d\n",
+              k, area, mass, meanradius, rr_min, hmean, hrms, Sx, Sy, Sz, S,
+              spec_resid, alpha, lmax_active);
+      fflush(pofile_verbose);
+    }
+
+    if (Kokkos::fabs(hmean) > hmean_max) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, hmean > %f\n", hmean_max);
+        fflush(pofile_verbose);
+      }
+      last_exit = ExitCode::hmean_diverged;
+      failed = true;
+      break;
+    }
+
+    if (meanradius < 0.) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed, meanradius < 0\n");
+        fflush(pofile_verbose);
+      }
+      last_exit = ExitCode::meanradius_neg;
+      failed = true;
+      break;
+    }
+
+    // Check to prevent horizon radius blow up and mass = 0
+    if (mass < 1.0e-10) {
+      if (verbose && ioproc) {
+        fprintf(pofile_verbose, "Failed mass < 1e-10\n");
+        fflush(pofile_verbose);
+      }
+      last_exit = ExitCode::mass_collapse;
+      failed = true;
+      break;
+    }
+
+    const bool hrms_abs_ok = (hrms * mass < hrms_tol);
+    const bool hrms_rel_ok =
+        (hrms * mass < hrms_rel_skip) ||
+        ((k >= 2) && (hrms_prev > 0.0) &&
+         (Kokkos::fabs(hrms - hrms_prev) < hrms_rel_tol * hrms_prev));
+    if ((k >= 1) && (Kokkos::fabs(mass_prev - mass) < mass_tol) && hrms_abs_ok &&
+        hrms_rel_ok && (spec_resid < spec_tol) && !ramp_in_progress) {
+      ah_found = true;
+      last_exit = ExitCode::success;
+      break;
+    }
+
+    // Stagnation detection, suppressed while the mode ramp is active.
+    if (ramp_just_finished) {
+      hrms_best = std::numeric_limits<Real>::infinity();
+      spec_best = std::numeric_limits<Real>::infinity();
+      iters_no_improve = 0;
+    }
+    if (!ramp_in_progress) {
+      const Real keep = 1.0 - stagnation_improvement_frac;
+      if (hrms < hrms_best * keep || spec_resid < spec_best * keep) {
+        hrms_best = Kokkos::fmin(hrms, hrms_best);
+        spec_best = Kokkos::fmin(spec_resid, spec_best);
+        iters_no_improve = 0;
+      } else {
+        ++iters_no_improve;
+      }
+      if (stagnation_detect && k >= stagnation_warmup && !hrms_abs_ok &&
+          iters_no_improve >= stagnation_window) {
+        if (verbose && ioproc) {
+          fprintf(pofile_verbose, "Stagnated, hrms %.3e (best %.3e) for %d iters\n",
+                  hrms, hrms_best, iters_no_improve);
+          fflush(pofile_verbose);
+        }
+        last_exit = ExitCode::stagnated;
+        failed = true;
+        break;
+      }
+    }
+
+    hrms_prev = hrms;
+
+    // Step 5: Update the spectral coefficients.
+    for (int i = 0; i < ntotal; ++i) {
+      acoef[i] -= ABfac[ell[i]] * grad[i];
+    }
+    UnpackCoefficients(acoef);
+    a0.template modify<HostMemSpace>();
+    a0.template sync<DevExeSpace>();
+    ac.template modify<HostMemSpace>();
+    ac.template sync<DevExeSpace>();
+    as.template modify<HostMemSpace>();
+    as.template sync<DevExeSpace>();
+  }
+
+  if (ah_found) {
+    last_a0 = a0.h_view(0);
+    alpha_last = alpha;
+    PackCoefficients(last_shape);
+
+    const Real mass_chr = Kokkos::sqrt(SQR(mass) + 0.25*SQR(S/mass));
+    ah_prop[harea] = area;
+    ah_prop[hcoarea] = integrals[icoarea];
+    ah_prop[hhrms] = hrms;
+    ah_prop[hhmean] = hmean;
+    ah_prop[hmeanradius] = meanradius;
+    ah_prop[hminradius] = rr_min;
+    ah_prop[hSx] = Sx;
+    ah_prop[hSy] = Sy;
+    ah_prop[hSz] = Sz;
+    ah_prop[hS]  = S;
+    ah_prop[hmass] = mass_chr; // Christodoulu mass
+    ah_prop[hmass_irr] = mass;
+    ah_prop[hchi] = (mass_chr > 1e-10) ? S / SQR(mass_chr) : 0.0;
+  }
+
+  if (verbose && ioproc) {
+    if (ah_found) {
+      fprintf(pofile_verbose, "Found horizon %d\n", nh);
+      fprintf(pofile_verbose, " mass = %f\n", ah_prop[hmass]);
+      fprintf(pofile_verbose, " mass_irr = %f\n", mass);
+      fprintf(pofile_verbose, " meanradius = %f\n", meanradius);
+      fprintf(pofile_verbose, " minradius = %f\n", rr_min);
+      fprintf(pofile_verbose, " hrms = %f\n", hrms);
+      fprintf(pofile_verbose, " hmean = %f\n", hmean);
+      fprintf(pofile_verbose, " Sx = %f\n", Sx);
+      fprintf(pofile_verbose, " Sy = %f\n", Sy);
+      fprintf(pofile_verbose, " Sz = %f\n", Sz);
+      fprintf(pofile_verbose, " S  = %f\n", S);
+      fprintf(pofile_verbose, " chi = %f\n", ah_prop[hchi]);
+    } else if (!failed) {
+      fprintf(pofile_verbose, "Failed, reached max iterations %d\n", flow_iterations);
+    }
+    fflush(pofile_verbose);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -942,7 +1153,7 @@ void FastFlow::RadiiFromSphericalHarmonics() {
   // Step 2: Compute the global minimum.
   rr_min = std::numeric_limits<Real>::infinity();
   Kokkos::parallel_reduce("FastFlow_sphradii",
-  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles),
   KOKKOS_LAMBDA(const int &p, Real &lmin) {
     lmin = Kokkos::min(lmin, rr_(p));
   }, Kokkos::Min<Real>(rr_min));
@@ -952,7 +1163,7 @@ void FastFlow::RadiiFromSphericalHarmonics() {
 //! \fn void FastFlow::SurfaceIntegrals()
 //! \brief Compute expansion, surface element and spin integrand on surface n.
 //!        Needs metric and extr. curv. interpolated on the surface.
-//!        Performs local sums and MPI reduce.
+//!        Performs local sums only, reduced in FastFlowLoop().
 void FastFlow::SurfaceIntegrals() {
   const Real min_rp = 1e-10;
 
@@ -1041,7 +1252,7 @@ void FastFlow::SurfaceIntegrals() {
 
   // Loop over surface points
   Kokkos::parallel_reduce("FastFlow_surfintegrals",
-  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles-1),
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nangles),
   KOKKOS_LAMBDA(const int &p,
                 Real& area,
                 Real& coarea,
@@ -1379,10 +1590,6 @@ void FastFlow::SurfaceIntegrals() {
      Kokkos::Sum<Real>(integrals[iSy]),
      Kokkos::Sum<Real>(integrals[iSz]));
 
-  #if MPI_PARALLEL_ENABLED
-    MPI_Allreduce(MPI_IN_PLACE,integrals,invar,MPI_ATHENA_REAL,MPI_SUM,MPI_COMM_WORLD);
-  #endif
-
   // Sync rho back to host.
   rho.template modify<DevExeSpace>();
   rho.template sync<HostMemSpace>();
@@ -1589,4 +1796,20 @@ bool FastFlow::PuncAreClose() {
   Real const mass = PuncSumMasses();
   Real const maxdist = PuncMaxDistance();
   return (maxdist < merger_distance * mass);
+}
+
+FastFlowFinder::FastFlowFinder(MeshBlockPack *pmbp, ParameterInput *pin): pmbp(pmbp) {
+  int nh = pin->GetOrAddInteger("fastflow", "num_horizons", 0);
+  for (int n = 0; n < nh; ++n) {
+    pff.push_back(std::make_unique<FastFlow>(pmbp, pin, n));
+  }
+}
+
+void FastFlowFinder::Find(Driver *pdrive, int stage) {
+  if (stage != pdrive->nexp_stages) return;
+  Real time = pmbp->pmesh->time;
+  for (auto &pahf : pff) {
+    pahf->Find(stage, time);
+    pahf->Write(stage, time);
+  }
 }
