@@ -153,12 +153,14 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
 
   // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
+    if (pmy_mesh->pzoom != nullptr) pmy_mesh->pzoom->StoreZoomRegion();
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
 
     // Mark one mesh-topology update event (AMR and any resulting load balancing).
     pmy_mesh->MarkMeshUpdated();
 
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
+    if (pmy_mesh->pzoom != nullptr) pmy_mesh->pzoom->ApplyZoomRegion(pdriver);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
     if (pmbp->pmhd != nullptr) {
@@ -227,6 +229,9 @@ void MeshRefinement::CheckForRefinement(MeshBlockPack* pmbp) {
         break;
       case RefCritMethod::location:
         pmrc->CheckLocation(pmbp, *it);
+        break;
+      case RefCritMethod::cyclic_zoom:
+        pmrc->CheckCyclicZoom(pmbp);
         break;
       case RefCritMethod::user:
         pmy_mesh->pgen->user_ref_func(pmbp);

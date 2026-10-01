@@ -13,6 +13,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 
@@ -29,6 +30,7 @@ class Viscosity {
   Real dtnew;
   Real nu_iso;      // coefficient of isotropic kinematic shear viscosity
   Real nu_aniso;    // coefficient of anisotropic kinematic shear viscosity
+  parabolic::DiffusionSelection mode = parabolic::DiffusionSelection::explicit_only;
 
   // function to add viscous fluxes to Hydro and/or MHD fluxes
   void AddViscousFluxes(const DvceArray5D<Real> &w, const EOS_Data &eos,

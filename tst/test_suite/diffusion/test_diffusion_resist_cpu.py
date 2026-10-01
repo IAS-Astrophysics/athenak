@@ -24,7 +24,7 @@ _b_comp = {"By": 2, "Bz": 3}
 
 def arguments(iv, rv, fv, wv, res, soe, name):
     """Assemble arguments for run command"""
-    return [
+    args = [
         f"job/basename={name}",
         "time/tlim=1.0",
         "time/integrator=" + iv,
@@ -42,6 +42,13 @@ def arguments(iv, rv, fv, wv, res, soe, name):
         "mhd/eta_ohm=0.25",
         "problem/amp=1.0e-6",
     ]
+    if fv == "sts":
+        args += [
+            "time/sts_integrator=rkl2",
+            "time/sts_max_dt_ratio=16.0",
+            "mhd/resistivity_integrator=sts",
+        ]
+    return args
 
 
 """
@@ -62,5 +69,21 @@ def test_run():
         "rk2",
         "diff",
         "none",
+        "mhd",
+    )
+
+
+def test_sts_run():
+    """Check RKL2 Ohmic constrained-transport convergence for one field component."""
+    testutils.test_error_convergence(
+        "inputs/diffusion_mhd.athinput",
+        "diffusion_resist1d_sts",
+        arguments,
+        errors,
+        ["By"],
+        _res,
+        "rk2",
+        "diff",
+        "sts",
         "mhd",
     )

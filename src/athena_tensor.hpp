@@ -184,14 +184,16 @@ class AthenaTensor<T, sym, ndim, 0> {
   // operators to access the data
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const k, int const j, int const i) const {
-    return data_(m,k,j,i);
+    return data_(m,idx_,k,j,i);
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx) {
-    data_ = Kokkos::subview(src,Kokkos::ALL,indx,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    data_ = src;
+    idx_ = indx;
   }
  private:
-  sub_DvceArray5D_0D data_;
+  DvceArray5D<Real> data_;
+  int idx_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -210,15 +212,24 @@ class AthenaTensor<T, sym, ndim, 1> {
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const a,
                              int const k, int const j, int const i) const {
-    return data_(m,a,k,j,i);
+    #if defined(KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK)
+    if (a >= ndim) {
+      Kokkos::abort("Requested variable is out of range for AthenaTensor.");
+    }
+    #endif
+    return data_(m,low_+a,k,j,i);
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
-                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    data_ = src;
+    low_ = indx1;
+    high_ = indx2;
   }
+
  private:
-  sub_DvceArray5D_1D data_;
+  DvceArray5D<Real> data_;
+  int low_;
+  int high_;
 };
 
 //----------------------------------------------------------------------------------------
@@ -240,16 +251,33 @@ class AthenaTensor<T, sym, ndim, 2> {
   KOKKOS_INLINE_FUNCTION
   decltype(auto) operator() (int const m, int const a, int const b,
                              int const k, int const j, int const i) const {
-    return data_(m,idxmap_[a][b],k,j,i);
+    #if defined(KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK)
+    if (a >= ndim || b >= ndim) {
+      Kokkos::abort("Requested variable is out of range for AthenaTensor.");
+    }
+    #endif
+    if constexpr (sym == TensorSymm::NONE) {
+      return data_(m,low_+(b+ndim*a),k,j,i);
+    } else if (sym == TensorSymm::SYM2 || sym == TensorSymm::ISYM2) {
+      if (b < a) {
+        return data_(m,low_+(b*(2*ndim - b + 1)/2+a-b),k,j,i);
+      } else {
+        return data_(m,low_+(a*(2*ndim - a + 1)/2+b-a),k,j,i);
+      }
+    }
   }
   //KOKKOS_INLINE_FUNCTION
   void InitWithShallowSlice(DvceArray5D<Real> src, const int indx1, const int indx2) {
-    data_ = Kokkos::subview(src, Kokkos::ALL, std::make_pair(indx1, indx2+1),
-                                 Kokkos::ALL, Kokkos::ALL, Kokkos::ALL);
+    data_ = src;
+    low_ = indx1;
+    high_ = indx2;
   }
 
  private:
-  sub_DvceArray5D_2D data_;
+  //sub_DvceArray5D_2D data_;
+  DvceArray5D<Real> data_;
+  int low_;
+  int high_;
   int idxmap_[3][3];
   int ndof_;
 };

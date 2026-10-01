@@ -37,6 +37,8 @@ nx3       = 1          # Number of cells in each MeshBlock, X3-dir
 <time>
 evolution  = kinematic # dynamic/kinematic/static (diffusion tests require kinematic)
 integrator = rk2       # time integration algorithm
+sts_integrator = none  # parabolic super-time-step integrator (none/rkl2)
+sts_max_dt_ratio = -1.0 # optional cap on cycle/parabolic timestep ratio
 cfl_number = 0.4       # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1        # cycle limit (no limit if <0)
 tlim       = 1.0       # time limit
@@ -49,6 +51,8 @@ rsolver     = advect   # Riemann-solver to be used
 gamma       = 1.66666666667   # gamma = C_p/C_v
 nu_iso      = 0.0      # isotropic kinematic viscosity (set by viscosity tests)
 alpha_iso   = 0.0      # isotropic thermal diffusivity (set by conduction tests)
+viscosity_integrator = explicit    # explicit/sts
+conductivity_integrator = explicit # explicit/sts
 
 <units>
 # Default (length=mass=time=mu=1) code units. Present so the thermal-conduction module

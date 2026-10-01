@@ -16,6 +16,7 @@
 #include <string>
 
 #include "athena.hpp"
+#include "diffusion/sts_types.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -84,6 +85,7 @@ class Mesh;
 #include "meshblock_pack.hpp"
 #include "meshblock_tree.hpp"
 #include "mesh_refinement.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \class Mesh
@@ -137,7 +139,8 @@ class Mesh {
   // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
   int *nprtcl_eachrank;    // number of particles on each rank
 
-  Real time, dt, dtold, dt_last_completed, cfl_no;
+  Real time, dt, dtold, dt_last_completed, dt_parabolic_sts, sts_max_dt_ratio, cfl_no;
+  parabolic::STSIntegrator sts_integrator;
   int ncycle;
   EventCounters ecounter;
 
@@ -145,6 +148,7 @@ class Mesh {
   MeshBlockPack* pmb_pack;                 // container for MeshBlocks on this rank
   std::unique_ptr<ProblemGenerator> pgen;  // class containing functions to set ICs
   MeshRefinement *pmr=nullptr;             // mesh refinement data/functions (if needed)
+  CyclicZoom *pzoom=nullptr;               // cyclic zoom data/functions (if needed)
 
   // functions
   void BuildTreeFromScratch(ParameterInput *pin);
@@ -153,7 +157,9 @@ class Mesh {
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
+  void RefreshSTSParabolicTimeStep();
   void AddCoordinatesAndPhysics(ParameterInput *pinput);
+  void AddCyclicZoom(ParameterInput *pin);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
   std::string GetBoundaryString(BoundaryFlag input_flag);
 

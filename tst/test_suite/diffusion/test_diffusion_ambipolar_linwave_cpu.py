@@ -10,6 +10,7 @@ import pytest
 import numpy as np
 from numpy.polynomial import Polynomial
 import os
+import subprocess
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -157,3 +158,22 @@ def test_ambipolar_linwave(wave_flag, dim):
             )
     finally:
         testutils.cleanup()
+
+
+def test_ambipolar_rejects_sts():
+    """STS rejects ambipolar diffusion until its state-dependent bound is stage-safe."""
+    result = subprocess.run(
+        [
+            "./athena",
+            "-i",
+            "inputs/lwave_ambipolar.athinput",
+            "time/sts_integrator=rkl2",
+            "mhd/resistivity_integrator=sts",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = (result.stdout + result.stderr).lower()
+    assert result.returncode != 0
+    assert "ambipolar diffusion is not supported with sts" in output

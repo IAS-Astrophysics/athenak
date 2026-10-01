@@ -47,7 +47,6 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
         break;
       case FileMode::write:
         mpi_mode = MPI_MODE_WRONLY | MPI_MODE_CREATE;
-        MPI_File_delete(fname, MPI_INFO_NULL); // truncation
         break;
       case FileMode::append:
         mpi_mode = MPI_MODE_WRONLY | MPI_MODE_APPEND;
@@ -67,6 +66,17 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
                 << std::endl << "File '" << fname << "' could not be opened"
                 << std::endl;
       std::exit(EXIT_FAILURE);
+    }
+    // truncate collectively
+    if (rw == FileMode::write) {
+      errcode = MPI_File_set_size(fh_, 0);
+      if (errcode != MPI_SUCCESS) {
+        char msg[MPI_MAX_ERROR_STRING];
+        int resultlen;
+        MPI_Error_string(errcode, msg, &resultlen);
+        Kokkos::printf("%.*s\n", resultlen, msg);
+        MPI_Abort(comm_, 1);
+      }
     }
   } else {
     FILE* local_fh;

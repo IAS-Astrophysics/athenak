@@ -5,6 +5,17 @@
 //========================================================================================
 //! \file spherical_surface.cpp
 //! \brief writes data on a SphericalSurface sub-grid in binary VTK format
+//!
+//! Parameters of an <output> block with file_type = sph:
+//!   radius | radii | (nradii, r_min, r_max, r_spacing)  surface radii, see ParseRadii
+//!   ntheta, nphi, theta_spacing, theta_centering        angular grid, see
+//!                                                       ParseAngleOptions
+//!   xc, yc, zc                                          center of the surfaces
+//!   weights                                             write the surface element of
+//!                                                       each point (default true)
+//!
+//! Points are written with the radius varying fastest, then theta, then phi. theta
+//! increases with its index, phi starts at 0.
 
 #include "utils/spherical_surface.hpp"
 
@@ -116,6 +127,58 @@ std::vector<Real> ParseRadii(ParameterInput *pin, const OutputParameters &op) {
   }
   return rad;
 }
+
+//! \fn SphericalSurface::AngleOptions ParseAngleOptions(...)
+//! \brief Build the angular grid description requested by an <output> block.
+//! Accepted parameters:
+//!   ntheta           number of points along theta (default 32)
+//!   nphi             number of points along phi (default 2*ntheta)
+//!   theta_spacing    'uniform_costheta' (default) or 'uniform_theta'
+//!   theta_centering  'node' (default) or 'cell'
+SphericalSurface::AngleOptions ParseAngleOptions(ParameterInput *pin,
+                                                 const OutputParameters &op,
+                                                 int ntheta) {
+  SphericalSurface::AngleOptions aopt;
+  aopt.nphi = pin->GetOrAddInteger(op.block_name, "nphi", 2*ntheta);
+
+  std::string spacing = pin->GetOrAddString(op.block_name, "theta_spacing",
+                                            "uniform_costheta");
+  if (spacing.compare("uniform_theta") == 0) {
+    aopt.theta_spacing = SphThetaSpacing::uniform_theta;
+  } else if (spacing.compare("uniform_costheta") == 0) {
+    aopt.theta_spacing = SphThetaSpacing::uniform_costheta;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized theta_spacing = '" << spacing
+              << "' in output block '" << op.block_name
+              << "' (must be 'uniform_theta' or 'uniform_costheta')" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
+  std::string centering = pin->GetOrAddString(op.block_name, "theta_centering", "node");
+  if (centering.compare("cell") == 0) {
+    aopt.theta_centering = SphThetaCentering::cell;
+  } else if (centering.compare("node") == 0) {
+    aopt.theta_centering = SphThetaCentering::node;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Unrecognized theta_centering = '" << centering
+              << "' in output block '" << op.block_name
+              << "' (must be 'cell' or 'node')" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  return aopt;
+}
+
+//! \brief names of the angular grid layout, written to the file header so that the grid
+//! a file was dumped on can be identified without the input file
+const char *SpacingName(SphThetaSpacing spacing) {
+  return (spacing == SphThetaSpacing::uniform_theta) ? "uniform_theta"
+                                                     : "uniform_costheta";
+}
+const char *CenteringName(SphThetaCentering centering) {
+  return (centering == SphThetaCentering::cell) ? "cell" : "node";
+}
 } // namespace
 
 SphericalSurfaceOutput::SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm,
@@ -125,10 +188,14 @@ SphericalSurfaceOutput::SphericalSurfaceOutput(ParameterInput *pin, Mesh *pm,
 
   std::vector<Real> rad = ParseRadii(pin, op);
   int ntheta = pin->GetOrAddInteger(op.block_name, "ntheta", 32);
+  SphericalSurface::AngleOptions aopt = ParseAngleOptions(pin, op, ntheta);
   Real xc = pin->GetOrAddReal(op.block_name, "xc", 0.0);
   Real yc = pin->GetOrAddReal(op.block_name, "yc", 0.0);
   Real zc = pin->GetOrAddReal(op.block_name, "zc", 0.0);
-  psurf = new SphericalSurface(pm->pmb_pack, ntheta, rad, xc, yc, zc);
+  // the quadrature weights are only useful when integrating over the surface, so they
+  // can be switched off if not needed
+  dump_weights = pin->GetOrAddBoolean(op.block_name, "weights", true);
+  psurf = new SphericalSurface(pm->pmb_pack, ntheta, rad, xc, yc, zc, aopt);
 }
 
 SphericalSurfaceOutput::~SphericalSurfaceOutput() { delete psurf; }
@@ -198,12 +265,14 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           << " rmin=" << psurf->radii.h_view(0)
           << " rmax=" << psurf->radii.h_view(nradii-1)
           << " xc=" << psurf->xc << " yc=" << psurf->yc << " zc=" << psurf->zc
+          << " theta_spacing=" << SpacingName(psurf->theta_spacing)
+          << " theta_centering=" << CenteringName(psurf->theta_centering)
           << std::endl;
     ofile << "BINARY" << std::endl;
     ofile << "DATASET STRUCTURED_GRID" << std::endl;
     // radius varies fastest, then theta, then phi
     ofile << "DIMENSIONS " << nradii << " " << psurf->ntheta
-          << " " << 2 * psurf->ntheta << std::endl;
+          << " " << psurf->nphi << std::endl;
     ofile << "POINTS " << psurf->npoints << " float\n";
 
     for (int i = 0; i < psurf->nangles; ++i) {
@@ -246,17 +315,21 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       ofile.write(reinterpret_cast<char *>(&rr), sizeof(float));
     }
 
-    ofile << "\nPOINT_DATA " << psurf->npoints << std::endl;
-    ofile << "SCALARS weights float 1" << std::endl;
-    ofile << "LOOKUP_TABLE default" << std::endl;
-    for (int i = 0; i < psurf->nangles; ++i) {
-      for (int r = 0; r < nradii; ++r) {
-        Real rad = psurf->radii.h_view(r);
-        float d = rad * rad * psurf->int_weights.h_view(i);
-        if (!big_end) {
-          Swap4Bytes(&d);
+    // every block below starts on a new line, since the preceding one ends in binary data
+    ofile << "\nPOINT_DATA " << psurf->npoints;
+    if (dump_weights) {
+      ofile << "\nSCALARS weights float 1" << std::endl;
+      ofile << "LOOKUP_TABLE default" << std::endl;
+      for (int i = 0; i < psurf->nangles; ++i) {
+        for (int r = 0; r < nradii; ++r) {
+          Real rad = psurf->radii.h_view(r);
+          // int_weights is the solid angle of the point, r^2*dOmega its surface element
+          float d = rad * rad * psurf->int_weights.h_view(i);
+          if (!big_end) {
+            Swap4Bytes(&d);
+          }
+          ofile.write(reinterpret_cast<char *>(&d), sizeof(float));
         }
-        ofile.write(reinterpret_cast<char *>(&d), sizeof(float));
       }
     }
 
