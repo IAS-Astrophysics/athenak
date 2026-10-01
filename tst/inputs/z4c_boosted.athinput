@@ -110,6 +110,15 @@ mass_tol_0 = 1e-4
 start_time_0 = 0.0
 stop_time_0 = 200.0
 
+<bhahaha>
+bah_num_horizons = 1
+bah_mass_0 = 1.0
+bah_max_search_radius = 0.75
+bah_Theta_L2_tol = 0.1      # loose, the residual is limited by the grid
+bah_Theta_Linf_tol = 1.0
+bah_find_every = 10
+bah_output_shape_every = 0
+
 <problem>
 pgen_name = z4c_boosted_puncture
 punc_ADM_mass = 1.0

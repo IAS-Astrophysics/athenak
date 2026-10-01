@@ -68,7 +68,7 @@ x3min = -0.8
 x3max = 0.8
 
 <z4c>
-horizon_finder = fastflow
+horizon_finder = fastflow  # fastflow or bhahaha
 # Gauge parameters
 lapse_oplog     = 2.0
 lapse_harmonic  = 0.0
@@ -127,10 +127,76 @@ stop_time_0 = 100.0
 start_time_1 = 0.0
 stop_time_1 = 100.0
 
+mass_tol_0 = 1e-3
+spec_tol_0 = 1e-5
+hrms_tol_0 = 1e-1
+hrms_rel_tol_0 = 1e-3
+hrms_rel_skip_0 = 1e-4
+step_rule_0 = monotone
+alpha_min_0 = 0.1
+alpha_max_0 = 4.0
+alpha_grow_0 = 1.1
+alpha_shrink_0 = 0.5
+stagnation_detect_0 = true
+stagnation_window_0 = 8
+stagnation_improvement_frac_0 = 0.1
+stagnation_warmup_0 = 5
+mode_ramp_lmin_0 = -1
+mode_ramp_iters_per_step_0 = 2
+mode_ramp_modes_per_step_0 = 2
+auto_retry_0 = true
+max_retries_0 = 5
+retry_shrink_0 = 0.5
+retry_grow_0 = 2.0
+
+mass_tol_1 = 1e-3
+spec_tol_1 = 1e-5
+hrms_tol_1 = 1e-1
+hrms_rel_tol_1 = 1e-3
+hrms_rel_skip_1 = 1e-4
+step_rule_1 = monotone
+alpha_min_1 = 0.1
+alpha_max_1 = 4.0
+alpha_grow_1 = 1.1
+alpha_shrink_1 = 0.5
+stagnation_detect_1 = true
+stagnation_window_1 = 8
+stagnation_improvement_frac_1 = 0.1
+stagnation_warmup_1 = 5
+mode_ramp_lmin_1 = -1
+mode_ramp_iters_per_step_1 = 2
+mode_ramp_modes_per_step_1 = 2
+auto_retry_1 = true
+max_retries_1 = 5
+retry_shrink_1 = 0.5
+retry_grow_1 = 2.0
+
+propagate_iter_coefficients = true
+
 # AHF output
 output_ylm = false	# output spherical harmonics
 output_grid = false	# output grid
 verbose = true
+
+# BHaHAHA finder, enable with horizon_finder = bhahaha in <z4c>
+<bhahaha>
+bah_num_horizons = 2
+bah_mass_0 = 0.538969134951477
+bah_mass_1 = 0.538969134951477
+bah_find_every = 1
+bah_num_resolutions_multigrid = 3
+bah_Ntheta_array_multigrid_0 = 8
+bah_Nphi_array_multigrid_0 = 16
+bah_Ntheta_array_multigrid_1 = 16
+bah_Nphi_array_multigrid_1 = 32
+bah_Ntheta_array_multigrid_2 = 32
+bah_Nphi_array_multigrid_2 = 64
+bah_Nr_interp = 48
+bah_max_search_radius = 0.75
+bah_Theta_Linf_tol = 1e-2
+bah_Theta_L2_tol = 2e-5
+bah_output_shape_every = 1
+bah_verbosity = 0
 
 <problem>
 pgen_name = z4c_two_puncture
