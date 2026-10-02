@@ -49,6 +49,7 @@ struct NuratesParams {
   bool neglect_blocking;
   bool use_decay;
   bool use_BRT_brem;
+  bool exclude_pair_brem_nue_anue;  // drop pair and brem from nue/anue (as THC)
 
   int eq_warmup_cycles;  // force use_equilibrium_distribution for the first
                          // this-many cycles on a fresh start, to avoid
@@ -268,6 +269,8 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
+  grey_op_params.opacity_pars.exclude_pair_brem_nue_anue =
+      nurates_params.exclude_pair_brem_nue_anue;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
   grey_op_params.opacity_pars.brem_implementation =
       nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
