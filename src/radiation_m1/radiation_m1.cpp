@@ -140,7 +140,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.nb_min = pin->GetOrAddReal("bns_nurates", "nb_min_fm-3", 0.);
     nurates_params.temp_min_mev = pin->GetOrAddReal("bns_nurates", "temp_min_mev", 0.);
     nurates_params.max_recon_temp =
-        pin->GetOrAddReal("bns_nurates", "max_recon_temp_mev", 200.);
+        pin->GetOrAddReal("bns_nurates", "max_recon_temp_mev", 2000.);
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
@@ -166,6 +166,11 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
     nurates_params.exclude_pair_brem_nue_anue =
         pin->GetOrAddBoolean("bns_nurates", "exclude_pair_brem_nue_anue", false);
+    // bns_nurates reconstructed-distribution guards; off unless asked for.
+    nurates_params.use_eq_fallback_temp =
+        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_temp", false);
+    nurates_params.use_eq_fallback_y =
+        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_y", false);
     nurates_params.eq_warmup_cycles =
         pin->GetOrAddInteger("bns_nurates", "eq_warmup_cycles", 1);
 

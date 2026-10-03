@@ -177,16 +177,19 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
        << std::endl << "Input file is likely missing a <gravity> block" << std::endl;
     exit(EXIT_FAILURE);
   }
-  // 154-171 is the whole contiguous rad_m1_* run, from rad_m1_N through rad_m1_absF;
+  // 154-171 is the whole contiguous rad_m1_* run, from rad_m1_N through rad_m1_absF,
+  // plus 176 (rad_m1_fluid_frame), appended at the end of the table;
   // 172-174 (u_t, win_Vi, r_sph) are not radiation variables. Every one of these
   // dereferences pradm1 below, so the bound must track the table in outputs.hpp --
   // it previously stopped at 166 and left rad_m1_J/H/n/fnu/e/absF to segfault instead.
-  if ((ivar>=154) && (ivar<172) && (pm->pmb_pack->pradm1 == nullptr)) {
-    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-       << "Output of radiation m1 variables requested in <output> block '"
-       << out_params.block_name << "' but radiation M1 object not constructed."
-       << std::endl << "Input file is likely missing corresponding block" << std::endl;
-    exit(EXIT_FAILURE);
+  if (((ivar>=154) && (ivar<172)) || (ivar==176)) {
+    if (pm->pmb_pack->pradm1 == nullptr) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+         << "Output of radiation m1 variables requested in <output> block '"
+         << out_params.block_name << "' but radiation M1 object not constructed."
+         << std::endl << "Input file is likely missing corresponding block" << std::endl;
+      exit(EXIT_FAILURE);
+    }
   }
   if ((ivar==175) && (pm->pmb_pack->pz4c == nullptr)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -903,6 +906,24 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     out_params.n_derived += nspec;
     for (int nuidx = 0; nuidx < nspec; ++nuidx) {
       outvars.emplace_back("|F|:" + std::to_string(nuidx), nuidx, &(derived_var));
+    }
+  }
+
+  // radiation m1 fluid frame, grouped: undensitized J [EOS energy density, MeV/fm^3],
+  // n [EOS number density, fm^-3] and the Eddington factor chi, per species -- exactly
+  // the inputs of the opacity calculation (radiation_m1_calc_opacities_nurates.cpp)
+  if (out_params.variable.compare("rad_m1_fluid_frame") == 0) {
+    int nspec = pm->pmb_pack->pradm1->nspecies;
+    out_params.contains_derived = true;
+    out_params.n_derived += 3 * nspec;
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("J:" + std::to_string(nuidx), nuidx, &(derived_var));
+    }
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("n:" + std::to_string(nuidx), nspec + nuidx, &(derived_var));
+    }
+    for (int nuidx = 0; nuidx < nspec; ++nuidx) {
+      outvars.emplace_back("chi:" + std::to_string(nuidx), 2*nspec + nuidx, &(derived_var));
     }
   }
 

@@ -50,6 +50,10 @@ struct NuratesParams {
   bool use_decay;
   bool use_BRT_brem;
   bool exclude_pair_brem_nue_anue;  // drop pair and brem from nue/anue (as THC)
+  // Per-flavour fallbacks from the reconstructed distribution to Fermi-Dirac,
+  // inside bns_nurates' CalculateThickParamsFromM1.  Both default off.
+  bool use_eq_fallback_temp;  // fall back where the trapped temperature >= 200 MeV
+  bool use_eq_fallback_y;     // fall back where y >= y3 (~0.79012)
 
   int eq_warmup_cycles;  // force use_equilibrium_distribution for the first
                          // this-many cycles on a fresh start, to avoid
@@ -271,6 +275,10 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
   grey_op_params.opacity_pars.exclude_pair_brem_nue_anue =
       nurates_params.exclude_pair_brem_nue_anue;
+  grey_op_params.opacity_pars.use_eq_fallback_temp =
+      nurates_params.use_eq_fallback_temp;
+  grey_op_params.opacity_pars.use_eq_fallback_y =
+      nurates_params.use_eq_fallback_y;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
   grey_op_params.opacity_pars.brem_implementation =
       nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
@@ -310,7 +318,8 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     grey_op_params.m1_pars.chi[id_anux] = chi_anux;
 
     grey_op_params.distr_pars =
-        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
+        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars,
+                                   &grey_op_params.opacity_pars);
 
     // The reconstructed spectral temperature T_nu = J/n diverges when the
     // number density collapses (neutral-current-only heavy neutrinos in the
