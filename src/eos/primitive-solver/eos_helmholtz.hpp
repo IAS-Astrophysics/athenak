@@ -217,8 +217,6 @@ class EOSHelmholtz : public EOSPolicyInterface {
     Real abar = Y[SCXN] + Y[SCXP] + Y[SCXA]/4 +
                 ((Y[SCXH] > 0.0) ? Y[SCXH]/Y[SCAH] : 0.0);
     if (abar <= 0.0) {
-      Kokkos::printf("EOSHelmholtz::inverse_abar: invalid mass fractions, "
-                     "sum is %.5e\n", abar);
       return 1.0;
     }
     return abar;

@@ -287,8 +287,11 @@ class PrimitiveSolver {
   //  \param[in,out] cons  The array of conserved variables
   //  \param[in,out] bu    The magnetic field
   //  \param[in]     g3d   The 3x3 spatial metric
+  //  \param[in,out] solver_result  cons_adjusted is set when cons was recomputed, so
+  //                                that the caller copies the reset state back to u0
   KOKKOS_INLINE_FUNCTION void HandleFailure(Real prim[NPRIM], Real cons[NCONS],
-                     Real bu[NMAG], Real g3d[NSPMETRIC]) const {
+                     Real bu[NMAG], Real g3d[NSPMETRIC],
+                     SolverResult &solver_result) const {
     const int n_species = eos.GetNSpecies();
     const Real D = cons[CDN];
     if (isfinite(D) && D > 0.0) {
@@ -316,6 +319,7 @@ class PrimitiveSolver {
     bool result = eos.DoFailureResponse(prim);
     if (result) {
       PrimToCon(prim, cons, bu, g3d);
+      solver_result.cons_adjusted = true;
     }
   }
 };
@@ -394,7 +398,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   bool floored = eos.ApplyConservedFloor(D, S_d, tau, Y, Bsq);
   solver_result.cons_floor = floored;
   if (floored && eos.IsConservedFlooringFailure()) {
-    HandleFailure(prim, cons, b, g3d);
+    HandleFailure(prim, cons, b, g3d, solver_result);
     solver_result.error = Error::CONS_FLOOR;
     return solver_result;
   }
@@ -420,14 +424,14 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // Make sure there are no NaNs at this point.
   if (!isfinite(D) || !isfinite(rsqr) || !isfinite(q) ||
       !isfinite(rbsqr) || !isfinite(bsqr)) {
-    HandleFailure(prim, cons, b, g3d);
+    HandleFailure(prim, cons, b, g3d, solver_result);
     solver_result.error = Error::NANS_IN_CONS;
     return solver_result;
   }
   // We have to check the particle fractions separately.
   for (int s = 0; s < n_species; s++) {
     if (!isfinite(Y[s])) {
-      HandleFailure(prim, cons, b, g3d);
+      HandleFailure(prim, cons, b, g3d, solver_result);
       solver_result.error = Error::NANS_IN_CONS;
       return solver_result;
     }
@@ -436,7 +440,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // Make sure that the magnetic field is physical.
   Error error = eos.DoMagnetizationResponse(bsqr, b_u);
   if (error == Error::MAG_TOO_BIG) {
-    HandleFailure(prim, cons, b, g3d);
+    HandleFailure(prim, cons, b, g3d, solver_result);
     solver_result.error = Error::MAG_TOO_BIG;
     return solver_result;
   } else if (error == Error::CONS_ADJUSTED) {
@@ -503,7 +507,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
                                   bsqr, rsqr, rbsqr, min_h);
     // Scream if the bracketing failed.
     if (!result) {
-      HandleFailure(prim, cons, b, g3d);
+      HandleFailure(prim, cons, b, g3d, solver_result);
       solver_result.error = Error::BRACKETING_FAILED;
       return solver_result;
     } else {
@@ -519,7 +523,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   error = CheckDensityValid(mul, muh, D, bsqr, rsqr, rbsqr, min_h);
   // TODO(JF): This is probably something that should be handled by the ErrorPolicy.
   if (error != Error::SUCCESS) {
-    HandleFailure(prim, cons, b, g3d);
+    HandleFailure(prim, cons, b, g3d, solver_result);
     solver_result.error = error;
     return solver_result;
   }
@@ -538,7 +542,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   // trusted on single-thread benchmarks.
   solver_result.iterations = root.iterations;
   if (!result) {
-    HandleFailure(prim, cons, b, g3d);
+    HandleFailure(prim, cons, b, g3d, solver_result);
     solver_result.error = Error::NO_SOLUTION;
     return solver_result;
   }
@@ -561,7 +565,7 @@ SolverResult PrimitiveSolver<EOSPolicy, ErrorPolicy>::ConToPrim(Real prim[NPRIM]
   floored = eos.ApplyPrimitiveFloor(n, Wv_u, P, T, Y);
   solver_result.prim_floor = floored;
   if (floored && eos.IsPrimitiveFlooringFailure()) {
-    HandleFailure(prim, cons, b, g3d);
+    HandleFailure(prim, cons, b, g3d, solver_result);
     solver_result.error = Error::PRIM_FLOOR;
     return solver_result;
   }

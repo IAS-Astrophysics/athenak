@@ -826,8 +826,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       rhs(m, IM1+a, k, j, i) -= dt*vol*E*dalpha_d[a];
     }
 
-    // Assemble damping source terms
-    if (smoothing) {
+    // Assemble damping source terms. Only where the excision mask is set: tau_ex
+    // evaluates the EOS at (dexcise, texcise) with this cell's composition, and a
+    // non-finite result would otherwise poison IEN everywhere via 0*NaN.
+    if (smoothing && floor(m,k,j,i)) {
       // D = rho*W and tau = E-D are needed for the smooth damping terms
       // inside excised regions, if existing.
       Real D = prim(m, IDN, k, j, i) * W;

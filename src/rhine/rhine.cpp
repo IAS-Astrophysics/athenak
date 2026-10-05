@@ -218,10 +218,17 @@ TaskStatus RHINE::NSEResyncEOS() {
     Real Y[MAX_SPECIES] = {0.0};
     for (int l = 0; l < N_RHINE_SCALARS; ++l) { Y[SCYE + l] = w0(m, I_YE + l, k, j, i); }
 
-    w0(m, I_XN, k, j, i) = eos.FrYn(n_fm3, T, Y);
-    w0(m, I_XP, k, j, i) = eos.FrYp(n_fm3, T, Y);
-    w0(m, I_XA, k, j, i) = eos.FrXa(n_fm3, T, Y);
-    w0(m, I_XH, k, j, i) = eos.FrXh(n_fm3, T, Y);
+    const Real xn = eos.FrYn(n_fm3, T, Y);
+    const Real xp = eos.FrYp(n_fm3, T, Y);
+    const Real xa = eos.FrXa(n_fm3, T, Y);
+    const Real xh = eos.FrXh(n_fm3, T, Y);
+    const Real xsum = xn + xp + xa + xh;
+    if (!(xsum > 0.0)) { return; }
+
+    w0(m, I_XN, k, j, i) = xn / xsum;
+    w0(m, I_XP, k, j, i) = xp / xsum;
+    w0(m, I_XA, k, j, i) = xa / xsum;
+    w0(m, I_XH, k, j, i) = xh / xsum;
     w0(m, I_AH, k, j, i) = eos.AN(n_fm3, T, Y);
     w0(m, I_EB, k, j, i) = eos.GetNSEBindingEnergy(n_fm3, T, Y);
 
@@ -486,6 +493,10 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
       for (int l = 0; l < 4; ++l) { u0(m, sp[l], k, j, i) = Xs[l]; }
     }
   });
+
+  if (apply_) {
+    pmy_pack->pdyngr->EnforceSpeciesSum(u0, is, ie, js, je, ks, ke);
+  }
 
   return TaskStatus::complete;
 }

@@ -276,9 +276,12 @@ struct RhineNets {
     const int nh1 = h1(n);
     const int nh2 = h2(n);
 
-    // 1. Scale inputs (affine)
+    // 1. Scale inputs (affine); [-1, 1] is the net's training range [xmin, xmax].
     Real xs[MAX_DIN];
-    for (int jj = 0; jj < nin; ++jj) xs[jj] = x[jj] * sa(n, jj) + sb(n, jj);
+    for (int jj = 0; jj < nin; ++jj) {
+      xs[jj] = x[jj] * sa(n, jj) + sb(n, jj);
+      xs[jj] = Kokkos::fmin(Kokkos::fmax(xs[jj], -1.0), 1.0);
+    }
 
     // 2. Hidden layer 1
     Real h1v[MAX_H];

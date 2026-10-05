@@ -527,6 +527,16 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     Y_NSE[SCXH] = compose_eos.FrXh(n, T, Y);
     Y_NSE[SCAH] = compose_eos.AN(n, T, Y);
     Y_NSE[SCEB] = 0.0;
+    // The table fractions need not sum to 1 (species missing from the table at some
+    // nodes). Normalize them, so that eps_helm and [min_EB, max_EB] refer to the
+    // composition that is actually stored.
+    Real const Xsum = Y_NSE[SCXN] + Y_NSE[SCXP] + Y_NSE[SCXA] + Y_NSE[SCXH];
+    if (Xsum > 0.0) {
+      Y_NSE[SCXN] /= Xsum;
+      Y_NSE[SCXP] /= Xsum;
+      Y_NSE[SCXA] /= Xsum;
+      Y_NSE[SCXH] /= Xsum;
+    }
 
     Real eps_helm = helmholtz_eos.SpecificInternalEnergy(n, T, Y_NSE);
     Real eps_comp = compose_eos.SpecificInternalEnergy(n, T, Y);
