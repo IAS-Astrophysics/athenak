@@ -245,6 +245,12 @@ if (${PROBLEM} MATCHES "dyn_grmhd/lorene/*")
       GSL::gsl ${CMAKE_Fortran_IMPLICIT_LINK_LIBRARIES})
 endif()
 
+if ("${PROBLEM}" STREQUAL "id_solve")
+  find_package(HDF5 REQUIRED COMPONENTS C)
+  target_include_directories(athena PRIVATE ${HDF5_INCLUDE_DIRS})
+  target_link_libraries(athena PRIVATE ${HDF5_LIBRARIES})
+endif()
+
 # enable include of header files created in build directories
 target_include_directories(athena PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
