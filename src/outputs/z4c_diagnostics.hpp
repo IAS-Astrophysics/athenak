@@ -200,9 +200,11 @@ void Compute(Mesh *pm, DvceArray5D<Real> dv, int offset, int selected) {
     Real eps_duu[3][3][3] = {};
     for (int a=0; a<3; ++a)
     for (int c=0; c<3; ++c)
-    for (int d=0; d<3; ++d)
-    for (int e=0; e<3; ++e) {
-      eps_duu[a][c][d] += adm.g_dd(m,a,e,k,j,i)*LC[e][c][d]/sqrt_g;
+    for (int d=0; d<3; ++d) {
+      for (int e=0; e<3; ++e) {
+        eps_duu[a][c][d] += adm.g_dd(m,a,e,k,j,i)*LC[e][c][d];
+      }
+      eps_duu[a][c][d] /= sqrt_g;
     }
 
     // B_ij
@@ -243,12 +245,30 @@ void Compute(Mesh *pm, DvceArray5D<Real> dv, int offset, int selected) {
       invariant += 8.0*g_uu(a,c)*g_uu(b,d)*
                    (E_dd(a,b)*E_dd(c,d)-B_dd(a,b)*B_dd(c,d));
     }
+    // Raise B's second index once, then form Q_bc = E_bd B_c^d.
+    // These are not symmetric tensors, even though E, B and g are symmetric.
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> B_du;
+    AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> Q_dd;
     for (int a=0; a<3; ++a)
-    for (int b=0; b<3; ++b)
-    for (int c=0; c<3; ++c)
-    for (int d=0; d<3; ++d)
-    for (int e=0; e<3; ++e) {
-      P_u(a) -= LC[a][b][c]/sqrt_g*E_dd(b,d)*g_uu(d,e)*B_dd(c,e);
+    for (int b=0; b<3; ++b) {
+      B_du(a,b) = 0.0;
+      for (int c=0; c<3; ++c) {
+        B_du(a,b) += B_dd(a,c)*g_uu(b,c);
+      }
+    }
+    for (int a=0; a<3; ++a)
+    for (int b=0; b<3; ++b) {
+      Q_dd(a,b) = 0.0;
+      for (int c=0; c<3; ++c) {
+        Q_dd(a,b) += E_dd(a,c)*B_du(b,c);
+      }
+    }
+    for (int a=0; a<3; ++a) {
+      for (int b=0; b<3; ++b)
+      for (int c=0; c<3; ++c) {
+        P_u(a) -= LC[a][b][c]*Q_dd(b,c);
+      }
+      P_u(a) /= sqrt_g;
     }
     Real norm2=0.0;
     for (int a=0; a<3; ++a)

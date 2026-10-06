@@ -135,15 +135,25 @@ variable=z4c_diag
             assert np.max(np.abs(values)) < 1e-12
 
 
-def test_super_poynting_metric_norm(tmp_path):
+@pytest.mark.parametrize("order,ghosts", [(2, 2), (4, 3), (6, 4)])
+@pytest.mark.parametrize("problem", ["z4c_linear_wave", "z4c_superposed_punctures"])
+def test_super_poynting_metric_norm(tmp_path, order, ghosts, problem):
     fields = []
     for output in ("adm", "z4c_diag"):
         directory = tmp_path / output
         run_case(directory, f"""
 <problem>
-pgen_name=z4c_superposed_punctures
+pgen_name={problem}
+amp=0.001
 punc_1_velocity_x1=0.3
 punc_2_velocity_x1=-0.2
+<mesh>
+nghost={ghosts}
+<z4c>
+spatial_order={order}
+<time>
+nlim=1
+cfl_number=0.001
 <output1>
 variable={output}
 """)
@@ -169,7 +179,8 @@ variable={output}
     expected_norm = np.sqrt(np.einsum("na,nab,nb->n", actual_p, metric, actual_p))
     assert expected_norm.max() > 1e-8
     np.testing.assert_allclose(diag["z4c_Pnorm"], expected_norm, rtol=1e-12)
-    assert np.max(np.abs(expected_norm-np.linalg.norm(actual_p, axis=1))) > 1e-8
+    if problem == "z4c_superposed_punctures":
+        assert np.max(np.abs(expected_norm-np.linalg.norm(actual_p, axis=1))) > 1e-8
     # Weyl tensors must be symmetric and trace-free in the physical metric.
     np.testing.assert_allclose(np.einsum("nab,nab->n", inverse, electric), 0, atol=1e-13)
     np.testing.assert_allclose(np.einsum("nab,nab->n", inverse, magnetic), 0, atol=1e-13)
