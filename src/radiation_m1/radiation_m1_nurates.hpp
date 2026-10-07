@@ -52,7 +52,6 @@ struct NuratesParams {
   Real exclude_pair_brem_nb_max;  // remove pair/brem from nue/anue where the baryon
                                   // number density is below this [nm^-3]; <= 0: never
   // Per-flavour fallbacks from the reconstructed distribution to Fermi-Dirac,
-  // inside bns_nurates' CalculateThickParamsFromM1.  Both default off.
   bool use_eq_fallback_temp;  // fall back where the trapped temperature >= 200 MeV
   bool use_eq_fallback_y;     // fall back where y >= y3 (~0.79012)
 
