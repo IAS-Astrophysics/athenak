@@ -189,6 +189,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pnrrad = new nr_radiation::SC(this, pin);
     nphysics++;
     tl_map.insert(std::make_pair("sc_bvals", std::make_shared<TaskList>()));
+    tl_map.insert(std::make_pair("sc_bvals_srad", std::make_shared<TaskList>()));
+    tl_map.insert(std::make_pair("sc_flxcor", std::make_shared<TaskList>()));
     pnrrad->AssembleSCTasks(tl_map);
   } else {
     pnrrad = nullptr;

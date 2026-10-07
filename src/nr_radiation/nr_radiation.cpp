@@ -36,6 +36,7 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
     moments("sc_moments",1,1,1,1,1),
     j_prev("sc_j_prev",1,1,1,1,1),
     qrad("sc_qrad",1,1,1,1),
+    hflx("sc_hflx",1,1,1,1,1),
     sigma_a("sc_sigma_a",1,1,1,1,1),
     pmy_pack(ppack) {
   // straight-line rays require flat, Cartesian spacetime
@@ -102,6 +103,78 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
       << std::endl << "<nr_radiation>/team_size must be a multiple of 32 (a warp); got "
       << team_size << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+
+  // Coupling form ---------------------------------------------------------------------
+  // hybrid is the default: it is a bit-exact Q_int passthrough where tau_cell < kTauLo,
+  // so thin problems are unchanged, and it switches to the conservative differential
+  // form only where Q_int loses its significant figures. integral remains available
+  // to pin the legacy path (and skips the face-flux build entirely).
+  qrad_form_name = pin->GetOrAddString("nr_radiation", "qrad_form", "hybrid");
+  if (qrad_form_name == "integral") {
+    qrad_form = QradForm::integral;
+  } else if (qrad_form_name == "divh") {
+    qrad_form = QradForm::divh;
+  } else if (qrad_form_name == "hybrid") {
+    qrad_form = QradForm::hybrid;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+      << std::endl << "<nr_radiation>/qrad_form = '" << qrad_form_name
+      << "' is not recognised; valid values are 'integral', 'divh', 'hybrid'"
+      << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  // A user face is the pgen's to fill. The differential forms read the inbound half of
+  // every boundary ghost, which every built-in flag provides (outflow and diode copy the
+  // last active cell, inflow writes i_in, vacuum zeroes, reflect mirrors each ray), but a
+  // user boundary is only as good as its own kernel.
+  if (qrad_form != QradForm::integral && global_variable::my_rank == 0) {
+    int ndim_msh = 1 + (ppack->pmesh->multi_d ? 1 : 0) + (ppack->pmesh->three_d ? 1 : 0);
+    for (int f = 0; f < 2*ndim_msh; ++f) {
+      if (ppack->pmesh->mesh_bcs[f] == BoundaryFlag::user) {
+        std::cout << "### WARNING in " << __FILE__ << ": <nr_radiation>/qrad_form = "
+          << qrad_form_name << " reads the inbound intensity in the ghost zones of every "
+          << "boundary; on a user face the pgen's boundary kernel must set it"
+          << std::endl;
+        break;
+      }
+    }
+  }
+
+  // Q_rad energy-depletion timestep limit ---------------------------------------------
+  // dt <= cfl_qrad * e_int / |Q|, imposed in SolveTransfer (see sc/coupling.cpp). The
+  // default has to be chosen after qrad_form, because the form is what decides whether
+  // the limit is needed at all:
+  //   integral  Q = crat*prat*sigma_a*(J - brad). In the thin COOLING limit brad > J,
+  //             so |Q| <= crat*prat*sigma_a*T^4 and e_int/|Q| >= 4/nu_rad identically:
+  //             sc/newdt.cpp already bounds it. Default 0 (off). NOTE this does NOT
+  //             make the integral form safe in the
+  //             thin HEATING limit (J >> brad), where |Q| is set by J while nu_rad is
+  //             evaluated at the cold pre-heating T -- measured to run away to
+  //             max|Q| ~ 1e11 on a thin irradiated slab, and rescued by setting this
+  //             parameter. A radiation-dominated heating problem should set it
+  //             explicitly whichever form is in use.
+  //   divh      Q = -crat*prat*div(H), which is set by the radiation field and bears no
+  //   hybrid    relation to the local sigma_a: a cold, optically thin cell in a strong
+  //             field has nu_rad -> 0 while |Q| stays large. Default 0.25, which is the
+  //             value that makes this limit coincide with 1/nu_rad in the thin cooling
+  //             limit -- it inherits that calibration rather than being a new knob.
+  // Applied ON TOP OF <time>/cfl_number, exactly as 1/nu_rad is: Mesh::NewTimeStep
+  // scales every module's dtnew by cfl_no (mesh.cpp), and Athena-C likewise folds its
+  // one CourNo into radtrans_dt. The effective bound at the defaults is therefore
+  // 0.3*0.25 = 0.075*e_int/|Q|; do not "fix" 0.25 into an effective 0.25.
+  cfl_qrad_specified = pin->DoesParameterExist("nr_radiation", "cfl_qrad");
+  Real cfl_qrad_default = (qrad_form == QradForm::integral) ? 0.0 : 0.25;
+  cfl_qrad = pin->GetOrAddReal("nr_radiation", "cfl_qrad", cfl_qrad_default);
+  if (cfl_qrad < 0.0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+      << std::endl << "<nr_radiation>/cfl_qrad must be non-negative (0 disables the "
+      << "Q_rad energy-depletion timestep limit); got " << cfl_qrad << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (cfl_qrad_specified && !affect_fluid && global_variable::my_rank == 0) {
+    std::cout << "### WARNING in " << __FILE__ << ": <nr_radiation>/cfl_qrad is ignored "
+      << "when affect_fluid = false; Q_rad is never added to the gas" << std::endl;
   }
 
   // Iteration control -----------------------------------------------------------------
@@ -249,6 +322,28 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_ir->InitializeBuffers(nang_tot);
   pbval_srad = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_srad->InitializeBuffers(1);
+  // Coarse-fine flux correction of hflx (nvar = 1, matching hflx's second extent --
+  // PackAndSendFluxCC and RecvAndUnpackFluxCC both derive nvar from flx.x1f.extent(1),
+  // and InitFluxRecv's argument sets only the MPI count, so the two MUST agree).
+  // Constructed only where it can act, so the integral form and uniform meshes allocate
+  // nothing: multilevel is set in the Mesh constructor, well before MeshBlockPack.
+  //
+  // Unconditional for the differential forms, because they exist BECAUSE they telescope
+  // and without this they stop doing so the moment the mesh is refined: measured
+  // residual 5.4e-04 (2D) and 4.7e-05 (3D) against 1.6e-16 with refinement off, i.e.
+  // only ~3x better than the integral form instead of thirteen orders. There is no knob
+  // because there is no regime in which the uncorrected answer is the one you want. Cost
+  // is within run-to-run noise (4.57 s vs 4.54 s on the 3D deck).
+  //
+  // NOTE this is NOT a DSJ12/JSD12 algorithm -- the papers say nothing about refinement,
+  // and Athena-C's rad_to_hydro has no coarse-fine awareness. It is AthenaK's own
+  // existing mechanism (Berger & Colella 1989), already driven by hydro, MHD and the GR
+  // radiation module, applied to hflx unchanged -- a deliberate deviation from the
+  // papers, as the half-range boundary rule is.
+  if (qrad_form != QradForm::integral && ppack->pmesh->multilevel) {
+    pbval_hflx = new MeshBoundaryValuesCC(ppack, pin, false);
+    pbval_hflx->InitializeBuffers(1);
+  }
 
   // hyperplane orderings for the sweep kernels (static in the meshblock/tile dims)
   BuildIndices();
@@ -260,6 +355,7 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 SC::~SC() {
+  delete pbval_hflx;   // nullptr unless a differential form on a multilevel mesh
   delete pbval_srad;
   delete pbval_ir;
   delete pang;

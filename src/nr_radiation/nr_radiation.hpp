@@ -43,6 +43,13 @@ namespace nr_radiation {
 //! \brief container to hold TaskIDs of all nr_radiation tasks
 
 struct SCTaskIDs {
+  // "sc_bvals_srad": the source-only refresh at solve start. ir ghosts survive from
+  // the previous solve's post-sweep exchange, but srad follows the fluid and does not.
+  TaskID sronly_irecv, sronly_rest, sronly_send, sronly_recv,
+         sronly_bcs, sronly_prol, sronly_csend, sronly_crecv;
+  // "sc_flxcor": coarse-fine correction of hflx. The matching InitFluxRecv is posted
+  // in SolveTransfer, not here, so it is not a task.
+  TaskID hflx_send, hflx_recv, hflx_csend, hflx_crecv;
   TaskID sc_solve;  // formal solution + iteration + J (+ H, K if requested) + Q_rad
   TaskID sc_qrad;   // apply Q_rad onto hydro/mhd conserved energy for this stage
   TaskID sc_newdt;  // radiation-relaxation timestep (stagen, after hydro/mhd newdt)
@@ -74,6 +81,29 @@ struct HyperplaneOrder {
 //! same sweep and the same result whichever is chosen
 
 enum class SweepKernel {tiled, plane};
+
+//----------------------------------------------------------------------------------------
+//! \enum QradForm
+//! \brief which form of the gas-energy coupling to evaluate (<nr_radiation>/qrad_form).
+//! Davis 2012 gives two, identical in the continuum and differing only as
+//! discretisations:
+//!   integral  Eq. 27, Q = crat prat sigma_a (J - brad). Local and algebraic. Loses
+//!             precision when the zone is optically thick and near equilibrium, where
+//!             J -> brad and the difference is small while sigma_a is large.
+//!   divh      Eq. 28, Q = -crat prat div H, from the flux on cell faces. Accurate in
+//!             that thick limit, and conservative: the face-flux difference telescopes,
+//!             so the domain-integrated heating equals minus the net flux through the
+//!             boundary whatever the state of the solve. Degrades in the opposite limit,
+//!             where sigma_a -> 0 makes the exact answer zero while div H does not.
+//!   hybrid    Eq. 27 where tau = chi*dx <= kTauLo, Eq. 28 where tau >= kTauHi, and a
+//!             smoothstep blend in log tau between (Davis sec. 4 switches hard at 1).
+//!             Accurate in both limits. Exactly conservative only where w = 1, the deep
+//!             thick region; in the band and below it a differential zone debits a face
+//!             flux that its integral-form neighbour never credits.
+//! No 4 pi anywhere: the quadrature weights sum to one (angular_grid.hpp), so J is the
+//! mean intensity and H = <mu I>, and both forms carry only crat*prat.
+
+enum class QradForm {integral, divh, hybrid};
 
 //----------------------------------------------------------------------------------------
 //! \class SC
@@ -126,6 +156,18 @@ class SC {
   int tile_size;   // tiled only: cells per tile edge; 0 = the whole meshblock is one tile
   int team_size;   // tiled only: threads per team; 0 = Kokkos::AUTO
 
+  // which form of the gas-energy coupling to evaluate (see QradForm above)
+  QradForm qrad_form;
+  std::string qrad_form_name;      // as given in the deck, for messages
+
+  // Fraction of a cell's internal energy Q_rad may remove in one step, imposed as
+  //   dt <= cfl_qrad * e_int / |Q|
+  // at the end of SolveTransfer (sc/coupling.cpp, LimitDtByQrad). 0 disables it. The
+  // default depends on qrad_form: the integral form is already bounded by the relaxation
+  // rate in sc/newdt.cpp, the differential forms are not.
+  Real cfl_qrad;
+  bool cfl_qrad_specified;         // <nr_radiation>/cfl_qrad present in the input
+
   // iteration control
   int iter_max;
   // minimum sweeps before early exit (default 1: sweep 1 is compared to the
@@ -167,6 +209,15 @@ class SC {
   DvceArray5D<Real> moments;
   DvceArray5D<Real> j_prev; // J from the previous sweep (residual scratch)
   DvceArray4D<Real> qrad;       // radiative heating/cooling rate of the gas
+  // Radiative flux on cell faces, H.n per face, for the divh and hybrid forms; the
+  // quantity whose divergence is Q. Built from ir rather than from the cell-centred H in
+  // moments: on an interior face the two agree (the moment of a linear face
+  // reconstruction is the mean of the moments), but at a physical boundary only the
+  // per-ray form is defined, because a boundary condition fixes just the inbound half of
+  // the sphere. DvceFaceFld5D with nvar = 1 because that is the type the coarse-fine
+  // flux correction takes; gray, so there is nothing else to carry. Allocated on first
+  // use, so the integral form costs nothing.
+  DvceFaceFld5D<Real> hflx;
   // absorption coefficient per unit volume (nmb, 1, nx3, nx2, nx1); nvar=1 5D so it is
   // directly registrable as a stored output variable. Written every solve by the opacity
   // hook, else kappa_a * rho; the sweep reads the copy chi
@@ -188,6 +239,12 @@ class SC {
   // boundary communication: separate MeshBoundaryValuesCC for ir and srad
   MeshBoundaryValuesCC *pbval_ir = nullptr;
   MeshBoundaryValuesCC *pbval_srad = nullptr;
+  // coarse-fine flux correction of hflx. Its own object rather than a borrowed one: the
+  // flux buffers, comm_flux and flux_req are per-object, so sharing pbval_srad (also
+  // nvar = 1) would work today and break silently the day srad wants a correction of its
+  // own. nullptr -- and so a no-op everywhere -- unless a differential form is in use on
+  // a multilevel mesh, so the integral form and every uniform grid pay nothing.
+  MeshBoundaryValuesCC *pbval_hflx = nullptr;
 
   Real dtnew;
 
@@ -219,6 +276,11 @@ class SC {
   // stagen task: radiation-relaxation timestep
   TaskStatus NewTimeStep(Driver *pdrive, int stage);
 
+  // Q_rad energy-depletion timestep limit, called at the end of SolveTransfer so it
+  // constrains the very step that applies this Q (sc/coupling.cpp). No-op when
+  // cfl_qrad == 0, which is the default for qrad_form = integral.
+  void LimitDtByQrad();
+
   // helpers called from SolveTransfer. UpdateOpacity also runs wherever the relaxation
   // timestep is evaluated (NewTimeStep, driver initialization, after a remesh)
   void UpdateOpacity();             // sigma_a (hook or kappa_a*rho) and chi = sigma_a
@@ -229,8 +291,18 @@ class SC {
   void ApplyPhysicalBCsSource();
   void ComputeJ();       // J only, into moments slot 0 (every sweep; after a remesh)
   Real ResidualJ();      // max symmetric relative change J vs j_prev, allreduced
-  void ComputeHK();      // H_i and K_ij into moments slots 1-9 (once per solve)
-  void ComputeQrad();
+  void ComputeHK();      // H_i and K_ij into slots 1-9, active + 1 ghost layer
+  void FillHflx();       // face-centred H from the cell-centred slots 1-3
+  void BoundaryHflx();   // physical faces: per-ray upwind face flux
+  TaskStatus SendHflx(Driver *pdrive, int stage);
+  TaskStatus RecvHflx(Driver *pdrive, int stage);
+  TaskStatus ClearSendHflx(Driver *pdrive, int stage);
+  TaskStatus ClearRecvHflx(Driver *pdrive, int stage);
+  bool ir_ghosts_fresh_ = false;
+  int ir_ghosts_seq_ = -1;
+  static constexpr Real kTauLo = 0.3, kTauHi = 3.0;
+  void ComputeQrad();          // blended Q_int <-> Q_dif on optical depth
+  void ComputeQradIntegral();    // Eq. 27, local
 
   // formal solution (sc/formal_solution.cpp): dispatch on sweep_kernel. Public because
   // Kokkos CUDA device lambdas cannot be defined inside private/protected members.
