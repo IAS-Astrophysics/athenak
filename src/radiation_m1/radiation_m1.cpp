@@ -164,8 +164,20 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_decay = pin->GetOrAddBoolean("bns_nurates", "use_decay", true);
     nurates_params.use_BRT_brem =
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
-    nurates_params.exclude_pair_brem_nue_anue =
-        pin->GetOrAddBoolean("bns_nurates", "exclude_pair_brem_nue_anue", false);
+    {
+      const Real rho_max = pin->GetOrAddReal("bns_nurates",
+                                             "exclude_pair_brem_nue_anue_rho_max", -1.0);
+      const bool exclude_all =
+          pin->GetOrAddBoolean("bns_nurates", "exclude_pair_brem_nue_anue", false);
+      const Real m_n_g = 1.67492750e-24;   // neutron mass [g]
+      if (rho_max > 0.0) {
+        nurates_params.exclude_pair_brem_nb_max = rho_max / m_n_g * 1.0e-21;  // cm^-3 -> nm^-3
+      } else if (exclude_all) {
+        nurates_params.exclude_pair_brem_nb_max = 1.0e300;   // every density
+      } else {
+        nurates_params.exclude_pair_brem_nb_max = -1.0;      // never
+      }
+    }
     // bns_nurates reconstructed-distribution guards; off unless asked for.
     nurates_params.use_eq_fallback_temp =
         pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_temp", false);

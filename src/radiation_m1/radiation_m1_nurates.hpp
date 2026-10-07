@@ -49,7 +49,8 @@ struct NuratesParams {
   bool neglect_blocking;
   bool use_decay;
   bool use_BRT_brem;
-  bool exclude_pair_brem_nue_anue;  // drop pair and brem from nue/anue (as THC)
+  Real exclude_pair_brem_nb_max;  // remove pair/brem from nue/anue where the baryon
+                                  // number density is below this [nm^-3]; <= 0: never
   // Per-flavour fallbacks from the reconstructed distribution to Fermi-Dirac,
   // inside bns_nurates' CalculateThickParamsFromM1.  Both default off.
   bool use_eq_fallback_temp;  // fall back where the trapped temperature >= 200 MeV
@@ -273,8 +274,10 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
+  // Pair and brem are removed from nue/anue only below the density cut (see radiation_m1.cpp).
   grey_op_params.opacity_pars.exclude_pair_brem_nue_anue =
-      nurates_params.exclude_pair_brem_nue_anue;
+      nurates_params.exclude_pair_brem_nb_max > 0.0 &&
+      nb * unit_num_dens < nurates_params.exclude_pair_brem_nb_max;
   grey_op_params.opacity_pars.use_eq_fallback_temp =
       nurates_params.use_eq_fallback_temp;
   grey_op_params.opacity_pars.use_eq_fallback_y =
