@@ -6,14 +6,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file sc_interp.hpp
-//! \brief Short-characteristics interpolation coefficients for the Eq. 20 formal-solution
-//! update (Davis, Stone & Jiang 2012), following Kunasz & Auer (1988, JQSRT 39, 67) for
-//! the quadratic source-function interpolation, with the Bezier-type opacity
-//! interpolation and slope-limited source control point of Auer (2003, ASP 288, 3) /
-//! Hayek et al. (2010, A&A 517, 49) that keep I >= 0 for positive S. Both routines are
-//! direct, validated ports of Athena-C's radiation/utils_rad.c (interp_quad_chi(),
-//! interp_quad_source_slope_lim()) which implement exactly this scheme; ported here as
-//! KOKKOS_INLINE_FUNCTION so they can be called from device sweep kernels.
+//! \brief Short-characteristics interpolation for the Eq. 20 update (Davis, Stone &
+//! Jiang 2012): Kunasz & Auer (1988) quadratic source interpolation with the Bezier
+//! opacity interpolation and slope-limited control point of Auer (2003) / Hayek et al.
+//! (2010), which keep I >= 0 for positive S. KOKKOS_INLINE_FUNCTION, called from the
+//! sweep kernels.
 
 #include <cmath>
 
@@ -23,10 +20,10 @@ namespace nr_radiation {
 
 //----------------------------------------------------------------------------------------
 //! \fn Real InterpQuadChi()
-//! \brief 2nd-order (parabolic) representation of the opacity chi at the upwind or
-//! downwind footpoint of a ray, with Bezier-type slope limiting to avoid overshoots
-//! (Auer 2003). chi0,chi1,chi2 are the opacities at the far, near, and center points
-//! of the 3-point stencil along the ray (chi1 = local cell).
+//! \brief Mean opacity over the ray segment from chi0 to chi1, from a parabola through
+//! chi0, chi1, chi2 with Bezier-type slope limiting against overshoot (Auer 2003). For
+//! the upwind segment pass (upwind footpoint, local cell, downwind footpoint); for the
+//! downwind segment reverse the order.
 
 KOKKOS_INLINE_FUNCTION
 Real InterpQuadChi(Real chi0, Real chi1, Real chi2) {
@@ -92,30 +89,22 @@ void InterpQuadSourceSlopeLim(Real dtaum, Real dtaup, Real S0, Real S1, Real S2,
 }
 
 //----------------------------------------------------------------------------------------
-//! The per-cell update, UpdateCellSC() at the end of this file, is split into two pieces:
-//!   ComputeSCAngleInv()  the arithmetic that depends only on the ray and the cell size:
-//!                        sweep signs, dominant axis, footpoint interpolation weights,
-//!                        path length (SCRayInv);
-//!   GatherSolveSC()      the per-cell footpoint gathers of chi, S and I, the optical
-//!                        depths, and the Eq. 20 solve.
-//! UpdateCellSC() calls the two in turn. The split is kept deliberately: on the V100 the
-//! two forms compile to measurably different code (rt-profiling/v100/split), and this is
-//! the form the sweep kernels were tuned with. IrGet() is the one place the gather spells
-//! the intensity layout ir(m,angg,k,j,i). The optional a1/a0/edtau outputs expose the
-//! Eq. 20 weights for a scattering iteration (Lambda* accumulation); unused in LTE.
+//! The per-cell update is ComputeSCAngleInv() -- the ray- and cell-size-dependent
+//! arithmetic (sweep signs, marching axis, footpoint weights, path length) -- followed by
+//! GatherSolveSC(), the footpoint gathers of chi, S and I and the Eq. 20 solve. IrGet()
+//! is the one place the gather spells the layout ir(m,angg,k,j,i). The optional
+//! a1/a0/edtau outputs expose the Eq. 20 weights; unused in LTE.
 //!
-//! Parameters of UpdateCellSC / GatherSolveSC:
-//!   chi_       — extinction (nmb,nx3,nx2,nx1)
-//!   srad_      — source S as 5D (nmb,1,nx3,nx2,nx1) for CC boundary exchange
-//!   ir_        — intensity array (nmb,nang_tot,nx3,nx2,nx1)
-//!   m, angg    — meshblock and flattened angle index
-//!   i, j, k    — cell indices in the active domain
-//!   sx,sy,sz   — sign(mu_x/y/z), encoding sweep direction (+1 or -1; sy=sz=0 if unused)
-//!   mux,muy,muz— direction cosines (muy/muz unused in lower dims)
-//!   dx1,dx2,dx3— cell widths
-//!   ndim       — 1, 2 or 3
-//!   ks, js     — start-of-active-zone indices for k, j
-//!   a1_out, a0_out, edtau_out — if non-null, the Eq. 20 weights a1, a0 and e^{-dtau}
+//! Parameters of GatherSolveSC:
+//!   chi_       - extinction (nmb,nx3,nx2,nx1)
+//!   srad_      - source S as 5D (nmb,1,nx3,nx2,nx1) for CC boundary exchange
+//!   ir_        - intensity array (nmb,nang_tot,nx3,nx2,nx1)
+//!   m, angg    - meshblock and flattened angle index
+//!   i, j, k    - cell indices in the active domain
+//!   inv        - the per-ray invariants from ComputeSCAngleInv
+//!   ndim       - 1, 2 or 3
+//!   ks, js     - start-of-active-zone indices for k, j
+//!   a1_out, a0_out, edtau_out - if non-null, the Eq. 20 weights a1, a0 and e^{-dtau}
 
 //----------------------------------------------------------------------------------------
 //! \fn Real IrGet()
@@ -143,10 +132,8 @@ struct SCRayInv {
 
 //----------------------------------------------------------------------------------------
 //! \fn SCRayInv ComputeSCAngleInv()
-//! \brief Compute the per-ray SC interpolation invariants. The path length is carried
-//! as the pair (pdx = dominant dx, pamu = |mu_dom|), not a single quotient, because the
-//! caller applies it as `InterpQuadChi(...) * pdx / pamu`, the left-associative
-//! (x*dx)/|mu| order of the Athena-C reference, so dtau rounds identically.
+//! \brief Compute the per-ray SC interpolation invariants; the path length is carried as
+//! the pair (pdx = dominant dx, pamu = |mu_dom|).
 
 KOKKOS_INLINE_FUNCTION
 SCRayInv ComputeSCAngleInv(Real mux, Real muy, Real muz,
@@ -173,16 +160,10 @@ SCRayInv ComputeSCAngleInv(Real mux, Real muy, Real muz,
   } else {
     Real lx = dx1/fabs(mux), ly = dx2/fabs(muy), lz = dx3/fabs(muz);
     Real lmin = fmin(fmin(lx,ly),lz);
-    // An exact tie is a real case, not a guard: on cubic cells the Carlson sets tie by
-    // symmetry, and S_2 (nmu = 1) has |mux| = |muy| = |muz| bitwise, so ALL of its rays
-    // tie three ways. A tie means the characteristic crosses two or three faces at the
-    // same point, so every tied axis names the same footpoint with the same weights and
-    // the choice is free -- but only to the answer. The plane and tiled kernels sweep
-    // planes taken at a fixed index along this axis, and ir(m,angg,k,j,i) has i fastest,
-    // so an x-marching plane touches a separate cache line per cell while a z-marching
-    // one is contiguous: 16x the lines at nx1 = 192, measured 15x on a V100. Hence the
-    // test order below is z, then y, then x -- the slowest-varying index first. Reorder
-    // it only together with the ir layout.
+    // Ties are real (S_2 has |mux| = |muy| = |muz| bitwise) and the choice is free for
+    // the answer, but the kernels sweep planes at fixed index along this axis and i is
+    // fastest in ir, so prefer z, then y, then x: the contiguous plane. Reorder only
+    // together with the ir layout.
     const int tie_axis = (lmin == lz) ? 2 : ((lmin == ly) ? 1 : 0);
     if (tie_axis == 0) {
       inv.axis = 0;
@@ -210,8 +191,8 @@ SCRayInv ComputeSCAngleInv(Real mux, Real muy, Real muz,
 //----------------------------------------------------------------------------------------
 //! \fn Real GatherSolveSC()
 //! \brief The per-cell short-characteristics gather + Eq. 20 solve, given the per-ray
-//! invariants `inv` from ComputeSCAngleInv. Called through UpdateCellSC by the sweep
-//! kernels.
+//! invariants `inv` from ComputeSCAngleInv. The sweep kernels call it directly with inv
+//! from RayGeometry (formal_solution.cpp).
 
 KOKKOS_INLINE_FUNCTION
 Real GatherSolveSC(
@@ -254,11 +235,8 @@ Real GatherSolveSC(
     int km = k - sz, kp = k + sz;
     // The 4-point upwind and downwind stencils are a property of the RAY (inv.axis),
     // not of the cell, so each cell is named once and the source, opacity and intensity
-    // all index the same names. Writing the loads together also gives the compiler the
-    // option of issuing them before any is consumed, which measurably it takes; that is
-    // a schedule the compiler chooses, not one this form can guarantee. Same loads, same
-    // arithmetic and same summation order as the interleaved form, so bit-identical.
-    // Subscripts 0..3 pair with the interpolation weights c0..c3.
+    // all index the same names. Issuing the loads together lets the compiler schedule
+    // them ahead of use. Subscripts 0..3 pair with the interpolation weights c0..c3.
     int u0k, u0j, u0i, u1k, u1j, u1i, u2k, u2j, u2i, u3k, u3j, u3i;
     int d0k, d0j, d0i, d1k, d1j, d1i, d2k, d2j, d2i, d3k, d3j, d3i;
     if (inv.axis == 0) {          // x-dominant
@@ -294,8 +272,6 @@ Real GatherSolveSC(
     chi2 = c0*cd0 + c1_*cd1 + c2_*cd2 + c3*cd3;
   }
 
-  // path length applied as (x*pdx)/pamu, the left-associative order of the
-  // Athena-C reference
   dtaum = InterpQuadChi(chi0,chi1,chi2) * inv.pdx / inv.pamu;
   dtaup = InterpQuadChi(chi2,chi1,chi0) * inv.pdx / inv.pamu;
 
@@ -305,27 +281,6 @@ Real GatherSolveSC(
   if (a0_out != nullptr) { *a0_out = a0; }
   if (edtau_out != nullptr) { *edtau_out = edtau; }
   return a0*S0 + a1*S1 + a2*S2 + edtau*imu0;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn Real UpdateCellSC()
-//! \brief Per-cell short-characteristics intensity update (Davis, Stone & Jiang 2012
-//! Eq. 20) for 1D/2D/3D: the per-ray invariants, then the per-cell gather and solve.
-//! Returns the updated intensity for cell (m,angg,k,j,i).
-
-KOKKOS_INLINE_FUNCTION
-Real UpdateCellSC(
-    const DvceArray4D<Real> &chi_, const DvceArray5D<Real> &srad_,
-    const DvceArray5D<Real> &ir_, int m, int angg,
-    int i, int j, int k,
-    int sx, int sy, int sz,
-    Real mux, Real muy, Real muz,
-    Real dx1, Real dx2, Real dx3,
-    int ndim, int ks, int js,
-    Real *a1_out, Real *a0_out = nullptr, Real *edtau_out = nullptr) {
-  SCRayInv inv = ComputeSCAngleInv(mux, muy, muz, dx1, dx2, dx3, ndim, sx, sy, sz);
-  return GatherSolveSC(chi_, srad_, ir_, m, angg, i, j, k, inv,
-                                  ndim, ks, js, a1_out, a0_out, edtau_out);
 }
 
 }  // namespace nr_radiation

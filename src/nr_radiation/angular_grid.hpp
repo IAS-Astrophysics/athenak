@@ -6,12 +6,8 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file angular_grid.hpp
-//! \brief Angular quadrature grid for the LTE short-characteristics SC solver.
-//!
-//! Implements the Bruls et al. (1999, A&A 348, 233) "type-A" discrete-ordinate grid
-//! (Carlson 1963 symmetric S_N method), as described in Davis, Stone & Jiang (2012)
-//! Sec. 3.2. The construction (permutation-family weight solve, n_mu <= 6) follows
-//! Athena-C's radiation/angles.c::carlson().
+//! \brief Angular quadrature grid for the SC solver: Bruls et al. (1999) type-A set,
+//! n_mu <= 6.
 
 #include "athena.hpp"
 
@@ -31,9 +27,9 @@ class SCAngularGrid {
   int noct;   // number of octants: 2 (1D), 4 (2D), 8 (3D)
 
   // mu(oct,ang,0..2) = direction cosines (n-hat . x1hat, x2hat, x3hat) of ray 'ang' in
-  // octant 'oct'; wmu(ang) = quadrature weight (same for every octant, already includes
-  // the 1/noct octant-degeneracy factor, so moments are plain sums over (oct,ang) with
-  // no extra prefactor -- Eq. 17-19 of Davis 2012).
+  // octant 'oct'; wmu(ang) = quadrature weight, the same in every octant and summing to
+  // one over all (oct, ang) because the 1/noct octant factor is folded in. The moments
+  // are therefore plain sums, J = Sum wmu I, with no normalisation in front.
   DualArray3D<Real> mu;
   DualArray1D<Real> wmu;
 

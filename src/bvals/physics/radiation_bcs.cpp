@@ -66,19 +66,10 @@ void MeshBoundaryValues::RadiationBCsCoarse(MeshBlockPack *ppack, DualArray2D<Re
 }
 
 //! Flags handled here: periodic (nothing to do), outflow, inflow, diode and vacuum.
-//!
-//! diode falls through to outflow. A hydro diode copies rho, energy and the tangential
-//! velocity -- it asserts the medium continues -- and clamps only the normal velocity,
-//! which is about advecting material inward. A radiation ghost is per-ray and is read
-//! only by rays ENTERING through that face (an outgoing ray's upwind cell is interior),
-//! so there is no ghost velocity to clamp and nothing of the diode survives except its
-//! statement that the medium continues, which is outflow.
-//!
-//! vacuum writes zero: nothing enters, which is also what inflow gives with i_in = 0.
-//!
-//! reflect is NOT handled here. It is an exact permutation of the rays for an
-//! octant-structured quadrature and needs angular interpolation for a geodesic mesh, so
-//! it belongs to whichever module owns the angular grid (see SC::ApplyReflectBCs).
+//! diode falls through to outflow: a radiation ghost is read only by rays entering
+//! through the face, so there is no normal velocity to clamp. vacuum writes zero. reflect
+//! is a ray permutation owned by the angular grid (SC::ApplyReflectBCs), not handled
+//! here.
 void BCHelperRadiation(MeshBlockPack *ppack, DualArray2D<Real> i_in, DvceArray5D<Real> i0,
               int is, int ie, int js, int je, int ks, int ke, int n1, int n2, int n3) {
   // loop over all MeshBlocks in this MeshBlockPack

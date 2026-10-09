@@ -48,7 +48,7 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
-  // Check for hydro/mhd coupling (mirrors radiation::Radiation)
+  // Check for hydro/mhd coupling
   is_hydro_enabled = pin->DoesBlockExist("hydro");
   is_mhd_enabled = pin->DoesBlockExist("mhd");
   if (is_hydro_enabled && is_mhd_enabled) {
@@ -57,10 +57,8 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
       << "both <hydro> and <mhd> blocks exist in input file" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  // radiation -> gas coupling (AddQrad + the radiation dt limit). The gas always emits
-  // when present, independent of this flag. crat and prat are required only when true.
-  // Without a fluid there is nothing to act on, so the flag is false regardless of the
-  // deck (same rule as the GR module's rad_source).
+  // radiation -> gas coupling. Forced false without a fluid, silently: the input file
+  // cannot turn it on. crat and prat are required only when true.
   if (is_hydro_enabled || is_mhd_enabled) {
     affect_fluid = pin->GetOrAddBoolean("nr_radiation", "affect_fluid", true);
   } else {
@@ -105,11 +103,8 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
-  // Coupling form ---------------------------------------------------------------------
-  // hybrid is the default: it is a bit-exact Q_int passthrough where tau_cell < kTauLo,
-  // so thin problems are unchanged, and it switches to the conservative differential
-  // form only where Q_int loses its significant figures. integral remains available
-  // to pin the legacy path (and skips the face-flux build entirely).
+  // Coupling form. hybrid: Q_int where tau_cell < kTauLo, Q_dif above kTauHi, blended
+  // between.
   qrad_form_name = pin->GetOrAddString("nr_radiation", "qrad_form", "hybrid");
   if (qrad_form_name == "integral") {
     qrad_form = QradForm::integral;
@@ -124,10 +119,8 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
       << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  // A user face is the pgen's to fill. The differential forms read the inbound half of
-  // every boundary ghost, which every built-in flag provides (outflow and diode copy the
-  // last active cell, inflow writes i_in, vacuum zeroes, reflect mirrors each ray), but a
-  // user boundary is only as good as its own kernel.
+  // The differential forms read the inbound intensity in every boundary ghost. The
+  // built-in flags fill it; a user boundary kernel may not, so warn.
   if (qrad_form != QradForm::integral && global_variable::my_rank == 0) {
     int ndim_msh = 1 + (ppack->pmesh->multi_d ? 1 : 0) + (ppack->pmesh->three_d ? 1 : 0);
     for (int f = 0; f < 2*ndim_msh; ++f) {
@@ -141,28 +134,11 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
     }
   }
 
-  // Q_rad energy-depletion timestep limit ---------------------------------------------
-  // dt <= cfl_qrad * e_int / |Q|, imposed in SolveTransfer (see sc/coupling.cpp). The
-  // default has to be chosen after qrad_form, because the form is what decides whether
-  // the limit is needed at all:
-  //   integral  Q = crat*prat*sigma_a*(J - brad). In the thin COOLING limit brad > J,
-  //             so |Q| <= crat*prat*sigma_a*T^4 and e_int/|Q| >= 4/nu_rad identically:
-  //             sc/newdt.cpp already bounds it. Default 0 (off). NOTE this does NOT
-  //             make the integral form safe in the
-  //             thin HEATING limit (J >> brad), where |Q| is set by J while nu_rad is
-  //             evaluated at the cold pre-heating T -- measured to run away to
-  //             max|Q| ~ 1e11 on a thin irradiated slab, and rescued by setting this
-  //             parameter. A radiation-dominated heating problem should set it
-  //             explicitly whichever form is in use.
-  //   divh      Q = -crat*prat*div(H), which is set by the radiation field and bears no
-  //   hybrid    relation to the local sigma_a: a cold, optically thin cell in a strong
-  //             field has nu_rad -> 0 while |Q| stays large. Default 0.25, which is the
-  //             value that makes this limit coincide with 1/nu_rad in the thin cooling
-  //             limit -- it inherits that calibration rather than being a new knob.
-  // Applied ON TOP OF <time>/cfl_number, exactly as 1/nu_rad is: Mesh::NewTimeStep
-  // scales every module's dtnew by cfl_no (mesh.cpp), and Athena-C likewise folds its
-  // one CourNo into radtrans_dt. The effective bound at the defaults is therefore
-  // 0.3*0.25 = 0.075*e_int/|Q|; do not "fix" 0.25 into an effective 0.25.
+  // Q_rad depletion timestep limit, dt <= cfl_qrad * e_int / |Q| (sc/coupling.cpp).
+  // The integral Q_rad is already bounded by the relaxation rate in sc/newdt.cpp
+  // (default 0, off); the differential forms are not, so this parameter acts as a
+  // safety knob (default 0.25, the value at which this limit equals 1/nu_rad in the
+  // thin cooling limit).
   cfl_qrad_specified = pin->DoesParameterExist("nr_radiation", "cfl_qrad");
   Real cfl_qrad_default = (qrad_form == QradForm::integral) ? 0.0 : 0.25;
   cfl_qrad = pin->GetOrAddReal("nr_radiation", "cfl_qrad", cfl_qrad_default);
@@ -322,24 +298,10 @@ SC::SC(MeshBlockPack *ppack, ParameterInput *pin) :
   pbval_ir->InitializeBuffers(nang_tot);
   pbval_srad = new MeshBoundaryValuesCC(ppack, pin, false);
   pbval_srad->InitializeBuffers(1);
-  // Coarse-fine flux correction of hflx (nvar = 1, matching hflx's second extent --
-  // PackAndSendFluxCC and RecvAndUnpackFluxCC both derive nvar from flx.x1f.extent(1),
-  // and InitFluxRecv's argument sets only the MPI count, so the two MUST agree).
-  // Constructed only where it can act, so the integral form and uniform meshes allocate
-  // nothing: multilevel is set in the Mesh constructor, well before MeshBlockPack.
-  //
-  // Unconditional for the differential forms, because they exist BECAUSE they telescope
-  // and without this they stop doing so the moment the mesh is refined: measured
-  // residual 5.4e-04 (2D) and 4.7e-05 (3D) against 1.6e-16 with refinement off, i.e.
-  // only ~3x better than the integral form instead of thirteen orders. There is no knob
-  // because there is no regime in which the uncorrected answer is the one you want. Cost
-  // is within run-to-run noise (4.57 s vs 4.54 s on the 3D deck).
-  //
-  // NOTE this is NOT a DSJ12/JSD12 algorithm -- the papers say nothing about refinement,
-  // and Athena-C's rad_to_hydro has no coarse-fine awareness. It is AthenaK's own
-  // existing mechanism (Berger & Colella 1989), already driven by hydro, MHD and the GR
-  // radiation module, applied to hflx unchanged -- a deliberate deviation from the
-  // papers, as the half-range boundary rule is.
+  // Coarse-fine flux correction of hflx (nvar = 1, matching hflx's second extent; the
+  // InitFluxRecv argument must agree). Constructed only where it can act: a differential
+  // form on a multilevel mesh. Without it the face flux stops telescoping across
+  // refinement boundaries, so there is no option to disable it.
   if (qrad_form != QradForm::integral && ppack->pmesh->multilevel) {
     pbval_hflx = new MeshBoundaryValuesCC(ppack, pin, false);
     pbval_hflx->InitializeBuffers(1);

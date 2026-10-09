@@ -5,12 +5,11 @@
 //========================================================================================
 //! \file sc_linwave.cpp
 //! \brief Radiatively damped acoustic waves (Davis, Stone & Jiang 2012 Sec. 5.4 /
-//! Eq. 38; Stein & Spiegel 1967). 1D port of Athena-C linear_wave_rad1d.c for Figs. 9-10,
-//! with the 2D non-grid-aligned extension of linear_wave_rad2d.c.
+//! Eq. 38; Stein & Spiegel 1967), in 1D and as a 2D non-grid-aligned wave.
 //!
 //! Sec. 5.4 protocol: rho0 = 1, v0 = 0, a = 1 (adiabatic sound speed), A = 1e-6,
 //! periodic, t_final = lambda / a. The wave is characterised by the optical depth per
-//! wavelength tau and the Boltzmann number Bo. The deck supplies the module's own
+//! wavelength tau and the Boltzmann number Bo. The input file supplies the module's own
 //! parameters and the pgen derives the two from them (rho0 = 1, T0 = 1/gamma):
 //!   tau = kappa_a * lambda / (2 pi)          (chi0 = kappa_a rho0 = tau k)
 //!   Bo  = 4 gamma^4 / ((gamma - 1) crat prat) (from B0 = gamma Etherm0 / (Bo pi),
@@ -40,8 +39,8 @@ using Complex = std::complex<Real>;
 struct WaveVars {
   Real amp, vflow, Bo, tau;
   Real sin_a, cos_a, lambda;
-  Real vph, rdamp;           // analytic: vph = Re(ω)/(k a) with a=1; rdamp = 2π Im(ω)
-  Real omega_r, omega_i;     // analytic ω/(k a)
+  Real vph, rdamp;           // analytic: Re(omega)/(k a) with a = 1; 2 pi Im(omega)
+  Real omega_r, omega_i;     // analytic omega/(k a)
   Real V0R, V0I, E0R, E0I;
   Real dens, pgas;
   Real gamma;
@@ -96,7 +95,7 @@ void AcousticWaveRad(Real Bo, Real tau, Real cs, Real d0,
 }
 
 //----------------------------------------------------------------------------------------
-//! Fourier fit of the fundamental density mode (Davis §5.4 Fig. 9)
+//! Fourier fit of the fundamental density mode (Davis Sec. 5.4 Fig. 9)
 
 void FitFourierOmega(Mesh *pm, Real *omega_r_fit, Real *omega_i_fit, Real *amp_meas) {
   MeshBlockPack *pmbp = pm->pmb_pack;
@@ -198,22 +197,21 @@ void SCLinwaveErrors(ParameterInput *pin, Mesh *pm) {
   });
   pm->pgen->OutputErrors(pin, pm);
 
-  // 2. Davis sec. 5.4 dispersion check: Fourier-fit the density mode (volume-weighted,
-  // so it is
-  //    valid on SMR/AMR meshes) and record fitted vs analytic omega_R, omega_I.
+  // 2. Davis Sec. 5.4 dispersion check: Fourier-fit the density mode (volume-weighted,
+  //    so it is valid on SMR/AMR meshes) and record fitted vs analytic omega_R, omega_I.
   Real omega_r_fit=0, omega_i_fit=0, amp_meas=0;
   FitFourierOmega(pm, &omega_r_fit, &omega_i_fit, &amp_meas);
 
   if (global_variable::my_rank == 0) {
     int nx1_tot = pm->mesh_indcs.nx1;
-    std::cout << "sc_linwave §5.4: Bo=" << wv.Bo << " tau=" << wv.tau
+    std::cout << "sc_linwave Sec. 5.4: Bo=" << wv.Bo << " tau=" << wv.tau
               << " N=" << nx1_tot << " t=" << time
               << " 1D=" << (wv.is_1d?1:0) << std::endl;
-    std::cout << "  analytic: ωR/(ka)=" << wv.omega_r
-              << " ωI/(ka)=" << wv.omega_i
+    std::cout << "  analytic: omegaR/(ka)=" << wv.omega_r
+              << " omegaI/(ka)=" << wv.omega_i
               << " vph=" << wv.vph << " rdamp=" << wv.rdamp << std::endl;
-    std::cout << "  fitted:   ωR/(ka)=" << omega_r_fit
-              << " ωI/(ka)=" << omega_i_fit
+    std::cout << "  fitted:   omegaR/(ka)=" << omega_r_fit
+              << " omegaI/(ka)=" << omega_i_fit
               << " A_meas=" << amp_meas << std::endl;
 
     FILE *fp = std::fopen("SCLinWave-davis54.dat", "a");

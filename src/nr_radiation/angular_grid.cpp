@@ -4,16 +4,9 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file angular_grid.cpp
-//! \brief Construction of the Bruls et al. (1999) type-A angular quadrature grid.
-//!
-//! This is a direct, validated port (host-side, run-once at startup) of the Carlson
-//! symmetric S_N method implemented in Athena-C's radiation/angles.c::carlson()
-//! (itself following Bruls et al. 1999, A&A 348, 233, as cited by Davis, Stone & Jiang
-//! 2012 Sec. 3.2). The polar weights are distributed in azimuth by solving a linear
-//! system over "permutation families" of direction-cosine triplets (the exact type-A
-//! grid). That solve yields negative weights for n_mu > 6 (Bruls et al. 1999 define the
-//! exact grid only up to 6; Athena-C falls back to equal weights there), so n_mu > 6 is
-//! rejected.
+//! \brief Bruls et al. (1999) type-A angular quadrature (Carlson symmetric S_N), as in
+//! Davis, Stone & Jiang (2012) Sec. 3.2. Host-side, once at startup. The exact grid is
+//! defined only up to n_mu = 6; larger values are rejected.
 
 #include <algorithm>
 #include <array>
@@ -129,9 +122,8 @@ SCAngularGrid::SCAngularGrid(int ndim_in, int nmu_in) :
 
 //----------------------------------------------------------------------------------------
 //! \fn SCAngularGrid::BuildCarlson1D
-//! \brief 1D angular grid: plain Gauss-Legendre quadrature on mu in [-1,1], split into
-//! two octants (mu>0 outgoing, mu<0 incoming) -- Athena-C angles.c::carlson(), nDim==1
-//! branch.
+//! \brief 1D angular grid: Gauss-Legendre quadrature on mu in [-1,1], split into two
+//! octants (0: mu > 0, 1: mu < 0).
 
 void SCAngularGrid::BuildCarlson1D() {
   // 2*nmu Gauss-Legendre nodes on [-1,1]: the nmu positive nodes form octant 0 (mu > 0),
@@ -150,8 +142,7 @@ void SCAngularGrid::BuildCarlson1D() {
 
 //----------------------------------------------------------------------------------------
 //! \fn SCAngularGrid::BuildCarlsonND
-//! \brief 2D/3D angular grid following Bruls et al. (1999) type-A construction --
-//! Athena-C angles.c::carlson(), nDim>1 branch, ported verbatim.
+//! \brief 2D/3D angular grid following the Bruls et al. (1999) type-A construction.
 
 void SCAngularGrid::BuildCarlsonND() {
   // --- polar weights/angles (mu2tmp, wtmp); nmu<=6 enforced in ctor ---

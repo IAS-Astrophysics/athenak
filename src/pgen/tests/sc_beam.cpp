@@ -4,11 +4,10 @@
 // Licensed under the 3-clause BSD License, see LICENSE file for details
 //========================================================================================
 //! \file sc_beam.cpp
-//! \brief Pencil-beam test for the LTE short-characteristics SC solver.
-//! Ported from Athena-C beam2d.c. Injects unit intensity at selected boundary cells along
-//! a chosen discrete-ordinate angle through a uniform absorber with no source (Davis 2012
-//! Fig. 6, linear interpolation). There is no fluid: the pgen enrolls hooks that write
-//! sigma_a = const and brad = 0 at every solve (see sc_hooks.hpp).
+//! \brief Pencil-beam test for the LTE short-characteristics SC solver. Injects unit
+//! intensity at selected boundary cells along a chosen discrete-ordinate angle through a
+//! uniform absorber with no source (Davis 2012 Fig. 6). There is no fluid: the pgen
+//! enrolls hooks that write sigma_a = const and brad = 0 at every solve (sc_hooks.hpp).
 
 #include <algorithm>
 #include <cmath>

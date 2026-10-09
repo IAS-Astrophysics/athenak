@@ -68,7 +68,7 @@ TaskStatus SC::NewTimeStep(Driver *pdrive, int stage) {
     return TaskStatus::complete;
   }
   const Real gm1 = gamma - 1.0;
-  const Real rate_base = 4.0 * gm1 * crat * prat;   // times sigma_a/rho and T^3 per cell
+  const Real rate_base = 4.0 * gm1 * crat * prat;  // nu_rad = rate_base*(sigma_a/rho)*T^3
 
   auto chi_ = chi;
   auto sigma_a_ = sigma_a;

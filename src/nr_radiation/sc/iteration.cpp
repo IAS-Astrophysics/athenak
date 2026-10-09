@@ -5,7 +5,7 @@
 //========================================================================================
 //! \file iteration.cpp
 //! \brief Task assembly, the per-solve opacity/source update, boundary-exchange tasks,
-//! and SolveTransfer: the exchange-before-sweep loop iterated until J stops changing.
+//! and SolveTransfer: the sweep-then-exchange loop iterated until J stops changing.
 //! sc_bvals exchanges ir and srad (source S).
 
 #include <algorithm>
@@ -31,7 +31,8 @@
 namespace nr_radiation {
 
 //----------------------------------------------------------------------------------------
-//! \fn void SC::AssembleTasks
+//! \fn void SC::AssembleSCTasks
+//! \brief Register the solve, coupling and timestep tasks and the three exchange lists.
 
 void SC::AssembleSCTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   TaskID none(0);
@@ -54,8 +55,8 @@ void SC::AssembleSCTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   }
 
   // sc_bvals: dual CC exchange for ir (nvar=nang_tot) and srad (nvar=1)
-  // InitRecv both from none → Restrict → Send → Recv → PhysBCs (after both Recvs)
-  // → Prolong → Clear*
+  // InitRecv both from none -> Restrict -> Send -> Recv -> PhysBCs (after both Recvs)
+  // -> Prolong -> Clear*
   auto &vtl = tl["sc_bvals"];
   id.srad_irecv = vtl->AddTask(&SC::InitRecvSrad, this, none);
   id.ir_irecv = vtl->AddTask(&SC::InitRecvIr, this, none);
@@ -96,8 +97,8 @@ void SC::AssembleSCTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
   id.sronly_csend = stl->AddTask(&SC::ClearSendSrad, this, id.sronly_prol);
   id.sronly_crecv = stl->AddTask(&SC::ClearRecvSrad, this, id.sronly_csend);
 
-  // sc_flxcor: coarse-fine correction of hflx. Runs once per solve, after FillHflx, and
-  // only does anything on a multilevel mesh.
+  // sc_flxcor: coarse-fine correction of hflx. Run once per solve, after the face flux
+  // is built, on a multilevel mesh only.
   auto &ftl = tl["sc_flxcor"];
   // InitFluxRecv is NOT a task here: SolveTransfer posts it before the iteration loop,
   // so every rank has posted before any rank sends and ClearFluxSend always clears.
@@ -109,17 +110,11 @@ void SC::AssembleSCTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::UpdateOpacity / SC::UpdateEmission
-//! \brief The per-cell opacity and LTE emission of the CURRENT fluid state, over ALL
-//! cells including ghosts (the sweep reads both at ghost footpoints):
-//!   sigma_a:  the enrolled opacity hook, else kappa_a * rho of the fluid;  chi = sigma_a
-//!   emission: the enrolled emission hook, else the Planck function T^4 of the fluid
-//! Both run at the start of every solve. The opacity alone is also refreshed wherever the
-//! relaxation timestep is evaluated (driver initialization, the end of each step, after a
-//! remesh), so that dt always sees the opacity of the state it is timing -- which is what
-//! makes a restart continue a run bitwise. Without a fluid both hooks are required
-//! (checked after the pgen runs), so neither array is ever state: nothing about them is
-//! packed by AMR or checkpointed. The gas emits whenever a fluid is present, independent
-//! of affect_fluid (which gates only the reverse coupling).
+//! \brief Per-cell opacity and LTE emission of the current fluid state over ALL cells
+//! including ghosts (the sweep reads both at ghost footpoints): the enrolled hook, else
+//! sigma_a = kappa_a * rho and brad = T^4. Both run at the start of every solve; the
+//! opacity also wherever the relaxation timestep is evaluated. Neither is state: nothing
+//! is packed by AMR or checkpointed.
 
 void SC::UpdateOpacity() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -186,9 +181,8 @@ void SC::UpdateEmission() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::UpdateSource
-//! \brief The source the sweep reads: S = brad in LTE. (With scattering S becomes the
-//! iterate of the solve and this is where it is initialised; AMR packs srad so that an
-//! accelerated iteration resumes from its exact iterate after a remesh.)
+//! \brief The source the sweep reads: S = brad without scattering. Kept as its own array
+//! because it is exchanged and packed by AMR as a CC field.
 
 void SC::UpdateSource() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -233,22 +227,11 @@ int MirrorRay(int angg, int nang, int axis_bit) {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::ApplyReflectBCs
-//! \brief Mirror the intensity into the ghost zones of reflecting physical boundaries.
-//!
-//! Two mirrors, both exact. A symmetry plane sits BETWEEN the last ghost and the first
-//! active cell, so ghost is-i-1 takes its value from is+i, not from is. And the ray
-//! mirrors: the ghost value of ray angg is the interior value of the ray with that
-//! direction cosine negated (MirrorRay). Because the Carlson set is closed under these
-//! reflections and equal-weight, a half-domain run with a reflecting face reproduces the
-//! corresponding half of a full-domain run bit for bit.
-//!
-//! Only ghosts are written and only interior cells are read, so the two index ranges are
-//! disjoint and the gather is race-free.
-//!
-//! This is not in bvals/RadiationBCs with the other flags because the ray mirror is a
-//! property of THIS angular grid: an exact permutation for an octant-structured
-//! quadrature, but needing angular interpolation for the geodesic mesh the GR radiation
-//! module uses, which is a different and lossier operation.
+//! \brief Mirror the intensity into the ghost zones of reflecting physical boundaries:
+//! ghost is-i-1 takes ray angg from active cell is+i of the ray with the normal direction
+//! cosine negated (MirrorRay). Exact for the Carlson set, which is closed under these
+//! reflections. Only ghosts are written and only interior cells read. Lives here rather
+//! than in bvals/RadiationBCs because the ray mirror is a property of this angular grid.
 
 void SC::ApplyReflectBCs() {
   auto &pm = pmy_pack->pmesh;
@@ -324,7 +307,8 @@ void SC::ApplyReflectBCs() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::ApplyPhysicalBCsSource
-//! \brief Nearest-active copy of S (srad) into physical-boundary ghost layers.
+//! \brief Nearest-active copy of S (srad) into the ghost layers of faces flagged outflow
+//! or inflow. Other flags keep the srad that UpdateSource wrote from the ghost state.
 
 void SC::ApplyPhysicalBCsSource() {
   auto &pm = pmy_pack->pmesh;
@@ -404,11 +388,9 @@ void SC::ApplyPhysicalBCsSource() {
 //----------------------------------------------------------------------------------------
 //! \fn Real SC::ResidualJ
 //! \brief Max over active cells of the symmetric relative change |Jn-Jo| / max(Jn,Jo)
-//! between J and j_prev, allreduced across ranks. Departs from the Athena-C LTE test
-//! (|dJ|/J_old with dJ/0 := 0 plus an all-zero guard, jacobi_3d_linear.c): that form
-//! cannot see a cell lit from exactly zero, so a front entering vacuum could stop the
-//! iteration early whenever any other cell moved by a tiny nonzero amount. Here 0 -> J
-//! reports 1; the only zero-change case is Jn == Jo == 0.
+//! between J and j_prev, allreduced across ranks. A cell lit from exactly zero reports
+//! 1, so a front entering vacuum cannot stop the iteration early; the only zero-change
+//! case is Jn == Jo == 0.
 
 Real SC::ResidualJ() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -443,22 +425,10 @@ Real SC::ResidualJ() {
 
 //----------------------------------------------------------------------------------------
 //! \fn SC::SendHflx / RecvHflx / ClearSendHflx / ClearRecvHflx
-//! \brief Coarse-fine correction of the face-centred H, mirroring Hydro's flux tasks.
-//!
-//! Within a level the face form already telescopes: the face between two cells is one
-//! number entering both divergences with opposite signs. Across a coarse-fine boundary it
-//! does not -- the coarse block computes one face, the four fine blocks compute four, and
-//! nothing makes them agree. RecvAndUnpackFluxCC REPLACES the coarse face with the
-//! arithmetic mean of the fine ones, and since A_coarse = 4 A_fine on a Cartesian mesh
-//! the two sides then cancel exactly.
-//!
-//! These run on pbval_hflx, a bvals object owned by the face flux. The matching
-//! InitFluxRecv(1) is posted in SolveTransfer before the iteration loop rather than as a
-//! task here: the sends are iter_max sweeps away, so posting early keeps the latency off
-//! the critical path AND guarantees every rank has posted a receive before any rank
-//! sends, which is what makes the MPI_Wait inside ClearFluxSend certain to clear.
-//!
-//! Every one is a no-op on a uniform mesh.
+//! \brief Coarse-fine correction of the face-centred H, mirroring Hydro's flux tasks:
+//! the coarse face is replaced by the mean of the fine faces so both sides of a
+//! refinement boundary difference the same number. The matching InitFluxRecv(1) is
+//! posted in SolveTransfer before the iteration loop. No-ops on a uniform mesh.
 
 TaskStatus SC::SendHflx(Driver *pdrive, int stage) {
   (void)pdrive; (void)stage;
@@ -497,7 +467,7 @@ TaskStatus SC::ClearRecvHflx(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! Boundary-exchange wrapper tasks — intensity (ir)
+//! Boundary-exchange wrapper tasks -- intensity (ir)
 
 TaskStatus SC::InitRecvIr(Driver *pdrive, int stage) {
   (void)pdrive; (void)stage;
@@ -548,7 +518,7 @@ TaskStatus SC::ClearRecvIr(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
-//! Boundary-exchange wrapper tasks — source S (srad)
+//! Boundary-exchange wrapper tasks -- source S (srad)
 
 TaskStatus SC::InitRecvSrad(Driver *pdrive, int stage) {
   (void)pdrive; (void)stage;
@@ -600,13 +570,10 @@ TaskStatus SC::ClearRecvSrad(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus SC::SolveTransfer
-//! \brief One quasi-static solve per cycle: opacity/source -> [exchange -> sweep -> J ->
+//! \brief One quasi-static solve per cycle: opacity/source -> [sweep -> exchange -> J ->
 //! residual] until the per-sweep change of J is below iter_tol -> H, K and Q_rad.
-//! moments slot 0 (J) is NOT zeroed between solves: it carries the previous step's
-//! converged J (or, after a remesh, J(ir) rebuilt by MeshRefinement) as the reference for
-//! the first sweep, so a
-//! quasi-static field exits after ONE sweep. At construction J == 0, so the first solve
-//! (and a restart without a checkpointed field) takes two.
+//! moments slot 0 carries the previous solve's J as the first sweep's reference, so a
+//! quasi-static field exits after one sweep (two on the first solve, where J == 0).
 
 TaskStatus SC::SolveTransfer(Driver *pdrive, int stage) {
   (void)stage;
@@ -614,21 +581,11 @@ TaskStatus SC::SolveTransfer(Driver *pdrive, int stage) {
   UpdateEmission();
   UpdateSource();
 
-  // Post the coarse-fine flux-correction receives HERE, before the iteration, not at the
-  // point of use: the matching sends are iter_max sweeps away, so this keeps the posting
-  // latency off the critical path. It is the same split hydro uses -- InitFluxRecv in
-  // "before_stagen", SendFlux in "stagen" (hydro_tasks.cpp) -- expressed without a second
-  // task list, since the chain is linear and there is nothing in
-  // "before_timeintegrator" to overlap it with anyway. The argument MUST be 1: it sets
-  // only the MPI_Irecv count, and a value disagreeing with hflx's second extent either
-  // overruns the buffer or trips MPI_ERR_TRUNCATE. Matched by ClearRecvHflx in the
-  // "sc_flxcor" task list, which runs on every path out of this function.
-  //
-  // Posting here is also what makes the correction deadlock-free, not merely prompt:
-  // ClearSendHflx is an MPI_Wait on this rank's own
-  // sends (bvals_tasks.cpp). Every rank reaches THIS line before any rank sends, so
-  // every send has a matching receive already posted and the Wait always clears.
-  // nullptr unless a differential form is in use on a multilevel mesh.
+  // Post the flux-correction receives before the iteration, as hydro does (InitFluxRecv
+  // in "before_stagen", SendFlux in "stagen"): the sends are iter_max sweeps away, and
+  // every rank posts here before any rank sends, so the MPI_Wait in ClearSendHflx always
+  // clears. The argument must be 1, hflx's nvar. Matched by ClearRecvHflx in "sc_flxcor".
+  // nullptr unless a differential form runs on a multilevel mesh.
   if (pbval_hflx != nullptr) {
     (void)pbval_hflx->InitFluxRecv(1);
   }
@@ -646,13 +603,11 @@ TaskStatus SC::SolveTransfer(Driver *pdrive, int stage) {
   auto mom_ = moments;
   auto jprev_ = j_prev;
 
-  // Ghost ir is whatever the previous solve's post-sweep exchange left, which is what the
-  // next sweep wants: ir does not change between solves. Three cases break that -- the
-  // first solve, a restart (SC is constructed fresh, so the flag is false), and any
-  // remesh or load balance (the counter moves) -- each needs one full exchange first.
-  // Otherwise only srad is refreshed, because B follows the fluid and the fluid moved.
-  // ApplyPhysicalBCs runs either way so a time-dependent user BC is stamped at THIS t,
-  // not at the end of the previous solve; it is local and idempotent for static BCs.
+  // Ghost ir is still what the previous solve's post-sweep exchange left, unless this is
+  // the first solve, a restart (flag false) or a remesh/load balance (counter moved),
+  // each of which needs a full exchange. Otherwise only srad is refreshed, since the
+  // fluid moved. ApplyPhysicalBCs runs either way so a time-dependent user BC is stamped
+  // at this t.
   if (!ir_ghosts_fresh_ ||
       ir_ghosts_seq_ != pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq()) {
     pdrive->ExecuteTaskList(pmy_pack->pmesh, "sc_bvals", 0);
@@ -662,19 +617,14 @@ TaskStatus SC::SolveTransfer(Driver *pdrive, int stage) {
   }
 
   for (int it = 0; it < iter_max; ++it) {
-    // carry J forward as the residual's reference. A par_for rather than a deep_copy: the
-    // source is slot 0 of the moments array, and ResidualJ reads only the active range,
-    // so there is no point moving the ghosts the old whole-array copy did.
+    // carry J forward as the residual's reference; ResidualJ reads only the active range
     par_for("sc_carry_j", DevExeSpace(), 0,nmb1, ks,ke, js,je, is,ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       jprev_(m,0,k,j,i) = mom_(m,0,k,j,i);
     });
     FormalSolution();
-    // The exchange sits AFTER the sweep so the ghost ir the moments will be taken from is
-    // the current one: ComputeHK reads H one cell into the ghosts, and two blocks sharing
-    // a face must form the same face flux from it. A converged break still leaves fresh
-    // ghosts because this runs before the test. Each sweep still sees the previous
-    // iteration's active values, exactly as it did when the exchange led.
+    // bval exchange placed after the sweep so the ghost ir that ComputeHK reads one cell
+    // into the ghosts is current, and two blocks sharing a face form the same face flux.
     pdrive->ExecuteTaskList(pmy_pack->pmesh, "sc_bvals", 0);
     ir_ghosts_fresh_ = true;
     ir_ghosts_seq_ = pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq();
@@ -688,10 +638,9 @@ TaskStatus SC::SolveTransfer(Driver *pdrive, int stage) {
       break;
     }
   }
-  // per-solve report in Athena++'s static-RT format (static_iteration.cpp), rank 0 only,
-  // at the driver's diagnostic cadence (<time>/ndiag, the same test that
-  // Driver::OutputCycleDiagnostics uses) so it sits under the cycle line it belongs to;
-  // the warning is unconditional
+  // per-solve report, rank 0 only, at the driver's diagnostic cadence (<time>/ndiag, the
+  // test Driver::OutputCycleDiagnostics uses) so it sits under the cycle line it belongs
+  // to; the warning is unconditional
   if (global_variable::my_rank == 0) {
     if (pmy_pack->pmesh->ncycle % pdrive->ndiag == 0) {
       std::cout << "Iteration stops at niter: " << niter_last
@@ -706,31 +655,14 @@ TaskStatus SC::SolveTransfer(Driver *pdrive, int stage) {
 
   ComputeHK();
 
-  // The form selector is tested HERE rather than inside a ComputeQrad wrapper, because
-  // driving the flux-correction task list needs the Driver, which a physics routine has
-  // no business holding. integral never builds the face flux, so it never pays for it:
-  // hflx is allocated on first use.
-  if (qrad_form == QradForm::integral) {
-    ComputeQradIntegral();
-  } else {
-    FillHflx();
-    // overwrites the faces FillHflx just wrote on PHYSICAL boundaries: averaging across a
-    // boundary ghost folds in its invalid outbound half. Must follow FillHflx.
-    BoundaryHflx();
-    // coarse-fine correction: the coarse face is replaced by the mean of the fine faces,
-    // so both sides of a refinement boundary difference the same number. No-op if
-    // uniform.
-    if (pmy_pack->pmesh->multilevel) {
-      pdrive->ExecuteTaskList(pmy_pack->pmesh, "sc_flxcor", 0);
-    }
-    ComputeQrad();
+  if (qrad_form != QradForm::integral) {
+    BuildFaceFlux(pdrive);
   }
+  ComputeQrad();
 
-  // Bound the gas-energy update this Q is about to drive. Athena-C's ordering
-  // (radtrans_dt between formal_solution and rad_to_hydro, main.c:687-689): the limit
-  // must constrain the very step that applies this Q, so it is taken here rather than in
-  // NewTimeStep, which runs in "stagen" and would set it one cycle late. No-op unless
-  // <nr_radiation>/cfl_qrad > 0.
+  // Bound the gas-energy update this Q is about to drive; taken here rather than in
+  // NewTimeStep so it constrains the very step that applies this Q. No-op if
+  // cfl_qrad = 0.
   LimitDtByQrad();
   return TaskStatus::complete;
 }

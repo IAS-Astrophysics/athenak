@@ -4,35 +4,20 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file sc_sphere.cpp
-//! \brief Homogeneous emitting/absorbing sphere test for the multi-D SC formal solution.
-//!
-//! Classic short-characteristics benchmark (Davis, Stone & Jiang 2012, ApJS 199, 9): a
-//! uniform sphere of radius R with constant absorption sigma_a and constant source S = b
-//! sits in vacuum (sigma_a = S = 0 outside, no incoming radiation). For a point at radius
-//! r < R the exact specific intensity along a ray whose direction makes cosine
-//! mu_r = n.rhat with the outward radial is
+//! \brief Homogeneous emitting/absorbing sphere test for the multi-D SC formal solution
+//! (Davis, Stone & Jiang 2012): a uniform sphere of radius R with constant sigma_a and
+//! source S = b in vacuum. The exact intensity at radius r < R along a ray with
+//! mu_r = n.rhat is
 //!     I(r, mu_r) = b [ 1 - exp(-sigma_a * s) ],
-//!     s = r*mu_r + sqrt(R^2 - r^2 (1 - mu_r^2)),
-//! s being the chord length from the sphere entry point to the cell (all inside, since
-//! the sphere is convex). The moments J = sum_n w_n I_n, H_i = sum_n w_n n_i I_n and
-//! K_ij = sum_n w_n n_i n_j I_n of that intensity are compared to the numeric moments.
-//! Because the analytic moments use the SAME angular quadrature (octant-indexed mu/wmu,
-//! as ComputeJ / ComputeHK), the angle integration cancels and this isolates the
-//! transport + bilinear-interpolation error.
+//!     s = r mu_r + sqrt(R^2 - r^2 (1 - mu_r^2)),
+//! and its moments on the SAME quadrature are compared to the numeric J, H, K, so the
+//! angle integration cancels and the test isolates transport + interpolation error.
 //!
-//! There is no fluid, so the pgen enrolls an opacity and an emission hook that write the
-//! sphere's sigma_a and brad at every solve (see sc_hooks.hpp). The run goes through the
-//! ordinary driver for one cycle, so the solve, the ghost exchange, and the moments are
-//! the production path; with several meshblocks the iteration converges to the
-//! single-block answer. Interior cells (r < r_mask*R) are checked, avoiding the
-//! staircased sphere surface.
-//!
-//! Relative L2 errors of J, H and K (H and K normalised by J, since H vanishes at the
-//! centre) and the L-infty error of J are written to sc_sphere-errs.dat, so the pytest
-//! wrapper runs a ladder of resolutions and checks that the errors CONVERGE (the SC
-//! bilinear sweep is ~1st order here, limited by the sigma_a discontinuity at the
-//! staircased surface) rather than testing a single-resolution threshold. A loose in-pgen
-//! tol on J only guards against a grossly broken (or NaN) sweep.
+//! No fluid: hooks write the sphere's sigma_a and brad each solve. One cycle through the
+//! ordinary driver. Interior cells (r < r_mask R) are checked. Relative L2 errors of J,
+//! H, K (H, K normalised by J) and the L-infty error of J go to sc_sphere-errs.dat; the
+//! pytest wrapper checks convergence over a resolution ladder (~1st order, limited by
+//! the staircased surface).
 
 #include <cmath>
 #include <cstdio>

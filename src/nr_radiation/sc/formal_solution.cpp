@@ -5,28 +5,12 @@
 //========================================================================================
 //! \file formal_solution.cpp
 //! \brief Short-characteristics formal solution (Davis, Stone & Jiang 2012 Eq. 20): one
-//! ordered upwind sweep of every meshblock, for every discrete ray, packaged into Kokkos
-//! kernels by one of two schemes (<nr_radiation>/sweep_kernel). Both produce
-//! bit-identical intensities; they differ only in how the work is split into launches
-//! and teams.
-//!
-//!   plane      one launch per plane along each ray's OWN marching axis, a flat par_for
-//!              over the transverse cells x rays. n launches per meshblock per sweep in
-//!              3D, every one of them the same full size; no tiles, teams or table.
-//!   tiled      the meshblock is cut into tiles of tile_size^3 cells (tile_size = 0: one
-//!              tile). One launch per TILE hyperplane; inside it one team per (tile,
-//!              ray), each team walking its tile in planes along that ray's own marching
-//!              axis with a team barrier between them. Every footpoint of a tile lies in
-//!              the same tile or on an earlier tile-plane, so the launch boundary is the
-//!              cross-tile barrier (Koch-Baker-Alcouffe).
-//!
-//! Both sweep planes taken along the ray's marching axis and differ only in whether that
-//! is done per meshblock by a launch or per tile by a team. plane has no parameters;
-//! tiled trades that for tile_size and team_size, and wins where there are too few
-//! meshblocks to fill the device from one launch.
-//!
-//! Only tiled needs a HyperplaneOrder table, over TILES: the one place a diagonal
-//! l1+l2+l3 ordering survives. A cell plane is walked arithmetically in both.
+//! ordered upwind sweep of every meshblock for every ray, as Kokkos kernels under one of
+//! two schemes (<nr_radiation>/sweep_kernel), bit-identical in their intensities:
+//!   plane   one launch per plane along each ray's marching axis; no parameters.
+//!   tiled   the meshblock cut into tile_size^3 tiles; one launch per tile hyperplane,
+//!           one team per (tile, ray) walking its tile plane by plane. Wins where there
+//!           are too few meshblocks to fill the device from one launch.
 
 #include <algorithm>
 #include <cmath>
@@ -77,11 +61,6 @@ HyperplaneOrder IndexHyperplanes(int n1, int n2, int n3, int ndim) {
 
   Kokkos::realloc(ord.items, nitems);
   Kokkos::deep_copy(ord.items, h_items);
-  const int nstart = hmax + 2;
-  HostArray1D<int> h_start("hyperplane_start_host", nstart);
-  for (int h = 0; h < nstart; ++h) { h_start(h) = ord.start[h]; }
-  Kokkos::realloc(ord.start_dev, nstart);
-  Kokkos::deep_copy(ord.start_dev, h_start);
   return ord;
 }
 
@@ -116,10 +95,10 @@ struct SweepRay {
 //! \fn SweepRay RayGeometry()
 //! \brief Resolve one ray against one cell size.
 //!
-//! The single definition of this arithmetic: both plane kernels call it on the device and
-//! BuildRayGroups calls it twice on the host, so a ray cannot be classified one way when
-//! the groups are built and marched another way when the sweep runs. Templated on the
-//! view type only so that h_view and d_view can share it.
+//! The single definition of this arithmetic: every sweep kernel calls it on the device
+//! and BuildRayGroups on the host, so a ray cannot be classified one way when the groups
+//! are built and marched another way when the sweep runs. Templated on the view type so
+//! that h_view and d_view can share it.
 
 template <class MuView>
 KOKKOS_INLINE_FUNCTION
@@ -236,7 +215,7 @@ void SC::FormalSolutionTiled() {
       const int m = rem / nang_tot_;
       const int angg = rem - m * nang_tot_;
 
-      const int tlin = tpc_(tlo + t);              // packed tile index (tc*nt2+tb)*nt1+ta
+      const int tlin = tpc_(tlo + t);   // packed tile index (tc*nt2+tb)*nt1+ta
       const int tc = tlin / nt12;
       const int tr = tlin - tc * nt12;
       const int tb = tr / nt1;
@@ -252,10 +231,7 @@ void SC::FormalSolutionTiled() {
       const int j0 = (g.sy > 0) ? (js + tb*tx2) : (je - tb*tx2);
       const int k0 = (g.sz > 0) ? (ks + tc*tx3) : (ke - tc*tx3);
 
-      // The tile's extents resolved against this ray's marching axis. Per team, so a tile
-      // that is not cubic costs nothing: a team is one ray and teams never synchronize
-      // with each other, which is why this needs no ray grouping where the plane kernel,
-      // whose launches are shared across rays, needs PlaneSweepRaysByAxis.
+      // the tile's plane count and transverse extents along this ray's marching axis
       int np, nu, nv;
       AxisExtents(g.march_axis, tx1, tx2, tx3, np, nu, nv);
       const int cnt = nu*nv;
@@ -290,59 +266,22 @@ void SC::FormalSolutionTiled() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::FormalSolutionPlane()
-//! \brief Sweep by planes taken along each ray's own marching axis.
+//! \brief Sweep by planes taken along each ray's own marching axis: the stencil reads
+//! intensity only one step upwind along that axis, so plane p depends on plane p-1 alone.
+//! Flat par_for, no tiles, teams, barriers or cell table.
 //!
-//! The 3D gather in GatherSolveSC offsets all four upwind cells one step along inv.axis
-//! and varies only the transverse indices (axis 0: every cell sits at i-sx; axis 1: at
-//! j-sy; axis 2: at k-sz), and the 2D branch does the same about its own crossed face. So
-//! the intensity on plane p of a ray depends only on plane p-1 of that ray and on nothing
-//! within plane p, so a diagonal i+j+k ordering would be stricter than the stencil
-//! requires. For a 192^3 block that is 192 launches of 36864 cells, every one of them
-//! full, instead of the 574 averaging 12335 and ramping from 1 up to 27648 that the
-//! diagonal costs. Flat par_for, no tiles, teams or barriers, and no cell table.
-//!
-//! Two launch loops implement it, and this picks between them by block shape. They sweep
-//! the same planes in the same order and differ only in thread assignment, so they
-//! are bit-identical to each other and to tiled:
-//!
-//!   PlaneSweepAllRays     one launch per plane, every ray in it, sized to axis 0's
-//!                         transverse face. Cubic blocks only: sizing one launch for
-//!                         every ray costs nothing when the faces match, and would waste
-//!                         longest/shortest of the threads when they do not.
+//! Two launch loops, bit-identical, chosen by block shape (Mesh::equal_block_nx):
+//!   PlaneSweepAllRays     one launch per plane, every ray, sized to axis 0's transverse
+//!                         face. Cubic blocks only: it carries no per-thread range guard.
 //!   PlaneSweepRaysByAxis  rays grouped by marching axis, one launch per (axis, plane),
-//!                         sized to that axis's own extents, so no thread exits early.
-//!                         Costs nx1+nx2+nx3 launches instead of max(nx1,nx2,nx3), and a
-//!                         ray-index load per thread.
+//!                         sized to that axis's extents; nx1+nx2+nx3 launches.
 //!
-//! The test is Mesh::equal_block_nx, exact equality of the active cell counts. Exact is
-//! load-bearing here and not merely a convention: PlaneSweepAllRays sizes every launch
-//! from axis 0's extents and carries no per-thread range guard, so a block that was only
-//! approximately cubic would index past the block rather than run slowly.
-//!
-//! On a cubic block every transverse face is the same size, so the all-rays loop wastes
-//! nothing and the grouping can only add overhead -- that much is geometry, not tuning,
-//! and it is why the test is exact equality of the cell counts rather than a tuned
-//! threshold. Off cubic the waste grows without bound (longest/shortest extent) while the
-//! grouping's overhead does not, so the grouped loop takes over. Measured on 36
-//! configurations across V100 and A100 MIG; the ungrouped loop alone falls to 0.46x on
-//! elongated blocks on the A100.
-//!
-//! PRECONDITION: a cell may read the INTENSITY only at a strictly smaller index along its
-//! ray's marching axis. chi and srad are built before the sweep and are read-only during
-//! it, so the stencil may read those anywhere, as it already does downwind. The present
-//! parabolic scheme satisfies this -- all four of its intensity reads sit one step upwind
-//! along the marching axis. What would violate it is an intensity read at the SAME index
-//! along that axis: transverse coupling within a plane, such as a limiter or a diffusion
-//! term applied to the intensity being computed, which would be a data race rather than a
-//! merely different answer. Widening the transverse stencil on the upwind face is
-//! safe here, every cell still being one step upwind, but would break tiled's i+j+k
-//! ordering of TILES. The verification suite pins the two kernels against each other bit
-//! for bit.
+//! PRECONDITION: a cell may read the INTENSITY only at a strictly smaller index along
+//! its ray's marching axis (chi and srad are read-only during the sweep and may be read
+//! anywhere). A read at the same index -- transverse coupling within a plane -- would be
+//! a data race.
 
 void SC::FormalSolutionPlane() {
-  // the same flag BuildIndices tested when it decided whether to build the ray grouping
-  // that PlaneSweepRaysByAxis reads. Mesh sets it once at construction and never changes
-  // it, so the two cannot disagree and leave the grouped loop with no groups to sweep.
   if (pmy_pack->pmesh->equal_block_nx) {
     PlaneSweepAllRays();
   } else {
@@ -376,10 +315,7 @@ void SC::PlaneSweepAllRays() {
 
   // The block is cubic in cells, so every axis carries the same number of planes and
   // every transverse face the same number of cells: no maximum to take over the three
-  // axes, and no ray runs out of planes before the others. Axis 0's extents are also
-  // right in 2D and 1D without special-casing ndim: an absent dimension already has
-  // nx = 1 (mesh.cpp rejects nx < 1, and nx2 == 1 with nx3 > 1), so 2D gives nx2*1 and
-  // 1D gives 1*1, which are the face sizes a ray actually needs there.
+  // axes, and no ray runs out of planes before the others.
   const int nplanes = nx1;
   const int ntrans = nx2*nx3;
 
@@ -390,7 +326,7 @@ void SC::PlaneSweepAllRays() {
                                      mbsize.d_view(m).dx2, mbsize.d_view(m).dx3);
       // cubic, so the transverse fast extent is nx2 whichever axis the ray marches along
       const int u = t % nx2, v = t / nx2;
-      // Inlined on purpose: as a helper this costs 10 registers and up to 26% on V100
+      // inlined on purpose: as a helper this costs registers and measurable throughput
       int i, j, k;
       if (g.march_axis == 0) {
         i = (g.sx > 0) ? (is + p) : (ie - p);
@@ -479,18 +415,10 @@ void SC::PlaneSweepRaysByAxis() {
 
 //----------------------------------------------------------------------------------------
 //! \fn void SC::BuildRayGroups()
-//! \brief Sort the rays by the grid axis they march along (host, once).
-//!
-//! Group g holds ray_by_axis[ray_axis_start[g] .. ray_axis_start[g+1]) and marches along
-//! axis g. Classification uses the same MarchAxis and ComputeSCAngleInv the kernel calls,
-//! so it cannot disagree with the kernel, ties included.
-//!
-//! PlaneSweepRaysByAxis takes the marching axis from the group while still computing inv
-//! per thread for the gather, so one grouping is only valid if every meshblock would
-//! classify a ray the same way. It does: the axis follows the RATIOS dx1:dx2:dx3, and
-//! uniform refinement halves all three together. That is checked below, not assumed,
-//! because a mesh that broke it would desync the march axis from the stencil offsets and
-//! turn the sweep into a silent data race.
+//! \brief Sort the rays by the grid axis they march along (host, once). Group g holds
+//! ray_by_axis[ray_axis_start[g] .. ray_axis_start[g+1]). Uses the same MarchAxis as the
+//! kernel, ties included. One grouping serves every meshblock because the axis follows
+//! the ratios dx1:dx2:dx3, which uniform refinement preserves -- checked below.
 
 void SC::BuildRayGroups() {
   const int ndim = pang->ndim;

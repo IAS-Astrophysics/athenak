@@ -183,8 +183,8 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   // Not added to the hydro/mhd task-list guards above: unlike the GR <radiation> module
   // it does not replace the fluid task list but inserts its tasks into the "stagen" list
   // the fluid assembled (SC::AssembleSCTasks), so a fluid-only run is unaffected. Its own
-  // "sc_bvals" list (the per-sweep ghost exchange) is created here because the task-list
-  // map is passed to the assemblers by value.
+  // lists (the ghost exchanges and the face-flux correction) are created here because
+  // the task-list map is passed to the assemblers by value.
   if (pin->DoesBlockExist("nr_radiation")) {
     pnrrad = new nr_radiation::SC(this, pin);
     nphysics++;

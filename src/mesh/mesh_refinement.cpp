@@ -114,9 +114,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
   }
   if (pm->pmb_pack->pnrrad != nullptr) {
-    // ir, plus srad: the source is overwritten by the next solve in LTE, but it is
-    // packed so that a scattering iteration resumes from its exact iterate after a
-    // remesh
+    // ir + srad
     ncc_tosend += pm->pmb_pack->pnrrad->nang_tot + 1;
   }
   if (pm->pmb_pack->pz4c != nullptr) {

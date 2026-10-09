@@ -102,8 +102,8 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Gravity (153)
   "grav_phi",
 
-  // SC (short-characteristics) radiation (154-159). Moments in the Σw=1 quadrature
-  // normalization (Er=J, F=H, P=K in code units; no 4π). In 2D, mu_z is unsigned, so
+  // SC (short-characteristics) radiation (154-159). Moments in the Sum(w)=1 quadrature
+  // normalization (Er=J, F=H, P=K in code units; no 4 pi). In 2D, mu_z is unsigned, so
   // H3/K13/K23 are not meaningful. sc_rad_src = the source S the sweep reads (= brad in
   // LTE); sc_rad_sigma = the per-cell absorption coefficient sigma_a.
   "sc_rad", "sc_rad_J", "sc_rad_H", "sc_rad_K", "sc_rad_src", "sc_rad_sigma"
