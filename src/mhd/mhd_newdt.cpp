@@ -17,6 +17,7 @@
 #include "driver/driver.hpp"
 #include "eos/eos.hpp"
 #include "mhd.hpp"
+#include "coordinates/adm.hpp"
 #include "diffusion/conduction.hpp"
 #include "srcterms/srcterms.hpp"
 
@@ -47,6 +48,8 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
   auto &is_special_relativistic_ = pmy_pack->pcoord->is_special_relativistic;
   auto &is_general_relativistic_ = pmy_pack->pcoord->is_general_relativistic;
   auto &is_dynamical_relativistic_ = pmy_pack->pcoord->is_dynamical_relativistic;
+  adm::ADM::ADM_vars adm_vars;
+  if (pmy_pack->padm != nullptr) adm_vars = pmy_pack->padm->adm;
   const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
   const int nkji = nx3*nx2*nx1;
   const int nji  = nx2*nx1;
@@ -83,7 +86,36 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
       Real max_dv1 = 0.0, max_dv2 = 0.0, max_dv3 = 0.0;
 
       // timestep in GR MHD
-      if (is_general_relativistic_ || is_dynamical_relativistic_) {
+      if (is_dynamical_relativistic_) {
+        Real speeds[3] = {0.0,0.0,0.0};
+        for (int d=0; d<3; ++d) {
+          for (int side=0; side<2; ++side) {
+            int ni=i+(d==0 ? (side==0 ? -1 : 1) : 0);
+            int nj=j+(d==1 ? (side==0 ? -1 : 1) : 0);
+            int nk=k+(d==2 ? (side==0 ? -1 : 1) : 0);
+            Real g[6];
+            int aidx[6] = {0,0,0,1,1,2};
+            int bidx[6] = {0,1,2,1,2,2};
+            for (int n=0; n<6; ++n) {
+              g[n] = 0.5*(adm_vars.g_dd(m,aidx[n],bidx[n],k,j,i)+
+                            adm_vars.g_dd(m,aidx[n],bidx[n],nk,nj,ni));
+            }
+            Real det = adm::SpatialDet(g[0],g[1],g[2],g[3],g[4],g[5]);
+            Real invdiag = d==0 ? (g[3]*g[5]-g[4]*g[4])/det :
+                           d==1 ? (g[0]*g[5]-g[2]*g[2])/det :
+                                  (g[0]*g[3]-g[1]*g[1])/det;
+            Real alpha = 0.5*(adm_vars.alpha(m,k,j,i)+adm_vars.alpha(m,nk,nj,ni));
+            Real beta = 0.5*(adm_vars.beta_u(m,d,k,j,i)+adm_vars.beta_u(m,d,nk,nj,ni));
+            if (!(det > 0.0 && invdiag > 0.0 && alpha > 0.0 &&
+                  isfinite(det) && isfinite(invdiag) &&
+                  isfinite(alpha) && isfinite(beta))) {
+              Kokkos::abort("Invalid ADM geometry in coordinate light-cone CFL");
+            }
+            speeds[d] = fmax(speeds[d],fabs(beta)+alpha*sqrt(invdiag));
+          }
+        }
+        max_dv1 = speeds[0]; max_dv2 = speeds[1]; max_dv3 = speeds[2];
+      } else if (is_general_relativistic_) {
         max_dv1 = 1.0;
         max_dv2 = 1.0;
         max_dv3 = 1.0;

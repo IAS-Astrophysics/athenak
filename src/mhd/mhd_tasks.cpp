@@ -515,7 +515,10 @@ TaskStatus MHD::RecvB_Shr(Driver *pdrive, int stage) {
 
 TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
-  if (pmy_pack->pmesh->strictly_periodic) return TaskStatus::complete;
+  if (pmy_pack->pmesh->strictly_periodic) {
+    if (pmy_pack->pmesh->pzoom != nullptr) pmy_pack->pmesh->pzoom->ApplyMask();
+    return TaskStatus::complete;
+  }
 
   // physical BCs
   pbval_u->HydroBCs((pmy_pack), (pbval_u->u_in), u0);

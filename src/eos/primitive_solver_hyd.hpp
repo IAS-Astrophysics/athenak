@@ -250,6 +250,16 @@ class PrimitiveSolverHydro {
                   DvceArray5D<Real> &cons,
                   const int il, const int iu, const int jl, const int ju,
                   const int kl, const int ku) {
+    PrimToCons(prim, bcc, cons, il, iu, jl, ju, kl, ku,
+               KOKKOS_LAMBDA(int, int, int, int) { return true; });
+  }
+
+  template<typename CellFilter>
+  void PrimToCons(DvceArray5D<Real> &prim, DvceArray5D<Real> &bcc,
+                  DvceArray5D<Real> &cons,
+                  const int il, const int iu, const int jl, const int ju,
+                  const int kl, const int ku, CellFilter select_cell,
+                  const int ml=0, const int mu=-1) {
     //int &is = indcs.is, &js = indcs.js, &ks = indcs.ks;
     //auto &size = pmy_pack->pmb->mb_size;
     //auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
@@ -265,8 +275,10 @@ class PrimitiveSolverHydro {
     Real mb = eos_.GetBaryonMass();
 
 
-    par_for("pshyd_prim2cons", DevExeSpace(), 0, (nmb-1), kl, ku, jl, ju, il, iu,
+    par_for("pshyd_prim2cons", DevExeSpace(), ml, mu<0 ? nmb-1 : mu,
+            kl, ku, jl, ju, il, iu,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      if (!select_cell(m, k, j, i)) return;
       // Extract metric at a single point
       Real g3d[NSPMETRIC];
       g3d[S11] = adm.g_dd(m, 0, 0, k, j, i);

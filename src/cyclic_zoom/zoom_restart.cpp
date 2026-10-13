@@ -24,6 +24,7 @@ IOWrapperSizeT CyclicZoom::RestartFileSize() {
 
   // Size of zoom state parameters
   res_size += sizeof(ZoomState);
+  if (zstate.zone == 0) return res_size;
 
   // Size of zoom mesh metadata
   res_size += sizeof(int);                              // nzmb_total
@@ -31,7 +32,8 @@ IOWrapperSizeT CyclicZoom::RestartFileSize() {
   res_size += pzmesh->nzmb_total * sizeof(LogicalLocation);  // lloc_eachzmb
 
   // Size of ZMB data
-  res_size += pzmesh->nzmb_total * pzdata->zmb_data_cnt * sizeof(Real);
+  res_size += static_cast<IOWrapperSizeT>(pzmesh->nzmb_total) *
+              pzdata->zmb_data_cnt * sizeof(Real);
 
   return res_size;
 }
@@ -94,10 +96,11 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
       int zm = pzmesh->lid_eachzmb[gzm];
 
       // Calculate offset in file for this ZMB based on its global index
-      IOWrapperSizeT file_offset = base_offset + gzm * zmb_size * sizeof(Real);
+      IOWrapperSizeT file_offset = base_offset +
+                                  static_cast<IOWrapperSizeT>(gzm)*zmb_size*sizeof(Real);
 
       // Calculate offset in local zdata array
-      size_t data_offset = zm * zmb_size;
+      size_t data_offset = static_cast<size_t>(zm) * zmb_size;
       if (resfile.Write_any_type_at(pzdata->zdata.data() + data_offset,
                                     zmb_size, file_offset, "Real") != zmb_size) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -140,6 +143,16 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   std::memcpy(&(zstate), &(zrdata[0]), sizeof(ZoomState));
   delete[] zrdata;
 
+  if (zstate.format != 0x435A424248000001ULL || zstate.last_cycle < 0 ||
+      zstate.last_cycle > pmesh->ncycle || zstate.zone < 0 ||
+      zstate.zone >= zamr.nlevels ||
+      zstate.last_zone < 0 || zstate.last_zone >= zamr.nlevels ||
+      (zstate.direction != 1 && zstate.direction != -1) || zstate.id < 0 ||
+      (zstate.zone == 0 && zstate.direction != 1) ||
+      (zstate.zone == zamr.nlevels-1 && zstate.direction != -1) ||
+      !std::isfinite(zstate.next_time)) {
+    Kokkos::abort("Invalid cyclic zoom state in restart");
+  }
   // Update CyclicZoom runtime parameters from restart data
   UpdateAMRFromRestart();
 
@@ -164,6 +177,18 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   MPI_Bcast(pzmesh->nzmb_eachlevel, pzmesh->nlevels, MPI_INT, 0, MPI_COMM_WORLD);
 #endif
 
+  int count = 0;
+  for (int z=0; z<pzmesh->nlevels; ++z) {
+    if (pzmesh->nzmb_eachlevel[z] < 0 ||
+        pzmesh->nzmb_eachlevel[z] > pzmesh->nzmb_max_perhost*global_variable::nranks) {
+      Kokkos::abort("Invalid zoom block count in restart");
+    }
+    count += pzmesh->nzmb_eachlevel[z];
+  }
+  if (nzmb_total_read != count || count <= 0 ||
+      count > pzmesh->nzmb_max_perhost*global_variable::nranks) {
+    Kokkos::abort("Zoom restart exceeds configured storage or has inconsistent counts");
+  }
   // Resize arrays and read lloc data
   pzmesh->nzmb_total = nzmb_total_read;
   // Rebuild derived mesh structure arrays
@@ -195,10 +220,11 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
       int zm = pzmesh->lid_eachzmb[gzm];
 
       // Calculate offset in file for this ZMB based on its global index
-      IOWrapperSizeT file_offset = base_offset + gzm * zmb_size * sizeof(Real);
+      IOWrapperSizeT file_offset = base_offset +
+                                  static_cast<IOWrapperSizeT>(gzm)*zmb_size*sizeof(Real);
 
       // Calculate offset in local zdata array
-      size_t data_offset = zm * zmb_size;
+      size_t data_offset = static_cast<size_t>(zm) * zmb_size;
 
       // Read this ZMB's data from file
       resfile.Read_Reals_at(pzdata->zdata.data() + data_offset, zmb_size, file_offset);

@@ -430,6 +430,10 @@ void ZoomData::RedistZMBs(int nlmb, int lmbs,
                         dst_zm * cnt_per_zmb :
                         (*dst_lids)[gzm] * cnt_per_zmb;
 
+    if ((src_rank_val == my_rank && offset_src+cnt_per_zmb > src_buf.extent(0)) ||
+        (dst_rank_val == my_rank && offset_dst+cnt_per_zmb > dst_buf.extent(0))) {
+      Kokkos::abort("Zoom redistribution exceeds allocated host storage");
+    }
     // Local copy (same rank, but may need reindexing between dense/logical)
     if (src_rank_val == my_rank && dst_rank_val == my_rank) {
       Kokkos::deep_copy(

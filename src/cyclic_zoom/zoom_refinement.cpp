@@ -52,8 +52,8 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
                 << std::endl;
     }
   }
+  AdjustExcisionForZoom();
   if (zstate.zone > 0) {
-    AdjustExcisionForZoom();
     LoadZoomData(zstate.zone-1);
     MaskVariables(zstate.zone-1, zregion);
     if (verbose && global_variable::my_rank == 0) {

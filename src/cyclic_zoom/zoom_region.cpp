@@ -12,6 +12,8 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -96,6 +98,7 @@ void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
   // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
   if (pzmesh->nzmb_eachlevel[zone] == 0) {
     pzdata->ApplyUniformFill(zreg);
+    if (pmesh->pmb_pack->pdyngr != nullptr) pmesh->pmb_pack->pdyngr->PrimToConMask(zreg);
     return;
   }
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
@@ -138,6 +141,10 @@ void CyclicZoom::AdjustExcisionForZoom() {
   // update excision masks if necessary
   auto pcoord = pmesh->pmb_pack->pcoord;
   auto &coord = pcoord->coord_data;
+  if (pmesh->pmb_pack->pdyngr != nullptr) {
+    if (coord.bh_excise) pcoord->UpdateExcisionMasks();
+    return;  // saved primitive mask handles the artificial zoom boundary
+  }
   if (coord.bh_excise) {
     coord.flux_excise_r = std::max(coord.flux_excise_r, zregion.exc.r);
     coord.rexcise = std::max(coord.rexcise, zregion.exc.r);

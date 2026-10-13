@@ -26,6 +26,8 @@
 #include "dyn_radiation/dyn_radiation.hpp"
 #include "particles/particles.hpp"
 #include "driver.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
+#include "coordinates/adm.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -312,8 +314,20 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
 //  outputting ICs, and computing initial time step
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool res_flag) {
+  if (res_flag && pmesh->pzoom != nullptr && pmesh->pmb_pack->pdyngr != nullptr) {
+    // Zoom state is now loaded: enforce finest-level horizon checks on zone-zero
+    // restarts, while allowing the intentionally coarsened intermediate levels.
+    pmesh->pmb_pack->padm->SetADMVariables(pmesh->pmb_pack);
+  }
   //---- Step 1.  Set conserved variables in ghost zones for all physics
   InitBoundaryValuesAndPrimitives(pmesh);
+  // Scheduled outputs are written before AMR. Complete a pending checkpoint-cycle
+  // event before advancing the restarted state, while preserving post-AMR checkpoints.
+  if (res_flag && pmesh->pzoom != nullptr &&
+      pmesh->pzoom->zstate.last_cycle < pmesh->ncycle &&
+      pmesh->time >= pmesh->pzoom->zstate.next_time) {
+    pmesh->pmr->AdaptiveMeshRefinement(this, pin);
+  }
 
   //---- Step 2.  Compute time step (if problem involves time evolution)
   hydro::Hydro *phydro = pmesh->pmb_pack->phydro;

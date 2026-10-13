@@ -14,6 +14,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::UpdateFluxes()
@@ -24,7 +25,11 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   (void) pmhd->InitRecv(pdriver, 1);  // stage = 1
   (void) pmhd->CopyCons(pdriver, 1);  // stage = 1: copy u0 to u1
-  (void) pmhd->Fluxes(pdriver, 1);
+  if (pmesh->pmb_pack->pdyngr != nullptr) {
+    (void) pmesh->pmb_pack->pdyngr->RefreshFluxes(pdriver, 1);
+  } else {
+    (void) pmhd->Fluxes(pdriver, 1);
+  }
   // (void) pmhd->RestrictU(this, 0);
   // TODO(@mhguo): may only send/recv electric fields if possible
   (void) pmhd->SendFlux(pdriver, 1);  // stage = 1
@@ -32,7 +37,7 @@ void CyclicZoom::UpdateFluxes(Driver *pdriver) {
   (void) pmhd->SendU(pdriver, 1);
   (void) pmhd->RecvU(pdriver, 1);
   (void) pmhd->CornerE(pdriver, 1);
-  (void) pmhd->EField(pdriver, 1);
+  (void) pmhd->EFieldSrc(pdriver, 1);
   (void) pmhd->SendE(pdriver, 1);
   (void) pmhd->RecvE(pdriver, 1);
   (void) pmhd->SendB(pdriver, 1);

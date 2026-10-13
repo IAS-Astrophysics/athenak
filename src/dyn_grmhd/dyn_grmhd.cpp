@@ -22,6 +22,8 @@
 #include "eos/eos.hpp"
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
@@ -323,6 +325,66 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
 }
 
 //----------------------------------------------------------------------------------------
+//! \brief Convert only masked primitives, retaining all unmasked evolved conserved data.
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConMask(const ZoomRegion &region,
+    int only_m, int ox1, int ox2, int ox3) {
+  auto indcs = pmy_pack->pmesh->mb_indcs;
+  auto size = pmy_pack->pmb->mb_size;
+  auto b = pmy_pack->pmhd->b0;
+  auto bcc = pmy_pack->pmhd->bcc0;
+  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
+                indcs.is+(ox1<0 ? 0 : ox1*indcs.cnx1),
+                ox1<0 ? indcs.ie : indcs.is+(ox1+1)*indcs.cnx1-1,
+                indcs.js+(ox2<0 ? 0 : ox2*indcs.cnx2),
+                ox2<0 ? indcs.je : indcs.js+(ox2+1)*indcs.cnx2-1,
+                indcs.ks+(ox3<0 ? 0 : ox3*indcs.cnx3),
+                ox3<0 ? indcs.ke : indcs.ks+(ox3+1)*indcs.cnx3-1,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      auto s = size.d_view(m);
+      Real x = CellCenterX(i-indcs.is, indcs.nx1, s.x1min, s.x1max);
+      Real y = CellCenterX(j-indcs.js, indcs.nx2, s.x2min, s.x2max);
+      Real z = CellCenterX(k-indcs.ks, indcs.nx3, s.x3min, s.x3max);
+      if (!region.IsInRegion(x,y,z)) return false;
+      bcc(m,IBX,k,j,i) = 0.5*(b.x1f(m,k,j,i)+b.x1f(m,k,j,i+1));
+      bcc(m,IBY,k,j,i) = 0.5*(b.x2f(m,k,j,i)+b.x2f(m,k,j+1,i));
+      bcc(m,IBZ,k,j,i) = 0.5*(b.x3f(m,k,j,i)+b.x3f(m,k+1,j,i));
+      return true;
+    }, only_m<0 ? 0 : only_m, only_m);
+}
+
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConBoundary() {
+  auto ind = pmy_pack->pmesh->mb_indcs;
+  auto size = pmy_pack->pmb->mb_size;
+  auto bounds = pmy_pack->pmesh->mesh_size;
+  auto b = pmy_pack->pmhd->b0;
+  auto bcc = pmy_pack->pmhd->bcc0;
+  int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
+  eos.PrimToCons(pmy_pack->pmhd->w0, pmy_pack->pmhd->bcc0, pmy_pack->pmhd->u0,
+                0,n1-1,0,n2-1,0,n3-1,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      auto s=size.d_view(m);
+      Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
+      Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
+      Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
+      if (!(x<bounds.x1min || x>bounds.x1max || y<bounds.x2min || y>bounds.x2max ||
+            z<bounds.x3min || z>bounds.x3max)) return false;
+      bcc(m,IBX,k,j,i)=0.5*(b.x1f(m,k,j,i)+b.x1f(m,k,j,i+1));
+      bcc(m,IBY,k,j,i)=0.5*(b.x2f(m,k,j,i)+b.x2f(m,k,j+1,i));
+      bcc(m,IBZ,k,j,i)=0.5*(b.x3f(m,k,j,i)+b.x3f(m,k+1,j,i));
+      return true;
+    });
+}
+
+template<class EOSPolicy, class ErrorPolicy>
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::RefreshFluxes(Driver *d, int stage) {
+  if (rsolver_method == DynGRMHD_RSolver::hlle_dyngr) {
+    return CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(d, stage);
+  }
+  return CalcFluxes<DynGRMHD_RSolver::llf_dyngr>(d, stage);
+}
+
 //! \fn void DynGRMHDPS::ConToPrimBC(int is, int ie, int js, int je, int ks, int ke)
 //  \brief
 template<class EOSPolicy, class ErrorPolicy>

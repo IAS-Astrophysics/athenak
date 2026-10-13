@@ -85,7 +85,6 @@ The read_*(...) functions return a filedata dictionary-like object with
 
 import numpy as np
 import os
-import h5py
 import glob
 
 
@@ -1728,6 +1727,8 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
       locsize_bytes - int (default=8, options=4,8)
           number of bytes to use for output location data
     """
+
+    import h5py  # Binary readers require only NumPy; HDF5 is optional.
 
     if varsize_bytes not in [4, 8]:
         raise ValueError(f"varsizebytes must be 4 or 8, not {varsize_bytes}")

@@ -19,6 +19,7 @@
 #include "eos/ideal_c2p_mhd.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation/radiation.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
@@ -40,7 +41,9 @@ void ZoomData::StoreData(int zm, int m) {
     auto w_ = pmbp->pmhd->w0;
     StoreCCData(zm, u0, coarse_u0, m, u_);
     StoreCCData(zm, w0, coarse_w0, m, w_);
-    StoreCoarsePrim(zm, coarse_w0, m, w_);
+    // Valencia stores pressure and densitized energy with a different convention.
+    // Restrict its primitives directly, then convert with the actual coarse ADM metric.
+    if (pmbp->pdyngr == nullptr) StoreCoarsePrim(zm, coarse_w0, m, w_);
     auto efld = pmbp->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
   }
@@ -533,6 +536,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
+  bool is_dyn = pmbp->pdyngr != nullptr;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   bool is_sr = pmbp->pcoord->is_special_relativistic;
   auto &coord = pmbp->pcoord->coord_data;
@@ -574,6 +578,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
         w_(m,IVY,k,j,i) = 0.0;
         w_(m,IVZ,k,j,i) = 0.0;
       }
+      if (is_dyn) return;  // Valencia conversion below uses the actual ADM geometry.
       // Load single state of primitive variables
       MHDPrim1D w;
       w.d  = w_(m,IDN,k,j,i);
@@ -611,6 +616,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
       }
     }
   });
+  if (is_dyn) pmbp->pdyngr->PrimToConMask(zregion, m);
   if (pzoom->verbose) {
     std::cout << " Rank " << global_variable::my_rank
               << " applied same-level prims to local mb m=" << m
@@ -642,6 +648,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto cu0 = coarse_u0, cw0 = coarse_w0;
   auto eos = pmbp->pmhd->peos->eos_data;
   Real gamma = eos.gamma;
+  bool is_dyn = pmbp->pdyngr != nullptr;
   bool is_gr = pmbp->pcoord->is_general_relativistic;
   bool is_sr = pmbp->pcoord->is_special_relativistic;
   bool flat = true;
@@ -691,6 +698,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
         w_(m,IVY,k,j,i) = 0.0;
         w_(m,IVZ,k,j,i) = 0.0;
       }
+      if (is_dyn) return;  // Convert only this restored octant, after copying primitives.
 
       // Load single state of primitive variables
       MHDPrim1D w;
@@ -730,6 +738,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
       }
     }
   });
+  if (is_dyn) pmbp->pdyngr->PrimToConMask(zregion, m, ox1, ox2, ox3);
   return;
 }
 
@@ -739,6 +748,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
 
 void ZoomData::ApplyUniformFill(const ZoomRegion &zregion) {
   auto pmbp = pzoom->pmesh->pmb_pack;
+  bool is_dyn = pmbp->pdyngr != nullptr;
   auto pmesh = pzoom->pmesh;
   int nmb = pmbp->nmb_thispack;
   Real d0 = d_zoom;
@@ -754,7 +764,7 @@ void ZoomData::ApplyUniformFill(const ZoomRegion &zregion) {
     auto peos = pmbp->phydro->peos;
     const bool is_ideal = peos->eos_data.is_ideal;
     Real gm1 = peos->eos_data.gamma - 1.0;
-    Real e_int = (is_ideal) ? (p0 / gm1) : 0.0;
+    Real e_int = is_dyn ? p0 : ((is_ideal) ? (p0 / gm1) : 0.0);
     int nhyd = pmbp->phydro->nhydro;
     int nscal = pmbp->phydro->nscalars;
     bool is_gr = pmbp->pcoord->is_general_relativistic;
@@ -839,7 +849,7 @@ void ZoomData::ApplyUniformFill(const ZoomRegion &zregion) {
     auto peos = pmbp->pmhd->peos;
     const bool is_ideal = peos->eos_data.is_ideal;
     Real gm1 = peos->eos_data.gamma - 1.0;
-    Real e_int = (is_ideal) ? (p0 / gm1) : 0.0;
+    Real e_int = is_dyn ? p0 : ((is_ideal) ? (p0 / gm1) : 0.0);
     int nmhd = pmbp->pmhd->nmhd;
     int nscal = pmbp->pmhd->nscalars;
     bool is_gr = pmbp->pcoord->is_general_relativistic;
@@ -884,6 +894,8 @@ void ZoomData::ApplyUniformFill(const ZoomRegion &zregion) {
         for (int n=nmhd; n<(nmhd+nscal); ++n) {
           w_(m,n,k,j,i) = 0.0;
         }
+
+        if (is_dyn) return;  // converted with the Valencia EOS after masking
 
         Real bx = 0.5*(b.x1f(m,k,j,i) + b.x1f(m,k,j,i+1));
         Real by = 0.5*(b.x2f(m,k,j,i) + b.x2f(m,k,j+1,i));

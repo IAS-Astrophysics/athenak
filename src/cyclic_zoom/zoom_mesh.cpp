@@ -28,6 +28,9 @@ ZoomMesh::ZoomMesh(CyclicZoom *pz, ParameterInput *pin) :
                      pzoom->pmesh->nmb_maxperrank);
   nzmb_max_perhost = pin->GetOrAddInteger("cyclic_zoom","max_nzmb_per_host",
                      pzoom->pmesh->nmb_maxperrank);
+  if (nzmb_max_perdvce < 1 || nzmb_max_perhost < 1) {
+    Kokkos::abort("Zoom device and host storage capacities must be positive");
+  }
   if (nzmb_max_perdvce > pzoom->pmesh->nmb_maxperrank) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "max_nzmb_per_dvce exceeds max_nmb_per_rank: "
@@ -103,6 +106,9 @@ void ZoomMesh::UpdateMeshStructure() {
     std::exit(EXIT_FAILURE);
   }
   nzmb_eachlevel[pzoom->zstate.zone-1] = nzmb_thislevel;
+  // A new outward sweep replaces the old snapshots from this level onward.
+  // Do not serialize stale counts for snapshots no longer in nzmb_total.
+  for (int zone=pzoom->zstate.zone; zone<nlevels; ++zone) nzmb_eachlevel[zone] = 0;
   gzms_eachlevel[pzoom->zstate.zone] = nzmb_total;
   // resize arrays to hold all zoom MeshBlocks across all levels/ranks
   rank_eachzmb.resize(nzmb_total);

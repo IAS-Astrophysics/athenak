@@ -102,6 +102,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
 // destructor
 
 MeshRefinement::~MeshRefinement() {
+  delete pmrc;
   if (pmy_mesh->adaptive) { // deallocate arrays for AMR
     delete [] nref_eachrank;
     delete [] nderef_eachrank;
@@ -125,6 +126,15 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
 
   // Refine/derefine mesh and evolved data, set boundary conditions/timestep on new mesh
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
+    if (pmy_mesh->pzoom != nullptr && pmy_mesh->pmb_pack->pdyngr != nullptr &&
+        pmy_mesh->pzoom->zamr.zooming_out) {
+      // Use the EMF of the current state before/after coarsening. Last-stage
+      // scratch EMFs are stale and are not present in a scheduled checkpoint.
+      // Synchronize/prolong ghost data first; cached primitives at AMR corners
+      // otherwise depend on whether this state came from a restart.
+      pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
+      pmy_mesh->pzoom->UpdateFluxes(pdriver);
+    }
     if (pmy_mesh->pzoom != nullptr) pmy_mesh->pzoom->StoreZoomRegion();
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
@@ -139,7 +149,13 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
         if (pmbp->pz4c != nullptr) {
           (void) pmbp->pz4c->ConvertZ4cToADM(pdriver, 0);
         }
-        (void) pmbp->pdyngr->ConToPrim(pdriver, 0);
+        if (pmy_mesh->pzoom != nullptr) {
+          // Repair changes interior CT faces. Rebuild the boundary state from
+          // those final faces before the next flux solve, including AMR corners.
+          pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
+        } else {
+          (void) pmbp->pdyngr->ConToPrim(pdriver, 0);
+        }
       }
     }
     if (pmbp->phydro != nullptr) {
@@ -160,6 +176,10 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
 
     nmb_created += nnew;
     nmb_deleted += ndel;
+  } else if (pmy_mesh->pzoom != nullptr &&
+             (pmy_mesh->pzoom->zamr.zooming_in || pmy_mesh->pzoom->zamr.zooming_out)) {
+    Kokkos::abort("Cyclic zoom event changed no mesh blocks: "
+                  "check initial hierarchy and region coverage");
   }
   return;
 }
@@ -669,6 +689,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     // With dynGRMHD, recalculate ADM variables
     if ((pz4c == nullptr) && (padm != nullptr)) {
       padm->SetADMVariables(pm->pmb_pack);
+      if (pm->pmb_pack->pcoord->coord_data.bh_excise) {
+        pm->pmb_pack->pcoord->UpdateExcisionMasks();
+      }
     }
     // With radiation, compute tetrads and associated mesh arrays
     if (prad != nullptr) {

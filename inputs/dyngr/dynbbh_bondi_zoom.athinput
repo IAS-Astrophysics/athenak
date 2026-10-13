@@ -1,0 +1,124 @@
+# Infrastructure smoke case, G=M_total=c=1. Not a resolved production model.
+<job>
+basename = binary_bondi_zoom
+<mesh>
+nghost = 4
+nx1 = 16
+nx2 = 16
+nx3 = 16
+x1min = -256
+x1max = 256
+x2min = -256
+x2max = 256
+x3min = -256
+x3max = 256
+ix1_bc = user
+ox1_bc = user
+ix2_bc = user
+ox2_bc = user
+ix3_bc = user
+ox3_bc = user
+<meshblock>
+nx1 = 4
+nx2 = 4
+nx3 = 4
+<mesh_refinement>
+refinement = adaptive
+num_levels = 9
+max_nmb_per_rank = 2048
+ncycle_check = 1
+refinement_interval = 1
+<refined_region1>
+level = 8
+x1min = 31.75
+x1max = 32.25
+x2min = -0.25
+x2max = 0.25
+x3min = -0.25
+x3max = 0.25
+<refined_region2>
+level = 8
+x1min = -32.25
+x1max = -31.75
+x2min = -0.25
+x2max = 0.25
+x3min = -0.25
+x3max = 0.25
+<amr_criterion1>
+method = cyclic_zoom
+nlevels = 9
+ncenters = 2
+x1c = 32
+x1c2 = -32
+r_0 = 2
+f_ref = 2
+f_exc = 0
+trun_fac = 0
+trun_fac_0 = 0.02
+trun_pow = 0
+<cyclic_zoom>
+verbose = false
+max_nzmb_per_dvce = 512
+max_nzmb_per_host = 2048
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.2
+nlim = 20
+tlim = 1e6
+ndiag = 1
+<coord>
+general_rel = true
+a = 0
+excise = true
+excision_scheme = puncture
+excise_1_rad = 0.8
+excise_2_rad = 0.8
+dexcise = 1e-8
+pexcise = 1e-12
+require_resolved_horizon = false
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+gamma = 1.6666666666666667
+dfloor = 1e-10
+pfloor = 1e-14
+tfloor = 1e-12
+fofc = true
+gamma_max = 10
+enforce_maximum = false
+calculate_tmunu = false
+<adm>
+dynamic = false
+<problem>
+initial_condition = bondi_reservoir
+corotating = true
+sep = 64
+q = 1
+a1 = 0
+a2 = 0
+th_a1 = 0
+th_a2 = 0
+rho_inf = 1
+r_bondi = 2048
+b_inf = 0.001
+metric_derivative = ad
+user_hist = false
+<output1>
+file_type = bin
+variable = mhd_w_bcc
+dcycle = 4
+<output2>
+file_type = bin
+variable = adm
+dcycle = 4
+<output3>
+file_type = bin
+variable = mhd_divb
+dcycle = 4
+<output4>
+file_type = rst
+dcycle = 4

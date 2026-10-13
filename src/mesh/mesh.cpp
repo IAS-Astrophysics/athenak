@@ -342,6 +342,7 @@ Mesh::~Mesh() {
   delete [] lloc_eachmb;
   delete [] gids_eachrank;
   delete [] nmb_eachrank;
+  delete pzoom;
   delete pmb_pack;
   if (multilevel) {
     delete pmr;

@@ -66,6 +66,8 @@ struct DynGRMHDTaskIDs {
   TaskID rkdep;
 };
 
+struct ZoomRegion;
+
 namespace dyngr {
 
 class DynGRMHD {
@@ -88,6 +90,10 @@ class DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
+  virtual void PrimToConMask(const ZoomRegion &region, int only_m=-1,
+                             int ox1=-1, int ox2=-1, int ox3=-1) = 0;
+  virtual void PrimToConBoundary() = 0;
+  virtual TaskStatus RefreshFluxes(Driver *d, int stage) = 0;
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke) = 0;
 
@@ -135,6 +141,10 @@ class DynGRMHDPS : public DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
+  virtual void PrimToConMask(const ZoomRegion &region, int only_m=-1,
+                             int ox1=-1, int ox2=-1, int ox3=-1);
+  virtual void PrimToConBoundary();
+  virtual TaskStatus RefreshFluxes(Driver *d, int stage);
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke);
 

@@ -105,7 +105,7 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   Kokkos::realloc(zbuf, nzmb * zmb_data_cnt);
   // Host data buffer: stores ZMBs for load balancing and restart
   // Note: zdata may contain completely different ZMBs than zbuf due to load balancing
-  Kokkos::realloc(zdata, nzmb * zmb_data_cnt);
+  Kokkos::realloc(zdata, static_cast<size_t>(pzmesh->nzmb_max_perhost) * zmb_data_cnt);
 
   Initialize();
 
@@ -154,7 +154,7 @@ void ZoomData::Initialize() {
   if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
     auto peos = (pmbp->pmhd != nullptr)? pmbp->pmhd->peos : pmbp->phydro->peos;
     const bool &is_ideal = peos->eos_data.is_ideal;
-    Real gm1 = peos->eos_data.gamma - 1.0;
+    Real gm1 = pmbp->pdyngr != nullptr ? 1.0 : peos->eos_data.gamma - 1.0;
     Real d0 = d_zoom;
     Real p0 = p_zoom;
 

@@ -29,6 +29,7 @@
 #include "mhd/mhd.hpp"
 #include "diffusion/current_density.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 #include "dyn_radiation/dyn_radiation.hpp"
 #include "utils/flux_generalized.hpp"
 #include "units/units.hpp"
@@ -214,6 +215,7 @@ struct bbh_pgen {
   Real thin_cooling_cfl;
   Real thin_cooling_r_inner;
   Real thin_cooling_r_outer;
+  bool corotating;
   bool use_traj_table;
   bool spin_ramp;
   bool smooth_b_damping;
@@ -432,6 +434,9 @@ void SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
                    Real gcov[][NDIM], const Real traj_array[NTRAJ],
                    const bbh_pgen bbh_);
 void SetADMVariablesToBBH(MeshBlockPack *pmbp);
+void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart);
+void BinaryReservoirBoundary(Mesh *pm);
+Real reservoir_density, reservoir_pressure, reservoir_bz;
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
@@ -457,7 +462,7 @@ void TorusHistory(HistoryData *pdata, Mesh *pm) {
     MeshBlockPack *pmbp = pm->pmb_pack;
 
     // 1. Calculate current Black Hole Trajectory
-    Real tt = pm->time;
+    Real tt = bbh.corotating ? 0.0 : pm->time;
     Real btraj[NTRAJ];
 
     // Ensure find_traj_t is visible here (it is declared global in your snippet)
@@ -569,6 +574,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   bbh.spin = 0.0;
 
+  bbh.corotating = pin->GetOrAddBoolean("problem", "corotating", false);
   bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
   bbh.om = std::pow(bbh.sep, -1.5);
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
@@ -820,7 +826,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   auto &coord_data = pmbp->pcoord->coord_data;
-  if (coord_data.bh_excise && coord_data.excision_scheme == ExcisionScheme::puncture) {
+  if (coord_data.bh_excise && coord_data.excision_scheme == ExcisionScheme::puncture &&
+      !(restart && pmy_mesh_->pzoom != nullptr)) {
     Real finest_dx = LocalFinestMeshSpacing(pmbp);
     Real min_horizon = MinDynBBHHorizonRadius();
     if (finest_dx > min_horizon) {
@@ -924,7 +931,23 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     user_efield_func = AddSmoothExcisionMagneticDamping;
   }
 
+  if (!(std::isfinite(bbh.sep) && bbh.sep > 1.0 &&
+        std::isfinite(bbh.q) && bbh.q > 0.0)) {
+    Kokkos::abort("dynbbh requires finite sep > 1 and q > 0 in total-mass units");
+  }
+  if (bbh.corotating && (bbh.use_traj_table || bbh.spin_ramp ||
+      (fabs(bbh.a1*sin(bbh.th_a1)) > 1.0e-12) ||
+      (fabs(bbh.a2*sin(bbh.th_a2)) > 1.0e-12) ||
+      bbh.puncture_excise_shrink_to_horizon || pmbp->padm == nullptr ||
+      pmbp->pz4c != nullptr)) {
+    Kokkos::abort("corotating requires a fixed circular orbit, aligned spins, "
+                  "stationary excision and prescribed ADM");
+  }
+  if (pmy_mesh_->pzoom != nullptr && !bbh.corotating) {
+    Kokkos::abort("dynbbh cyclic zoom requires problem/corotating=true");
+  }
   if (pmbp->padm != nullptr) {
+    if (bbh.corotating) pmbp->padm->is_dynamic = false;
     pmbp->padm->SetADMVariables = &SetADMVariablesToBBH;
   }
   if (pmbp->prad != nullptr) {
@@ -991,6 +1014,22 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
   if (restart && restart_missing_dynrad_i0) {
     post_restart_primitive_init_func = InitializeDynBBHPostRestart;
+  }
+
+  auto initial_condition = pin->GetOrAddString("problem", "initial_condition", "torus");
+  if (initial_condition != "torus" && initial_condition != "bondi_reservoir") {
+    Kokkos::abort("dynbbh initial_condition must be torus or bondi_reservoir");
+  }
+  if (bbh.corotating && initial_condition != "bondi_reservoir") {
+    Kokkos::abort("corotating currently requires initial_condition=bondi_reservoir");
+  }
+  if (!restart && pmy_mesh_->pzoom != nullptr && pmy_mesh_->pzoom->zstate.zone != 0) {
+    Kokkos::abort("Start binary cyclic zoom at zone=0; other zones require a restart");
+  }
+  if (initial_condition == "bondi_reservoir") {
+    InitializeBinaryReservoir(pmy_mesh_, pin, restart);
+    user_bcs_func = BinaryReservoirBoundary;
+    return;
   }
 
   // Flux diagnostics setup
@@ -2038,6 +2077,116 @@ void InitializeDynBBHRestartDynRadiation(Mesh *pm) {
   Kokkos::fence();
 }
 
+// Uniform ambient reservoir: the binary develops its own accretion solution.
+// cs_inf is the relativistic adiabatic sound speed; r_B = 2 M / cs_inf^2.
+void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
+  auto pack = pm->pmb_pack;
+  if (pack->pdyngr == nullptr || pack->padm == nullptr ||
+      pack->pdyngr->eos_policy != DynGRMHD_EOS::eos_ideal) {
+    Kokkos::abort("bondi_reservoir requires ideal Valencia MHD and prescribed ADM");
+  }
+  for (int face=0; face<6; ++face) {
+    if (pm->mesh_bcs[face] != BoundaryFlag::user) {
+      Kokkos::abort("bondi_reservoir requires six user reservoir boundaries");
+    }
+  }
+  reservoir_density = pin->GetOrAddReal("problem","rho_inf",1.0);
+  Real rb = pin->GetOrAddReal("problem","r_bondi",2.0e4);
+  Real cs = pin->GetOrAddReal("problem","cs_inf",sqrt(2.0/rb));
+  Real gamma = pack->pmhd->peos->eos_data.gamma;
+  if (!(reservoir_density > 0.0 && std::isfinite(reservoir_density) &&
+        rb > 0.0 && std::isfinite(rb) && cs > 0.0 && std::isfinite(cs) &&
+        cs*cs < gamma-1.0 && cs < 1.0)) {
+    Kokkos::abort("Invalid Bondi reservoir density or sound speed");
+  }
+  reservoir_pressure = reservoir_density*cs*cs/(gamma*(1.0-cs*cs/(gamma-1.0)));
+  reservoir_bz = pin->GetOrAddReal("problem","b_inf",0.0);
+  if (!std::isfinite(reservoir_bz)) Kokkos::abort("b_inf must be finite");
+  if (global_variable::my_rank == 0) {
+    std::cout << "Binary Bondi reservoir: r_B=" << 2.0/(cs*cs)
+              << " r_B/a=" << 2.0/(cs*cs*bbh.sep)
+              << " Omega=" << bbh.om << " light-cylinder radius=" << 1.0/bbh.om
+              << " corotating=" << bbh.corotating << std::endl;
+  }
+  pack->padm->SetADMVariables(pack);
+  if (pack->pcoord->coord_data.bh_excise) pack->pcoord->UpdateExcisionMasks();
+  if (restart) return;
+  auto ind = pm->mb_indcs;
+  auto w = pack->pmhd->w0;
+  auto b = pack->pmhd->b0;
+  auto bc = pack->pmhd->bcc0;
+  int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
+  Real rho=reservoir_density, pressure=reservoir_pressure, bz=reservoir_bz;
+  int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
+  Kokkos::deep_copy(b.x1f,0.0);
+  Kokkos::deep_copy(b.x2f,0.0);
+  Kokkos::deep_copy(b.x3f,bz);
+  par_for("binary_reservoir_init",DevExeSpace(),0,pack->nmb_thispack-1,
+          0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      for (int n=0; n<nv; ++n) w(m,n,k,j,i)=0.0;
+      w(m,IDN,k,j,i)=rho;
+      w(m,IPR,k,j,i)=pressure;
+      bc(m,IBX,k,j,i)=0.0;
+      bc(m,IBY,k,j,i)=0.0;
+      bc(m,IBZ,k,j,i)=bz;
+    });
+  pack->pdyngr->PrimToConInit(0,n1-1,0,n2-1,0,n3-1);
+}
+
+void BinaryReservoirBoundary(Mesh *pm) {
+  auto pack=pm->pmb_pack;
+  auto ind=pm->mb_indcs;
+  auto size=pack->pmb->mb_size;
+  auto bounds=pm->mesh_size;
+  auto w=pack->pmhd->w0;
+  auto b=pack->pmhd->b0;
+  Real bz=reservoir_bz;
+  Real rho=reservoir_density, pressure=reservoir_pressure;
+  int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
+  int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
+  // User BFieldBCs leaves magnetic ghost faces to this callback. Fill only
+  // exterior faces; normal faces on the physical boundary remain CT-evolved.
+  par_for("binary_reservoir_b_bc",DevExeSpace(),0,pack->nmb_thispack-1,
+          0,n3,0,n2,0,n1,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      auto s=size.d_view(m);
+      Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
+      Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
+      Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
+      Real xf=LeftEdgeX(i-ind.is,ind.nx1,s.x1min,s.x1max);
+      Real yf=LeftEdgeX(j-ind.js,ind.nx2,s.x2min,s.x2max);
+      Real zf=LeftEdgeX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
+      if (k<n3 && j<n2 &&
+          (xf<bounds.x1min || xf>bounds.x1max || y<bounds.x2min || y>bounds.x2max ||
+           z<bounds.x3min || z>bounds.x3max)) b.x1f(m,k,j,i)=0.0;
+      if (k<n3 && i<n1 &&
+          (x<bounds.x1min || x>bounds.x1max || yf<bounds.x2min || yf>bounds.x2max ||
+           z<bounds.x3min || z>bounds.x3max)) b.x2f(m,k,j,i)=0.0;
+      if (j<n2 && i<n1 &&
+          (x<bounds.x1min || x>bounds.x1max || y<bounds.x2min || y>bounds.x2max ||
+           zf<bounds.x3min || zf>bounds.x3max)) b.x3f(m,k,j,i)=bz;
+    });
+  // Only exterior ghost cells. Internal/AMR boundaries retain their exchanged data.
+  par_for("binary_reservoir_bc",DevExeSpace(),0,pack->nmb_thispack-1,0,n3-1,0,n2-1,0,n1-1,
+    KOKKOS_LAMBDA(int m,int k,int j,int i) {
+      auto s=size.d_view(m);
+      Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
+      Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
+      Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
+      if (x<bounds.x1min || x>bounds.x1max || y<bounds.x2min || y>bounds.x2max ||
+          z<bounds.x3min || z>bounds.x3max) {
+        for (int n=0; n<nv; ++n) w(m,n,k,j,i)=0.0;
+        w(m,IDN,k,j,i)=rho;
+        w(m,IPR,k,j,i)=pressure;
+      }
+    });
+  // Primitive-to-conserved conversion restricted to each exterior ghost slab.
+  // The EOS filter overload keeps active cells and exchanged internal ghosts intact.
+  // Implemented through the general masked conversion entry point below.
+  pack->pdyngr->PrimToConBoundary();
+}
+
 template <typename ADMVars>
 KOKKOS_INLINE_FUNCTION
 void StoreADMVariables(ADMVars adm_vars, const int m, const int k,
@@ -2056,6 +2205,8 @@ void StoreADMVariables(ADMVars adm_vars, const int m, const int k,
   adm_vars.vK_dd(m,1,2,k,j,i) = met3.kyz;
   adm_vars.vK_dd(m,2,2,k,j,i) = met3.kzz;
 
+  adm_vars.psi4(m,k,j,i) = cbrt(adm::SpatialDet(met3.gxx,met3.gxy,met3.gxz,
+                                             met3.gyy,met3.gyz,met3.gzz));
   adm_vars.alpha(m,k,j,i) = met3.alpha;
   adm_vars.beta_u(m,0,k,j,i) = met3.betax;
   adm_vars.beta_u(m,1,k,j,i) = met3.betay;
@@ -2063,7 +2214,7 @@ void StoreADMVariables(ADMVars adm_vars, const int m, const int k,
 }
 
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
-  const Real tt = pmbp->pmesh->time;
+  const Real tt = bbh.corotating ? 0.0 : pmbp->pmesh->time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;
   auto &indcs = pmbp->pmesh->mb_indcs;
@@ -2126,7 +2277,9 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
     coord.punc_1_rad = std::min(coord.punc_1_rad, rH2);
   }
   if (pmbp->pcoord->coord_data.bh_excise &&
-      pmbp->pcoord->coord_data.excision_scheme == ExcisionScheme::puncture) {
+      pmbp->pcoord->coord_data.excision_scheme == ExcisionScheme::puncture &&
+      !(pmbp->pmesh->pzoom != nullptr && (pmbp->pmesh->pzoom->zstate.zone > 0 ||
+        (pmbp->pmesh->ncycle > 0 && pmbp->pmesh->pzoom->zstate.id == 0)))) {
     CheckPunctureExcisionResolution(pmbp, traj, coord.punc_0_rad,
                                     coord.punc_1_rad, "ADM update");
   }
@@ -2927,13 +3080,30 @@ SuperposedBBHTemplateMixed(C x, C y, C z, G gcov[NDIM][NDIM],
   AddBoostedKerrSchildHoleMixed(KS1, J1, gcov);
   AddBoostedKerrSchildHoleMixed(KS2, J2, gcov);
 }
+template<typename T>
+KOKKOS_INLINE_FUNCTION
+void EvaluateBBHMetric(const T x, const T y, const T z, T gcov[NDIM][NDIM],
+                       const Real tr[NTRAJ], const bbh_pgen b) {
+  SuperposedBBHTemplateMixed<T,Real,T>(x,y,z,gcov,tr,b);
+  if (!b.corotating) return;
+  T vx = -b.om*y, vy = b.om*x;
+  T gtt = gcov[TT][TT]+2.0*(gcov[TT][XX]*vx+gcov[TT][YY]*vy)
+            +gcov[XX][XX]*vx*vx+2.0*gcov[XX][YY]*vx*vy+gcov[YY][YY]*vy*vy;
+  T gt[3];
+  for (int a=1; a<NDIM; ++a) {
+    gt[a-1] = gcov[TT][a]+gcov[XX][a]*vx+gcov[YY][a]*vy;
+  }
+  gcov[TT][TT] = gtt;
+  for (int a=1; a<NDIM; ++a) gcov[TT][a] = gcov[a][TT] = gt[a-1];
+}
+
 KOKKOS_INLINE_FUNCTION
 void
 SuperposedBBH(const Real time, const Real x, const Real y, const Real z,
               Real gcov[][NDIM], const Real traj_array[NTRAJ], const bbh_pgen b)
 {
   (void)time;
-  SuperposedBBHTemplate<Real>(x, y, z, gcov, traj_array, b);
+  EvaluateBBHMetric<Real>(x, y, z, gcov, traj_array, b);
 }
 
 KOKKOS_FORCEINLINE_FUNCTION
@@ -2992,7 +3162,9 @@ void numerical_4metric(const Real t, const Real x, const Real y,
 
   get_metric(t, x, y, z, outmet, traj_0, b);
 
-  if (hm > 0.0 && hp > 0.0) {
+  if (b.corotating) {
+    outmet.g_t = {};
+  } else if (hm > 0.0 && hp > 0.0) {
     get_metric(t - hm, x, y, z, met_m, traj_m, b);
     get_metric(t + hp, x, y, z, met_p, traj_p, b);
     DifferenceMetric(met_p.g, met_m.g, hm + hp, outmet.g_t);
@@ -3021,6 +3193,12 @@ void TimeMetricAD(const Real x, const Real y, const Real z,
                   const Real tr[NTRAJ], const Real dtr[NTRAJ],
                   const bbh_pgen b, struct dd_sym &g, struct dd_sym &dg) {
   dual1_real gcov[NDIM][NDIM];
+  if (b.corotating) {
+    EvaluateBBHMetric<dual1_real>(dual1_real(x),dual1_real(y),dual1_real(z),gcov,tr,b);
+    FillMetricValue(gcov, g);
+    dg = {};
+    return;
+  }
   dual1_real td[NTRAJ];
   for (int n = 0; n < NTRAJ; ++n)
     td[n] = dual1_real(tr[n], dtr[n]);
@@ -3038,8 +3216,7 @@ void SpatialMetricAD(const Real x, const Real y, const Real z, const int dir,
   dual1_real xd(x, dir == 0 ? 1.0 : 0.0);
   dual1_real yd(y, dir == 1 ? 1.0 : 0.0);
   dual1_real zd(z, dir == 2 ? 1.0 : 0.0);
-  SuperposedBBHTemplateMixed<dual1_real, Real, dual1_real>(
-      xd, yd, zd, gcov, tr, b);
+  EvaluateBBHMetric<dual1_real>(xd, yd, zd, gcov, tr, b);
   FillMetricDerivative(gcov, dg);
 }
 

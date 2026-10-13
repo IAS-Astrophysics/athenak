@@ -58,7 +58,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
   // temperature = pressure / density
   if (name.compare("temperature") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_wz") == 0)?
@@ -74,7 +74,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("hydro_wz") == 0 ||
       name.compare("mhd_wz") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_wz") == 0)?
@@ -93,7 +93,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("hydro_w2") == 0 ||
       name.compare("mhd_w2") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_w2") == 0)?
@@ -120,7 +120,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // This makes for a large stencil, but approximates volume-averaged value within cell.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_jz") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -137,7 +137,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // magnitude of current density.  Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_j2") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -164,7 +164,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -232,7 +232,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_alt") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -712,7 +712,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_k_jxb") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -749,7 +749,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_perp") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -859,7 +859,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_bmag") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -976,7 +976,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
   // divergence of B, including ghost zones
   if (name.compare("mhd_divb") == 0) {
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
 
     // set the loop limits for 1D/2D/3D problems
@@ -1231,7 +1231,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // 3-5: EM    Angular Momentum (Lx, Ly, Lz)
   if (name.compare("angular_momentum") == 0) {
     int n_comp = 6;
-    if (derived_var.extent(4) <= 1) {
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb) {
       Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     }
 
@@ -1362,7 +1362,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // *non-densitized* (no sqrt(gamma)); we densitize only at the end.
   if (name.compare("torque") == 0) {
     int n_comp = 3;
-    if (derived_var.extent(4) <= 1)
+    if (derived_var.extent(4) <= 1 || derived_var.extent_int(0) < nmb)
       Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
 
     auto dv    = derived_var;

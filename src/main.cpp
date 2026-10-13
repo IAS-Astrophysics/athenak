@@ -318,13 +318,9 @@ int main(int argc, char *argv[]) {
 
   pmesh->AddCoordinatesAndPhysics(pinput);
 
-  // Construct MeshRefinement object only after physics modules have been added because
-  // size of buffers for load balancing, refinement criteria, etc. depend on physics
-  if (pmesh->multilevel) {
-    pmesh->pmr = new MeshRefinement(pmesh, pinput);
-    // Initialize cyclic zoom data only if enabled
-    pmesh->AddCyclicZoom(pinput);
-  }
+  // Stable constructs MeshRefinement with the tree, then enrolls physics-dependent
+  // criteria in AddCoordinatesAndPhysics. Reuse that object; do not replace it here.
+  if (pmesh->multilevel) pmesh->AddCyclicZoom(pinput);
 
   if (!res_flag) {
     // set ICs using ProblemGenerator constructor for new runs

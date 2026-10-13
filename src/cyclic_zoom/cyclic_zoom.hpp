@@ -8,6 +8,7 @@
 //! \file cyclic_zoom.hpp
 //! \brief Definitions for CyclicZoom class and related structures
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -16,6 +17,8 @@
 //! \brief runtime state of cyclic zoom AMR, updated during simulation, used for restart
 
 typedef struct ZoomState {
+  std::uint64_t format = 0x435A424248000001ULL;  // CZBBH, restart format 1
+  int last_cycle = 0;            // prevents repeating an event at a zero interval
   int id;                       // zoom event id
   int zone;                     // zone number = level_max - level
   int last_zone;                // last zone number
@@ -45,6 +48,8 @@ typedef struct ZoomRegion {
   // TODO(@mhguo): may add box region later
   // Real x1min, x2min, x3min;     // box minimum of zoom region
   // Real x1max, x2max, x3max;     // box maximum of zoom region
+  int ncenters = 1;
+  Real x1c2 = 0.0, x2c2 = 0.0, x3c2 = 0.0;
   Real x1c, x2c, x3c;           // center of zoom region
   Real r_0;                     // radius of zoom region at zone 0
   Real radius;                  // radius of zoom region
@@ -67,7 +72,24 @@ typedef struct ZoomRegion {
   }
   KOKKOS_INLINE_FUNCTION
   bool IsInRegion(Real x1, Real x2, Real x3, Real r) const {
-    return (SQR(x1 - x1c) + SQR(x2 - x2c) + SQR(x3 - x3c) <= SQR(r));
+    if (r <= 0.0) return false;
+    return (SQR(x1 - x1c) + SQR(x2 - x2c) + SQR(x3 - x3c) <= SQR(r)) ||
+           (ncenters == 2 && SQR(x1-x1c2)+SQR(x2-x2c2)+SQR(x3-x3c2) <= SQR(r));
+  }
+  // Exact sphere/AABB overlap, including off-center holes and their sibling blocks.
+  KOKKOS_INLINE_FUNCTION
+  bool Overlaps(Real xmin, Real xmax, Real ymin, Real ymax,
+                Real zmin, Real zmax, Real r) const {
+    for (int n=0; n<ncenters; ++n) {
+      Real x = n == 0 ? x1c : x1c2;
+      Real y = n == 0 ? x2c : x2c2;
+      Real z = n == 0 ? x3c : x3c2;
+      Real dx = x-fmax(xmin,fmin(x,xmax));
+      Real dy = y-fmax(ymin,fmin(y,ymax));
+      Real dz = z-fmax(zmin,fmin(z,zmax));
+      if (dx*dx+dy*dy+dz*dz < r*r) return true;
+    }
+    return false;
   }
 } ZoomRegion;
 
@@ -112,7 +134,7 @@ class CyclicZoom {
   friend class ZoomData;
  public:
   CyclicZoom(Mesh *pmesh, ParameterInput *pin);
-  ~CyclicZoom() = default;
+  ~CyclicZoom();
 
   // data
   // TODO(@mhguo): may extend to accept multiple zoom criteria later

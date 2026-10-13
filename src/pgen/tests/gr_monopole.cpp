@@ -693,8 +693,7 @@ void MonopoleDiagnostic(ParameterInput *pin, Mesh *pm) {
 
   // construct spherical grid
   int nlevel = pin->GetOrAddInteger("problem", "nlevel", 10);
-  int ninterp = pin->GetOrAddInteger("problem", "ninterp", -1);
-  SphericalGrid *psph = new SphericalGrid(pmbp, nlevel, rh, ninterp);
+  SphericalGrid *psph = new SphericalGrid(pmbp, nlevel, rh);
 
   // capture variables
   auto &w0_ = pm->pmb_pack->pmhd->w0;

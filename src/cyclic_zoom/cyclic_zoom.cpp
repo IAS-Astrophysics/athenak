@@ -13,6 +13,8 @@
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
+#include "coordinates/adm.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "pgen/pgen.hpp"
@@ -24,8 +26,10 @@
 CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     pmesh(pm) {
   // cycle through ParameterInput list and read each <amr_criterion> block
+  int ncriteria = 0;
   for (auto it = pin->block.begin(); it != pin->block.end(); ++it) {
     if (it->block_name.compare(0, 13, "amr_criterion") == 0) {
+      ++ncriteria;
       std::string method = pin->GetString(it->block_name, "method");
       if (method.compare("cyclic_zoom") == 0) {
         block_name = it->block_name;
@@ -35,6 +39,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
 
   // Check for unimplemented physics or a 1D/2D mesh
   MeshBlockPack *pmbp = pmesh->pmb_pack;
+  if (pmbp->pdyngr != nullptr && ncriteria != 1) {
+    Kokkos::abort("Valencia cyclic zoom requires exactly one AMR criterion");
+  }
   const char *err = nullptr;
   if (!(pmesh->three_d)) {
     err = "Cyclic zoom requires a 3D mesh";
@@ -44,12 +51,15 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     err = "Cyclic zoom is not implemented for ion-neutral (two-fluid) MHD";
   } else if (pmbp->ppart != nullptr) {
     err = "Cyclic zoom is not implemented for particles";
-  } else if (pmbp->pgrav != nullptr) {
+  } else if (pin->DoesBlockExist("gravity")) {
     err = "Cyclic zoom is not implemented for self-gravity";
   } else if (pmbp->pturb != nullptr) {
     err = "Cyclic zoom is not implemented for turbulence driving";
-  } else if (pmbp->pz4c != nullptr || pmbp->padm != nullptr || pmbp->pdyngr != nullptr) {
-    err = "Cyclic zoom is not implemented for Z4c, ADM, or dynamical GRMHD";
+  } else if (pmbp->pz4c != nullptr || pmbp->pdynrad != nullptr ||
+             (pmbp->padm != nullptr &&
+              (pmbp->pdyngr == nullptr || pmbp->padm->is_dynamic))) {
+    err = "Cyclic zoom requires a stationary prescribed ADM metric and Valencia MHD; "
+          "Z4c and dynamical radiation are unsupported";
   } else if (pin->DoesBlockExist("shearing_box")) {
     err = "Cyclic zoom is not implemented for the shearing box";
   }
@@ -59,6 +69,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     std::exit(EXIT_FAILURE);
   }
 
+  if (pmesh->pmr->refinement_interval != 1 || pmesh->pmr->ncyc_check_amr != 1) {
+    Kokkos::abort("Cyclic zoom requires ncycle_check=1 and refinement_interval=1");
+  }
   // Set basic parameters
   verbose = pin->GetOrAddBoolean("cyclic_zoom","verbose",false);
   read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);
@@ -72,6 +85,9 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
 
   // Set zoom AMR parameters
   zamr.nlevels = pin->GetOrAddInteger(block_name,"nlevels",2);
+  if (zamr.nlevels < 2 || zamr.nlevels > pmesh->max_level-pmesh->root_level+1) {
+    Kokkos::abort("Invalid cyclic zoom levels: require 2 <= nlevels <= mesh levels");
+  }
   zamr.max_level = pmesh->max_level;
   zamr.min_level = zamr.max_level - zamr.nlevels + 1;
   zamr.level = zamr.max_level - zstate.zone;
@@ -83,11 +99,18 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.x1c = pin->GetOrAddReal(block_name,"x1c",0.0);
   zregion.x2c = pin->GetOrAddReal(block_name,"x2c",0.0);
   zregion.x3c = pin->GetOrAddReal(block_name,"x3c",0.0);
+  zregion.ncenters = pin->GetOrAddInteger(block_name,"ncenters",1);
+  zregion.x1c2 = pin->GetOrAddReal(block_name,"x1c2",0.0);
+  zregion.x2c2 = pin->GetOrAddReal(block_name,"x2c2",0.0);
+  zregion.x3c2 = pin->GetOrAddReal(block_name,"x3c2",0.0);
   zregion.r_0 = pin->GetOrAddReal(block_name,"r_0",1.0);
   zregion.ref.f = pin->GetOrAddReal(block_name,"f_ref",1.0);
   zregion.ref.r_max = pin->GetOrAddReal(block_name,"r_ref_max",FLT_MAX);
   // default 0.4 based on monopole test
-  zregion.exc.f = pin->GetOrAddReal(block_name,"f_exc",0.4);
+  zregion.exc.f = pin->GetOrAddReal(block_name,"f_exc",pmbp->pdyngr ? 0.0 : 0.4);
+  if (pmbp->pdyngr && zregion.exc.f != 0.0) {
+    Kokkos::abort("Valencia binary zoom uses physical puncture excision; set f_exc=0");
+  }
   zregion.exc.r_max = pin->GetOrAddReal(block_name,"r_exc_max",8.0);
   // default 0.0
   zregion.cut.f = pin->GetOrAddReal(block_name,"f_cut",0.0);
@@ -110,6 +133,29 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     zint.trun_facs[i] = pin->GetOrAddReal(block_name, param_name.c_str(), zint.trun_fac);
   }
 
+  if (zamr.nlevels < 2 || zamr.min_level < pmesh->root_level ||
+      zstate.zone < 0 || zstate.zone >= zamr.nlevels ||
+      (zstate.direction != 1 && zstate.direction != -1) ||
+      (zstate.zone == 0 && zstate.direction != 1) ||
+      (zstate.zone == zamr.nlevels-1 && zstate.direction != -1) ||
+      zregion.r_0 <= 0.0 || zregion.ref.f < 1.0 ||
+      zregion.ref.r_max < zregion.r_0*std::pow(2.0,zamr.nlevels-1) ||
+      (zregion.ncenters != 1 && zregion.ncenters != 2)) {
+    Kokkos::abort("Invalid cyclic zoom levels, direction or region geometry");
+  }
+  for (Real x : {zregion.r_0,zregion.ref.f,zregion.ref.r_max,
+                 zregion.x1c,zregion.x2c,zregion.x3c,
+                 zregion.x1c2,zregion.x2c2,zregion.x3c2,
+                 zregion.exc.f,zregion.exc.r_max,zregion.cut.f,zregion.cut.r_max,
+                 zregion.flx.f,zregion.flx.r_max,zint.trun_pow,zint.trun_max}) {
+    if (!std::isfinite(x)) Kokkos::abort("Nonfinite cyclic zoom geometry or interval");
+  }
+  if (zregion.exc.f < 0 || zregion.exc.r_max < 0 || zregion.cut.f < 0 ||
+      zregion.cut.r_max < 0 || zregion.flx.f < 0 || zregion.flx.r_max < 0 ||
+      zint.trun_max < 0) Kokkos::abort("Negative cyclic zoom scale or interval");
+  for (Real t : zint.trun_facs) {
+    if (!std::isfinite(t) || t < 0.0) Kokkos::abort("Invalid cyclic zoom interval");
+  }
   // Update zoom state
   zstate.next_time = pmesh->time;
   old_zregion = zregion; // initialize old zoom region
@@ -134,6 +180,11 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::Initialize()
 //! \brief Initialize CyclicZoom variables
+
+CyclicZoom::~CyclicZoom() {
+  delete pzdata;
+  delete pzmesh;
+}
 
 void CyclicZoom::Initialize(ParameterInput *pin) {
   pzmesh = new ZoomMesh(this, pin);

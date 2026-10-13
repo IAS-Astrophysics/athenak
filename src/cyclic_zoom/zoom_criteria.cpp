@@ -8,6 +8,8 @@
 
 #include <algorithm>
 #include <iostream>
+#include <set>
+#include <tuple>
 
 #include "athena.hpp"
 #include "globals.hpp"
@@ -20,7 +22,7 @@
 //! \brief Main function for CyclicZoom adaptive mesh refinement criteria
 
 void CyclicZoom::CheckRefinement() {
-  if (pmesh->time >= zstate.next_time) {
+  if (pmesh->time >= zstate.next_time && pmesh->ncycle > zstate.last_cycle) {
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: old level = " << zamr.level << std::endl;
     }
@@ -48,6 +50,7 @@ void CyclicZoom::UpdateState() {
   if (zstate.zone == 0) {zstate.direction = 1;}
   if (zstate.zone == zamr.nlevels - 1 ) {zstate.direction = -1;}
   zstate.id++;
+  zstate.last_cycle = pmesh->ncycle;
   // update zoom AMR parameters
   zamr.level = zamr.max_level - zstate.zone;
   zamr.refine_flag = -zstate.direction;
@@ -96,6 +99,7 @@ void CyclicZoom::SetRegionAndInterval() {
   Real timescale = pow(zregion.radius,zint.trun_pow);
   zint.runtime = zint.trun_facs[zstate.zone]*timescale;
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}
+  if (!std::isfinite(zint.runtime)) Kokkos::abort("Nonfinite cyclic zoom runtime");
 }
 
 //----------------------------------------------------------------------------------------
@@ -113,6 +117,28 @@ void CyclicZoom::SetRefinementFlags() {
 
   int old_level = zamr.max_level - zstate.last_zone;
   int ref_flag = - (zstate.zone - zstate.last_zone);
+  // Restore the hierarchy that was actually saved. Geometric refinement on the
+  // return sweep can refine unrelated siblings, multiplying the mesh each cycle.
+  if (ref_flag > 0 && pmesh->pmb_pack->pdyngr != nullptr) {
+    std::set<std::tuple<int,int,int>> parents;
+    int first = pzmesh->gzms_eachlevel[zstate.zone];
+    int count = pzmesh->nzmb_eachlevel[zstate.zone];
+    for (int zm=first; zm<first+count; ++zm) {
+      const auto &loc = pzmesh->lloc_eachzmb[zm];
+      if (loc.level == old_level+1) {
+        parents.emplace(loc.lx1 >> 1, loc.lx2 >> 1, loc.lx3 >> 1);
+      }
+    }
+    for (int m=0; m<nmb; ++m) {
+      const auto &loc = pmesh->lloc_eachmb[m+mbs];
+      if (loc.level == old_level && parents.count({loc.lx1,loc.lx2,loc.lx3})) {
+        refine_flag.h_view(m+mbs) = 1;
+      }
+    }
+    refine_flag.template modify<HostMemSpace>();
+    refine_flag.template sync<DevExeSpace>();
+    return;
+  }
   Real r_ref = (ref_flag < 0) ? zregion.ref.r : old_zregion.ref.r;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   if(verbose && global_variable::my_rank == 0) {
@@ -149,14 +175,7 @@ void CyclicZoom::SetRefinementFlags() {
         x3min = LeftEdgeX(plx3, nmbx3, ms.x3min, ms.x3max);
         x3max = LeftEdgeX(plx3+1, nmbx3, ms.x3min, ms.x3max);
       }
-      // levels_thisrank.h_view(m) = pmesh->lloc_eachmb[m+mbs].level;
-      // Find the closest point on the box to the sphere center
-      Real closest_x1 = fmax(x1min, fmin(x1c, x1max));
-      Real closest_x2 = fmax(x2min, fmin(x2c, x2max));
-      Real closest_x3 = fmax(x3min, fmin(x3c, x3max));
-      // Calculate the distance from sphere center to this closest point
-      Real r_sq = SQR(x1c - closest_x1) + SQR(x2c - closest_x2) + SQR(x3c - closest_x3);
-      if (r_sq < SQR(r_ref)) {
+      if (zregion.Overlaps(x1min,x1max,x2min,x2max,x3min,x3max,r_ref)) {
         refine_flag.h_view(m+mbs) = ref_flag;
       }
     }
@@ -177,6 +196,12 @@ bool CyclicZoom::CheckStoreFlag(int m) {
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   // note that now the zoom state has been updated
   int old_level = zamr.max_level - zstate.last_zone;
+  if (pmesh->pmb_pack->pdyngr != nullptr) {
+    // Save complete coarsening families, including siblings outside the mask.
+    // Their logical locations also describe the topology to restore on zoom-in.
+    return pmesh->lloc_eachmb[m+mbs].level == old_level &&
+           pmesh->pmr->refine_flag.h_view(m+mbs) < 0;
+  }
   // use the updated zoom region parameters
   Real r_zoom = zregion.radius;
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
@@ -189,13 +214,7 @@ bool CyclicZoom::CheckStoreFlag(int m) {
     Real x2max = size.h_view(m).x2max;
     Real x3min = size.h_view(m).x3min;
     Real x3max = size.h_view(m).x3max;
-    // Find the closest point on the box to the sphere center
-    Real closest_x1 = fmax(x1min, fmin(x1c, x1max));
-    Real closest_x2 = fmax(x2min, fmin(x2c, x2max));
-    Real closest_x3 = fmax(x3min, fmin(x3c, x3max));
-    // Calculate the distance from sphere center to this closest point
-    Real r_sq = SQR(x1c - closest_x1) + SQR(x2c - closest_x2) + SQR(x3c - closest_x3);
-    if (r_sq < SQR(r_zoom)) {
+    if (zregion.Overlaps(x1min,x1max,x2min,x2max,x3min,x3max,r_zoom)) {
       return true;
     }
   }
