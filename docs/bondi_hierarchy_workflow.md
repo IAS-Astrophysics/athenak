@@ -135,3 +135,28 @@ restored topology and finite positive saved fields. The guard remains enabled.
 This changes the mesh coarsening region, not the residence-time formula. The
 original failure is retained in its receipt; no long-time relaxation claim is made. The density/temperature
 movie uses saved states only, without interpolating simulation states.
+
+### Gradual-seed continuation, 2026-10-13
+
+Job 8925240 finished normally at its original 26-minute solver cutoff:
+time 11812.91 M, cycle 17684, 400 active MeshBlocks. All twelve rank guards
+reported exit zero with no guard stop; the sum of their peak resident memory
+was 10.20 GB. Final primitive output 00119 has finite fields, positive density
+(minimum 0.0007885134) and pressure (minimum 0.000006729216).
+This covers one complete outward/inward zoom cycle and part of the next.
+
+Job 8925561 resumes `evolution-lowres-8925240/rst/matched_bondi.00006.rst`
+toward the existing 35000 M target, using the same validated executable. The
+checkpoint SHA256 is
+`5391082d072c71787b38f63ea2db5af4ec8e43abb2322594c7aa737c1a0f114f`.
+The remote submission receipt is `continuation-8925240.receipt` under
+`/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013`.
+The PBS script accepts an optional absolute `CZ_RESTART` path and uses `-r`
+without overriding the checkpoint's stored input or output counters. Each job
+gets a distinct output directory and records the predecessor path and hash.
+It requests one debug node for one hour, uses twelve explicit GPU tiles, and
+passes `-t 00:55:00`; the existing memory and 58-minute guards remain enabled.
+
+The thread heartbeat `finish-cyclic-zoom-visualization` checks every 30 minutes
+and will validate and visualize the gradual-seed chain after completion. The
+old floor-core movie is not a visualization of this new chain.

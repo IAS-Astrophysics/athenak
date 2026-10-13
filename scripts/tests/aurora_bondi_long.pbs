@@ -21,7 +21,15 @@ grep -q 'mpich-5.0.0.aurora_test.51a9474-' "$CZ_OUT/libraries.txt"
 sha256sum build-sane/src/athena > "$CZ_OUT/executable.sha256"
 cp source/inputs/dyngr/bondi_hierarchy/binary_lowres.athinput "$CZ_OUT/input.athinput"
 printf '%s\n' "$PBS_JOBID" > "$CZ_OUT/job-id.txt"
+if [[ -n "${CZ_RESTART:-}" ]]; then
+ test -s "$CZ_RESTART"
+ sha256sum "$CZ_RESTART" > "$CZ_OUT/restart.sha256"
+ printf '%s\n' "$CZ_RESTART" > "$CZ_OUT/restart-source.txt"
+ initial_args=(-r "$CZ_RESTART")
+else
+ initial_args=(-i "$CZ_OUT/input.athinput")
+fi
 bind='list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100'
 mpiexec -n 12 -ppn 12 --cpu-bind "$bind" bash source/scripts/tests/aurora_benchmark_rank.sh \
- ./build-sane/src/athena -i "$CZ_OUT/input.athinput" -d "$CZ_OUT" -t 00:55:00 \
+ ./build-sane/src/athena "${initial_args[@]}" -d "$CZ_OUT" -t 00:55:00 \
  > "$CZ_OUT/launcher.log" 2>&1
