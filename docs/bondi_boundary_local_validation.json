@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-12",
+  "date": "2026-10-13",
   "backend": "Apple M5 Pro, Kokkos Serial; debug/bounds/DualView checks",
   "frame_tests": {
     "inertial16": {

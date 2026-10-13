@@ -12,6 +12,7 @@ from test_binary_zoom import coords, load
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root',type=Path,required=True)
+    parser.add_argument('--tlim',type=float,default=4.0)
     args=parser.parse_args()
     root=args.root.resolve()
     result={}
@@ -35,6 +36,8 @@ def main():
                 'initial_blocks':first['n_mbs'],'final_blocks':last['n_mbs'],
                 'topology_restored':bool(np.array_equal(first['mb_logical'],last['mb_logical'])),
                 'minima':minima}
+        assert last['time'] == args.tlim, ('Incomplete physical-time target', name, last['time'])
+        assert record['topology_restored'], record
         for f in ('resources.json','allocations.json'):
             record[f]=json.loads((case/f).read_text())
         record['max_divb']=0.0
@@ -46,7 +49,7 @@ def main():
         assert record['resources.json']['returncode'] == 0
         assert record['allocations.json']['combined_peak_bytes'] < 24e9
         if name != 'upstream':
-            assert record['topology_restored'], record
+            assert record['allocations.json']['metric_evaluations'] == 7, record
             x,y,z=coords(last)
             r=np.sqrt(x*x+y*y+z*z)
             vol=((last['mb_geometry'][:,1]-last['mb_geometry'][:,0])/
@@ -64,11 +67,16 @@ def main():
         a,av,r,weights=states['single_rotating']
         b,bv,_,_=states[other]
         assert a['time'] == b['time'] and np.array_equal(a['mb_logical'],b['mb_logical'])
-        mask=(r>64)&(r<192)
-        result['single_rotating_vs_'+other]={
-            key:float(np.sum(weights[mask]*abs(av[key][mask]-bv[key][mask]))/
-                      np.sum(weights[mask]*abs(bv[key][mask])))
-            for key in ('dens','press')}
+        comparison={}
+        for lo,hi in ((3,32),(64,192)):
+            mask=(r>lo)&(r<hi)
+            comparison[f'r{lo}_{hi}']={
+                key:float(np.sum(weights[mask]*abs(av[key][mask]-bv[key][mask]))/
+                          np.sum(weights[mask]*abs(bv[key][mask])))
+                for key in ('dens','press')}
+            if other == 'single_inertial':
+                assert max(comparison[f'r{lo}_{hi}'].values()) < 0.05, comparison
+        result['single_rotating_vs_'+other]=comparison
     (root/'validation.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps({k:{p:v for p,v in d.items() if p != 'minima'}
                       for k,d in result.items()},indent=2))

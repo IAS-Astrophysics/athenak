@@ -66,8 +66,8 @@ resolution. It is selected by `problem/pgen_name=gr_bondi` in this executable.
 | Root grid / block | 64^3 / 8^3, four ghost cells |
 | Physical refinement levels | 8 |
 | Finest cell width | M/16 |
-| Cyclic zones / residence time | 4 / 10 M per zone |
-| Intended debug evolution | 64 M, about one complete zoom cycle |
+| Cyclic zones / debug residence time | 4 / 1 M at zone 0, 0.5 M elsewhere |
+| Debug evolution target | 4 M, one complete zoom cycle |
 
 The sum of the input hole mass parameters is exactly one. The prescribed
 boosted superposed metric is not a constraint-solved binary spacetime, and its
@@ -76,9 +76,14 @@ at separation 32 is `|E_bind|/M = 1/(8*32) = 0.00390625`. From the initial
 binary field, the mean diagnostic `r(1+g_tt,inertial)/2` over `128<r<192`
 is 1.01018 (angular scatter 0.01064); this finite-radius metric diagnostic is
 not an ADM mass measurement. Thus the far-field potentials are close but not
-identical. A 64 M run is short compared with either an orbital or Bondi time.
-The tests are adiabatic hydro controls with no gas self-gravity, cooling, star
-formation, or radiation feedback. They cannot determine fragmentation at a
+identical. The 4 M matched test is short compared with either an orbital or
+Bondi time. This is the global zoom clock: stored interior zones are held while
+outer zones evolve, so it does not represent uninterrupted inner-flow evolution.
+The final debug campaign uses shorter residence times: the return occurs near
+t=3.5 M, and t=4 M precedes the next outward sweep. The standalone input retains
+10 M residence times for longer runs. The tests are adiabatic hydro controls
+with no gas self-gravity, cooling, star formation, or radiation feedback.
+They cannot determine fragmentation at a
 physical parsec-scale Bondi radius; the gas density normalization also remains
 free in this non-self-gravitating calculation.
 
@@ -124,6 +129,43 @@ The new bounded hydro regression completes six transitions and restores all
 288 initial blocks, with finite positive saved fields. The complete Mac
 boundary suite takes 75.36 s with sampled peak RSS 2.14 GB.
 
+## Completed Aurora validation
+
+Debug job **8924219** finished with exit status 0 on 2026-10-13, using one
+Intel Data Center GPU Max 1550. Its allocation elapsed time was 7 min 50 s.
+All saved fluid fields are finite, density and pressure are positive, and all
+cases restore their original logical topology at the common global time t=4 M.
+
+| Case | Steps | Wall seconds | Blocks, initial/final |
+| --- | ---: | ---: | ---: |
+| Upstream/Minghao hydro | 148 | 24.36 | 904 / 904 |
+| Valencia single, inertial | 148 | 150.07 | 1520 / 1520 |
+| Valencia single, rotating | 151 | 145.92 | 1520 / 1520 |
+| Valencia binary, rotating | 154 | 146.84 | 1520 / 1520 |
+
+The three Valencia cases each record **7 metric evaluations**: initialization
+and six actual mesh changes. There are no per-stage metric updates. Peak
+combined tracked host/device allocation is **11.8052 GB**; the largest sampled
+process-tree RSS is **3.3179 GB**. These overlap in their host allocation and
+should not be added together. All hydro controls have B=0 and saved div B=0.
+
+Volume-weighted rotating/inertial single-hole L1 differences are:
+
+| Shell | Density | Pressure |
+| --- | ---: | ---: |
+| 3 < r < 32 M | 0.006119% | 0.011639% |
+| 64 < r < 192 M | 0.001580% | 0.002856% |
+
+The density error against the initial analytic profile in 3<r<32 is 0.03171%
+(inertial) and 0.03146% (rotating). The binary/single inner-shell differences
+are 0.779% in density and 2.795% in pressure. These describe a short,
+partially held initial transient, not relaxed binary accretion.
+
+The separately retained upstream control also completed t=64 M in 1,936 steps,
+restoring 904 blocks with finite positive saved fields. Full records, source
+verification, executable hash, and memory reports are in
+[the Aurora validation report](bondi_boundary_aurora_validation.json).
+
 ## Aurora protocol
 
 The source/build/results live in an isolated
@@ -134,7 +176,7 @@ It does not touch other jobs or submit to debug-scaling.
 
 One node runs the four cases serially, on one GPU, within a 30-minute allocation.
 Each case has a six-minute graceful Athena wall limit and a seven-minute outer
-deadline. A wall-limited case may finish before t=64; its actual time must be
+deadline. A wall-limited case may finish before its target; its actual time must be
 reported, not treated as a completed physical-time comparison.
 
 The Kokkos Tools guard limits combined tracked host/device allocations to
@@ -149,8 +191,40 @@ Kokkos bounds checks; the GPU build uses generic SYCL/SPIR64, optimization -O2,
 general debug and DualView checks, with device bounds checks disabled. This
 avoids very slow ahead-of-time compilation of unrelated kernels in this older
 source tree. SYCL persistent caching is confined to the campaign directory.
+The second attempt (8924164) completed the upstream control but hit its
+seven-minute guard while Intel IGC compiled the first Valencia fluid kernels,
+before taking a fluid step. A short debugger backtrace confirmed `libigc`.
+The final build additionally sets
+`CMAKE_EXE_LINKER_FLAGS=-fsycl-device-code-split=per_kernel`, limiting each first-use
+compilation to an individual kernel rather than a larger source module.
+The second attempt is retained in `results-attempt2`.
+The third attempt (8924190) removed the compilation bottleneck, but measured
+about 0.69 s per Valencia step. Its inertial control reached t=7.21875 M in
+462 steps before the graceful wall limit. The job was stopped during the next
+control to avoid spending the allocation on unequal end times. Those outputs
+are retained in `results-attempt3`; its upstream control again completed t=64 M.
+The final matched campaign therefore uses t=4 M and compressed residence times,
+with the same physical grid and gas parameters. This is a short infrastructure
+test rather than an accretion-relaxation calculation.
+
+The successful build configuration can be reproduced after loading
+`oneapi/release/2025.3.1`:
+
+```sh
+cmake -S source -B build-sycl2025 -DPROBLEM=dynbbh \
+  -DCMAKE_CXX_COMPILER=icpx -DCMAKE_CXX_FLAGS=-fsycl \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE='-O2 -DNDEBUG' \
+  -DCMAKE_EXE_LINKER_FLAGS=-fsycl-device-code-split=per_kernel \
+  -DAthena_ENABLE_MPI=OFF -DAthena_ENABLE_OPENMP=OFF \
+  -DKokkos_ENABLE_SYCL=ON -DKokkos_ENABLE_SERIAL=ON \
+  -DKokkos_ARCH_INTEL_PVC=OFF -DKokkos_ARCH_INTEL_GEN=ON \
+  -DKokkos_ENABLE_DEBUG=ON -DKokkos_ENABLE_DEBUG_BOUNDS_CHECK=OFF \
+  -DKokkos_ENABLE_DEBUG_DUALVIEW_MODIFY_CHECK=ON
+```
 
 Reproduce the local checks with `test_bondi_frames.py` under `run_bounded.py`.
 `make_bondi_campaign.py` prepares the inputs without submitting anything.
+Its default is the compressed t=4 M sweep; `--tlim 64 --residence 10
+--zone0-residence 10` reproduces the longer target.
 `analyze_bondi_campaign.py` checks saved fields, mesh restoration, resource
 reports, and frame differences after the debug job completes.

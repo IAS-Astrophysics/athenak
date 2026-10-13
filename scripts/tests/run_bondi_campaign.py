@@ -28,7 +28,7 @@ def main():
                  '--seconds','420','--memory-gb','20','--gpu-allocations',
                  '--report',str(case/'resources.json'),
                  '--',str(exe),'-i',str(root/'campaign'/input_name),'-d',str(case),
-                 '-t','00:06:00','time/tlim=64','time/ndiag=100']+flags
+                 '-t','00:06:00','time/ndiag=100']+flags
         started=time.monotonic()
         with (case/'run.log').open('w') as log:
             proc=subprocess.run(command,env=env,stdout=log,stderr=subprocess.STDOUT,

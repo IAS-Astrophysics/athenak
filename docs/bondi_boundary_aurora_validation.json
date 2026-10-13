@@ -1,0 +1,432 @@
+{
+  "date": "2026-10-13",
+  "numerical_source_commit": "995a69b651e8dc1530b132a54128876bca1ad831",
+  "branch": "codex/circumbinary-cyclic-zoom",
+  "job_id": "8924219",
+  "queue": "debug",
+  "job_state": "F",
+  "exit_status": 0,
+  "node": "x4712c1s3b0n0",
+  "job_walltime": "00:07:50",
+  "device": "Intel Data Center GPU Max 1550, one root GPU",
+  "compiler": "oneAPI 2025.3.1 / icpx 2025.3, SYCL SPIR64, per-kernel device code split",
+  "debug_checks": {
+    "general": true,
+    "dualview": true,
+    "gpu_bounds": false,
+    "mac_bounds": true
+  },
+  "executable_sha256": "b7f89ace4b40e79fd13f70b0f87462e6242889cd711652d8e35b9d7c3e5ba7df",
+  "local_staged_files_verified": 356,
+  "source_manifest_sha256": "12b13d49b40aa4858d63eb4a13dfe1eae35ce09b318a6cf2108463a91495e5fb",
+  "configuration": {
+    "total_mass": 1.0,
+    "binary_masses": [
+      0.5,
+      0.5
+    ],
+    "separation": 32.0,
+    "sonic_radius": 8.0,
+    "bondi_radius": 161.227,
+    "box_half_width": 256.0,
+    "root_cells_per_axis": 64,
+    "block_cells_per_axis": 8,
+    "finest_cell_width": 0.0625,
+    "physical_levels": 8,
+    "zoom_zones": 4,
+    "zone0_residence": 1.0,
+    "other_zone_residence": 0.5,
+    "target_global_time": 4.0,
+    "magnetic_field": 0.0
+  },
+  "guards": {
+    "combined_kokkos_bytes": 24000000000,
+    "process_rss_bytes": 20000000000
+  },
+  "validation": {
+    "upstream": {
+      "time": 4.0,
+      "cycle": 148,
+      "initial_blocks": 904,
+      "final_blocks": 904,
+      "topology_restored": true,
+      "minima": {
+        "matched_bondi.hydro_w.00000.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00001.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00002.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00003.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00004.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00005.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00006.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00007.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        },
+        "matched_bondi.hydro_w.00008.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 1.4999999940062958e-12
+        }
+      },
+      "resources.json": {
+        "command": [
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/build-sycl2025/src/athena",
+          "-i",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/campaign/upstream.athinput",
+          "-d",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/results/upstream",
+          "-t",
+          "00:06:00",
+          "time/ndiag=100"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 1545400320,
+        "memory_budget_bytes": 20000000000,
+        "seconds": 24.36307634296827,
+        "stopped": null
+      },
+      "allocations.json": {
+        "combined_peak_bytes": 5498698136,
+        "budget_bytes": 24000000000,
+        "spaces": {
+          "Host": 1390123176,
+          "SYCLDeviceUSM": 4108313048,
+          "SYCLHostUSM": 268704
+        },
+        "metric_evaluations": 0
+      },
+      "max_divb": 0.0
+    },
+    "single_inertial": {
+      "time": 4.0,
+      "cycle": 148,
+      "initial_blocks": 1520,
+      "final_blocks": 1520,
+      "topology_restored": true,
+      "minima": {
+        "matched_bondi.mhd_w_bcc.00000.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00001.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00002.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00003.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00004.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00005.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00006.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00007.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00008.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        }
+      },
+      "resources.json": {
+        "command": [
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/build-sycl2025/src/athena",
+          "-i",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/campaign/matched.athinput",
+          "-d",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/results/single_inertial",
+          "-t",
+          "00:06:00",
+          "time/ndiag=100",
+          "problem/single_black_hole=true",
+          "problem/corotating=false",
+          "problem/frame_omega=0"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 3317891072,
+        "memory_budget_bytes": 20000000000,
+        "seconds": 150.0677238740027,
+        "stopped": null
+      },
+      "allocations.json": {
+        "combined_peak_bytes": 11805187624,
+        "budget_bytes": 24000000000,
+        "spaces": {
+          "Host": 3029894528,
+          "SYCLDeviceUSM": 8775050896,
+          "SYCLHostUSM": 253024
+        },
+        "metric_evaluations": 7
+      },
+      "max_divb": 0.0,
+      "dens_L1_r3_32": 0.00031713011269021626,
+      "press_L1_r3_32": 0.0007949338061018397,
+      "dens_L1_r64_192": 7.706157010810265e-06,
+      "press_L1_r64_192": 1.318789573796394e-05
+    },
+    "single_rotating": {
+      "time": 4.0,
+      "cycle": 151,
+      "initial_blocks": 1520,
+      "final_blocks": 1520,
+      "topology_restored": true,
+      "minima": {
+        "matched_bondi.mhd_w_bcc.00000.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00001.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00002.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00003.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00004.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00005.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00006.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00007.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00008.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        }
+      },
+      "resources.json": {
+        "command": [
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/build-sycl2025/src/athena",
+          "-i",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/campaign/matched.athinput",
+          "-d",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/results/single_rotating",
+          "-t",
+          "00:06:00",
+          "time/ndiag=100",
+          "problem/single_black_hole=true"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 3256188928,
+        "memory_budget_bytes": 20000000000,
+        "seconds": 145.92076334997546,
+        "stopped": null
+      },
+      "allocations.json": {
+        "combined_peak_bytes": 11805187624,
+        "budget_bytes": 24000000000,
+        "spaces": {
+          "Host": 3029894528,
+          "SYCLDeviceUSM": 8775050896,
+          "SYCLHostUSM": 253024
+        },
+        "metric_evaluations": 7
+      },
+      "max_divb": 0.0,
+      "dens_L1_r3_32": 0.00031456762183753494,
+      "press_L1_r3_32": 0.000785027146368969,
+      "dens_L1_r64_192": 1.8335117397898606e-05,
+      "press_L1_r64_192": 3.256935809130506e-05
+    },
+    "binary_rotating": {
+      "time": 4.0,
+      "cycle": 154,
+      "initial_blocks": 1520,
+      "final_blocks": 1520,
+      "topology_restored": true,
+      "minima": {
+        "matched_bondi.mhd_w_bcc.00000.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00001.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00002.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00003.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00004.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00005.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00006.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00007.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        },
+        "matched_bondi.mhd_w_bcc.00008.bin": {
+          "density": 9.99999993922529e-09,
+          "thermal": 9.999999960041972e-13
+        }
+      },
+      "resources.json": {
+        "command": [
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/build-sycl2025/src/athena",
+          "-i",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/campaign/matched.athinput",
+          "-d",
+          "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/results/binary_rotating",
+          "-t",
+          "00:06:00",
+          "time/ndiag=100",
+          "problem/single_black_hole=false"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 3219214336,
+        "memory_budget_bytes": 20000000000,
+        "seconds": 146.8350318360608,
+        "stopped": null
+      },
+      "allocations.json": {
+        "combined_peak_bytes": 11805187624,
+        "budget_bytes": 24000000000,
+        "spaces": {
+          "Host": 3029894528,
+          "SYCLDeviceUSM": 8775050896,
+          "SYCLHostUSM": 253024
+        },
+        "metric_evaluations": 7
+      },
+      "max_divb": 0.0,
+      "dens_L1_r3_32": 0.007820203187409136,
+      "press_L1_r3_32": 0.028705882040434814,
+      "dens_L1_r64_192": 1.9456969105550472e-05,
+      "press_L1_r64_192": 3.48432849680289e-05
+    },
+    "single_rotating_vs_single_inertial": {
+      "r3_32": {
+        "dens": 6.118950559558759e-05,
+        "press": 0.00011639247319461516
+      },
+      "r64_192": {
+        "dens": 1.5797765892431817e-05,
+        "press": 2.855618906311615e-05
+      }
+    },
+    "single_rotating_vs_binary_rotating": {
+      "r3_32": {
+        "dens": 0.007787035854024162,
+        "press": 0.02794816235844411
+      },
+      "r64_192": {
+        "dens": 3.933083714548422e-06,
+        "press": 6.960254327579152e-06
+      }
+    }
+  },
+  "analysis_resources": {
+    "command": [
+      "python3",
+      "scripts/tests/analyze_bondi_campaign.py",
+      "--root",
+      "build-mac-zoom-opt/aurora-results"
+    ],
+    "returncode": 0,
+    "peak_rss_bytes": 521650176,
+    "memory_budget_bytes": 20000000000,
+    "seconds": 1.496682292,
+    "stopped": null
+  },
+  "extended_upstream64": {
+    "time": 64.0,
+    "cycles": 1936,
+    "initial_blocks": 904,
+    "final_blocks": 904,
+    "topology_restored": true,
+    "saved_states_checked": 8,
+    "all_finite_and_positive": true,
+    "resources": {
+      "command": [
+        "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/build-sycl2025/src/athena",
+        "-i",
+        "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/campaign/upstream.athinput",
+        "-d",
+        "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_boundary_20261012/results/upstream",
+        "-t",
+        "00:06:00",
+        "time/tlim=64",
+        "time/ndiag=100"
+      ],
+      "returncode": 0,
+      "peak_rss_bytes": 1680998400,
+      "memory_budget_bytes": 20000000000,
+      "seconds": 243.63121006498113,
+      "stopped": null
+    },
+    "allocations": {
+      "combined_peak_bytes": 5498698136,
+      "budget_bytes": 24000000000,
+      "spaces": {
+        "Host": 1390123176,
+        "SYCLDeviceUSM": 4108313048,
+        "SYCLHostUSM": 268704
+      },
+      "metric_evaluations": 0
+    }
+  },
+  "earlier_attempts": {
+    "8924152": "Hydro geometric return exceeded block capacity; fixed saved topology for all solvers.",
+    "8924164": "IGC compilation exceeded wall deadline before first Valencia step.",
+    "8924190": "Per-kernel build advanced inertial control to 7.21875; stopped own job to use common bounded target and full zoom cycle."
+  }
+}

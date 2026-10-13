@@ -18,5 +18,8 @@ export SYCL_CACHE_PERSISTENT=1
 export SYCL_CACHE_DIR="$PWD/sycl-cache"
 export KOKKOS_TOOLS_LIBS="$PWD/kokkos_memory_guard.so"
 export KOKKOS_MEMORY_BUDGET_BYTES=24000000000
+if command -v sycl-ls >/dev/null 2>&1; then
+  sycl-ls > results/devices.txt 2>&1 || true
+fi
 sha256sum build-sycl2025/src/athena > results/executable.sha256
 /usr/bin/python3.11 source/scripts/tests/run_bondi_campaign.py --root "$PWD"
