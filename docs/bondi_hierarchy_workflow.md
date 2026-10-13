@@ -160,3 +160,12 @@ passes `-t 00:55:00`; the existing memory and 58-minute guards remain enabled.
 The thread heartbeat `finish-cyclic-zoom-visualization` checks every 30 minutes
 and will validate and visualize the gradual-seed chain after completion. The
 old floor-core movie is not a visualization of this new chain.
+
+Job 8925561 subsequently reached the requested t=35000 M, cycle 48130, with
+exit status zero after 50 minutes 7 seconds. Three complete zoom cycles were
+executed. All 351 saved fluid states passed finite-value and positive-density/
+pressure checks. The new movie, initial/final slices, first finest-return view,
+zoom history and source hashes are in
+`docs/bondi_visualizations/gradual_evolution_movie/`. Total zone-zero dwell is
+200.04 M; the 30.77-orbit global clock is not a near-horizon relaxation claim.
+The completion heartbeat is paused after delivering these artifacts.

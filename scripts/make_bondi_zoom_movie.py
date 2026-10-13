@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Circle
 from plot_bondi_validation import load,midplane,michel
-p=argparse.ArgumentParser();p.add_argument('--run',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--ffmpeg',required=True);a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--run',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--ffmpeg',required=True)
+p.add_argument('--fps',type=int,default=4)
+p.add_argument('--caption',default='Different zoom regions have different evolution exposure; only the active AMR mesh is shown.')
+a=p.parse_args();assert a.fps>0
 a.out.mkdir(parents=True,exist_ok=True);frames=a.out/'frames';frames.mkdir(exist_ok=True)
 paths=sorted((a.run/'bin').glob('*.mhd_w_bcc.*.bin'));assert len(paths)>2
 log=(a.run/'rank-0.log').read_text();events=[(float(t),int(z)) for z,t in re.findall(r'CyclicZoom: new id = \d+ zone = (\d+).*?CyclicZoom: time = ([\d.eE+-]+)',log,re.S)]
@@ -31,9 +34,10 @@ for n,path in enumerate(paths):
   fig.colorbar(plt.cm.ScalarMappable(norm=norm,cmap=cm),ax=ax,fraction=.046,pad=.025,extend='min')
  fig.text(.5,.96,'Binary Bondi inflow — saved low-resolution evolution',ha='center',fontsize=16)
  fig.text(.5,.90,f't = {t:,.1f} M  |  global clock = {t/(2*np.pi*32**1.5):.2f} binary orbits  |  zoom zone {zone}  |  {d["n_mbs"]} blocks',ha='center',fontsize=12)
- fig.text(.5,.055,'Full residence times; rotating-frame equatorial slices. Cyan crosses mark the black holes.\nOriginal floor-core seed; different zoom regions have different evolution exposure. Run later stopped at a zoom guard.',ha='center',fontsize=9)
+ fig.text(.5,.055,'Full residence times; rotating-frame equatorial slices. Cyan crosses mark the black holes.\n'+a.caption,ha='center',fontsize=9)
  fig.savefig(frames/f'{n:04d}.png');plt.close(fig)
  report.append(dict(file=path.name,time=t,cycle=d['cycle'],blocks=d['n_mbs'],zone=zone,finite=True))
-subprocess.run([a.ffmpeg,'-y','-loglevel','error','-framerate','4','-i',str(frames/'%04d.png'),'-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2,tpad=stop_mode=clone:stop_duration=2','-c:v','libx264','-crf','19','-pix_fmt','yuv420p','-movflags','+faststart',str(a.out/'bondi_evolution.mp4')],check=True)
+ if n%50==0:print(f'Rendered {n+1}/{len(paths)} frames',flush=True)
+subprocess.run([a.ffmpeg,'-y','-loglevel','error','-framerate',str(a.fps),'-i',str(frames/'%04d.png'),'-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2,tpad=stop_mode=clone:stop_duration=2','-c:v','libx264','-crf','19','-pix_fmt','yuv420p','-movflags','+faststart',str(a.out/'bondi_evolution.mp4')],check=True)
 subprocess.run([a.ffmpeg,'-y','-loglevel','error','-i',str(a.out/'bondi_evolution.mp4'),'-vf','fps=4,scale=900:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse',str(a.out/'bondi_evolution.gif')],check=True)
 (a.out/'frames.json').write_text(json.dumps(report,indent=2)+'\n');print('Validated frames:',len(report),'final time:',report[-1]['time'])
