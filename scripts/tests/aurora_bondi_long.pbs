@@ -29,7 +29,12 @@ if [[ -n "${CZ_RESTART:-}" ]]; then
 else
  initial_args=(-i "$CZ_OUT/input.athinput")
 fi
+overrides=()
+if [[ -n "${CZ_TLIM:-}" ]]; then overrides+=("time/tlim=$CZ_TLIM"); fi
+if [[ -n "${CZ_FLUID_DT:-}" ]]; then overrides+=("output1/dt=$CZ_FLUID_DT"); fi
+if [[ -n "${CZ_FLUID_LAST:-}" ]]; then overrides+=("output1/last_time=$CZ_FLUID_LAST"); fi
+printf '%s\n' "${overrides[@]}" > "$CZ_OUT/overrides.txt"
 bind='list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100'
 mpiexec -n 12 -ppn 12 --cpu-bind "$bind" bash source/scripts/tests/aurora_benchmark_rank.sh \
- ./build-sane/src/athena "${initial_args[@]}" -d "$CZ_OUT" -t 00:55:00 \
+ ./build-sane/src/athena "${initial_args[@]}" -d "$CZ_OUT" -t 00:55:00 "${overrides[@]}" \
  > "$CZ_OUT/launcher.log" 2>&1
