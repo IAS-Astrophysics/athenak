@@ -362,6 +362,9 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
   IOWrapperSizeT myoffset = offset_myrank;
 
+  // Use independent MPI-IO for disjoint per-block records. Thousands of tiny
+  // collective writes caused an Aurora ROMIO Waitall failure with unequal rank
+  // block counts. Metadata and the file-close synchronization are unchanged.
   // write cell-centered variables, one MeshBlock at a time (but parallelized over all
   // ranks). MeshBlocks are written seperately to reduce number of data elements per write
   // call, to avoid exceeding 2^31 limit for very large grids per MPI rank.
@@ -381,10 +384,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int mbcnt = ncells * nhydro;
-        if (resfile.Write_any_type_at_all(host_buffer.data(),mbcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered hydro data not written correctly to rst file, "
@@ -425,10 +428,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int mbcnt = ncells * nmhd;
-        if (resfile.Write_any_type_at_all(host_buffer.data(),mbcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered mhd data not written correctly to rst file, "
@@ -466,10 +469,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int fldcnt = (nout1+1)*nout2*nout3; // Use calculated size
-        if (resfile.Write_any_type_at_all(host_buffer.data(),fldcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),fldcnt,myoffset,"Real",
                                           single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x1f data not written correctly to rst file, "
@@ -491,7 +494,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
         
         fldcnt = nout1*(nout2+1)*nout3; // Update count
-        if (resfile.Write_any_type_at_all(host_buffer.data(),fldcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),fldcnt,myoffset,"Real",
                                           single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x2f data not written correctly to rst file, "
@@ -513,7 +516,7 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
 
         fldcnt = nout1*nout2*(nout3+1); // Update count
-        if (resfile.Write_any_type_at_all(host_buffer.data(),fldcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),fldcnt,myoffset,"Real",
                                           single_file_per_rank) != fldcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "b0.x3f data not written correctly to rst file, "
@@ -603,10 +606,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int mbcnt = ncells * nrad;
-        if (resfile.Write_any_type_at_all(host_buffer.data(),mbcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered rad data not written correctly to rst file, "
@@ -648,10 +651,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int mbcnt = ncells * nforce;
-        if (resfile.Write_any_type_at_all(host_buffer.data(),mbcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "cell-centered turb data not written correctly to rst file, "
@@ -693,10 +696,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int mbcnt = ncells * nz4c;
-        if (resfile.Write_any_type_at_all(host_buffer.data(),mbcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered z4c data not written correctly"
@@ -736,10 +739,10 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
         }
       }
 
-      // every rank has a MB to write, so write collectively
+      // Explicit offsets are disjoint; independent writes avoid a collective per block.
       if (m < noutmbs_min) {
         int mbcnt = ncells * nadm;
-        if (resfile.Write_any_type_at_all(host_buffer.data(),mbcnt,myoffset,"Real",
+        if (resfile.Write_any_type_at(host_buffer.data(),mbcnt,myoffset,"Real",
                                           single_file_per_rank) != mbcnt) {
           std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                     << std::endl << "cell-centered adm data not written correctly"

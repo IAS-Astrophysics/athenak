@@ -1,0 +1,40 @@
+{
+  "job_id": "8925171",
+  "queue": "debug",
+  "nodes": 1,
+  "ranks": 12,
+  "gpu_tiles": 12,
+  "build_sha256": "9cbf45fa4ecef2049af1c6dfa2d2587acaa4c7e95bb8b5d2ca4472032e20ca33",
+  "root_cells": [
+    32,
+    32,
+    32
+  ],
+  "meshblock_cells": [
+    8,
+    8,
+    8
+  ],
+  "initial_blocks": 848,
+  "physical_levels": 8,
+  "finest_dx_M": 0.125,
+  "total_mass": 1,
+  "separation_M": 32,
+  "bondi_radius_M": 161.226654,
+  "residence_scale": 1,
+  "target_global_time_M": 35000,
+  "target_global_orbits": 30.772530337401086,
+  "solver_wall_limit_seconds": 1560,
+  "rank_guard_seconds": 1680,
+  "pbs_wall_seconds": 1800,
+  "aggregate_tracked_allocation_budget_GB": 16,
+  "aggregate_RSS_budget_GB": 12,
+  "remote_directory": "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-lowres-8925171",
+  "initial_state": "fresh floor-core Bondi seed; not the accelerated benchmark checkpoint",
+  "last_observed_status": "failed",
+  "pbs_exit_status": 143,
+  "last_saved_time_M": 3100.56,
+  "abort_time_M": 3199.735,
+  "abort_reason": "Cyclic zoom event changed no mesh blocks",
+  "movie_frames": 32
+}

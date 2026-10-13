@@ -14,6 +14,7 @@
 #include "globals.hpp"
 
 namespace global_variable {
+int mpi_tag_lid_bits = NUM_BITS_LID;
 int my_rank;   // MPI rank of this process; set at start of main();
 int nranks;    // total number of MPI ranks; set at start of main();
 }

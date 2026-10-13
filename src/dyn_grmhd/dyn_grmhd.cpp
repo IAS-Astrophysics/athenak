@@ -144,6 +144,11 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
               << "' not implemented for FOFC" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  flux_team_size = pin->GetOrAddInteger("mhd", "dyn_flux_team_size", 0);
+  if (flux_team_size < 0) Kokkos::abort("Negative dyn_flux_team_size");
+#if !defined(KOKKOS_ENABLE_CUDA) && !defined(KOKKOS_ENABLE_HIP) && !defined(KOKKOS_ENABLE_SYCL)
+  if (flux_team_size > 1) Kokkos::abort("CPU flux team size must be zero or one");
+#endif
   scratch_level = pin->GetOrAddInteger("mhd", "dyn_scratch", 0);
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   calculate_tmunu = pin->GetOrAddBoolean("mhd", "calculate_tmunu", false);

@@ -289,9 +289,9 @@ void Mesh::BuildTreeFromScratch(ParameterInput *pin) {
     }
   }
 #if MPI_PARALLEL_ENABLED
-  if (nmb_maxperrank > (1 << (NUM_BITS_LID))) {
+  if (nmb_maxperrank > (1 << global_variable::mpi_tag_lid_bits)) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
-      << "Maximum number of MeshBlocks per rank cannot exceed 2^(NUM_BITS_LID) due to MPI"
+      << "Maximum number of MeshBlocks per rank exceeds the runtime MPI_TAG_UB"
       << " tag limits" << std::endl;
     std::exit(EXIT_FAILURE);
   }
@@ -593,6 +593,12 @@ void Mesh::BuildTreeFromRestart(ParameterInput *pin, IOWrapper &resfile,
       std::exit(EXIT_FAILURE);
     }
   }
+
+#if MPI_PARALLEL_ENABLED
+  if (nmb_maxperrank > (1 << global_variable::mpi_tag_lid_bits)) {
+    Kokkos::abort("Restart block capacity exceeds the runtime MPI_TAG_UB");
+  }
+#endif
 
   // Create new MeshRefinement object with either SMR or AMR (SMR needs Restrict fns)
   if (multilevel) {

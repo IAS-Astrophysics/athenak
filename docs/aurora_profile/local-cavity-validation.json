@@ -1,0 +1,13 @@
+{
+  "original": {
+    "central_initial_density": 0.07941649854183197,
+    "final_time": 0.2
+  },
+  "cavity": {
+    "central_initial_density": 1.000000013351432e-10,
+    "final_time": 0.2
+  },
+  "core_at_floor": true,
+  "outer_fields_identical": true,
+  "adiabat_preserved": true
+}

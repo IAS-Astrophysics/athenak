@@ -119,6 +119,36 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.flx.f = pin->GetOrAddReal(block_name,"f_flx",0.0);
   zregion.flx.r_max = pin->GetOrAddReal(block_name,"r_flx_max",0.0);
 
+  // Eq. 17 of Guo et al. (2025), in individual-hole units near the horizons.
+  // Equal-mass circular binaries share one radius; unequal masses need separate
+  // radius ladders and are deliberately rejected by this preset.
+  bondi_hydro_schedule = pin->GetOrAddBoolean(block_name,"bondi_hydro_schedule",false);
+  residence_scale = pin->GetOrAddReal(block_name,"residence_scale",1.0);
+  if (!std::isfinite(residence_scale) || residence_scale <= 0.0) {
+    Kokkos::abort("residence_scale must be finite and positive");
+  }
+  if (bondi_hydro_schedule) {
+    if (pmbp->pdyngr == nullptr || pin->GetOrAddReal("problem","b_inf",0.0) != 0.0 ||
+        pin->GetOrAddString("problem","initial_condition","") != "bondi_inflow") {
+      Kokkos::abort("Bondi hydro schedule requires the unmagnetized dynbbh Bondi setup");
+    }
+    bool single = pin->GetOrAddBoolean("problem","single_black_hole",false);
+    if (!single && (pin->GetReal("problem","q") != 1.0 ||
+                    !pin->GetOrAddBoolean("problem","corotating",false))) {
+      Kokkos::abort("Bondi hydro binary schedule requires equal masses and corotation");
+    }
+    zoom_mass = single ? 1.0 : 0.5;
+    merge_radius = single ? 0.0 : pin->GetReal("problem","sep");
+    if (!std::isfinite(merge_radius) || merge_radius < 0.0 ||
+        (!single && merge_radius <= 0.0)) Kokkos::abort("Invalid binary merge radius");
+    zregion.r_0 = zoom_mass;
+    zregion.ncenters = single ? 1 : 2;
+    zregion.x1c = 0.5*merge_radius;
+    zregion.x1c2 = -0.5*merge_radius;
+    zregion.x2c = zregion.x3c = zregion.x2c2 = zregion.x3c2 = 0.0;
+  }
+  base_zregion = zregion;
+
   // Set zoom interval parameters
   zint.trun_fac = pin->GetOrAddReal(block_name,"trun_fac",1.0);
   zint.trun_pow = pin->GetOrAddReal(block_name,"trun_pow",0.0);

@@ -90,14 +90,32 @@ void CyclicZoom::SetRegionAndInterval() {
     zr.cut.r = std::min(zr.cut.f * zr.radius, zr.cut.r_max);
     zr.flx.r = std::min(zr.flx.f * zr.radius, zr.flx.r_max);
   };
+  old_zregion = base_zregion;
+  zregion = base_zregion;
   old_zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.last_zone));
   set_scales(old_zregion);
 
   zregion.radius = zregion.r_0 * std::pow(2.0,static_cast<Real>(zstate.zone));
   set_scales(zregion);
 
+  // Merge only once the COM sphere contains the previous pair of spheres.
+  auto merge_centers = [&](ZoomRegion &zr) {
+    if (bondi_hydro_schedule && merge_radius > 0.0 && zr.radius >= merge_radius) {
+      zr.ncenters = 1;
+      zr.x1c = zr.x2c = zr.x3c = 0.0;
+    }
+  };
+  merge_centers(old_zregion);
+  merge_centers(zregion);
   Real timescale = pow(zregion.radius,zint.trun_pow);
   zint.runtime = zint.trun_facs[zstate.zone]*timescale;
+  if (bondi_hydro_schedule) {
+    Real mass = zregion.ncenters == 2 ? zoom_mass : total_mass;
+    zint.runtime = zstate.zone == 0 ? 100.0*zoom_mass :
+        (zstate.zone == 1 || zstate.zone == 2 ? 0.0 :
+         10.0*std::sqrt(zregion.radius*zregion.radius*zregion.radius/mass));
+    zint.runtime *= residence_scale;
+  }
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}
   if (!std::isfinite(zint.runtime)) Kokkos::abort("Nonfinite cyclic zoom runtime");
 }

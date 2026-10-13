@@ -1,0 +1,124 @@
+# Matched hydro Michel control / circular binary. G=M_total=c=1.
+# Generated companion files use the same gas; hierarchy follows the horizons.
+<job>
+basename = matched_bondi
+<mesh>
+nghost = 4
+nx1 = 64
+nx2 = 64
+nx3 = 64
+x1min = -256
+x1max = 256
+x2min = -256
+x2max = 256
+x3min = -256
+x3max = 256
+ix1_bc = user
+ox1_bc = user
+ix2_bc = user
+ox2_bc = user
+ix3_bc = user
+ox3_bc = user
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+<mesh_refinement>
+refinement = adaptive
+num_levels = 8
+max_nmb_per_rank = 2048
+ncycle_check = 1
+refinement_interval = 1
+# Resolve each physical horizon at m_hole/16; no binary COM fine patch.
+<refined_region1>
+level = 7
+x1min = -0.5
+x1max = 0.5
+x2min = -0.5
+x2max = 0.5
+x3min = -0.5
+x3max = 0.5
+<amr_criterion1>
+method = cyclic_zoom
+bondi_hydro_schedule = true
+residence_scale = 1.0
+nlevels = 8
+ncenters = 1
+x1c = 0
+r_0 = 1.0
+f_ref = 2
+f_exc = 0
+trun_fac = 10
+trun_pow = 1.5
+<cyclic_zoom>
+verbose = true
+max_nzmb_per_dvce = 2048
+max_nzmb_per_host = 2048
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim = -1
+tlim = 100000
+ndiag = 100
+<coord>
+general_rel = true
+a = 0
+excise = true
+excision_scheme = puncture
+excise_1_rad = 0.8
+excise_2_rad = 0.8
+dexcise = 1e-8
+pexcise = 1e-12
+require_resolved_horizon = true
+<mhd>
+dyn_flux_team_size = 0
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = ppm4
+rsolver = hlle
+gamma = 1.6666666666666667
+dfloor = 1e-10
+pfloor = 1e-14
+tfloor = 1e-12
+fofc = true
+gamma_max = 10
+enforce_maximum = false
+calculate_tmunu = false
+<adm>
+dynamic = false
+<problem>
+initial_condition = bondi_inflow
+# Optional initial cavity only; exterior feeding remains the Michel solution.
+bondi_cavity_radius = 32
+bondi_cavity_fraction = 0
+bondi_cavity_core_fraction = 0
+bondi_cache_boundary = true
+single_black_hole = true
+corotating = true
+sep = 32
+q = 1
+frame_omega = 0.005524271728019903
+a1 = 0
+a2 = 0
+r_crit = 8
+k_adi = 1
+b_inf = 0
+metric_derivative = ad
+user_hist = false
+<output1>
+file_type = bin
+variable = mhd_w_bcc
+dt = 10
+<output2>
+file_type = bin
+variable = adm
+dt = 120
+<output3>
+file_type = bin
+variable = mhd_divb
+dt = 10
+<output4>
+file_type = rst
+dt = 60

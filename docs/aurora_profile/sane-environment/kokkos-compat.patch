@@ -1,0 +1,27 @@
+diff --git a/cmake/kokkos_arch.cmake b/cmake/kokkos_arch.cmake
+index 474160313..6ceab865d 100644
+--- a/cmake/kokkos_arch.cmake
++++ b/cmake/kokkos_arch.cmake
+@@ -1189,5 +1189,5 @@ if(KOKKOS_ENABLE_SYCL)
+     elseif(KOKKOS_ARCH_INTEL_XEHP)
+       set(SYCL_TARGET_BACKEND_FLAG -Xsycl-target-backend "-device 12.50.4")
+     elseif(KOKKOS_ARCH_INTEL_PVC)
+-      set(SYCL_TARGET_BACKEND_FLAG -Xsycl-target-backend "-device 12.60.7")
++      set(SYCL_TARGET_BACKEND_FLAG -Xsycl-target-backend -device -Xsycl-target-backend=spir64_gen 12.60.7)
+     endif()
+diff --git a/core/src/setup/Kokkos_Setup_SYCL.hpp b/core/src/setup/Kokkos_Setup_SYCL.hpp
+index 243a8fc05..19f7ae91e 100644
+--- a/core/src/setup/Kokkos_Setup_SYCL.hpp
++++ b/core/src/setup/Kokkos_Setup_SYCL.hpp
+@@ -36,7 +36,10 @@
+ // FIXME_SYCL Use type directly once it has stabilized in SYCL.
+ namespace Kokkos::Impl {
+ #ifndef SYCL_EXT_INTEL_USM_ADDRESS_SPACES
+-#error SYCL_EXT_INTEL_USM_ADDRESS_SPACES undefined!
++template <typename T>
++using sycl_device_ptr = sycl::global_ptr<T>;
++template <typename T>
++using sycl_host_ptr = sycl::global_ptr<T>;
+ #elif SYCL_EXT_INTEL_USM_ADDRESS_SPACES >= 2
+ template <typename T>
+ using sycl_device_ptr = sycl::ext::intel::device_ptr<T>;

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "python3",
+    "scripts/tests/test_binary_zoom.py",
+    "--exe",
+    "build-mac-zoom-opt/src/athena",
+    "--out",
+    "build-mac-zoom-opt/final-quick",
+    "--quick-only"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 4184997888,
+  "memory_budget_bytes": 20000000000,
+  "seconds": 16.575536958,
+  "stopped": null
+}

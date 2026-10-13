@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "scripts/tests/test_bondi_frames.py",
+    "--exe",
+    "build-mac-zoom-opt/src/athena",
+    "--out",
+    "build-mac-zoom-opt/final-frames"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 2139340800,
+  "memory_budget_bytes": 8000000000,
+  "seconds": 94.44475200000001,
+  "stopped": null
+}

@@ -1,0 +1,620 @@
+{
+  "cavity_binary": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 7170764800,
+    "warm_seconds_per_step_10_to_50": 0.35018650000000007,
+    "ranks": 6,
+    "memory": [
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2070197512,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 515825784,
+          "SYCLDeviceUSM": 1554111536,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2070197512,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 515825784,
+          "SYCLDeviceUSM": 1554111536,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "hierarchy_binary": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 7042949120,
+    "warm_seconds_per_step_10_to_50": 0.31068225,
+    "ranks": 6,
+    "memory": [
+      {
+        "combined_peak_bytes": 2046602632,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 497085400,
+          "SYCLDeviceUSM": 1549257040,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2046602632,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 497085400,
+          "SYCLDeviceUSM": 1549257040,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2047782280,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498022360,
+          "SYCLDeviceUSM": 1549499728,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2047782280,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498022360,
+          "SYCLDeviceUSM": 1549499728,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2047782280,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498022360,
+          "SYCLDeviceUSM": 1549499728,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2047782280,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498022360,
+          "SYCLDeviceUSM": 1549499728,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "hierarchy_roundtrip": {
+    "successful": true,
+    "final_cycle": 16,
+    "aggregate_peak_rss_bytes_upper_bound": 7087517696,
+    "ranks": 6,
+    "memory": [
+      {
+        "combined_peak_bytes": 2046913048,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 497098000,
+          "SYCLDeviceUSM": 1549567568,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 17
+      },
+      {
+        "combined_peak_bytes": 2046775448,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 497097808,
+          "SYCLDeviceUSM": 1549430160,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 17
+      },
+      {
+        "combined_peak_bytes": 2047886296,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034656,
+          "SYCLDeviceUSM": 1549604144,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 17
+      },
+      {
+        "combined_peak_bytes": 2047920696,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034704,
+          "SYCLDeviceUSM": 1549638496,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 17
+      },
+      {
+        "combined_peak_bytes": 2048058296,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034896,
+          "SYCLDeviceUSM": 1549775904,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 17
+      },
+      {
+        "combined_peak_bytes": 2048092696,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034944,
+          "SYCLDeviceUSM": 1549810256,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 17
+      }
+    ]
+  },
+  "hierarchy_single": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 6463987712,
+    "warm_seconds_per_step_10_to_50": 0.19729432500000002,
+    "ranks": 6,
+    "memory": [
+      {
+        "combined_peak_bytes": 1947503464,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 418375384,
+          "SYCLDeviceUSM": 1528867888,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1947503464,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 418375384,
+          "SYCLDeviceUSM": 1528867888,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1948683112,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 419312344,
+          "SYCLDeviceUSM": 1529110576,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1948683112,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 419312344,
+          "SYCLDeviceUSM": 1529110576,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1948683112,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 419312344,
+          "SYCLDeviceUSM": 1529110576,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1948683112,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 419312344,
+          "SYCLDeviceUSM": 1529110576,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "node12": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 11053518848,
+    "warm_seconds_per_step_10_to_50": 0.19184977500000003,
+    "ranks": 12,
+    "memory": [
+      {
+        "combined_peak_bytes": 1065998312,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 262493880,
+          "SYCLDeviceUSM": 803244240,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1065998312,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 262493880,
+          "SYCLDeviceUSM": 803244240,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1065998312,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 262493880,
+          "SYCLDeviceUSM": 803244240,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1065998312,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 262493880,
+          "SYCLDeviceUSM": 803244240,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 1067177960,
+        "budget_bytes": 1333333333,
+        "spaces": {
+          "Host": 263430840,
+          "SYCLDeviceUSM": 803486928,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "node6": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 7114559488,
+    "warm_seconds_per_step_10_to_50": 0.3574481749999999,
+    "ranks": 6,
+    "memory": [
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2069017896,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 514888840,
+          "SYCLDeviceUSM": 1553868864,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2070197512,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 515825784,
+          "SYCLDeviceUSM": 1554111536,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      },
+      {
+        "combined_peak_bytes": 2070197512,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 515825784,
+          "SYCLDeviceUSM": 1554111536,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "stage_profile": {
+    "successful": true,
+    "final_cycle": 876,
+    "aggregate_peak_rss_bytes_upper_bound": 7019036672,
+    "warm_seconds_per_step_10_to_50": 0.31624220000000003,
+    "ranks": 6,
+    "memory": [
+      {
+        "combined_peak_bytes": 2045992920,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 497098000,
+          "SYCLDeviceUSM": 1549256784,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 23
+      },
+      {
+        "combined_peak_bytes": 2045913592,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 497097808,
+          "SYCLDeviceUSM": 1549256784,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 23
+      },
+      {
+        "combined_peak_bytes": 2046967072,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034656,
+          "SYCLDeviceUSM": 1549499472,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 23
+      },
+      {
+        "combined_peak_bytes": 2047020312,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034704,
+          "SYCLDeviceUSM": 1549499472,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 23
+      },
+      {
+        "combined_peak_bytes": 2047157960,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034896,
+          "SYCLDeviceUSM": 1549499472,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 23
+      },
+      {
+        "combined_peak_bytes": 2047173472,
+        "budget_bytes": 2666666666,
+        "spaces": {
+          "Host": 498034944,
+          "SYCLDeviceUSM": 1549499472,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 23
+      }
+    ]
+  },
+  "team0": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 3736825856,
+    "warm_seconds_per_step_10_to_50": 0.8824092499999999,
+    "ranks": 1,
+    "memory": [
+      {
+        "combined_peak_bytes": 12116976136,
+        "budget_bytes": 16000000000,
+        "spaces": {
+          "Host": 3039699112,
+          "SYCLDeviceUSM": 9077016832,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "team128": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 3692785664,
+    "warm_seconds_per_step_10_to_50": 0.341861475,
+    "ranks": 1,
+    "memory": [
+      {
+        "combined_peak_bytes": 12116976136,
+        "budget_bytes": 16000000000,
+        "spaces": {
+          "Host": 3039699112,
+          "SYCLDeviceUSM": 9077016832,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "team32": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 3775574016,
+    "warm_seconds_per_step_10_to_50": 0.3143283,
+    "ranks": 1,
+    "memory": [
+      {
+        "combined_peak_bytes": 12116976136,
+        "budget_bytes": 16000000000,
+        "spaces": {
+          "Host": 3039699112,
+          "SYCLDeviceUSM": 9077016832,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  },
+  "team64": {
+    "successful": true,
+    "final_cycle": 60,
+    "aggregate_peak_rss_bytes_upper_bound": 3725066240,
+    "warm_seconds_per_step_10_to_50": 0.30709424999999996,
+    "ranks": 1,
+    "memory": [
+      {
+        "combined_peak_bytes": 12116976136,
+        "budget_bytes": 16000000000,
+        "spaces": {
+          "Host": 3039699112,
+          "SYCLDeviceUSM": 9077016832,
+          "SYCLHostUSM": 260192
+        },
+        "metric_evaluations": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "job": "8925171",
+  "source": "evolution-lowres-8925171/bin/*.mhd_w_bcc.*.bin",
+  "frame_count": 32,
+  "frame_spacing_M": "approximately 100; exact times in frames.json",
+  "playback_fps": 4,
+  "last_frame_hold_seconds": 2,
+  "rendered_fields": [
+    "dens/rho_infinity",
+    "temperature=p/rho"
+  ],
+  "plane": "z=0, mean of the two adjacent cell-center planes",
+  "frame": "binary corotating",
+  "residence_scale": 1,
+  "initial_cavity_radius_M": 16,
+  "initial_core_fraction": 0.5,
+  "last_snapshot_time_M": 3100.56,
+  "run_abort_time_M": 3199.735,
+  "run_abort_reason": "Cyclic zoom event changed no mesh blocks",
+  "all_saved_fields_finite": true,
+  "all_saved_density_pressure_positive": true,
+  "note": "Movie predates the gradual r_cut=a/core_fraction=0 seed. No interpolated simulation states."
+}

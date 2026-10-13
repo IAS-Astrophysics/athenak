@@ -1,0 +1,21 @@
+{
+  "command": [
+    "build-mac-zoom-opt/src/athena",
+    "-i",
+    "inputs/dyngr/bondi_hierarchy/binary_lowres.athinput",
+    "-d",
+    "build-mac-zoom-opt/lowres-roundtrip",
+    "time/nlim=14",
+    "time/tlim=100",
+    "amr_criterion1/residence_scale=0.000001",
+    "mhd/dyn_flux_team_size=0",
+    "mesh_refinement/max_nmb_per_rank=900",
+    "cyclic_zoom/max_nzmb_per_dvce=900",
+    "cyclic_zoom/max_nzmb_per_host=900"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 6853230592,
+  "memory_budget_bytes": 20000000000,
+  "seconds": 144.589329958,
+  "stopped": null
+}

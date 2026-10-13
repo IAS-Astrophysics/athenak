@@ -86,6 +86,7 @@ dexcise = 1e-8
 pexcise = 1e-12
 require_resolved_horizon = true
 <mhd>
+dyn_flux_team_size = 0
 eos = ideal
 dyn_eos = ideal
 dyn_error = reset_floor
@@ -103,6 +104,11 @@ calculate_tmunu = false
 dynamic = false
 <problem>
 initial_condition = bondi_inflow
+# Optional initial cavity only; exterior feeding remains the Michel solution.
+bondi_cavity_radius = 0
+bondi_cavity_fraction = 0
+bondi_cavity_core_fraction = 0
+bondi_cache_boundary = true
 single_black_hole = false
 corotating = true
 sep = 32

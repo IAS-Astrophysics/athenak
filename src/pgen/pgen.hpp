@@ -49,6 +49,9 @@ class ProblemGenerator {
   // true if user history outputs are specified
   bool user_hist;
 
+  // Problem-owned boundary cache, destroyed before Kokkos finalization.
+  std::shared_ptr<void> user_boundary_data;
+
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
   std::vector<std::unique_ptr<SphericalSurfaceGrid>> surface_grids;

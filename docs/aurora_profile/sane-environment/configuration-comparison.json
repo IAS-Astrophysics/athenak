@@ -1,0 +1,87 @@
+{
+  "Athena_ENABLE_MPI": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Athena_ENABLE_OPENMP": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Athena_SINGLE_PRECISION": {
+    "sane": "OFF",
+    "cyclic": "OFF",
+    "matches": true
+  },
+  "CMAKE_BUILD_TYPE": {
+    "sane": "Release",
+    "cyclic": "Release",
+    "matches": true
+  },
+  "CMAKE_CXX_FLAGS": {
+    "sane": "-O3 -fsycl -fiopenmp",
+    "cyclic": "-O3 -fsycl -fiopenmp",
+    "matches": true
+  },
+  "CMAKE_CXX_FLAGS_RELEASE": {
+    "sane": "-O3 -DNDEBUG",
+    "cyclic": "-O3 -DNDEBUG",
+    "matches": true
+  },
+  "CMAKE_EXE_LINKER_FLAGS": {
+    "sane": "-fsycl-max-parallel-link-jobs=8",
+    "cyclic": "-fsycl-max-parallel-link-jobs=8",
+    "matches": true
+  },
+  "Kokkos_ARCH_INTEL_PVC": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Kokkos_ARCH_INTEL_GEN": {
+    "sane": "OFF",
+    "cyclic": "OFF",
+    "matches": true
+  },
+  "Kokkos_ENABLE_SYCL": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Kokkos_ENABLE_SERIAL": {
+    "sane": "OFF",
+    "cyclic": "OFF",
+    "matches": true
+  },
+  "Kokkos_ENABLE_OPENMP": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Kokkos_ENABLE_AGGRESSIVE_VECTORIZATION": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Kokkos_ENABLE_SYCL_RELOCATABLE_DEVICE_CODE": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  },
+  "Kokkos_ENABLE_DEBUG": {
+    "sane": "OFF",
+    "cyclic": "OFF",
+    "matches": true
+  },
+  "Kokkos_ENABLE_DEBUG_BOUNDS_CHECK": {
+    "sane": "OFF",
+    "cyclic": "OFF",
+    "matches": true
+  },
+  "Kokkos_ENABLE_DEBUG_DUALVIEW_MODIFY_CHECK": {
+    "sane": "ON",
+    "cyclic": "ON",
+    "matches": true
+  }
+}

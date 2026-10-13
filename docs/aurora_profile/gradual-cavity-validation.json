@@ -1,0 +1,14 @@
+{
+  "original": {
+    "central_initial_density": 0.07941649854183197,
+    "final_time": 0.2
+  },
+  "cavity": {
+    "central_initial_density": 0.00011593081580940634,
+    "final_time": 0.2
+  },
+  "smooth_taper_matches_quintic": true,
+  "floor_reached_only_at_geometric_origin": true,
+  "outer_fields_identical": true,
+  "adiabat_preserved": true
+}

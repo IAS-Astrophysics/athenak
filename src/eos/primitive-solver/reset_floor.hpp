@@ -35,6 +35,7 @@ class ResetFloor : public ErrorPolicyInterface {
   /// Floor for primitive variables
   KOKKOS_INLINE_FUNCTION bool PrimitiveFloor(Real& n, Real v[3], Real& T, Real *Y,
                                              int n_species) const {
+    bool changed = false;
     if (n < n_atm*n_threshold) {
       n = n_atm;
       if (aggressive_floor) {
@@ -46,12 +47,15 @@ class ResetFloor : public ErrorPolicyInterface {
           Y[i] = Y_atm[i];
         }
       }
-      return true;
-    } else if (T < T_atm) {
+      changed = true;
+    }
+    // Non-aggressive density flooring must still enforce the temperature floor.
+    // Otherwise simultaneous low density/temperature can return zero pressure.
+    if (T < T_atm) {
       T = T_atm;
       return true;
     }
-    return false;
+    return changed;
   }
 
   /// Floor for conserved variables

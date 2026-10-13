@@ -1,0 +1,38 @@
+{
+  "states": [
+    {
+      "cycle": 0,
+      "time": 0.0,
+      "blocks": 848,
+      "max_level": 7,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 14,
+      "time": 6.06477,
+      "blocks": 848,
+      "max_level": 7,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 2.3251077695536594e-15
+    }
+  ],
+  "max_abs_divb": 0.0,
+  "topology_restored": true,
+  "zones": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    6,
+    5,
+    4,
+    3,
+    2,
+    1,
+    0
+  ]
+}

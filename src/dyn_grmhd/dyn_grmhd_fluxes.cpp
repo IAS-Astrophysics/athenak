@@ -31,6 +31,36 @@
 #include "eos/primitive-solver/reset_floor.hpp"
 
 namespace dyngr {
+// Small MeshBlocks have short rows. Allow a measured GPU team size instead of
+// AUTO, which can assign many idle threads to each reconstruction row.
+template<typename F>
+void FluxRows(const std::string &name, int team_size, size_t scratch, int level,
+              int ml, int mu, int kl, int ku, int jl, int ju, const F &fn) {
+  int nk = ku-kl+1, nj = ju-jl+1;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), (mu-ml+1)*nk*nj, Kokkos::AUTO);
+  if (team_size > 0) {
+    policy = Kokkos::TeamPolicy<>(DevExeSpace(), (mu-ml+1)*nk*nj, team_size);
+  }
+  Kokkos::parallel_for(name, policy.set_scratch_size(level,Kokkos::PerTeam(scratch)),
+    KOKKOS_LAMBDA(TeamMember_t member) {
+      int row = member.league_rank();
+      fn(member, row/(nk*nj)+ml, (row/nj)%nk+kl, row%nj+jl);
+    });
+}
+template<typename F>
+void FluxRows(const std::string &name, int team_size, size_t scratch, int level,
+              int ml, int mu, int kl, int ku, const F &fn) {
+  int nk = ku-kl+1;
+  Kokkos::TeamPolicy<> policy(DevExeSpace(), (mu-ml+1)*nk, Kokkos::AUTO);
+  if (team_size > 0) {
+    policy = Kokkos::TeamPolicy<>(DevExeSpace(), (mu-ml+1)*nk, team_size);
+  }
+  Kokkos::parallel_for(name, policy.set_scratch_size(level,Kokkos::PerTeam(scratch)),
+    KOKKOS_LAMBDA(TeamMember_t member) {
+      fn(member, member.league_rank()/nk+ml, member.league_rank()%nk+kl);
+    });
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::CalcFluxes
 //! \brief Calls reconstruction and Riemann solver functions to compute hydro fluxes
@@ -88,7 +118,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   int il = is, iu = ie+1;
   if (use_fofc) { il = is-1, iu = ie+2; }
 
-  par_for_outer("dyngrflux_x1",DevExeSpace(), scr_size, scr_level,
+  FluxRows("dyngrflux_x1",flux_team_size, scr_size, scr_level,
       0, nmb1, kl, ku, jl, ju,
   KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k, const int j) {
     ScrArray2D<Real> wl(member.team_scratch(scr_level), nvars, ncells1);
@@ -186,7 +216,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     jl = js-1, ju = je+1;
     if (use_fofc) { jl = js-2, ju = je+2; }
 
-    par_for_outer("dyngrflux_x2",DevExeSpace(), scr_size, scr_level, 0, nmb1, kl, ku,
+    FluxRows("dyngrflux_x2",flux_team_size, scr_size, scr_level, 0, nmb1, kl, ku,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int k) {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);
@@ -298,7 +328,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     kl = ks-1, ku = ke+1;
     if (use_fofc) { kl = ks-2, ku = ke+2; }
 
-    par_for_outer("dyngrflux_x3",DevExeSpace(), scr_size, scr_level, 0, nmb1, js-1, je+1,
+    FluxRows("dyngrflux_x3",flux_team_size, scr_size, scr_level, 0, nmb1, js-1, je+1,
     KOKKOS_LAMBDA(TeamMember_t member, const int m, const int j) {
       ScrArray2D<Real> scr1(member.team_scratch(scr_level), nvars, ncells1);
       ScrArray2D<Real> scr2(member.team_scratch(scr_level), nvars, ncells1);

@@ -1,0 +1,208 @@
+{
+  "cached": {
+    "states": [
+      {
+        "cycle": 0,
+        "time": 0.0,
+        "blocks": 512,
+        "max_level": 4,
+        "min_density": 9.99999993922529e-09,
+        "min_pressure": 9.999999960041972e-13
+      },
+      {
+        "cycle": 1,
+        "time": 0.0431543,
+        "blocks": 512,
+        "max_level": 4,
+        "min_density": 9.99999993922529e-09,
+        "min_pressure": 9.999999960041972e-13
+      },
+      {
+        "cycle": 2,
+        "time": 0.107576,
+        "blocks": 400,
+        "max_level": 3,
+        "min_density": 9.99999993922529e-09,
+        "min_pressure": 9.999999960041972e-13
+      },
+      {
+        "cycle": 3,
+        "time": 0.193161,
+        "blocks": 288,
+        "max_level": 2,
+        "min_density": 0.0019045850494876504,
+        "min_pressure": 2.9263977921800688e-05
+      },
+      {
+        "cycle": 4,
+        "time": 0.295908,
+        "blocks": 176,
+        "max_level": 1,
+        "min_density": 0.001904575969092548,
+        "min_pressure": 2.9263726901263e-05
+      },
+      {
+        "cycle": 5,
+        "time": 0.501402,
+        "blocks": 64,
+        "max_level": 0,
+        "min_density": 0.0019045536173507571,
+        "min_pressure": 2.9263115720823407e-05
+      },
+      {
+        "cycle": 6,
+        "time": 0.604149,
+        "blocks": 176,
+        "max_level": 1,
+        "min_density": 0.0019045406952500343,
+        "min_pressure": 2.9262766474857926e-05
+      },
+      {
+        "cycle": 7,
+        "time": 0.689734,
+        "blocks": 288,
+        "max_level": 2,
+        "min_density": 0.0019045291701331735,
+        "min_pressure": 2.9262457246659324e-05
+      },
+      {
+        "cycle": 8,
+        "time": 0.754155,
+        "blocks": 400,
+        "max_level": 3,
+        "min_density": 9.99999993922529e-09,
+        "min_pressure": 9.999999960041972e-13
+      },
+      {
+        "cycle": 8,
+        "time": 0.754155,
+        "blocks": 512,
+        "max_level": 4,
+        "min_density": 9.99999993922529e-09,
+        "min_pressure": 1.919086337935573e-15
+      }
+    ],
+    "max_abs_divb": 0.0
+  },
+  "restart": {
+    "dens": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "velx": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "vely": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "velz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "press": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "bcc1": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "bcc2": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "bcc3": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "temperature": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_gxx": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_gxy": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_gxz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_gyy": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_gyz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_gzz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_Kxx": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_Kxy": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_Kxz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_Kyy": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_Kyz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_Kzz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_psi4": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_alpha": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_betax": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_betay": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "adm_betaz": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    },
+    "divb": {
+      "max_abs_error": 0.0,
+      "relative_to_field_max": 0.0
+    }
+  },
+  "cache_bitwise_equal": true,
+  "stage_runtimes": [
+    0.0,
+    0.0,
+    8e-05,
+    0.0002262742,
+    8e-05,
+    0.0,
+    0.0,
+    5e-05
+  ]
+}

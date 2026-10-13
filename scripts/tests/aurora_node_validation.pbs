@@ -1,0 +1,53 @@
+#!/bin/bash
+#PBS -A MHDTidal
+#PBS -q debug
+#PBS -N cz_node_validate
+#PBS -l select=1
+#PBS -l walltime=00:30:00
+#PBS -l filesystems=flare:home
+#PBS -j oe
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+source source/scripts/tests/aurora_sane_environment.sh runtime
+export ONEAPI_DEVICE_SELECTOR=level_zero:gpu ZE_FLAT_DEVICE_HIERARCHY=COMPOSITE
+export SYCL_CACHE_PERSISTENT=1
+export SYCL_CACHE_DIR="$PWD/sycl-cache"
+mkdir -p results-sane
+module list > results-sane/modules-runtime.txt 2>&1
+ldd ./build-sane/src/athena > results-sane/libraries-runtime.txt
+grep -q "mpich-5.0.0.aurora_test.51a9474-" results-sane/libraries-runtime.txt
+sha256sum ./build-sane/src/athena > results-sane/executable.sha256
+printf "%s\n" "$PBS_JOBID" > results-sane/job-id.txt
+export KOKKOS_TOOLS_LIBS="$PWD/memory_guard.so"
+run_case() {
+ local name=$1 ranks=$2 exe=$3 input=$4 team=$5
+ shift 5
+ export CZ_NRANKS=$ranks CZ_OUT="$PWD/results-sane/$name"
+ export CZ_RSS_GB
+ CZ_RSS_GB=$(python3.11 -c "print(12/$ranks)")
+ mkdir -p "$CZ_OUT"
+ local binding=1-8
+ if [ "$ranks" = 6 ]; then binding=1-8:17-24:33-40:53-60:69-76:85-92; fi
+ if [ "$ranks" = 12 ]; then binding=1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100; fi
+ local capacity=$(( (1600+ranks-1)/ranks+8 ))
+ local zcapacity=$(( (1024+ranks-1)/ranks+8 ))
+ local extra=()
+ if [ "$team" != baseline ]; then extra+=("mhd/dyn_flux_team_size=$team"); fi
+ mpiexec -n "$ranks" -ppn "$ranks" --cpu-bind "list:$binding" bash source/scripts/tests/aurora_benchmark_rank.sh "$exe" -i "$input" -d "$CZ_OUT" -t 00:06:00 time/nlim=60 time/ndiag=10 mesh_refinement/max_nmb_per_rank="$capacity" cyclic_zoom/max_nzmb_per_dvce="$zcapacity" cyclic_zoom/max_nzmb_per_host="$capacity" output1/dt=1000 output2/dt=1000 output3/dt=1000 output4/dt=1000 "${extra[@]}" "$@" > "$CZ_OUT/run.log" 2>&1
+}
+base=source/inputs/dyngr/bondi_matched_zoom.athinput
+best=32
+run_case fixed_team32 1 ./build-sane/src/athena "$base" "$best"
+for ranks in 6 12; do
+ run_case "fixed_node$ranks" "$ranks" ./build-sane/src/athena "$base" "$best"
+done
+run_case fixed_cavity_binary 6 ./build-sane/src/athena "$base" "$best" problem/bondi_cavity_radius=32
+# Hole-centered hierarchies; short physical-time benchmarks, not relaxed flows.
+for kind in binary single; do
+ run_case "fixed_hierarchy_$kind" 6 ./build-sane/src/athena "source/inputs/dyngr/bondi_hierarchy/$kind.athinput" "$best"
+done
+# Full nine-level merge/split smoke sweep; accelerated residence is explicitly
+# an infrastructure check and is excluded from physical relaxation estimates.
+run_case fixed_hierarchy_roundtrip 6 ./build-sane/src/athena source/inputs/dyngr/bondi_hierarchy/binary.athinput "$best" amr_criterion1/residence_scale=0.000001 time/nlim=16 time/ndiag=1
+# Sample multiple evolution steps at each level for stage-aware cost estimates.
+run_case stage_profile 6 ./build-sane/src/athena source/inputs/dyngr/bondi_hierarchy/binary.athinput "$best" amr_criterion1/residence_scale=0.01 time/nlim=2000 time/tlim=330 time/ndiag=1

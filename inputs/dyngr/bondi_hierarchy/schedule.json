@@ -1,0 +1,142 @@
+{
+  "single": [
+    {
+      "zone": 0,
+      "radius": 1.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 100.0,
+      "actual_residence": 100.0
+    },
+    {
+      "zone": 1,
+      "radius": 2.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 0,
+      "actual_residence": 0.0
+    },
+    {
+      "zone": 2,
+      "radius": 4.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 0,
+      "actual_residence": 0.0
+    },
+    {
+      "zone": 3,
+      "radius": 8.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 226.27416997969522,
+      "actual_residence": 226.27416997969522
+    },
+    {
+      "zone": 4,
+      "radius": 16.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 640.0,
+      "actual_residence": 640.0
+    },
+    {
+      "zone": 5,
+      "radius": 32.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 1810.1933598375617,
+      "actual_residence": 1810.1933598375617
+    },
+    {
+      "zone": 6,
+      "radius": 64.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 5120.0,
+      "actual_residence": 5120.0
+    },
+    {
+      "zone": 7,
+      "radius": 128.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 14481.546878700494,
+      "actual_residence": 14481.546878700494
+    }
+  ],
+  "binary": [
+    {
+      "zone": 0,
+      "radius": 0.5,
+      "centers": 2,
+      "mass": 0.5,
+      "physical_residence": 50.0,
+      "actual_residence": 50.0
+    },
+    {
+      "zone": 1,
+      "radius": 1.0,
+      "centers": 2,
+      "mass": 0.5,
+      "physical_residence": 0,
+      "actual_residence": 0.0
+    },
+    {
+      "zone": 2,
+      "radius": 2.0,
+      "centers": 2,
+      "mass": 0.5,
+      "physical_residence": 0,
+      "actual_residence": 0.0
+    },
+    {
+      "zone": 3,
+      "radius": 4.0,
+      "centers": 2,
+      "mass": 0.5,
+      "physical_residence": 113.13708498984761,
+      "actual_residence": 113.13708498984761
+    },
+    {
+      "zone": 4,
+      "radius": 8.0,
+      "centers": 2,
+      "mass": 0.5,
+      "physical_residence": 320.0,
+      "actual_residence": 320.0
+    },
+    {
+      "zone": 5,
+      "radius": 16.0,
+      "centers": 2,
+      "mass": 0.5,
+      "physical_residence": 905.0966799187809,
+      "actual_residence": 905.0966799187809
+    },
+    {
+      "zone": 6,
+      "radius": 32.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 1810.1933598375617,
+      "actual_residence": 1810.1933598375617
+    },
+    {
+      "zone": 7,
+      "radius": 64.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 5120.0,
+      "actual_residence": 5120.0
+    },
+    {
+      "zone": 8,
+      "radius": 128.0,
+      "centers": 1,
+      "mass": 1,
+      "physical_residence": 14481.546878700494,
+      "actual_residence": 14481.546878700494
+    }
+  ]
+}

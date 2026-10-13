@@ -1,0 +1,258 @@
+[
+  {
+    "file": "matched_bondi.mhd_w_bcc.00000.bin",
+    "time": 0.0,
+    "cycle": 0,
+    "blocks": 848,
+    "zone": 0,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00001.bin",
+    "time": 100.044,
+    "cycle": 1964,
+    "blocks": 512,
+    "zone": 3,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00002.bin",
+    "time": 200.217,
+    "cycle": 2359,
+    "blocks": 400,
+    "zone": 4,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00003.bin",
+    "time": 300.278,
+    "cycle": 2628,
+    "blocks": 400,
+    "zone": 4,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00004.bin",
+    "time": 400.34,
+    "cycle": 2897,
+    "blocks": 400,
+    "zone": 4,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00005.bin",
+    "time": 500.191,
+    "cycle": 3149,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00006.bin",
+    "time": 600.546,
+    "cycle": 3319,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00007.bin",
+    "time": 700.311,
+    "cycle": 3488,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00008.bin",
+    "time": 800.075,
+    "cycle": 3657,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00009.bin",
+    "time": 900.43,
+    "cycle": 3827,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00010.bin",
+    "time": 1000.19,
+    "cycle": 3996,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00011.bin",
+    "time": 1100.55,
+    "cycle": 4166,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00012.bin",
+    "time": 1200.31,
+    "cycle": 4335,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00013.bin",
+    "time": 1300.08,
+    "cycle": 4504,
+    "blocks": 288,
+    "zone": 5,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00014.bin",
+    "time": 1400.43,
+    "cycle": 4674,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00015.bin",
+    "time": 1500.2,
+    "cycle": 4843,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00016.bin",
+    "time": 1600.55,
+    "cycle": 5013,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00017.bin",
+    "time": 1700.32,
+    "cycle": 5182,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00018.bin",
+    "time": 1800.08,
+    "cycle": 5351,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00019.bin",
+    "time": 1900.44,
+    "cycle": 5521,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00020.bin",
+    "time": 2000.2,
+    "cycle": 5690,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00021.bin",
+    "time": 2100.55,
+    "cycle": 5860,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00022.bin",
+    "time": 2200.32,
+    "cycle": 6029,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00023.bin",
+    "time": 2300.08,
+    "cycle": 6198,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00024.bin",
+    "time": 2400.44,
+    "cycle": 6368,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00025.bin",
+    "time": 2500.2,
+    "cycle": 6537,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00026.bin",
+    "time": 2600.56,
+    "cycle": 6707,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00027.bin",
+    "time": 2700.32,
+    "cycle": 6876,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00028.bin",
+    "time": 2800.09,
+    "cycle": 7045,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00029.bin",
+    "time": 2900.44,
+    "cycle": 7215,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00030.bin",
+    "time": 3000.21,
+    "cycle": 7384,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  },
+  {
+    "file": "matched_bondi.mhd_w_bcc.00031.bin",
+    "time": 3100.56,
+    "cycle": 7554,
+    "blocks": 232,
+    "zone": 6,
+    "finite": true
+  }
+]

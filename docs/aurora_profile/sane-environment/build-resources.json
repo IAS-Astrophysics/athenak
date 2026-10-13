@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cmake",
+    "--build",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/build-sane",
+    "-j4"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 4378333184,
+  "memory_budget_bytes": 24000000000,
+  "seconds": 702.7324402460363,
+  "stopped": null
+}

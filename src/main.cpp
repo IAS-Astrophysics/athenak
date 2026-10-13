@@ -112,6 +112,20 @@ int main(int argc, char *argv[]) {
     MPI_Finalize();
     return(0);
   }
+  int *tag_limit=nullptr, has_tag_limit=0;
+  MPI_Comm_get_attr(MPI_COMM_WORLD,MPI_TAG_UB,&tag_limit,&has_tag_limit);
+  if (!has_tag_limit || tag_limit == nullptr || *tag_limit < 32767) {
+    std::cerr << "MPI_TAG_UB is unavailable or below the MPI minimum" << std::endl;
+    MPI_Abort(MPI_COMM_WORLD,1);
+  }
+  int tag_upper_bound=*tag_limit;
+  MPI_Allreduce(MPI_IN_PLACE,&tag_upper_bound,1,MPI_INT,MPI_MIN,MPI_COMM_WORLD);
+  global_variable::mpi_tag_lid_bits =
+      global_variable::MPILocalIDBits(tag_upper_bound,NUM_BITS_LID);
+  if (global_variable::my_rank == 0) {
+    std::cout << "MPI tag upper bound=" << tag_upper_bound << " local-ID bits="
+              << global_variable::mpi_tag_lid_bits << std::endl;
+  }
 #else  // no MPI
   global_variable::my_rank = 0;
   global_variable::nranks  = 1;

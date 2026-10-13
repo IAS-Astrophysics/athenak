@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "scripts/tests/test_bondi_cavity.py",
+    "--exe",
+    "build-mac-zoom-opt/src/athena",
+    "--out",
+    "build-mac-zoom-opt/final-cavity"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 336068608,
+  "memory_budget_bytes": 4000000000,
+  "seconds": 5.563868125,
+  "stopped": null
+}

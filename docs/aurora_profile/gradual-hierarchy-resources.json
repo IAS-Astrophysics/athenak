@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "scripts/tests/test_bondi_hierarchy.py",
+    "--exe",
+    "build-mac-zoom-opt/src/athena",
+    "--out",
+    "build-mac-zoom-opt/gradual-hierarchy"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 2473574400,
+  "memory_budget_bytes": 8000000000,
+  "seconds": 74.81895862500001,
+  "stopped": null
+}

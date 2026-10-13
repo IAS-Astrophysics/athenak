@@ -34,13 +34,15 @@ namespace particles {
 class Particles;
 }
 
+#include "globals.hpp"
+
 //----------------------------------------------------------------------------------------
 //! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
 //! \brief calculate an MPI tag for boundary buffer communications.  Note maximum size of
-//! lid that can be encoded is set by (NUM_BITS_LID) macro defined in athena.hpp.
+//! lid capacity is set at startup from MPI_TAG_UB via mpi_tag_lid_bits.
 //! The convention in AthenaK is lid and bufid are both for the *receiving* process.
 static int CreateBvals_MPI_Tag(int lid, int bufid) {
-  return (bufid << (NUM_BITS_LID)) | lid;
+  return (bufid << (global_variable::mpi_tag_lid_bits)) | lid;
 }
 
 //----------------------------------------------------------------------------------------

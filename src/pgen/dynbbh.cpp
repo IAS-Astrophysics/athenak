@@ -443,6 +443,12 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart);
 void BinaryReservoirBoundary(Mesh *pm);
 Real reservoir_density, reservoir_pressure, reservoir_bz;
 bool use_bondi_inflow = false;
+bool cache_bondi_boundary = true;
+std::uint64_t bondi_metric_revision = 0;
+struct BondiBoundaryCache {
+  DvceArray5D<Real> primitive;
+  std::uint64_t revision = 0;
+};
 bondi_profile::Solution inflow_solution;
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
@@ -2107,13 +2113,24 @@ void InitializeDynBBHRestartDynRadiation(Mesh *pm) {
 }
 
 KOKKOS_INLINE_FUNCTION
+Real BondiCavityWeight(Real radius, Real cutoff, Real core_fraction) {
+  if (cutoff <= 0.0 || radius >= cutoff) return 1.0;
+  Real q=fmax(0.0,(radius/cutoff-core_fraction)/(1.0-core_fraction));
+  return q*q*q*(10.0+q*(-15.0+6.0*q));
+}
+
+KOKKOS_INLINE_FUNCTION
 void BondiInflowPrimitive(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
                          int m, int k, int j, int i, Real omega,
                          bondi_profile::Solution solution, bool initial,
-                         Real &rho, Real &p, Real u[3]) {
+                         Real &rho, Real &p, Real u[3], Real cavity_radius=0.0,
+                         Real cavity_core_fraction=0.0) {
   Real radius = sqrt(x*x+y*y+z*z), ur, ut;
   solution.Sample(radius,rho,p,ur,ut);
   Real f = ur/(ut*fmax(radius,1.0));
+  if (initial && cavity_radius > 0.0 && radius < cavity_radius) {
+    f *= BondiCavityWeight(radius,cavity_radius,cavity_core_fraction);
+  }
   // Specify the inertial KS coordinate velocity, pull it back to the rotating
   // coordinates, then convert using the actual local binary ADM fields.
   // The grid rotation cancels between v_coord and beta, even outside r_LC.
@@ -2186,6 +2203,25 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
               << " M_total=1 boundary=" << (use_bondi_inflow ? "Michel" : "ambient")
               << std::endl;
   }
+  cache_bondi_boundary=pin->GetOrAddBoolean("problem","bondi_cache_boundary",true);
+  Real cavity_radius=pin->GetOrAddReal("problem","bondi_cavity_radius",0.0);
+  Real cavity_core_fraction=pin->GetOrAddReal("problem","bondi_cavity_core_fraction",0.0);
+  Real cavity_fraction=pin->GetOrAddReal("problem","bondi_cavity_fraction",0.0);
+  if (!(std::isfinite(cavity_radius) && cavity_radius >= 0.0 &&
+        std::isfinite(cavity_core_fraction) && cavity_core_fraction >= 0.0 &&
+        cavity_core_fraction < 1.0 && std::isfinite(cavity_fraction) && cavity_fraction >= 0.0 && cavity_fraction <= 1.0)) {
+    Kokkos::abort("Invalid Bondi initial cavity parameters");
+  }
+  if (cavity_radius > 0.0 && !use_bondi_inflow) {
+    Kokkos::abort("Bondi initial cavity requires bondi_inflow");
+  }
+  Real cavity_density=0.0;
+  if (cavity_radius > 0.0) {
+    Real cp, cur, cut;
+    inflow_solution.Sample(cavity_radius,cavity_density,cp,cur,cut);
+    cavity_density = std::max(cavity_density*cavity_fraction,
+                              pin->GetReal("mhd","dfloor"));
+  }
   pack->padm->SetADMVariables(pack);
   if (pack->pcoord->coord_data.bh_excise) pack->pcoord->UpdateExcisionMasks();
   if (restart) return;
@@ -2197,6 +2233,7 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   auto bc = pack->pmhd->bcc0;
   int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
   Real rho=reservoir_density, pressure=reservoir_pressure, bz=reservoir_bz;
+  Real initial_pfloor=pin->GetReal("mhd","pfloor");
   bool inflow=use_bondi_inflow;
   auto solution=inflow_solution;
   Real omega=bbh.frame_omega;
@@ -2216,7 +2253,14 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
         Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
         Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
         Real d, p, u[3];
-        BondiInflowPrimitive(x,y,z,adm,m,k,j,i,omega,solution,true,d,p,u);
+        BondiInflowPrimitive(x,y,z,adm,m,k,j,i,omega,solution,true,d,p,u,cavity_radius,
+                            cavity_core_fraction);
+        Real radius=sqrt(x*x+y*y+z*z);
+        if (cavity_radius > 0.0 && radius < cavity_radius) {
+          Real blend=BondiCavityWeight(radius,cavity_radius,cavity_core_fraction);
+          d=cavity_density+blend*(d-cavity_density);
+          p=fmax(solution.k*pow(d,solution.gamma),initial_pfloor);
+        }
         w(m,IDN,k,j,i)=d;
         w(m,IPR,k,j,i)=p;
         for (int a=0; a<3; ++a) w(m,IVX+a,k,j,i)=u[a];
@@ -2243,6 +2287,24 @@ void BinaryReservoirBoundary(Mesh *pm) {
   Real omega=bbh.frame_omega;
   int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
   int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
+  // Cache only stationary analytic boundary primitives. The ADM callback
+  // invalidates them whenever geometry or the local block layout changes.
+  bool cached=inflow && cache_bondi_boundary && !pack->padm->is_dynamic;
+  bool refresh=false;
+  DvceArray5D<Real> boundary_state;
+  std::shared_ptr<BondiBoundaryCache> cache;
+  if (cached) {
+    if (!pm->pgen->user_boundary_data) {
+      pm->pgen->user_boundary_data=std::make_shared<BondiBoundaryCache>();
+    }
+    cache=std::static_pointer_cast<BondiBoundaryCache>(pm->pgen->user_boundary_data);
+    refresh=cache->revision != bondi_metric_revision ||
+            cache->primitive.extent(0) != static_cast<size_t>(pack->nmb_thispack);
+    if (refresh) {
+      Kokkos::realloc(cache->primitive,pack->nmb_thispack,5,n3,n2,n1);
+    }
+    boundary_state=cache->primitive;
+  }
   // User BFieldBCs leaves magnetic ghost faces to this callback. Fill only
   // exterior faces; normal faces on the physical boundary remain CT-evolved.
   par_for("binary_reservoir_b_bc",DevExeSpace(),0,pack->nmb_thispack-1,
@@ -2279,7 +2341,16 @@ void BinaryReservoirBoundary(Mesh *pm) {
         w(m,IPR,k,j,i)=pressure;
         if (inflow) {
           Real d, p, u[3];
-          BondiInflowPrimitive(x,y,z,adm,m,k,j,i,omega,solution,false,d,p,u);
+          if (cached && !refresh) {
+            d=boundary_state(m,0,k,j,i); p=boundary_state(m,1,k,j,i);
+            for (int a=0; a<3; ++a) u[a]=boundary_state(m,2+a,k,j,i);
+          } else {
+            BondiInflowPrimitive(x,y,z,adm,m,k,j,i,omega,solution,false,d,p,u);
+            if (cached) {
+              boundary_state(m,0,k,j,i)=d; boundary_state(m,1,k,j,i)=p;
+              for (int a=0; a<3; ++a) boundary_state(m,2+a,k,j,i)=u[a];
+            }
+          }
           w(m,IDN,k,j,i)=d;
           w(m,IPR,k,j,i)=p;
           for (int a=0; a<3; ++a) w(m,IVX+a,k,j,i)=u[a];
@@ -2289,7 +2360,35 @@ void BinaryReservoirBoundary(Mesh *pm) {
   // Primitive-to-conserved conversion restricted to each exterior ghost slab.
   // The EOS filter overload keeps active cells and exchanged internal ghosts intact.
   // Implemented through the general masked conversion entry point below.
+  if (cached) cache->revision=bondi_metric_revision;
   pack->pdyngr->PrimToConBoundary();
+  if (pm->multilevel) {
+    // Coarse-neighbor prolongation also reads coarse ghost corners at physical
+    // faces. No MPI neighbor fills these slots. Populate them from the analytic
+    // fine ghost state, rather than retaining values from a previous hierarchy.
+    auto cons=pack->pmhd->u0;
+    auto coarse=pack->pmhd->coarse_u0;
+    int hg=ind.ng/2;
+    par_for("bondi_coarse_boundary",DevExeSpace(),0,pack->nmb_thispack-1,
+            ind.cks-hg,ind.cke+hg,ind.cjs-hg,ind.cje+hg,ind.cis-hg,ind.cie+hg,
+      KOKKOS_LAMBDA(int m,int k,int j,int i) {
+        auto s=size.d_view(m);
+        Real x=CellCenterX(i-ind.cis,ind.cnx1,s.x1min,s.x1max);
+        Real y=CellCenterX(j-ind.cjs,ind.cnx2,s.x2min,s.x2max);
+        Real z=CellCenterX(k-ind.cks,ind.cnx3,s.x3min,s.x3max);
+        if (x>=bounds.x1min && x<=bounds.x1max && y>=bounds.x2min &&
+            y<=bounds.x2max && z>=bounds.x3min && z<=bounds.x3max) return;
+        int fi=2*(i-ind.cis)+ind.is;
+        int fj=2*(j-ind.cjs)+ind.js;
+        int fk=2*(k-ind.cks)+ind.ks;
+        for (int n=0; n<nv; ++n) {
+          coarse(m,n,k,j,i)=0.125*(cons(m,n,fk,fj,fi)+cons(m,n,fk,fj,fi+1)+
+              cons(m,n,fk,fj+1,fi)+cons(m,n,fk,fj+1,fi+1)+
+              cons(m,n,fk+1,fj,fi)+cons(m,n,fk+1,fj,fi+1)+
+              cons(m,n,fk+1,fj+1,fi)+cons(m,n,fk+1,fj+1,fi+1));
+        }
+      });
+  }
 }
 
 template <typename ADMVars>
@@ -2319,6 +2418,7 @@ void StoreADMVariables(ADMVars adm_vars, const int m, const int k,
 }
 
 void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
+  ++bondi_metric_revision;  // Includes mesh redistribution and restart initialization.
   const Real tt = bbh.corotating ? 0.0 : pmbp->pmesh->time;
   auto &adm = pmbp->padm->adm;
   auto &size = pmbp->pmb->mb_size;

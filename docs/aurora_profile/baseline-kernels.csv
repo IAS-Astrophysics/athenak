@@ -1,0 +1,180 @@
+kernel,calls,synchronous_seconds
+CT-b1,200,0.011265074
+CT-b2,200,0.011057902
+CT-b3,200,0.012980121
+FOFC-flx,400,0.148762007
+FOFC-newu,200,0.187834950
+Kokkos::View::initialization [B_cc] via memset,2,0.000065354
+Kokkos::View::initialization [B_fc.x1f] via memset,2,0.000036409
+Kokkos::View::initialization [B_fc.x2f] via memset,2,0.000035664
+Kokkos::View::initialization [B_fc.x3f] via memset,2,0.000037924
+Kokkos::View::initialization [B_fc1.x1f] via memset,2,0.000035888
+Kokkos::View::initialization [B_fc1.x2f] via memset,2,0.000031966
+Kokkos::View::initialization [B_fc1.x3f] via memset,2,0.000034822
+Kokkos::View::initialization [DualView::modified_flags] via memset,19,0.000010538
+Kokkos::View::initialization [] via memset,456,0.322952215
+Kokkos::View::initialization [_mirror] via memset,6,0.000626175
+Kokkos::View::initialization [bccsaved] via memset,1,0.000009282
+Kokkos::View::initialization [bcctest] via memset,2,0.000063698
+Kokkos::View::initialization [bin] via memset,4,0.000043890
+Kokkos::View::initialization [bin_mirror] via memset,4,0.000001926
+Kokkos::View::initialization [cB_fc.x1f] via memset,2,0.000031074
+Kokkos::View::initialization [cB_fc.x2f] via memset,2,0.000029330
+Kokkos::View::initialization [cB_fc.x3f] via memset,2,0.000029213
+Kokkos::View::initialization [cc_outvar] via memset,7,0.052100197
+Kokkos::View::initialization [ccons] via memset,2,0.000048411
+Kokkos::View::initialization [cons1] via memset,2,0.000082956
+Kokkos::View::initialization [cons] via memset,2,0.000080789
+Kokkos::View::initialization [corner_emf_fallback_counts] via memset,200,0.003578286
+Kokkos::View::initialization [corner_emf_fallback_counts_mirror] via memset,200,0.000134475
+Kokkos::View::initialization [corner_emf_fallback_first_locs] via memset,200,0.002441003
+Kokkos::View::initialization [corner_emf_fallback_first_locs_mirror] via memset,200,0.000104878
+Kokkos::View::initialization [cprim] via memset,2,0.000049881
+Kokkos::View::initialization [cyc_since_ref] via memset,1,0.000000743
+Kokkos::View::initialization [d_out_var] via memset,82080,1.488155834
+Kokkos::View::initialization [d_out_var_mirror] via memset,82080,0.042506001
+Kokkos::View::initialization [derived-var] via memset,5,0.000109801
+Kokkos::View::initialization [derived_ref_vars] via memset,1,0.000012819
+Kokkos::View::initialization [e1_cc] via memset,2,0.000033253
+Kokkos::View::initialization [e1x2] via memset,2,0.000030229
+Kokkos::View::initialization [e1x3] via memset,2,0.000036049
+Kokkos::View::initialization [e2_cc] via memset,2,0.000033039
+Kokkos::View::initialization [e2x1] via memset,2,0.000030315
+Kokkos::View::initialization [e2x3] via memset,2,0.000035012
+Kokkos::View::initialization [e3_cc] via memset,2,0.000033293
+Kokkos::View::initialization [e3x1] via memset,2,0.000033965
+Kokkos::View::initialization [e3x2] via memset,2,0.000033229
+Kokkos::View::initialization [efld.x1e] via memset,2,0.000037982
+Kokkos::View::initialization [efld.x2e] via memset,2,0.000038289
+Kokkos::View::initialization [efld.x3e] via memset,2,0.000038051
+Kokkos::View::initialization [excision_floor] via memset,2,0.000026394
+Kokkos::View::initialization [excision_flux] via memset,2,0.000023960
+Kokkos::View::initialization [excision_weight] via memset,2,0.000038582
+Kokkos::View::initialization [fc_amr_repair] via memset,1,0.000012043
+Kokkos::View::initialization [fc_amr_repair_mirror] via memset,1,0.000002469
+Kokkos::View::initialization [fc_outvar.x1f] via memset,5,0.017630941
+Kokkos::View::initialization [fc_outvar.x2f] via memset,5,0.018367651
+Kokkos::View::initialization [fc_outvar.x3f] via memset,5,0.015005647
+Kokkos::View::initialization [fofc] via memset,2,0.000023534
+Kokkos::View::initialization [iin] via memset,4,0.000044007
+Kokkos::View::initialization [iin_mirror] via memset,4,0.000001766
+Kokkos::View::initialization [mb_gid] via memset,1,0.000091521
+Kokkos::View::initialization [mb_gid_mirror] via memset,1,0.000003677
+Kokkos::View::initialization [mb_lev] via memset,1,0.000012923
+Kokkos::View::initialization [mb_lev_mirror] via memset,1,0.000002121
+Kokkos::View::initialization [mbbcs] via memset,1,0.000014279
+Kokkos::View::initialization [mbbcs_mirror] via memset,1,0.000015653
+Kokkos::View::initialization [mbsize] via memset,1,0.000048321
+Kokkos::View::initialization [mbsize_mirror] via memset,1,0.000034278
+Kokkos::View::initialization [nflx] via memset,200,0.003939412
+Kokkos::View::initialization [prim] via memset,2,0.000104522
+Kokkos::View::initialization [rflag] via memset,1,0.000022473
+Kokkos::View::initialization [rflag_mirror] via memset,1,0.000002677
+Kokkos::View::initialization [ru] via memset,1,0.000026782
+Kokkos::View::initialization [temperature] via memset,2,0.000037235
+Kokkos::View::initialization [u_adm] via memset,2,0.000352428
+Kokkos::View::initialization [u_tmunu] via memset,2,0.000193643
+Kokkos::View::initialization [uflx.x1f] via memset,2,0.000093946
+Kokkos::View::initialization [uflx.x2f] via memset,2,0.000093566
+Kokkos::View::initialization [uflx.x3f] via memset,2,0.000099486
+Kokkos::View::initialization [uin] via memset,4,0.000051699
+Kokkos::View::initialization [uin_mirror] via memset,4,0.000002509
+Kokkos::View::initialization [utest] via memset,2,0.000082173
+Kokkos::View::initialization [wsaved] via memset,1,0.000022036
+Kokkos::View::initialization [z_buffer] via memset,2,0.000245415
+Kokkos::View::initialization [z_buffer_mirror] via memset,2,0.193103127
+Kokkos::View::initialization [z_data] via memset,2,0.294542096
+Kokkos::View::initialization [zccons] via memset,2,0.000039187
+Kokkos::View::initialization [zci0] via memset,1,0.000012144
+Kokkos::View::initialization [zcons] via memset,2,0.000061536
+Kokkos::View::initialization [zcprim] via memset,2,0.000038527
+Kokkos::View::initialization [zdelta_efld.x1e] via memset,2,0.000024678
+Kokkos::View::initialization [zdelta_efld.x2e] via memset,2,0.000024617
+Kokkos::View::initialization [zdelta_efld.x3e] via memset,2,0.000026530
+Kokkos::View::initialization [zefld_buf.x1e] via memset,2,0.000024536
+Kokkos::View::initialization [zefld_buf.x2e] via memset,2,0.000024906
+Kokkos::View::initialization [zefld_buf.x3e] via memset,2,0.000024763
+Kokkos::View::initialization [zeflda.x1e] via memset,2,0.000024466
+Kokkos::View::initialization [zeflda.x2e] via memset,2,0.000027510
+Kokkos::View::initialization [zeflda.x3e] via memset,2,0.000024540
+Kokkos::View::initialization [zefldp.x1e] via memset,2,0.000027956
+Kokkos::View::initialization [zefldp.x2e] via memset,2,0.000023344
+Kokkos::View::initialization [zefldp.x3e] via memset,2,0.000027265
+Kokkos::View::initialization [zi0] via memset,1,0.000012247
+Kokkos::View::initialization [zprim] via memset,2,0.000067708
+Kokkos::ViewCopy-3D,82080,1.529479238
+Kokkos::ViewFill-1D,200,0.004803645
+MHDNudt2,101,0.082800669
+ProFC-2d-int,201,0.228674541
+ProFC-2d-shared,201,0.332897414
+ProlCC,201,0.591609264
+ProlCCSame,201,0.809023608
+ProlFCSame,201,0.422665350
+RecvBuff,2003,4.090940566
+SendBuff,603,1.752873601
+bfield-bc_x1,201,0.006507166
+bfield-bc_x2,201,0.006442392
+bfield-bc_x3,201,0.006379564
+binary_reservoir_b_bc,201,0.025330866
+binary_reservoir_bc,201,0.518040864
+binary_reservoir_init,1,0.015303848
+coord_src,200,0.372671992
+divb,2,0.002300933
+dyngr_tmunu_loop,1,0.001965588
+dyngrflux_x1,200,16.333752091
+dyngrflux_x2,200,18.548097273
+dyngrflux_x3,200,18.903573464
+e_cc_3d,200,0.055812574
+emf3,200,0.035832642
+hydrobc_x1,201,0.009915339
+hydrobc_x2,201,0.009787005
+hydrobc_x3,201,0.013157081
+init_nflx,200,0.004841181
+mhd_find_bad_CornerE edge_efld.x1e,200,0.029236607
+mhd_find_bad_CornerE edge_efld.x2e,200,0.029476289
+mhd_finite_ApplyPhysicalBCs_b0.x1f,201,0.027795303
+mhd_finite_ApplyPhysicalBCs_b0.x2f,201,0.021449832
+mhd_finite_ApplyPhysicalBCs_b0.x3f,201,0.021390955
+mhd_finite_CT_b0.x1f,200,0.021834871
+mhd_finite_CT_b0.x2f,200,0.021808232
+mhd_finite_CT_b0.x3f,200,0.025650114
+mhd_finite_CornerE cell-centered_e1_cc,200,0.024771019
+mhd_finite_CornerE cell-centered_e2_cc,200,0.023267968
+mhd_finite_CornerE cell-centered_e3_cc,200,0.023324948
+mhd_finite_CornerE edge_efld.x3e,200,0.024649253
+mhd_finite_CornerE pre-SG07_e1x2,200,0.028486494
+mhd_finite_CornerE pre-SG07_e1x3,200,0.028877813
+mhd_finite_CornerE pre-SG07_e2x1,200,0.027028404
+mhd_finite_CornerE pre-SG07_e2x3,200,0.031337336
+mhd_finite_CornerE pre-SG07_e3x1,200,0.023344512
+mhd_finite_CornerE pre-SG07_e3x2,200,0.031904139
+mhd_finite_CornerE pre-SG07_uflx.x1f(IDN),200,0.027309864
+mhd_finite_CornerE pre-SG07_uflx.x2f(IDN),200,0.027962256
+mhd_finite_CornerE pre-SG07_uflx.x3f(IDN),200,0.022403474
+mhd_finite_EFieldSrc_efld.x1e,200,0.023272738
+mhd_finite_EFieldSrc_efld.x2e,200,0.018370761
+mhd_finite_EFieldSrc_efld.x3e,200,0.018313026
+mhd_finite_Prolongate_b0.x1f,201,0.027136143
+mhd_finite_Prolongate_b0.x2f,201,0.025963326
+mhd_finite_Prolongate_b0.x3f,201,0.023359876
+mhd_finite_RecvB_b0.x1f,201,0.020856146
+mhd_finite_RecvB_b0.x2f,201,0.020595862
+mhd_finite_RecvB_b0.x3f,201,0.020624901
+mhd_finite_RecvE_efld.x1e,200,0.019397763
+mhd_finite_RecvE_efld.x2e,200,0.018439564
+mhd_finite_RecvE_efld.x3e,200,0.021070442
+mhd_finite_RestrictB_b0.x1f,201,0.022520379
+mhd_finite_RestrictB_b0.x2f,201,0.021821230
+mhd_finite_RestrictB_b0.x3f,201,0.020470036
+mhd_update,200,2.659340692
+pshyd_c2p,401,1.192301380
+pshyd_prim2cons,202,0.156524777
+restrictCC-3D,201,0.020411301
+restrictFC-3D,201,0.007517259
+set_excision,1,0.003179108
+update_adm_vars_ad,1,0.027587645
+zoom_init,1,0.010382200
+zoom_init_c,1,0.002512840
+zoom_init_e1,1,0.001880613
+zoom_init_e2,1,0.001882317
+zoom_init_e3,1,0.001815190
