@@ -1,0 +1,132 @@
+# Matched hydro Michel control / circular binary. G=M_total=c=1.
+# Change only problem/single_black_hole to switch black-hole configurations.
+<job>
+basename = matched_bondi
+<mesh>
+nghost = 4
+nx1 = 64
+nx2 = 64
+nx3 = 64
+x1min = -256
+x1max = 256
+x2min = -256
+x2max = 256
+x3min = -256
+x3max = 256
+ix1_bc = user
+ox1_bc = user
+ix2_bc = user
+ox2_bc = user
+ix3_bc = user
+ox3_bc = user
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 8
+<mesh_refinement>
+refinement = adaptive
+num_levels = 8
+max_nmb_per_rank = 1600
+ncycle_check = 1
+refinement_interval = 1
+# Keep the mesh identical for single and binary: refine origin and both holes.
+<refined_region1>
+level = 7
+x1min = -0.5
+x1max = 0.5
+x2min = -0.5
+x2max = 0.5
+x3min = -0.5
+x3max = 0.5
+<refined_region2>
+level = 7
+x1min = 15.5
+x1max = 16.5
+x2min = -0.5
+x2max = 0.5
+x3min = -0.5
+x3max = 0.5
+<refined_region3>
+level = 7
+x1min = -16.5
+x1max = -15.5
+x2min = -0.5
+x2max = 0.5
+x3min = -0.5
+x3max = 0.5
+<amr_criterion1>
+method = cyclic_zoom
+nlevels = 4
+ncenters = 1
+x1c = 0
+r_0 = 32
+f_ref = 2
+f_exc = 0
+trun_fac = 10
+trun_pow = 0
+<cyclic_zoom>
+verbose = false
+max_nzmb_per_dvce = 1024
+max_nzmb_per_host = 1600
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim = 20000
+tlim = 120
+ndiag = 100
+<coord>
+general_rel = true
+a = 0
+excise = true
+excision_scheme = puncture
+excise_1_rad = 0.8
+excise_2_rad = 0.8
+dexcise = 1e-8
+pexcise = 1e-12
+require_resolved_horizon = true
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = ppm4
+rsolver = hlle
+gamma = 1.6666666666666667
+dfloor = 1e-10
+pfloor = 1e-14
+tfloor = 1e-12
+fofc = true
+gamma_max = 10
+enforce_maximum = false
+calculate_tmunu = false
+<adm>
+dynamic = false
+<problem>
+initial_condition = bondi_inflow
+single_black_hole = false
+corotating = true
+sep = 32
+q = 1
+frame_omega = 0.005524271728019903
+a1 = 0
+a2 = 0
+r_crit = 8
+k_adi = 1
+b_inf = 0
+metric_derivative = ad
+user_hist = false
+<output1>
+file_type = bin
+variable = mhd_w_bcc
+dt = 10
+<output2>
+file_type = bin
+variable = adm
+dt = 120
+<output3>
+file_type = bin
+variable = mhd_divb
+dt = 10
+<output4>
+file_type = rst
+dt = 60

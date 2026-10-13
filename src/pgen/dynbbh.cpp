@@ -34,6 +34,7 @@
 #include "utils/flux_generalized.hpp"
 #include "units/units.hpp"
 #include "srcterms/ismcooling.hpp"
+#include "pgen/bondi_profile.hpp"
 
 
 
@@ -185,6 +186,7 @@ enum class CoolingSource {
 struct bbh_pgen {
   Real sep;
   Real om;
+  Real frame_omega;
   Real q;
   Real a1, a2;
   Real th_a1, th_a2;
@@ -216,6 +218,7 @@ struct bbh_pgen {
   Real thin_cooling_r_inner;
   Real thin_cooling_r_outer;
   bool corotating;
+  bool single_black_hole;
   bool use_traj_table;
   bool spin_ramp;
   bool smooth_b_damping;
@@ -365,6 +368,7 @@ Real SmoothRamp01(const Real time, const Real start_time, const Real timescale,
 }
 
 Real MinDynBBHHorizonRadius() {
+  if (bbh.single_black_hole) return 2.0;
   if (bbh.use_traj_table && !bbh_table.t.empty()) {
     Real rmin = std::numeric_limits<Real>::max();
     for (std::size_t n = 0; n < bbh_table.t.size(); ++n) {
@@ -393,7 +397,8 @@ void CheckPunctureExcisionResolution(MeshBlockPack *pmbp, const bbh_traj_state &
   Real dx0 = LocalMeshSpacingAtPoint(pmbp, traj.q[X1], traj.q[Y1], traj.q[Z1]);
   Real dx1 = LocalMeshSpacingAtPoint(pmbp, traj.q[X2], traj.q[Y2], traj.q[Z2]);
   Real cells0 = (r0 > 0.0) ? 2.0*r0/std::max(dx0, 1.0e-300) : 0.0;
-  Real cells1 = (r1 > 0.0) ? 2.0*r1/std::max(dx1, 1.0e-300) : 0.0;
+  Real cells1 = bbh.single_black_hole ? min_cells_across :
+      ((r1 > 0.0) ? 2.0*r1/std::max(dx1, 1.0e-300) : 0.0);
   if ((cells0 < min_cells_across || cells1 < min_cells_across) &&
       global_variable::my_rank == 0) {
     std::cout << "WARNING: puncture excision radius is under-resolved during "
@@ -437,6 +442,8 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp);
 void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart);
 void BinaryReservoirBoundary(Mesh *pm);
 Real reservoir_density, reservoir_pressure, reservoir_bz;
+bool use_bondi_inflow = false;
+bondi_profile::Solution inflow_solution;
 void RefineAlphaMin(MeshBlockPack* pmbp);
 void RefineTracker(MeshBlockPack* pmbp);
 void RefineRadii(MeshBlockPack* pmbp);
@@ -562,6 +569,12 @@ void InitializeDynBBHRestartDynRadiation(Mesh *pm);
 //! \brief Problem Generator for the shock tube (Riemann problem) tests
 
 void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
+  // Keep the upstream/Minghao hydro control available in this same executable.
+  if (pin->DoesParameterExist("problem","pgen_name") &&
+      pin->GetString("problem","pgen_name") == "gr_bondi") {
+    BondiAccretion(pin,restart);
+    return;
+  }
 
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
   if (!pmbp->pcoord->is_general_relativistic &&
@@ -575,8 +588,17 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   bbh.spin = 0.0;
 
   bbh.corotating = pin->GetOrAddBoolean("problem", "corotating", false);
+  bbh.single_black_hole = pin->GetOrAddBoolean("problem", "single_black_hole", false);
   bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
   bbh.om = std::pow(bbh.sep, -1.5);
+  bbh.frame_omega = pin->GetOrAddReal("problem", "frame_omega",
+                                    bbh.corotating ? bbh.om : 0.0);
+  if (!std::isfinite(bbh.frame_omega) ||
+      (!bbh.corotating && bbh.frame_omega != 0.0) ||
+      (bbh.corotating && !bbh.single_black_hole &&
+       fabs(bbh.frame_omega-bbh.om) > 1.0e-12*bbh.om)) {
+    Kokkos::abort("Invalid frame_omega: stationary binary requires orbital frequency");
+  }
   bbh.q = pin->GetOrAddReal("problem", "q", 1.0);
   bbh.a1 = pin->GetOrAddReal("problem", "a1", 0.0);
   bbh.a2 = pin->GetOrAddReal("problem", "a2", 0.0);
@@ -943,7 +965,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     Kokkos::abort("corotating requires a fixed circular orbit, aligned spins, "
                   "stationary excision and prescribed ADM");
   }
-  if (pmy_mesh_->pzoom != nullptr && !bbh.corotating) {
+  if (bbh.single_black_hole && (bbh.use_traj_table || bbh.spin_ramp ||
+      bbh.a1 != 0.0 || bbh.a2 != 0.0)) {
+    Kokkos::abort("single_black_hole Bondi control requires nonspinning fixed M=1");
+  }
+  if (pmy_mesh_->pzoom != nullptr && !bbh.corotating && !bbh.single_black_hole) {
     Kokkos::abort("dynbbh cyclic zoom requires problem/corotating=true");
   }
   if (pmbp->padm != nullptr) {
@@ -1017,16 +1043,19 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   }
 
   auto initial_condition = pin->GetOrAddString("problem", "initial_condition", "torus");
-  if (initial_condition != "torus" && initial_condition != "bondi_reservoir") {
-    Kokkos::abort("dynbbh initial_condition must be torus or bondi_reservoir");
+  use_bondi_inflow = initial_condition == "bondi_inflow";
+  if (initial_condition != "torus" && initial_condition != "bondi_reservoir" &&
+      !use_bondi_inflow) {
+    Kokkos::abort("dynbbh initial_condition must be torus, bondi_reservoir or bondi_inflow");
   }
-  if (bbh.corotating && initial_condition != "bondi_reservoir") {
-    Kokkos::abort("corotating currently requires initial_condition=bondi_reservoir");
+  if ((bbh.corotating || bbh.single_black_hole) &&
+      initial_condition != "bondi_reservoir" && !use_bondi_inflow) {
+    Kokkos::abort("corotating/single_black_hole requires a Bondi initial condition");
   }
   if (!restart && pmy_mesh_->pzoom != nullptr && pmy_mesh_->pzoom->zstate.zone != 0) {
     Kokkos::abort("Start binary cyclic zoom at zone=0; other zones require a restart");
   }
-  if (initial_condition == "bondi_reservoir") {
+  if (initial_condition == "bondi_reservoir" || use_bondi_inflow) {
     InitializeBinaryReservoir(pmy_mesh_, pin, restart);
     user_bcs_func = BinaryReservoirBoundary;
     return;
@@ -2077,7 +2106,38 @@ void InitializeDynBBHRestartDynRadiation(Mesh *pm) {
   Kokkos::fence();
 }
 
-// Uniform ambient reservoir: the binary develops its own accretion solution.
+KOKKOS_INLINE_FUNCTION
+void BondiInflowPrimitive(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
+                         int m, int k, int j, int i, Real omega,
+                         bondi_profile::Solution solution, bool initial,
+                         Real &rho, Real &p, Real u[3]) {
+  Real radius = sqrt(x*x+y*y+z*z), ur, ut;
+  solution.Sample(radius,rho,p,ur,ut);
+  Real f = ur/(ut*fmax(radius,1.0));
+  // Specify the inertial KS coordinate velocity, pull it back to the rotating
+  // coordinates, then convert using the actual local binary ADM fields.
+  // The grid rotation cancels between v_coord and beta, even outside r_LC.
+  Real vc[3] = {f*x+omega*y, f*y-omega*x, f*z};
+  Real v[3];
+  for (int a=0; a<3; ++a) v[a]=(vc[a]+adm.beta_u(m,a,k,j,i))/adm.alpha(m,k,j,i);
+  Real vsq=0.0;
+  for (int a=0; a<3; ++a) {
+    for (int b=0; b<3; ++b) vsq += adm.g_dd(m,a,b,k,j,i)*v[a]*v[b];
+  }
+  if (!Kokkos::isfinite(vsq) || vsq < 0.0) Kokkos::abort("Invalid Bondi velocity norm");
+  if (vsq >= 0.9) {
+    // A central monopole is not a solution near either individual horizon.
+    // Limit only the initial binary seed, never the prescribed outer inflow.
+    if (!initial) Kokkos::abort("Bondi boundary is not timelike; move it farther out");
+    Real scale=sqrt(0.9/vsq);
+    for (int a=0; a<3; ++a) v[a] *= scale;
+    vsq=0.9;
+  }
+  Real w=1.0/sqrt(1.0-vsq);
+  for (int a=0; a<3; ++a) u[a]=w*v[a];
+}
+
+// Uniform reservoir or a finite-radius Michel inflow, with total reference M=1.
 // cs_inf is the relativistic adiabatic sound speed; r_B = 2 M / cs_inf^2.
 void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   auto pack = pm->pmb_pack;
@@ -2102,21 +2162,44 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   reservoir_pressure = reservoir_density*cs*cs/(gamma*(1.0-cs*cs/(gamma-1.0)));
   reservoir_bz = pin->GetOrAddReal("problem","b_inf",0.0);
   if (!std::isfinite(reservoir_bz)) Kokkos::abort("b_inf must be finite");
+  if (use_bondi_inflow) {
+    Real rc=pin->GetOrAddReal("problem","r_crit",8.0);
+    Real kadi=pin->GetOrAddReal("problem","k_adi",1.0);
+    if (!(std::isfinite(rc) && rc > 0.5*(1.0/(gamma-1.0)+3.0) &&
+          std::isfinite(kadi) && kadi > 0.0)) Kokkos::abort("Invalid Michel parameters");
+    inflow_solution.Initialize(gamma,kadi,rc);
+    Real hinf=sqrt(inflow_solution.c2);
+    if (!(std::isfinite(hinf) && hinf > 1.0)) {
+      Kokkos::abort("Michel parameters do not define a positive-temperature reservoir");
+    }
+    Real tinf=(hinf-1.0)/(inflow_solution.n+1.0);
+    cs=sqrt(gamma*tinf/hinf);
+    reservoir_density=pow(tinf/kadi,inflow_solution.n);
+    reservoir_pressure=reservoir_density*tinf;
+  }
   if (global_variable::my_rank == 0) {
     std::cout << "Binary Bondi reservoir: r_B=" << 2.0/(cs*cs)
               << " r_B/a=" << 2.0/(cs*cs*bbh.sep)
-              << " Omega=" << bbh.om << " light-cylinder radius=" << 1.0/bbh.om
-              << " corotating=" << bbh.corotating << std::endl;
+              << " Omega_frame=" << bbh.frame_omega
+              << " corotating=" << bbh.corotating
+              << " single_black_hole=" << bbh.single_black_hole
+              << " M_total=1 boundary=" << (use_bondi_inflow ? "Michel" : "ambient")
+              << std::endl;
   }
   pack->padm->SetADMVariables(pack);
   if (pack->pcoord->coord_data.bh_excise) pack->pcoord->UpdateExcisionMasks();
   if (restart) return;
   auto ind = pm->mb_indcs;
   auto w = pack->pmhd->w0;
+  auto adm = pack->padm->adm;
+  auto size = pack->pmb->mb_size;
   auto b = pack->pmhd->b0;
   auto bc = pack->pmhd->bcc0;
   int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
   Real rho=reservoir_density, pressure=reservoir_pressure, bz=reservoir_bz;
+  bool inflow=use_bondi_inflow;
+  auto solution=inflow_solution;
+  Real omega=bbh.frame_omega;
   int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
   Kokkos::deep_copy(b.x1f,0.0);
   Kokkos::deep_copy(b.x2f,0.0);
@@ -2127,6 +2210,17 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
       for (int n=0; n<nv; ++n) w(m,n,k,j,i)=0.0;
       w(m,IDN,k,j,i)=rho;
       w(m,IPR,k,j,i)=pressure;
+      if (inflow) {
+        auto s=size.d_view(m);
+        Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
+        Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
+        Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
+        Real d, p, u[3];
+        BondiInflowPrimitive(x,y,z,adm,m,k,j,i,omega,solution,true,d,p,u);
+        w(m,IDN,k,j,i)=d;
+        w(m,IPR,k,j,i)=p;
+        for (int a=0; a<3; ++a) w(m,IVX+a,k,j,i)=u[a];
+      }
       bc(m,IBX,k,j,i)=0.0;
       bc(m,IBY,k,j,i)=0.0;
       bc(m,IBZ,k,j,i)=bz;
@@ -2140,9 +2234,13 @@ void BinaryReservoirBoundary(Mesh *pm) {
   auto size=pack->pmb->mb_size;
   auto bounds=pm->mesh_size;
   auto w=pack->pmhd->w0;
+  auto adm=pack->padm->adm;
   auto b=pack->pmhd->b0;
   Real bz=reservoir_bz;
   Real rho=reservoir_density, pressure=reservoir_pressure;
+  bool inflow=use_bondi_inflow;
+  auto solution=inflow_solution;
+  Real omega=bbh.frame_omega;
   int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
   int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
   // User BFieldBCs leaves magnetic ghost faces to this callback. Fill only
@@ -2179,6 +2277,13 @@ void BinaryReservoirBoundary(Mesh *pm) {
         for (int n=0; n<nv; ++n) w(m,n,k,j,i)=0.0;
         w(m,IDN,k,j,i)=rho;
         w(m,IPR,k,j,i)=pressure;
+        if (inflow) {
+          Real d, p, u[3];
+          BondiInflowPrimitive(x,y,z,adm,m,k,j,i,omega,solution,false,d,p,u);
+          w(m,IDN,k,j,i)=d;
+          w(m,IPR,k,j,i)=p;
+          for (int a=0; a<3; ++a) w(m,IVX+a,k,j,i)=u[a];
+        }
       }
     });
   // Primitive-to-conserved conversion restricted to each exterior ghost slab.
@@ -2648,6 +2753,11 @@ bbh_traj_state find_traj_state(Real t) {
 }
 
 void find_traj_t_with_deriv(Real t, Real bbh_t[NTRAJ], Real dbbh_t[NTRAJ]) {
+  if (bbh.single_black_hole) {
+    for (int n=0; n<NTRAJ; ++n) bbh_t[n] = dbbh_t[n] = 0.0;
+    bbh_t[M1T] = 1.0;
+    return;
+  }
   if (!bbh.use_traj_table) {
     Real r1 = bbh.q / (1.0 + bbh.q) * bbh.sep, r2 = -bbh.sep / (1.0 + bbh.q),
          c = std::cos(bbh.om * t), s = std::sin(bbh.om * t),
@@ -3086,7 +3196,7 @@ void EvaluateBBHMetric(const T x, const T y, const T z, T gcov[NDIM][NDIM],
                        const Real tr[NTRAJ], const bbh_pgen b) {
   SuperposedBBHTemplateMixed<T,Real,T>(x,y,z,gcov,tr,b);
   if (!b.corotating) return;
-  T vx = -b.om*y, vy = b.om*x;
+  T vx = -b.frame_omega*y, vy = b.frame_omega*x;
   T gtt = gcov[TT][TT]+2.0*(gcov[TT][XX]*vx+gcov[TT][YY]*vy)
             +gcov[XX][XX]*vx*vx+2.0*gcov[XX][YY]*vx*vy+gcov[YY][YY]*vy*vy;
   T gt[3];

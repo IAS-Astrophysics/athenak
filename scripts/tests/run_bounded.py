@@ -15,6 +15,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--seconds', type=float, default=600)
     parser.add_argument('--memory-gb', type=float, default=20)
+    parser.add_argument('--gpu-allocations', action='store_true',
+                        help='use the Kokkos allocation guard instead of a virtual-space cap')
     parser.add_argument('--report', type=Path, required=True)
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -22,12 +24,16 @@ def main():
     if not command or not (0 < args.memory_gb <= 24) or args.seconds <= 0:
         parser.error('command, positive deadline and memory budget <=24 decimal GB required')
     budget = int(args.memory_gb * 1e9)
+    if args.gpu_allocations:
+        tracked_budget = int(os.environ.get('KOKKOS_MEMORY_BUDGET_BYTES', '0'))
+        if not os.environ.get('KOKKOS_TOOLS_LIBS') or not (0 < tracked_budget <= 24e9):
+            parser.error('--gpu-allocations requires the Kokkos guard and budget <=24 GB')
 
     def limits():
         os.setsid()
         # Per-process address-space cap supplements aggregate resident-memory monitoring.
         # Keep extra headroom below the requested 30 GB total cap.
-        if sys.platform != 'darwin':
+        if sys.platform != 'darwin' and not args.gpu_allocations:
             resource.setrlimit(resource.RLIMIT_AS, (26_000_000_000, 26_000_000_000))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
@@ -46,7 +52,8 @@ def main():
 
     try:
         while proc.poll() is None:
-            rows = subprocess.check_output(['ps', '-axo', 'pid=,ppid=,rss='], text=True)
+            rows = subprocess.check_output(['ps', '-axo', 'pid=,ppid=,rss='],
+                                           universal_newlines=True)
             table = [tuple(map(int, row.split())) for row in rows.splitlines()
                      if len(row.split()) == 3]
             changed = True

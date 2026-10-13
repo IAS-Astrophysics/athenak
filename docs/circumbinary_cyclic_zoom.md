@@ -5,6 +5,11 @@ branch's prescribed ADM metric and Valencia GRMHD solver. It provides a small,
 magnetized ambient reservoir test and repeatable local regression checks.
 These are infrastructure tests, not converged parsec binary accretion models.
 
+For the shift-aware finite-radius Michel inflow, rotating single-hole validation,
+and matched Aurora controls, see [Bondi boundary validation](bondi_boundary_validation.md).
+Select `problem/initial_condition=bondi_inflow`; the original ambient input below
+retains its constant reservoir boundary for infrastructure regression tests.
+
 ## Source history
 
 The local branch `codex/circumbinary-cyclic-zoom` starts at fetched

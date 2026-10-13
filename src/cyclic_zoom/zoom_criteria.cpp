@@ -119,7 +119,7 @@ void CyclicZoom::SetRefinementFlags() {
   int ref_flag = - (zstate.zone - zstate.last_zone);
   // Restore the hierarchy that was actually saved. Geometric refinement on the
   // return sweep can refine unrelated siblings, multiplying the mesh each cycle.
-  if (ref_flag > 0 && pmesh->pmb_pack->pdyngr != nullptr) {
+  if (ref_flag > 0) {
     std::set<std::tuple<int,int,int>> parents;
     int first = pzmesh->gzms_eachlevel[zstate.zone];
     int count = pzmesh->nzmb_eachlevel[zstate.zone];
@@ -192,31 +192,11 @@ void CyclicZoom::SetRefinementFlags() {
 //! \brief Check whether to store variables for MeshBlock with given global ID
 
 bool CyclicZoom::CheckStoreFlag(int m) {
-  auto &size = pmesh->pmb_pack->pmb->mb_size;
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
   // note that now the zoom state has been updated
   int old_level = zamr.max_level - zstate.last_zone;
-  if (pmesh->pmb_pack->pdyngr != nullptr) {
-    // Save complete coarsening families, including siblings outside the mask.
-    // Their logical locations also describe the topology to restore on zoom-in.
-    return pmesh->lloc_eachmb[m+mbs].level == old_level &&
-           pmesh->pmr->refine_flag.h_view(m+mbs) < 0;
-  }
-  // use the updated zoom region parameters
-  Real r_zoom = zregion.radius;
-  Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
-  // check previous level (finer level)
-  if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
-    // extract bounds of MeshBlock
-    Real x1min = size.h_view(m).x1min;
-    Real x1max = size.h_view(m).x1max;
-    Real x2min = size.h_view(m).x2min;
-    Real x2max = size.h_view(m).x2max;
-    Real x3min = size.h_view(m).x3min;
-    Real x3max = size.h_view(m).x3max;
-    if (zregion.Overlaps(x1min,x1max,x2min,x2max,x3min,x3max,r_zoom)) {
-      return true;
-    }
-  }
-  return false;
+  // Save complete coarsening families for every solver, including siblings
+  // outside the mask. These locations define the exact return hierarchy.
+  return pmesh->lloc_eachmb[m+mbs].level == old_level &&
+         pmesh->pmr->refine_flag.h_view(m+mbs) < 0;
 }

@@ -1,0 +1,356 @@
+{
+  "date": "2026-10-12",
+  "backend": "Apple M5 Pro, Kokkos Serial; debug/bounds/DualView checks",
+  "frame_tests": {
+    "inertial16": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.006910545751452446,
+          "min_pressure": 0.00025071902200579643
+        },
+        {
+          "cycle": 2,
+          "time": 0.500039,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.006911158096045256,
+          "min_pressure": 0.0002507464087102562
+        },
+        {
+          "cycle": 4,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.006911718286573887,
+          "min_pressure": 0.0002507715253159404
+        }
+      ],
+      "max_abs_divb": 0.0,
+      "seconds": 0.8296178750000001,
+      "density_L1": 0.004238548688590527,
+      "pressure_L1": 0.007170963566750288,
+      "tangential_to_radial_L1": 0.0022563094064108288
+    },
+    "rotating16": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.006910545751452446,
+          "min_pressure": 0.00025071902200579643
+        },
+        {
+          "cycle": 5,
+          "time": 0.50131,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.006911105941981077,
+          "min_pressure": 0.0002507438766770065
+        },
+        {
+          "cycle": 10,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.00691139604896307,
+          "min_pressure": 0.0002507561875972897
+        }
+      ],
+      "max_abs_divb": 0.0,
+      "seconds": 1.794446125,
+      "density_L1": 0.0045952643267810345,
+      "pressure_L1": 0.007710689678788185,
+      "tangential_to_radial_L1": 0.0017064170563642115
+    },
+    "comparison16": {
+      "dens": 0.002914616372436285,
+      "press": 0.005570191890001297
+    },
+    "inertial32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 4,
+          "time": 0.50001,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 8,
+          "time": 1.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        }
+      ],
+      "max_abs_divb": 0.0,
+      "seconds": 8.530438291000001,
+      "density_L1": 0.0010382693726569414,
+      "pressure_L1": 0.0016394304111599922,
+      "tangential_to_radial_L1": 0.0007460960595845853
+    },
+    "rotating32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 11,
+          "time": 0.540668,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 21,
+          "time": 1.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        }
+      ],
+      "max_abs_divb": 0.0,
+      "seconds": 20.159916208,
+      "density_L1": 0.001143645728006959,
+      "pressure_L1": 0.0019029619870707393,
+      "tangential_to_radial_L1": 0.000511340105611118
+    },
+    "comparison32": {
+      "dens": 0.0007598808733746409,
+      "press": 0.00141849834471941
+    },
+    "upstream_initial_max_errors": {
+      "dens": 0.0,
+      "press": 4.656612873077393e-10,
+      "velx": 2.3283064365386963e-10,
+      "vely": 2.3283064365386963e-10,
+      "velz": 2.3283064365386963e-10
+    },
+    "upstream_restart_relative_max_errors": {
+      "dens": 0.0,
+      "velx": 0.0,
+      "vely": 0.0,
+      "velz": 0.0,
+      "eint": 0.0
+    },
+    "upstream_zoom_roundtrip": {
+      "initial_blocks": 288,
+      "final_blocks": 288,
+      "cycle": 6,
+      "time": 0.328125,
+      "topology_restored": true
+    }
+  },
+  "frame_resources": {
+    "command": [
+      "python3",
+      "scripts/tests/test_bondi_frames.py",
+      "--exe",
+      "build-mac-zoom-opt/src/athena",
+      "--out",
+      "build-mac-zoom-opt/bondi-frames-final3"
+    ],
+    "returncode": 0,
+    "peak_rss_bytes": 2134851584,
+    "memory_budget_bytes": 20000000000,
+    "seconds": 75.3613295,
+    "stopped": null
+  },
+  "quick_zoom_regression": {
+    "metric_inertial": {
+      "seconds": 0.012343666999999996,
+      "returncode": 0
+    },
+    "metric_rotating": {
+      "seconds": 0.011909040999999995,
+      "returncode": 0
+    },
+    "high_shift": {
+      "seconds": 0.020709000000000005,
+      "returncode": 0,
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.0005867970758117735
+        },
+        {
+          "cycle": 4,
+          "time": 0.672063,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0000009536743164,
+          "min_pressure": 0.0005867980653420091
+        },
+        {
+          "cycle": 4,
+          "time": 0.672063,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0000009536743164,
+          "min_pressure": 0.0005867980653420091
+        }
+      ],
+      "max_abs_divb": 3.6647585634429506e-19
+    },
+    "metric_fd": {
+      "seconds": 0.011932250000000005,
+      "returncode": 0
+    },
+    "metric_transform": {
+      "max_error": 5.948822945356369e-08,
+      "coordinate_dt": 0.1680157
+    },
+    "reject_tilted": {
+      "seconds": 0.023988791999999995,
+      "returncode": -6
+    },
+    "reject_dynamic_zoom": {
+      "seconds": 0.267970083,
+      "returncode": 1
+    },
+    "reject_levels": {
+      "seconds": 0.25165429199999995,
+      "returncode": -6
+    },
+    "reject_boundaries": {
+      "seconds": 0.023022959000000065,
+      "returncode": -6
+    },
+    "small": {
+      "seconds": 5.3536969999999995,
+      "returncode": 0,
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 176,
+          "max_level": 2,
+          "min_density": 1.0,
+          "min_pressure": 0.0005867970758117735
+        },
+        {
+          "cycle": 1,
+          "time": 1.43318,
+          "blocks": 176,
+          "max_level": 2,
+          "min_density": 1.000016450881958,
+          "min_pressure": 0.0005868130829185247
+        },
+        {
+          "cycle": 2,
+          "time": 4.02642,
+          "blocks": 120,
+          "max_level": 1,
+          "min_density": 1.000044584274292,
+          "min_pressure": 0.0005868404405191541
+        },
+        {
+          "cycle": 3,
+          "time": 8.38448,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 1.000087022781372,
+          "min_pressure": 0.0005868817679584026
+        },
+        {
+          "cycle": 4,
+          "time": 10.9777,
+          "blocks": 120,
+          "max_level": 1,
+          "min_density": 1.0001095533370972,
+          "min_pressure": 0.0005869036540389061
+        },
+        {
+          "cycle": 5,
+          "time": 12.4109,
+          "blocks": 176,
+          "max_level": 2,
+          "min_density": 1.0001211166381836,
+          "min_pressure": 0.0005869149463251233
+        },
+        {
+          "cycle": 5,
+          "time": 12.4109,
+          "blocks": 120,
+          "max_level": 1,
+          "min_density": 1.0001211166381836,
+          "min_pressure": 0.0005869149463251233
+        }
+      ],
+      "max_abs_divb": 8.746276924890693e-20
+    },
+    "small_restart": {
+      "seconds": 4.948634416999999,
+      "returncode": 0
+    }
+  },
+  "quick_zoom_resources": {
+    "command": [
+      "python3",
+      "scripts/tests/test_binary_zoom.py",
+      "--exe",
+      "build-mac-zoom-opt/src/athena",
+      "--out",
+      "build-mac-zoom-opt/bondi-regression-final2",
+      "--quick-only"
+    ],
+    "returncode": 0,
+    "peak_rss_bytes": 2678931456,
+    "memory_budget_bytes": 20000000000,
+    "seconds": 11.078788792,
+    "stopped": null
+  },
+  "matched_two_step_resources": {
+    "command": [
+      "build-mac-zoom-opt/src/athena",
+      "-i",
+      "inputs/dyngr/bondi_matched_zoom.athinput",
+      "-d",
+      "build-mac-zoom-opt/bondi-high-evolve",
+      "-t",
+      "00:02:00",
+      "time/nlim=2",
+      "time/ndiag=1"
+    ],
+    "returncode": 0,
+    "peak_rss_bytes": 11199889408,
+    "memory_budget_bytes": 20000000000,
+    "seconds": 54.489452708,
+    "stopped": null
+  },
+  "matched_two_step_allocations": {
+    "combined_peak_bytes": 11176773552,
+    "budget_bytes": 24000000000,
+    "spaces": {
+      "Host": 11176773552
+    },
+    "metric_evaluations": 1
+  }
+}

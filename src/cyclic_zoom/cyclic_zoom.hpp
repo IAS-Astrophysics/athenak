@@ -17,7 +17,7 @@
 //! \brief runtime state of cyclic zoom AMR, updated during simulation, used for restart
 
 typedef struct ZoomState {
-  std::uint64_t format = 0x435A424248000001ULL;  // CZBBH, restart format 1
+  std::uint64_t format = 0x435A424248000002ULL;  // CZBBH, complete-family topology
   int last_cycle = 0;            // prevents repeating an event at a zero interval
   int id;                       // zoom event id
   int zone;                     // zone number = level_max - level

@@ -143,7 +143,7 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
   std::memcpy(&(zstate), &(zrdata[0]), sizeof(ZoomState));
   delete[] zrdata;
 
-  if (zstate.format != 0x435A424248000001ULL || zstate.last_cycle < 0 ||
+  if (zstate.format != 0x435A424248000002ULL || zstate.last_cycle < 0 ||
       zstate.last_cycle > pmesh->ncycle || zstate.zone < 0 ||
       zstate.zone >= zamr.nlevels ||
       zstate.last_zone < 0 || zstate.last_zone >= zamr.nlevels ||

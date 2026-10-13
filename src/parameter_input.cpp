@@ -40,6 +40,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -623,7 +625,8 @@ Real ParameterInput::GetOrAddReal(std::string block, std::string name, Real def_
     ret = static_cast<Real>(atof(val.c_str()));
   } else {
     pb = FindOrAddBlock(block);
-    ss_value << def_value;
+    // Restart text must round-trip computed defaults, including frame frequencies.
+    ss_value << std::setprecision(std::numeric_limits<Real>::max_digits10) << def_value;
     AddParameter(pb, name, ss_value.str(), "# Default value added at run time");
     ret = def_value;
   }
@@ -718,7 +721,7 @@ Real ParameterInput::SetReal(std::string block, std::string name, Real value) {
 
   Lock();
   pb = FindOrAddBlock(block);
-  ss_value << value;
+  ss_value << std::setprecision(std::numeric_limits<Real>::max_digits10) << value;
   AddParameter(pb, name, ss_value.str(), "# Updated during run time");
   Unlock();
   return value;
