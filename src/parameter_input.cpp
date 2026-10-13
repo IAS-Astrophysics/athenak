@@ -87,10 +87,7 @@ ParameterInput::~ParameterInput() {
 
 InputLine* InputBlock::GetPtrToLine(std::string name) {
   for (auto it = line.begin(); it != line.end(); ++it) {
-    if (name.compare(it->param_name) == 0) {
-      it->accessed = true;   // record that the code has read this parameter
-      return &*it;
-    }
+    if (name.compare(it->param_name) == 0) return &*it;
   }
   return nullptr;
 }
@@ -107,9 +104,9 @@ void ParameterInput::CheckBlockNames() {
     "mesh", "meshblock", "mesh_refinement", "refined_region", "amr_criterion",
     "coord", "adm", "shearing_box", "cyclic_zoom",
     "time", "problem", "output", "units",
-    "hydro", "mhd", "ion-neutral", "radiation", "z4c", "z4c_amr", "cce",
-    "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles", "turb_driving",
-    "gravity", "fastflow"
+    "hydro", "mhd", "ion-neutral", "radiation", "dyn_radiation", "z4c", "z4c_amr", "cce",
+    "rad_srcterms", "hydro_srcterms", "mhd_srcterms", "particles",
+    "refinement", "turb_init", "turb_mhd"
     };
 
   for (auto it1 = block.begin(); it1 != block.end(); ++it1) {
@@ -157,10 +154,11 @@ void ParameterInput::LoadFromStream(std::istream &is) {
   std::string line, block_name, param_name, param_value, param_comment;
   std::size_t first_char, last_char;
   InputBlock *pib{};
-  int blocks_found{0};
+  int line_num{-1}, blocks_found{0};
 
   while (is.good()) {
     std::getline(is, line);
+    line_num++;
     if (line.find('\t') != std::string::npos) {
       line.erase(std::remove(line.begin(), line.end(), '\t'), line.end());
     }
@@ -327,14 +325,10 @@ void ParameterInput::ParseLine(std::string line, std::string& name, std::string&
 //  are replaced (overwritten).
 
 void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string value,
-                                  std::string comment, bool from_code) {
-  // Parameters inserted by the code itself (GetOrAdd* defaults, Set* values) are marked
-  // as accessed so they are not later reported as unused; parameters loaded from the
-  // input file keep accessed=false until the code reads them.
+                                  std::string comment) {
   // if line contains no elements, create the first one
   if (pb->line.empty()) {
     pb->line.emplace_front(name,value,comment);
-    pb->line.front().accessed = from_code;
     pb->max_len_parname = name.length();
     pb->max_len_parvalue = value.length();
     return;
@@ -345,8 +339,7 @@ void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string 
     for (auto it = pb->line.begin(); it != pb->line.end(); ++it) {
       if (name.compare(it->param_name) == 0) {   // param name already exists
         it->param_value.assign(value);           // replace existing param value
-        it->param_comment.assign(comment);       // replace existing param comment
-        it->accessed = it->accessed || from_code;
+        it->param_comment.assign(comment);       // replace exisiting param comment
         if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
         return;
       }
@@ -354,7 +347,6 @@ void ParameterInput::AddParameter(InputBlock *pb, std::string name, std::string 
 
   // Parameter not found, so create new node in linked list
     pb->line.emplace_back(name,value,comment);
-    pb->line.back().accessed = from_code;
     if (name.length() > pb->max_len_parname) pb->max_len_parname = name.length();
     if (value.length() > pb->max_len_parvalue) pb->max_len_parvalue = value.length();
   }
@@ -604,7 +596,7 @@ int ParameterInput::GetOrAddInteger(std::string block, std::string name, int def
   } else {
     pb = FindOrAddBlock(block);
     ss_value << def_value;
-    AddParameter(pb, name, ss_value.str(), "# Default value added at run time", true);
+    AddParameter(pb, name, ss_value.str(), "# Default value added at run time");
     ret = def_value;
   }
   Unlock();
@@ -632,7 +624,7 @@ Real ParameterInput::GetOrAddReal(std::string block, std::string name, Real def_
   } else {
     pb = FindOrAddBlock(block);
     ss_value << def_value;
-    AddParameter(pb, name, ss_value.str(), "# Default value added at run time", true);
+    AddParameter(pb, name, ss_value.str(), "# Default value added at run time");
     ret = def_value;
   }
   Unlock();
@@ -666,7 +658,7 @@ bool ParameterInput::GetOrAddBoolean(std::string block,std::string name, bool de
   } else {
     pb = FindOrAddBlock(block);
     ss_value << def_value;
-    AddParameter(pb, name, ss_value.str(), "# Default value added at run time", true);
+    AddParameter(pb, name, ss_value.str(), "# Default value added at run time");
     ret = def_value;
   }
   Unlock();
@@ -693,7 +685,7 @@ std::string ParameterInput::GetOrAddString(std::string block, std::string name,
     ret = pl->param_value;
   } else {
     pb = FindOrAddBlock(block);
-    AddParameter(pb, name, def_value, "# Default value added at run time", true);
+    AddParameter(pb, name, def_value, "# Default value added at run time");
     ret = def_value;
   }
   Unlock();
@@ -711,7 +703,7 @@ int ParameterInput::SetInteger(std::string block, std::string name, int value) {
   Lock();
   pb = FindOrAddBlock(block);
   ss_value << value;
-  AddParameter(pb, name, ss_value.str(), "# Updated during run time", true);
+  AddParameter(pb, name, ss_value.str(), "# Updated during run time");
   Unlock();
   return value;
 }
@@ -727,7 +719,7 @@ Real ParameterInput::SetReal(std::string block, std::string name, Real value) {
   Lock();
   pb = FindOrAddBlock(block);
   ss_value << value;
-  AddParameter(pb, name, ss_value.str(), "# Updated during run time", true);
+  AddParameter(pb, name, ss_value.str(), "# Updated during run time");
   Unlock();
   return value;
 }
@@ -743,7 +735,7 @@ bool ParameterInput::SetBoolean(std::string block, std::string name, bool value)
   Lock();
   pb = FindOrAddBlock(block);
   ss_value << value;
-  AddParameter(pb, name, ss_value.str(), "# Updated during run time", true);
+  AddParameter(pb, name, ss_value.str(), "# Updated during run time");
   Unlock();
   return value;
 }
@@ -759,7 +751,7 @@ std::string ParameterInput::SetString(std::string block, std::string name,
 
   Lock();
   pb = FindOrAddBlock(block);
-  AddParameter(pb, name, value, "# Updated during run time", true);
+  AddParameter(pb, name, value, "# Updated during run time");
   Unlock();
   return value;
 }
@@ -793,40 +785,4 @@ void ParameterInput::ParameterDump(std::ostream& os) {
 
   os<< "#------------------------- PAR_DUMP -------------------------" << std::endl;
   os<< "<par_end>" << std::endl;    // finish with par-end (needed for restart files)
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ParameterInput::CheckUnusedParameters(std::ostream& os)
-//  \brief Warn about input parameters that were never read by the code.  Should be called
-//  after all classes that read parameters have been constructed (i.e. just before the
-//  main evolution loop).  Such parameters are usually typos in optional parameters, which
-//  are otherwise silently ignored.  <comment> blocks are skipped, as they are never read.
-//  With MPI the parameter list is identical on every rank, so only rank 0 prints.
-//  If skip_refinement is true (e.g. the -v single-block validation, which disables mesh
-//  refinement) the mesh-refinement blocks are also skipped, as they are not read.
-
-void ParameterInput::CheckUnusedParameters(std::ostream& os, bool skip_refinement) {
-  if (global_variable::my_rank != 0) return;
-  static const std::vector<std::string> refinement_blocks =
-    {"mesh_refinement", "refined_region", "amr_criterion", "z4c_amr"};
-  for (auto itb = block.begin(); itb != block.end(); ++itb) {   // loop over InputBlocks
-    if (itb->block_name.compare(0, 7, "comment") == 0) continue;
-    if (skip_refinement) {
-      bool is_refinement_block = false;
-      for (auto& rb : refinement_blocks) {
-        if (itb->block_name.compare(0, rb.length(), rb) == 0) {
-          is_refinement_block = true;
-          break;
-        }
-      }
-      if (is_refinement_block) continue;
-    }
-    for (auto itl = itb->line.begin(); itl != itb->line.end(); ++itl) {
-      if (!itl->accessed) {
-        os << "### WARNING in " << __FILE__ << ": input parameter <" << itb->block_name
-           << ">/" << itl->param_name << " = " << itl->param_value
-           << " was not used by the code (check for a typo)" << std::endl;
-      }
-    }
-  }
 }

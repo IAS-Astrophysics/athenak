@@ -19,7 +19,8 @@ IdealMHD::IdealMHD(MeshBlockPack *pp, ParameterInput *pin) :
   eos_data.is_ideal = true;
   eos_data.gamma = pin->GetReal("mhd","gamma");
   eos_data.iso_cs = 0.0;
-  eos_data.sigma_max = pin->GetOrAddReal("mhd","sigma_max",(FLT_MAX));  // sigma ceiling
+  eos_data.use_e = true;  // ideal gas EOS always uses internal energy
+  eos_data.use_t = false;
 }
 
 //----------------------------------------------------------------------------------------

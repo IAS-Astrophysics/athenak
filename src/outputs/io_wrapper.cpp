@@ -47,6 +47,7 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
         break;
       case FileMode::write:
         mpi_mode = MPI_MODE_WRONLY | MPI_MODE_CREATE;
+        MPI_File_delete(fname, MPI_INFO_NULL); // truncation
         break;
       case FileMode::append:
         mpi_mode = MPI_MODE_WRONLY | MPI_MODE_APPEND;
@@ -66,17 +67,6 @@ int IOWrapper::Open(const char* fname, FileMode rw, bool single_file_per_rank) {
                 << std::endl << "File '" << fname << "' could not be opened"
                 << std::endl;
       std::exit(EXIT_FAILURE);
-    }
-    // truncate collectively
-    if (rw == FileMode::write) {
-      errcode = MPI_File_set_size(fh_, 0);
-      if (errcode != MPI_SUCCESS) {
-        char msg[MPI_MAX_ERROR_STRING];
-        int resultlen;
-        MPI_Error_string(errcode, msg, &resultlen);
-        Kokkos::printf("%.*s\n", resultlen, msg);
-        MPI_Abort(comm_, 1);
-      }
     }
   } else {
     FILE* local_fh;
@@ -199,6 +189,36 @@ std::size_t IOWrapper::Read_bytes_at_all(void *buf, IOWrapperSizeT size,
 #else
   std::fseek(fh_, offset, SEEK_SET);
   return std::fread(buf, size, cnt, fh_);
+#endif
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn std::size_t IOWrapper::Read_Integers(void *buf, IOWrapperSizeT cnt,
+//!                                          bool single_file_per_rank)
+//! \brief wrapper for {MPI_File_read} versus {std::fread} for reading integers.
+//! Returns number of ints actually read.
+
+std::size_t IOWrapper::Read_Integers(void *buf, IOWrapperSizeT cnt,
+                                     bool single_file_per_rank) {
+#if MPI_PARALLEL_ENABLED
+  if (!single_file_per_rank) {
+    MPI_Status status;
+    int errcode = MPI_File_read(fh_, buf, cnt, MPI_INT, &status);
+    if (errcode != MPI_SUCCESS) {
+      char msg[MPI_MAX_ERROR_STRING];
+      int resultlen;
+      MPI_Error_string(errcode, msg, &resultlen);
+      Kokkos::printf("%.*s\n", resultlen, msg);
+      return 0;
+    }
+    int nread;
+    if (MPI_Get_count(&status, MPI_INT, &nread) == MPI_UNDEFINED) { return 0; }
+    return nread;
+  } else {
+    return std::fread(buf, sizeof(int), cnt, reinterpret_cast<FILE*>(fh_));
+  }
+#else
+  return std::fread(buf, sizeof(int), cnt, fh_);
 #endif
 }
 
@@ -636,5 +656,32 @@ IOWrapperSizeT IOWrapper::GetPosition(bool single_file_per_rank) {
 #else
   int64_t pos = ftell(fh_);
   return pos;
+#endif
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn IOWrapperSizeT IOWrapper::GetSize(bool single_file_per_rank)
+//  \brief wrapper for {MPI_File_get_size} versus ftell/seek-to-end
+
+IOWrapperSizeT IOWrapper::GetSize(bool single_file_per_rank) {
+#if MPI_PARALLEL_ENABLED
+  if (!single_file_per_rank) {
+    MPI_Offset size;
+    MPI_File_get_size(fh_, &size);
+    return size;
+  } else {
+    FILE *fh = reinterpret_cast<FILE*>(fh_);
+    int64_t pos = ftell(fh);
+    std::fseek(fh, 0, SEEK_END);
+    int64_t size = ftell(fh);
+    std::fseek(fh, pos, SEEK_SET);
+    return size;
+  }
+#else
+  int64_t pos = ftell(fh_);
+  std::fseek(fh_, 0, SEEK_END);
+  int64_t size = ftell(fh_);
+  std::fseek(fh_, pos, SEEK_SET);
+  return size;
 #endif
 }

@@ -1,0 +1,104 @@
+<comment>
+problem = small dynbbh ADM dyn_radiation beam smoke test
+
+<job>
+basename = dynbbh_beam
+
+<mesh>
+nghost = 2
+nx1 = 8
+x1min = -4.0
+x1max = 4.0
+ix1_bc = outflow
+ox1_bc = outflow
+
+nx2 = 8
+x2min = -4.0
+x2max = 4.0
+ix2_bc = outflow
+ox2_bc = outflow
+
+nx3 = 4
+x3min = -2.0
+x3max = 2.0
+ix3_bc = outflow
+ox3_bc = outflow
+
+<meshblock>
+nx1 = 8
+nx2 = 8
+nx3 = 4
+
+<mesh_refinement>
+refinement = none
+
+<coord>
+general_rel = true
+m = 1.0
+a = 0.0
+excise = false
+
+<adm>
+dynamic = true
+
+<time>
+evolution = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim = 2
+tlim = 0.05
+ndiag = 1
+
+<mhd>
+eos = ideal
+dyn_eos = ideal
+dyn_error = reset_floor
+reconstruct = plm
+rsolver = hlle
+dfloor = 1.0e-12
+pfloor = 1.0e-14
+tfloor = 1.0e-12
+gamma = 1.6666666666666667
+fofc = false
+gamma_max = 20.0
+calculate_tmunu = false
+
+<dyn_radiation>
+geometry = adm
+rad_source = true
+kappa_a = 0.1
+kappa_s = 0.05
+kappa_p = 0.0
+arad = 1.0
+nlevel = 1
+rotate_geo = false
+angular_fluxes = true
+reconstruct = plm
+source_max_iter = 6
+source_tolerance = 1.0e-10
+
+<rad_srcterms>
+rad_beam = true
+dii_dt = 1.0e-3
+pos_1 = -2.0
+pos_2 = 0.0
+pos_3 = 0.0
+dir_1 = 1.0
+dir_2 = 0.08
+dir_3 = 0.02
+width = 1.0
+spread = 90.0
+
+<problem>
+pgen_name = dynbbh_beam
+rho = 1.0e-8
+pgas = 1.0e-10
+sep = 4.0
+q = 1.0
+a1 = 0.10
+a2 = 0.05
+th_a1 = 20.0
+ph_a1 = 30.0
+th_a2 = 70.0
+ph_a2 = 150.0
+metric_derivative = ad

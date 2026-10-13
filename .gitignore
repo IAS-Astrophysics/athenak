@@ -1,9 +1,5 @@
 # build directories
 build*/
-__pycache__
-
-# Temporary testing files
-tst/test_log.txt
 
 # Athena output files
 *.tab
@@ -13,6 +9,9 @@ tst/test_log.txt
 *.hst
 *.rst
 
+# staging scan outputs
+staging_manifests/
+
 # Mac OS metadata
 .DS_Store
 .vscode
@@ -21,6 +20,3 @@ tst/test_log.txt
 *~
 *.swp
 Lorene
-
-# python cache
-__pycache__/

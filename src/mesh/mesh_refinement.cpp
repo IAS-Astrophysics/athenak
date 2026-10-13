@@ -8,9 +8,6 @@
 //! Note while restriction functions for CC and FC data are implemented in this file,
 //! prolongation operators are implemented as INLINE functions in prolongation.hpp (and
 //! are used both here for AMR and in the BVals class at fine/coarse boundaries).
-//!
-//! Because refinement cruteria & buffer sizes depend on physics, this constructor
-//! called in main() *after* physics modules are added
 
 #include <cstdint>   // int32_t
 #include <iostream>
@@ -29,6 +26,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
@@ -44,22 +42,22 @@
 // called from Mesh::BuildTree (before physics modules are enrolled)
 
 MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
+  pmy_mesh(pm),
+  refine_flag("rflag",pm->nmb_total),
+  fc_amr_repair("fc_amr_repair",pm->nmb_total),
+  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
   nmb_created(0),
   nmb_deleted(0),
   nmb_sent_thisrank(0),
   ncyc_check_amr(1),
   refinement_interval(5),
-  prolong_prims(false),
-  refine_flag("rflag",pm->nmb_total),
-  fc_amr_repair("fc_amr_repair",pm->nmb_total),
-  ncyc_since_ref("cyc_since_ref",pm->nmb_total),
 #if MPI_PARALLEL_ENABLED
   sendbuf("lb send buff",1),
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
 #endif
-  pmy_mesh(pm) {
+  prolong_prims(false) {
   if (pin->DoesBlockExist("mesh_refinement")) {
     // read interval (in cycles) between check of AMR and derefinement
     ncyc_check_amr = pin->GetOrAddReal("mesh_refinement", "ncycle_check", 1);
@@ -70,13 +68,14 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     }
   }
 
-  // allocate arrays for AMR, add RefinementCriteria object
+  // allocate arrays for AMR
+  // NOTE: RefinementCriteria object cannot be allocated until Physics modules are defined
+  // This is done in Mesh::AddCoordinatesAndPhysics and not in this constructor
   if (pm->adaptive) {
     nref_eachrank = new int[global_variable::nranks];
     nderef_eachrank = new int[global_variable::nranks];
     nref_rsum = new int[global_variable::nranks];
     nderef_rsum = new int[global_variable::nranks];
-    pmrc = new RefinementCriteria(pm, pin);
   }
 
   // be sure Views are initialized to zero
@@ -96,33 +95,6 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
 #if MPI_PARALLEL_ENABLED
   // create unique communicators for AMR
   MPI_Comm_dup(MPI_COMM_WORLD, &amr_comm);
-  // allocate fixed-length send/recv data buffers as work around on Aurora and other
-  // machines where frequent reallocation of Kokkos:Views causes memory issues
-  // count number of cell- and face-centered variables communicated depending on physics
-  int ncc_tosend=0, nfc_tosend=0;
-  if (pm->pmb_pack->phydro != nullptr) {
-    ncc_tosend += (pm->pmb_pack->phydro->nhydro +
-                   pm->pmb_pack->phydro->nscalars);
-  }
-  if (pm->pmb_pack->pmhd != nullptr) {
-    ncc_tosend += (pm->pmb_pack->pmhd->nmhd +
-                   pm->pmb_pack->pmhd->nscalars);
-    nfc_tosend += 1;
-  }
-  if (pm->pmb_pack->prad != nullptr) {
-    ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
-  }
-  if (pm->pmb_pack->pz4c != nullptr) {
-    ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
-  }
-  int nmb = std::max((pm->pmb_pack->nmb_thispack), (pm->nmb_maxperrank));
-  // number of cells per MB, including ghost zones
-  int ncells = (pm->mb_indcs.nx1 + 2*pm->mb_indcs.ng);
-  if (pm->multi_d) ncells *= (pm->mb_indcs.nx2 + 2*pm->mb_indcs.ng);
-  if (pm->three_d) ncells *= (pm->mb_indcs.nx3 + 2*pm->mb_indcs.ng);
-  int ndata = nmb*(ncc_tosend + nfc_tosend)*ncells;
-  Kokkos::realloc(recv_data, ndata);
-  Kokkos::realloc(send_data, ndata);
 #endif
 }
 
@@ -155,20 +127,20 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
   if (nnew != 0 || ndel != 0) { // at least one (de)refinement flagged
     if (pmy_mesh->pzoom != nullptr) pmy_mesh->pzoom->StoreZoomRegion();
     RedistAndRefineMeshBlocks(pin, nnew, ndel);
-
-    // Mark one mesh-topology update event (AMR and any resulting load balancing).
-    pmy_mesh->MarkMeshUpdated();
-
     pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
     if (pmy_mesh->pzoom != nullptr) pmy_mesh->pzoom->ApplyZoomRegion(pdriver);
 
     MeshBlockPack* pmbp = pmy_mesh->pmb_pack;
     if (pmbp->pmhd != nullptr) {
       RepairAMRFC(pmbp->pmhd->b0);
-      // Repair changes internal faces after the first exchange finalized exterior
-      // faces. Refresh neighboring ghost fields and their primitives before the next
-      // reconstruction consumes them.
-      pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
+      if (pmbp->pdyngr == nullptr) {
+        (void) pmbp->pmhd->ConToPrim(pdriver, 0);
+      } else {
+        if (pmbp->pz4c != nullptr) {
+          (void) pmbp->pz4c->ConvertZ4cToADM(pdriver, 0);
+        }
+        (void) pmbp->pdyngr->ConToPrim(pdriver, 0);
+      }
     }
     if (pmbp->phydro != nullptr) {
       (void) pmbp->phydro->NewTimeStep(pdriver, pdriver->nexp_stages);
@@ -178,6 +150,9 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     }
     if (pmbp->prad != nullptr) {
       (void) pmbp->prad->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->pdynrad != nullptr) {
+      (void) pmbp->pdynrad->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
     if (pmbp->pz4c != nullptr) {
       (void) pmbp->pz4c->NewTimeStep(pdriver, pdriver->nexp_stages);
@@ -307,7 +282,7 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
   }
 
   // allocate memory for logical location arrays over total number MBs refined/derefined
-  LogicalLocation *llref=NULL, *llderef=NULL, *cllderef=NULL;
+  LogicalLocation *llref, *llderef, *cllderef;
   if (tnref > 0) {
     llref = new LogicalLocation[tnref];
   }
@@ -395,6 +370,10 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     std::sort(cllderef, &(cllderef[ctnd-1]), Mesh::GreaterLevel);
   }
 
+  if (tnderef >= nleaf) {
+    delete [] llderef;
+  }
+
   // Now the lists of the blocks to be refined and derefined are completed
   // Start tree manipulation.  Note all ranks manipulate entire tree, so each rank has
   // a complete and updated copy of the entire tree.
@@ -412,9 +391,9 @@ void MeshRefinement::UpdateMeshBlockTree(int &nnew, int &ndel) {
     MeshBlockTree *bt = pmy_mesh->ptree->FindMeshBlock(cllderef[n]);
     bt->Derefine(ndel);
   }
+
   if (tnderef >= nleaf) {
     delete [] cllderef;
-    delete [] llderef;
   }
 
   return;
@@ -516,6 +495,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
+  dyn_radiation::DynRadiation* pdynrad = pm->pmb_pack->pdynrad;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
   if ((ndel > 0) && (pmhd != nullptr)) {
@@ -546,6 +526,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       DerefineCCSameRank(prad->i0, prad->coarse_i0);
+    } else if (pdynrad != nullptr) {
+      DerefineCCSameRank(pdynrad->i0, pdynrad->coarse_i0);
     }
     if (pz4c != nullptr) {
       DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
@@ -564,6 +546,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   if (prad != nullptr) {
     CopyCC(prad->i0);
+  } else if (pdynrad != nullptr) {
+    CopyCC(pdynrad->i0);
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
@@ -583,6 +567,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       CopyForRefinementCC(prad->i0, prad->coarse_i0);
+    } else if (pdynrad != nullptr) {
+      CopyForRefinementCC(pdynrad->i0, pdynrad->coarse_i0);
     }
     if (pz4c != nullptr) {
       CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
@@ -618,6 +604,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       RefineCC(new_to_old, prad->i0, prad->coarse_i0);
+    } else if (pdynrad != nullptr) {
+      RefineCC(new_to_old, pdynrad->i0, pdynrad->coarse_i0);
     }
     if (pz4c != nullptr) {
       RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0, true);
@@ -685,6 +673,8 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     // With radiation, compute tetrads and associated mesh arrays
     if (prad != nullptr) {
       prad->SetOrthonormalTetrad();
+    } else if (pdynrad != nullptr) {
+      pdynrad->PrepareADMGeometry();
     }
   }
 

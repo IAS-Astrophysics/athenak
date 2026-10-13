@@ -51,8 +51,12 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.mhd_flux  = tl["stagen"]->AddTask(&mhd::MHD::Fluxes, pmhd, id.rad_src);
     id.mhd_sendf = tl["stagen"]->AddTask(&mhd::MHD::SendFlux, pmhd, id.mhd_flux);
     id.mhd_recvf = tl["stagen"]->AddTask(&mhd::MHD::RecvFlux, pmhd, id.mhd_sendf);
-    id.mhd_rkupdt= tl["stagen"]->AddTask(&mhd::MHD::RKUpdate, pmhd, id.mhd_recvf);
-    id.mhd_src   = tl["stagen"]->AddTask(&mhd::MHD::MHDSrcTerms, pmhd, id.mhd_rkupdt);
+    id.mhd_repairf = tl["stagen"]->AddTask(&mhd::MHD::RepairNonFiniteFluxes, pmhd,
+                                            id.mhd_recvf);
+    id.mhd_rkupdt= tl["stagen"]->AddTask(&mhd::MHD::RKUpdate, pmhd, id.mhd_repairf);
+    id.mhd_repairu = tl["stagen"]->AddTask(&mhd::MHD::RepairNonFiniteConserved, pmhd,
+                                            id.mhd_rkupdt);
+    id.mhd_src   = tl["stagen"]->AddTask(&mhd::MHD::MHDSrcTerms, pmhd, id.mhd_repairu);
     id.mhd_efld  = tl["stagen"]->AddTask(&mhd::MHD::CornerE, pmhd, id.mhd_src);
     id.mhd_sende = tl["stagen"]->AddTask(&mhd::MHD::SendE, pmhd, id.mhd_efld);
     id.mhd_recve = tl["stagen"]->AddTask(&mhd::MHD::RecvE, pmhd, id.mhd_sende);
@@ -67,10 +71,10 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.mhd_restb = tl["stagen"]->AddTask(&mhd::MHD::RestrictB, pmhd, id.mhd_recvu);
     id.mhd_sendb = tl["stagen"]->AddTask(&mhd::MHD::SendB, pmhd, id.mhd_restb);
     id.mhd_recvb = tl["stagen"]->AddTask(&mhd::MHD::RecvB, pmhd, id.mhd_sendb);
-    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.mhd_recvb);
+    id.bcs       = tl["stagen"]->AddTask(&Radiation::ApplyPhysicalBCs,this,id.mhd_recvb);
+    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.bcs);
     id.mhd_prol  = tl["stagen"]->AddTask(&mhd::MHD::Prolongate, pmhd, id.rad_prol);
-    id.bcs       = tl["stagen"]->AddTask(&Radiation::ApplyPhysicalBCs,this,id.mhd_prol);
-    id.mhd_c2p   = tl["stagen"]->AddTask(&mhd::MHD::ConToPrim, pmhd, id.bcs);
+    id.mhd_c2p   = tl["stagen"]->AddTask(&mhd::MHD::ConToPrim, pmhd, id.mhd_prol);
 
     // assemble "after_stagen" task list
     id.rad_csend = tl["after_stagen"]->AddTask(&Radiation::ClearSend, this, none);
@@ -105,10 +109,10 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.hyd_restu = tl["stagen"]->AddTask(&hydro::Hydro::RestrictU, phyd, id.rad_recvi);
     id.hyd_sendu = tl["stagen"]->AddTask(&hydro::Hydro::SendU, phyd, id.hyd_restu);
     id.hyd_recvu = tl["stagen"]->AddTask(&hydro::Hydro::RecvU, phyd, id.hyd_sendu);
-    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.hyd_recvu);
+    id.bcs       = tl["stagen"]->AddTask(&Radiation::ApplyPhysicalBCs,this,id.hyd_recvu);
+    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.bcs);
     id.hyd_prol  = tl["stagen"]->AddTask(&hydro::Hydro::Prolongate, phyd, id.rad_prol);
-    id.bcs       = tl["stagen"]->AddTask(&Radiation::ApplyPhysicalBCs,this,id.hyd_prol);
-    id.hyd_c2p   = tl["stagen"]->AddTask(&hydro::Hydro::ConToPrim, phyd, id.bcs);
+    id.hyd_c2p   = tl["stagen"]->AddTask(&hydro::Hydro::ConToPrim, phyd, id.hyd_prol);
 
     // assemble "after_stagen" task list
     // assemble end task list
@@ -135,9 +139,9 @@ void Radiation::AssembleRadTasks(std::map<std::string, std::shared_ptr<TaskList>
     id.rad_resti = tl["stagen"]->AddTask(&Radiation::RestrictI, this, id.rad_coupl);
     id.rad_sendi = tl["stagen"]->AddTask(&Radiation::SendI, this, id.rad_resti);
     id.rad_recvi = tl["stagen"]->AddTask(&Radiation::RecvI, this, id.rad_sendi);
-    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.rad_recvi);
     id.bcs       = tl["stagen"]->AddTask(
-                                    &Radiation::ApplyPhysicalBCs, this, id.rad_prol);
+                                    &Radiation::ApplyPhysicalBCs, this, id.rad_recvi);
+    id.rad_prol  = tl["stagen"]->AddTask(&Radiation::Prolongate, this, id.bcs);
 
     // assemble "after_stagen" task list
     id.rad_csend = tl["after_stagen"]->AddTask(&Radiation::ClearSend, this, none);
@@ -273,7 +277,7 @@ TaskStatus Radiation::RecvI(Driver *pdrive, int stage) {
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus Radiation::ApplyPhysicalBCs
-//! \brief Wrapper task list function to call functions that set physical and user BCs
+//! \brief Wrapper task list function to call funtions that set physical and user BCs
 
 TaskStatus Radiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
   // do not apply BCs if domain is strictly periodic
@@ -314,14 +318,6 @@ TaskStatus Radiation::Prolongate(Driver *pdrive, int stage) {
   if (pmy_pack->pmesh->multilevel) {  // only prolongate with SMR/AMR
     // prolongate specific intensity
     pbval_i->FillCoarseInBndryCC(i0, coarse_i0);
-
-    // Step 1: apply physical BCs to the coarse array, so the prolongation stencil
-    //         reads valid data in coarse ghost zones that sit at a physical boundary.
-    if (!(pmy_pack->pmesh->strictly_periodic)) {
-      pbval_i->RadiationBCsCoarse(pmy_pack, pbval_i->i_in, coarse_i0);
-    }
-
-    // Step 2: prolongate fine ghost zones from the coarse array.
     pbval_i->ProlongateCC(i0, coarse_i0);
   }
   return TaskStatus::complete;

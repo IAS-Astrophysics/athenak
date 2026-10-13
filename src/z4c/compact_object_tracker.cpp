@@ -32,8 +32,8 @@
 
 //----------------------------------------------------------------------------------------
 CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int n):
-              owns_compact_object{false}, vel{NAN, NAN, NAN},
-              pmesh{pmesh}, out_every{1}, pos{NAN, NAN, NAN} {
+              owns_compact_object{false}, pos{NAN, NAN, NAN}, vel{NAN, NAN, NAN},
+              pmesh{pmesh}, out_every{1} {
   std::string nstr = std::to_string(n);
   std::string ofname = pin->GetString("job", "basename") + ".";
   ofname += pin->GetOrAddString("z4c", "filename", "co_");
@@ -67,26 +67,33 @@ CompactObjectTracker::CompactObjectTracker(Mesh *pmesh, ParameterInput *pin, int
   pos[1] = pin->GetOrAddReal("z4c", "co_" + nstr + "_y", 0.0);
   pos[2] = pin->GetOrAddReal("z4c", "co_" + nstr + "_z", 0.0);
 
-  mass = pin->GetOrAddReal("z4c", "co_" + nstr + "_mass", 0.0);
-
   reflevel = pin->GetOrAddInteger("z4c", "co_" + nstr + "_reflevel", -1);
   radius = pin->GetOrAddReal("z4c", "co_" + nstr + "_radius", 0.0);
 
   out_every = pin->GetOrAddInteger("z4c", "co_" + nstr + "_out_every", 1);
 
   if (0 == global_variable::my_rank) {
-    ofile.open(ofname.c_str());
+    std::ifstream fileCheck(ofname);
+    bool fileExists = fileCheck.good();
+    fileCheck.close();
+    if (!fileExists) {
+      std::ofstream createFile(ofname);
+      createFile.close();
 
-    if (type == BlackHole) {
-      ofile << "# Black Hole";
+      ofile.open(ofname, std::ios::out | std::ios::app);
+      if (type == BlackHole) {
+        ofile << "# Black Hole";
+      } else {
+        ofile << "# Neutron Star";
+      }
+      ofile << std::endl;
+
+      ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz\n";
+      ofile << std::flush;
+      ofile << std::setprecision(19);
     } else {
-      ofile << "# Neutron Star";
+      ofile.open(ofname, std::ios::out | std::ios::app);
     }
-    ofile << std::endl;
-
-    ofile << "# 1:iter 2:time 3:x 4:y 5:z 6:vx 7:vy 8:vz\n";
-    ofile << std::flush;
-    ofile << std::setprecision(19);
   }
 }
 

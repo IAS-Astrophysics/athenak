@@ -230,7 +230,9 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
   int nfx = indcs.nx2 + 2*(ng + maxjshift);
 
   auto &mbsize = pmy_pack->pmb->mb_size;
+  auto &mesh_size = pmy_pack->pmesh->mesh_size;
   Real &dt = pmy_pack->pmesh->dt;
+  Real ly = (mesh_size.x2max - mesh_size.x2min);
   Real qo = qshear*omega0;
 
   int scr_lvl=0;
@@ -250,7 +252,7 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
     if (v==0) {
       // B3 located at x1-cell centers
       x1 = CellCenterX(i-is, nx1, x1min, x1max);
-    } else {
+    } else if (v==1) {
       // B1 located at x1-cell faces
       x1 = LeftEdgeX(i-is, nx1, x1min, x1max);
     }
@@ -287,8 +289,8 @@ TaskStatus OrbitalAdvectionFC::RecvAndUnpackFC(DvceFaceFld4D<Real> &b0,
         break;
       case ReconstructionMethod::ppm4:
       case ReconstructionMethod::ppmx:
-      case ReconstructionMethod::teno:
       case ReconstructionMethod::wenoz:
+      case ReconstructionMethod::wenomz:
         PPMX_RemapFlx(member, (jfs-joffset), (jfe+1-joffset), epsi, b0_, flx);
         break;
       default:

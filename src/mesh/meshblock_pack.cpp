@@ -27,11 +27,11 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "particles/particles.hpp"
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
-#include "gravity/gravity.hpp"
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -47,20 +47,23 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   tl_map.insert(std::make_pair("before_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("after_stagen",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("before_parabolic_stagen",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("parabolic_stagen",std::make_shared<TaskList>()));
-  tl_map.insert(std::make_pair("after_parabolic_stagen",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
 // MeshBlock destructor
 
 MeshBlockPack::~MeshBlockPack() {
-  if (ppart  != nullptr) {delete ppart;}
-  if (pnr    != nullptr) {delete pnr;}
-  if (pdyngr != nullptr) {delete pdyngr;}
-  if (ptmunu != nullptr) {delete ptmunu;}
+  delete pcoord;
+  if (phydro != nullptr) {delete phydro;}
+  if (pmhd   != nullptr) {delete pmhd;}
   if (padm   != nullptr) {delete padm;}
+  if (ptmunu != nullptr) {delete ptmunu;}
+  if (prad   != nullptr) {delete prad;}
+  if (pdynrad != nullptr) {delete pdynrad;}
+  if (pdyngr != nullptr) {delete pdyngr;}
+  if (pnr    != nullptr) {delete pnr;}
+  if (pturb  != nullptr) {delete pturb;}
+  if (punit  != nullptr) {delete punit;}
   if (pz4c   != nullptr) {
     delete pz4c;
     // cce dump
@@ -69,12 +72,8 @@ MeshBlockPack::~MeshBlockPack() {
     }
     pz4c_cce.resize(0);
   }
-  if (pturb  != nullptr) {delete pturb;}
-  if (prad   != nullptr) {delete prad;}
-  if (pmhd   != nullptr) {delete pmhd;}
-  if (phydro != nullptr) {delete phydro;}
-  if (punit  != nullptr) {delete punit;}
-  delete pcoord;
+  if (ppart  != nullptr) {delete ppart;}
+  // must be last, since it calls ~BoundaryValues() which (MPI) uses pmy_pack->pmb->nnghbr
   delete pmb;
 }
 
@@ -121,6 +120,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     phydro = new hydro::Hydro(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("mhd")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("dyn_radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       phydro->AssembleHydroTasks(tl_map);
     }
@@ -134,6 +134,7 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     pmhd = new mhd::MHD(this, pin);
     nphysics++;
     if (!(pin->DoesBlockExist("hydro")) && !(pin->DoesBlockExist("radiation")) &&
+        !(pin->DoesBlockExist("dyn_radiation")) &&
         !(pin->DoesBlockExist("adm")) && !(pin->DoesBlockExist("z4c")) ) {
       pmhd->AssembleMHDTasks(tl_map);
     }
@@ -169,6 +170,20 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
 
   // (5) RADIATION
   // Create radiation physics module.  Create tasklist.
+  if (pin->DoesBlockExist("radiation") && pin->DoesBlockExist("dyn_radiation")) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "<radiation> and <dyn_radiation> are separate solvers; "
+              << "enable only one in a run." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (pin->DoesBlockExist("radiation") &&
+      (pin->DoesBlockExist("adm") || pin->DoesBlockExist("z4c"))) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Legacy <radiation> cannot be combined with ADM/Z4c "
+              << "backgrounds; use <dyn_radiation> for ADM radiation transport."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if (pin->DoesBlockExist("radiation")) {
     prad = new radiation::Radiation(this, pin);
     nphysics++;
@@ -228,12 +243,24 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ptmunu = new Tmunu(this, pin);
   }
 
+  // (8b) DYNAMICAL-METRIC RADIATION
+  // Construct after ADM/Z4c so ADM geometry is available, and before the NR task graph
+  // so its tasks can be ordered with Z4c/DynGRMHD tasks.
+  if (pin->DoesBlockExist("dyn_radiation")) {
+    pdynrad = new dyn_radiation::DynRadiation(this, pin);
+    nphysics++;
+  } else {
+    pdynrad = nullptr;
+  }
+
   if (pz4c != nullptr || padm != nullptr) {
     pnr = new numrel::NumericalRelativity(this, pin);
     pnr->AssembleNumericalRelativityTasks(tl_map);
+  } else if (pdynrad != nullptr) {
+    pdynrad->AssembleRadTasks(tl_map);
   }
 
-  // (9) PARTICLES
+  // (8) PARTICLES
   // Create particles module.  Create tasklist.
   if (pin->DoesBlockExist("particles")) {
     ppart = new particles::Particles(this, pin);
@@ -243,16 +270,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     ppart = nullptr;
   }
 
-  // (9) GRAVITY
-  // Create gravity physics module.  Create tasklist.
-  if (pin->DoesBlockExist("gravity")) {
-    // Gravity module uses Multigrid module
-    pgrav = new gravity::Gravity(this, pin);
-    //pgrav->AssembleTasks(tl_map);
-    nphysics++;
-  } else {
-    pgrav = nullptr;
-  }
   // Check that at least ONE is requested and initialized.
   // Error if there are no physics blocks in the input file.
   if (nphysics == 0) {

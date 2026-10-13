@@ -25,15 +25,18 @@
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "driver/driver.hpp"
 #include "mesh/mesh.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "srcterms/srcterms.hpp"
 #include "pgen/pgen.hpp"
 
 // function to compute errors in solution at end of run
 void RadiationLinearWaveErrors(ParameterInput *pin, Mesh *pm);
+void DynRadSourceIterationCheck(ParameterInput *pin, Mesh *pm);
 
 namespace {
 // global variable to control computation of initial conditions versus errors
@@ -69,6 +72,57 @@ struct RadEigensystem {
 
 void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool restart) {
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (pin->GetOrAddBoolean("problem", "source_iteration_test", false)) {
+    pgen_final_func = DynRadSourceIterationCheck;
+    if (restart) return;
+    if (pmbp->pdynrad == nullptr || pmbp->phydro == nullptr) {
+      throw std::runtime_error("source_iteration_test requires <hydro> and <dyn_radiation>");
+    }
+
+    const Real rho = pin->GetReal("problem", "rho");
+    const Real pgas = pin->GetReal("problem", "pgas");
+    const Real erad = pin->GetReal("problem", "erad");
+    auto &indcs = pmy_mesh_->mb_indcs;
+    int &ng = indcs.ng;
+    int n1 = indcs.nx1 + 2*ng;
+    int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+    int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+    auto &w0 = pmbp->phydro->w0;
+    Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+    par_for("dynrad_source_iter_hydro",DevExeSpace(),0,(pmbp->nmb_thispack-1),
+            0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      w0(m,IDN,k,j,i) = rho;
+      w0(m,IVX,k,j,i) = 0.0;
+      w0(m,IVY,k,j,i) = 0.0;
+      w0(m,IVZ,k,j,i) = 0.0;
+      w0(m,IEN,k,j,i) = pgas/gm1;
+    });
+    pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+
+    auto &i0 = pmbp->pdynrad->i0;
+    auto &sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+    auto &tet_c = pmbp->pdynrad->tet_c;
+    auto &tetcov_c = pmbp->pdynrad->tetcov_c;
+    auto &nh_c = pmbp->pdynrad->nh_c;
+    const bool use_adm_geometry = pmbp->pdynrad->use_adm_geometry;
+    const int nangles = pmbp->pdynrad->prgeo->nangles;
+    par_for("dynrad_source_iter_rad",DevExeSpace(),0,(pmbp->nmb_thispack-1),
+            0,(nangles-1),0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+      Real norm = sqrt_detg_c(m,k,j,i);
+      if (!(use_adm_geometry)) {
+        Real n_0 = 0.0;
+        for (int d=0; d<4; ++d) {
+          n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+        }
+        norm = tet_c(m,0,0,k,j,i)*n_0;
+      }
+      i0(m,n,k,j,i) = norm*erad/(4.0*M_PI);
+    });
+    return;
+  }
+
   // set linear wave errors function
   pgen_final_func = RadiationLinearWaveErrors;
   if (restart) return;
@@ -190,21 +244,36 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
   int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
   int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
+  int &ie = indcs.ie; int &je = indcs.je; int &ke = indcs.ke;
   auto &size = pmbp->pmb->mb_size;
-  int nangles_ = pmbp->prad->prgeo->nangles;
+  int nangles_ = -1;
+  if (pmbp->prad != nullptr) {
+    nangles_ = pmbp->prad->prgeo->nangles;
+  } else if (pmbp->pdynrad != nullptr) {
+    nangles_ = pmbp->pdynrad->prgeo->nangles;
+  } else {
+    throw std::runtime_error("rad_linear_wave requires either <radiation> or <dyn_radiation>");
+  }
   auto eig_ = eig;
   auto wv_ = rlw;
+  const bool has_hydro = (pmbp->phydro != nullptr);
+  const bool has_mhd = (pmbp->pmhd != nullptr);
+  const bool use_dyn_grmhd = (pmbp->pdyngr != nullptr);
+  if (!(has_hydro || has_mhd)) {
+    throw std::runtime_error("rad_linear_wave requires <hydro> or <mhd>");
+  }
 
   // time for reference solution
   Real tf = pmbp->pmesh->time;
 
   // set EOS data
-  Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+  Real gm1 = has_hydro ? (pmbp->phydro->peos->eos_data.gamma - 1.0)
+                       : (pmbp->pmhd->peos->eos_data.gamma - 1.0);
 
   // set primitive variables.  Note solution explicitly depends on time since wave
   // is damped.  Initial conditions will ise amplitudes at t=0.  Final time will
   // compute damped solution at appropriate spatial position.
-  auto &w0 = pmbp->phydro->w0;
+  DvceArray5D<Real> w0 = has_hydro ? pmbp->phydro->w0 : pmbp->pmhd->w0;
   par_for("rad_wave",DevExeSpace(),0,(pmbp->nmb_thispack-1),0,(n3-1),0,(n2-1),0,(n1-1),
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -237,24 +306,79 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
     w0(m,IVX,k,j,i) = uxn*wv_.cos_a2*wv_.cos_a3-uyn*wv_.sin_a3-uzn*wv_.sin_a2*wv_.cos_a3;
     w0(m,IVY,k,j,i) = uxn*wv_.cos_a2*wv_.sin_a3+uyn*wv_.cos_a3-uzn*wv_.sin_a2*wv_.sin_a3;
     w0(m,IVZ,k,j,i) = uxn*wv_.sin_a2                          +uzn*wv_.cos_a2;
-    w0(m,IEN,k,j,i) = pgasn/gm1;
+    w0(m,IEN,k,j,i) = use_dyn_grmhd ? pgasn : pgasn/gm1;
   });
 
   // Convert primitives to conserved
-  if (set_initial_conditions) {
-    pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+  if (has_hydro) {
+    if (set_initial_conditions) {
+      pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0,
+                                     0,(n1-1), 0,(n2-1), 0,(n3-1));
+    } else {
+      pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u1,
+                                     0,(n1-1), 0,(n2-1), 0,(n3-1));
+    }
   } else {
-    pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u1, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+    auto &b = set_initial_conditions ? pmbp->pmhd->b0 : pmbp->pmhd->b1;
+    auto &bcc0 = pmbp->pmhd->bcc0;
+    par_for("rad_wave_zero_b",DevExeSpace(),0,(pmbp->nmb_thispack-1),
+            0,(n3-1),0,(n2-1),0,(n1-1),
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      bcc0(m,IBX,k,j,i) = 0.0;
+      bcc0(m,IBY,k,j,i) = 0.0;
+      bcc0(m,IBZ,k,j,i) = 0.0;
+      b.x1f(m,k,j,i) = 0.0;
+      b.x2f(m,k,j,i) = 0.0;
+      b.x3f(m,k,j,i) = 0.0;
+      if (i == n1-1) { b.x1f(m,k,j,i+1) = 0.0; }
+      if (j == n2-1) { b.x2f(m,k,j+1,i) = 0.0; }
+      if (k == n3-1) { b.x3f(m,k+1,j,i) = 0.0; }
+    });
+
+    if (pmbp->padm != nullptr) {
+      pmbp->padm->SetADMVariables(pmbp);
+      if (set_initial_conditions) {
+        pmbp->pdyngr->PrimToConInit(is, ie, js, je, ks, ke);
+      } else {
+        auto& eos = static_cast<dyngr::DynGRMHDPS
+                     <Primitive::IdealGas, Primitive::ResetFloor>*>(pmbp->pdyngr)->eos;
+        eos.PrimToCons(w0, bcc0, pmbp->pmhd->u1, is, ie, js, je, ks, ke);
+      }
+    } else {
+      if (set_initial_conditions) {
+        pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u0,
+                                     0,(n1-1), 0,(n2-1), 0,(n3-1));
+      } else {
+        pmbp->pmhd->peos->PrimToCons(w0, bcc0, pmbp->pmhd->u1,
+                                     0,(n1-1), 0,(n2-1), 0,(n3-1));
+      }
+    }
   }
 
   // initialize specific intensity over angles in initial conditions
   if (set_initial_conditions) {
-    auto &nh_c_ = pmbp->prad->nh_c;
-    auto &norm_to_tet_ = pmbp->prad->norm_to_tet;
-    auto &tet_c_ = pmbp->prad->tet_c;
-    auto &tetcov_c_ = pmbp->prad->tetcov_c;
-
-    auto &i0 = pmbp->prad->i0;
+    DualArray2D<Real> nh_c_;
+    DvceArray6D<Real> norm_to_tet_;
+    DvceArray6D<Real> tet_c_;
+    DvceArray6D<Real> tetcov_c_;
+    DvceArray4D<Real> sqrt_detg_c_;
+    DvceArray5D<Real> i0;
+    bool use_adm_geometry_ = false;
+    if (pmbp->prad != nullptr) {
+      nh_c_ = pmbp->prad->nh_c;
+      norm_to_tet_ = pmbp->prad->norm_to_tet;
+      tet_c_ = pmbp->prad->tet_c;
+      tetcov_c_ = pmbp->prad->tetcov_c;
+      i0 = pmbp->prad->i0;
+    } else {
+      nh_c_ = pmbp->pdynrad->nh_c;
+      norm_to_tet_ = pmbp->pdynrad->norm_to_tet;
+      tet_c_ = pmbp->pdynrad->tet_c;
+      tetcov_c_ = pmbp->pdynrad->tetcov_c;
+      sqrt_detg_c_ = pmbp->pdynrad->sqrt_detg_c;
+      i0 = pmbp->pdynrad->i0;
+      use_adm_geometry_ = pmbp->pdynrad->use_adm_geometry;
+    }
     par_for("rad_wave2",DevExeSpace(),0,(pmbp->nmb_thispack-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
       Real &x1min = size.d_view(m).x1min;
@@ -473,15 +597,100 @@ void ProblemGenerator::RadiationLinearWave(ParameterInput *pin, const bool resta
           ii_f = ee_f/(9.0*M_PI)*(fn_f - 3.0*f_f + 2.0)/SQR(1.0 - f_f);
         }
 
-        // Calculate intensity in tetrad frame
-        Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
-        for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
-        i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
-      }
+	    // Calculate intensity in tetrad frame
+	    Real n0 = tet_c_(m,0,0,k,j,i); Real n_0 = 0.0;
+	    for (int d=0; d<4; ++d) {  n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);  }
+	    if (use_adm_geometry_) {
+	      i0(m,n,k,j,i) = sqrt_detg_c_(m,k,j,i)*ii_f/SQR(SQR(n0_f));
+	    } else {
+	      i0(m,n,k,j,i) = n0*n_0*ii_f/SQR(SQR(n0_f));
+	    }
+	  }
     });
   }
 
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshBlock::RadiationEquilibration(ParameterInput *pin)
+//  \brief Homogeneous gas-radiation thermal equilibration test.
+
+void ProblemGenerator::RadiationEquilibration(ParameterInput *pin, const bool restart) {
+  MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
+  if (restart) return;
+  if (pmbp->phydro == nullptr || (pmbp->prad == nullptr && pmbp->pdynrad == nullptr)) {
+    throw std::runtime_error("rad_equilibration requires <hydro> and a radiation solver");
+  }
+
+  const Real rho = pin->GetOrAddReal("problem", "rho", 1.0);
+  const Real tgas = pin->GetOrAddReal("problem", "tgas", 2.0);
+  const Real trad = pin->GetOrAddReal("problem", "trad", 1.0);
+  const Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+  Real arad = 1.0;
+  if (pmbp->prad != nullptr) {
+    arad = pmbp->prad->arad;
+  } else {
+    arad = pmbp->pdynrad->arad;
+  }
+  const Real erad = arad*SQR(SQR(trad));
+
+  auto &indcs = pmy_mesh_->mb_indcs;
+  int &ng = indcs.ng;
+  int n1 = indcs.nx1 + 2*ng;
+  int n2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*ng) : 1;
+  int n3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng) : 1;
+  int nmb1 = pmbp->nmb_thispack - 1;
+
+  auto &w0 = pmbp->phydro->w0;
+  par_for("rad_equil_hydro",DevExeSpace(),0,nmb1,0,(n3-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int k, int j, int i) {
+    w0(m,IDN,k,j,i) = rho;
+    w0(m,IVX,k,j,i) = 0.0;
+    w0(m,IVY,k,j,i) = 0.0;
+    w0(m,IVZ,k,j,i) = 0.0;
+    w0(m,IEN,k,j,i) = rho*tgas/gm1;
+  });
+  pmbp->phydro->peos->PrimToCons(w0, pmbp->phydro->u0, 0,(n1-1), 0,(n2-1), 0,(n3-1));
+
+  DvceArray5D<Real> i0;
+  DualArray2D<Real> nh_c;
+  DvceArray6D<Real> tet_c;
+  DvceArray6D<Real> tetcov_c;
+  DvceArray4D<Real> sqrt_detg_c;
+  bool use_adm_geometry = false;
+  int nangles = -1;
+  if (pmbp->prad != nullptr) {
+    i0 = pmbp->prad->i0;
+    nh_c = pmbp->prad->nh_c;
+    tet_c = pmbp->prad->tet_c;
+    tetcov_c = pmbp->prad->tetcov_c;
+    nangles = pmbp->prad->prgeo->nangles;
+  } else {
+    i0 = pmbp->pdynrad->i0;
+    nh_c = pmbp->pdynrad->nh_c;
+    tet_c = pmbp->pdynrad->tet_c;
+    tetcov_c = pmbp->pdynrad->tetcov_c;
+    sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+    use_adm_geometry = pmbp->pdynrad->use_adm_geometry;
+    nangles = pmbp->pdynrad->prgeo->nangles;
+  }
+
+  par_for("rad_equil_radiation",DevExeSpace(),0,nmb1,0,(nangles-1),
+          0,(n3-1),0,(n2-1),0,(n1-1),
+  KOKKOS_LAMBDA(int m, int n, int k, int j, int i) {
+    Real norm = 1.0;
+    if (use_adm_geometry) {
+      norm = sqrt_detg_c(m,k,j,i);
+    } else {
+      Real n_0 = 0.0;
+      for (int d=0; d<4; ++d) {
+        n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+      }
+      norm = tet_c(m,0,0,k,j,i)*n_0;
+    }
+    i0(m,n,k,j,i) = norm*erad/(4.0*M_PI);
+  });
 }
 
 
@@ -498,4 +707,87 @@ void RadiationLinearWaveErrors(ParameterInput *pin, Mesh *pm) {
   pm->pgen->RadiationLinearWave(pin, false);
   pm->pgen->OutputErrors(pin, pm);
   return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void DynRadSourceIterationCheck()
+//! \brief Checks positivity and total local energy conservation for the nonlinear source test.
+
+void DynRadSourceIterationCheck(ParameterInput *pin, Mesh *pm) {
+  MeshBlockPack *pmbp = pm->pmb_pack;
+  if (pmbp->pdynrad == nullptr || pmbp->phydro == nullptr) {
+    throw std::runtime_error("source_iteration_test requires <hydro> and <dyn_radiation>");
+  }
+
+  const Real pgas = pin->GetReal("problem", "pgas");
+  const Real erad = pin->GetReal("problem", "erad");
+  const Real min_rad_change = pin->GetOrAddReal("problem", "min_rad_change", 1.0e-8);
+  const Real max_rad_change_allowed = pin->GetOrAddReal(
+      "problem", "max_rad_change", std::numeric_limits<Real>::max());
+  const Real gm1 = pmbp->phydro->peos->eos_data.gamma - 1.0;
+  const Real expected_total = pgas/gm1 + erad;
+
+  auto &indcs = pm->mb_indcs;
+  const int nx1 = indcs.nx1;
+  const int nx2 = indcs.nx2;
+  const int nx3 = indcs.nx3;
+  const int is = indcs.is;
+  const int js = indcs.js;
+  const int ks = indcs.ks;
+  const int nmkji = pmbp->nmb_thispack*nx3*nx2*nx1;
+  const int nkji = nx3*nx2*nx1;
+  const int nji = nx2*nx1;
+
+  auto &u0 = pmbp->phydro->u0;
+  auto &i0 = pmbp->pdynrad->i0;
+  auto &sqrt_detg_c = pmbp->pdynrad->sqrt_detg_c;
+  auto &tet_c = pmbp->pdynrad->tet_c;
+  auto &tetcov_c = pmbp->pdynrad->tetcov_c;
+  auto &nh_c = pmbp->pdynrad->nh_c;
+  auto &solid_angles = pmbp->pdynrad->prgeo->solid_angles;
+  const bool affect_fluid = pmbp->pdynrad->affect_fluid;
+  const bool use_adm_geometry = pmbp->pdynrad->use_adm_geometry;
+  const int nang1 = pmbp->pdynrad->prgeo->nangles - 1;
+  Real min_i = std::numeric_limits<Real>::max();
+  Real max_total_err = 0.0;
+  Real max_rad_change = 0.0;
+  Kokkos::parallel_reduce("dynrad_source_iter_check",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+  KOKKOS_LAMBDA(const int &idx, Real &thread_min_i, Real &thread_max_err,
+                Real &thread_rad_change) {
+    int m = idx/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+
+    Real rad_m0 = 0.0;
+    for (int n=0; n<=nang1; ++n) {
+      Real norm = sqrt_detg_c(m,k,j,i);
+      if (!(use_adm_geometry)) {
+        Real n_0 = 0.0;
+        for (int d=0; d<4; ++d) {
+          n_0 += tetcov_c(m,d,0,k,j,i)*nh_c.d_view(n,d);
+        }
+        norm = tet_c(m,0,0,k,j,i)*n_0;
+      }
+      const Real intensity = i0(m,n,k,j,i)/norm;
+      thread_min_i = fmin(thread_min_i, intensity);
+      rad_m0 += intensity*solid_angles.d_view(n);
+    }
+    const Real total = u0(m,IEN,k,j,i) + rad_m0;
+    thread_max_err = fmax(thread_max_err, fabs(total - expected_total));
+    thread_rad_change = fmax(thread_rad_change, fabs(rad_m0 - erad));
+  }, Kokkos::Min<Real>(min_i), Kokkos::Max<Real>(max_total_err),
+     Kokkos::Max<Real>(max_rad_change));
+
+  if (min_i < -1.0e-13 || (affect_fluid && max_total_err > 1.0e-10) ||
+      max_rad_change < min_rad_change || max_rad_change > max_rad_change_allowed) {
+    std::cout << "### FATAL ERROR in dyn_radiation source iteration test"
+              << std::endl << "min_i=" << min_i
+              << " max_total_err=" << max_total_err
+              << " max_rad_change=" << max_rad_change << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 }

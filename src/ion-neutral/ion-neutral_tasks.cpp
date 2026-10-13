@@ -46,8 +46,10 @@ void IonNeutral::AssembleIonNeutralTasks(
   id.i_flux   = tl["stagen"]->AddTask(&MHD::Fluxes, pmhd, id.impl_2x);
   id.i_sendf  = tl["stagen"]->AddTask(&MHD::SendFlux, pmhd, id.i_flux);
   id.i_recvf  = tl["stagen"]->AddTask(&MHD::RecvFlux, pmhd, id.i_sendf);
-  id.i_rkupdt = tl["stagen"]->AddTask(&MHD::RKUpdate, pmhd, id.i_recvf);
-  id.i_srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, pmhd, id.i_rkupdt);
+  id.i_repairf = tl["stagen"]->AddTask(&MHD::RepairNonFiniteFluxes, pmhd, id.i_recvf);
+  id.i_rkupdt = tl["stagen"]->AddTask(&MHD::RKUpdate, pmhd, id.i_repairf);
+  id.i_repairu = tl["stagen"]->AddTask(&MHD::RepairNonFiniteConserved, pmhd, id.i_rkupdt);
+  id.i_srctrms   = tl["stagen"]->AddTask(&MHD::MHDSrcTerms, pmhd, id.i_repairu);
 
   id.n_flux   = tl["stagen"]->AddTask(&Hydro::Fluxes, phyd, id.i_srctrms);
   id.n_sendf  = tl["stagen"]->AddTask(&Hydro::SendFlux, phyd, id.n_flux);
@@ -107,10 +109,10 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
   Kokkos::deep_copy(DevExeSpace(), pmhd->b1.x3f, pmhd->b0.x3f);
 
   // Solve implicit equations first time (nexp_stage = -1)
-  ImpRKUpdate(pdrive, -1);
+  auto status = ImpRKUpdate(pdrive, -1);
 
   // Solve implicit equations second time (nexp_stage = 0)
-  ImpRKUpdate(pdrive, 0);
+  status = ImpRKUpdate(pdrive, 0);
 
   // update primitive variables for both hydro and MHD
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -130,7 +132,7 @@ TaskStatus IonNeutral::FirstTwoImpRK(Driver *pdrive, int stage) {
 //  \brief Implicit RK update of ion-neutral drag term. Used as part of ImEx RK integrator
 //  This function should be added AFTER the explicit updates in the task list, so that
 //  source terms are evaluated using partially updated values (including explicit terms
-//  such as flux divergence).  This means source terms must only be evaluated using
+//  such as flux divergence).  This means soure terms must only be evaluated using
 //  conserved variables (u0), as primitives (w0) are not updated until end of TaskList.
 //
 //  Note indices of source term array correspond to:

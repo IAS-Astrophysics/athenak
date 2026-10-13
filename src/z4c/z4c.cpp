@@ -20,9 +20,7 @@
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
-#include "z4c/fastflow.hpp"
 #include "z4c/compact_object_tracker.hpp"
-#include "z4c/driftcontrol/driftcontrol.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
@@ -40,6 +38,7 @@ char const * const Z4c::Z4c_names[Z4c::nz4c] = {
   "z4c_Theta",
   "z4c_alpha",
   "z4c_betax", "z4c_betay", "z4c_betaz",
+  "z4c_Bx", "z4c_By", "z4c_Bz",
 };
 
 char const * const Z4c::Constraint_names[Z4c::ncon] = {
@@ -60,16 +59,16 @@ char const * const Z4c::Constraint_names[Z4c::ncon] = {
 // constructor, initializes data structures and parameters
 
 Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
+  pmy_pack(ppack),
   u_con("u_con",1,1,1,1,1),
   //u_mat("u_mat",1,1,1,1,1),
   u0("u0 z4c",1,1,1,1,1),
+  coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u1("u1 z4c",1,1,1,1,1),
   u_rhs("u_rhs z4c",1,1,1,1,1),
-  coarse_u0("coarse u0 z4c",1,1,1,1,1),
   u_weyl("u_weyl",1,1,1,1,1),
   coarse_u_weyl("coarse_u_weyl",1,1,1,1,1),
-  pamr(new Z4c_AMR(pin)),
-  pmy_pack(ppack) {
+  pamr(new Z4c_AMR(pin)) {
   // (1) read time-evolution option [already error checked in driver constructor]
   // Then initialize memory and algorithms for reconstruction and Riemann solvers
   std::string evolution_t = pin->GetString("time","evolution");
@@ -96,13 +95,9 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   con.Z.InitWithShallowSlice(u_con, I_CON_Z);
   con.M_d.InitWithShallowSlice(u_con, I_CON_MX, I_CON_MZ);
 
-  // Matter commented out
-  //mat.rho.InitWithShallowSlice(u_mat, I_MAT_rho);
-  //mat.S_d.InitWithShallowSlice(u_mat, I_MAT_Sx, I_MAT_Sz);
-  //mat.S_dd.InitWithShallowSlice(u_mat, I_MAT_Sxx, I_MAT_Szz);
-
   z4c.alpha.InitWithShallowSlice (u0, I_Z4C_ALPHA);
   z4c.beta_u.InitWithShallowSlice(u0, I_Z4C_BETAX, I_Z4C_BETAZ);
+  z4c.vB_d.InitWithShallowSlice(u0, I_Z4C_BX, I_Z4C_BZ);
   z4c.chi.InitWithShallowSlice   (u0, I_Z4C_CHI);
   z4c.vKhat.InitWithShallowSlice  (u0, I_Z4C_KHAT);
   z4c.vTheta.InitWithShallowSlice (u0, I_Z4C_THETA);
@@ -112,6 +107,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
 
   rhs.alpha.InitWithShallowSlice (u_rhs, I_Z4C_ALPHA);
   rhs.beta_u.InitWithShallowSlice(u_rhs, I_Z4C_BETAX, I_Z4C_BETAZ);
+  rhs.vB_d.InitWithShallowSlice  (u_rhs, I_Z4C_BX, I_Z4C_BZ);
   rhs.chi.InitWithShallowSlice   (u_rhs, I_Z4C_CHI);
   rhs.vKhat.InitWithShallowSlice  (u_rhs, I_Z4C_KHAT);
   rhs.vTheta.InitWithShallowSlice (u_rhs, I_Z4C_THETA);
@@ -125,7 +121,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.chi_psi_power = pin->GetOrAddReal("z4c", "chi_psi_power", -4.0);
   opt.chi_div_floor = pin->GetOrAddReal("z4c", "chi_div_floor", -1000.0);
   opt.chi_min_floor = pin->GetOrAddReal("z4c", "chi_min_floor", 1e-12);
-  opt.floor_chi = pin->GetOrAddBoolean("z4c", "floor_chi", false);
   opt.diss = pin->GetOrAddReal("z4c", "diss", 0.0);
   opt.eps_floor = pin->GetOrAddReal("z4c", "eps_floor", 1e-12);
   opt.damp_kappa1 = pin->GetOrAddReal("z4c", "damp_kappa1", 0.0);
@@ -139,15 +134,21 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.ssl_damping_amp = pin->GetOrAddReal("z4c", "ssl_damping_amp", 0.6);
   opt.ssl_damping_time = pin->GetOrAddReal("z4c", "ssl_damping_time", 20.0);
   opt.ssl_damping_index = pin->GetOrAddInteger("z4c", "ssl_damping_index", 1);
+  opt.sss_damping_amp = pin->GetOrAddReal("z4c", "sss_damping_amp", 0.);
+  opt.sss_damping_time = pin->GetOrAddReal("z4c", "sss_damping_time", 10.0);
+  opt.telegraph_lapse = pin->GetOrAddBoolean("z4c", "telegraph_lapse", false);
+  opt.telegraph_tau = pin->GetOrAddReal("z4c", "telegraph_tau", 0.1);
+  opt.telegraph_kappa = pin->GetOrAddReal("z4c", "telegraph_kappa", 0.1);
 
   opt.shift_ggamma = pin->GetOrAddReal("z4c", "shift_Gamma", 1.0);
   opt.shift_advect = pin->GetOrAddReal("z4c", "shift_advect", 1.0);
   opt.shift_alpha2ggamma = pin->GetOrAddReal("z4c", "shift_alpha2Gamma", 0.0);
   opt.shift_hh = pin->GetOrAddReal("z4c", "shift_H", 0.0);
-
   opt.shift_eta = pin->GetOrAddReal("z4c", "shift_eta", 2.0);
 
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
+
+  opt.back_reaction = pin->GetOrAddBoolean("z4c", "back_reaction", true);
 
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
 
@@ -157,32 +158,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       pin->GetOrAddInteger("z4c", "extrap_order", 2))));
 
   diss = opt.diss*pow(2., -2.*indcs.ng)*(indcs.ng % 2 == 0 ? -1. : 1.);
-
-  // DriftControl parameters
-  opt.enable_driftcontrol = pin->GetOrAddBoolean("z4c", "enable_driftcontrol", false);
-  opt.dc_tracker_index    = pin->GetOrAddInteger("z4c", "dc_tracker_index", 0);
-  opt.dc_fixed_x          = pin->GetOrAddReal("z4c", "dc_fixed_x", 0.0);
-  opt.dc_fixed_y          = pin->GetOrAddReal("z4c", "dc_fixed_y", 0.0);
-  opt.dc_fixed_z          = pin->GetOrAddReal("z4c", "dc_fixed_z", 0.0);
-  opt.dc_damping_time     = pin->GetOrAddReal("z4c", "dc_damping_time", 0.5);
-  opt.dc_damping_scale    = pin->GetOrAddReal("z4c", "dc_damping_scale", 10.0);
-  opt.dc_damping_coeff    = pin->GetOrAddReal("z4c", "dc_damping_coeff", 1.0);
-  opt.dc_variety          = DriftControl::VarietyFromString(
-      pin->GetOrAddString("z4c", "dc_variety", "oscillator"));
-  opt.dc_Kp               = pin->GetOrAddReal("z4c", "dc_Kp", 1.0);
-  opt.dc_Ki               = pin->GetOrAddReal("z4c", "dc_Ki", 0.1);
-  opt.dc_Kd               = pin->GetOrAddReal("z4c", "dc_Kd", 2.0);
-  opt.dc_omega_c          = pin->GetOrAddReal("z4c", "dc_omega_c", 0.2);
-  opt.dc_omega_o          = pin->GetOrAddReal("z4c", "dc_omega_o", 1.0);
-  opt.dc_zeta             = pin->GetOrAddReal("z4c", "dc_zeta", 1.0);
-  opt.dc_relaxation_time  = pin->GetOrAddReal("z4c", "dc_relaxation_time", 1.0);
-  opt.dc_kappa            = pin->GetOrAddReal("z4c", "dc_kappa", 1.0);
-  opt.dc_gamma_suppress   = pin->GetOrAddReal("z4c", "dc_gamma_suppress", 0.0);
-  opt.dc_gain_x           = pin->GetOrAddReal("z4c", "dc_gain_x", 1.0);
-  opt.dc_gain_y           = pin->GetOrAddReal("z4c", "dc_gain_y", 1.0);
-  opt.dc_gain_z           = pin->GetOrAddReal("z4c", "dc_gain_z", 1.0);
-  opt.dc_gaussian_center  = DriftControl::CenterFromString(
-      pin->GetOrAddString("z4c", "dc_gaussian_center", "fixed"));
   }
 
   // allocate memory for conserved variables on coarse mesh
@@ -239,26 +214,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  // Construct the drift control (needs the trackers to already exist)
-  if (opt.enable_driftcontrol) {
-    if (opt.dc_tracker_index < 0 ||
-        static_cast<std::size_t>(opt.dc_tracker_index) >= ptracker.size()) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
-                << __LINE__ << std::endl;
-      std::cout << "enable_driftcontrol is set but dc_tracker_index "
-                << opt.dc_tracker_index << " is out of range for "
-                << ptracker.size() << " compact object trackers." << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    pdrift_control = std::make_unique<DriftControl>(pmy_pack->pmesh, pin);
-  }
-
-  // Construct the apparent horizon finders
-  n = 0;
-  while (n < pin->GetOrAddInteger("fastflow", "num_horizons", 0)) {
-    pfastflow.push_back(std::make_unique<FastFlow>(pmy_pack, pin, n));
-    n++;
-  }
   // Construct the Cartesian data grid for dumping horizon data
   n = 0;
   while (true) {
@@ -272,23 +227,6 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
       break;
     }
   }
-  /*
-  horizon_dt = pin->GetOrAddReal("z4c", "horizon_dt", 1);
-  horizon_last_output_time = 0;
-  n = 0;
-  for (auto & pt : ptracker) {
-    if (pin->GetOrAddBoolean("z4c", "dump_horizon_" + std::to_string(n),false)) {
-      horizon_extent.push_back(pin->GetOrAddReal("z4c", "horizon_"
-                              + std::to_string(n)+"_radius",3));
-      Real extend[3] = {horizon_extent[n],horizon_extent[n],horizon_extent[n]};
-      horizon_nx.push_back(pin->GetOrAddInteger("z4c", "horizon_"
-                              + std::to_string(n)+"_Nx",100));
-      int Nx[3] = {horizon_nx[n],horizon_nx[n],horizon_nx[n]};
-      horizon_dump.emplace_back(pmy_pack, pt.pos, extend, Nx);
-      n++;
-    }
-  }
-  */
 }
 
 //----------------------------------------------------------------------------------------
@@ -342,12 +280,13 @@ void Z4c::AlgConstr(MeshBlockPack *pmbp) {
     }
   });
 }
+
 //----------------------------------------------------------------------------------------
 // destructor
 Z4c::~Z4c() {
   delete[] psi_out;
-  delete pbval_weyl;
   delete pbval_u;
+  delete pbval_weyl;
   delete pamr;
 }
 

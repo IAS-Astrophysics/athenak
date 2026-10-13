@@ -18,12 +18,12 @@
 #include "coordinates/cell_locations.hpp"
 #include "eos/eos.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
-#include "gravity/gravity.hpp"
-#include "hydro/hydro.hpp"
+//#include "hydro/hydro.hpp"
 #include "ismcooling.hpp"
 #include "mesh/mesh.hpp"
-#include "mhd/mhd.hpp"
+//#include "mhd/mhd.hpp"
 #include "parameter_input.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
 #include "units/units.hpp"
@@ -41,7 +41,6 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   ism_cooling = pin->GetOrAddBoolean(block, "ism_cooling", false);
   rel_cooling = pin->GetOrAddBoolean(block, "rel_cooling", false);
   rad_beam = pin->GetOrAddBoolean(block, "rad_beam", false);
-  self_gravity = pin->GetOrAddBoolean(block, "self_gravity", false);
 
   // (1) read data for (constant) gravitational acceleration
   if (const_accel) {
@@ -96,7 +95,6 @@ void SourceTerms::ApplySrcTerms(const DvceArray5D<Real> &w0, const EOS_Data &eos
   if (const_accel) ConstantAccel(w0, eos_data,  bdt, u0);
   if (ism_cooling) ISMCooling(w0, eos_data, bdt, u0);
   if (rel_cooling) RelCooling(w0, eos_data, bdt, u0);
-  if (self_gravity) SelfGravity(w0, eos_data, bdt, u0);
   return;
 }
 
@@ -143,6 +141,7 @@ void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  Real use_e = eos_data.use_e;
   Real gamma = eos_data.gamma;
   Real gm1 = gamma - 1.0;
   Real heating_rate = hrate;
@@ -156,7 +155,13 @@ void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // temperature in cgs unit
-    Real temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+    Real temp = 1.0;
+    if (use_e) {
+      temp = temp_unit*w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+    } else {
+      temp = temp_unit*w0(m,ITM,k,j,i);
+    }
+
     Real lambda_cooling = ISMCoolFn(temp)/cooling_unit;
     Real gamma_heating = heating_rate/heating_unit;
 
@@ -179,6 +184,7 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = pmy_pack->nmb_thispack - 1;
+  Real use_e = eos_data.use_e;
   Real gamma = eos_data.gamma;
   Real gm1 = gamma - 1.0;
   Real cooling_rate = crate_rel;
@@ -187,120 +193,25 @@ void SourceTerms::RelCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     // temperature in cgs unit
-    Real temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+    Real temp = 1.0;
+    if (use_e) {
+      temp = w0(m,IEN,k,j,i)/w0(m,IDN,k,j,i)*gm1;
+    } else {
+      temp = w0(m,ITM,k,j,i);
+    }
 
     auto &ux = w0(m,IVX,k,j,i);
     auto &uy = w0(m,IVY,k,j,i);
     auto &uz = w0(m,IVZ,k,j,i);
-    Real ut = sqrt(1.0 + ux*ux + uy*uy + uz*uz);
+
+    auto ut = 1.0 + ux*ux + uy*uy + uz*uz;
+    ut = sqrt(ut);
 
     u0(m,IEN,k,j,i) -= bdt*w0(m,IDN,k,j,i)*ut*pow((temp*cooling_rate), cooling_power);
     u0(m,IM1,k,j,i) -= bdt*w0(m,IDN,k,j,i)*ux*pow((temp*cooling_rate), cooling_power);
     u0(m,IM2,k,j,i) -= bdt*w0(m,IDN,k,j,i)*uy*pow((temp*cooling_rate), cooling_power);
     u0(m,IM3,k,j,i) -= bdt*w0(m,IDN,k,j,i)*uz*pow((temp*cooling_rate), cooling_power);
   });
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn SourceTerms::SelfGravity
-//! \brief Adds source terms for self-gravitational acceleration to conserved variables
-//! \note
-//! This implements the source term formula in Mullen, Hanawa and Gammie 2020, but only
-//! for the momentum part. The energy source term is not conservative in this version.
-//! Also note that this implementation is not exactly conservative when the potential
-//! contains a residual error (Multigrid has small but non-zero residual).
-
-void SourceTerms::SelfGravity(const DvceArray5D<Real> &w0, const EOS_Data &eos_data,
-                              const Real bdt, DvceArray5D<Real> &u0) {
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int is = indcs.is, ie = indcs.ie;
-  int js = indcs.js, je = indcs.je;
-  int ks = indcs.ks, ke = indcs.ke;
-  int nmb = pmy_pack->nmb_thispack;
-  bool &multi_d = pmy_pack->pmesh->multi_d;
-  bool &three_d = pmy_pack->pmesh->three_d;
-  auto &mbsize = pmy_pack->pmb->mb_size;
-  // Get gravitational potential - check if gravity is enabled
-  if (pmy_pack->pgrav == nullptr) {
-    std::cout << "### ERROR in SourceTerms::SelfGravity" << std::endl
-              << "self_gravity source term enabled but pgrav is null" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-
-  auto &phi = pmy_pack->pgrav->phi;
-
-  // Get Godunov density fluxes from Riemann solver
-  // (following Mullen, Hanawa & Gammie 2020 for the energy source term)
-  DvceArray5D<Real> flx1, flx2, flx3;
-  if (pmy_pack->pmhd != nullptr) {
-    flx1 = pmy_pack->pmhd->uflx.x1f;
-    flx2 = pmy_pack->pmhd->uflx.x2f;
-    flx3 = pmy_pack->pmhd->uflx.x3f;
-  } else {
-    flx1 = pmy_pack->phydro->uflx.x1f;
-    flx2 = pmy_pack->phydro->uflx.x2f;
-    flx3 = pmy_pack->phydro->uflx.x3f;
-  }
-
-  // x1-direction momentum and energy source terms
-  par_for("selfgrav_x1",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
-  KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real dx1 = mbsize.d_view(m).dx1;
-    Real hdtodx1 = 0.5*bdt/dx1;
-    Real dpl = -(phi(m,0,k,j,i  ) - phi(m,0,k,j,i-1));
-    Real dpr = -(phi(m,0,k,j,i+1) - phi(m,0,k,j,i  ));
-
-    // Add momentum source term
-    u0(m,IM1,k,j,i) += hdtodx1 * w0(m,IDN,k,j,i) * (dpl + dpr);
-
-    // Add energy source term using Godunov fluxes (ideal EOS only)
-    if (eos_data.is_ideal) {
-      u0(m,IEN,k,j,i) += hdtodx1 * (flx1(m,IDN,k,j,i  ) * dpl
-                                    + flx1(m,IDN,k,j,i+1) * dpr);
-    }
-  });
-
-  if (multi_d) {
-    // x2-direction momentum and energy source terms
-    par_for("selfgrav_x2",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real dx2 = mbsize.d_view(m).dx2;
-      Real hdtodx2 = 0.5*bdt/dx2;
-      Real dpl = -(phi(m,0,k,j,  i) - phi(m,0,k,j-1,i));
-      Real dpr = -(phi(m,0,k,j+1,i) - phi(m,0,k,j,  i));
-
-      // Add momentum source term
-      u0(m,IM2,k,j,i) += hdtodx2 * w0(m,IDN,k,j,i) * (dpl + dpr);
-
-      // Add energy source term using Godunov fluxes (ideal EOS only)
-      if (eos_data.is_ideal) {
-        u0(m,IEN,k,j,i) += hdtodx2 * (flx2(m,IDN,k,j,  i) * dpl
-                                      + flx2(m,IDN,k,j+1,i) * dpr);
-      }
-    });
-  }
-
-  if (three_d) {
-    // x3-direction momentum and energy source terms
-    par_for("selfgrav_x3",DevExeSpace(),0,nmb-1,ks,ke,js,je,is,ie,
-    KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real dx3 = mbsize.d_view(m).dx3;
-      Real hdtodx3 = 0.5*bdt/dx3;
-      Real dpl = -(phi(m,0,k,  j,i) - phi(m,0,k-1,j,i));
-      Real dpr = -(phi(m,0,k+1,j,i) - phi(m,0,k,  j,i));
-
-      // Add momentum source term
-      u0(m,IM3,k,j,i) += hdtodx3 * w0(m,IDN,k,j,i) * (dpl + dpr);
-
-      // Add energy source term using Godunov fluxes (ideal EOS only)
-      if (eos_data.is_ideal) {
-        u0(m,IEN,k,j,i) += hdtodx3 * (flx3(m,IDN,k,  j,i) * dpl
-                                      + flx3(m,IDN,k+1,j,i) * dpr);
-      }
-    });
-  }
 
   return;
 }
@@ -316,7 +227,34 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   int js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
   int nmb1 = (pmy_pack->nmb_thispack-1);
-  int nang1 = (pmy_pack->prad->prgeo->nangles-1);
+  int nang1 = -1;
+
+  const bool use_dyn_radiation = (pmy_pack->pdynrad != nullptr);
+  const bool use_adm_radiation =
+      use_dyn_radiation && pmy_pack->pdynrad->use_adm_geometry;
+  DualArray2D<Real> nh_c_;
+  DvceArray6D<Real> tet_c_, tetcov_c_;
+  DvceArray4D<Real> sqrt_detg_c_;
+  if (pmy_pack->prad != nullptr) {
+    nang1 = (pmy_pack->prad->prgeo->nangles-1);
+    nh_c_ = pmy_pack->prad->nh_c;
+    tet_c_ = pmy_pack->prad->tet_c;
+    tetcov_c_ = pmy_pack->prad->tetcov_c;
+  } else if (pmy_pack->pdynrad != nullptr) {
+    nang1 = (pmy_pack->pdynrad->prgeo->nangles-1);
+    nh_c_ = pmy_pack->pdynrad->nh_c;
+    tet_c_ = pmy_pack->pdynrad->tet_c;
+    tetcov_c_ = pmy_pack->pdynrad->tetcov_c;
+    sqrt_detg_c_ = pmy_pack->pdynrad->sqrt_detg_c;
+  } else {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "Radiation beam source requested, but no radiation "
+              << "solver has been constructed." << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  auto &excise = pmy_pack->pcoord->coord_data.bh_excise;
+  auto &rad_mask_ = pmy_pack->pcoord->excision_floor;
 
   auto &size = pmy_pack->pmb->mb_size;
   auto &flat = pmy_pack->pcoord->coord_data.is_minkowski;
@@ -328,9 +266,6 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
   Real &width_ = width;
   Real &spread_ = spread;
 
-  auto &tc = pmy_pack->prad->tetcov_c;
-  auto &nh_c_ = pmy_pack->prad->nh_c;
-  auto &tet_c_ = pmy_pack->prad->tet_c;
   par_for("rad_beam",DevExeSpace(),0,nmb1,ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -346,11 +281,20 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
     Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
     Real glower[4][4], gupper[4][4];
-    ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
-    Real dgx[4][4], dgy[4][4], dgz[4][4];
-    ComputeMetricDerivatives(x1v,x2v,x3v,flat,spin,dgx,dgy,dgz);
-    Real e[4][4], e_cov[4][4], omega[4][4][4];
-    ComputeTetrad(x1v,x2v,x3v,flat,spin,glower,gupper,dgx,dgy,dgz,e,e_cov,omega);
+    if (use_adm_radiation) {
+      for (int mu=0; mu<4; ++mu) {
+        for (int nu=0; nu<4; ++nu) {
+          glower[mu][nu] = 0.0;
+          for (int a=0; a<4; ++a) {
+            const Real eta = (a == 0) ? -1.0 : 1.0;
+            glower[mu][nu] +=
+                eta*tetcov_c_(m,a,mu,k,j,i)*tetcov_c_(m,a,nu,k,j,i);
+          }
+        }
+      }
+    } else {
+      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+    }
 
     // Calculate proper distance to beam origin and minimum angle between directions
     Real dx1 = x1v - p1;
@@ -391,10 +335,18 @@ void SourceTerms::BeamSource(DvceArray5D<Real> &i0, const Real bdt) {
                + nh_c_.d_view(n,2) * dtc2
                + nh_c_.d_view(n,3) * dtc3);
       if ((dx_sq < SQR(width_/2.0)) && (mu > mu_min)) {
-        Real n0 = tet_c_(m,0,0,k,j,i);
-        Real n_0 = tc(m,0,0,k,j,i)*nh_c_.d_view(n,0) + tc(m,1,0,k,j,i)*nh_c_.d_view(n,1)
-                 + tc(m,2,0,k,j,i)*nh_c_.d_view(n,2) + tc(m,3,0,k,j,i)*nh_c_.d_view(n,3);
-        i0(m,n,k,j,i) += n0*n_0*dii_dt_*bdt;
+        Real conserved_norm = 0.0;
+        if (use_adm_radiation) {
+          conserved_norm = sqrt_detg_c_(m,k,j,i);
+        } else {
+          const Real n0 = tet_c_(m,0,0,k,j,i);
+          Real n_0 = 0.0;
+          for (int d=0; d<4; ++d) {
+            n_0 += tetcov_c_(m,d,0,k,j,i)*nh_c_.d_view(n,d);
+          }
+          conserved_norm = n0*n_0;
+        }
+        i0(m,n,k,j,i) += conserved_norm*dii_dt_*bdt;
       }
     }
   });

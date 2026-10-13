@@ -13,12 +13,9 @@
 // called in Finalize().
 
 #include <ctime>
-#include <limits>
 #include <memory>
 #include <string>
 
-#include "diffusion/sts_rkl2.hpp"
-#include "diffusion/sts_types.hpp"
 #include "parameter_input.hpp"
 #include "outputs/outputs.hpp"
 #include "pgen/pgen.hpp"
@@ -28,27 +25,12 @@
 
 class Driver {
  public:
-  enum class STSSweep {none, pre, post};
-
-  struct STSController {
-    bool enabled = false;
-    parabolic::STSIntegrator integrator = parabolic::STSIntegrator::none;
-    STSSweep sweep = STSSweep::none;
-    Real dt_cycle = 0.0;
-    Real dt_sweep = 0.0;
-    Real dt_parabolic_min = std::numeric_limits<float>::max();
-    int nstages = 0;
-    int current_stage = 0;
-    parabolic::RKL2Coefficients coeffs;
-  };
-
   Driver(ParameterInput *pin, Mesh *pmesh, Real wtlim, Kokkos::Timer* ptimer);
   ~Driver() = default;
 
   // data
   TimeEvolution time_evolution;
   DvceArray6D<Real> impl_src;  // stiff source terms used in ImEx integrators
-  STSController sts;
 
   // folowing data only relevant for runs involving time evolution
   Real tlim;      // stopping time
@@ -69,7 +51,7 @@ class Driver {
   // functions
   void ExecuteTaskList(Mesh *pm, std::string tl, int stage);
   void Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool rflag);
-  void Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdflag);
+  void Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
   void Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout);
   void InitBoundaryValuesAndPrimitives(Mesh *pm);
 
@@ -78,12 +60,6 @@ class Driver {
   std::uint64_t nmb_updated_;   // running total of MB updated during run
   std::uint64_t npart_updated_; // running total of particles updated during run
   float lb_efficiency_;         // measure of how efficient was load balancing
-  void ResetSTSController();
-  void ValidateSTSConfiguration(Mesh *pm);
-  void RefreshSTSCycleState(Mesh *pm);
-  void BeginSTSSweep(Mesh *pm, STSSweep sweep);
-  void SetSTSStage(int stage);
-  void EndSTSSweep();
   void OutputCycleDiagnostics(Mesh *pm);
   Real UpdateWallClock();
 };

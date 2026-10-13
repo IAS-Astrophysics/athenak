@@ -21,8 +21,8 @@ char const * const Tmunu::Tmunu_names[Tmunu::N_Tmunu] = {
 //----------------------------------------------------------------------------------------
 // constructor: initializes data structures and parameters
 Tmunu::Tmunu(MeshBlockPack *ppack, ParameterInput *pin):
-  u_tmunu("u_tmunu",1,1,1,1,1),
-  pmy_pack(ppack) {
+  pmy_pack(ppack),
+  u_tmunu("u_tmunu",1,1,1,1,1) {
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int ncells1 = indcs.nx1 + 2*(indcs.ng);

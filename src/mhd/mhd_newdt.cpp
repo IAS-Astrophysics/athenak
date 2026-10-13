@@ -18,8 +18,6 @@
 #include "eos/eos.hpp"
 #include "mhd.hpp"
 #include "diffusion/conduction.hpp"
-#include "diffusion/viscosity.hpp"
-#include "diffusion/resistivity.hpp"
 #include "srcterms/srcterms.hpp"
 
 namespace mhd {
@@ -33,14 +31,6 @@ TaskStatus MHD::NewTimeStep(Driver *pdriver, int stage) {
     return TaskStatus::complete; // only execute last stage
   }
 
-  RecomputeTimeStepFromCurrentState(pdriver);
-  return TaskStatus::complete;
-}
-
-//----------------------------------------------------------------------------------------
-//! \brief Recompute hyperbolic and parabolic timestep limits from the current state.
-
-void MHD::RecomputeTimeStepFromCurrentState(Driver *pdriver) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int is = indcs.is, nx1 = indcs.nx1;
   int js = indcs.js, nx2 = indcs.nx2;
@@ -134,22 +124,27 @@ void MHD::RecomputeTimeStepFromCurrentState(Driver *pdriver) {
         Real &w_by = bcc0_(m,IBY,k,j,i);
         Real &w_bz = bcc0_(m,IBZ,k,j,i);
         Real cf;
+        Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
         if (eos.is_ideal) {
-          Real p = eos.IdealGasPressure(w0_(m,IEN,k,j,i));
           cf = eos.IdealMHDFastSpeed(w_d, p, w_bx, w_by, w_bz);
-          max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
-          cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
-          max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
-          cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
-          max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
         } else {
           cf = eos.IdealMHDFastSpeed(w_d, w_bx, w_by, w_bz);
-          max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
-          cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
-          max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
-          cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
-          max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
         }
+        max_dv1 = fabs(w0_(m,IVX,k,j,i)) + cf;
+
+        if (eos.is_ideal) {
+          cf = eos.IdealMHDFastSpeed(w_d, p, w_by, w_bz, w_bx);
+        } else {
+          cf = eos.IdealMHDFastSpeed(w_d, w_by, w_bz, w_bx);
+        }
+        max_dv2 = fabs(w0_(m,IVY,k,j,i)) + cf;
+
+        if (eos.is_ideal) {
+          cf = eos.IdealMHDFastSpeed(w_d, p, w_bz, w_bx, w_by);
+        } else {
+          cf = eos.IdealMHDFastSpeed(w_d, w_bz, w_bx, w_by);
+        }
+        max_dv3 = fabs(w0_(m,IVZ,k,j,i)) + cf;
       }
 
       min_dt1 = fmin((mbsize.d_view(m).dx1/max_dv1), min_dt1);
@@ -167,17 +162,11 @@ void MHD::RecomputeTimeStepFromCurrentState(Driver *pdriver) {
   if (pcond != nullptr) {
     pcond->NewTimeStep(w0, peos->eos_data);
   }
-  if (pvisc != nullptr) {
-    pvisc->NewTimeStep(w0, peos->eos_data);
-  }
-  if (presist != nullptr) {
-    presist->NewTimeStep(w0, peos->eos_data);
-  }
   // compute source terms timestep
   if (psrc != nullptr) {
     psrc->NewTimeStep(w0, peos->eos_data);
   }
 
-  return;
+  return TaskStatus::complete;
 }
 } // namespace mhd

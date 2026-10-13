@@ -16,7 +16,6 @@
 #include <string>
 
 #include "athena.hpp"
-#include "diffusion/sts_types.hpp"
 
 // Define following structure before other "include" files to resolve declarations
 //----------------------------------------------------------------------------------------
@@ -69,9 +68,10 @@ struct LogicalLocation {
 //! \brief stores various counters used as diagnostics throughout the code
 
 struct EventCounters {
-  int nfofc, neos_dfloor, neos_efloor, neos_tfloor, neos_vceil, neos_fail, maxit_c2p;
+  int nfofc, neos_dfloor, neos_efloor, neos_tfloor, neos_tceil, neos_vceil;
+  int neos_fail, maxit_c2p;
   EventCounters() : nfofc(0), neos_dfloor(0), neos_efloor(0), neos_tfloor(0),
-                    neos_vceil(0), neos_fail(0), maxit_c2p(0) {}
+                    neos_tceil(0), neos_vceil(0), neos_fail(0), maxit_c2p(0) {}
 };
 
 // Forward declarations required due to recursive definitions amongst mesh classes
@@ -139,8 +139,7 @@ class Mesh {
   // following 1x arrays allocated with length [nranks] in AddCoordinatesAndPhysics()
   int *nprtcl_eachrank;    // number of particles on each rank
 
-  Real time, dt, dtold, dt_last_completed, dt_parabolic_sts, sts_max_dt_ratio, cfl_no;
-  parabolic::STSIntegrator sts_integrator;
+  Real time, dt, dtold, cfl_no;
   int ncycle;
   EventCounters ecounter;
 
@@ -157,7 +156,6 @@ class Mesh {
   void PrintMeshDiagnostics();
   void WriteMeshStructure();
   void NewTimeStep(const Real tlim);
-  void RefreshSTSParabolicTimeStep();
   void AddCoordinatesAndPhysics(ParameterInput *pinput);
   void AddCyclicZoom(ParameterInput *pin);
   BoundaryFlag GetBoundaryFlag(const std::string& input_string);
@@ -178,15 +176,9 @@ class Mesh {
   int NumberOfMeshBlockCells() const {
     return (mb_indcs.nx1)*(mb_indcs.nx2)*(mb_indcs.nx3);
   }
-  // Monotonic counter of mesh-topology update events (AMR and any resulting load
-  // balancing). Used by the rank-packed boundary communication path to detect when
-  // its cached communication metadata must be rebuilt.
-  void MarkMeshUpdated() { ++amr_lb_seq_; }
-  int GetAMRLoadBalanceUpdateSeq() const { return amr_lb_seq_; }
 
  private:
   std::unique_ptr<MeshBlockTree> ptree;  // pointer to root node in binary/quad/oct-tree
   void LoadBalance(float *clist, int *rlist, int *slist, int *nlist, int nb);
-  int amr_lb_seq_ = 0;
 };
 #endif  // MESH_MESH_HPP_

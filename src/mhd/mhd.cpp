@@ -28,6 +28,7 @@ namespace mhd {
 // constructor, initializes data structures and parameters
 
 MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
+    pmy_pack(ppack),
     u0("cons",1,1,1,1,1),
     w0("prim",1,1,1,1,1),
     b0("B_fc",1,1,1,1),
@@ -36,37 +37,23 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
     coarse_w0("cprim",1,1,1,1,1),
     coarse_b0("cB_fc",1,1,1,1),
     u1("cons1",1,1,1,1,1),
-    u_sts0("u_sts0",1,1,1,1,1),
-    u_sts1("u_sts1",1,1,1,1,1),
-    u_sts2("u_sts2",1,1,1,1,1),
-    u_sts_rhs("u_sts_rhs",1,1,1,1,1),
     b1("B_fc1",1,1,1,1),
-    b_sts0("b_sts0",1,1,1,1),
-    b_sts1("b_sts1",1,1,1,1),
-    b_sts2("b_sts2",1,1,1,1),
-    b_sts_rhs("b_sts_rhs",1,1,1,1),
     uflx("uflx",1,1,1,1,1),
     efld("efld",1,1,1,1),
+    wsaved("wsaved",1,1,1,1,1),
+    bccsaved("bccsaved",1,1,1,1,1),
     e3x1("e3x1",1,1,1,1),
     e2x1("e2x1",1,1,1,1),
     e1x2("e1x2",1,1,1,1),
     e3x2("e3x2",1,1,1,1),
     e2x3("e2x3",1,1,1,1),
     e1x3("e1x3",1,1,1,1),
-    wl3d("wl3d",1,1,1,1,1),
-    wr3d("wr3d",1,1,1,1,1),
-    bl3d("bl3d",1,1,1,1,1),
-    br3d("br3d",1,1,1,1,1),
-    wsaved("wsaved",1,1,1,1,1),
-    bccsaved("bccsaved",1,1,1,1,1),
-    fofc("fofc",1,1,1,1),
-    fofc_scal("fofc_scal",1,1,1,1,1),
-    utest("utest",1,1,1,1,1),
-    bcctest("bcctest",1,1,1,1,1),
-    pmy_pack(ppack),
     e1_cc("e1_cc",1,1,1,1),
     e2_cc("e2_cc",1,1,1,1),
-    e3_cc("e3_cc",1,1,1,1) {
+    e3_cc("e3_cc",1,1,1,1),
+    utest("utest",1,1,1,1,1),
+    bcctest("bcctest",1,1,1,1,1),
+    fofc("fofc",1,1,1,1) {
   // Total number of MeshBlocks on this rank to be used in array dimensioning
   int nmb = std::max((ppack->nmb_thispack), (ppack->pmesh->nmb_maxperrank));
 
@@ -76,9 +63,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   if (eqn_of_state.compare("ideal") == 0) {
     if (pmy_pack->pcoord->is_special_relativistic) {
       peos = new IdealSRMHD(ppack, pin);
-    } else if (pmy_pack->pcoord->is_dynamical_relativistic) {
-      // DynGRMHD uses PrimitiveSolver instead, so use a no-op here.
-      peos = new NoOpDynGRMHD(ppack, pin);
     } else if (pmy_pack->pcoord->is_general_relativistic) {
       peos = new IdealGRMHD(ppack, pin);
     } else {
@@ -109,73 +93,26 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
 
   // Viscosity (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","nu_iso") ||
-      pin->DoesParameterExist("mhd","nu_aniso")) {
+  if (pin->DoesParameterExist("mhd","viscosity")) {
     pvisc = new Viscosity("mhd", ppack, pin);
-    const bool active = (pvisc->nu_iso != 0.0 || pvisc->nu_aniso != 0.0);
-    has_sts_viscosity = active &&
-        (pvisc->mode == parabolic::DiffusionSelection::sts_only);
-    has_explicit_viscosity = active &&
-        (pvisc->mode == parabolic::DiffusionSelection::explicit_only);
-    if (active) {
-      ppack->RegisterParabolicProcess({"mhd/viscosity",
-                                       parabolic::ParabolicProcessOwner::mhd,
-                                       pvisc->mode, &(pvisc->dtnew)});
-    }
   } else {
     pvisc = nullptr;
   }
 
-  // Resistivity / non-ideal MHD (only constructed if needed). The Resistivity class now
-  // also implements ambipolar diffusion, so it is constructed if either the Ohmic
-  // coefficient (eta_ohm) or the ambipolar coefficient (eta_ad) is supplied in <mhd>.
-  if (pin->DoesParameterExist("mhd","eta_ohm") ||
-      pin->DoesParameterExist("mhd","eta_ad")) {
+  // Resistivity (only constructed if needed)
+  if (pin->DoesParameterExist("mhd","ohmic_resistivity")) {
     presist = new Resistivity(ppack, pin);
-    const bool active = (presist->eta_ohm != 0.0 || presist->eta_ad != 0.0);
-    has_sts_resistivity = active &&
-        (presist->mode == parabolic::DiffusionSelection::sts_only);
-    has_explicit_resistivity = active &&
-        (presist->mode == parabolic::DiffusionSelection::explicit_only);
-    if (active) {
-      ppack->RegisterParabolicProcess({"mhd/resistivity",
-                                       parabolic::ParabolicProcessOwner::mhd,
-                                       presist->mode, &(presist->dtnew)});
-    }
   } else {
     presist = nullptr;
   }
 
   // Thermal conduction (only constructed if needed)
-  if (pin->DoesParameterExist("mhd","alpha_iso") ||
-      pin->DoesParameterExist("mhd","alpha_aniso") ||
-      pin->DoesParameterExist("mhd","alpha_spitzer")) {
-    if (peos->eos_data.is_ideal) {
-      pcond = new Conduction("mhd", ppack, pin);
-      const bool active = (pcond->alpha_iso != 0.0 || pcond->alpha_aniso != 0.0 ||
-                           pcond->alpha_spitzer);
-      has_sts_conduction = active &&
-          (pcond->mode == parabolic::DiffusionSelection::sts_only);
-      has_explicit_conduction = active &&
-          (pcond->mode == parabolic::DiffusionSelection::explicit_only);
-      if (active) {
-        ppack->RegisterParabolicProcess({"mhd/conduction",
-                                         parabolic::ParabolicProcessOwner::mhd,
-                                         pcond->mode, &(pcond->dtnew)});
-      }
-    } else {
-      std::cout << "### FATAL ERROR in "<< __FILE__ <<" at line " << __LINE__ << std::endl
-                << "Thermal conduction in MHD requires ideal gas EOS" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+  if (pin->DoesParameterExist("mhd","conductivity") ||
+      pin->DoesParameterExist("mhd","tdep_conductivity")) {
+    pcond = new Conduction("mhd", ppack, pin);
   } else {
     pcond = nullptr;
   }
-
-  has_any_sts_cell_update = (has_sts_viscosity || has_sts_conduction ||
-                             (has_sts_resistivity && peos->eos_data.is_ideal));
-  has_any_sts_field_update = has_sts_resistivity;
-  has_any_sts_diffusion = (has_any_sts_cell_update || has_any_sts_field_update);
 
   // Source terms (if needed)
   if (pin->DoesBlockExist("mhd_srcterms")) {
@@ -238,11 +175,15 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // for time-evolving problems, continue to construct methods, allocate arrays
   if (evolution_t.compare("stationary") != 0) {
-    // determine if FOFC is enabled.  On the split-recon-rsolver branch the main flux
-    // kernels extend their face-normal range by one cell when FOFC is on, so the
-    // self-contained first-order flux correction (mhd_fofc.cpp) has the fluxes/EMFs it
-    // needs over [is-1,ie+2] etc.
+    // determine if FOFC is enabled
     use_fofc = pin->GetOrAddBoolean("mhd","fofc",false);
+    repair_nonfinite_fluxes = pin->GetOrAddBoolean("mhd","repair_nonfinite_fluxes",false);
+    repair_nonfinite_face_emfs = pin->GetOrAddBoolean("mhd",
+                                                      "repair_nonfinite_face_emfs",false);
+    repair_nonfinite_conserved = pin->GetOrAddBoolean("mhd",
+                                                      "repair_nonfinite_conserved",false);
+    repair_nonfinite_fluxes_verbose = pin->GetOrAddBoolean("mhd",
+        "repair_nonfinite_fluxes_verbose",true);
 
     // select reconstruction method (default PLM)
     std::string xorder = pin->GetOrAddString("mhd","reconstruct","plm");
@@ -260,8 +201,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       }
     } else if (xorder.compare("ppm4") == 0 ||
                xorder.compare("ppmx") == 0 ||
-               xorder.compare("teno") == 0 ||
-               xorder.compare("wenoz") == 0) {
+               xorder.compare("wenoz") == 0 ||
+               xorder.compare("wenomz") == 0) {
       // check that nghost > 2
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       if (indcs.ng < 3) {
@@ -270,7 +211,7 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
           << "but <mesh>/nghost=" << indcs.ng << std::endl;
         std::exit(EXIT_FAILURE);
       }
-      // check that nghost > 3 with PPM4(or PPMX or WENOZ or TENO)+FOFC
+      // check that nghost > 3 with PPM4(or PPMX or WENOZ)+FOFC
       if (use_fofc && indcs.ng < 4) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
           << std::endl << "FOFC and " << xorder << " reconstruction requires at "
@@ -283,8 +224,8 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         recon_method = ReconstructionMethod::ppmx;
       } else if (xorder.compare("wenoz") == 0) {
         recon_method = ReconstructionMethod::wenoz;
-      } else if (xorder.compare("teno") == 0) {
-        recon_method = ReconstructionMethod::teno;
+      } else if (xorder.compare("wenomz") == 0) {
+        recon_method = ReconstructionMethod::wenomz;
       }
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -377,29 +318,9 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       int ncells2 = (indcs.nx2 > 1)? (indcs.nx2 + 2*(indcs.ng)) : 1;
       int ncells3 = (indcs.nx3 > 1)? (indcs.nx3 + 2*(indcs.ng)) : 1;
       Kokkos::realloc(u1,     nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      if (has_any_sts_cell_update) {
-        Kokkos::realloc(u_sts0,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-        Kokkos::realloc(u_sts1,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-        Kokkos::realloc(u_sts2,    nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-        Kokkos::realloc(u_sts_rhs, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      }
       Kokkos::realloc(b1.x1f, nmb, ncells3, ncells2, ncells1+1);
       Kokkos::realloc(b1.x2f, nmb, ncells3, ncells2+1, ncells1);
       Kokkos::realloc(b1.x3f, nmb, ncells3+1, ncells2, ncells1);
-      if (has_any_sts_field_update) {
-        Kokkos::realloc(b_sts0.x1f,    nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts0.x2f,    nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts0.x3f,    nmb, ncells3+1, ncells2, ncells1);
-        Kokkos::realloc(b_sts1.x1f,    nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts1.x2f,    nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts1.x3f,    nmb, ncells3+1, ncells2, ncells1);
-        Kokkos::realloc(b_sts2.x1f,    nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts2.x2f,    nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts2.x3f,    nmb, ncells3+1, ncells2, ncells1);
-        Kokkos::realloc(b_sts_rhs.x1f, nmb, ncells3, ncells2, ncells1+1);
-        Kokkos::realloc(b_sts_rhs.x2f, nmb, ncells3, ncells2+1, ncells1);
-        Kokkos::realloc(b_sts_rhs.x3f, nmb, ncells3+1, ncells2, ncells1);
-      }
 
       // allocate fluxes, electric fields
       Kokkos::realloc(uflx.x1f, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1+1);
@@ -420,15 +341,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
       Kokkos::realloc(e2_cc, nmb, ncells3, ncells2, ncells1);
       Kokkos::realloc(e3_cc, nmb, ncells3, ncells2, ncells1);
 
-      // allocate global per-face L/R buffers for the split-kernel flux path.
-      // Indexed by the GLOBAL cell/face index (m,n,k,j,i), so sized to the full
-      // cell range (including ghost zones) in every dimension.  bl/br hold the
-      // reconstructed cell-centered magnetic field (3 components).
-      Kokkos::realloc(wl3d, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      Kokkos::realloc(wr3d, nmb, (nmhd+nscalars), ncells3, ncells2, ncells1);
-      Kokkos::realloc(bl3d, nmb, 3, ncells3, ncells2, ncells1);
-      Kokkos::realloc(br3d, nmb, 3, ncells3, ncells2, ncells1);
-
       // allocate array of flags used with FOFC
       if (use_fofc) {
         int nvars = (pmy_pack->pcoord->is_dynamical_relativistic) ? nmhd+nscalars : nmhd;
@@ -436,10 +348,6 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
         Kokkos::realloc(utest,   nmb, nvars, ncells3, ncells2, ncells1);
         Kokkos::realloc(bcctest, nmb, 3,    ncells3, ncells2, ncells1);
         Kokkos::deep_copy(fofc, false);
-        if (nscalars > 0) {
-          Kokkos::realloc(fofc_scal,    nmb, nscalars, ncells3, ncells2, ncells1);
-          Kokkos::deep_copy(fofc_scal, false);
-        }
       }
     }
   }
@@ -449,17 +357,13 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 // destructor
 
 MHD::~MHD() {
-  if (psbox_b != nullptr) {delete psbox_b;}
-  if (psbox_u != nullptr) {delete psbox_u;}
-  if (porb_b != nullptr) {delete porb_b;}
-  if (porb_u != nullptr) {delete porb_u;}
-  delete pbval_b;
-  delete pbval_u;
-  if (psrc!= nullptr) {delete psrc;}
-  if (pcond != nullptr) {delete pcond;}
-  if (presist!= nullptr) {delete presist;}
-  if (pvisc != nullptr) {delete pvisc;}
   delete peos;
+  delete pbval_u;
+  delete pbval_b;
+  if (pvisc != nullptr) {delete pvisc;}
+  if (presist!= nullptr) {delete presist;}
+  if (pcond != nullptr) {delete pcond;}
+  if (psrc!= nullptr) {delete psrc;}
 }
 
 //----------------------------------------------------------------------------------------

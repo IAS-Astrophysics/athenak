@@ -48,6 +48,7 @@ class TurbulenceDriver {
   void Initialize();
 
  private:
+  bool first_time = true;   // flag to enable initialization on first call
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this TurbulenceDriver
 };
 

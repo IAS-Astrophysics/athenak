@@ -22,6 +22,7 @@
 // Forward declarations
 namespace z4c {class Z4c;}
 namespace dyngr {class DynGRMHD;}
+namespace dyn_radiation {class DynRadiation;}
 class ADM;
 class Tmunu;
 class MeshBlockPack;
@@ -35,12 +36,15 @@ enum TaskName {
   MHD_SetTmunu,
   MHD_SendFlux,
   MHD_RecvFlux,
+  MHD_RepairFlux,
   MHD_ExplRK,
+  MHD_RepairCons,
   MHD_AddSrc,
   MHD_RestU,
   MHD_SendU,
   MHD_RecvU,
   MHD_EField,
+  MHD_EFieldSrc,
   MHD_SendE,
   MHD_RecvE,
   MHD_CT,
@@ -63,7 +67,6 @@ enum TaskName {
   Z4c_CalcRHS,
   Z4c_SomBC,
   Z4c_ExplRK,
-  Z4c_ChiFloor,
   Z4c_SendU,
   Z4c_RestU,
   Z4c_RecvU,
@@ -85,16 +88,36 @@ enum TaskName {
   Z4c_ClearRW,
   Z4c_Wave,
   Z4c_PT,
-  Z4c_FastFlow,
   Z4c_CCE,
   Z4c_DumpHorizon,
-  Z4c_NTASKS
+  Z4c_NTASKS,
+
+  Rad_Recv,
+  Rad_CopyI,
+  Rad_SetTmunu,
+  Rad_PrepareGeom,
+  Rad_Flux,
+  Rad_SendFlux,
+  Rad_RecvFlux,
+  Rad_ExplRK,
+  Rad_AddSrc,
+  Rad_Couple,
+  Rad_RestI,
+  Rad_SendI,
+  Rad_RecvI,
+  Rad_BCS,
+  Rad_Prolong,
+  Rad_Newdt,
+  Rad_ClearS,
+  Rad_ClearR,
+  Rad_NTASKS
 };
 
 enum PhysicsDependency {
   Phys_None,
   Phys_MHD,
-  Phys_Z4c
+  Phys_Z4c,
+  Phys_DynRad
 };
 
 enum TaskLocation {
@@ -155,6 +178,7 @@ class NumericalRelativity {
     AddExtraDependencies(dependencies, optional);
     // Add a new task to the queue.
     //std::cout << "Queuing " << name_string << "...\n";
+    auto& queue = SelectQueue(loc);
     SelectQueue(loc).push_back(QueuedTask(name, name_string, false, TaskID(),
       dependencies,
       [=](Driver *d, int s) mutable -> TaskStatus {return (obj->*func)(d,s);}));

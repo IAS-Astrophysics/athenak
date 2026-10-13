@@ -12,7 +12,6 @@
 //!   - z-component of current density Jz  [non-relativistic]
 //!   - magnitude of current density J^2  [non-relativistic]
 
-#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <string>   // std::string, to_string()
@@ -21,6 +20,7 @@
 #include "parameter_input.hpp"
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "dyn_grmhd/valencia_stress_energy.hpp"
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
@@ -28,55 +28,17 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "dyn_radiation/dyn_radiation.hpp"
+#include "utils/finite_diff.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
-
-KOKKOS_INLINE_FUNCTION
-void ComputeUcBcFromPrimitive(const Real uu1, const Real uu2, const Real uu3,
-                              const Real bb1, const Real bb2, const Real bb3,
-                              const Real glower[4][4], const Real gupper[4][4],
-                              Real ucov[4], Real bcov[4]) {
-  const Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
-                   + 2.0*glower[1][3]*uu1*uu3
-                   + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
-                   + glower[3][3]*uu3*uu3;
-  const Real alpha = sqrt(-1.0/gupper[0][0]);
-  const Real gamma = sqrt(1.0 + uu_sq);
-
-  Real ucon[4];
-  ucon[0] = gamma / alpha;
-  ucon[1] = uu1 - alpha * gamma * gupper[0][1];
-  ucon[2] = uu2 - alpha * gamma * gupper[0][2];
-  ucon[3] = uu3 - alpha * gamma * gupper[0][3];
-
-  for (int mu=0; mu<4; ++mu) {
-    ucov[mu] = 0.0;
-    for (int nu=0; nu<4; ++nu) {
-      ucov[mu] += glower[mu][nu]*ucon[nu];
-    }
-  }
-
-  Real bcon[4];
-  bcon[0] = bb1 * ucov[1] + bb2 * ucov[2] + bb3 * ucov[3];
-  bcon[1] = (bb1 + bcon[0] * ucon[1]) / ucon[0];
-  bcon[2] = (bb2 + bcon[0] * ucon[2]) / ucon[0];
-  bcon[3] = (bb3 + bcon[0] * ucon[3]) / ucon[0];
-
-  for (int mu=0; mu<4; ++mu) {
-    bcov[mu] = 0.0;
-    for (int nu=0; nu<4; ++nu) {
-      bcov[mu] += glower[mu][nu]*bcon[nu];
-    }
-  }
-}
 
 //----------------------------------------------------------------------------------------
 // BaseTypeOutput::ComputeDerivedVariable()
 
 void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int nmb = pm->pmb_pack->nmb_thispack;
-  int nmb_alloc = std::max(nmb, pm->pmb_pack->pmesh->nmb_maxperrank);
   auto &indcs = pm->mb_indcs;
   int &ng = indcs.ng;
   int n1 = indcs.nx1 + 2*ng;
@@ -94,22 +56,16 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   int &i_dv = out_params.i_derived;
   int &n_dv = out_params.n_derived;
 
-  // specific internal energy proxy = eint / density
+  // temperature = pressure / density
   if (name.compare("temperature") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
-    if (pm->pmb_pack->phydro == nullptr && pm->pmb_pack->pmhd == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Temperature output requested but no hydro or MHD "
-                << "module constructed." << std::endl;
-      exit(EXIT_FAILURE);
-    }
-    auto &w0_ = (pm->pmb_pack->phydro != nullptr) ?
+    auto &w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
     par_for("temperature", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      dv(m,i_dv,k,j,i) = w0_(m,IEN,k,j,i) / w0_(m,IDN,k,j,i);
+      dv(m,i_dv,k,j,i) = (w0_(m,IEN,k,j,i+1) / w0_(m,IDN,k,j,i-1));
     });
     i_dv += 1; // increment derived variable index
   }
@@ -119,7 +75,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("hydro_wz") == 0 ||
       name.compare("mhd_wz") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_wz") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
@@ -129,7 +85,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       if (multi_d) {
         dv(m,i_dv,k,j,i) -=(w0_(m,IVX,k,j+1,i) - w0_(m,IVX,k,j-1,i))/size.d_view(m).dx2;
       }
-      dv(m,i_dv,k,j,i) *= 0.5; // accounts for divide by 2*dx
     });
     i_dv += 1; // increment derived variable index
   }
@@ -139,7 +94,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   if (name.compare("hydro_w2") == 0 ||
       name.compare("mhd_w2") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = (name.compare("hydro_w2") == 0)?
       pm->pmb_pack->phydro->w0 : pm->pmb_pack->pmhd->w0;
@@ -156,7 +111,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         w1 -= (w0_(m,IVY,k+1,j,i) - w0_(m,IVY,k-1,j,i))/size.d_view(m).dx3;
         w2 += (w0_(m,IVX,k+1,j,i) - w0_(m,IVX,k-1,j,i))/size.d_view(m).dx3;
       }
-      dv(m,i_dv,k,j,i) = 0.25*(w1*w1 + w2*w2 + w3*w3); // accounts for divide by 2*dx
+      dv(m,i_dv,k,j,i) = w1*w1 + w2*w2 + w3*w3;
     });
     i_dv += 1; // increment derived variable index
   }
@@ -166,7 +121,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_jz") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("jz", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -175,7 +130,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       if (multi_d) {
         dv(m,i_dv,k,j,i) -=(bcc(m,IBX,k,j+1,i) - bcc(m,IBX,k,j-1,i))/size.d_view(m).dx2;
       }
-      dv(m,i_dv,k,j,i) *= 0.5; // accounts for divide by 2*dx
     });
     i_dv += 1; // increment derived variable index
   }
@@ -184,7 +138,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_j2") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("j2", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -200,7 +154,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
         j1 -= (bcc(m,IBY,k+1,j,i) - bcc(m,IBY,k-1,j,i))/size.d_view(m).dx3;
         j2 += (bcc(m,IBX,k+1,j,i) - bcc(m,IBX,k-1,j,i))/size.d_view(m).dx3;
       }
-      dv(m,i_dv,k,j,i) = 0.25*(j1*j1 + j2*j2 + j3*j3); // accounts for divide by 2*dx
+      dv(m,i_dv,k,j,i) = j1*j1 + j2*j2 + j3*j3;
     });
     i_dv += 1; // increment derived variable index
   }
@@ -211,7 +165,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -279,7 +233,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_alt") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_alt", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -364,7 +318,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // contravariant four-current jcon.  Calculated from cell-centered fields.
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_jcon") == 0) {
-    Kokkos::realloc(derived_var, nmb_alloc, 4, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, 4, n3, n2, n1);
     auto jcon = derived_var;
 
     // Coordinates
@@ -372,8 +326,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     bool &flat = coord.is_minkowski;
     auto &spin = coord.bh_spin;
 
-    const Real dt_last = pm->dt_last_completed;
-    const bool have_prior = (pm->pmb_pack->pmhd->wbcc_saved && dt_last > 0.);
+    auto &dtold = pm->dtold;
     auto w0_ = pm->pmb_pack->pmhd->w0;
     auto bcc_ = pm->pmb_pack->pmhd->bcc0;
     auto wsaved_ = pm->pmb_pack->pmhd->wsaved;
@@ -387,140 +340,120 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("jcon", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      if (!have_prior) {
-        for (int mu=0; mu<4; ++mu) {
-          jcon(m,mu,k,j,i) = 0.;
-        }
-        return;
-      }
-
       Real &x1min = size.d_view(m).x1min;
       Real &x1max = size.d_view(m).x1max;
       Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-      Real x1v_ip1 = CellCenterX(i+1-is, indcs.nx1, x1min, x1max);
-      Real x1v_im1 = CellCenterX(i-1-is, indcs.nx1, x1min, x1max);
 
       Real &x2min = size.d_view(m).x2min;
       Real &x2max = size.d_view(m).x2max;
       Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-      Real x2v_jp1 = CellCenterX(j+1-js, indcs.nx2, x2min, x2max);
-      Real x2v_jm1 = CellCenterX(j-1-js, indcs.nx2, x2min, x2max);
 
       Real &x3min = size.d_view(m).x3min;
       Real &x3max = size.d_view(m).x3max;
       Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-      Real x3v_kp1 = CellCenterX(k+1-ks, indcs.nx3, x3min, x3max);
-      Real x3v_km1 = CellCenterX(k-1-ks, indcs.nx3, x3min, x3max);
 
-      // Metric at center and neighbors
-      Real glower_c[4][4], gupper_c[4][4];
-      Real glower_ip1[4][4], gupper_ip1[4][4];
-      Real glower_im1[4][4], gupper_im1[4][4];
-      Real glower_jp1[4][4], gupper_jp1[4][4];
-      Real glower_jm1[4][4], gupper_jm1[4][4];
-      Real glower_kp1[4][4], gupper_kp1[4][4];
-      Real glower_km1[4][4], gupper_km1[4][4];
-      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower_c, gupper_c);
-      ComputeMetricAndInverse(x1v_ip1, x2v, x3v, flat, spin, glower_ip1, gupper_ip1);
-      ComputeMetricAndInverse(x1v_im1, x2v, x3v, flat, spin, glower_im1, gupper_im1);
-      if (multi_d) {
-        ComputeMetricAndInverse(x1v, x2v_jp1, x3v, flat, spin, glower_jp1, gupper_jp1);
-        ComputeMetricAndInverse(x1v, x2v_jm1, x3v, flat, spin, glower_jm1, gupper_jm1);
-      }
-      if (three_d) {
-        ComputeMetricAndInverse(x1v, x2v, x3v_kp1, flat, spin, glower_kp1, gupper_kp1);
-        ComputeMetricAndInverse(x1v, x2v, x3v_km1, flat, spin, glower_km1, gupper_km1);
-      }
+      // Extract components of metric
+      Real glower[4][4], gupper[4][4];
+      ComputeMetricAndInverse(x1v, x2v, x3v, flat, spin, glower, gupper);
 
-      // Center (new/old) for temporal term
-      Real ucov_new[4], bcov_new[4];
-      Real ucov_old[4], bcov_old[4];
-      ComputeUcBcFromPrimitive(w0_(m,IVX,k,j,i), w0_(m,IVY,k,j,i), w0_(m,IVZ,k,j,i),
-                               bcc_(m,IBX,k,j,i), bcc_(m,IBY,k,j,i), bcc_(m,IBZ,k,j,i),
-                               glower_c, gupper_c, ucov_new, bcov_new);
-      ComputeUcBcFromPrimitive(wsaved_(m,IVX,k,j,i), wsaved_(m,IVY,k,j,i),
-                               wsaved_(m,IVZ,k,j,i), bccsaved_(m,IBX,k,j,i),
-                               bccsaved_(m,IBY,k,j,i), bccsaved_(m,IBZ,k,j,i),
-                               glower_c, gupper_c, ucov_old, bcov_old);
+      // Get 4-velocity for current step
+      const Real &uu1 = w0_(m,IVX,k,j,i);
+      const Real &uu2 = w0_(m,IVY,k,j,i);
+      const Real &uu3 = w0_(m,IVZ,k,j,i);
 
-      // Time-centered neighbors for spatial terms
-      Real ucov_ip1[4], bcov_ip1[4], ucov_im1[4], bcov_im1[4];
-      Real ucov_jp1[4], bcov_jp1[4], ucov_jm1[4], bcov_jm1[4];
-      Real ucov_kp1[4], bcov_kp1[4], ucov_km1[4], bcov_km1[4];
+      Real uu_sq = glower[1][1]*uu1*uu1 + 2.0*glower[1][2]*uu1*uu2
+                 + 2.0*glower[1][3]*uu1*uu3
+                 + glower[2][2]*uu2*uu2 + 2.0*glower[2][3]*uu2*uu3
+                 + glower[3][3]*uu3*uu3;
+      Real alpha = sqrt(-1.0/gupper[0][0]);
+      Real gamma = sqrt(1.0 + uu_sq);
 
-      ComputeUcBcFromPrimitive(
-          0.5*(w0_(m,IVX,k,j,i+1) + wsaved_(m,IVX,k,j,i+1)),
-          0.5*(w0_(m,IVY,k,j,i+1) + wsaved_(m,IVY,k,j,i+1)),
-          0.5*(w0_(m,IVZ,k,j,i+1) + wsaved_(m,IVZ,k,j,i+1)),
-          0.5*(bcc_(m,IBX,k,j,i+1) + bccsaved_(m,IBX,k,j,i+1)),
-          0.5*(bcc_(m,IBY,k,j,i+1) + bccsaved_(m,IBY,k,j,i+1)),
-          0.5*(bcc_(m,IBZ,k,j,i+1) + bccsaved_(m,IBZ,k,j,i+1)),
-          glower_ip1, gupper_ip1, ucov_ip1, bcov_ip1);
-      ComputeUcBcFromPrimitive(
-          0.5*(w0_(m,IVX,k,j,i-1) + wsaved_(m,IVX,k,j,i-1)),
-          0.5*(w0_(m,IVY,k,j,i-1) + wsaved_(m,IVY,k,j,i-1)),
-          0.5*(w0_(m,IVZ,k,j,i-1) + wsaved_(m,IVZ,k,j,i-1)),
-          0.5*(bcc_(m,IBX,k,j,i-1) + bccsaved_(m,IBX,k,j,i-1)),
-          0.5*(bcc_(m,IBY,k,j,i-1) + bccsaved_(m,IBY,k,j,i-1)),
-          0.5*(bcc_(m,IBZ,k,j,i-1) + bccsaved_(m,IBZ,k,j,i-1)),
-          glower_im1, gupper_im1, ucov_im1, bcov_im1);
+      Real ucon[4];
+      ucon[0] = gamma / alpha;
+      ucon[1] = uu1 - alpha * gamma * gupper[0][1];
+      ucon[2] = uu2 - alpha * gamma * gupper[0][2];
+      ucon[3] = uu3 - alpha * gamma * gupper[0][3];
 
-      if (multi_d) {
-        ComputeUcBcFromPrimitive(
-            0.5*(w0_(m,IVX,k,j+1,i) + wsaved_(m,IVX,k,j+1,i)),
-            0.5*(w0_(m,IVY,k,j+1,i) + wsaved_(m,IVY,k,j+1,i)),
-            0.5*(w0_(m,IVZ,k,j+1,i) + wsaved_(m,IVZ,k,j+1,i)),
-            0.5*(bcc_(m,IBX,k,j+1,i) + bccsaved_(m,IBX,k,j+1,i)),
-            0.5*(bcc_(m,IBY,k,j+1,i) + bccsaved_(m,IBY,k,j+1,i)),
-            0.5*(bcc_(m,IBZ,k,j+1,i) + bccsaved_(m,IBZ,k,j+1,i)),
-            glower_jp1, gupper_jp1, ucov_jp1, bcov_jp1);
-        ComputeUcBcFromPrimitive(
-            0.5*(w0_(m,IVX,k,j-1,i) + wsaved_(m,IVX,k,j-1,i)),
-            0.5*(w0_(m,IVY,k,j-1,i) + wsaved_(m,IVY,k,j-1,i)),
-            0.5*(w0_(m,IVZ,k,j-1,i) + wsaved_(m,IVZ,k,j-1,i)),
-            0.5*(bcc_(m,IBX,k,j-1,i) + bccsaved_(m,IBX,k,j-1,i)),
-            0.5*(bcc_(m,IBY,k,j-1,i) + bccsaved_(m,IBY,k,j-1,i)),
-            0.5*(bcc_(m,IBZ,k,j-1,i) + bccsaved_(m,IBZ,k,j-1,i)),
-            glower_jm1, gupper_jm1, ucov_jm1, bcov_jm1);
+      // Get 4-velocity for last step
+      const Real &uu1saved = wsaved_(m,IVX,k,j,i);
+      const Real &uu2saved = wsaved_(m,IVY,k,j,i);
+      const Real &uu3saved = wsaved_(m,IVZ,k,j,i);
+
+      uu_sq = glower[1][1]*uu1saved*uu1saved + 2.0*glower[1][2]*uu1saved*uu2saved
+            + 2.0*glower[1][3]*uu1saved*uu3saved
+            + glower[2][2]*uu2saved*uu2saved + 2.0*glower[2][3]*uu2saved*uu3saved
+            + glower[3][3]*uu3saved*uu3saved;
+      gamma = sqrt(1.0 + uu_sq);
+
+      Real uconsaved[4];
+      uconsaved[0] = gamma / alpha;
+      uconsaved[1] = uu1saved - alpha * gamma * gupper[0][1];
+      uconsaved[2] = uu2saved - alpha * gamma * gupper[0][2];
+      uconsaved[3] = uu3saved - alpha * gamma * gupper[0][3];
+
+      // Lower 4-velocities
+      Real ucov[4], ucovsaved[4];
+      for (int mu=0; mu<4; ++mu) {
+        ucov[mu] = 0.0;
+        ucovsaved[mu] = 0.0;
+        for (int nu=0; nu<4; ++nu) {
+          ucov[mu] += glower[mu][nu]*ucon[nu];
+          ucovsaved[mu] += glower[mu][nu]*uconsaved[nu];
+        }
       }
 
-      if (three_d) {
-        ComputeUcBcFromPrimitive(
-            0.5*(w0_(m,IVX,k+1,j,i) + wsaved_(m,IVX,k+1,j,i)),
-            0.5*(w0_(m,IVY,k+1,j,i) + wsaved_(m,IVY,k+1,j,i)),
-            0.5*(w0_(m,IVZ,k+1,j,i) + wsaved_(m,IVZ,k+1,j,i)),
-            0.5*(bcc_(m,IBX,k+1,j,i) + bccsaved_(m,IBX,k+1,j,i)),
-            0.5*(bcc_(m,IBY,k+1,j,i) + bccsaved_(m,IBY,k+1,j,i)),
-            0.5*(bcc_(m,IBZ,k+1,j,i) + bccsaved_(m,IBZ,k+1,j,i)),
-            glower_kp1, gupper_kp1, ucov_kp1, bcov_kp1);
-        ComputeUcBcFromPrimitive(
-            0.5*(w0_(m,IVX,k-1,j,i) + wsaved_(m,IVX,k-1,j,i)),
-            0.5*(w0_(m,IVY,k-1,j,i) + wsaved_(m,IVY,k-1,j,i)),
-            0.5*(w0_(m,IVZ,k-1,j,i) + wsaved_(m,IVZ,k-1,j,i)),
-            0.5*(bcc_(m,IBX,k-1,j,i) + bccsaved_(m,IBX,k-1,j,i)),
-            0.5*(bcc_(m,IBY,k-1,j,i) + bccsaved_(m,IBY,k-1,j,i)),
-            0.5*(bcc_(m,IBZ,k-1,j,i) + bccsaved_(m,IBZ,k-1,j,i)),
-            glower_km1, gupper_km1, ucov_km1, bcov_km1);
+      // Get bcon and bconsaved
+      Real bcon[4];
+      Real bconsaved[4];
+
+      bcon[0] = bcc_(m,IBX,k,j,i) * ucov[1] + bcc_(m,IBY,k,j,i) * ucov[2]
+              + bcc_(m,IBZ,k,j,i) * ucov[3];
+      bcon[1] = (bcc_(m,IBX,k,j,i) + bcon[0] * ucon[1]) / ucon[0];
+      bcon[2] = (bcc_(m,IBY,k,j,i) + bcon[0] * ucon[2]) / ucon[0];
+      bcon[3] = (bcc_(m,IBZ,k,j,i) + bcon[0] * ucon[3]) / ucon[0];
+
+      bconsaved[0] = bccsaved_(m,IBX,k,j,i) * ucovsaved[1]
+                   + bccsaved_(m,IBY,k,j,i) * ucovsaved[2]
+                   + bccsaved_(m,IBZ,k,j,i) * ucovsaved[3];
+      bconsaved[1] = (bccsaved_(m,IBX,k,j,i) + bconsaved[0]*uconsaved[1]) / uconsaved[0];
+      bconsaved[2] = (bccsaved_(m,IBY,k,j,i) + bconsaved[0]*uconsaved[2]) / uconsaved[0];
+      bconsaved[3] = (bccsaved_(m,IBZ,k,j,i) + bconsaved[0]*uconsaved[3]) / uconsaved[0];
+
+      // Lower bcon and bconsaved
+      Real bcov[4], bcovsaved[4];
+
+      for (int mu=0; mu<4; ++mu) {
+        bcov[mu] = 0.0;
+        bcovsaved[mu] = 0.0;
+        for (int nu=0; nu<4; ++nu) {
+          bcov[mu] += glower[mu][nu]*bcon[nu];
+          bcovsaved[mu] += glower[mu][nu]*bconsaved[nu];
+        }
       }
 
       // Compute current
       for (int mu=0; mu<4; ++mu) {
-        const Real gF0p = get_detg_Fcon(mu, 0, ucov_new, bcov_new);
-        const Real gF0m = get_detg_Fcon(mu, 0, ucov_old, bcov_old);
-        const Real gF1p = get_detg_Fcon(mu, 1, ucov_ip1, bcov_ip1);
-        const Real gF1m = get_detg_Fcon(mu, 1, ucov_im1, bcov_im1);
-        const Real gF2p = (multi_d) ? get_detg_Fcon(mu, 2, ucov_jp1, bcov_jp1) : 0.;
-        const Real gF2m = (multi_d) ? get_detg_Fcon(mu, 2, ucov_jm1, bcov_jm1) : 0.;
-        const Real gF3p = (three_d) ? get_detg_Fcon(mu, 3, ucov_kp1, bcov_kp1) : 0.;
-        const Real gF3m = (three_d) ? get_detg_Fcon(mu, 3, ucov_km1, bcov_km1) : 0.;
+        if (dtold > 0) {
+          const Real gF0p = get_detg_Fcon(0, mu, ucov, bcov);
+          const Real gF0m = get_detg_Fcon(0, mu, ucovsaved, bcovsaved);
+          const Real gF1p = get_detg_Fcon(1, mu, ucov, bcov);
+          const Real gF1m = get_detg_Fcon(1, mu, ucovsaved, bcovsaved);
+          const Real gF2p = (multi_d) ? get_detg_Fcon(2, mu, ucov, bcov) : 0.;
+          const Real gF2m = (multi_d) ? get_detg_Fcon(2, mu, ucovsaved, bcovsaved) : 0.;
+          const Real gF3p = (three_d) ? get_detg_Fcon(3, mu, ucov, bcov) : 0.;
+          const Real gF3m = (three_d) ? get_detg_Fcon(3, mu, ucovsaved, bcovsaved) : 0.;
 
-        const Real dgF0 = (gF0p - gF0m) / dt_last;
-        const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
-        const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
-        const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
+          const Real dgF0 = (gF0p - gF0m) / dtold;
+          const Real dgF1 = (gF1p - gF1m) / (2 * size.d_view(m).dx1);
+          const Real dgF2 = (multi_d) ? (gF2p - gF2m) / (2 * size.d_view(m).dx2) : 0.;
+          const Real dgF3 = (three_d) ? (gF3p - gF3m) / (2 * size.d_view(m).dx3) : 0.;
 
-        const Real detg = 1.;
-        jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
+          const Real detg = 1.;
+          jcon(m,mu,k,j,i) = 1. / (detg * sqrt(4. * M_PI)) * (dgF0 + dgF1 + dgF2 + dgF3);
+        } else {
+          // zero current if dtold == 0 (e.g., when we don't have a previous step)
+          jcon(m,mu,k,j,i) = 0.;
+        }
       }
     });
   }
@@ -528,7 +461,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // get all sgs terms for the MHD equations
   if (name.compare("mhd_sgs") == 0) {
     int n_sgs = 59;
-    Kokkos::realloc(derived_var, nmb_alloc, n_sgs, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->pmhd->u0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -615,7 +548,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all sgs terms for the MHD equations
   if (name.compare("hydro_sgs") == 0) {
     int n_sgs = 23;
-    Kokkos::realloc(derived_var, nmb_alloc, n_sgs, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, n_sgs, n3, n2, n1);
     auto dv = derived_var;
     auto u0_ = pm->pmb_pack->phydro->u0;
     par_for("hydro_sgs", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -658,7 +591,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for |v| and |B|
   if (name.compare("mhd_v_B_moments") == 0) {
     int n_moments = 8;
-    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -686,7 +619,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for v_i and B_i
   if (name.compare("mhd_vi_Bi_moments") == 0) {
     int n_moments = 24;
-    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->pmhd->w0;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
@@ -730,7 +663,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for |v|
   if (name.compare("hydro_v_moments") == 0) {
     int n_moments = 4;
-    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_v_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -749,7 +682,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 // get all moments terms for v_i and B_i
   if (name.compare("hydro_vi_moments") == 0) {
     int n_moments = 12;
-    Kokkos::realloc(derived_var, nmb_alloc, n_moments, n3, n2, n1);
+    Kokkos::realloc(derived_var, n_moments, 1, n3, n2, n1);
     auto dv = derived_var;
     auto &w0_ = pm->pmb_pack->phydro->w0;
     par_for("hydro_moments", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -780,7 +713,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_k_jxb") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("mhd_k_jxb", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -810,7 +743,6 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       // calculate | j x B | / B^2
       dv(m,i_dv,k,j,i) = sqrt(jxB1*jxB1 + jxB2*jxB2 + jxB3*jxB3) / B_mag_sq;
     });
-    i_dv += 1; // increment derived variable index
   }
 
   // magnitude of curv_perp = |(j x B / B^2) - b_hat dot nabla b_hat|
@@ -818,7 +750,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_curv_perp") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("curv_perp", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -928,7 +860,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // Not computed in ghost zones since requires derivative
   if (name.compare("mhd_bmag") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     par_for("bmag", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
@@ -951,7 +883,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     // 5 = < |B.J|^2 >
     // 6 = < U^2 >
     // 7 = < (d_j U_i)(d_j U_i) >
-    Kokkos::realloc(derived_var, nmb_alloc, 8, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, 8, n3, n2, n1);
     auto dv = derived_var;
     auto &bcc = pm->pmb_pack->pmhd->bcc0;
     auto &b = pm->pmb_pack->pmhd->b0;
@@ -983,8 +915,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
                             *(bcc(m,IBY,k+1,j,i)-bcc(m,IBY,k-1,j,i))
                       + 0.25*(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
                             *(bcc(m,IBZ,k,j,i+1)-bcc(m,IBZ,k,j,i-1))
-                      + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i))
-                            *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,k,j-1,i)))
+                      + 0.25*(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i))
+                            *(bcc(m,IBZ,k,j+1,i)-bcc(m,IBZ,i,j-1,i)))
                       / dx_squared;
       // 2 = < (B_j d_j B_i)(B_k d_k B_i) >
       Real bdb1 = bcc(m,IBX,k,j,i)*(b.x1f(m,k,j,i+1)-b.x1f(m,k,j,i))
@@ -1045,15 +977,14 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   // divergence of B, including ghost zones
   if (name.compare("mhd_divb") == 0) {
     if (derived_var.extent(4) <= 1)
-      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
 
     // set the loop limits for 1D/2D/3D problems
     int jl = js, ju = je, kl = ks, ku = ke;
     if (multi_d) {
       jl = js-ng, ju = je+ng;
-    }
-    if (three_d) {
-      kl = ks-ng, ku = ke+ng;
+    } else if (three_d) {
+      jl = js-ng, ju = je+ng, kl = ks-ng, ku = ke+ng;
     }
 
     auto dv = derived_var;
@@ -1080,22 +1011,38 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     bool needs_both = !(needs_coord_only || needs_fluid_only);
     int mom_var_size = (needs_both) ? 20 : 10;
     int moments_offset = (needs_both) ? 10 : 0;
-    Kokkos::realloc(derived_var, nmb_alloc, mom_var_size, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, mom_var_size, n3, n2, n1);
     auto dv = derived_var;
 
-    // Coordinates
-    auto &coord = pm->pmb_pack->pcoord->coord_data;
-    bool &flat = coord.is_minkowski;
-    Real &spin = coord.bh_spin;
-
     // Radiation
-    int nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
-    auto nh_c_ = pm->pmb_pack->prad->nh_c;
-    auto tet_c_ = pm->pmb_pack->prad->tet_c;
-    auto tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
-    auto solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
-    auto i0_ = pm->pmb_pack->prad->i0;
-    auto norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+    int nang1 = -1;
+    bool use_adm_radiation = false;
+    DualArray2D<Real> nh_c_;
+    DvceArray6D<Real> tet_c_;
+    DvceArray6D<Real> tetcov_c_;
+    DualArray1D<Real> solid_angles_;
+    DvceArray5D<Real> i0_;
+    DvceArray6D<Real> norm_to_tet_;
+    DvceArray4D<Real> sqrt_detg_c_;
+    if (pm->pmb_pack->prad != nullptr) {
+      nang1 = pm->pmb_pack->prad->prgeo->nangles - 1;
+      nh_c_ = pm->pmb_pack->prad->nh_c;
+      tet_c_ = pm->pmb_pack->prad->tet_c;
+      tetcov_c_ = pm->pmb_pack->prad->tetcov_c;
+      solid_angles_ = pm->pmb_pack->prad->prgeo->solid_angles;
+      i0_ = pm->pmb_pack->prad->i0;
+      norm_to_tet_ = pm->pmb_pack->prad->norm_to_tet;
+    } else {
+      nang1 = pm->pmb_pack->pdynrad->prgeo->nangles - 1;
+      use_adm_radiation = pm->pmb_pack->pdynrad->use_adm_geometry;
+      nh_c_ = pm->pmb_pack->pdynrad->nh_c;
+      tet_c_ = pm->pmb_pack->pdynrad->tet_c;
+      tetcov_c_ = pm->pmb_pack->pdynrad->tetcov_c;
+      solid_angles_ = pm->pmb_pack->pdynrad->prgeo->solid_angles;
+      i0_ = pm->pmb_pack->pdynrad->i0;
+      norm_to_tet_ = pm->pmb_pack->pdynrad->norm_to_tet;
+      sqrt_detg_c_ = pm->pmb_pack->pdynrad->sqrt_detg_c;
+    }
 
     // Select either Hydro or MHD (if fluid enabled)
     DvceArray5D<Real> w0_;
@@ -1107,24 +1054,20 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
     par_for("moments",DevExeSpace(),0,(nmb-1),0,(n3-1),0,(n2-1),0,(n1-1),
     KOKKOS_LAMBDA(int m, int k, int j, int i) {
-      Real &x1min = size.d_view(m).x1min;
-      Real &x1max = size.d_view(m).x1max;
-      Real x1v = CellCenterX(i-is, indcs.nx1, x1min, x1max);
-
-      Real &x2min = size.d_view(m).x2min;
-      Real &x2max = size.d_view(m).x2max;
-      Real x2v = CellCenterX(j-js, indcs.nx2, x2min, x2max);
-
-      Real &x3min = size.d_view(m).x3min;
-      Real &x3max = size.d_view(m).x3max;
-      Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
-
-      // Extract components of metric
-      Real glower[4][4], gupper[4][4];
-      ComputeMetricAndInverse(x1v,x2v,x3v,flat,spin,glower,gupper);
+      Real glower[4][4];
+      for (int mu=0; mu<4; ++mu) {
+        for (int nu=0; nu<4; ++nu) {
+          glower[mu][nu] = 0.0;
+          for (int a=0; a<4; ++a) {
+            Real eta = (a == 0) ? -1.0 : 1.0;
+            glower[mu][nu] += eta*tetcov_c_(m,a,mu,k,j,i)*tetcov_c_(m,a,nu,k,j,i);
+          }
+        }
+      }
 
       // coordinate component n^0
       Real n0 = tet_c_(m,0,0,k,j,i);
+      Real intensity_norm = use_adm_radiation ? sqrt_detg_c_(m,k,j,i) : n0;
 
       // set coordinate frame components
       for (int n1=0, n12=0; n1<4; ++n1) {
@@ -1137,8 +1080,9 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
               nmun2 += tet_c_   (m,d,n2,k,j,i)*nh_c_.d_view(n,d);
               n_0   += tetcov_c_(m,d,0, k,j,i)*nh_c_.d_view(n,d);
             }
-            dv(m,n12,k,j,i) += (nmun1*nmun2*(i0_(m,n,k,j,i)/(n0*n_0))*
-                                solid_angles_.d_view(n));
+            Real intensity = i0_(m,n,k,j,i)/intensity_norm;
+            if (!(use_adm_radiation)) { intensity /= n_0; }
+            dv(m,n12,k,j,i) += nmun1*nmun2*intensity*solid_angles_.d_view(n);
           }
         }
       }
@@ -1255,7 +1199,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
   // Particle density binned to mesh.
   if (name.compare("prtcl_d") == 0) {
-    Kokkos::realloc(derived_var, nmb_alloc, 1, n3, n2, n1);
+    Kokkos::realloc(derived_var, nmb, 1, n3, n2, n1);
     auto pdens = derived_var;
     auto pr = pm->pmb_pack->ppart->prtcl_rdata;
     auto pi = pm->pmb_pack->ppart->prtcl_idata;
@@ -1278,6 +1222,345 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
       pdens(m,0,kp,jp,ip) += 1.0;
     });
+  }
+
+  // Angular Momentum density about the origin.
+  // Separated into Fluid (Gas) and Electromagnetic components.
+  // Densitized (multiplied by sqrt{gamma}) for direct integration.
+  // 0-2: Fluid Angular Momentum (Lx, Ly, Lz)
+  // 3-5: EM    Angular Momentum (Lx, Ly, Lz)
+  if (name.compare("angular_momentum") == 0) {
+    int n_comp = 6;
+    if (derived_var.extent(4) <= 1) {
+      Kokkos::realloc(derived_var, nmb, n_dv, n3, n2, n1);
+    }
+
+    auto dv   = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+    auto &prim = pm->pmb_pack->pmhd->w0;
+    auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+
+    // Gamma-law EOS
+    Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+
+    par_for("angular_momentum", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // --- 1. Spatial metric and inverse ---
+      Real g_dd_1d[6];
+      g_dd_1d[0] = adm.g_dd(m,0,0,k,j,i);
+      g_dd_1d[1] = adm.g_dd(m,0,1,k,j,i);
+      g_dd_1d[2] = adm.g_dd(m,0,2,k,j,i);
+      g_dd_1d[3] = adm.g_dd(m,1,1,k,j,i);
+      g_dd_1d[4] = adm.g_dd(m,1,2,k,j,i);
+      g_dd_1d[5] = adm.g_dd(m,2,2,k,j,i);
+
+      // det(gamma), sqrt(gamma)
+      Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                                  g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
+      if (detg <= 0.0) {
+        for (int n = 0; n < n_comp; ++n) {
+          dv(m, i_dv+n, k, j, i) = 0.0;
+        }
+        return;
+      }
+      Real sqrt_gamma = sqrt(detg);
+
+      // Inverse metric g^ij
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+      adm::SpatialInv(1.0/detg,
+                      g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                      g_dd_1d[3], g_dd_1d[4], g_dd_1d[5],
+                      &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                      &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+      // --- 2. Primitives: rho, P, Wv^i, densitized B^i ---
+      Real rho  = prim(m, IDN, k, j, i);
+      Real pres = prim(m, IPR, k, j, i);
+
+      Real prim_Wv_u[3] = {
+        prim(m, IVX, k, j, i),
+        prim(m, IVY, k, j, i),
+        prim(m, IVZ, k, j, i)
+      };
+
+      Real B_tilde_u[3] = {
+        bcc(m, 0, k, j, i),
+        bcc(m, 1, k, j, i),
+        bcc(m, 2, k, j, i)
+      };
+
+      // --- 3. Eulerian velocity and magnetic field ---
+      Real W, v_u[3], v_d[3];
+      ValenciaPrimsToEulerianVelocity(prim_Wv_u, g_dd_1d, W, v_u, v_d);
+
+      Real sqrt_gamma_chk, B_u[3], B_d[3];
+      ValenciaEulerianMagneticFromDensitized(B_tilde_u, g_dd_1d,
+                                            sqrt_gamma_chk, B_u, B_d);
+
+      // --- 4. Comoving B and stress-energy decomposition ---
+      Real Bv, b0, b_u[3], b_d[3], b2;
+      ValenciaComovingB(v_u, v_d, B_u, B_d, W, Bv, b0, b_u, b_d, b2);
+
+      Real E_fluid, E_em;
+      Real S_fluid_d[3], S_em_d[3];
+      Real S_fluid_dd[3][3], S_em_dd[3][3];
+
+      ValenciaStressEnergyDecomposed(rho, pres, gamma_gas,
+                                    v_u, v_d, W,
+                                    B_u, B_d,
+                                    b0, b_d, b2,
+                                    g_dd_1d,
+                                    E_fluid, E_em,
+                                    S_fluid_d, S_em_d,
+                                    S_fluid_dd, S_em_dd);
+
+      // --- 5. Coordinates (Cartesian) ---
+      Real x1v = CellCenterX(i - is, indcs.nx1,
+                            size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j - js, indcs.nx2,
+                            size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k - ks, indcs.nx3,
+                            size.d_view(m).x3min, size.d_view(m).x3max);
+
+      // --- 6. Angular momentum densities (densitized by sqrt(gamma)) ---
+      // L = (r x S) * sqrt(gamma)
+
+      // Fluid
+      dv(m, i_dv,   k, j, i) =
+        (x2v * S_fluid_d[2] - x3v * S_fluid_d[1]) * sqrt_gamma; // Lx
+      dv(m, i_dv+1, k, j, i) =
+        (x3v * S_fluid_d[0] - x1v * S_fluid_d[2]) * sqrt_gamma; // Ly
+      dv(m, i_dv+2, k, j, i) =
+        (x1v * S_fluid_d[1] - x2v * S_fluid_d[0]) * sqrt_gamma; // Lz
+
+      // EM
+      dv(m, i_dv+3, k, j, i) =
+        (x2v * S_em_d[2] - x3v * S_em_d[1]) * sqrt_gamma;
+      dv(m, i_dv+4, k, j, i) =
+        (x3v * S_em_d[0] - x1v * S_em_d[2]) * sqrt_gamma;
+      dv(m, i_dv+5, k, j, i) =
+        (x1v * S_em_d[1] - x2v * S_em_d[0]) * sqrt_gamma;
+    });
+    i_dv += n_comp;
+  }
+
+  // Torque Integrand (Torque density)
+  // Goal: consistent with paper’s momentum source (Eq. like 9a) AND the derived
+  // angular-momentum balance law.
+  //
+  // We output the *densitized* torque source for Cartesian rotations about the origin:
+  //
+  //   tau_a = sqrt(gamma) * [ (r × G)_a  +  (F^j{}_i ∂_j φ^i)_a ]
+  //
+  // where
+  //   G_i =  - E ∂_i α  +  S_j ∂_i β^j  +  (1/2) α S^{jk} ∂_i γ_{jk}
+  // and for Cartesian rotations: (F^j{}_i ∂_j φ^i)_a = F^j{}_i ε_{a j}{}^{i},
+  // with
+  //   F^j{}_i = α S^j{}_i - β^j S_i  (momentum flux, non-densitized here).
+  //
+  // IMPORTANT: assumes E, S_i, S_ij returned by ValenciaStressEnergyTotal are
+  // *non-densitized* (no sqrt(gamma)); we densitize only at the end.
+  if (name.compare("torque") == 0) {
+    int n_comp = 3;
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb, n_comp, n3, n2, n1);
+
+    auto dv    = derived_var;
+    auto &adm  = pm->pmb_pack->padm->adm;
+    auto &prim = pm->pmb_pack->pmhd->w0;
+    auto &bcc  = pm->pmb_pack->pmhd->bcc0;
+
+    Real gamma_gas = pm->pmb_pack->pmhd->peos->eos_data.gamma;
+
+    par_for("torque", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // --- 0. Cell geometry + inverse dx ---
+      Real idx[3] = {
+        1.0/size.d_view(m).dx1,
+        1.0/size.d_view(m).dx2,
+        1.0/size.d_view(m).dx3
+      };
+
+      // --- 1. Metric, det, inverse ---
+      Real g_dd_1d[6];
+      g_dd_1d[0] = adm.g_dd(m,0,0,k,j,i);
+      g_dd_1d[1] = adm.g_dd(m,0,1,k,j,i);
+      g_dd_1d[2] = adm.g_dd(m,0,2,k,j,i);
+      g_dd_1d[3] = adm.g_dd(m,1,1,k,j,i);
+      g_dd_1d[4] = adm.g_dd(m,1,2,k,j,i);
+      g_dd_1d[5] = adm.g_dd(m,2,2,k,j,i);
+
+      Real detg = adm::SpatialDet(g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                                  g_dd_1d[3], g_dd_1d[4], g_dd_1d[5]);
+
+      // Guard against bad metric
+      if (detg <= 0.0) {
+        dv(m,i_dv+0,k,j,i) = 0.0;
+        dv(m,i_dv+1,k,j,i) = 0.0;
+        dv(m,i_dv+2,k,j,i) = 0.0;
+        return;
+      }
+      Real sqrt_gamma = sqrt(detg);
+
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> g_uu;
+      adm::SpatialInv(1.0/detg,
+                      g_dd_1d[0], g_dd_1d[1], g_dd_1d[2],
+                      g_dd_1d[3], g_dd_1d[4], g_dd_1d[5],
+                      &g_uu(0,0), &g_uu(0,1), &g_uu(0,2),
+                      &g_uu(1,1), &g_uu(1,2), &g_uu(2,2));
+
+      Real alpha = adm.alpha(m, k, j, i);
+
+      // --- 2. Metric derivatives, lapse/shift derivatives (index DOWN: ∂_i) ---
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 3> dg_ddd;   // ∂_c γ_ab
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 1> dalpha_d; // ∂_c α
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> dbeta_du; // ∂_c β^a
+
+      // ∂_c γ_ab
+      for (int c = 0; c < 3; ++c) {
+        for (int a = 0; a < 3; ++a) {
+          for (int b = a; b < 3; ++b) {
+            dg_ddd(c,a,b) = Dx<4>(c, idx, adm.g_dd, m, a, b, k, j, i);
+          }
+        }
+      }
+
+      // ∂_c α
+      for (int c = 0; c < 3; ++c) {
+        dalpha_d(c) = Dx<4>(c, idx, adm.alpha, m, k, j, i);
+      }
+
+      // ∂_c β^a
+      for (int c = 0; c < 3; ++c) {
+        for (int a = 0; a < 3; ++a) {
+          dbeta_du(c,a) = Dx<4>(c, idx, adm.beta_u, m, a, k, j, i);
+        }
+      }
+
+      // --- 3. Primitives + B field as Valencia objects ---
+      Real rho  = prim(m, IDN, k, j, i);
+      Real pres = prim(m, IPR, k, j, i);
+
+      Real prim_Wv_u[3] = {
+        prim(m, IVX, k, j, i),
+        prim(m, IVY, k, j, i),
+        prim(m, IVZ, k, j, i)
+      };
+
+      Real B_tilde_u[3] = {
+        bcc(m, 0, k, j, i),
+        bcc(m, 1, k, j, i),
+        bcc(m, 2, k, j, i)
+      };
+
+      Real W, v_u[3], v_d[3];
+      ValenciaPrimsToEulerianVelocity(prim_Wv_u, g_dd_1d, W, v_u, v_d);
+
+      Real sqrt_gamma_chk, B_u[3], B_d[3];
+      ValenciaEulerianMagneticFromDensitized(B_tilde_u, g_dd_1d,
+                                            sqrt_gamma_chk, B_u, B_d);
+
+      Real Bv, b0, b_u[3], b_d[3], b2;
+      ValenciaComovingB(v_u, v_d, B_u, B_d, W, Bv, b0, b_u, b_d, b2);
+
+      // Total stress-energy (fluid + EM), non-densitized
+      Real E_tot;
+      Real S_d[3];
+      Real S_dd[3][3];
+      ValenciaStressEnergyTotal(rho, pres, gamma_gas,
+                                v_u, v_d, W,
+                                B_u, B_d,
+                                b0, b_d, b2,
+                                g_dd_1d,
+                                E_tot, S_d, S_dd);
+
+      // --- 4. Build stresses with needed index placements ---
+      // Mixed spatial stress: S^k{}_j = g^{km} S_{mj}
+      AthenaPointTensor<Real, TensorSymm::NONE, 3, 2> S_ud;
+      for (int kk = 0; kk < 3; ++kk) {
+        for (int jj = 0; jj < 3; ++jj) {
+          Real sum = 0.0;
+          for (int mm = 0; mm < 3; ++mm) {
+            sum += g_uu(kk,mm) * S_dd[mm][jj];
+          }
+          S_ud(kk,jj) = sum;
+        }
+      }
+
+      // Fully contravariant spatial stress: S^{jk} = g^{jm} g^{kn} S_{mn}
+      AthenaPointTensor<Real, TensorSymm::SYM2, 3, 2> S_uu;
+      for (int a = 0; a < 3; ++a) {
+        for (int b = a; b < 3; ++b) {
+          Real sum = 0.0;
+          for (int m2 = 0; m2 < 3; ++m2) {
+            for (int n2 = 0; n2 < 3; ++n2) {
+              sum += g_uu(a,m2) * g_uu(b,n2) * S_dd[m2][n2];
+            }
+          }
+          S_uu(a,b) = sum;
+        }
+      }
+
+      // --- 5. Momentum source G_i (index DOWN) consistent with paper ---
+      // G_i = -E ∂_i α + S_j ∂_i β^j + (1/2) α S^{jk} ∂_i γ_{jk}
+      Real G_d[3] = {0.0, 0.0, 0.0};
+      for (int i_idx = 0; i_idx < 3; ++i_idx) {
+        // -E ∂_i α
+        Real term1 = -E_tot * dalpha_d(i_idx);
+
+        // S_j ∂_i β^j
+        Real term2 = 0.0;
+        for (int j_idx = 0; j_idx < 3; ++j_idx) {
+          term2 += S_d[j_idx] * dbeta_du(i_idx, j_idx);
+        }
+
+        // (1/2) α S^{jk} ∂_i γ_{jk}
+        Real term3 = 0.0;
+        for (int j_idx = 0; j_idx < 3; ++j_idx) {
+          for (int k_idx = j_idx; k_idx < 3; ++k_idx) {
+            const Real fac = (j_idx == k_idx ? 1.0 : 2.0); // account for symmetry
+            term3 += 0.5 * fac * S_uu(j_idx, k_idx) * dg_ddd(i_idx, j_idx, k_idx);
+          }
+        }
+        term3 *= alpha;
+
+        G_d[i_idx] = term1 + term2 + term3;
+      }
+
+      // --- 6. Position and densitized torque density (r × G)_a ---
+      Real x1v = CellCenterX(i - is, indcs.nx1,
+                            size.d_view(m).x1min, size.d_view(m).x1max);
+      Real x2v = CellCenterX(j - js, indcs.nx2,
+                            size.d_view(m).x2min, size.d_view(m).x2max);
+      Real x3v = CellCenterX(k - ks, indcs.nx3,
+                            size.d_view(m).x3min, size.d_view(m).x3max);
+
+      // Start with sqrt(gamma) * (r × G)_a   (using Cartesian r × ...)
+      dv(m,i_dv+0,k,j,i) = (x2v * G_d[2] - x3v * G_d[1]) * sqrt_gamma; // tau_x
+      dv(m,i_dv+1,k,j,i) = (x3v * G_d[0] - x1v * G_d[2]) * sqrt_gamma; // tau_y
+      dv(m,i_dv+2,k,j,i) = (x1v * G_d[1] - x2v * G_d[0]) * sqrt_gamma; // tau_z
+
+      // --- 7. Add the product-rule term: F^j{}_i ∂_j φ^i = F^j{}_i ε_{a j}{}^{i} ---
+      // F^j{}_i = α S^j{}_i - β^j S_i
+      Real F_ud[3][3];
+      for (int jdir = 0; jdir < 3; ++jdir) {
+        const Real betaj = adm.beta_u(m, jdir, k, j, i); // β^j
+        for (int idir = 0; idir < 3; ++idir) {
+          F_ud[jdir][idir] = alpha * S_ud(jdir, idir) - betaj * S_d[idir];
+        }
+      }
+
+      // (F^j{}_i ε_{a j}{}^{i}) components
+      Real miss[3] = {0.0, 0.0, 0.0};
+      miss[0] = F_ud[1][2] - F_ud[2][1]; // a = x
+      miss[1] = F_ud[2][0] - F_ud[0][2]; // a = y
+      miss[2] = F_ud[0][1] - F_ud[1][0]; // a = z
+
+      dv(m,i_dv+0,k,j,i) += sqrt_gamma * miss[0];
+      dv(m,i_dv+1,k,j,i) += sqrt_gamma * miss[1];
+      dv(m,i_dv+2,k,j,i) += sqrt_gamma * miss[2];
+    });
+    i_dv += n_comp;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
 }

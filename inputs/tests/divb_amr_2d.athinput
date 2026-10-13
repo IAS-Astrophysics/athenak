@@ -1,0 +1,74 @@
+# AthenaK input file for AMR div(B) preservation in 2D
+
+<job>
+basename  = DivBAMR2D
+
+<mesh>
+nghost    = 2
+nx1       = 48
+x1min     = 0.0
+x1max     = 1.0
+ix1_bc    = periodic
+ox1_bc    = periodic
+
+nx2       = 48
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 1
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 8
+nx2       = 8
+nx3       = 1
+
+<mesh_refinement>
+refinement          = adaptive
+num_levels          = 3
+ncycle_check        = 1
+refinement_interval = 1
+max_nmb_per_rank    = 1024
+
+<amr_criterion1>
+method = user
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.25
+nlim       = 20
+tlim       = 1.0
+ndiag      = 1
+
+<mhd>
+eos         = ideal
+reconstruct = plm
+rsolver     = hlld
+gamma       = 1.66666666667
+
+<problem>
+pgen_name     = divb_amr
+user_hist     = true
+refine_levels = 2
+rho0          = 1.0
+pgas0         = 10.0
+vx0           = 0.08
+vy0           = 0.05
+vz0           = 0.03
+guide_b1      = 0.7
+guide_b2      = 0.2
+guide_b3      = -0.15
+field_amp     = 0.25
+field_k       = 2.0
+
+<output1>
+file_type      = hst
+data_format    = %24.16e
+dcycle         = 1
+user_hist_only = true

@@ -28,7 +28,7 @@
 
 // function to compute errors in solution at end of run
 void Z4cLinearWaveErrors(ParameterInput *pin, Mesh *pm);
-static void RefinementCondition(MeshBlockPack* pmbp);
+void RefinementCondition(MeshBlockPack* pmbp);
 
 namespace {
 // global variable to control computation of initial conditions versus errors

@@ -27,9 +27,7 @@
 class Coordinates;
 class Driver;
 class CompactObjectTracker;
-class FastFlow;
 class HorizonDump;
-class DriftControl;
 
 namespace z4c {
 class Z4c_AMR;
@@ -53,6 +51,7 @@ class Z4c {
     I_Z4C_THETA,
     I_Z4C_ALPHA,
     I_Z4C_BETAX, I_Z4C_BETAY, I_Z4C_BETAZ,
+    I_Z4C_BX, I_Z4C_BY, I_Z4C_BZ,
     nz4c
   };
   // Names of Z4c variables
@@ -66,7 +65,7 @@ class Z4c {
     I_CON_MX, I_CON_MY, I_CON_MZ,
     ncon,
   };
-  // Names of constraint variables
+  // Names of costraint variables
   static char const * const Constraint_names[ncon];
   // Indices of matter fields
   /*enum {
@@ -115,6 +114,8 @@ class Z4c {
     AthenaTensor<Real, TensorSymm::NONE, 3, 0> alpha;   // lapse
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> vGam_u;  // Gamma functions (BSSN)
     AthenaTensor<Real, TensorSymm::NONE, 3, 1> beta_u;  // shift
+    // advective derivative of shift or heat flux for telegraph lapse
+    AthenaTensor<Real, TensorSymm::NONE, 3, 1> vB_d;
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> g_dd;    // conf. 3-metric
     AthenaTensor<Real, TensorSymm::SYM2, 3, 2> vA_dd;   // conf. traceless extr. curvature
   };
@@ -145,7 +146,6 @@ class Z4c {
     // in non-differentiated chi
     Real chi_div_floor;
     Real chi_min_floor;   // minimum of chi, only used in slow-start-lapse
-    bool floor_chi;       // used as a safe guard after RK update
     // where a square root is necessary.
     Real diss;            // amount of numerical dissipation
     Real eps_floor;       // a small number O(10^-12)
@@ -162,36 +162,31 @@ class Z4c {
     Real ssl_damping_amp;
     Real ssl_damping_time;
     Real ssl_damping_index;
+    // telegrapher lapse condition
+    bool telegraph_lapse;
+    Real telegraph_tau;
+    Real telegraph_kappa;
+
     // Gauge condition for the shift
     Real shift_ggamma;
     Real shift_alpha2ggamma;
     Real shift_hh;
     Real shift_advect;
     Real shift_eta;
-    // turn on shift damping smoothly
-    bool slow_roll_eta;
-    Real turn_on_time;
+    // slow start shift condition
+    Real sss_damping_amp;
+    Real sss_damping_time;
+
     // Enable BSSN if false (disable theta)
     bool use_z4c;
+    // disable fluid Back-reaction
+    bool back_reaction;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
     // Boundary extrapolation order
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation
     Real excise_chi;
-
-    // Flag if drift control for COT should be used.
-    bool enable_driftcontrol;
-    int dc_variety;
-    int dc_tracker_index;
-    Real dc_fixed_x, dc_fixed_y, dc_fixed_z;
-    Real dc_damping_time, dc_damping_scale, dc_damping_coeff;
-    Real dc_Kp, dc_Ki, dc_Kd;
-    Real dc_omega_c, dc_omega_o, dc_zeta;
-    Real dc_relaxation_time, dc_kappa;
-    Real dc_gamma_suppress;
-    Real dc_gain_x, dc_gain_y, dc_gain_z;
-    int dc_gaussian_center;
   };
   Options opt;
   Real diss;              // Dissipation parameter
@@ -234,7 +229,6 @@ class Z4c {
   TaskStatus Prolongate(Driver *pdrive, int stage);
   TaskStatus ProlongateWeyl(Driver *pdrive, int stage);
   TaskStatus ExpRKUpdate(Driver *d, int stage);
-  TaskStatus Z4cFloorChi(Driver *pdrive, int stage);
   TaskStatus NewTimeStep(Driver *d, int stage);
   TaskStatus ApplyPhysicalBCs(Driver *d, int stage);
   TaskStatus EnforceAlgConstr(Driver *d, int stage);
@@ -247,7 +241,6 @@ class Z4c {
   TaskStatus RestrictWeyl(Driver *d, int stage);
   TaskStatus CCEDump(Driver *pdrive, int stage);
   TaskStatus TrackCompactObjects(Driver *d, int stage);
-  TaskStatus FindHorizon(Driver *d, int stage);
   TaskStatus CalcWeylScalar(Driver *d, int stage);
   TaskStatus CalcWaveForm(Driver *d, int stage);
   TaskStatus DumpHorizons(Driver *d, int stage);
@@ -267,17 +260,8 @@ class Z4c {
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
-  std::vector<std::unique_ptr<FastFlow>> pfastflow;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
-  std::unique_ptr<DriftControl> pdrift_control;
 
-  /*
-  std::list<CartesianGrid> horizon_dump;
-  Real horizon_dt;
-  Real horizon_last_output_time;
-  std::vector<Real> horizon_extent; // radius for dumping data in a cube
-  std::vector<int> horizon_nx;  // number of points in each direction
-  */
   // TODO(@hzhu): think about how to automatically trigger common horizon
   // maybe have a horizon dump object to save all the space here
   // same for the waveform.
