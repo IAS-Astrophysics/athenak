@@ -183,9 +183,9 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       }
     }
     nurates_params.use_eq_fallback_temp =
-        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_temp", true);
+        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_temp", false);
     nurates_params.use_eq_fallback_y =
-        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_y", true);
+        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_y", false);
     nurates_params.eq_warmup_cycles =
         pin->GetOrAddInteger("bns_nurates", "eq_warmup_cycles", 1);
 

@@ -644,10 +644,10 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // part is kept to swap the limited one in wherever the total is used.
             const Real eta_1_non_th_raw = eta_1_non_th_loc[nuidx];
             if (use_eq) {
-              Real f_occ_0 =
-                  (my_nudens_0 > 0.0) ? nudens_0[nuidx] / my_nudens_0 : 1.0;
+              // n_eq: blackbody eta_non_th was built from; no cap (abs*J follows n).
+              Real f_occ_0 = (nudens_0_thin[nuidx] > 0.0)
+                                 ? nudens_0[nuidx] / nudens_0_thin[nuidx] : 1.0;
               if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
-              // No cap: abs_1_non_th*J already follows the field; capping drains <e>.
               eta_1_non_th_loc[nuidx] *= f_occ_0;
             }
             const Real eta_1_tot = Kokkos::fmax(
