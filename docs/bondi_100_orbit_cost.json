@@ -1,0 +1,181 @@
+{
+  "purpose": "Analytic planning estimate only; no new simulation launched",
+  "reference_job": "8924219",
+  "mass": 1,
+  "separation": 32,
+  "bondi_radius": 161.226654,
+  "period_M": 1137.3780321685417,
+  "bondi_time_M": 1447.572298598403,
+  "outer_cap_M": 217.13584478976045,
+  "target_100_orbits_M": 113737.80321685417,
+  "cost_model": "wall = sum_z k Nblock_z dwell_z / dt_z; finite ordered stages from zone 0",
+  "k_seconds_per_block_step": 0.0006196177960850071,
+  "block_counts": [
+    1520,
+    1352,
+    1184,
+    1016
+  ],
+  "approximate_dt_M": [
+    0.01450588,
+    0.029,
+    0.057,
+    0.1115385
+  ],
+  "seconds_per_M": [
+    64.92670903448882,
+    28.88700897610102,
+    12.870657378327165,
+    5.644075192174605
+  ],
+  "continuous_100_orbits_gpu_days": 85.47015342225275,
+  "alternative_measured_steady_seconds_per_step": 0.69,
+  "alternative_100_fine_orbits_gpu_days": 62.61755467599954,
+  "uncertainty": "Short debug-build extrapolation; allow factor two. Coarse per-block cost is modeled, not separately benchmarked.",
+  "scenarios": {
+    "3_zones_10_dynamical_uncapped": {
+      "dwell_M": [
+        1810.1933598375617,
+        5120.0,
+        14481.546878700494
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 7.957747154594768,
+        "wall_gpu_days": 30.93832607673463,
+        "stages": 19
+      }
+    },
+    "3_zones_1_inner_orbits_outer_cap": {
+      "dwell_M": [
+        1137.3780321685417,
+        217.13584478976045,
+        217.13584478976045
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 63.91817539589694,
+        "wall_gpu_days": 65.81600828438513,
+        "stages": 253
+      },
+      "target_100_finest_active": {
+        "global_orbits": 156.70001009216216,
+        "finest_stage_active_orbits": 100.0,
+        "wall_gpu_days": 103.04665382180696,
+        "stages": 397
+      }
+    },
+    "3_zones_3_inner_orbits_outer_cap": {
+      "dwell_M": [
+        3412.134096505625,
+        217.13584478976045,
+        217.13584478976045
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 84.00000000000001,
+        "wall_gpu_days": 76.75223116429714,
+        "stages": 112
+      },
+      "target_100_finest_active": {
+        "global_orbits": 118.90000336405397,
+        "finest_stage_active_orbits": 100.0,
+        "wall_gpu_days": 91.3289868887709,
+        "stages": 133
+      }
+    },
+    "3_zones_10_inner_orbits_outer_cap": {
+      "dwell_M": [
+        11373.780321685417,
+        217.13584478976045,
+        217.13584478976045
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 94.84545362798531,
+        "wall_gpu_days": 82.6624184025574,
+        "stages": 37
+      },
+      "target_100_finest_active": {
+        "global_orbits": 105.15454637201469,
+        "finest_stage_active_orbits": 100.0,
+        "wall_gpu_days": 87.06801709493953,
+        "stages": 37
+      }
+    },
+    "4_zones_10_dynamical_uncapped": {
+      "dwell_M": [
+        1810.1933598375617,
+        5120.0,
+        14481.546878700494,
+        40960.0
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 3.183098861837907,
+        "wall_gpu_days": 17.679843782922703,
+        "stages": 10
+      }
+    },
+    "4_zones_1_inner_orbits_outer_cap": {
+      "dwell_M": [
+        1137.3780321685417,
+        217.13584478976045,
+        217.13584478976045,
+        217.13584478976045
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 51.31817315319433,
+        "wall_gpu_days": 55.28932400268091,
+        "stages": 307
+      },
+      "target_100_finest_active": {
+        "global_orbits": 194.50001682027042,
+        "finest_stage_active_orbits": 100.0,
+        "wall_gpu_days": 107.65314685048158,
+        "stages": 595
+      }
+    },
+    "4_zones_3_inner_orbits_outer_cap": {
+      "dwell_M": [
+        3412.134096505625,
+        217.13584478976045,
+        217.13584478976045,
+        217.13584478976045
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 76.13635938882078,
+        "wall_gpu_days": 70.67562919697248,
+        "stages": 151
+      },
+      "target_100_finest_active": {
+        "global_orbits": 131.50000560675662,
+        "finest_stage_active_orbits": 100.0,
+        "wall_gpu_days": 92.86448456499585,
+        "stages": 199
+      }
+    },
+    "4_zones_10_inner_orbits_outer_cap": {
+      "dwell_M": [
+        11373.780321685417,
+        217.13584478976045,
+        217.13584478976045,
+        217.13584478976045
+      ],
+      "target_100_global": {
+        "global_orbits": 100.0,
+        "finest_stage_active_orbits": 91.4090893799755,
+        "wall_gpu_days": 80.1441247011519,
+        "stages": 55
+      },
+      "target_100_finest_active": {
+        "global_orbits": 108.59091062002449,
+        "finest_stage_active_orbits": 100.0,
+        "wall_gpu_days": 87.48678918845543,
+        "stages": 55
+      }
+    }
+  }
+}

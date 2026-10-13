@@ -1,0 +1,105 @@
+{
+  "source": "Aurora debug job 8924219",
+  "global_time": 4,
+  "gamma": 1.6666666666666667,
+  "orbital_period": 1137.3780321685417,
+  "global_orbits": 0.0035168606099886955,
+  "relaxation_complete": false,
+  "sonic_radius": 8,
+  "bondi_radius": 161.2266541750925,
+  "rho_infinity": 0.0006604689449583913,
+  "temperature_infinity": 0.007584057226363949,
+  "analytic_mdot": 2.3961277108098513,
+  "angular_quadrature": [
+    64,
+    128
+  ],
+  "higher_angular_quadrature": [
+    96,
+    192
+  ],
+  "angular_convergence_max_abs_flux_fraction": 0.00024237960799016655,
+  "initial_single_hole_flux_sampling_bias_max_fraction": {
+    "upstream": 0.0009841776168068028,
+    "single_inertial": 0.0018821906380682707,
+    "single_rotating": 0.001882191878629813
+  },
+  "flux_definition": "-r^2 integral alpha sqrt(det gamma) rho u^r dOmega",
+  "binary_flux_min_radius": 24,
+  "notes": [
+    "Instantaneous snapshots, not steady or time-averaged profiles.",
+    "Both configurations start with the central M=1 spherical Bondi seed; the binary central peak is unrelaxed initial gas.",
+    "Global time is only 0.00352 binary orbit; stored interior patches evolve for less time.",
+    "Binary radial flux is through COM spheres, not individual horizon accretion.",
+    "Thin dotted flux curves use t=0 on the same mesh to expose interpolation bias.",
+    "Black disks mark nominal isolated-hole radii 2 m, not measured binary horizons.",
+    "Mid-plane values average the z cell centers bracketing zero.",
+    "Cyan circles are nominal mask radii; only blocks with stored zoom data are held."
+  ],
+  "zoom_snapshots": {
+    "single_rotating": [
+      {
+        "file": "matched_bondi.mhd_w_bcc.00000.bin",
+        "time": 0.0,
+        "zone": 0,
+        "blocks": 1520
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00004.bin",
+        "time": 2.02374,
+        "zone": 2,
+        "blocks": 1184
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00005.bin",
+        "time": 2.58501,
+        "zone": 3,
+        "blocks": 1016
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00006.bin",
+        "time": 3.04791,
+        "zone": 2,
+        "blocks": 1184
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00008.bin",
+        "time": 4.0,
+        "zone": 0,
+        "blocks": 1520
+      }
+    ],
+    "binary_rotating": [
+      {
+        "file": "matched_bondi.mhd_w_bcc.00000.bin",
+        "time": 0.0,
+        "zone": 0,
+        "blocks": 1520
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00004.bin",
+        "time": 2.03614,
+        "zone": 2,
+        "blocks": 1184
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00005.bin",
+        "time": 2.59384,
+        "zone": 3,
+        "blocks": 1016
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00006.bin",
+        "time": 3.05125,
+        "zone": 2,
+        "blocks": 1184
+      },
+      {
+        "file": "matched_bondi.mhd_w_bcc.00008.bin",
+        "time": 4.0,
+        "zone": 0,
+        "blocks": 1520
+      }
+    ]
+  }
+}

@@ -166,6 +166,12 @@ restoring 904 blocks with finite positive saved fields. Full records, source
 verification, executable hash, and memory reports are in
 [the Aurora validation report](bondi_boundary_aurora_validation.json).
 
+## Figures and relaxation cost
+
+[Saved control figures](bondi_visualizations/README.md) show the instantaneous
+unrelaxed t=4 M state. The [100-orbit cost estimate](bondi_100_orbit_cost.md)
+distinguishes global zoom time from active evolution of the stored inner flow.
+
 ## Aurora protocol
 
 The source/build/results live in an isolated
