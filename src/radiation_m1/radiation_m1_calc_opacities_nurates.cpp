@@ -252,13 +252,17 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           // Non-thermal (inelastic scattering / NEPS) energy emissivity and
           // absorption; the number channel contains thermal processes only.
           Real eta_1_non_th_loc[4]{}, abs_1_non_th_loc[4]{};
+          bool eq_fallback = false;
 
           // Note: everything sent and received are in code units
           ComputeNuratesOpacities(nb, T, yp, yn, mu_n, mu_p, mu_e, nudens_0,
                                   nudens_1, chi_loc, eta_0_loc, eta_1_loc,
                                   abs_0_loc, abs_1_loc, scat_0_loc, scat_1_loc,
-                                  eta_1_non_th_loc, abs_1_non_th_loc,
+                                  eta_1_non_th_loc, abs_1_non_th_loc, eq_fallback,
                                   nurates_params_, code_units, eos_units, nurates_units);
+
+          const bool use_eq =
+              nurates_params_.use_equilibrium_distribution || eq_fallback;
 
           assert(Kokkos::isfinite(eta_0_loc[0]));
           assert(Kokkos::isfinite(eta_0_loc[1]));
@@ -310,7 +314,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
           Real corr_ae[4] = {1.0, 1.0, 1.0, 1.0};
 
           if (nurates_params_.use_kirchhoff_law ||
-              nurates_params_.use_equilibrium_distribution) {
+              use_eq) {
             // compute neutrino black body function assuming fixed temperature
             // and Ye
             NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0],
@@ -342,7 +346,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // ----------------------------------------------------------------
             for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
               Real corr_fac = 1.0;
-              if (nurates_params_.use_equilibrium_distribution) {
+              if (use_eq) {
                 corr_fac = (J[nuidx] / rnnu[nuidx]) *
                            (nudens_0_thin[nuidx] / nudens_1_thin[nuidx]);
                 if (!Kokkos::isfinite(corr_fac)) {
@@ -609,7 +613,7 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
             Real my_nudens_0{}, my_nudens_1{};
             if (nurates_params_.use_kirchhoff_law ||
-                nurates_params_.use_equilibrium_distribution) {
+                use_eq) {
               if (peq_on_) {
                 // One equilibrium per cell, at the state the matter is predicted
                 // to reach over this step: the local blackbody as dt -> 0, the
@@ -631,20 +635,19 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
             // (NEPS) emissivity by the ratio of the ACTUAL M1 density to the
             // equilibrium density (a grey proxy for g_field/g_eq), using the number
             // ratio to preserve the spectrum and apply the ratio to both
-            // the number (nudens_0) and energy (nudens_1) channels. Capped
-            // at 1 so it only removes the spurious excess, never amplifies; deep
-            // in the optically-thick core the field ~ equilibrium so the factor
-            // -> 1. This mimics the reconstructed-distribution result without
+            // the number (nudens_0) and energy (nudens_1) channels. Deep in the
+            // optically-thick core the field ~ equilibrium so the factor -> 1.
+            // This mimics the reconstructed-distribution result without
             // reconstructing the spectrum. Only the non-thermal (NEPS) part is
             // touched; the spontaneous (beta) emissivity has no g_nu dependence.
             // eta_1_loc is bns_nurates' TOTAL (thermal + NEPS), so the raw NEPS
             // part is kept to swap the limited one in wherever the total is used.
             const Real eta_1_non_th_raw = eta_1_non_th_loc[nuidx];
-            if (nurates_params_.use_equilibrium_distribution) {
+            if (use_eq) {
               Real f_occ_0 =
                   (my_nudens_0 > 0.0) ? nudens_0[nuidx] / my_nudens_0 : 1.0;
               if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
-              f_occ_0 = Kokkos::fmin(f_occ_0, 1.0);
+              // No cap: abs_1_non_th*J already follows the field; capping drains <e>.
               eta_1_non_th_loc[nuidx] *= f_occ_0;
             }
             const Real eta_1_tot = Kokkos::fmax(

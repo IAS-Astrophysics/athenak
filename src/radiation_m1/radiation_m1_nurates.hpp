@@ -30,6 +30,8 @@ struct NuratesParams {
   Real temp_min_mev;
   Real max_recon_temp;  // [MeV] fall back to the equilibrium distribution when the
                         // reconstructed spectral temperature exceeds this
+  bool use_recon_y_fallback;
+  Real max_recon_y;
 
   bool use_abs_em;
   bool use_pair;
@@ -162,6 +164,7 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
                              Real scat_1[4],
                              Real eta_1_non_th[4],
                              Real abs_1_non_th[4],
+                             bool &eq_fallback,
                              NuratesParams const &nurates_params,
                              Primitive::UnitSystem const &code_units,
                              Primitive::UnitSystem const &eos_units,
@@ -336,7 +339,21 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
         used_fallback = true;
         break;
       }
+      if (nurates_params.use_recon_y_fallback) {
+        const Real n_s = (grey_op_params.m1_pars.n[s] > 1e-100)
+                             ? grey_op_params.m1_pars.n[s] : 1e-100;
+        const Real j_s = (grey_op_params.m1_pars.J[s] > 1e-100)
+                             ? grey_op_params.m1_pars.J[s] : 1e-100;
+        const Real n_over_j = n_s / j_s;
+        const Real y_s =
+            n_s * n_over_j * n_over_j * n_over_j / bns_nurates::kBS_FourPi_hc3;
+        if (!(y_s < nurates_params.max_recon_y)) {
+          used_fallback = true;
+          break;
+        }
+      }
     }
+    eq_fallback = used_fallback;
     if (used_fallback) {
       grey_op_params.distr_pars =
           bns_nurates::NuEquilibriumParams(&grey_op_params.eos_pars);
