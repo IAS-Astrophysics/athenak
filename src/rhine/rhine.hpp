@@ -81,6 +81,8 @@ class RHINE {
   RhineNets nets;
   int  pmode;
   bool apply;        // back-react on the conserved variables (else diagnostics only)
+  bool clamp_cold;   // evaluate at T9 = 0.1 below RHINE's cutoff while free n remain
+  bool fnu_physical; // apply the neutrino fraction to the reaction release only
   bool use_nqt;      // EOS LogPolicy selector (mirrors <mhd> use_NQT)
   // Set when PostStep is queued in Task_AfterTimeIntegrator (i.e. behind the
   // operator-split M1 step), which already runs once per step and is invoked

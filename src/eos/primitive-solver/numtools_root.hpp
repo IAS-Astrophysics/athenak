@@ -51,11 +51,16 @@ class Root {
     Real fub = f(ub, args...);
     Real xold;
     x = lb;
-    // If one of the bounds is already within tolerance of the root, we have the root.
-    if (fabs(flb)/lb <= tol) {
+    // If one of the bounds is exactly a root, we have the root. N.B. no |f|/x
+    // tolerance test (as in GR-Athena++ 3a6b732b): the primitive solver calls this
+    // with lb = 0, and dividing by it is undefined under icpx's default finite-math
+    // fp model. The resulting codegen made the c2p fail spuriously (NO_SOLUTION) in
+    // converged cells, depending on how the surrounding code was inlined.
+    // Convergence is judged in x only.
+    if (flb == 0.0) {
       x = lb;
       return true;
-    } else if (fabs(fub)/ub <= tol) {
+    } else if (fub == 0.0) {
       x = ub;
       return true;
     }
@@ -64,12 +69,13 @@ class Root {
     }
     do {
       xold = x;
+      const Real width = fabs(ub - lb);
       // Calculate the new root position.
       x = (fub*lb - flb*ub)/(fub - flb);
       count++;
       // Calculate f at the prospective root.
       ftest = f(x,args...);
-      if (fabs((x-xold)/x) <= tol) {
+      if (fabs(x - xold) <= tol*(fabs(x) + tol) || ftest == 0.0) {
         return true;
       }
       // Check the sign of f. If f is on the same side as the lower bound, then we adjust
@@ -96,11 +102,35 @@ class Root {
         ub = x;
         side = -1;
       }
+      // Safeguard: a smooth f converges in a few iterations. If it has not after 10, f
+      // probably jumps inside the bracket (e.g. a multivalued T(e) in the transition
+      // strip), where Anderson-Bjorck shrinks the bracket only slowly; from then on
+      // every step that does not halve the bracket is followed by a bisection, so the
+      // iteration ends at the root or at the jump within the budget.
+      if (count > 10 && fabs(ub - lb) > 0.5*width) {
+        xold = x;
+        x = 0.5*(lb + ub);
+        ftest = f(x, args...);
+        if (ftest == 0.0) {
+          return true;
+        }
+        if (ftest*flb >= 0) {
+          flb = ftest;
+          lb = x;
+        } else {
+          fub = ftest;
+          ub = x;
+        }
+        side = 0;
+        if (fabs(ub - lb) <= tol*(fabs(x) + tol)) {
+          return true;
+        }
+      }
     } while (count < iterations);
     //last_count = count;
 
     // Return success if we're below the tolerance, otherwise report failure.
-    return fabs((x-xold)/x) <= tol;
+    return fabs(x - xold) <= tol*(fabs(x) + tol) || fabs(ub - lb) <= tol*(fabs(x) + tol);
   }
 
   // }}}

@@ -554,6 +554,22 @@ struct RhineNets {
   }
 
   // -----------------------------------------------------------------------
+  // Device: mass excess m-tilde [MeV/baryon] of the mass model for a composition,
+  // with the inputs run() builds (the mass model reads neither T nor drho).
+  // -----------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION
+  Real massExcess(Real ye, Real yn, Real ya, Real yh, Real ah) const {
+    const Real yp = 1.0 - yn - 4.0 * ya - ah * yh;
+    Real zh = (ye - yp - 2.0 * ya) / (yh + 1e-25);
+    zh = Kokkos::fmax(Kokkos::fmin(zh, 0.55 * ah), 0.3 * ah);
+    if (ah >= 80.0) zh = Kokkos::fmin(zh, (0.4 + 1.5 / (ah - 70.0)) * ah);
+    const Real x6[6] = { zh / ah, ah,
+                         Kokkos::log10(yn + 1e-25), Kokkos::log10(yp + 1e-25),
+                         Kokkos::log10(ya + 1e-25), Kokkos::log10(yh + 1e-25) };
+    return forward(N_MA, x6);
+  }
+
+  // -----------------------------------------------------------------------
   // Device: full RHINE source-term evaluation for one cell (one time step).
   //
   // Units follow the original RHINE demo: rho [g/cm^3], tmev [MeV], dt [s],

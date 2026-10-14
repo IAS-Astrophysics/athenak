@@ -84,6 +84,10 @@ class EOSHelmholtz : public EOSPolicyInterface {
     mp = new_mp;
   }
 
+  /// Enable/disable the ion Coulomb (OCP) correction to P, eps and s.
+  KOKKOS_INLINE_FUNCTION void SetCoulomb(bool use) { use_coulomb = use; }
+  KOKKOS_INLINE_FUNCTION bool GetCoulomb() const { return use_coulomb; }
+
   KOKKOS_INLINE_FUNCTION bool IsInitialized() const { return m_initialized; }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
@@ -150,9 +154,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
     Real pres    = Pressure(n, T, Y);
     Real eps     = SpecificInternalEnergy(n, T, Y);
     Real dpresdt = eval_at_nty(ECDPDT, n, T, Y);            // dP/dT [fm^-3]
-    // dpdn channel is dP_ele/dn_e; n_e = Ye*n_b introduces the Ye factor.
-    Real dpele_dne = eval_at_lnty(ECDPDN, Kokkos::log(n*Y[SCYE]), Kokkos::log(T));
-    Real dpresdn   = Y[SCYE]*dpele_dne + T*inverse_abar(Y);  // dP/dn [MeV]
+    Real dpresdn = eval_at_nty(ECDPDN, n, T, Y);            // dP/dn [MeV]
     Real cv      = eval_at_nty(ECDEPSDT, n, T, Y);          // deps/dT [1/MeV]
     Real chit    = T/pres*dpresdt;
     Real chin    = n/pres*dpresdn;
@@ -222,6 +224,59 @@ class EOSHelmholtz : public EOSPolicyInterface {
     return abar;
   }
 
+  // Classical one-component-plasma Coulomb correction for a single mean ion averaged
+  // over the charged species (free neutrons carry no charge). Yakovlev & Shalybkov
+  // (1989) fits with the Timmes Helmholtz coefficients.
+  // Returns the per-ion energy u = E_C/(N_i T), du/dGamma and the per-ion entropy s
+  // [kB]; y_chg = 0 means no correction. Not applied to the chemical potentials.
+  struct CoulombTerms {
+    Real y_chg;  // charged ions per baryon
+    Real gamma;  // plasma coupling parameter
+    Real u;      // E_C per ion in units of T
+    Real du;     // du/dGamma
+    Real s;      // S_C per ion in kB
+  };
+  KOKKOS_INLINE_FUNCTION CoulombTerms coulomb_terms(Real n, Real T, const Real *Y,
+                                                     Real p_e = -1.0) const {
+    CoulombTerms c = {0.0, 0.0, 0.0, 0.0, 0.0};
+    Real y_chg = Y[SCXP] + Y[SCXA]/4 + ((Y[SCXH] > 0.0) ? Y[SCXH]/Y[SCAH] : 0.0);
+    if (!(y_chg > 1e-30) || !(Y[SCYE] > 0.0) || !(T > 0.0)) {
+      return c;
+    }
+    Real zbar  = Y[SCYE]/y_chg;  // charge neutrality
+    Real n_i   = n*y_chg;
+    Real a_i   = Kokkos::cbrt(3.0/(4.0*M_PI*n_i));
+    Real gamma = zbar*zbar*esqu/(a_i*T);
+    constexpr Real a1 = -0.898004, b1 = 0.96786, c1 = 0.220703,
+                   d1 = -0.86097, e1 = 2.5269;
+    constexpr Real a2 = 0.29561, b2 = 1.9885, c2 = 0.288675;
+    if (gamma >= 1.0) {
+      Real x = Kokkos::sqrt(Kokkos::sqrt(gamma));  // gamma^(1/4)
+      c.u  = a1*gamma + b1*x + c1/x + d1;
+      c.du = a1 + 0.25*(b1*x - c1/x)/gamma;
+      c.s  = -(3.0*b1*x - 5.0*c1/x + d1*(Kokkos::log(gamma) - 1.0) - e1);
+    } else {
+      Real x = gamma*Kokkos::sqrt(gamma);  // gamma^(3/2)
+      Real y = Kokkos::pow(gamma, b2);
+      c.u  = -3.0*c2*x + a2*y;
+      c.du = (-4.5*c2*x + a2*b2*y)/gamma;
+      c.s  = -(c2*x - a2*(b2 - 1.0)/b2*y);
+    }
+    const Real pcoul = n*y_chg*T*c.u/3.0;
+    const Real p_ir  = asol/3.0*T*T*T*T + n*inverse_abar(Y)*T;
+    if (p_ir + pcoul <= 0.0) {
+      if (p_e < 0.0) {
+        p_e = Kokkos::exp(eval_at_lnty(ECLOGP, Kokkos::log(n*Y[SCYE]), Kokkos::log(T)));
+      }
+      if (p_e + p_ir + pcoul <= 0.0) {
+        return CoulombTerms{0.0, 0.0, 0.0, 0.0, 0.0};
+      }
+    }
+    c.y_chg = y_chg;
+    c.gamma = gamma;
+    return c;
+  }
+
   /// Add the analytic radiation + ion terms to an electron-gas table value.
   KOKKOS_INLINE_FUNCTION Real add_rad_ion(int vi, Real var, Real n, Real T,
                                           const Real *Y) const {
@@ -229,9 +284,14 @@ class EOSHelmholtz : public EOSPolicyInterface {
     const Real eps_fac = Ye/mb;
     switch (vi) {
       case ECLOGP: {
-        Real prad = asol/3.0*T*T*T*T;
-        Real pion = n*inverse_abar(Y)*T;
-        return Kokkos::log(Kokkos::exp(var) + prad + pion);
+        Real pele = Kokkos::exp(var);
+        Real ptot = pele + (asol/3.0*T*T*T*T + n*inverse_abar(Y)*T);
+        if (use_coulomb) {
+          const CoulombTerms c = coulomb_terms(n, T, Y, pele);
+          Real pcoul = n*c.y_chg*T*c.u/3.0;
+          if (ptot + pcoul > 0.0) { ptot += pcoul; }
+        }
+        return Kokkos::log(ptot);
       }
       case ECENT: {
         Real srad = 4.0*asol/3.0*T*T*T/n;
@@ -253,27 +313,56 @@ class EOSHelmholtz : public EOSPolicyInterface {
             sh = Yh*(2.5 - Kokkos::log(n*Yh/g_h*Kokkos::pow(sac_const/(mh*T), 1.5)));
           }
         }
-        return Ye*var + srad + sn + sp + sa + sh;
+        Real scoul = 0.0;
+        if (use_coulomb) {
+          const CoulombTerms c = coulomb_terms(n, T, Y);
+          scoul = c.y_chg*c.s;
+        }
+        return Ye*var + srad + sn + sp + sa + sh + scoul;
       }
       case ECLOGEPS: {
         Real erad  = asol*T*T*T*T/(n*mb);
         Real eion  = 1.5*T*inverse_abar(Y)/mb;
         Real ebind = Y[SCEB];
-        return Kokkos::log(eps_fac*Kokkos::exp(var) + erad + eion + ebind);
+        Real etot  = eps_fac*Kokkos::exp(var) + erad + eion + ebind;
+        if (use_coulomb) {
+          const CoulombTerms c = coulomb_terms(n, T, Y);
+          Real ecoul = c.y_chg*T*c.u/mb;
+          if (etot + ecoul > 0.0) { etot += ecoul; }
+        }
+        return Kokkos::log(etot);
       }
       case ECDEPSDT: {
         Real deraddt = 4.0*asol*T*T*T/(n*mb);
         Real deiondt = 1.5*inverse_abar(Y)/mb;
-        return eps_fac*var + deraddt + deiondt;
+        Real decouldt = 0.0;
+        if (use_coulomb) {
+          // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T
+          const CoulombTerms c = coulomb_terms(n, T, Y);
+          decouldt = c.y_chg*(c.u - c.gamma*c.du)/mb;
+        }
+        return eps_fac*var + deraddt + deiondt + decouldt;
       }
       case ECDPDN: {
         Real dpiondn = T*inverse_abar(Y);
-        return Ye*var + dpiondn;
+        Real dpcouldn = 0.0;
+        if (use_coulomb) {
+          // d/dn of n*y_chg*T*u(Gamma)/3 with dGamma/dn = Gamma/(3n)
+          const CoulombTerms c = coulomb_terms(n, T, Y);
+          dpcouldn = c.y_chg*T*(c.u + c.gamma*c.du/3.0)/3.0;
+        }
+        return Ye*var + dpiondn + dpcouldn;
       }
       case ECDPDT: {
         Real dpraddt = 4.0/3.0*asol*T*T*T;
         Real dpiondt = n*inverse_abar(Y);
-        return var + dpraddt + dpiondt;
+        Real dpcouldt = 0.0;
+        if (use_coulomb) {
+          // d/dT of n*y_chg*T*u(Gamma)/3 with dGamma/dT = -Gamma/T
+          const CoulombTerms c = coulomb_terms(n, T, Y);
+          dpcouldt = n*c.y_chg*(c.u - c.gamma*c.du)/3.0;
+        }
+        return var + dpraddt + dpiondt + dpcouldt;
       }
       case ECETA:
       default:
@@ -441,6 +530,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   int m_nn, m_nt;
   static constexpr Real m_min_h = 0.0;
   bool m_initialized;
+  bool use_coulomb = true;  // ion Coulomb (OCP) correction
 
   // Table storage on device.
   DvceArray1D<Real> m_log_ne;
@@ -453,6 +543,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   static constexpr Real min_Y_free = 1.0e-30;  // floor for Yn/Yp in log()
   static constexpr Real sac_const = hbarc*hbarc*2.0*M_PI;           // (MeV fm)^2
   static constexpr Real me = 0.5109989461;   // MeV
+  static constexpr Real esqu = 1.4399764;    // e^2 [MeV fm]
   // Physical nucleon masses [MeV]. The CODATA values are the defaults; when the
   // Helmholtz EOS is driven by EOSTransition these are replaced by the values
   // carried by the compose table (SetNucleonMasses), since the table energies

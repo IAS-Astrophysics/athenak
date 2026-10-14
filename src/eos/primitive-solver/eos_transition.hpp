@@ -69,6 +69,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     m_helm_T_ramp_dec = 0.5;
     m_ln_n_h0 = std::numeric_limits<Real>::quiet_NaN();
     m_ln_T_h0 = std::numeric_limits<Real>::quiet_NaN();
+    m_n_h0 = std::numeric_limits<Real>::quiet_NaN();
+    m_ln_T_cmin = std::numeric_limits<Real>::quiet_NaN();
     m_id_ln_n_ramp = std::numeric_limits<Real>::quiet_NaN();
     m_id_ln_T_ramp = std::numeric_limits<Real>::quiet_NaN();
     root.iterations = 500;
@@ -84,14 +86,29 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if ((n > m_helm_n_max) || (T > m_helm_T_max)) {
       return 1.0;
     }
-    if ((n < compose_eos.min_n) || (T < compose_eos.min_T)) {
+    if (n < compose_eos.min_n) {
       return 0.0;
+    }
+    if (T < compose_eos.min_T) {
+      if (n < m_n_h0) { return 0.0; }
+      T  = compose_eos.min_T;
+      lT = m_ln_T_cmin;
     }
     Real u = Kokkos::fmin(1.0, Kokkos::fmax(0.0, (T - trans_T_end)/m_trans_T_width));
     u *= Kokkos::fmin(1.0, Kokkos::fmax(0.0, (ln - trans_ln_end)/m_trans_ln_width));
     Real v_n = Kokkos::fmin(1.0, Kokkos::fmax(0.0, (ln - m_ln_n_h0)*m_id_ln_n_ramp));
     Real v_T = Kokkos::fmin(1.0, Kokkos::fmax(0.0, (lT - m_ln_T_h0)*m_id_ln_T_ramp));
     return 1.0 - (1.0 - u)*(1.0 - v_n)*(1.0 - v_T);
+  }
+
+  //--------------------------------------------------------------------------
+  // Temperature floor of the density ramp band (n >= n_h0, where w >= v_n > 0): the
+  // compose half is not defined below its table edge, the inversions never return less
+  // and ResetFloorTransition floors T there to the same value, so the forward EOS uses it
+  // too.
+  //--------------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION Real BandT(Real n, Real T) const {
+    return (n >= m_n_h0 && T < compose_eos.min_T) ? compose_eos.min_T : T;
   }
 
   //--------------------------------------------------------------------------
@@ -175,10 +192,12 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) { return compose_eos.Entropy(n, T, &yq); }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.Entropy(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.Entropy(n, T, Yn); }
-    return helmholtz_eos.Entropy(n, T, Yn)*(1 - w) + compose_eos.Entropy(n, T, Yn)*w;
+    return helmholtz_eos.Entropy(n, T, Yn)*(1 - w) +
+           compose_eos.Entropy(n, T, Yn)*w;
   }
 
   KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergy(Real n, Real T,
@@ -202,6 +221,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) { return compose_eos.SoundSpeed(n, T, &yq); }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.SoundSpeed(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.SoundSpeed(n, T, Yn); }
@@ -214,6 +234,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) { return compose_eos.BaryonChemicalPotential(n, T, &yq); }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.BaryonChemicalPotential(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.BaryonChemicalPotential(n, T, Yn); }
@@ -226,6 +247,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) { return compose_eos.ChargeChemicalPotential(n, T, &yq); }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.ChargeChemicalPotential(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.ChargeChemicalPotential(n, T, Yn); }
@@ -241,6 +263,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.ElectronLeptonChemicalPotential(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.ElectronLeptonChemicalPotential(n, T, Yn); }
@@ -258,6 +281,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) { return compose_eos.ProtonFraction(n, T, &yq); }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.ProtonFraction(n, T, Yn); }
     if (w == 0.0) { return Yn[SCXP]; }
@@ -269,6 +293,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (InteriorYq(n, Y, yq)) { return compose_eos.NeutronFraction(n, T, &yq); }
     Real Y_fb[SCNVAR];
     Real *Yn = GuardMassFractions(Y, Y_fb);
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.NeutronFraction(n, T, Yn); }
     if (w == 0.0) { return Yn[SCXN]; }
@@ -312,14 +337,17 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   // replaced the full sanitize on this path -- kept for greppability.)
   //--------------------------------------------------------------------------
   KOKKOS_INLINE_FUNCTION Real PressureSanitized(Real n, Real T, Real *Yn) const {
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.Pressure(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.Pressure(n, T, Yn); }
-    return helmholtz_eos.Pressure(n, T, Yn)*(1 - w) + compose_eos.Pressure(n, T, Yn)*w;
+    return helmholtz_eos.Pressure(n, T, Yn)*(1 - w) +
+           compose_eos.Pressure(n, T, Yn)*w;
   }
 
   KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergySanitized(Real n, Real T,
                                                               Real *Yn) const {
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 1.0) { return compose_eos.SpecificInternalEnergy(n, T, Yn); }
     if (w == 0.0) { return helmholtz_eos.SpecificInternalEnergy(n, T, Yn); }
@@ -507,6 +535,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   }
   KOKKOS_INLINE_FUNCTION Real InteractionPotentialDifference(Real n, Real T,
                                                              Real *Y) const {
+    T = BandT(n, T);
     Real w = TransitionFactor(n, T);
     if (w == 0.0) { return 0.0; }
     return w*compose_eos.InteractionPotentialDifference(n, T, Y);
@@ -579,6 +608,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   void SetTransition(Real n_start, Real n_end, Real T_start, Real T_end);
   void SetHelmholtzTMax(Real T_max) { m_helm_T_max = T_max; if (m_initialized) update_bounds(); }
   void SetHelmholtzNMax(Real n_max) { m_helm_n_max = n_max; if (m_initialized) update_bounds(); }
+  void SetHelmholtzCoulomb(bool use) { helmholtz_eos.SetCoulomb(use); }
   void SetHelmholtzRampDecades(Real n_dec, Real T_dec) {
     m_helm_n_ramp_dec = n_dec; m_helm_T_ramp_dec = T_dec;
     if (m_initialized) update_bounds();
@@ -614,9 +644,9 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     compose_eos.weight_idx_ln(&wn0, &wn1, &in, log2_(n));
     compose_eos.weight_idx_yq(&wy0, &wy1, &iy, Yq);
 
-    // Natural log(T) at compose grid node it.
-    auto lT_node = [=](int it) {
-      return Kokkos::log(exp2_(compose_eos.m_log_t(it)));
+    // T at compose grid node it.
+    auto T_node = [=](int it) {
+      return exp2_(compose_eos.m_log_t(it));
     };
     // Compose table value (log2 of P or e) interpolated in (n, Ye) at node it.
     auto vcomp_node = [=](int it) {
@@ -626,9 +656,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
                   wy1*compose_eos.m_table(iv, in+1, iy+1, it));
     };
     auto f = [=](int it) {
-      Real lT = lT_node(it);
-      Real T  = Kokkos::exp(lT);
-      Real w  = TransitionFactor(n, T, ln_n, lT);
+      Real T  = T_node(it);
+      Real w  = TransitionFactor(n, T, ln_n, Kokkos::log(T));
       Real var_helm = (iv == EOSCompOSE<LogPolicy>::ECLOGP)
                     ? helmholtz_eos.Pressure(n, T, Y)
                     : helmholtz_eos.Energy(n, T, Y);
@@ -658,23 +687,24 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     }
     if (!bracketed) { return Kokkos::Experimental::quiet_NaN_v<Real>; }
 
-    Real ltlo = lT_node(ilo);
-    Real lthi = lT_node(ihi);
-    if (flo == 0) { return Kokkos::exp(ltlo); }
-    if (fhi == 0) { return Kokkos::exp(lthi); }
+    if (flo == 0) { return T_node(ilo); }
+    if (fhi == 0) { return T_node(ihi); }
 
+    // The root is sought in the compose table's own T variable (log2_ of the
+    // LogPolicy, linear between nodes), so that the result inverts the forward compose
+    // interpolation exactly.
     Real v0 = vcomp_node(ilo);
     Real v1 = vcomp_node(ihi);
     Real dv = v1 - v0;
-    Real lt0 = ltlo;
-    Real dlt = lthi - ltlo;
+    Real lt0 = compose_eos.m_log_t(ilo);
+    Real dlt = compose_eos.m_log_t(ihi) - lt0;
 
     Real wt;
     Real lb = 0.0;
     Real ub = 1.0;
     root.FalsePositionModified(RootFunction, lb, ub, wt, 1e-13, 1e-15,
                                iv, ilo, v0, dv, lt0, dlt, n, ln_n, Y, var, this);
-    return Kokkos::exp(lt0 + wt*dlt);
+    return exp2_(lt0 + wt*dlt);
   }
 
   //--------------------------------------------------------------------------
@@ -686,9 +716,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     Real operator()(Real wt, int iv, int it, Real v0, Real dv, Real lt0, Real dlt,
                     Real n, Real ln, Real *Y, Real var,
                     const EOSTransition *peos) const {
-      Real lt = lt0 + wt*dlt;
-      Real t  = Kokkos::exp(lt);
-      Real f_trans = peos->TransitionFactor(n, t, ln, lt);
+      Real t  = peos->exp2_(lt0 + wt*dlt);  // lt0, dlt: compose log2_(T) node/spacing
+      Real f_trans = peos->TransitionFactor(n, t, ln, Kokkos::log(t));
       Real var_helm = (iv == EOSCompOSE<LogPolicy>::ECLOGP)
                     ? peos->helmholtz_eos.Pressure(n, t, Y)
                     : peos->helmholtz_eos.Energy(n, t, Y);
@@ -710,6 +739,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   Real m_helm_n_max, m_helm_T_max;
   Real m_helm_n_ramp_dec, m_helm_T_ramp_dec;
   Real m_ln_n_h0, m_ln_T_h0, m_id_ln_n_ramp, m_id_ln_T_ramp;
+  Real m_n_h0, m_ln_T_cmin;  // exp(m_ln_n_h0), log(compose min_T)
   int  comp_it_trans_start, comp_it_trans_end, comp_it_helm_tmax;
 
   NumTools::Root root;

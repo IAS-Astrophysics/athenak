@@ -94,6 +94,8 @@ RHINE::RHINE(MeshBlockPack *ppack, ParameterInput *pin) :
 
   pmode   = pin->GetOrAddInteger("rhine", "pmode", 1);
   apply   = pin->GetOrAddBoolean("rhine", "apply", true);
+  clamp_cold = pin->GetOrAddBoolean("rhine", "clamp_cold", true);
+  fnu_physical = pin->GetOrAddBoolean("rhine", "fnu_physical", false);
   use_nqt = pin->GetOrAddBoolean("mhd", "use_NQT", false);
   std::string models_path = pin->GetString("rhine", "models_path");
   nets.InitFromFiles(models_path);
@@ -290,10 +292,21 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
 
   RhineNets nets_ = nets;
   const int  pmode_ = pmode;
+  const bool clamp_cold_ = clamp_cold;
+  const bool fnu_physical_ = fnu_physical;
 
   constexpr Real MEV_TO_ERG = 1.602176634e-6;    // erg per MeV
   constexpr Real M_U_G      = 1.66053906660e-24; // atomic mass unit [g]
   constexpr Real M_U_MEV    = 931.49410242;      // atomic mass unit [MeV]
+  // RHINE zeroes every rate below T9 = 0.1, which assumes r-process heating keeps
+  // ejecta above 0.1 GK until the neutrons are gone. Cold low-entropy tidal matter
+  // leaves NSE already below that and then never ignites (X_n ~ 0.7 frozen). Neutron
+  // capture is not temperature gated, so while free neutrons remain the networks are
+  // evaluated at T9 = 0.1, inside their training range (as GR-Athena++ f811c71b).
+  constexpr Real T9_LOW     = 0.1;
+  constexpr Real YN_MIN     = 1e-3;
+  constexpr Real YE_MAX     = 0.45;
+  constexpr Real T9_PER_MEV = 11.604442475978844;
 
   par_for("rhine_src", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
@@ -423,8 +436,12 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
       }
     }
 
+    Real T_net = T;
+    if (clamp_cold_ && T*T9_PER_MEV < T9_LOW && yn > YN_MIN && ye < YE_MAX) {
+      T_net = 1.0001*T9_LOW/T9_PER_MEV;
+    }
     Real dye, dyn, dyp, dya, dyh, dah, dma, fnu;
-    nets_.run(rho_cgs, T, ye, yn, ya, yh, ah, drho, dt_net,
+    nets_.run(rho_cgs, T_net, ye, yn, ya, yh, ah, drho, dt_net,
               ye0, yn0, ya0, yh0, ah0, mass0,
               dye, dyn, dyp, dya, dyh, dah, dma, fnu, pmode_);
 
@@ -433,11 +450,33 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
           Kokkos::isfinite(dma) && Kokkos::isfinite(fnu))) {
       dye = dyn = dyp = dya = dyh = dah = dma = fnu = 0.0;
     }
-    // fnu is only valid while the composition releases energy (dma < 0).
-    if (!(dma < 0.0)) { fnu = 0.0; }
+    // Release the neutrino fraction acts on. fnu (model 8) is the share of the nuclear
+    // release carried off by beta-decay neutrinos; dma also holds the m-tilde
+    // reconciliation (NSE hand-off, mixing), which emits no neutrinos. With
+    // rhine/fnu_physical, fnu acts on dm_phys only: the m-tilde change from this
+    // call's increments, both ends on the current composition (GR-Athena++ 6026f590).
+    Real dm_nu = dma;
+    if (fnu_physical_ && dma != 0.0) {
+      const Real m_now = nets_.massExcess(ye, yn, ya, yh, ah);
+      const Real dxh1 = dah*yh0 + ah0*dyh + dt_net*dah*dyh;
+      Real yn1 = Kokkos::fmax(yn + dyn*dt_net, 0.0);
+      Real ya1 = Kokkos::fmax(ya + dya*dt_net, 0.0);
+      const Real ah1 = Kokkos::fmax(ah + dah*dt_net, 1.0);
+      Real yh1 = Kokkos::fmax(ah*yh + dxh1*dt_net, 0.0) / ah1;
+      const Real s1 = yn1 + 4.0*ya1 + ah1*yh1;
+      if (s1 > s_max) {
+        const Real f1 = s_max / s1;
+        yn1 *= f1; ya1 *= f1; yh1 *= f1;
+      }
+      const Real m_next = nets_.massExcess(ye + dye*dt_net, yn1, ya1, yh1, ah1);
+      dm_nu = (m_next - m_now) / dt_net;
+      if (!Kokkos::isfinite(dm_nu)) { dm_nu = dma; }
+    }
+    // fnu is only valid while that release is positive (dm_nu < 0).
+    if (!(dm_nu < 0.0)) { fnu = 0.0; }
 
     // Diagnostics.
-    aux_(m, A_HEAT, k, j, i) = -(1.0 - fnu) * dma * MEV_TO_ERG * n_cm3;
+    aux_(m, A_HEAT, k, j, i) = -(dma - fnu * dm_nu) * MEV_TO_ERG * n_cm3;
     aux_(m, A_FNU,  k, j, i) = fnu;
     aux_(m, A_DYE,  k, j, i) = dye;
     aux_(m, A_DYN,  k, j, i) = dyn;
@@ -446,9 +485,10 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
     aux_(m, A_DYH,  k, j, i) = dyh;
     aux_(m, A_DAH,  k, j, i) = dah;
     aux_(m, A_DMA,  k, j, i) = dma;
-    const Real rate = D * (-dma / mb_MeV) * alpha * time_cgs;  // densitized code rate
-    aux_(m, A_QDOT, k, j, i) = (1.0 - fnu) * rate;
-    aux_(m, A_LNU,  k, j, i) = fnu * rate;
+    const Real to_code = D / mb_MeV * alpha * time_cgs;  // densitized code rate
+    const Real lnu = -fnu * dm_nu * to_code;
+    aux_(m, A_QDOT, k, j, i) = -dma * to_code - lnu;
+    aux_(m, A_LNU,  k, j, i) = lnu;
 
     if (!apply_) { return; }
 
@@ -466,9 +506,9 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
     u0(m, I_EB, k, j, i) += D * (dma / mb_MeV) * dt_ap;
 
     // Neutrino energy sink (no 1/W; four-force tau projection).
-    u0(m, IEN, k, j, i) += D * fnu * (dma / mb_MeV) * (dt_apply_code * alpha * time_cgs);
+    u0(m, IEN, k, j, i) += D * fnu * (dm_nu / mb_MeV) * (dt_apply_code * alpha * time_cgs);
     // Neutrino momentum sink (proper-time factor).
-    const Real snu = D * fnu * (dma / mb_MeV) * dt_ap;
+    const Real snu = D * fnu * (dm_nu / mb_MeV) * dt_ap;
     const Real u_d_1 = g11*wv1 + g12*wv2 + g13*wv3;
     const Real u_d_2 = g12*wv1 + g22*wv2 + g23*wv3;
     const Real u_d_3 = g13*wv1 + g23*wv2 + g33*wv3;
