@@ -1,0 +1,54 @@
+{
+  "time": 114760.0,
+  "rows": [
+    {
+      "radius": 24.0,
+      "incoming": 0.6071423268953943,
+      "outgoing": 0.0010177995092110236,
+      "entropy_proxy_mean": 1.0342769351632746,
+      "entropy_proxy_angular_rms": 0.04019650961169049
+    },
+    {
+      "radius": 32.0,
+      "incoming": 0.6092945737085406,
+      "outgoing": 0.006817142838709974,
+      "entropy_proxy_mean": 1.052000945488944,
+      "entropy_proxy_angular_rms": 0.05330941094450759
+    },
+    {
+      "radius": 48.0,
+      "incoming": 0.6621876871532673,
+      "outgoing": 0.06097964798432392,
+      "entropy_proxy_mean": 1.078662222348843,
+      "entropy_proxy_angular_rms": 0.05937155200757106
+    },
+    {
+      "radius": 64.0,
+      "incoming": 0.7256710051309683,
+      "outgoing": 0.12466424364080891,
+      "entropy_proxy_mean": 1.096022119990658,
+      "entropy_proxy_angular_rms": 0.06295667849759085
+    },
+    {
+      "radius": 96.0,
+      "incoming": 0.8457630589207384,
+      "outgoing": 0.27233880190139026,
+      "entropy_proxy_mean": 1.1040016331480305,
+      "entropy_proxy_angular_rms": 0.05913011330082421
+    },
+    {
+      "radius": 128.0,
+      "incoming": 1.0363163402104658,
+      "outgoing": 0.4415156473221085,
+      "entropy_proxy_mean": 1.115226663648465,
+      "entropy_proxy_angular_rms": 0.0666538250651317
+    },
+    {
+      "radius": 161.226654,
+      "incoming": 1.138206699695962,
+      "outgoing": 0.5215236639395887,
+      "entropy_proxy_mean": 1.1240600456027496,
+      "entropy_proxy_angular_rms": 0.0788638073658717
+    }
+  ]
+}

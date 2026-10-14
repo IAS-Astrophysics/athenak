@@ -162,3 +162,39 @@ same hardware, queue, memory and wall-time restrictions. Receipt
 continuation-8926665.receipt prevents duplicate submission. The heartbeat now
 follows this final batch; it stops at140000 and reports remaining diagnostic or
 spatial limitations instead of evolving indefinitely to force radial flatness.
+
+## Final analysis at user-requested stop
+
+The user stopped further evolution. Job8926712 ended normally at124768.4 M,
+cycle161378, with all twelve guards clean. Its continuation8928492 was still
+queued and was cancelled explicitly; qstat reports F and the user's debug queue
+is empty. The completion heartbeat is PAUSED. There are no further submissions.
+The final interval includes ten complete cycles and part of the eleventh.
+
+Updated diagnostics use37 saved finest states. The latest is114760 M, from
+visit10. The mean r=2 M rates are0.3056528 and0.3056992 of the total analytic
+rate, changes of+0.0185%/+0.0416% from visit9. Across COM spheres24–161.23 M,
+the maximum last-cycle flux change is0.992%; shell rest masses change by at most
+0.102%. Temporal repeatability is good, but radial flux spread remains7.21%
+(6.90% in visit9), well above the angular sensitivity of0.443%. Full global
+steady mass balance remains unverified without face fluxes and accounting for
+floors and cyclic operations; simply evolving longer has not removed this gap.
+
+The new entropy_transport plot separates inward/outward rest-mass flux at the
+latest finest snapshot. At rB they are1.1382 and0.5215 times the analytic rate,
+leaving net0.6167. With192x384 angular samples these become1.1375 and0.5213:
+the substantial outward component is robust to angular quadrature. This is
+transport through an internal sphere, not measured outer-box supply, and it
+does not establish an unbound wind. At r=24 M the inward/outward values are
+0.6071/0.0010. The area-averaged entropy proxy K=p/rho^(5/3) rises from its
+initial exterior value1 to1.034 at24 M and1.124 at rB, with angular variations.
+These findings are consistent with a heated envelope with circulation, but
+do not alone demonstrate saturated convection or time-stationary turbulence.
+The plotted RMS is angular variation, not a time-series uncertainty.
+
+Ten completed returns plus the initial dwell yield only about550 M of finest
+zone exposure (0.48 binary periods), although the final global clock spans
+about110 periods. The near-hole plateau is therefore evidence of repeatability
+under the cyclic procedure, not proof of a continuously evolved equilibrium.
+Further progress would require conservative mass-budget diagnostics and
+resolution/schedule controls rather than automatically submitting more cycles.
