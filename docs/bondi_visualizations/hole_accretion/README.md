@@ -105,3 +105,29 @@ Bondi reservoir: these diagnostics do not test its flux profile, shell mass
 budgets, or sufficient local inflow exposure throughout the domain. The
 remaining radial variation can include physical mass accumulation and numerical
 sampling/discretization error; a flux profile alone cannot separate them.
+
+## Reservoir equilibrium and further evolution
+
+The user subsequently authorized checks all the way to rB and more cycles if
+needed. `plot_bondi_reservoir_equilibrium.py` now measures COM-sphere fluxes
+between 24 M and rB=161.226654 M, plus rest mass in fixed shells on identical
+restored finest-stage meshes. Both diagnostics are compared at phases
+10,20,30,40 M of each finest visit. Angular sampling is 48x96 versus96x192.
+Shell masses use rho W sqrt(det gamma) times coordinate cell volume; cell-center
+shell boundary assignment introduces spatial error, especially on the outer
+coarse mesh. These are temporal and radial checks, not a continuous mass-budget
+closure through frozen zoom intervals.
+
+Cycle5-to6 flux changes are between -0.82% and +0.52% over the sampled radii.
+Shell-mass changes are below 0.25%, but the radial flux profile is not flat:
+inflow is about0.60 of the analytic rate at24 M, about0.58 at96–128 M and0.63
+at rB. Temporal repeatability therefore does not yet establish uniform steady
+inflow throughout the reservoir; spatial/interpolation effects also remain.
+
+Job8926227 resumes the final70000 M checkpoint toward105000 M (aboutnine
+cycles), using the same validated executable, twelve tiles on one debug node,
+one-hour allocation and -t00:55:00. Receipt continuation-8926068.receipt is under
+the existing remote run root. The reactivated completion heartbeat follows
+clean checkpoints and reassesses outer flux and mass drift after this batch.
+It can extend one further batch to140000 M if needed, then stops and reports
+unresolved relaxation or diagnostic/spatial errors. No other queues are used.
