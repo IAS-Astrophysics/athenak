@@ -131,3 +131,34 @@ the existing remote run root. The reactivated completion heartbeat follows
 clean checkpoints and reassesses outer flux and mass drift after this batch.
 It can extend one further batch to140000 M if needed, then stops and reports
 unresolved relaxation or diagnostic/spatial errors. No other queues are used.
+
+## Nine-cycle assessment
+
+Job8926227 stopped cleanly at90739.6 M; job8926515 stopped at104969.4 M;
+job8926665 reached105000 M, cycle139602, with exit status zero. All twelve
+rank guards passed in every job, with conservative RSS/allocation bounds below
+30GB. The final fluid has finite positive density/pressure and exactly B=0.
+
+The updated figures use32 finest-state snapshots: initial, one from visit1,
+and five each from visits4–9. Visits2–3 were missed by the original cadence.
+The latest finest state is103290 M (latest_finest.png); the global105000 state
+is coarser. Mean r=2 M hole rates in visit9 are0.3055964 and0.3055722 times
+the total analytic Michel rate. The near-hole rates now fluctuate around a
+plateau instead of decreasing monotonically.
+
+Between cycles8 and9, the maximum COM-flux change is0.961% and maximum shell
+rest-mass change0.131%. At rB the inflow changes from0.625184 to0.619951 of the
+analytic rate (-0.837%). Shell masses stopped their earlier systematic decline
+and changed slightly upward in the last comparison. The largest angular
+sampling difference during cycle9 is0.461% of the local rate. These diagnostics
+indicate approximate cyclic temporal repeatability, not closed steady mass
+balance. The radial flux spread remains6.90%, versus6.82% in cycle8 and7.03%
+in cycle7; it is not yet clearly decaying. Coarse spatial reconstruction and
+cyclic masks can contribute even when angular quadrature is converged.
+
+Following the authorized final-batch criterion, job8926712 was submitted from
+the final105000 checkpoint toward140000 M (abouttwelve cycles), with all the
+same hardware, queue, memory and wall-time restrictions. Receipt
+continuation-8926665.receipt prevents duplicate submission. The heartbeat now
+follows this final batch; it stops at140000 and reports remaining diagnostic or
+spatial limitations instead of evolving indefinitely to force radial flatness.
