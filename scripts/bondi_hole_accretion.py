@@ -44,13 +44,28 @@ def zoom_events(runs):
 
 def selected_snapshots(runs, events):
     selected, seen = [], set()
+    intervals=[(e, events[i+1][0] if i+1<len(events) else float('inf'))
+               for i,e in enumerate(events) if e[1]==0]
     for run in runs:
-        for path in sorted((run/'bin').glob('*.mhd_w_bcc.*.bin')):
-            t = snapshot_time(path)
-            _, zone, visit, entry = next(e for e in reversed(events) if e[0] <= t)
-            if zone == 0 and t not in seen:
-                selected.append((path, t, visit, t-entry))
-                seen.add(t)
+        paths=sorted((run/'bin').glob('*.mhd_w_bcc.*.bin'))
+        times={}
+        def time_at(i):
+            if i not in times:times[i]=snapshot_time(paths[i])
+            return times[i]
+        def lower_bound(t):
+            lo,hi=0,len(paths)
+            while lo<hi:
+                mid=(lo+hi)//2
+                if time_at(mid)<t:lo=mid+1
+                else:hi=mid
+            return lo
+        # Output counters and times are chronological within each restart run.
+        # Binary searches avoid opening thousands of irrelevant outer-stage files.
+        for (start,zone,visit,entry),end in intervals:
+            for i in range(lower_bound(start),lower_bound(end)):
+                t=time_at(i)
+                if t not in seen:
+                    selected.append((paths[i],t,visit,t-entry));seen.add(t)
     return selected
 
 
