@@ -8,7 +8,7 @@ debug node for an hour, twelve GPU tiles, the 55-minute solver stop and existing
 memory guards. Later clean continuations preserve the checkpoint output clocks.
 The thread heartbeat follows receipts until this bounded target is reached.
 
-The current plots are a **baseline**, not a convergence result: the previous
+The initial plots were a **baseline**, not a convergence result: the previous
 100 M output cadence saved only the initial state and t=11500 M during zone zero.
 The latter is the most recent saved fully refined state available at submission.
 Its image is `../gradual_evolution_movie/finest_return.png`. Later fully refined
@@ -55,3 +55,30 @@ Run the script with chronological `--runs` directories, the initial ADM file
 as `--metric`, and this directory as `--out`. `--list-only` lists the finest
 snapshots without loading their fluid arrays, to permit selective transfer
 from Aurora. Preserve each run's `rank-0.log` for visit identification.
+
+## Completed six-cycle comparison
+
+Jobs 8925878 and 8925972 stopped cleanly at 54189.3 and 69880.4 M. Job 8926068
+finished at 70000 M, cycle 93958, with PBS exit status zero. All five jobs in the
+chain passed twelve-rank resource checks; conservative combined RSS/allocation
+peak bounds are below 20 GB (resources.json). Final fields are finite, density
+and pressure positive, and magnetic components zero. No further run is scheduled.
+
+Seventeen finest-stage snapshots are available: initial state, one from visit 1,
+and five each from visits 4, 5 and 6. Visits 2 and 3 were missed by the previous
+cadence. The latest finest state is t=68870 M, cycle 91135, with 848 MeshBlocks
+and near-hole dx=0.125 M (latest_finest.png). The final global state is coarser.
+
+Matched-phase means at r=2 M for the negative-x hole are 0.310954, 0.306701 and
+0.305445 of the total analytic Bondi rate; positive-x values are 0.310995,
+0.306789 and 0.305425. Successive changes decrease from about -1.36% to -0.43%.
+Across all extraction radii the last change is -0.32% to -0.48%. Final mean
+extraction-radius spread is under 0.1%, and inter-hole differences under 0.03%.
+Maximum angular-quadrature sensitivity is 0.000373 of the total Bondi rate,
+about 0.12% of an individual-hole rate. This does not bound interpolation error.
+
+These results support approach to a repeatable cyclic inner inflow, but do not
+prove continuously evolved stationarity, exact horizon flux or spatial
+convergence. Six returns plus the initial dwell give about 350 M of zone-zero
+exposure, despite the global clock of about 61.55 binary orbits. This remains
+unmagnetized hydro using the MHD solver. The completion timer is paused.

@@ -132,6 +132,8 @@ def main():
     fig,axs=plt.subplots(2,2,figsize=(12,8),layout='constrained')
     for ax,center in zip(axs[0],[-16.,16.]):
         for visit in visits:
+            if visit == 0:
+                continue  # Initial transient remains in JSON; show evolved visits here.
             rows=[v for v in records if v['center']==center and v['radius']==2 and v['visit']==visit]
             ax.plot([v['phase'] for v in rows],[v['mdot_over_bondi'] for v in rows],'.-',label=f'Visit {visit}')
         ax.set(title=f'Hole at x={center:g} M; sphere r=2 M',xlabel='Time since finest-zone entry [M]',ylabel=r'$\dot M/\dot M_{\rm Bondi,total}$')
