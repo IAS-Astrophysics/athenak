@@ -82,3 +82,26 @@ prove continuously evolved stationarity, exact horizon flux or spatial
 convergence. Six returns plus the initial dwell give about 350 M of zone-zero
 exposure, despite the global clock of about 61.55 binary orbits. This remains
 unmagnetized hydro using the MHD solver. The completion timer is paused.
+
+## Extended inflow-equilibrium assessment
+
+`scripts/plot_bondi_inflow_equilibrium.py` generates inflow_equilibrium.png/PDF
+and its numerical JSON from the saved data. The radial profiles use the closest
+saved state to phase 30 M in each visit; actual phases (25.0, 33.7, 32.4 M) are
+shown, so those profiles are not exactly phase matched. The bottom-left means
+retain the exact common phases used above through within-visit interpolation.
+
+At the last profile time the flux spread across r=1.5–3 M is 0.093–0.099%; over
+r=1.25–12 M it is 1.69%. Last-cycle angular sampling changes are at most 0.077%
+of an individual-hole rate for these surfaces; spatial error is not bounded.
+At r=2 M the phase-10 to phase-40 net change falls from about -0.45% (cycle 4)
+to -0.32% (cycle 5) to -0.067/-0.070% (cycle 6). The last visit still fluctuates
+by roughly 0.5% over its saved samples, so the small endpoint drift alone is
+not evidence that all transients have vanished.
+
+The evidence supports approximate local inflow equilibrium close to each hole
+and improving cyclic repeatability. It does not establish equilibrium over the
+Bondi reservoir: these diagnostics do not test its flux profile, shell mass
+budgets, or sufficient local inflow exposure throughout the domain. The
+remaining radial variation can include physical mass accumulation and numerical
+sampling/discretization error; a flux profile alone cannot separate them.
