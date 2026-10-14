@@ -157,6 +157,10 @@ class PrimitiveSolverHydro {
             pin->GetOrAddReal(block, "helm_T_ramp_dec", 0.5));
       }
 
+      // Ion Coulomb (OCP) correction of the Helmholtz branch.
+      ps.GetEOSMutable().SetHelmholtzCoulomb(
+          pin->GetOrAddBoolean(block, "helm_coulomb", true));
+
       // Optional explicit transition strip (else defaults are used).
       if (pin->DoesParameterExist(block, "transition_n_start")) {
         ps.GetEOSMutable().SetTransition(
@@ -190,10 +194,11 @@ class PrimitiveSolverHydro {
   MeshBlockPack* pmy_pack;
   unsigned int nerrs;
   unsigned int errcap;
+  Kokkos::View<int, DevMemSpace> nprinted;
 
   PrimitiveSolverHydro(std::string block, MeshBlockPack *pp, ParameterInput *pin) :
 //        pmy_pack(pp), ps{&eos} {
-        pmy_pack(pp), nerrs(0) {
+        pmy_pack(pp), nerrs(0), nprinted("c2p printed") {
     SetPolicyParams(block, pin);
     Real mb = ps.GetEOS().GetBaryonMass();
     ps.GetEOSMutable().SetDensityFloor(pin->GetOrAddReal(block, "dfloor", (FLT_MIN))/mb);
@@ -408,6 +413,7 @@ class PrimitiveSolverHydro {
     const int rank = global_variable::my_rank;
     const int nerrs_ = nerrs;
     const int errcap_ = errcap;
+    auto nprinted_ = nprinted;
 
     Real mb = eos_.GetBaryonMass();
 
@@ -523,6 +529,8 @@ class PrimitiveSolverHydro {
       } else if (!floors_only) {
         if (result.error != Primitive::Error::SUCCESS && (nerrs_ + sumerrs < errcap_)) {
           sumerrs++;
+          const int iprint = Kokkos::atomic_fetch_add(&nprinted_(), 1);
+          if (nerrs_ + iprint < errcap_) {
           // Find out where the point went bad and report a bunch of information about it.
           Real &x1min = size.d_view(m).x1min;
           Real &x1max = size.d_view(m).x1max;
@@ -536,7 +544,15 @@ class PrimitiveSolverHydro {
           Real &x3max = size.d_view(m).x3max;
           Real x3v = CellCenterX(k-ks, indcs.nx3, x3min, x3max);
 
-          Kokkos::printf("An error occurred during the primitive solve: %s\n"
+          // mass fractions of all scalars (the transition EOS also needs Xn..E_B to
+          // replay the state; unused slots print as 0)
+          Real Yp[MAX_SPECIES];
+          for (int n = 0; n < MAX_SPECIES; n++) {
+            Yp[n] = (n < nscal && cons_pt_old[CDN] != 0.0) ?
+                    cons_pt_old[CYD + n]/cons_pt_old[CDN] : 0.0;
+          }
+
+          Kokkos::printf("An error occurred during the primitive solve: error %d\n"
                  "  Location: (%d, %d, %d, %d)\n"
                  "            (%.17g, %.17g, %.17g)\n"
                  "  Conserved vars: \n"
@@ -546,6 +562,7 @@ class PrimitiveSolverHydro {
                  "    Sz  = %.17g\n"
                  "    tau = %.17g\n"
                  "    Dye = %.17g\n"
+                 "    Y   = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n"
                  "    Bx  = %.17g\n"
                  "    By  = %.17g\n"
                  "    Bz  = %.17g\n"
@@ -556,11 +573,13 @@ class PrimitiveSolverHydro {
                  "    beta = {%.17g, %.17g, %.17g}\n"
                  "    psi4 = %.17g\n"
                  "    K_dd = {%.17g, %.17g, %.17g, %.17g, %.17g, %.17g}\n",
-                 ErrorToString(result.error),
+                 static_cast<int>(result.error),
                  m, k, j, i,
                  x1v, x2v, x3v,
                  cons_pt_old[CDN], cons_pt_old[CSX], cons_pt_old[CSY], cons_pt_old[CSZ],
-                 cons_pt_old[CTA], cons_pt_old[CYD], b3u[IBX], b3u[IBY], b3u[IBZ], detg,
+                 cons_pt_old[CTA], cons_pt_old[CYD],
+                 Yp[0], Yp[1], Yp[2], Yp[3], Yp[4], Yp[5], Yp[6],
+                 b3u[IBX], b3u[IBY], b3u[IBZ], detg,
                  g3d[S11], g3d[S12], g3d[S13], g3d[S22], g3d[S23], g3d[S33],
                  adm.alpha(m, k, j, i),
                  adm.beta_u(m, 0, k, j, i),
@@ -570,11 +589,12 @@ class PrimitiveSolverHydro {
                  adm.vK_dd(m, 0, 2, k, j, i),
                  adm.vK_dd(m, 1, 1, k, j, i), adm.vK_dd(m, 1, 2, k, j, i),
                  adm.vK_dd(m, 2, 2, k, j, i));
-          if (nerrs_ + sumerrs == errcap_) {
+          if (nerrs_ + iprint + 1 == errcap_) {
             Kokkos::printf("%d C2P errors have been detected on rank %d."
                    "All future C2P errors\n"
                    "on this rank will be suppressed. Fix your code!\n",
-                   nerrs_ + sumerrs,rank);
+                   errcap_,rank);
+          }
           }
         }
         // Regardless of failure, we need to copy the primitives.
@@ -635,6 +655,9 @@ class PrimitiveSolverHydro {
       ps.GetEOSMutable().SetConservedFloorFailure(cons_failure);
     } else {
       nerrs += count_errs;
+    }
+    if (count_errs > 0) {
+      Kokkos::deep_copy(nprinted, 0);
     }
   }
 
