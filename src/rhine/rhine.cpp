@@ -133,6 +133,14 @@ TaskStatus RHINE::PostStep(Driver *pdrive, int stage) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void RHINE::Diagnostics(Driver *pdrive)
+//! \brief Diagnostics-only network evaluation (no resync), for outputs after a step
+//! whose PostStep skipped it.
+void RHINE::Diagnostics(Driver *pdrive) {
+  (void) Dispatch(pdrive, pdrive->nexp_stages, RhinePass::diag);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass)
 //! \brief Resolve the EOS/error policy template arguments and run the requested pass.
 TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass) {
@@ -158,7 +166,14 @@ TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass) {
 //! \brief Resync first, then evaluate the network (GR-Athena++ ordering).
 template<class EOSPolicy, class ErrorPolicy>
 TaskStatus RHINE::RunPassEOS(RhinePass pass, Real dt_apply_code) {
-  if (pass == RhinePass::poststep) { NSEResyncEOS<EOSPolicy, ErrorPolicy>(); }
+  if (pass == RhinePass::poststep) {
+    NSEResyncEOS<EOSPolicy, ErrorPolicy>();
+    if (!diag_due) {
+      diag_fresh = false;
+      return TaskStatus::complete;
+    }
+  }
+  diag_fresh = (pass != RhinePass::source);
   return NetworkStepEOS<EOSPolicy, ErrorPolicy>(dt_apply_code);
 }
 

@@ -116,6 +116,7 @@ void EOSTransition<LogPolicy>::update_bounds() {
   m_id_ln_T_ramp = 1.0/(m_helm_T_ramp_dec*ln10);
   m_n_h0         = std::exp(m_ln_n_h0);
   m_ln_T_cmin    = std::log(compose_eos.min_T);
+  m_n_start      = std::exp(trans_ln_start);
 
   Real const edge_tol = 1.0 - 1e-10;
   if (trans_T_end < compose_eos.min_T*edge_tol) {

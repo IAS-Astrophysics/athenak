@@ -378,24 +378,39 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     if (n < compose_eos.min_n) {
       return helmholtz_eos.TemperatureFromEps(n, eps, Yn, guess_it);
     }
-    // Bounds are evaluated lazily: floor-clamped states (the atmosphere) hit
-    // the eps_min early-out, so the max bound is only computed when needed.
-    Real eps_min = MinimumSpecificInternalEnergySanitized(n, Yn);
-    if (eps <= eps_min) {
-      return (Kokkos::log(n) >= m_ln_n_h0) ? compose_eos.min_T : min_T;
-    }
-    Real eps_max = MaximumSpecificInternalEnergySanitized(n, Yn);
-    if (eps >= eps_max) { return max_T; }
+    // NSE shortcut (see NSEShortcut): straight to the compose inversion below.
+    if (!NSEShortcut(n, Yn, eps)) {
+      // Bounds are evaluated lazily: floor-clamped states (the atmosphere) hit
+      // the eps_min early-out, so the max bound is only computed when needed.
+      Real eps_min = MinimumSpecificInternalEnergySanitized(n, Yn);
+      if (eps <= eps_min) {
+        return (Kokkos::log(n) >= m_ln_n_h0) ? compose_eos.min_T : min_T;
+      }
+      Real eps_max = MaximumSpecificInternalEnergySanitized(n, Yn);
+      if (eps >= eps_max) { return max_T; }
 
-    if (Kokkos::log(n) < m_ln_n_h0) {
-      Real T_h = helmholtz_eos.TemperatureFromEps(n, eps, Yn, guess_it);
-      if (TransitionFactor(n, T_h) == 0.0) { return T_h; }
+      if (Kokkos::log(n) < m_ln_n_h0) {
+        Real T_h = helmholtz_eos.TemperatureFromEps(n, eps, Yn, guess_it);
+        if (TransitionFactor(n, T_h) == 0.0) { return T_h; }
+      }
+      Real T_b = temperature_from_var_trans(EOSCompOSE<LogPolicy>::ECLOGE,
+                                            n*mb*(1 + eps), n, Yn);
+      if (!Kokkos::isnan(T_b)) { return T_b; }
     }
-    Real T_b = temperature_from_var_trans(EOSCompOSE<LogPolicy>::ECLOGE,
-                                          Kokkos::log(n*mb*(1 + eps)), n, Yn);
-    if (!Kokkos::isnan(T_b)) { return T_b; }
     Real T_c = compose_eos.TemperatureFromEps(n, eps, Yn);
     return T_c;
+  }
+
+  //--------------------------------------------------------------------------
+  // NSE shortcut: for n >= n_start the weight is identically 1 at T >= T_start.
+  // Below T_start the blend is a convex combination of two functions increasing
+  // in T, so it never exceeds max(eps_c, eps_h) at T_start. Above that bound the
+  // lowest root (the one the strip scan returns) is the unique compose root.
+  //--------------------------------------------------------------------------
+  KOKKOS_INLINE_FUNCTION bool NSEShortcut(Real n, Real *Yn, Real eps) const {
+    return (n >= m_n_start) &&
+           (eps >= compose_eos.SpecificInternalEnergy(n, trans_T_start, Yn)) &&
+           (eps >= helmholtz_eos.SpecificInternalEnergy(n, trans_T_start, Yn));
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromPSanitized(Real n, Real p,
@@ -414,7 +429,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
       if (TransitionFactor(n, T_h) == 0.0) { return T_h; }
     }
     Real T_b = temperature_from_var_trans(EOSCompOSE<LogPolicy>::ECLOGP,
-                                          Kokkos::log(p), n, Yn);
+                                          p, n, Yn);
     if (!Kokkos::isnan(T_b)) { return T_b; }
     return compose_eos.TemperatureFromP(n, p, Yn);
   }
@@ -486,6 +501,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   }
   //! Raw baryon mass in EOS (nuclear, MeV) units, for per-baryon energetics.
   KOKKOS_INLINE_FUNCTION Real GetBaryonMassMeV() const { return mb; }
+  //! Density [fm^-3] above which the CompOSE fast path applies (no Helmholtz branch).
+  KOKKOS_INLINE_FUNCTION Real GetHelmholtzNMax() const { return m_helm_n_max; }
 
   //! Physical nucleon masses [MeV] as carried by the compose table. Names
   //! follow EOSCompOSE so that table-aware consumers work against either
@@ -631,18 +648,25 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   void update_bounds();
 
   //--------------------------------------------------------------------------
-  // Strip solver: invert log(P) or log(e) for temperature across the blended
-  // region. Returns NaN if no root is bracketed. All returned/compared logs
-  // are natural; compose grid nodes and table values are decoded via exp2_.
+  // Strip solver: invert P or e (var_lin, linear) for temperature across the
+  // blended region. Returns NaN if no root is bracketed. The node scan compares
+  // in linear space (same sign as the log residual, one log per node less); the
+  // root polish uses the natural-log residual. Compose grid nodes and table
+  // values are decoded via exp2_.
   //--------------------------------------------------------------------------
-  KOKKOS_INLINE_FUNCTION Real temperature_from_var_trans(int iv, Real var,
+  KOKKOS_INLINE_FUNCTION Real temperature_from_var_trans(int iv, Real var_lin,
                                                          Real n, Real *Y) const {
+    Real const var = Kokkos::log(var_lin);
     int in, iy;
     Real wn0, wn1, wy0, wy1;
     Real Yq = Y[SCYE];
     Real const ln_n = Kokkos::log(n);
     compose_eos.weight_idx_ln(&wn0, &wn1, &in, log2_(n));
     compose_eos.weight_idx_yq(&wy0, &wy1, &iy, Yq);
+    // Loop invariants of the Helmholtz evaluations: log(n Ye) and the (n, Y)-only
+    // ion/Coulomb terms.
+    Real const ln_ne = Kokkos::log(n*Yq);
+    const EOSHelmholtz::CoulombPrep cp = helmholtz_eos.coulomb_prep(n, Y);
 
     // T at compose grid node it.
     auto T_node = [=](int it) {
@@ -657,12 +681,13 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     };
     auto f = [=](int it) {
       Real T  = T_node(it);
-      Real w  = TransitionFactor(n, T, ln_n, Kokkos::log(T));
+      Real lT = Kokkos::log(T);
+      Real w  = TransitionFactor(n, T, ln_n, lT);
       Real var_helm = (iv == EOSCompOSE<LogPolicy>::ECLOGP)
-                    ? helmholtz_eos.Pressure(n, T, Y)
-                    : helmholtz_eos.Energy(n, T, Y);
+                    ? helmholtz_eos.pressure_at(n, T, ln_ne, lT, Y, cp)
+                    : helmholtz_eos.energy_at(n, T, ln_ne, lT, Y, cp);
       Real var_comp = exp2_(vcomp_node(it));
-      return var - Kokkos::log(var_helm*(1 - w) + var_comp*w);
+      return var_lin - (var_helm*(1 - w) + var_comp*w);
     };
 
     int nt_max = static_cast<int>(compose_eos.m_nt) - 1;
@@ -703,7 +728,8 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
     Real lb = 0.0;
     Real ub = 1.0;
     root.FalsePositionModified(RootFunction, lb, ub, wt, 1e-13, 1e-15,
-                               iv, ilo, v0, dv, lt0, dlt, n, ln_n, Y, var, this);
+                               iv, ilo, v0, dv, lt0, dlt, n, ln_n, ln_ne, cp, Y, var,
+                               this);
     return exp2_(lt0 + wt*dlt);
   }
 
@@ -714,13 +740,14 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
    public:
     KOKKOS_INLINE_FUNCTION
     Real operator()(Real wt, int iv, int it, Real v0, Real dv, Real lt0, Real dlt,
-                    Real n, Real ln, Real *Y, Real var,
-                    const EOSTransition *peos) const {
+                    Real n, Real ln, Real ln_ne, EOSHelmholtz::CoulombPrep cp,
+                    Real *Y, Real var, const EOSTransition *peos) const {
       Real t  = peos->exp2_(lt0 + wt*dlt);  // lt0, dlt: compose log2_(T) node/spacing
-      Real f_trans = peos->TransitionFactor(n, t, ln, Kokkos::log(t));
+      Real lt = Kokkos::log(t);
+      Real f_trans = peos->TransitionFactor(n, t, ln, lt);
       Real var_helm = (iv == EOSCompOSE<LogPolicy>::ECLOGP)
-                    ? peos->helmholtz_eos.Pressure(n, t, Y)
-                    : peos->helmholtz_eos.Energy(n, t, Y);
+                    ? peos->helmholtz_eos.pressure_at(n, t, ln_ne, lt, Y, cp)
+                    : peos->helmholtz_eos.energy_at(n, t, ln_ne, lt, Y, cp);
       Real var_comp = peos->exp2_(v0 + wt*dv);
       Real var_pt   = Kokkos::log(var_comp*f_trans + var_helm*(1 - f_trans));
       return (var - var_pt)/var;
@@ -740,6 +767,7 @@ class EOSTransition : public EOSPolicyInterface, public LogPolicy,
   Real m_helm_n_ramp_dec, m_helm_T_ramp_dec;
   Real m_ln_n_h0, m_ln_T_h0, m_id_ln_n_ramp, m_id_ln_T_ramp;
   Real m_n_h0, m_ln_T_cmin;  // exp(m_ln_n_h0), log(compose min_T)
+  Real m_n_start;             // exp(trans_ln_start)
   int  comp_it_trans_start, comp_it_trans_end, comp_it_helm_tmax;
 
   NumTools::Root root;

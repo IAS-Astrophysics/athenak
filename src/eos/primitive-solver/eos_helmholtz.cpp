@@ -46,6 +46,7 @@ void EOSHelmholtz::ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye
 
   Kokkos::realloc(m_log_ne, m_nn);
   Kokkos::realloc(m_log_t,  m_nt);
+  Kokkos::realloc(m_t,      m_nt);
   Kokkos::realloc(m_table,  ECNVARS, m_nn, m_nt);
 
   auto host_log_ne = Kokkos::create_mirror_view(m_log_ne);
@@ -108,6 +109,12 @@ void EOSHelmholtz::ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye
 
   Kokkos::deep_copy(m_log_ne, host_log_ne);
   Kokkos::deep_copy(m_log_t,  host_log_t);
+  {
+    // exp(log t) rather than t: bit-identical to the exp(m_log_t) it replaces.
+    auto host_t = Kokkos::create_mirror_view(m_t);
+    for (int it = 0; it < m_nt; ++it) { host_t(it) = exp(host_log_t(it)); }
+    Kokkos::deep_copy(m_t, host_t);
+  }
   Kokkos::deep_copy(m_table,  host_table);
 
   max_Y[SCYE] = max_Ye;

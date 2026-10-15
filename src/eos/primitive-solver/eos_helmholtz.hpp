@@ -48,6 +48,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   EOSHelmholtz() :
       m_log_ne("helm log ne", 1),
       m_log_t("helm log T", 1),
+      m_t("helm T", 1),
       m_table("helm table", 1, 1, 1) {
     n_species = 1;
     eos_units = MakeNuclear();
@@ -105,7 +106,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
     if (eps <= eps_min) { return min_T; }
     Real eps_max = MaximumInternalEnergy(n, Y);
     if (eps >= eps_max) { return max_T; }
-    return temperature_from_var(ECLOGEPS, Kokkos::log(eps), n, Y, guess_it);
+    return temperature_from_var(ECLOGEPS, eps, n, Y, guess_it);
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromP(Real n, Real p, Real *Y) const {
@@ -114,7 +115,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
     if (p <= p_min) { return min_T; }
     Real p_max = MaximumPressure(n, Y);
     if (p >= p_max) { return max_T; }
-    return temperature_from_var(ECLOGP, Kokkos::log(p), n, Y);
+    return temperature_from_var(ECLOGP, p, n, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromEntropy(Real n, Real s, Real *Y) const {
@@ -126,7 +127,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergy(Real n, Real T, Real *Y) const {
-    return Kokkos::exp(eval_at_nty(ECLOGEPS, n, T, Y));
+    return eval_lin_at_nty(ECLOGEPS, n, T, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real Energy(Real n, Real T, Real *Y) const {
@@ -134,7 +135,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   KOKKOS_INLINE_FUNCTION Real Pressure(Real n, Real T, Real *Y) const {
-    return Kokkos::exp(eval_at_nty(ECLOGP, n, T, Y));
+    return eval_lin_at_nty(ECLOGP, n, T, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real Abar(Real n, Real T, Real *Y) const {
@@ -142,7 +143,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
-    return eval_at_nty(ECENT, n, T, Y);
+    return eval_lin_at_nty(ECENT, n, T, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
@@ -150,12 +151,19 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   KOKKOS_INLINE_FUNCTION Real SoundSpeed(Real n, Real T, Real *Y) const {
-    // Timmes & Arnett (1999) Gamma_1 from the (n, T) derivatives.
-    Real pres    = Pressure(n, T, Y);
-    Real eps     = SpecificInternalEnergy(n, T, Y);
-    Real dpresdt = eval_at_nty(ECDPDT, n, T, Y);            // dP/dT [fm^-3]
-    Real dpresdn = eval_at_nty(ECDPDN, n, T, Y);            // dP/dn [MeV]
-    Real cv      = eval_at_nty(ECDEPSDT, n, T, Y);          // deps/dT [1/MeV]
+    // Timmes & Arnett (1999) Gamma_1 from the (n, T) derivatives. One table
+    // point (log n_e, log T) and one Coulomb prep serve all five channels.
+    const Real ln_ne = Kokkos::log(n*Y[SCYE]);
+    const Real lT    = Kokkos::log(T);
+    const CoulombPrep cp = coulomb_prep(n, Y);
+    auto ch = [&](int vi) {
+      return add_rad_ion_lin(vi, eval_at_lnty(vi, ln_ne, lT), n, T, lT, Y, cp);
+    };
+    Real pres    = ch(ECLOGP);
+    Real eps     = ch(ECLOGEPS);
+    Real dpresdt = ch(ECDPDT);                              // dP/dT [fm^-3]
+    Real dpresdn = ch(ECDPDN);                              // dP/dn [MeV]
+    Real cv      = ch(ECDEPSDT);                            // deps/dT [1/MeV]
     Real chit    = T/pres*dpresdt;
     Real chin    = n/pres*dpresdn;
     Real x       = pres*chit/(n*mb*T*cv);
@@ -178,7 +186,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   KOKKOS_INLINE_FUNCTION Real ElectronChemicalPotential(Real n, Real T, Real *Y) const {
-    return eval_at_nty(ECETA, n, T, Y)*T + me;
+    return eval_lin_at_nty(ECETA, n, T, Y)*T + me;
   }
 
   KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
@@ -236,17 +244,43 @@ class EOSHelmholtz : public EOSPolicyInterface {
     Real du;     // du/dGamma
     Real s;      // S_C per ion in kB
   };
-  KOKKOS_INLINE_FUNCTION CoulombTerms coulomb_terms(Real n, Real T, const Real *Y,
-                                                     Real p_e = -1.0) const {
-    CoulombTerms c = {0.0, 0.0, 0.0, 0.0, 0.0};
+  // The (n, Y)-only part of the ion and Coulomb terms. Gamma = Gamma_T/T at fixed
+  // (n, Y), so the ion-sphere cbrt and log(Gamma_T) are taken once per prep and every
+  // temperature then costs a division, and for Gamma < 1 one exp in place of the pow.
+  // Callers that evaluate many temperatures at one (n, Y) (the inversions, the
+  // multi-channel SoundSpeed, the transition strip solver) build the prep once.
+  struct CoulombPrep {
+    Real inv_abar;    // 1/abar (ion term)
+    Real y_chg;       // charged ions per baryon; 0 = no correction
+    Real gamma_T;     // Gamma*T = zbar^2 e^2/a_i [MeV]
+    Real ln_gamma_T;  // log(gamma_T)
+  };
+  KOKKOS_INLINE_FUNCTION CoulombPrep coulomb_prep(Real n, const Real *Y) const {
+    CoulombPrep cp = {inverse_abar(Y), 0.0, 0.0, 0.0};
+    if (!use_coulomb) { return cp; }
     Real y_chg = Y[SCXP] + Y[SCXA]/4 + ((Y[SCXH] > 0.0) ? Y[SCXH]/Y[SCAH] : 0.0);
-    if (!(y_chg > 1e-30) || !(Y[SCYE] > 0.0) || !(T > 0.0)) {
-      return c;
+    if (!(y_chg > 1e-30) || !(Y[SCYE] > 0.0)) {
+      return cp;
     }
     Real zbar  = Y[SCYE]/y_chg;  // charge neutrality
-    Real n_i   = n*y_chg;
-    Real a_i   = Kokkos::cbrt(3.0/(4.0*M_PI*n_i));
-    Real gamma = zbar*zbar*esqu/(a_i*T);
+    Real a_i   = Kokkos::cbrt(3.0/(4.0*M_PI*n*y_chg));
+    cp.y_chg      = y_chg;
+    cp.gamma_T    = zbar*zbar*esqu/a_i;
+    cp.ln_gamma_T = Kokkos::log(cp.gamma_T);
+    return cp;
+  }
+  //! lT = log(T). p_e, when known (the P channel), saves the electron-pressure lookup
+  //! of the positivity guard.
+  KOKKOS_INLINE_FUNCTION CoulombTerms coulomb_terms(const CoulombPrep &cp, Real n,
+                                                     Real T, Real lT, const Real *Y,
+                                                     Real p_e = -1.0) const {
+    CoulombTerms c = {0.0, 0.0, 0.0, 0.0, 0.0};
+    if (!(cp.y_chg > 0.0) || !(T > 0.0)) {
+      return c;
+    }
+    const Real y_chg = cp.y_chg;
+    const Real gamma = cp.gamma_T/T;
+    const Real lng   = cp.ln_gamma_T - lT;  // log(gamma)
     constexpr Real a1 = -0.898004, b1 = 0.96786, c1 = 0.220703,
                    d1 = -0.86097, e1 = 2.5269;
     constexpr Real a2 = 0.29561, b2 = 1.9885, c2 = 0.288675;
@@ -254,19 +288,19 @@ class EOSHelmholtz : public EOSPolicyInterface {
       Real x = Kokkos::sqrt(Kokkos::sqrt(gamma));  // gamma^(1/4)
       c.u  = a1*gamma + b1*x + c1/x + d1;
       c.du = a1 + 0.25*(b1*x - c1/x)/gamma;
-      c.s  = -(3.0*b1*x - 5.0*c1/x + d1*(Kokkos::log(gamma) - 1.0) - e1);
+      c.s  = -(3.0*b1*x - 5.0*c1/x + d1*(lng - 1.0) - e1);
     } else {
       Real x = gamma*Kokkos::sqrt(gamma);  // gamma^(3/2)
-      Real y = Kokkos::pow(gamma, b2);
+      Real y = Kokkos::exp(b2*lng);        // gamma^b2
       c.u  = -3.0*c2*x + a2*y;
       c.du = (-4.5*c2*x + a2*b2*y)/gamma;
       c.s  = -(c2*x - a2*(b2 - 1.0)/b2*y);
     }
     const Real pcoul = n*y_chg*T*c.u/3.0;
-    const Real p_ir  = asol/3.0*T*T*T*T + n*inverse_abar(Y)*T;
+    const Real p_ir  = asol/3.0*T*T*T*T + n*cp.inv_abar*T;
     if (p_ir + pcoul <= 0.0) {
       if (p_e < 0.0) {
-        p_e = Kokkos::exp(eval_at_lnty(ECLOGP, Kokkos::log(n*Y[SCYE]), Kokkos::log(T)));
+        p_e = Kokkos::exp(eval_at_lnty(ECLOGP, Kokkos::log(n*Y[SCYE]), lT));
       }
       if (p_e + p_ir + pcoul <= 0.0) {
         return CoulombTerms{0.0, 0.0, 0.0, 0.0, 0.0};
@@ -278,20 +312,24 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   /// Add the analytic radiation + ion terms to an electron-gas table value.
-  KOKKOS_INLINE_FUNCTION Real add_rad_ion(int vi, Real var, Real n, Real T,
-                                          const Real *Y) const {
+  /// lT = log(T); cp = coulomb_prep(n, Y). The log-stored channels (ECLOGP,
+  /// ECLOGEPS) return the total itself, not its log: every caller wants the value
+  /// or compares linearly, so no exp(log(.)) round trip.
+  KOKKOS_INLINE_FUNCTION Real add_rad_ion_lin(int vi, Real var, Real n, Real T,
+                                              Real lT, const Real *Y,
+                                              const CoulombPrep &cp) const {
     const Real Ye      = Y[SCYE];
     const Real eps_fac = Ye/mb;
     switch (vi) {
       case ECLOGP: {
         Real pele = Kokkos::exp(var);
-        Real ptot = pele + (asol/3.0*T*T*T*T + n*inverse_abar(Y)*T);
+        Real ptot = pele + (asol/3.0*T*T*T*T + n*cp.inv_abar*T);
         if (use_coulomb) {
-          const CoulombTerms c = coulomb_terms(n, T, Y, pele);
+          const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y, pele);
           Real pcoul = n*c.y_chg*T*c.u/3.0;
           if (ptot + pcoul > 0.0) { ptot += pcoul; }
         }
-        return Kokkos::log(ptot);
+        return ptot;
       }
       case ECENT: {
         Real srad = 4.0*asol/3.0*T*T*T/n;
@@ -315,51 +353,51 @@ class EOSHelmholtz : public EOSPolicyInterface {
         }
         Real scoul = 0.0;
         if (use_coulomb) {
-          const CoulombTerms c = coulomb_terms(n, T, Y);
+          const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           scoul = c.y_chg*c.s;
         }
         return Ye*var + srad + sn + sp + sa + sh + scoul;
       }
       case ECLOGEPS: {
         Real erad  = asol*T*T*T*T/(n*mb);
-        Real eion  = 1.5*T*inverse_abar(Y)/mb;
+        Real eion  = 1.5*T*cp.inv_abar/mb;
         Real ebind = Y[SCEB];
         Real etot  = eps_fac*Kokkos::exp(var) + erad + eion + ebind;
         if (use_coulomb) {
-          const CoulombTerms c = coulomb_terms(n, T, Y);
+          const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           Real ecoul = c.y_chg*T*c.u/mb;
           if (etot + ecoul > 0.0) { etot += ecoul; }
         }
-        return Kokkos::log(etot);
+        return etot;
       }
       case ECDEPSDT: {
         Real deraddt = 4.0*asol*T*T*T/(n*mb);
-        Real deiondt = 1.5*inverse_abar(Y)/mb;
+        Real deiondt = 1.5*cp.inv_abar/mb;
         Real decouldt = 0.0;
         if (use_coulomb) {
           // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T
-          const CoulombTerms c = coulomb_terms(n, T, Y);
+          const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           decouldt = c.y_chg*(c.u - c.gamma*c.du)/mb;
         }
         return eps_fac*var + deraddt + deiondt + decouldt;
       }
       case ECDPDN: {
-        Real dpiondn = T*inverse_abar(Y);
+        Real dpiondn = T*cp.inv_abar;
         Real dpcouldn = 0.0;
         if (use_coulomb) {
           // d/dn of n*y_chg*T*u(Gamma)/3 with dGamma/dn = Gamma/(3n)
-          const CoulombTerms c = coulomb_terms(n, T, Y);
+          const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           dpcouldn = c.y_chg*T*(c.u + c.gamma*c.du/3.0)/3.0;
         }
         return Ye*var + dpiondn + dpcouldn;
       }
       case ECDPDT: {
         Real dpraddt = 4.0/3.0*asol*T*T*T;
-        Real dpiondt = n*inverse_abar(Y);
+        Real dpiondt = n*cp.inv_abar;
         Real dpcouldt = 0.0;
         if (use_coulomb) {
           // d/dT of n*y_chg*T*u(Gamma)/3 with dGamma/dT = -Gamma/T
-          const CoulombTerms c = coulomb_terms(n, T, Y);
+          const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           dpcouldt = n*c.y_chg*(c.u - c.gamma*c.du)/3.0;
         }
         return var + dpraddt + dpiondt + dpcouldt;
@@ -370,9 +408,25 @@ class EOSHelmholtz : public EOSPolicyInterface {
     }
   }
 
-  KOKKOS_INLINE_FUNCTION Real eval_at_nty(int vi, Real n, Real T, const Real *Y) const {
-    Real var = eval_at_lnty(vi, Kokkos::log(n*Y[SCYE]), Kokkos::log(T));
-    return add_rad_ion(vi, var, n, T, Y);
+  /// Full channel value at (n, T, Y); ECLOGP/ECLOGEPS return P and eps themselves.
+  KOKKOS_INLINE_FUNCTION Real eval_lin_at_nty(int vi, Real n, Real T,
+                                              const Real *Y) const {
+    const Real lT = Kokkos::log(T);
+    Real var = eval_at_lnty(vi, Kokkos::log(n*Y[SCYE]), lT);
+    if (vi == ECETA) { return var; }  // no analytic terms: skip the prep
+    return add_rad_ion_lin(vi, var, n, T, lT, Y, coulomb_prep(n, Y));
+  }
+
+  /// Pressure and energy density with ln_ne = log(n Ye), lT = log(T) and the prep
+  /// supplied by the caller (EOSTransition's strip solver scans T at fixed n, Y).
+  KOKKOS_INLINE_FUNCTION Real pressure_at(Real n, Real T, Real ln_ne, Real lT,
+                                          const Real *Y, const CoulombPrep &cp) const {
+    return add_rad_ion_lin(ECLOGP, eval_at_lnty(ECLOGP, ln_ne, lT), n, T, lT, Y, cp);
+  }
+  KOKKOS_INLINE_FUNCTION Real energy_at(Real n, Real T, Real ln_ne, Real lT,
+                                        const Real *Y, const CoulombPrep &cp) const {
+    return (add_rad_ion_lin(ECLOGEPS, eval_at_lnty(ECLOGEPS, ln_ne, lT),
+                            n, T, lT, Y, cp) + 1.0)*n*mb;
   }
 
   KOKKOS_INLINE_FUNCTION void weight_idx_ln(Real *w0, Real *w1, int *in,
@@ -410,7 +464,9 @@ class EOSHelmholtz : public EOSPolicyInterface {
   }
 
   /// Invert one table variable for temperature at fixed (n, Y). Returns NaN on
-  /// bracketing failure. The analytic terms make f nonlinear in log T inside a
+  /// bracketing failure. var is the target value itself (P, eps or s), not its log:
+  /// the root of var - value is the root of log var - log value, and staying linear
+  /// saves a log per evaluation. The analytic terms make f nonlinear in log T inside a
   /// cell, so refine with a false-position (Anderson-Bjorck) iteration.
   KOKKOS_INLINE_FUNCTION Real temperature_from_var(int iv, Real var, Real n,
                                                    const Real *Y,
@@ -418,10 +474,12 @@ class EOSHelmholtz : public EOSPolicyInterface {
     int in;
     Real wn0, wn1;
     weight_idx_ln(&wn0, &wn1, &in, Kokkos::log(n*Y[SCYE]));
+    // (n, Y)-only parts of the ion/Coulomb terms, identical at every T.
+    const CoulombPrep cp = coulomb_prep(n, Y);
 
     auto f = [=](int it) {
       Real var_pt = wn0*m_table(iv, in+0, it) + wn1*m_table(iv, in+1, it);
-      var_pt = add_rad_ion(iv, var_pt, n, Kokkos::exp(m_log_t(it)), Y);
+      var_pt = add_rad_ion_lin(iv, var_pt, n, m_t(it), m_log_t(it), Y, cp);
       return var - var_pt;
     };
 
@@ -484,15 +542,15 @@ class EOSHelmholtz : public EOSPolicyInterface {
     if (guess_it != nullptr) { *guess_it = ilo; }
     Real lthi = m_log_t(ihi);
     Real ltlo = m_log_t(ilo);
-    if (flo == 0) { return Kokkos::exp(ltlo); }
-    if (fhi == 0) { return Kokkos::exp(lthi); }
+    if (flo == 0) { return m_t(ilo); }
+    if (fhi == 0) { return m_t(ihi); }
 
     Real const v_lo = wn0*m_table(iv, in+0, ilo) + wn1*m_table(iv, in+1, ilo);
     Real const v_hi = wn0*m_table(iv, in+0, ihi) + wn1*m_table(iv, in+1, ihi);
     auto g = [=](Real lt) {
       Real wt     = (lt - ltlo)/(lthi - ltlo);
       Real var_pt = (1.0 - wt)*v_lo + wt*v_hi;
-      return var - add_rad_ion(iv, var_pt, n, Kokkos::exp(lt), Y);
+      return var - add_rad_ion_lin(iv, var_pt, n, Kokkos::exp(lt), lt, Y, cp);
     };
 
     Real la = ltlo, lb_ = lthi;
@@ -535,6 +593,7 @@ class EOSHelmholtz : public EOSPolicyInterface {
   // Table storage on device.
   DvceArray1D<Real> m_log_ne;
   DvceArray1D<Real> m_log_t;
+  DvceArray1D<Real> m_t;       // exp(m_log_t), so scans need no exp per node
   DvceArray3D<Real> m_table;   // (ECNVARS, m_nn, m_nt)
 
  public:

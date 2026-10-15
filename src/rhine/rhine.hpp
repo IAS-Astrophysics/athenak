@@ -60,8 +60,9 @@ constexpr int N_RHINE_SCALARS = 7;
 //! Which network pass to run. GR-Athena++ evaluates the network twice per step:
 //! `source` = TransitionNetworkApply (per substep, back-reaction, '0' reference frozen at
 //! full-step start); `poststep` = Mesh::CalculateTransitionNetwork (once per step after the
-//! final C2P: NSE resync, then diagnostics-only with the current state as reference).
-enum class RhinePass {source, poststep};
+//! final C2P: NSE resync, then diagnostics-only with the current state as reference);
+//! `diag` = the diagnostics-only network evaluation alone (no resync).
+enum class RhinePass {source, poststep, diag};
 
 //----------------------------------------------------------------------------------------
 //! \class RHINE
@@ -78,16 +79,19 @@ class RHINE {
   //! the diagnostics-only network evaluation.
   TaskStatus PostStep(Driver *pdrive, int stage);
 
+  //! Diagnostics-only network evaluation on the current state (no resync). Used by
+  //! Driver::Finalize when the last PostStep skipped it, so final outputs see fresh aux.
+  void Diagnostics(Driver *pdrive);
+
   RhineNets nets;
   int  pmode;
   bool apply;        // back-react on the conserved variables (else diagnostics only)
   bool clamp_cold;   // evaluate at T9 = 0.1 below RHINE's cutoff while free n remain
   bool fnu_physical; // apply the neutrino fraction to the reaction release only
   bool use_nqt;      // EOS LogPolicy selector (mirrors <mhd> use_NQT)
-  // Set when PostStep is queued in Task_AfterTimeIntegrator (i.e. behind the
-  // operator-split M1 step), which already runs once per step and is invoked
-  // with stage = 1, so the final-stage gate must not apply there.
   bool post_after_integrator = false;
+  bool diag_due = true;
+  bool diag_fresh = false;
 
   // Diagnostic array (nmb, N_RHINE_AUX, nc3, nc2, nc1).
   DvceArray5D<Real> aux;

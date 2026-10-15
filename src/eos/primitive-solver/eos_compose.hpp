@@ -594,54 +594,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       return var - var_pt;
     };
 
+    // f is monotone in T (decreasing), so equal signs at both table ends mean var is
+    // outside the table range: clamp (formerly found by a linear walk over the whole
+    // T grid, which ended in the same clamp). Only ECLOGE/ECLOGP come through here.
     int ilo = 0;
     int ihi = m_nt-1;
     Real flo = f(ilo);
     Real fhi = f(ihi);
-    while (flo*fhi>0) {
-      if (ilo == ihi - 1) {
-        break;
-      } else {
-        ilo += 1;
-        flo = f(ilo);
-      }
-    }
-
-    if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE)) {
-      /*if (iv == ECLOGE) {
-        Real vlo = eval_at_nty(iv,n,min_T,Yq);
-        Real vhi = eval_at_nty(iv,n,max_T,Yq);
-        Kokkos::printf("Testing maxima and minima:\n"
-                       "  iv = %i\n"
-                       "  var = %20.17g\n"
-                       "  minimum: %20.17g\n"
-                       "  maximum: %20.17g\n",
-                       iv, var, vlo, vhi);
-      }*/
-      //if (var <= eval_at_nty(iv,n,min_T,Yq)) {
-      if (f(0) <= 0) {
-        return min_T;
-      } //else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
-      else if (f(m_nt-1) >= 0) {
-        return max_T;
-      }
-    }
-
-    if (flo*fhi > 0) {
-      int imin = 0;
-      Real fmin = f(imin);
-      Kokkos::printf("There's a problem with temperature bracketing!\n"
-                     "  iv = %i\n"
-                     "  var = %20.17g\n"
-                     "  n = %20.17g\n"
-                     "  Yq = %20.17g\n"
-                     "  imin = %i\n"
-                     "  ilo = %i\n"
-                     "  ihi = %i\n"
-                     "  fmin = %20.17g\n"
-                     "  flo = %20.17g\n"
-                     "  fhigh = %20.17g\n", iv, var, n , Yq, imin, ilo, ihi, fmin, flo, fhi);
-      assert(flo*fhi <= 0);
+    if (flo*fhi > 0.0) {
+      return (flo <= 0.0) ? min_T : max_T;
     }
     while (ihi - ilo > 1) {
       int ip = ilo + (ihi - ilo)/2;

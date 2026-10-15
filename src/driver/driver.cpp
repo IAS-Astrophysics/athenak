@@ -567,6 +567,23 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
         EndSTSSweep();
       }
 
+      // RHINE's post-step diagnostics network only feeds outputs: request it when an
+      // output is due at the end of this step (same test as below) or the step is the last.
+      if (pmesh->pmb_pack->prhine != nullptr) {
+        float time_32 = static_cast<float>(pmesh->time + pmesh->dt);
+        float tlim_32 = static_cast<float>(tlim);
+        bool due = (time_32 >= tlim_32) || (nlim >= 0 && pmesh->ncycle + 1 >= nlim);
+        for (auto &out : pout->pout_list) {
+          float next_32 = static_cast<float>(out->out_params.last_time+out->out_params.dt);
+          int &dcycle_ = out->out_params.dcycle;
+          if (((out->out_params.dt > 0.0) && (time_32 >= next_32)) ||
+              ((dcycle_ > 0) && ((pmesh->ncycle + 1)%(dcycle_) == 0))) {
+            due = true;
+          }
+        }
+        pmesh->pmb_pack->prhine->diag_due = due;
+      }
+
       // Execute TaskLists
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
@@ -677,6 +694,10 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
 //!  and printing diagnostic messages
 
 void Driver::Finalize(Mesh *pmesh, ParameterInput *pin, Outputs *pout) {
+  // RHINE aux is stale if the last PostStep skipped its diagnostics (wall-clock stop).
+  if (pmesh->pmb_pack->prhine != nullptr && !pmesh->pmb_pack->prhine->diag_fresh) {
+    pmesh->pmb_pack->prhine->Diagnostics(this);
+  }
   // cycle through output Types and load data / write files
   //  This design allows for asynchronous outputs to implemented in the future.
   for (auto &out : pout->pout_list) {
