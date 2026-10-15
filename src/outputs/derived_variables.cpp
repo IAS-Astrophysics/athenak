@@ -1272,7 +1272,8 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       name.compare("rad_m1_n") == 0 ||
       name.compare("rad_m1_fnu") == 0 ||
       name.compare("rad_m1_e") == 0 ||
-      name.compare("rad_m1_absF") == 0) {
+      name.compare("rad_m1_absF") == 0 ||
+      name.compare("rad_m1_fluid_frame") == 0) {
     using namespace radiationm1;
     auto *pradm1        = pm->pmb_pack->pradm1;
     const int nspecies_ = pradm1->nspecies;
@@ -1283,9 +1284,11 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
              : (name.compare("rad_m1_n") == 0)    ? 2
              : (name.compare("rad_m1_fnu") == 0)  ? 3
              : (name.compare("rad_m1_e") == 0)    ? 4
-             : (name.compare("rad_m1_absF") == 0) ? 5 : 0;
+             : (name.compare("rad_m1_absF") == 0) ? 5
+             : (name.compare("rad_m1_fluid_frame") == 0) ? 6 : 0;
 
-    int ncomp = (mode == 1) ? 3*nspecies_ : (mode == 3) ? 4*nspecies_ : nspecies_;
+    int ncomp = (mode == 1 || mode == 6) ? 3*nspecies_
+              : (mode == 3) ? 4*nspecies_ : nspecies_;
     Kokkos::realloc(derived_var, nmb_alloc, ncomp, n3, n2, n1);
     auto dv = derived_var;
 
@@ -1428,6 +1431,22 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
 
           Real flux_fac = flux_factor(g_uu, J, H_d, params_.rad_E_floor);
           dv(m,nuidx,k,j,i) = nnu * Kokkos::sqrt(flux_fac) / volform;
+        } else if (mode == 6) {
+          // Undensitized, as handed to the opacity calculation: J/sqrt(gamma),
+          // n = N/(Gamma sqrt(gamma)), and chi
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+          const Real volform = Kokkos::sqrt(adm::SpatialDet(
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
+          dv(m, nuidx, k, j, i) = J * ene_conv / volform;
+          dv(m, nspecies_ + nuidx, k, j, i) = nnu / volform;
+          dv(m, 2*nspecies_ + nuidx, k, j, i) = chi_(m, nuidx, k, j, i);
         } else {
           Real nnu = 0.0;
           if (nvars_ > M1_N_IDX) {

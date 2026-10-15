@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 178
+#define NOUTPUT_CHOICES 179
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -135,7 +135,11 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   "rhine_aux",
 
   // DynGRMHD chemical potentials mu_b, mu_q, mu_le, code units (177).
-  "mhd_mu"
+  "mhd_mu",
+
+  // radiation M1 fluid frame, grouped (178): the undensitized J, n and chi per species,
+  // exactly as passed to the opacity calculation
+  "rad_m1_fluid_frame"
 };
 
 

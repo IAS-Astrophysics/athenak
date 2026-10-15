@@ -114,6 +114,9 @@ class DynGRMHD {
   void EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu, int jl, int ju,
                          int kl, int ku);
 
+  // Full C2P, including temperature publication, is skipped in fixed mode.
+  bool IsFixedEvolution() const { return fixed_evolution; }
+
   // Unit systems of the EOS, exposed on the non-templated base so that code
   // which cannot see the EOS policies (e.g. derived output variables) can still
   // convert between code units and EOS (nuclear) units.

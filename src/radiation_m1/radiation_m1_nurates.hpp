@@ -30,6 +30,8 @@ struct NuratesParams {
   Real temp_min_mev;
   Real max_recon_temp;  // [MeV] fall back to the equilibrium distribution when the
                         // reconstructed spectral temperature exceeds this
+  bool use_recon_y_fallback;
+  Real max_recon_y;
 
   bool use_abs_em;
   bool use_pair;
@@ -49,6 +51,11 @@ struct NuratesParams {
   bool neglect_blocking;
   bool use_decay;
   bool use_BRT_brem;
+  Real exclude_pair_brem_nb_max;  // remove pair/brem from nue/anue where the baryon
+                                  // number density is below this [nm^-3]; <= 0: never
+  // Per-flavour fallbacks from the reconstructed distribution to Fermi-Dirac,
+  bool use_eq_fallback_temp;  // fall back where the trapped temperature >= 200 MeV
+  bool use_eq_fallback_y;     // fall back where y >= y3 (~0.79012)
 
   int eq_warmup_cycles;  // force use_equilibrium_distribution for the first
                          // this-many cycles on a fresh start, to avoid
@@ -157,6 +164,7 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
                              Real scat_1[4],
                              Real eta_1_non_th[4],
                              Real abs_1_non_th[4],
+                             bool &eq_fallback,
                              NuratesParams const &nurates_params,
                              Primitive::UnitSystem const &code_units,
                              Primitive::UnitSystem const &eos_units,
@@ -268,6 +276,14 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
+  // Pair and brem are removed from nue/anue only below the density cut (see radiation_m1.cpp).
+  grey_op_params.opacity_pars.exclude_pair_brem_nue_anue =
+      nurates_params.exclude_pair_brem_nb_max > 0.0 &&
+      nb * unit_num_dens < nurates_params.exclude_pair_brem_nb_max;
+  grey_op_params.opacity_pars.use_eq_fallback_temp =
+      nurates_params.use_eq_fallback_temp;
+  grey_op_params.opacity_pars.use_eq_fallback_y =
+      nurates_params.use_eq_fallback_y;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
   grey_op_params.opacity_pars.brem_implementation =
       nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
@@ -307,7 +323,8 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     grey_op_params.m1_pars.chi[id_anux] = chi_anux;
 
     grey_op_params.distr_pars =
-        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
+        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars,
+                                   &grey_op_params.opacity_pars);
 
     // The reconstructed spectral temperature T_nu = J/n diverges when the
     // number density collapses (neutral-current-only heavy neutrinos in the
@@ -322,7 +339,21 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
         used_fallback = true;
         break;
       }
+      if (nurates_params.use_recon_y_fallback) {
+        const Real n_s = (grey_op_params.m1_pars.n[s] > 1e-100)
+                             ? grey_op_params.m1_pars.n[s] : 1e-100;
+        const Real j_s = (grey_op_params.m1_pars.J[s] > 1e-100)
+                             ? grey_op_params.m1_pars.J[s] : 1e-100;
+        const Real n_over_j = n_s / j_s;
+        const Real y_s =
+            n_s * n_over_j * n_over_j * n_over_j / bns_nurates::kBS_FourPi_hc3;
+        if (!(y_s < nurates_params.max_recon_y)) {
+          used_fallback = true;
+          break;
+        }
+      }
     }
+    eq_fallback = used_fallback;
     if (used_fallback) {
       grey_op_params.distr_pars =
           bns_nurates::NuEquilibriumParams(&grey_op_params.eos_pars);

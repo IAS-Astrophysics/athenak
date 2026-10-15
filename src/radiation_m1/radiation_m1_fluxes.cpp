@@ -264,7 +264,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                 0.5 * (abs_1_(m, nuidx, k, j - 1, i) + abs_1_(m, nuidx, k, j, i) +
                        scat_1_(m, nuidx, k, j - 1, i) + scat_1_(m, nuidx, k, j, i));
           }
-          Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+          Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx2));
 
           for (int momidx = 0; momidx < nvars_; ++momidx) {
             const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k, j - 2, i);
@@ -330,7 +330,7 @@ TaskStatus RadiationM1::CalculateFluxes(Driver *pdrive, int stage) {
                 0.5 * (abs_1_(m, nuidx, k - 1, j, i) + abs_1_(m, nuidx, k, j, i) +
                        scat_1_(m, nuidx, k - 1, j, i) + scat_1_(m, nuidx, k, j, i));
           }
-          Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx1));
+          Real A_jp12 = Kokkos::fmin(1., 1. / (kappa_ave * mbsize.d_view(m).dx3));
 
           for (int momidx = 0; momidx < nvars_; ++momidx) {
             const Real ujm = u0_(m, CombinedIdx(nuidx, momidx, nvars_), k - 2, j, i);
