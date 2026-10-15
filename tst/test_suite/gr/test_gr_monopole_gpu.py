@@ -31,7 +31,7 @@ def test_run():
         assert results, "GR Monopole test run failed."
         # Check the errors in the output
         data = athena_read.error_dat("monopole-diag.dat")
-        omega = list(zip(*data))[2]
+        omega = data[:, 2]
         omega_error = np.abs(np.average(omega) - 0.5)/0.5
         omega_std = np.std(omega)
         error_threshold = 0.03
