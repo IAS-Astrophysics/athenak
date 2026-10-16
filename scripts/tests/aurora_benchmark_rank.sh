@@ -8,7 +8,7 @@ else
  export ZE_AFFINITY_MASK="$local_rank"
 fi
 export ZE_ENABLE_PCI_ID_DEVICE_ORDER=1
-export KOKKOS_MEMORY_BUDGET_BYTES=$((16000000000 / CZ_NRANKS))
+export KOKKOS_MEMORY_BUDGET_BYTES=$((${CZ_KOKKOS_TOTAL_BYTES:-16000000000} / CZ_NRANKS))
 export KOKKOS_MEMORY_REPORT="$CZ_OUT/memory-$rank.json"
 exec > "$CZ_OUT/rank-$rank.log" 2>&1
 printf 'rank=%s host=%s affinity=%s\n' "$rank" "$(hostname)" "$ZE_AFFINITY_MASK"

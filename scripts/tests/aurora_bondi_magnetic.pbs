@@ -12,7 +12,9 @@ source source-magnetic/scripts/tests/aurora_sane_environment.sh runtime
 export ONEAPI_DEVICE_SELECTOR=level_zero:gpu
 export SYCL_CACHE_PERSISTENT=1 SYCL_CACHE_DIR="$PWD/sycl-cache"
 export KOKKOS_TOOLS_LIBS="$PWD/memory_guard.so"
-export CZ_NRANKS=12 CZ_RSS_GB=1 CZ_SECONDS=3480
+export CZ_NRANKS=12 CZ_RSS_GB=1.2 CZ_SECONDS=3480
+# 14 GB tracked allocations + 14.4 GB aggregate RSS = 28.4 GB.
+export CZ_KOKKOS_TOTAL_BYTES=14000000000
 export CZ_OUT="$PWD/evolution-magnetic-${PBS_JOBID%%.*}"
 mkdir "$CZ_OUT"
 module list > "$CZ_OUT/modules.txt" 2>&1

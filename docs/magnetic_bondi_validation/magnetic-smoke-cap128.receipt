@@ -1,0 +1,14 @@
+{
+  "predecessor": 8937379,
+  "reason": "RSS guard at1.008GB; capacity128 retains full1408-block tree;14GB tracked+14.4GB RSS guards",
+  "attempt_utc": "2026-10-16T23:39:14.951408+00:00",
+  "command": [
+    "qsub",
+    "-v",
+    "CZ_SMOKE=1",
+    "source-magnetic/scripts/tests/aurora_bondi_magnetic.pbs"
+  ],
+  "returncode": 0,
+  "stdout": "8937389.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": ""
+}

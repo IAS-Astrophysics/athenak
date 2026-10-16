@@ -111,11 +111,23 @@ queued job started, removing an inherited hardcoded420-second timeout and
 restoring per-rank logs. Its hash is in magnetic-smoke-cap160-runtime.sha256.
 The test must pass
 scripts/tests/validate_magnetic_pilot.py --roundtrip before physical use.
-No physical magnetic evolution has yet been submitted at this receipt.
+Job 8937379 initialized the full GPU mesh with finite positive fluid and
+zero discrete divB, but its first timestep exceeded the 1 GB rank RSS guard
+(1.008 GB observed). Initial validation and failure evidence are archived in
+failed-8937379/. Its allocation guard did not trigger.
+
+The next test, job8937389 (magnetic-smoke-cap128.receipt), uses capacity128.
+The exact saved-parent restoration cannot enlarge the original1408-block
+tree, whose balanced requirement is118 blocks/rank. This retains10 spare
+slots and does not lower physical resolution. The per-node budgets are now
+14 GB combined tracked allocations plus14.4 GB aggregate RSS (1.2 GB/rank),
+total28.4 GB. The wrapper's optional allocation-budget setting preserves its
+16 GB default for unrelated workflows. No physical magnetic evolution has
+yet been submitted at this receipt.
 
 scripts/tests/aurora_bondi_magnetic.pbs uses one-hour allocations. The physical
 pilot uses -t00:55:00 and residence_scale=1. The tracked allocation budgets
-sum to 16 GB and rank RSS budgets sum to 12 GB, below the 30 GB ceiling.
+sum to14 GB and rank RSS budgets sum to14.4 GB, below the30 GB ceiling.
 Check qselect -u hzhu -q debug-scaling before submission and never duplicate
 an accepted receipt or alter other jobs. The physical target is 20000 M;
 startup or an accelerated test does not establish a relaxed magnetized flow.
