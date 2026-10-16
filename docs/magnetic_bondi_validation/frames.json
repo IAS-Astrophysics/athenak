@@ -137,6 +137,10 @@
       "max_abs_divb": 3.946495907847236e-16,
       "initial_inertial_velocity_error": 1.1920928955078125e-07,
       "external_ghost_inertial_velocity_error": 1.1920928955078125e-07
+    },
+    "invalid_boundary": {
+      "returncode": -6,
+      "expected_rejection": "Bondi boundary is not timelike"
     }
   },
   "frame_comparisons": {

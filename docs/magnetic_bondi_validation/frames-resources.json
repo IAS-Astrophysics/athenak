@@ -8,8 +8,8 @@
     "build-mac-zoom-opt/magnetic-frames"
   ],
   "returncode": 0,
-  "peak_rss_bytes": 496058368,
+  "peak_rss_bytes": 489865216,
   "memory_budget_bytes": 8000000000,
-  "seconds": 35.939572667,
+  "seconds": 37.678289708,
   "stopped": null
 }

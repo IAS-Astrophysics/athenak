@@ -29,7 +29,8 @@ Initial rest is exact wherever timelike. Where inertial-coordinate rest is
 spacelike near the holes, it is impossible to impose; only those initial
 cells are limited to v_Eulerian^2=0.9, with physical puncture excision applied
 by the solver. Boundary data must be timelike and are never silently limited.
-The pre-existing Michel velocity limiter is unchanged.
+The pre-existing Michel velocity limiter is unchanged. A negative single-hole
+control with its boundary inside the static limit confirms explicit rejection.
 
 All six outer boundaries prescribe uniform density, pressure, inertial rest,
 and vertical field in exterior ghosts. Random perturbations are initial only.
@@ -86,11 +87,11 @@ mhd/dyn_flux_team_size=0 on CPU and compare the restart at cycle9 with cycle18.
 ## Aurora execution status
 
 An isolated source-magnetic/build-magnetic pair under
-/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013 is being built
+/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013 has completed a full and incremental build
 with the validated SANE compiler/Kokkos configuration. Existing hydro and SANE
-production checkouts/executables are not overwritten. The latest source must
-be synchronized and an incremental build completed after the current full
-build, then a bounded magnetic GPU roundtrip validated before physical use.
+production checkouts/executables are not overwritten. A final forced problem-generator rebuild is running to remove uncertainty
+from source updates during the first build. A bounded magnetic GPU roundtrip
+must be validated before physical use.
 
 scripts/tests/aurora_bondi_magnetic.pbs uses debug-scaling (newly authorized),
 one node, twelve explicit GPU tiles, one-hour allocation and -t00:55:00.

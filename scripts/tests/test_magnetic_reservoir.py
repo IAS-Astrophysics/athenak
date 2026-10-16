@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Validate inertial-rest magnetic reservoir and external ghost cells in GR frames."""
-import argparse,json,subprocess
+import argparse,json,subprocess,resource
 from pathlib import Path
 import numpy as np
 from test_binary_zoom import ROOT,load,coords,final_output,inspect
@@ -74,5 +74,18 @@ for nx in [16,32]:
     # single-hole horizon; require improvement and tighter errors at nx=32.
     assert max(comparisons[str(nx)].values())<(.10 if nx==16 else .05),comparisons
 for key in ['dens','press','bcc3']:assert comparisons['32'][key]<comparisons['16'][key],comparisons
+# Negative control: a boundary placed inside the single-hole static limit
+# must fail explicitly rather than silently limit the imposed reservoir.
+invalid=a.out/'invalid_boundary';invalid.mkdir(exist_ok=True)
+invalid_flags=['mesh_refinement/refinement=none','problem/initial_condition=bondi_reservoir',
+ 'problem/single_black_hole=true','problem/corotating=false','problem/frame_omega=0',
+ 'coord/require_resolved_horizon=false','time/nlim=1']
+for i in [1,2,3]:invalid_flags += [f'mesh/nx{i}=8',f'mesh/x{i}min=-0.5',f'mesh/x{i}max=0.5']
+def no_core(): resource.setrlimit(resource.RLIMIT_CORE,(0,0))
+with (invalid/'run.log').open('w') as log:
+ proc=subprocess.run([str(a.exe.resolve()),'-i',str(input_path.resolve()),'-d',str(invalid.resolve())]+invalid_flags,
+  stdout=log,stderr=subprocess.STDOUT,timeout=30,preexec_fn=no_core)
+assert proc.returncode!=0 and 'Bondi boundary is not timelike' in (invalid/'run.log').read_text()
+results['invalid_boundary']={'returncode':proc.returncode,'expected_rejection':'Bondi boundary is not timelike'}
 (a.out/'validation.json').write_text(json.dumps(dict(cases=results,frame_comparisons=comparisons),indent=2)+'\n')
 print('Magnetic inertial-rest and boundary checks passed',comparisons,flush=True)

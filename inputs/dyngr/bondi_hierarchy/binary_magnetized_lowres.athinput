@@ -98,7 +98,7 @@ calculate_tmunu = false
 dynamic = false
 <problem>
 initial_condition = bondi_reservoir
-# Optional initial cavity only; exterior feeding remains the Michel solution.
+# No initial cavity; all outer faces maintain the uniform inertial-rest reservoir.
 bondi_cavity_radius = 0
 bondi_cavity_fraction = 0
 bondi_cavity_core_fraction = 0
