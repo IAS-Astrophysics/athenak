@@ -133,8 +133,16 @@ all rank logs/reports are in gpu-roundtrip-8937389/.
 
 Physical pilot8937401 was accepted after this validation, from fresh initial
 data with residence_scale1, no cycle limit, target20000 M and the55-minute
-clean solver cutoff. magnetic-physical.receipt records it. Its result remains
-pending; neither target completion nor inflow equilibrium is claimed.
+clean solver cutoff. magnetic-physical.receipt records it. It started on one node at23:48 UTC. The runtime log confirms the250 M
+first dwell, all12 explicit tiles, and forward evolution with dt=0.007260854 M.
+Its final result remains pending; neither target completion nor inflow
+equilibrium is claimed.
+
+scripts/plot_magnetic_bondi_snapshot.py renders density, p/rho and physical
+fluid-frame beta from matching stationary ADM and fluid snapshots. It requires
+identical saved topology, converts Btilde to Eulerian B with sqrt(gamma), and
+uses b^2=(B_i B^i+(B_i u^i)^2)/(1+u_i u^i). Excision cells are masked. Initial
+rendering was inspected locally; an evolved physical-run figure remains pending.
 
 scripts/tests/aurora_bondi_magnetic.pbs uses one-hour allocations. The physical
 pilot uses -t00:55:00 and residence_scale=1. The tracked allocation budgets
