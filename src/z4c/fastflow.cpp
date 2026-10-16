@@ -803,7 +803,7 @@ void FastFlow::FastFlowLoop() {
       break;
      }
 
-    if (meanradius < 0.) {
+    if ((meanradius < 0.) || (rr_min < 0.)) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, meanradius < 0\n");
         fflush(pofile_verbose);
