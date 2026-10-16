@@ -1,0 +1,23 @@
+{
+  "command": [
+    "./build-magnetic/src/athena",
+    "-i",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937389/input.athinput",
+    "-d",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937389",
+    "-t",
+    "00:05:00",
+    "amr_criterion1/residence_scale=1e-6",
+    "time/nlim=18",
+    "time/tlim=100",
+    "output1/dt=1e-6",
+    "output2/dt=1e-6",
+    "output3/dt=1e-6",
+    "output4/dt=1000"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 957644800,
+  "memory_budget_bytes": 1200000000,
+  "seconds": 35.48490932700224,
+  "stopped": null
+}

@@ -1,0 +1,297 @@
+{
+  "ranks": [
+    {
+      "rank": 0,
+      "affinity": "0.0",
+      "rss_bytes": 983781376,
+      "tracked_bytes": 1027949944,
+      "seconds": 35.5052784900181
+    },
+    {
+      "rank": 1,
+      "affinity": "0.1",
+      "rss_bytes": 947818496,
+      "tracked_bytes": 1027777944,
+      "seconds": 35.46759208897129
+    },
+    {
+      "rank": 2,
+      "affinity": "1.0",
+      "rss_bytes": 951521280,
+      "tracked_bytes": 1027571544,
+      "seconds": 35.46890510991216
+    },
+    {
+      "rank": 3,
+      "affinity": "1.1",
+      "rss_bytes": 956362752,
+      "tracked_bytes": 1027468344,
+      "seconds": 35.514120056061074
+    },
+    {
+      "rank": 4,
+      "affinity": "2.0",
+      "rss_bytes": 956960768,
+      "tracked_bytes": 1028540984,
+      "seconds": 35.62353518104646
+    },
+    {
+      "rank": 5,
+      "affinity": "2.1",
+      "rss_bytes": 953020416,
+      "tracked_bytes": 1027856120,
+      "seconds": 35.51549643604085
+    },
+    {
+      "rank": 6,
+      "affinity": "3.0",
+      "rss_bytes": 957644800,
+      "tracked_bytes": 1027468344,
+      "seconds": 35.48490932700224
+    },
+    {
+      "rank": 7,
+      "affinity": "3.1",
+      "rss_bytes": 949248000,
+      "tracked_bytes": 1028187608,
+      "seconds": 35.48235496203415
+    },
+    {
+      "rank": 8,
+      "affinity": "4.0",
+      "rss_bytes": 955092992,
+      "tracked_bytes": 1028587320,
+      "seconds": 35.59664846700616
+    },
+    {
+      "rank": 9,
+      "affinity": "4.1",
+      "rss_bytes": 964128768,
+      "tracked_bytes": 1028621720,
+      "seconds": 35.48572045797482
+    },
+    {
+      "rank": 10,
+      "affinity": "5.0",
+      "rss_bytes": 952778752,
+      "tracked_bytes": 1028896920,
+      "seconds": 35.486070741084404
+    },
+    {
+      "rank": 11,
+      "affinity": "5.1",
+      "rss_bytes": 931487744,
+      "tracked_bytes": 1029034520,
+      "seconds": 35.48514890403021
+    }
+  ],
+  "aggregate_peak_rss_bytes": 11459846144,
+  "sum_tracked_allocation_peaks_bytes": 12337961312,
+  "conservative_sum_bytes": 23797807456,
+  "sum_guard_budgets_bytes": 28399999992,
+  "max_abs_divb": 3.7192471324942744e-15,
+  "states": [
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+      "time": 0.0,
+      "cycle": 0,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.06949082016944885
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+      "time": 0.00726085,
+      "cycle": 1,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.09240763634443283
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+      "time": 0.0217667,
+      "cycle": 2,
+      "blocks": 1296,
+      "max_level": 11,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.915971039067828e-13,
+      "max_field": 0.10726885497570038
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+      "time": 0.0506915,
+      "cycle": 3,
+      "blocks": 1184,
+      "max_level": 10,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.908421739340811e-13,
+      "max_field": 0.11022869497537613
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+      "time": 0.107869,
+      "cycle": 4,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.1065974161028862
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+      "time": 0.219407,
+      "cycle": 5,
+      "blocks": 960,
+      "max_level": 8,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.09236649423837662
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+      "time": 0.433418,
+      "cycle": 6,
+      "blocks": 848,
+      "max_level": 7,
+      "min_density": 0.7049657106399536,
+      "min_pressure": 0.002308496041223407,
+      "max_field": 0.07127376645803452
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+      "time": 0.805393,
+      "cycle": 7,
+      "blocks": 736,
+      "max_level": 6,
+      "min_density": 0.9664610624313354,
+      "min_pressure": 0.0023662522435188293,
+      "max_field": 0.07026451081037521
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+      "time": 1.39572,
+      "cycle": 8,
+      "blocks": 624,
+      "max_level": 5,
+      "min_density": 0.9964559078216553,
+      "min_pressure": 0.002366263885051012,
+      "max_field": 0.06979475915431976
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+      "time": 1.76769,
+      "cycle": 9,
+      "blocks": 736,
+      "max_level": 6,
+      "min_density": 0.9664610624313354,
+      "min_pressure": 0.002366273431107402,
+      "max_field": 0.07022121548652649
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+      "time": 1.9817,
+      "cycle": 10,
+      "blocks": 848,
+      "max_level": 7,
+      "min_density": 0.7049657106399536,
+      "min_pressure": 0.002308496041223407,
+      "max_field": 0.07123145461082458
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+      "time": 2.09324,
+      "cycle": 11,
+      "blocks": 960,
+      "max_level": 8,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.08239451050758362
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+      "time": 2.15042,
+      "cycle": 12,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.10552545636892319
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+      "time": 2.17934,
+      "cycle": 13,
+      "blocks": 1184,
+      "max_level": 10,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.899459724183046e-13,
+      "max_field": 0.14009389281272888
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+      "time": 2.19385,
+      "cycle": 14,
+      "blocks": 1296,
+      "max_level": 11,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.88162459844566e-13,
+      "max_field": 0.1901211440563202
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+      "time": 2.20111,
+      "cycle": 15,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.872532479027196e-13,
+      "max_field": 0.2568930387496948
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+      "time": 2.21562,
+      "cycle": 16,
+      "blocks": 1296,
+      "max_level": 11,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 8.97677223353488e-13,
+      "max_field": 0.27236953377723694
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+      "time": 2.24454,
+      "cycle": 17,
+      "blocks": 1184,
+      "max_level": 10,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.841950388347898e-13,
+      "max_field": 0.22806482017040253
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+      "time": 2.30172,
+      "cycle": 18,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.1734800487756729
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00019.bin",
+      "time": 2.30172,
+      "cycle": 18,
+      "blocks": 960,
+      "max_level": 8,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13,
+      "max_field": 0.10453606396913528
+    }
+  ],
+  "restored_topology": true,
+  "interpretation": "bounded magnetized evolution; no relaxation claim"
+}

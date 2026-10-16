@@ -122,8 +122,19 @@ tree, whose balanced requirement is118 blocks/rank. This retains10 spare
 slots and does not lower physical resolution. The per-node budgets are now
 14 GB combined tracked allocations plus14.4 GB aggregate RSS (1.2 GB/rank),
 total28.4 GB. The wrapper's optional allocation-budget setting preserves its
-16 GB default for unrelated workflows. No physical magnetic evolution has
-yet been submitted at this receipt.
+16 GB default for unrelated workflows. The revised full-hierarchy test8937389 completed18 steps normally and passed
+all12 rank checks: finite positive fluid, nonzero evolving field, all8 zoom
+stages and a return to the exact original finest topology. Maximum discrete
+divB was3.72e-15. The sum of peak rank RSS was11.46 GB; tracked allocation
+peaks summed to12.34 GB, giving a conservative23.80 GB total below30 GB.
+Elapsed rank runtime was about36 seconds. The test's global time2.30 M is
+accelerated topology validation, not physical relaxation. Exact receipts and
+all rank logs/reports are in gpu-roundtrip-8937389/.
+
+Physical pilot8937401 was accepted after this validation, from fresh initial
+data with residence_scale1, no cycle limit, target20000 M and the55-minute
+clean solver cutoff. magnetic-physical.receipt records it. Its result remains
+pending; neither target completion nor inflow equilibrium is claimed.
 
 scripts/tests/aurora_bondi_magnetic.pbs uses one-hour allocations. The physical
 pilot uses -t00:55:00 and residence_scale=1. The tracked allocation budgets

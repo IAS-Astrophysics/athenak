@@ -1,0 +1,12 @@
+{
+  "validation_job": 8937389,
+  "attempt_utc": "2026-10-16T23:44:07.378866+00:00",
+  "command": [
+    "qsub",
+    "source-magnetic/scripts/tests/aurora_bondi_magnetic.pbs"
+  ],
+  "physics": "residence_scale1, tlim20000, clean solver cutoff55min, no accelerated restart",
+  "returncode": 0,
+  "stdout": "8937401.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": ""
+}

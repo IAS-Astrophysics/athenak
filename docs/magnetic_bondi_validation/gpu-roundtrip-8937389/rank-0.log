@@ -1,0 +1,466 @@
+rank=0 host=x4609c6s6b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+
+Root grid = 4 x 4 x 4 MeshBlocks
+Total number of MeshBlocks = 1408
+Number of logical  levels of refinement = 14 (15 levels total)
+Number of physical levels of refinement = 12 (13 levels total)
+  Physical level = 0 (logical level = 2): 48 MeshBlocks, cost = 48
+  Physical level = 1 (logical level = 3): 112 MeshBlocks, cost = 112
+  Physical level = 2 (logical level = 4): 112 MeshBlocks, cost = 112
+  Physical level = 3 (logical level = 5): 112 MeshBlocks, cost = 112
+  Physical level = 4 (logical level = 6): 112 MeshBlocks, cost = 112
+  Physical level = 5 (logical level = 7): 112 MeshBlocks, cost = 112
+  Physical level = 6 (logical level = 8): 112 MeshBlocks, cost = 112
+  Physical level = 7 (logical level = 9): 112 MeshBlocks, cost = 112
+  Physical level = 8 (logical level = 10): 112 MeshBlocks, cost = 112
+  Physical level = 9 (logical level = 11): 112 MeshBlocks, cost = 112
+  Physical level = 10 (logical level = 12): 112 MeshBlocks, cost = 112
+  Physical level = 11 (logical level = 13): 112 MeshBlocks, cost = 112
+  Physical level = 12 (logical level = 14): 128 MeshBlocks, cost = 128
+Number of parallel ranks = 12
+  Rank = 0: 117 MeshBlocks, cost = 117
+  Rank = 1: 117 MeshBlocks, cost = 117
+  Rank = 2: 117 MeshBlocks, cost = 117
+  Rank = 3: 117 MeshBlocks, cost = 117
+  Rank = 4: 117 MeshBlocks, cost = 117
+  Rank = 5: 117 MeshBlocks, cost = 117
+  Rank = 6: 117 MeshBlocks, cost = 117
+  Rank = 7: 117 MeshBlocks, cost = 117
+  Rank = 8: 118 MeshBlocks, cost = 118
+  Rank = 9: 118 MeshBlocks, cost = 118
+  Rank = 10: 118 MeshBlocks, cost = 118
+  Rank = 11: 118 MeshBlocks, cost = 118
+Load Balancing:
+  Maximum normalized cost = 1.00855, Average = 1.00285
+=============== CyclicZoom Information ===============
+Basic: read_rst = 1 write_rst = 1
+Mesh: nzmb_max_perdvce = 128 nzmb_max_perhost = 128
+Data: nvars = 5 nangles = 0 zmb_data_cnt = 76492
+Initial: d_zoom = 1.17549e-38 p_zoom = 1.17549e-38
+Funcs: add_emf = 1
+Efield: emf_fmax = 1 emf_zmax = 8
+Region: x1c = 16 x2c = 0 x3c = 0 r_0 = 0.5 radius = 0.5
+ f_ref = 4 r_ref = 2 r_ref_max = 3.40282e+38
+ f_exc = 0 r_exc = 0 r_exc_max = 8
+ f_cut = 0 r_cut = 0 r_cut_max = 0
+ f_flx = 0 r_flx = 0 r_flx_max = 0
+Interval: trun_fac = 10 trun_pow = 1.5 trun_max = 3.40282e+38
+ trun_fac_0 = 10
+ trun_fac_1 = 10
+ trun_fac_2 = 10
+ trun_fac_3 = 10
+ trun_fac_4 = 10
+ trun_fac_5 = 10
+ trun_fac_6 = 10
+ trun_fac_7 = 10
+AMR: level = 14 max_level = 14 min_level = 7
+State: id = 0 zone = 0 last_zone = 0 direction = 1
+Time: runtime = 0.00025 next time = 0.00025
+======================================================
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0.00552427 corotating=1 single_black_hole=0 M_total=1 boundary=ambient
+CyclicZoom: Writing cyclic zoom restart data at offset 1162129872
+
+Setup complete, executing task list(s)...
+
+elapsed=4.978944e+00 cycle=0 time=0.000000e+00 dt=7.260854e-03
+CyclicZoom: old level = 14
+CyclicZoom: new id = 1 zone = 1 level = 13
+CyclicZoom: old radius = 5.000000e-01 r_ref = 2.000000e+00
+CyclicZoom: new radius = 1.000000e+00 r_ref = 4.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 7.260854e-03 runtime = 0.000000e+00 next time = 7.260854e-03
+CyclicZoom: derefines to level 13 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 0
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 0
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 1.000000e+00 (r_ref = 4.000000e+00)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=6.344338e-02, emax2=5.915228e-02, emax3=6.704848e-04
+CyclicZoom: LimitEFields: emax for limiting = 6.344338e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 0
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 13
+CyclicZoom: new id = 2 zone = 2 level = 12
+CyclicZoom: old radius = 1.000000e+00 r_ref = 4.000000e+00
+CyclicZoom: new radius = 2.000000e+00 r_ref = 8.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.176673e-02 runtime = 0.000000e+00 next time = 2.176673e-02
+CyclicZoom: derefines to level 12 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 1
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 1
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 2.000000e+00 (r_ref = 8.000000e+00)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=5.633344e-02, emax2=5.244190e-02, emax3=7.045198e-04
+CyclicZoom: LimitEFields: emax for limiting = 5.633344e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 1
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 12
+CyclicZoom: new id = 3 zone = 3 level = 11
+CyclicZoom: old radius = 2.000000e+00 r_ref = 8.000000e+00
+CyclicZoom: new radius = 4.000000e+00 r_ref = 1.600000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 5.069146e-02 runtime = 5.656854e-04 next time = 5.125714e-02
+CyclicZoom: derefines to level 11 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 2
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 2
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 4.000000e+00 (r_ref = 1.600000e+01)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=4.297011e-02, emax2=4.004082e-02, emax3=1.227264e-03
+CyclicZoom: LimitEFields: emax for limiting = 4.297011e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 2
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 11
+CyclicZoom: new id = 4 zone = 4 level = 10
+CyclicZoom: old radius = 4.000000e+00 r_ref = 1.600000e+01
+CyclicZoom: new radius = 8.000000e+00 r_ref = 3.200000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 1.078685e-01 runtime = 1.185854e-03 next time = 1.090544e-01
+CyclicZoom: derefines to level 10 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 3
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 3
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 8.000000e+00 (r_ref = 3.200000e+01)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=1.155481e-02, emax2=1.452290e-02, emax3=9.383169e-04
+CyclicZoom: LimitEFields: emax for limiting = 1.452290e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 3
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 10
+CyclicZoom: new id = 5 zone = 5 level = 9
+CyclicZoom: old radius = 8.000000e+00 r_ref = 3.200000e+01
+CyclicZoom: new radius = 1.600000e+01 r_ref = 6.400000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.194070e-01 runtime = 1.185854e-03 next time = 2.205929e-01
+CyclicZoom: derefines to level 9 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 4
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 4
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 1.600000e+01 (r_ref = 6.400000e+01)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=1.533589e-02, emax2=6.538179e-03, emax3=2.763968e-05
+CyclicZoom: LimitEFields: emax for limiting = 1.533589e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 4
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 9
+CyclicZoom: new id = 6 zone = 6 level = 8
+CyclicZoom: old radius = 1.600000e+01 r_ref = 6.400000e+01
+CyclicZoom: new radius = 3.200000e+01 r_ref = 1.280000e+02
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 4.334180e-01 runtime = 1.185854e-03 next time = 4.346039e-01
+CyclicZoom: derefines to level 8 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 5
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 5
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 3.200000e+01 (r_ref = 1.280000e+02)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=1.268323e-02, emax2=6.543745e-03, emax3=1.804405e-05
+CyclicZoom: LimitEFields: emax for limiting = 1.268323e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 5
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 8
+CyclicZoom: new id = 7 zone = 7 level = 7
+CyclicZoom: old radius = 3.200000e+01 r_ref = 1.280000e+02
+CyclicZoom: new radius = 6.400000e+01 r_ref = 2.560000e+02
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 8.053935e-01 runtime = 1.185854e-03 next time = 8.065794e-01
+CyclicZoom: derefines to level 7 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 6
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 6
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 6.400000e+01 (r_ref = 2.560000e+02)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=2.533974e-02, emax2=1.306497e-02, emax3=7.601715e-06
+CyclicZoom: LimitEFields: emax for limiting = 2.533974e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 6
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 7
+CyclicZoom: new id = 8 zone = 6 level = 8
+CyclicZoom: old radius = 6.400000e+01 r_ref = 2.560000e+02
+CyclicZoom: new radius = 3.200000e+01 r_ref = 1.280000e+02
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 1.395716e+00 runtime = 1.185854e-03 next time = 1.396902e+00
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 6
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 6.400000e+01 (r_ref = 2.560000e+02)
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 5
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 3.200000e+01 (r_ref = 1.280000e+02)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 8
+CyclicZoom: new id = 9 zone = 5 level = 9
+CyclicZoom: old radius = 3.200000e+01 r_ref = 1.280000e+02
+CyclicZoom: new radius = 1.600000e+01 r_ref = 6.400000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 1.767691e+00 runtime = 1.185854e-03 next time = 1.768877e+00
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 5
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 3.200000e+01 (r_ref = 1.280000e+02)
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 4
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 1.600000e+01 (r_ref = 6.400000e+01)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 9
+CyclicZoom: new id = 10 zone = 4 level = 10
+CyclicZoom: old radius = 1.600000e+01 r_ref = 6.400000e+01
+CyclicZoom: new radius = 8.000000e+00 r_ref = 3.200000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 1.981702e+00 runtime = 1.185854e-03 next time = 1.982888e+00
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 4
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 1.600000e+01 (r_ref = 6.400000e+01)
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 3
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 8.000000e+00 (r_ref = 3.200000e+01)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 10
+CyclicZoom: new id = 11 zone = 3 level = 11
+CyclicZoom: old radius = 8.000000e+00 r_ref = 3.200000e+01
+CyclicZoom: new radius = 4.000000e+00 r_ref = 1.600000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.093241e+00 runtime = 5.656854e-04 next time = 2.093806e+00
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 3
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 8.000000e+00 (r_ref = 3.200000e+01)
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 2
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 4.000000e+00 (r_ref = 1.600000e+01)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 11
+CyclicZoom: new id = 12 zone = 2 level = 12
+CyclicZoom: old radius = 4.000000e+00 r_ref = 1.600000e+01
+CyclicZoom: new radius = 2.000000e+00 r_ref = 8.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.150418e+00 runtime = 0.000000e+00 next time = 2.150418e+00
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 2
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 4.000000e+00 (r_ref = 1.600000e+01)
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 1
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 2.000000e+00 (r_ref = 8.000000e+00)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 12
+CyclicZoom: new id = 13 zone = 1 level = 13
+CyclicZoom: old radius = 2.000000e+00 r_ref = 8.000000e+00
+CyclicZoom: new radius = 1.000000e+00 r_ref = 4.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.179343e+00 runtime = 0.000000e+00 next time = 2.179343e+00
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 1
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 2.000000e+00 (r_ref = 8.000000e+00)
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 0
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 1.000000e+00 (r_ref = 4.000000e+00)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 13
+CyclicZoom: new id = 14 zone = 0 level = 14
+CyclicZoom: old radius = 1.000000e+00 r_ref = 4.000000e+00
+CyclicZoom: new radius = 5.000000e-01 r_ref = 2.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.193848e+00 runtime = 2.500000e-04 next time = 2.194098e+00
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 0
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Reinitialize variables for old radius: 1.000000e+00 (r_ref = 4.000000e+00)
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 14
+CyclicZoom: new id = 15 zone = 1 level = 13
+CyclicZoom: old radius = 5.000000e-01 r_ref = 2.000000e+00
+CyclicZoom: new radius = 1.000000e+00 r_ref = 4.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.201109e+00 runtime = 0.000000e+00 next time = 2.201109e+00
+CyclicZoom: derefines to level 13 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 0
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 0
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 1.000000e+00 (r_ref = 4.000000e+00)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=1.156631e-01, emax2=1.096974e-01, emax3=4.483019e-03
+CyclicZoom: LimitEFields: emax for limiting = 1.156631e-01
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 0
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 13
+CyclicZoom: new id = 16 zone = 2 level = 12
+CyclicZoom: old radius = 1.000000e+00 r_ref = 4.000000e+00
+CyclicZoom: new radius = 2.000000e+00 r_ref = 8.000000e+00
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.215615e+00 runtime = 0.000000e+00 next time = 2.215615e+00
+CyclicZoom: derefines to level 12 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 1
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 1
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 2.000000e+00 (r_ref = 8.000000e+00)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=7.845957e-02, emax2=6.709140e-02, emax3=4.063166e-03
+CyclicZoom: LimitEFields: emax for limiting = 7.845957e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 1
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 12
+CyclicZoom: new id = 17 zone = 3 level = 11
+CyclicZoom: old radius = 2.000000e+00 r_ref = 8.000000e+00
+CyclicZoom: new radius = 4.000000e+00 r_ref = 1.600000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.244540e+00 runtime = 5.656854e-04 next time = 2.245106e+00
+CyclicZoom: derefines to level 11 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 2
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 2
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 4.000000e+00 (r_ref = 1.600000e+01)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=4.852556e-02, emax2=3.532882e-02, emax3=3.252151e-03
+CyclicZoom: LimitEFields: emax for limiting = 4.852556e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 2
+CyclicZoom: Applied zoom region
+CyclicZoom: old level = 11
+CyclicZoom: new id = 18 zone = 4 level = 10
+CyclicZoom: old radius = 4.000000e+00 r_ref = 1.600000e+01
+CyclicZoom: new radius = 8.000000e+00 r_ref = 3.200000e+01
+CyclicZoom: r_exc = 0.000000e+00 r_cut = 0.000000e+00 r_flx = 0.000000e+00
+CyclicZoom: time = 2.301717e+00 runtime = 1.185854e-03 next time = 2.302903e+00
+CyclicZoom: derefines to level 10 (refine_flag=-1)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: Storing variables before zooming
+CyclicZoom: Corrected variables before zooming
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 3
+CyclicZoom: Stored zoom region before zooming
+ Rank 0 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+CyclicZoom: loaded 128 zoom MeshBlocks from storage for zone 3
+CyclicZoom: Unpacking data from communication buffer
+CyclicZoom: Mask variables for new radius: 8.000000e+00 (r_ref = 3.200000e+01)
+CyclicZoom: Calculated electric fields after AMR
+CyclicZoom: LimitEFields: emax1=1.128452e-02, emax2=7.281041e-03, emax3=2.562749e-03
+CyclicZoom: LimitEFields: emax for limiting = 1.128452e-02
+CyclicZoom: Updated electric fields in zoom region
+CyclicZoom: Packing data into communication buffer
+ Rank 0 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+CyclicZoom: saved 128 zoom MeshBlocks to storage for zone 3
+CyclicZoom: Applied zoom region
+CyclicZoom: Writing cyclic zoom restart data at offset 792367230
+
+Terminating on cycle limit
+time=2.301717e+00 cycle=18
+tlim=1.000000e+02 nlim=18
+
+Current number of MeshBlocks = 960
+784 MeshBlocks created, 1232 deleted by AMR
+1083 communicated for load balancing, load balancing efficiency = 9.962842e-01
+
+MeshBlock-cycles = 19184
+cpu time used  = 2.968688e+01
+zone-cycles/cpu_second = 3.308602e+05
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-magnetic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937389/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937389", "-t", "00:05:00", "amr_criterion1/residence_scale=1e-6", "time/nlim=18", "time/tlim=100", "output1/dt=1e-6", "output2/dt=1e-6", "output3/dt=1e-6", "output4/dt=1000"], "returncode": 0, "peak_rss_bytes": 983781376, "memory_budget_bytes": 1200000000, "seconds": 35.5052784900181, "stopped": null}
