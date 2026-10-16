@@ -16,6 +16,8 @@ export CZ_NRANKS=12 CZ_RSS_GB=1 CZ_SECONDS=3480
 export CZ_OUT="$PWD/evolution-magnetic-${PBS_JOBID%%.*}"
 mkdir "$CZ_OUT"
 module list > "$CZ_OUT/modules.txt" 2>&1
+sha256sum -c build-magnetic/source.sha256 > "$CZ_OUT/source-verification.txt"
+sha256sum -c build-magnetic/executable.sha256 > "$CZ_OUT/executable-verification.txt"
 ldd build-magnetic/src/athena > "$CZ_OUT/libraries.txt"
 grep -q 'mpich-5.0.0.aurora_test.51a9474-' "$CZ_OUT/libraries.txt"
 sha256sum build-magnetic/src/athena > "$CZ_OUT/executable.sha256"

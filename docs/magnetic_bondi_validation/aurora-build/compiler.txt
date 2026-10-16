@@ -1,0 +1,5 @@
+Intel(R) oneAPI DPC++/C++ Compiler 2026.1.0 (2026.1.0.20260617)
+Target: x86_64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /opt/aurora/26.181.0/oneapi/compiler/2026.1/bin/compiler
+Configuration file: /opt/aurora/26.181.0/oneapi/compiler/2026.1/bin/compiler/../icpx.cfg

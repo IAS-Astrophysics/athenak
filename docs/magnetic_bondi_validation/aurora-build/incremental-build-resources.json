@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cmake",
+    "--build",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/build-magnetic",
+    "-j4"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 5167194112,
+  "memory_budget_bytes": 24000000000,
+  "seconds": 363.4245707880473,
+  "stopped": null
+}

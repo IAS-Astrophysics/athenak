@@ -1,0 +1,12 @@
+{
+  "attempt_utc": "2026-10-16T23:27:39.391770+00:00",
+  "command": [
+    "qsub",
+    "-v",
+    "CZ_SMOKE=1",
+    "source-magnetic/scripts/tests/aurora_bondi_magnetic.pbs"
+  ],
+  "returncode": 0,
+  "stdout": "8937358.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": ""
+}

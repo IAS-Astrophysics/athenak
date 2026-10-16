@@ -86,17 +86,23 @@ mhd/dyn_flux_team_size=0 on CPU and compare the restart at cycle9 with cycle18.
 
 ## Aurora execution status
 
-An isolated source-magnetic/build-magnetic pair under
-/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013 has completed a full and incremental build
-with the validated SANE compiler/Kokkos configuration. Existing hydro and SANE
-production checkouts/executables are not overwritten. A final forced problem-generator rebuild is running to remove uncertainty
-from source updates during the first build. A bounded magnetic GPU roundtrip
-must be validated before physical use.
+The isolated source-magnetic/build-magnetic pair under
+/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013 completed the
+final forced problem-generator rebuild with the validated SANE environment.
+The final build took 332 seconds with peak RSS 5.00 GB. Source and executable
+hashes are checked again by the batch script at launch. Build receipts are
+in aurora-build/. Existing hydro/SANE production files are not overwritten.
 
-scripts/tests/aurora_bondi_magnetic.pbs uses debug-scaling (newly authorized),
-one node, twelve explicit GPU tiles, one-hour allocation and -t00:55:00.
-Existing tracked-allocation16 GB plus aggregate rank RSS12 GB guards stay
-below30 GB. Check qselect -u hzhu -q debug-scaling before submitting; do not
-alter other jobs. No GPU submission has yet been made at this receipt.
-The pilot physical target is20000 M; successful startup or a short smoke test
-must not be reported as a relaxed magnetized binary flow.
+Magnetic GPU roundtrip job 8937358 was accepted in debug-scaling on
+2026-10-16 at 23:27 UTC; magnetic-smoke.receipt records the submission.
+It uses one node and twelve explicit GPU tiles, accelerated residence times,
+18 steps and a five-minute solver cutoff. It must pass
+scripts/tests/validate_magnetic_pilot.py --roundtrip before physical use.
+No physical magnetic evolution has yet been submitted at this receipt.
+
+scripts/tests/aurora_bondi_magnetic.pbs uses one-hour allocations. The physical
+pilot uses -t00:55:00 and residence_scale=1. The tracked allocation budgets
+sum to 16 GB and rank RSS budgets sum to 12 GB, below the 30 GB ceiling.
+Check qselect -u hzhu -q debug-scaling before submission and never duplicate
+an accepted receipt or alter other jobs. The physical target is 20000 M;
+startup or an accelerated test does not establish a relaxed magnetized flow.
