@@ -26,7 +26,8 @@ nx3 = 8
 <mesh_refinement>
 refinement = adaptive
 num_levels = 13
-max_nmb_per_rank = 220
+# 118 initial blocks/rank on 12 tiles; reserve 160 without changing resolution.
+max_nmb_per_rank = 160
 ncycle_check = 1
 refinement_interval = 1
 # Resolve each physical horizon at m_hole/16; no binary COM fine patch.
@@ -60,8 +61,8 @@ trun_fac = 10
 trun_pow = 1.5
 <cyclic_zoom>
 verbose = true
-max_nzmb_per_dvce = 220
-max_nzmb_per_host = 220
+max_nzmb_per_dvce = 160
+max_nzmb_per_host = 160
 <time>
 evolution = dynamic
 integrator = rk2

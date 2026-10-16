@@ -93,10 +93,23 @@ The final build took 332 seconds with peak RSS 5.00 GB. Source and executable
 hashes are checked again by the batch script at launch. Build receipts are
 in aurora-build/. Existing hydro/SANE production files are not overwritten.
 
-Magnetic GPU roundtrip job 8937358 was accepted in debug-scaling on
-2026-10-16 at 23:27 UTC; magnetic-smoke.receipt records the submission.
-It uses one node and twelve explicit GPU tiles, accelerated residence times,
-18 steps and a five-minute solver cutoff. It must pass
+The first GPU test, job 8937358, stopped before fluid initialization: the
+Kokkos guard rejected 1.431 GB/rank against its 1.333 GB/rank budget. PBS exit
+was 143 after MPI terminated the remaining ranks. Evidence is archived in
+failed-8937358/. There are no fluid snapshots or relaxation results from it.
+
+The mesh contains 1408 blocks, distributed as 117–118 per rank; capacity220
+reserved unnecessary array space. Capacity160 retains the identical mesh,
+physical resolution, field, dwell prescription and memory guards. Load
+balancing checks the new per-rank block count against capacity on every AMR
+change. The accelerated full-hierarchy test will verify this choice dynamically.
+Replacement job 8937379 was accepted in debug-scaling; its predecessor/reason
+are recorded in magnetic-smoke-cap160.receipt. It uses one node and twelve
+explicit GPU tiles, 18 steps and a five-minute solver cutoff. The isolated
+rank wrapper was synchronized with the current validated wrapper before this
+queued job started, removing an inherited hardcoded420-second timeout and
+restoring per-rank logs. Its hash is in magnetic-smoke-cap160-runtime.sha256.
+The test must pass
 scripts/tests/validate_magnetic_pilot.py --roundtrip before physical use.
 No physical magnetic evolution has yet been submitted at this receipt.
 

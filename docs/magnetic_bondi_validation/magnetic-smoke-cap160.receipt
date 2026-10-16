@@ -1,0 +1,14 @@
+{
+  "predecessor": 8937358,
+  "reason": "Allocation guard rejected spare capacity220; reserve160, same mesh/physics/guards",
+  "attempt_utc": "2026-10-16T23:33:49.292055+00:00",
+  "command": [
+    "qsub",
+    "-v",
+    "CZ_SMOKE=1",
+    "source-magnetic/scripts/tests/aurora_bondi_magnetic.pbs"
+  ],
+  "returncode": 0,
+  "stdout": "8937379.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": ""
+}

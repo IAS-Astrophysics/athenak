@@ -1,0 +1,18 @@
+Job Id: 8937358.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+    resources_used.cpupercent = 666
+    resources_used.cput = 00:00:40
+    resources_used.mem = 301460kb
+    resources_used.ncpus = 208
+    resources_used.ngpus = 0
+    resources_used.vmem = 0kb
+    resources_used.walltime = 00:00:06
+    job_state = F
+    queue = debug-scaling
+    mtime = Fri Oct 16 23:32:20 2026
+    Resource_List.select = 1
+    Resource_List.walltime = 01:00:00
+    stime = Fri Oct 16 23:31:40 2026
+    obittime = Fri Oct 16 23:32:20 2026
+    comment = Job run at Fri Oct 16 at 23:31 on (x4119c7s0b0n0:ncpus=208) and f
+    run_count = 1
+    Exit_status = 143

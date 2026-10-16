@@ -24,6 +24,9 @@ sha256sum build-magnetic/src/athena > "$CZ_OUT/executable.sha256"
 sha256sum source-magnetic/src/pgen/dynbbh.cpp source-magnetic/src/cyclic_zoom/cyclic_zoom.cpp \
  source-magnetic/src/cyclic_zoom/cyclic_zoom.hpp source-magnetic/src/cyclic_zoom/zoom_criteria.cpp \
  > "$CZ_OUT/source.sha256"
+sha256sum source-magnetic/scripts/tests/aurora_benchmark_rank.sh \
+ source-magnetic/scripts/tests/aurora_sane_environment.sh source/scripts/tests/run_bounded.py \
+ > "$CZ_OUT/runtime-scripts.sha256"
 cp source-magnetic/inputs/dyngr/bondi_hierarchy/binary_magnetized_lowres.athinput "$CZ_OUT/input.athinput"
 printf '%s\n' "$PBS_JOBID" > "$CZ_OUT/job-id.txt"
 if [[ -n "${CZ_RESTART:-}" ]]; then
