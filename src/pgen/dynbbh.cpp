@@ -444,6 +444,7 @@ void BinaryReservoirBoundary(Mesh *pm);
 Real reservoir_density, reservoir_pressure, reservoir_bz;
 bool use_bondi_inflow = false;
 bool cache_bondi_boundary = true;
+Real reservoir_perturbation = 0.0;
 std::uint64_t bondi_metric_revision = 0;
 struct BondiBoundaryCache {
   DvceArray5D<Real> primitive;
@@ -2120,17 +2121,9 @@ Real BondiCavityWeight(Real radius, Real cutoff, Real core_fraction) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void BondiInflowPrimitive(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
-                         int m, int k, int j, int i, Real omega,
-                         bondi_profile::Solution solution, bool initial,
-                         Real &rho, Real &p, Real u[3], Real cavity_radius=0.0,
-                         Real cavity_core_fraction=0.0) {
-  Real radius = sqrt(x*x+y*y+z*z), ur, ut;
-  solution.Sample(radius,rho,p,ur,ut);
-  Real f = ur/(ut*fmax(radius,1.0));
-  if (initial && cavity_radius > 0.0 && radius < cavity_radius) {
-    f *= BondiCavityWeight(radius,cavity_radius,cavity_core_fraction);
-  }
+void BondiCoordinateVelocity(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
+                            int m, int k, int j, int i, Real omega, Real f,
+                            bool initial, Real u[3], Real max_vsq=0.9) {
   // Specify the inertial KS coordinate velocity, pull it back to the rotating
   // coordinates, then convert using the actual local binary ADM fields.
   // The grid rotation cancels between v_coord and beta, even outside r_LC.
@@ -2142,7 +2135,7 @@ void BondiInflowPrimitive(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
     for (int b=0; b<3; ++b) vsq += adm.g_dd(m,a,b,k,j,i)*v[a]*v[b];
   }
   if (!Kokkos::isfinite(vsq) || vsq < 0.0) Kokkos::abort("Invalid Bondi velocity norm");
-  if (vsq >= 0.9) {
+  if (vsq >= max_vsq) {
     // A central monopole is not a solution near either individual horizon.
     // Limit only the initial binary seed, never the prescribed outer inflow.
     if (!initial) Kokkos::abort("Bondi boundary is not timelike; move it farther out");
@@ -2152,6 +2145,20 @@ void BondiInflowPrimitive(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
   }
   Real w=1.0/sqrt(1.0-vsq);
   for (int a=0; a<3; ++a) u[a]=w*v[a];
+}
+
+KOKKOS_INLINE_FUNCTION
+void BondiInflowPrimitive(Real x, Real y, Real z, const adm::ADM::ADM_vars &adm,
+                         int m, int k, int j, int i, Real omega,
+                         bondi_profile::Solution solution, bool initial,
+                         Real &rho, Real &p, Real u[3], Real cavity_radius=0.0,
+                         Real cavity_core_fraction=0.0) {
+  Real radius=sqrt(x*x+y*y+z*z),ur,ut;
+  solution.Sample(radius,rho,p,ur,ut);
+  Real f=ur/(ut*fmax(radius,1.0));
+  if (initial && cavity_radius>0.0 && radius<cavity_radius)
+    f*=BondiCavityWeight(radius,cavity_radius,cavity_core_fraction);
+  BondiCoordinateVelocity(x,y,z,adm,m,k,j,i,omega,f,initial,u);
 }
 
 // Uniform reservoir or a finite-radius Michel inflow, with total reference M=1.
@@ -2179,6 +2186,16 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   reservoir_pressure = reservoir_density*cs*cs/(gamma*(1.0-cs*cs/(gamma-1.0)));
   reservoir_bz = pin->GetOrAddReal("problem","b_inf",0.0);
   if (!std::isfinite(reservoir_bz)) Kokkos::abort("b_inf must be finite");
+  if (pin->DoesParameterExist("problem","beta_inf")) {
+    Real beta=pin->GetReal("problem","beta_inf");
+    if (use_bondi_inflow || reservoir_bz!=0.0 || !(beta>0.0 && std::isfinite(beta)))
+      Kokkos::abort("beta_inf requires a uniform reservoir and no explicit b_inf");
+    // Ambient asymptotic normalization: p_mag=B^2/2 in the rest frame.
+    reservoir_bz=std::sqrt(2.0*reservoir_pressure/beta);
+  }
+  reservoir_perturbation=pin->GetOrAddReal("problem","reservoir_pressure_perturbation",0.0);
+  if (!(reservoir_perturbation>=0.0 && reservoir_perturbation<1.0))
+    Kokkos::abort("Invalid reservoir pressure perturbation amplitude");
   if (use_bondi_inflow) {
     Real rc=pin->GetOrAddReal("problem","r_crit",8.0);
     Real kadi=pin->GetOrAddReal("problem","k_adi",1.0);
@@ -2237,6 +2254,8 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   bool inflow=use_bondi_inflow;
   auto solution=inflow_solution;
   Real omega=bbh.frame_omega;
+  Real perturbation=reservoir_perturbation;
+  Kokkos::Random_XorShift64_Pool<> reservoir_random(12345+global_variable::my_rank);
   int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
   Kokkos::deep_copy(b.x1f,0.0);
   Kokkos::deep_copy(b.x2f,0.0);
@@ -2247,6 +2266,25 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
       for (int n=0; n<nv; ++n) w(m,n,k,j,i)=0.0;
       w(m,IDN,k,j,i)=rho;
       w(m,IPR,k,j,i)=pressure;
+      if (!inflow) {
+        auto s=size.d_view(m);
+        Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
+        Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
+        Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
+        Real u[3];
+        // Inertial-coordinate rest is impossible where its time direction is
+        // spacelike. Limit only those initial cells, not valid exterior rest data.
+        BondiCoordinateVelocity(x,y,z,adm,m,k,j,i,omega,0.0,true,u,1.0);
+        for (int a=0;a<3;++a) w(m,IVX+a,k,j,i)=u[a];
+        // Perturb active gas only; external reservoir ghosts stay unperturbed
+        // even before the first boundary callback. Internal ghosts are exchanged.
+        if (perturbation>0.0 && i>=ind.is && i<=ind.ie &&
+            j>=ind.js && j<=ind.je && k>=ind.ks && k<=ind.ke) {
+          auto random=reservoir_random.get_state();
+          w(m,IPR,k,j,i)*=1.0+perturbation*(2.0*random.frand()-1.0);
+          reservoir_random.free_state(random);
+        }
+      }
       if (inflow) {
         auto s=size.d_view(m);
         Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
@@ -2339,6 +2377,11 @@ void BinaryReservoirBoundary(Mesh *pm) {
         for (int n=0; n<nv; ++n) w(m,n,k,j,i)=0.0;
         w(m,IDN,k,j,i)=rho;
         w(m,IPR,k,j,i)=pressure;
+        if (!inflow) {
+          Real u[3];
+          BondiCoordinateVelocity(x,y,z,adm,m,k,j,i,omega,0.0,false,u,1.0);
+          for (int a=0;a<3;++a) w(m,IVX+a,k,j,i)=u[a];
+        }
         if (inflow) {
           Real d, p, u[3];
           if (cached && !refresh) {

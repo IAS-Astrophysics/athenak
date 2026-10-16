@@ -1,0 +1,17 @@
+{
+  "command": [
+    "build-mac-zoom-opt/src/athena",
+    "-i",
+    "inputs/dyngr/bondi_hierarchy/binary_magnetized_lowres.athinput",
+    "-d",
+    "build-mac-zoom-opt/magnetic-full-initial",
+    "mhd/dyn_flux_team_size=0",
+    "mesh_refinement/max_nmb_per_rank=4000",
+    "time/nlim=0"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 6019301376,
+  "memory_budget_bytes": 20000000000,
+  "seconds": 11.525198791,
+  "stopped": null
+}

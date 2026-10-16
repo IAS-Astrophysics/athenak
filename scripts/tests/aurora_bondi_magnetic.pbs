@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -A MHDTidal
+#PBS -q debug-scaling
+#PBS -N cz_magnetic
+#PBS -l select=1
+#PBS -l walltime=01:00:00
+#PBS -l filesystems=flare:home
+#PBS -j oe
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+source source-magnetic/scripts/tests/aurora_sane_environment.sh runtime
+export ONEAPI_DEVICE_SELECTOR=level_zero:gpu
+export SYCL_CACHE_PERSISTENT=1 SYCL_CACHE_DIR="$PWD/sycl-cache"
+export KOKKOS_TOOLS_LIBS="$PWD/memory_guard.so"
+export CZ_NRANKS=12 CZ_RSS_GB=1 CZ_SECONDS=3480
+export CZ_OUT="$PWD/evolution-magnetic-${PBS_JOBID%%.*}"
+mkdir "$CZ_OUT"
+module list > "$CZ_OUT/modules.txt" 2>&1
+ldd build-magnetic/src/athena > "$CZ_OUT/libraries.txt"
+grep -q 'mpich-5.0.0.aurora_test.51a9474-' "$CZ_OUT/libraries.txt"
+sha256sum build-magnetic/src/athena > "$CZ_OUT/executable.sha256"
+sha256sum source-magnetic/src/pgen/dynbbh.cpp source-magnetic/src/cyclic_zoom/cyclic_zoom.cpp \
+ source-magnetic/src/cyclic_zoom/cyclic_zoom.hpp source-magnetic/src/cyclic_zoom/zoom_criteria.cpp \
+ > "$CZ_OUT/source.sha256"
+cp source-magnetic/inputs/dyngr/bondi_hierarchy/binary_magnetized_lowres.athinput "$CZ_OUT/input.athinput"
+printf '%s\n' "$PBS_JOBID" > "$CZ_OUT/job-id.txt"
+if [[ -n "${CZ_RESTART:-}" ]]; then
+ test -s "$CZ_RESTART"
+ sha256sum "$CZ_RESTART" > "$CZ_OUT/restart.sha256"
+ printf '%s\n' "$CZ_RESTART" > "$CZ_OUT/restart-source.txt"
+ initial_args=(-r "$CZ_RESTART")
+else
+ initial_args=(-i "$CZ_OUT/input.athinput")
+fi
+overrides=()
+code_wall=00:55:00
+if [[ ${CZ_SMOKE:-0} == 1 ]]; then
+ overrides+=("amr_criterion1/residence_scale=1e-6" "time/nlim=18" "time/tlim=100"
+              "output1/dt=1e-6" "output2/dt=1e-6" "output3/dt=1e-6" "output4/dt=1000")
+ code_wall=00:05:00
+ export CZ_SECONDS=600
+fi
+if [[ -n "${CZ_TLIM:-}" ]]; then overrides+=("time/tlim=$CZ_TLIM"); fi
+if [[ -n "${CZ_FLUID_DT:-}" ]]; then overrides+=("output1/dt=$CZ_FLUID_DT"); fi
+if [[ -n "${CZ_FLUID_LAST:-}" ]]; then overrides+=("output1/last_time=$CZ_FLUID_LAST"); fi
+printf '%s\n' "${overrides[@]}" > "$CZ_OUT/overrides.txt"
+bind='list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100'
+mpiexec -n 12 -ppn 12 --cpu-bind "$bind" bash source-magnetic/scripts/tests/aurora_benchmark_rank.sh \
+ ./build-magnetic/src/athena "${initial_args[@]}" -d "$CZ_OUT" -t "$code_wall" "${overrides[@]}" \
+ > "$CZ_OUT/launcher.log" 2>&1

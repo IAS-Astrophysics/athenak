@@ -1,0 +1,165 @@
+{
+  "states": [
+    {
+      "cycle": 0,
+      "time": 0.0,
+      "blocks": 512,
+      "max_level": 4,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 1,
+      "time": 0.0431543,
+      "blocks": 512,
+      "max_level": 4,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 8.98172541115988e-13
+    },
+    {
+      "cycle": 2,
+      "time": 0.107576,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 6.974045364642467e-13
+    },
+    {
+      "cycle": 3,
+      "time": 0.193161,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7353338003158569,
+      "min_pressure": 0.002344179665669799
+    },
+    {
+      "cycle": 4,
+      "time": 0.295908,
+      "blocks": 176,
+      "max_level": 1,
+      "min_density": 0.9730254411697388,
+      "min_pressure": 0.0023572640493512154
+    },
+    {
+      "cycle": 5,
+      "time": 0.501402,
+      "blocks": 64,
+      "max_level": 0,
+      "min_density": 0.9996052384376526,
+      "min_pressure": 0.0023669328074902296
+    },
+    {
+      "cycle": 6,
+      "time": 0.604149,
+      "blocks": 176,
+      "max_level": 1,
+      "min_density": 0.9730254411697388,
+      "min_pressure": 0.00023755125585012138
+    },
+    {
+      "cycle": 7,
+      "time": 0.689734,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7353338003158569,
+      "min_pressure": 1.1839117178169545e-05
+    },
+    {
+      "cycle": 8,
+      "time": 0.754155,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 6.462899876727435e-13
+    },
+    {
+      "cycle": 9,
+      "time": 0.79731,
+      "blocks": 512,
+      "max_level": 4,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 6.955696869176409e-13
+    },
+    {
+      "cycle": 10,
+      "time": 0.861732,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 11,
+      "time": 0.947316,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7293421030044556,
+      "min_pressure": 4.653864016290754e-05
+    },
+    {
+      "cycle": 12,
+      "time": 1.05006,
+      "blocks": 176,
+      "max_level": 1,
+      "min_density": 0.9812515377998352,
+      "min_pressure": 0.0014520836994051933
+    },
+    {
+      "cycle": 13,
+      "time": 1.25556,
+      "blocks": 64,
+      "max_level": 0,
+      "min_density": 0.9982922673225403,
+      "min_pressure": 0.002368979388847947
+    },
+    {
+      "cycle": 14,
+      "time": 1.3583,
+      "blocks": 176,
+      "max_level": 1,
+      "min_density": 0.9812515377998352,
+      "min_pressure": 0.0002487551246304065
+    },
+    {
+      "cycle": 15,
+      "time": 1.44389,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7293421030044556,
+      "min_pressure": 8.723886821826454e-06
+    },
+    {
+      "cycle": 16,
+      "time": 1.50831,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 17,
+      "time": 1.55147,
+      "blocks": 512,
+      "max_level": 4,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 6.765083827332818e-13
+    },
+    {
+      "cycle": 18,
+      "time": 1.61589,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 18,
+      "time": 1.61589,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7376615405082703,
+      "min_pressure": 2.7015797968488187e-05
+    }
+  ],
+  "max_abs_divb": 2.1467203015212988e-16
+}

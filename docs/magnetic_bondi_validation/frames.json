@@ -1,0 +1,154 @@
+{
+  "cases": {
+    "inertial16": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 4,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.9978622198104858,
+          "min_pressure": 1.385480489016211e-12
+        }
+      ],
+      "max_abs_divb": 8.714274961352242e-17,
+      "initial_inertial_velocity_error": 2.9802322387695312e-08,
+      "external_ghost_inertial_velocity_error": 1.4901161193847656e-08
+    },
+    "rotating16": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 10,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.9980560541152954,
+          "min_pressure": 1.0602733968578804e-12
+        }
+      ],
+      "max_abs_divb": 1.3982142266916187e-16,
+      "initial_inertial_velocity_error": 1.9073486612342094e-07,
+      "external_ghost_inertial_velocity_error": 1.9073486612342094e-07
+    },
+    "binary16": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.0023662529420107603
+        },
+        {
+          "cycle": 8,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 0.9615690112113953,
+          "min_pressure": 9.615690405376243e-13
+        }
+      ],
+      "max_abs_divb": 1.1774435593192578e-16,
+      "initial_inertial_velocity_error": 1.1920928955078125e-07,
+      "external_ghost_inertial_velocity_error": 1.1920928955078125e-07
+    },
+    "inertial32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 8,
+          "time": 1.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.870403105960435e-13
+        }
+      ],
+      "max_abs_divb": 2.7080659763256687e-16,
+      "initial_inertial_velocity_error": 5.960464477539063e-08,
+      "external_ghost_inertial_velocity_error": 2.9802322387695312e-08
+    },
+    "rotating32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 21,
+          "time": 1.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.486927302765347e-13
+        }
+      ],
+      "max_abs_divb": 5.251384044410376e-16,
+      "initial_inertial_velocity_error": 1.668930025289228e-07,
+      "external_ghost_inertial_velocity_error": 1.668930025289228e-07
+    },
+    "binary32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 16,
+          "time": 1.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 6.236874623526123e-13
+        }
+      ],
+      "max_abs_divb": 3.946495907847236e-16,
+      "initial_inertial_velocity_error": 1.1920928955078125e-07,
+      "external_ghost_inertial_velocity_error": 1.1920928955078125e-07
+    }
+  },
+  "frame_comparisons": {
+    "16": {
+      "dens": 0.0020444286055862904,
+      "press": 0.06968624144792557,
+      "bcc3": 0.0015252316370606422
+    },
+    "32": {
+      "dens": 0.0005130288773216307,
+      "press": 0.01310799177736044,
+      "bcc3": 0.00035237264819443226
+    }
+  }
+}

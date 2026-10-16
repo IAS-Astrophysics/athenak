@@ -1,0 +1,101 @@
+{
+  "states": [
+    {
+      "cycle": 10,
+      "time": 0.861732,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 11,
+      "time": 0.947316,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7293421030044556,
+      "min_pressure": 4.653864016290754e-05
+    },
+    {
+      "cycle": 12,
+      "time": 1.05006,
+      "blocks": 176,
+      "max_level": 1,
+      "min_density": 0.9812515377998352,
+      "min_pressure": 0.0014520836994051933
+    },
+    {
+      "cycle": 13,
+      "time": 1.25556,
+      "blocks": 64,
+      "max_level": 0,
+      "min_density": 0.9982922673225403,
+      "min_pressure": 0.002368979388847947
+    },
+    {
+      "cycle": 14,
+      "time": 1.3583,
+      "blocks": 176,
+      "max_level": 1,
+      "min_density": 0.9812515377998352,
+      "min_pressure": 0.0002487551246304065
+    },
+    {
+      "cycle": 15,
+      "time": 1.44389,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7293421030044556,
+      "min_pressure": 8.723886821826454e-06
+    },
+    {
+      "cycle": 16,
+      "time": 1.50831,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 17,
+      "time": 1.55147,
+      "blocks": 512,
+      "max_level": 4,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 6.765083827332818e-13
+    },
+    {
+      "cycle": 18,
+      "time": 1.61589,
+      "blocks": 400,
+      "max_level": 3,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 18,
+      "time": 1.61589,
+      "blocks": 288,
+      "max_level": 2,
+      "min_density": 0.7376615405082703,
+      "min_pressure": 2.7015797968488187e-05
+    }
+  ],
+  "max_abs_divb": 2.1326256732789872e-16,
+  "bitwise_restart_equal": false,
+  "restart_max_absolute_errors": {
+    "dens": 5.960464477539063e-08,
+    "velx": 3.725290298461914e-09,
+    "vely": 3.725290298461914e-09,
+    "velz": 1.862645149230957e-09,
+    "press": 9.313225746154785e-10,
+    "bcc1": 7.717062544543296e-09,
+    "bcc2": 1.2531018001027405e-08,
+    "bcc3": 1.4901161193847656e-08,
+    "temperature": 9.313225746154785e-10
+  },
+  "restart_tolerance": {
+    "rtol": 5e-06,
+    "atol": 2e-08
+  }
+}

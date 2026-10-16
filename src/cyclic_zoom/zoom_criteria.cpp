@@ -100,7 +100,7 @@ void CyclicZoom::SetRegionAndInterval() {
 
   // Merge only once the COM sphere contains the previous pair of spheres.
   auto merge_centers = [&](ZoomRegion &zr) {
-    if (bondi_hydro_schedule && merge_radius > 0.0 && zr.radius >= merge_radius) {
+    if ((bondi_hydro_schedule || bondi_mhd_schedule) && merge_radius > 0.0 && zr.radius >= merge_radius) {
       zr.ncenters = 1;
       zr.x1c = zr.x2c = zr.x3c = 0.0;
     }
@@ -114,6 +114,13 @@ void CyclicZoom::SetRegionAndInterval() {
     zint.runtime = zstate.zone == 0 ? 100.0*zoom_mass :
         (zstate.zone == 1 || zstate.zone == 2 ? 0.0 :
          10.0*std::sqrt(zregion.radius*zregion.radius*zregion.radius/mass));
+    zint.runtime *= residence_scale;
+  }
+  if (bondi_mhd_schedule) {
+    Real mass=zregion.ncenters == 2 ? zoom_mass : total_mass;
+    zint.runtime=zstate.zone == 0 ? 500.0*zoom_mass :
+        (zstate.zone == 1 || zstate.zone == 2 ? 0.0 :
+         std::min(50.0*std::sqrt(std::pow(zregion.radius,3)/mass),0.15*bondi_time));
     zint.runtime *= residence_scale;
   }
   if (zint.runtime > zint.trun_max) {zint.runtime = zint.trun_max;}

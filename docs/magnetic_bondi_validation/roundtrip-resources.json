@@ -1,0 +1,15 @@
+{
+  "command": [
+    "build-mac-zoom-opt/src/athena",
+    "-i",
+    "build-mac-zoom-opt/magnetic-roundtrip/input.athinput",
+    "-d",
+    "build-mac-zoom-opt/magnetic-roundtrip",
+    "mhd/dyn_flux_team_size=0"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 3442655232,
+  "memory_budget_bytes": 8000000000,
+  "seconds": 45.421009667,
+  "stopped": null
+}

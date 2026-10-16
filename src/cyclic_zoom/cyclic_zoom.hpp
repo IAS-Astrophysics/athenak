@@ -150,6 +150,8 @@ class CyclicZoom {
   ZoomRegion old_zregion;  // previous zoom region parameters
   ZoomRegion base_zregion; // immutable near-zone centers
   bool bondi_hydro_schedule = false;
+  bool bondi_mhd_schedule = false;
+  Real bondi_time = 0.0;
   Real zoom_mass = 1.0, total_mass = 1.0, merge_radius = 0.0;
   Real residence_scale = 1.0; // explicit test acceleration; physical runs use one
   ZoomEMF zemf;            // zoom electric field parameters

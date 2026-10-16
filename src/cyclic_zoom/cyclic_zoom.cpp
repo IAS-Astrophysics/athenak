@@ -119,23 +119,39 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zregion.flx.f = pin->GetOrAddReal(block_name,"f_flx",0.0);
   zregion.flx.r_max = pin->GetOrAddReal(block_name,"r_flx_max",0.0);
 
-  // Eq. 17 of Guo et al. (2025), in individual-hole units near the horizons.
+  // Eqs. 17 (hydro) and 20 (MHD) of Guo et al. (2025), in individual-hole units.
   // Equal-mass circular binaries share one radius; unequal masses need separate
   // radius ladders and are deliberately rejected by this preset.
   bondi_hydro_schedule = pin->GetOrAddBoolean(block_name,"bondi_hydro_schedule",false);
+  bondi_mhd_schedule = pin->GetOrAddBoolean(block_name,"bondi_mhd_schedule",false);
+  if (bondi_hydro_schedule && bondi_mhd_schedule) Kokkos::abort("Choose one Bondi schedule");
   residence_scale = pin->GetOrAddReal(block_name,"residence_scale",1.0);
   if (!std::isfinite(residence_scale) || residence_scale <= 0.0) {
     Kokkos::abort("residence_scale must be finite and positive");
   }
-  if (bondi_hydro_schedule) {
-    if (pmbp->pdyngr == nullptr || pin->GetOrAddReal("problem","b_inf",0.0) != 0.0 ||
-        pin->GetOrAddString("problem","initial_condition","") != "bondi_inflow") {
-      Kokkos::abort("Bondi hydro schedule requires the unmagnetized dynbbh Bondi setup");
+  if (bondi_hydro_schedule || bondi_mhd_schedule) {
+    auto initial = pin->GetOrAddString("problem","initial_condition","");
+    if (pmbp->pdyngr == nullptr ||
+        (bondi_hydro_schedule && (pin->GetOrAddReal("problem","b_inf",0.0) != 0.0 ||
+         pin->DoesParameterExist("problem","beta_inf") || initial != "bondi_inflow")) ||
+        (bondi_mhd_schedule && initial != "bondi_reservoir")) {
+      Kokkos::abort("Bondi schedule incompatible with initial condition or field");
+    }
+    if (bondi_mhd_schedule) {
+      if (!pin->DoesParameterExist("problem","beta_inf") &&
+          pin->GetOrAddReal("problem","b_inf",0.0)==0.0)
+        Kokkos::abort("Magnetic Bondi schedule requires a nonzero field");
+      Real rb=pin->GetReal("problem","r_bondi");
+      if (!(rb>0.0 && std::isfinite(rb))) Kokkos::abort("Invalid magnetic Bondi radius");
+      Real cs=pin->GetOrAddReal("problem","cs_inf",std::sqrt(2.0/rb));
+      bondi_time=2.0/(cs*cs*cs);
+      if (!(rb>0.0 && cs>0.0 && std::isfinite(bondi_time)))
+        Kokkos::abort("Invalid magnetic Bondi timescale");
     }
     bool single = pin->GetOrAddBoolean("problem","single_black_hole",false);
     if (!single && (pin->GetReal("problem","q") != 1.0 ||
                     !pin->GetOrAddBoolean("problem","corotating",false))) {
-      Kokkos::abort("Bondi hydro binary schedule requires equal masses and corotation");
+      Kokkos::abort("Bondi binary schedule requires equal masses and corotation");
     }
     zoom_mass = single ? 1.0 : 0.5;
     merge_radius = single ? 0.0 : pin->GetReal("problem","sep");

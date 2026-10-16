@@ -1,0 +1,14 @@
+{
+  "command": [
+    "build-mac-zoom-opt/src/athena",
+    "-r",
+    "build-mac-zoom-opt/magnetic-roundtrip/rst/magnetic_bondi_binary.00001.rst",
+    "-d",
+    "build-mac-zoom-opt/magnetic-restart"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 3433381888,
+  "memory_budget_bytes": 8000000000,
+  "seconds": 25.442501,
+  "stopped": null
+}

@@ -1,0 +1,21 @@
+{
+  "states": [
+    {
+      "cycle": 0,
+      "time": 0.0,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    },
+    {
+      "cycle": 0,
+      "time": 0.0,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 9.99999993922529e-09,
+      "min_pressure": 9.999999960041972e-13
+    }
+  ],
+  "max_abs_divb": 0.0
+}

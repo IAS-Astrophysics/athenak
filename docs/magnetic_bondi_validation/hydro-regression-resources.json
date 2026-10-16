@@ -1,0 +1,15 @@
+{
+  "command": [
+    "python3",
+    "scripts/tests/test_bondi_frames.py",
+    "--exe",
+    "build-mac-zoom-opt/src/athena",
+    "--out",
+    "build-mac-zoom-opt/hydro-regression-magnetic"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 2137194496,
+  "memory_budget_bytes": 20000000000,
+  "seconds": 63.182117999999996,
+  "stopped": null
+}
