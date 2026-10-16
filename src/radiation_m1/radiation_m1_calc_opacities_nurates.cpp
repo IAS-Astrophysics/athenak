@@ -88,7 +88,6 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
   auto &abs_1_ = abs_1;
   auto &scat_1_ = scat_1;
 
-  const bool peq_on_ = nurates_params_.use_partial_equilibrium;
   // Half-width of the tier-1 c_v secant, relative to T; a gate, not a Jacobian,
   // so a crude c_v is enough.
   const Real peq_cv_eps = 1.0e-2;
@@ -307,371 +306,308 @@ TaskStatus RadiationM1::CalcOpacityNurates_(Driver *pdrive, int stage) {
 
           Real nudens_0_thin[4]{}, nudens_1_thin[4]{},
               nudens_0_peq[4]{}, nudens_1_peq[4]{};
-          // Thermal absorption after the non-LTE correction (Kirchhoff applies to
-          // it alone) and the correction factor itself, needed below by the
-          // no-Kirchhoff path. Both default to a no-op if the block is skipped.
-          Real abs_0_th[4]{}, abs_1_th[4]{};
-          Real corr_ae[4] = {1.0, 1.0, 1.0, 1.0};
+          // Thermal energy absorption after the non-LTE correction; Kirchhoff uses
+          // it alone.
+          Real abs_1_th[4]{};
 
-          if (nurates_params_.use_kirchhoff_law ||
-              use_eq) {
-            // compute neutrino black body function assuming fixed temperature
-            // and Ye
-            NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0],
-                         nudens_0_thin[1], nudens_0_thin[2], nudens_1_thin[0],
-                         nudens_1_thin[1], nudens_1_thin[2], nurates_params_,
-                         code_units, eos_units, nurates_units);
+          // local blackbody at (T, Y_e)
+          NeutrinoDens(mu_n, mu_p, mu_e, T, nudens_0_thin[0],
+                       nudens_0_thin[1], nudens_0_thin[2], nudens_1_thin[0],
+                       nudens_1_thin[1], nudens_1_thin[2], nurates_params_,
+                       code_units, eos_units, nurates_units);
 
-            nudens_0_thin[2] *= 0.5;
-            nudens_1_thin[2] *= 0.5;
-            nudens_0_thin[3] = nudens_0_thin[2];
-            nudens_1_thin[3] = nudens_1_thin[2];
+          nudens_0_thin[2] *= 0.5;
+          nudens_1_thin[2] *= 0.5;
+          nudens_0_thin[3] = nudens_0_thin[2];
+          nudens_1_thin[3] = nudens_1_thin[2];
 
-            // ----------------------------------------------------------------
-            // Non-LTE correction (kappa ~ E_nu^2), applied to the OPACITIES
-            // only: the emissivities are set at the end of the kernel, where
-            // Kirchhoff's law has an equilibrium distribution to multiply by.
-            //
-            // corr_fac comes from the LOCAL blackbody at (T^n, Ye^n), not from
-            // the equilibrium the predictor settles on -- the predictor's
-            // weights are built from kappa_abs, so the other choice would make
-            // kappa depend on the weights that depend on kappa.
-            //
-            // Absorption is charged-current: corr_ae is 1 for the heavy-lepton
-            // neutrinos (matches THC; otherwise their luminosity inflates ~3x)
-            // and scales the THERMAL part only. Scattering is corrected on ALL
-            // flavours, with no thermal split. The result is folded into the
-            // *_loc arrays, so those are the opacities the rest of the step
-            // sees; abs_*_th keep the thermal parts Kirchhoff multiplies.
-            // ----------------------------------------------------------------
-            for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-              Real corr_fac = 1.0;
-              if (use_eq) {
-                corr_fac = (J[nuidx] / rnnu[nuidx]) *
-                           (nudens_0_thin[nuidx] / nudens_1_thin[nuidx]);
-                if (!Kokkos::isfinite(corr_fac)) {
-                  corr_fac = 1.0;
-                }
-                corr_fac *= corr_fac;
-                corr_fac = Kokkos::fmax(
-                    1.0 / nurates_params_.opacity_corr_fac_max,
-                    Kokkos::fmin(corr_fac,
-                                 nurates_params_.opacity_corr_fac_max));
+          // Non-LTE correction (kappa ~ E_nu^2) of the opacities, from the local
+          // blackbody, in eq cells only. Absorption is charged-current: nue/anue
+          // only (as THC), thermal part only. Scattering: all flavours.
+          for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+            Real corr_fac = 1.0;
+            if (use_eq) {
+              corr_fac = (J[nuidx] / rnnu[nuidx]) *
+                         (nudens_0_thin[nuidx] / nudens_1_thin[nuidx]);
+              if (!Kokkos::isfinite(corr_fac)) {
+                corr_fac = 1.0;
               }
-              corr_ae[nuidx] = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
+              corr_fac *= corr_fac;
+              corr_fac = Kokkos::fmax(
+                  1.0 / nurates_params_.opacity_corr_fac_max,
+                  Kokkos::fmin(corr_fac,
+                               nurates_params_.opacity_corr_fac_max));
+            }
+            const Real corr_ae = (nuidx == 0 || nuidx == 1) ? corr_fac : 1.0;
 
-              scat_1_loc[nuidx] *= corr_fac;
+            scat_1_loc[nuidx] *= corr_fac;
 
-              abs_0_th[nuidx] = abs_0_loc[nuidx]*corr_ae[nuidx];
-              abs_1_th[nuidx] = Kokkos::fmax(
-                  abs_1_loc[nuidx] - abs_1_non_th_loc[nuidx], 0.0)*corr_ae[nuidx];
-              abs_0_loc[nuidx] = abs_0_th[nuidx];
-              abs_1_loc[nuidx] = abs_1_th[nuidx] + abs_1_non_th_loc[nuidx];
+            abs_0_loc[nuidx] *= corr_ae;  // number absorption is thermal only
+            abs_1_th[nuidx] = Kokkos::fmax(
+                abs_1_loc[nuidx] - abs_1_non_th_loc[nuidx], 0.0)*corr_ae;
+            abs_1_loc[nuidx] = abs_1_th[nuidx] + abs_1_non_th_loc[nuidx];
+
+            // Eq cells: the eq distribution over-populates the decoupling region,
+            // so scale the NEPS emissivity by the occupation n_M1/n_eq and swap
+            // it into the total eta_1_loc.
+            if (use_eq) {
+              Real f_occ_0 = (nudens_0_thin[nuidx] > 0.0)
+                                 ? nudens_0[nuidx] / nudens_0_thin[nuidx] : 1.0;
+              if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
+              eta_1_loc[nuidx] = Kokkos::fmax(
+                  eta_1_loc[nuidx] - eta_1_non_th_loc[nuidx] +
+                      eta_1_non_th_loc[nuidx]*f_occ_0, 0.0);
+              eta_1_non_th_loc[nuidx] *= f_occ_0;
+            }
+          }
+
+          // Kirchhoff only where the step optical depth, max over nue/anue of
+          // sqrt(kappa_a*(kappa_a + kappa_s))*dtau, exceeds kirchhoff_tau_trap
+          // (THC's opacity_tau_trap); < 0: always. dtau is a full step, since
+          // stage > 1 returns early.
+          const Real dtau = dt_ * adm.alpha(m, k, j, i) / w_lorentz;
+          const Real tau_e = Kokkos::sqrt(
+              abs_1_loc[0]*(abs_1_loc[0] + scat_1_loc[0]));
+          const Real tau_a = Kokkos::sqrt(
+              abs_1_loc[1]*(abs_1_loc[1] + scat_1_loc[1]));
+          const bool use_kirchhoff =
+              nurates_params_.kirchhoff_tau_trap < 0.0 ||
+              Kokkos::fmax(tau_e, tau_a) * dtau > nurates_params_.kirchhoff_tau_trap;
+
+          // ----------------------------------------------------------------
+          // Partially-equilibrated (T*, Ye*) predictor for the equilibrium
+          // Kirchhoff's law multiplies by: a one-parameter family in
+          // w = a/(1+a), a = dtau*kappa. At w = 1 the residuals are
+          // GetBetaEquilibriumTrapped's exactly, at w = 0 they return
+          // (T, Y_e), the local blackbody just computed. Run only where
+          // Kirchhoff is used, since nothing else reads its result.
+          // ----------------------------------------------------------------
+          if (use_kirchhoff) {
+            // ABSORPTION opacities only. The weights measure thermalisation,
+            // and elastic scattering neither thermalises the energy
+            // (u_a H^a = 0) nor changes the number density, so scat_1 has no
+            // place in them. abs_0_loc is thermal-only and abs_1_loc thermal
+            // plus non-thermal (above); both are stored verbatim below, so
+            // each weight tracks the kappa its own channel integrates.
+            //
+            // The electron pair takes one weight per species, because lumping
+            // a pair under a common weight is exact only where the two terms
+            // that weight multiplies are equal -- and they differ by
+            // exp(eta), with the lepton residual their difference, so the two
+            // errors reinforce.
+            //
+            // The heavy pairs share one weight because nothing in the
+            // opacities distinguishes nu_x from its antiparticle: the two
+            // differ only numerically. That weight comes from a J-weighted
+            // kappa, so kappa_bar*J equals the sum of the per-species
+            // kappa_x*J_x at t^n, falling back to the arithmetic mean when
+            // the field is empty and there is nothing to weight with. Once
+            // the physics does distinguish them, they need splitting the same
+            // way: eta = 0 equalises their equilibrium densities but not the
+            // actual ones, so no single weight is exact for both sides.
+            Real J_x = nudens_1[2];
+            Real kJ_x = abs_1_loc[2] * nudens_1[2];
+            Real ks_x = abs_1_loc[2];
+            int n_x = 1;
+            if (nspecies_ > 3) {
+              J_x += nudens_1[3];
+              kJ_x += abs_1_loc[3] * nudens_1[3];
+              ks_x += abs_1_loc[3];
+              n_x = 2;
             }
 
-            // ----------------------------------------------------------------
-            // Partially-equilibrated (T*, Ye*) predictor: a one-parameter family
-            // in w = a/(1+a), a = dtau*kappa. At w = 1 the residuals are
-            // GetBetaEquilibriumTrapped's exactly, at w = 0 they return
-            // (T, Y_e), the local blackbody just computed. It spans, per cell
-            // and continuously in dt, the two states the optical-depth test
-            // this replaced jumped between.
-            // ----------------------------------------------------------------
-            if (peq_on_) {
-              // A FULL step, not the stage's beta*dt: this function returns
-              // early for stage > 1, so this emissivity serves the whole cycle.
-              const Real dtau = dt_ * adm.alpha(m, k, j, i) / w_lorentz;
+            const Real kbar_1x = (J_x > 0.0) ? kJ_x/J_x : ks_x/n_x;
 
-              // ABSORPTION opacities only. The weights measure thermalisation,
-              // and elastic scattering neither thermalises the energy
-              // (u_a H^a = 0) nor changes the number density, so scat_1 has no
-              // place in them. abs_0_loc is thermal-only and abs_1_loc thermal
-              // plus non-thermal (above); both are stored verbatim below, so
-              // each weight tracks the kappa its own channel integrates.
-              //
-              // The electron pair takes one weight per species, because lumping
-              // a pair under a common weight is exact only where the two terms
-              // that weight multiplies are equal -- and they differ by
-              // exp(eta), with the lepton residual their difference, so the two
-              // errors reinforce.
-              //
-              // The heavy pairs share one weight because nothing in the
-              // opacities distinguishes nu_x from its antiparticle: the two
-              // differ only numerically. That weight comes from a J-weighted
-              // kappa, so kappa_bar*J equals the sum of the per-species
-              // kappa_x*J_x at t^n, falling back to the arithmetic mean when
-              // the field is empty and there is nothing to weight with. Once
-              // the physics does distinguish them, they need splitting the same
-              // way: eta = 0 equalises their equilibrium densities but not the
-              // actual ones, so no single weight is exact for both sides.
-              Real J_x = nudens_1[2];
-              Real kJ_x = abs_1_loc[2] * nudens_1[2];
-              Real ks_x = abs_1_loc[2];
-              int n_x = 1;
+            const Real a_1p = dtau*abs_1_loc[0];
+            const Real a_1m = dtau*abs_1_loc[1];
+            const Real a_1x = dtau*kbar_1x;
+            const Real a_0p = dtau*abs_0_loc[0];
+            const Real a_0m = dtau*abs_0_loc[1];
+            const Real w_1p = a_1p/(1.0 + a_1p);
+            const Real w_1m = a_1m/(1.0 + a_1m);
+            const Real w_1x = a_1x/(1.0 + a_1x);
+            const Real w_0p = a_0p/(1.0 + a_0p);
+            const Real w_0m = a_0m/(1.0 + a_0m);
+
+            Real T_star = T;
+            Real Ye_star = Y;
+
+            // Tier-0 gate: no EOS calls at all. An optically thin cell has
+            // nothing to equilibrate with and must cost nothing. Ternaries not
+            // fmax, per eos_compose.hpp:188 (SYCL's fmax(x, NaN) = NaN), so a
+            // NaN weight gates the cell out deliberately, not by luck.
+            const bool w_finite = Kokkos::isfinite(w_1p) &&
+                                  Kokkos::isfinite(w_1m) &&
+                                  Kokkos::isfinite(w_1x) &&
+                                  Kokkos::isfinite(w_0p) &&
+                                  Kokkos::isfinite(w_0m);
+            Real w_max = (w_1p > w_1m) ? w_1p : w_1m;
+            w_max = (w_max > w_1x) ? w_max : w_1x;
+            w_max = (w_max > w_0p) ? w_max : w_0p;
+            w_max = (w_max > w_0m) ? w_max : w_0m;
+
+            if (w_finite && w_max >= nurates_params_.peq_w_floor) {
+              Real Y_part[3] = {Y, 0.0, 0.0};
+
+              // Tier-1 gate: first-order bounds on the excursion the solve
+              // would produce, from the blackbody already in hand and c_v. A
+              // cell already at equilibrium must also cost nothing. T is
+              // clamped to the table because weight_idx_lt clamps the index
+              // but not the interpolation weight, so an out-of-range T
+              // extrapolates; dividing by the actual T_hi - T_lo keeps a
+              // one-sided secant at the edge correct.
+              const Real T_tab_min = eos.GetMinimumTemperature()*
+                                      eos_units.TemperatureConversion(code_units);
+              const Real T_tab_max = eos.GetMaximumTemperature()*
+                                      eos_units.TemperatureConversion(code_units);
+              Real T_lo = T*(1.0 - peq_cv_eps);
+              Real T_hi = T*(1.0 + peq_cv_eps);
+              T_lo = (T_lo > T_tab_min) ? T_lo : T_tab_min;
+              T_hi = (T_hi < T_tab_max) ? T_hi : T_tab_max;
+              const Real cv = (T_hi > T_lo)
+                                  ? (eos.GetEnergy(nb, T_hi, Y_part) -
+                                      eos.GetEnergy(nb, T_lo, Y_part))/(T_hi - T_lo)
+                                  : 0.0;
+              const bool cv_ok = Kokkos::isfinite(cv) && cv > 0.0;
+
+              Real J_x_eq = nudens_1_thin[2];
               if (nspecies_ > 3) {
-                J_x += nudens_1[3];
-                kJ_x += abs_1_loc[3] * nudens_1[3];
-                ks_x += abs_1_loc[3];
-                n_x = 2;
+                J_x_eq += nudens_1_thin[3];
               }
 
-              const Real kbar_1x = (J_x > 0.0) ? kJ_x/J_x : ks_x/n_x;
+              // Sum of absolute per-species terms, not the absolute value of
+              // the weighted net: the gate's only job is to skip cells where
+              // nothing happens, and only the sum is guaranteed not to
+              // under-estimate the move, so only it cannot gate out a cell
+              // that would have moved.
+              const Real dlnT_hat =
+                  cv_ok ? (w_1p*Kokkos::fabs(nudens_1_thin[0] - nudens_1[0]) +
+                            w_1m*Kokkos::fabs(nudens_1_thin[1] - nudens_1[1]) +
+                            w_1x*Kokkos::fabs(J_x_eq - J_x))/(T*cv)
+                        : 0.0;
+              const Real dYe_hat =
+                  (w_0p*Kokkos::fabs(nudens_0_thin[0] - nudens_0[0]) +
+                    w_0m*Kokkos::fabs(nudens_0_thin[1] - nudens_0[1]))/nb;
 
-              const Real a_1p = dtau*abs_1_loc[0];
-              const Real a_1m = dtau*abs_1_loc[1];
-              const Real a_1x = dtau*kbar_1x;
-              const Real a_0p = dtau*abs_0_loc[0];
-              const Real a_0m = dtau*abs_0_loc[1];
-              const Real w_1p = a_1p/(1.0 + a_1p);
-              const Real w_1m = a_1m/(1.0 + a_1m);
-              const Real w_1x = a_1x/(1.0 + a_1x);
-              const Real w_0p = a_0p/(1.0 + a_0p);
-              const Real w_0m = a_0m/(1.0 + a_0m);
+              // A bad c_v removes the gate and the trust region both --
+              // everything below divides by T*cv. Predict nothing instead.
+              if (cv_ok && !(dlnT_hat < nurates_params_.peq_dlnT_tol &&
+                              dYe_hat < nurates_params_.peq_dYe_tol)) {
+                // Trust region. The gate estimates do double duty: a root far
+                // outside the linear bound is a converged-but-wrong root --
+                // the failure mode that matters, since a small energy residual
+                // admits a badly wrong T wherever the thermal energy is a small
+                // fraction of the total. The floor at the gate tolerances lets
+                // an already-equilibrated cell still move imperceptibly, and is
+                // where the ternaries' NaN branch lands: reject, not admit.
+                const Real dlnT_trust = peq_trust_c*dlnT_hat;
+                const Real dYe_trust = peq_trust_c*dYe_hat;
+                const Real dlnT_max =
+                    (dlnT_trust > nurates_params_.peq_dlnT_tol)
+                        ? dlnT_trust : nurates_params_.peq_dlnT_tol;
+                const Real dYe_max =
+                    (dYe_trust > nurates_params_.peq_dYe_tol)
+                        ? dYe_trust : nurates_params_.peq_dYe_tol;
 
-              Real T_star = T;
-              Real Ye_star = Y;
+                const Real e_mat = eos.GetEnergy(nb, T, Y_part);
 
-              // Tier-0 gate: no EOS calls at all. An optically thin cell has
-              // nothing to equilibrate with and must cost nothing. Ternaries not
-              // fmax, per eos_compose.hpp:188 (SYCL's fmax(x, NaN) = NaN), so a
-              // NaN weight gates the cell out deliberately, not by luck.
-              const bool w_finite = Kokkos::isfinite(w_1p) &&
-                                    Kokkos::isfinite(w_1m) &&
-                                    Kokkos::isfinite(w_1x) &&
-                                    Kokkos::isfinite(w_0p) &&
-                                    Kokkos::isfinite(w_0m);
-              Real w_max = (w_1p > w_1m) ? w_1p : w_1m;
-              w_max = (w_max > w_1x) ? w_max : w_1x;
-              w_max = (w_max > w_0p) ? w_max : w_0p;
-              w_max = (w_max > w_0m) ? w_max : w_0m;
+                // On failure, halve all five weights and retry: that slides
+                // the problem along the same one-parameter family toward the
+                // trivial one, so every intermediate point is a valid scheme.
+                // Scaling all five is the same as scaling the pair mean and
+                // the half-difference, so this attacks the split terms too.
+                // A cell that never produces an accepted root keeps (T, Y_e).
+                Real f_soft = 1.0;
+                for (int n_soft = 0; n_soft <= peq_max_halvings;
+                      ++n_soft, f_soft *= 0.5) {
+                  const Real u[PEQ_NWEIGHTS] = {
+                      f_soft*w_1p, f_soft*w_1m, f_soft*w_1x,
+                      f_soft*w_0p, f_soft*w_0m};
 
-              if (w_finite && w_max >= nurates_params_.peq_w_floor) {
-                Real Y_part[3] = {Y, 0.0, 0.0};
+                  const Real e_rhs = e_mat + u[PEQ_W1_NUE]*nudens_1[0] +
+                                      u[PEQ_W1_ANUE]*nudens_1[1] + u[PEQ_W1_X]*J_x;
+                  Real Yl_rhs[3] = {Y + (u[PEQ_W0_NUE]*nudens_0[0] -
+                                          u[PEQ_W0_ANUE]*nudens_0[1])/nb, 0.0, 0.0};
 
-                // Tier-1 gate: first-order bounds on the excursion the solve
-                // would produce, from the blackbody already in hand and c_v. A
-                // cell already at equilibrium must also cost nothing. T is
-                // clamped to the table because weight_idx_lt clamps the index
-                // but not the interpolation weight, so an out-of-range T
-                // extrapolates; dividing by the actual T_hi - T_lo keeps a
-                // one-sided secant at the edge correct.
-                const Real T_tab_min = eos.GetMinimumTemperature()*
-                                       eos_units.TemperatureConversion(code_units);
-                const Real T_tab_max = eos.GetMaximumTemperature()*
-                                       eos_units.TemperatureConversion(code_units);
-                Real T_lo = T*(1.0 - peq_cv_eps);
-                Real T_hi = T*(1.0 + peq_cv_eps);
-                T_lo = (T_lo > T_tab_min) ? T_lo : T_tab_min;
-                T_hi = (T_hi < T_tab_max) ? T_hi : T_tab_max;
-                const Real cv = (T_hi > T_lo)
-                                    ? (eos.GetEnergy(nb, T_hi, Y_part) -
-                                       eos.GetEnergy(nb, T_lo, Y_part))/(T_hi - T_lo)
-                                    : 0.0;
-                const bool cv_ok = Kokkos::isfinite(cv) && cv > 0.0;
+                  Real T_try = T;
+                  Real Ye_try[3] = {Y, 0.0, 0.0};
+                  bool ok = eos.GetBetaEquilibriumPartial(
+                      nb, e_rhs, Yl_rhs, u, T_try, &Ye_try[0], T, Y_part);
 
-                Real J_x_eq = nudens_1_thin[2];
-                if (nspecies_ > 3) {
-                  J_x_eq += nudens_1_thin[3];
-                }
-
-                // Sum of absolute per-species terms, not the absolute value of
-                // the weighted net: the gate's only job is to skip cells where
-                // nothing happens, and only the sum is guaranteed not to
-                // under-estimate the move, so only it cannot gate out a cell
-                // that would have moved.
-                const Real dlnT_hat =
-                    cv_ok ? (w_1p*Kokkos::fabs(nudens_1_thin[0] - nudens_1[0]) +
-                             w_1m*Kokkos::fabs(nudens_1_thin[1] - nudens_1[1]) +
-                             w_1x*Kokkos::fabs(J_x_eq - J_x))/(T*cv)
-                          : 0.0;
-                const Real dYe_hat =
-                    (w_0p*Kokkos::fabs(nudens_0_thin[0] - nudens_0[0]) +
-                     w_0m*Kokkos::fabs(nudens_0_thin[1] - nudens_0[1]))/nb;
-
-                // A bad c_v removes the gate and the trust region both --
-                // everything below divides by T*cv. Predict nothing instead.
-                if (cv_ok && !(dlnT_hat < nurates_params_.peq_dlnT_tol &&
-                               dYe_hat < nurates_params_.peq_dYe_tol)) {
-                  // Trust region. The gate estimates do double duty: a root far
-                  // outside the linear bound is a converged-but-wrong root --
-                  // the failure mode that matters, since a small energy residual
-                  // admits a badly wrong T wherever the thermal energy is a small
-                  // fraction of the total. The floor at the gate tolerances lets
-                  // an already-equilibrated cell still move imperceptibly, and is
-                  // where the ternaries' NaN branch lands: reject, not admit.
-                  const Real dlnT_trust = peq_trust_c*dlnT_hat;
-                  const Real dYe_trust = peq_trust_c*dYe_hat;
-                  const Real dlnT_max =
-                      (dlnT_trust > nurates_params_.peq_dlnT_tol)
-                          ? dlnT_trust : nurates_params_.peq_dlnT_tol;
-                  const Real dYe_max =
-                      (dYe_trust > nurates_params_.peq_dYe_tol)
-                          ? dYe_trust : nurates_params_.peq_dYe_tol;
-
-                  const Real e_mat = eos.GetEnergy(nb, T, Y_part);
-
-                  // On failure, halve all five weights and retry: that slides
-                  // the problem along the same one-parameter family toward the
-                  // trivial one, so every intermediate point is a valid scheme.
-                  // Scaling all five is the same as scaling the pair mean and
-                  // the half-difference, so this attacks the split terms too.
-                  // A cell that never produces an accepted root keeps (T, Y_e).
-                  Real f_soft = 1.0;
-                  for (int n_soft = 0; n_soft <= peq_max_halvings;
-                       ++n_soft, f_soft *= 0.5) {
-                    const Real u[PEQ_NWEIGHTS] = {
-                        f_soft*w_1p, f_soft*w_1m, f_soft*w_1x,
-                        f_soft*w_0p, f_soft*w_0m};
-
-                    const Real e_rhs = e_mat + u[PEQ_W1_NUE]*nudens_1[0] +
-                                       u[PEQ_W1_ANUE]*nudens_1[1] + u[PEQ_W1_X]*J_x;
-                    Real Yl_rhs[3] = {Y + (u[PEQ_W0_NUE]*nudens_0[0] -
-                                           u[PEQ_W0_ANUE]*nudens_0[1])/nb, 0.0, 0.0};
-
-                    Real T_try = T;
-                    Real Ye_try[3] = {Y, 0.0, 0.0};
-                    bool ok = eos.GetBetaEquilibriumPartial(
-                        nb, e_rhs, Yl_rhs, u, T_try, &Ye_try[0], T, Y_part);
-
-                    if (ok && Kokkos::fabs(Kokkos::log(T_try/T)) <= dlnT_max &&
-                        Kokkos::fabs(Ye_try[0] - Y) <= dYe_max) {
-                      T_star = T_try;
-                      Ye_star = Ye_try[0];
-                      break;
-                    }
+                  if (ok && Kokkos::fabs(Kokkos::log(T_try/T)) <= dlnT_max &&
+                      Kokkos::fabs(Ye_try[0] - Y) <= dYe_max) {
+                    T_star = T_try;
+                    Ye_star = Ye_try[0];
+                    break;
                   }
                 }
               }
+            }
 
-              // The equilibrium the cell is predicted to be radiating towards.
-              // Evaluated unconditionally: a gated or unusable cell has
-              // (T*, Ye*) = (T, Y_e), so this reproduces nudens_*_thin bit for
-              // bit and the w -> 0 limit costs no special case. The solve and
-              // this evaluation do not share a function, but they agree on the
-              // mathematics to 1-2 ulp: func_eq_weak's closed forms are exactly
-              // what FDI_p2/FDI_p3 reflect on.
-              Real Ye_arr[3] = {Ye_star, 0.0, 0.0};
-              Real mu_b_s = eos.GetBaryonChemicalPotential(nb, T_star, Ye_arr);
-              Real mu_q_s = eos.GetChargeChemicalPotential(nb, T_star, Ye_arr);
-              Real mu_le_s =
-                  eos.GetElectronLeptonChemicalPotential(nb, T_star, Ye_arr);
+            // The equilibrium the cell is predicted to be radiating towards.
+            // Evaluated in every Kirchhoff cell: a gated or unusable cell has
+            // (T*, Ye*) = (T, Y_e), so this reproduces nudens_*_thin bit for
+            // bit and the w -> 0 limit costs no special case. The solve and
+            // this evaluation do not share a function, but they agree on the
+            // mathematics to 1-2 ulp: func_eq_weak's closed forms are exactly
+            // what FDI_p2/FDI_p3 reflect on.
+            Real Ye_arr[3] = {Ye_star, 0.0, 0.0};
+            Real mu_b_s = eos.GetBaryonChemicalPotential(nb, T_star, Ye_arr);
+            Real mu_q_s = eos.GetChargeChemicalPotential(nb, T_star, Ye_arr);
+            Real mu_le_s =
+                eos.GetElectronLeptonChemicalPotential(nb, T_star, Ye_arr);
 
-              NeutrinoDens(mu_b_s, mu_b_s + mu_q_s, mu_le_s - mu_q_s, T_star,
-                           nudens_0_peq[0], nudens_0_peq[1], nudens_0_peq[2],
-                           nudens_1_peq[0], nudens_1_peq[1], nudens_1_peq[2],
-                           nurates_params_, code_units, eos_units,
-                           nurates_units);
-              nudens_0_peq[2] *= 0.5;
-              nudens_1_peq[2] *= 0.5;
-              nudens_0_peq[3] = nudens_0_peq[2];
-              nudens_1_peq[3] = nudens_1_peq[2];
+            NeutrinoDens(mu_b_s, mu_b_s + mu_q_s, mu_le_s - mu_q_s, T_star,
+                          nudens_0_peq[0], nudens_0_peq[1], nudens_0_peq[2],
+                          nudens_1_peq[0], nudens_1_peq[1], nudens_1_peq[2],
+                          nurates_params_, code_units, eos_units,
+                          nurates_units);
+            nudens_0_peq[2] *= 0.5;
+            nudens_1_peq[2] *= 0.5;
+            nudens_0_peq[3] = nudens_0_peq[2];
+            nudens_1_peq[3] = nudens_1_peq[2];
 
-              // Finiteness screen, the live counterpart of the asserts the
-              // trapped branch carried (and -DNDEBUG removes). Nothing
-              // downstream catches this: abs_*_th * my_nudens_* would carry a
-              // NaN into eta_* and on into the source term. Fall back to the
-              // local blackbody, the w -> 0 answer.
-              bool peq_finite = true;
+            // Finiteness screen, the live counterpart of the asserts the
+            // trapped branch carried (and -DNDEBUG removes). Nothing
+            // downstream catches this: abs_*_loc * nudens_*_peq would carry a
+            // NaN into eta_* and on into the source term. Fall back to the
+            // local blackbody, the w -> 0 answer.
+            bool peq_finite = true;
+            for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+              peq_finite = peq_finite &&
+                            Kokkos::isfinite(nudens_0_peq[nuidx]) &&
+                            Kokkos::isfinite(nudens_1_peq[nuidx]);
+            }
+            if (!peq_finite) {
               for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-                peq_finite = peq_finite &&
-                             Kokkos::isfinite(nudens_0_peq[nuidx]) &&
-                             Kokkos::isfinite(nudens_1_peq[nuidx]);
-              }
-              if (!peq_finite) {
-                for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-                  nudens_0_peq[nuidx] = nudens_0_thin[nuidx];
-                  nudens_1_peq[nuidx] = nudens_1_thin[nuidx];
-                }
-                T_star = T;
-                Ye_star = Y;
+                nudens_0_peq[nuidx] = nudens_0_thin[nuidx];
+                nudens_1_peq[nuidx] = nudens_1_thin[nuidx];
               }
             }
           }
 
-          // Effective optical depth over a step, as in THC's opacity_tau_trap
-          // test: min over the electron pair of sqrt(kappa_a*kappa_transport)*dt.
-          // Below it the field has not thermalised and Kirchhoff's law does not
-          // hold, so bns_nurates' own emissivities are used instead.
-          bool use_kirchhoff = nurates_params_.use_kirchhoff_law;
-          if (use_kirchhoff && nurates_params_.kirchhoff_tau_trap >= 0.0) {
-            const Real tau_e = Kokkos::sqrt(
-                abs_1_loc[0]*(abs_1_loc[0] + scat_1_loc[0]));
-            const Real tau_a = Kokkos::sqrt(
-                abs_1_loc[1]*(abs_1_loc[1] + scat_1_loc[1]));
-            const Real tau = Kokkos::fmax(tau_e, tau_a) *
-                             dt_ * adm.alpha(m, k, j, i) / w_lorentz;
-            use_kirchhoff = (tau > nurates_params_.kirchhoff_tau_trap);
-          }
-
           for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-            // store opacities and emissivities
-            eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
-            eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
+            // store opacities
             abs_0_(m, nuidx, k, j, i) = abs_0_loc[nuidx];
             abs_1_(m, nuidx, k, j, i) = abs_1_loc[nuidx];
             scat_1_(m, nuidx, k, j, i) = scat_1_loc[nuidx];
 
-            Real my_nudens_0{}, my_nudens_1{};
-            if (nurates_params_.use_kirchhoff_law ||
-                use_eq) {
-              if (peq_on_) {
-                // One equilibrium per cell, at the state the matter is predicted
-                // to reach over this step: the local blackbody as dt -> 0, the
-                // trapped weak equilibrium as dt -> infinity, continuous between.
-                my_nudens_0 = nudens_0_peq[nuidx];
-                my_nudens_1 = nudens_1_peq[nuidx];
-              } else {
-                // The predictor's dt -> 0 limit, and all that is left with it off.
-                my_nudens_0 = nudens_0_thin[nuidx];
-                my_nudens_1 = nudens_1_thin[nuidx];
-              }
-            }
-
-            // Correction for the NEPS
-            // emissivity when using the equilibrium distribution. The NEPS
-            // in-scattering emissivity scales with the neutrino occupation
-            // (~ g_nu); the equilibrium distribution over-populates the field in
-            // the decoupling region, over-estimating it. Scale the non-thermal
-            // (NEPS) emissivity by the ratio of the ACTUAL M1 density to the
-            // equilibrium density (a grey proxy for g_field/g_eq), using the number
-            // ratio to preserve the spectrum and apply the ratio to both
-            // the number (nudens_0) and energy (nudens_1) channels. Deep in the
-            // optically-thick core the field ~ equilibrium so the factor -> 1.
-            // This mimics the reconstructed-distribution result without
-            // reconstructing the spectrum. Only the non-thermal (NEPS) part is
-            // touched; the spontaneous (beta) emissivity has no g_nu dependence.
-            // eta_1_loc is bns_nurates' TOTAL (thermal + NEPS), so the raw NEPS
-            // part is kept to swap the limited one in wherever the total is used.
-            const Real eta_1_non_th_raw = eta_1_non_th_loc[nuidx];
-            if (use_eq) {
-              // n_eq: blackbody eta_non_th was built from; no cap (abs*J follows n).
-              Real f_occ_0 = (nudens_0_thin[nuidx] > 0.0)
-                                 ? nudens_0[nuidx] / nudens_0_thin[nuidx] : 1.0;
-              if (!Kokkos::isfinite(f_occ_0)) f_occ_0 = 1.0;
-              eta_1_non_th_loc[nuidx] *= f_occ_0;
-            }
-            const Real eta_1_tot = Kokkos::fmax(
-                eta_1_loc[nuidx] - eta_1_non_th_raw + eta_1_non_th_loc[nuidx], 0.0);
-
-            // The emissivities, and the only place they are set. Kirchhoff
-            // derives them from the corrected THERMAL opacity and the
-            // equilibrium distribution, inheriting the non-LTE correction
-            // through abs_*_th; NEPS emission is added back afterwards, kept
-            // out of thermalization. Without Kirchhoff (off, or gated off below
-            // kirchhoff_tau_trap), bns_nurates' own emissivities stand UNSCALED,
-            // with the same occupation-limited NEPS part as the Kirchhoff branch.
+            // Emissivities. Kirchhoff: corrected thermal kappa times the predicted
+            // equilibrium, plus NEPS. Otherwise bns_nurates' own, unscaled. Both
+            // use the occupation-limited NEPS part.
             if (use_kirchhoff) {
               eta_0_(m, nuidx, k, j, i) =
-                  (abs_0_th[nuidx] > 0)
-                      ? abs_0_th[nuidx] * my_nudens_0
+                  (abs_0_loc[nuidx] > 0)
+                      ? abs_0_loc[nuidx] * nudens_0_peq[nuidx]
                       : eta_0_loc[nuidx];
               eta_1_(m, nuidx, k, j, i) =
                   (abs_1_th[nuidx] > 0)
-                      ? abs_1_th[nuidx] * my_nudens_1 + eta_1_non_th_loc[nuidx]
-                      : eta_1_tot;
+                      ? abs_1_th[nuidx] * nudens_1_peq[nuidx] +
+                            eta_1_non_th_loc[nuidx]
+                      : eta_1_loc[nuidx];
             } else {
               eta_0_(m, nuidx, k, j, i) = eta_0_loc[nuidx];
-              eta_1_(m, nuidx, k, j, i) = eta_1_tot;
+              eta_1_(m, nuidx, k, j, i) = eta_1_loc[nuidx];
             }
           }
         }
