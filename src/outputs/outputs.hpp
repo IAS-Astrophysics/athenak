@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 176
+#define NOUTPUT_CHOICES 177
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -130,6 +130,10 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
 
   // Z4c gauge only: lapse + shift, no other Z4c evolved fields (175)
   "z4c_gauge",
+
+  // radiation M1 fluid frame, grouped (176): the undensitized J, n and chi per species,
+  // exactly as passed to the opacity calculation
+  "rad_m1_fluid_frame",
 };
 
 
