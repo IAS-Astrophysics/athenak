@@ -198,3 +198,49 @@ about110 periods. The near-hole plateau is therefore evidence of repeatability
 under the cyclic procedure, not proof of a continuously evolved equilibrium.
 Further progress would require conservative mass-budget diagnostics and
 resolution/schedule controls rather than automatically submitting more cycles.
+
+## Residence audit and correction to interpretation
+
+The finest dwell matches the mass-scaled hydro prescription in Guo et al.2025,
+Eq17:100 t_g for zone0, zero for1–2, and10 sqrt(r_z^3/M) otherwise. Each hole
+has mass0.5, so100 local t_g is50 total-mass M. For this eight-zone pilot the
+requested dwells are50,0,0,113.137,320,905.097,1810.193,5120 M. The code uses
+hole-centered radii and mass0.5 below a, then COM radii and mass1 at r>=a.
+All logged requested dwells match that formula to log-printing precision;
+residence_scale is1 and the runtime cap is inactive. This binary adaptation
+is not independently validated in the paper.
+
+Ten returns plus the initial dwell yield about550 M in zone0, or0.484 binary
+periods. That is correct bookkeeping but a misleading relaxation yardstick
+for horizon-scale gas: the binary period is1137.38 M, much longer than the
+local advection time. The masks reset hydrodynamic primitives inside r_z at
+every step for zones>0. Zones1–2 have only incidental transition steps (about
+3.59 M total), so they do not hide a substantial additional horizon exposure.
+Larger-radius gas evolves in several stages and has much greater exposure.
+
+`audit_bondi_residence.py` computes coordinate-time inflow estimates from the
+latest finest snapshot via(dM/dlnr)/mdot_in. Around the negative-x hole these
+are3.76,5.98,11.91,19.89 and75.14 M at radii1.5,2,3,4 and8 M. Each50 M finest
+visit therefore provides13.3,8.4,4.2 and2.5 estimated inflow times through the
+first four scales. Gas at8 M also advances during zone3 visits, outside the
+4 M mask, so its relaxation budget is not just the50 M finest dwell. These
+are instantaneous scale estimates, not integrated travel times or turbulent
+correlation/viscous times. The half-orbit total alone does not establish that
+near-horizon relaxation is insufficient.
+
+Guo's Eq17 hydro validation starts from the analytic single-hole Bondi state;
+it tests maintaining that solution, not relaxing a binary from a tapered cavity.
+For turbulent magnetized Bondi, Eq20 instead uses500 t_g at zone0 and
+min(50 t_dyn,0.15 t_B) elsewhere. That is relevant evidence for longer turbulent
+dwells, not an automatic prescription for our unmagnetized binary.
+Source: https://arxiv.org/html/2504.16802v2#S3.SS1 and#S3.SS3.
+
+There is also an independent spatial limitation: the pilot has r_z/dx=4
+at each corresponding zoom level, versus16 in the paper, which recommends
+roughly10 or more (SectionII.1). f_ref=4 increases refinement overlap, not the
+mask radius or its cells-per-radius. The present mask resolution is below that
+tested regime. The residual radial-flux mismatch cannot be assigned to short
+residence alone. If future runs are authorized, compare longer finest dwells
+at fixed outer data and improved mask resolution before asserting binary
+turbulent convergence. This audit launches no simulation; the timer remains
+paused and no Aurora jobs are submitted.

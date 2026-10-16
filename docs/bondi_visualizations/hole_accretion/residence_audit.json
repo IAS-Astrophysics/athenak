@@ -1,0 +1,71 @@
+{
+  "final_global_time": 124768.4,
+  "binary_period": 1137.3780321685417,
+  "finest_visits": 11,
+  "requested_residences": [
+    50.0,
+    0.0,
+    0.0,
+    113.13708498984761,
+    320.0,
+    905.0966799187809,
+    1810.1933598375617,
+    5120.0
+  ],
+  "logged_dwell": {
+    "0": 550.0908499999787,
+    "1": 1.2171700000180863,
+    "2": 2.3715400000073714,
+    "3": 2377.371840000007,
+    "4": 6725.690799999982,
+    "5": 19016.1648,
+    "6": 39763.49100000001,
+    "7": 56332.00200000004
+  },
+  "finest_binary_orbits": 0.48364821057003127,
+  "radius_by_zone": [
+    0.5,
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64
+  ],
+  "local_times": [
+    {
+      "radius": 1.5,
+      "dynamical_scale": 2.598076211353316,
+      "inflow_estimate": 3.760826534558764,
+      "finest_dwell_over_inflow": 13.294949804396179
+    },
+    {
+      "radius": 2.0,
+      "dynamical_scale": 4.0,
+      "inflow_estimate": 5.982049574503703,
+      "finest_dwell_over_inflow": 8.35833929111967
+    },
+    {
+      "radius": 3.0,
+      "dynamical_scale": 7.3484692283495345,
+      "inflow_estimate": 11.907585055209095,
+      "finest_dwell_over_inflow": 4.199004228664064
+    },
+    {
+      "radius": 4.0,
+      "dynamical_scale": 11.313708498984761,
+      "inflow_estimate": 19.88972454665639,
+      "finest_dwell_over_inflow": 2.5138608572839876
+    },
+    {
+      "radius": 8.0,
+      "dynamical_scale": 32.0,
+      "inflow_estimate": 75.13837371568351,
+      "finest_dwell_over_inflow": 0.665438943211564
+    }
+  ],
+  "snapshot_time": 114760.0,
+  "mask_cells_per_radius": 4,
+  "caveat": "Dwell totals use rounded logs; inflow estimates use one sphere snapshot and coordinate-time transport, not turbulent correlation or viscous times."
+}
