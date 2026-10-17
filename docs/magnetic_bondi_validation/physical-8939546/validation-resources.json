@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/home/hzhu/pyenv/bin/python",
+    "source-magnetic/scripts/tests/validate_magnetic_pilot.py",
+    "--run",
+    "evolution-magnetic-8939546",
+    "--out",
+    "evolution-magnetic-8939546/validation.json"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 154382336,
+  "memory_budget_bytes": 4000000000,
+  "seconds": 9.00565169902984,
+  "stopped": null
+}

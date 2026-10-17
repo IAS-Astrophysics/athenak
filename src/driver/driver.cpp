@@ -314,6 +314,30 @@ void Driver::ExecuteTaskList(Mesh *pm, std::string tl, int stage) {
 //  outputting ICs, and computing initial time step
 
 void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool res_flag) {
+  // Opt-in when changing inner-flow physics at a finest checkpoint. Consume the
+  // request in the parameter header so subsequent wall-time restarts retain the
+  // remaining residence instead of repeatedly resetting it.
+  if (pin->DoesParameterExist("cyclic_zoom", "restart_reset_finest_dwell") &&
+      pin->GetBoolean("cyclic_zoom", "restart_reset_finest_dwell")) {
+    if (!res_flag || pmesh->pzoom == nullptr || pmesh->pzoom->zstate.zone != 0 ||
+        !(pmesh->pzoom->zint.runtime > 0.0) ||
+        !std::isfinite(pmesh->pzoom->zint.runtime)) {
+      Kokkos::abort("restart_reset_finest_dwell requires a finest-zone restart "
+                    "with positive finite residence time");
+    }
+    auto &zoom = *pmesh->pzoom;
+    Real old_next = zoom.zstate.next_time;
+    zoom.zstate.next_time = pmesh->time + zoom.zint.runtime;
+    zoom.zstate.last_cycle = pmesh->ncycle;
+    pin->SetBoolean("cyclic_zoom", "restart_reset_finest_dwell", false);
+    if (global_variable::my_rank == 0) {
+      auto old_precision = std::cout.precision(17);
+      std::cout << "CyclicZoom: reset finest dwell once at time=" << pmesh->time
+                << " id=" << zoom.zstate.id << " old_next=" << old_next
+                << " next_time=" << zoom.zstate.next_time << std::endl;
+      std::cout.precision(old_precision);
+    }
+  }
   if (res_flag && pmesh->pzoom != nullptr && pmesh->pmb_pack->pdyngr != nullptr) {
     // Zoom state is now loaded: enforce finest-level horizon checks on zone-zero
     // restarts, while allowing the intentionally coarsened intermediate levels.

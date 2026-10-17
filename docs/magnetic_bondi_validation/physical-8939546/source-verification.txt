@@ -1,0 +1,4 @@
+source-magnetic/src/pgen/dynbbh.cpp: OK
+source-magnetic/src/cyclic_zoom/cyclic_zoom.cpp: OK
+source-magnetic/src/cyclic_zoom/cyclic_zoom.hpp: OK
+source-magnetic/src/cyclic_zoom/zoom_criteria.cpp: OK

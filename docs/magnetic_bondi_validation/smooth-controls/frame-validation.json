@@ -1,0 +1,239 @@
+{
+  "cases": {
+    "single-32-inertial": {
+      "time": 0.5,
+      "cycle": 4,
+      "max_abs_divb": 1.8909163514505e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-32-inertial/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-32-inertial"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 245825536,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 3.727602083,
+        "stopped": null
+      }
+    },
+    "single-32-rotating": {
+      "time": 0.5,
+      "cycle": 11,
+      "max_abs_divb": 3.1492007352557083e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-32-rotating/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-32-rotating"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 245825536,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 5.884666083,
+        "stopped": null
+      }
+    },
+    "binary-32-inertial": {
+      "time": 0.5,
+      "cycle": 4,
+      "max_abs_divb": 1.8396200361647796e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-32-inertial/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-32-inertial"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 245776384,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 3.826519208,
+        "stopped": null
+      }
+    },
+    "binary-32-rotating": {
+      "time": 0.5,
+      "cycle": 8,
+      "max_abs_divb": 2.6455888261361915e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-32-rotating/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-32-rotating"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 245825536,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 4.431427792,
+        "stopped": null
+      }
+    },
+    "single-64-inertial": {
+      "time": 0.5,
+      "cycle": 8,
+      "max_abs_divb": 5.673799375206096e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-64-inertial/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-64-inertial"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 1895825408,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 56.401806125,
+        "stopped": null
+      }
+    },
+    "single-64-rotating": {
+      "time": 0.5,
+      "cycle": 21,
+      "max_abs_divb": 1.0222105839330408e-15,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-64-rotating/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/single-64-rotating"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 1895841792,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 85.96138425,
+        "stopped": null
+      }
+    },
+    "binary-64-inertial": {
+      "time": 0.5,
+      "cycle": 9,
+      "max_abs_divb": 6.221863573397518e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-64-inertial/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-64-inertial"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 1895727104,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 64.002365209,
+        "stopped": null
+      }
+    },
+    "binary-64-rotating": {
+      "time": 0.5,
+      "cycle": 16,
+      "max_abs_divb": 8.465806316604665e-16,
+      "resources": {
+        "command": [
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/src/athena",
+          "-i",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-64-rotating/input.athinput",
+          "-d",
+          "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/smooth-frame-controls-v2/binary-64-rotating"
+        ],
+        "returncode": 0,
+        "peak_rss_bytes": 1895776256,
+        "memory_budget_bytes": 8000000000,
+        "seconds": 66.015233292,
+        "stopped": null
+      }
+    }
+  },
+  "frame_comparisons": {
+    "single-32": {
+      "outside_drain": {
+        "dens": 0.0018316906006229188,
+        "press": 0.17291337824520275,
+        "u_relative_L1": 0.014722488636503118,
+        "B_relative_L1": 0.0013818013713895179
+      },
+      "far_exterior": {
+        "dens": 0.00027496605849255886,
+        "press": 0.010363668696748724,
+        "u_relative_L1": 0.00394670429206295,
+        "B_relative_L1": 0.0002609149742963654
+      },
+      "drain": {
+        "dens": 0.28332021504661126,
+        "press": 0.552878445791812,
+        "u_relative_L1": 0.4192993856833791,
+        "B_relative_L1": 0.027996141563129056
+      }
+    },
+    "binary-32": {
+      "outside_drain": {
+        "dens": 0.0036647947317838703,
+        "press": 0.3393034182819155,
+        "u_relative_L1": 0.030287224608943168,
+        "B_relative_L1": 0.0025631696672976712
+      },
+      "far_exterior": {
+        "dens": 0.00045133228636648113,
+        "press": 0.028077894157067296,
+        "u_relative_L1": 0.0038437352081068916,
+        "B_relative_L1": 0.0005341825700902665
+      },
+      "drain": {
+        "dens": 0.29209415571643516,
+        "press": 0.4281594167522848,
+        "u_relative_L1": 0.392084934528669,
+        "B_relative_L1": 0.08246101428106725
+      }
+    },
+    "single-64": {
+      "outside_drain": {
+        "dens": 0.002169641522991865,
+        "press": 0.395663127767772,
+        "u_relative_L1": 0.02169723841359759,
+        "B_relative_L1": 0.0013516465120044761
+      },
+      "far_exterior": {
+        "dens": 6.217806434634344e-05,
+        "press": 0.0021856400544195873,
+        "u_relative_L1": 0.0011105185925054297,
+        "B_relative_L1": 4.3500257974468414e-05
+      },
+      "drain": {
+        "dens": 0.4366641628449667,
+        "press": 0.40051496473008924,
+        "u_relative_L1": 0.35834415085087534,
+        "B_relative_L1": 0.03538223445509297
+      }
+    },
+    "binary-64": {
+      "outside_drain": {
+        "dens": 0.0020837867953431965,
+        "press": 0.3098789159468751,
+        "u_relative_L1": 0.018950759261746192,
+        "B_relative_L1": 0.0015132962414735555
+      },
+      "far_exterior": {
+        "dens": 0.00011062460776641065,
+        "press": 0.0034103598195274042,
+        "u_relative_L1": 0.0009718270011686469,
+        "B_relative_L1": 0.00021653746618878518
+      },
+      "drain": {
+        "dens": 0.2706174813985641,
+        "press": 0.3582661349631758,
+        "u_relative_L1": 0.26399241311169047,
+        "B_relative_L1": 0.08882415402189475
+      }
+    }
+  },
+  "interpretation": "Measured rotating/inertial differences; resolution trends must be assessed before declaring a pass."
+}

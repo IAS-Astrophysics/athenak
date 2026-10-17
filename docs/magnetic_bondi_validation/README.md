@@ -192,3 +192,12 @@ Matched phases50,100,200 M compare startup and first return: r=2 M individual
 hole rates rise by factors4.53/4.38; shell masses24..500 M rise by factors1.4..4.4.
 The current MHD chain is still transient; old hydro equilibrium numbers do not
 apply. The new scripts preserve angular/spatial and frozen-interval caveats.
+
+## Smooth-excision continuation
+
+The user selected a restart from the validated finest checkpoint at 9903.61585 M
+(job 8938971) and two additional full cycles. The old hard-excision chain is
+stopped. See [SMOOTH_CONTINUATION.md](SMOOTH_CONTINUATION.md) for the explicit
+physics switch, one-shot dwell reset, event-count stopping rule, bounded frame
+controls, and separate build/job provenance. This is magnetized evolution;
+the original hydro-chain plots are not used to assess it.

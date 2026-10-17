@@ -18,6 +18,7 @@ p.add_argument('--runs',type=Path,nargs='+',required=True)
 p.add_argument('--metric',type=Path,required=True)
 p.add_argument('--out',type=Path,required=True)
 p.add_argument('--frame-dt',type=float,default=100.)
+p.add_argument('--start-from-restart',action='store_true',help='Label an evolved checkpoint start explicitly')
 a=p.parse_args();assert a.frame_dt>0
 a.out.mkdir(parents=True,exist_ok=True);frames=a.out/'frames';frames.mkdir(exist_ok=True)
 md,mf=load(a.metric);metric_errors=validate_saved_metric(md,mf);del md,mf
@@ -30,12 +31,14 @@ paths=sorted({round(t,5):(t,path) for t,path in paths}.values());events.sort()
 chosen=[];next_time=-1
 for t,path in paths:
     if t>=next_time or path==paths[-1][1]:chosen.append((t,path));next_time=t+a.frame_dt
-assert chosen[0][0]==0,'Movie must begin with initial data'
+assert chosen[0][0]==0 or a.start_from_restart,'Use --start-from-restart for an evolved start'
+start_label='evolution from checkpoint' if a.start_from_restart else 'evolution from initial data'
 report=[];cache={}
 for number,(t,path) in enumerate(chosen):
     d,f=load(path);c=check_pilot(d['header'])
     assert all(np.isfinite(v).all() for v in f.values()) and f['dens'].min()>0 and f['press'].min()>0
-    assert c['coord/smooth_excision'].lower() in ('0','false')
+    smooth=c['coord/smooth_excision'].lower() in ('1','true')
+    treatment='smooth puncture drain' if smooth else 'hard puncture excision'
     assert float(c['coord/excise_1_rad'])==float(c['coord/excise_2_rad'])==.8
     n=d['nx1_out_mb'];assert n==d['nx1_mb']==8
     zone=next((z for et,z in reversed(events) if et<=t),0)
@@ -70,12 +73,12 @@ for number,(t,path) in enumerate(chosen):
         ax.plot(hx,0,'+',color='cyan',ms=6)
       ax.set(xlim=(-48,48),ylim=(-48,48),aspect='equal',xlabel='x/M',ylabel='y/M',title=title)
       fig.colorbar(plt.cm.ScalarMappable(norm=norm,cmap=cm),ax=ax,fraction=.046,pad=.025,extend='both')
-    fig.suptitle(f'Magnetized binary: evolution from initial data | t={t:,.2f} M | zone {zone} | {d["n_mbs"]} active blocks',y=.96,fontsize=14)
-    fig.text(.5,.045,'Rotating-frame xy cell slice; actual active AMR only. Black masks: hard puncture excision (smooth option disabled).\n'
+    fig.suptitle(f'Magnetized binary: {start_label} | t={t:,.2f} M | zone {zone} | {d["n_mbs"]} active blocks',y=.96,fontsize=14)
+    fig.text(.5,.045,f'Rotating-frame xy cell slice; actual active AMR only. Black masks: {treatment}.\n'
              'Temperature proxy p/rho; beta uses the physical fluid-frame field. Zoom exposure differs by region; relaxation is not established.\n'
              'Saved time gaps are shown in the clock; the playback does not interpolate states.',ha='center',fontsize=8.5)
     fig.savefig(frames/f'{number:04d}.png');plt.close(fig)
-    report.append({'file':str(path),'time':t,'zone':zone,'blocks':d['n_mbs'],'finite_positive':True,'smooth_excision':False})
+    report.append({'file':str(path),'time':t,'zone':zone,'blocks':d['n_mbs'],'finite_positive':True,'smooth_excision':smooth})
     if number%10==0:print('Rendered',number+1,'/',len(chosen),flush=True)
 (a.out/'frames.json').write_text(json.dumps(report,indent=2)+'\n')
 (a.out/'metric-validation.json').write_text(json.dumps({'saved_metric':str(a.metric),'spatial_component_max_error_normalized_by_max_1_abs_saved':metric_errors,'checked_all_saved_ADM_cells':True,'method':'Exact nonspinning boosted KS specialization, corotating t=0; no spatial interpolation','cached_slice_topologies':len(cache)},indent=2)+'\n')
