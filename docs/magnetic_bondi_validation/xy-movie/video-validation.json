@@ -1,0 +1,11 @@
+{
+  "source_frames": 79,
+  "encoded_frames": 89,
+  "fps": 5,
+  "duration_seconds": 17.8,
+  "final_hold_seconds": 2,
+  "complete_decode_returncode": 0,
+  "first_time_M": 0.0,
+  "last_time_M": 9903.62,
+  "all_frames_finite_positive": true
+}

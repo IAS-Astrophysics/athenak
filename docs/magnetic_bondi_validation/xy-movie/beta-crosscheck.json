@@ -1,0 +1,8 @@
+{
+  "time": 9903.62,
+  "all_cells_compared": true,
+  "max_relative_beta_difference_vs_saved_ADM": 7.809876834130591e-07,
+  "max_relative_difference_outside_excision": 1.2689783723818238e-07,
+  "metric_topology_exactly_matches": true,
+  "note": "Saved metric is float32; largest conditioning-amplified difference occurs inside masked puncture excision."
+}

@@ -1,0 +1,634 @@
+[
+  {
+    "file": "evolution-magnetic-8937401/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+    "time": 0.0,
+    "zone": 0,
+    "blocks": 1408,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937401/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+    "time": 100.004,
+    "zone": 0,
+    "blocks": 1408,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937572/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+    "time": 238.432,
+    "zone": 0,
+    "blocks": 1408,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+    "time": 350.052,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+    "time": 450.055,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+    "time": 600.03,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+    "time": 700.033,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+    "time": 800.035,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+    "time": 900.082,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00021.bin",
+    "time": 1050.1,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00024.bin",
+    "time": 1200.01,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00026.bin",
+    "time": 1300.06,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00028.bin",
+    "time": 1400.11,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8937793/bin/magnetic_bondi_binary.mhd_w_bcc.00031.bin",
+    "time": 1550.02,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00034.bin",
+    "time": 1700.04,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00036.bin",
+    "time": 1800.09,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00039.bin",
+    "time": 1950.11,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00042.bin",
+    "time": 2100.08,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00045.bin",
+    "time": 2250.1,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00048.bin",
+    "time": 2400.13,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00051.bin",
+    "time": 2550.15,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00054.bin",
+    "time": 2700.17,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00057.bin",
+    "time": 2850.19,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00060.bin",
+    "time": 3000.21,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00063.bin",
+    "time": 3150.02,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00065.bin",
+    "time": 3250.18,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00067.bin",
+    "time": 3350.24,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00069.bin",
+    "time": 3450.3,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00071.bin",
+    "time": 3550.36,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00074.bin",
+    "time": 3700.27,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00076.bin",
+    "time": 3800.33,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00079.bin",
+    "time": 3950.24,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00081.bin",
+    "time": 4050.3,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00083.bin",
+    "time": 4150.36,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00086.bin",
+    "time": 4300.26,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00089.bin",
+    "time": 4450.29,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00092.bin",
+    "time": 4600.23,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00094.bin",
+    "time": 4700.58,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00097.bin",
+    "time": 4850.52,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00100.bin",
+    "time": 5000.47,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00103.bin",
+    "time": 5150.41,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00106.bin",
+    "time": 5300.35,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00109.bin",
+    "time": 5450.29,
+    "zone": 7,
+    "blocks": 624,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00112.bin",
+    "time": 5600.05,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00114.bin",
+    "time": 5700.11,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00116.bin",
+    "time": 5800.17,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00118.bin",
+    "time": 5900.23,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00120.bin",
+    "time": 6000.29,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00122.bin",
+    "time": 6100.35,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00125.bin",
+    "time": 6250.26,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00127.bin",
+    "time": 6350.32,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00130.bin",
+    "time": 6500.23,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00132.bin",
+    "time": 6600.29,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00134.bin",
+    "time": 6700.35,
+    "zone": 6,
+    "blocks": 736,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00137.bin",
+    "time": 6850.01,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00139.bin",
+    "time": 6950.17,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00142.bin",
+    "time": 7100.19,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00145.bin",
+    "time": 7250.21,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00148.bin",
+    "time": 7400.02,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938001/bin/magnetic_bondi_binary.mhd_w_bcc.00150.bin",
+    "time": 7500.18,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00153.bin",
+    "time": 7650.2,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00156.bin",
+    "time": 7800.0,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00158.bin",
+    "time": 7900.16,
+    "zone": 5,
+    "blocks": 848,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00161.bin",
+    "time": 8050.08,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00164.bin",
+    "time": 8200.1,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00167.bin",
+    "time": 8350.01,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00169.bin",
+    "time": 8450.06,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00172.bin",
+    "time": 8600.08,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00175.bin",
+    "time": 8750.1,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00178.bin",
+    "time": 8900.01,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00180.bin",
+    "time": 9000.06,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00182.bin",
+    "time": 9100.11,
+    "zone": 4,
+    "blocks": 960,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00185.bin",
+    "time": 9250.05,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00187.bin",
+    "time": 9350.05,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938136/bin/magnetic_bondi_binary.mhd_w_bcc.00189.bin",
+    "time": 9450.06,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938200/bin/magnetic_bondi_binary.mhd_w_bcc.00192.bin",
+    "time": 9600.03,
+    "zone": 3,
+    "blocks": 1072,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938200/bin/magnetic_bondi_binary.mhd_w_bcc.00195.bin",
+    "time": 9750.01,
+    "zone": 0,
+    "blocks": 1408,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938971/bin/magnetic_bondi_binary.mhd_w_bcc.00198.bin",
+    "time": 9900.0,
+    "zone": 0,
+    "blocks": 1408,
+    "finite_positive": true,
+    "smooth_excision": false
+  },
+  {
+    "file": "evolution-magnetic-8938971/bin/magnetic_bondi_binary.mhd_w_bcc.00199.bin",
+    "time": 9903.62,
+    "zone": 0,
+    "blocks": 1408,
+    "finite_positive": true,
+    "smooth_excision": false
+  }
+]

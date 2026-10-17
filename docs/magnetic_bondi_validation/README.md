@@ -173,3 +173,11 @@ boundary adjustment is visible: adjacent face-mean density/pressure departures
 reach0.75%/1.24%, with individual-cell departures1.61%/2.66%. No large boundary
 instability is apparent, but reflection and inner-flow contamination remain
 unexcluded without matched box-size/characteristic-boundary controls.
+
+## Equatorial density/temperature/beta movie and excision audit
+
+[xy-movie/README.md](xy-movie/README.md) documents the t=0..9903.62 M
+equatorial movie, including physical beta on every active topology. Actual saved
+headers confirm smooth_excision=0: this pilot uses hard puncture primitive resets
+at0.8 M, with magnetic damping off. The user's smooth drain implementation is
+present but was left disabled in the input. No current evolution was changed.

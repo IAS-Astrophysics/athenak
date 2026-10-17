@@ -1,0 +1,30 @@
+{
+  "source_snapshot": "evolution-magnetic-8938971/bin/magnetic_bondi_binary.mhd_w_bcc.00199.bin",
+  "settings": {
+    "coord/excise": "true",
+    "coord/excision_scheme": "puncture",
+    "coord/excise_1_rad": "0.8",
+    "coord/excise_2_rad": "0.8",
+    "coord/dexcise": "1e-8",
+    "coord/pexcise": "1e-12",
+    "coord/texcise": "-1",
+    "coord/flux_excise_r": "1",
+    "coord/smooth_excision": "0",
+    "coord/smooth_excision_width": "256",
+    "coord/smooth_excision_puncture_weight_exponent": "1",
+    "coord/smooth_excision_puncture_width_fraction": "1",
+    "coord/puncture_flux_excision_radius_factor": "1",
+    "coord/smooth_excision_lapse_width": "0.050000000000000003",
+    "coord/smooth_excision_sigma_max": "-1",
+    "coord/smooth_excision_temp_ceil": "-1",
+    "coord/smooth_excision_inflow": "0",
+    "coord/smooth_excision_inflow_speed": "0",
+    "coord/smooth_excision_b_damping": "0",
+    "coord/smooth_excision_b_damping_eta": "0",
+    "coord/smooth_excision_b_damping_cfl": "0.25",
+    "coord/excise_cap_to_horizon": "0",
+    "coord/excise_to_horizon": "0",
+    "coord/excise_shrink_to_horizon": "0",
+    "coord/excise_shrink_timescale": "50"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/home/hzhu/pyenv/bin/python",
+    "source-magnetic/scripts/make_magnetic_xy_movie.py",
+    "--runs",
+    "evolution-magnetic-8937401",
+    "evolution-magnetic-8937572",
+    "evolution-magnetic-8937793",
+    "evolution-magnetic-8938001",
+    "evolution-magnetic-8938136",
+    "evolution-magnetic-8938200",
+    "evolution-magnetic-8938971",
+    "--metric",
+    "evolution-magnetic-8937401/bin/magnetic_bondi_binary.adm.00000.bin",
+    "--out",
+    "magnetic-xy-movie",
+    "--frame-dt",
+    "100"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 237576192,
+  "memory_budget_bytes": 4000000000,
+  "seconds": 103.94997077505104,
+  "stopped": null
+}
