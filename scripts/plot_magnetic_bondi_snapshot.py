@@ -3,6 +3,10 @@
 import argparse
 import json
 from pathlib import Path
+import os
+# Keep login-host/postprocessing thread use bounded, independently of solver OMP.
+for _thread_setting in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS'):
+    os.environ[_thread_setting]='1'
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')

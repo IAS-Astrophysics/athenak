@@ -31,8 +31,8 @@ def main():
     statefile=root/'magnetic-monitor-state.json'
     scripts=root/'source-magnetic/scripts/tests'
     checked=set();last=None
-    def run(cmd,timeout=60,check=True):
-        return subprocess.run(cmd,cwd=root,text=True,capture_output=True,timeout=timeout,check=check)
+    def run(cmd,timeout=60,check=True,env=None):
+        return subprocess.run(cmd,cwd=root,text=True,capture_output=True,timeout=timeout,check=check,env=env)
     def emit(event,**data):print(json.dumps(dict(event=event,job=job,**data)),flush=True)
     while True:
         statefile.write_text(json.dumps({'pid':os.getpid(),'job':job,'target':a.target,
@@ -59,7 +59,10 @@ def main():
                      '--report',str(case/'validation-resources.json'),'--',
                      '/home/hzhu/pyenv/bin/python',str(scripts/'validate_magnetic_pilot.py'),
                      '--run',str(case),'--out',str(case/'validation.json')]
-            result=run(command,timeout=330,check=False)
+            analysis_env=os.environ.copy()
+            for key in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS'):
+                analysis_env[key]='1'
+            result=run(command,timeout=330,check=False,env=analysis_env)
             if result.returncode:
                 emit('VALIDATION_FAILED',returncode=result.returncode,output=result.stdout[-5000:],stderr=result.stderr[-5000:]);return
             checked.add(job)

@@ -265,3 +265,25 @@ The ongoing8937572 job retains its already-sourced environment. Future batch
 launches record EnableImplicitScaling, device hierarchy, GPU-aware MPI and OMP
 thread count explicitly in runtime-controls.txt, alongside script hashes.
 The build CMake file, build script and compiler launcher match the branch.
+
+## Second physical clean stop and postprocessing thread guard
+
+Job8937572 stopped normally at t=238.4319395305 M, cycle32838. All12 ranks
+exited0; the conservative peak sum is23.45 GB. Every saved state is finite
+and positive; max field-scaled divB is5.80e-13 and max exterior absolute divB
+is3.33e-11. This remains the initial250 M finest dwell, without a physical
+zoom transition yet. The native restart/cycle/output counters were preserved.
+
+The monitor correctly stopped before submission when the first postprocessing
+attempt failed during NumPy import: OpenBLAS tried64 threads and pthread
+creation failed on the shared login host. This was not a solver failure.
+validation-openblas-failure.json retains the resource evidence. Postprocessing
+now explicitly uses one BLAS/OMP/MKL/NumExpr thread; the bounded retry passed
+in1.88 seconds at117 MB RSS. Solver OMP remains8 as in the validated runtime.
+
+After that successful validation and an empty debug-scaling queue,
+continuation8937793 was accepted from magnetic_bondi_binary.00002.rst.
+magnetic-continuation-8937572.receipt records the exact checkpoint hash and
+native time. The fixed monitor follows8937793; the original monitor terminated
+on the postprocessing error and did not duplicate a job. Subsequent launches
+use the synchronized explicit EnableImplicitScaling=0 runtime setting.
