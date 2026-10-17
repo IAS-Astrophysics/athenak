@@ -5,14 +5,15 @@ around an equal-mass circular binary. The physical cyclic-zoom run is ongoing
 on Aurora in debug-scaling. Job8938200 reached9782.468493 M cleanly after
 completing the first physical roundtrip and restoring the finest topology at
 9683.038 M. The returned finest snapshot matches the original stationary ADM
-geometry exactly. Job8938971 is the accepted continuation, from the final
-checkpoint of8938200, toward the unchanged20000 M pilot target.
+geometry exactly. Job8938971 subsequently stopped cleanly at9903.615850 M, still on the
+finest grid. Its fields and all twelve resource reports passed validation.
+Job8939546 is the accepted continuation toward the unchanged20000 M target.
 
-Six completed physical jobs have passed every saved fluid/divergence pair and
+Seven completed physical jobs have passed every saved fluid/divergence pair and
 all twelve rank/resource checks. Their accumulated solver walltime is about
-5.5 node-hours. The latest finest exposure is only about349.44 M: the initial
-250 M dwell plus99.43 M after the first return. Global9782 M must not be
-interpreted as9782 M of inner-flow evolution or as demonstrated equilibrium.
+6.4 node-hours. The latest finest exposure is only about470.58 M: the initial
+250 M dwell plus220.58 M after the first return. Global9904 M must not be
+interpreted as9904 M of inner-flow evolution or as demonstrated equilibrium.
 
 | Physical job | Final time (M, native checkpoint where recorded) | Conservative peak GB | Scaled divB maximum |
 | --- | ---: | ---: | ---: |
@@ -22,6 +23,7 @@ interpreted as9782 M of inner-flow evolution or as demonstrated equilibrium.
 | 8938001 | 7579.573404 | 22.63 | 1.86e-12 |
 | 8938136 | 9518.668019 | 22.81 | 2.87e-12 |
 | 8938200 | 9782.468493 | 23.53 | 2.32e-12 |
+| 8938971 | 9903.615850 | 23.47 | 3.29e-12 |
 
 The scaled divergence values are the cell-centered diagnostic defined below,
 not a proof of exact global magnetic-flux or mass conservation. Every job used
@@ -146,6 +148,8 @@ agents are cancelled or changed.
 
 ## Artifacts and limits
 
+- `latest_finest_xy.png/json`: equatorial density, temperature proxy p/rho,
+  and physical fluid-frame beta at9903.62 M; exact ADM topology matched.
 - `latest_finest.png/json`: the latest downloaded actual finest saved state,
   currently9782.47 M, with density, temperature and fluid-frame beta.
 - `physical-JOB/`: exact logs, provenance and rank/resource validation packets.
