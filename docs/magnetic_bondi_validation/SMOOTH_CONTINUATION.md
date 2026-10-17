@@ -95,3 +95,21 @@ pressure errors are 40.1% and 35.8%, respectively. No coordinate-specific change
 to the physical boost reference is justified by these measurements; retaining
 the original smooth prescription avoids changing the intended sink physics.
 Full measurements and resource records are in `smooth-controls`.
+
+## Launch state, 2026-10-17 20:04 UTC
+
+The isolated GPU build passed (903.35 s, peak RSS 5.224 GB under the 24 GB
+build guard). Its executable SHA256 is
+`59805f259870066369f5d0525660ff599a05933c172336e18627b4f76829e682`.
+Build modules, compiler, complete source hashes, CMake flags and resource record
+are saved in `smooth-controls/build`.
+
+The half-M switch test was accepted as **8939714**, with its immutable receipt
+in `smooth-controls/magnetic-smooth-check.receipt`. This is a separate test and
+is not counted as a physical smooth cycle. `start_magnetic_smooth_chain.py`
+waits for its normal exit, validates all ranks and fields, then submits the
+physical anchor from the original finest checkpoint. It does not continue the
+half-M test checkpoint. The physical chain has not passed its two-cycle target
+at this launch-state record. Follow accepted descendant receipts and native
+checkpoints for current status; do not interpret this document as a completion
+claim. A quiet 30-minute completion check replaces the old hydro automation.
