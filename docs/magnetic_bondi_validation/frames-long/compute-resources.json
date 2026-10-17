@@ -1,0 +1,23 @@
+{
+  "command": [
+    "python3",
+    "scripts/tests/test_magnetic_reservoir.py",
+    "--exe",
+    "build-mac-zoom-opt/src/athena",
+    "--out",
+    "build-mac-zoom-opt/magnetic-frames-long",
+    "--resolutions",
+    "32",
+    "64",
+    "--tlim",
+    "2",
+    "--case-seconds",
+    "600",
+    "--reuse-completed"
+  ],
+  "returncode": 1,
+  "peak_rss_bytes": 3786194944,
+  "memory_budget_bytes": 8000000000,
+  "seconds": 848.4986796659999,
+  "stopped": null
+}

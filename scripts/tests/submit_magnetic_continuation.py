@@ -61,7 +61,7 @@ def main():
     case = root/f'evolution-magnetic-{a.predecessor}'
     v = json.loads((case/'validation.json').read_text())
     assert len(v['ranks']) == 12 and len(v['hosts']) == 1
-    assert v['max_abs_divb'] < 1e-9 and v['conservative_sum_bytes'] < 30e9
+    assert v['max_scaled_divb'] < 1e-9 and v['conservative_sum_bytes'] < 30e9
     checkpoints = sorted((case/'rst').glob('*.rst'))
     assert checkpoints and checkpoints[-1].stat().st_size > 0
     checkpoint = checkpoints[-1];state = restart_state(checkpoint)

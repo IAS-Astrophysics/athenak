@@ -1,0 +1,12 @@
+{
+  "time": 50.0055,
+  "cycle": 6887,
+  "max_abs_divb": 5.384208634495735e-10,
+  "max_transverse_Btilde": 531.3358764648438,
+  "positive_finite": true,
+  "interpretation": "First physical finest-zone transient; large puncture-interior fields are excluded from physical interpretation; job remains running",
+  "max_abs_divb_exterior": 4.618527782440651e-12,
+  "max_scaled_divb": 2.1354228662144412e-13,
+  "max_Btilde_coordinate_norm_including_excision": 2130.80712890625,
+  "max_Btilde_coordinate_norm_exterior": 7.452044486999512
+}

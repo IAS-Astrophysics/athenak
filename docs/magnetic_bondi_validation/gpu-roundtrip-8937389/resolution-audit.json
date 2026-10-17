@@ -1,0 +1,194 @@
+{
+  "mask_source_job": 8937389,
+  "mask_angular_sampling": [
+    24,
+    48
+  ],
+  "mask_surfaces": [
+    {
+      "zone": 0,
+      "radius": 0.5,
+      "samples": [
+        {
+          "center": -16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        },
+        {
+          "center": 16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 1,
+      "radius": 1.0,
+      "samples": [
+        {
+          "center": -16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        },
+        {
+          "center": 16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 2,
+      "radius": 2.0,
+      "samples": [
+        {
+          "center": -16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        },
+        {
+          "center": 16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 3,
+      "radius": 4.0,
+      "samples": [
+        {
+          "center": -16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        },
+        {
+          "center": 16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 4,
+      "radius": 8.0,
+      "samples": [
+        {
+          "center": -16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        },
+        {
+          "center": 16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 5,
+      "radius": 16.0,
+      "samples": [
+        {
+          "center": -16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        },
+        {
+          "center": 16,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 6,
+      "radius": 32.0,
+      "samples": [
+        {
+          "center": 0,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    },
+    {
+      "zone": 7,
+      "radius": 64.0,
+      "samples": [
+        {
+          "center": 0,
+          "r_over_dx": [
+            16.0
+          ],
+          "counts": [
+            1152
+          ]
+        }
+      ]
+    }
+  ],
+  "nominal_single_hole_horizon_radius": 1.0,
+  "horizon_source_snapshot": "8937401/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+  "horizon_angular_sampling": [
+    48,
+    96
+  ],
+  "nominal_horizon_dx_minmax": [
+    0.0625,
+    0.0625
+  ],
+  "note": "Nominal single-hole radius, not an apparent-horizon finder; sampled mask boundary resolution"
+}

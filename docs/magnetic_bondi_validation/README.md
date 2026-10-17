@@ -25,7 +25,8 @@ W = (1 - gamma_ij v_Eulerian^i v_Eulerian^j)^(-1/2)
 u_primitive = W v_Eulerian
 ```
 
-Initial rest is exact wherever timelike. Where inertial-coordinate rest is
+Initial rest is exact where timelike and within the configured Lorentz ceiling
+(gamma_max=10); the EOS applies that ceiling in a thin high-W region. Where inertial-coordinate rest is
 spacelike near the holes, it is impossible to impose; only those initial
 cells are limited to v_Eulerian^2=0.9, with physical puncture excision applied
 by the solver. Boundary data must be timelike and are never silently limited.
@@ -45,7 +46,9 @@ production requirement. The box faces are at2048 M (4.096 rB).
 ## Mesh and cyclic timing
 
 The coarse root grid is32^3 with8^3 active cells per MeshBlock. Thirteen
-physical refinement levels resolve the holes at dx=0.03125 M=m_hole/16.
+physical refinement levels have a minimum dx=0.03125 M=m_hole/16 near the
+punctures. The nominal single-hole horizon sphere r=1 M has dx=0.0625 M
+(m_hole/8); this minimum-spacing statement is not uniform horizon resolution.
 Only eight inner levels participate in cyclic zoom. Thus r_z/dx=16 at the
 corresponding zoom levels, while the widest mask radius is64 M, inside rB.
 The complete initial mesh has1408 blocks. This remains a coarse outer-grid
@@ -169,3 +172,37 @@ are never automatically retried. The helper refuses live predecessors (tested
 against8937401), accelerated residence times, failures, and targets above20000 M.
 The current double-precision header decoder was checked against both local
 full-pilot initialization checkpoints. No running solver/input is modified.
+
+## Longer frame control and early physical diagnostic
+
+The32^3/64^3 controls reached2 M with finite positive fields and exact exterior
+reservoir data. Fine-grid inertial/rotating differences are0.0411% density,
+0.513% pressure and0.0202% vertical field, improving from0.151%,2.50% and0.0969%.
+Initial-rest checks now use the actual metric light cone and configured Lorentz
+ceiling, rather than isolated-hole distance heuristics. The very tight a=4 M
+binary has a combined static-limit region reaching farther than isolated-hole
+spheres. Spacelike initial cells are checked against the intended v^2=0.9
+limiter; high-W cells subject to gamma_max=10 are explicitly counted. The
+outer ghost velocity error remains below2e-7. The initial300-second fine-case
+budget was insufficient because rotation reduces the CFL step;600 seconds
+was used thereafter. Completed datasets were audited only after every requested
+parameter matched their saved headers. frames-long/ includes normal solver
+logs for all six completed cases, the final passing audit, and the computation
+resource receipt (3.79 GB peak, whose earlier heuristic-rest assertion failed).
+No fluid solver changes were needed for this test-harness correction.
+
+At t=50.0055 M, the physical run is finite and positive and has developed
+magnetized near-hole inflow. Density/temperature/fluid-frame-beta views are in
+physical-8937401/early_flow.png (xy) and early_poloidal.png (xz). These are early
+transients, not relaxed flows. The largest densitized fields are inside
+puncture excision: coordinate norm2131 there versus7.45 outside. Raw discrete
+divB is5.38e-10 globally and4.62e-12 outside excision. A field-scaled cellwise
+proxy dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient) is2.14e-13. The validator
+retains both absolute measures and now gates on the dimensionless proxy<1e-9;
+an absolute-only cutoff is inappropriate when interior field amplitudes grow.
+The proxy uses cell-centered fields and is not an invariant face-flux norm.
+
+A24x48 angular audit found r_mask/dx=16 at every sampled mask-boundary point
+in all8 GPU zoom stages, including merged COM stages6 and7. Resolution audit
+metadata are archived beside the successful GPU test. This does not establish
+spatial convergence or resolve a true binary apparent horizon.

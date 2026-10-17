@@ -1,0 +1,193 @@
+{
+  "tlim": 2.0,
+  "resolutions": [
+    32,
+    64
+  ],
+  "cases": {
+    "inertial32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 16,
+          "time": 2.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        }
+      ],
+      "max_abs_divb": 3.802297018906664e-16,
+      "reused_completed_case": true,
+      "checked_representable_rest_cells": 259904,
+      "limited_spacelike_cells": 2176,
+      "lorentz_ceiling_cells": 0,
+      "gamma_max": 10.0,
+      "initial_inertial_velocity_error": 5.960464477539063e-08,
+      "external_ghost_inertial_velocity_error": 2.9802322387695312e-08
+    },
+    "rotating32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 41,
+          "time": 2.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.612148316878733e-13
+        }
+      ],
+      "max_abs_divb": 6.845110415987232e-16,
+      "reused_completed_case": true,
+      "checked_representable_rest_cells": 259904,
+      "limited_spacelike_cells": 2176,
+      "lorentz_ceiling_cells": 0,
+      "gamma_max": 10.0,
+      "initial_inertial_velocity_error": 1.668930025289228e-07,
+      "external_ghost_inertial_velocity_error": 1.668930025289228e-07
+    },
+    "binary32": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 32,
+          "time": 2.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        }
+      ],
+      "max_abs_divb": 6.800116025829084e-16,
+      "reused_completed_case": true,
+      "checked_representable_rest_cells": 260064,
+      "limited_spacelike_cells": 1920,
+      "lorentz_ceiling_cells": 32,
+      "gamma_max": 10.0,
+      "initial_inertial_velocity_error": 1.1920928955078125e-07,
+      "external_ghost_inertial_velocity_error": 1.1920928955078125e-07
+    },
+    "inertial64": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 512,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 32,
+          "time": 2.0,
+          "blocks": 512,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.916760338249397e-13
+        }
+      ],
+      "max_abs_divb": 1.9984014443252818e-15,
+      "reused_completed_case": true,
+      "checked_representable_rest_cells": 2079744,
+      "limited_spacelike_cells": 16320,
+      "lorentz_ceiling_cells": 0,
+      "gamma_max": 10.0,
+      "initial_inertial_velocity_error": 5.960464477539063e-08,
+      "external_ghost_inertial_velocity_error": 2.9802322387695312e-08
+    },
+    "rotating64": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 512,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 83,
+          "time": 2.0,
+          "blocks": 512,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.373255210193276e-13
+        }
+      ],
+      "max_abs_divb": 2.886579864025407e-15,
+      "reused_completed_case": true,
+      "checked_representable_rest_cells": 2079744,
+      "limited_spacelike_cells": 16320,
+      "lorentz_ceiling_cells": 0,
+      "gamma_max": 10.0,
+      "initial_inertial_velocity_error": 1.1920928955078125e-07,
+      "external_ghost_inertial_velocity_error": 1.1920928955078125e-07
+    },
+    "binary64": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 512,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 9.999999960041972e-13
+        },
+        {
+          "cycle": 64,
+          "time": 2.0,
+          "blocks": 512,
+          "max_level": 0,
+          "min_density": 9.99999993922529e-09,
+          "min_pressure": 1.1672586996362005e-13
+        }
+      ],
+      "max_abs_divb": 2.886579864025407e-15,
+      "reused_completed_case": true,
+      "checked_representable_rest_cells": 2080704,
+      "limited_spacelike_cells": 14112,
+      "lorentz_ceiling_cells": 160,
+      "gamma_max": 10.0,
+      "initial_inertial_velocity_error": 1.1920928955078125e-07,
+      "external_ghost_inertial_velocity_error": 1.1920928955078125e-07
+    },
+    "invalid_boundary": {
+      "returncode": -6,
+      "expected_rejection": "Bondi boundary is not timelike"
+    }
+  },
+  "frame_comparisons": {
+    "32": {
+      "dens": 0.0015096931019797921,
+      "press": 0.024984611198306084,
+      "bcc3": 0.0009690268780104816
+    },
+    "64": {
+      "dens": 0.0004112781025469303,
+      "press": 0.005132387857884169,
+      "bcc3": 0.0002021682885242626
+    }
+  }
+}

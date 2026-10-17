@@ -1,0 +1,22 @@
+
+Root grid = 8 x 8 x 8 MeshBlocks
+Total number of MeshBlocks = 512
+Number of logical  levels of refinement = 3 (4 levels total)
+Number of physical levels of refinement = 0 (1 levels total)
+Number of parallel ranks = 1
+WARNING: puncture excision radius is under-resolved during initialization: cells across excision diameter are hole1=6.4 (r=0.8, dx=0.25), hole2=6.4 (r=0.8, dx=0.25); recommended minimum is 10
+Binary Bondi reservoir: r_B=500 r_B/a=125 Omega_frame=0.125 corotating=1 single_black_hole=0 M_total=1 boundary=ambient
+WARNING: puncture excision radius is under-resolved during ADM update: cells across excision diameter are hole1=6.4 (r=0.8, dx=0.25), hole2=6.4 (r=0.8, dx=0.25); recommended minimum is 10
+
+Setup complete, executing task list(s)...
+
+elapsed=4.520206e+00 cycle=0 time=0.000000e+00 dt=3.158491e-02
+
+Terminating on time limit
+time=2.000000e+00 cycle=64
+tlim=2.000000e+00 nlim=2000
+
+MeshBlock-cycles = 32768
+cpu time used  = 3.683475e+02
+zone-cycles/cpu_second = 4.554725e+04
+particle-updates/cpu_second = 0.000000e+00

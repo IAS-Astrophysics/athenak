@@ -106,6 +106,20 @@
   "conservative_sum_bytes": 23797807456,
   "sum_guard_budgets_bytes": 28399999992,
   "max_abs_divb": 3.7192471324942744e-15,
+  "max_abs_divb_exterior": 1.5120283497482845e-15,
+  "max_scaled_divb": 3.4305481839685853e-15,
+  "scaled_divb_definition": "dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient)",
+  "field_normalization_floor": 6.949082016944885e-05,
+  "diagnostic_excision_spheres": [
+    {
+      "center": 16.0,
+      "radius": 0.8
+    },
+    {
+      "center": -16.0,
+      "radius": 0.8
+    }
+  ],
   "states": [
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00000.bin",
@@ -115,7 +129,11 @@
       "max_level": 12,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.06949082016944885
+      "max_Btilde_coordinate_norm": 0.06949082016944885,
+      "max_Btilde_exterior": 0.06949082016944885,
+      "max_abs_divb": 0.0,
+      "max_abs_divb_exterior": 0.0,
+      "max_scaled_divb": 0.0
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00001.bin",
@@ -125,7 +143,11 @@
       "max_level": 12,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.09240763634443283
+      "max_Btilde_coordinate_norm": 0.09240763277472495,
+      "max_Btilde_exterior": 0.0698808784983711,
+      "max_abs_divb": 1.3322676295501878e-15,
+      "max_abs_divb_exterior": 1.0408340855860843e-15,
+      "max_scaled_divb": 7.149449549811496e-16
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00002.bin",
@@ -135,7 +157,11 @@
       "max_level": 11,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.915971039067828e-13,
-      "max_field": 0.10726885497570038
+      "max_Btilde_coordinate_norm": 0.10726885931524038,
+      "max_Btilde_exterior": 0.07060106650144486,
+      "max_abs_divb": 1.244233801276154e-15,
+      "max_abs_divb_exterior": 1.244233801276154e-15,
+      "max_scaled_divb": 1.119027105572811e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00003.bin",
@@ -145,7 +171,11 @@
       "max_level": 10,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.908421739340811e-13,
-      "max_field": 0.11022869497537613
+      "max_Btilde_coordinate_norm": 0.11022869253089153,
+      "max_Btilde_exterior": 0.0719111997873331,
+      "max_abs_divb": 6.41139566567514e-16,
+      "max_abs_divb_exterior": 6.41139566567514e-16,
+      "max_scaled_divb": 1.2425693918989122e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00004.bin",
@@ -155,7 +185,11 @@
       "max_level": 9,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.1065974161028862
+      "max_Btilde_coordinate_norm": 0.10659741561902511,
+      "max_Btilde_exterior": 0.07173292440246261,
+      "max_abs_divb": 4.0815426057927255e-16,
+      "max_abs_divb_exterior": 4.0815426057927255e-16,
+      "max_scaled_divb": 1.524549029197179e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00005.bin",
@@ -165,7 +199,11 @@
       "max_level": 8,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.09236649423837662
+      "max_Btilde_coordinate_norm": 0.0923664931202596,
+      "max_Btilde_exterior": 0.07869720077256627,
+      "max_abs_divb": 2.2086611739760456e-16,
+      "max_abs_divb_exterior": 2.2086611739760456e-16,
+      "max_scaled_divb": 1.6835817187621855e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00006.bin",
@@ -175,7 +213,11 @@
       "max_level": 7,
       "min_density": 0.7049657106399536,
       "min_pressure": 0.002308496041223407,
-      "max_field": 0.07127376645803452
+      "max_Btilde_coordinate_norm": 0.07127376228541181,
+      "max_Btilde_exterior": 0.07127376228541181,
+      "max_abs_divb": 1.1474088298008044e-16,
+      "max_abs_divb_exterior": 1.1474088298008044e-16,
+      "max_scaled_divb": 2.0431255687079024e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00007.bin",
@@ -185,7 +227,11 @@
       "max_level": 6,
       "min_density": 0.9664610624313354,
       "min_pressure": 0.0023662522435188293,
-      "max_field": 0.07026451081037521
+      "max_Btilde_coordinate_norm": 0.07026450926423726,
+      "max_Btilde_exterior": 0.07026450926423726,
+      "max_abs_divb": 6.184632240200955e-17,
+      "max_abs_divb_exterior": 6.184632240200955e-17,
+      "max_scaled_divb": 2.4411867024763925e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00008.bin",
@@ -195,7 +241,11 @@
       "max_level": 5,
       "min_density": 0.9964559078216553,
       "min_pressure": 0.002366263885051012,
-      "max_field": 0.06979475915431976
+      "max_Btilde_coordinate_norm": 0.06979476467875752,
+      "max_Btilde_exterior": 0.06979476467875752,
+      "max_abs_divb": 3.5207440613327227e-17,
+      "max_abs_divb_exterior": 3.5207440613327227e-17,
+      "max_scaled_divb": 2.349528601733797e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00009.bin",
@@ -205,7 +255,11 @@
       "max_level": 6,
       "min_density": 0.9664610624313354,
       "min_pressure": 0.002366273431107402,
-      "max_field": 0.07022121548652649
+      "max_Btilde_coordinate_norm": 0.07022121405434033,
+      "max_Btilde_exterior": 0.07022121405434033,
+      "max_abs_divb": 3.477863018377974e-17,
+      "max_abs_divb_exterior": 3.477863018377974e-17,
+      "max_scaled_divb": 2.528355202196643e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00010.bin",
@@ -215,7 +269,11 @@
       "max_level": 7,
       "min_density": 0.7049657106399536,
       "min_pressure": 0.002308496041223407,
-      "max_field": 0.07123145461082458
+      "max_Btilde_coordinate_norm": 0.07123145431972046,
+      "max_Btilde_exterior": 0.07123145431972046,
+      "max_abs_divb": 5.86087507193668e-17,
+      "max_abs_divb_exterior": 5.86087507193668e-17,
+      "max_scaled_divb": 2.7246562600217215e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00011.bin",
@@ -225,7 +283,11 @@
       "max_level": 8,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.08239451050758362
+      "max_Btilde_coordinate_norm": 0.0823945110177634,
+      "max_Btilde_exterior": 0.07561692186758666,
+      "max_abs_divb": 1.232246591006611e-16,
+      "max_abs_divb_exterior": 1.232246591006611e-16,
+      "max_scaled_divb": 2.9547873211904445e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00012.bin",
@@ -235,7 +297,11 @@
       "max_level": 9,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.10552545636892319
+      "max_Btilde_coordinate_norm": 0.10552545827668335,
+      "max_Btilde_exterior": 0.07661794792831014,
+      "max_abs_divb": 2.590701091154113e-16,
+      "max_abs_divb_exterior": 2.590701091154113e-16,
+      "max_scaled_divb": 2.826604075491181e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00013.bin",
@@ -245,7 +311,11 @@
       "max_level": 10,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.899459724183046e-13,
-      "max_field": 0.14009389281272888
+      "max_Btilde_coordinate_norm": 0.14009389786374604,
+      "max_Btilde_exterior": 0.07736330202734404,
+      "max_abs_divb": 5.243201706139899e-16,
+      "max_abs_divb_exterior": 5.243201706139899e-16,
+      "max_scaled_divb": 2.6852161231881654e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00014.bin",
@@ -255,7 +325,11 @@
       "max_level": 11,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.88162459844566e-13,
-      "max_field": 0.1901211440563202
+      "max_Btilde_coordinate_norm": 0.19012114013179635,
+      "max_Btilde_exterior": 0.07846069455135765,
+      "max_abs_divb": 1.1518563880486e-15,
+      "max_abs_divb_exterior": 9.298117831235686e-16,
+      "max_scaled_divb": 2.8598060932856145e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00015.bin",
@@ -265,7 +339,11 @@
       "max_level": 12,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.872532479027196e-13,
-      "max_field": 0.2568930387496948
+      "max_Btilde_coordinate_norm": 0.25689304629158877,
+      "max_Btilde_exterior": 0.07840956424064041,
+      "max_abs_divb": 3.7192471324942744e-15,
+      "max_abs_divb_exterior": 1.2437967322753707e-15,
+      "max_scaled_divb": 3.0001760852555894e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00016.bin",
@@ -275,7 +353,11 @@
       "max_level": 11,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 8.97677223353488e-13,
-      "max_field": 0.27236953377723694
+      "max_Btilde_coordinate_norm": 0.2723695382805671,
+      "max_Btilde_exterior": 0.07868167328698208,
+      "max_abs_divb": 1.5120283497482845e-15,
+      "max_abs_divb_exterior": 1.5120283497482845e-15,
+      "max_scaled_divb": 3.0558387977521974e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00017.bin",
@@ -285,7 +367,11 @@
       "max_level": 10,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.841950388347898e-13,
-      "max_field": 0.22806482017040253
+      "max_Btilde_coordinate_norm": 0.2280648121771476,
+      "max_Btilde_exterior": 0.07953631365115894,
+      "max_abs_divb": 9.831545300098554e-16,
+      "max_abs_divb_exterior": 9.831545300098554e-16,
+      "max_scaled_divb": 3.2251797938829218e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00018.bin",
@@ -295,7 +381,11 @@
       "max_level": 9,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.1734800487756729
+      "max_Btilde_coordinate_norm": 0.17348005365399422,
+      "max_Btilde_exterior": 0.07875219468943451,
+      "max_abs_divb": 5.265427850675852e-16,
+      "max_abs_divb_exterior": 5.265427850675852e-16,
+      "max_scaled_divb": 3.4305481839685853e-15
     },
     {
       "file": "magnetic_bondi_binary.mhd_w_bcc.00019.bin",
@@ -305,7 +395,11 @@
       "max_level": 8,
       "min_density": 9.99999993922529e-09,
       "min_pressure": 9.999999960041972e-13,
-      "max_field": 0.10453606396913528
+      "max_Btilde_coordinate_norm": 0.10453606869655045,
+      "max_Btilde_exterior": 0.0828078564187057,
+      "max_abs_divb": 2.7249727539528645e-16,
+      "max_abs_divb_exterior": 2.7249727539528645e-16,
+      "max_scaled_divb": 3.4305481839685853e-15
     }
   ],
   "restored_topology": true,

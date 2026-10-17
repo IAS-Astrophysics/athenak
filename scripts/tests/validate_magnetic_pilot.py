@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import re
 import numpy as np
-from test_binary_zoom import load
+from test_binary_zoom import load, coords
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--run', type=Path, required=True)
@@ -53,11 +53,49 @@ selected = paths  # Validate every saved fluid state, including intermediate sta
 states = []
 initial = None
 restored = False
+maxdiv = max_scaled_div = max_exterior_div = 0.
+field_floor = None
+excision_spheres = None
+paired_div = set()
 for path in selected:
     d, f = load(path)
     assert all(np.isfinite(v).all() for v in f.values()), path
     assert f['dens'].min() > 0 and f['press'].min() > 0, path
-    bmax = float(np.sqrt(sum(f[f'bcc{i}']**2 for i in (1,2,3))).max())
+    bnorm = np.sqrt(sum(f[f'bcc{i}'].astype(np.float64)**2 for i in (1,2,3)))
+    bmax = float(bnorm.max())
+    dx=(d['mb_geometry'][:,1]-d['mb_geometry'][:,0])/d['nx1_mb']
+    if field_floor is None:
+        params={};block=''
+        for line in d['header']:
+            line=line.split('#',1)[0].strip()
+            if line.startswith('<') and line.endswith('>'):block=line[1:-1]
+            elif '=' in line:
+                key,value=line.split('=',1);params[block+'/'+key.strip()]=value.strip()
+        if params['problem/single_black_hole']=='true':
+            centers=[0.]
+        else:
+            assert float(params['problem/q'])==1.
+            sep=float(params['problem/sep']);centers=[sep/2,-sep/2]
+        excision_spheres=[{'center':center,'radius':float(params[f'coord/excise_{i+1}_rad'])}
+                          for i,center in enumerate(centers)]
+        ambient=float(np.median(bnorm[dx==dx.max()]))
+        assert ambient>0
+        field_floor=1e-3*ambient
+    divpath=path.with_name(path.name.replace('.mhd_w_bcc.','.mhd_divb.'))
+    dd,df=load(divpath);paired_div.add(divpath)
+    for key in ('mb_logical','mb_geometry'):
+        assert np.array_equal(d[key],dd[key]), 'Unmatched fluid/divB topology'
+    assert (d['cycle'],d['time'])==(dd['cycle'],dd['time'])
+    div=df['divb'];assert np.isfinite(div).all() and div.shape==bnorm.shape
+    raw=float(abs(div).max())
+    scaled=float((abs(div)*dx[:,None,None,None]/np.maximum(bnorm,field_floor)).max())
+    x,y,z=np.broadcast_arrays(*coords(d))
+    exterior=np.ones_like(div,dtype=bool)
+    for sphere in excision_spheres:
+        exterior &= (x-sphere['center'])**2+y*y+z*z>=sphere['radius']**2
+    external=float(abs(div[exterior]).max())
+    maxdiv=max(maxdiv,raw);max_scaled_div=max(max_scaled_div,scaled)
+    max_exterior_div=max(max_exterior_div,external)
     assert bmax > 0, 'This must be genuinely magnetized'
     if initial is None:
         initial = d
@@ -66,24 +104,24 @@ for path in selected:
     states.append({'file': path.name, 'time': d['time'], 'cycle': d['cycle'],
                    'blocks': d['n_mbs'], 'max_level': int(d['mb_logical'][:,3].max()),
                    'min_density': float(f['dens'].min()), 'min_pressure': float(f['press'].min()),
-                   'max_field': bmax})
+                   'max_Btilde_coordinate_norm': bmax,
+                   'max_Btilde_exterior':float(bnorm[exterior].max()),
+                   'max_abs_divb':raw,'max_abs_divb_exterior':external,
+                   'max_scaled_divb':scaled})
 assert states[-1]['time'] > states[0]['time'] and states[-1]['cycle'] > 0
 if a.roundtrip:
     assert restored, 'No return to the initial resolved topology was saved'
     assert len({s['max_level'] for s in states}) >= 8, 'Not all eight zoom stages sampled'
-divpaths = sorted((a.run/'bin').glob('*.mhd_divb.*.bin'))
-assert divpaths
-maxdiv = 0.
-for path in divpaths:
-    _, fields = load(path)
-    for v in fields.values():
-        assert np.isfinite(v).all()
-        maxdiv = max(maxdiv, float(abs(v).max()))
-assert maxdiv < 1e-9, maxdiv
+assert paired_div == set((a.run/'bin').glob('*.mhd_divb.*.bin'))
+# CT is a relative face-flux constraint. The raw absolute error grows with
+# the very large fields inside puncture excision; retain both diagnostics.
+assert max_scaled_div < 1e-9, max_scaled_div
 result = {'ranks': ranks, 'hosts': sorted(hosts), 'termination': termination, 'aggregate_peak_rss_bytes': rss,
           'sum_tracked_allocation_peaks_bytes': allocations,
           'conservative_sum_bytes': rss+allocations, 'sum_guard_budgets_bytes': budget,
-          'max_abs_divb': maxdiv, 'states': states, 'restored_topology': restored,
+          'max_abs_divb': maxdiv, 'max_abs_divb_exterior':max_exterior_div,
+          'max_scaled_divb':max_scaled_div,'scaled_divb_definition':'dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient)',
+          'field_normalization_floor':field_floor, 'diagnostic_excision_spheres':excision_spheres, 'states': states, 'restored_topology': restored,
           'interpretation': 'bounded magnetized evolution; no relaxation claim'}
 a.out.parent.mkdir(parents=True, exist_ok=True)
 a.out.write_text(json.dumps(result, indent=2)+'\n')
