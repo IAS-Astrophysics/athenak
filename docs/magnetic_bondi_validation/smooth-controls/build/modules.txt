@@ -1,0 +1,9 @@
+
+Currently Loaded Modules:
+  1) gcc/14.3.0                            5) cray-pals/1.8.0
+  2) oneapi/release/2026.1.0               6) cray-libpals/1.8.0
+  3) mpich/prd/5.0.0.aurora_test.87e2045   7) cmake/3.31.11
+  4) libfabric/2.3.1
+
+ 
+
