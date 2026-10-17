@@ -113,3 +113,19 @@ half-M test checkpoint. The physical chain has not passed its two-cycle target
 at this launch-state record. Follow accepted descendant receipts and native
 checkpoints for current status; do not interpret this document as a completion
 claim. A quiet 30-minute completion check replaces the old hydro automation.
+
+## Switch validation and physical launch, 2026-10-17 20:36 UTC
+
+Switch test 8939714 completed normally at native t=9904.115850407483 M,
+cycle 125405, zone 0/event 14, with the reset next_time retained at
+10153.615850407483 M. All twelve ranks passed; conservative RSS plus tracked
+allocation peaks totaled 23.396 GB, and maximum scaled magnetic divergence
+was 2.03e-12. Saved density and pressure were finite and positive. This is
+only a half-M launch check, not evidence of relaxation. Its complete validator
+and resource records are in `smooth-controls/gpu-switch-8939714`.
+
+The guarded bootstrap accepted physical job **8939726** from the original
+9903.61585 M anchor (receipt `smooth-controls/magnetic-smooth-anchor.receipt`)
+and transitioned to the physical-chain monitor. At this check the job is running
+normally in its initial fresh finest dwell, near t=9948 M; neither new full
+cycle has completed. No independent continuation was submitted by the heartbeat.

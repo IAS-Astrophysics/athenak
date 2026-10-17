@@ -1,0 +1,168 @@
+{
+  "ranks": [
+    {
+      "rank": 0,
+      "affinity": "0.0",
+      "rss_bytes": 912076800,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.06554844393395,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 1,
+      "affinity": "0.1",
+      "rss_bytes": 913682432,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.065452281967737,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 2,
+      "affinity": "1.0",
+      "rss_bytes": 913760256,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.065532946027815,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 3,
+      "affinity": "1.1",
+      "rss_bytes": 951848960,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.065712009905837,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 4,
+      "affinity": "2.0",
+      "rss_bytes": 916692992,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.0657756869914,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 5,
+      "affinity": "2.1",
+      "rss_bytes": 918962176,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.065758823999204,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 6,
+      "affinity": "3.0",
+      "rss_bytes": 916574208,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.06757038203068,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 7,
+      "affinity": "3.1",
+      "rss_bytes": 957243392,
+      "tracked_bytes": 1026848872,
+      "seconds": 19.067674727994017,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 8,
+      "affinity": "4.0",
+      "rss_bytes": 916692992,
+      "tracked_bytes": 1027860520,
+      "seconds": 19.067852908046916,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 9,
+      "affinity": "4.1",
+      "rss_bytes": 920178688,
+      "tracked_bytes": 1027860520,
+      "seconds": 19.067734524025582,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 10,
+      "affinity": "5.0",
+      "rss_bytes": 916381696,
+      "tracked_bytes": 1027860520,
+      "seconds": 19.067850772989914,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 11,
+      "affinity": "5.1",
+      "rss_bytes": 915247104,
+      "tracked_bytes": 1027860520,
+      "seconds": 19.06790581101086,
+      "metric_evaluations": 2
+    }
+  ],
+  "hosts": [
+    "x4310c3s3b0n0"
+  ],
+  "termination": "time limit",
+  "aggregate_peak_rss_bytes": 11069341696,
+  "sum_tracked_allocation_peaks_bytes": 12326233056,
+  "conservative_sum_bytes": 23395574752,
+  "sum_guard_budgets_bytes": 28399999992,
+  "max_abs_divb": 1.7404090613126755e-08,
+  "max_abs_divb_exterior": 9.606537787476555e-11,
+  "max_scaled_divb": 2.0300255849457223e-12,
+  "scaled_divb_definition": "dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient)",
+  "field_normalization_floor": 6.944769606978802e-05,
+  "diagnostic_excision_spheres": [
+    {
+      "center": 16.0,
+      "radius": 0.8
+    },
+    {
+      "center": -16.0,
+      "radius": 0.8
+    }
+  ],
+  "states": [
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00200.bin",
+      "time": 9904.12,
+      "cycle": 125405,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 5.055102974438341e-06,
+      "min_pressure": 2.7654218975534106e-13,
+      "max_Btilde_coordinate_norm": 14100.67498119749,
+      "max_Btilde_exterior": 41.24744753925935,
+      "max_abs_divb": 1.7404090613126755e-08,
+      "max_abs_divb_exterior": 9.606537787476555e-11,
+      "max_scaled_divb": 2.0300255849457223e-12
+    }
+  ],
+  "restored_topology": false,
+  "initial_checkpoint_state": {
+    "time": 9903.615850407483,
+    "dt": 0.00726085448353874,
+    "cycle": 125336,
+    "blocks": 1408
+  },
+  "interpretation": "smooth-excision continuation of evolved hard-excision data; finite fields do not establish relaxation",
+  "smooth_checkpoint": {
+    "time": 9904.115850407483,
+    "dt": 0.00726085448353874,
+    "cycle": 125405,
+    "blocks": 1408,
+    "id": 14,
+    "zone": 0,
+    "last_cycle": 125336,
+    "last_zone": 1,
+    "direction": 1,
+    "next_time": 10153.615850407483
+  },
+  "residence_reset_records": [
+    [
+      "9903.6158504074829",
+      "14",
+      "9933.0383520587002",
+      "10153.615850407483"
+    ]
+  ],
+  "two_complete_smooth_cycles": false
+}

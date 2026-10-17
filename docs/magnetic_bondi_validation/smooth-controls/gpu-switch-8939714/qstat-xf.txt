@@ -1,0 +1,91 @@
+Job Id: 8939714.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+    Job_Name = cz_mhd_smooth
+    Job_Owner = hzhu@aurora-uan-0012.hostmgmt1000.cm.aurora.alcf.anl.gov
+    resources_used.cpupercent = 157
+    resources_used.cput = 00:05:17
+    resources_used.mem = 929088kb
+    resources_used.ncpus = 208
+    resources_used.ngpus = 0
+    resources_used.vmem = 24748kb
+    resources_used.walltime = 00:00:30
+    job_state = F
+    queue = debug-scaling
+    server = aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+    Account_Name = MHDTidal
+    Checkpoint = u
+    ctime = Sat Oct 17 20:04:24 2026
+    Error_Path = aurora-uan-0012.hostmgmt1000.cm.aurora.alcf.anl.gov:/lus/flare
+	/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/cz_mhd_smooth.e893
+	9714
+    exec_host = x4310c3s3b0n0/0*208
+    exec_vnode = (x4310c3s3b0n0:ncpus=208)
+    Hold_Types = n
+    Join_Path = oe
+    Keep_Files = doe
+    Mail_Points = a
+    Mail_Users = hz0693@princeton.edu
+    mtime = Sat Oct 17 20:10:12 2026
+    Output_Path = aurora-uan-0012.hostmgmt1000.cm.aurora.alcf.anl.gov:/lus/flar
+	e/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/cz_mhd_smooth.o89
+	39714
+    Priority = 0
+    qtime = Sat Oct 17 20:04:24 2026
+    Rerunable = False
+    Resource_List.allow_account_check_failure = True
+    Resource_List.allow_negative_allocation = True
+    Resource_List.award_category = INCITE
+    Resource_List.award_type = INCITE-2026
+    Resource_List.backfill_factor = 84600
+    Resource_List.backfill_max = 50
+    Resource_List.base_score = 51
+    Resource_List.bkc_definition = compute_aurora_prod_20261002T162246_af5b0375
+	_b4fd227
+    Resource_List.burn_ratio = 0.3970
+    Resource_List.current_allocation = 12372586496
+    Resource_List.enable_2nd_fp64 = True
+    Resource_List.enable_backfill = 0
+    Resource_List.enable_fifo = 1
+    Resource_List.enable_wfp = 0
+    Resource_List.fifo_factor = 1800
+    Resource_List.filesystems = flare:home
+    Resource_List.flare_fs = True
+    Resource_List.hbm_mode = flat
+    Resource_List.home_fs = True
+    Resource_List.ncpus = 208
+    Resource_List.ni_resource = aurora
+    Resource_List.nodect = 1
+    Resource_List.overburn = False
+    Resource_List.place = scatter
+    Resource_List.project_priority = 25
+    Resource_List.route_backfill = False
+    Resource_List.score_boost = 0
+    Resource_List.select = 1
+    Resource_List.snc_mode = quad
+    Resource_List.total_allocation = 20519999488
+    Resource_List.total_cpus = 10624
+    Resource_List.walltime = 01:00:00
+    Resource_List.wfp_factor = 100000
+    stime = Sat Oct 17 20:09:09 2026
+    obittime = Sat Oct 17 20:10:12 2026
+    session_id = 2001518
+    jobdir = /home/hzhu
+    substate = 92
+    euser = hzhu
+    egroup = users
+    comment = Job run at Sat Oct 17 at 20:09 on (x4310c3s3b0n0:ncpus=208) and f
+	inished
+    etime = Sat Oct 17 20:04:24 2026
+    umask = 22
+    run_count = 1
+    eligible_time = 00:04:47
+    Stageout_status = 1
+    Exit_status = 0
+    Submit_arguments = -v CZ_RESTART=/lus/flare/projects/MHDTidal/hzhu/cyclic_z
+	oom_profile_20261013/evolution-magnetic-8938971/rst/magnetic_bondi_bina
+	ry.00022.rst,CZ_TLIM=9904.1158504074829,CZ_SMOOTH_ANCHOR=1,
+	CZ_CHECK_SWITCH=1 source-magnetic-smooth/scripts/tests/aurora_bondi_ma
+	gnetic_smooth.pbs
+    history_timestamp = 1792267812
+    project = MHDTidal
+    Submit_Host = aurora-uan-0012.hostmgmt1000.cm.aurora.alcf.anl.gov
+

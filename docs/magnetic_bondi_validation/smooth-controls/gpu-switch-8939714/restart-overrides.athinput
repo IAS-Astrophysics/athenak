@@ -1,0 +1,8 @@
+<coord>
+smooth_excision = true
+smooth_excision_puncture_width_fraction = 1
+smooth_excision_puncture_weight_exponent = 1
+smooth_excision_inflow = false
+smooth_excision_b_damping = false
+<cyclic_zoom>
+restart_reset_finest_dwell = true
