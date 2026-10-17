@@ -287,3 +287,11 @@ magnetic-continuation-8937572.receipt records the exact checkpoint hash and
 native time. The fixed monitor follows8937793; the original monitor terminated
 on the postprocessing error and did not duplicate a job. Subsequent launches
 use the synchronized explicit EnableImplicitScaling=0 runtime setting.
+
+The first physical zoom transitions occurred after the250 M finest dwell in
+job8937793. The saved t=300.022 M state has1072 active blocks, maximum physical
+level9 (zone3), finite positive fluid, and max field-scaled divB5.05e-13.
+This is real physical-duration evolution, distinct from the accelerated smoke
+test. first-coarse-validation.json records the check; runtime-controls.txt
+confirms EnableImplicitScaling=0, composite hierarchy, GPU-aware MPI and OMP8.
+No physical roundtrip has completed yet at this receipt.

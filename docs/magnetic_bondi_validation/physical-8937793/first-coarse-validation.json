@@ -1,0 +1,11 @@
+{
+  "file": "magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+  "time": 300.022,
+  "cycle": 35308,
+  "blocks": 1072,
+  "max_level": 9,
+  "positive_finite": true,
+  "max_scaled_divb": 5.047399335834861e-13,
+  "max_abs_divb": 7.73070496506989e-12,
+  "interpretation": "first saved physical coarse-stage state; job remains running"
+}
