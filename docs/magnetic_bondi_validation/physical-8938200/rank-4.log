@@ -1,0 +1,144 @@
+rank=4 host=x4304c7s5b0n0 affinity=2.0
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 288
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 289
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 290
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 291
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 292
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 293
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 294
+ Rank 4 finds MeshBlock 359 for zoom MeshBlock 295
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 296
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 297
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 298
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 299
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 300
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 301
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 302
+ Rank 4 finds MeshBlock 378 for zoom MeshBlock 303
+ Rank 4 found 16 zoom MeshBlocks
+ Rank 4 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 293
+ Rank 4 finds MeshBlock 393 for zoom MeshBlock 294
+ Rank 4 finds MeshBlock 394 for zoom MeshBlock 295
+ Rank 4 finds MeshBlock 413 for zoom MeshBlock 296
+ Rank 4 finds MeshBlock 414 for zoom MeshBlock 297
+ Rank 4 finds MeshBlock 415 for zoom MeshBlock 298
+ Rank 4 finds MeshBlock 416 for zoom MeshBlock 299
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 300
+ Rank 4 finds MeshBlock 418 for zoom MeshBlock 301
+ Rank 4 finds MeshBlock 419 for zoom MeshBlock 302
+ Rank 4 finds MeshBlock 420 for zoom MeshBlock 303
+ Rank 4 finds MeshBlock 487 for zoom MeshBlock 304
+ Rank 4 finds MeshBlock 488 for zoom MeshBlock 305
+ Rank 4 finds MeshBlock 489 for zoom MeshBlock 306
+ Rank 4 finds MeshBlock 490 for zoom MeshBlock 307
+ Rank 4 found 15 zoom MeshBlocks
+ Rank 4 RedistZMBs completed sends: 10, recvs: 14, copies: 1
+ Rank 4 applied same-level prims to local mb m=0 with zm=0
+ Rank 4 applied same-level prims to local mb m=1 with zm=1
+ Rank 4 applied same-level prims to local mb m=2 with zm=2
+ Rank 4 applied same-level prims to local mb m=21 with zm=3
+ Rank 4 applied same-level prims to local mb m=22 with zm=4
+ Rank 4 applied same-level prims to local mb m=23 with zm=5
+ Rank 4 applied same-level prims to local mb m=24 with zm=6
+ Rank 4 applied same-level prims to local mb m=25 with zm=7
+ Rank 4 applied same-level prims to local mb m=26 with zm=8
+ Rank 4 applied same-level prims to local mb m=27 with zm=9
+ Rank 4 applied same-level prims to local mb m=28 with zm=10
+ Rank 4 applied same-level prims to local mb m=95 with zm=11
+ Rank 4 applied same-level prims to local mb m=96 with zm=12
+ Rank 4 applied same-level prims to local mb m=97 with zm=13
+ Rank 4 applied same-level prims to local mb m=98 with zm=14
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 160
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 161
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 162
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 163
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 164
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 165
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 166
+ Rank 4 finds MeshBlock 392 for zoom MeshBlock 167
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 168
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 169
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 170
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 171
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 172
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 173
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 174
+ Rank 4 finds MeshBlock 417 for zoom MeshBlock 175
+ Rank 4 found 16 zoom MeshBlocks
+ Rank 4 RedistZMBs completed sends: 8, recvs: 14, copies: 2
+ Rank 4 finds MeshBlock 452 for zoom MeshBlock 168
+ Rank 4 finds MeshBlock 453 for zoom MeshBlock 169
+ Rank 4 finds MeshBlock 454 for zoom MeshBlock 170
+ Rank 4 finds MeshBlock 455 for zoom MeshBlock 171
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 172
+ Rank 4 finds MeshBlock 457 for zoom MeshBlock 173
+ Rank 4 finds MeshBlock 458 for zoom MeshBlock 174
+ Rank 4 finds MeshBlock 459 for zoom MeshBlock 175
+ Rank 4 finds MeshBlock 534 for zoom MeshBlock 176
+ Rank 4 finds MeshBlock 535 for zoom MeshBlock 177
+ Rank 4 finds MeshBlock 536 for zoom MeshBlock 178
+ Rank 4 finds MeshBlock 537 for zoom MeshBlock 179
+ Rank 4 finds MeshBlock 538 for zoom MeshBlock 180
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 181
+ Rank 4 found 14 zoom MeshBlocks
+ Rank 4 RedistZMBs completed sends: 9, recvs: 13, copies: 1
+ Rank 4 applied same-level prims to local mb m=20 with zm=0
+ Rank 4 applied same-level prims to local mb m=21 with zm=1
+ Rank 4 applied same-level prims to local mb m=22 with zm=2
+ Rank 4 applied same-level prims to local mb m=23 with zm=3
+ Rank 4 applied same-level prims to local mb m=24 with zm=4
+ Rank 4 applied same-level prims to local mb m=25 with zm=5
+ Rank 4 applied same-level prims to local mb m=26 with zm=6
+ Rank 4 applied same-level prims to local mb m=27 with zm=7
+ Rank 4 applied same-level prims to local mb m=102 with zm=8
+ Rank 4 applied same-level prims to local mb m=103 with zm=9
+ Rank 4 applied same-level prims to local mb m=104 with zm=10
+ Rank 4 applied same-level prims to local mb m=105 with zm=11
+ Rank 4 applied same-level prims to local mb m=106 with zm=12
+ Rank 4 applied same-level prims to local mb m=107 with zm=13
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 40
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 41
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 42
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 43
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 44
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 45
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 46
+ Rank 4 finds MeshBlock 456 for zoom MeshBlock 47
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 48
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 49
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 50
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 51
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 52
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 53
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 54
+ Rank 4 finds MeshBlock 539 for zoom MeshBlock 55
+ Rank 4 found 16 zoom MeshBlocks
+ Rank 4 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+ Rank 4 finds MeshBlock 491 for zoom MeshBlock 40
+ Rank 4 finds MeshBlock 492 for zoom MeshBlock 41
+ Rank 4 finds MeshBlock 493 for zoom MeshBlock 42
+ Rank 4 finds MeshBlock 494 for zoom MeshBlock 43
+ Rank 4 finds MeshBlock 495 for zoom MeshBlock 44
+ Rank 4 finds MeshBlock 496 for zoom MeshBlock 45
+ Rank 4 finds MeshBlock 497 for zoom MeshBlock 46
+ Rank 4 finds MeshBlock 498 for zoom MeshBlock 47
+ Rank 4 finds MeshBlock 581 for zoom MeshBlock 48
+ Rank 4 finds MeshBlock 582 for zoom MeshBlock 49
+ Rank 4 finds MeshBlock 583 for zoom MeshBlock 50
+ Rank 4 finds MeshBlock 584 for zoom MeshBlock 51
+ Rank 4 found 12 zoom MeshBlocks
+ Rank 4 RedistZMBs completed sends: 10, recvs: 11, copies: 1
+ Rank 4 applied same-level prims to local mb m=23 with zm=0
+ Rank 4 applied same-level prims to local mb m=24 with zm=1
+ Rank 4 applied same-level prims to local mb m=25 with zm=2
+ Rank 4 applied same-level prims to local mb m=26 with zm=3
+ Rank 4 applied same-level prims to local mb m=27 with zm=4
+ Rank 4 applied same-level prims to local mb m=28 with zm=5
+ Rank 4 applied same-level prims to local mb m=29 with zm=6
+ Rank 4 applied same-level prims to local mb m=30 with zm=7
+ Rank 4 applied same-level prims to local mb m=113 with zm=8
+ Rank 4 applied same-level prims to local mb m=114 with zm=9
+ Rank 4 applied same-level prims to local mb m=115 with zm=10
+ Rank 4 applied same-level prims to local mb m=116 with zm=11
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938136/rst/magnetic_bondi_binary.00020.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938200", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 939741184, "memory_budget_bytes": 1200000000, "seconds": 3303.3181927140104, "stopped": null}

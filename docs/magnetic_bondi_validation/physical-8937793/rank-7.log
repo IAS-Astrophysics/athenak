@@ -1,0 +1,266 @@
+rank=7 host=x4615c0s4b0n0 affinity=3.1
+ Rank 7 Stores MeshBlock 819 with zoom MeshBlock index 0
+ Rank 7 Stores MeshBlock 820 with zoom MeshBlock index 1
+ Rank 7 Stores MeshBlock 821 with zoom MeshBlock index 2
+ Rank 7 Stores MeshBlock 822 with zoom MeshBlock index 3
+ Rank 7 Stores MeshBlock 823 with zoom MeshBlock index 4
+ Rank 7 Stores MeshBlock 824 with zoom MeshBlock index 5
+ Rank 7 Stores MeshBlock 825 with zoom MeshBlock index 6
+ Rank 7 Stores MeshBlock 826 with zoom MeshBlock index 7
+ Rank 7 Stores MeshBlock 909 with zoom MeshBlock index 8
+ Rank 7 Stores MeshBlock 910 with zoom MeshBlock index 9
+ Rank 7 Stores MeshBlock 911 with zoom MeshBlock index 10
+ Rank 7 Stores MeshBlock 912 with zoom MeshBlock index 11
+ Rank 7 Stores MeshBlock 913 with zoom MeshBlock index 12
+ Rank 7 Stores MeshBlock 914 with zoom MeshBlock index 13
+ Rank 7 Stores MeshBlock 915 with zoom MeshBlock index 14
+ Rank 7 Stores MeshBlock 916 with zoom MeshBlock index 15
+ Rank 7 Storing MeshBlock 819 with zoom MeshBlock index 0
+ Rank 7 Storing MeshBlock 820 with zoom MeshBlock index 1
+ Rank 7 Storing MeshBlock 821 with zoom MeshBlock index 2
+ Rank 7 Storing MeshBlock 822 with zoom MeshBlock index 3
+ Rank 7 Storing MeshBlock 823 with zoom MeshBlock index 4
+ Rank 7 Storing MeshBlock 824 with zoom MeshBlock index 5
+ Rank 7 Storing MeshBlock 825 with zoom MeshBlock index 6
+ Rank 7 Storing MeshBlock 826 with zoom MeshBlock index 7
+ Rank 7 Storing MeshBlock 909 with zoom MeshBlock index 8
+ Rank 7 Storing MeshBlock 910 with zoom MeshBlock index 9
+ Rank 7 Storing MeshBlock 911 with zoom MeshBlock index 10
+ Rank 7 Storing MeshBlock 912 with zoom MeshBlock index 11
+ Rank 7 Storing MeshBlock 913 with zoom MeshBlock index 12
+ Rank 7 Storing MeshBlock 914 with zoom MeshBlock index 13
+ Rank 7 Storing MeshBlock 915 with zoom MeshBlock index 14
+ Rank 7 Storing MeshBlock 916 with zoom MeshBlock index 15
+ Rank 7 RedistZMBs completed sends: 15, recvs: 10, copies: 1
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 72
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 73
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 74
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 75
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 76
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 77
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 78
+ Rank 7 finds MeshBlock 756 for zoom MeshBlock 79
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 80
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 81
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 82
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 83
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 84
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 85
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 86
+ Rank 7 finds MeshBlock 839 for zoom MeshBlock 87
+ Rank 7 found 16 zoom MeshBlocks
+ Rank 7 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+ Rank 7 RedistZMBs completed sends: 15, recvs: 10, copies: 1
+ Rank 7 Stores MeshBlock 756 with zoom MeshBlock index 0
+ Rank 7 Stores MeshBlock 757 with zoom MeshBlock index 1
+ Rank 7 Stores MeshBlock 758 with zoom MeshBlock index 2
+ Rank 7 Stores MeshBlock 759 with zoom MeshBlock index 3
+ Rank 7 Stores MeshBlock 760 with zoom MeshBlock index 4
+ Rank 7 Stores MeshBlock 761 with zoom MeshBlock index 5
+ Rank 7 Stores MeshBlock 836 with zoom MeshBlock index 6
+ Rank 7 Stores MeshBlock 837 with zoom MeshBlock index 7
+ Rank 7 Stores MeshBlock 838 with zoom MeshBlock index 8
+ Rank 7 Stores MeshBlock 839 with zoom MeshBlock index 9
+ Rank 7 Stores MeshBlock 840 with zoom MeshBlock index 10
+ Rank 7 Stores MeshBlock 841 with zoom MeshBlock index 11
+ Rank 7 Stores MeshBlock 842 with zoom MeshBlock index 12
+ Rank 7 Stores MeshBlock 843 with zoom MeshBlock index 13
+ Rank 7 Storing MeshBlock 756 with zoom MeshBlock index 0
+ Rank 7 Storing MeshBlock 757 with zoom MeshBlock index 1
+ Rank 7 Storing MeshBlock 758 with zoom MeshBlock index 2
+ Rank 7 Storing MeshBlock 759 with zoom MeshBlock index 3
+ Rank 7 Storing MeshBlock 760 with zoom MeshBlock index 4
+ Rank 7 Storing MeshBlock 761 with zoom MeshBlock index 5
+ Rank 7 Storing MeshBlock 836 with zoom MeshBlock index 6
+ Rank 7 Storing MeshBlock 837 with zoom MeshBlock index 7
+ Rank 7 Storing MeshBlock 838 with zoom MeshBlock index 8
+ Rank 7 Storing MeshBlock 839 with zoom MeshBlock index 9
+ Rank 7 Storing MeshBlock 840 with zoom MeshBlock index 10
+ Rank 7 Storing MeshBlock 841 with zoom MeshBlock index 11
+ Rank 7 Storing MeshBlock 842 with zoom MeshBlock index 12
+ Rank 7 Storing MeshBlock 843 with zoom MeshBlock index 13
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 72 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 73 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 74 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 75 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 76 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 77 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 78 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 79 on MeshBlock 756
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 80 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 81 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 82 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 83 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 84 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 85 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 86 on MeshBlock 839
+ Rank 7 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 87 on MeshBlock 839
+ Rank 7 RedistZMBs completed sends: 13, recvs: 9, copies: 1
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 200
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 201
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 202
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 203
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 204
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 205
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 206
+ Rank 7 finds MeshBlock 691 for zoom MeshBlock 207
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 208
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 209
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 210
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 211
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 212
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 213
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 214
+ Rank 7 finds MeshBlock 766 for zoom MeshBlock 215
+ Rank 7 found 16 zoom MeshBlocks
+ Rank 7 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 7 RedistZMBs completed sends: 15, recvs: 9, copies: 1
+ Rank 7 Stores MeshBlock 689 with zoom MeshBlock index 0
+ Rank 7 Stores MeshBlock 690 with zoom MeshBlock index 1
+ Rank 7 Stores MeshBlock 691 with zoom MeshBlock index 2
+ Rank 7 Stores MeshBlock 692 with zoom MeshBlock index 3
+ Rank 7 Stores MeshBlock 693 with zoom MeshBlock index 4
+ Rank 7 Stores MeshBlock 694 with zoom MeshBlock index 5
+ Rank 7 Stores MeshBlock 695 with zoom MeshBlock index 6
+ Rank 7 Stores MeshBlock 696 with zoom MeshBlock index 7
+ Rank 7 Stores MeshBlock 763 with zoom MeshBlock index 8
+ Rank 7 Stores MeshBlock 764 with zoom MeshBlock index 9
+ Rank 7 Stores MeshBlock 765 with zoom MeshBlock index 10
+ Rank 7 Stores MeshBlock 766 with zoom MeshBlock index 11
+ Rank 7 Stores MeshBlock 767 with zoom MeshBlock index 12
+ Rank 7 Stores MeshBlock 768 with zoom MeshBlock index 13
+ Rank 7 Stores MeshBlock 769 with zoom MeshBlock index 14
+ Rank 7 Stores MeshBlock 770 with zoom MeshBlock index 15
+ Rank 7 Storing MeshBlock 689 with zoom MeshBlock index 0
+ Rank 7 Storing MeshBlock 690 with zoom MeshBlock index 1
+ Rank 7 Storing MeshBlock 691 with zoom MeshBlock index 2
+ Rank 7 Storing MeshBlock 692 with zoom MeshBlock index 3
+ Rank 7 Storing MeshBlock 693 with zoom MeshBlock index 4
+ Rank 7 Storing MeshBlock 694 with zoom MeshBlock index 5
+ Rank 7 Storing MeshBlock 695 with zoom MeshBlock index 6
+ Rank 7 Storing MeshBlock 696 with zoom MeshBlock index 7
+ Rank 7 Storing MeshBlock 763 with zoom MeshBlock index 8
+ Rank 7 Storing MeshBlock 764 with zoom MeshBlock index 9
+ Rank 7 Storing MeshBlock 765 with zoom MeshBlock index 10
+ Rank 7 Storing MeshBlock 766 with zoom MeshBlock index 11
+ Rank 7 Storing MeshBlock 767 with zoom MeshBlock index 12
+ Rank 7 Storing MeshBlock 768 with zoom MeshBlock index 13
+ Rank 7 Storing MeshBlock 769 with zoom MeshBlock index 14
+ Rank 7 Storing MeshBlock 770 with zoom MeshBlock index 15
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 200 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 201 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 202 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 203 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 204 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 205 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 206 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 207 on MeshBlock 691
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 208 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 209 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 210 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 211 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 212 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 213 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 214 on MeshBlock 766
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 215 on MeshBlock 766
+ Rank 7 RedistZMBs completed sends: 14, recvs: 9, copies: 2
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 328
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 329
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 330
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 331
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 332
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 333
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 334
+ Rank 7 finds MeshBlock 626 for zoom MeshBlock 335
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 336
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 337
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 338
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 339
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 340
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 341
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 342
+ Rank 7 finds MeshBlock 693 for zoom MeshBlock 343
+ Rank 7 found 16 zoom MeshBlocks
+ Rank 7 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+ Rank 7 RedistZMBs completed sends: 14, recvs: 9, copies: 2
+ Rank 7 Stores MeshBlock 624 with zoom MeshBlock index 0
+ Rank 7 Stores MeshBlock 625 with zoom MeshBlock index 1
+ Rank 7 Stores MeshBlock 626 with zoom MeshBlock index 2
+ Rank 7 Stores MeshBlock 627 with zoom MeshBlock index 3
+ Rank 7 Stores MeshBlock 628 with zoom MeshBlock index 4
+ Rank 7 Stores MeshBlock 629 with zoom MeshBlock index 5
+ Rank 7 Stores MeshBlock 630 with zoom MeshBlock index 6
+ Rank 7 Stores MeshBlock 631 with zoom MeshBlock index 7
+ Rank 7 Stores MeshBlock 690 with zoom MeshBlock index 8
+ Rank 7 Stores MeshBlock 691 with zoom MeshBlock index 9
+ Rank 7 Stores MeshBlock 692 with zoom MeshBlock index 10
+ Rank 7 Stores MeshBlock 693 with zoom MeshBlock index 11
+ Rank 7 Stores MeshBlock 694 with zoom MeshBlock index 12
+ Rank 7 Stores MeshBlock 695 with zoom MeshBlock index 13
+ Rank 7 Stores MeshBlock 696 with zoom MeshBlock index 14
+ Rank 7 Stores MeshBlock 697 with zoom MeshBlock index 15
+ Rank 7 Stores MeshBlock 710 with zoom MeshBlock index 16
+ Rank 7 Stores MeshBlock 711 with zoom MeshBlock index 17
+ Rank 7 Storing MeshBlock 624 with zoom MeshBlock index 0
+ Rank 7 Storing MeshBlock 625 with zoom MeshBlock index 1
+ Rank 7 Storing MeshBlock 626 with zoom MeshBlock index 2
+ Rank 7 Storing MeshBlock 627 with zoom MeshBlock index 3
+ Rank 7 Storing MeshBlock 628 with zoom MeshBlock index 4
+ Rank 7 Storing MeshBlock 629 with zoom MeshBlock index 5
+ Rank 7 Storing MeshBlock 630 with zoom MeshBlock index 6
+ Rank 7 Storing MeshBlock 631 with zoom MeshBlock index 7
+ Rank 7 Storing MeshBlock 690 with zoom MeshBlock index 8
+ Rank 7 Storing MeshBlock 691 with zoom MeshBlock index 9
+ Rank 7 Storing MeshBlock 692 with zoom MeshBlock index 10
+ Rank 7 Storing MeshBlock 693 with zoom MeshBlock index 11
+ Rank 7 Storing MeshBlock 694 with zoom MeshBlock index 12
+ Rank 7 Storing MeshBlock 695 with zoom MeshBlock index 13
+ Rank 7 Storing MeshBlock 696 with zoom MeshBlock index 14
+ Rank 7 Storing MeshBlock 697 with zoom MeshBlock index 15
+ Rank 7 Storing MeshBlock 710 with zoom MeshBlock index 16
+ Rank 7 Storing MeshBlock 711 with zoom MeshBlock index 17
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 328 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 329 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 330 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 331 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 332 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 333 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 334 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 2 using old zoom MeshBlock 335 on MeshBlock 626
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 336 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 337 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 338 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 339 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 340 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 341 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 342 on MeshBlock 693
+ Rank 7 Correcting local zoom MeshBlock 11 using old zoom MeshBlock 343 on MeshBlock 693
+ Rank 7 RedistZMBs completed sends: 17, recvs: 10, copies: 1
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 456
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 457
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 458
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 459
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 460
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 461
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 462
+ Rank 7 finds MeshBlock 561 for zoom MeshBlock 463
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 464
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 465
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 466
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 467
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 468
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 469
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 470
+ Rank 7 finds MeshBlock 620 for zoom MeshBlock 471
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 472
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 473
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 474
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 475
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 476
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 477
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 478
+ Rank 7 finds MeshBlock 633 for zoom MeshBlock 479
+ Rank 7 found 24 zoom MeshBlocks
+ Rank 7 RedistZMBs completed sends: 9, recvs: 22, copies: 2
+ Rank 7 RedistZMBs completed sends: 22, recvs: 9, copies: 2
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937572/rst/magnetic_bondi_binary.00002.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937793", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 839131136, "memory_budget_bytes": 1200000000, "seconds": 3303.8920016509946, "stopped": null}

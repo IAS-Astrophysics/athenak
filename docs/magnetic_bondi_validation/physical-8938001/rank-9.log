@@ -1,0 +1,328 @@
+rank=9 host=x4516c6s5b0n0 affinity=4.1
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 480
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 481
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 482
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 483
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 484
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 485
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 486
+ Rank 9 finds MeshBlock 770 for zoom MeshBlock 487
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 488
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 489
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 490
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 491
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 492
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 493
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 494
+ Rank 9 finds MeshBlock 783 for zoom MeshBlock 495
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 9 Stores MeshBlock 769 with zoom MeshBlock index 0
+ Rank 9 Stores MeshBlock 770 with zoom MeshBlock index 1
+ Rank 9 Stores MeshBlock 771 with zoom MeshBlock index 2
+ Rank 9 Stores MeshBlock 772 with zoom MeshBlock index 3
+ Rank 9 Stores MeshBlock 773 with zoom MeshBlock index 4
+ Rank 9 Stores MeshBlock 774 with zoom MeshBlock index 5
+ Rank 9 Stores MeshBlock 775 with zoom MeshBlock index 6
+ Rank 9 Stores MeshBlock 776 with zoom MeshBlock index 7
+ Rank 9 Stores MeshBlock 783 with zoom MeshBlock index 8
+ Rank 9 Stores MeshBlock 784 with zoom MeshBlock index 9
+ Rank 9 Stores MeshBlock 785 with zoom MeshBlock index 10
+ Rank 9 Stores MeshBlock 786 with zoom MeshBlock index 11
+ Rank 9 Stores MeshBlock 787 with zoom MeshBlock index 12
+ Rank 9 Stores MeshBlock 788 with zoom MeshBlock index 13
+ Rank 9 Stores MeshBlock 789 with zoom MeshBlock index 14
+ Rank 9 Stores MeshBlock 790 with zoom MeshBlock index 15
+ Rank 9 Storing MeshBlock 769 with zoom MeshBlock index 0
+ Rank 9 Storing MeshBlock 770 with zoom MeshBlock index 1
+ Rank 9 Storing MeshBlock 771 with zoom MeshBlock index 2
+ Rank 9 Storing MeshBlock 772 with zoom MeshBlock index 3
+ Rank 9 Storing MeshBlock 773 with zoom MeshBlock index 4
+ Rank 9 Storing MeshBlock 774 with zoom MeshBlock index 5
+ Rank 9 Storing MeshBlock 775 with zoom MeshBlock index 6
+ Rank 9 Storing MeshBlock 776 with zoom MeshBlock index 7
+ Rank 9 Storing MeshBlock 783 with zoom MeshBlock index 8
+ Rank 9 Storing MeshBlock 784 with zoom MeshBlock index 9
+ Rank 9 Storing MeshBlock 785 with zoom MeshBlock index 10
+ Rank 9 Storing MeshBlock 786 with zoom MeshBlock index 11
+ Rank 9 Storing MeshBlock 787 with zoom MeshBlock index 12
+ Rank 9 Storing MeshBlock 788 with zoom MeshBlock index 13
+ Rank 9 Storing MeshBlock 789 with zoom MeshBlock index 14
+ Rank 9 Storing MeshBlock 790 with zoom MeshBlock index 15
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 480 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 481 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 482 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 483 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 484 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 485 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 486 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 487 on MeshBlock 770
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 488 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 489 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 490 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 491 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 492 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 493 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 494 on MeshBlock 783
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 495 on MeshBlock 783
+ Rank 9 RedistZMBs completed sends: 14, recvs: 9, copies: 2
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 608
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 609
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 610
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 611
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 612
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 613
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 614
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 615
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 616
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 617
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 618
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 619
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 620
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 621
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 622
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 623
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+ Rank 9 RedistZMBs completed sends: 14, recvs: 9, copies: 2
+ Rank 9 Stores MeshBlock 684 with zoom MeshBlock index 0
+ Rank 9 Stores MeshBlock 685 with zoom MeshBlock index 1
+ Rank 9 Stores MeshBlock 686 with zoom MeshBlock index 2
+ Rank 9 Stores MeshBlock 687 with zoom MeshBlock index 3
+ Rank 9 Stores MeshBlock 688 with zoom MeshBlock index 4
+ Rank 9 Stores MeshBlock 689 with zoom MeshBlock index 5
+ Rank 9 Stores MeshBlock 690 with zoom MeshBlock index 6
+ Rank 9 Stores MeshBlock 691 with zoom MeshBlock index 7
+ Rank 9 Stores MeshBlock 692 with zoom MeshBlock index 8
+ Rank 9 Stores MeshBlock 693 with zoom MeshBlock index 9
+ Rank 9 Stores MeshBlock 694 with zoom MeshBlock index 10
+ Rank 9 Stores MeshBlock 695 with zoom MeshBlock index 11
+ Rank 9 Stores MeshBlock 696 with zoom MeshBlock index 12
+ Rank 9 Stores MeshBlock 697 with zoom MeshBlock index 13
+ Rank 9 Stores MeshBlock 698 with zoom MeshBlock index 14
+ Rank 9 Stores MeshBlock 699 with zoom MeshBlock index 15
+ Rank 9 Storing MeshBlock 684 with zoom MeshBlock index 0
+ Rank 9 Storing MeshBlock 685 with zoom MeshBlock index 1
+ Rank 9 Storing MeshBlock 686 with zoom MeshBlock index 2
+ Rank 9 Storing MeshBlock 687 with zoom MeshBlock index 3
+ Rank 9 Storing MeshBlock 688 with zoom MeshBlock index 4
+ Rank 9 Storing MeshBlock 689 with zoom MeshBlock index 5
+ Rank 9 Storing MeshBlock 690 with zoom MeshBlock index 6
+ Rank 9 Storing MeshBlock 691 with zoom MeshBlock index 7
+ Rank 9 Storing MeshBlock 692 with zoom MeshBlock index 8
+ Rank 9 Storing MeshBlock 693 with zoom MeshBlock index 9
+ Rank 9 Storing MeshBlock 694 with zoom MeshBlock index 10
+ Rank 9 Storing MeshBlock 695 with zoom MeshBlock index 11
+ Rank 9 Storing MeshBlock 696 with zoom MeshBlock index 12
+ Rank 9 Storing MeshBlock 697 with zoom MeshBlock index 13
+ Rank 9 Storing MeshBlock 698 with zoom MeshBlock index 14
+ Rank 9 Storing MeshBlock 699 with zoom MeshBlock index 15
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 608 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 609 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 610 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 611 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 612 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 613 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 614 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 615 on MeshBlock 685
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 616 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 617 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 618 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 619 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 620 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 621 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 622 on MeshBlock 692
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 623 on MeshBlock 692
+ Rank 9 RedistZMBs completed sends: 15, recvs: 10, copies: 1
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 736
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 737
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 738
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 739
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 740
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 741
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 742
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 743
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 744
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 745
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 746
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 747
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 748
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 749
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 750
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 751
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+ Rank 9 RedistZMBs completed sends: 15, recvs: 10, copies: 1
+ Rank 9 Stores MeshBlock 592 with zoom MeshBlock index 0
+ Rank 9 Stores MeshBlock 593 with zoom MeshBlock index 1
+ Rank 9 Stores MeshBlock 594 with zoom MeshBlock index 2
+ Rank 9 Stores MeshBlock 595 with zoom MeshBlock index 3
+ Rank 9 Stores MeshBlock 596 with zoom MeshBlock index 4
+ Rank 9 Stores MeshBlock 597 with zoom MeshBlock index 5
+ Rank 9 Stores MeshBlock 598 with zoom MeshBlock index 6
+ Rank 9 Stores MeshBlock 599 with zoom MeshBlock index 7
+ Rank 9 Stores MeshBlock 600 with zoom MeshBlock index 8
+ Rank 9 Stores MeshBlock 601 with zoom MeshBlock index 9
+ Rank 9 Stores MeshBlock 602 with zoom MeshBlock index 10
+ Rank 9 Stores MeshBlock 603 with zoom MeshBlock index 11
+ Rank 9 Stores MeshBlock 604 with zoom MeshBlock index 12
+ Rank 9 Stores MeshBlock 605 with zoom MeshBlock index 13
+ Rank 9 Stores MeshBlock 606 with zoom MeshBlock index 14
+ Rank 9 Stores MeshBlock 607 with zoom MeshBlock index 15
+ Rank 9 Storing MeshBlock 592 with zoom MeshBlock index 0
+ Rank 9 Storing MeshBlock 593 with zoom MeshBlock index 1
+ Rank 9 Storing MeshBlock 594 with zoom MeshBlock index 2
+ Rank 9 Storing MeshBlock 595 with zoom MeshBlock index 3
+ Rank 9 Storing MeshBlock 596 with zoom MeshBlock index 4
+ Rank 9 Storing MeshBlock 597 with zoom MeshBlock index 5
+ Rank 9 Storing MeshBlock 598 with zoom MeshBlock index 6
+ Rank 9 Storing MeshBlock 599 with zoom MeshBlock index 7
+ Rank 9 Storing MeshBlock 600 with zoom MeshBlock index 8
+ Rank 9 Storing MeshBlock 601 with zoom MeshBlock index 9
+ Rank 9 Storing MeshBlock 602 with zoom MeshBlock index 10
+ Rank 9 Storing MeshBlock 603 with zoom MeshBlock index 11
+ Rank 9 Storing MeshBlock 604 with zoom MeshBlock index 12
+ Rank 9 Storing MeshBlock 605 with zoom MeshBlock index 13
+ Rank 9 Storing MeshBlock 606 with zoom MeshBlock index 14
+ Rank 9 Storing MeshBlock 607 with zoom MeshBlock index 15
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 736 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 737 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 738 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 739 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 740 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 741 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 742 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 743 on MeshBlock 600
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 744 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 745 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 746 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 747 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 748 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 749 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 750 on MeshBlock 601
+ Rank 9 Correcting local zoom MeshBlock 9 using old zoom MeshBlock 751 on MeshBlock 601
+ Rank 9 RedistZMBs completed sends: 15, recvs: 9, copies: 1
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 864
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 865
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 866
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 867
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 868
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 869
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 870
+ Rank 9 finds MeshBlock 508 for zoom MeshBlock 871
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 872
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 873
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 874
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 875
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 876
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 877
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 878
+ Rank 9 finds MeshBlock 509 for zoom MeshBlock 879
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 9 RedistZMBs completed sends: 15, recvs: 9, copies: 1
+ Rank 9 finds MeshBlock 592 for zoom MeshBlock 864
+ Rank 9 finds MeshBlock 593 for zoom MeshBlock 865
+ Rank 9 finds MeshBlock 594 for zoom MeshBlock 866
+ Rank 9 finds MeshBlock 595 for zoom MeshBlock 867
+ Rank 9 finds MeshBlock 596 for zoom MeshBlock 868
+ Rank 9 finds MeshBlock 597 for zoom MeshBlock 869
+ Rank 9 finds MeshBlock 598 for zoom MeshBlock 870
+ Rank 9 finds MeshBlock 599 for zoom MeshBlock 871
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 872
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 873
+ Rank 9 finds MeshBlock 602 for zoom MeshBlock 874
+ Rank 9 finds MeshBlock 603 for zoom MeshBlock 875
+ Rank 9 finds MeshBlock 604 for zoom MeshBlock 876
+ Rank 9 finds MeshBlock 605 for zoom MeshBlock 877
+ Rank 9 finds MeshBlock 606 for zoom MeshBlock 878
+ Rank 9 finds MeshBlock 607 for zoom MeshBlock 879
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 9 applied same-level prims to local mb m=42 with zm=0
+ Rank 9 applied same-level prims to local mb m=43 with zm=1
+ Rank 9 applied same-level prims to local mb m=44 with zm=2
+ Rank 9 applied same-level prims to local mb m=45 with zm=3
+ Rank 9 applied same-level prims to local mb m=46 with zm=4
+ Rank 9 applied same-level prims to local mb m=47 with zm=5
+ Rank 9 applied same-level prims to local mb m=48 with zm=6
+ Rank 9 applied same-level prims to local mb m=49 with zm=7
+ Rank 9 applied same-level prims to local mb m=50 with zm=8
+ Rank 9 applied same-level prims to local mb m=51 with zm=9
+ Rank 9 applied same-level prims to local mb m=52 with zm=10
+ Rank 9 applied same-level prims to local mb m=53 with zm=11
+ Rank 9 applied same-level prims to local mb m=54 with zm=12
+ Rank 9 applied same-level prims to local mb m=55 with zm=13
+ Rank 9 applied same-level prims to local mb m=56 with zm=14
+ Rank 9 applied same-level prims to local mb m=57 with zm=15
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 736
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 737
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 738
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 739
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 740
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 741
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 742
+ Rank 9 finds MeshBlock 600 for zoom MeshBlock 743
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 744
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 745
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 746
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 747
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 748
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 749
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 750
+ Rank 9 finds MeshBlock 601 for zoom MeshBlock 751
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+ Rank 9 finds MeshBlock 684 for zoom MeshBlock 736
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 737
+ Rank 9 finds MeshBlock 686 for zoom MeshBlock 738
+ Rank 9 finds MeshBlock 687 for zoom MeshBlock 739
+ Rank 9 finds MeshBlock 688 for zoom MeshBlock 740
+ Rank 9 finds MeshBlock 689 for zoom MeshBlock 741
+ Rank 9 finds MeshBlock 690 for zoom MeshBlock 742
+ Rank 9 finds MeshBlock 691 for zoom MeshBlock 743
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 744
+ Rank 9 finds MeshBlock 693 for zoom MeshBlock 745
+ Rank 9 finds MeshBlock 694 for zoom MeshBlock 746
+ Rank 9 finds MeshBlock 695 for zoom MeshBlock 747
+ Rank 9 finds MeshBlock 696 for zoom MeshBlock 748
+ Rank 9 finds MeshBlock 697 for zoom MeshBlock 749
+ Rank 9 finds MeshBlock 698 for zoom MeshBlock 750
+ Rank 9 finds MeshBlock 699 for zoom MeshBlock 751
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+ Rank 9 applied same-level prims to local mb m=49 with zm=0
+ Rank 9 applied same-level prims to local mb m=50 with zm=1
+ Rank 9 applied same-level prims to local mb m=51 with zm=2
+ Rank 9 applied same-level prims to local mb m=52 with zm=3
+ Rank 9 applied same-level prims to local mb m=53 with zm=4
+ Rank 9 applied same-level prims to local mb m=54 with zm=5
+ Rank 9 applied same-level prims to local mb m=55 with zm=6
+ Rank 9 applied same-level prims to local mb m=56 with zm=7
+ Rank 9 applied same-level prims to local mb m=57 with zm=8
+ Rank 9 applied same-level prims to local mb m=58 with zm=9
+ Rank 9 applied same-level prims to local mb m=59 with zm=10
+ Rank 9 applied same-level prims to local mb m=60 with zm=11
+ Rank 9 applied same-level prims to local mb m=61 with zm=12
+ Rank 9 applied same-level prims to local mb m=62 with zm=13
+ Rank 9 applied same-level prims to local mb m=63 with zm=14
+ Rank 9 applied same-level prims to local mb m=64 with zm=15
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 608
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 609
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 610
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 611
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 612
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 613
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 614
+ Rank 9 finds MeshBlock 685 for zoom MeshBlock 615
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 616
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 617
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 618
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 619
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 620
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 621
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 622
+ Rank 9 finds MeshBlock 692 for zoom MeshBlock 623
+ Rank 9 found 16 zoom MeshBlocks
+ Rank 9 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937793/rst/magnetic_bondi_binary.00004.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 894603264, "memory_budget_bytes": 1200000000, "seconds": 3304.38240311807, "stopped": null}

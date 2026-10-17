@@ -2,10 +2,31 @@
 
 This branch implements and tests a low-resolution, magnetized uniform reservoir
 around an equal-mass circular binary. The physical cyclic-zoom run is ongoing
-on Aurora in debug-scaling. The latest completed job8937572 reached238.432 M;
-job8937793 subsequently completed the250 M finest dwell and produced a validated
-coarse-stage snapshot at300.022 M. No full physical roundtrip or inflow equilibrium
-has yet been established. The guarded chain targets20000 M and then stops.
+on Aurora in debug-scaling. Job8938200 reached9782.468493 M cleanly after
+completing the first physical roundtrip and restoring the finest topology at
+9683.038 M. The returned finest snapshot matches the original stationary ADM
+geometry exactly. Job8938971 is the accepted continuation, from the final
+checkpoint of8938200, toward the unchanged20000 M pilot target.
+
+Six completed physical jobs have passed every saved fluid/divergence pair and
+all twelve rank/resource checks. Their accumulated solver walltime is about
+5.5 node-hours. The latest finest exposure is only about349.44 M: the initial
+250 M dwell plus99.43 M after the first return. Global9782 M must not be
+interpreted as9782 M of inner-flow evolution or as demonstrated equilibrium.
+
+| Physical job | Final time (M, native checkpoint where recorded) | Conservative peak GB | Scaled divB maximum |
+| --- | ---: | ---: | ---: |
+| 8937401 | 117.945320 | 23.56 | 4.74e-13 |
+| 8937572 | 238.431940 | 23.45 | 5.81e-13 |
+| 8937793 | 1601.324871 | 22.04 | 5.12e-13 |
+| 8938001 | 7579.573404 | 22.63 | 1.86e-12 |
+| 8938136 | 9518.668019 | 22.81 | 2.87e-12 |
+| 8938200 | 9782.468493 | 23.53 | 2.32e-12 |
+
+The scaled divergence values are the cell-centered diagnostic defined below,
+not a proof of exact global magnetic-flux or mass conservation. Every job used
+one node, twelve tile ranks and the55-minute clean solver cutoff. The exact
+continuation receipts and physical-JOB reports retain restart provenance.
 
 ## Configuration and meaning
 
@@ -115,7 +136,7 @@ queue, and a unique receipt written before qsub. Unknown receipts are never
 retried automatically. Output counters are preserved; forced-final dumps can
 create gaps in the saved cadence, so actual timestamps are always used.
 
-`watch_magnetic_pilot.py --job 8937793 --continue-jobs` follows accepted receipts
+`watch_magnetic_pilot.py --job 8938200 --continue-jobs` follows accepted receipts
 under an exclusive lock to the20000 M target. Failures stop it for review.
 The remote root is /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013.
 A magnetic-monitor.stop file there prevents further submissions without
@@ -126,7 +147,7 @@ agents are cancelled or changed.
 ## Artifacts and limits
 
 - `latest_finest.png/json`: the latest downloaded actual finest saved state,
-  currently238.432 M, with density, temperature and fluid-frame beta.
+  currently9782.47 M, with density, temperature and fluid-frame beta.
 - `physical-JOB/`: exact logs, provenance and rank/resource validation packets.
 - `frames-long/`: completed longer frame controls and their passing audit.
 - `gpu-roundtrip-8937389/`: successful full GPU topology test and resolution audit.

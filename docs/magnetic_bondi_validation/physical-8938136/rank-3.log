@@ -1,0 +1,12 @@
+rank=3 host=x4304c7s5b0n0 affinity=1.1
+ Rank 3 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 3 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 3 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 3 finds MeshBlock 354 for zoom MeshBlock 416
+ Rank 3 finds MeshBlock 355 for zoom MeshBlock 417
+ Rank 3 found 2 zoom MeshBlocks
+ Rank 3 RedistZMBs completed sends: 11, recvs: 2, copies: 0
+ Rank 3 applied same-level prims to local mb m=87 with zm=0
+ Rank 3 applied same-level prims to local mb m=88 with zm=1
+ Rank 3 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001/rst/magnetic_bondi_binary.00016.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938136", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 891109376, "memory_budget_bytes": 1200000000, "seconds": 3304.1226256549126, "stopped": null}

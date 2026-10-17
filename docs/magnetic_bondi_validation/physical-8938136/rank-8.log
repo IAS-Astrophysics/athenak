@@ -1,0 +1,29 @@
+rank=8 host=x4304c7s5b0n0 affinity=4.0
+ Rank 8 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 8 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 8 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 474
+ Rank 8 finds MeshBlock 713 for zoom MeshBlock 475
+ Rank 8 finds MeshBlock 714 for zoom MeshBlock 476
+ Rank 8 finds MeshBlock 715 for zoom MeshBlock 477
+ Rank 8 finds MeshBlock 716 for zoom MeshBlock 478
+ Rank 8 finds MeshBlock 717 for zoom MeshBlock 479
+ Rank 8 found 6 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 9, recvs: 5, copies: 1
+ Rank 8 applied same-level prims to local mb m=0 with zm=0
+ Rank 8 applied same-level prims to local mb m=1 with zm=1
+ Rank 8 applied same-level prims to local mb m=2 with zm=2
+ Rank 8 applied same-level prims to local mb m=3 with zm=3
+ Rank 8 applied same-level prims to local mb m=4 with zm=4
+ Rank 8 applied same-level prims to local mb m=5 with zm=5
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 344
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 345
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 346
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 347
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 348
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 349
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 350
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 351
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001/rst/magnetic_bondi_binary.00016.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938136", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 902610944, "memory_budget_bytes": 1200000000, "seconds": 3303.9681622259086, "stopped": null}

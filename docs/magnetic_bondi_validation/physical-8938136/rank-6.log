@@ -1,0 +1,70 @@
+rank=6 host=x4304c7s5b0n0 affinity=3.0
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 576
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 577
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 578
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 579
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 580
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 581
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 582
+ Rank 6 finds MeshBlock 489 for zoom MeshBlock 583
+ Rank 6 found 8 zoom MeshBlocks
+ Rank 6 RedistZMBs completed sends: 9, recvs: 7, copies: 1
+ Rank 6 finds MeshBlock 545 for zoom MeshBlock 576
+ Rank 6 finds MeshBlock 546 for zoom MeshBlock 577
+ Rank 6 finds MeshBlock 547 for zoom MeshBlock 578
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 579
+ Rank 6 finds MeshBlock 549 for zoom MeshBlock 580
+ Rank 6 finds MeshBlock 550 for zoom MeshBlock 581
+ Rank 6 finds MeshBlock 551 for zoom MeshBlock 582
+ Rank 6 finds MeshBlock 552 for zoom MeshBlock 583
+ Rank 6 finds MeshBlock 559 for zoom MeshBlock 584
+ Rank 6 found 9 zoom MeshBlocks
+ Rank 6 RedistZMBs completed sends: 9, recvs: 8, copies: 1
+ Rank 6 applied same-level prims to local mb m=65 with zm=0
+ Rank 6 applied same-level prims to local mb m=66 with zm=1
+ Rank 6 applied same-level prims to local mb m=67 with zm=2
+ Rank 6 applied same-level prims to local mb m=68 with zm=3
+ Rank 6 applied same-level prims to local mb m=69 with zm=4
+ Rank 6 applied same-level prims to local mb m=70 with zm=5
+ Rank 6 applied same-level prims to local mb m=71 with zm=6
+ Rank 6 applied same-level prims to local mb m=72 with zm=7
+ Rank 6 applied same-level prims to local mb m=79 with zm=8
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 448
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 449
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 450
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 451
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 452
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 453
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 454
+ Rank 6 finds MeshBlock 548 for zoom MeshBlock 455
+ Rank 6 found 8 zoom MeshBlocks
+ Rank 6 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+ Rank 6 finds MeshBlock 604 for zoom MeshBlock 448
+ Rank 6 finds MeshBlock 605 for zoom MeshBlock 449
+ Rank 6 finds MeshBlock 606 for zoom MeshBlock 450
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 451
+ Rank 6 finds MeshBlock 608 for zoom MeshBlock 452
+ Rank 6 finds MeshBlock 609 for zoom MeshBlock 453
+ Rank 6 finds MeshBlock 610 for zoom MeshBlock 454
+ Rank 6 finds MeshBlock 611 for zoom MeshBlock 455
+ Rank 6 found 8 zoom MeshBlocks
+ Rank 6 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+ Rank 6 applied same-level prims to local mb m=70 with zm=0
+ Rank 6 applied same-level prims to local mb m=71 with zm=1
+ Rank 6 applied same-level prims to local mb m=72 with zm=2
+ Rank 6 applied same-level prims to local mb m=73 with zm=3
+ Rank 6 applied same-level prims to local mb m=74 with zm=4
+ Rank 6 applied same-level prims to local mb m=75 with zm=5
+ Rank 6 applied same-level prims to local mb m=76 with zm=6
+ Rank 6 applied same-level prims to local mb m=77 with zm=7
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 320
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 321
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 322
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 323
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 324
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 325
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 326
+ Rank 6 finds MeshBlock 607 for zoom MeshBlock 327
+ Rank 6 found 8 zoom MeshBlocks
+ Rank 6 RedistZMBs completed sends: 11, recvs: 8, copies: 0
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001/rst/magnetic_bondi_binary.00016.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938136", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 896098304, "memory_budget_bytes": 1200000000, "seconds": 3304.1249436549842, "stopped": null}

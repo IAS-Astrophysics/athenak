@@ -1,0 +1,62 @@
+rank=3 host=x4304c7s5b0n0 affinity=1.1
+ Rank 3 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+ Rank 3 finds MeshBlock 387 for zoom MeshBlock 288
+ Rank 3 finds MeshBlock 388 for zoom MeshBlock 289
+ Rank 3 finds MeshBlock 389 for zoom MeshBlock 290
+ Rank 3 finds MeshBlock 390 for zoom MeshBlock 291
+ Rank 3 finds MeshBlock 391 for zoom MeshBlock 292
+ Rank 3 found 5 zoom MeshBlocks
+ Rank 3 RedistZMBs completed sends: 9, recvs: 4, copies: 1
+ Rank 3 applied same-level prims to local mb m=93 with zm=0
+ Rank 3 applied same-level prims to local mb m=94 with zm=1
+ Rank 3 applied same-level prims to local mb m=95 with zm=2
+ Rank 3 applied same-level prims to local mb m=96 with zm=3
+ Rank 3 applied same-level prims to local mb m=97 with zm=4
+ Rank 3 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 3 finds MeshBlock 420 for zoom MeshBlock 160
+ Rank 3 finds MeshBlock 421 for zoom MeshBlock 161
+ Rank 3 finds MeshBlock 422 for zoom MeshBlock 162
+ Rank 3 finds MeshBlock 423 for zoom MeshBlock 163
+ Rank 3 finds MeshBlock 424 for zoom MeshBlock 164
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 165
+ Rank 3 finds MeshBlock 426 for zoom MeshBlock 166
+ Rank 3 finds MeshBlock 427 for zoom MeshBlock 167
+ Rank 3 found 8 zoom MeshBlocks
+ Rank 3 RedistZMBs completed sends: 11, recvs: 8, copies: 0
+ Rank 3 applied same-level prims to local mb m=96 with zm=0
+ Rank 3 applied same-level prims to local mb m=97 with zm=1
+ Rank 3 applied same-level prims to local mb m=98 with zm=2
+ Rank 3 applied same-level prims to local mb m=99 with zm=3
+ Rank 3 applied same-level prims to local mb m=100 with zm=4
+ Rank 3 applied same-level prims to local mb m=101 with zm=5
+ Rank 3 applied same-level prims to local mb m=102 with zm=6
+ Rank 3 applied same-level prims to local mb m=103 with zm=7
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 32
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 33
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 34
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 35
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 36
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 37
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 38
+ Rank 3 finds MeshBlock 425 for zoom MeshBlock 39
+ Rank 3 found 8 zoom MeshBlocks
+ Rank 3 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+ Rank 3 finds MeshBlock 453 for zoom MeshBlock 32
+ Rank 3 finds MeshBlock 454 for zoom MeshBlock 33
+ Rank 3 finds MeshBlock 455 for zoom MeshBlock 34
+ Rank 3 finds MeshBlock 456 for zoom MeshBlock 35
+ Rank 3 finds MeshBlock 457 for zoom MeshBlock 36
+ Rank 3 finds MeshBlock 458 for zoom MeshBlock 37
+ Rank 3 finds MeshBlock 459 for zoom MeshBlock 38
+ Rank 3 finds MeshBlock 460 for zoom MeshBlock 39
+ Rank 3 found 8 zoom MeshBlocks
+ Rank 3 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+ Rank 3 applied same-level prims to local mb m=102 with zm=0
+ Rank 3 applied same-level prims to local mb m=103 with zm=1
+ Rank 3 applied same-level prims to local mb m=104 with zm=2
+ Rank 3 applied same-level prims to local mb m=105 with zm=3
+ Rank 3 applied same-level prims to local mb m=106 with zm=4
+ Rank 3 applied same-level prims to local mb m=107 with zm=5
+ Rank 3 applied same-level prims to local mb m=108 with zm=6
+ Rank 3 applied same-level prims to local mb m=109 with zm=7
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938136/rst/magnetic_bondi_binary.00020.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938200", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 943038464, "memory_budget_bytes": 1200000000, "seconds": 3303.317656487925, "stopped": null}

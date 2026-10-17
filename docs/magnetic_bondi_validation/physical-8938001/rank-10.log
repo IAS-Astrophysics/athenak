@@ -1,0 +1,328 @@
+rank=10 host=x4516c6s5b0n0 affinity=5.0
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 496
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 497
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 498
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 499
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 500
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 501
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 502
+ Rank 10 finds MeshBlock 842 for zoom MeshBlock 503
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 504
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 505
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 506
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 507
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 508
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 509
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 510
+ Rank 10 finds MeshBlock 855 for zoom MeshBlock 511
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 10 Stores MeshBlock 841 with zoom MeshBlock index 0
+ Rank 10 Stores MeshBlock 842 with zoom MeshBlock index 1
+ Rank 10 Stores MeshBlock 843 with zoom MeshBlock index 2
+ Rank 10 Stores MeshBlock 844 with zoom MeshBlock index 3
+ Rank 10 Stores MeshBlock 845 with zoom MeshBlock index 4
+ Rank 10 Stores MeshBlock 846 with zoom MeshBlock index 5
+ Rank 10 Stores MeshBlock 847 with zoom MeshBlock index 6
+ Rank 10 Stores MeshBlock 848 with zoom MeshBlock index 7
+ Rank 10 Stores MeshBlock 855 with zoom MeshBlock index 8
+ Rank 10 Stores MeshBlock 856 with zoom MeshBlock index 9
+ Rank 10 Stores MeshBlock 857 with zoom MeshBlock index 10
+ Rank 10 Stores MeshBlock 858 with zoom MeshBlock index 11
+ Rank 10 Stores MeshBlock 859 with zoom MeshBlock index 12
+ Rank 10 Stores MeshBlock 860 with zoom MeshBlock index 13
+ Rank 10 Stores MeshBlock 861 with zoom MeshBlock index 14
+ Rank 10 Stores MeshBlock 862 with zoom MeshBlock index 15
+ Rank 10 Storing MeshBlock 841 with zoom MeshBlock index 0
+ Rank 10 Storing MeshBlock 842 with zoom MeshBlock index 1
+ Rank 10 Storing MeshBlock 843 with zoom MeshBlock index 2
+ Rank 10 Storing MeshBlock 844 with zoom MeshBlock index 3
+ Rank 10 Storing MeshBlock 845 with zoom MeshBlock index 4
+ Rank 10 Storing MeshBlock 846 with zoom MeshBlock index 5
+ Rank 10 Storing MeshBlock 847 with zoom MeshBlock index 6
+ Rank 10 Storing MeshBlock 848 with zoom MeshBlock index 7
+ Rank 10 Storing MeshBlock 855 with zoom MeshBlock index 8
+ Rank 10 Storing MeshBlock 856 with zoom MeshBlock index 9
+ Rank 10 Storing MeshBlock 857 with zoom MeshBlock index 10
+ Rank 10 Storing MeshBlock 858 with zoom MeshBlock index 11
+ Rank 10 Storing MeshBlock 859 with zoom MeshBlock index 12
+ Rank 10 Storing MeshBlock 860 with zoom MeshBlock index 13
+ Rank 10 Storing MeshBlock 861 with zoom MeshBlock index 14
+ Rank 10 Storing MeshBlock 862 with zoom MeshBlock index 15
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 496 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 497 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 498 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 499 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 500 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 501 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 502 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 503 on MeshBlock 842
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 504 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 505 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 506 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 507 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 508 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 509 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 510 on MeshBlock 855
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 511 on MeshBlock 855
+ Rank 10 RedistZMBs completed sends: 15, recvs: 10, copies: 1
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 624
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 625
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 626
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 627
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 628
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 629
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 630
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 631
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 632
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 633
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 634
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 635
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 636
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 637
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 638
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 639
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+ Rank 10 RedistZMBs completed sends: 15, recvs: 10, copies: 1
+ Rank 10 Stores MeshBlock 742 with zoom MeshBlock index 0
+ Rank 10 Stores MeshBlock 743 with zoom MeshBlock index 1
+ Rank 10 Stores MeshBlock 744 with zoom MeshBlock index 2
+ Rank 10 Stores MeshBlock 745 with zoom MeshBlock index 3
+ Rank 10 Stores MeshBlock 746 with zoom MeshBlock index 4
+ Rank 10 Stores MeshBlock 747 with zoom MeshBlock index 5
+ Rank 10 Stores MeshBlock 748 with zoom MeshBlock index 6
+ Rank 10 Stores MeshBlock 749 with zoom MeshBlock index 7
+ Rank 10 Stores MeshBlock 750 with zoom MeshBlock index 8
+ Rank 10 Stores MeshBlock 751 with zoom MeshBlock index 9
+ Rank 10 Stores MeshBlock 752 with zoom MeshBlock index 10
+ Rank 10 Stores MeshBlock 753 with zoom MeshBlock index 11
+ Rank 10 Stores MeshBlock 754 with zoom MeshBlock index 12
+ Rank 10 Stores MeshBlock 755 with zoom MeshBlock index 13
+ Rank 10 Stores MeshBlock 756 with zoom MeshBlock index 14
+ Rank 10 Stores MeshBlock 757 with zoom MeshBlock index 15
+ Rank 10 Storing MeshBlock 742 with zoom MeshBlock index 0
+ Rank 10 Storing MeshBlock 743 with zoom MeshBlock index 1
+ Rank 10 Storing MeshBlock 744 with zoom MeshBlock index 2
+ Rank 10 Storing MeshBlock 745 with zoom MeshBlock index 3
+ Rank 10 Storing MeshBlock 746 with zoom MeshBlock index 4
+ Rank 10 Storing MeshBlock 747 with zoom MeshBlock index 5
+ Rank 10 Storing MeshBlock 748 with zoom MeshBlock index 6
+ Rank 10 Storing MeshBlock 749 with zoom MeshBlock index 7
+ Rank 10 Storing MeshBlock 750 with zoom MeshBlock index 8
+ Rank 10 Storing MeshBlock 751 with zoom MeshBlock index 9
+ Rank 10 Storing MeshBlock 752 with zoom MeshBlock index 10
+ Rank 10 Storing MeshBlock 753 with zoom MeshBlock index 11
+ Rank 10 Storing MeshBlock 754 with zoom MeshBlock index 12
+ Rank 10 Storing MeshBlock 755 with zoom MeshBlock index 13
+ Rank 10 Storing MeshBlock 756 with zoom MeshBlock index 14
+ Rank 10 Storing MeshBlock 757 with zoom MeshBlock index 15
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 624 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 625 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 626 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 627 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 628 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 629 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 630 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 631 on MeshBlock 743
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 632 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 633 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 634 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 635 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 636 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 637 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 638 on MeshBlock 750
+ Rank 10 Correcting local zoom MeshBlock 8 using old zoom MeshBlock 639 on MeshBlock 750
+ Rank 10 RedistZMBs completed sends: 14, recvs: 9, copies: 2
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 752
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 753
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 754
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 755
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 756
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 757
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 758
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 759
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 760
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 761
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 762
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 763
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 764
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 765
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 766
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 767
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+ Rank 10 RedistZMBs completed sends: 14, recvs: 9, copies: 2
+ Rank 10 Stores MeshBlock 644 with zoom MeshBlock index 0
+ Rank 10 Stores MeshBlock 645 with zoom MeshBlock index 1
+ Rank 10 Stores MeshBlock 646 with zoom MeshBlock index 2
+ Rank 10 Stores MeshBlock 647 with zoom MeshBlock index 3
+ Rank 10 Stores MeshBlock 648 with zoom MeshBlock index 4
+ Rank 10 Stores MeshBlock 649 with zoom MeshBlock index 5
+ Rank 10 Stores MeshBlock 650 with zoom MeshBlock index 6
+ Rank 10 Stores MeshBlock 651 with zoom MeshBlock index 7
+ Rank 10 Stores MeshBlock 652 with zoom MeshBlock index 8
+ Rank 10 Stores MeshBlock 653 with zoom MeshBlock index 9
+ Rank 10 Stores MeshBlock 654 with zoom MeshBlock index 10
+ Rank 10 Stores MeshBlock 655 with zoom MeshBlock index 11
+ Rank 10 Stores MeshBlock 656 with zoom MeshBlock index 12
+ Rank 10 Stores MeshBlock 657 with zoom MeshBlock index 13
+ Rank 10 Stores MeshBlock 658 with zoom MeshBlock index 14
+ Rank 10 Stores MeshBlock 659 with zoom MeshBlock index 15
+ Rank 10 Storing MeshBlock 644 with zoom MeshBlock index 0
+ Rank 10 Storing MeshBlock 645 with zoom MeshBlock index 1
+ Rank 10 Storing MeshBlock 646 with zoom MeshBlock index 2
+ Rank 10 Storing MeshBlock 647 with zoom MeshBlock index 3
+ Rank 10 Storing MeshBlock 648 with zoom MeshBlock index 4
+ Rank 10 Storing MeshBlock 649 with zoom MeshBlock index 5
+ Rank 10 Storing MeshBlock 650 with zoom MeshBlock index 6
+ Rank 10 Storing MeshBlock 651 with zoom MeshBlock index 7
+ Rank 10 Storing MeshBlock 652 with zoom MeshBlock index 8
+ Rank 10 Storing MeshBlock 653 with zoom MeshBlock index 9
+ Rank 10 Storing MeshBlock 654 with zoom MeshBlock index 10
+ Rank 10 Storing MeshBlock 655 with zoom MeshBlock index 11
+ Rank 10 Storing MeshBlock 656 with zoom MeshBlock index 12
+ Rank 10 Storing MeshBlock 657 with zoom MeshBlock index 13
+ Rank 10 Storing MeshBlock 658 with zoom MeshBlock index 14
+ Rank 10 Storing MeshBlock 659 with zoom MeshBlock index 15
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 752 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 753 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 754 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 755 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 756 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 757 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 758 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 0 using old zoom MeshBlock 759 on MeshBlock 644
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 760 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 761 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 762 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 763 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 764 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 765 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 766 on MeshBlock 645
+ Rank 10 Correcting local zoom MeshBlock 1 using old zoom MeshBlock 767 on MeshBlock 645
+ Rank 10 RedistZMBs completed sends: 15, recvs: 9, copies: 1
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 880
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 881
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 882
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 883
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 884
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 885
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 886
+ Rank 10 finds MeshBlock 546 for zoom MeshBlock 887
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 888
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 889
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 890
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 891
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 892
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 893
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 894
+ Rank 10 finds MeshBlock 547 for zoom MeshBlock 895
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 10 RedistZMBs completed sends: 15, recvs: 9, copies: 1
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 880
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 881
+ Rank 10 finds MeshBlock 646 for zoom MeshBlock 882
+ Rank 10 finds MeshBlock 647 for zoom MeshBlock 883
+ Rank 10 finds MeshBlock 648 for zoom MeshBlock 884
+ Rank 10 finds MeshBlock 649 for zoom MeshBlock 885
+ Rank 10 finds MeshBlock 650 for zoom MeshBlock 886
+ Rank 10 finds MeshBlock 651 for zoom MeshBlock 887
+ Rank 10 finds MeshBlock 652 for zoom MeshBlock 888
+ Rank 10 finds MeshBlock 653 for zoom MeshBlock 889
+ Rank 10 finds MeshBlock 654 for zoom MeshBlock 890
+ Rank 10 finds MeshBlock 655 for zoom MeshBlock 891
+ Rank 10 finds MeshBlock 656 for zoom MeshBlock 892
+ Rank 10 finds MeshBlock 657 for zoom MeshBlock 893
+ Rank 10 finds MeshBlock 658 for zoom MeshBlock 894
+ Rank 10 finds MeshBlock 659 for zoom MeshBlock 895
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 9, recvs: 15, copies: 1
+ Rank 10 applied same-level prims to local mb m=32 with zm=0
+ Rank 10 applied same-level prims to local mb m=33 with zm=1
+ Rank 10 applied same-level prims to local mb m=34 with zm=2
+ Rank 10 applied same-level prims to local mb m=35 with zm=3
+ Rank 10 applied same-level prims to local mb m=36 with zm=4
+ Rank 10 applied same-level prims to local mb m=37 with zm=5
+ Rank 10 applied same-level prims to local mb m=38 with zm=6
+ Rank 10 applied same-level prims to local mb m=39 with zm=7
+ Rank 10 applied same-level prims to local mb m=40 with zm=8
+ Rank 10 applied same-level prims to local mb m=41 with zm=9
+ Rank 10 applied same-level prims to local mb m=42 with zm=10
+ Rank 10 applied same-level prims to local mb m=43 with zm=11
+ Rank 10 applied same-level prims to local mb m=44 with zm=12
+ Rank 10 applied same-level prims to local mb m=45 with zm=13
+ Rank 10 applied same-level prims to local mb m=46 with zm=14
+ Rank 10 applied same-level prims to local mb m=47 with zm=15
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 752
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 753
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 754
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 755
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 756
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 757
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 758
+ Rank 10 finds MeshBlock 644 for zoom MeshBlock 759
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 760
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 761
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 762
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 763
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 764
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 765
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 766
+ Rank 10 finds MeshBlock 645 for zoom MeshBlock 767
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+ Rank 10 finds MeshBlock 742 for zoom MeshBlock 752
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 753
+ Rank 10 finds MeshBlock 744 for zoom MeshBlock 754
+ Rank 10 finds MeshBlock 745 for zoom MeshBlock 755
+ Rank 10 finds MeshBlock 746 for zoom MeshBlock 756
+ Rank 10 finds MeshBlock 747 for zoom MeshBlock 757
+ Rank 10 finds MeshBlock 748 for zoom MeshBlock 758
+ Rank 10 finds MeshBlock 749 for zoom MeshBlock 759
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 760
+ Rank 10 finds MeshBlock 751 for zoom MeshBlock 761
+ Rank 10 finds MeshBlock 752 for zoom MeshBlock 762
+ Rank 10 finds MeshBlock 753 for zoom MeshBlock 763
+ Rank 10 finds MeshBlock 754 for zoom MeshBlock 764
+ Rank 10 finds MeshBlock 755 for zoom MeshBlock 765
+ Rank 10 finds MeshBlock 756 for zoom MeshBlock 766
+ Rank 10 finds MeshBlock 757 for zoom MeshBlock 767
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 9, recvs: 14, copies: 2
+ Rank 10 applied same-level prims to local mb m=36 with zm=0
+ Rank 10 applied same-level prims to local mb m=37 with zm=1
+ Rank 10 applied same-level prims to local mb m=38 with zm=2
+ Rank 10 applied same-level prims to local mb m=39 with zm=3
+ Rank 10 applied same-level prims to local mb m=40 with zm=4
+ Rank 10 applied same-level prims to local mb m=41 with zm=5
+ Rank 10 applied same-level prims to local mb m=42 with zm=6
+ Rank 10 applied same-level prims to local mb m=43 with zm=7
+ Rank 10 applied same-level prims to local mb m=44 with zm=8
+ Rank 10 applied same-level prims to local mb m=45 with zm=9
+ Rank 10 applied same-level prims to local mb m=46 with zm=10
+ Rank 10 applied same-level prims to local mb m=47 with zm=11
+ Rank 10 applied same-level prims to local mb m=48 with zm=12
+ Rank 10 applied same-level prims to local mb m=49 with zm=13
+ Rank 10 applied same-level prims to local mb m=50 with zm=14
+ Rank 10 applied same-level prims to local mb m=51 with zm=15
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 624
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 625
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 626
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 627
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 628
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 629
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 630
+ Rank 10 finds MeshBlock 743 for zoom MeshBlock 631
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 632
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 633
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 634
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 635
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 636
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 637
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 638
+ Rank 10 finds MeshBlock 750 for zoom MeshBlock 639
+ Rank 10 found 16 zoom MeshBlocks
+ Rank 10 RedistZMBs completed sends: 10, recvs: 15, copies: 1
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937793/rst/magnetic_bondi_binary.00004.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 916901888, "memory_budget_bytes": 1200000000, "seconds": 3304.3717865410727, "stopped": null}

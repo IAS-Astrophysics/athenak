@@ -1,0 +1,16 @@
+rank=11 host=x4516c6s5b0n0 affinity=5.1
+ Rank 11 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+ Rank 11 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+ Rank 11 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+ Rank 11 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 0, recvs: 11, copies: 0
+ Rank 11 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+ Rank 11 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 0, recvs: 10, copies: 0
+ Rank 11 RedistZMBs completed sends: 10, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+ Rank 11 RedistZMBs completed sends: 11, recvs: 0, copies: 0
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937793/rst/magnetic_bondi_binary.00004.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 900333568, "memory_budget_bytes": 1200000000, "seconds": 3304.3717557269847, "stopped": null}

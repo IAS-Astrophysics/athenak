@@ -1,0 +1,86 @@
+rank=8 host=x4304c7s5b0n0 affinity=4.0
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 344
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 345
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 346
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 347
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 348
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 349
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 350
+ Rank 8 finds MeshBlock 712 for zoom MeshBlock 351
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+ Rank 8 finds MeshBlock 789 for zoom MeshBlock 344
+ Rank 8 finds MeshBlock 790 for zoom MeshBlock 345
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 346
+ Rank 8 finds MeshBlock 792 for zoom MeshBlock 347
+ Rank 8 finds MeshBlock 793 for zoom MeshBlock 348
+ Rank 8 finds MeshBlock 794 for zoom MeshBlock 349
+ Rank 8 finds MeshBlock 795 for zoom MeshBlock 350
+ Rank 8 finds MeshBlock 796 for zoom MeshBlock 351
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 10, recvs: 7, copies: 1
+ Rank 8 applied same-level prims to local mb m=1 with zm=0
+ Rank 8 applied same-level prims to local mb m=2 with zm=1
+ Rank 8 applied same-level prims to local mb m=3 with zm=2
+ Rank 8 applied same-level prims to local mb m=4 with zm=3
+ Rank 8 applied same-level prims to local mb m=5 with zm=4
+ Rank 8 applied same-level prims to local mb m=6 with zm=5
+ Rank 8 applied same-level prims to local mb m=7 with zm=6
+ Rank 8 applied same-level prims to local mb m=8 with zm=7
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 216
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 217
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 218
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 219
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 220
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 221
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 222
+ Rank 8 finds MeshBlock 791 for zoom MeshBlock 223
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 11, recvs: 8, copies: 0
+ Rank 8 finds MeshBlock 868 for zoom MeshBlock 216
+ Rank 8 finds MeshBlock 869 for zoom MeshBlock 217
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 218
+ Rank 8 finds MeshBlock 871 for zoom MeshBlock 219
+ Rank 8 finds MeshBlock 872 for zoom MeshBlock 220
+ Rank 8 finds MeshBlock 873 for zoom MeshBlock 221
+ Rank 8 finds MeshBlock 874 for zoom MeshBlock 222
+ Rank 8 finds MeshBlock 875 for zoom MeshBlock 223
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 11, recvs: 8, copies: 0
+ Rank 8 applied same-level prims to local mb m=4 with zm=0
+ Rank 8 applied same-level prims to local mb m=5 with zm=1
+ Rank 8 applied same-level prims to local mb m=6 with zm=2
+ Rank 8 applied same-level prims to local mb m=7 with zm=3
+ Rank 8 applied same-level prims to local mb m=8 with zm=4
+ Rank 8 applied same-level prims to local mb m=9 with zm=5
+ Rank 8 applied same-level prims to local mb m=10 with zm=6
+ Rank 8 applied same-level prims to local mb m=11 with zm=7
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 88
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 89
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 90
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 91
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 92
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 93
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 94
+ Rank 8 finds MeshBlock 870 for zoom MeshBlock 95
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 9, recvs: 7, copies: 1
+ Rank 8 finds MeshBlock 947 for zoom MeshBlock 88
+ Rank 8 finds MeshBlock 948 for zoom MeshBlock 89
+ Rank 8 finds MeshBlock 949 for zoom MeshBlock 90
+ Rank 8 finds MeshBlock 950 for zoom MeshBlock 91
+ Rank 8 finds MeshBlock 951 for zoom MeshBlock 92
+ Rank 8 finds MeshBlock 952 for zoom MeshBlock 93
+ Rank 8 finds MeshBlock 953 for zoom MeshBlock 94
+ Rank 8 finds MeshBlock 954 for zoom MeshBlock 95
+ Rank 8 found 8 zoom MeshBlocks
+ Rank 8 RedistZMBs completed sends: 9, recvs: 7, copies: 1
+ Rank 8 applied same-level prims to local mb m=11 with zm=0
+ Rank 8 applied same-level prims to local mb m=12 with zm=1
+ Rank 8 applied same-level prims to local mb m=13 with zm=2
+ Rank 8 applied same-level prims to local mb m=14 with zm=3
+ Rank 8 applied same-level prims to local mb m=15 with zm=4
+ Rank 8 applied same-level prims to local mb m=16 with zm=5
+ Rank 8 applied same-level prims to local mb m=17 with zm=6
+ Rank 8 applied same-level prims to local mb m=18 with zm=7
+{"command": ["./build-magnetic/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938136/rst/magnetic_bondi_binary.00020.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938200", "-t", "00:55:00", "time/tlim=20000"], "returncode": 0, "peak_rss_bytes": 935526400, "memory_budget_bytes": 1200000000, "seconds": 3303.306001732941, "stopped": null}

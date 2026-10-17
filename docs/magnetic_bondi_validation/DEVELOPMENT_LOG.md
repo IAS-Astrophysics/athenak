@@ -300,3 +300,15 @@ This is real physical-duration evolution, distinct from the accelerated smoke
 test. first-coarse-validation.json records the check; runtime-controls.txt
 confirms EnableImplicitScaling=0, composite hierarchy, GPU-aware MPI and OMP8.
 No physical roundtrip has completed yet at this receipt.
+
+## First physical magnetic roundtrip (2026-10-17)
+
+Jobs8937793,8938001,8938136,8938200 passed all saved-field and twelve-rank
+resource validations. The first finest return is logged at9683.038 M in
+physical-8938200/rank-0.log; latest saved time9782.47 M restores the exact
+initial ADM topology. The latest_finest figure was rerendered and inspected.
+The SSH observation handle disappeared after8938200; authoritative PBS state
+was F/exit0 and no live monitor process remained. Restarting the exclusive
+monitor on that accepted predecessor revalidated it and produced the unique
+accepted continuation8938971. No simulation was rerun or duplicated.
+Target remains20000 M; no equilibrium or spatial-convergence claim.

@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/home/hzhu/pyenv/bin/python",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-magnetic/scripts/tests/validate_magnetic_pilot.py",
+    "--run",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001",
+    "--out",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938001/validation.json"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 135733248,
+  "memory_budget_bytes": 4000000000,
+  "seconds": 24.186768892919645,
+  "stopped": null
+}

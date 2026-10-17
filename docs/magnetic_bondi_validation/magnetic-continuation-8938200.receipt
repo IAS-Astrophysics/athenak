@@ -1,0 +1,22 @@
+{
+  "predecessor": 8938200,
+  "restart": "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938200/rst/magnetic_bondi_binary.00021.rst",
+  "restart_state": {
+    "time": 9782.468493353286,
+    "dt": 0.00726085448353874,
+    "cycle": 108651,
+    "blocks": 1408
+  },
+  "restart_sha256": "7bbea2abd9224f83702ce885a363fc4cf0808b70c388d176b5533b72389f4f01",
+  "target": 20000.0,
+  "attempt_utc": "2026-10-17T11:28:41.365473+00:00",
+  "command": [
+    "qsub",
+    "-v",
+    "CZ_RESTART=/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8938200/rst/magnetic_bondi_binary.00021.rst,CZ_TLIM=20000",
+    "source-magnetic/scripts/tests/aurora_bondi_magnetic.pbs"
+  ],
+  "returncode": 0,
+  "stdout": "8938971.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": ""
+}
