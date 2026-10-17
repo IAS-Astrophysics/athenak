@@ -1,14 +1,14 @@
 {
-  "snapshot": "build-mac-zoom-opt/aurora-magnetic/evolution-magnetic-8937401/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+  "snapshot": "build-mac-zoom-opt/aurora-magnetic/evolution-magnetic-8937572/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
   "metric": "build-mac-zoom-opt/aurora-magnetic/evolution-magnetic-8937401/bin/magnetic_bondi_binary.adm.00000.bin",
-  "time": 117.945,
-  "cycle": 16244,
+  "time": 238.432,
+  "cycle": 32838,
   "blocks": 1408,
   "plane": "xz",
   "rho_inf": 1.0,
   "separation": 32.0,
   "excision_radius": 0.8,
-  "max_b_squared_including_excision": 10908372.737347744,
+  "max_b_squared_including_excision": 40557890.6489615,
   "zero_field_cells": 0,
   "metric_topology_matches": true
 }
