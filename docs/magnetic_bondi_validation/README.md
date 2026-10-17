@@ -228,3 +228,16 @@ receipt is magnetic-continuation-8937401.receipt. It retains one node/all12
 tiles, physical dwell times, output counters and the55-minute clean cutoff.
 This continuation started at00:48 UTC. Its restored log retains zone0 and
 next_time=250 M, so the dwell clock was not reset; its final result is pending.
+
+## Guarded chain monitor
+
+watch_magnetic_pilot.py --job8937572 --continue-jobs follows only accepted
+predecessor receipts up to the20000 M target. It holds an exclusive monitor
+lock, observes PBS directly, validates every completed successful job under a
+4 GB postprocessing guard, and calls the tested submission helper only when
+debug-scaling is empty. Failures, unknown receipts or diagnostic errors stop
+the monitor for review; they never trigger a blind resubmission. The monitor
+runs lightweight orchestration on the login host, not fluid evolution. A
+magnetic-monitor.stop file in the remote pilot root prevents further submissions
+without cancelling a running job. magnetic-monitor-state.json records its PID
+and current job. Queue/observation waits use50-second intervals.
