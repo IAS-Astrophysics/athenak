@@ -150,3 +150,22 @@ sum to14 GB and rank RSS budgets sum to14.4 GB, below the30 GB ceiling.
 Check qselect -u hzhu -q debug-scaling before submission and never duplicate
 an accepted receipt or alter other jobs. The physical target is 20000 M;
 startup or an accelerated test does not establish a relaxed magnetized flow.
+
+## Continuations and completion checks
+
+validate_magnetic_pilot.py checks every saved fluid/divB state, all twelve
+rank exit/resource reports, one host, tile affinities, the physical55-minute
+cutoff and normal solver termination. Physical runs may stop on the wall clock
+or target time, never an accelerated cycle limit. Metric evaluation counts are
+recorded to audit reuse of the stationary geometry.
+
+submit_magnetic_continuation.py --predecessor JOB runs only after PBS reports
+a successful completed job and its validation.json exists. It decodes the
+actual final checkpoint's time/cycle/block count and physical MHD parameters,
+compares them with the final fluid state, and preserves output counters with
+CZ_RESTART. It checks debug-scaling is empty and verifies build hashes, then
+writes a unique predecessor receipt before qsub. Existing or unknown receipts
+are never automatically retried. The helper refuses live predecessors (tested
+against8937401), accelerated residence times, failures, and targets above20000 M.
+The current double-precision header decoder was checked against both local
+full-pilot initialization checkpoints. No running solver/input is modified.

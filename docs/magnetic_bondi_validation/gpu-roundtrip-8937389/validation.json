@@ -5,86 +5,102 @@
       "affinity": "0.0",
       "rss_bytes": 983781376,
       "tracked_bytes": 1027949944,
-      "seconds": 35.5052784900181
+      "seconds": 35.5052784900181,
+      "metric_evaluations": 19
     },
     {
       "rank": 1,
       "affinity": "0.1",
       "rss_bytes": 947818496,
       "tracked_bytes": 1027777944,
-      "seconds": 35.46759208897129
+      "seconds": 35.46759208897129,
+      "metric_evaluations": 19
     },
     {
       "rank": 2,
       "affinity": "1.0",
       "rss_bytes": 951521280,
       "tracked_bytes": 1027571544,
-      "seconds": 35.46890510991216
+      "seconds": 35.46890510991216,
+      "metric_evaluations": 19
     },
     {
       "rank": 3,
       "affinity": "1.1",
       "rss_bytes": 956362752,
       "tracked_bytes": 1027468344,
-      "seconds": 35.514120056061074
+      "seconds": 35.514120056061074,
+      "metric_evaluations": 19
     },
     {
       "rank": 4,
       "affinity": "2.0",
       "rss_bytes": 956960768,
       "tracked_bytes": 1028540984,
-      "seconds": 35.62353518104646
+      "seconds": 35.62353518104646,
+      "metric_evaluations": 19
     },
     {
       "rank": 5,
       "affinity": "2.1",
       "rss_bytes": 953020416,
       "tracked_bytes": 1027856120,
-      "seconds": 35.51549643604085
+      "seconds": 35.51549643604085,
+      "metric_evaluations": 19
     },
     {
       "rank": 6,
       "affinity": "3.0",
       "rss_bytes": 957644800,
       "tracked_bytes": 1027468344,
-      "seconds": 35.48490932700224
+      "seconds": 35.48490932700224,
+      "metric_evaluations": 19
     },
     {
       "rank": 7,
       "affinity": "3.1",
       "rss_bytes": 949248000,
       "tracked_bytes": 1028187608,
-      "seconds": 35.48235496203415
+      "seconds": 35.48235496203415,
+      "metric_evaluations": 19
     },
     {
       "rank": 8,
       "affinity": "4.0",
       "rss_bytes": 955092992,
       "tracked_bytes": 1028587320,
-      "seconds": 35.59664846700616
+      "seconds": 35.59664846700616,
+      "metric_evaluations": 19
     },
     {
       "rank": 9,
       "affinity": "4.1",
       "rss_bytes": 964128768,
       "tracked_bytes": 1028621720,
-      "seconds": 35.48572045797482
+      "seconds": 35.48572045797482,
+      "metric_evaluations": 19
     },
     {
       "rank": 10,
       "affinity": "5.0",
       "rss_bytes": 952778752,
       "tracked_bytes": 1028896920,
-      "seconds": 35.486070741084404
+      "seconds": 35.486070741084404,
+      "metric_evaluations": 19
     },
     {
       "rank": 11,
       "affinity": "5.1",
       "rss_bytes": 931487744,
       "tracked_bytes": 1029034520,
-      "seconds": 35.48514890403021
+      "seconds": 35.48514890403021,
+      "metric_evaluations": 19
     }
   ],
+  "hosts": [
+    "x4609c6s6b0n0"
+  ],
+  "termination": "cycle limit",
   "aggregate_peak_rss_bytes": 11459846144,
   "sum_tracked_allocation_peaks_bytes": 12337961312,
   "conservative_sum_bytes": 23797807456,

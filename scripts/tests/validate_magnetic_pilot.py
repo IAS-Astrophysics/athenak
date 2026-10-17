@@ -14,6 +14,8 @@ p.add_argument('--roundtrip', action='store_true')
 a = p.parse_args()
 rss = allocations = budget = 0
 ranks = []
+hosts = set()
+termination = None
 for rank in range(12):
     resource = json.loads((a.run/f'resources-{rank}.json').read_text())
     memory = json.loads((a.run/f'memory-{rank}.json').read_text())
@@ -22,17 +24,32 @@ for rank in range(12):
     assert memory['combined_peak_bytes'] <= memory['budget_bytes']
     text = (a.run/f'rank-{rank}.log').read_text()
     affinity = f'{rank//2}.{rank%2}'
-    assert re.search(rf'rank={rank} host=\S+ affinity={re.escape(affinity)}\s', text)
+    identity = re.search(rf'rank={rank} host=(\S+) affinity={re.escape(affinity)}\s', text)
+    assert identity
+    hosts.add(identity.group(1))
+    if rank == 0:
+        ended = re.search(r'Terminating on (cycle limit|time limit|wall clock limit)',text)
+        assert ended, 'Missing normal solver termination'
+        termination = ended.group(1)
+        if not a.roundtrip: assert termination != 'cycle limit'
+    if not a.roundtrip:
+        command = resource['command']
+        assert command[command.index('-t')+1] == '00:55:00'
+        for flag in command:
+            if flag.startswith('amr_criterion1/residence_scale='):
+                assert float(flag.split('=',1)[1]) == 1.0
     assert not re.search(r'NaN|finite-check failure|nonfinite.*repair', text)
     rss += resource['peak_rss_bytes']
     allocations += memory['combined_peak_bytes']
     budget += resource['memory_budget_bytes']+memory['budget_bytes']
     ranks.append({'rank': rank, 'affinity': affinity, 'rss_bytes': resource['peak_rss_bytes'],
-                  'tracked_bytes': memory['combined_peak_bytes'], 'seconds': resource['seconds']})
+                  'tracked_bytes': memory['combined_peak_bytes'], 'seconds': resource['seconds'],
+                  'metric_evaluations': memory.get('metric_evaluations')})
+assert len(hosts) == 1, hosts
 assert budget <= 30_000_000_000 and rss+allocations < 30_000_000_000
 paths = sorted((a.run/'bin').glob('*.mhd_w_bcc.*.bin'))
 assert len(paths) >= 2, 'Need both initial and evolved fluid data'
-selected = paths if a.roundtrip else [paths[0], paths[-1]]
+selected = paths  # Validate every saved fluid state, including intermediate stages.
 states = []
 initial = None
 restored = False
@@ -57,13 +74,13 @@ if a.roundtrip:
 divpaths = sorted((a.run/'bin').glob('*.mhd_divb.*.bin'))
 assert divpaths
 maxdiv = 0.
-for path in (divpaths if a.roundtrip else [divpaths[-1]]):
+for path in divpaths:
     _, fields = load(path)
     for v in fields.values():
         assert np.isfinite(v).all()
         maxdiv = max(maxdiv, float(abs(v).max()))
 assert maxdiv < 1e-9, maxdiv
-result = {'ranks': ranks, 'aggregate_peak_rss_bytes': rss,
+result = {'ranks': ranks, 'hosts': sorted(hosts), 'termination': termination, 'aggregate_peak_rss_bytes': rss,
           'sum_tracked_allocation_peaks_bytes': allocations,
           'conservative_sum_bytes': rss+allocations, 'sum_guard_budgets_bytes': budget,
           'max_abs_divb': maxdiv, 'states': states, 'restored_topology': restored,
