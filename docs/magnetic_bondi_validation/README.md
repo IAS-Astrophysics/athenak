@@ -160,3 +160,12 @@ excision and supports xy/xz slices. It never substitutes frozen finer data for
 an active coarse snapshot. A completed20000 M pilot would still be a short,
 low-resolution experiment; statistical/spatial convergence, global conservative
 mass balance and boundary-distance independence would remain unproven.
+
+## Movie and boundary-layer assessment
+
+The first-return movie and six-face diagnostics are in
+[movie-first-return/README.md](movie-first-return/README.md). A mild polar
+boundary adjustment is visible: adjacent face-mean density/pressure departures
+reach0.75%/1.24%, with individual-cell departures1.61%/2.66%. No large boundary
+instability is apparent, but reflection and inner-flow contamination remain
+unexcluded without matched box-size/characteristic-boundary controls.

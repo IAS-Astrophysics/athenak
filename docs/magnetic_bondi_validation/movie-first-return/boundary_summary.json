@@ -1,0 +1,91 @@
+{
+  "time_range_M": [
+    0.0,
+    9782.47
+  ],
+  "initial_max_inertial_speed_c": 9.570175052431296e-07,
+  "final_adjacent_face_means": {
+    "x-": {
+      "rho/rho_inf-1": -0.0019812306854873896,
+      "p/p_inf-1": -0.0032729818485677242,
+      "outward_inertial_coordinate_v_normal": -0.00023785569646861404,
+      "inertial_coordinate_speed": 0.000256633065873757,
+      "Btilde_x/Binf": -4.895563506579492e-06,
+      "Btilde_y/Binf": -1.2413531749189133e-06,
+      "Btilde_z/Binf-1": -0.0023251643870025873
+    },
+    "x+": {
+      "rho/rho_inf-1": -0.0020004885736852884,
+      "p/p_inf-1": -0.0032782522030174732,
+      "outward_inertial_coordinate_v_normal": -0.00023833119485061616,
+      "inertial_coordinate_speed": 0.0002570237556938082,
+      "Btilde_x/Binf": -7.708157681918237e-06,
+      "Btilde_y/Binf": -7.966799557834747e-07,
+      "Btilde_z/Binf-1": -0.002336024772375822
+    },
+    "y-": {
+      "rho/rho_inf-1": -0.0014638137072324753,
+      "p/p_inf-1": -0.0024350332096219063,
+      "outward_inertial_coordinate_v_normal": -0.00019717142276931554,
+      "inertial_coordinate_speed": 0.00021858519176021218,
+      "Btilde_x/Binf": 1.3669778127223253e-06,
+      "Btilde_y/Binf": -7.831258699297905e-07,
+      "Btilde_z/Binf-1": -0.0015760327223688364
+    },
+    "y+": {
+      "rho/rho_inf-1": -0.0014567661564797163,
+      "p/p_inf-1": -0.0024289069697260857,
+      "outward_inertial_coordinate_v_normal": -0.00019621005048975348,
+      "inertial_coordinate_speed": 0.00021779372764285654,
+      "Btilde_x/Binf": -1.463631633669138e-06,
+      "Btilde_y/Binf": 6.725895218551159e-06,
+      "Btilde_z/Binf-1": -0.0015726513229310513
+    },
+    "z-": {
+      "rho/rho_inf-1": -0.007490810006856918,
+      "p/p_inf-1": -0.012400446459650993,
+      "outward_inertial_coordinate_v_normal": -0.0006441146833822131,
+      "inertial_coordinate_speed": 0.0008014788036234677,
+      "Btilde_x/Binf": -1.592020271345973e-05,
+      "Btilde_y/Binf": 2.0368024706840515e-06,
+      "Btilde_z/Binf-1": 0.0014494115021079779
+    },
+    "z+": {
+      "rho/rho_inf-1": -0.007468909956514835,
+      "p/p_inf-1": -0.012341327965259552,
+      "outward_inertial_coordinate_v_normal": -0.0006423916202038527,
+      "inertial_coordinate_speed": 0.0007999858353286982,
+      "Btilde_x/Binf": 5.41802728548646e-06,
+      "Btilde_y/Binf": -2.0075589418411255e-05,
+      "Btilde_z/Binf-1": 0.001437271828763187
+    }
+  },
+  "final_adjacent_max_abs_over_all_cells_faces": {
+    "rho/rho_inf-1": 0.016062915325164795,
+    "p/p_inf-1": 0.02657264471054077,
+    "outward_inertial_coordinate_v_normal": 0.0015226455871015787,
+    "inertial_coordinate_speed": 0.0015257539926096797,
+    "Btilde_x/Binf": 0.009282510727643967,
+    "Btilde_y/Binf": 0.009203070774674416,
+    "Btilde_z/Binf-1": 0.010689496994018555
+  },
+  "final_adjacent_max_abs_face_mean": {
+    "rho/rho_inf-1": 0.007490810006856918,
+    "p/p_inf-1": 0.012400446459650993,
+    "outward_inertial_coordinate_v_normal": 0.0006441146833822131,
+    "inertial_coordinate_speed": 0.0008014788036234677,
+    "Btilde_x/Binf": 1.592020271345973e-05,
+    "Btilde_y/Binf": 2.0075589418411255e-05,
+    "Btilde_z/Binf-1": 0.002336024772375822
+  },
+  "initial_adjacent_max_abs_face_mean": {
+    "rho/rho_inf-1": 0.0,
+    "p/p_inf-1": 0.0006848921184428036,
+    "outward_inertial_coordinate_v_normal": 1.2281817340920043e-08,
+    "inertial_coordinate_speed": 5.072110980108846e-07,
+    "Btilde_x/Binf": 0.0,
+    "Btilde_y/Binf": 0.0,
+    "Btilde_z/Binf-1": 0.0
+  },
+  "limits": "Active cell diagnostics, not ghost cells or face fluxes. Corners counted on each adjoining face; identical outer metric geometry asserted."
+}
