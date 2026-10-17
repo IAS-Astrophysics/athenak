@@ -18,6 +18,9 @@ export CZ_KOKKOS_TOTAL_BYTES=14000000000
 export CZ_OUT="$PWD/evolution-magnetic-${PBS_JOBID%%.*}"
 mkdir "$CZ_OUT"
 module list > "$CZ_OUT/modules.txt" 2>&1
+printf 'EnableImplicitScaling=%s\nZE_FLAT_DEVICE_HIERARCHY=%s\nMPICH_GPU_SUPPORT_ENABLED=%s\nOMP_NUM_THREADS=%s\n' \
+ "${EnableImplicitScaling:-unset}" "$ZE_FLAT_DEVICE_HIERARCHY" "$MPICH_GPU_SUPPORT_ENABLED" "$OMP_NUM_THREADS" \
+ > "$CZ_OUT/runtime-controls.txt"
 sha256sum -c build-magnetic/source.sha256 > "$CZ_OUT/source-verification.txt"
 sha256sum -c build-magnetic/executable.sha256 > "$CZ_OUT/executable-verification.txt"
 ldd build-magnetic/src/athena > "$CZ_OUT/libraries.txt"

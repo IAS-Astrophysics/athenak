@@ -249,3 +249,19 @@ require initial and evolved snapshots. Saved output counters are preserved.
 AthenaK's forced-final dump advances its output clock even between periodic
 dumps, so continuation output times can have gaps; no uniform saved cadence
 or interpolation across those gaps is assumed.
+
+The full337-file src C++/header/CMake manifest is saved in aurora-build/.
+336 files match the branch byte-for-byte. The only mismatch is a stale MPI-tag
+comment in bvals.hpp; source-comment-diff.patch records the exact benign
+difference. No solver/EOS differences were found. Build-recipe hashes are
+also saved; the SANE dependency/compiler-launcher configuration remains
+intentionally recorded separately from the solver source.
+
+The runtime environment copy had one stale difference: it lacked the branch's
+explicit EnableImplicitScaling=0. Tile affinity masks were already explicit
+and correct. environment-original.sh preserves the exact original recipe;
+the current branch environment has now been synchronized for subsequent jobs.
+The ongoing8937572 job retains its already-sourced environment. Future batch
+launches record EnableImplicitScaling, device hierarchy, GPU-aware MPI and OMP
+thread count explicitly in runtime-controls.txt, alongside script hashes.
+The build CMake file, build script and compiler launcher match the branch.

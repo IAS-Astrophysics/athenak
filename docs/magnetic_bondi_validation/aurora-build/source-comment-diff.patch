@@ -1,0 +1,11 @@
+--- branch/src/bvals/bvals.hpp
++++ built/src/bvals/bvals.hpp
+@@ -39,7 +39,7 @@
+ //----------------------------------------------------------------------------------------
+ //! \fn int CreateBvals_MPI_Tag(int lid, int bufid)
+ //! \brief calculate an MPI tag for boundary buffer communications.  Note maximum size of
+-//! lid capacity is set at startup from MPI_TAG_UB via mpi_tag_lid_bits.
++//! lid that can be encoded is set by (global_variable::mpi_tag_lid_bits) macro defined in athena.hpp.
+ //! The convention in AthenaK is lid and bufid are both for the *receiving* process.
+ static int CreateBvals_MPI_Tag(int lid, int bufid) {
+   return (bufid << (global_variable::mpi_tag_lid_bits)) | lid;
