@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import numpy as np
 from test_binary_zoom import load, coords
+from submit_magnetic_continuation import restart_state
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--run', type=Path, required=True)
@@ -48,7 +49,13 @@ for rank in range(12):
 assert len(hosts) == 1, hosts
 assert budget <= 30_000_000_000 and rss+allocations < 30_000_000_000
 paths = sorted((a.run/'bin').glob('*.mhd_w_bcc.*.bin'))
-assert len(paths) >= 2, 'Need both initial and evolved fluid data'
+restart_source=a.run/'restart-source.txt'
+initial_checkpoint=None
+if restart_source.exists() and not a.roundtrip:
+    initial_checkpoint=restart_state(Path(restart_source.read_text().strip()))
+    assert paths, 'Missing final evolved fluid data'
+else:
+    assert len(paths)>=2, 'Need both initial and evolved fluid data'
 selected = paths  # Validate every saved fluid state, including intermediate stages.
 states = []
 initial = None
@@ -111,7 +118,11 @@ for path in selected:
                    'max_Btilde_exterior':float(bnorm[exterior].max()),
                    'max_abs_divb':raw,'max_abs_divb_exterior':external,
                    'max_scaled_divb':scaled})
-assert states[-1]['time'] > states[0]['time'] and states[-1]['cycle'] > 0
+if initial_checkpoint is not None:
+    assert states[-1]['time']>initial_checkpoint['time']
+    assert states[-1]['cycle']>initial_checkpoint['cycle']
+else:
+    assert states[-1]['time']>states[0]['time'] and states[-1]['cycle']>0
 if a.roundtrip:
     assert restored, 'No return to the initial resolved topology was saved'
     assert len({s['max_level'] for s in states}) >= 8, 'Not all eight zoom stages sampled'
@@ -124,7 +135,7 @@ result = {'ranks': ranks, 'hosts': sorted(hosts), 'termination': termination, 'a
           'conservative_sum_bytes': rss+allocations, 'sum_guard_budgets_bytes': budget,
           'max_abs_divb': maxdiv, 'max_abs_divb_exterior':max_exterior_div,
           'max_scaled_divb':max_scaled_div,'scaled_divb_definition':'dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient)',
-          'field_normalization_floor':field_floor, 'diagnostic_excision_spheres':excision_spheres, 'states': states, 'restored_topology': restored,
+          'field_normalization_floor':field_floor, 'diagnostic_excision_spheres':excision_spheres, 'states': states, 'restored_topology': restored, 'initial_checkpoint_state':initial_checkpoint,
           'interpretation': 'bounded magnetized evolution; no relaxation claim'}
 a.out.parent.mkdir(parents=True, exist_ok=True)
 a.out.write_text(json.dumps(result, indent=2)+'\n')

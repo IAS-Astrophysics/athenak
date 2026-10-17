@@ -241,3 +241,11 @@ runs lightweight orchestration on the login host, not fluid evolution. A
 magnetic-monitor.stop file in the remote pilot root prevents further submissions
 without cancelling a running job. magnetic-monitor-state.json records its PID
 and current job. Queue/observation waits use50-second intervals.
+
+Restart validation uses the native source checkpoint as its initial time/cycle
+reference, so a legitimate short final continuation with only one final fluid
+dump can still be audited. Fresh runs and accelerated topology tests still
+require initial and evolved snapshots. Saved output counters are preserved.
+AthenaK's forced-final dump advances its output clock even between periodic
+dumps, so continuation output times can have gaps; no uniform saved cadence
+or interpolation across those gaps is assumed.
