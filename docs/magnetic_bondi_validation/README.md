@@ -181,3 +181,14 @@ equatorial movie, including physical beta on every active topology. Actual saved
 headers confirm smooth_excision=0: this pilot uses hard puncture primitive resets
 at0.8 M, with magnetic damping off. The user's smooth drain implementation is
 present but was left disabled in the input. No current evolution was changed.
+
+## ApJ-style methods/status report and MHD equilibrium audit
+
+The editable AASTeX report, compiled PDF and figure bundle are in
+[output/pdf/magnetic_bondi_status](../../output/pdf/magnetic_bondi_status/README.md).
+The dated live check confirms8939546 running; the timeline reaches10208 M,
+while quantitative finest analysis uses completed jobs through9903.62 M.
+Matched phases50,100,200 M compare startup and first return: r=2 M individual
+hole rates rise by factors4.53/4.38; shell masses24..500 M rise by factors1.4..4.4.
+The current MHD chain is still transient; old hydro equilibrium numbers do not
+apply. The new scripts preserve angular/spatial and frozen-interval caveats.

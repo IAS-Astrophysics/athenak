@@ -1,0 +1,178 @@
+{
+  "last_logged_time_M": 10208.05,
+  "zone": 3,
+  "finest_exposure_M": 500.0116999999994,
+  "global_binary_orbits": 8.975072237448776,
+  "finest_binary_orbits": 0.43961786306587064,
+  "bondi_times": 1.2912275387552727,
+  "binary_period_M": 1137.3780321685417,
+  "bondi_time_M": 7905.694150420949,
+  "cs": 0.06324555320336758,
+  "pinf": 0.002414486921529175,
+  "Binf": 0.06949081840832176,
+  "events": [
+    [
+      0.0,
+      0
+    ],
+    [
+      250.0057,
+      1
+    ],
+    [
+      250.0202,
+      2
+    ],
+    [
+      250.0492,
+      3
+    ],
+    [
+      815.7591,
+      4
+    ],
+    [
+      2001.637,
+      5
+    ],
+    [
+      3187.686,
+      6
+    ],
+    [
+      4373.543,
+      7
+    ],
+    [
+      5559.501,
+      6
+    ],
+    [
+      6745.359,
+      5
+    ],
+    [
+      7931.407,
+      4
+    ],
+    [
+      9117.285,
+      3
+    ],
+    [
+      9682.995,
+      2
+    ],
+    [
+      9683.024,
+      1
+    ],
+    [
+      9683.038,
+      0
+    ],
+    [
+      9933.044,
+      1
+    ],
+    [
+      9933.059,
+      2
+    ],
+    [
+      9933.088,
+      3
+    ]
+  ],
+  "schedule": [
+    {
+      "stage": 0,
+      "radius": 0.5,
+      "centers": 2,
+      "local_mass": 0.5,
+      "r_ref": 2.0,
+      "mask_dx": 0.03125,
+      "dynamical_time": 0.5,
+      "dwell": 250,
+      "dwell_over_dyn": 500.0
+    },
+    {
+      "stage": 1,
+      "radius": 1.0,
+      "centers": 2,
+      "local_mass": 0.5,
+      "r_ref": 4.0,
+      "mask_dx": 0.0625,
+      "dynamical_time": 1.4142135623730951,
+      "dwell": 0,
+      "dwell_over_dyn": 0.0
+    },
+    {
+      "stage": 2,
+      "radius": 2.0,
+      "centers": 2,
+      "local_mass": 0.5,
+      "r_ref": 8.0,
+      "mask_dx": 0.125,
+      "dynamical_time": 4.0,
+      "dwell": 0,
+      "dwell_over_dyn": 0.0
+    },
+    {
+      "stage": 3,
+      "radius": 4.0,
+      "centers": 2,
+      "local_mass": 0.5,
+      "r_ref": 16.0,
+      "mask_dx": 0.25,
+      "dynamical_time": 11.313708498984761,
+      "dwell": 565.685424949238,
+      "dwell_over_dyn": 50.0
+    },
+    {
+      "stage": 4,
+      "radius": 8.0,
+      "centers": 2,
+      "local_mass": 0.5,
+      "r_ref": 32.0,
+      "mask_dx": 0.5,
+      "dynamical_time": 32.0,
+      "dwell": 1185.8541225631423,
+      "dwell_over_dyn": 37.057941330098195
+    },
+    {
+      "stage": 5,
+      "radius": 16.0,
+      "centers": 2,
+      "local_mass": 0.5,
+      "r_ref": 64.0,
+      "mask_dx": 1.0,
+      "dynamical_time": 90.50966799187809,
+      "dwell": 1185.8541225631423,
+      "dwell_over_dyn": 13.101960805662829
+    },
+    {
+      "stage": 6,
+      "radius": 32.0,
+      "centers": 1,
+      "local_mass": 1.0,
+      "r_ref": 128.0,
+      "mask_dx": 2.0,
+      "dynamical_time": 181.01933598375618,
+      "dwell": 1185.8541225631423,
+      "dwell_over_dyn": 6.5509804028314145
+    },
+    {
+      "stage": 7,
+      "radius": 64.0,
+      "centers": 1,
+      "local_mass": 1.0,
+      "r_ref": 256.0,
+      "mask_dx": 4.0,
+      "dynamical_time": 512.0,
+      "dwell": 1185.8541225631423,
+      "dwell_over_dyn": 2.316121333131137
+    }
+  ],
+  "nominal_roundtrip_M": 9682.349707840473
+}

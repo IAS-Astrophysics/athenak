@@ -1,0 +1,12 @@
+2026-10-17T19:29:37Z
+    resources_used.walltime = 00:38:20
+    job_state = R
+    Resource_List.walltime = 01:00:00
+elapsed=2.306884e+03 cycle=137500 time=1.039674e+04 dt=5.717707e-02
+elapsed=2.325351e+03 cycle=137600 time=1.040245e+04 dt=5.717707e-02
+{
+  "pid": 986163,
+  "job": 8939546,
+  "target": 20000.0,
+  "continue_jobs": true
+}
