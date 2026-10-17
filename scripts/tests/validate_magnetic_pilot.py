@@ -53,6 +53,7 @@ selected = paths  # Validate every saved fluid state, including intermediate sta
 states = []
 initial = None
 restored = False
+different_topology_seen = False
 maxdiv = max_scaled_div = max_exterior_div = 0.
 field_floor = None
 excision_spheres = None
@@ -99,7 +100,9 @@ for path in selected:
     assert bmax > 0, 'This must be genuinely magnetized'
     if initial is None:
         initial = d
-    elif d['cycle'] > 0 and np.array_equal(initial['mb_logical'], d['mb_logical']):
+    elif not np.array_equal(initial['mb_logical'], d['mb_logical']):
+        different_topology_seen = True
+    elif different_topology_seen:
         restored = True
     states.append({'file': path.name, 'time': d['time'], 'cycle': d['cycle'],
                    'blocks': d['n_mbs'], 'max_level': int(d['mb_logical'][:,3].max()),

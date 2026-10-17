@@ -1,0 +1,2 @@
+rank=4 host=x4401c2s3b0n0 affinity=2.0
+{"command": ["./build-magnetic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937401/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-8937401", "-t", "00:55:00"], "returncode": 0, "peak_rss_bytes": 949878784, "memory_budget_bytes": 1200000000, "seconds": 3303.990693777916, "stopped": null}

@@ -206,3 +206,25 @@ A24x48 angular audit found r_mask/dx=16 at every sampled mask-boundary point
 in all8 GPU zoom stages, including merged COM stages6 and7. Resolution audit
 metadata are archived beside the successful GPU test. This does not establish
 spatial convergence or resolve a true binary apparent horizon.
+
+## First physical clean stop
+
+Job8937401 stopped normally on the55-minute solver wall clock after16244
+steps at t=117.9453202306 M. All12 rank exits were0. Every saved fluid/divB
+state passed validation. The conservative sum of peak RSS and tracked
+allocation peaks is23.56 GB (11.23+12.33), below the28.4 GB guard sum and30 GB
+ceiling. Raw divB reaches2.67e-9 inside excision and1.26e-11 outside; the
+field-scaled maximum is4.73e-13. The large interior fields (coordinate
+Btilde norm5167) are excluded from physical interpretation; the exterior
+maximum is14.0. Each rank evaluated the stationary metric once over all16244
+steps. All exact logs/reports are in physical-8937401/.
+
+The first250 M finest dwell remains incomplete, so no physical zoom cycle or
+inflow equilibrium has been established. latest_finest.png shows the actual
+117.945 M xz snapshot. After checking the final checkpoint's native header,
+hash, time/cycle/block count and physics, continuation8937572 was accepted
+from magnetic_bondi_binary.00001.rst toward20000 M. Its unique predecessor
+receipt is magnetic-continuation-8937401.receipt. It retains one node/all12
+tiles, physical dwell times, output counters and the55-minute clean cutoff.
+This continuation started at00:48 UTC. Its restored log retains zone0 and
+next_time=250 M, so the dwell clock was not reset; its final result is pending.
