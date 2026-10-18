@@ -1,0 +1,3288 @@
+[
+  {
+    "case": "acoustic3d-fastrotation-characteristic-16",
+    "raw_files": [
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 293106
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 293307
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 30821
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 30781
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 31010
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 31006
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 161917
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 162029
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 162138
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 162264
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-fastrotation-characteristic-32",
+    "raw_files": [
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 2252658
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 2252859
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 155365
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 155326
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 155550
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 1203965
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 1204078
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 1204312
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-fastrotation-fixed-16",
+    "raw_files": [
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 293106
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 293307
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 30821
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 30781
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 31010
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 31006
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 161917
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 162029
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 162138
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 162264
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-fastrotation-fixed-32",
+    "raw_files": [
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 2252658
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 2252859
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 155365
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 155326
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 155550
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 1203965
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 1204078
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "acoustic3d-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 1204312
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-fastrotation-reference-16",
+    "raw_files": [
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 2252574
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 2252775
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 155281
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 155241
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 155470
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 155466
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 1203881
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 1203993
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 1204102
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 1204228
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-fastrotation-reference-32",
+    "raw_files": [
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 17928990
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 17929191
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 1151633
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 1151594
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 1151818
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 9540265
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 9540378
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "acoustic3d-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 9540612
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-rotating-characteristic-16",
+    "raw_files": [
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 293099
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 293071
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 30814
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 30773
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 30770
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 161910
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 161901
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 161898
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-rotating-characteristic-24",
+    "raw_files": [
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 957940
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 957913
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 73063
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 73022
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 73024
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 73020
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 515455
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 515446
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 515448
+      },
+      {
+        "path": "acoustic3d-rotating-characteristic-24/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 515444
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-rotating-fixed-16",
+    "raw_files": [
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 293099
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 293071
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 30814
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 30773
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 30774
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 30770
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 161910
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 161901
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 161902
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 161898
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-rotating-fixed-24",
+    "raw_files": [
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 957940
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 957913
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 73063
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 73022
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 73023
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 73024
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 73020
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 515455
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 515446
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 515447
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 515448
+      },
+      {
+        "path": "acoustic3d-rotating-fixed-24/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 515444
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-rotating-reference-16",
+    "raw_files": [
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 7571358
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 7571330
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 493329
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 493288
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 493289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 493285
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 4032297
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 4032288
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 4032289
+      },
+      {
+        "path": "acoustic3d-rotating-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 4032285
+      }
+    ]
+  },
+  {
+    "case": "acoustic3d-rotating-reference-24",
+    "raw_files": [
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 25522254
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 25522227
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 1634241
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 1634201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 1634201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 1634201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 1634200
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 1634201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 1634201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 1634201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 1634202
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 1634198
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 13578201
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 13578193
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 13578193
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 13578193
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 13578192
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 13578193
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 13578193
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 13578193
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 13578194
+      },
+      {
+        "path": "acoustic3d-rotating-reference-24/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 13578190
+      }
+    ]
+  },
+  {
+    "case": "entropy-fastrotation-characteristic-16",
+    "raw_files": [
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 293106
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 293307
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 30821
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 30781
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 31010
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 31006
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 161917
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 162029
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 162138
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 162264
+      }
+    ]
+  },
+  {
+    "case": "entropy-fastrotation-characteristic-32",
+    "raw_files": [
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 2252658
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 2252859
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 155365
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 155326
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 155550
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 1203965
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 1204078
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-characteristic-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 1204312
+      }
+    ]
+  },
+  {
+    "case": "entropy-fastrotation-fixed-16",
+    "raw_files": [
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 293106
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 293307
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 30821
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 30781
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 31010
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 31011
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 31006
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 161917
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 162029
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 162138
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 162139
+      },
+      {
+        "path": "entropy-fastrotation-fixed-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 162264
+      }
+    ]
+  },
+  {
+    "case": "entropy-fastrotation-fixed-32",
+    "raw_files": [
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 2252658
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 2252859
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 155365
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 155326
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 155555
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 155550
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 1203965
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 1204078
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 1204187
+      },
+      {
+        "path": "entropy-fastrotation-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 1204312
+      }
+    ]
+  },
+  {
+    "case": "entropy-fastrotation-reference-16",
+    "raw_files": [
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 2252574
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 2252775
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 155281
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 155241
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 155470
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 155471
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 155466
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 1203881
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 1203993
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 1204102
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 1204103
+      },
+      {
+        "path": "entropy-fastrotation-reference-16/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 1204228
+      }
+    ]
+  },
+  {
+    "case": "entropy-fastrotation-reference-32",
+    "raw_files": [
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 17928990
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 17929191
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 1151633
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 1151594
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 1151823
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 1151818
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 9540265
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 9540378
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 9540487
+      },
+      {
+        "path": "entropy-fastrotation-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 9540612
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-reference-32",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 13386702
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 13386675
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 115521
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 115475
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 115476
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 115477
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 115477
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 115477
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 115478
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 115478
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 115478
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 115478
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 115478
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 115478
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 7095129
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 7095115
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 7095116
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 7095117
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 7095117
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 7095117
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 7095118
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 7095118
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 7095118
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 7095118
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 7095118
+      },
+      {
+        "path": "planar-acoustic-reference-32/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 7095118
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-fixed-32",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 4470990
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 4470963
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 47169
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 47123
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 2373721
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 2373707
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-fixed-32/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 2373710
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-order1-32",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 4470990
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 4470963
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 47169
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 47123
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 2373721
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 2373707
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order1-32/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 2373710
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-order2-32",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 4470990
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 4470963
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 47169
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 47123
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 2373721
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 2373707
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order2-32/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 2373710
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-order3-32",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 4470990
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 4470963
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 47169
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 47123
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 47124
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 47125
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 47126
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 2373721
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 2373707
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 2373708
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 2373709
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 2373710
+      },
+      {
+        "path": "planar-acoustic-order3-32/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 2373710
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-reference-64",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 26760270
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 26760243
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 218049
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 218004
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 218004
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 218004
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 218004
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 218004
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 218004
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 218005
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 218005
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 218005
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 218006
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 14177241
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 14177228
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 14177228
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 14177228
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 14177228
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 14177228
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 14177228
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 14177229
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 14177229
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 14177229
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 14177230
+      },
+      {
+        "path": "planar-acoustic-reference-64/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 14177230
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-fixed-64",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 8928846
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 8928819
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 81345
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 4734425
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-fixed-64/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 4734414
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-order1-64",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 8928846
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 8928819
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 81345
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 4734425
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order1-64/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 4734414
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-order2-64",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 8928846
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 8928819
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 81345
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 4734425
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order2-64/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 4734414
+      }
+    ]
+  },
+  {
+    "case": "planar-acoustic-order3-64",
+    "raw_files": [
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 8928846
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 8928819
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 81345
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00002.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00003.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00004.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00005.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00006.bin",
+        "bytes": 81300
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00007.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00008.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00009.bin",
+        "bytes": 81301
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00010.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00011.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00012.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00013.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00014.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00015.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00016.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00017.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_divb.00018.bin",
+        "bytes": 81302
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 4734425
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00002.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00003.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00004.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00005.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00006.bin",
+        "bytes": 4734412
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00007.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00008.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00009.bin",
+        "bytes": 4734413
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00010.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00011.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00012.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00013.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00014.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00015.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00016.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00017.bin",
+        "bytes": 4734414
+      },
+      {
+        "path": "planar-acoustic-order3-64/bin/magnetic_bondi_binary.mhd_w_bcc.00018.bin",
+        "bytes": 4734414
+      }
+    ]
+  },
+  {
+    "case": "curved-amr-fixed",
+    "raw_files": [
+      {
+        "path": "curved-amr-fixed/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 49162436
+      },
+      {
+        "path": "curved-amr-fixed/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 49162527
+      },
+      {
+        "path": "curved-amr-fixed/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 3024951
+      },
+      {
+        "path": "curved-amr-fixed/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 3024906
+      },
+      {
+        "path": "curved-amr-fixed/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 26093647
+      },
+      {
+        "path": "curved-amr-fixed/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 26093894
+      }
+    ]
+  },
+  {
+    "case": "curved-amr-characteristic",
+    "raw_files": [
+      {
+        "path": "curved-amr-characteristic/bin/magnetic_bondi_binary.adm.00000.bin",
+        "bytes": 49162436
+      },
+      {
+        "path": "curved-amr-characteristic/bin/magnetic_bondi_binary.adm.00001.bin",
+        "bytes": 49162527
+      },
+      {
+        "path": "curved-amr-characteristic/bin/magnetic_bondi_binary.mhd_divb.00000.bin",
+        "bytes": 3024951
+      },
+      {
+        "path": "curved-amr-characteristic/bin/magnetic_bondi_binary.mhd_divb.00001.bin",
+        "bytes": 3024906
+      },
+      {
+        "path": "curved-amr-characteristic/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+        "bytes": 26093647
+      },
+      {
+        "path": "curved-amr-characteristic/bin/magnetic_bondi_binary.mhd_w_bcc.00001.bin",
+        "bytes": 26093894
+      }
+    ]
+  }
+]

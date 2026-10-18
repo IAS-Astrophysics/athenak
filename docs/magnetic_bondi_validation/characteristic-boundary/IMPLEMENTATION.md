@@ -1,7 +1,9 @@
-> New user request: improve acoustic treatment/cost and validate rotating packets.
-> The next isolated suite is in progress; see
-> [improved-rotating/README.md](improved-rotating/README.md).
-> The completed job8941903 results below describe the previous first-order version.
+> Rotating suite **8942061 completed**: all 30 cases and 360 rank audits pass.
+> The quadratic trace improves planar acoustic pressure diagnostics, but remains
+> worse and slower for the rotating 3D packet. Keep the fixed production default.
+> See [updated results](improved-rotating/aurora/README.md) and the
+> [explicit seven-wave decomposition](improved-rotating/FULL_DECOMPOSITION.md).
+> Job 8941903 below describes the historical first-order version.
 
 # Full GRMHD characteristic implementation — bounded validation complete
 

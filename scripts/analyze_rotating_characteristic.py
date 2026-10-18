@@ -12,9 +12,9 @@ sys.path.insert(0,str(Path(__file__).resolve().parent/'tests'))
 from test_binary_zoom import load,final_output,inspect
 from analyze_grmhd_characteristic import audit,params
 
-def cube(case,initial=False):
+def cube(case,initial=False,snapshot=None):
     files=sorted((case/'bin').glob('*.mhd_w_bcc.*.bin'))
-    d,f=load(files[0] if initial else files[-1]);cfg=params(d['header'])
+    d,f=load(snapshot if snapshot is not None else (files[0] if initial else files[-1]));cfg=params(d['header'])
     n=int(case.name.split('-')[-1]);dx=16/n;out={k:np.empty((n,n,n)) for k in f};seen=np.zeros((n,n,n),int)
     for mb,box in enumerate(d['mb_geometry']):
         xyz=[box[2*i]+(np.arange(d[f'nx{i+1}_mb'])+.5)*(box[2*i+1]-box[2*i])/d[f'nx{i+1}_mb'] for i in range(3)]
@@ -60,7 +60,7 @@ def analyze(runs,out,local=False):
                        inertial_speed_max=float(np.sqrt(np.sum(v*v,axis=0)).max()))
         rows.append(row)
     (out/'audits.json').write_text(json.dumps(audits,indent=2)+'\n');(out/'comparisons.json').write_text(json.dumps(rows,indent=2)+'\n')
-    fig,axs=plt.subplots(1,3,figsize=(15,4),layout='constrained')
+    fig,axs=plt.subplots(1,3,figsize=(15,4),constrained_layout=True)
     for row in rows:
         color={'fixed':'tab:blue','characteristic':'tab:orange','firstorder':'tab:green'}[row['choice']]
         if row['family']=='acoustic3d':

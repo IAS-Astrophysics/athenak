@@ -1,0 +1,1340 @@
+[
+  {
+    "name": "acoustic3d-fastrotation-characteristic-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0545368,
+        "cycle": 5,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.474164305937985e-16
+      },
+      {
+        "time": 0.109074,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.811193956907557e-15
+      },
+      {
+        "time": 0.152703,
+        "cycle": 14,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.236260689325412e-15
+      },
+      {
+        "time": 0.20724,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.6053956739541804e-15
+      },
+      {
+        "time": 0.250869,
+        "cycle": 23,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.2050967064190083e-15
+      },
+      {
+        "time": 0.305406,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.0921413310350825e-15
+      },
+      {
+        "time": 0.359943,
+        "cycle": 33,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.093250732721549e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 37,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.677216164029713e-15
+      }
+    ],
+    "rss_plus_tracked_bytes": 8394366432,
+    "max_rank_seconds": 7.552359202876687,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 2720
+  },
+  {
+    "name": "acoustic3d-fastrotation-characteristic-32",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0537083,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.82306674518784e-15
+      },
+      {
+        "time": 0.102046,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.479133001534183e-15
+      },
+      {
+        "time": 0.150383,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.2237906485878417e-15
+      },
+      {
+        "time": 0.204092,
+        "cycle": 38,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 6.446274774331192e-15
+      },
+      {
+        "time": 0.252429,
+        "cycle": 47,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 7.55156034247209e-15
+      },
+      {
+        "time": 0.300767,
+        "cycle": 56,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 7.609217233690535e-15
+      },
+      {
+        "time": 0.354475,
+        "cycle": 66,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 9.606236258764106e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 75,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.0988215939815836e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 8782550240,
+    "max_rank_seconds": 10.097083507105708,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 10880
+  },
+  {
+    "name": "acoustic3d-fastrotation-fixed-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0545368,
+        "cycle": 5,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.856224153510734e-16
+      },
+      {
+        "time": 0.109074,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.7318950670902665e-15
+      },
+      {
+        "time": 0.152703,
+        "cycle": 14,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.0076014792034996e-15
+      },
+      {
+        "time": 0.20724,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.341978956609072e-15
+      },
+      {
+        "time": 0.250869,
+        "cycle": 23,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.4556910106024973e-15
+      },
+      {
+        "time": 0.305406,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.944552244324304e-15
+      },
+      {
+        "time": 0.359943,
+        "cycle": 33,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.0850613484955604e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 37,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.256065191040829e-15
+      }
+    ],
+    "rss_plus_tracked_bytes": 8349867392,
+    "max_rank_seconds": 6.977003182051703,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-fastrotation-fixed-32",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0537083,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.8981196262157587e-15
+      },
+      {
+        "time": 0.102046,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.298832277628711e-15
+      },
+      {
+        "time": 0.150383,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.134209652530675e-15
+      },
+      {
+        "time": 0.204092,
+        "cycle": 38,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.637066313145767e-15
+      },
+      {
+        "time": 0.252429,
+        "cycle": 47,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 6.192733541320276e-15
+      },
+      {
+        "time": 0.300767,
+        "cycle": 56,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.932794962683054e-15
+      },
+      {
+        "time": 0.354475,
+        "cycle": 66,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 9.644430149614584e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 75,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 9.420396906456207e-15
+      }
+    ],
+    "rss_plus_tracked_bytes": 8755975296,
+    "max_rank_seconds": 8.49013746692799,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-fastrotation-reference-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0545368,
+        "cycle": 5,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.0479188354579603e-15
+      },
+      {
+        "time": 0.109074,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.6052156786376529e-15
+      },
+      {
+        "time": 0.152703,
+        "cycle": 14,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.9252741608511863e-15
+      },
+      {
+        "time": 0.20724,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.658302802312747e-15
+      },
+      {
+        "time": 0.250869,
+        "cycle": 23,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.863183106209693e-15
+      },
+      {
+        "time": 0.305406,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.2465409061418027e-15
+      },
+      {
+        "time": 0.359943,
+        "cycle": 33,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.929997480692302e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 37,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.4466137543744175e-15
+      }
+    ],
+    "rss_plus_tracked_bytes": 8755004544,
+    "max_rank_seconds": 7.800800107885152,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-fastrotation-reference-32",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0537083,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.8981196262157587e-15
+      },
+      {
+        "time": 0.102046,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.5025666124359624e-15
+      },
+      {
+        "time": 0.150383,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.367182879086102e-15
+      },
+      {
+        "time": 0.204092,
+        "cycle": 38,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 6.353622116402895e-15
+      },
+      {
+        "time": 0.252429,
+        "cycle": 47,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 6.347391564167518e-15
+      },
+      {
+        "time": 0.300767,
+        "cycle": 56,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.564896413375925e-15
+      },
+      {
+        "time": 0.354475,
+        "cycle": 66,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.858786347654603e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 75,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.1008049185141484e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 11298090112,
+    "max_rank_seconds": 13.716304288012907,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-rotating-characteristic-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 20.1359,
+        "cycle": 91,
+        "min_density": 0.9992159008979797,
+        "min_pressure": 0.0024117568973451853,
+        "max_scaled_divB": 5.512742109136056e-15
+      },
+      {
+        "time": 40.0506,
+        "cycle": 181,
+        "min_density": 0.9988490343093872,
+        "min_pressure": 0.0024103212635964155,
+        "max_scaled_divB": 9.330418239888938e-15
+      },
+      {
+        "time": 60.1866,
+        "cycle": 272,
+        "min_density": 0.9994020462036133,
+        "min_pressure": 0.0024121752940118313,
+        "max_scaled_divB": 1.018881669967502e-14
+      },
+      {
+        "time": 80.1012,
+        "cycle": 362,
+        "min_density": 0.9995553493499756,
+        "min_pressure": 0.0024127219803631306,
+        "max_scaled_divB": 1.0945493603272634e-14
+      },
+      {
+        "time": 100.016,
+        "cycle": 452,
+        "min_density": 0.9996333122253418,
+        "min_pressure": 0.0024130214005708694,
+        "max_scaled_divB": 1.3476017510922466e-14
+      },
+      {
+        "time": 120.152,
+        "cycle": 543,
+        "min_density": 0.9996775388717651,
+        "min_pressure": 0.0024131801910698414,
+        "max_scaled_divB": 1.3381637059989544e-14
+      },
+      {
+        "time": 140.067,
+        "cycle": 633,
+        "min_density": 0.9996992349624634,
+        "min_pressure": 0.0024132609833031893,
+        "max_scaled_divB": 1.531185245163472e-14
+      },
+      {
+        "time": 160.202,
+        "cycle": 724,
+        "min_density": 0.9997087717056274,
+        "min_pressure": 0.0024132956750690937,
+        "max_scaled_divB": 1.8251448164544863e-14
+      },
+      {
+        "time": 180.0,
+        "cycle": 814,
+        "min_density": 0.9997279047966003,
+        "min_pressure": 0.0024133757688105106,
+        "max_scaled_divB": 1.9228478504033067e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 8423521760,
+    "max_rank_seconds": 46.2645268579945,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 4354720
+  },
+  {
+    "name": "acoustic3d-rotating-characteristic-24",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 20.0459,
+        "cycle": 136,
+        "min_density": 0.9987003803253174,
+        "min_pressure": 0.0024090304505079985,
+        "max_scaled_divB": 1.0135496854843561e-14
+      },
+      {
+        "time": 40.0917,
+        "cycle": 272,
+        "min_density": 0.9987024664878845,
+        "min_pressure": 0.0024093484971672297,
+        "max_scaled_divB": 2.051256203845441e-14
+      },
+      {
+        "time": 60.1376,
+        "cycle": 408,
+        "min_density": 0.9991373419761658,
+        "min_pressure": 0.0024110719095915556,
+        "max_scaled_divB": 2.4085282657745885e-14
+      },
+      {
+        "time": 80.036,
+        "cycle": 543,
+        "min_density": 0.9993184804916382,
+        "min_pressure": 0.0024117878638207912,
+        "max_scaled_divB": 2.1783683573576425e-14
+      },
+      {
+        "time": 100.082,
+        "cycle": 679,
+        "min_density": 0.999373197555542,
+        "min_pressure": 0.00241197575815022,
+        "max_scaled_divB": 2.296002036800973e-14
+      },
+      {
+        "time": 120.128,
+        "cycle": 815,
+        "min_density": 0.9993855357170105,
+        "min_pressure": 0.0024119908921420574,
+        "max_scaled_divB": 2.6289545125426133e-14
+      },
+      {
+        "time": 140.026,
+        "cycle": 950,
+        "min_density": 0.9994130730628967,
+        "min_pressure": 0.002412119647487998,
+        "max_scaled_divB": 2.6857503965757782e-14
+      },
+      {
+        "time": 160.072,
+        "cycle": 1086,
+        "min_density": 0.9994301795959473,
+        "min_pressure": 0.0024121899623423815,
+        "max_scaled_divB": 2.898506228500981e-14
+      },
+      {
+        "time": 180.0,
+        "cycle": 1222,
+        "min_density": 0.9994579553604126,
+        "min_pressure": 0.002412320114672184,
+        "max_scaled_divB": 2.56478093226626e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 8599473696,
+    "max_rank_seconds": 75.90761885605752,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 14694120
+  },
+  {
+    "name": "acoustic3d-rotating-fixed-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 20.1359,
+        "cycle": 91,
+        "min_density": 0.9992159008979797,
+        "min_pressure": 0.0024117568973451853,
+        "max_scaled_divB": 6.466797467571863e-15
+      },
+      {
+        "time": 40.0506,
+        "cycle": 181,
+        "min_density": 0.9988492727279663,
+        "min_pressure": 0.002410320332273841,
+        "max_scaled_divB": 8.607654373241766e-15
+      },
+      {
+        "time": 60.1866,
+        "cycle": 272,
+        "min_density": 0.9994019269943237,
+        "min_pressure": 0.0024121718015521765,
+        "max_scaled_divB": 1.1034451612092816e-14
+      },
+      {
+        "time": 80.1012,
+        "cycle": 362,
+        "min_density": 0.999555230140686,
+        "min_pressure": 0.002412769477814436,
+        "max_scaled_divB": 1.331958063627238e-14
+      },
+      {
+        "time": 100.016,
+        "cycle": 452,
+        "min_density": 0.9996330142021179,
+        "min_pressure": 0.0024130200035870075,
+        "max_scaled_divB": 1.4545353476721913e-14
+      },
+      {
+        "time": 120.152,
+        "cycle": 543,
+        "min_density": 0.999677300453186,
+        "min_pressure": 0.002413180423900485,
+        "max_scaled_divB": 1.4617753990692756e-14
+      },
+      {
+        "time": 140.067,
+        "cycle": 633,
+        "min_density": 0.9996980428695679,
+        "min_pressure": 0.0024132579565048218,
+        "max_scaled_divB": 1.4663483257870393e-14
+      },
+      {
+        "time": 160.202,
+        "cycle": 724,
+        "min_density": 0.9997074604034424,
+        "min_pressure": 0.0024132919497787952,
+        "max_scaled_divB": 1.6340643663478262e-14
+      },
+      {
+        "time": 180.0,
+        "cycle": 814,
+        "min_density": 0.9997272491455078,
+        "min_pressure": 0.002413372742012143,
+        "max_scaled_divB": 1.8593241020388952e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 8379932032,
+    "max_rank_seconds": 16.959666474955156,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-rotating-fixed-24",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 20.0459,
+        "cycle": 136,
+        "min_density": 0.9987003803253174,
+        "min_pressure": 0.0024090304505079985,
+        "max_scaled_divB": 9.271110482778942e-15
+      },
+      {
+        "time": 40.0917,
+        "cycle": 272,
+        "min_density": 0.9987024664878845,
+        "min_pressure": 0.0024093484971672297,
+        "max_scaled_divB": 1.951047501496851e-14
+      },
+      {
+        "time": 60.1376,
+        "cycle": 408,
+        "min_density": 0.9991348385810852,
+        "min_pressure": 0.002411062829196453,
+        "max_scaled_divB": 2.2016144587417596e-14
+      },
+      {
+        "time": 80.036,
+        "cycle": 543,
+        "min_density": 0.9993186593055725,
+        "min_pressure": 0.0024117883294820786,
+        "max_scaled_divB": 2.3901249074912658e-14
+      },
+      {
+        "time": 100.082,
+        "cycle": 679,
+        "min_density": 0.999373197555542,
+        "min_pressure": 0.00241197575815022,
+        "max_scaled_divB": 2.376888907915302e-14
+      },
+      {
+        "time": 120.128,
+        "cycle": 815,
+        "min_density": 0.9993858933448792,
+        "min_pressure": 0.0024119922891259193,
+        "max_scaled_divB": 2.5864501523333487e-14
+      },
+      {
+        "time": 140.026,
+        "cycle": 950,
+        "min_density": 0.9994142055511475,
+        "min_pressure": 0.0024121240712702274,
+        "max_scaled_divB": 2.71825077872136e-14
+      },
+      {
+        "time": 160.072,
+        "cycle": 1086,
+        "min_density": 0.9994291663169861,
+        "min_pressure": 0.0024121864698827267,
+        "max_scaled_divB": 2.969183016689054e-14
+      },
+      {
+        "time": 180.0,
+        "cycle": 1222,
+        "min_density": 0.9994560480117798,
+        "min_pressure": 0.0024123103357851505,
+        "max_scaled_divB": 2.9331408467623554e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 8537300416,
+    "max_rank_seconds": 26.75474369386211,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-rotating-reference-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 20.1359,
+        "cycle": 91,
+        "min_density": 0.9992159008979797,
+        "min_pressure": 0.0024117568973451853,
+        "max_scaled_divB": 7.896411524074035e-15
+      },
+      {
+        "time": 40.0506,
+        "cycle": 181,
+        "min_density": 0.9988492727279663,
+        "min_pressure": 0.0024103205651044846,
+        "max_scaled_divB": 1.8006019419253256e-14
+      },
+      {
+        "time": 60.1866,
+        "cycle": 272,
+        "min_density": 0.9994017481803894,
+        "min_pressure": 0.002412234665825963,
+        "max_scaled_divB": 2.6683861875707074e-14
+      },
+      {
+        "time": 80.1012,
+        "cycle": 362,
+        "min_density": 0.9995492696762085,
+        "min_pressure": 0.002412728499621153,
+        "max_scaled_divB": 4.3294580413641096e-14
+      },
+      {
+        "time": 100.016,
+        "cycle": 452,
+        "min_density": 0.9996336102485657,
+        "min_pressure": 0.002413022331893444,
+        "max_scaled_divB": 5.0488101692901336e-14
+      },
+      {
+        "time": 120.152,
+        "cycle": 543,
+        "min_density": 0.9996808767318726,
+        "min_pressure": 0.002413196489214897,
+        "max_scaled_divB": 6.110023027054973e-14
+      },
+      {
+        "time": 140.067,
+        "cycle": 633,
+        "min_density": 0.9996982216835022,
+        "min_pressure": 0.002413259819149971,
+        "max_scaled_divB": 7.437936583521042e-14
+      },
+      {
+        "time": 160.202,
+        "cycle": 724,
+        "min_density": 0.9997058510780334,
+        "min_pressure": 0.0024132870603352785,
+        "max_scaled_divB": 7.475306031792915e-14
+      },
+      {
+        "time": 180.0,
+        "cycle": 814,
+        "min_density": 0.9997206330299377,
+        "min_pressure": 0.002413348061963916,
+        "max_scaled_divB": 7.379534783826012e-14
+      }
+    ],
+    "rss_plus_tracked_bytes": 9783330560,
+    "max_rank_seconds": 49.27241956489161,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "acoustic3d-rotating-reference-24",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 20.0459,
+        "cycle": 136,
+        "min_density": 0.9987004399299622,
+        "min_pressure": 0.0024090309161692858,
+        "max_scaled_divB": 1.164241313206769e-14
+      },
+      {
+        "time": 40.0917,
+        "cycle": 272,
+        "min_density": 0.9987024068832397,
+        "min_pressure": 0.0024093484971672297,
+        "max_scaled_divB": 3.2308570453213024e-14
+      },
+      {
+        "time": 60.1376,
+        "cycle": 408,
+        "min_density": 0.9991402626037598,
+        "min_pressure": 0.002411085879430175,
+        "max_scaled_divB": 4.028632438818507e-14
+      },
+      {
+        "time": 80.036,
+        "cycle": 543,
+        "min_density": 0.9993186593055725,
+        "min_pressure": 0.002411788562312722,
+        "max_scaled_divB": 5.2879577359637337e-14
+      },
+      {
+        "time": 100.082,
+        "cycle": 679,
+        "min_density": 0.9993731379508972,
+        "min_pressure": 0.00241197575815022,
+        "max_scaled_divB": 6.661337576385259e-14
+      },
+      {
+        "time": 120.128,
+        "cycle": 815,
+        "min_density": 0.9993859529495239,
+        "min_pressure": 0.0024119927547872066,
+        "max_scaled_divB": 7.94280809292521e-14
+      },
+      {
+        "time": 140.026,
+        "cycle": 950,
+        "min_density": 0.9994145035743713,
+        "min_pressure": 0.002412125002592802,
+        "max_scaled_divB": 8.664999679711867e-14
+      },
+      {
+        "time": 160.072,
+        "cycle": 1086,
+        "min_density": 0.9994223713874817,
+        "min_pressure": 0.0024121608585119247,
+        "max_scaled_divB": 1.0975633756609946e-13
+      },
+      {
+        "time": 180.0,
+        "cycle": 1222,
+        "min_density": 0.9994435906410217,
+        "min_pressure": 0.002412261674180627,
+        "max_scaled_divB": 1.3390672645376994e-13
+      }
+    ],
+    "rss_plus_tracked_bytes": 12570669440,
+    "max_rank_seconds": 185.73275886895135,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "entropy-fastrotation-characteristic-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0545368,
+        "cycle": 5,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 6.970473760926501e-17
+      },
+      {
+        "time": 0.109074,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.277437628298506e-17
+      },
+      {
+        "time": 0.152703,
+        "cycle": 14,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.713092052364982e-17
+      },
+      {
+        "time": 0.20724,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 9.584401495670511e-17
+      },
+      {
+        "time": 0.250869,
+        "cycle": 23,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.7426184104729964e-16
+      },
+      {
+        "time": 0.305406,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.6139277347440103e-16
+      },
+      {
+        "time": 0.359943,
+        "cycle": 33,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.0951534907771214e-16
+      },
+      {
+        "time": 0.4,
+        "cycle": 37,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.93945055046589e-16
+      }
+    ],
+    "rss_plus_tracked_bytes": 8400162272,
+    "max_rank_seconds": 7.770079716108739,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 2720
+  },
+  {
+    "name": "entropy-fastrotation-characteristic-32",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0537083,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.2871097433923009e-16
+      },
+      {
+        "time": 0.102046,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.0593756846552938e-16
+      },
+      {
+        "time": 0.150383,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.6600267077831423e-16
+      },
+      {
+        "time": 0.204092,
+        "cycle": 38,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.3332696598759714e-16
+      },
+      {
+        "time": 0.252429,
+        "cycle": 47,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.194598890052873e-16
+      },
+      {
+        "time": 0.300767,
+        "cycle": 56,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.2055928120229776e-15
+      },
+      {
+        "time": 0.354475,
+        "cycle": 66,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.6346293931537446e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 75,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.9982964082686144e-15
+      }
+    ],
+    "rss_plus_tracked_bytes": 8782861536,
+    "max_rank_seconds": 9.663528576958925,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 10880
+  },
+  {
+    "name": "entropy-fastrotation-fixed-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0545368,
+        "cycle": 5,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.713092052364982e-17
+      },
+      {
+        "time": 0.109074,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 9.584401495670511e-17
+      },
+      {
+        "time": 0.152703,
+        "cycle": 14,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.713092052364982e-17
+      },
+      {
+        "time": 0.20724,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.3069638673720051e-16
+      },
+      {
+        "time": 0.250869,
+        "cycle": 23,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.9168802991341021e-16
+      },
+      {
+        "time": 0.305406,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.265403957421798e-16
+      },
+      {
+        "time": 0.359943,
+        "cycle": 33,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.396100284641741e-16
+      },
+      {
+        "time": 0.4,
+        "cycle": 37,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.659017057020845e-16
+      }
+    ],
+    "rss_plus_tracked_bytes": 8343842176,
+    "max_rank_seconds": 6.635459699900821,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "entropy-fastrotation-fixed-32",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0537083,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.1154950633261878e-16
+      },
+      {
+        "time": 0.102046,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.9735682255877216e-16
+      },
+      {
+        "time": 0.150383,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.003256067915369e-16
+      },
+      {
+        "time": 0.204092,
+        "cycle": 38,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.346485428047595e-16
+      },
+      {
+        "time": 0.252429,
+        "cycle": 47,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.947136451175443e-16
+      },
+      {
+        "time": 0.300767,
+        "cycle": 56,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 5.148438973569203e-16
+      },
+      {
+        "time": 0.354475,
+        "cycle": 66,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 7.122007437225956e-16
+      },
+      {
+        "time": 0.4,
+        "cycle": 75,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 8.020956099908004e-16
+      }
+    ],
+    "rss_plus_tracked_bytes": 8756622464,
+    "max_rank_seconds": 8.710798928979784,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "entropy-fastrotation-reference-16",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0545368,
+        "cycle": 5,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 5.2278554694880204e-17
+      },
+      {
+        "time": 0.109074,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.2198328635241943e-16
+      },
+      {
+        "time": 0.152703,
+        "cycle": 14,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.4812256369985952e-16
+      },
+      {
+        "time": 0.20724,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.7426184104729964e-16
+      },
+      {
+        "time": 0.250869,
+        "cycle": 23,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 2.4396657270483885e-16
+      },
+      {
+        "time": 0.305406,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.6594988286416145e-16
+      },
+      {
+        "time": 0.359943,
+        "cycle": 33,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.792200569283482e-16
+      },
+      {
+        "time": 0.4,
+        "cycle": 37,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 5.316509996102472e-16
+      }
+    ],
+    "rss_plus_tracked_bytes": 8775677056,
+    "max_rank_seconds": 7.757645815145224,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  },
+  {
+    "name": "entropy-fastrotation-reference-32",
+    "states": [
+      {
+        "time": 0.0,
+        "cycle": 0,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 0.0
+      },
+      {
+        "time": 0.0537083,
+        "cycle": 10,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.1154950633261878e-16
+      },
+      {
+        "time": 0.102046,
+        "cycle": 19,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.0890632889139094e-16
+      },
+      {
+        "time": 0.150383,
+        "cycle": 28,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 3.174870747981482e-16
+      },
+      {
+        "time": 0.204092,
+        "cycle": 38,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.2903658113076697e-16
+      },
+      {
+        "time": 0.252429,
+        "cycle": 47,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 4.805209613436977e-16
+      },
+      {
+        "time": 0.300767,
+        "cycle": 56,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 6.049415984399039e-16
+      },
+      {
+        "time": 0.354475,
+        "cycle": 66,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.0039455808004722e-15
+      },
+      {
+        "time": 0.4,
+        "cycle": 75,
+        "min_density": 1.0,
+        "min_pressure": 0.002414486836642027,
+        "max_scaled_divB": 1.1389907150175581e-15
+      }
+    ],
+    "rss_plus_tracked_bytes": 11294215296,
+    "max_rank_seconds": 13.950762116117403,
+    "limited_faces_in_last_logged_counters": 0,
+    "faces_in_last_logged_counters": 0
+  }
+]

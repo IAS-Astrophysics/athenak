@@ -1,0 +1,129 @@
+{
+  "scope": "Maximum per-rank elapsed wall time within one sequential one-node capacity allocation, including setup/output; not a production performance benchmark.",
+  "comparisons": [
+    {
+      "family": "planar acoustic",
+      "n": 32,
+      "treatment": "fixed",
+      "seconds": 31.88151124212891,
+      "ratio_to_fixed": 1.0,
+      "cycles": 1440
+    },
+    {
+      "family": "planar acoustic",
+      "n": 64,
+      "treatment": "fixed",
+      "seconds": 65.82791815907694,
+      "ratio_to_fixed": 1.0,
+      "cycles": 2880
+    },
+    {
+      "family": "planar acoustic",
+      "n": 32,
+      "treatment": "optimized order1",
+      "seconds": 56.5200327700004,
+      "ratio_to_fixed": 1.7728153581161994,
+      "cycles": 1440
+    },
+    {
+      "family": "planar acoustic",
+      "n": 64,
+      "treatment": "optimized order1",
+      "seconds": 102.73916045879014,
+      "ratio_to_fixed": 1.5607232209670532,
+      "cycles": 2880
+    },
+    {
+      "family": "planar acoustic",
+      "n": 32,
+      "treatment": "limited order2",
+      "seconds": 62.28318464010954,
+      "ratio_to_fixed": 1.9535831964517167,
+      "cycles": 1440
+    },
+    {
+      "family": "planar acoustic",
+      "n": 64,
+      "treatment": "limited order2",
+      "seconds": 115.65537480381317,
+      "ratio_to_fixed": 1.7569350214649857,
+      "cycles": 2880
+    },
+    {
+      "family": "planar acoustic",
+      "n": 32,
+      "treatment": "limited quadratic",
+      "seconds": 63.90400006482378,
+      "ratio_to_fixed": 2.0044219227719564,
+      "cycles": 1440
+    },
+    {
+      "family": "planar acoustic",
+      "n": 64,
+      "treatment": "limited quadratic",
+      "seconds": 107.5243771050591,
+      "ratio_to_fixed": 1.633416035506702,
+      "cycles": 2880
+    },
+    {
+      "family": "acoustic3d",
+      "frame": "rotating",
+      "n": 16,
+      "treatment": "limited quadratic",
+      "seconds": 46.2645268579945,
+      "fixed_seconds": 16.959666474955156,
+      "ratio_to_fixed": 2.727914898934758,
+      "cycles": 814
+    },
+    {
+      "family": "acoustic3d",
+      "frame": "rotating",
+      "n": 24,
+      "treatment": "limited quadratic",
+      "seconds": 75.90761885605752,
+      "fixed_seconds": 26.75474369386211,
+      "ratio_to_fixed": 2.8371648678313344,
+      "cycles": 1222
+    },
+    {
+      "family": "acoustic3d",
+      "frame": "fastrotation",
+      "n": 16,
+      "treatment": "limited quadratic",
+      "seconds": 7.552359202876687,
+      "fixed_seconds": 6.977003182051703,
+      "ratio_to_fixed": 1.0824646350033327,
+      "cycles": 37
+    },
+    {
+      "family": "acoustic3d",
+      "frame": "fastrotation",
+      "n": 32,
+      "treatment": "limited quadratic",
+      "seconds": 10.097083507105708,
+      "fixed_seconds": 8.49013746692799,
+      "ratio_to_fixed": 1.1892720873410267,
+      "cycles": 75
+    },
+    {
+      "family": "entropy",
+      "frame": "fastrotation",
+      "n": 16,
+      "treatment": "limited quadratic",
+      "seconds": 7.770079716108739,
+      "fixed_seconds": 6.635459699900821,
+      "ratio_to_fixed": 1.170993430376026,
+      "cycles": 37
+    },
+    {
+      "family": "entropy",
+      "frame": "fastrotation",
+      "n": 32,
+      "treatment": "limited quadratic",
+      "seconds": 9.663528576958925,
+      "fixed_seconds": 8.710798928979784,
+      "ratio_to_fixed": 1.1093733945355486,
+      "cycles": 75
+    }
+  ]
+}

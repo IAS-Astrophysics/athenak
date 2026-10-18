@@ -23,7 +23,7 @@ for b in ('fixed','characteristic'):rows.append(audit(a.runs/f'curved-amr-{b}'))
 assert len(rows)==30
 (a.out/'all_audits.json').write_text(json.dumps(rows,indent=2)+'\n');(a.out/'curved_inner_comparison.json').write_text(json.dumps(compare_curved(a.runs),indent=2)+'\n')
 old={r['name']:r for r in json.loads(a.previous.read_text())};summary=[]
-fig,axs=plt.subplots(1,2,figsize=(11,4),layout='constrained')
+fig,axs=plt.subplots(1,2,figsize=(11,4),constrained_layout=True)
 def profile(row):
  q=np.asarray(row['profile']);z=np.unique(q[:,0]);return z,np.array([q[q[:,0]==zz,1].mean() for zz in z])
 for n,ax in zip((32,64),axs):
@@ -49,7 +49,7 @@ def inward(path):
  for mb,box in enumerate(d['mb_geometry']):
   z.extend((box[4]+(np.arange(d['nx3_mb'])+.5)*(box[5]-box[4])/d['nx3_mb']).tolist());v.extend(q[mb].mean(axis=(1,2)).tolist())
  z,v=np.array(z),np.array(v);zz=np.unique(z);return d['time'],zz,np.array([v[z==x].mean() for x in zz])
-series=[];fig,axs=plt.subplots(1,2,figsize=(11,4),layout='constrained')
+series=[];fig,axs=plt.subplots(1,2,figsize=(11,4),constrained_layout=True)
 for n,ax in zip((32,64),axs):
  refs=sorted((a.runs/f'planar-acoustic-reference-{n}'/'bin').glob('*.mhd_w_bcc.*.bin'))
  for choice in ('fixed','order1','order2','order3'):

@@ -1,0 +1,20 @@
+{
+  "job": "8942061",
+  "queue": "capacity",
+  "nodes": 1,
+  "gpu_tiles": 12,
+  "pbs_exit_status": 0,
+  "pbs_walltime": "00:20:52",
+  "cases": 30,
+  "rank_report_pairs": 360,
+  "saved_fluid_snapshots": 362,
+  "max_rss_plus_tracked_GB": 21.720752928,
+  "max_scaled_divB": 1.3390672645376994e-13,
+  "aggregate_guard_GB": 28.4,
+  "all_local_audits_passed": true,
+  "production_default": "fixed",
+  "physical_zoom_continued": false,
+  "executable_sha256": "e90830db0dcd0e3442f5c07dd4b0e0a8d6e25ac4bd6059467e742244d8fb2c81",
+  "provenance_sha256": "291b415dfa9e55732540235ce7c0883628623cb65ea5cef705709218f024f7fe",
+  "provenance_files": 1159
+}

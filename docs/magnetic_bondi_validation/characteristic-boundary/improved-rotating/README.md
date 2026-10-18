@@ -1,6 +1,14 @@
-# Improved characteristic boundary: rotating tests in progress
+# Improved characteristic boundary: rotating tests completed
 
-New user authorization: improve the acoustic treatment and cost, then test in the
+**Completed:** capacity job 8942061 passed all 30 cases/360 rank audits.
+[Results, acoustic comparisons and runtimes](aurora/README.md) recommend retaining
+the fixed production default. The quadratic trace helps planar acoustic pressure
+errors, but rotating 3D errors and cost remain worse.
+[Explicit seven-wave decomposition](FULL_DECOMPOSITION.md) is implemented as an
+offline diagnostic and agrees with the native full projector; no production
+eigensolver replacement is implied.
+
+Original user authorization: improve the acoustic treatment and cost, then test in the
 rotating frame before deciding on production use. The completed physical smooth
 cycle chain remains stopped, and the production default remains fixed.
 
@@ -42,7 +50,7 @@ capacity node/all 12 GPU tiles, existing 28.4GB guards, PBS one hour and solver
 no blind retries and no changes to other jobs or production files.
 
 
-## Preflight evidence and pending GPU batch
+## Preflight evidence and completed GPU batch
 
 All local preflight gates pass: 900 independent native mode checks, 4 trace
 polynomial checks, weak acoustic/Alfven full-solver packets, uniform high-shift

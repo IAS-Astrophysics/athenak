@@ -1,3 +1,8 @@
+> Updated rotating tests: job **8942061** completed all 30 cases and 360 rank audits.
+> [Acoustic/runtime comparisons](improved-rotating/aurora/README.md) support keeping
+> the fixed default. An [explicit full-wave diagnostic](improved-rotating/FULL_DECOMPOSITION.md)
+> now separates the seven characteristic families; it is not a new GPU solver.
+
 > Full-GRMHD update: capacity job **8941903** completed all 14 bounded tests and
 > all 168 rank audits. Accuracy is mixed; retain the fixed production default.
 > See [the final GPU results](full-grmhd-aurora/README.md) and
@@ -12,7 +17,7 @@ remaining validation. It is **not approved for production use**. The original
 linear prototype and failed-job record below remain historical provenance.
 The completed smooth-excision experiment is unchanged. Corrected capacity
 control job 8941753 completed; all four fixed-boundary controls passed their
-field/resource audits. A separate characteristic build is in progress.
+field/resource audits. The isolated characteristic validation suites are complete; see the update above.
 
 ## Boundary prescription
 
