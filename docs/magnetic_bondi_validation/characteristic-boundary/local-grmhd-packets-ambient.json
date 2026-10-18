@@ -1,0 +1,126 @@
+[
+  {
+    "name": "acoustic-fixed-32",
+    "transverse_density_spread": 0.0,
+    "seconds": 56.375926583,
+    "time": 180.0,
+    "cycle": 1440,
+    "density_max_deviation": 1.7881393432617188e-07,
+    "pressure_max_relative_deviation": 2.980232238769531e-07,
+    "max_inward_mode_amplitude": 1.8793312284015026e-07,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 1440,
+          "time": 180.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 0.9999998211860657,
+          "min_pressure": 0.002414486138150096
+        }
+      ],
+      "max_abs_divb": 0.0
+    }
+  },
+  {
+    "name": "acoustic-characteristic-32",
+    "transverse_density_spread": 0.0,
+    "seconds": 56.808455458000005,
+    "time": 180.0,
+    "cycle": 1440,
+    "density_max_deviation": 2.384185791015625e-07,
+    "pressure_max_relative_deviation": 2.980232238769531e-07,
+    "max_inward_mode_amplitude": 1.877715051322578e-07,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 1440,
+          "time": 180.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 0.9999998211860657,
+          "min_pressure": 0.002414486138150096
+        }
+      ],
+      "max_abs_divb": 0.0
+    }
+  },
+  {
+    "name": "alfven-fixed-32",
+    "transverse_density_spread": 0.0,
+    "seconds": 53.991039875,
+    "time": 180.0,
+    "cycle": 1440,
+    "density_max_deviation": 1.4543533325195312e-05,
+    "pressure_max_relative_deviation": 2.4199485778808594e-05,
+    "max_inward_mode_amplitude": 9.57503888967033e-09,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 1440,
+          "time": 180.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 0.9999893307685852,
+          "min_pressure": 0.0024144863709807396
+        }
+      ],
+      "max_abs_divb": 0.0
+    }
+  },
+  {
+    "name": "alfven-characteristic-32",
+    "transverse_density_spread": 0.0,
+    "seconds": 57.72318016700001,
+    "time": 180.0,
+    "cycle": 1440,
+    "density_max_deviation": 2.7120113372802734e-05,
+    "pressure_max_relative_deviation": 2.4437904357910156e-05,
+    "max_inward_mode_amplitude": 2.503921960535677e-08,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 1440,
+          "time": 180.0,
+          "blocks": 4,
+          "max_level": 0,
+          "min_density": 0.9999728798866272,
+          "min_pressure": 0.002414486138150096
+        }
+      ],
+      "max_abs_divb": 0.0
+    }
+  }
+]

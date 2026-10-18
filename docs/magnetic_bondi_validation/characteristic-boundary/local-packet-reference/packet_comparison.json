@@ -1,0 +1,26 @@
+[
+  {
+    "mode": "acoustic",
+    "boundary": "fixed",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 2.9208434186692715e-05
+  },
+  {
+    "mode": "acoustic",
+    "boundary": "characteristic",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 8.754095556760675e-05
+  },
+  {
+    "mode": "alfven",
+    "boundary": "fixed",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 1.0876741427716467e-05
+  },
+  {
+    "mode": "alfven",
+    "boundary": "characteristic",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 3.1002849664286796e-05
+  }
+]

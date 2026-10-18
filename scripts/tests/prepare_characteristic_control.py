@@ -3,10 +3,13 @@
 import argparse,re
 from pathlib import Path
 
-def prepare(text):
-    for block, key, value in [('coord','smooth_excision','true'),
+def prepare(text, characteristic=False):
+    settings=[('coord','smooth_excision','true'),
                               ('output1','ghost_zones','true'),
-                              ('output2','ghost_zones','true')]:
+                              ('output2','ghost_zones','true')]
+    if characteristic:
+        settings += [('problem',key,value) for key,value in dict(reservoir_boundary='fixed',reservoir_test_flat_metric='false',reservoir_test_pulse='0',reservoir_test_pulse_mode='acoustic',reservoir_test_pulse_z='4',reservoir_test_pulse_width='1').items()]
+    for block,key,value in settings:
         pattern=rf'(<{block}>\s*\n)(.*?)(?=\n<|\Z)'
         def update(m):
             body=m[2]
@@ -19,5 +22,5 @@ def prepare(text):
     return text
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('source',type=Path);p.add_argument('target',type=Path)
-    a=p.parse_args();a.target.write_text(prepare(a.source.read_text()))
+    p=argparse.ArgumentParser();p.add_argument('source',type=Path);p.add_argument('target',type=Path);p.add_argument('--characteristic',action='store_true')
+    a=p.parse_args();a.target.write_text(prepare(a.source.read_text(),a.characteristic))

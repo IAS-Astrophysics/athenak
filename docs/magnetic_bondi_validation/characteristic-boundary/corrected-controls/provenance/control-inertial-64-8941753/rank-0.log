@@ -1,0 +1,42 @@
+rank=0 host=x4607c4s4b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+### WARNING in /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-magnetic-smooth/src/mesh/load_balance.cpp at line 83
+Number of MeshBlocks cannot be divided evenly by number of MPI ranks. This will result in poor load balancing.
+
+Root grid = 8 x 8 x 8 MeshBlocks
+Total number of MeshBlocks = 512
+Number of logical  levels of refinement = 3 (4 levels total)
+Number of physical levels of refinement = 0 (1 levels total)
+Number of parallel ranks = 12
+  Rank = 0: 42 MeshBlocks, cost = 42
+  Rank = 1: 42 MeshBlocks, cost = 42
+  Rank = 2: 42 MeshBlocks, cost = 42
+  Rank = 3: 42 MeshBlocks, cost = 42
+  Rank = 4: 43 MeshBlocks, cost = 43
+  Rank = 5: 43 MeshBlocks, cost = 43
+  Rank = 6: 43 MeshBlocks, cost = 43
+  Rank = 7: 43 MeshBlocks, cost = 43
+  Rank = 8: 43 MeshBlocks, cost = 43
+  Rank = 9: 43 MeshBlocks, cost = 43
+  Rank = 10: 43 MeshBlocks, cost = 43
+  Rank = 11: 43 MeshBlocks, cost = 43
+Load Balancing:
+  Maximum normalized cost = 1.02381, Average = 1.01587
+WARNING: puncture excision is under-resolved: finest active dx=64 exceeds minimum horizon radius=1
+WARNING: puncture excision radius is under-resolved during initialization: cells across excision diameter are hole1=0.025 (r=0.8, dx=64), hole2=0.025 (r=0.8, dx=64); recommended minimum is 10
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0 corotating=0 single_black_hole=0 M_total=1 boundary=ambient
+WARNING: puncture excision radius is under-resolved during ADM update: cells across excision diameter are hole1=0.025 (r=0.8, dx=64), hole2=0.025 (r=0.8, dx=64); recommended minimum is 10
+
+Setup complete, executing task list(s)...
+
+elapsed=1.393987e+00 cycle=0 time=0.000000e+00 dt=1.600000e+01
+
+Terminating on time limit
+time=6.400000e+01 cycle=4
+tlim=6.400000e+01 nlim=5000
+
+MeshBlock-cycles = 2048
+cpu time used  = 1.505434e+00
+zone-cycles/cpu_second = 6.965276e+05
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-magnetic-smooth/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-characteristic-20261018-r1/control-input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-characteristic-20261018-r1/control-inertial-64-8941753", "-t", "00:55:00", "mesh_refinement/refinement=none", "coord/require_resolved_horizon=false", "coord/smooth_excision=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "time/tlim=64", "time/nlim=5000", "output1/dt=64", "output2/dt=64", "output3/dt=64", "output4/dt=0", "output1/ghost_zones=true", "output2/ghost_zones=true", "mesh/nx1=64", "mesh/nx2=64", "mesh/nx3=64"], "returncode": 0, "peak_rss_bytes": 822734848, "memory_budget_bytes": 1200000000, "seconds": 3.8093212509993464, "stopped": null}

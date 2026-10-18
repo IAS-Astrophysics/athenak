@@ -1,0 +1,7 @@
+{
+  "status": "built",
+  "periodic_ghost_fix": true,
+  "linearization": "physical_primitive_mean",
+  "fofc_boundary_predictor": true,
+  "executable_sha256": "4cbb3de390c9f1c5697f884b1439202812d4ae56ae9fb640be566679735ef065"
+}

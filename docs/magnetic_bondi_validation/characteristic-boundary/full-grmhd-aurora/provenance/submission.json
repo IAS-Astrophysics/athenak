@@ -1,0 +1,19 @@
+{
+  "status": "accepted",
+  "predecessor": "8941753",
+  "time": 1792349072.5731266,
+  "queue": "capacity",
+  "nodes": 1,
+  "executable_sha256": "4cbb3de390c9f1c5697f884b1439202812d4ae56ae9fb640be566679735ef065",
+  "sha256": {
+    "input.athinput": "38ebd319936348fcb84d241c38fb7efe92406b9032ae0a94fa177b146c3b69de",
+    "source.sha256": "11a947549a30a666566035e69412641ebb9980a73f217a73ca863b5d845cde38",
+    "job.pbs": "731f45141b72cc81ecf63ee1fe2944809266704e6b62faf160953369c8058be5",
+    "predecessor-qstat.txt": "0465ff80d564b2e23e37b63527ca146d5a49137ce469358bd3265da5e33981f3",
+    "local-gate.json": "060246cbe24f8eb889b88e1cdec46a7197d29f57a7fb1015d0fa3f90dfdcd95e",
+    "build-ready.json": "3386976e27edb8ffd4f83902a05f57669ddef89f4a9236f072125c6ec757d93e"
+  },
+  "stdout": "8941903.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": "",
+  "returncode": 0
+}

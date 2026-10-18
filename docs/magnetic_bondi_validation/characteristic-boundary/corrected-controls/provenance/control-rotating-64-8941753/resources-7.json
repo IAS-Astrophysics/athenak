@@ -1,0 +1,33 @@
+{
+  "command": [
+    "./build-magnetic-smooth/src/athena",
+    "-i",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-characteristic-20261018-r1/control-input.athinput",
+    "-d",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-characteristic-20261018-r1/control-rotating-64-8941753",
+    "-t",
+    "00:55:00",
+    "mesh_refinement/refinement=none",
+    "coord/require_resolved_horizon=false",
+    "coord/smooth_excision=true",
+    "problem/reservoir_pressure_perturbation=0",
+    "problem/corotating=true",
+    "problem/frame_omega=0.005524271728019903",
+    "time/tlim=64",
+    "time/nlim=5000",
+    "output1/dt=64",
+    "output2/dt=64",
+    "output3/dt=64",
+    "output4/dt=0",
+    "output1/ghost_zones=true",
+    "output2/ghost_zones=true",
+    "mesh/nx1=64",
+    "mesh/nx2=64",
+    "mesh/nx3=64"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 685584384,
+  "memory_budget_bytes": 1200000000,
+  "seconds": 6.399962685070932,
+  "stopped": null
+}

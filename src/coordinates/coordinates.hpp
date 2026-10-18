@@ -65,6 +65,10 @@ void ExcisionBoostedDisplacement(const Real x1, const Real x2, const Real x3,
 //! inside kernels.
 
 struct CoordData {
+  bool characteristic_reservoir = false;
+  bool reservoir_user_faces[6];
+  Real reservoir_rho, reservoir_p, reservoir_bz, reservoir_omega;
+  Real reservoir_min[3], reservoir_max[3];
   // following data is only used in GR calculations to compute metric
   bool is_minkowski;               // flag to specify Minkowski (flat) space
   Real bh_spin;                    // needed for GR metric
@@ -112,6 +116,7 @@ class Coordinates {
 
   // data needed to compute metric in GR
   CoordData coord_data;
+  DvceArray1D<int> characteristic_counts;
 
   // excision masks
   DvceArray4D<bool> excision_floor;  // cell-centered mask for C2P flooring about horizon

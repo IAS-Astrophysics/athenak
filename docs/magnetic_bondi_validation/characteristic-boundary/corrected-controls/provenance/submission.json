@@ -1,0 +1,16 @@
+{
+  "status": "accepted",
+  "predecessor": "8941632",
+  "time": 1792346045.2910297,
+  "queue": "capacity",
+  "nodes": 1,
+  "sha256": {
+    "prepare_characteristic_control.py": "8a1a17202297c6945a8f78b8a96b63fda2982bd0e64ed61bb803e586accef65a",
+    "input.athinput": "83048c07a685c0dca08deef720aa4bc75fe3fdb4be85d3953372b899eda1a3fb",
+    "aurora_characteristic_boundary.pbs": "2c8edf2a135592d6bd321c4467f8ec8c1e9035295af1e8a2f4ee254508280409",
+    "test_characteristic_reservoir.py": "9de88871a513d11e247a05aa16d68d7ce56170000b3e2895bda5be0c32edc93a"
+  },
+  "stdout": "8941753.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": "",
+  "returncode": 0
+}

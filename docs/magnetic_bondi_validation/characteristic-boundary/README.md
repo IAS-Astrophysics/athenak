@@ -1,9 +1,12 @@
 # Incoming-characteristic reservoir boundary: formulation and staged tests
 
-This is a candidate formulation with an isolated verification prototype, **not
-an implemented or validated production AthenaK boundary**. The completed
-smooth-excision experiment is unchanged. A single capacity node was authorized
-on 2026-10-18; job 8941632 runs the prototype and existing-boundary GPU controls.
+An experimental opt-in implementation now exists in the full GRMHD solver;
+see [IMPLEMENTATION.md](IMPLEMENTATION.md) for its design, current tests and
+remaining validation. It is **not approved for production use**. The original
+linear prototype and failed-job record below remain historical provenance.
+The completed smooth-excision experiment is unchanged. Corrected capacity
+control job 8941753 completed; all four fixed-boundary controls passed their
+field/resource audits. A separate characteristic build is in progress.
 
 ## Boundary prescription
 

@@ -1,0 +1,64 @@
+[
+  {
+    "name": "ambient-characteristic-0.0000",
+    "transverse_density_spread": 0.0,
+    "seconds": 0.502321625,
+    "time": 1.0,
+    "cycle": 4,
+    "density_max_deviation": 0.0,
+    "pressure_max_relative_deviation": 0.0,
+    "max_inward_mode_amplitude": 1.0997679746607607e-15,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 4,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 1.45578063719494e-17
+    }
+  },
+  {
+    "name": "ambient-characteristic-1.4142",
+    "transverse_density_spread": 0.0,
+    "seconds": 4.430589542,
+    "time": 1.0,
+    "cycle": 47,
+    "density_max_deviation": 0.0,
+    "pressure_max_relative_deviation": 0.0,
+    "max_inward_mode_amplitude": 1.1003315171776407e-15,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 47,
+          "time": 1.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 2.1367484738008495e-16
+    }
+  }
+]

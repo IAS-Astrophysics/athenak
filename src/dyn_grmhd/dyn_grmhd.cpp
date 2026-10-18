@@ -363,6 +363,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConBoundary() {
   auto ind = pmy_pack->pmesh->mb_indcs;
   auto size = pmy_pack->pmb->mb_size;
   auto bounds = pmy_pack->pmesh->mesh_size;
+  bool user[6];for(int f=0;f<6;++f)user[f]=pmy_pack->pmesh->mesh_bcs[f]==BoundaryFlag::user;
+
   auto b = pmy_pack->pmhd->b0;
   auto bcc = pmy_pack->pmhd->bcc0;
   int n1=ind.nx1+2*ind.ng, n2=ind.nx2+2*ind.ng, n3=ind.nx3+2*ind.ng;
@@ -373,8 +375,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConBoundary() {
       Real x=CellCenterX(i-ind.is,ind.nx1,s.x1min,s.x1max);
       Real y=CellCenterX(j-ind.js,ind.nx2,s.x2min,s.x2max);
       Real z=CellCenterX(k-ind.ks,ind.nx3,s.x3min,s.x3max);
-      if (!(x<bounds.x1min || x>bounds.x1max || y<bounds.x2min || y>bounds.x2max ||
-            z<bounds.x3min || z>bounds.x3max)) return false;
+      if (!((user[0]&&x<bounds.x1min) || (user[1]&&x>bounds.x1max) ||
+            (user[2]&&y<bounds.x2min) || (user[3]&&y>bounds.x2max) ||
+            (user[4]&&z<bounds.x3min) || (user[5]&&z>bounds.x3max))) return false;
       bcc(m,IBX,k,j,i)=0.5*(b.x1f(m,k,j,i)+b.x1f(m,k,j,i+1));
       bcc(m,IBY,k,j,i)=0.5*(b.x2f(m,k,j,i)+b.x2f(m,k,j+1,i));
       bcc(m,IBZ,k,j,i)=0.5*(b.x3f(m,k,j,i)+b.x3f(m,k+1,j,i));

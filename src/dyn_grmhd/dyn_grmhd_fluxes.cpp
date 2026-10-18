@@ -14,6 +14,8 @@
 #include "mesh/mesh.hpp"
 #include "dyn_grmhd.hpp"
 #include "dyn_grmhd_util.hpp"
+#include "dyn_grmhd/characteristic_reservoir.hpp"
+#include "coordinates/coordinates.hpp"
 #include "coordinates/adm.hpp"
 #include "eos/eos.hpp"
 #include "diffusion/viscosity.hpp"
@@ -426,11 +428,28 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     });
   }
 
+  // The positivity predictor must see the actual characteristic boundary flux.
+  // The closure is already first order and w0/bcc0 are not changed by FOFC;
+  // reapplying it below prevents the fallback from reverting to fixed ghosts.
+  if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
+    CharacteristicFaces<IVX>(pmy_pack,eos);
+    if(pmy_pack->pmesh->multi_d)CharacteristicFaces<IVY>(pmy_pack,eos);
+    if(pmy_pack->pmesh->three_d)CharacteristicFaces<IVZ>(pmy_pack,eos);
+  }
   // Call FOFC if necessary
   if (pmy_pack->pmhd->use_fofc || pmy_pack->pcoord->coord_data.bh_excise) {
     FOFC<rsolver_method_>(pdriver, stage);
   }
 
+  if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
+    CharacteristicFaces<IVX>(pmy_pack,eos);
+    if(pmy_pack->pmesh->multi_d)CharacteristicFaces<IVY>(pmy_pack,eos);
+    if(pmy_pack->pmesh->three_d)CharacteristicFaces<IVZ>(pmy_pack,eos);
+    if(stage==1&&pmy_pack->pmesh->ncycle%100==0) {
+      auto counts=Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),pmy_pack->pcoord->characteristic_counts);
+      std::cout<<"Characteristic boundary rank "<<global_variable::my_rank<<" faces="<<counts(0)<<" limited="<<counts(1)<<std::endl;
+    }
+  }
   return TaskStatus::complete;
 }
 

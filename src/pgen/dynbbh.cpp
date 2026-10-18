@@ -443,6 +443,7 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart);
 void BinaryReservoirBoundary(Mesh *pm);
 Real reservoir_density, reservoir_pressure, reservoir_bz;
 bool use_bondi_inflow = false;
+bool reservoir_test_flat_metric = false;
 bool cache_bondi_boundary = true;
 Real reservoir_perturbation = 0.0;
 std::uint64_t bondi_metric_revision = 0;
@@ -596,6 +597,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   bbh.corotating = pin->GetOrAddBoolean("problem", "corotating", false);
   bbh.single_black_hole = pin->GetOrAddBoolean("problem", "single_black_hole", false);
+  reservoir_test_flat_metric=pin->GetOrAddBoolean("problem","reservoir_test_flat_metric",false);
+  if(reservoir_test_flat_metric && (pmy_mesh_->pzoom!=nullptr || pmbp->pz4c!=nullptr || pin->GetOrAddBoolean("coord","excise",true)))
+    Kokkos::abort("Flat reservoir validation requires no zoom, no Z4c and excise=false");
   bbh.sep = pin->GetOrAddReal("problem", "sep", 25.0);
   bbh.om = std::pow(bbh.sep, -1.5);
   bbh.frame_omega = pin->GetOrAddReal("problem", "frame_omega",
@@ -2170,7 +2174,9 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
     Kokkos::abort("bondi_reservoir requires ideal Valencia MHD and prescribed ADM");
   }
   for (int face=0; face<6; ++face) {
-    if (pm->mesh_bcs[face] != BoundaryFlag::user) {
+    if (pm->mesh_bcs[face] != BoundaryFlag::user &&
+        !(reservoir_test_flat_metric && bbh.frame_omega==0 && face<4 &&
+          pm->mesh_bcs[face]==BoundaryFlag::periodic)) {
       Kokkos::abort("bondi_reservoir requires six user reservoir boundaries");
     }
   }
@@ -2221,6 +2227,24 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
               << std::endl;
   }
   cache_bondi_boundary=pin->GetOrAddBoolean("problem","bondi_cache_boundary",true);
+  auto &cfg=pack->pcoord->coord_data;
+  std::string boundary=pin->GetOrAddString("problem","reservoir_boundary","fixed");
+  if(boundary!="fixed"&&boundary!="characteristic") Kokkos::abort("Unknown reservoir boundary");
+  cfg.characteristic_reservoir=boundary=="characteristic";
+  if(cfg.characteristic_reservoir) {
+    if(use_bondi_inflow||pack->pmhd->nscalars!=0||pin->GetString("mhd","rsolver")!="hlle")
+      Kokkos::abort("Characteristic reservoir requires uniform ideal MHD, HLLE, no scalars");
+    for(int f=0;f<6;++f)cfg.reservoir_user_faces[f]=pm->mesh_bcs[f]==BoundaryFlag::user;
+    cfg.reservoir_rho=reservoir_density;cfg.reservoir_p=reservoir_pressure;
+    cfg.reservoir_bz=reservoir_bz;cfg.reservoir_omega=bbh.frame_omega;
+    cfg.reservoir_min[0]=pm->mesh_size.x1min;cfg.reservoir_max[0]=pm->mesh_size.x1max;
+    cfg.reservoir_min[1]=pm->mesh_size.x2min;cfg.reservoir_max[1]=pm->mesh_size.x2max;
+    cfg.reservoir_min[2]=pm->mesh_size.x3min;cfg.reservoir_max[2]=pm->mesh_size.x3max;
+    pack->pcoord->characteristic_counts=DvceArray1D<int>("characteristic_counts",2);
+    Kokkos::deep_copy(pack->pcoord->characteristic_counts,0);
+    if(global_variable::my_rank==0) std::cout<<"Experimental characteristic reservoir face flux enabled"<<std::endl;
+  }
+
   Real cavity_radius=pin->GetOrAddReal("problem","bondi_cavity_radius",0.0);
   Real cavity_core_fraction=pin->GetOrAddReal("problem","bondi_cavity_core_fraction",0.0);
   Real cavity_fraction=pin->GetOrAddReal("problem","bondi_cavity_fraction",0.0);
@@ -2255,11 +2279,31 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   auto solution=inflow_solution;
   Real omega=bbh.frame_omega;
   Real perturbation=reservoir_perturbation;
+  Real pulse=pin->GetOrAddReal("problem","reservoir_test_pulse",0.0);
+  Real pulse_z=pin->GetOrAddReal("problem","reservoir_test_pulse_z",4.0);
+  Real pulse_width=pin->GetOrAddReal("problem","reservoir_test_pulse_width",1.0);
+  std::string pulse_mode=pin->GetOrAddString("problem","reservoir_test_pulse_mode","acoustic");
+  bool alfven=pulse_mode=="alfven";
+  if(!(std::isfinite(pulse)&&pulse>=0&&pulse<.1&&pulse_width>0) ||
+      (pulse_mode!="acoustic"&&pulse_mode!="alfven") || (pulse>0&&!reservoir_test_flat_metric))
+    Kokkos::abort("Invalid flat reservoir pulse test configuration");
+  if(pulse>0&&restart)Kokkos::abort("Pulse tests are fresh-start only");
+  Real enthalpy_density=rho+gamma*pressure/(gamma-1);
+  Real inertia=sqrt(enthalpy_density+bz*bz);
+
   Kokkos::Random_XorShift64_Pool<> reservoir_random(12345+global_variable::my_rank);
   int nv=pack->pmhd->nmhd+pack->pmhd->nscalars;
   Kokkos::deep_copy(b.x1f,0.0);
   Kokkos::deep_copy(b.x2f,0.0);
   Kokkos::deep_copy(b.x3f,bz);
+  if(pulse>0&&alfven) {
+    par_for("flat_alfven_Bx",DevExeSpace(),0,pack->nmb_thispack-1,0,n3-1,0,n2-1,0,n1,
+      KOKKOS_LAMBDA(int m,int k,int j,int i){
+        auto box=size.d_view(m);Real z=CellCenterX(k-ind.ks,ind.nx3,box.x3min,box.x3max);
+        Real q=(z-pulse_z)/pulse_width;
+        b.x1f(m,k,j,i)=-inertia*pulse*exp(-q*q);
+      });
+  }
   par_for("binary_reservoir_init",DevExeSpace(),0,pack->nmb_thispack-1,
           0,n3-1,0,n2-1,0,n1-1,
     KOKKOS_LAMBDA(int m,int k,int j,int i) {
@@ -2303,7 +2347,16 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
         w(m,IPR,k,j,i)=p;
         for (int a=0; a<3; ++a) w(m,IVX+a,k,j,i)=u[a];
       }
-      bc(m,IBX,k,j,i)=0.0;
+      if(pulse>0) {
+        auto box=size.d_view(m);Real z=CellCenterX(k-ind.ks,ind.nx3,box.x3min,box.x3max);
+        Real q=(z-pulse_z)/pulse_width,amp=pulse*exp(-q*q);
+        if(alfven)w(m,IVX,k,j,i)=amp/sqrt(1-amp*amp);
+        else {
+          w(m,IDN,k,j,i)=rho*(1+amp);w(m,IPR,k,j,i)=pressure*(1+gamma*amp);
+          Real velocity=cs*amp;w(m,IVZ,k,j,i)=velocity/sqrt(1-velocity*velocity);
+        }
+      }
+      bc(m,IBX,k,j,i)=pulse>0&&alfven?-inertia*pulse*exp(-SQR((CellCenterX(k-ind.ks,ind.nx3,size.d_view(m).x3min,size.d_view(m).x3max)-pulse_z)/pulse_width)):0.0;
       bc(m,IBY,k,j,i)=0.0;
       bc(m,IBZ,k,j,i)=bz;
     });
@@ -2315,6 +2368,12 @@ void BinaryReservoirBoundary(Mesh *pm) {
   auto ind=pm->mb_indcs;
   auto size=pack->pmb->mb_size;
   auto bounds=pm->mesh_size;
+  // Flat wave benchmarks may use periodic transverse faces. Do not overwrite
+  // their exchanged ghosts with ambient data.
+  if(reservoir_test_flat_metric) {
+    if(pm->mesh_bcs[0]==BoundaryFlag::periodic){bounds.x1min=-1e100;bounds.x1max=1e100;}
+    if(pm->mesh_bcs[2]==BoundaryFlag::periodic){bounds.x2min=-1e100;bounds.x2max=1e100;}
+  }
   auto w=pack->pmhd->w0;
   auto adm=pack->padm->adm;
   auto b=pack->pmhd->b0;
@@ -2475,6 +2534,19 @@ void SetADMVariablesToBBH(MeshBlockPack *pmbp) {
   int n3 = (indcs.nx3 > 1) ? (indcs.nx3 + 2*ng) : 1;
 
   auto &coord = pmbp->pcoord->coord_data;
+  if(reservoir_test_flat_metric) {
+    Real omega=bbh.frame_omega;
+    par_for("flat_reservoir_validation_ADM",DevExeSpace(),0,nmb-1,0,n3-1,0,n2-1,0,n1-1,
+      KOKKOS_LAMBDA(int m,int k,int j,int i) {
+        auto box=size.d_view(m);
+        Real x=CellCenterX(i-is,indcs.nx1,box.x1min,box.x1max);
+        Real y=CellCenterX(j-js,indcs.nx2,box.x2min,box.x2max);
+        adm.alpha(m,k,j,i)=1;adm.psi4(m,k,j,i)=1;
+        adm.beta_u(m,0,k,j,i)=-omega*y;adm.beta_u(m,1,k,j,i)=omega*x;adm.beta_u(m,2,k,j,i)=0;
+        for(int a=0;a<3;++a)for(int b=a;b<3;++b){adm.g_dd(m,a,b,k,j,i)=a==b?1:0;adm.vK_dd(m,a,b,k,j,i)=0;}
+      });
+    return;
+  }
 
   bbh_traj_state traj = find_traj_state(tt);
   auto bbh_ = bbh;
