@@ -1,0 +1,26 @@
+{
+  "status": "passed",
+  "checks": {
+    "post_recovery_ghosts": true,
+    "native_flux_and_ct": true,
+    "all_ghost_cells_checked": true,
+    "ghost_cases": 8,
+    "native_modes": 900,
+    "full_decomposition_states": 1620,
+    "plane_cases": 6,
+    "rotating_cases": 3,
+    "curved_cases": 2,
+    "curved_scope": "Coarse curved/static-AMR smoke, horizon not resolved; not physical-drain validation",
+    "max_all_ghost_abs_divB": 2.4028710057048797e-16
+  },
+  "source_sha256": {
+    "src/coordinates/coordinates.hpp": "69b572eba258557e3a05a708dbec5baeb66f6510767a0c8d3906d91e183dfd74",
+    "src/dyn_grmhd/characteristic_reservoir.hpp": "e73a49f4af65793dabd09f8fb21636dfebb2818b6773e69dab4f3819cebefbf7",
+    "src/dyn_grmhd/characteristic_ghost_ct.hpp": "553ce0fea0dab509c11f81b7ca5cd8a5b45da973f6ae2804c4ff0835ee5f579e",
+    "src/dyn_grmhd/dyn_grmhd.cpp": "d91056118c0d4b1780b15e6b0c9d065388bba43291ff80da2baf23ae069e3214",
+    "src/dyn_grmhd/dyn_grmhd_fluxes.cpp": "85d9204b0d8ea1797a0ff305d620c7ec618702a08190c9479830d5e1adc5cc3c",
+    "src/dyn_grmhd/dyn_grmhd_fofc.cpp": "118ee4cbb5a0c9e6512fd4017c61aea0a1298538d63ebdcf2adba7b321f66db9",
+    "src/pgen/dynbbh.cpp": "048ca4fd7469353caec6883bdb625e6963c8ef2e58581ef207ed2c8db3dc121e"
+  },
+  "local_executable_sha256": "eff36e17eb1f74fe3e8059a52d3665d6d74850adcb2da8ca935e8dab51fa9558"
+}

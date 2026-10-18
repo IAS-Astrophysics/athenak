@@ -1,0 +1,110 @@
+{
+  "status": "passed",
+  "scope": "Coarse curved/static-AMR smoke, horizon not resolved; not physical-drain validation",
+  "cases": [
+    {
+      "boundary": "fixed",
+      "seconds": 2.256856958,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 176,
+            "max_level": 2,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 1,
+            "time": 0.05,
+            "blocks": 176,
+            "max_level": 2,
+            "min_density": 0.9999315738677979,
+            "min_pressure": 0.0024143806658685207
+          }
+        ],
+        "max_abs_divb": 1.2968074422463338e-18
+      }
+    },
+    {
+      "boundary": "characteristic",
+      "seconds": 2.469913042,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 176,
+            "max_level": 2,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 1,
+            "time": 0.05,
+            "blocks": 176,
+            "max_level": 2,
+            "min_density": 0.9999315738677979,
+            "min_pressure": 0.0024143806658685207
+          }
+        ],
+        "max_abs_divb": 1.2968074422463338e-18
+      }
+    }
+  ],
+  "inner_comparison": {
+    "time": 0.05,
+    "radius": 100,
+    "cell_count": 136,
+    "identical_topology": true,
+    "fields": {
+      "dens": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "velx": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "vely": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "velz": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "press": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "bcc1": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "bcc2": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "bcc3": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      },
+      "temperature": {
+        "max_abs_difference": 0.0,
+        "relative_to_field_max": 0.0,
+        "bitwise_equal": true
+      }
+    },
+    "scope": "Short integration-isolation check; not a curved-space reflection or long-time test"
+  }
+}

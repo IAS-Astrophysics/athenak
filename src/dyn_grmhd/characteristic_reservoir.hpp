@@ -87,15 +87,16 @@ template<int ivx,class E,class Err>
 KOKKOS_INLINE_FUNCTION
 bool Project(const PrimitiveSolverHydro<E,Err>& eos,Real ref[7],Real inside[7],
              Real bn,Real g[NSPMETRIC],Real beta[3],Real alpha,int outward,
-             Real result[7],bool &limited) {
+             Real result[7],bool &limited,Real (*projector)[7]=nullptr) {
   constexpr int d=ivx-IVX;
   constexpr int diag[3]={S11,S22,S33};
   constexpr int off[3]={S23,S13,S12};
   Real ginv=(g[diag[(d+1)%3]]*g[diag[(d+2)%3]]-g[off[d]]*g[off[d]])/Primitive::GetDeterminant(g);
   Real center=-outward*beta[d],radius=alpha*sqrt(ginv);
   limited=false;
+  if(projector)for(int i=0;i<7;++i)for(int j=0;j<7;++j)projector[i][j]=i==j?1:0;
   if(center>radius) {for(int i=0;i<7;++i)result[i]=inside[i];return true;}
-  if(center<-radius) {for(int i=0;i<7;++i)result[i]=ref[i];return true;}
+  if(center<-radius) {if(projector)for(int i=0;i<7;++i)for(int j=0;j<7;++j)projector[i][j]=0;for(int i=0;i<7;++i)result[i]=ref[i];return true;}
   // Normalize primitive AND conservative rows to avoid pressure/density scale
   // disparities in the finite differences and the small matrix inversion.
   Real vscale=sqrt(ref[1]/ref[0]);
@@ -107,7 +108,7 @@ bool Project(const PrimitiveSolverHydro<E,Err>& eos,Real ref[7],Real inside[7],
   Real linearization[7];for(int k=0;k<7;++k)linearization[k]=.5*(ref[k]+inside[k]);
   Real lp,lm;SpeedBounds<ivx>(eos,linearization,bn,g,beta,alpha,ginv,lp,lm);
   if((outward>0?lm:-lp)>0){for(int k=0;k<7;++k)result[k]=inside[k];return true;}
-  if((outward>0?lp:-lm)<0){for(int k=0;k<7;++k)result[k]=ref[k];return true;}
+  if((outward>0?lp:-lm)<0){if(projector)for(int i=0;i<7;++i)for(int j=0;j<7;++j)projector[i][j]=0;for(int k=0;k<7;++k)result[k]=ref[k];return true;}
   Real du[7][7],df[7][7];
   for(int j=0;j<7;++j) {
     Real plus[7],minus[7];for(int k=0;k<7;++k)plus[k]=minus[k]=linearization[k];
@@ -121,6 +122,8 @@ bool Project(const PrimitiveSolverHydro<E,Err>& eos,Real ref[7],Real inside[7],
   Real inv[7][7],a[7][7];if(!Inverse(du,inv))return false;
   for(int i=0;i<7;++i)for(int j=0;j<7;++j){a[i][j]=0;for(int k=0;k<7;++k)a[i][j]+=outward*inv[i][k]*df[k][j];}
   if(!Sign(a))return false;
+  if(projector)for(int i=0;i<7;++i)for(int j=0;j<7;++j)
+    projector[i][j]=.5*((i==j?1.0:0.0)+a[i][j]);
   Real delta[7];for(int i=0;i<7;++i){delta[i]=0;for(int j=0;j<7;++j)delta[i]+=.5*((i==j?1.0:0.0)+a[i][j])*(inside[j]-ref[j])/scale[j];delta[i]*=scale[i];}
   Real theta=1;limited=false;
   for(int trial=0;trial<24;++trial) {

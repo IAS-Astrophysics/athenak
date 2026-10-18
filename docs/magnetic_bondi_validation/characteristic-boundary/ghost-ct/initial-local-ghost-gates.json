@@ -1,0 +1,221 @@
+{
+  "status": "passed",
+  "cases": [
+    {
+      "name": "ambient-inertial",
+      "status": "passed",
+      "seconds": 0.46581258400000003,
+      "all_ghost_max_abs_divB": 1.5750337771816074e-17,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 4,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          }
+        ],
+        "max_abs_divb": 1.5750337771816074e-17
+      }
+    },
+    {
+      "name": "ambient-rotating",
+      "status": "passed",
+      "seconds": 0.456237333,
+      "all_ghost_max_abs_divB": 1.6626985439360998e-17,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 4,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          }
+        ],
+        "max_abs_divb": 1.6626985439360998e-17
+      }
+    },
+    {
+      "name": "ambient-fast",
+      "status": "passed",
+      "seconds": 3.2507511669999998,
+      "all_ghost_max_abs_divB": 2.2830828122107885e-16,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 37,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          }
+        ],
+        "max_abs_divb": 2.2830828122107885e-16
+      }
+    },
+    {
+      "name": "ambient-reverse",
+      "status": "passed",
+      "seconds": 3.1577962919999996,
+      "all_ghost_max_abs_divB": 2.2830828122107885e-16,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 37,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          }
+        ],
+        "max_abs_divb": 2.2830828122107885e-16
+      }
+    },
+    {
+      "name": "compact-fast",
+      "status": "passed",
+      "seconds": 2.9880171669999998,
+      "all_ghost_max_abs_divB": 2.4028710057048797e-16,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 37,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          }
+        ],
+        "max_abs_divb": 2.4028710057048797e-16
+      }
+    },
+    {
+      "name": "compact-reverse",
+      "status": "passed",
+      "seconds": 2.982913291999999,
+      "all_ghost_max_abs_divB": 2.3295383342029506e-16,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 37,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          }
+        ],
+        "max_abs_divb": 2.3295383342029506e-16
+      }
+    },
+    {
+      "name": "alfven",
+      "status": "passed",
+      "seconds": 0.4608006249999992,
+      "all_ghost_max_abs_divB": 7.124971822295727e-17,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 0.955827534198761,
+            "min_pressure": 0.0022367306519299746
+          },
+          {
+            "cycle": 4,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 0.9553781151771545,
+            "min_pressure": 0.0022350207436829805
+          }
+        ],
+        "max_abs_divb": 7.124971822295727e-17
+      }
+    },
+    {
+      "name": "fofc",
+      "status": "passed",
+      "seconds": 0.4655751670000008,
+      "all_ghost_max_abs_divB": 6.798565690837812e-17,
+      "checks": {
+        "states": [
+          {
+            "cycle": 0,
+            "time": 0.0,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 1.0,
+            "min_pressure": 0.002414486836642027
+          },
+          {
+            "cycle": 4,
+            "time": 0.4,
+            "blocks": 8,
+            "max_level": 0,
+            "min_density": 0.9906934499740601,
+            "min_pressure": 0.002377036027610302
+          }
+        ],
+        "max_abs_divb": 6.798565690837812e-17
+      }
+    }
+  ]
+}

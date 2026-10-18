@@ -1,3 +1,7 @@
+> New implementation: [characteristic ghosts and native CT](ghost-ct/README.md).
+> Final local preflights pass; a guarded one-node capacity repeat is being built.
+> Production selection remains fixed pending the new rotating comparisons.
+
 > Rotating suite **8942061 completed**: all 30 cases and 360 rank audits pass.
 > The quadratic trace improves planar acoustic pressure diagnostics, but remains
 > worse and slower for the rotating 3D packet. Keep the fixed production default.

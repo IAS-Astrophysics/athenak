@@ -6,11 +6,12 @@ import numpy as np
 from prepare_characteristic_control import prepare
 from test_binary_zoom import ROOT,load,final_output,inspect
 
-def run(exe,out,resolutions=(32,),suite='all',include_reference=True,boundaries=('fixed','characteristic'),trace_order=3,modes=('acoustic','alfven')):
+def run(exe,out,resolutions=(32,),suite='all',include_reference=True,boundaries=('fixed','characteristic'),trace_order=3,modes=('acoustic','alfven'),ghost_ct=False):
     out.mkdir(parents=True,exist_ok=True)
     base=prepare((ROOT/'inputs/dyngr/bondi_hierarchy/binary_magnetized_lowres.athinput').read_text())
     base=base.replace('<problem>','''<problem>
 reservoir_boundary = fixed
+reservoir_ghost_ct = false
 reservoir_trace_order = 2
 reservoir_test_flat_metric = true
 reservoir_test_pulse = 0
@@ -36,7 +37,7 @@ reservoir_test_pulse_width = 1
     for name,nx,ny,nz,tlim,omega,boundary,amplitude,mode in cases:
         case=out/name;case.mkdir(exist_ok=True)
         flags=['problem/single_black_hole=true',f'mesh/nx1={nx}',f'mesh/nx2={ny}',f'mesh/nx3={nz}',
-          f'problem/reservoir_boundary={boundary}',f'problem/reservoir_trace_order={trace_order}',f'problem/frame_omega={omega}',
+          f'problem/reservoir_boundary={boundary}',f'problem/reservoir_ghost_ct={str(ghost_ct and boundary=="characteristic").lower()}',f'problem/reservoir_trace_order={trace_order}',f'problem/frame_omega={omega}',
           f'problem/corotating={str(omega!=0).lower()}',f'problem/reservoir_test_pulse={amplitude}',
           f'problem/reservoir_test_pulse_mode={mode}','problem/reservoir_pressure_perturbation=0',
           'coord/require_resolved_horizon=false','time/nlim=50000',f'time/tlim={tlim}',
@@ -82,4 +83,4 @@ reservoir_test_pulse_width = 1
         rows.append(row);(out/'results.json').write_text(json.dumps(rows,indent=2)+'\n');print(json.dumps({k:v for k,v in row.items() if k!='profile'}),flush=True)
     return rows
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--resolutions',type=int,nargs='+',default=[32]);p.add_argument('--skip-references',action='store_true');p.add_argument('--boundaries',nargs='+',choices=['fixed','characteristic'],default=['fixed','characteristic']);p.add_argument('--modes',nargs='+',choices=['acoustic','alfven'],default=['acoustic','alfven']);p.add_argument('--trace-order',type=int,choices=(1,2,3),default=3);p.add_argument('--suite',choices=['all','ambient','pulse'],default='all');a=p.parse_args();run(a.exe,a.out,a.resolutions,a.suite,not a.skip_references,a.boundaries,a.trace_order,a.modes)
+    p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--resolutions',type=int,nargs='+',default=[32]);p.add_argument('--skip-references',action='store_true');p.add_argument('--boundaries',nargs='+',choices=['fixed','characteristic'],default=['fixed','characteristic']);p.add_argument('--modes',nargs='+',choices=['acoustic','alfven'],default=['acoustic','alfven']);p.add_argument('--trace-order',type=int,choices=(1,2,3),default=3);p.add_argument('--ghost-ct',action='store_true');p.add_argument('--suite',choices=['all','ambient','pulse'],default='all');a=p.parse_args();run(a.exe,a.out,a.resolutions,a.suite,not a.skip_references,a.boundaries,a.trace_order,a.modes,a.ghost_ct)

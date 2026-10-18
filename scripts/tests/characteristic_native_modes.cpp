@@ -6,6 +6,7 @@
 #include "mesh/mesh.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "dyn_grmhd/characteristic_reservoir.hpp"
+#include "dyn_grmhd/characteristic_ghost_ct.hpp"
 using NativeEOS=PrimitiveSolverHydro<Primitive::IdealGas,Primitive::ResetFloor>;
 template<int ivx>
 int Check(const NativeEOS &eos,Real &worst) {
@@ -31,12 +32,14 @@ int Check(const NativeEOS &eos,Real &worst) {
       if(family==1){delta[2+t]=eps/tangent_scale;delta[5]=-prop*sqrt(H)*eps/tangent_scale;speed=prop*ca*sqrt(inv[d][d]);}
       if(family==2)delta[0]=eps;
       for(int j=0;j<7;++j)inside[j]=ref[j]+delta[j];
-      bool limited=false;
-      if(!dyngr::char_reservoir::Project<ivx>(eos,ref,inside,B*normal[d],g,beta,alpha,sign,out,limited)||limited)
+      bool limited=false;Real projector[7][7];
+      if(!dyngr::char_reservoir::Project<ivx>(eos,ref,inside,B*normal[d],g,beta,alpha,sign,out,limited,projector)||limited)
         throw std::runtime_error("Native characteristic projection failed");
       bool outgoing=sign*(alpha*speed-shift)>=0;
       Real scale[7]={rho,p,sqrt(p),sqrt(p),sqrt(p),sqrt(p),sqrt(p)};
       for(int j=0;j<7;++j) {
+        Real projected=ref[j];for(int k=0;k<7;++k)projected+=scale[j]*projector[j][k]*(inside[k]-ref[k])/scale[k];
+        if(fabs(projected-out[j])>1e-12*scale[j])throw std::runtime_error("Returned projector disagrees with native state projection");
         Real expected=ref[j]+(outgoing?delta[j]:0.0);
         Real error=fabs(out[j]-expected)/(eps*scale[j]);worst=std::max(worst,error);
         if(error>1e-3) {std::cerr<<"axis="<<d<<" family="<<family<<" alpha="<<alpha<<" shift="<<shift<<" outward="<<sign<<" propagation="<<prop<<" component="<<j<<" normalized_error="<<error<<std::endl;throw std::runtime_error("Wrong native incoming/outgoing mode");}
@@ -58,8 +61,13 @@ int main(int argc,char **argv) {
        fabs(9.533333333333333+increment(9.533333333333333,8.733333333333333,8.133333333333333,3)-10)>1e-13 ||
        increment(1,1,1,3)!=0 || increment(2,1,2,3)!=0)
       throw std::runtime_error("Boundary trace fails constant/linear/quadratic/extremum check");
+    auto extend=dyngr::char_ghost::Extend;
+    if(fabs(extend(9.5,8.5,7.5,2,3)-11.5)>1e-13 ||
+       fabs(extend(9.533333333333333,8.733333333333333,8.133333333333333,2,3)-11.733333333333333)>1e-13 ||
+       extend(1,1,1,3,3)!=1 || extend(2,1,2,3,3)!=2)
+      throw std::runtime_error("Ghost extension polynomial/extremum check failed");
     int n=Check<IVX>(eos,worst)+Check<IVY>(eos,worst)+Check<IVZ>(eos,worst);
-    std::cout<<"{\"status\":\"passed\",\"trace_polynomial_cases\":4,\"native_mode_cases\":"<<n<<",\"max_normalized_error\":"<<worst<<"}"<<std::endl;
+    std::cout<<"{\"status\":\"passed\",\"trace_polynomial_cases\":4,\"ghost_polynomial_cases\":4,\"native_mode_cases\":"<<n<<",\"max_normalized_error\":"<<worst<<"}"<<std::endl;
   } catch(const std::exception &e){std::cerr<<e.what()<<std::endl;status=1;}
   Kokkos::finalize();return status;
 }

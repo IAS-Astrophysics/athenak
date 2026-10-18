@@ -1,3 +1,7 @@
+> Follow-up: [ghost reconstruction and native CT](ghost-ct/README.md) are now
+> implemented behind `reservoir_ghost_ct=true`, with final local gates passing.
+> The one-node capacity repeat is in progress; no production adoption yet.
+
 > Updated rotating tests: job **8942061** completed all 30 cases and 360 rank audits.
 > [Acoustic/runtime comparisons](improved-rotating/aurora/README.md) support keeping
 > the fixed default. An [explicit full-wave diagnostic](improved-rotating/FULL_DECOMPOSITION.md)

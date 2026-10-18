@@ -1,0 +1,451 @@
+{
+  "status": "passed",
+  "native_states": 1620,
+  "degenerate_states": 870,
+  "non_glancing_projector_comparisons": 1512,
+  "worst": {
+    "eigen_residual": 1.2247264644686705e-06,
+    "inverse_error": 4.920654522045081e-13,
+    "reconstruction_error": 1.241229341530925e-12,
+    "sign_projector_error": 1.2840208228268035e-08,
+    "dispersion_error": 2.0741415612369347e-06,
+    "condition": 10473.940740262608
+  },
+  "examples": [
+    {
+      "field": 0,
+      "speeds": [
+        -0.08985125712889779,
+        -0.08985125712889785,
+        -0.08221921916437784,
+        0.0,
+        0.08221921916437755,
+        0.08985125712889785,
+        0.0898512571288982
+      ],
+      "groups": [
+        {
+          "families": [
+            "Alfven-",
+            "fast-"
+          ],
+          "indices": [
+            1,
+            0
+          ],
+          "speed": -0.08985125712889783,
+          "speed_spread": 6.938893903907228e-17,
+          "null_residual": 1.0783892621692834e-14
+        },
+        {
+          "families": [
+            "slow-"
+          ],
+          "indices": [
+            2
+          ],
+          "speed": -0.08221921916437784,
+          "speed_spread": 0.0,
+          "null_residual": 3.232352420776228e-11
+        },
+        {
+          "families": [
+            "entropy"
+          ],
+          "indices": [
+            3
+          ],
+          "speed": 0.0,
+          "speed_spread": 0.0,
+          "null_residual": 0.0
+        },
+        {
+          "families": [
+            "slow+"
+          ],
+          "indices": [
+            4
+          ],
+          "speed": 0.08221921916437755,
+          "speed_spread": 0.0,
+          "null_residual": 3.232326152042108e-11
+        },
+        {
+          "families": [
+            "Alfven+",
+            "fast+"
+          ],
+          "indices": [
+            5,
+            6
+          ],
+          "speed": 0.08985125712889802,
+          "speed_spread": 3.469446951953614e-16,
+          "null_residual": 1.0986905196870358e-14
+        }
+      ],
+      "condition": 1.8123370581962206
+    },
+    {
+      "field": 1,
+      "speeds": [
+        -0.1216591772699978,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.1216591772699978
+      ],
+      "groups": [
+        {
+          "families": [
+            "fast-"
+          ],
+          "indices": [
+            0
+          ],
+          "speed": -0.1216591772699978,
+          "speed_spread": 0.0,
+          "null_residual": 1.7678439314220424e-12
+        },
+        {
+          "families": [
+            "Alfven-",
+            "slow-",
+            "entropy",
+            "slow+",
+            "Alfven+"
+          ],
+          "indices": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "speed": 0.0,
+          "speed_spread": 0.0,
+          "null_residual": 0.0
+        },
+        {
+          "families": [
+            "fast+"
+          ],
+          "indices": [
+            6
+          ],
+          "speed": 0.1216591772699978,
+          "speed_spread": 0.0,
+          "null_residual": 1.7678383396584881e-12
+        }
+      ],
+      "condition": 1.6919066838902381
+    },
+    {
+      "field": 2,
+      "speeds": [
+        -0.11317770879674975,
+        -0.06289437775392327,
+        -0.04569032792529462,
+        0.0,
+        0.045690327925294594,
+        0.06289437775392327,
+        0.11317770879674978
+      ],
+      "groups": [
+        {
+          "families": [
+            "fast-"
+          ],
+          "indices": [
+            0
+          ],
+          "speed": -0.11317770879674975,
+          "speed_spread": 0.0,
+          "null_residual": 1.6636756676252283e-11
+        },
+        {
+          "families": [
+            "Alfven-"
+          ],
+          "indices": [
+            1
+          ],
+          "speed": -0.06289437775392327,
+          "speed_spread": 0.0,
+          "null_residual": 2.4343283259388193e-14
+        },
+        {
+          "families": [
+            "slow-"
+          ],
+          "indices": [
+            2
+          ],
+          "speed": -0.04569032792529462,
+          "speed_spread": 0.0,
+          "null_residual": 1.206387473496574e-11
+        },
+        {
+          "families": [
+            "entropy"
+          ],
+          "indices": [
+            3
+          ],
+          "speed": 0.0,
+          "speed_spread": 0.0,
+          "null_residual": 0.0
+        },
+        {
+          "families": [
+            "slow+"
+          ],
+          "indices": [
+            4
+          ],
+          "speed": 0.045690327925294594,
+          "speed_spread": 0.0,
+          "null_residual": 1.206384649279812e-11
+        },
+        {
+          "families": [
+            "Alfven+"
+          ],
+          "indices": [
+            5
+          ],
+          "speed": 0.06289437775392327,
+          "speed_spread": 0.0,
+          "null_residual": 2.4344111639876655e-14
+        },
+        {
+          "families": [
+            "fast+"
+          ],
+          "indices": [
+            6
+          ],
+          "speed": 0.11317770879674978,
+          "speed_spread": 0.0,
+          "null_residual": 1.6636778096229864e-11
+        }
+      ],
+      "condition": 1.8913291090661866
+    },
+    {
+      "field": 3,
+      "speeds": [
+        -0.12165917726999781,
+        -8.985125712889786e-10,
+        -6.072291764459881e-10,
+        0.0,
+        6.072291764459881e-10,
+        8.985125712889786e-10,
+        0.1216591772699978
+      ],
+      "groups": [
+        {
+          "families": [
+            "fast-"
+          ],
+          "indices": [
+            0
+          ],
+          "speed": -0.12165917726999781,
+          "speed_spread": 0.0,
+          "null_residual": 1.4150830926755887e-12
+        },
+        {
+          "families": [
+            "Alfven-",
+            "slow-",
+            "entropy",
+            "slow+",
+            "Alfven+"
+          ],
+          "indices": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "speed": -2.0679515313825693e-26,
+          "speed_spread": 1.7970251425779572e-09,
+          "null_residual": 9.033806393080739e-10
+        },
+        {
+          "families": [
+            "fast+"
+          ],
+          "indices": [
+            6
+          ],
+          "speed": 0.1216591772699978,
+          "speed_spread": 0.0,
+          "null_residual": 1.4150813775094849e-12
+        }
+      ],
+      "condition": 1.6919066838862709
+    },
+    {
+      "field": 4,
+      "speeds": [
+        -0.08221921916437788,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.08221921916437788
+      ],
+      "groups": [
+        {
+          "families": [
+            "fast-"
+          ],
+          "indices": [
+            0
+          ],
+          "speed": -0.08221921916437788,
+          "speed_spread": 0.0,
+          "null_residual": 3.2272957042169974e-11
+        },
+        {
+          "families": [
+            "Alfven-",
+            "slow-",
+            "entropy",
+            "slow+",
+            "Alfven+"
+          ],
+          "indices": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "speed": 0.0,
+          "speed_spread": 0.0,
+          "null_residual": 0.0
+        },
+        {
+          "families": [
+            "fast+"
+          ],
+          "indices": [
+            6
+          ],
+          "speed": 0.08221921916437788,
+          "speed_spread": 0.0,
+          "null_residual": 3.227295097774855e-11
+        }
+      ],
+      "condition": 1.8123370581966065
+    },
+    {
+      "field": 5,
+      "speeds": [
+        -1.1075304201909442,
+        -0.4723890435337215,
+        -0.03506852506539169,
+        0.0,
+        0.03506852506539167,
+        0.4723890435337215,
+        1.1075304201909442
+      ],
+      "groups": [
+        {
+          "families": [
+            "fast-"
+          ],
+          "indices": [
+            0
+          ],
+          "speed": -1.1075304201909442,
+          "speed_spread": 0.0,
+          "null_residual": 9.688076024511695e-11
+        },
+        {
+          "families": [
+            "Alfven-"
+          ],
+          "indices": [
+            1
+          ],
+          "speed": -0.4723890435337215,
+          "speed_spread": 0.0,
+          "null_residual": 3.1388830618309795e-12
+        },
+        {
+          "families": [
+            "slow-"
+          ],
+          "indices": [
+            2
+          ],
+          "speed": -0.03506852506539169,
+          "speed_spread": 0.0,
+          "null_residual": 2.1398901258009066e-11
+        },
+        {
+          "families": [
+            "entropy"
+          ],
+          "indices": [
+            3
+          ],
+          "speed": 0.0,
+          "speed_spread": 0.0,
+          "null_residual": 0.0
+        },
+        {
+          "families": [
+            "slow+"
+          ],
+          "indices": [
+            4
+          ],
+          "speed": 0.03506852506539167,
+          "speed_spread": 0.0,
+          "null_residual": 2.139889821434771e-11
+        },
+        {
+          "families": [
+            "Alfven+"
+          ],
+          "indices": [
+            5
+          ],
+          "speed": 0.4723890435337215,
+          "speed_spread": 0.0,
+          "null_residual": 3.13888036741778e-12
+        },
+        {
+          "families": [
+            "fast+"
+          ],
+          "indices": [
+            6
+          ],
+          "speed": 1.1075304201909442,
+          "speed_spread": 0.0,
+          "null_residual": 9.688076024511695e-11
+        }
+      ],
+      "condition": 2.073078570572278
+    }
+  ],
+  "scope": "Offline full seven-wave left/right decomposition; not a GPU solver replacement or performance claim. Normal CT B held fixed. Near-degenerate families grouped; glancing projector comparisons excluded.",
+  "source_sha256": {
+    "scripts/tests/test_characteristic_decomposition.py": "7190557c7af92e5ecdb1a38367ab4b3b176fe5f7397aca1fb7fea549f5f82e45",
+    "scripts/characteristic_decomposition.py": "9b1a66dfb2edd2834b3140fc2355550cd9744d62fe4c112483377aef7db8150b",
+    "scripts/tests/characteristic_native_spectrum.cpp": "27a97970c270cc7aea69e4b82ce9e64d920ebe012bb8fafc6c9eb27e5192fff8",
+    "src/dyn_grmhd/characteristic_reservoir.hpp": "e73a49f4af65793dabd09f8fb21636dfebb2818b6773e69dab4f3819cebefbf7",
+    "src/dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp": "29a03ad00089b13a3df3b037f6248b9555897250c60740c6eecf2b23bb054384"
+  },
+  "diagnostic_executable_sha256": "ad3eaf14a1e53762ee3ce6492aacfa51c03edd7d630587315c5aa124ac45f528"
+}

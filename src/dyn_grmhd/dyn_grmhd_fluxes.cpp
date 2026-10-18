@@ -431,7 +431,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   // The positivity predictor must see the actual characteristic boundary flux.
   // FOFC retries only overwritten faces at first order before clearing flags;
   // unchanged faces retain this limited outgoing trace without a second projection.
-  if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
+  if(pmy_pack->pcoord->coord_data.characteristic_reservoir &&
+     !pmy_pack->pcoord->coord_data.reservoir_ghost_ct) {
     CharacteristicFaces<IVX>(pmy_pack,eos);
     if(pmy_pack->pmesh->multi_d)CharacteristicFaces<IVY>(pmy_pack,eos);
     if(pmy_pack->pmesh->three_d)CharacteristicFaces<IVZ>(pmy_pack,eos);

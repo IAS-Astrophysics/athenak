@@ -2231,6 +2231,9 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   std::string boundary=pin->GetOrAddString("problem","reservoir_boundary","fixed");
   if(boundary!="fixed"&&boundary!="characteristic") Kokkos::abort("Unknown reservoir boundary");
   cfg.characteristic_reservoir=boundary=="characteristic";
+  cfg.reservoir_ghost_ct=pin->GetOrAddBoolean("problem","reservoir_ghost_ct",false);
+  if(cfg.reservoir_ghost_ct&&!cfg.characteristic_reservoir)
+    Kokkos::abort("reservoir_ghost_ct requires characteristic reservoir");
   cfg.reservoir_trace_order=pin->GetOrAddInteger("problem","reservoir_trace_order",3);
   if(cfg.reservoir_trace_order<1||cfg.reservoir_trace_order>3)Kokkos::abort("Reservoir trace order must be 1, 2 or 3");
   if(cfg.characteristic_reservoir) {
@@ -2244,7 +2247,8 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
     cfg.reservoir_min[2]=pm->mesh_size.x3min;cfg.reservoir_max[2]=pm->mesh_size.x3max;
     pack->pcoord->characteristic_counts=DvceArray1D<int>("characteristic_counts",2);
     Kokkos::deep_copy(pack->pcoord->characteristic_counts,0);
-    if(global_variable::my_rank==0) std::cout<<"Experimental characteristic reservoir face flux enabled"<<std::endl;
+    if(global_variable::my_rank==0) std::cout<<(cfg.reservoir_ghost_ct ? "Characteristic reservoir: reconstructed ghosts + native CT" :
+      "Experimental characteristic reservoir face flux enabled")<<std::endl;
   }
 
   Real cavity_radius=pin->GetOrAddReal("problem","bondi_cavity_radius",0.0);

@@ -28,6 +28,7 @@
 #include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
+#include "dyn_grmhd/characteristic_ghost_ct.hpp"
 #include "tasklist/numerical_relativity.hpp"
 
 #include "eos/primitive_solver_hyd.hpp"
@@ -326,6 +327,10 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim(Driver *pdrive, int sta
   int n3m1 = (indcs.nx3 > 1)? (indcs.nx3 + 2*ng - 1) : 0;
   eos.ConsToPrim(pmy_pack->pmhd->u0, pmy_pack->pmhd->b0, pmy_pack->pmhd->bcc0,
                  pmy_pack->pmhd->w0, temperature, 0, n1m1, 0, n2m1, 0, n3m1, false);
+  if(pmy_pack->pcoord->coord_data.reservoir_ghost_ct) {
+    CharacteristicGhostCT(pmy_pack,eos,temperature);
+    PrimToConBoundary();
+  }
   return TaskStatus::complete;
 }
 

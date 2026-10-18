@@ -426,7 +426,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   // Unchanged characteristic faces retain the predictor flux exactly. Recompute
   // only overwritten faces, with a positivity-safe first-order trace, while the
   // FOFC flags still exist. This avoids a second dense projector on every face.
-  if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
+  if(pmy_pack->pcoord->coord_data.characteristic_reservoir &&
+     !pmy_pack->pcoord->coord_data.reservoir_ghost_ct) {
     CharacteristicFaces<IVX>(pmy_pack,eos,true);
     if(multi_d)CharacteristicFaces<IVY>(pmy_pack,eos,true);
     if(three_d)CharacteristicFaces<IVZ>(pmy_pack,eos,true);

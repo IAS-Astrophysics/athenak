@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "trace_polynomial_cases": 4,
+  "ghost_polynomial_cases": 4,
+  "native_mode_cases": 900,
+  "max_normalized_error": 5.01309e-06
+}

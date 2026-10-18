@@ -1,0 +1,100 @@
+#!/bin/bash
+#PBS -A MHDTidal
+#PBS -q capacity
+#PBS -N cz_char_ghostct
+#PBS -l select=1
+#PBS -l walltime=01:00:00
+#PBS -l filesystems=flare:home
+#PBS -j oe
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+trial="${CZ_BOUNDARY_TRIAL:?Unique trial directory required}"
+[[ "$trial" = /* && -d "$trial" && ! -e "$trial/started.txt" ]] || exit 2
+printf '%s\n' "$PBS_JOBID" > "$trial/started.txt"
+source source-characteristic/scripts/tests/aurora_sane_environment.sh runtime
+export ONEAPI_DEVICE_SELECTOR=level_zero:gpu SYCL_CACHE_PERSISTENT=1 SYCL_CACHE_DIR="$PWD/sycl-cache"
+export KOKKOS_TOOLS_LIBS="$PWD/memory_guard.so"
+export CZ_NRANKS=12 CZ_RSS_GB=1.2 CZ_SECONDS=900 CZ_KOKKOS_TOTAL_BYTES=14000000000
+export OPENBLAS_NUM_THREADS=1
+sha256sum -c "$trial/executable.sha256" > "$trial/executable-verification.txt"
+sha256sum -c "$trial/source.sha256" > "$trial/source-verification.txt"
+module list > "$trial/modules.txt" 2>&1
+SECONDS=0
+bind='list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100'
+run_case() {
+ (( SECONDS < 2400 )) || { echo 'Stopped before new case near wall deadline'; exit 4; }
+ export CZ_OUT="$trial/$1";shift
+ mkdir "$CZ_OUT"
+ printf '%s\n' "$@" > "$CZ_OUT/overrides.txt"
+ mpiexec -n 12 -ppn 12 --cpu-bind "$bind" bash source-characteristic/scripts/tests/aurora_benchmark_rank.sh \
+ ./build-characteristic/src/athena -i "$trial/input.athinput" -d "$CZ_OUT" -t 00:55:00 "$@" > "$CZ_OUT/launcher.log" 2>&1
+}
+# Real 3D finite-support wave: no imposed transverse periodicity in a rotating box.
+for n in 16 24; do
+ for choice in reference fixed characteristic; do
+  mapfile -t args < <(python3.11 "$trial/characteristic_ghost_ct_cases.py" acoustic3d rotating "$choice" "$n" --block-z 4)
+  run_case "acoustic3d-rotating-$choice-$n" "${args[@]}"
+ done
+done
+# Exact inertial-rest entropy perturbation advected through high-shift faces,
+# before possible reentry: short-box corner coordinate speed16c.
+for family in entropy acoustic3d; do
+ for n in 16 32; do
+  for choice in reference fixed characteristic; do
+   mapfile -t args < <(python3.11 "$trial/characteristic_ghost_ct_cases.py" "$family" fastrotation "$choice" "$n" --block-z 4)
+   run_case "$family-fastrotation-$choice-$n" "${args[@]}"
+  done
+ done
+done
+# Matched historical acoustic control, optimized first-order versus limited trace.
+# Previous job8941903 fixed/reference fields have identical initial parameters.
+for nz in 32 64; do
+ for choice in reference fixed order1 order2 order3; do
+  boundary=fixed;ghost=false;order=3;mesh_nz=$nz;zhalf=8
+  if [[ $choice == reference ]];then mesh_nz=$((3*nz));zhalf=24;fi
+  if [[ $choice == order* ]];then boundary=characteristic;ghost=true;order=${choice#order};fi
+  args=(mesh_refinement/refinement=none mesh/nx1=16 mesh/nx2=16 "mesh/nx3=$mesh_nz"
+    coord/excise=false coord/require_resolved_horizon=false problem/single_black_hole=true
+    problem/reservoir_test_flat_metric=true problem/reservoir_pressure_perturbation=0
+    problem/corotating=false problem/frame_omega=0 "problem/reservoir_boundary=$boundary" "problem/reservoir_ghost_ct=$ghost"
+    "problem/reservoir_trace_order=$order" problem/reservoir_test_pulse=0.01
+    problem/reservoir_test_pulse_mode=acoustic problem/reservoir_test_pulse_z=4 problem/reservoir_test_pulse_width=1
+    time/tlim=180 time/nlim=50000 output1/dt=10 output2/dt=180 output3/dt=10 output4/dt=0
+    output1/ghost_zones=true output2/ghost_zones=true
+    mesh/ix1_bc=periodic mesh/ox1_bc=periodic mesh/ix2_bc=periodic mesh/ox2_bc=periodic)
+  for d in 1 2 3;do
+   half=8;if [[ $d == 3 ]];then half=$zhalf;fi
+   args+=("mesh/x${d}min=-$half" "mesh/x${d}max=$half")
+  done
+  run_case "planar-acoustic-$choice-$nz" "${args[@]}"
+ done
+done
+for nz in 32; do
+ for choice in reference fixed order3; do
+  boundary=fixed;ghost=false;order=3;mesh_nz=$nz;zhalf=8
+  if [[ $choice == reference ]];then mesh_nz=$((3*nz));zhalf=24;fi
+  if [[ $choice == order* ]];then boundary=characteristic;ghost=true;order=${choice#order};fi
+  args=(mesh_refinement/refinement=none mesh/nx1=16 mesh/nx2=16 "mesh/nx3=$mesh_nz"
+    coord/excise=false coord/require_resolved_horizon=false problem/single_black_hole=true
+    problem/reservoir_test_flat_metric=true problem/reservoir_pressure_perturbation=0
+    problem/corotating=false problem/frame_omega=0 "problem/reservoir_boundary=$boundary" "problem/reservoir_ghost_ct=$ghost"
+    "problem/reservoir_trace_order=$order" problem/reservoir_test_pulse=0.01
+    problem/reservoir_test_pulse_mode=alfven problem/reservoir_test_pulse_z=4 problem/reservoir_test_pulse_width=1
+    time/tlim=180 time/nlim=50000 output1/dt=10 output2/dt=180 output3/dt=10 output4/dt=0
+    output1/ghost_zones=true output2/ghost_zones=true
+    mesh/ix1_bc=periodic mesh/ox1_bc=periodic mesh/ix2_bc=periodic mesh/ox2_bc=periodic)
+  for d in 1 2 3;do
+   half=8;if [[ $d == 3 ]];then half=$zhalf;fi
+   args+=("mesh/x${d}min=-$half" "mesh/x${d}max=$half")
+  done
+  run_case "ct-alfven-$choice-$nz" "${args[@]}"
+ done
+done
+for boundary in fixed characteristic;do
+ ghost=false;[[ $boundary != characteristic ]] || ghost=true
+ run_case "curved-amr-$boundary" "problem/reservoir_boundary=$boundary" "problem/reservoir_ghost_ct=$ghost" problem/reservoir_trace_order=3 \
+ problem/reservoir_test_flat_metric=false problem/reservoir_test_pulse=0 problem/reservoir_pressure_perturbation=0 \
+ coord/smooth_excision=true coord/require_resolved_horizon=false output1/ghost_zones=false output2/ghost_zones=false \
+ time/tlim=0.05 time/nlim=100 output1/dt=0.05 output2/dt=0.05 output3/dt=0.05 output4/dt=0
+ done
+printf 'All33 cases exited zero; audit pending\n' > "$trial/completed.txt"
