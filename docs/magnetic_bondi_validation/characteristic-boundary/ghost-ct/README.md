@@ -4,7 +4,10 @@
 cases pass their audits. The rotating acoustic residual remains worse than
 fixed, with a 2.35x runtime cost at n24. Keep the fixed production default.
 See [results, plots and refined-physical-face diagnosis](aurora/README.md).
-No retry was submitted; monitoring is paused after delivery.
+No retry was submitted. This test batch is finished; do not rebuild, resubmit or
+restart physical evolution without a new user request. The app's automation tool
+failed to load when pausing was attempted, so the heartbeat still needs to be
+paused in Automations.
 
 The user authorized this implementation and repeated rotating tests on one Aurora
 capacity node. The production default remains fixed. No physical smooth-excision
