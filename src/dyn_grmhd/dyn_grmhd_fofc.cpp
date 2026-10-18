@@ -19,6 +19,7 @@
 #include "dyn_grmhd/rsolvers/llf_dyn_grmhd.hpp"
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
 #include "dyn_grmhd/dyn_grmhd_util.hpp"
+#include "dyn_grmhd/characteristic_reservoir.hpp"
 #include "mhd/mhd.hpp"
 #include "coordinates/adm.hpp"
 
@@ -422,6 +423,14 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   });
 
 
+  // Unchanged characteristic faces retain the predictor flux exactly. Recompute
+  // only overwritten faces, with a positivity-safe first-order trace, while the
+  // FOFC flags still exist. This avoids a second dense projector on every face.
+  if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
+    CharacteristicFaces<IVX>(pmy_pack,eos,true);
+    if(multi_d)CharacteristicFaces<IVY>(pmy_pack,eos,true);
+    if(three_d)CharacteristicFaces<IVZ>(pmy_pack,eos,true);
+  }
   // reset FOFC flag (do not reset excision flag)
   if (use_fofc_) {
     Kokkos::deep_copy(fofc_, false);

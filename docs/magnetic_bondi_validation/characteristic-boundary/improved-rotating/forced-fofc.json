@@ -1,0 +1,60 @@
+{
+  "status": "passed",
+  "forced_every_cell": true,
+  "first_and_third_order_bitwise_equal": true,
+  "max_abs_errors": {
+    "dens": 0.0,
+    "velx": 0.0,
+    "vely": 0.0,
+    "velz": 0.0,
+    "press": 0.0,
+    "bcc1": 0.0,
+    "bcc2": 0.0,
+    "bcc3": 0.0,
+    "temperature": 0.0
+  },
+  "checks": [
+    {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 1,
+          "time": 0.5,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 1.2350746222592563e-17
+    },
+    {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 1,
+          "time": 0.5,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 1.2350746222592563e-17
+    }
+  ]
+}

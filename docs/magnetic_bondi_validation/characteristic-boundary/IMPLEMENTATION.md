@@ -1,3 +1,8 @@
+> New user request: improve acoustic treatment/cost and validate rotating packets.
+> The next isolated suite is in progress; see
+> [improved-rotating/README.md](improved-rotating/README.md).
+> The completed job8941903 results below describe the previous first-order version.
+
 # Full GRMHD characteristic implementation — bounded validation complete
 
 User authorization on 2026-10-18 covers resubmitting corrected controls and

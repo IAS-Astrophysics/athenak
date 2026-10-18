@@ -17,7 +17,7 @@ def params(header):
    key,value=line.split('=',1);out[block+'/'+key.strip()]=value.strip()
  return out
 
-def audit(case):
+def audit(case,target=None,plane=True,boundary=None,wave_mode=None):
  rss=tracked=budget=0;hosts=set();limited=faces=0;seconds=[]
  for rank in range(12):
   r=json.loads((case/f'resources-{rank}.json').read_text());m=json.loads((case/f'memory-{rank}.json').read_text())
@@ -48,18 +48,19 @@ def audit(case):
   states.append(dict(time=d['time'],cycle=d['cycle'],min_density=float(f['dens'].min()),min_pressure=float(f['press'].min()),max_scaled_divB=scaled))
   final=d,f,cfg,sl
  assert len(states)>=2 and final is not None
- d,f,cfg,sl=final;target=.05 if case.name.startswith('curved-amr') else 180
+ d,f,cfg,sl=final
+ if target is None:target=.05 if case.name.startswith('curved-amr') else 180
  assert d['time']==target,(case,d['time'])
- expected='characteristic' if 'characteristic' in case.name else 'fixed'
+ expected=boundary or ('characteristic' if ('characteristic' in case.name or 'firstorder' in case.name) else 'fixed')
  assert cfg['problem/reservoir_boundary']==expected
  if expected=='characteristic':assert faces>0
  result=dict(name=case.name,states=states,rss_plus_tracked_bytes=rss+tracked,max_rank_seconds=max(seconds),limited_faces_in_last_logged_counters=limited,faces_in_last_logged_counters=faces)
- if not case.name.startswith('curved-amr'):
+ if plane and not case.name.startswith('curved-amr'):
   assert cfg['problem/reservoir_test_flat_metric']=='true'
   gamma=float(cfg['mhd/gamma']);rho=float(cfg['problem/rho_inf']);cs2=2/float(cfg['problem/r_bondi']);pinf=rho*cs2/(gamma*(1-cs2/(gamma-1)));Binf=np.sqrt(2*pinf/float(cfg['problem/beta_inf']));inertia=np.sqrt(rho+gamma*pinf/(gamma-1)+Binf**2)
   velocity=np.array([f['vel'+c][(slice(None),)+sl] for c in 'xyz'],dtype=float);velocity/=np.sqrt(1+np.sum(velocity**2,axis=0))
   dens=f['dens'][(slice(None),)+sl];Bx=f['bcc1'][(slice(None),)+sl]
-  incoming=(dens/rho-1-velocity[2]/np.sqrt(cs2))/2 if case.name.startswith('acoustic') else (velocity[0]+Bx/inertia)/2
+  incoming=(dens/rho-1-velocity[2]/np.sqrt(cs2))/2 if (wave_mode=='acoustic' or case.name.startswith('acoustic')) else (velocity[0]+Bx/inertia)/2
   profiles=[];density_range={}
   for mb,box in enumerate(d['mb_geometry']):
    zc=box[4]+(np.arange(d['nx3_mb'])+.5)*(box[5]-box[4])/d['nx3_mb']

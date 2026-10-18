@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "acoustic",
+    "boundary": "fixed",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 2.9208434186692715e-05
+  },
+  {
+    "mode": "acoustic",
+    "boundary": "characteristic",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 7.687141855451443e-05
+  }
+]

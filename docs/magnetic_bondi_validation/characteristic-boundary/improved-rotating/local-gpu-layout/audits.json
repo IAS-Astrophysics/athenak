@@ -1,0 +1,74 @@
+[
+  {
+    "name": "acoustic3d-fastrotation-characteristic-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 2.3419820422915043e-16
+    }
+  },
+  {
+    "name": "acoustic3d-fastrotation-fixed-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 2.3391934510104656e-16
+    }
+  },
+  {
+    "name": "acoustic3d-fastrotation-reference-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 128,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 128,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 3.677864702581455e-16
+    }
+  }
+]

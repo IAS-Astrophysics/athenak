@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "historical_first_order_saved_fields_identical": true,
+  "max_abs_errors": {
+    "dens": 0.0,
+    "velx": 0.0,
+    "vely": 0.0,
+    "velz": 0.0,
+    "press": 0.0,
+    "bcc1": 0.0,
+    "bcc2": 0.0,
+    "bcc3": 0.0,
+    "temperature": 0.0
+  }
+}

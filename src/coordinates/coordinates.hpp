@@ -66,6 +66,7 @@ void ExcisionBoostedDisplacement(const Real x1, const Real x2, const Real x3,
 
 struct CoordData {
   bool characteristic_reservoir = false;
+  int reservoir_trace_order = 2;
   bool reservoir_user_faces[6];
   Real reservoir_rho, reservoir_p, reservoir_bz, reservoir_omega;
   Real reservoir_min[3], reservoir_max[3];

@@ -52,8 +52,14 @@ int main(int argc,char **argv) {
     ParameterInput pin;std::stringstream input;
     input<<"<mhd>\ngamma=1.6666666666666667\ngamma_max=10\n";pin.LoadFromStream(input);
     NativeEOS eos("mhd",nullptr,&pin);Real worst=0;
+    // Independent cell-average polynomials fix the extrapolation coefficients.
+    auto increment=dyngr::char_reservoir::TraceIncrement;
+    if(fabs(increment(9.5,8.5,7.5,3)-.5)>1e-13 ||
+       fabs(9.533333333333333+increment(9.533333333333333,8.733333333333333,8.133333333333333,3)-10)>1e-13 ||
+       increment(1,1,1,3)!=0 || increment(2,1,2,3)!=0)
+      throw std::runtime_error("Boundary trace fails constant/linear/quadratic/extremum check");
     int n=Check<IVX>(eos,worst)+Check<IVY>(eos,worst)+Check<IVZ>(eos,worst);
-    std::cout<<"{\"status\":\"passed\",\"native_mode_cases\":"<<n<<",\"max_normalized_error\":"<<worst<<"}"<<std::endl;
+    std::cout<<"{\"status\":\"passed\",\"trace_polynomial_cases\":4,\"native_mode_cases\":"<<n<<",\"max_normalized_error\":"<<worst<<"}"<<std::endl;
   } catch(const std::exception &e){std::cerr<<e.what()<<std::endl;status=1;}
   Kokkos::finalize();return status;
 }

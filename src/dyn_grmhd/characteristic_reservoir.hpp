@@ -54,6 +54,35 @@ void Evaluate(const PrimitiveSolverHydro<E,Err>& eos,Real q[7],Real bn,
   for(int j=0;j<5;++j){U[j]=c[j];F[j]=alpha*f[j];}
   U[5]=b[t];U[6]=b[s];F[5]=alpha*bf[t];F[6]=alpha*bf[s];
 }
+// A conservative bound from the same fast-speed estimate used by native HLLE.
+// Most large rotating-box faces have all modes moving the same way; no dense
+// Jacobian or sign iteration is needed there. Never decide from fluid v_n alone.
+template<int ivx,class E,class Err>
+KOKKOS_INLINE_FUNCTION
+void SpeedBounds(const PrimitiveSolverHydro<E,Err>& eos,const Real q[7],Real bn,
+                 Real g[NSPMETRIC],Real beta[3],Real alpha,Real ginv,
+                 Real &lp,Real &lm) {
+  constexpr int d=ivx-IVX,t=(d+1)%3,s=(d+2)%3;
+  Real p[NPRIM]={},u[3]={q[2],q[3],q[4]},B[3];
+  p[PRH]=q[0];p[PPR]=q[1];for(int a=0;a<3;++a)p[PVX+a]=u[a];
+  p[PTM]=eos.ps.GetEOS().GetTemperatureFromP(p[PRH],p[PPR],&p[PYF]);
+  B[d]=bn;B[t]=q[5];B[s]=q[6];
+  Real Bu=0;int index[3][3]={{S11,S12,S13},{S12,S22,S23},{S13,S23,S33}};
+  for(int a=0;a<3;++a)for(int b=0;b<3;++b)Bu+=g[index[a][b]]*B[a]*u[b];
+  Real bsq=(Primitive::SquareVector(B,g)+Bu*Bu)/(1+Primitive::SquareVector(u,g));
+  eos.GetGRFastMagnetosonicSpeeds(lp,lm,p,bsq,g,beta,alpha,ginv,PVX+d);
+}
+KOKKOS_INLINE_FUNCTION
+Real TraceIncrement(Real q0,Real q1,Real q2,int order=3) {
+  // Cell-AVERAGE quadratic extrapolation: q_face=(11q0-7q1+2q2)/6.
+  // Limit its increment to the last monotone interval; preserve linear/quadratic
+  // data where this bound is inactive. Order2 remains an ablation.
+  Real a=q0-q1,b=q1-q2;
+  if(a*b<=0)return 0;
+  Real direction=a>0?1:-1;
+  if(order==2)return .5*direction*fmin(fabs(a),fabs(b));
+  return direction*fmin(fabs(a),fmax(0.0,direction*(5*a-2*b)/6));
+}
 template<int ivx,class E,class Err>
 KOKKOS_INLINE_FUNCTION
 bool Project(const PrimitiveSolverHydro<E,Err>& eos,Real ref[7],Real inside[7],
@@ -76,6 +105,9 @@ bool Project(const PrimitiveSolverHydro<E,Err>& eos,Real ref[7],Real inside[7],
   // entropy/contact mode. Linearizing permanently at ambient rest would leave
   // that mode glancing even after a nonzero boundary mass flow develops.
   Real linearization[7];for(int k=0;k<7;++k)linearization[k]=.5*(ref[k]+inside[k]);
+  Real lp,lm;SpeedBounds<ivx>(eos,linearization,bn,g,beta,alpha,ginv,lp,lm);
+  if((outward>0?lm:-lp)>0){for(int k=0;k<7;++k)result[k]=inside[k];return true;}
+  if((outward>0?lp:-lm)<0){for(int k=0;k<7;++k)result[k]=ref[k];return true;}
   Real du[7][7],df[7][7];
   for(int j=0;j<7;++j) {
     Real plus[7],minus[7];for(int k=0;k<7;++k)plus[k]=minus[k]=linearization[k];
@@ -104,15 +136,18 @@ bool Project(const PrimitiveSolverHydro<E,Err>& eos,Real ref[7],Real inside[7],
 }
 } // namespace char_reservoir
 
-// First-order face-interior trace, characteristic exterior, shared HLLE fluid
+// Limited face-interior trace, characteristic exterior, shared HLLE fluid
 // flux and induction flux -> standard edge EMF -> standard CT. Runs before the
-// FOFC predictor and after fallback replacement.
+// FOFC predictor; only overwritten/flagged faces are recomputed after fallback.
 // Physical face-normal B is read, never overwritten. Tangential ghost strips are
 // included to supply the existing unsplit CT corner construction.
 template<int ivx,class E,class Err>
-void CharacteristicFaces(MeshBlockPack *pack,const PrimitiveSolverHydro<E,Err>& eos) {
+void CharacteristicFaces(MeshBlockPack *pack,const PrimitiveSolverHydro<E,Err>& eos,
+                         bool correction_only=false) {
   auto cfg=pack->pcoord->coord_data;auto count=pack->pcoord->characteristic_counts;
   auto ind=pack->pmesh->mb_indcs;auto size=pack->pmb->mb_size;auto adm=pack->padm->adm;
+  auto flags=pack->pmhd->fofc;auto excision=pack->pcoord->excision_flux;
+  bool use_fofc=pack->pmhd->use_fofc;
   auto w=pack->pmhd->w0;auto bc=pack->pmhd->bcc0;auto b=pack->pmhd->b0;
   constexpr int d=ivx-IVX,t=(d+1)%3,s=(d+2)%3;
   auto flux=d==0?pack->pmhd->uflx.x1f:(d==1?pack->pmhd->uflx.x2f:pack->pmhd->uflx.x3f);
@@ -130,6 +165,12 @@ void CharacteristicFaces(MeshBlockPack *pack,const PrimitiveSolverHydro<E,Err>& 
       if(cell[d]==lo[d]&&fabs(mn[d]-cfg.reservoir_min[d])<1e-9)sign=-1;
       if(cell[d]==hi[d]+1&&fabs(mx[d]-cfg.reservoir_max[d])<1e-9)sign=1;
       if(!sign||!cfg.reservoir_user_faces[2*d+(sign>0)])return;
+      if(correction_only) {
+        int l[3]={i,j,k};--l[d];
+        bool changed=(use_fofc&&(flags(m,k,j,i)||flags(m,l[2],l[1],l[0])))||
+          (cfg.bh_excise&&(excision(m,k,j,i)||excision(m,l[2],l[1],l[0])));
+        if(!changed)return;
+      }
       Real g[NSPMETRIC],beta[3],alpha;
       if constexpr(d==0)adm::Face1Metric(m,k,j,i,adm.g_dd,adm.beta_u,adm.alpha,g,beta,alpha);
       if constexpr(d==1)adm::Face2Metric(m,k,j,i,adm.g_dd,adm.beta_u,adm.alpha,g,beta,alpha);
@@ -150,20 +191,35 @@ void CharacteristicFaces(MeshBlockPack *pack,const PrimitiveSolverHydro<E,Err>& 
       Real ref[7]={cfg.reservoir_rho/mb,cfg.reservoir_p,W*v[0],W*v[1],W*v[2],
                    t==2?cfg.reservoir_bz/root:0.0,s==2?cfg.reservoir_bz/root:0.0};
       int ci=i-(d==0&&sign==1),cj=j-(d==1&&sign==1),ck=k-(d==2&&sign==1);
-      Real inside[7]={w(m,IDN,ck,cj,ci)/mb,w(m,IPR,ck,cj,ci),w(m,IVX,ck,cj,ci),
-          w(m,IVY,ck,cj,ci),w(m,IVZ,ck,cj,ci),bc(m,t,ck,cj,ci)/root,bc(m,s,ck,cj,ci)/root};
-      // Trace the PERTURBATION from the adjacent cell, not its background
-      // Eulerian velocity. The inertial-rest reference varies with ADM geometry.
-      Real xc=CellCenterX(ci-ind.is,ind.nx1,box.x1min,box.x1max);
-      Real yc=CellCenterX(cj-ind.js,ind.nx2,box.x2min,box.x2max);
-      Real vc[3]={(adm.beta_u(m,0,ck,cj,ci)+cfg.reservoir_omega*yc)/adm.alpha(m,ck,cj,ci),
-                  (adm.beta_u(m,1,ck,cj,ci)-cfg.reservoir_omega*xc)/adm.alpha(m,ck,cj,ci),
-                   adm.beta_u(m,2,ck,cj,ci)/adm.alpha(m,ck,cj,ci)};
-      Real normc=0;for(int a=0;a<3;++a)for(int z=0;z<3;++z)
-        normc+=adm.g_dd(m,a,z,ck,cj,ci)*vc[a]*vc[z];
-      if(!(normc>=0&&normc<1))Kokkos::abort("Interior reservoir reference not timelike");
-      Real wc=1/sqrt(1-normc);
-      for(int a=0;a<3;++a)inside[2+a]+=ref[2+a]-wc*vc[a];
+      Real trace[3][7];
+      int order=correction_only?1:cfg.reservoir_trace_order;
+      for(int n=0;n<(order>=2?3:1);++n) {
+        int c[3]={ci,cj,ck};c[d]-=sign*n;
+        Real xc=CellCenterX(c[0]-ind.is,ind.nx1,box.x1min,box.x1max);
+        Real yc=CellCenterX(c[1]-ind.js,ind.nx2,box.x2min,box.x2max);
+        Real ac=adm.alpha(m,c[2],c[1],c[0]);
+        Real vc[3]={(adm.beta_u(m,0,c[2],c[1],c[0])+cfg.reservoir_omega*yc)/ac,
+                    (adm.beta_u(m,1,c[2],c[1],c[0])-cfg.reservoir_omega*xc)/ac,
+                     adm.beta_u(m,2,c[2],c[1],c[0])/ac};
+        Real normc=0;for(int a=0;a<3;++a)for(int z=0;z<3;++z)
+          normc+=adm.g_dd(m,a,z,c[2],c[1],c[0])*vc[a]*vc[z];
+        if(!(normc>=0&&normc<1))Kokkos::abort("Interior reservoir reference not timelike");
+        Real wc=1/sqrt(1-normc);
+        trace[n][0]=w(m,IDN,c[2],c[1],c[0])/mb-ref[0];
+        trace[n][1]=w(m,IPR,c[2],c[1],c[0])-ref[1];
+        for(int a=0;a<3;++a)trace[n][2+a]=w(m,IVX+a,c[2],c[1],c[0])-wc*vc[a];
+        trace[n][5]=(bc(m,t,c[2],c[1],c[0])-(t==2?cfg.reservoir_bz:0))/root;
+        trace[n][6]=(bc(m,s,c[2],c[1],c[0])-(s==2?cfg.reservoir_bz:0))/root;
+      }
+      Real inside[7];
+      for(int a=0;a<7;++a)inside[a]=ref[a]+trace[0][a]+(order>=2?
+        char_reservoir::TraceIncrement(trace[0][a],trace[1][a],trace[2][a],order):0);
+      // Fall back the trace, never the boundary model, if extrapolation loses
+      // positivity. FOFC later retries flagged faces with this first-order trace.
+      Real iu[3]={inside[2],inside[3],inside[4]};
+      Real usq=Primitive::SquareVector(iu,g),vmax=eos.ps.GetEOS().GetMaxVelocity();
+      if(!(inside[0]>0&&inside[1]>0&&usq>=0&&usq/(1+usq)<vmax*vmax))
+        for(int a=0;a<7;++a)inside[a]=ref[a]+trace[0][a];
       Real out[7];bool limited;
       if(!char_reservoir::Project<ivx>(eos,ref,inside,bn,g,beta,alpha,sign,out,limited))
         Kokkos::abort("Characteristic projector failed; no silent boundary fallback");

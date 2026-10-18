@@ -429,8 +429,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   }
 
   // The positivity predictor must see the actual characteristic boundary flux.
-  // The closure is already first order and w0/bcc0 are not changed by FOFC;
-  // reapplying it below prevents the fallback from reverting to fixed ghosts.
+  // FOFC retries only overwritten faces at first order before clearing flags;
+  // unchanged faces retain this limited outgoing trace without a second projection.
   if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
     CharacteristicFaces<IVX>(pmy_pack,eos);
     if(pmy_pack->pmesh->multi_d)CharacteristicFaces<IVY>(pmy_pack,eos);
@@ -442,9 +442,6 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   }
 
   if(pmy_pack->pcoord->coord_data.characteristic_reservoir) {
-    CharacteristicFaces<IVX>(pmy_pack,eos);
-    if(pmy_pack->pmesh->multi_d)CharacteristicFaces<IVY>(pmy_pack,eos);
-    if(pmy_pack->pmesh->three_d)CharacteristicFaces<IVZ>(pmy_pack,eos);
     if(stage==1&&pmy_pack->pmesh->ncycle%100==0) {
       auto counts=Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(),pmy_pack->pcoord->characteristic_counts);
       std::cout<<"Characteristic boundary rank "<<global_variable::my_rank<<" faces="<<counts(0)<<" limited="<<counts(1)<<std::endl;

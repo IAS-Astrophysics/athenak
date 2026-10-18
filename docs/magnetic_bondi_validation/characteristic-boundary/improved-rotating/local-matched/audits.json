@@ -1,0 +1,218 @@
+[
+  {
+    "name": "acoustic3d-fastrotation-characteristic-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 2.3419820422915043e-16
+    }
+  },
+  {
+    "name": "acoustic3d-fastrotation-fixed-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 2.3391934510104656e-16
+    }
+  },
+  {
+    "name": "acoustic3d-fastrotation-reference-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 3.677864702581455e-16
+    }
+  },
+  {
+    "name": "acoustic3d-rotating-characteristic-8",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 406,
+          "time": 180.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 0.9999434351921082,
+          "min_pressure": 0.0024142623879015446
+        }
+      ],
+      "max_abs_divb": 3.711183537655091e-16
+    }
+  },
+  {
+    "name": "acoustic3d-rotating-fixed-8",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 406,
+          "time": 180.0,
+          "blocks": 1,
+          "max_level": 0,
+          "min_density": 0.999939501285553,
+          "min_pressure": 0.0024142456240952015
+        }
+      ],
+      "max_abs_divb": 3.966039604918353e-16
+    }
+  },
+  {
+    "name": "acoustic3d-rotating-reference-8",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 27,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 406,
+          "time": 180.0,
+          "blocks": 27,
+          "max_level": 0,
+          "min_density": 0.9999291300773621,
+          "min_pressure": 0.0024142118636518717
+        }
+      ],
+      "max_abs_divb": 6.628496562803522e-16
+    }
+  },
+  {
+    "name": "entropy-fastrotation-characteristic-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 9.305620425565991e-17
+    }
+  },
+  {
+    "name": "entropy-fastrotation-fixed-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 8,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 3.6944864006823407e-17
+    }
+  },
+  {
+    "name": "entropy-fastrotation-reference-16",
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 64,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 6.318938578410985e-17
+    }
+  }
+]

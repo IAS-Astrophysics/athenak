@@ -1,0 +1,25 @@
+{
+  "status": "passed",
+  "purpose": "Bounded GPU preflight and source consistency, not production acceptance",
+  "trace_order": 3,
+  "native": {
+    "status": "passed",
+    "trace_polynomial_cases": 4,
+    "native_mode_cases": 900,
+    "max_normalized_error": 5.01309e-06
+  },
+  "forced_fofc": true,
+  "optimized_first_order_saved_fields_unchanged": true,
+  "weak_planar_acoustic_and_alfven": true,
+  "uniform_high_shift_reservoir": true,
+  "matched_timestep_rotating_controls": true,
+  "gpu_meshblock_8_8_4_checked": true,
+  "source_sha256": {
+    "src/coordinates/coordinates.hpp": "a1803565cf85bd7ee6fd06247fa50a540b30d2c79b9766508170a6dd374768ab",
+    "src/dyn_grmhd/characteristic_reservoir.hpp": "102b378b486e696d067d83d01de02aacec895ffd993be7bbb2ce326c16320dd7",
+    "src/dyn_grmhd/dyn_grmhd.cpp": "c8ce55e9b421d3bed0e9e93fafa2d37531723fa2551d9205e4cdfbbc32b96f7a",
+    "src/dyn_grmhd/dyn_grmhd_fluxes.cpp": "c36c139f6c4947735118562af81042bab1c92d1ae4f5818d762e79d74423b761",
+    "src/dyn_grmhd/dyn_grmhd_fofc.cpp": "371bb206d8b6f62b591a89bf69654b0b44113fd987198c8e69f63767c444b15e",
+    "src/pgen/dynbbh.cpp": "96fae0bcbf9ff4b0fd205eb31416bb96cb869fc17c16a37b23dc87c4cfaaff57"
+  }
+}

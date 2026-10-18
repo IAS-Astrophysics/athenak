@@ -8,7 +8,7 @@ def prepare(text, characteristic=False):
                               ('output1','ghost_zones','true'),
                               ('output2','ghost_zones','true')]
     if characteristic:
-        settings += [('problem',key,value) for key,value in dict(reservoir_boundary='fixed',reservoir_test_flat_metric='false',reservoir_test_pulse='0',reservoir_test_pulse_mode='acoustic',reservoir_test_pulse_z='4',reservoir_test_pulse_width='1').items()]
+        settings += [('problem',key,value) for key,value in dict(reservoir_boundary='fixed',reservoir_trace_order='3',reservoir_test_flat_metric='false',reservoir_test_pulse='0',reservoir_test_pulse_mode='acoustic',reservoir_test_pulse_z='4',reservoir_test_pulse_width='1',reservoir_test_pulse_x='0',reservoir_test_pulse_y='0',reservoir_test_pulse_transverse='3').items()]
     for block,key,value in settings:
         pattern=rf'(<{block}>\s*\n)(.*?)(?=\n<|\Z)'
         def update(m):

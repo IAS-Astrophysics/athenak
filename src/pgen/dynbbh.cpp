@@ -2231,6 +2231,8 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   std::string boundary=pin->GetOrAddString("problem","reservoir_boundary","fixed");
   if(boundary!="fixed"&&boundary!="characteristic") Kokkos::abort("Unknown reservoir boundary");
   cfg.characteristic_reservoir=boundary=="characteristic";
+  cfg.reservoir_trace_order=pin->GetOrAddInteger("problem","reservoir_trace_order",3);
+  if(cfg.reservoir_trace_order<1||cfg.reservoir_trace_order>3)Kokkos::abort("Reservoir trace order must be 1, 2 or 3");
   if(cfg.characteristic_reservoir) {
     if(use_bondi_inflow||pack->pmhd->nscalars!=0||pin->GetString("mhd","rsolver")!="hlle")
       Kokkos::abort("Characteristic reservoir requires uniform ideal MHD, HLLE, no scalars");
@@ -2283,9 +2285,13 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
   Real pulse_z=pin->GetOrAddReal("problem","reservoir_test_pulse_z",4.0);
   Real pulse_width=pin->GetOrAddReal("problem","reservoir_test_pulse_width",1.0);
   std::string pulse_mode=pin->GetOrAddString("problem","reservoir_test_pulse_mode","acoustic");
-  bool alfven=pulse_mode=="alfven";
-  if(!(std::isfinite(pulse)&&pulse>=0&&pulse<.1&&pulse_width>0) ||
-      (pulse_mode!="acoustic"&&pulse_mode!="alfven") || (pulse>0&&!reservoir_test_flat_metric))
+  bool alfven=pulse_mode=="alfven",compact=pulse_mode=="acoustic3d"||pulse_mode=="entropy";
+  bool entropy=pulse_mode=="entropy";
+  Real pulse_x=pin->GetOrAddReal("problem","reservoir_test_pulse_x",0.0);
+  Real pulse_y=pin->GetOrAddReal("problem","reservoir_test_pulse_y",0.0);
+  Real pulse_transverse=pin->GetOrAddReal("problem","reservoir_test_pulse_transverse",3.0);
+  if(!(std::isfinite(pulse)&&pulse>=0&&pulse<.1&&pulse_width>0&&pulse_transverse>0) ||
+      (!compact&&pulse_mode!="acoustic"&&pulse_mode!="alfven") || (pulse>0&&!reservoir_test_flat_metric))
     Kokkos::abort("Invalid flat reservoir pulse test configuration");
   if(pulse>0&&restart)Kokkos::abort("Pulse tests are fresh-start only");
   Real enthalpy_density=rho+gamma*pressure/(gamma-1);
@@ -2350,7 +2356,16 @@ void InitializeBinaryReservoir(Mesh *pm, ParameterInput *pin, bool restart) {
       if(pulse>0) {
         auto box=size.d_view(m);Real z=CellCenterX(k-ind.ks,ind.nx3,box.x3min,box.x3max);
         Real q=(z-pulse_z)/pulse_width,amp=pulse*exp(-q*q);
+        if(compact) {
+          Real x=CellCenterX(i-ind.is,ind.nx1,box.x1min,box.x1max);
+          Real y=CellCenterX(j-ind.js,ind.nx2,box.x2min,box.x2max);
+          Real r2=SQR((x-pulse_x)/pulse_transverse)+SQR((y-pulse_y)/pulse_transverse);
+          Real z2=q*q;
+          // Smooth finite support: no initial perturbation in physical ghosts.
+          amp=(r2<1&&z2<1)?pulse*exp(2-1/(1-r2)-1/(1-z2)):0;
+        }
         if(alfven)w(m,IVX,k,j,i)=amp/sqrt(1-amp*amp);
+        else if(entropy)w(m,IDN,k,j,i)=rho*(1+amp);
         else {
           w(m,IDN,k,j,i)=rho*(1+amp);w(m,IPR,k,j,i)=pressure*(1+gamma*amp);
           Real velocity=cs*amp;w(m,IVZ,k,j,i)=velocity/sqrt(1-velocity*velocity);
