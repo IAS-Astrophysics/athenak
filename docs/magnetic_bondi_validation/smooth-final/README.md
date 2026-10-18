@@ -117,3 +117,20 @@ topology rather than rounded event timestamps. Coarse-stage frames show actual
 active coarse data; frozen finer states are not displayed. Black masks mark
 the smooth puncture-drain regions. The temperature panel is a dimensionless
 proxy, not kelvin. The historical ApJ report is preserved as an earlier status.
+
+## Return labels and active-block movie
+
+All three plotted visits belong to the **post-smooth-switch** evolution:
+"Smooth restart" is the fresh finest dwell starting at 9903.61585 M, "Return 1"
+is the first full post-switch roundtrip ending at 19586.65420 M, and "Return 2"
+is the second ending at 29269.69255 M. No pre-switch hard-excision returns enter
+these matched comparisons.
+
+`smooth_zoom_xy_meshblocks.mp4` adds active leaf-meshblock outlines on all three
+xy panels. Each block contains 8x8x8 cells. Edges come directly from the saved
+active block geometry intersecting the plotted slice, with duplicate shared
+edges removed and clipping at the view limits. The same 52 files, times, stages,
+color scales and playback cadence are retained. `movie-meshblocks/frames.json`
+records overlay flags, visible-block counts and edge counts; the final frame is
+also saved as `finest_xy_meshblocks.png`. This overlay visualizes the grid
+actually present at each stage, including the intentionally coarse phases.

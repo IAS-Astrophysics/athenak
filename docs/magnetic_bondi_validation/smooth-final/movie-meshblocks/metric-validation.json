@@ -1,0 +1,14 @@
+{
+  "saved_metric": "/Users/hz0693/research/circumbinary/athenak_circumbinary_cyclic_zoom/build-mac-zoom-opt/aurora-magnetic/evolution-magnetic-8937401/bin/magnetic_bondi_binary.adm.00000.bin",
+  "spatial_component_max_error_normalized_by_max_1_abs_saved": {
+    "xx": 5.9589813415310686e-08,
+    "xy": 5.9057556203607665e-08,
+    "xz": 5.737478490568928e-08,
+    "yy": 5.959637040155396e-08,
+    "yz": 5.857706390374007e-08,
+    "zz": 5.9595961021340125e-08
+  },
+  "checked_all_saved_ADM_cells": true,
+  "method": "Exact nonspinning boosted KS specialization, corotating t=0; no spatial interpolation",
+  "cached_slice_topologies": 224
+}
