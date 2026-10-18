@@ -1,0 +1,101 @@
+{
+  "time_range_M": [
+    0.0,
+    29500.0
+  ],
+  "selected_frames": 53,
+  "final_adjacent_max_abs_face_mean": {
+    "rho/rho_inf-1": 0.025002631184179336,
+    "p/p_inf-1": 0.04114209540421143,
+    "outward_inertial_coordinate_v_normal": 0.0017407893272684586,
+    "inertial_coordinate_speed": 0.002172148263800126,
+    "Btilde_x/Binf": 4.330161151009261e-06,
+    "Btilde_y/Binf": 4.479797958965772e-06,
+    "Btilde_z/Binf-1": 0.01501604688141441
+  },
+  "final_adjacent_max_abs_over_all_cells_faces": {
+    "rho/rho_inf-1": 0.06796497106552124,
+    "p/p_inf-1": 0.11260557174682617,
+    "outward_inertial_coordinate_v_normal": 0.005216476563676432,
+    "inertial_coordinate_speed": 0.005229385676226729,
+    "Btilde_x/Binf": 0.03314116711701917,
+    "Btilde_y/Binf": 0.03308660718682837,
+    "Btilde_z/Binf-1": 0.08441424871370473
+  },
+  "all_time_adjacent_max_abs_over_all_cells_faces": {
+    "rho/rho_inf-1": 0.06796497106552124,
+    "p/p_inf-1": 0.11260557174682617,
+    "outward_inertial_coordinate_v_normal": 0.005216476563676432,
+    "inertial_coordinate_speed": 0.005229385676226729,
+    "Btilde_x/Binf": 0.034034393318772796,
+    "Btilde_y/Binf": 0.034107052778740723,
+    "Btilde_z/Binf-1": 0.08441424871370473
+  },
+  "initial_max_inertial_coordinate_speed": 6.410644655007929e-07,
+  "final_face_means": {
+    "x-": {
+      "rho/rho_inf-1": 0.002848464929099594,
+      "p/p_inf-1": 0.005120422657845276,
+      "outward_inertial_coordinate_v_normal": 0.00026333172262014883,
+      "inertial_coordinate_speed": 0.00035071626134828665,
+      "Btilde_x/Binf": -3.282620688668158e-07,
+      "Btilde_y/Binf": 3.4600818521458886e-07,
+      "Btilde_z/Binf-1": 0.0027305716014877604
+    },
+    "x+": {
+      "rho/rho_inf-1": 0.0029003819384213004,
+      "p/p_inf-1": 0.005208829816962991,
+      "outward_inertial_coordinate_v_normal": 0.0002673085487572756,
+      "inertial_coordinate_speed": 0.00035477669797134143,
+      "Btilde_x/Binf": 4.330161151009261e-06,
+      "Btilde_y/Binf": 3.391093863882726e-06,
+      "Btilde_z/Binf-1": 0.0027709063442439494
+    },
+    "y-": {
+      "rho/rho_inf-1": 0.0015286972629837692,
+      "p/p_inf-1": 0.002775980858132243,
+      "outward_inertial_coordinate_v_normal": 0.00011819205697373973,
+      "inertial_coordinate_speed": 0.0002639819180573353,
+      "Btilde_x/Binf": 3.048737283805529e-06,
+      "Btilde_y/Binf": -4.479797958965772e-06,
+      "Btilde_z/Binf-1": 0.0015330332344453922
+    },
+    "y+": {
+      "rho/rho_inf-1": 0.0015215924941003323,
+      "p/p_inf-1": 0.0027877110987901688,
+      "outward_inertial_coordinate_v_normal": 0.00011831610880363351,
+      "inertial_coordinate_speed": 0.00026418381342837444,
+      "Btilde_x/Binf": -4.05433446477437e-06,
+      "Btilde_y/Binf": 2.9627848473057607e-06,
+      "Btilde_z/Binf-1": 0.0015329996245031347
+    },
+    "z-": {
+      "rho/rho_inf-1": -0.025002631184179336,
+      "p/p_inf-1": -0.04114209540421143,
+      "outward_inertial_coordinate_v_normal": -0.0017406828909163224,
+      "inertial_coordinate_speed": 0.0021719817016090017,
+      "Btilde_x/Binf": -2.536951507333893e-07,
+      "Btilde_y/Binf": -2.462762399287749e-06,
+      "Btilde_z/Binf-1": 0.01501604688141441
+    },
+    "z+": {
+      "rho/rho_inf-1": -0.024988865479826927,
+      "p/p_inf-1": -0.04114066710462794,
+      "outward_inertial_coordinate_v_normal": -0.0017407893272684586,
+      "inertial_coordinate_speed": 0.002172148263800126,
+      "Btilde_x/Binf": -2.8912588971117398e-06,
+      "Btilde_y/Binf": 2.0943337652352956e-06,
+      "Btilde_z/Binf-1": 0.015010210582998852
+    }
+  },
+  "light_cylinder_M": 181.01933598375615,
+  "outer_face_midplane_rotation_speed_c": 11.313708498984761,
+  "outer_equatorial_corner_rotation_speed_c": 16.000000000000004,
+  "reservoir": {
+    "rho": 1.0,
+    "pressure": 0.0024144869215291746,
+    "Btilde_z": 0.06949081840832175,
+    "cs": 0.06324555320336758
+  },
+  "limits": "Active-cell, not ghost or face-flux diagnostics. No nonreflection or mass-budget proof. Corners counted on each adjoining face. Outer metric geometry matched exactly. Float32 saved ADM limits small velocity cancellation accuracy."
+}
