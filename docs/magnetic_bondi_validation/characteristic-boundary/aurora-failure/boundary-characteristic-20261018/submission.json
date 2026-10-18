@@ -1,0 +1,15 @@
+{
+  "status": "accepted",
+  "time": 1792341224.444821,
+  "queue": "capacity",
+  "nodes": 1,
+  "note": "isolated SRMHD prototype plus unchanged-solver fixed-reservoir GPU controls",
+  "sha256": {
+    "input.athinput": "83048c07a685c0dca08deef720aa4bc75fe3fdb4be85d3953372b899eda1a3fb",
+    "aurora_characteristic_boundary.pbs": "7b790261cbf589e04a47d63385cfca1570a95fe70e1ec1facd991b9a6161158f",
+    "test_characteristic_reservoir.py": "9745ac14c8467e573ef323ea117e95c54ee6892c1ccd6912f2f5047ed2573f2e"
+  },
+  "stdout": "8941632.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": "",
+  "returncode": 0
+}

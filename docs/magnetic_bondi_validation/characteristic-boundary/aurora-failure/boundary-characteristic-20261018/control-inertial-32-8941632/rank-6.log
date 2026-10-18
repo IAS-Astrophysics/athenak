@@ -1,0 +1,5 @@
+rank=6 host=x4603c5s3b0n0 affinity=3.0
+### FATAL ERROR in /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-magnetic-smooth/src/parameter_input.cpp at line 394
+Parameter 'smooth_excision' in block 'coord' on command line not found
+Kokkos::SYCL ERROR: Failed to call Kokkos::SYCL::finalize()
+{"command": ["./build-magnetic-smooth/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-characteristic-20261018/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-characteristic-20261018/control-inertial-32-8941632", "-t", "00:55:00", "mesh_refinement/refinement=none", "coord/require_resolved_horizon=false", "coord/smooth_excision=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "time/tlim=64", "time/nlim=5000", "output1/dt=64", "output2/dt=64", "output3/dt=64", "output4/dt=0", "output1/ghost_zones=true", "output2/ghost_zones=true", "mesh/nx1=32", "mesh/nx2=32", "mesh/nx3=32"], "returncode": 1, "peak_rss_bytes": 296722432, "memory_budget_bytes": 1200000000, "seconds": 0.814181916997768, "stopped": null}

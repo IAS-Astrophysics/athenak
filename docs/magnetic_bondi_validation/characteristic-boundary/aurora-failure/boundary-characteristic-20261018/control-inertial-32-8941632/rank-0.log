@@ -1,0 +1,5 @@
+rank=0 host=x4603c5s3b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+### FATAL ERROR in /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-magnetic-smooth/src/parameter_input.cpp at line 394
+Parameter 'smooth_excision' in block 'coord' on command line not found
+Kokkos::SYCL ERROR: Failed to call Kokkos::SYCL::finalize()

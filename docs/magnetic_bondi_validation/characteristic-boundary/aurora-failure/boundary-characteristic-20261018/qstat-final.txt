@@ -1,0 +1,89 @@
+Job Id: 8941632.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+    Job_Name = cz_boundary_test
+    Job_Owner = hzhu@aurora-uan-0011.hostmgmt1000.cm.aurora.alcf.anl.gov
+    resources_used.cpupercent = 90
+    resources_used.cput = 00:00:09
+    resources_used.mem = 294668kb
+    resources_used.ncpus = 208
+    resources_used.ngpus = 0
+    resources_used.vmem = 0kb
+    resources_used.walltime = 00:00:10
+    job_state = F
+    queue = capacity
+    server = aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+    Account_Name = MHDTidal
+    Checkpoint = u
+    ctime = Sun Oct 18 16:33:46 2026
+    Error_Path = aurora-uan-0011.hostmgmt1000.cm.aurora.alcf.anl.gov:/lus/flare
+	/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/cz_boundary_test.e
+	8941632
+    exec_host = x4603c5s3b0n0/0*208
+    exec_vnode = (x4603c5s3b0n0:ncpus=208)
+    Hold_Types = n
+    Join_Path = oe
+    Keep_Files = doe
+    Mail_Points = a
+    Mail_Users = hz0693@princeton.edu
+    mtime = Sun Oct 18 16:38:38 2026
+    Output_Path = aurora-uan-0011.hostmgmt1000.cm.aurora.alcf.anl.gov:/lus/flar
+	e/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/cz_boundary_test.
+	o8941632
+    Priority = 0
+    qtime = Sun Oct 18 16:33:46 2026
+    Rerunable = False
+    Resource_List.allow_account_check_failure = True
+    Resource_List.allow_negative_allocation = True
+    Resource_List.award_category = INCITE
+    Resource_List.award_type = INCITE-2026
+    Resource_List.backfill_factor = 84600
+    Resource_List.backfill_max = 50
+    Resource_List.base_score = 0
+    Resource_List.bkc_definition = compute_aurora_prod_20261002T162246_af5b0375
+	_b4fd227
+    Resource_List.burn_ratio = 0.3974
+    Resource_List.current_allocation = 12365570048
+    Resource_List.enable_2nd_fp64 = True
+    Resource_List.enable_backfill = 0
+    Resource_List.enable_fifo = 0
+    Resource_List.enable_wfp = 1
+    Resource_List.fifo_factor = 1800
+    Resource_List.filesystems = flare:home
+    Resource_List.flare_fs = True
+    Resource_List.hbm_mode = flat
+    Resource_List.home_fs = True
+    Resource_List.ncpus = 208
+    Resource_List.ni_resource = aurora
+    Resource_List.nodect = 1
+    Resource_List.overburn = False
+    Resource_List.place = scatter
+    Resource_List.project_priority = 25
+    Resource_List.route_backfill = False
+    Resource_List.score_boost = 0
+    Resource_List.select = 1
+    Resource_List.snc_mode = quad
+    Resource_List.total_allocation = 20519999488
+    Resource_List.total_cpus = 10624
+    Resource_List.walltime = 01:00:00
+    Resource_List.wfp_factor = 100000
+    stime = Sun Oct 18 16:37:50 2026
+    obittime = Sun Oct 18 16:38:38 2026
+    session_id = 2386758
+    jobdir = /home/hzhu
+    substate = 93
+    euser = hzhu
+    egroup = users
+    comment = Job run at Sun Oct 18 at 16:37 on (x4603c5s3b0n0:ncpus=208) and f
+	ailed
+    etime = Sun Oct 18 16:33:46 2026
+    umask = 22
+    run_count = 1
+    eligible_time = 00:04:09
+    Stageout_status = 1
+    Exit_status = 143
+    Submit_arguments = /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20
+	261013/boundary-characteristic-20261018/aurora_characteristic_boundary.
+	pbs
+    history_timestamp = 1792341518
+    project = MHDTidal
+    Submit_Host = aurora-uan-0011.hostmgmt1000.cm.aurora.alcf.anl.gov
+

@@ -102,3 +102,31 @@ inertial and rotating physical boundaries, grid refinement, then an AMR control.
 A fixed rotating cube and a fixed inertial cube have different moving-face
 physics; compare transformed local face fluxes or common interior regions,
 not untransformed boundary primitive components.
+
+## Capacity outcome: failed before GPU evolution
+
+Job 8941632 finished with PBS exit status 143. The isolated characteristic
+prototype passed on Aurora (21 projector cases, eight pulse cases), but the
+first GPU control aborted during parameter parsing:
+
+    Parameter 'smooth_excision' in block 'coord' on command line not found
+
+This was a test-harness defect: AthenaK CLI overrides require pre-existing input
+keys. It is not evidence of a boundary instability. No fluid outputs or GPU
+allocation reports were produced; none of the four controls completed. Twelve
+rank resource files were preserved, including empty files left by MPI teardown;
+empty files do not establish rank resource usage. The solver error appears on
+multiple ranks and completed resource reports report returncode 1. The launcher
+then terminated remaining ranks. See failure-summary.json and aurora-failure/
+for the exact submitted scripts, source hashes, scheduler record and rank logs.
+
+The corrected harness now prepares smooth_excision and output1/output2
+ghost_zones explicitly in a separate control input before CLI overrides.
+`prepare_characteristic_control.py` preserves the submitted original input.
+A local CPU initialization-only check passed (cycle 0, no evolution); its flux
+team size was set to 0 for CPU compatibility, whereas the GPU script retains 64.
+Any future allocation must supply a new absolute CZ_BOUNDARY_TRIAL directory;
+the corrected script rejects reuse of a started trial directory.
+No replacement job was submitted. The monitor is paused on this diagnosed
+failure. Nonlinear boundary integration, GPU evolution and reflection validation
+remain outstanding; the linear prototype passing does not replace them.

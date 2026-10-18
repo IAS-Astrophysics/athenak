@@ -1,0 +1,98 @@
+{
+  "job": "8941632",
+  "status": "failed_before_evolution",
+  "pbs_exit_status": 143,
+  "solver_error": "Parameter 'smooth_excision' in block 'coord' on command line not found",
+  "prototype_status": "passed",
+  "rank_resources": [
+    {
+      "rank": "resources-0",
+      "valid": false,
+      "note": "empty after launcher termination; resource status unknown"
+    },
+    {
+      "rank": "resources-1",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 297701376,
+      "seconds": 0.8169135199859738,
+      "stopped": null
+    },
+    {
+      "rank": "resources-10",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 296685568,
+      "seconds": 0.8141225849976763,
+      "stopped": null
+    },
+    {
+      "rank": "resources-11",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 296067072,
+      "seconds": 0.8141333430539817,
+      "stopped": null
+    },
+    {
+      "rank": "resources-2",
+      "valid": false,
+      "note": "empty after launcher termination; resource status unknown"
+    },
+    {
+      "rank": "resources-3",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 298483712,
+      "seconds": 0.8168389420025051,
+      "stopped": null
+    },
+    {
+      "rank": "resources-4",
+      "valid": false,
+      "note": "empty after launcher termination; resource status unknown"
+    },
+    {
+      "rank": "resources-5",
+      "valid": false,
+      "note": "empty after launcher termination; resource status unknown"
+    },
+    {
+      "rank": "resources-6",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 296722432,
+      "seconds": 0.814181916997768,
+      "stopped": null
+    },
+    {
+      "rank": "resources-7",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 302604288,
+      "seconds": 0.8140572009142488,
+      "stopped": null
+    },
+    {
+      "rank": "resources-8",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 302157824,
+      "seconds": 0.8141024300130084,
+      "stopped": null
+    },
+    {
+      "rank": "resources-9",
+      "valid": true,
+      "returncode": 1,
+      "peak_rss_bytes": 296747008,
+      "seconds": 0.81421662599314,
+      "stopped": null
+    }
+  ],
+  "completed_gpu_controls": 0,
+  "planned_gpu_controls": 4,
+  "magnetic_memory_reports": 0,
+  "retry_submitted": false,
+  "local_preflight": "Prepared missing smooth_excision and output ghost_zones keys; CPU executable initialized and exited normally at cycle 0. CPU team-size override 0 used; GPU team-size remains 64. This is not an evolution or GPU validation."
+}
