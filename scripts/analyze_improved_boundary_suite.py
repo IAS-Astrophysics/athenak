@@ -45,7 +45,7 @@ from test_binary_zoom import load
 def inward(path):
  d,f=load(path);cfg=params(d['header']);gamma=float(cfg['mhd/gamma']);rho=float(cfg['problem/rho_inf']);cs2=2/float(cfg['problem/r_bondi']);pinf=rho*cs2/(gamma*(1-cs2/(gamma-1)))
  sl=tuple(slice((d[f'nx{i}_out_mb']-d[f'nx{i}_mb'])//2,(d[f'nx{i}_out_mb']-d[f'nx{i}_mb'])//2+d[f'nx{i}_mb']) for i in (3,2,1));sel=(slice(None),)+sl
- u=np.array([f['vel'+c][sel] for c in 'xyz']);vz=u[2]/np.sqrt(1+np.sum(u*u,axis=0));q=.5*((f['press'][sel]/pinf-1)/gamma-vz/np.sqrt(cs2));z=[];v=[]
+ u=np.array([f['vel'+c][sel] for c in 'xyz'],dtype=float);vz=u[2]/np.sqrt(1+np.sum(u*u,axis=0));q=.5*((f['press'][sel].astype(float)/pinf-1)/gamma-vz/np.sqrt(cs2));z=[];v=[]
  for mb,box in enumerate(d['mb_geometry']):
   z.extend((box[4]+(np.arange(d['nx3_mb'])+.5)*(box[5]-box[4])/d['nx3_mb']).tolist());v.extend(q[mb].mean(axis=(1,2)).tolist())
  z,v=np.array(z),np.array(v);zz=np.unique(z);return d['time'],zz,np.array([v[z==x].mean() for x in zz])
