@@ -72,7 +72,8 @@ data_format=%24.16e
         raise RuntimeError(result.stdout + result.stderr)
     times = [int(x) for x in re.findall(r"Z4C_DIAGNOSTIC_NS (\d+)", result.stdout)]
     if len(times) < 2:
-        raise RuntimeError("No repeated kernel timings; use a Serial build with Kokkos Tools")
+        raise RuntimeError(
+            "No repeated kernel timings; use a Serial build with Kokkos Tools")
     files = sorted((directory / "tab").glob("*.tab"))
     data = np.atleast_2d(np.loadtxt(files[-1]))
     if not np.isfinite(data).all():
