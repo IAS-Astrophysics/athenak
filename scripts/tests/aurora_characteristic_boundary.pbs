@@ -1,0 +1,44 @@
+#!/bin/bash
+#PBS -A MHDTidal
+#PBS -q capacity
+#PBS -N cz_boundary_test
+#PBS -l select=1
+#PBS -l walltime=01:00:00
+#PBS -l filesystems=flare:home
+#PBS -j oe
+set -euo pipefail
+cd "$PBS_O_WORKDIR"
+trial="$PWD/boundary-characteristic-20261018"
+source source-magnetic-smooth/scripts/tests/aurora_sane_environment.sh runtime
+export ONEAPI_DEVICE_SELECTOR=level_zero:gpu
+export SYCL_CACHE_PERSISTENT=1 SYCL_CACHE_DIR="$PWD/sycl-cache"
+export KOKKOS_TOOLS_LIBS="$PWD/memory_guard.so"
+export CZ_NRANKS=12 CZ_RSS_GB=1.2 CZ_SECONDS=600
+export CZ_KOKKOS_TOTAL_BYTES=14000000000
+sha256sum -c build-magnetic-smooth/executable.sha256 > "$trial/executable-verification.txt"
+sha256sum -c build-magnetic-smooth/source.sha256 > "$trial/source-verification.txt"
+module list > "$trial/modules.txt" 2>&1
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+/home/hzhu/pyenv/bin/python "$trial/test_characteristic_reservoir.py" --out "$trial/aurora-characteristics.json"
+bind='list:1-8:9-16:17-24:25-32:33-40:41-48:53-60:61-68:69-76:77-84:85-92:93-100'
+# Full GPU solver CONTROLS use existing fixed-reservoir boundary; the new
+# characteristic projector above remains isolated, not integrated into AthenaK.
+for nx in 32 64; do
+ for frame in inertial rotating; do
+  export CZ_OUT="$trial/control-${frame}-${nx}-${PBS_JOBID%%.*}"
+  mkdir "$CZ_OUT"
+  corotating=true; omega=0.005524271728019903
+  if [[ $frame == inertial ]]; then corotating=false; omega=0; fi
+  args=(mesh_refinement/refinement=none coord/require_resolved_horizon=false
+    coord/smooth_excision=true problem/reservoir_pressure_perturbation=0
+    "problem/corotating=$corotating" "problem/frame_omega=$omega"
+    time/tlim=64 time/nlim=5000 output1/dt=64 output2/dt=64 output3/dt=64 output4/dt=0
+    output1/ghost_zones=true output2/ghost_zones=true)
+  for d in 1 2 3; do args+=("mesh/nx$d=$nx"); done
+  printf '%s\n' "${args[@]}" > "$CZ_OUT/overrides.txt"
+  mpiexec -n 12 -ppn 12 --cpu-bind "$bind" bash source-magnetic-smooth/scripts/tests/aurora_benchmark_rank.sh \
+    ./build-magnetic-smooth/src/athena -i "$trial/input.athinput" -d "$CZ_OUT" -t 00:55:00 "${args[@]}" \
+    > "$CZ_OUT/launcher.log" 2>&1
+ done
+done
+printf 'all four existing-boundary GPU controls exited zero\n' > "$trial/controls-completed.txt"
