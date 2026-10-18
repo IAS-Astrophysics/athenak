@@ -1,0 +1,15 @@
+{
+  "status": "measured",
+  "scope": "x/y exchange and rotation reversal; ordered corner extension may break exact symmetry",
+  "max_abs_differences": {
+    "dens": 0.0,
+    "velx": 2.7755575615628914e-17,
+    "vely": 2.220446049250313e-16,
+    "velz": 5.551115123125783e-17,
+    "press": 0.0,
+    "bcc1": 2.220446049250313e-15,
+    "bcc2": 2.220446049250313e-15,
+    "bcc3": 0.0,
+    "temperature": 0.0
+  }
+}

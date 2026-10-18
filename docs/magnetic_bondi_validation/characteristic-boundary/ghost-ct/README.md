@@ -70,9 +70,19 @@ at zero/production/high rotation with both signs, compact near-corner packets, a
 transverse magnetic Alfvén perturbation and forced FOFC. Exported **all-layer
 physical ghosts**, including edges/corners, remain finite/positive and
 solenoidal. Initial coarse rotating integration reaches t180 with matched grid
-spacing/timesteps. Initial local reports are archived here; final guarded-source
-reports will be separate, with exact hashes. Short controls do not imply
-production accuracy or interior convergence.
+spacing/timesteps. Initial reports are archived separately from the final ones.
+
+**All final-source local gates passed**, as recorded with exact source hashes in
+`local-gate.json`: eight ghost/CT cases, six planar controls, three matched
+rotating controls, two coarse curved-AMR cases, 900 native modes and 1,620 full
+spectral-decomposition states. The coarse curved pair preserves 136 inner cells
+bitwise. All-layer ghost divergence stays below 2.41e-16 in the dedicated gates.
+An additional 8x8x4 MeshBlock control matching the GPU layout passes. In the
+compact flat control, x/y exchange plus rotation reversal gives identical saved
+density/pressure and velocity/B differences below 2.3e-15. These bounded checks
+do not establish arbitrary corner scattering symmetry, production accuracy,
+interior convergence or horizon-resolved drain behavior. The GPU pair retains
+the actual hierarchy.
 
 Remote root:
 `/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013`.

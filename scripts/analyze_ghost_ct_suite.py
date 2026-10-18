@@ -3,7 +3,7 @@
 
 No submissions. Old face-only results remain immutable comparison data.
 """
-import argparse,json,subprocess,sys
+import argparse,json,subprocess,sys,re
 from pathlib import Path
 import numpy as np
 from analyze_grmhd_characteristic import audit
@@ -21,6 +21,12 @@ for row in rows:
  char=cfg['problem/reservoir_boundary']=='characteristic'
  assert (cfg.get('problem/reservoir_ghost_ct')=='true')==char,row['name']
  row['ghost_ct']=char
+ repairs=[]
+ for rank in range(12):
+  text=(a.runs/row['name']/f'rank-{rank}.log').read_text()
+  repairs.extend(line for line in text.splitlines() if re.search(r'MHD.*(?:nonfinite.*repair|finite-EMF fallback)',line))
+ row['nonfinite_repair_messages']=repairs
+ assert not repairs,(row['name'],'Nonfinite repairs/fallbacks require diagnosis',repairs[:5])
  if char:
   row['projection_columns_in_last_logged_counters']=row.pop('faces_in_last_logged_counters')
   row['limited_ghost_cells_in_last_logged_counters']=row.pop('limited_faces_in_last_logged_counters')

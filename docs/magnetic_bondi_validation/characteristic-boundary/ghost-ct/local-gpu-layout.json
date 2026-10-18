@@ -1,0 +1,85 @@
+[
+  {
+    "name": "acoustic3d-fastrotation-characteristic-16",
+    "seconds": 5.353857209,
+    "cycle": 37,
+    "time": 0.4,
+    "checks": {
+      "states": [
+        {
+          "cycle": 0,
+          "time": 0.0,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 5,
+          "time": 0.0545368,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 10,
+          "time": 0.109074,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 14,
+          "time": 0.152703,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 19,
+          "time": 0.20724,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 23,
+          "time": 0.250869,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 28,
+          "time": 0.305406,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 33,
+          "time": 0.359943,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        },
+        {
+          "cycle": 37,
+          "time": 0.4,
+          "blocks": 16,
+          "max_level": 0,
+          "min_density": 1.0,
+          "min_pressure": 0.002414486836642027
+        }
+      ],
+      "max_abs_divb": 2.4028710057048797e-16
+    }
+  }
+]
