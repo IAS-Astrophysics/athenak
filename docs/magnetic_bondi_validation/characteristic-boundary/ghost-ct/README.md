@@ -90,6 +90,16 @@ Unique trial: `boundary-characteristic-rotating-20261018-v3`.
 The v2 executable/source are archived in `characteristic-v2-8942061`.
 Only `source-characteristic/build-characteristic` are modified.
 
+**Aurora capacity job 8942262 was accepted on 2026-10-18**, and its scheduler
+record confirms queued state, one node and one-hour walltime. The final guarded
+GPU build passed with executable SHA256
+`d48198a64798b54ab7e334b7b14f7f0482f0285fdbec19ae53e34d38c71689c9`.
+The accepted receipt, source/executable hashes, build resource reports and initial
+scheduler record are preserved in `provenance/`. The submission controller has
+finished; no further build or submission is needed. GPU accuracy/runtime audits
+are pending. The active heartbeat follows this accepted receipt and stays quiet
+while its queued/running state is unchanged.
+
 Serialized owners:
 
 - `trial/build.sh`, with `build.pid/log/started`, owns the broad guarded build.

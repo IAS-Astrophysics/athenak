@@ -1,5 +1,5 @@
 > New implementation: [characteristic ghosts and native CT](ghost-ct/README.md).
-> Final local preflights pass; a guarded one-node capacity repeat is being built.
+> Final local preflights and GPU build pass; one-node capacity job **8942262** is queued.
 > Production selection remains fixed pending the new rotating comparisons.
 
 > Rotating suite **8942061 completed**: all 30 cases and 360 rank audits pass.

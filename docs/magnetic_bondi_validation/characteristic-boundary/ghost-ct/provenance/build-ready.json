@@ -1,0 +1,8 @@
+{
+  "status": "built",
+  "ghost_ct": true,
+  "final_source": true,
+  "unrefined_physical_faces": true,
+  "surface_divergence_kernels": true,
+  "executable_sha256": "d48198a64798b54ab7e334b7b14f7f0482f0285fdbec19ae53e34d38c71689c9"
+}
