@@ -129,3 +129,13 @@ The guarded bootstrap accepted physical job **8939726** from the original
 and transitioned to the physical-chain monitor. At this check the job is running
 normally in its initial fresh finest dwell, near t=9948 M; neither new full
 cycle has completed. No independent continuation was submitted by the heartbeat.
+
+## First smooth return and renewed monitoring
+
+After renewed SSH access, job 8940293 was verified running under the healthy
+existing controller. The first requested roundtrip completed at event 28,
+t=19586.65420246086 M; the second is pending. The latest validated finest saved
+state is cycle 236032 at native t=19700.932791173836 M from job 8940212.
+Updated xy density/temperature/physical-beta panels and provenance are in
+[smooth-latest](smooth-latest/README.md). The completion automation is active
+again, with its original two-cycle target and hardware restrictions unchanged.
