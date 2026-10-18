@@ -1,0 +1,53 @@
+rank=0 host=x4310c3s2b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+### WARNING in /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-characteristic/src/mesh/load_balance.cpp at line 83
+Number of MeshBlocks cannot be divided evenly by number of MPI ranks. This will result in poor load balancing.
+
+Root grid = 2 x 2 x 4 MeshBlocks
+Total number of MeshBlocks = 16
+Number of logical  levels of refinement = 2 (3 levels total)
+Number of physical levels of refinement = 0 (1 levels total)
+Number of parallel ranks = 12
+  Rank = 0: 1 MeshBlocks, cost = 1
+  Rank = 1: 1 MeshBlocks, cost = 1
+  Rank = 2: 1 MeshBlocks, cost = 1
+  Rank = 3: 1 MeshBlocks, cost = 1
+  Rank = 4: 1 MeshBlocks, cost = 1
+  Rank = 5: 1 MeshBlocks, cost = 1
+  Rank = 6: 1 MeshBlocks, cost = 1
+  Rank = 7: 1 MeshBlocks, cost = 1
+  Rank = 8: 2 MeshBlocks, cost = 2
+  Rank = 9: 2 MeshBlocks, cost = 2
+  Rank = 10: 2 MeshBlocks, cost = 2
+  Rank = 11: 2 MeshBlocks, cost = 2
+Load Balancing:
+  Maximum normalized cost = 2, Average = 1.33333
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0 corotating=0 single_black_hole=1 M_total=1 boundary=ambient
+
+Setup complete, executing task list(s)...
+
+elapsed=8.772054e-01 cycle=0 time=0.000000e+00 dt=1.250000e-01
+elapsed=2.555314e+00 cycle=100 time=1.250000e+01 dt=1.250000e-01
+elapsed=4.020074e+00 cycle=200 time=2.500000e+01 dt=1.250000e-01
+elapsed=5.463945e+00 cycle=300 time=3.750000e+01 dt=1.250000e-01
+elapsed=6.930476e+00 cycle=400 time=5.000000e+01 dt=1.250000e-01
+elapsed=8.391836e+00 cycle=500 time=6.250000e+01 dt=1.250000e-01
+elapsed=9.852907e+00 cycle=600 time=7.500000e+01 dt=1.250000e-01
+elapsed=1.131537e+01 cycle=700 time=8.750000e+01 dt=1.250000e-01
+elapsed=1.276932e+01 cycle=800 time=1.000000e+02 dt=1.250000e-01
+elapsed=1.424243e+01 cycle=900 time=1.125000e+02 dt=1.250000e-01
+elapsed=1.572474e+01 cycle=1000 time=1.250000e+02 dt=1.250000e-01
+elapsed=1.717801e+01 cycle=1100 time=1.375000e+02 dt=1.250000e-01
+elapsed=1.864304e+01 cycle=1200 time=1.500000e+02 dt=1.250000e-01
+elapsed=2.010989e+01 cycle=1300 time=1.625000e+02 dt=1.250000e-01
+elapsed=2.156998e+01 cycle=1400 time=1.750000e+02 dt=1.250000e-01
+
+Terminating on time limit
+time=1.800000e+02 cycle=1440
+tlim=1.800000e+02 nlim=50000
+
+MeshBlock-cycles = 23040
+cpu time used  = 2.204123e+01
+zone-cycles/cpu_second = 5.352006e+05
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-characteristic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/alfven-fixed-32", "-t", "00:55:00", "mesh_refinement/refinement=none", "mesh/nx1=16", "mesh/nx2=16", "mesh/nx3=32", "coord/excise=false", "coord/require_resolved_horizon=false", "problem/single_black_hole=true", "problem/reservoir_test_flat_metric=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "problem/reservoir_boundary=fixed", "problem/reservoir_test_pulse=0.01", "problem/reservoir_test_pulse_mode=alfven", "time/tlim=180", "time/nlim=50000", "output1/dt=180", "output2/dt=180", "output3/dt=180", "output4/dt=0", "mesh/ix1_bc=periodic", "mesh/ox1_bc=periodic", "mesh/ix2_bc=periodic", "mesh/ox2_bc=periodic", "mesh/x1min=-8", "mesh/x1max=8", "mesh/x2min=-8", "mesh/x2max=8", "mesh/x3min=-8", "mesh/x3max=8"], "returncode": 0, "peak_rss_bytes": 664649728, "memory_budget_bytes": 1200000000, "seconds": 23.758876318112016, "stopped": null}

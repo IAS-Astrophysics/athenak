@@ -1,0 +1,1 @@
+all solver tests exited zero; fields/resources still require audit

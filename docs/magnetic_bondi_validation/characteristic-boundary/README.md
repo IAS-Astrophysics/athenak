@@ -1,3 +1,9 @@
+> Full-GRMHD update: capacity job **8941903** completed all 14 bounded tests and
+> all 168 rank audits. Accuracy is mixed; retain the fixed production default.
+> See [the final GPU results](full-grmhd-aurora/README.md) and
+> [implementation details](IMPLEMENTATION.md). The earlier prototype and failed
+> first harness below remain historical evidence, not the final solver result.
+
 # Incoming-characteristic reservoir boundary: formulation and staged tests
 
 An experimental opt-in implementation now exists in the full GRMHD solver;

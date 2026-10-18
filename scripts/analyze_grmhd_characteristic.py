@@ -18,7 +18,7 @@ def params(header):
  return out
 
 def audit(case):
- rss=tracked=budget=0;hosts=set();limited=faces=0
+ rss=tracked=budget=0;hosts=set();limited=faces=0;seconds=[]
  for rank in range(12):
   r=json.loads((case/f'resources-{rank}.json').read_text());m=json.loads((case/f'memory-{rank}.json').read_text())
   assert r['returncode']==0 and r['stopped'] is None,(case,rank,r)
@@ -26,6 +26,7 @@ def audit(case):
   assert r['command'][r['command'].index('-t')+1]=='00:55:00'
   log=(case/f'rank-{rank}.log').read_text();identity=re.search(rf'rank={rank} host=(\S+) affinity={rank//2}\.{rank%2}\s',log);assert identity
   hosts.add(identity[1]);rss+=r['peak_rss_bytes'];tracked+=m['combined_peak_bytes'];budget+=r['memory_budget_bytes']+m['budget_bytes']
+  seconds.append(r['seconds'])
   counts=re.findall(r'faces=(\d+) limited=(\d+)',log)
   if counts:faces+=int(counts[-1][0]);limited+=int(counts[-1][1])
  assert len(hosts)==1 and budget<=30e9 and rss+tracked<30e9
@@ -52,7 +53,7 @@ def audit(case):
  expected='characteristic' if 'characteristic' in case.name else 'fixed'
  assert cfg['problem/reservoir_boundary']==expected
  if expected=='characteristic':assert faces>0
- result=dict(name=case.name,states=states,rss_plus_tracked_bytes=rss+tracked,limited_faces_in_last_logged_counters=limited,faces_in_last_logged_counters=faces)
+ result=dict(name=case.name,states=states,rss_plus_tracked_bytes=rss+tracked,max_rank_seconds=max(seconds),limited_faces_in_last_logged_counters=limited,faces_in_last_logged_counters=faces)
  if not case.name.startswith('curved-amr'):
   assert cfg['problem/reservoir_test_flat_metric']=='true'
   gamma=float(cfg['mhd/gamma']);rho=float(cfg['problem/rho_inf']);cs2=2/float(cfg['problem/r_bondi']);pinf=rho*cs2/(gamma*(1-cs2/(gamma-1)));Binf=np.sqrt(2*pinf/float(cfg['problem/beta_inf']));inertia=np.sqrt(rho+gamma*pinf/(gamma-1)+Binf**2)
@@ -69,6 +70,31 @@ def audit(case):
   result.update(profile=sorted(profiles),time=d['time'],seed_amplitude=float(cfg['problem/reservoir_test_pulse']),transverse_density_spread=spread)
  return result
 
+def compare_curved(runs):
+ """Same saved topology and interior cells: a short integration-isolation check."""
+ pair=[]
+ for boundary in ('fixed','characteristic'):
+  path=sorted((runs/f'curved-amr-{boundary}'/'bin').glob('*.mhd_w_bcc.*.bin'))[-1]
+  pair.append(load(path))
+ (a,af),(b,bf)=pair
+ assert a['time']==b['time']==.05
+ for key in ('mb_geometry','mb_logical'):
+  assert np.array_equal(a[key],b[key]),key
+ assert all(a[f'nx{i}_out_mb']==a[f'nx{i}_mb'] for i in (1,2,3))
+ xyz=[]
+ for i in range(3):
+  n=a[f'nx{i+1}_mb'];box=a['mb_geometry']
+  xyz.append(box[:,2*i,None]+(np.arange(n)+.5)*(box[:,2*i+1]-box[:,2*i])[:,None]/n)
+ radius2=xyz[0][:,None,None,:]**2+xyz[1][:,None,:,None]**2+xyz[2][:,:,None,None]**2
+ mask=radius2<100**2
+ fields={}
+ for key in af:
+  av,bv=af[key][mask].astype(float),bf[key][mask].astype(float)
+  error=float(np.max(abs(av-bv)));scale=max(float(np.max(abs(av))),float(np.max(abs(bv))),1e-30)
+  fields[key]=dict(max_abs_difference=error,relative_to_field_max=error/scale,bitwise_equal=bool(np.array_equal(av,bv)))
+ return dict(time=.05,radius=100,cell_count=int(mask.sum()),identical_topology=True,fields=fields,
+             scope='Short integration-isolation check; not a curved-space reflection or long-time test')
+
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--runs',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
  cases=sorted([d for d in a.runs.iterdir() if d.is_dir() and (d.name.startswith(('acoustic-','alfven-','curved-amr-')))])
@@ -77,3 +103,4 @@ if __name__=='__main__':
  for case in cases:
   row=audit(case);rows.append(row);print(json.dumps({k:v for k,v in row.items() if k!='profile'}),flush=True)
  (a.out/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
+ (a.out/'curved_inner_comparison.json').write_text(json.dumps(compare_curved(a.runs),indent=2)+'\n')

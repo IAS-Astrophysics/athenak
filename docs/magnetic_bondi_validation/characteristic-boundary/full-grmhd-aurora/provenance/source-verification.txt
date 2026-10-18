@@ -1,0 +1,5 @@
+source-characteristic/src/coordinates/coordinates.hpp: OK
+source-characteristic/src/dyn_grmhd/dyn_grmhd.cpp: OK
+source-characteristic/src/dyn_grmhd/dyn_grmhd_fluxes.cpp: OK
+source-characteristic/src/dyn_grmhd/characteristic_reservoir.hpp: OK
+source-characteristic/src/pgen/dynbbh.cpp: OK

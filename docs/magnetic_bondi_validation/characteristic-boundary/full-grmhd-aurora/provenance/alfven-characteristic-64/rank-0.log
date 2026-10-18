@@ -1,0 +1,97 @@
+rank=0 host=x4310c3s2b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+### WARNING in /lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-characteristic/src/mesh/load_balance.cpp at line 83
+Number of MeshBlocks cannot be divided evenly by number of MPI ranks. This will result in poor load balancing.
+
+Root grid = 2 x 2 x 8 MeshBlocks
+Total number of MeshBlocks = 32
+Number of logical  levels of refinement = 3 (4 levels total)
+Number of physical levels of refinement = 0 (1 levels total)
+Number of parallel ranks = 12
+  Rank = 0: 2 MeshBlocks, cost = 2
+  Rank = 1: 2 MeshBlocks, cost = 2
+  Rank = 2: 2 MeshBlocks, cost = 2
+  Rank = 3: 2 MeshBlocks, cost = 2
+  Rank = 4: 3 MeshBlocks, cost = 3
+  Rank = 5: 3 MeshBlocks, cost = 3
+  Rank = 6: 3 MeshBlocks, cost = 3
+  Rank = 7: 3 MeshBlocks, cost = 3
+  Rank = 8: 3 MeshBlocks, cost = 3
+  Rank = 9: 3 MeshBlocks, cost = 3
+  Rank = 10: 3 MeshBlocks, cost = 3
+  Rank = 11: 3 MeshBlocks, cost = 3
+Load Balancing:
+  Maximum normalized cost = 1.5, Average = 1.33333
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0 corotating=0 single_black_hole=1 M_total=1 boundary=ambient
+Experimental characteristic reservoir face flux enabled
+
+Setup complete, executing task list(s)...
+
+elapsed=5.932055e+00 cycle=0 time=0.000000e+00 dt=6.250000e-02
+Characteristic boundary rank 0 faces=400 limited=0
+elapsed=1.006964e+01 cycle=100 time=6.250000e+00 dt=6.250000e-02
+Characteristic boundary rank 0 faces=80400 limited=0
+elapsed=1.397962e+01 cycle=200 time=1.250000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=160400 limited=0
+elapsed=1.789246e+01 cycle=300 time=1.875000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=240400 limited=0
+elapsed=2.178524e+01 cycle=400 time=2.500000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=320400 limited=0
+elapsed=2.567736e+01 cycle=500 time=3.125000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=400400 limited=0
+elapsed=2.957749e+01 cycle=600 time=3.750000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=480400 limited=0
+elapsed=3.348228e+01 cycle=700 time=4.375000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=560400 limited=0
+elapsed=3.738511e+01 cycle=800 time=5.000000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=640400 limited=0
+elapsed=4.128837e+01 cycle=900 time=5.625000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=720400 limited=0
+elapsed=4.518678e+01 cycle=1000 time=6.250000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=800400 limited=0
+elapsed=4.908811e+01 cycle=1100 time=6.875000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=880400 limited=0
+elapsed=5.299047e+01 cycle=1200 time=7.500000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=960400 limited=0
+elapsed=5.690202e+01 cycle=1300 time=8.125000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1040400 limited=0
+elapsed=6.080050e+01 cycle=1400 time=8.750000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1120400 limited=0
+elapsed=6.470961e+01 cycle=1500 time=9.375000e+01 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1200400 limited=0
+elapsed=6.861159e+01 cycle=1600 time=1.000000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1280400 limited=0
+elapsed=7.393604e+01 cycle=1700 time=1.062500e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1360400 limited=0
+elapsed=7.783785e+01 cycle=1800 time=1.125000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1440400 limited=0
+elapsed=8.173132e+01 cycle=1900 time=1.187500e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1520400 limited=0
+elapsed=8.562936e+01 cycle=2000 time=1.250000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1600400 limited=0
+elapsed=8.953355e+01 cycle=2100 time=1.312500e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1680400 limited=0
+elapsed=9.344226e+01 cycle=2200 time=1.375000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1760400 limited=0
+elapsed=9.735214e+01 cycle=2300 time=1.437500e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1840400 limited=0
+elapsed=1.012582e+02 cycle=2400 time=1.500000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=1920400 limited=0
+elapsed=1.051629e+02 cycle=2500 time=1.562500e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=2000400 limited=0
+elapsed=1.104698e+02 cycle=2600 time=1.625000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=2080400 limited=0
+elapsed=1.143731e+02 cycle=2700 time=1.687500e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=2160400 limited=0
+elapsed=1.182997e+02 cycle=2800 time=1.750000e+02 dt=6.250000e-02
+Characteristic boundary rank 0 faces=2240400 limited=0
+
+Terminating on time limit
+time=1.800000e+02 cycle=2880
+tlim=1.800000e+02 nlim=50000
+
+MeshBlock-cycles = 92160
+cpu time used  = 1.162809e+02
+zone-cycles/cpu_second = 4.057925e+05
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-characteristic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/alfven-characteristic-64", "-t", "00:55:00", "mesh_refinement/refinement=none", "mesh/nx1=16", "mesh/nx2=16", "mesh/nx3=64", "coord/excise=false", "coord/require_resolved_horizon=false", "problem/single_black_hole=true", "problem/reservoir_test_flat_metric=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "problem/reservoir_boundary=characteristic", "problem/reservoir_test_pulse=0.01", "problem/reservoir_test_pulse_mode=alfven", "time/tlim=180", "time/nlim=50000", "output1/dt=180", "output2/dt=180", "output3/dt=180", "output4/dt=0", "mesh/ix1_bc=periodic", "mesh/ox1_bc=periodic", "mesh/ix2_bc=periodic", "mesh/ox2_bc=periodic", "mesh/x1min=-8", "mesh/x1max=8", "mesh/x2min=-8", "mesh/x2max=8", "mesh/x3min=-8", "mesh/x3max=8"], "returncode": 0, "peak_rss_bytes": 665792512, "memory_budget_bytes": 1200000000, "seconds": 123.00459470390342, "stopped": null}

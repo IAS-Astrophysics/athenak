@@ -1,0 +1,65 @@
+rank=0 host=x4310c3s2b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+
+Root grid = 2 x 2 x 24 MeshBlocks
+Total number of MeshBlocks = 96
+Number of logical  levels of refinement = 5 (6 levels total)
+Number of physical levels of refinement = 0 (1 levels total)
+Number of parallel ranks = 12
+  Rank = 0: 8 MeshBlocks, cost = 8
+  Rank = 1: 8 MeshBlocks, cost = 8
+  Rank = 2: 8 MeshBlocks, cost = 8
+  Rank = 3: 8 MeshBlocks, cost = 8
+  Rank = 4: 8 MeshBlocks, cost = 8
+  Rank = 5: 8 MeshBlocks, cost = 8
+  Rank = 6: 8 MeshBlocks, cost = 8
+  Rank = 7: 8 MeshBlocks, cost = 8
+  Rank = 8: 8 MeshBlocks, cost = 8
+  Rank = 9: 8 MeshBlocks, cost = 8
+  Rank = 10: 8 MeshBlocks, cost = 8
+  Rank = 11: 8 MeshBlocks, cost = 8
+Load Balancing:
+  Maximum normalized cost = 1, Average = 1
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0 corotating=0 single_black_hole=1 M_total=1 boundary=ambient
+
+Setup complete, executing task list(s)...
+
+elapsed=1.167639e+00 cycle=0 time=0.000000e+00 dt=6.250000e-02
+elapsed=3.293079e+00 cycle=100 time=6.250000e+00 dt=6.250000e-02
+elapsed=5.162535e+00 cycle=200 time=1.250000e+01 dt=6.250000e-02
+elapsed=7.006410e+00 cycle=300 time=1.875000e+01 dt=6.250000e-02
+elapsed=8.881857e+00 cycle=400 time=2.500000e+01 dt=6.250000e-02
+elapsed=1.076035e+01 cycle=500 time=3.125000e+01 dt=6.250000e-02
+elapsed=1.263658e+01 cycle=600 time=3.750000e+01 dt=6.250000e-02
+elapsed=1.452416e+01 cycle=700 time=4.375000e+01 dt=6.250000e-02
+elapsed=1.639771e+01 cycle=800 time=5.000000e+01 dt=6.250000e-02
+elapsed=1.825052e+01 cycle=900 time=5.625000e+01 dt=6.250000e-02
+elapsed=2.011823e+01 cycle=1000 time=6.250000e+01 dt=6.250000e-02
+elapsed=2.199904e+01 cycle=1100 time=6.875000e+01 dt=6.250000e-02
+elapsed=2.386685e+01 cycle=1200 time=7.500000e+01 dt=6.250000e-02
+elapsed=2.574845e+01 cycle=1300 time=8.125000e+01 dt=6.250000e-02
+elapsed=2.762575e+01 cycle=1400 time=8.750000e+01 dt=6.250000e-02
+elapsed=2.950526e+01 cycle=1500 time=9.375000e+01 dt=6.250000e-02
+elapsed=3.139628e+01 cycle=1600 time=1.000000e+02 dt=6.250000e-02
+elapsed=3.325879e+01 cycle=1700 time=1.062500e+02 dt=6.250000e-02
+elapsed=3.513831e+01 cycle=1800 time=1.125000e+02 dt=6.250000e-02
+elapsed=3.703281e+01 cycle=1900 time=1.187500e+02 dt=6.250000e-02
+elapsed=3.892211e+01 cycle=2000 time=1.250000e+02 dt=6.250000e-02
+elapsed=4.080495e+01 cycle=2100 time=1.312500e+02 dt=6.250000e-02
+elapsed=4.267673e+01 cycle=2200 time=1.375000e+02 dt=6.250000e-02
+elapsed=4.455585e+01 cycle=2300 time=1.437500e+02 dt=6.250000e-02
+elapsed=4.643839e+01 cycle=2400 time=1.500000e+02 dt=6.250000e-02
+elapsed=4.831656e+01 cycle=2500 time=1.562500e+02 dt=6.250000e-02
+elapsed=5.019451e+01 cycle=2600 time=1.625000e+02 dt=6.250000e-02
+elapsed=5.207540e+01 cycle=2700 time=1.687500e+02 dt=6.250000e-02
+elapsed=5.395149e+01 cycle=2800 time=1.750000e+02 dt=6.250000e-02
+
+Terminating on time limit
+time=1.800000e+02 cycle=2880
+tlim=1.800000e+02 nlim=50000
+
+MeshBlock-cycles = 276480
+cpu time used  = 5.517226e+01
+zone-cycles/cpu_second = 2.565742e+06
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-characteristic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/alfven-reference-64", "-t", "00:55:00", "mesh_refinement/refinement=none", "mesh/nx1=16", "mesh/nx2=16", "mesh/nx3=192", "coord/excise=false", "coord/require_resolved_horizon=false", "problem/single_black_hole=true", "problem/reservoir_test_flat_metric=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "problem/reservoir_boundary=fixed", "problem/reservoir_test_pulse=0.01", "problem/reservoir_test_pulse_mode=alfven", "time/tlim=180", "time/nlim=50000", "output1/dt=180", "output2/dt=180", "output3/dt=180", "output4/dt=0", "mesh/ix1_bc=periodic", "mesh/ox1_bc=periodic", "mesh/ix2_bc=periodic", "mesh/ox2_bc=periodic", "mesh/x1min=-8", "mesh/x1max=8", "mesh/x2min=-8", "mesh/x2max=8", "mesh/x3min=-24", "mesh/x3max=24"], "returncode": 0, "peak_rss_bytes": 697233408, "memory_budget_bytes": 1200000000, "seconds": 57.17483508400619, "stopped": null}

@@ -1,0 +1,46 @@
+{
+  "job": "8941903",
+  "queue": "capacity",
+  "nodes": 1,
+  "gpu_tiles": 12,
+  "status": "passed_bounded_suite",
+  "normal_pbs_exit": true,
+  "cases": 14,
+  "rank_resource_memory_pairs": 168,
+  "finite_positive_saved_fluid": true,
+  "max_rss_plus_tracked_bytes": 21634056992,
+  "max_scaled_divB": 2.185750439975289e-15,
+  "limited_in_last_logged_counters": 0,
+  "source_and_receipt_hashes_verified": true,
+  "runtime_comparisons": [
+    {
+      "mode": "acoustic",
+      "nz": 32,
+      "fixed_seconds": 24.098153617000207,
+      "characteristic_seconds": 59.962223330978304,
+      "ratio": 2.4882496926518693
+    },
+    {
+      "mode": "acoustic",
+      "nz": 64,
+      "fixed_seconds": 50.19457970303483,
+      "characteristic_seconds": 115.5671696960926,
+      "ratio": 2.3023834521540034
+    },
+    {
+      "mode": "alfven",
+      "nz": 32,
+      "fixed_seconds": 23.7635367680341,
+      "characteristic_seconds": 60.0481497310102,
+      "ratio": 2.5269028897998433
+    },
+    {
+      "mode": "alfven",
+      "nz": 64,
+      "fixed_seconds": 50.981770909857005,
+      "characteristic_seconds": 123.1521714690607,
+      "ratio": 2.415611879917063
+    }
+  ],
+  "production_recommendation": "Keep fixed default; experimental characteristic has mixed accuracy and higher small-test cost; no established spatial/reflection convergence"
+}

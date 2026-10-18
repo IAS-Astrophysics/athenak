@@ -22,7 +22,9 @@ for mode,ax in zip(('acoustic','alfven'),axs):
    q=np.array(row['profile']);z=np.unique(q[:,0]);v=np.array([q[q[:,0]==zz,1].mean() for zz in z])
    j=np.searchsorted(rz,z);assert np.allclose(rz[j],z,atol=1e-10)
    error=v-rv[j];norm=row.get('seed_amplitude',.001)
-   ax.plot(z,error/norm,label=f'{boundary}, nz={nz}')
+   ax.plot(z,error/norm,label=f'{boundary}, nz={nz}',
+           color={'fixed':'tab:blue','characteristic':'tab:orange'}[boundary],
+           linestyle='--' if nz==32 else '-')
    records.append(dict(mode=mode,boundary=boundary,nz=nz,max_reference_subtracted_incoming_relative_to_seed=float(abs(error).max()/norm)))
  ax.set_title(mode.capitalize());ax.set_xlabel('z / M');ax.set_ylabel('Incoming residual minus reference / seed');ax.grid(alpha=.2)
  if ax.lines:ax.legend(fontsize=8)

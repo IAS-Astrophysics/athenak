@@ -1,0 +1,50 @@
+[
+  {
+    "mode": "acoustic",
+    "boundary": "fixed",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.00042174400723942243
+  },
+  {
+    "mode": "acoustic",
+    "boundary": "characteristic",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.00036576062728347996
+  },
+  {
+    "mode": "acoustic",
+    "boundary": "fixed",
+    "nz": 64,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.0001907595286582405
+  },
+  {
+    "mode": "acoustic",
+    "boundary": "characteristic",
+    "nz": 64,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.00033700815958052015
+  },
+  {
+    "mode": "alfven",
+    "boundary": "fixed",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.0007853765893464836
+  },
+  {
+    "mode": "alfven",
+    "boundary": "characteristic",
+    "nz": 32,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.0006831004570223396
+  },
+  {
+    "mode": "alfven",
+    "boundary": "fixed",
+    "nz": 64,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.0033487806050273524
+  },
+  {
+    "mode": "alfven",
+    "boundary": "characteristic",
+    "nz": 64,
+    "max_reference_subtracted_incoming_relative_to_seed": 0.0013826226699488872
+  }
+]

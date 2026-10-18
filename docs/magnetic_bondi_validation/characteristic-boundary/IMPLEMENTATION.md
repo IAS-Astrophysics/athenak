@@ -1,4 +1,4 @@
-# Full GRMHD characteristic implementation — experimental validation in progress
+# Full GRMHD characteristic implementation — bounded validation complete
 
 User authorization on 2026-10-18 covers resubmitting corrected controls and
 implementing/validating this boundary, using one capacity node at a time.
@@ -88,8 +88,9 @@ Corrected fixed-boundary controls **8941753** passed and all outputs are downloa
 under `build-mac-characteristic/aurora-controls/boundary-characteristic-20261018-r1`.
 The plots, audit and small provenance are in `corrected-controls/`.
 
-Full-GRMHD validation job **8941903** was accepted in `capacity`, one node/all
-12 GPU tiles. Its immutable receipt and submitted files are preserved in
+Full-GRMHD validation job **8941903** completed normally in `capacity`, one node/all
+12 GPU tiles. All 14 cases and168 rank resource/memory audits passed. Detailed
+results and plots are in [full-grmhd-aurora/README.md](full-grmhd-aurora/README.md). Its immutable receipt and submitted files are preserved in
 `full-grmhd-aurora/provenance/`. The isolated remote source/build are
 `source-characteristic` and `build-characteristic`; the original production
 source/build and completed physical study remain untouched. The final executable
@@ -103,28 +104,38 @@ accepted 8941903. Never duplicate its accepted receipt.
 
 The suite has **14 cases**: acoustic and Alfven packets at nz32/64 with fixed,
 characteristic and larger-domain reference cases (12), plus paired fixed and
-characteristic real binary ADM/AMR/smooth-drain smoke cases at t0.05. GPU packet
-seed is0.01 (local seed0.001), to reduce float32 output quantization. The larger
+characteristic real binary ADM/AMR/smooth-drain smoke cases at t=0.05 M. GPU packet
+seed is 0.01 (local seed 0.001), to reduce float32 output quantization. The larger
 reference domain has the same cell size and the pulse has not encountered its
 boundary. All cases retain solver `-t 00:55:00`, one-hour PBS walltime, validated
 SANE environment and existing28.4GB guards. No further physical zoom cycles are
-being submitted. The heartbeat monitor is active and reports completion/failure.
+being submitted. Monitoring is paused after final delivery; no retries or
+physical continuations are pending.
 
-After completion download every saved output and all12 resource/memory reports
-per case; run `analyze_grmhd_characteristic.py` and
-`plot_characteristic_packets.py`. Check finite/positive fields, target completion,
-scaleddivB<1e-9, transverse uniformity, resource limits, limiter samples and
-reference-subtracted incoming modes. Compare the paired curved-AMR inner r<100
-states for unintended internal-flux changes. Inspect figures, preserve source
-hashes and small provenance, commit/push results, then pause monitoring.
+Every saved output and all 12 resource/memory reports per case were downloaded
+and audited. The two analysis scripts, source/receipt verification, output hashes,
+plots and small provenance are retained. All fields are finite with positive
+density and pressure; maximum scaleddivB is 2.186e-15. The conservative sum of
+per-rank peak RSS plus tracked allocations is at most 21.635 GB. Last logged limiter
+samples show zero contractions; these samples need not be final counters.
+The paired real binary ADM/AMR cases have identical saved fluid values in 447528
+cells at r<100 M,t=0.05 M. This is an integration-isolation check, not a curved-space
+reflection or long-time stability result.
 
-Remaining requirements before adoption: nonlinear packet resolution comparison,
-consistent extended-domain reference subtraction, curved ADM and AMR validation,
-finite positivity/divergence/resource checks, limiter counters and reflection
-assessment. Strong finite disturbances, oblique fast/slow modes, curved-space
-wave packets and prolonged mixed-face/corner behavior remain untested. Do not
-interpret local short ambient preservation as global equilibrium or production
-readiness. Do not resume the completed smooth-excision cycle chain.
+At nz64, incoming-mode residual relative to seed is 0.01908% fixed vs 0.03370%
+characteristic for acoustic, and 0.33488% vs 0.13826% for Alfven. Accuracy is mixed;
+Alfven residuals increase from nz32 to nz64, so these tests do not establish spatial
+convergence. The characteristic packet runs take 2.30–2.53 times the fixed run time
+on these small boundary-heavy grids, with identical timestep counts. This cost
+ratio is not a production scaling prediction. Keep the fixed default.
+
+Remaining requirements before adoption: accurate higher-order outgoing traces,
+strong/oblique fast/slow packets, curved-space wave reflection, long-time rotating
+multi-face/corner behavior and exterior-memory assumptions, plus performance
+optimization and stronger convergence evidence. The seed 0.01 nonlinear tests use
+a linear incoming-mode diagnostic; their differences are not pure reflection
+coefficients. No global equilibrium or exact transparency is established. Do not
+resume the completed smooth-excision cycle chain.
 
 ## Final local packet and mode results
 
@@ -135,7 +146,7 @@ mode selection agrees with independent analytic expectations; maximum normalized
 projector error5.02e-6 (test tolerance1e-3). These are projector checks, not bounds
 on the evolved solution error.
 
-At nz32 and seed0.001, maximum reference-subtracted incoming residuals as fractions
+At nz32 and seed 0.001, maximum reference-subtracted incoming residuals as fractions
 of seed are:
 
 | Packet | Fixed | Characteristic (final mean) |

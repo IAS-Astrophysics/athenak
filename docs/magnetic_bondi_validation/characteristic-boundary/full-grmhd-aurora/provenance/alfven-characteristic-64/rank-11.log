@@ -1,0 +1,31 @@
+rank=11 host=x4310c3s2b0n0 affinity=5.1
+Characteristic boundary rank 11 faces=600 limited=0
+Characteristic boundary rank 11 faces=120600 limited=0
+Characteristic boundary rank 11 faces=240600 limited=0
+Characteristic boundary rank 11 faces=360600 limited=0
+Characteristic boundary rank 11 faces=480600 limited=0
+Characteristic boundary rank 11 faces=600600 limited=0
+Characteristic boundary rank 11 faces=720600 limited=0
+Characteristic boundary rank 11 faces=840600 limited=0
+Characteristic boundary rank 11 faces=960600 limited=0
+Characteristic boundary rank 11 faces=1080600 limited=0
+Characteristic boundary rank 11 faces=1200600 limited=0
+Characteristic boundary rank 11 faces=1320600 limited=0
+Characteristic boundary rank 11 faces=1440600 limited=0
+Characteristic boundary rank 11 faces=1560600 limited=0
+Characteristic boundary rank 11 faces=1680600 limited=0
+Characteristic boundary rank 11 faces=1800600 limited=0
+Characteristic boundary rank 11 faces=1920600 limited=0
+Characteristic boundary rank 11 faces=2040600 limited=0
+Characteristic boundary rank 11 faces=2160600 limited=0
+Characteristic boundary rank 11 faces=2280600 limited=0
+Characteristic boundary rank 11 faces=2400600 limited=0
+Characteristic boundary rank 11 faces=2520600 limited=0
+Characteristic boundary rank 11 faces=2640600 limited=0
+Characteristic boundary rank 11 faces=2760600 limited=0
+Characteristic boundary rank 11 faces=2880600 limited=0
+Characteristic boundary rank 11 faces=3000600 limited=0
+Characteristic boundary rank 11 faces=3120600 limited=0
+Characteristic boundary rank 11 faces=3240600 limited=0
+Characteristic boundary rank 11 faces=3360600 limited=0
+{"command": ["./build-characteristic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/alfven-characteristic-64", "-t", "00:55:00", "mesh_refinement/refinement=none", "mesh/nx1=16", "mesh/nx2=16", "mesh/nx3=64", "coord/excise=false", "coord/require_resolved_horizon=false", "problem/single_black_hole=true", "problem/reservoir_test_flat_metric=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "problem/reservoir_boundary=characteristic", "problem/reservoir_test_pulse=0.01", "problem/reservoir_test_pulse_mode=alfven", "time/tlim=180", "time/nlim=50000", "output1/dt=180", "output2/dt=180", "output3/dt=180", "output4/dt=0", "mesh/ix1_bc=periodic", "mesh/ox1_bc=periodic", "mesh/ix2_bc=periodic", "mesh/ox2_bc=periodic", "mesh/x1min=-8", "mesh/x1max=8", "mesh/x2min=-8", "mesh/x2max=8", "mesh/x3min=-8", "mesh/x3max=8"], "returncode": 0, "peak_rss_bytes": 675991552, "memory_budget_bytes": 1200000000, "seconds": 123.14136583311483, "stopped": null}

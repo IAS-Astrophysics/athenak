@@ -1,0 +1,51 @@
+rank=0 host=x4310c3s2b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+
+Root grid = 2 x 2 x 12 MeshBlocks
+Total number of MeshBlocks = 48
+Number of logical  levels of refinement = 4 (5 levels total)
+Number of physical levels of refinement = 0 (1 levels total)
+Number of parallel ranks = 12
+  Rank = 0: 4 MeshBlocks, cost = 4
+  Rank = 1: 4 MeshBlocks, cost = 4
+  Rank = 2: 4 MeshBlocks, cost = 4
+  Rank = 3: 4 MeshBlocks, cost = 4
+  Rank = 4: 4 MeshBlocks, cost = 4
+  Rank = 5: 4 MeshBlocks, cost = 4
+  Rank = 6: 4 MeshBlocks, cost = 4
+  Rank = 7: 4 MeshBlocks, cost = 4
+  Rank = 8: 4 MeshBlocks, cost = 4
+  Rank = 9: 4 MeshBlocks, cost = 4
+  Rank = 10: 4 MeshBlocks, cost = 4
+  Rank = 11: 4 MeshBlocks, cost = 4
+Load Balancing:
+  Maximum normalized cost = 1, Average = 1
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0 corotating=0 single_black_hole=1 M_total=1 boundary=ambient
+
+Setup complete, executing task list(s)...
+
+elapsed=1.074785e+00 cycle=0 time=0.000000e+00 dt=1.250000e-01
+elapsed=2.921453e+00 cycle=100 time=1.250000e+01 dt=1.250000e-01
+elapsed=4.484489e+00 cycle=200 time=2.500000e+01 dt=1.250000e-01
+elapsed=6.070953e+00 cycle=300 time=3.750000e+01 dt=1.250000e-01
+elapsed=7.633102e+00 cycle=400 time=5.000000e+01 dt=1.250000e-01
+elapsed=9.206257e+00 cycle=500 time=6.250000e+01 dt=1.250000e-01
+elapsed=1.077059e+01 cycle=600 time=7.500000e+01 dt=1.250000e-01
+elapsed=1.234832e+01 cycle=700 time=8.750000e+01 dt=1.250000e-01
+elapsed=1.393534e+01 cycle=800 time=1.000000e+02 dt=1.250000e-01
+elapsed=1.550928e+01 cycle=900 time=1.125000e+02 dt=1.250000e-01
+elapsed=1.707763e+01 cycle=1000 time=1.250000e+02 dt=1.250000e-01
+elapsed=1.866045e+01 cycle=1100 time=1.375000e+02 dt=1.250000e-01
+elapsed=2.024840e+01 cycle=1200 time=1.500000e+02 dt=1.250000e-01
+elapsed=2.181903e+01 cycle=1300 time=1.625000e+02 dt=1.250000e-01
+elapsed=2.338991e+01 cycle=1400 time=1.750000e+02 dt=1.250000e-01
+
+Terminating on time limit
+time=1.800000e+02 cycle=1440
+tlim=1.800000e+02 nlim=50000
+
+MeshBlock-cycles = 69120
+cpu time used  = 2.367366e+01
+zone-cycles/cpu_second = 1.494886e+06
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-characteristic/src/athena", "-i", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/input.athinput", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/boundary-grmhd-characteristic-20261018-v1/alfven-reference-32", "-t", "00:55:00", "mesh_refinement/refinement=none", "mesh/nx1=16", "mesh/nx2=16", "mesh/nx3=96", "coord/excise=false", "coord/require_resolved_horizon=false", "problem/single_black_hole=true", "problem/reservoir_test_flat_metric=true", "problem/reservoir_pressure_perturbation=0", "problem/corotating=false", "problem/frame_omega=0", "problem/reservoir_boundary=fixed", "problem/reservoir_test_pulse=0.01", "problem/reservoir_test_pulse_mode=alfven", "time/tlim=180", "time/nlim=50000", "output1/dt=180", "output2/dt=180", "output3/dt=180", "output4/dt=0", "mesh/ix1_bc=periodic", "mesh/ox1_bc=periodic", "mesh/ix2_bc=periodic", "mesh/ox2_bc=periodic", "mesh/x1min=-8", "mesh/x1max=8", "mesh/x2min=-8", "mesh/x2max=8", "mesh/x3min=-24", "mesh/x3max=24"], "returncode": 0, "peak_rss_bytes": 673435648, "memory_budget_bytes": 1200000000, "seconds": 25.68527070991695, "stopped": null}
