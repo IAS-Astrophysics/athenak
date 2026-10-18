@@ -1,0 +1,14 @@
+[
+  {
+    "name": "ct-alfven-fixed-32",
+    "max_incoming_error_over_seed": 0.0007853765893464836,
+    "rms_incoming_error_over_seed": 0.00028086807187191725,
+    "max_rank_seconds": 32.233854703999896
+  },
+  {
+    "name": "ct-alfven-order3-32",
+    "max_incoming_error_over_seed": 0.00019277273212316,
+    "rms_incoming_error_over_seed": 0.00010579681230828345,
+    "max_rank_seconds": 55.94794424999964
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "name": "acoustic3d-fastrotation-characteristic-16",
+    "ghost_ct_incoming_proxy_max": 1.4464070461744352e-05,
+    "face_only_incoming_proxy_max": 1.5055827821752266e-05,
+    "ghost_ct_incoming_proxy_rms": 5.761682741193926e-07,
+    "face_only_incoming_proxy_rms": 5.066478762191015e-07
+  },
+  {
+    "name": "acoustic3d-fastrotation-characteristic-32",
+    "ghost_ct_incoming_proxy_max": 7.182584099902668e-05,
+    "face_only_incoming_proxy_max": 8.749141699206358e-05,
+    "ghost_ct_incoming_proxy_rms": 1.2304272306886458e-06,
+    "face_only_incoming_proxy_rms": 1.1620537667583478e-06
+  },
+  {
+    "name": "acoustic3d-fastrotation-fixed-16",
+    "ghost_ct_incoming_proxy_max": 4.11332088339053e-06,
+    "face_only_incoming_proxy_max": 4.11332088339053e-06,
+    "ghost_ct_incoming_proxy_rms": 2.0247906716728848e-07,
+    "face_only_incoming_proxy_rms": 2.0247906716728848e-07
+  },
+  {
+    "name": "acoustic3d-fastrotation-fixed-32",
+    "ghost_ct_incoming_proxy_max": 4.440843177947688e-05,
+    "face_only_incoming_proxy_max": 4.440843177947688e-05,
+    "ghost_ct_incoming_proxy_rms": 5.905079194816332e-07,
+    "face_only_incoming_proxy_rms": 5.905079194816332e-07
+  },
+  {
+    "name": "acoustic3d-rotating-characteristic-16",
+    "ghost_ct_incoming_proxy_max": 0.03453151829550524,
+    "face_only_incoming_proxy_max": 0.031242128038398036,
+    "ghost_ct_incoming_proxy_rms": 0.004088339322941273,
+    "face_only_incoming_proxy_rms": 0.0038676908337872563
+  },
+  {
+    "name": "acoustic3d-rotating-characteristic-24",
+    "ghost_ct_incoming_proxy_max": 0.06636007021019859,
+    "face_only_incoming_proxy_max": 0.0648666798710877,
+    "ghost_ct_incoming_proxy_rms": 0.00583133692094041,
+    "face_only_incoming_proxy_rms": 0.005472818162403899
+  },
+  {
+    "name": "acoustic3d-rotating-fixed-16",
+    "ghost_ct_incoming_proxy_max": 0.024819766803460583,
+    "face_only_incoming_proxy_max": 0.024819766803460583,
+    "ghost_ct_incoming_proxy_rms": 0.0031895408362071992,
+    "face_only_incoming_proxy_rms": 0.0031895408362071992
+  },
+  {
+    "name": "acoustic3d-rotating-fixed-24",
+    "ghost_ct_incoming_proxy_max": 0.05620882315777009,
+    "face_only_incoming_proxy_max": 0.05620882315777009,
+    "ghost_ct_incoming_proxy_rms": 0.004778986235353955,
+    "face_only_incoming_proxy_rms": 0.004778986235353955
+  },
+  {
+    "name": "entropy-fastrotation-characteristic-16",
+    "ghost_ct_incoming_proxy_max": 7.894709704390622e-15,
+    "face_only_incoming_proxy_max": 7.900157681341019e-15,
+    "ghost_ct_incoming_proxy_rms": 2.596980159964391e-15,
+    "face_only_incoming_proxy_rms": 2.5977666401012075e-15
+  },
+  {
+    "name": "entropy-fastrotation-characteristic-32",
+    "ghost_ct_incoming_proxy_max": 1.7628133880698626e-14,
+    "face_only_incoming_proxy_max": 1.5397461364448095e-14,
+    "ghost_ct_incoming_proxy_rms": 3.592570636859917e-15,
+    "face_only_incoming_proxy_rms": 3.589848394432014e-15
+  },
+  {
+    "name": "entropy-fastrotation-fixed-16",
+    "ghost_ct_incoming_proxy_max": 6.025344220311211e-15,
+    "face_only_incoming_proxy_max": 6.025344220311211e-15,
+    "ghost_ct_incoming_proxy_rms": 4.451917276870298e-16,
+    "face_only_incoming_proxy_rms": 4.451917276870298e-16
+  },
+  {
+    "name": "entropy-fastrotation-fixed-32",
+    "ghost_ct_incoming_proxy_max": 1.5517539699813846e-14,
+    "face_only_incoming_proxy_max": 1.5517539699813846e-14,
+    "ghost_ct_incoming_proxy_rms": 3.560551897701564e-16,
+    "face_only_incoming_proxy_rms": 3.560551897701564e-16
+  }
+]

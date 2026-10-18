@@ -1,6 +1,7 @@
 > New implementation: [characteristic ghosts and native CT](ghost-ct/README.md).
-> Final local preflights and GPU build pass; one-node capacity job **8942262** is queued.
-> Production selection remains fixed pending the new rotating comparisons.
+> Job **8942262** finished: 32 cases pass, but the final curved case rejects
+> refined physical faces. [Results](ghost-ct/aurora/README.md) still favor fixed
+> for rotating acoustics. No retry or production adoption.
 
 > Rotating suite **8942061 completed**: all 30 cases and 360 rank audits pass.
 > The quadratic trace improves planar acoustic pressure diagnostics, but remains

@@ -1,0 +1,32 @@
+{
+  "scope": "Residuals against matched larger-domain controls, not nonlinear reflection coefficients. Runtime ratios use each method allocation's fresh fixed control; absolute allocation times are not directly compared.",
+  "comparisons": [
+    {
+      "treatment": "Fixed",
+      "planar_final_percent_seed": 0.014503419420054672,
+      "planar_peak_percent_seed": 0.054398254067877155,
+      "rotating_final_percent_seed": 5.620882315777009,
+      "rotating_peak_percent_seed": 7.387892848988338,
+      "planar_runtime_ratio": 1.0,
+      "rotating_runtime_ratio": 1.0
+    },
+    {
+      "treatment": "Face-only characteristic (v2)",
+      "planar_final_percent_seed": 0.011604839263141268,
+      "planar_peak_percent_seed": 0.028134627409856765,
+      "rotating_final_percent_seed": 6.48666798710877,
+      "rotating_peak_percent_seed": 9.298477734715286,
+      "planar_runtime_ratio": 1.633416035506702,
+      "rotating_runtime_ratio": 2.8371648678313344
+    },
+    {
+      "treatment": "Ghost/CT characteristic (v3)",
+      "planar_final_percent_seed": 0.02686685252097305,
+      "planar_peak_percent_seed": 0.040908196752109945,
+      "rotating_final_percent_seed": 6.636007021019859,
+      "rotating_peak_percent_seed": 7.929921926378332,
+      "planar_runtime_ratio": 1.7160368462620739,
+      "rotating_runtime_ratio": 2.3474960108323746
+    }
+  ]
+}

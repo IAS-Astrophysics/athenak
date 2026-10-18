@@ -1,4 +1,10 @@
-# Characteristic ghost reconstruction and native CT — validation in progress
+# Characteristic ghost reconstruction and native CT — partial validation
+
+**Job 8942262 finished with a failure in its final curved-AMR case.** The other32
+cases pass their audits. The rotating acoustic residual remains worse than
+fixed, with a 2.35x runtime cost at n24. Keep the fixed production default.
+See [results, plots and refined-physical-face diagnosis](aurora/README.md).
+No retry was submitted; monitoring is paused after delivery.
 
 The user authorized this implementation and repeated rotating tests on one Aurora
 capacity node. The production default remains fixed. No physical smooth-excision
@@ -56,7 +62,7 @@ same operation count with v2.
 
 Support is deliberately restricted to 3D blocks with at least three cells per
 axis and **unrefined physical faces**. Interior static AMR is allowed and tested
-with the actual curved binary hierarchy. Refined physical faces are rejected
+with a coarse curved binary hierarchy. Refined physical faces are rejected
 because they need a separate coarse physical-ghost/reflux closure; the code does
 not claim that missing treatment is consistent. Strong/oblique curved waves and
 long-time exterior reentry remain outside the present validation. Coordinate CFL
@@ -81,8 +87,9 @@ An additional 8x8x4 MeshBlock control matching the GPU layout passes. In the
 compact flat control, x/y exchange plus rotation reversal gives identical saved
 density/pressure and velocity/B differences below 2.3e-15. These bounded checks
 do not establish arbitrary corner scattering symmetry, production accuracy,
-interior convergence or horizon-resolved drain behavior. The GPU pair retains
-the actual hierarchy.
+interior convergence or horizon-resolved drain behavior. The GPU pair attempted
+the full hierarchy, but its characteristic case exposed refined physical faces
+and aborted at the support guard. The coarse preflight missed that topology.
 
 Remote root:
 `/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013`.
@@ -95,12 +102,13 @@ record confirms queued state, one node and one-hour walltime. The final guarded
 GPU build passed with executable SHA256
 `d48198a64798b54ab7e334b7b14f7f0482f0285fdbec19ae53e34d38c71689c9`.
 The accepted receipt, source/executable hashes, build resource reports and initial
-scheduler record are preserved in `provenance/`. The submission controller has
-finished; no further build or submission is needed. GPU accuracy/runtime audits
-are pending. The active heartbeat follows this accepted receipt and stays quiet
-while its queued/running state is unchanged.
+scheduler record are preserved in `provenance/`. Final qstat records F/143; the
+last characteristic case aborted because 32 outer x-face blocks are refined.
+The other32 cases passed384 rank audits. This is not an all33-case pass and there
+is no full-hierarchy curved comparison. The controller finished, no retry is
+submitted, and the final [analysis](aurora/README.md) retains all failure evidence.
 
-Serialized owners:
+Historical serialized owners (all finished):
 
 - `trial/build.sh`, with `build.pid/log/started`, owns the broad guarded build.
 - `trial/finalize_characteristic_ghost_ct.sh`, with `finalize.pid/log/started`,

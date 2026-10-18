@@ -1,6 +1,8 @@
 > Follow-up: [ghost reconstruction and native CT](ghost-ct/README.md) are now
 > implemented behind `reservoir_ghost_ct=true`, with final local gates passing.
-> One-node capacity job **8942262** is queued; GPU comparisons are pending.
+> Job **8942262** ended with32 passing cases and a refined-physical-face guard
+> failure in the final curved case. [Results](ghost-ct/aurora/README.md) support
+> keeping fixed for production; no retry was submitted.
 
 > Updated rotating tests: job **8942061** completed all 30 cases and 360 rank audits.
 > [Acoustic/runtime comparisons](improved-rotating/aurora/README.md) support keeping

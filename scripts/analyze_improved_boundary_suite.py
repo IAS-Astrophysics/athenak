@@ -10,7 +10,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from analyze_grmhd_characteristic import audit,compare_curved
 from analyze_rotating_characteristic import analyze
-p=argparse.ArgumentParser();p.add_argument('--runs',type=Path,required=True);p.add_argument('--previous',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--runs',type=Path,required=True);p.add_argument('--previous',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--skip-curved',action='store_true',help='Audit only the 28 flat controls; caller must separately account for both curved cases');a=p.parse_args();a.out.mkdir(parents=True,exist_ok=True)
 analyze(a.runs,a.out/'rotating');rows=json.loads((a.out/'rotating/audits.json').read_text());assert len(rows)==18
 new={}
 fresh={}
@@ -19,9 +19,11 @@ for n in (32,64):
   row=audit(a.runs/f'planar-acoustic-{choice}-{n}',target=180,boundary='fixed',wave_mode='acoustic');rows.append(row);fresh[n,choice]=row
  for order in (1,2,3):
   case=a.runs/f'planar-acoustic-order{order}-{n}';row=audit(case,target=180,boundary='characteristic',wave_mode='acoustic');rows.append(row);new[n,order]=row
-for b in ('fixed','characteristic'):rows.append(audit(a.runs/f'curved-amr-{b}'))
-assert len(rows)==30
-(a.out/'all_audits.json').write_text(json.dumps(rows,indent=2)+'\n');(a.out/'curved_inner_comparison.json').write_text(json.dumps(compare_curved(a.runs),indent=2)+'\n')
+if not a.skip_curved:
+ for b in ('fixed','characteristic'):rows.append(audit(a.runs/f'curved-amr-{b}'))
+assert len(rows)==(28 if a.skip_curved else 30)
+(a.out/'all_audits.json').write_text(json.dumps(rows,indent=2)+'\n')
+if not a.skip_curved:(a.out/'curved_inner_comparison.json').write_text(json.dumps(compare_curved(a.runs),indent=2)+'\n')
 old={r['name']:r for r in json.loads(a.previous.read_text())};summary=[]
 fig,axs=plt.subplots(1,2,figsize=(11,4),constrained_layout=True)
 def profile(row):

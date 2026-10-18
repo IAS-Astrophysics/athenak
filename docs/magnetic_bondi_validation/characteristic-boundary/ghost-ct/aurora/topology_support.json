@@ -1,0 +1,79 @@
+[
+  {
+    "snapshot": "build-mac-characteristic/ghost-ct-final-curved/curved-amr-fixed/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+    "time": 0.0,
+    "meshblock_shape": [
+      8,
+      8,
+      8
+    ],
+    "total_blocks": 176,
+    "physical_boundary_blocks": 56,
+    "refined_physical_boundary_blocks": 0,
+    "physical_boundary_levels": {
+      "0": 56
+    },
+    "user_faces": {
+      "ix1": {
+        "0": 16
+      },
+      "ox1": {
+        "0": 16
+      },
+      "ix2": {
+        "0": 16
+      },
+      "ox2": {
+        "0": 16
+      },
+      "ix3": {
+        "0": 16
+      },
+      "ox3": {
+        "0": 16
+      }
+    },
+    "supported": true,
+    "scope": "Saved topology support only; no numerical accuracy claim"
+  },
+  {
+    "snapshot": "build-mac-characteristic/aurora-grmhd/boundary-characteristic-rotating-20261018-v3/curved-amr-fixed/bin/magnetic_bondi_binary.mhd_w_bcc.00000.bin",
+    "time": 0.0,
+    "meshblock_shape": [
+      8,
+      8,
+      8
+    ],
+    "total_blocks": 1408,
+    "physical_boundary_blocks": 80,
+    "refined_physical_boundary_blocks": 32,
+    "physical_boundary_levels": {
+      "0": 48,
+      "1": 32
+    },
+    "user_faces": {
+      "ix1": {
+        "0": 12,
+        "1": 16
+      },
+      "ox1": {
+        "0": 12,
+        "1": 16
+      },
+      "ix2": {
+        "0": 16
+      },
+      "ox2": {
+        "0": 16
+      },
+      "ix3": {
+        "0": 16
+      },
+      "ox3": {
+        "0": 16
+      }
+    },
+    "supported": false,
+    "scope": "Saved topology support only; no numerical accuracy claim"
+  }
+]

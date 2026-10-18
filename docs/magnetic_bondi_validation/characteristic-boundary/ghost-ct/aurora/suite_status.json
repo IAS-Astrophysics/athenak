@@ -1,0 +1,9 @@
+{
+  "status": "incomplete-unsupported-curved",
+  "audited_cases": 32,
+  "expected_cases": 33,
+  "failed_cases": [
+    "curved-amr-characteristic"
+  ],
+  "paired_curved_comparison": false
+}

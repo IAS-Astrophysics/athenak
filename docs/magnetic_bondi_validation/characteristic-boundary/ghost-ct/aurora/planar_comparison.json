@@ -1,0 +1,72 @@
+[
+  {
+    "n": 32,
+    "treatment": "fixed",
+    "max_incoming_difference_over_seed": 0.00042174400723942243,
+    "rms_incoming_difference_over_seed": 9.884597658980365e-05,
+    "max_rank_seconds": 35.2212400010003
+  },
+  {
+    "n": 32,
+    "treatment": "old first-order",
+    "max_incoming_difference_over_seed": 0.00036576062728347996,
+    "rms_incoming_difference_over_seed": 0.00010838481018027371,
+    "max_rank_seconds": 59.962223330978304
+  },
+  {
+    "n": 32,
+    "treatment": "optimized first-order",
+    "max_incoming_difference_over_seed": 0.00038458883856739304,
+    "rms_incoming_difference_over_seed": 0.00012777200641465986,
+    "max_rank_seconds": 62.663989478000076
+  },
+  {
+    "n": 32,
+    "treatment": "limited second-order",
+    "max_incoming_difference_over_seed": 0.0002471463889123637,
+    "rms_incoming_difference_over_seed": 8.991588476326986e-05,
+    "max_rank_seconds": 55.854341446000035
+  },
+  {
+    "n": 32,
+    "treatment": "limited quadratic",
+    "max_incoming_difference_over_seed": 0.00032191269449689445,
+    "rms_incoming_difference_over_seed": 8.968720004659378e-05,
+    "max_rank_seconds": 56.09428374400068
+  },
+  {
+    "n": 64,
+    "treatment": "fixed",
+    "max_incoming_difference_over_seed": 0.0001907595286582405,
+    "rms_incoming_difference_over_seed": 5.8560083021154284e-05,
+    "max_rank_seconds": 58.874953845000164
+  },
+  {
+    "n": 64,
+    "treatment": "old first-order",
+    "max_incoming_difference_over_seed": 0.00033700815958052015,
+    "rms_incoming_difference_over_seed": 8.766233346346603e-05,
+    "max_rank_seconds": 115.5671696960926
+  },
+  {
+    "n": 64,
+    "treatment": "optimized first-order",
+    "max_incoming_difference_over_seed": 0.00037277159531635056,
+    "rms_incoming_difference_over_seed": 9.002724766982681e-05,
+    "max_rank_seconds": 112.5007328949996
+  },
+  {
+    "n": 64,
+    "treatment": "limited second-order",
+    "max_incoming_difference_over_seed": 0.00022969849242083457,
+    "rms_incoming_difference_over_seed": 7.248669790743216e-05,
+    "max_rank_seconds": 105.36067935899973
+  },
+  {
+    "n": 64,
+    "treatment": "limited quadratic",
+    "max_incoming_difference_over_seed": 0.0002726848538880371,
+    "rms_incoming_difference_over_seed": 8.26067103292772e-05,
+    "max_rank_seconds": 101.03159011999924
+  }
+]
