@@ -2,6 +2,11 @@
 """Compare initial/first-return MHD finest visits without importing hydro normalization."""
 import os
 for k in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS'):os.environ[k]='1'
+import sys
+if '--runs' in sys.argv:
+ from analyze_smooth_magnetic_inflow import main
+ main()
+ raise SystemExit(0)
 import argparse,json,re
 from pathlib import Path
 import numpy as np

@@ -69,10 +69,10 @@ def selected_snapshots(runs, events):
     return selected
 
 
-def geometry(ad, af, radius, center, nmu):
+def geometry(ad, af, radius, center, nmu, sampler_class=AMRSampler):
     points, normal, weights = sphere_grid(np.array([radius]), nmu, 2*nmu)
     points += np.array([center, 0., 0.])
-    s = AMRSampler(ad, points)
+    s = sampler_class(ad, points)
     g = np.empty((len(points), 3, 3))
     for i, j, name in [(0,0,'xx'),(0,1,'xy'),(0,2,'xz'),
                        (1,1,'yy'),(1,2,'yz'),(2,2,'zz')]:
@@ -84,9 +84,9 @@ def geometry(ad, af, radius, center, nmu):
     return points, normal, weights, g, alpha, beta, np.sqrt(det)
 
 
-def flux(d, f, geo, radius):
+def flux(d, f, geo, radius, sampler_class=AMRSampler):
     points, normal, weights, g, alpha, beta, sqrtg = geo
-    s = AMRSampler(d, points)
+    s = sampler_class(d, points)
     rho = s.sample(f['dens'])
     u = np.column_stack([s.sample(f['vel'+k]) for k in 'xyz'])
     # Athena stores the normal-frame spatial four-velocity: utilde^i.

@@ -1,0 +1,175 @@
+{
+  "ranks": [
+    {
+      "rank": 0,
+      "affinity": "0.0",
+      "rss_bytes": 897933312,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.45893405308,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 1,
+      "affinity": "0.1",
+      "rss_bytes": 901300224,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.445028325077,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 2,
+      "affinity": "1.0",
+      "rss_bytes": 901386240,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.450338785071,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 3,
+      "affinity": "1.1",
+      "rss_bytes": 902000640,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.4662085669115,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 4,
+      "affinity": "2.0",
+      "rss_bytes": 909910016,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.453076452017,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 5,
+      "affinity": "2.1",
+      "rss_bytes": 901185536,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.470370933879,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 6,
+      "affinity": "3.0",
+      "rss_bytes": 904998912,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.4449873461854,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 7,
+      "affinity": "3.1",
+      "rss_bytes": 894152704,
+      "tracked_bytes": 1026848872,
+      "seconds": 3304.4404885279946,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 8,
+      "affinity": "4.0",
+      "rss_bytes": 896176128,
+      "tracked_bytes": 1027860520,
+      "seconds": 3304.4394835000858,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 9,
+      "affinity": "4.1",
+      "rss_bytes": 899473408,
+      "tracked_bytes": 1027860520,
+      "seconds": 3304.4523991378956,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 10,
+      "affinity": "5.0",
+      "rss_bytes": 893677568,
+      "tracked_bytes": 1027860520,
+      "seconds": 3304.437676097965,
+      "metric_evaluations": 2
+    },
+    {
+      "rank": 11,
+      "affinity": "5.1",
+      "rss_bytes": 893792256,
+      "tracked_bytes": 1027860520,
+      "seconds": 3304.437245040899,
+      "metric_evaluations": 2
+    }
+  ],
+  "hosts": [
+    "x4103c1s5b0n0"
+  ],
+  "termination": "wall clock limit",
+  "aggregate_peak_rss_bytes": 10795986944,
+  "sum_tracked_allocation_peaks_bytes": 12326233056,
+  "conservative_sum_bytes": 23122220000,
+  "sum_guard_budgets_bytes": 28399999992,
+  "max_abs_divb": 2.601882442831993e-08,
+  "max_abs_divb_exterior": 7.884182195994072e-11,
+  "max_scaled_divb": 3.553578991620225e-12,
+  "scaled_divb_definition": "dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient)",
+  "field_normalization_floor": 7.026986824843127e-05,
+  "diagnostic_excision_spheres": [
+    {
+      "center": 16.0,
+      "radius": 0.8
+    },
+    {
+      "center": -16.0,
+      "radius": 0.8
+    }
+  ],
+  "states": [
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00589.bin",
+      "time": 29450.0,
+      "cycle": 340083,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 3.654547981568612e-06,
+      "min_pressure": 2.5829108274942614e-13,
+      "max_Btilde_coordinate_norm": 13918.474301237096,
+      "max_Btilde_exterior": 40.252194984925,
+      "max_abs_divb": 1.8742866814136505e-08,
+      "max_abs_divb_exterior": 7.645439836778678e-11,
+      "max_scaled_divb": 3.553578991620225e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00590.bin",
+      "time": 29477.1,
+      "cycle": 343819,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 2.5662391180958366e-06,
+      "min_pressure": 2.594935171688212e-13,
+      "max_Btilde_coordinate_norm": 14598.045726118931,
+      "max_Btilde_exterior": 42.25235014923499,
+      "max_abs_divb": 2.601882442831993e-08,
+      "max_abs_divb_exterior": 7.884182195994072e-11,
+      "max_scaled_divb": 2.6680874192835805e-12
+    }
+  ],
+  "restored_topology": false,
+  "initial_checkpoint_state": {
+    "time": 29358.23867492825,
+    "dt": 0.00726085448353874,
+    "cycle": 327445,
+    "blocks": 1408
+  },
+  "interpretation": "smooth-excision continuation of evolved hard-excision data; finite fields do not establish relaxation",
+  "smooth_checkpoint": {
+    "time": 29477.127906238133,
+    "dt": 0.00726085448353874,
+    "cycle": 343819,
+    "blocks": 1408,
+    "id": 42,
+    "zone": 0,
+    "last_cycle": 315250,
+    "last_zone": 1,
+    "direction": 1,
+    "next_time": 29519.69255450416
+  },
+  "residence_reset_records": [],
+  "two_complete_smooth_cycles": false
+}

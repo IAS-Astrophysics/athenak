@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "build-mac-zoom-opt/render_smooth_final.py"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 546029568,
+  "memory_budget_bytes": 8000000000,
+  "seconds": 20.677227791,
+  "stopped": null
+}

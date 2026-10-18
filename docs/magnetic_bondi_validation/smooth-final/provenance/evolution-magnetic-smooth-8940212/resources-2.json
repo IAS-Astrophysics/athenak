@@ -1,0 +1,17 @@
+{
+  "command": [
+    "./build-magnetic-smooth/src/athena",
+    "-r",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940137/rst/magnetic_bondi_binary.00040.rst",
+    "-d",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940212",
+    "-t",
+    "00:55:00",
+    "time/tlim=29500"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 934752256,
+  "memory_budget_bytes": 1200000000,
+  "seconds": 3303.82591356989,
+  "stopped": null
+}

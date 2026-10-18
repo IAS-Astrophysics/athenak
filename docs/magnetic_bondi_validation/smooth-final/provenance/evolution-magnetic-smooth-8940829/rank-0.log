@@ -1,0 +1,135 @@
+rank=0 host=x4302c2s3b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+
+Root grid = 4 x 4 x 4 MeshBlocks
+Total number of MeshBlocks = 1408
+Number of logical  levels of refinement = 14 (15 levels total)
+Number of physical levels of refinement = 12 (13 levels total)
+  Physical level = 0 (logical level = 2): 48 MeshBlocks, cost = 48
+  Physical level = 1 (logical level = 3): 112 MeshBlocks, cost = 112
+  Physical level = 2 (logical level = 4): 112 MeshBlocks, cost = 112
+  Physical level = 3 (logical level = 5): 112 MeshBlocks, cost = 112
+  Physical level = 4 (logical level = 6): 112 MeshBlocks, cost = 112
+  Physical level = 5 (logical level = 7): 112 MeshBlocks, cost = 112
+  Physical level = 6 (logical level = 8): 112 MeshBlocks, cost = 112
+  Physical level = 7 (logical level = 9): 112 MeshBlocks, cost = 112
+  Physical level = 8 (logical level = 10): 112 MeshBlocks, cost = 112
+  Physical level = 9 (logical level = 11): 112 MeshBlocks, cost = 112
+  Physical level = 10 (logical level = 12): 112 MeshBlocks, cost = 112
+  Physical level = 11 (logical level = 13): 112 MeshBlocks, cost = 112
+  Physical level = 12 (logical level = 14): 128 MeshBlocks, cost = 128
+Number of parallel ranks = 12
+  Rank = 0: 117 MeshBlocks, cost = 117
+  Rank = 1: 117 MeshBlocks, cost = 117
+  Rank = 2: 117 MeshBlocks, cost = 117
+  Rank = 3: 117 MeshBlocks, cost = 117
+  Rank = 4: 117 MeshBlocks, cost = 117
+  Rank = 5: 117 MeshBlocks, cost = 117
+  Rank = 6: 117 MeshBlocks, cost = 117
+  Rank = 7: 117 MeshBlocks, cost = 117
+  Rank = 8: 118 MeshBlocks, cost = 118
+  Rank = 9: 118 MeshBlocks, cost = 118
+  Rank = 10: 118 MeshBlocks, cost = 118
+  Rank = 11: 118 MeshBlocks, cost = 118
+Load Balancing:
+  Maximum normalized cost = 1.00855, Average = 1.00285
+=============== CyclicZoom Information ===============
+Basic: read_rst = 1 write_rst = 1
+Mesh: nzmb_max_perdvce = 128 nzmb_max_perhost = 128
+Data: nvars = 5 nangles = 0 zmb_data_cnt = 76492
+Initial: d_zoom = 1.17549e-38 p_zoom = 1.17549e-38
+Funcs: add_emf = 1
+Efield: emf_fmax = 1 emf_zmax = 8
+Region: x1c = 16 x2c = 0 x3c = 0 r_0 = 0.5 radius = 0.5
+ f_ref = 4 r_ref = 2 r_ref_max = 3.40282e+38
+ f_exc = 0 r_exc = 0 r_exc_max = 8
+ f_cut = 0 r_cut = 0 r_cut_max = 0
+ f_flx = 0 r_flx = 0 r_flx_max = 0
+Interval: trun_fac = 10 trun_pow = 1.5 trun_max = 3.40282e+38
+ trun_fac_0 = 10
+ trun_fac_1 = 10
+ trun_fac_2 = 10
+ trun_fac_3 = 10
+ trun_fac_4 = 10
+ trun_fac_5 = 10
+ trun_fac_6 = 10
+ trun_fac_7 = 10
+AMR: level = 14 max_level = 14 min_level = 7
+State: id = 0 zone = 0 last_zone = 0 direction = 1
+Time: runtime = 250 next time = 29727.1
+======================================================
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0.00552427 corotating=1 single_black_hole=0 M_total=1 boundary=ambient
+=============== CyclicZoom Information ===============
+Basic: read_rst = 1 write_rst = 1
+Mesh: nzmb_max_perdvce = 128 nzmb_max_perhost = 128
+Data: nvars = 5 nangles = 0 zmb_data_cnt = 76492
+Initial: d_zoom = 1.17549e-38 p_zoom = 1.17549e-38
+Funcs: add_emf = 1
+Efield: emf_fmax = 1 emf_zmax = 8
+Region: x1c = 16 x2c = 0 x3c = 0 r_0 = 0.5 radius = 0.5
+ f_ref = 4 r_ref = 2 r_ref_max = 3.40282e+38
+ f_exc = 0 r_exc = 0 r_exc_max = 8
+ f_cut = 0 r_cut = 0 r_cut_max = 0
+ f_flx = 0 r_flx = 0 r_flx_max = 0
+Interval: trun_fac = 10 trun_pow = 1.5 trun_max = 3.40282e+38
+ trun_fac_0 = 10
+ trun_fac_1 = 10
+ trun_fac_2 = 10
+ trun_fac_3 = 10
+ trun_fac_4 = 10
+ trun_fac_5 = 10
+ trun_fac_6 = 10
+ trun_fac_7 = 10
+AMR: level = 14 max_level = 14 min_level = 7
+State: id = 42 zone = 0 last_zone = 1 direction = 1
+Time: runtime = 250 next time = 29519.7
+======================================================
+
+Setup complete, executing task list(s)...
+
+elapsed=2.100357e+01 cycle=343900 time=2.947772e+04 dt=7.260854e-03
+elapsed=4.160021e+01 cycle=344000 time=2.947844e+04 dt=7.260854e-03
+elapsed=6.215560e+01 cycle=344100 time=2.947917e+04 dt=7.260854e-03
+elapsed=8.266052e+01 cycle=344200 time=2.947989e+04 dt=7.260854e-03
+elapsed=1.031633e+02 cycle=344300 time=2.948062e+04 dt=7.260854e-03
+elapsed=1.237040e+02 cycle=344400 time=2.948135e+04 dt=7.260854e-03
+elapsed=1.442605e+02 cycle=344500 time=2.948207e+04 dt=7.260854e-03
+elapsed=1.648277e+02 cycle=344600 time=2.948280e+04 dt=7.260854e-03
+elapsed=1.853705e+02 cycle=344700 time=2.948352e+04 dt=7.260854e-03
+elapsed=2.058787e+02 cycle=344800 time=2.948425e+04 dt=7.260854e-03
+elapsed=2.263731e+02 cycle=344900 time=2.948498e+04 dt=7.260854e-03
+elapsed=2.469157e+02 cycle=345000 time=2.948570e+04 dt=7.260854e-03
+elapsed=2.674131e+02 cycle=345100 time=2.948643e+04 dt=7.260854e-03
+elapsed=2.879784e+02 cycle=345200 time=2.948716e+04 dt=7.260854e-03
+elapsed=3.085084e+02 cycle=345300 time=2.948788e+04 dt=7.260854e-03
+elapsed=3.290986e+02 cycle=345400 time=2.948861e+04 dt=7.260854e-03
+elapsed=3.496192e+02 cycle=345500 time=2.948933e+04 dt=7.260854e-03
+elapsed=3.701802e+02 cycle=345600 time=2.949006e+04 dt=7.260854e-03
+elapsed=3.907085e+02 cycle=345700 time=2.949079e+04 dt=7.260854e-03
+elapsed=4.112017e+02 cycle=345800 time=2.949151e+04 dt=7.260854e-03
+elapsed=4.317171e+02 cycle=345900 time=2.949224e+04 dt=7.260854e-03
+elapsed=4.522356e+02 cycle=346000 time=2.949296e+04 dt=7.260854e-03
+elapsed=4.727842e+02 cycle=346100 time=2.949369e+04 dt=7.260854e-03
+elapsed=4.933411e+02 cycle=346200 time=2.949442e+04 dt=7.260854e-03
+elapsed=5.138687e+02 cycle=346300 time=2.949514e+04 dt=7.260854e-03
+elapsed=5.344446e+02 cycle=346400 time=2.949587e+04 dt=7.260854e-03
+elapsed=5.549780e+02 cycle=346500 time=2.949659e+04 dt=7.260854e-03
+elapsed=5.755179e+02 cycle=346600 time=2.949732e+04 dt=7.260854e-03
+elapsed=5.960762e+02 cycle=346700 time=2.949805e+04 dt=7.260854e-03
+elapsed=6.166430e+02 cycle=346800 time=2.949877e+04 dt=7.260854e-03
+elapsed=6.371672e+02 cycle=346900 time=2.949950e+04 dt=7.260854e-03
+CyclicZoom: Writing cyclic zoom restart data at offset 1162129812
+
+Terminating on time limit
+time=2.950000e+04 cycle=346970
+tlim=2.950000e+04 nlim=-1
+
+Current number of MeshBlocks = 1408
+0 MeshBlocks created, 0 deleted by AMR
+0 communicated for load balancing, load balancing efficiency = 9.055457e-03
+
+MeshBlock-cycles = 4436608
+cpu time used  = 6.526766e+02
+zone-cycles/cpu_second = 3.480350e+06
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-magnetic-smooth/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940746/rst/magnetic_bondi_binary.00061.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940829", "-t", "00:55:00", "time/tlim=29500"], "returncode": 0, "peak_rss_bytes": 917024768, "memory_budget_bytes": 1200000000, "seconds": 656.2382494379999, "stopped": null}

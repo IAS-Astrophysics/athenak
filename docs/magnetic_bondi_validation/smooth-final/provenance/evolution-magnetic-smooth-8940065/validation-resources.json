@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/home/hzhu/pyenv/bin/python",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/source-magnetic-smooth/scripts/tests/validate_magnetic_smooth.py",
+    "--run",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940065",
+    "--out",
+    "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940065/validation.json"
+  ],
+  "returncode": 0,
+  "peak_rss_bytes": 177152000,
+  "memory_budget_bytes": 4000000000,
+  "seconds": 28.912359077017754,
+  "stopped": null
+}

@@ -1,0 +1,32 @@
+{
+  "predecessor": 8940622,
+  "anchor": false,
+  "restart": "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940622/rst/magnetic_bondi_binary.00060.rst",
+  "restart_state": {
+    "time": 29358.23867492825,
+    "dt": 0.00726085448353874,
+    "cycle": 327445,
+    "blocks": 1408,
+    "id": 42,
+    "zone": 0,
+    "last_cycle": 315250,
+    "last_zone": 1,
+    "direction": 1,
+    "next_time": 29519.69255450416
+  },
+  "restart_sha256": "c28f94b93e472f1e47e02549509ca6692b7185c4113b6b34a7fec48088d5e769",
+  "target": 29500.0,
+  "check_switch": false,
+  "required_final_event": 42,
+  "minimum_final_finest_phase": 200,
+  "attempt_utc": "2026-10-18T07:27:17.113596+00:00",
+  "command": [
+    "qsub",
+    "-v",
+    "CZ_RESTART=/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8940622/rst/magnetic_bondi_binary.00060.rst,CZ_TLIM=29500",
+    "source-magnetic-smooth/scripts/tests/aurora_bondi_magnetic_smooth.pbs"
+  ],
+  "returncode": 0,
+  "stdout": "8940746.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov\n",
+  "stderr": ""
+}

@@ -1,0 +1,268 @@
+{
+  "jobs": [
+    {
+      "job": 8939726,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23381132256,
+      "max_scaled_divb": 2.689944289176602e-12,
+      "checkpoint": {
+        "time": 10027.486027892925,
+        "dt": 0.00726085448353874,
+        "cycle": 142396,
+        "blocks": 1408,
+        "id": 14,
+        "zone": 0,
+        "last_cycle": 125336,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 10153.615850407483
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8939853,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23451579360,
+      "max_scaled_divb": 2.146044126163008e-12,
+      "checkpoint": {
+        "time": 10152.45985525983,
+        "dt": 0.00726085448353874,
+        "cycle": 159608,
+        "blocks": 1408,
+        "id": 14,
+        "zone": 0,
+        "last_cycle": 125336,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 10153.615850407483
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8939955,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 21920215744,
+      "max_scaled_divb": 8.937606844867592e-12,
+      "checkpoint": {
+        "time": 11738.613908714155,
+        "dt": 0.11153851423578795,
+        "cycle": 178802,
+        "blocks": 960,
+        "id": 18,
+        "zone": 4,
+        "last_cycle": 169664,
+        "last_zone": 3,
+        "direction": 1,
+        "next_time": 11905.229088183252
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940065,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 22112354048,
+      "max_scaled_divb": 1.2065327594909115e-11,
+      "checkpoint": {
+        "time": 17947.45416780488,
+        "dt": 0.11153851423578795,
+        "cycle": 200773,
+        "blocks": 960,
+        "id": 24,
+        "zone": 4,
+        "last_cycle": 199765,
+        "last_zone": 5,
+        "direction": -1,
+        "next_time": 19020.87746801753
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940137,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 22915270032,
+      "max_scaled_divb": 6.352928177697516e-12,
+      "checkpoint": {
+        "time": 19568.42846319891,
+        "dt": 0.057177071260097995,
+        "cycle": 219973,
+        "blocks": 1072,
+        "id": 25,
+        "zone": 3,
+        "last_cycle": 210397,
+        "last_zone": 4,
+        "direction": -1,
+        "next_time": 19586.586253767153
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940212,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23474412304,
+      "max_scaled_divb": 9.50509378444435e-12,
+      "checkpoint": {
+        "time": 19700.932791173836,
+        "dt": 0.00726085448353874,
+        "cycle": 236032,
+        "blocks": 1408,
+        "id": 28,
+        "zone": 0,
+        "last_cycle": 220293,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 19836.65420246086
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940293,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 22691202016,
+      "max_scaled_divb": 4.931506266199243e-12,
+      "checkpoint": {
+        "time": 19819.29924096092,
+        "dt": 0.00726085448353874,
+        "cycle": 252334,
+        "blocks": 1408,
+        "id": 28,
+        "zone": 0,
+        "last_cycle": 220293,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 19836.65420246086
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940380,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 22674191040,
+      "max_scaled_divb": 1.6789122609355004e-11,
+      "checkpoint": {
+        "time": 21057.255934756562,
+        "dt": 0.11153851423578795,
+        "cycle": 270492,
+        "blocks": 960,
+        "id": 32,
+        "zone": 4,
+        "last_cycle": 264621,
+        "last_zone": 3,
+        "direction": 1,
+        "next_time": 21588.26744023663
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940464,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 22403995104,
+      "max_scaled_divb": 5.199072988496701e-12,
+      "checkpoint": {
+        "time": 26830.230330530656,
+        "dt": 0.21401100403607312,
+        "cycle": 291508,
+        "blocks": 848,
+        "id": 37,
+        "zone": 5,
+        "last_cycle": 289180,
+        "last_zone": 6,
+        "direction": -1,
+        "next_time": 27517.866835701374
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940535,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23028689744,
+      "max_scaled_divb": 3.970520496568901e-12,
+      "checkpoint": {
+        "time": 29006.977658536576,
+        "dt": 0.057177071260097995,
+        "cycle": 310654,
+        "blocks": 1072,
+        "id": 39,
+        "zone": 3,
+        "last_cycle": 305354,
+        "last_zone": 4,
+        "direction": -1,
+        "next_time": 29269.62460581045
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940622,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23427549968,
+      "max_scaled_divb": 7.458396673894514e-12,
+      "checkpoint": {
+        "time": 29358.23867492825,
+        "dt": 0.00726085448353874,
+        "cycle": 327445,
+        "blocks": 1408,
+        "id": 42,
+        "zone": 0,
+        "last_cycle": 315250,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 29519.69255450416
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940746,
+      "termination": "wall clock limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23122220000,
+      "max_scaled_divb": 3.553578991620225e-12,
+      "checkpoint": {
+        "time": 29477.127906238133,
+        "dt": 0.00726085448353874,
+        "cycle": 343819,
+        "blocks": 1408,
+        "id": 42,
+        "zone": 0,
+        "last_cycle": 315250,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 29519.69255450416
+      },
+      "two_complete_smooth_cycles": false
+    },
+    {
+      "job": 8940829,
+      "termination": "time limit",
+      "ranks": 12,
+      "conservative_sum_bytes": 23341614048,
+      "max_scaled_divb": 2.5309815654905716e-12,
+      "checkpoint": {
+        "time": 29500.0,
+        "dt": 0.0008042788176680915,
+        "cycle": 346970,
+        "blocks": 1408,
+        "id": 42,
+        "zone": 0,
+        "last_cycle": 315250,
+        "last_zone": 1,
+        "direction": 1,
+        "next_time": 29519.69255450416
+      },
+      "two_complete_smooth_cycles": true
+    }
+  ],
+  "final_finest_phase": 230.3074454958405,
+  "sampling_regression": "Positive edge, affine interior, and analytic nonzero-lapse/radial-shift sphere flux passed.",
+  "selected_frames_validated": 52,
+  "finest_samples": 16
+}

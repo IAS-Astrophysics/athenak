@@ -1,0 +1,245 @@
+{
+  "ranks": [
+    {
+      "rank": 0,
+      "affinity": "0.0",
+      "rss_bytes": 926162944,
+      "tracked_bytes": 1027158368,
+      "seconds": 3305.799461052986,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 1,
+      "affinity": "0.1",
+      "rss_bytes": 923369472,
+      "tracked_bytes": 1027295864,
+      "seconds": 3305.776546491077,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 2,
+      "affinity": "1.0",
+      "rss_bytes": 931115008,
+      "tracked_bytes": 1027089464,
+      "seconds": 3305.7992971970234,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 3,
+      "affinity": "1.1",
+      "rss_bytes": 927031296,
+      "tracked_bytes": 1026986264,
+      "seconds": 3305.8131958569866,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 4,
+      "affinity": "2.0",
+      "rss_bytes": 932433920,
+      "tracked_bytes": 1028058904,
+      "seconds": 3305.7956602629274,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 5,
+      "affinity": "2.1",
+      "rss_bytes": 927105024,
+      "tracked_bytes": 1027374040,
+      "seconds": 3305.7886416590773,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 6,
+      "affinity": "3.0",
+      "rss_bytes": 918585344,
+      "tracked_bytes": 1026986264,
+      "seconds": 3305.7939192811027,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 7,
+      "affinity": "3.1",
+      "rss_bytes": 920489984,
+      "tracked_bytes": 1027705528,
+      "seconds": 3305.7916342869867,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 8,
+      "affinity": "4.0",
+      "rss_bytes": 929001472,
+      "tracked_bytes": 1028101112,
+      "seconds": 3305.791164473165,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 9,
+      "affinity": "4.1",
+      "rss_bytes": 927895552,
+      "tracked_bytes": 1028135512,
+      "seconds": 3305.788833123166,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 10,
+      "affinity": "5.0",
+      "rss_bytes": 918794240,
+      "tracked_bytes": 1028410712,
+      "seconds": 3305.7863420159556,
+      "metric_evaluations": 5
+    },
+    {
+      "rank": 11,
+      "affinity": "5.1",
+      "rss_bytes": 914059264,
+      "tracked_bytes": 1028204416,
+      "seconds": 3305.7873034679797,
+      "metric_evaluations": 5
+    }
+  ],
+  "hosts": [
+    "x4302c2s5b0n0"
+  ],
+  "termination": "wall clock limit",
+  "aggregate_peak_rss_bytes": 11096043520,
+  "sum_tracked_allocation_peaks_bytes": 12331506448,
+  "conservative_sum_bytes": 23427549968,
+  "sum_guard_budgets_bytes": 28399999992,
+  "max_abs_divb": 1.0419171303510666e-08,
+  "max_abs_divb_exterior": 4.234834705130197e-11,
+  "max_scaled_divb": 7.458396673894514e-12,
+  "scaled_divb_definition": "dx*abs(divBtilde)/max(norm(Btilde),0.001*ambient)",
+  "field_normalization_floor": 7.025184942171248e-05,
+  "diagnostic_excision_spheres": [
+    {
+      "center": 16.0,
+      "radius": 0.8
+    },
+    {
+      "center": -16.0,
+      "radius": 0.8
+    }
+  ],
+  "states": [
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00582.bin",
+      "time": 29100.0,
+      "cycle": 312281,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 0.0002821907983161509,
+      "min_pressure": 4.728501661402373e-13,
+      "max_Btilde_coordinate_norm": 351.06392351938854,
+      "max_Btilde_exterior": 50.18971308749627,
+      "max_abs_divb": 1.48929757415317e-11,
+      "max_abs_divb_exterior": 5.4996007747831754e-12,
+      "max_scaled_divb": 2.66071949887793e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00583.bin",
+      "time": 29150.0,
+      "cycle": 313156,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 0.000258349027717486,
+      "min_pressure": 4.731653437117789e-13,
+      "max_Btilde_coordinate_norm": 356.87385866866344,
+      "max_Btilde_exterior": 52.57969857731712,
+      "max_abs_divb": 2.7398527890909463e-11,
+      "max_abs_divb_exterior": 6.153300091682468e-12,
+      "max_scaled_divb": 1.4713753150191956e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00584.bin",
+      "time": 29200.0,
+      "cycle": 314030,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 0.00019297661492601037,
+      "min_pressure": 4.706866949151511e-13,
+      "max_Btilde_coordinate_norm": 363.54432334806216,
+      "max_Btilde_exterior": 57.04065505934987,
+      "max_abs_divb": 2.0236257114447653e-11,
+      "max_abs_divb_exterior": 7.119638212316204e-12,
+      "max_scaled_divb": 1.5576659624311292e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00585.bin",
+      "time": 29250.0,
+      "cycle": 314905,
+      "blocks": 1072,
+      "max_level": 9,
+      "min_density": 0.00017341531929560006,
+      "min_pressure": 4.707752742326432e-13,
+      "max_Btilde_coordinate_norm": 361.07721486403756,
+      "max_Btilde_exterior": 62.20799375917327,
+      "max_abs_divb": 2.319211489520967e-11,
+      "max_abs_divb_exterior": 7.744915819785092e-12,
+      "max_scaled_divb": 1.6697074358392256e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00586.bin",
+      "time": 29300.0,
+      "cycle": 319424,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 3.5683933674590662e-06,
+      "min_pressure": 1.5095684305441864e-13,
+      "max_Btilde_coordinate_norm": 16050.370554604851,
+      "max_Btilde_exterior": 41.50828640855763,
+      "max_abs_divb": 5.2677933126688e-09,
+      "max_abs_divb_exterior": 3.751665644813329e-11,
+      "max_scaled_divb": 2.336418853195542e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00587.bin",
+      "time": 29350.0,
+      "cycle": 326311,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 3.6844328406004934e-06,
+      "min_pressure": 1.9727985521231228e-13,
+      "max_Btilde_coordinate_norm": 15758.702418732148,
+      "max_Btilde_exterior": 41.787368584247226,
+      "max_abs_divb": 9.807990863919258e-09,
+      "max_abs_divb_exterior": 4.087041816092096e-11,
+      "max_scaled_divb": 7.458396673894514e-12
+    },
+    {
+      "file": "magnetic_bondi_binary.mhd_w_bcc.00588.bin",
+      "time": 29358.2,
+      "cycle": 327445,
+      "blocks": 1408,
+      "max_level": 12,
+      "min_density": 3.6661590456787962e-06,
+      "min_pressure": 2.1529159748359672e-13,
+      "max_Btilde_coordinate_norm": 15634.135495982391,
+      "max_Btilde_exterior": 41.29198317843063,
+      "max_abs_divb": 1.0419171303510666e-08,
+      "max_abs_divb_exterior": 4.234834705130197e-11,
+      "max_scaled_divb": 6.76819267476611e-12
+    }
+  ],
+  "restored_topology": false,
+  "initial_checkpoint_state": {
+    "time": 29006.977658536576,
+    "dt": 0.057177071260097995,
+    "cycle": 310654,
+    "blocks": 1072
+  },
+  "interpretation": "smooth-excision continuation of evolved hard-excision data; finite fields do not establish relaxation",
+  "smooth_checkpoint": {
+    "time": 29358.23867492825,
+    "dt": 0.00726085448353874,
+    "cycle": 327445,
+    "blocks": 1408,
+    "id": 42,
+    "zone": 0,
+    "last_cycle": 315250,
+    "last_zone": 1,
+    "direction": 1,
+    "next_time": 29519.69255450416
+  },
+  "residence_reset_records": [],
+  "two_complete_smooth_cycles": false
+}

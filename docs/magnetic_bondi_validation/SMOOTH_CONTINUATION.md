@@ -139,3 +139,15 @@ state is cycle 236032 at native t=19700.932791173836 M from job 8940212.
 Updated xy density/temperature/physical-beta panels and provenance are in
 [smooth-latest](smooth-latest/README.md). The completion automation is active
 again, with its original two-cycle target and hardware restrictions unchanged.
+
+## Completed two new cycles
+
+The controller reached t=29500 M in job 8940829, zone 0/event 42, with a final
+finest phase of 230.307 M, and stopped without another submission. All thirteen
+physical jobs passed validation. Updated accretion, shell-mass, finest xy and
+movie artifacts, complete provenance, and qualified assessment are in
+[smooth-final](smooth-final/README.md). Individual hole fluxes and shell masses
+still change substantially; inflow equilibrium is not established. The new
+analysis corrects a block-edge extrapolation artifact using bounded sampling
+and records nearest-cell sensitivity without changing the evolution or old
+historical analysis defaults. The completion monitor is paused after delivery.

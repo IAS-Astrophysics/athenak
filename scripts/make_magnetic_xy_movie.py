@@ -19,13 +19,17 @@ p.add_argument('--metric',type=Path,required=True)
 p.add_argument('--out',type=Path,required=True)
 p.add_argument('--frame-dt',type=float,default=100.)
 p.add_argument('--start-from-restart',action='store_true',help='Label an evolved checkpoint start explicitly')
+p.add_argument('--available-only',action='store_true',help='Use an explicitly selective local download; report missing files')
 a=p.parse_args();assert a.frame_dt>0
 a.out.mkdir(parents=True,exist_ok=True);frames=a.out/'frames';frames.mkdir(exist_ok=True)
 md,mf=load(a.metric);metric_errors=validate_saved_metric(md,mf);del md,mf
-paths=[];events=[]
+paths=[];events=[];missing=0
 for run in a.runs:
     validation=json.loads((run/'validation.json').read_text())
-    paths += [(s['time'],run/'bin'/s['file']) for s in validation['states']]
+    for state in validation['states']:
+        path=run/'bin'/state['file']
+        if a.available_only and not path.exists():missing+=1;continue
+        paths.append((state['time'],path))
     events += [(float(t),int(z)) for z,t in re.findall(r'CyclicZoom: new id = \d+ zone = (\d+).*?CyclicZoom: time = ([\d.eE+-]+)',(run/'rank-0.log').read_text(),re.S)]
 paths=sorted({round(t,5):(t,path) for t,path in paths}.values());events.sort()
 chosen=[];next_time=-1
@@ -41,7 +45,9 @@ for number,(t,path) in enumerate(chosen):
     treatment='smooth puncture drain' if smooth else 'hard puncture excision'
     assert float(c['coord/excise_1_rad'])==float(c['coord/excise_2_rad'])==.8
     n=d['nx1_out_mb'];assert n==d['nx1_mb']==8
-    zone=next((z for et,z in reversed(events) if et<=t),0)
+    # Use the topology actually written, not a rounded event time near AMR.
+    zone=int(c['mesh_refinement/num_levels'])-1-int(d['mb_logical'][:,3].max())
+    assert 0<=zone<int(c['amr_criterion1/nlevels'])
     fig,axes=plt.subplots(1,3,figsize=(15,5),dpi=120)
     fig.subplots_adjust(left=.05,right=.97,bottom=.25,top=.80,wspace=.27)
     norms=[LogNorm(.01,100),LogNorm(1e-4,1),LogNorm(1e-3,1e3)]
@@ -82,4 +88,5 @@ for number,(t,path) in enumerate(chosen):
     if number%10==0:print('Rendered',number+1,'/',len(chosen),flush=True)
 (a.out/'frames.json').write_text(json.dumps(report,indent=2)+'\n')
 (a.out/'metric-validation.json').write_text(json.dumps({'saved_metric':str(a.metric),'spatial_component_max_error_normalized_by_max_1_abs_saved':metric_errors,'checked_all_saved_ADM_cells':True,'method':'Exact nonspinning boosted KS specialization, corotating t=0; no spatial interpolation','cached_slice_topologies':len(cache)},indent=2)+'\n')
+(a.out/'selection.json').write_text(json.dumps({'available_only':a.available_only,'omitted_not_downloaded':missing,'frames':len(report),'first_saved_time':report[0]['time'],'last_saved_time':report[-1]['time']},indent=2)+'\n')
 print('Complete',len(report),'frames; final time',report[-1]['time'],flush=True)

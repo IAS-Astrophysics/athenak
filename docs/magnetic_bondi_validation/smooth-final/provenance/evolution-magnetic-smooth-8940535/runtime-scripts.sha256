@@ -1,0 +1,3 @@
+7a64b35298de6c03c44be953d1f401965386c4c2f65bc85eaeecb5f3223da26d  source-magnetic-smooth/scripts/tests/aurora_benchmark_rank.sh
+c69f1d8e3d596c24afdde11092d64aaa8a3e0dba0f4c92d0be227b318af80152  source-magnetic-smooth/scripts/tests/aurora_sane_environment.sh
+3ab6fcee45e2d592a31f83e082eb60ba6f7c365868ce14e28106f8b3a1091a53  source/scripts/tests/run_bounded.py

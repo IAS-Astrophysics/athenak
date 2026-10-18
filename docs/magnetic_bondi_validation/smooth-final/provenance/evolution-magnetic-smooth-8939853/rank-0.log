@@ -1,0 +1,277 @@
+rank=0 host=x4502c7s0b0n0 affinity=0.0
+MPI tag upper bound=262143 local-ID bits=12
+
+Root grid = 4 x 4 x 4 MeshBlocks
+Total number of MeshBlocks = 1408
+Number of logical  levels of refinement = 14 (15 levels total)
+Number of physical levels of refinement = 12 (13 levels total)
+  Physical level = 0 (logical level = 2): 48 MeshBlocks, cost = 48
+  Physical level = 1 (logical level = 3): 112 MeshBlocks, cost = 112
+  Physical level = 2 (logical level = 4): 112 MeshBlocks, cost = 112
+  Physical level = 3 (logical level = 5): 112 MeshBlocks, cost = 112
+  Physical level = 4 (logical level = 6): 112 MeshBlocks, cost = 112
+  Physical level = 5 (logical level = 7): 112 MeshBlocks, cost = 112
+  Physical level = 6 (logical level = 8): 112 MeshBlocks, cost = 112
+  Physical level = 7 (logical level = 9): 112 MeshBlocks, cost = 112
+  Physical level = 8 (logical level = 10): 112 MeshBlocks, cost = 112
+  Physical level = 9 (logical level = 11): 112 MeshBlocks, cost = 112
+  Physical level = 10 (logical level = 12): 112 MeshBlocks, cost = 112
+  Physical level = 11 (logical level = 13): 112 MeshBlocks, cost = 112
+  Physical level = 12 (logical level = 14): 128 MeshBlocks, cost = 128
+Number of parallel ranks = 12
+  Rank = 0: 117 MeshBlocks, cost = 117
+  Rank = 1: 117 MeshBlocks, cost = 117
+  Rank = 2: 117 MeshBlocks, cost = 117
+  Rank = 3: 117 MeshBlocks, cost = 117
+  Rank = 4: 117 MeshBlocks, cost = 117
+  Rank = 5: 117 MeshBlocks, cost = 117
+  Rank = 6: 117 MeshBlocks, cost = 117
+  Rank = 7: 117 MeshBlocks, cost = 117
+  Rank = 8: 118 MeshBlocks, cost = 118
+  Rank = 9: 118 MeshBlocks, cost = 118
+  Rank = 10: 118 MeshBlocks, cost = 118
+  Rank = 11: 118 MeshBlocks, cost = 118
+Load Balancing:
+  Maximum normalized cost = 1.00855, Average = 1.00285
+=============== CyclicZoom Information ===============
+Basic: read_rst = 1 write_rst = 1
+Mesh: nzmb_max_perdvce = 128 nzmb_max_perhost = 128
+Data: nvars = 5 nangles = 0 zmb_data_cnt = 76492
+Initial: d_zoom = 1.17549e-38 p_zoom = 1.17549e-38
+Funcs: add_emf = 1
+Efield: emf_fmax = 1 emf_zmax = 8
+Region: x1c = 16 x2c = 0 x3c = 0 r_0 = 0.5 radius = 0.5
+ f_ref = 4 r_ref = 2 r_ref_max = 3.40282e+38
+ f_exc = 0 r_exc = 0 r_exc_max = 8
+ f_cut = 0 r_cut = 0 r_cut_max = 0
+ f_flx = 0 r_flx = 0 r_flx_max = 0
+Interval: trun_fac = 10 trun_pow = 1.5 trun_max = 3.40282e+38
+ trun_fac_0 = 10
+ trun_fac_1 = 10
+ trun_fac_2 = 10
+ trun_fac_3 = 10
+ trun_fac_4 = 10
+ trun_fac_5 = 10
+ trun_fac_6 = 10
+ trun_fac_7 = 10
+AMR: level = 14 max_level = 14 min_level = 7
+State: id = 0 zone = 0 last_zone = 0 direction = 1
+Time: runtime = 250 next time = 10277.5
+======================================================
+Binary Bondi reservoir: r_B=500 r_B/a=15.625 Omega_frame=0.00552427 corotating=1 single_black_hole=0 M_total=1 boundary=ambient
+=============== CyclicZoom Information ===============
+Basic: read_rst = 1 write_rst = 1
+Mesh: nzmb_max_perdvce = 128 nzmb_max_perhost = 128
+Data: nvars = 5 nangles = 0 zmb_data_cnt = 76492
+Initial: d_zoom = 1.17549e-38 p_zoom = 1.17549e-38
+Funcs: add_emf = 1
+Efield: emf_fmax = 1 emf_zmax = 8
+Region: x1c = 16 x2c = 0 x3c = 0 r_0 = 0.5 radius = 0.5
+ f_ref = 4 r_ref = 2 r_ref_max = 3.40282e+38
+ f_exc = 0 r_exc = 0 r_exc_max = 8
+ f_cut = 0 r_cut = 0 r_cut_max = 0
+ f_flx = 0 r_flx = 0 r_flx_max = 0
+Interval: trun_fac = 10 trun_pow = 1.5 trun_max = 3.40282e+38
+ trun_fac_0 = 10
+ trun_fac_1 = 10
+ trun_fac_2 = 10
+ trun_fac_3 = 10
+ trun_fac_4 = 10
+ trun_fac_5 = 10
+ trun_fac_6 = 10
+ trun_fac_7 = 10
+AMR: level = 14 max_level = 14 min_level = 7
+State: id = 14 zone = 0 last_zone = 1 direction = 1
+Time: runtime = 250 next time = 10153.6
+======================================================
+
+Setup complete, executing task list(s)...
+
+elapsed=3.530061e+00 cycle=142400 time=1.002752e+04 dt=7.260854e-03
+elapsed=2.356528e+01 cycle=142500 time=1.002824e+04 dt=7.260854e-03
+elapsed=4.361871e+01 cycle=142600 time=1.002897e+04 dt=7.260854e-03
+elapsed=6.366709e+01 cycle=142700 time=1.002969e+04 dt=7.260854e-03
+elapsed=8.369678e+01 cycle=142800 time=1.003042e+04 dt=7.260854e-03
+elapsed=1.036924e+02 cycle=142900 time=1.003115e+04 dt=7.260854e-03
+elapsed=1.236902e+02 cycle=143000 time=1.003187e+04 dt=7.260854e-03
+elapsed=1.437512e+02 cycle=143100 time=1.003260e+04 dt=7.260854e-03
+elapsed=1.637575e+02 cycle=143200 time=1.003332e+04 dt=7.260854e-03
+elapsed=1.838048e+02 cycle=143300 time=1.003405e+04 dt=7.260854e-03
+elapsed=2.038649e+02 cycle=143400 time=1.003478e+04 dt=7.260854e-03
+elapsed=2.238680e+02 cycle=143500 time=1.003550e+04 dt=7.260854e-03
+elapsed=2.438783e+02 cycle=143600 time=1.003623e+04 dt=7.260854e-03
+elapsed=2.637522e+02 cycle=143700 time=1.003695e+04 dt=7.260854e-03
+elapsed=2.836487e+02 cycle=143800 time=1.003768e+04 dt=7.260854e-03
+elapsed=3.035872e+02 cycle=143900 time=1.003841e+04 dt=7.260854e-03
+elapsed=3.235251e+02 cycle=144000 time=1.003913e+04 dt=7.260854e-03
+elapsed=3.434410e+02 cycle=144100 time=1.003986e+04 dt=7.260854e-03
+elapsed=3.633157e+02 cycle=144200 time=1.004058e+04 dt=7.260854e-03
+elapsed=3.832116e+02 cycle=144300 time=1.004131e+04 dt=7.260854e-03
+elapsed=4.030903e+02 cycle=144400 time=1.004204e+04 dt=7.260854e-03
+elapsed=4.229619e+02 cycle=144500 time=1.004276e+04 dt=7.260854e-03
+elapsed=4.428442e+02 cycle=144600 time=1.004349e+04 dt=7.260854e-03
+elapsed=4.627164e+02 cycle=144700 time=1.004422e+04 dt=7.260854e-03
+elapsed=4.825962e+02 cycle=144800 time=1.004494e+04 dt=7.260854e-03
+elapsed=5.025040e+02 cycle=144900 time=1.004567e+04 dt=7.260854e-03
+elapsed=5.223238e+02 cycle=145000 time=1.004639e+04 dt=7.260854e-03
+elapsed=5.422092e+02 cycle=145100 time=1.004712e+04 dt=7.260854e-03
+elapsed=5.621150e+02 cycle=145200 time=1.004785e+04 dt=7.260854e-03
+elapsed=5.819582e+02 cycle=145300 time=1.004857e+04 dt=7.260854e-03
+elapsed=6.018123e+02 cycle=145400 time=1.004930e+04 dt=7.260854e-03
+elapsed=6.217323e+02 cycle=145500 time=1.005002e+04 dt=7.260854e-03
+elapsed=6.416026e+02 cycle=145600 time=1.005075e+04 dt=7.260854e-03
+elapsed=6.610932e+02 cycle=145700 time=1.005148e+04 dt=7.260854e-03
+elapsed=6.803019e+02 cycle=145800 time=1.005220e+04 dt=7.260854e-03
+elapsed=6.994820e+02 cycle=145900 time=1.005293e+04 dt=7.260854e-03
+elapsed=7.186700e+02 cycle=146000 time=1.005365e+04 dt=7.260854e-03
+elapsed=7.378625e+02 cycle=146100 time=1.005438e+04 dt=7.260854e-03
+elapsed=7.571017e+02 cycle=146200 time=1.005511e+04 dt=7.260854e-03
+elapsed=7.763249e+02 cycle=146300 time=1.005583e+04 dt=7.260854e-03
+elapsed=7.954745e+02 cycle=146400 time=1.005656e+04 dt=7.260854e-03
+elapsed=8.146505e+02 cycle=146500 time=1.005728e+04 dt=7.260854e-03
+elapsed=8.337956e+02 cycle=146600 time=1.005801e+04 dt=7.260854e-03
+elapsed=8.530187e+02 cycle=146700 time=1.005874e+04 dt=7.260854e-03
+elapsed=8.722111e+02 cycle=146800 time=1.005946e+04 dt=7.260854e-03
+elapsed=8.914274e+02 cycle=146900 time=1.006019e+04 dt=7.260854e-03
+elapsed=9.105916e+02 cycle=147000 time=1.006092e+04 dt=7.260854e-03
+elapsed=9.297622e+02 cycle=147100 time=1.006164e+04 dt=7.260854e-03
+elapsed=9.490075e+02 cycle=147200 time=1.006237e+04 dt=7.260854e-03
+elapsed=9.682145e+02 cycle=147300 time=1.006309e+04 dt=7.260854e-03
+elapsed=9.873798e+02 cycle=147400 time=1.006382e+04 dt=7.260854e-03
+elapsed=1.006602e+03 cycle=147500 time=1.006455e+04 dt=7.260854e-03
+elapsed=1.025810e+03 cycle=147600 time=1.006527e+04 dt=7.260854e-03
+elapsed=1.045065e+03 cycle=147700 time=1.006600e+04 dt=7.260854e-03
+elapsed=1.064200e+03 cycle=147800 time=1.006672e+04 dt=7.260854e-03
+elapsed=1.083377e+03 cycle=147900 time=1.006745e+04 dt=7.260854e-03
+elapsed=1.102563e+03 cycle=148000 time=1.006818e+04 dt=7.260854e-03
+elapsed=1.121768e+03 cycle=148100 time=1.006890e+04 dt=7.260854e-03
+elapsed=1.140899e+03 cycle=148200 time=1.006963e+04 dt=7.260854e-03
+elapsed=1.160087e+03 cycle=148300 time=1.007035e+04 dt=7.260854e-03
+elapsed=1.179238e+03 cycle=148400 time=1.007108e+04 dt=7.260854e-03
+elapsed=1.198427e+03 cycle=148500 time=1.007181e+04 dt=7.260854e-03
+elapsed=1.217586e+03 cycle=148600 time=1.007253e+04 dt=7.260854e-03
+elapsed=1.236679e+03 cycle=148700 time=1.007326e+04 dt=7.260854e-03
+elapsed=1.255875e+03 cycle=148800 time=1.007398e+04 dt=7.260854e-03
+elapsed=1.275034e+03 cycle=148900 time=1.007471e+04 dt=7.260854e-03
+elapsed=1.294134e+03 cycle=149000 time=1.007544e+04 dt=7.260854e-03
+elapsed=1.313293e+03 cycle=149100 time=1.007616e+04 dt=7.260854e-03
+elapsed=1.332509e+03 cycle=149200 time=1.007689e+04 dt=7.260854e-03
+elapsed=1.351616e+03 cycle=149300 time=1.007761e+04 dt=7.260854e-03
+elapsed=1.370767e+03 cycle=149400 time=1.007834e+04 dt=7.260854e-03
+elapsed=1.389918e+03 cycle=149500 time=1.007907e+04 dt=7.260854e-03
+elapsed=1.409112e+03 cycle=149600 time=1.007979e+04 dt=7.260854e-03
+elapsed=1.428213e+03 cycle=149700 time=1.008052e+04 dt=7.260854e-03
+elapsed=1.447249e+03 cycle=149800 time=1.008125e+04 dt=7.260854e-03
+elapsed=1.466166e+03 cycle=149900 time=1.008197e+04 dt=7.260854e-03
+elapsed=1.485017e+03 cycle=150000 time=1.008270e+04 dt=7.260854e-03
+elapsed=1.503892e+03 cycle=150100 time=1.008342e+04 dt=7.260854e-03
+elapsed=1.522747e+03 cycle=150200 time=1.008415e+04 dt=7.260854e-03
+elapsed=1.541709e+03 cycle=150300 time=1.008488e+04 dt=7.260854e-03
+elapsed=1.560582e+03 cycle=150400 time=1.008560e+04 dt=7.260854e-03
+elapsed=1.579497e+03 cycle=150500 time=1.008633e+04 dt=7.260854e-03
+elapsed=1.598396e+03 cycle=150600 time=1.008705e+04 dt=7.260854e-03
+elapsed=1.617326e+03 cycle=150700 time=1.008778e+04 dt=7.260854e-03
+elapsed=1.636180e+03 cycle=150800 time=1.008851e+04 dt=7.260854e-03
+elapsed=1.655096e+03 cycle=150900 time=1.008923e+04 dt=7.260854e-03
+elapsed=1.674009e+03 cycle=151000 time=1.008996e+04 dt=7.260854e-03
+elapsed=1.692881e+03 cycle=151100 time=1.009068e+04 dt=7.260854e-03
+elapsed=1.711796e+03 cycle=151200 time=1.009141e+04 dt=7.260854e-03
+elapsed=1.730730e+03 cycle=151300 time=1.009214e+04 dt=7.260854e-03
+elapsed=1.749606e+03 cycle=151400 time=1.009286e+04 dt=7.260854e-03
+elapsed=1.768467e+03 cycle=151500 time=1.009359e+04 dt=7.260854e-03
+elapsed=1.787398e+03 cycle=151600 time=1.009431e+04 dt=7.260854e-03
+elapsed=1.806251e+03 cycle=151700 time=1.009504e+04 dt=7.260854e-03
+elapsed=1.825127e+03 cycle=151800 time=1.009577e+04 dt=7.260854e-03
+elapsed=1.844043e+03 cycle=151900 time=1.009649e+04 dt=7.260854e-03
+elapsed=1.862952e+03 cycle=152000 time=1.009722e+04 dt=7.260854e-03
+elapsed=1.881872e+03 cycle=152100 time=1.009795e+04 dt=7.260854e-03
+elapsed=1.900789e+03 cycle=152200 time=1.009867e+04 dt=7.260854e-03
+elapsed=1.919723e+03 cycle=152300 time=1.009940e+04 dt=7.260854e-03
+elapsed=1.939264e+03 cycle=152400 time=1.010012e+04 dt=7.260854e-03
+elapsed=1.958100e+03 cycle=152500 time=1.010085e+04 dt=7.260854e-03
+elapsed=1.976938e+03 cycle=152600 time=1.010158e+04 dt=7.260854e-03
+elapsed=1.995744e+03 cycle=152700 time=1.010230e+04 dt=7.260854e-03
+elapsed=2.014598e+03 cycle=152800 time=1.010303e+04 dt=7.260854e-03
+elapsed=2.033466e+03 cycle=152900 time=1.010375e+04 dt=7.260854e-03
+elapsed=2.052319e+03 cycle=153000 time=1.010448e+04 dt=7.260854e-03
+elapsed=2.071147e+03 cycle=153100 time=1.010521e+04 dt=7.260854e-03
+elapsed=2.090067e+03 cycle=153200 time=1.010593e+04 dt=7.260854e-03
+elapsed=2.108912e+03 cycle=153300 time=1.010666e+04 dt=7.260854e-03
+elapsed=2.127733e+03 cycle=153400 time=1.010738e+04 dt=7.260854e-03
+elapsed=2.146648e+03 cycle=153500 time=1.010811e+04 dt=7.260854e-03
+elapsed=2.165616e+03 cycle=153600 time=1.010884e+04 dt=7.260854e-03
+elapsed=2.184518e+03 cycle=153700 time=1.010956e+04 dt=7.260854e-03
+elapsed=2.203371e+03 cycle=153800 time=1.011029e+04 dt=7.260854e-03
+elapsed=2.222210e+03 cycle=153900 time=1.011101e+04 dt=7.260854e-03
+elapsed=2.241005e+03 cycle=154000 time=1.011174e+04 dt=7.260854e-03
+elapsed=2.259814e+03 cycle=154100 time=1.011247e+04 dt=7.260854e-03
+elapsed=2.278703e+03 cycle=154200 time=1.011319e+04 dt=7.260854e-03
+elapsed=2.297521e+03 cycle=154300 time=1.011392e+04 dt=7.260854e-03
+elapsed=2.316338e+03 cycle=154400 time=1.011465e+04 dt=7.260854e-03
+elapsed=2.335220e+03 cycle=154500 time=1.011537e+04 dt=7.260854e-03
+elapsed=2.354054e+03 cycle=154600 time=1.011610e+04 dt=7.260854e-03
+elapsed=2.372934e+03 cycle=154700 time=1.011682e+04 dt=7.260854e-03
+elapsed=2.391789e+03 cycle=154800 time=1.011755e+04 dt=7.260854e-03
+elapsed=2.410657e+03 cycle=154900 time=1.011828e+04 dt=7.260854e-03
+elapsed=2.429549e+03 cycle=155000 time=1.011900e+04 dt=7.260854e-03
+elapsed=2.448430e+03 cycle=155100 time=1.011973e+04 dt=7.260854e-03
+elapsed=2.467292e+03 cycle=155200 time=1.012045e+04 dt=7.260854e-03
+elapsed=2.486150e+03 cycle=155300 time=1.012118e+04 dt=7.260854e-03
+elapsed=2.505070e+03 cycle=155400 time=1.012191e+04 dt=7.260854e-03
+elapsed=2.523917e+03 cycle=155500 time=1.012263e+04 dt=7.260854e-03
+elapsed=2.542786e+03 cycle=155600 time=1.012336e+04 dt=7.260854e-03
+elapsed=2.561631e+03 cycle=155700 time=1.012408e+04 dt=7.260854e-03
+elapsed=2.580461e+03 cycle=155800 time=1.012481e+04 dt=7.260854e-03
+elapsed=2.599323e+03 cycle=155900 time=1.012554e+04 dt=7.260854e-03
+elapsed=2.618219e+03 cycle=156000 time=1.012626e+04 dt=7.260854e-03
+elapsed=2.637068e+03 cycle=156100 time=1.012699e+04 dt=7.260854e-03
+elapsed=2.655874e+03 cycle=156200 time=1.012771e+04 dt=7.260854e-03
+elapsed=2.674730e+03 cycle=156300 time=1.012844e+04 dt=7.260854e-03
+elapsed=2.693618e+03 cycle=156400 time=1.012917e+04 dt=7.260854e-03
+elapsed=2.712580e+03 cycle=156500 time=1.012989e+04 dt=7.260854e-03
+elapsed=2.731444e+03 cycle=156600 time=1.013062e+04 dt=7.260854e-03
+elapsed=2.750342e+03 cycle=156700 time=1.013135e+04 dt=7.260854e-03
+elapsed=2.769236e+03 cycle=156800 time=1.013207e+04 dt=7.260854e-03
+elapsed=2.788158e+03 cycle=156900 time=1.013280e+04 dt=7.260854e-03
+elapsed=2.807046e+03 cycle=157000 time=1.013352e+04 dt=7.260854e-03
+elapsed=2.825868e+03 cycle=157100 time=1.013425e+04 dt=7.260854e-03
+elapsed=2.844709e+03 cycle=157200 time=1.013498e+04 dt=7.260854e-03
+elapsed=2.863582e+03 cycle=157300 time=1.013570e+04 dt=7.260854e-03
+elapsed=2.882444e+03 cycle=157400 time=1.013643e+04 dt=7.260854e-03
+elapsed=2.901299e+03 cycle=157500 time=1.013715e+04 dt=7.260854e-03
+elapsed=2.920172e+03 cycle=157600 time=1.013788e+04 dt=7.260854e-03
+elapsed=2.939022e+03 cycle=157700 time=1.013861e+04 dt=7.260854e-03
+elapsed=2.957902e+03 cycle=157800 time=1.013933e+04 dt=7.260854e-03
+elapsed=2.976761e+03 cycle=157900 time=1.014006e+04 dt=7.260854e-03
+elapsed=2.995626e+03 cycle=158000 time=1.014078e+04 dt=7.260854e-03
+elapsed=3.014483e+03 cycle=158100 time=1.014151e+04 dt=7.260854e-03
+elapsed=3.033373e+03 cycle=158200 time=1.014224e+04 dt=7.260854e-03
+elapsed=3.052272e+03 cycle=158300 time=1.014296e+04 dt=7.260854e-03
+elapsed=3.071081e+03 cycle=158400 time=1.014369e+04 dt=7.260854e-03
+elapsed=3.090025e+03 cycle=158500 time=1.014441e+04 dt=7.260854e-03
+elapsed=3.108946e+03 cycle=158600 time=1.014514e+04 dt=7.260854e-03
+elapsed=3.127809e+03 cycle=158700 time=1.014587e+04 dt=7.260854e-03
+elapsed=3.146722e+03 cycle=158800 time=1.014659e+04 dt=7.260854e-03
+elapsed=3.165607e+03 cycle=158900 time=1.014732e+04 dt=7.260854e-03
+elapsed=3.184565e+03 cycle=159000 time=1.014805e+04 dt=7.260854e-03
+elapsed=3.203472e+03 cycle=159100 time=1.014877e+04 dt=7.260854e-03
+elapsed=3.222416e+03 cycle=159200 time=1.014950e+04 dt=7.260854e-03
+elapsed=3.241882e+03 cycle=159300 time=1.015022e+04 dt=7.260854e-03
+elapsed=3.260853e+03 cycle=159400 time=1.015095e+04 dt=7.260854e-03
+elapsed=3.279743e+03 cycle=159500 time=1.015168e+04 dt=7.260854e-03
+elapsed=3.298633e+03 cycle=159600 time=1.015240e+04 dt=7.260854e-03
+CyclicZoom: Writing cyclic zoom restart data at offset 1162129812
+
+Terminating on wall clock limit
+time=1.015246e+04 cycle=159608
+tlim=2.950000e+04 nlim=-1
+
+Current number of MeshBlocks = 1408
+0 MeshBlocks created, 0 deleted by AMR
+0 communicated for load balancing, load balancing efficiency = 1.075293e-01
+
+MeshBlock-cycles = 24234496
+cpu time used  = 3.301651e+03
+zone-cycles/cpu_second = 3.758138e+06
+particle-updates/cpu_second = 0.000000e+00
+{"command": ["./build-magnetic-smooth/src/athena", "-r", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8939726/rst/magnetic_bondi_binary.00023.rst", "-d", "/lus/flare/projects/MHDTidal/hzhu/cyclic_zoom_profile_20261013/evolution-magnetic-smooth-8939853", "-t", "00:55:00", "time/tlim=29500"], "returncode": 0, "peak_rss_bytes": 928669696, "memory_budget_bytes": 1200000000, "seconds": 3304.392523368937, "stopped": null}
