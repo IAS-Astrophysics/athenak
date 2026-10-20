@@ -29,6 +29,7 @@ template <int NGHOST>
 //! \fn void Z4c::CalcRHS(Driver *pdriver, int stage)
 //! \brief compute rhs of the z4c equations
 TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
+  if (pmy_pack->pz4c->opt.freeze) return TaskStatus::complete;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   auto &size = pmy_pack->pmb->mb_size;
   int &is = indcs.is; int &ie = indcs.ie;

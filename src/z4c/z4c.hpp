@@ -176,6 +176,9 @@ class Z4c {
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
+    // Freeze the spacetime: skip the RHS, RK update and puncture tracking, keeping
+    // the task graph intact so matter/M1 still see the (fixed) ADM variables.
+    bool freeze;
     // Boundary extrapolation order
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation

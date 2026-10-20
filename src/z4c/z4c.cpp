@@ -17,6 +17,7 @@
 #include <Kokkos_Core.hpp>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
@@ -151,6 +152,11 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
+
+  opt.freeze = pin->GetOrAddBoolean("z4c", "freeze", false);
+  if (opt.freeze && global_variable::my_rank == 0) {
+    std::cout << "Z4c: spacetime is frozen (z4c/freeze = true)" << std::endl;
+  }
 
   opt.excise_chi = pin->GetOrAddReal("z4c", "excise_chi", 0.0625);
 

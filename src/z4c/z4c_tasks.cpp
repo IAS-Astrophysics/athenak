@@ -311,6 +311,8 @@ TaskStatus Z4c::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 }
 
 TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
+  // a frozen metric has a fixed puncture; integrating -beta would walk the tracker off it
+  if (pmy_pack->pz4c->opt.freeze) return TaskStatus::complete;
   if (stage == pdrive->nexp_stages) {
     for (auto & pt : ptracker) {
       pt->InterpolateVelocity(pmy_pack);

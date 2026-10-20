@@ -180,6 +180,7 @@ static void Z4cSommerfeld(const Z4c::Z4c_vars& z4c, const Z4c::Z4c_vars& rhs,
 //! \fn TaskStatus Z4c::Z4cBoundaryRHS
 //! \brief placeholder for the Sommerfield Boundary conditions for z4c
 TaskStatus Z4c::Z4cBoundaryRHS(Driver *pdriver, int stage) {
+  if (pmy_pack->pz4c->opt.freeze) return TaskStatus::complete;
   auto &pm = pmy_pack->pmesh;
   auto &mb_bcs = pmy_pack->pmb->mb_bcs;
   auto &indcs = pmy_pack->pmesh->mb_indcs;
