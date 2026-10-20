@@ -292,6 +292,11 @@ TaskStatus Radiation::ApplyPhysicalBCs(Driver *pdrive, int stage) {
     phyd->pbval_u->HydroBCs((pmy_pack), (phyd->pbval_u->u_in), phyd->u0);
   }
 
+  // TODO(@mhguo): this is temporary, need to move to a general mask function later
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->ApplyMask();
+  }
+
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {
     (pmy_pack->pmesh->pgen->user_bcs_func)(pmy_pack->pmesh);
