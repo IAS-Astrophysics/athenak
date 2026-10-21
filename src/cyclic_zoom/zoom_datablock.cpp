@@ -41,7 +41,10 @@ void ZoomData::StoreData(int zm, int m) {
     auto w_ = pmbp->pmhd->w0;
     StoreCCData(zm, u0, coarse_u0, m, u_);
     StoreCCData(zm, w0, coarse_w0, m, w_);
-    StoreCoarsePrim(zm, coarse_w0, m, w_);
+    // dyn_grmhd: coarse prims are taken from the derefined mesh after AMR
+    if (pmbp->pdyngr == nullptr) {
+      StoreCoarsePrim(zm, coarse_w0, m, w_);
+    }
     auto efld = pmbp->pmhd->efld;
     StoreEFieldsBeforeAMR(zm, m, efld);
   }
@@ -111,6 +114,31 @@ void ZoomData::StoreCCData(int zm, DvceArray5D<Real> a0, DvceArray5D<Real> ca,
                       + a(m,n,finek+1,finej+1,finei) + a(m,n,finek+1,finej+1,finei+1));
     });
   }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void ZoomData::StoreCCDataFromCoarse()
+//! \brief Store cell-centered data from the octant of coarser MeshBlock m covered by zoom
+//! meshblock zm into the coarse array ca (inverse of ApplyCCDataFromFiner)
+
+void ZoomData::StoreCCDataFromCoarse(int zm, DvceArray5D<Real> ca,
+                                     int m, DvceArray5D<Real> a) {
+  auto &indcs = pzoom->pmesh->mb_indcs;
+  int &cis = indcs.cis;  int &cie  = indcs.cie;
+  int &cjs = indcs.cjs;  int &cje  = indcs.cje;
+  int &cks = indcs.cks;  int &cke  = indcs.cke;
+  int cnx1 = indcs.cnx1, cnx2 = indcs.cnx2, cnx3 = indcs.cnx3;
+  int nvar = ca.extent_int(1);
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank]; // global id start of dvce
+  auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+  int ox1 = ((zlloc.lx1 & 1) == 1);
+  int ox2 = ((zlloc.lx2 & 1) == 1);
+  int ox3 = ((zlloc.lx3 & 1) == 1);
+  par_for("zoom_store_cc_coarse", DevExeSpace(),0,nvar-1,cks,cke,cjs,cje,cis,cie,
+  KOKKOS_LAMBDA(int n, int ck, int cj, int ci) {
+    ca(zm,n,ck,cj,ci) = a(m,n,ck + ox3*cnx3,cj + ox2*cnx2,ci + ox1*cnx1);
+  });
   return;
 }
 
@@ -555,6 +583,7 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
   auto u_ = pmbp->pmhd->u0, w_ = pmbp->pmhd->w0;
   auto u0_ = u0, w0_ = w0;
   auto b = pmbp->pmhd->b0;
+  bool is_dyngr = (pmbp->pdyngr != nullptr);
   par_for("zoom_apply_prim_same", DevExeSpace(),ks,ke,js,je,is,ie,
   KOKKOS_LAMBDA(int k, int j, int i) {
     Real &x1min = size.d_view(m).x1min;
@@ -582,6 +611,8 @@ void ZoomData::ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion) {
         w_(m,IVY,k,j,i) = 0.0;
         w_(m,IVZ,k,j,i) = 0.0;
       }
+      // dyn_grmhd: P2C with the EOS is done for the whole region in MaskVariables()
+      if (is_dyngr) return;
       // Load single state of primitive variables
       MHDPrim1D w;
       w.d  = w_(m,IDN,k,j,i);
@@ -669,6 +700,7 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
   auto u_ = pmbp->pmhd->u0;
   auto w_ = pmbp->pmhd->w0;
   auto b = pmbp->pmhd->b0;
+  bool is_dyngr = (pmbp->pdyngr != nullptr);
   par_for("zoom_apply_prim_finer", DevExeSpace(),cks,cke,cjs,cje,cis,cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
@@ -699,6 +731,8 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
         w_(m,IVY,k,j,i) = 0.0;
         w_(m,IVZ,k,j,i) = 0.0;
       }
+      // dyn_grmhd: P2C with the EOS is done for the whole region in MaskVariables()
+      if (is_dyngr) return;
 
       // Load single state of primitive variables
       MHDPrim1D w;

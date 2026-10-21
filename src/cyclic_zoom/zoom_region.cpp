@@ -12,6 +12,8 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
+#include "mhd/mhd.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -93,9 +95,13 @@ void CyclicZoom::CorrectVariables() {
 //! \brief Mask variables in the zoom region
 
 void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
+  auto pdyngr = pmesh->pmb_pack->pdyngr;
   // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
+  // dyn_grmhd keeps the state AMR produced (the uniform fill is ideal-gas only)
   if (pzmesh->nzmb_eachlevel[zone] == 0) {
-    pzdata->ApplyUniformFill(zreg);
+    if (pdyngr == nullptr) {
+      pzdata->ApplyUniformFill(zreg);
+    }
     return;
   }
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
@@ -116,6 +122,10 @@ void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
       std::exit(EXIT_FAILURE);
     }
   }
+  // dyn_grmhd: the functions above only set the primitives
+  if (pdyngr != nullptr) {
+    pdyngr->PrimToConInSphere(zreg.x1c, zreg.x2c, zreg.x3c, zreg.radius);
+  }
   return;
 }
 
@@ -133,6 +143,25 @@ void CyclicZoom::RestoreZ4c() {
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
     if (zlloc.level == lloc.level) {
       pzdata->ApplyZ4c(m, zm);
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::StoreCoarsePrimFromMesh()
+//! \brief Store the primitives of the derefined MeshBlocks as the coarse primitives of
+//! the loaded zoom data, i.e. C2P of the restricted conserved variables
+
+void CyclicZoom::StoreCoarsePrimFromMesh() {
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
+    auto &lloc = pmesh->lloc_eachmb[m+mbs];
+    if (zlloc.level - lloc.level == 1) {
+      pzdata->StoreCCDataFromCoarse(zm, pzdata->coarse_w0, m, pmesh->pmb_pack->pmhd->w0);
     }
   }
   return;

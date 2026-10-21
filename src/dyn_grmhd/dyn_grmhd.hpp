@@ -97,6 +97,8 @@ class DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
+  // P2C of the active cells within distance r of (x1c,x2c,x3c), used by cyclic zoom
+  virtual void PrimToConInSphere(Real x1c, Real x2c, Real x3c, Real r) = 0;
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke) = 0;
 
@@ -153,6 +155,7 @@ class DynGRMHDPS : public DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
+  virtual void PrimToConInSphere(Real x1c, Real x2c, Real x3c, Real r);
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke);
 

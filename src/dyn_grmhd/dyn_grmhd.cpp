@@ -26,6 +26,7 @@
 #include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
+#include "coordinates/cell_locations.hpp"
 #include "z4c/tmunu.hpp"
 #include "dyn_grmhd.hpp"
 #include "tasklist/numerical_relativity.hpp"
@@ -281,6 +282,88 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, i
     SetTmunu(nullptr, 0);
     fixed_evolution = fixed;
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  void DynGRMHD::PrimToConInSphere
+//  \brief P2C of the active cells within distance r of (x1c,x2c,x3c). The cell-centred
+//  field is the face average of b0 (as in C2P), since bcc0 may be stale here.
+template<class EOSPolicy, class ErrorPolicy>
+void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInSphere(Real x1c, Real x2c, Real x3c,
+                                                           Real r) {
+  auto &indcs = pmy_pack->pmesh->mb_indcs;
+  int &is = indcs.is, &ie = indcs.ie;
+  int &js = indcs.js, &je = indcs.je;
+  int &ks = indcs.ks, &ke = indcs.ke;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  auto &size = pmy_pack->pmb->mb_size;
+  int nmb = pmy_pack->nmb_thispack;
+  int &nhyd = pmy_pack->pmhd->nmhd;
+  int &nscal = pmy_pack->pmhd->nscalars;
+  auto &prim = pmy_pack->pmhd->w0;
+  auto &cons = pmy_pack->pmhd->u0;
+  auto &b0 = pmy_pack->pmhd->b0;
+  auto &adm = pmy_pack->padm->adm;
+  auto &eos_ = eos.ps.GetEOS();
+  auto &ps_  = eos.ps;
+  Real mb = eos_.GetBaryonMass();
+  Real r2 = SQR(r);
+
+  par_for("dyngr_p2c_sphere", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
+  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+    Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    if (SQR(x1v - x1c) + SQR(x2v - x2c) + SQR(x3v - x3c) > r2) return;
+
+    Real g3d[NSPMETRIC];
+    g3d[S11] = adm.g_dd(m, 0, 0, k, j, i);
+    g3d[S12] = adm.g_dd(m, 0, 1, k, j, i);
+    g3d[S13] = adm.g_dd(m, 0, 2, k, j, i);
+    g3d[S22] = adm.g_dd(m, 1, 1, k, j, i);
+    g3d[S23] = adm.g_dd(m, 1, 2, k, j, i);
+    g3d[S33] = adm.g_dd(m, 2, 2, k, j, i);
+    Real sdetg = sqrt(Primitive::GetDeterminant(g3d));
+
+    Real b[NMAG] = {0.5*(b0.x1f(m,k,j,i) + b0.x1f(m,k,j,i+1))/sdetg,
+                    0.5*(b0.x2f(m,k,j,i) + b0.x2f(m,k,j+1,i))/sdetg,
+                    0.5*(b0.x3f(m,k,j,i) + b0.x3f(m,k+1,j,i))/sdetg};
+
+    Real prim_pt[NPRIM], cons_pt[NCONS];
+    prim_pt[PRH] = prim(m, IDN, k, j, i)/mb;
+    prim_pt[PVX] = prim(m, IVX, k, j, i);
+    prim_pt[PVY] = prim(m, IVY, k, j, i);
+    prim_pt[PVZ] = prim(m, IVZ, k, j, i);
+    for (int n = 0; n < nscal; n++) {
+      prim_pt[PYF + n] = prim(m, nhyd + n, k, j, i);
+    }
+    prim_pt[PPR] = prim(m, IPR, k, j, i);
+    prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+    bool floor = eos_.ApplyPrimitiveFloor(prim_pt[PRH], &prim_pt[PVX],
+                                          prim_pt[PPR], prim_pt[PTM], &prim_pt[PYF]);
+
+    ps_.PrimToCon(prim_pt, cons_pt, b, g3d);
+
+    cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
+    cons(m, IM1, k, j, i) = cons_pt[CSX]*sdetg;
+    cons(m, IM2, k, j, i) = cons_pt[CSY]*sdetg;
+    cons(m, IM3, k, j, i) = cons_pt[CSZ]*sdetg;
+    cons(m, IEN, k, j, i) = cons_pt[CTA]*sdetg;
+    for (int n = 0; n < nscal; n++) {
+      cons(m, nhyd + n, k, j, i) = cons_pt[CYD + n]*sdetg;
+    }
+
+    if (floor) {
+      prim(m, IDN, k, j, i) = prim_pt[PRH]*mb;
+      prim(m, IVX, k, j, i) = prim_pt[PVX];
+      prim(m, IVY, k, j, i) = prim_pt[PVY];
+      prim(m, IVZ, k, j, i) = prim_pt[PVZ];
+      prim(m, IPR, k, j, i) = prim_pt[PPR];
+      for (int n = 0; n < nscal; n++) {
+        prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
+      }
+    }
+  });
 }
 
 //----------------------------------------------------------------------------------------

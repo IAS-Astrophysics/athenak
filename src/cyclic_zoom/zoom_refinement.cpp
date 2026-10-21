@@ -61,11 +61,24 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   if (zstate.zone > 0) {
     AdjustExcisionForZoom();
     LoadZoomData(zstate.zone-1);
-    MaskVariables(zstate.zone-1, zregion);
-    if (verbose && global_variable::my_rank == 0) {
-      std::cout << "CyclicZoom: Mask variables for new radius: "
-                << zregion.radius << " (r_ref = " << zregion.ref.r << ")"
-                << std::endl;
+    if (zamr.zooming_out && pmesh->pmb_pack->pdyngr != nullptr) {
+      // dyn_grmhd: the derefined mesh (restricted u0 + C2P) already holds the coarse
+      // state of the region; store it as the coarse prims instead of masking
+      StoreCoarsePrimFromMesh();
+      pzdata->PackBuffer();
+      pzdata->SaveToStorage(zstate.zone-1);
+      if (verbose && global_variable::my_rank == 0) {
+        std::cout << "CyclicZoom: Stored coarse prims from derefined mesh for radius: "
+                  << zregion.radius << " (r_ref = " << zregion.ref.r << ")"
+                  << std::endl;
+      }
+    } else {
+      MaskVariables(zstate.zone-1, zregion);
+      if (verbose && global_variable::my_rank == 0) {
+        std::cout << "CyclicZoom: Mask variables for new radius: "
+                  << zregion.radius << " (r_ref = " << zregion.ref.r << ")"
+                  << std::endl;
+      }
     }
   }
   // Initialize boundary values and primitive variables after reinitialization and masking
