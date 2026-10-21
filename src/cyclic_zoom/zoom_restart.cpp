@@ -6,6 +6,8 @@
 //! \file zoom_restart.cpp
 //! \brief Functions to write and read cyclic zoom restart data
 
+#include <cmath>
+#include <cstring>
 #include <iostream>
 
 #include "athena.hpp"
@@ -13,11 +15,17 @@
 #include "mesh/mesh.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
+// Zoom metadata format, written as a negative int before nzmb_total so that it cannot be
+// mistaken for nzmb_total (>= 0), which is the first int of the original format (1).
+// Format 2 adds zmb_data_cnt, checked on reading.
+static constexpr int kZoomRstFormat = 2;
+
 //----------------------------------------------------------------------------------------
 //! \fn IOWrapperSizeT CyclicZoom::RestartFileSize()
 //! \brief Calculate the size of restart file data for cyclic zoom
 //! \details Computes total size including ZoomState, ZoomMesh metadata arrays
-//!          (nzmb_total, nzmb_eachlevel, lloc_eachzmb), and ZMB data arrays.
+//!          (format, zmb_data_cnt, nzmb_total, nzmb_eachlevel, lloc_eachzmb), and ZMB
+//!          data.
 
 IOWrapperSizeT CyclicZoom::RestartFileSize() {
   IOWrapperSizeT res_size = 0;
@@ -26,6 +34,8 @@ IOWrapperSizeT CyclicZoom::RestartFileSize() {
   res_size += sizeof(ZoomState);
 
   // Size of zoom mesh metadata
+  res_size += sizeof(int);                              // -format
+  res_size += sizeof(int);                              // zmb_data_cnt
   res_size += sizeof(int);                              // nzmb_total
   res_size += pzmesh->nlevels * sizeof(int);            // nzmb_eachlevel
   res_size += pzmesh->nzmb_total * sizeof(LogicalLocation);  // lloc_eachzmb
@@ -69,6 +79,12 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
   }
 
   if (my_rank == 0) {
+    // Write format tag and ZMB layout (it changes with the physics stored)
+    int tag = -kZoomRstFormat;
+    resfile.Write_any_type_at(&tag, sizeof(int), current_offset, "byte");
+    current_offset += sizeof(int);
+    resfile.Write_any_type_at(&zmb_size, sizeof(int), current_offset, "byte");
+    current_offset += sizeof(int);
     // Write ZoomMesh metadata
     resfile.Write_any_type_at(&(pzmesh->nzmb_total), sizeof(int), current_offset, "byte");
     current_offset += sizeof(int);
@@ -82,7 +98,7 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
   }
 
   // STEP 3: Calculate base offset for ZMB data (after metadata)
-  IOWrapperSizeT base_offset = offset_zoom + sizeof(ZoomState) + sizeof(int)
+  IOWrapperSizeT base_offset = offset_zoom + sizeof(ZoomState) + 3 * sizeof(int)
                              + pzmesh->nlevels * sizeof(int)
                              + pzmesh->nzmb_total * sizeof(LogicalLocation);
 
@@ -94,10 +110,11 @@ void CyclicZoom::WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom
       int zm = pzmesh->lid_eachzmb[gzm];
 
       // Calculate offset in file for this ZMB based on its global index
-      IOWrapperSizeT file_offset = base_offset + gzm * zmb_size * sizeof(Real);
+      IOWrapperSizeT file_offset = base_offset
+                                 + static_cast<IOWrapperSizeT>(gzm)*zmb_size*sizeof(Real);
 
       // Calculate offset in local zdata array
-      size_t data_offset = zm * zmb_size;
+      size_t data_offset = static_cast<size_t>(zm) * zmb_size;
       if (resfile.Write_any_type_at(pzdata->zdata.data() + data_offset,
                                     zmb_size, file_offset, "Real") != zmb_size) {
         std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
@@ -127,18 +144,47 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
                                  bool single_file_per_rank) {
   int my_rank = global_variable::my_rank;
 
-  // STEP 1: Read and broadcast ZoomState parameters
+  // STEP 1: Read and broadcast ZoomState parameters. The zoom data is the last section
+  // of the file, so a restart file written without cyclic zoom ends at offset_zoom: keep
+  // the zoom state set from the input file (zone, direction, next_time = time + runtime).
   char *zrdata = new char[sizeof(ZoomState)];
   IOWrapperSizeT current_offset = offset_zoom;
+  int nread = 0;
   if (my_rank == 0) {
-    resfile.Read_bytes_at(zrdata, 1, sizeof(ZoomState), current_offset);
+    nread = resfile.Read_bytes_at(zrdata, 1, sizeof(ZoomState), current_offset);
     current_offset += sizeof(ZoomState);
+  }
+#if MPI_PARALLEL_ENABLED
+  MPI_Bcast(&nread, 1, MPI_INT, 0, MPI_COMM_WORLD);
+#endif
+  if (nread == 0) {
+    delete[] zrdata;
+    if (my_rank == 0) {
+      std::cout << "CyclicZoom: restart file has no cyclic zoom data, starting at zone "
+                << zstate.zone << " with next zoom at t = " << zstate.next_time
+                << std::endl;
+    }
+    PrintCyclicZoomDiagnostics();
+    return;
   }
 #if MPI_PARALLEL_ENABLED
   MPI_Bcast(zrdata, sizeof(ZoomState), MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
-  std::memcpy(&(zstate), &(zrdata[0]), sizeof(ZoomState));
+  ZoomState zread;
+  std::memcpy(&zread, &(zrdata[0]), sizeof(ZoomState));
   delete[] zrdata;
+  if (nread != static_cast<int>(sizeof(ZoomState)) ||
+      zread.zone < 0 || zread.zone >= zamr.nlevels ||
+      zread.last_zone < 0 || zread.last_zone >= zamr.nlevels ||
+      (zread.direction != 1 && zread.direction != -1) ||
+      !std::isfinite(zread.next_time)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CyclicZoom: invalid zoom state in restart file (zone=" << zread.zone
+              << ", direction=" << zread.direction << ", " << nread << " bytes read); "
+              << "was it written with a different nlevels or physics?" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  zstate = zread;
 
   // Update CyclicZoom runtime parameters from restart data
   UpdateAMRFromRestart();
@@ -149,20 +195,50 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
     return;
   }
 
-  // STEP 2: Read and broadcast zoom mesh metadata
+  // STEP 2: Read and broadcast zoom mesh metadata. The first int is nzmb_total in the
+  // original format and -format otherwise.
   int nzmb_total_read;
+  int zmb_size_read = -1;  // not stored in the original format
+  int format = 1;
   if (my_rank == 0) {
-    resfile.Read_bytes_at(&nzmb_total_read, 1, sizeof(int), current_offset);
+    int first;
+    resfile.Read_bytes_at(&first, 1, sizeof(int), current_offset);
     current_offset += sizeof(int);
-
+    if (first < 0) {
+      format = -first;
+      resfile.Read_bytes_at(&zmb_size_read, 1, sizeof(int), current_offset);
+      current_offset += sizeof(int);
+      resfile.Read_bytes_at(&nzmb_total_read, 1, sizeof(int), current_offset);
+      current_offset += sizeof(int);
+    } else {
+      nzmb_total_read = first;
+    }
     resfile.Read_bytes_at(pzmesh->nzmb_eachlevel, pzmesh->nlevels, sizeof(int),
                           current_offset);
     current_offset += pzmesh->nlevels * sizeof(int);
   }
 #if MPI_PARALLEL_ENABLED
+  MPI_Bcast(&format, 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(&nzmb_total_read, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Bcast(&zmb_size_read, 1, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Bcast(pzmesh->nzmb_eachlevel, pzmesh->nlevels, MPI_INT, 0, MPI_COMM_WORLD);
 #endif
+  if (format != 1 && format != kZoomRstFormat) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CyclicZoom: unknown zoom restart format " << format << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if (format == 1 && my_rank == 0) {
+    std::cout << "CyclicZoom: original zoom restart format, the zoom data layout "
+              << "cannot be checked" << std::endl;
+  }
+  if (format != 1 && zmb_size_read != pzdata->zmb_data_cnt) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "CyclicZoom: restart file stores " << zmb_size_read << " values per "
+              << "zoom MeshBlock, this build expects " << pzdata->zmb_data_cnt
+              << " (different physics or code version)" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // Resize arrays and read lloc data
   pzmesh->nzmb_total = nzmb_total_read;
@@ -181,7 +257,8 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
 #endif
 
   // STEP 3: Calculate base offset for ZMB data (after metadata)
-  IOWrapperSizeT base_offset = offset_zoom + sizeof(ZoomState) + sizeof(int)
+  int nmeta = (format == 1) ? 1 : 3;  // ints before nzmb_eachlevel
+  IOWrapperSizeT base_offset = offset_zoom + sizeof(ZoomState) + nmeta * sizeof(int)
                              + pzmesh->nlevels * sizeof(int)
                              + nzmb_total_read * sizeof(LogicalLocation);
 
@@ -195,13 +272,20 @@ void CyclicZoom::ReadRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,
       int zm = pzmesh->lid_eachzmb[gzm];
 
       // Calculate offset in file for this ZMB based on its global index
-      IOWrapperSizeT file_offset = base_offset + gzm * zmb_size * sizeof(Real);
+      IOWrapperSizeT file_offset = base_offset
+                                 + static_cast<IOWrapperSizeT>(gzm)*zmb_size*sizeof(Real);
 
       // Calculate offset in local zdata array
-      size_t data_offset = zm * zmb_size;
+      size_t data_offset = static_cast<size_t>(zm) * zmb_size;
 
       // Read this ZMB's data from file
-      resfile.Read_Reals_at(pzdata->zdata.data() + data_offset, zmb_size, file_offset);
+      if (resfile.Read_Reals_at(pzdata->zdata.data() + data_offset, zmb_size,
+                                file_offset) != static_cast<std::size_t>(zmb_size)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "CyclicZoom: zoom data not read correctly from rst "
+                  << "file, restart file is broken." << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
   }
 
