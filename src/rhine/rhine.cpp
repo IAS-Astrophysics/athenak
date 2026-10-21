@@ -146,6 +146,7 @@ void RHINE::Diagnostics(Driver *pdrive) {
 TaskStatus RHINE::Dispatch(Driver *pdrive, int stage, RhinePass pass) {
   using namespace dyngr;      // NOLINT
   using namespace Primitive;  // NOLINT
+  ResetCrossingStateOnRegrid();
   Real dt_apply = 0.0;
   if (pass == RhinePass::source) {
     if (stage == 1) { SnapshotReference(); }
@@ -187,25 +188,35 @@ void RHINE::SnapshotReference() {
   int ks = indcs.ks, ke = indcs.ke;
   auto &w0 = pmy_pack->pmhd->w0;
   auto &r0_ = r0;
+  auto &aux_ = aux;
 
   par_for("rhine_r0", DevExeSpace(), 0, pmy_pack->nmb_thispack-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     for (int l = 0; l < N_RHINE_SCALARS; ++l) {
       r0_(m, l, k, j, i) = w0(m, I_YE + l, k, j, i);
     }
+    aux_(m, A_QEXIT, k, j, i) = 0.0;
   });
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void RHINE::ResetCrossingStateOnRegrid()
+//! \brief AMR/load balancing reorders MeshBlocks but not aux, so the NSE-crossing state
+//! no longer belongs to its cells: mark everything unknown.
+//! A restart starts from the zero-initialized aux, i.e. unknown as well.
+void RHINE::ResetCrossingStateOnRegrid() {
+  const int seq = pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq();
+  if (seq == amr_seq) { return; }
+  amr_seq = seq;
+  Kokkos::deep_copy(Kokkos::subview(aux, Kokkos::ALL,
+                                    std::make_pair(static_cast<int>(A_NSEST),
+                                                   static_cast<int>(N_RHINE_AUX)),
+                                    Kokkos::ALL, Kokkos::ALL, Kokkos::ALL), 0.0);
 }
 
 //----------------------------------------------------------------------------------------
 //! \fn TaskStatus RHINE::NSEResyncEOS()
 //! \brief Re-synchronize the advected composition of NSE cells (w >= 1) with the table.
-//!
-//! Full block INCLUDING ghosts, as in GR-Athena++: an interior-only resync leaves ghost
-//! scalars stale relative to the neighbour's resynced interior, and AthenaK's FOFC mask
-//! reads those ghosts on the next step -- flipping the fallback decision on one side of a
-//! shared face only, i.e. unequal fluxes and a mass leak. Runs once per step after the
-//! final C2P, so w0/temperature are fresh everywhere; keeping it out of the substep path
-//! is also what protects the frozen r0 reference.
 template<class EOSPolicy, class ErrorPolicy>
 TaskStatus RHINE::NSEResyncEOS() {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
@@ -217,8 +228,14 @@ TaskStatus RHINE::NSEResyncEOS() {
   auto &w0   = pmy_pack->pmhd->w0;
   auto &u0   = pmy_pack->pmhd->u0;
   auto &temp = pmy_pack->pdyngr->temperature;
+  auto &adm  = pmy_pack->padm->adm;
+  auto &aux_ = aux;
   auto eos = static_cast<dyngr::DynGRMHDPS<EOSPolicy, ErrorPolicy>*>(
                  pmy_pack->pdyngr)->eos.ps.GetEOS();
+  const int is = indcs.is, ie = indcs.ie;
+  const int js = indcs.js, je = indcs.je;
+  const int ks = indcs.ks, ke = indcs.ke;
+  const Real dt_code = pmy_pack->pmesh->dt;
 
   // Excised cells hold no physical matter (see NetworkStepEOS).
   const bool excise_ = pmy_pack->pcoord->coord_data.bh_excise;
@@ -230,7 +247,15 @@ TaskStatus RHINE::NSEResyncEOS() {
     if (excise_ && excision_floor_(m, k, j, i)) { return; }
     const Real n_fm3 = w0(m, IDN, k, j, i) / eos.GetBaryonMass();
     const Real T = temp(m, 0, k, j, i);
-    if (eos.GetTransitionFactor(n_fm3, T) < 1.0) { return; }
+    aux_(m, A_QREENT, k, j, i) = 0.0;
+    aux_(m, A_QNSE, k, j, i) = 0.0;
+
+    const Real st = aux_(m, A_NSEST, k, j, i);
+    if (eos.GetTransitionFactor(n_fm3, T) < 1.0) {
+      if (st == 3.0 || st == 0.0) { aux_(m, A_NSEST, k, j, i) = 1.0; }
+      return;
+    }
+    aux_(m, A_NSEST, k, j, i) = 2.0;
 
     Real Y[MAX_SPECIES] = {0.0};
     for (int l = 0; l < N_RHINE_SCALARS; ++l) { Y[SCYE + l] = w0(m, I_YE + l, k, j, i); }
@@ -241,6 +266,7 @@ TaskStatus RHINE::NSEResyncEOS() {
     const Real xh = eos.FrXh(n_fm3, T, Y);
     const Real xsum = xn + xp + xa + xh;
     if (!(xsum > 0.0)) { return; }
+    const Real eb_old = w0(m, I_EB, k, j, i);
 
     w0(m, I_XN, k, j, i) = xn / xsum;
     w0(m, I_XP, k, j, i) = xp / xsum;
@@ -256,6 +282,21 @@ TaskStatus RHINE::NSEResyncEOS() {
     u0(m, I_XH, k, j, i) = w0(m, I_XH, k, j, i) * D;
     u0(m, I_AH, k, j, i) = w0(m, I_AH, k, j, i) * D;
     u0(m, I_EB, k, j, i) = w0(m, I_EB, k, j, i) * D;
+
+    if (dt_code > 0.0 && k >= ks && k <= ke && j >= js && j <= je && i >= is && i <= ie) {
+      const Real g11 = adm.g_dd(m,0,0,k,j,i), g12 = adm.g_dd(m,0,1,k,j,i);
+      const Real g13 = adm.g_dd(m,0,2,k,j,i), g22 = adm.g_dd(m,1,1,k,j,i);
+      const Real g23 = adm.g_dd(m,1,2,k,j,i), g33 = adm.g_dd(m,2,2,k,j,i);
+      const Real wv1 = w0(m, IVX, k, j, i);
+      const Real wv2 = w0(m, IVY, k, j, i);
+      const Real wv3 = w0(m, IVZ, k, j, i);
+      const Real Wlor = Kokkos::sqrt(1.0 + g11*wv1*wv1 + g22*wv2*wv2 + g33*wv3*wv3
+                        + 2.0*(g12*wv1*wv2 + g13*wv1*wv3 + g23*wv2*wv3));
+      const Real q_nse = -D * Wlor * (w0(m, I_EB, k, j, i) - eb_old) / dt_code;
+      aux_(m, A_QNSE, k, j, i) = q_nse;
+
+      if (st == 1.0 || st == 3.0) { aux_(m, A_QREENT, k, j, i) = q_nse; }
+    }
   });
 
   return TaskStatus::complete;
@@ -297,6 +338,11 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
   // Back-react only in the source pass; there the frozen r0 is the '0' reference.
   const bool apply_ = apply && (dt_apply_code > 0.0);
   const bool use_r0 = apply_;
+  // The deposited heating (A_HEAT, A_QDOT, A_LNU, A_QPHYS) is recorded where it is
+  // applied: in the source stages, against the frozen step-start reference.
+  const bool own_rates = apply_ || !apply;
+  // Compute reaction/heating split only where it is consumed.
+  const bool want_phys = fnu_physical || (own_rates && diag_due);
 
   const bool multi_d = pmy_pack->pmesh->multi_d;
   const bool three_d = pmy_pack->pmesh->three_d;
@@ -309,6 +355,7 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
   const int  pmode_ = pmode;
   const bool clamp_cold_ = clamp_cold;
   const bool fnu_physical_ = fnu_physical;
+  const bool want_phys_ = want_phys;
 
   constexpr Real MEV_TO_ERG = 1.602176634e-6;    // erg per MeV
   constexpr Real M_U_G      = 1.66053906660e-24; // atomic mass unit [g]
@@ -326,7 +373,7 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
   par_for("rhine_src", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
     if (excise_ && excision_floor_(m, k, j, i)) {
-      for (int l = 0; l < N_RHINE_AUX; ++l) { aux_(m, l, k, j, i) = 0.0; }
+      for (int l = 0; l < A_NSEST; ++l) { aux_(m, l, k, j, i) = 0.0; }
       return;
     }
     const Real mb_conv = eos.GetBaryonMass();     // combined mass+density factor
@@ -349,10 +396,13 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
     aux_(m, A_XERR, k, j, i) = Y[SCXN] + Y[SCXP] + Y[SCXA] + Y[SCXH] - 1.0;
 
     // Zero the rate diagnostics by default.
-    aux_(m, A_HEAT, k, j, i) = 0.0;
+    if (own_rates) {
+      aux_(m, A_HEAT, k, j, i) = 0.0;
+      aux_(m, A_QDOT, k, j, i) = 0.0;
+      aux_(m, A_LNU,  k, j, i) = 0.0;
+      aux_(m, A_QPHYS, k, j, i) = 0.0;
+    }
     aux_(m, A_FNU,  k, j, i) = 0.0;
-    aux_(m, A_QDOT, k, j, i) = 0.0;
-    aux_(m, A_LNU,  k, j, i) = 0.0;
     aux_(m, A_DYE,  k, j, i) = 0.0;
     aux_(m, A_DYN,  k, j, i) = 0.0;
     aux_(m, A_DYP,  k, j, i) = 0.0;
@@ -465,13 +515,13 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
           Kokkos::isfinite(dma) && Kokkos::isfinite(fnu))) {
       dye = dyn = dyp = dya = dyh = dah = dma = fnu = 0.0;
     }
-    // Release the neutrino fraction acts on. fnu (model 8) is the share of the nuclear
-    // release carried off by beta-decay neutrinos; dma also holds the m-tilde
-    // reconciliation (NSE hand-off, mixing), which emits no neutrinos. With
-    // rhine/fnu_physical, fnu acts on dm_phys only: the m-tilde change from this
-    // call's increments, both ends on the current composition (GR-Athena++ 6026f590).
-    Real dm_nu = dma;
-    if (fnu_physical_ && dma != 0.0) {
+    // Split of the release. dm_phys is the m-tilde change from this call's reaction
+    // increments alone, both ends on the current composition; dma - dm_phys is the
+    // reconciliation of the advected m-tilde with it (transport/mixing, NSE hand-off),
+    // which emits no neutrinos. fnu (model 8) is the share of the nuclear release
+    // carried off by beta-decay neutrinos.
+    Real dm_phys = dma;
+    if (want_phys_ && dma != 0.0) {
       const Real m_now = nets_.massExcess(ye, yn, ya, yh, ah);
       const Real dxh1 = dah*yh0 + ah0*dyh + dt_net*dah*dyh;
       Real yn1 = Kokkos::fmax(yn + dyn*dt_net, 0.0);
@@ -484,14 +534,17 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
         yn1 *= f1; ya1 *= f1; yh1 *= f1;
       }
       const Real m_next = nets_.massExcess(ye + dye*dt_net, yn1, ya1, yh1, ah1);
-      dm_nu = (m_next - m_now) / dt_net;
-      if (!Kokkos::isfinite(dm_nu)) { dm_nu = dma; }
+      dm_phys = (m_next - m_now) / dt_net;
+      if (!Kokkos::isfinite(dm_phys)) { dm_phys = dma; }
     }
+    const Real dm_nu = fnu_physical_ ? dm_phys : dma;
     // fnu is only valid while that release is positive (dm_nu < 0).
     if (!(dm_nu < 0.0)) { fnu = 0.0; }
 
     // Diagnostics.
-    aux_(m, A_HEAT, k, j, i) = -(dma - fnu * dm_nu) * MEV_TO_ERG * n_cm3;
+    if (own_rates) {
+      aux_(m, A_HEAT, k, j, i) = -(dma - fnu * dm_nu) * MEV_TO_ERG * n_cm3;
+    }
     aux_(m, A_FNU,  k, j, i) = fnu;
     aux_(m, A_DYE,  k, j, i) = dye;
     aux_(m, A_DYN,  k, j, i) = dyn;
@@ -502,8 +555,17 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
     aux_(m, A_DMA,  k, j, i) = dma;
     const Real to_code = D / mb_MeV * alpha * time_cgs;  // densitized code rate
     const Real lnu = -fnu * dm_nu * to_code;
-    aux_(m, A_QDOT, k, j, i) = -dma * to_code - lnu;
-    aux_(m, A_LNU,  k, j, i) = lnu;
+    const Real qdot = -dma * to_code - lnu;
+    if (own_rates) {
+      aux_(m, A_QDOT, k, j, i) = qdot;
+      aux_(m, A_LNU,  k, j, i) = lnu;
+      if (want_phys_) { aux_(m, A_QPHYS, k, j, i) = -(1.0 - fnu) * dm_phys * to_code; }
+    }
+
+    if (apply_ && aux_(m, A_NSEST, k, j, i) >= 2.0) {
+      aux_(m, A_QEXIT, k, j, i) = qdot;
+      aux_(m, A_NSEST, k, j, i) = 3.0;
+    }
 
     if (!apply_) { return; }
 

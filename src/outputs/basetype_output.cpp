@@ -498,6 +498,11 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("rhine_dyh",          rhine::A_DYH,  aux);
       outvars.emplace_back("rhine_dah",          rhine::A_DAH,  aux);
       outvars.emplace_back("rhine_dma",          rhine::A_DMA,  aux);
+      outvars.emplace_back("rhine_qphys",        rhine::A_QPHYS,  aux);
+      outvars.emplace_back("rhine_nse_state",    rhine::A_NSEST,  aux);
+      outvars.emplace_back("rhine_qexit",        rhine::A_QEXIT,  aux);
+      outvars.emplace_back("rhine_qreent",       rhine::A_QREENT, aux);
+      outvars.emplace_back("rhine_qnse",         rhine::A_QNSE,   aux);
     }
 
     // mhd cell-centered magnetic fields

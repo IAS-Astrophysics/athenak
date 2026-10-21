@@ -1001,6 +1001,11 @@ void EllipticaSystemHistory(HistoryData *pdata, Mesh *pm) {
   if (has_rhine) {
     pdata->label[nh++] = "rhine-qdot";
     pdata->label[nh++] = "rhine-Lfnu";
+    pdata->label[nh++] = "rh-qphys";
+    pdata->label[nh++] = "rh-qexit";
+    pdata->label[nh++] = "rh-qreent";
+    pdata->label[nh++] = "nse-qdot";
+    pdata->label[nh++] = "m-nonNSE";
   }
   pdata->nhist = nh;
 
@@ -1085,8 +1090,31 @@ void EllipticaSystemHistory(HistoryData *pdata, Mesh *pm) {
 
       if (mut > 1.0) { mb_ejg += vol*D; }
       if (hW*mut/W > 1.0) { mb_ejb += vol*D; }
-    },
-    qdot, lnu, mej_b, mej_g);
+    }, qdot, lnu, mej_b, mej_g);
+
+  // Heating split: reaction part, NSE exit release, NSE, re-entry take-back,
+  // every NSE resync, and the rest mass outside NSE (w < 1).
+  Real qphys = 0.0, qexit = 0.0, qreent = 0.0, qnse = 0.0, m_nonnse = 0.0;
+  if (has_rhine) {
+    Kokkos::parallel_reduce(
+      "EllipticaHistRhineSplit", Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
+      KOKKOS_LAMBDA(const int &idx, Real &mb_qphys, Real &mb_qexit, Real &mb_qreent,
+                    Real &mb_qnse, Real &mb_mnon) {
+        int m = (idx) / nkji;
+        int k = (idx - m * nkji) / nji;
+        int j = (idx - m * nkji - k * nji) / nx1;
+        int i = (idx - m * nkji - k * nji - j * nx1) + is;
+        k += ks;
+        j += js;
+        Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+        mb_qphys  += vol*aux_(m, rhine::A_QPHYS,  k, j, i);
+        mb_qexit  += vol*aux_(m, rhine::A_QEXIT,  k, j, i);
+        mb_qreent += vol*aux_(m, rhine::A_QREENT, k, j, i);
+        mb_qnse   += vol*aux_(m, rhine::A_QNSE,   k, j, i);
+        if (aux_(m, rhine::A_TRANS, k, j, i) < 1.0) { mb_mnon += vol*u0_(m, IDN, k, j, i); }
+      },
+      qphys, qexit, qreent, qnse, m_nonnse);
+  }
 
   // Currently AthenaK only supports MPI_SUM operations between ranks, but we
   // need MPI_MAX and MPI_MIN operations instead. This is a cheap hack to make
@@ -1120,6 +1148,11 @@ void EllipticaSystemHistory(HistoryData *pdata, Mesh *pm) {
   if (has_rhine) {
     pdata->hdata[n++] = qdot;
     pdata->hdata[n++] = lnu;
+    pdata->hdata[n++] = qphys;
+    pdata->hdata[n++] = qexit;
+    pdata->hdata[n++] = qreent;
+    pdata->hdata[n++] = qnse;
+    pdata->hdata[n++] = m_nonnse;
   }
 }
 

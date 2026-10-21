@@ -51,6 +51,15 @@ enum RhineAux {
   A_DYH,        // network rate dYh/dt  [1/s]
   A_DAH,        // network rate dAh/dt  [1/s]
   A_DMA,        // network rate dma/dt  [MeV/baryon/s]
+  A_QPHYS,      // densitized heating from the reaction increments only
+                // (A_QDOT - A_QPHYS - A_QEXIT is the mixing release)
+  A_NSEST,      // NSE crossing state: 0 unknown (init/restart/regrid), 1 out of NSE and
+                // released, 2 resynced and not yet released, 3 first release this step
+  A_QEXIT,      // densitized RHINE heating of cells making their first release since the
+                // last resync
+  A_QREENT,     // densitized heating by the NSE resync of cells that re-entered NSE after
+                // a release, -D W dE_B/dt
+  A_QNSE,       // same for EVERY resynced cell (binding-energy shifts inside NSE)
   N_RHINE_AUX
 };
 
@@ -92,6 +101,7 @@ class RHINE {
   bool post_after_integrator = false;
   bool diag_due = true;
   bool diag_fresh = false;
+  int  amr_seq = 0;  // mesh-update sequence the NSE-crossing state belongs to
 
   // Diagnostic array (nmb, N_RHINE_AUX, nc3, nc2, nc1).
   DvceArray5D<Real> aux;
@@ -107,6 +117,7 @@ class RHINE {
   TaskStatus NSEResyncEOS();
 
   void SnapshotReference();
+  void ResetCrossingStateOnRegrid();
 
  private:
   //! Resolve the EOS/error policy template arguments and run `pass`.
