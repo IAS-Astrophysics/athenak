@@ -20,6 +20,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "z4c/z4c.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -47,6 +48,13 @@ void ZoomData::StoreData(int zm, int m) {
   if (pmbp->prad != nullptr) {
     auto i_ = pmbp->prad->i0;
     StoreCCData(zm, i0, coarse_i0, m, i_);
+  }
+  if (pmbp->pz4c != nullptr) {
+    auto des_slice = Kokkos::subview(z4c_u0, Kokkos::make_pair(zm,zm+1),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    auto src_slice = Kokkos::subview(pmbp->pz4c->u0, Kokkos::make_pair(m,m+1),
+                                     Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+    Kokkos::deep_copy(des_slice, src_slice);
   }
   return;
 }
@@ -730,6 +738,21 @@ void ZoomData::ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion) {
       }
     }
   });
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn ZoomData::ApplyZ4c()
+//! \brief Copy the whole block of z4c variables from zoom data zm to MeshBlock m at the
+//! same level. Only valid for a frozen spacetime.
+
+void ZoomData::ApplyZ4c(int m, int zm) {
+  auto pmbp = pzoom->pmesh->pmb_pack;
+  auto des_slice = Kokkos::subview(pmbp->pz4c->u0, Kokkos::make_pair(m,m+1),
+                                   Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+  auto src_slice = Kokkos::subview(z4c_u0, Kokkos::make_pair(zm,zm+1),
+                                   Kokkos::ALL,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
+  Kokkos::deep_copy(des_slice, src_slice);
   return;
 }
 

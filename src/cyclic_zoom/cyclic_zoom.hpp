@@ -149,6 +149,7 @@ class CyclicZoom {
   bool CheckStoreFlag(int m);
   void CorrectVariables();
   void MaskVariables(int zone, const ZoomRegion &zreg);
+  void RestoreZ4c();
   void ApplyMask();
   void AdjustExcisionForZoom();
   void UpdateFluxes(Driver *pdriver);
@@ -222,6 +223,7 @@ class ZoomData {
   // data
   int nvars;               // number of variables
   int nangles;             // number of angles
+  int nz4c;                // number of z4c variables
   int zmb_data_cnt;        // count of data elements per Zoom MeshBlock needed for zooming
   Real d_zoom;             // density within inner boundary
   Real p_zoom;             // pressure within inner boundary
@@ -240,6 +242,9 @@ class ZoomData {
   // Radiation intensity arrays
   DvceArray5D<Real> i0;         // intensities
   DvceArray5D<Real> coarse_i0;  // intensities on 2x coarser grid (for SMR/AMR)
+
+  // Z4c variables (frozen spacetime only, no coarse copy needed)
+  DvceArray5D<Real> z4c_u0;
 
   // DualView for device <-> host mirrored packing buffer
   // Syncs only used portion via subviews for bandwidth efficiency
@@ -274,6 +279,7 @@ class ZoomData {
   void ApplyPrimSameLevel(int m, int zm, const ZoomRegion &zregion);
   void ApplyPrimFromFiner(int m, int zm, const ZoomRegion &zregion);
   void ApplyUniformFill(const ZoomRegion &zregion);
+  void ApplyZ4c(int m, int zm);
   // functions for storing/applying electric fields during zoom
   void StoreEFieldsBeforeAMR(int zm, int m, DvceEdgeFld4D<Real> efld);
   void CorrectEFieldsFromFiner(int zmc, int m, int zmf, DvceEdgeFld4D<Real> efld);

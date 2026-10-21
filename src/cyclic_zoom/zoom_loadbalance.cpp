@@ -47,6 +47,10 @@ void ZoomData::PackBuffer() {
     ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) *
               coarse_i0.extent(3) * coarse_i0.extent(4);
   }
+  size_t z4c_cnt = 0;
+  if (pmbp->pz4c != nullptr) {
+    z4c_cnt = z4c_u0.extent(1) * z4c_u0.extent(2) * z4c_u0.extent(3) * z4c_u0.extent(4);
+  }
   auto dzbuf = zbuf.d_view;  // Get device view for packing
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     // offset = zm * zmb_data_cnt;
@@ -79,6 +83,11 @@ void ZoomData::PackBuffer() {
       offset += i0_cnt;
       PackBuffersCC(dzbuf, offset, zm, coarse_i0);
       offset += ci0_cnt;
+    }
+    // pack z4c variables if z4c is enabled
+    if (pmbp->pz4c != nullptr) {
+      PackBuffersCC(dzbuf, offset, zm, z4c_u0);
+      offset += z4c_cnt;
     }
   }
   // Single copy: device buffer -> host buffer
@@ -225,6 +234,10 @@ void ZoomData::UnpackBuffer() {
     ci0_cnt = coarse_i0.extent(1) * coarse_i0.extent(2) *
               coarse_i0.extent(3) * coarse_i0.extent(4);
   }
+  size_t z4c_cnt = 0;
+  if (pmbp->pz4c != nullptr) {
+    z4c_cnt = z4c_u0.extent(1) * z4c_u0.extent(2) * z4c_u0.extent(3) * z4c_u0.extent(4);
+  }
   for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
     // offset = zm * zmb_data_cnt;
     if (pmbp->phydro != nullptr || pmbp->pmhd != nullptr) {
@@ -256,6 +269,11 @@ void ZoomData::UnpackBuffer() {
       offset += i0_cnt;
       UnpackBuffersCC(dzbuf, offset, zm, coarse_i0);
       offset += ci0_cnt;
+    }
+    // unpack z4c variables if z4c is enabled
+    if (pmbp->pz4c != nullptr) {
+      UnpackBuffersCC(dzbuf, offset, zm, z4c_u0);
+      offset += z4c_cnt;
     }
   }
   if (offset != used_size) {

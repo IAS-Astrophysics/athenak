@@ -120,6 +120,25 @@ void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::RestoreZ4c()
+//! \brief Restore the frozen z4c variables on MeshBlocks re-refined to the level of the
+//! loaded zoom data. Coarser MeshBlocks keep the restricted values.
+
+void CyclicZoom::RestoreZ4c() {
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
+    auto &lloc = pmesh->lloc_eachmb[m+mbs];
+    if (zlloc.level == lloc.level) {
+      pzdata->ApplyZ4c(m, zm);
+    }
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::ApplyMask()
 //! \brief wrapper function to call MaskVariables()
 

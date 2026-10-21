@@ -11,6 +11,7 @@
 #include "athena.hpp"
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
+#include "z4c/z4c.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -45,6 +46,11 @@ void CyclicZoom::StoreZoomRegion() {
 void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   if (zamr.zooming_in) {
     LoadZoomData(zstate.zone);
+    // restore the frozen metric before any prim->cons conversion in the mask
+    if (pmesh->pmb_pack->pz4c != nullptr) {
+      RestoreZ4c();
+      pmesh->pmb_pack->pz4c->Z4cToADM(pmesh->pmb_pack);
+    }
     MaskVariables(zstate.zone, old_zregion);
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Reinitialize variables for old radius: "
