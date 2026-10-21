@@ -121,6 +121,7 @@ class CyclicZoom {
   bool verbose;            // flag for verbose output
   bool read_rst;           // flag for reading zoom data restart file
   bool write_rst;          // flag for writing zoom data restart file
+  bool m1_mask_fixed;      // hold M1 fixed in the mask (m1_mask = fixed) or evolve it
 
   ZoomState zstate;        // zoom runtime state
   ZoomAMR zamr;            // zoom AMR parameters
@@ -158,10 +159,11 @@ class CyclicZoom {
   void StoreVariables();
   bool CheckStoreFlag(int m);
   void CorrectVariables();
-  Real MaskVariables(int zone, const ZoomRegion &zreg);
+  Real MaskVariables(int zone, const ZoomRegion &zreg, bool mask_m1 = true);
   void RestoreZ4c();
   void StoreCoarsePrimFromMesh();
   void ApplyMask();
+  void ApplyMaskM1();
   void AdjustExcisionForZoom();
   void UpdateFluxes(Driver *pdriver);
   void StoreFluxes();
@@ -237,6 +239,7 @@ class ZoomData {
   int nvars;               // number of variables
   int nangles;             // number of angles
   int nz4c;                // number of z4c variables
+  int nm1;                 // number of M1 variables
   int zmb_data_cnt;        // count of data elements per Zoom MeshBlock needed for zooming
   Real d_zoom;             // density within inner boundary
   Real p_zoom;             // pressure within inner boundary
@@ -258,6 +261,10 @@ class ZoomData {
 
   // Z4c variables (frozen spacetime only, no coarse copy needed)
   DvceArray5D<Real> z4c_u0;
+
+  // M1 evolved variables
+  DvceArray5D<Real> m1_u0;
+  DvceArray5D<Real> coarse_m1_u0;
 
   // DualView for device <-> host mirrored packing buffer
   // Syncs only used portion via subviews for bandwidth efficiency
@@ -284,8 +291,8 @@ class ZoomData {
   void StoreCoarsePrim(int zm, DvceArray5D<Real> cw,
                        int m, DvceArray5D<Real> w0_);
   void StoreCCDataFromCoarse(int zm, DvceArray5D<Real> ca, int m, DvceArray5D<Real> a);
-  void ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion);
-  void ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion);
+  void ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion, bool mask_m1);
+  void ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion, bool mask_m1);
   void ApplyCCDataSameLevel(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> a0,
                             const ZoomRegion &zregion);
   void ApplyCCDataFromFiner(int m, DvceArray5D<Real> a, int zm, DvceArray5D<Real> ca,

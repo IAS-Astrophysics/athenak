@@ -14,6 +14,7 @@
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -94,7 +95,7 @@ void CyclicZoom::CorrectVariables() {
 //! \fn void CyclicZoom::MaskVariables()
 //! \brief Mask variables in the zoom region
 
-Real CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
+Real CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg, bool mask_m1) {
   auto pdyngr = pmesh->pmb_pack->pdyngr;
   // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
   // dyn_grmhd keeps the state AMR produced (the uniform fill is ideal-gas only)
@@ -111,9 +112,9 @@ Real CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
     int m = pzmesh->mblid_eachzmb[zm+zmbs];
     auto &lloc = pmesh->lloc_eachmb[m+mbs];
     if (zlloc.level == lloc.level) {
-      pzdata->ApplyDataSameLevel(m, zm, zreg);
+      pzdata->ApplyDataSameLevel(m, zm, zreg, mask_m1);
     } else if (zlloc.level - lloc.level == 1) {
-      pzdata->ApplyDataFromFiner(m, zm, zreg);
+      pzdata->ApplyDataFromFiner(m, zm, zreg, mask_m1);
     } else {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "zoom block " << zm + zmbs << " at level " << zlloc.level
@@ -173,8 +174,34 @@ void CyclicZoom::StoreCoarsePrimFromMesh() {
 //! \brief wrapper function to call MaskVariables()
 
 void CyclicZoom::ApplyMask() {
+  // M1 is evolved in the operator-split stages and masked by ApplyMaskM1()
   if (zstate.zone > 0 && !zamr.zooming_out && !zamr.zooming_in) {
-    MaskVariables(zstate.zone-1, zregion);
+    MaskVariables(zstate.zone-1, zregion, false);
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::ApplyMaskM1()
+//! \brief Hold the M1 variables in the zoom region at their stored values (m1_mask =
+//! fixed). Called from the M1 physical BCs after each operator-split stage.
+
+void CyclicZoom::ApplyMaskM1() {
+  auto pradm1 = pmesh->pmb_pack->pradm1;
+  if (pradm1 == nullptr || !m1_mask_fixed) return;
+  if (zstate.zone == 0 || zamr.zooming_out || zamr.zooming_in) return;
+  if (pzmesh->nzmb_eachlevel[zstate.zone-1] == 0) return;
+  int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
+  int mbs = pmesh->gids_eachrank[global_variable::my_rank];
+  for (int zm = 0; zm < pzmesh->nzmb_thisdvce; ++zm) {
+    auto &zlloc = pzmesh->lloc_eachzmb[zm+zmbs];
+    int m = pzmesh->mblid_eachzmb[zm+zmbs];
+    auto &lloc = pmesh->lloc_eachmb[m+mbs];
+    if (zlloc.level == lloc.level) {
+      pzdata->ApplyCCDataSameLevel(m, pradm1->u0, zm, pzdata->m1_u0, zregion);
+    } else if (zlloc.level - lloc.level == 1) {
+      pzdata->ApplyCCDataFromFiner(m, pradm1->u0, zm, pzdata->coarse_m1_u0, zregion);
+    }
   }
   return;
 }

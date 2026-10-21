@@ -18,6 +18,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -36,6 +37,8 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
     i0("zi0",1,1,1,1,1),
     coarse_i0("zci0",1,1,1,1,1),
     z4c_u0("zz4c",1,1,1,1,1),
+    m1_u0("zm1",1,1,1,1,1),
+    coarse_m1_u0("zcm1",1,1,1,1,1),
     zbuf("z_buffer",1),
     zdata("z_data",1) {
   // allocate memory for primitive variables
@@ -56,6 +59,10 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   nz4c = 0;
   if (pmbp->pz4c != nullptr) {
     nz4c = pmbp->pz4c->u0.extent_int(1);
+  }
+  nm1 = 0;
+  if (pmbp->pradm1 != nullptr) {
+    nm1 = pmbp->pradm1->nvarstot;
   }
   // compute size of data per Zoom MeshBlock
   zmb_data_cnt = 0;
@@ -108,6 +115,12 @@ ZoomData::ZoomData(CyclicZoom *pz, ParameterInput *pin) :
   // allocate memory for z4c
   if (pmbp->pz4c != nullptr) {
     Kokkos::realloc(z4c_u0,nzmb,nz4c,ncells3,ncells2,ncells1);
+  }
+
+  // allocate memory for M1
+  if (pmbp->pradm1 != nullptr) {
+    Kokkos::realloc(m1_u0,nzmb,nm1,ncells3,ncells2,ncells1);
+    Kokkos::realloc(coarse_m1_u0,nzmb,nm1,nccells3,nccells2,nccells1);
   }
 
   // allocate device and host arrays for data transfer and storage
@@ -244,6 +257,12 @@ void ZoomData::Initialize() {
     Kokkos::deep_copy(z4c_u0, 0.0);
   }
 
+  // Initialize M1 variables to zero
+  if (pmbp->pradm1 != nullptr) {
+    Kokkos::deep_copy(m1_u0, 0.0);
+    Kokkos::deep_copy(coarse_m1_u0, 0.0);
+  }
+
   return;
 }
 
@@ -277,6 +296,10 @@ void ZoomData::MeshBlockDataSize() {
   }
   if (pmbp->pz4c != nullptr) {
     cnt += nz4c * ncells3 * ncells2 * ncells1; // z4c u0
+  }
+  if (pmbp->pradm1 != nullptr) {
+    cnt += nm1 * ncells3 * ncells2 * ncells1; // M1 u0
+    cnt += nm1 * nccells3 * nccells2 * nccells1; // coarse M1 u0
   }
   return;
 }

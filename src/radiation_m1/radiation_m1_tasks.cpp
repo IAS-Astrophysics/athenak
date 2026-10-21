@@ -23,6 +23,7 @@
 #include "radiation_m1/radiation_m1_helpers.hpp"
 #include "radiation_m1/radiation_m1_macro.hpp"
 #include "tasklist/task_list.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 namespace radiationm1 {
 //----------------------------------------------------------------------------------------
@@ -254,6 +255,11 @@ TaskStatus RadiationM1::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 
   // physical BCs
   pbval_u->RadiationM1BCs((pmy_pack), (pbval_u->u_in), u0);
+
+  // hold M1 fixed in the cyclic zoom mask region (if m1_mask = fixed)
+  if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->ApplyMaskM1();
+  }
 
   // user BCs
   if (pmy_pack->pmesh->pgen->user_bcs) {

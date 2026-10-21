@@ -70,6 +70,14 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);
   write_rst = pin->GetOrAddBoolean("cyclic_zoom","write_rst",true);
   flux_r_in = pin->GetOrAddReal("cyclic_zoom","flux_r_in",0.0);
+  std::string m1_mask = pin->GetOrAddString("cyclic_zoom","m1_mask","fixed");
+  if (m1_mask != "fixed" && m1_mask != "evolve") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<cyclic_zoom> m1_mask = " << m1_mask << " must be fixed or evolve"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  m1_mask_fixed = (m1_mask == "fixed");
   for (int n=0; n<4; ++n) {
     hflx_mask[n] = 0.0;
     hflx_in[n] = 0.0;

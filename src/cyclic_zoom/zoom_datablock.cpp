@@ -21,6 +21,7 @@
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -51,6 +52,10 @@ void ZoomData::StoreData(int zm, int m) {
   if (pmbp->prad != nullptr) {
     auto i_ = pmbp->prad->i0;
     StoreCCData(zm, i0, coarse_i0, m, i_);
+  }
+  if (pmbp->pradm1 != nullptr) {
+    // M1 u0 is densitized, so the coarse average is the volume integral (as in AMR)
+    StoreCCData(zm, m1_u0, coarse_m1_u0, m, pmbp->pradm1->u0);
   }
   if (pmbp->pz4c != nullptr) {
     auto des_slice = Kokkos::subview(z4c_u0, Kokkos::make_pair(zm,zm+1),
@@ -424,7 +429,8 @@ void ZoomData::StoreCoarsePrim(int zm, DvceArray5D<Real> cw,
 //! \fn ZoomData::ApplyDataSameLevel()
 //! \brief Load data from zoom data zm to MeshBlock m
 
-void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
+void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion,
+                                  bool mask_m1) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -441,6 +447,9 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
   if (pmbp->prad != nullptr) {
     ApplyCCDataSameLevel(m, pmbp->prad->i0, zm, i0, zregion);
   }
+  if (pmbp->pradm1 != nullptr && mask_m1) {
+    ApplyCCDataSameLevel(m, pmbp->pradm1->u0, zm, m1_u0, zregion);
+  }
   return;
 }
 
@@ -448,7 +457,8 @@ void ZoomData::ApplyDataSameLevel(int m, int zm, const ZoomRegion &zregion) {
 //! \fn ZoomData::ApplyDataFromFiner()
 //! \brief Apply data to MeshBlock m from finer level zoom data zm for the zoom region
 
-void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
+void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion,
+                                  bool mask_m1) {
   auto pmbp = pzoom->pmesh->pmb_pack;
   if (pmbp->phydro == nullptr && pmbp->pmhd == nullptr && pmbp->prad == nullptr) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
@@ -464,6 +474,9 @@ void ZoomData::ApplyDataFromFiner(int m, int zm, const ZoomRegion &zregion) {
   }
   if (pmbp->prad != nullptr) {
     ApplyCCDataFromFiner(m, pmbp->prad->i0, zm, coarse_i0, zregion);
+  }
+  if (pmbp->pradm1 != nullptr && mask_m1) {
+    ApplyCCDataFromFiner(m, pmbp->pradm1->u0, zm, coarse_m1_u0, zregion);
   }
   return;
 }
