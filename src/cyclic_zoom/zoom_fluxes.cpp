@@ -14,6 +14,9 @@
 #include "coordinates/cell_locations.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 #include "mhd/mhd.hpp"
+#include "coordinates/adm.hpp"
+#include "driver/driver.hpp"
+#include "outputs/outputs.hpp"
 
 //----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::UpdateFluxes()
@@ -288,5 +291,149 @@ void ZoomData::LimitEFields() {
     }
   });
 
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::AccumulateFluxes()
+//! \brief Sum the fluxes into the zoom sphere through the faces between cells inside
+//! (r <= radius, as in the mask) and outside it, for this stage of the time integrator:
+//! rest mass D, Ye*D, energy -sqrt(-g) T^i_t = alpha*(F_tau + F_D) - beta^j F_S_j, and
+//! J_z = sqrt(-g) T^i_phi = x F_S_y - y F_S_x about the zoom centre. Fluxes are weighted
+//! by their weight in the final update of the step, so the sums are the amounts crossing
+//! the faces over the step. dyn_grmhd only. Uses the sphere of the mask in zone > 0 and
+//! the flux_r_in sphere in zone 0.
+
+void CyclicZoom::AccumulateFluxes(Driver *pdrive, int stage) {
+  auto pmbp = pmesh->pmb_pack;
+  if (pmbp->pdyngr == nullptr || stage < 1 || stage > pdrive->nexp_stages) return;
+  // the after-time-integrator task list applies the BCs again with stage = 1
+  if (pmesh->ncycle == hlast_cycle && stage <= hlast_stage) return;
+  hlast_cycle = pmesh->ncycle;
+  hlast_stage = stage;
+
+  Real rs;
+  Real *acc;
+  if (zstate.zone > 0) {
+    rs = zregion.radius;
+    acc = hflx_mask;
+  } else if (flux_r_in > 0.0) {
+    rs = flux_r_in;
+    acc = hflx_in;
+  } else {
+    return;
+  }
+  // weight of this stage's fluxes in u^(n+1) = ... + beta_s*dt*prod_{t>s}(gam0_t)*L_s
+  Real wght = pdrive->beta[stage-1]*pmesh->dt;
+  for (int s = stage; s < pdrive->nexp_stages; ++s) {
+    wght *= pdrive->gam0[s];
+  }
+
+  auto &indcs = pmesh->mb_indcs;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
+  int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
+  auto &size = pmbp->pmb->mb_size;
+  auto &flx1 = pmbp->pmhd->uflx.x1f;
+  auto &flx2 = pmbp->pmhd->uflx.x2f;
+  auto &flx3 = pmbp->pmhd->uflx.x3f;
+  auto &adm = pmbp->padm->adm;
+  int iyf = (pmbp->pmhd->nscalars > 0) ? pmbp->pmhd->nmhd : -1;
+  Real xc[3] = {zregion.x1c, zregion.x2c, zregion.x3c};
+  Real rs2 = SQR(rs);
+
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  array_sum::GlobalSum sums;
+  Kokkos::parallel_reduce("zoom_flux_sums",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, (pmbp->nmb_thispack)*nkji),
+  KOKKOS_LAMBDA(const int &idx, array_sum::GlobalSum &mb_sum) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
+    Real xv[3];
+    xv[0] = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    xv[1] = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    xv[2] = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    if (SQR(xv[0]-xc[0]) + SQR(xv[1]-xc[1]) + SQR(xv[2]-xc[2]) > rs2) return;
+    Real dx[3] = {size.d_view(m).dx1, size.d_view(m).dx2, size.d_view(m).dx3};
+
+    array_sum::GlobalSum fsum;
+    for (int d = 0; d < 3; ++d) {
+      for (int side = 0; side < 2; ++side) {
+        // skip faces whose neighbour is also inside the sphere
+        Real sh = (side == 0) ? -1.0 : 1.0;
+        Real xn[3] = {xv[0], xv[1], xv[2]};
+        xn[d] += sh*dx[d];
+        if (SQR(xn[0]-xc[0]) + SQR(xn[1]-xc[1]) + SQR(xn[2]-xc[2]) <= rs2) continue;
+        // face and neighbour indices
+        int fi = i, fj = j, fk = k;
+        int ni = i, nj = j, nk = k;
+        if (d == 0) {fi += side; ni += (side == 0) ? -1 : 1;}
+        if (d == 1) {fj += side; nj += (side == 0) ? -1 : 1;}
+        if (d == 2) {fk += side; nk += (side == 0) ? -1 : 1;}
+        auto flx = [&](int n) {
+          return (d == 0) ? flx1(m,n,fk,fj,fi) :
+                 (d == 1) ? flx2(m,n,fk,fj,fi) : flx3(m,n,fk,fj,fi);
+        };
+        // inward = -outward, and the outward normal is -e_d (side 0) or +e_d (side 1)
+        Real area = dx[0]*dx[1]*dx[2]/dx[d];
+        Real sgn = -sh*area;
+        Real xf[3] = {xv[0], xv[1], xv[2]};
+        xf[d] += 0.5*sh*dx[d];
+        Real alp = 0.5*(adm.alpha(m,k,j,i) + adm.alpha(m,nk,nj,ni));
+        Real bx = 0.5*(adm.beta_u(m,0,k,j,i) + adm.beta_u(m,0,nk,nj,ni));
+        Real by = 0.5*(adm.beta_u(m,1,k,j,i) + adm.beta_u(m,1,nk,nj,ni));
+        Real bz = 0.5*(adm.beta_u(m,2,k,j,i) + adm.beta_u(m,2,nk,nj,ni));
+        Real fd = flx(IDN);
+        fsum.the_array[0] += sgn*fd;
+        fsum.the_array[1] += (iyf >= 0) ? sgn*flx(iyf) : 0.0;
+        fsum.the_array[2] += sgn*(alp*(flx(IEN) + fd)
+                                  - (bx*flx(IM1) + by*flx(IM2) + bz*flx(IM3)));
+        fsum.the_array[3] += sgn*((xf[0] - xc[0])*flx(IM2) - (xf[1] - xc[1])*flx(IM1));
+      }
+    }
+    mb_sum += fsum;
+  }, Kokkos::Sum<array_sum::GlobalSum>(sums));
+
+  for (int n = 0; n < 4; ++n) {
+    acc[n] += wght*sums.the_array[n];
+  }
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void CyclicZoom::LoadHistoryData()
+//! \brief Fill the zoom history (summed over ranks by the history output) and reset the
+//! accumulators. Amounts are those since the previous output, positive into the sphere.
+
+void CyclicZoom::LoadHistoryData(HistoryData *pdata) {
+  pdata->nhist = 12;
+  pdata->label[0] = "zone";
+  pdata->label[1] = "r-mask";
+  pdata->label[2] = "dM-mask";
+  pdata->label[3] = "dYeM-mask";
+  pdata->label[4] = "dE-mask";
+  pdata->label[5] = "dJz-mask";
+  pdata->label[6] = "r-in";
+  pdata->label[7] = "dM-in";
+  pdata->label[8] = "dYeM-in";
+  pdata->label[9] = "dE-in";
+  pdata->label[10] = "dJz-in";
+  pdata->label[11] = "dM-trans";
+  bool root = (global_variable::my_rank == 0);
+  pdata->hdata[0] = root ? static_cast<Real>(zstate.zone) : 0.0;
+  pdata->hdata[1] = (root && zstate.zone > 0) ? zregion.radius : 0.0;
+  pdata->hdata[6] = root ? flux_r_in : 0.0;
+  for (int n = 0; n < 4; ++n) {
+    pdata->hdata[2+n] = hflx_mask[n];
+    pdata->hdata[7+n] = hflx_in[n];
+    hflx_mask[n] = 0.0;
+    hflx_in[n] = 0.0;
+  }
+  pdata->hdata[11] = hdm_trans;
+  hdm_trans = 0.0;
   return;
 }

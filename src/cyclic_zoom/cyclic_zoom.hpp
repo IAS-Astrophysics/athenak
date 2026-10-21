@@ -102,6 +102,7 @@ typedef struct ZoomEMF {
 // Forward declaration
 class ZoomMesh;
 class ZoomData;
+struct HistoryData;
 
 //----------------------------------------------------------------------------------------
 //! \class CyclicZoom
@@ -131,6 +132,15 @@ class CyclicZoom {
   ZoomMesh *pzmesh;        // zoom mesh
   ZoomData *pzdata;        // zoom data
 
+  // fluxes into the zoom spheres for the zoom history file (dyn_grmhd only), summed on
+  // this rank since the last history output: rest mass, Ye*rest mass, E, J_z
+  Real flux_r_in;          // sphere used in zone 0 (<= 0: off)
+  Real hflx_mask[4];       // through the mask sphere (zone > 0)
+  Real hflx_in[4];         // through the flux_r_in sphere (zone 0)
+  Real hdm_trans;          // rest mass changed by masking at zoom-in
+  int hlast_cycle;         // last cycle/stage summed, to skip the after-integrator call
+  int hlast_stage;
+
   // functions
   // basic functions
   void Initialize(ParameterInput *pin);
@@ -148,7 +158,7 @@ class CyclicZoom {
   void StoreVariables();
   bool CheckStoreFlag(int m);
   void CorrectVariables();
-  void MaskVariables(int zone, const ZoomRegion &zreg);
+  Real MaskVariables(int zone, const ZoomRegion &zreg);
   void RestoreZ4c();
   void StoreCoarsePrimFromMesh();
   void ApplyMask();
@@ -156,6 +166,8 @@ class CyclicZoom {
   void UpdateFluxes(Driver *pdriver);
   void StoreFluxes();
   void SourceTermsFC(DvceEdgeFld4D<Real> emf);
+  void AccumulateFluxes(Driver *pdrive, int stage);
+  void LoadHistoryData(HistoryData *pdata);
   // restart functions
   IOWrapperSizeT RestartFileSize();
   void WriteRestartFile(IOWrapper &resfile, IOWrapperSizeT offset_zoom,

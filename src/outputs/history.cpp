@@ -22,6 +22,7 @@
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
 #include "coordinates/adm.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 #include "outputs.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -49,6 +50,10 @@ HistoryOutput::HistoryOutput(ParameterInput *pin, Mesh *pm, OutputParameters op)
   if (pm->pmb_pack->pz4c != nullptr) {
     hist_data.emplace_back(PhysicsModule::SpaceTimeDynamics);
   }
+
+  if (pm->pzoom != nullptr && pm->pmb_pack->pdyngr != nullptr) {
+    hist_data.emplace_back(PhysicsModule::ZoomFluxes);
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -66,6 +71,8 @@ void HistoryOutput::LoadOutputData(Mesh *pm) {
       LoadZ4cHistoryData(&data, pm);
     } else if (data.physics == PhysicsModule::UserDefined) {
       (pm->pgen->user_hist_func)(&data, pm);
+    } else if (data.physics == PhysicsModule::ZoomFluxes) {
+      pm->pzoom->LoadHistoryData(&data);
     }
   }
 }
@@ -409,6 +416,9 @@ void HistoryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           fname.append(".z4c");
         case PhysicsModule::UserDefined:
           fname.append(".user");
+          break;
+        case PhysicsModule::ZoomFluxes:
+          fname.append(".zoom");
           break;
         default:
           break;

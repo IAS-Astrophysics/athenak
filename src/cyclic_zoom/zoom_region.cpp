@@ -94,7 +94,7 @@ void CyclicZoom::CorrectVariables() {
 //! \fn void CyclicZoom::MaskVariables()
 //! \brief Mask variables in the zoom region
 
-void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
+Real CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
   auto pdyngr = pmesh->pmb_pack->pdyngr;
   // if zoom mesh missing (e.g. first zoom-in), apply uniform state to the zoom region
   // dyn_grmhd keeps the state AMR produced (the uniform fill is ideal-gas only)
@@ -102,7 +102,7 @@ void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
     if (pdyngr == nullptr) {
       pzdata->ApplyUniformFill(zreg);
     }
-    return;
+    return 0.0;
   }
   int zmbs = pzmesh->gzms_eachdvce[global_variable::my_rank];
   int mbs = pmesh->gids_eachrank[global_variable::my_rank];
@@ -123,10 +123,11 @@ void CyclicZoom::MaskVariables(int zone, const ZoomRegion &zreg) {
     }
   }
   // dyn_grmhd: the functions above only set the primitives
+  Real dmass = 0.0;
   if (pdyngr != nullptr) {
-    pdyngr->PrimToConInSphere(zreg.x1c, zreg.x2c, zreg.x3c, zreg.radius);
+    dmass = pdyngr->PrimToConInSphere(zreg.x1c, zreg.x2c, zreg.x3c, zreg.radius);
   }
-  return;
+  return dmass;
 }
 
 //----------------------------------------------------------------------------------------

@@ -69,6 +69,14 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   verbose = pin->GetOrAddBoolean("cyclic_zoom","verbose",false);
   read_rst = pin->GetOrAddBoolean("cyclic_zoom","read_rst",true);
   write_rst = pin->GetOrAddBoolean("cyclic_zoom","write_rst",true);
+  flux_r_in = pin->GetOrAddReal("cyclic_zoom","flux_r_in",0.0);
+  for (int n=0; n<4; ++n) {
+    hflx_mask[n] = 0.0;
+    hflx_in[n] = 0.0;
+  }
+  hdm_trans = 0.0;
+  hlast_cycle = -1;
+  hlast_stage = 0;
 
   // Set zoom runtime state parameters
   zstate.id = 0;

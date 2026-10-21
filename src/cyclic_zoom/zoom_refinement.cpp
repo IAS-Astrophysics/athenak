@@ -53,7 +53,7 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
     }
     // shrink the excision before the stored gas refills the old excision sphere
     AdjustExcisionForZoom();
-    MaskVariables(zstate.zone, old_zregion);
+    hdm_trans += MaskVariables(zstate.zone, old_zregion);
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Reinitialize variables for old radius: "
                 << old_zregion.radius << " (r_ref = " << old_zregion.ref.r << ")"
@@ -77,7 +77,8 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
                   << std::endl;
       }
     } else {
-      MaskVariables(zstate.zone-1, zregion);
+      Real dmass = MaskVariables(zstate.zone-1, zregion);
+      if (zamr.zooming_in) {hdm_trans += dmass;}
       if (verbose && global_variable::my_rank == 0) {
         std::cout << "CyclicZoom: Mask variables for new radius: "
                   << zregion.radius << " (r_ref = " << zregion.ref.r << ")"

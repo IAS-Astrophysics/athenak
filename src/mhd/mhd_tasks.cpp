@@ -579,6 +579,7 @@ TaskStatus MHD::ApplyPhysicalBCs(Driver *pdrive, int stage) {
 
   // TODO(@mhguo): this is temporary, need to move to a general mask function later
   if (pmy_pack->pmesh->pzoom != nullptr) {
+    pmy_pack->pmesh->pzoom->AccumulateFluxes(pdrive, stage);
     pmy_pack->pmesh->pzoom->ApplyMask();
   }
 

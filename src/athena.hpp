@@ -79,7 +79,7 @@ enum TimeEvolution {tstatic, kinematic, dynamic};
 
 // constants that enumerate Physics Modules implemented in code
 enum PhysicsModule {HydroDynamics, MagnetoHydroDynamics,
-                    SpaceTimeDynamics, UserDefined}; //SpaceTimeDynamics = Z4c
+                    SpaceTimeDynamics, UserDefined, ZoomFluxes}; //SpaceTimeDynamics = Z4c
 
 // structs to store primitive/conserved variables in one-dimension
 // (density, velocity/momentum, internal/total energy, [transverse magnetic field])

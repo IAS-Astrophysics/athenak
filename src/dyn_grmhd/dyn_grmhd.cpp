@@ -287,14 +287,13 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, i
 //----------------------------------------------------------------------------------------
 //! \fn  void DynGRMHD::PrimToConInSphere
 //  \brief P2C of the active cells within distance r of (x1c,x2c,x3c). The cell-centred
-//  field is the face average of b0 (as in C2P), since bcc0 may be stale here.
+//  field is the face average of b0 (as in C2P), since bcc0 may be stale here. Returns
+//  the change in rest mass on this rank.
 template<class EOSPolicy, class ErrorPolicy>
-void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInSphere(Real x1c, Real x2c, Real x3c,
+Real DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInSphere(Real x1c, Real x2c, Real x3c,
                                                            Real r) {
   auto &indcs = pmy_pack->pmesh->mb_indcs;
-  int &is = indcs.is, &ie = indcs.ie;
-  int &js = indcs.js, &je = indcs.je;
-  int &ks = indcs.ks, &ke = indcs.ke;
+  int is = indcs.is, js = indcs.js, ks = indcs.ks;
   int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   auto &size = pmy_pack->pmb->mb_size;
   int nmb = pmy_pack->nmb_thispack;
@@ -309,12 +308,24 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInSphere(Real x1c, Real x2c, R
   Real mb = eos_.GetBaryonMass();
   Real r2 = SQR(r);
 
-  par_for("dyngr_p2c_sphere", DevExeSpace(), 0, nmb-1, ks, ke, js, je, is, ie,
-  KOKKOS_LAMBDA(const int m, const int k, const int j, const int i) {
+  const int nkji = nx3*nx2*nx1;
+  const int nji  = nx2*nx1;
+  Real dmass = 0.0;
+  Kokkos::parallel_reduce("dyngr_p2c_sphere",
+  Kokkos::RangePolicy<>(DevExeSpace(), 0, nmb*nkji),
+  KOKKOS_LAMBDA(const int &idx, Real &dm) {
+    int m = (idx)/nkji;
+    int k = (idx - m*nkji)/nji;
+    int j = (idx - m*nkji - k*nji)/nx1;
+    int i = (idx - m*nkji - k*nji - j*nx1) + is;
+    k += ks;
+    j += js;
     Real x1v = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
     Real x2v = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
     Real x3v = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
     if (SQR(x1v - x1c) + SQR(x2v - x2c) + SQR(x3v - x3c) > r2) return;
+    Real vol = size.d_view(m).dx1*size.d_view(m).dx2*size.d_view(m).dx3;
+    Real d_old = cons(m, IDN, k, j, i);
 
     Real g3d[NSPMETRIC];
     g3d[S11] = adm.g_dd(m, 0, 0, k, j, i);
@@ -345,6 +356,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInSphere(Real x1c, Real x2c, R
     ps_.PrimToCon(prim_pt, cons_pt, b, g3d);
 
     cons(m, IDN, k, j, i) = cons_pt[CDN]*sdetg;
+    dm += vol*(cons(m, IDN, k, j, i) - d_old);
     cons(m, IM1, k, j, i) = cons_pt[CSX]*sdetg;
     cons(m, IM2, k, j, i) = cons_pt[CSY]*sdetg;
     cons(m, IM3, k, j, i) = cons_pt[CSZ]*sdetg;
@@ -363,7 +375,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInSphere(Real x1c, Real x2c, R
         prim(m, nhyd + n, k, j, i) = prim_pt[PYF + n];
       }
     }
-  });
+  }, Kokkos::Sum<Real>(dmass));
+  return dmass;
 }
 
 //----------------------------------------------------------------------------------------
