@@ -50,6 +50,10 @@ struct CoordData {
   bool freeze_excision = false;    // fix excision region when first activated (fastflow)
   bool freeze_excision_radius = true;   // freeze the size of the region (freeze_excision)
   bool freeze_excision_center = false;  // pin it in space instead of tracking the BH
+  Real zoom_exc_r = 0.0;           // horizon scheme: also excise this sphere (zoom)
+  Real zoom_exc_x1c = 0.0;         // centre of the cyclic zoom excision sphere
+  Real zoom_exc_x2c = 0.0;
+  Real zoom_exc_x3c = 0.0;
 };
 
 //----------------------------------------------------------------------------------------

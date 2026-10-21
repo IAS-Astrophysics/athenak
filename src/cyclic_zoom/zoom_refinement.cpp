@@ -51,6 +51,8 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
       RestoreZ4c();
       pmesh->pmb_pack->pz4c->Z4cToADM(pmesh->pmb_pack);
     }
+    // shrink the excision before the stored gas refills the old excision sphere
+    AdjustExcisionForZoom();
     MaskVariables(zstate.zone, old_zregion);
     if (verbose && global_variable::my_rank == 0) {
       std::cout << "CyclicZoom: Reinitialize variables for old radius: "
@@ -59,7 +61,9 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
     }
   }
   if (zstate.zone > 0) {
-    AdjustExcisionForZoom();
+    if (!zamr.zooming_in) {
+      AdjustExcisionForZoom();
+    }
     LoadZoomData(zstate.zone-1);
     if (zamr.zooming_out && pmesh->pmb_pack->pdyngr != nullptr) {
       // dyn_grmhd: the derefined mesh (restricted u0 + C2P) already holds the coarse

@@ -186,7 +186,15 @@ void CyclicZoom::AdjustExcisionForZoom() {
   // update excision masks if necessary
   auto pcoord = pmesh->pmb_pack->pcoord;
   auto &coord = pcoord->coord_data;
-  if (coord.bh_excise) {
+  if (coord.bh_excise && coord.excision_scheme == ExcisionScheme::horizon) {
+    // excise the zoom sphere while zoomed out; zone 0 is unexcised (set, not max).
+    // Masks are rebuilt now since UpdateExcisionMasks normally runs at the last stage.
+    coord.zoom_exc_r = (zstate.zone > 0) ? zregion.exc.r : 0.0;
+    coord.zoom_exc_x1c = zregion.x1c;
+    coord.zoom_exc_x2c = zregion.x2c;
+    coord.zoom_exc_x3c = zregion.x3c;
+    pcoord->UpdateExcisionMasks();
+  } else if (coord.bh_excise && zstate.zone > 0) {
     coord.flux_excise_r = std::max(coord.flux_excise_r, zregion.exc.r);
     coord.rexcise = std::max(coord.rexcise, zregion.exc.r);
     if (coord.excision_scheme == ExcisionScheme::fixed) {

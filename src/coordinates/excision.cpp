@@ -198,6 +198,12 @@ void Coordinates::UpdateExcisionMasks() {
     auto &floor = excision_floor;
     auto &flux = excision_flux;
 
+    // sphere excised by cyclic zoom while zoomed out
+    Real zr = coord_data.zoom_exc_r;
+    Real zx1 = coord_data.zoom_exc_x1c;
+    Real zx2 = coord_data.zoom_exc_x2c;
+    Real zx3 = coord_data.zoom_exc_x3c;
+
     // set up arrays to hold horizon information
     Real &horizon_factor = coord_data.horizon_factor;
     int hsize = pmy_pack->pz4c->pfastflow.size();
@@ -259,7 +265,7 @@ void Coordinates::UpdateExcisionMasks() {
       Real x2 = CellCenterX(j - js, indcs.nx2, x2min, x2max);
       Real x3 = CellCenterX(k - ks, indcs.nx3, x3min, x3max);
 
-      bool excise = false;
+      bool excise = (SQR(x1 - zx1) + SQR(x2 - zx2) + SQR(x3 - zx3) < SQR(zr));
       for (int h = 0; h < hsize; ++h) {
         if (!hfound.d_view(h,0)) continue;
 
