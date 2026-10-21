@@ -16,6 +16,7 @@
 #include "coordinates/cartesian_ks.hpp"
 #include "coordinates/cell_locations.hpp"
 #include "pgen/pgen.hpp"
+#include "z4c/z4c.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -48,8 +49,13 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
     err = "Cyclic zoom is not implemented for self-gravity";
   } else if (pmbp->pturb != nullptr) {
     err = "Cyclic zoom is not implemented for turbulence driving";
-  } else if (pmbp->pz4c != nullptr || pmbp->padm != nullptr || pmbp->pdyngr != nullptr) {
-    err = "Cyclic zoom is not implemented for Z4c, ADM, or dynamical GRMHD";
+  } else if ((pmbp->pz4c != nullptr || pmbp->padm != nullptr || pmbp->pdyngr != nullptr)
+             && (pmbp->pz4c == nullptr || !pmbp->pz4c->opt.freeze)) {
+    // only a frozen spacetime is supported: the metric is not stored in the zoom data
+    err = "Cyclic zoom with Z4c, ADM, or dynamical GRMHD requires <z4c> freeze = true";
+  } else if (pmbp->pdyngr != nullptr && pin->GetOrAddBoolean(block_name,"add_emf",true)) {
+    // the EMF correction calls the ideal-MHD flux/EMF functions
+    err = "Cyclic zoom with dynamical GRMHD requires add_emf = false";
   } else if (pin->DoesBlockExist("shearing_box")) {
     err = "Cyclic zoom is not implemented for the shearing box";
   }

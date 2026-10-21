@@ -602,6 +602,9 @@ void BNSHistory(HistoryData *pdata, Mesh *pm) {
 }
 
 void LoreneBNSRefinementCondition(MeshBlockPack *pmbp) {
+  // with cyclic zoom the tracker AMR would re-refine the region the zoom derefines;
+  // leave the mesh to the zoom criterion
+  if (pmbp->pmesh->pzoom != nullptr) return;
   pmbp->pz4c->pamr->Refine(pmbp);
 }
 

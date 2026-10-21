@@ -66,7 +66,7 @@ void CyclicZoom::ApplyZoomRegion(Driver *pdriver) {
   if (zamr.zooming_in || zstate.zone > 0) {
     pdriver->InitBoundaryValuesAndPrimitives(pmesh);
   }
-  if (zamr.zooming_out) {
+  if (zamr.zooming_out && zemf.add_emf) {
     // update electric fields after masking
     if (pmesh->pmb_pack->pmhd != nullptr) {
       pzdata->ResetDataEC(pzdata->delta_efld); // clear delta_efld first
