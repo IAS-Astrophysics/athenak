@@ -61,7 +61,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
       pin->GetOrAddBoolean("radiation_m1", "mirror_composition", true);
   params.theta_limiter = pin->GetOrAddBoolean("radiation_m1", "theta_limiter", false);
   params.closure_epsilon = pin->GetOrAddReal("radiation_m1", "closure_epsilon", 1e-5);
-  params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 64);
+  params.closure_maxiter = pin->GetOrAddInteger("radiation_m1", "closure_maxiter", 10);
   params.rad_N_floor = pin->GetOrAddReal("radiation_m1", "rad_N_floor", 1e-27);
   params.rad_E_floor = pin->GetOrAddReal("radiation_m1", "rad_E_floor", 1e-30);
   params.rad_eps = pin->GetOrAddReal("radiation_m1", "rad_eps", 1e-14);
@@ -99,7 +99,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
   // set closure rootfinder (default: brent). "newton" = pure Newton-Raphson with
   // analytic derivative and the relativistic-aberration initial guess.
   std::string closure_solver =
-      pin->GetOrAddString("radiation_m1", "closure_solver", "brent");
+      pin->GetOrAddString("radiation_m1", "closure_solver", "newton");
   if (closure_solver == "brent") {
     params.closure_solver = ClosureBrent;
   } else if (closure_solver == "newton") {
@@ -147,8 +147,6 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
         pin->GetOrAddReal("bns_nurates", "max_recon_temp_mev", 2000.);
     nurates_params.use_recon_y_fallback =
         pin->GetOrAddBoolean("bns_nurates", "use_recon_y_fallback", false);
-    nurates_params.max_recon_y =
-        pin->GetOrAddReal("bns_nurates", "max_recon_y", 0.7901234567745267);
     nurates_params.use_abs_em = pin->GetOrAddBoolean("bns_nurates", "use_abs_em", true);
     nurates_params.use_pair = pin->GetOrAddBoolean("bns_nurates", "use_pair", true);
     nurates_params.use_brem = pin->GetOrAddBoolean("bns_nurates", "use_brem", true);
@@ -160,11 +158,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
     nurates_params.use_dm_eff = pin->GetOrAddBoolean("bns_nurates", "use_dm_eff", false);
     nurates_params.use_equilibrium_distribution =
-        pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", true);
-    nurates_params.use_kirchhoff_law =
-        pin->GetOrAddBoolean("bns_nurates", "use_kirchhoff_law", true);
-    nurates_params.use_nonthermal_separated =
-        pin->GetOrAddBoolean("bns_nurates", "use_nonthermal_separated", true);
+        pin->GetOrAddBoolean("bns_nurates", "use_equilibrium_distribution", false);
     nurates_params.use_NN_medium_corr =
         pin->GetOrAddBoolean("bns_nurates", "use_NN_medium_corr", true);
     nurates_params.neglect_blocking =
@@ -173,36 +167,17 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_BRT_brem =
         pin->GetOrAddBoolean("bns_nurates", "use_BRT_brem", false);
     {
-      const Real rho_max = pin->GetOrAddReal("bns_nurates",
-                                             "exclude_pair_brem_nue_anue_rho_max", -1.0);
-      const bool exclude_all =
-          pin->GetOrAddBoolean("bns_nurates", "exclude_pair_brem_nue_anue", false);
+      // [g/cm^3]; eq-spectrum cells only; <= 0: never
+      const Real rho_max = pin->GetOrAddReal(
+          "bns_nurates", "exclude_pair_brem_nue_anue_rho_max", 1.0e12);
       const Real m_n_g = 1.67492750e-24;   // neutron mass [g]
-      if (rho_max > 0.0) {
-        nurates_params.exclude_pair_brem_nb_max = rho_max / m_n_g * 1.0e-21;  // cm^-3 -> nm^-3
-      } else if (exclude_all) {
-        nurates_params.exclude_pair_brem_nb_max = 1.0e300;   // every density
-      } else {
-        nurates_params.exclude_pair_brem_nb_max = -1.0;      // never
-      }
+      // cm^-3 -> nm^-3
+      nurates_params.exclude_pair_brem_nb_max = rho_max / m_n_g * 1.0e-21;
     }
-    nurates_params.use_eq_fallback_temp =
-        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_temp", false);
-    nurates_params.use_eq_fallback_y =
-        pin->GetOrAddBoolean("bns_nurates", "use_eq_fallback_y", false);
     nurates_params.eq_warmup_cycles =
         pin->GetOrAddInteger("bns_nurates", "eq_warmup_cycles", 1);
 
-    // Partially-equilibrated emissivity predictor. On by default: it is the scheme,
-    // not an option on top of one. Off, Kirchhoff's law gets the local blackbody --
-    // the predictor's own dt -> 0 limit -- and nothing else, which is a real fallback
-    // but is wrong wherever the neutrinos are trapped.
-    // Asked for by name, or inherited? GetOrAddBoolean writes the default into the
-    // input, so this has to be read before it, not after.
-    const bool peq_requested =
-        pin->DoesParameterExist("bns_nurates", "use_partial_equilibrium");
-    nurates_params.use_partial_equilibrium =
-        pin->GetOrAddBoolean("bns_nurates", "use_partial_equilibrium", true);
+    // Partially-equilibrated emissivity predictor (always on in Kirchhoff cells).
     nurates_params.peq_w_floor =
         pin->GetOrAddReal("bns_nurates", "peq_w_floor", 1e-3);
     nurates_params.peq_dlnT_tol =
@@ -210,35 +185,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.peq_dYe_tol =
         pin->GetOrAddReal("bns_nurates", "peq_dYe_tol", 1e-4);
     nurates_params.kirchhoff_tau_trap =
-        pin->GetOrAddReal("bns_nurates", "kirchhoff_tau_trap", -1.0);
-
-    // The block that computes the equilibrium distribution -- the predictor's only
-    // output -- is skipped when neither of these is set, so the predictor has nothing
-    // to supply and cannot run. Asking for it by name in that configuration is an
-    // error; inheriting the default there is not, since "no equilibrium closure at
-    // all" is a legitimate thing to configure and it would be rude to make it a
-    // startup failure for the sake of a line the user never wrote. Turn it off
-    // instead, and say so.
-    if (nurates_params.use_partial_equilibrium &&
-        !(nurates_params.use_kirchhoff_law ||
-          nurates_params.use_equilibrium_distribution)) {
-      if (peq_requested) {
-        std::cerr << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl
-                  << "<bns_nurates>/use_partial_equilibrium = true requires at least "
-                     "one of use_kirchhoff_law or use_equilibrium_distribution to be "
-                     "true; with both false there is no equilibrium distribution for "
-                     "the predictor to supply and it would be a no-op." << std::endl;
-        exit(EXIT_FAILURE);
-      }
-      nurates_params.use_partial_equilibrium = false;
-      if (global_variable::my_rank == 0) {
-        std::cout << "### WARNING: <bns_nurates>/use_partial_equilibrium defaults to "
-                     "true but both use_kirchhoff_law and use_equilibrium_distribution "
-                     "are false, so there is no equilibrium distribution for it to "
-                     "supply. Turning it off." << std::endl;
-      }
-    }
+        pin->GetOrAddReal("bns_nurates", "kirchhoff_tau_trap", 1.0);
 
     nurates_params.quadrature.nx = nurates_params.quad_nx;
     nurates_params.quadrature.dim = 1;

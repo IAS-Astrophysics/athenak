@@ -87,13 +87,20 @@ Coordinates::Coordinates(ParameterInput *pin, MeshBlockPack *ppack) :
           coord_data.excision_scheme = ExcisionScheme::lapse;
           coord_data.excise_lapse = pin->GetOrAddReal("coord","excise_lapse", 0.25);
         } else if (emethod.compare("horizon") == 0) {
-          if (pin->DoesBlockExist("fastflow")) {
+          std::string type = pin->GetOrAddString("z4c", "horizon_finder", "none");
+          bool have_finder =
+              (type.compare("fastflow") == 0 &&
+               pin->GetOrAddInteger("fastflow", "num_horizons", 0) > 0) ||
+              (type.compare("bhahaha") == 0 && pin->DoesBlockExist("bhahaha"));
+          if (have_finder) {
             coord_data.excision_scheme = ExcisionScheme::horizon;
             coord_data.horizon_factor = pin->GetOrAddReal("coord","horizon_factor",1.0);
           } else {
             std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
                     << __LINE__ << std::endl
-                    << "Horizon excision needs <fastflow> block!" << std::endl;
+                    << "Horizon excision needs  z4c/horizon_finder = fastflow (with "
+                    << "fastflow/num_horizons > 0) or bhahaha (with a <bhahaha> block)"
+                    << std::endl;
             std::exit(EXIT_FAILURE);
           }
         } else {

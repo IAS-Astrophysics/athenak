@@ -10,7 +10,7 @@ import test_suite.testutils as testutils
 import athena_read
 
 # Threshold errors for constraints based on 6th-order evolution with specific grid
-# in input file
+# in input file. RMS-horizon is the true RMS of the fastflow expansion H.
 maxerrors = {
     ("C-norm"): (1.85e-02),
     ("H-norm"): (4.7e-03),
@@ -20,7 +20,7 @@ maxerrors = {
     ("My-norm"): (4.5e-04),
     ("Mz-norm"): (4.5e-04),
     ("Theta-norm"): (3.1e-05),
-    ("RMS-horizon"): (3.0e-02),
+    ("RMS-horizon"): (5.0e-02),
 }
 
 

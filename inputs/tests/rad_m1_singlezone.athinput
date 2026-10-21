@@ -81,7 +81,7 @@ use_dU = false
 use_dm_eff = false
 
 use_equilibrium_distribution = true # default: true
-use_kirchhoff_law = true # default: true
+kirchhoff_tau_trap = -1.0 # default: 1.0; < 0: always Kirchhoff
 
 opacity_corr_fac_max = 3.0
 
