@@ -267,9 +267,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
-  // The reconstructed-distribution fallbacks are applied below, not in bns_nurates.
-  grey_op_params.opacity_pars.use_eq_fallback_temp = false;
-  grey_op_params.opacity_pars.use_eq_fallback_y = false;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
   grey_op_params.opacity_pars.brem_implementation =
       nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
@@ -309,8 +306,7 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     grey_op_params.m1_pars.chi[id_anux] = chi_anux;
 
     grey_op_params.distr_pars =
-        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars,
-                                   &grey_op_params.opacity_pars);
+        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
 
     // The reconstructed spectral temperature T_nu = J/n diverges when the
     // number density collapses (neutral-current-only heavy neutrinos in the
