@@ -13,8 +13,6 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "z4c/z4c.hpp"
-#include "z4c/compact_object_tracker.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -143,9 +141,33 @@ void CyclicZoom::SetRefinementFlags() {
               << " to level " << old_level + ref_flag
               << " (refine_flag=" << ref_flag << ")" << std::endl;
   }
+  // zoom_criterion = level: blocks to refine are the parents of the stored zoom
+  // MeshBlocks of the zone zoomed into
+  int zlmbs = 0, znlmb = 0;
+  if (zamr.level_criterion && ref_flag > 0) {
+    zlmbs = pzmesh->gzms_eachlevel[zstate.zone];
+    znlmb = pzmesh->nzmb_eachlevel[zstate.zone];
+    if (znlmb == 0) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "CyclicZoom: zoom_criterion = level has no stored zoom "
+                << "MeshBlocks to zoom in to zone " << zstate.zone << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
   // Check whether the MeshBlock is overlapping with the refinement radius
   for (int m=0; m<nmb; ++m) {
     if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
+      if (zamr.level_criterion) {
+        bool flag = (ref_flag < 0);
+        auto &lloc = pmesh->lloc_eachmb[m+mbs];
+        for (int lm = 0; lm < znlmb && !flag; ++lm) {
+          auto &zl = pzmesh->lloc_eachzmb[lm+zlmbs];
+          flag = (zl.level == lloc.level + 1) && ((zl.lx1 >> 1) == lloc.lx1) &&
+                 ((zl.lx2 >> 1) == lloc.lx2) && ((zl.lx3 >> 1) == lloc.lx3);
+        }
+        if (flag) {refine_flag.h_view(m+mbs) = ref_flag;}
+        continue;
+      }
       // extract bounds of MeshBlock
       Real x1min, x1max, x2min, x2max, x3min, x3max;
       if (ref_flag > 0) {
@@ -165,24 +187,6 @@ void CyclicZoom::SetRefinementFlags() {
         x3min = pb[4]; x3max = pb[5];
       }
       // levels_thisrank.h_view(m) = pmesh->lloc_eachmb[m+mbs].level;
-      // zoom in where the trackers refine (Z4c_AMR::RefineTracker), so the original
-      // tracker mesh and its 2:1 nest are recovered instead of a larger sphere
-      if (ref_flag > 0 && zamr.zoom_in_tracker) {
-        int plevel = old_level - pmesh->root_level;
-        for (auto &pt : pmesh->pmb_pack->pz4c->ptracker) {
-          Real cx = fmax(x1min, fmin(pt->GetPos(0), x1max));
-          Real cy = fmax(x2min, fmin(pt->GetPos(1), x2max));
-          Real cz = fmax(x3min, fmin(pt->GetPos(2), x3max));
-          Real d2 = SQR(pt->GetPos(0) - cx) + SQR(pt->GetPos(1) - cy)
-                  + SQR(pt->GetPos(2) - cz);
-          bool contained = (d2 == 0.0);
-          if ((d2 < SQR(pt->GetRadius()) || contained) &&
-              (pt->GetReflevel() < 0 || plevel < pt->GetReflevel())) {
-            refine_flag.h_view(m+mbs) = ref_flag;
-          }
-        }
-        continue;
-      }
       // Find the closest point on the box to the sphere center
       Real closest_x1 = fmax(x1min, fmin(x1c, x1max));
       Real closest_x2 = fmax(x2min, fmin(x2c, x2max));
@@ -215,12 +219,13 @@ bool CyclicZoom::CheckStoreFlag(int m) {
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   // check previous level (finer level)
   if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
+    // zoom_criterion = level: the whole level is removed, store all of it
+    if (zamr.level_criterion) return true;
     // with z4c, store every MeshBlock the zoom out derefines (same parent-box test as
     // SetRefinementFlags), so the metric is restored exactly on zooming in
     if (pmesh->pmb_pack->pz4c != nullptr) {
       Real pb[6];
       ParentBounds(pmesh, m+mbs, pb);
-      Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
       Real r_sq = SQR(x1c - fmax(pb[0], fmin(x1c, pb[1])))
                 + SQR(x2c - fmax(pb[2], fmin(x2c, pb[3])))
                 + SQR(x3c - fmax(pb[4], fmin(x3c, pb[5])));
