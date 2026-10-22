@@ -35,6 +35,7 @@ typedef struct ZoomAMR {
   int refine_flag;              // flag for refinement (+1: refine, -1: coarsen)
   bool zooming_in;              // flag for performing zoom in (refinement)
   bool zooming_out;             // flag for performing zoom out (coarsening)
+  bool zoom_in_tracker;         // zoom in where the z4c trackers refine (else sphere)
 } ZoomAMR;
 
 //----------------------------------------------------------------------------------------

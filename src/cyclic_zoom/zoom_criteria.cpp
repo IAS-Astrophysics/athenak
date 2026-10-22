@@ -13,6 +13,8 @@
 #include "globals.hpp"
 #include "mesh/mesh.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "z4c/z4c.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -150,6 +152,24 @@ void CyclicZoom::SetRefinementFlags() {
         x3max = LeftEdgeX(plx3+1, nmbx3, ms.x3min, ms.x3max);
       }
       // levels_thisrank.h_view(m) = pmesh->lloc_eachmb[m+mbs].level;
+      // zoom in where the trackers refine (Z4c_AMR::RefineTracker), so the original
+      // tracker mesh and its 2:1 nest are recovered instead of a larger sphere
+      if (ref_flag > 0 && zamr.zoom_in_tracker) {
+        int plevel = old_level - pmesh->root_level;
+        for (auto &pt : pmesh->pmb_pack->pz4c->ptracker) {
+          Real cx = fmax(x1min, fmin(pt->GetPos(0), x1max));
+          Real cy = fmax(x2min, fmin(pt->GetPos(1), x2max));
+          Real cz = fmax(x3min, fmin(pt->GetPos(2), x3max));
+          Real d2 = SQR(pt->GetPos(0) - cx) + SQR(pt->GetPos(1) - cy)
+                  + SQR(pt->GetPos(2) - cz);
+          bool contained = (d2 == 0.0);
+          if ((d2 < SQR(pt->GetRadius()) || contained) &&
+              (pt->GetReflevel() < 0 || plevel < pt->GetReflevel())) {
+            refine_flag.h_view(m+mbs) = ref_flag;
+          }
+        }
+        continue;
+      }
       // Find the closest point on the box to the sphere center
       Real closest_x1 = fmax(x1min, fmin(x1c, x1max));
       Real closest_x2 = fmax(x2min, fmin(x2c, x2max));

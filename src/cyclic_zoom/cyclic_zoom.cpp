@@ -17,6 +17,7 @@
 #include "coordinates/cell_locations.hpp"
 #include "pgen/pgen.hpp"
 #include "z4c/z4c.hpp"
+#include "z4c/compact_object_tracker.hpp"
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
@@ -100,6 +101,21 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zamr.refine_flag = - zstate.direction;
   zamr.zooming_in = false;
   zamr.zooming_out = false;
+  // zoom_in = tracker: refine where the z4c compact object trackers refine, so a mesh
+  // built by tracker AMR (with fixed trackers) is recovered exactly on zooming in.
+  std::string zoom_in = pin->GetOrAddString(block_name,"zoom_in","sphere");
+  if (zoom_in != "sphere" && zoom_in != "tracker") {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "<" << block_name << "> zoom_in = " << zoom_in
+              << " must be sphere or tracker" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  zamr.zoom_in_tracker = (zoom_in == "tracker");
+  if (zamr.zoom_in_tracker && (pmbp->pz4c == nullptr || pmbp->pz4c->ptracker.empty())) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "zoom_in = tracker requires z4c compact object trackers" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   // Set zoom region parameters
   zregion.x1c = pin->GetOrAddReal(block_name,"x1c",0.0);
