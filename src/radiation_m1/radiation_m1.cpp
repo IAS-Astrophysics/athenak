@@ -165,7 +165,7 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     {
       // [g/cm^3]; eq-spectrum cells only; <= 0: never
       const Real rho_max = pin->GetOrAddReal(
-          "bns_nurates", "exclude_pair_brem_nue_anue_rho_max", 1.0e12);
+          "bns_nurates", "exclude_pair_brem_nue_anue_rho_max", -1.0);
       const Real m_n_g = 1.67492750e-24;   // neutron mass [g]
       // cm^-3 -> nm^-3
       nurates_params.exclude_pair_brem_nb_max = rho_max / m_n_g * 1.0e-21;
