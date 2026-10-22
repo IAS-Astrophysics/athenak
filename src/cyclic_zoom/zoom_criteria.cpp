@@ -18,6 +18,28 @@
 #include "cyclic_zoom/cyclic_zoom.hpp"
 
 //----------------------------------------------------------------------------------------
+//! \fn ParentBounds()
+//! \brief Bounds {x1min,x1max,x2min,x2max,x3min,x3max} of the parent of MeshBlock gid
+
+static void ParentBounds(Mesh *pmesh, int gid, Real b[6]) {
+  auto &ms = pmesh->mesh_size;
+  auto &lloc = pmesh->lloc_eachmb[gid];
+  std::int32_t plev = lloc.level - 1;
+  std::int32_t plx1 = lloc.lx1 >> 1;
+  std::int32_t nmbx1 = pmesh->nmb_rootx1 << (plev - pmesh->root_level);
+  b[0] = LeftEdgeX(plx1, nmbx1, ms.x1min, ms.x1max);
+  b[1] = LeftEdgeX(plx1+1, nmbx1, ms.x1min, ms.x1max);
+  std::int32_t plx2 = lloc.lx2 >> 1;
+  std::int32_t nmbx2 = pmesh->nmb_rootx2 << (plev - pmesh->root_level);
+  b[2] = LeftEdgeX(plx2, nmbx2, ms.x2min, ms.x2max);
+  b[3] = LeftEdgeX(plx2+1, nmbx2, ms.x2min, ms.x2max);
+  std::int32_t plx3 = lloc.lx3 >> 1;
+  std::int32_t nmbx3 = pmesh->nmb_rootx3 << (plev - pmesh->root_level);
+  b[4] = LeftEdgeX(plx3, nmbx3, ms.x3min, ms.x3max);
+  b[5] = LeftEdgeX(plx3+1, nmbx3, ms.x3min, ms.x3max);
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void CyclicZoom::CheckRefinement()
 //! \brief Main function for CyclicZoom adaptive mesh refinement criteria
 
@@ -106,7 +128,6 @@ void CyclicZoom::SetRegionAndInterval() {
 
 void CyclicZoom::SetRefinementFlags() {
   auto &size = pmesh->pmb_pack->pmb->mb_size;
-  auto &ms = pmesh->mesh_size;
 
   // check (on device) Hydro/MHD refinement conditions over all MeshBlocks
   auto &refine_flag = pmesh->pmr->refine_flag;
@@ -137,19 +158,11 @@ void CyclicZoom::SetRefinementFlags() {
         x3max = size.h_view(m).x3max;
       } else {
         // For coarsening, need to compute the bounds of the parent MeshBlock
-        std::int32_t plev = pmesh->lloc_eachmb[m+mbs].level - 1;
-        std::int32_t plx1 = pmesh->lloc_eachmb[m+mbs].lx1 >> 1;
-        std::int32_t nmbx1 = pmesh->nmb_rootx1 << (plev - pmesh->root_level);
-        x1min = LeftEdgeX(plx1, nmbx1, ms.x1min, ms.x1max);
-        x1max = LeftEdgeX(plx1+1, nmbx1, ms.x1min, ms.x1max);
-        std::int32_t plx2 = pmesh->lloc_eachmb[m+mbs].lx2 >> 1;
-        std::int32_t nmbx2 = pmesh->nmb_rootx2 << (plev - pmesh->root_level);
-        x2min = LeftEdgeX(plx2, nmbx2, ms.x2min, ms.x2max);
-        x2max = LeftEdgeX(plx2+1, nmbx2, ms.x2min, ms.x2max);
-        std::int32_t plx3 = pmesh->lloc_eachmb[m+mbs].lx3 >> 1;
-        std::int32_t nmbx3 = pmesh->nmb_rootx3 << (plev - pmesh->root_level);
-        x3min = LeftEdgeX(plx3, nmbx3, ms.x3min, ms.x3max);
-        x3max = LeftEdgeX(plx3+1, nmbx3, ms.x3min, ms.x3max);
+        Real pb[6];
+        ParentBounds(pmesh, m+mbs, pb);
+        x1min = pb[0]; x1max = pb[1];
+        x2min = pb[2]; x2max = pb[3];
+        x3min = pb[4]; x3max = pb[5];
       }
       // levels_thisrank.h_view(m) = pmesh->lloc_eachmb[m+mbs].level;
       // zoom in where the trackers refine (Z4c_AMR::RefineTracker), so the original
@@ -202,6 +215,17 @@ bool CyclicZoom::CheckStoreFlag(int m) {
   Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
   // check previous level (finer level)
   if (pmesh->lloc_eachmb[m+mbs].level == old_level) {
+    // with z4c, store every MeshBlock the zoom out derefines (same parent-box test as
+    // SetRefinementFlags), so the metric is restored exactly on zooming in
+    if (pmesh->pmb_pack->pz4c != nullptr) {
+      Real pb[6];
+      ParentBounds(pmesh, m+mbs, pb);
+      Real x1c = zregion.x1c, x2c = zregion.x2c, x3c = zregion.x3c;
+      Real r_sq = SQR(x1c - fmax(pb[0], fmin(x1c, pb[1])))
+                + SQR(x2c - fmax(pb[2], fmin(x2c, pb[3])))
+                + SQR(x3c - fmax(pb[4], fmin(x3c, pb[5])));
+      return (r_sq < SQR(zregion.ref.r));
+    }
     // extract bounds of MeshBlock
     Real x1min = size.h_view(m).x1min;
     Real x1max = size.h_view(m).x1max;
