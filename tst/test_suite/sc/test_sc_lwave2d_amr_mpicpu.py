@@ -3,13 +3,10 @@ SC coupled-dynamics test: radiatively damped acoustic wave in 2D with AMR and MP
 analogue of rad/test_rad_lwave2d_amr_mpicpu.
 
 The wave propagates along the domain diagonal (the analytic dispersion needs no grid
-alignment
-for this solver), 8 root meshblocks on 8 ranks, two AMR levels following the crests. This
-exercises the MPI ghost exchange of intensity and source across ranks, the AMR packing of
-ir
-across ranks, and the allreduced residual and dispersion fit. Over two resolutions, both
-sweep
-kernels:
+alignment for this solver), 8 root meshblocks on 8 ranks, two AMR levels following the
+crests. This exercises the MPI ghost exchange of intensity and source across ranks, the
+AMR packing of ir across ranks, and the allreduced residual and dispersion fit. Over two
+resolutions, both sweep kernels:
   physics      fitted phase speed and damping match the analytic dispersion at the finer N
   convergence  the L1 rms error drops by more than a factor 2 from N to 2N
   ranks        the 8-rank run at the coarser N reproduces the 1-rank run's error line to a

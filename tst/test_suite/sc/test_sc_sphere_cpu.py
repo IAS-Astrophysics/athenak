@@ -2,26 +2,22 @@
 SC transport test: homogeneous emitting/absorbing sphere (Davis, Stone & Jiang 2012).
 
 A uniform sphere with constant absorption and source sits in vacuum. The pgen enrolls
-opacity
-and emission hooks, the run goes through the ordinary driver for one cycle (solve, ghost
-exchange, moments), and the final check compares the numeric J, H and K over the interior
-of
-the sphere to the analytic angular quadrature of I = b [1 - exp(-tau)] with the SAME rays
-and
-weights, so what remains is the transport + interpolation error. Errors go to
-sc_sphere-errs.dat: Nx1 Nx2 Nx3 Ncycle RMS-L1(J) L-infty(J) RMS(H)/J RMS(K)/J.
+opacity and emission hooks, the run goes through the ordinary driver for one cycle (solve,
+ghost exchange, moments), and the final check compares the numeric J, H and K over the
+interior of the sphere to the analytic angular quadrature of I = b [1 - exp(-tau)] with
+the SAME rays and weights, so what remains is the transport + interpolation error. Errors
+go to sc_sphere-errs.dat: Nx1 Nx2 Nx3 Ncycle RMS-L1(J) L-infty(J) RMS(H)/J RMS(K)/J.
 
 Parametrized over
   ndim         2 (an infinite cylinder: rays keep their mu_z, see the pgen) and 3
   sweep_kernel plane and tiled (tile_size 8): same sweep, different kernel packaging
 Each (ndim, kernel) runs a resolution ladder on ONE meshblock and asserts that J, H and K
 converge: monotone decrease, finest-grid floor, observed order > 0.8 (the bilinear sweep
-is
-~1st order here, limited by the staircased sphere surface). The finest resolution is then
-rerun on 2^ndim meshblocks and must reproduce the one-block error line EXACTLY: with a
-fixed
-source the block iteration converges to the single-block answer bit for bit (the ghost
-exchange is a copy on a uniform mesh), so this certifies the exchange and the iteration.
+is ~1st order here, limited by the staircased sphere surface). The finest resolution is
+then rerun on 2^ndim meshblocks and must reproduce the one-block error line EXACTLY: with
+a fixed source the block iteration converges to the single-block answer bit for bit (the
+ghost exchange is a copy on a uniform mesh), so this certifies the exchange and the
+iteration.
 """
 
 import math

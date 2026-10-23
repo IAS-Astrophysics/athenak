@@ -1,15 +1,12 @@
 """
 SC coupled-dynamics test: radiatively damped acoustic wave in 3D with AMR on the GPU, the
-SC
-analogue of rad/test_rad_lwave3d_amr_gpu.
+SC analogue of rad/test_rad_lwave3d_amr_gpu.
 
 The 2D oblique wave extended uniformly along x3 (64 x 32 x 8 cells, 16 x 8 x 8
-meshblocks, two
-AMR levels), both sweep kernels. One resolution: this run is too costly for a CPU ladder
-and the
-1D/2D tests carry the convergence checks; here the 3D kernels (bilinear footpoints, the
-tiled
-team sweep over 3D tiles) and 3D AMR of the intensity are exercised end to end.
+meshblocks, two AMR levels), both sweep kernels. One resolution: this run is too costly
+for a CPU ladder and the 1D/2D tests carry the convergence checks; here the 3D kernels
+(bilinear footpoints, the tiled team sweep over 3D tiles) and 3D AMR of the intensity are
+exercised end to end.
   physics    fitted phase speed and damping match the analytic dispersion
   error      the L1 rms error is below a floor
 """

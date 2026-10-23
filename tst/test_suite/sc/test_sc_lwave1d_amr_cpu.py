@@ -3,23 +3,19 @@ SC coupled-dynamics test: radiatively damped acoustic wave in 1D with AMR (Davis
 Jiang 2012 sec. 5.4), the SC analogue of rad/test_rad_lwave1d_amr_cpu.
 
 A small-amplitude acoustic wave in a radiating gas (affect_fluid on, Bo = tau = 1) is
-damped and
-phase-shifted by radiative heating and cooling. The mesh refines the wave crests
-adaptively
-(2 levels), so the run exercises the intensity and source restriction/prolongation, the
-AMR
-packing of ir, and the J rebuild after each remesh. After one period the pgen fits the
-density
-mode (volume-weighted, valid on AMR) and writes fitted vs analytic omega to
-SCLinWave-davis54.dat; the full-state L1 error goes through the shared OutputErrors into
-SCLinWave1D-errs.dat.
+damped and phase-shifted by radiative heating and cooling. The mesh refines the wave
+crests adaptively (2 levels), so the run exercises the intensity and source
+restriction/prolongation, the AMR packing of ir, and the J rebuild after each remesh.
+After one period the pgen fits the density mode (volume-weighted, valid on AMR) and writes
+fitted vs analytic omega to SCLinWave-davis54.dat; the full-state L1 error goes through
+the shared OutputErrors into SCLinWave1D-errs.dat.
 
-Parametrized over the sweep kernel. Over a resolution ladder (8 root blocks per run) this
-asserts
-  physics      fitted phase speed and damping match the analytic dispersion at the finest
-  N
+Parametrized over the sweep kernel. Over a resolution ladder (8 root blocks per run)
+this asserts
+  physics      fitted phase speed and damping match the analytic dispersion at the
+               finest N
   convergence  the L1 rms error decreases monotonically at ~1st order (operator-split
-  coupling)
+               coupling)
 SCLinWave-davis54.dat columns: Bo tau nx1 nx2 omega_r omega_i omega_r_fit omega_i_fit
 """
 import math

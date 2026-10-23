@@ -4,46 +4,34 @@ Davis, Stone & Jiang 2012 Fig. 6 (Athena-C beam2d), with SMR added. The SC analo
 rad/test_rad_beam_gpu.
 
 Box [0,1] x [0,0.5], 64 x 32 root cells in 16 x 8 meshblocks, a level-1 refined band over
-the
-central [0.25,0.75] x [0.125,0.375] (interior, so every beam enters and leaves it). Unit
-intensity enters through two ghost cells of root columns 16 and 47 of the bottom face
-along
-ray `iang` of octants 0 and 1: two mirror-image beams that cross at (0.5, 0.30), inside
-the
-fine region, and leave through the top ~0.33 from the side walls. The medium is a nearly
-transparent absorber (sigma_a = 6.4e-7) with no emission; there is no fluid, the pgen
-enrolls
-hooks for both, and its boundary function injects the beams on the device.
+the central [0.25,0.75] x [0.125,0.375] (interior, so every beam enters and leaves it).
+Unit intensity enters through two ghost cells of root columns 16 and 47 of the bottom face
+along ray `iang` of octants 0 and 1: two mirror-image beams that cross at (0.5, 0.30),
+inside the fine region, and leave through the top ~0.33 from the side walls. The medium is
+a nearly transparent absorber (sigma_a = 6.4e-7) with no emission; there is no fluid, the
+pgen enrolls hooks for both, and its boundary function injects the beams on the device.
 
 The pgen's final check walks the exit face and writes sc_beam-errs.dat:
   Nx1 Nx2 Ncycle [integral/expected centroid_err/dx rms_width/dx] x 2 beams  offbeam/peak
-   niter
+  niter
   integral/expected  integral of J across the exit slice over w_iang * dx, what entered:
-  the
-                     medium is transparent, so interpolation may smear a beam but
-                     conserves it.
-                     Measured 2026-09-11: 0.9999996 uniform, 0.9765 with SMR. The loss is
-                     the
-                     coarse-to-fine prolongation of a beam that is still ~1 root cell
-                     wide when
-                     it reaches the fine region: 2.35% after 8 coarse rows of travel,
-                     0.87% after
-                     16, 0.36% after 24, independent of the band's height (the
-                     fine-to-coarse
-                     restriction is an average and conserves). Tolerance 5%.
+                     the medium is transparent, so interpolation may smear a beam but
+                     conserves it. Measured 2026-09-11: 0.9999996 uniform, 0.9765 with
+                     SMR. The loss is the coarse-to-fine prolongation of a beam that is
+                     still ~1 root cell wide when it reaches the fine region: 2.35% after
+                     8 coarse rows of travel, 0.87% after 16, 0.36% after 24, independent
+                     of the band's height (the fine-to-coarse restriction is an average
+                     and conserves). Tolerance 5%.
   centroid_err/dx    beam centroid minus the geometric exit point, in root cells. Measured
                      6e-6 uniform, 0.10 SMR. Tolerance 1.
   offbeam/peak       largest J farther than `offbeam_margin` (16) root cells from both
-  exit
-                     points, over the peak: stray light. Measured 0. Threshold 1e-3.
+                     exit points, over the peak: stray light. Measured 0. Threshold 1e-3.
 The two beams are exact mirror images (the mesh, the refined band and the entry columns
-are
-symmetric about x = 0.5), so their integrals must agree and their centroid errors be
-opposite,
-to rounding: rays of different octants sweep in different orders yet must not interact.
-Refinement sharpens the beams (rms width 2.14 -> 1.87 root cells), which none of the
-checked
-quantities depend on. Both sweep kernels run and must produce the identical error line.
+are symmetric about x = 0.5), so their integrals must agree and their centroid errors be
+opposite, to rounding: rays of different octants sweep in different orders yet must not
+interact. Refinement sharpens the beams (rms width 2.14 -> 1.87 root cells), which none of
+the checked quantities depend on. Both sweep kernels run and must produce the identical
+error line.
 """
 import test_suite.testutils as testutils
 
