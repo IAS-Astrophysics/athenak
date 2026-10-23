@@ -53,9 +53,6 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
              && (pmbp->pz4c == nullptr || !pmbp->pz4c->opt.freeze)) {
     // only a frozen spacetime is supported: the metric is not stored in the zoom data
     err = "Cyclic zoom with Z4c, ADM, or dynamical GRMHD requires <z4c> freeze = true";
-  } else if (pmbp->pdyngr != nullptr && pin->GetOrAddBoolean(block_name,"add_emf",true)) {
-    // the EMF correction calls the ideal-MHD flux/EMF functions
-    err = "Cyclic zoom with dynamical GRMHD requires add_emf = false";
   } else if (pin->DoesBlockExist("shearing_box")) {
     err = "Cyclic zoom is not implemented for the shearing box";
   }

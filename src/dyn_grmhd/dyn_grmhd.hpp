@@ -95,6 +95,8 @@ class DynGRMHD {
   virtual void QueueDynGRMHDTasks() = 0;
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
+  // fluxes (and FOFC) with the configured Riemann solver, outside the task list
+  virtual TaskStatus Fluxes(Driver* pdrive, int stage) = 0;
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
   // P2C of the active cells within distance r of (x1c,x2c,x3c), used by cyclic zoom.
@@ -154,6 +156,7 @@ class DynGRMHDPS : public DynGRMHD {
   virtual void QueueDynGRMHDTasks();
 
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
+  virtual TaskStatus Fluxes(Driver* pdrive, int stage);
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
   virtual Real PrimToConInSphere(Real x1c, Real x2c, Real x3c, Real r);

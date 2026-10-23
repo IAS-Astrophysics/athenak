@@ -71,12 +71,15 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
 
   auto w_ = pzoom->pmesh->pmb_pack->pmhd->w0;
   auto u_ = pzoom->pmesh->pmb_pack->pmhd->u0;
+  // edges on the mid-planes of the coarse MeshBlock are shared by sibling octants: add
+  // the correction there once, from the lower octant
+  int ci0 = cis + ox1, cj0 = cjs + ox2, ck0 = cks + ox3;
 
   // Create independent execution space instances for concurrent kernel launches
   DevExeSpace exec1, exec2, exec3;
 
   // Launch three kernels in parallel using separate execution spaces
-  par_for("apply_emf_x1", exec1, cks, cke+1, cjs, cje+1, cis, cie,
+  par_for("apply_emf_x1", exec1, ck0, cke+1, cj0, cje+1, cis, cie,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -99,7 +102,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     }
   });
 
-  par_for("apply_emf_x2", exec2, cks, cke+1, cjs, cje, cis, cie+1,
+  par_for("apply_emf_x2", exec2, ck0, cke+1, cjs, cje, ci0, cie+1,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;
@@ -122,7 +125,7 @@ void ZoomData::AddSrcTermsFC(int m, int zm, DvceEdgeFld4D<Real> efld) {
     }
   });
 
-  par_for("apply_emf_x3", exec3, cks, cke, cjs, cje+1, cis, cie+1,
+  par_for("apply_emf_x3", exec3, cks, cke, cj0, cje+1, ci0, cie+1,
   KOKKOS_LAMBDA(int ck, int cj, int ci) {
     int i = ci + ox1 * cnx1;
     int j = cj + ox2 * cnx2;

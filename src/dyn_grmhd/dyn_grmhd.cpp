@@ -223,7 +223,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU", Task_Run, {MHD_AddSrc});
   pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU", Task_Run, {MHD_RestU});
   pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU", Task_Run, {MHD_SendU});
-  pnr->QueueTask(&MHD::CornerE, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});
+  pnr->QueueTask(&MHD::EField, pmhd, MHD_EField, "MHD_EField", Task_Run, {MHD_RecvU});
   pnr->QueueTask(&MHD::SendE, pmhd, MHD_SendE, "MHD_SendE", Task_Run, {MHD_EField});
   pnr->QueueTask(&MHD::RecvE, pmhd, MHD_RecvE, "MHD_RecvE", Task_Run, {MHD_SendE});
   pnr->QueueTask(&MHD::CT, pmhd, MHD_CT, "MHD_CT", Task_Run, {MHD_RecvE});
@@ -282,6 +282,18 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::PrimToConInit(int is, int ie, int js, i
     SetTmunu(nullptr, 0);
     fixed_evolution = fixed;
   }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn  TaskStatus DynGRMHD::Fluxes
+//  \brief CalcFluxes for the configured Riemann solver (as queued in the task list), for
+//  callers outside the task list (cyclic zoom EMF after a zoom out)
+template<class EOSPolicy, class ErrorPolicy>
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::Fluxes(Driver *pdrive, int stage) {
+  if (rsolver_method == DynGRMHD_RSolver::llf_dyngr) {
+    return CalcFluxes<DynGRMHD_RSolver::llf_dyngr>(pdrive, stage);
+  }
+  return CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(pdrive, stage);
 }
 
 //----------------------------------------------------------------------------------------
