@@ -149,6 +149,9 @@ add_executable(
         pgen/tests/shwave.cpp
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
+        pgen/tests/sc_beam.cpp
+        pgen/tests/sc_linwave.cpp
+        pgen/tests/sc_sphere.cpp
         pgen/tests/z4c_boosted_puncture.cpp
         pgen/tests/z4c_linear_wave.cpp
         pgen/tests/jeans_wave.cpp
@@ -165,6 +168,14 @@ add_executable(
         radiation/radiation_tasks.cpp
         radiation/radiation_tetrad.cpp
         radiation/radiation_update.cpp
+
+        nr_radiation/nr_radiation.cpp
+        nr_radiation/angular_grid.cpp
+        nr_radiation/sc/formal_solution.cpp
+        nr_radiation/sc/iteration.cpp
+        nr_radiation/sc/get_moments.cpp
+        nr_radiation/sc/coupling.cpp
+        nr_radiation/sc/newdt.cpp
 
         shearing_box/orbital_advection.cpp
         shearing_box/orbital_advection_cc.cpp

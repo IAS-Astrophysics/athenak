@@ -27,6 +27,7 @@
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "radiation/radiation.hpp"
+#include "nr_radiation/nr_radiation.hpp"
 #include "srcterms/turb_driver.hpp"
 #include "particles/particles.hpp"
 #include "units/units.hpp"
@@ -71,6 +72,7 @@ MeshBlockPack::~MeshBlockPack() {
   }
   if (pturb  != nullptr) {delete pturb;}
   if (prad   != nullptr) {delete prad;}
+  if (pnrrad != nullptr) {delete pnrrad;}
   if (pmhd   != nullptr) {delete pmhd;}
   if (phydro != nullptr) {delete phydro;}
   if (punit  != nullptr) {delete punit;}
@@ -175,6 +177,23 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
     prad->AssembleRadTasks(tl_map);
   } else {
     prad = nullptr;
+  }
+
+  // (5b) NR_RADIATION (short-characteristics SC radiation, gray LTE)
+  // Not added to the hydro/mhd task-list guards above: unlike the GR <radiation> module
+  // it does not replace the fluid task list but inserts its tasks into the "stagen" list
+  // the fluid assembled (SC::AssembleSCTasks), so a fluid-only run is unaffected. Its own
+  // lists (the ghost exchanges and the face-flux correction) are created here because
+  // the task-list map is passed to the assemblers by value.
+  if (pin->DoesBlockExist("nr_radiation")) {
+    pnrrad = new nr_radiation::SC(this, pin);
+    nphysics++;
+    tl_map.insert(std::make_pair("sc_bvals", std::make_shared<TaskList>()));
+    tl_map.insert(std::make_pair("sc_bvals_srad", std::make_shared<TaskList>()));
+    tl_map.insert(std::make_pair("sc_flxcor", std::make_shared<TaskList>()));
+    pnrrad->AssembleSCTasks(tl_map);
+  } else {
+    pnrrad = nullptr;
   }
 
   // (6) TURBULENCE DRIVER

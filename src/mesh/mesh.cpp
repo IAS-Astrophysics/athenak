@@ -27,6 +27,7 @@
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"
 #include "radiation/radiation.hpp"
+#include "nr_radiation/nr_radiation.hpp"
 #include "particles/particles.hpp"
 #include "srcterms/srcterms.hpp"
 #include "outputs/io_wrapper.hpp"
@@ -302,6 +303,17 @@ Mesh::Mesh(ParameterInput *pin) :
       << "Number of cells in MeshBlock must be divisible by two in each dimension for "
       << "SMR/AMR calculations." << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+
+  // A MeshBlock has the same cell counts at every refinement level, so this is a
+  // property of the Mesh, not of any one block. Kernels that build launch extents from
+  // those counts use it to tell the case where all three agree from the general one.
+  if (three_d) {
+    equal_block_nx = (mb_indcs.nx1 == mb_indcs.nx2) && (mb_indcs.nx2 == mb_indcs.nx3);
+  } else if (two_d) {
+    equal_block_nx = (mb_indcs.nx1 == mb_indcs.nx2);
+  } else {
+    equal_block_nx = true;
   }
 
   // initialize indices for Mesh cells, MeshBlock cells, and MeshBlock coarse cells
@@ -642,6 +654,10 @@ void Mesh::NewTimeStep(const Real tlim) {
   // Radiation timestep
   if (pmb_pack->prad != nullptr) {
     dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->prad->dtnew) );
+  }
+  // SC radiation: relaxation-rate limit when it acts on the gas (else dtnew=max)
+  if (pmb_pack->pnrrad != nullptr) {
+    dt_cycle = std::min(dt_cycle, (cfl_no)*(pmb_pack->pnrrad->dtnew) );
   }
   // Particles timestep
   if (pmb_pack->ppart != nullptr) {
