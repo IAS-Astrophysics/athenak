@@ -6,6 +6,7 @@
 //! \file driver.cpp
 //  \brief implementation of functions in class Driver
 
+#include <cmath>
 #include <iostream>
 #include <iomanip>    // std::setprecision()
 #include <limits>
@@ -29,6 +30,7 @@
 #include "utils/utils.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation_m1/radiation_m1.hpp"
+#include "cyclic_zoom/cyclic_zoom.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -632,6 +634,24 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
         }
         lb_efficiency_ += static_cast<float>(minnmb*(global_variable::nranks))/
             static_cast<float>(pmesh->nmb_total);
+      }
+
+      // cyclic zoom: outputs with zoom_scale_dt are made every dt_base*2^zone, so their
+      // cadence follows the time step. On a change, last_time moves onto the new
+      // cadence's grid, so a shorter dt does not trigger outputs on successive cycles.
+      if (pmesh->pzoom != nullptr) {
+        for (auto &out : pout->pout_list) {
+          auto &op = out->out_params;
+          if (!op.zoom_scale_dt) continue;
+          Real dt_new = op.dt_base*std::pow(2.0, pmesh->pzoom->zstate.zone);
+          if (dt_new != op.dt) {
+            op.dt = dt_new;
+            if (op.last_time >= 0.0) {
+              op.last_time = dt_new*(std::ceil(pmesh->time/dt_new) - 1.0);
+              pin->SetReal(op.block_name, "last_time", op.last_time);
+            }
+          }
+        }
       }
 
       // Test for/make outputs

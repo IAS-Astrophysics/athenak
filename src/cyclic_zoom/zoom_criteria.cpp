@@ -76,6 +76,12 @@ void CyclicZoom::UpdateState() {
   // update zoom interval
   SetRegionAndInterval();
   zstate.next_time = pmesh->time + zint.runtime;
+  // one line per zoom event when not verbose
+  if (!verbose && global_variable::my_rank == 0) {
+    std::cout << "CyclicZoom: t = " << pmesh->time << ", zone " << zstate.last_zone
+              << " -> " << zstate.zone << ", next zoom at t = " << zstate.next_time
+              << std::endl;
+  }
   // print verbose output
   if (verbose && global_variable::my_rank == 0) {
     std::cout << "CyclicZoom: new id = " << zstate.id

@@ -151,6 +151,8 @@ struct OutputParameters {
   std::string block_name;
   Real last_time, dt;
   int dcycle;                 // enables outputs every 'dcycle'
+  Real dt_base;               // dt from the input file
+  bool zoom_scale_dt=false;   // cyclic zoom: output every dt_base*2^zone
   int file_number;
   std::string file_basename;
   std::string file_type;

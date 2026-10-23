@@ -78,7 +78,9 @@ Outputs::Outputs(ParameterInput *pin, Mesh *pm) {
       } else {
         opar.dt = pin->GetReal(opar.block_name,"dt");
         opar.dcycle = 0;
+        opar.zoom_scale_dt = pin->GetOrAddBoolean(opar.block_name,"zoom_scale_dt",false);
       }
+      opar.dt_base = opar.dt;
 
       if (opar.dcycle == 0 && opar.dt <= 0.0) continue;  // only add output if dt>0
 
