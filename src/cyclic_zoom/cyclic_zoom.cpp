@@ -144,7 +144,12 @@ CyclicZoom::CyclicZoom(Mesh *pm, ParameterInput *pin) :
   zstate.next_time = pmesh->time;
   old_zregion = zregion; // initialize old zoom region
   SetRegionAndInterval();
-  zstate.next_time += zint.runtime;
+  // zoom_out_at_start: first zoom at the start time instead of after the first dwell,
+  // e.g. when restarting from a run without cyclic zoom that already ran long at zone 0.
+  // A restart file with zoom data replaces this state.
+  if (!pin->GetOrAddBoolean("cyclic_zoom","zoom_out_at_start",false)) {
+    zstate.next_time += zint.runtime;
+  }
 
   // Set zoom emf parameters if needed
   zemf.emf_fmax = 1.0;
