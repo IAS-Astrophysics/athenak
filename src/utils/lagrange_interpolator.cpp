@@ -31,6 +31,8 @@ LagrangeInterpolator::LagrangeInterpolator(
   Kokkos::realloc(rcoord, 3);
   Kokkos::realloc(interp_wghts, 2 * ng, 3);
   Kokkos::realloc(interp_indcs, 4);
+  stencil_ = DvceArray3D<Real>("lagrange_stencil", 2 * ng, 2 * ng, 2 * ng);
+  stencil_h_ = Kokkos::create_mirror_view(stencil_);
 
   for (int i = 0; i < 3; ++i) {
     rcoord(i) = rcoords[i];
@@ -56,21 +58,25 @@ Real LagrangeInterpolator::Interpolate(DvceArray5D<Real> &val, int nvars) {
   if (interp_indcs(0) == -1) { // point not on this rank
     ivals = 0.0;
   } else {
+    // Gather the (2ng)^3 stencil with one kernel and one copy to the host. A blocking
+    // deep_copy per point (512 per call with ng=4) made the rank owning a compact object
+    // ~20 ms late to the tracker's Allreduce every cycle, stalling every other rank.
+    // The host sum below reads the same values in the same order: bit-identical results.
+    const int n = 2 * ng;
+    const int m = ii0, v = nvars;
+    const int i0 = ii1 - ng + is + 1, j0 = ii2 - ng + js + 1, k0 = ii3 - ng + ks + 1;
+    auto stencil = stencil_;
+    Kokkos::parallel_for("LagrangeGather",
+    Kokkos::MDRangePolicy<DevExeSpace, Kokkos::Rank<3>>({0, 0, 0}, {n, n, n}),
+    KOKKOS_LAMBDA(const int k, const int j, const int i) {
+      stencil(k, j, i) = val(m, v, k0 + k, j0 + j, i0 + i);
+    });
+    Kokkos::deep_copy(stencil_h_, stencil);
     for (int i = 0; i < 2 * ng; i++) {
       for (int j = 0; j < 2 * ng; j++) {
         for (int k = 0; k < 2 * ng; k++) {
           Real iwght  = weights(i, 0) * weights(j, 1) * weights(k, 2);
-          auto buffer = Kokkos::subview(
-            val,
-            ii0,
-            nvars,
-            ii3 - (ng - k - ks) + 1,
-            ii2 - (ng - j - js) + 1,
-            ii1 - (ng - i - is) + 1);
-          Real scalar;
-          // Deep Copy Scalar View into a scalar
-          Kokkos::deep_copy(scalar, buffer);
-          ivals += iwght * scalar;
+          ivals += iwght * stencil_h_(k, j, i);
         }
       }
     }
