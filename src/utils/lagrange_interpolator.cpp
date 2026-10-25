@@ -58,10 +58,7 @@ Real LagrangeInterpolator::Interpolate(DvceArray5D<Real> &val, int nvars) {
   if (interp_indcs(0) == -1) { // point not on this rank
     ivals = 0.0;
   } else {
-    // Gather the (2ng)^3 stencil with one kernel and one copy to the host. A blocking
-    // deep_copy per point (512 per call with ng=4) made the rank owning a compact object
-    // ~20 ms late to the tracker's Allreduce every cycle, stalling every other rank.
-    // The host sum below reads the same values in the same order: bit-identical results.
+    // Gather the (2ng)^3 stencil with one kernel and one copy to the host.
     const int n = 2 * ng;
     const int m = ii0, v = nvars;
     const int i0 = ii1 - ng + is + 1, j0 = ii2 - ng + js + 1, k0 = ii3 - ng + ks + 1;
