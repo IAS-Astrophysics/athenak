@@ -67,6 +67,7 @@ add_executable(
         eos/noop_dyngrmhd.cpp
         eos/primitive-solver/eos_compose.cpp
         eos/primitive-solver/eos_hybrid.cpp
+        eos/primitive-solver/eos_helmholtz.cpp
         eos/primitive-solver/piecewise_polytrope.cpp
         eos/primitive-solver/unit_system.cpp
 

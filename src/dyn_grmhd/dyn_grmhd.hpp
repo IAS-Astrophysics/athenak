@@ -16,7 +16,8 @@
 
 enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr};   // Riemann solvers for dynamical GR
 enum class DynGRMHD_EOS {eos_ideal, eos_piecewise_poly,
-                      eos_compose, eos_hybrid};        // EOS policies for dynamical GR
+                         eos_compose, eos_hybrid,
+                         eos_helmholtz};        // EOS policies for dynamical GR
 enum class DynGRMHD_Error {reset_floor};               // Error policies for dynamical GR
 
 //----------------------------------------------------------------------------------------

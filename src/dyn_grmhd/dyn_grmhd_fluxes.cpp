@@ -275,6 +275,7 @@ INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE<Primitive::NormalLogs>,
                         Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::EOSCompOSE<Primitive::NQTLogs>,
                         Primitive::ResetFloor)
+INSTANTIATE_CALC_FLUXES(Primitive::EOSHelmholtz, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::EOSHybrid<Primitive::NormalLogs>,
                         Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::EOSHybrid<Primitive::NQTLogs>,

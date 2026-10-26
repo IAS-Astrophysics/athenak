@@ -26,6 +26,7 @@
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/eos_compose.hpp"
+#include "eos/primitive-solver/eos_helmholtz.hpp"
 #include "eos/primitive-solver/eos_hybrid.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 #include "eos/primitive-solver/logs.hpp"
@@ -89,7 +90,33 @@ class PrimitiveSolverHydro {
       // Ensure table was read properly
       assert(ps.GetEOSMutable().IsInitialized());
     }
-        // Parameters for Hybrid EoS
+    // Parameters for Helmholtz EoS
+    if constexpr (std::is_same_v<Primitive::EOSHelmholtz, EOSPolicy>) {
+      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", SCNVAR));
+      std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
+      if (!units.compare("geometric_solar")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());
+      } else if (!units.compare("geometric_kilometer")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricKilometer());
+      } else if (!units.compare("nuclear")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeNuclear());
+      } else if (!units.compare("cgs")) {
+        ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeCGS());
+      } else {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Unknown unit system " << units << " requested."
+                  << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+
+      // Coulomb correction true/false, table path, and Ye min/max.
+      ps.GetEOSMutable().SetCoulomb(pin->GetOrAddBoolean(block, "eir_coulomb", true));
+      ps.GetEOSMutable().ReadTableFromFile(pin->GetString(block, "electron_table"),
+                                          pin->GetReal(block, "eir_min_Ye"),
+                                          pin->GetReal(block, "eir_max_Ye"));
+      assert(ps.GetEOSMutable().IsInitialized());
+    }
+    // Parameters for Hybrid EoS
     if constexpr (
          std::is_same_v<Primitive::EOSHybrid<Primitive::NormalLogs>, EOSPolicy> ||
          std::is_same_v<Primitive::EOSHybrid<Primitive::NQTLogs>, EOSPolicy>) {

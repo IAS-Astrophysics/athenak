@@ -32,6 +32,7 @@
 #include "eos/primitive_solver_hyd.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/eos_compose.hpp"
+#include "eos/primitive-solver/eos_helmholtz.hpp"
 #include "eos/primitive-solver/eos_hybrid.hpp"
 #include "eos/primitive-solver/piecewise_polytrope.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -61,6 +62,9 @@ DynGRMHD* SelectDynGRMHDEOS(MeshBlockPack *ppack, ParameterInput *pin,
                                 ErrorPolicy>(ppack, pin);
       }
       break;
+    case DynGRMHD_EOS::eos_helmholtz:
+      dyn_gr = new DynGRMHDPS<Primitive::EOSHelmholtz, ErrorPolicy>(ppack, pin);
+      break;
     case DynGRMHD_EOS::eos_hybrid:
       use_NQT = pin->GetOrAddBoolean("mhd", "use_NQT",false);
       if (use_NQT) {
@@ -87,6 +91,8 @@ DynGRMHD* BuildDynGRMHD(MeshBlockPack *ppack, ParameterInput *pin) {
     eos_policy = DynGRMHD_EOS::eos_piecewise_poly;
   } else if (eos_string.compare("compose") == 0) {
     eos_policy = DynGRMHD_EOS::eos_compose;
+  } else if (eos_string.compare("helmholtz") == 0) {
+    eos_policy = DynGRMHD_EOS::eos_helmholtz;
   } else if (eos_string.compare("hybrid") == 0) {
     eos_policy = DynGRMHD_EOS::eos_hybrid;
   } else {
@@ -692,6 +698,7 @@ template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NormalLogs>,
                           Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSCompOSE<Primitive::NQTLogs>,
                           Primitive::ResetFloor>;
+template class DynGRMHDPS<Primitive::EOSHelmholtz, Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NormalLogs>,
                           Primitive::ResetFloor>;
 template class DynGRMHDPS<Primitive::EOSHybrid<Primitive::NQTLogs>,
@@ -717,6 +724,7 @@ INSTANTIATE_COORD_TERMS(Primitive::PiecewisePolytrope, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor);
+INSTANTIATE_COORD_TERMS(Primitive::EOSHelmholtz, Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NormalLogs>,
                         Primitive::ResetFloor);
 INSTANTIATE_COORD_TERMS(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor);

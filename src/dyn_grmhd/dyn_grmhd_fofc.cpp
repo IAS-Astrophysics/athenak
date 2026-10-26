@@ -755,6 +755,7 @@ INSTANTIATE_FOFC(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::PiecewisePolytrope, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor)
+INSTANTIATE_FOFC(Primitive::EOSHelmholtz, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NormalLogs>, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor)
 } // namespace dyngr
