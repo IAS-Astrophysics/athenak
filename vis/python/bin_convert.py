@@ -1736,9 +1736,6 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
 
     # extract Mesh/MeshBlock parameters
     nmb = fdata["n_mbs"]
-    Nx1 = fdata["Nx1"]  # noqa: F841
-    Nx2 = fdata["Nx2"]
-    Nx3 = fdata["Nx3"]
     nx1 = fdata["nx1_mb"]
     nx2 = fdata["nx2_mb"]
     nx3 = fdata["nx3_mb"]
@@ -1747,13 +1744,6 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
     nx3_out = fdata["nx3_out_mb"]
 
     number_of_moments = fdata.get("number_of_moments", 1)
-
-    # check dimensionality/slicing
-    two_d = Nx2 != 1 and Nx3 == 1
-    three_d = Nx3 != 1
-    x1slice = nx1_out == 1
-    x2slice = nx2_out == 1 and (two_d or three_d)
-    x3slice = nx3_out == 1 and three_d
 
     # keep variable order but separate out magnetic field
     vars_without_b = [v for v in fdata["var_names"] if "bcc" not in v]
@@ -1781,36 +1771,19 @@ def write_athdf(filename, fdata, varsize_bytes=4, locsize_bytes=8):
         LogicalLocations[mb] = logical[:3]
         Levels[mb] = logical[-1]
         geometry = fdata["mb_geometry"][mb]
-        mb_x1f = np.linspace(geometry[0], geometry[1], nx1 + 1)
-        mb_x1v = 0.5 * (mb_x1f[1:] + mb_x1f[:-1])
-        mb_x2f = np.linspace(geometry[2], geometry[3], nx2 + 1)
-        mb_x2v = 0.5 * (mb_x2f[1:] + mb_x2f[:-1])
-        mb_x3f = np.linspace(geometry[4], geometry[5], nx3 + 1)
-        mb_x3v = 0.5 * (mb_x3f[1:] + mb_x3f[:-1])
-        if x1slice:
-            x1f[mb] = np.array(
-                mb_x1f[(fdata["mb_index"][mb][0]): (fdata["mb_index"][mb][0] + 2)]
-            )
-            x1v[mb] = np.array([np.average(mb_x1f)])
-        else:
-            x1f[mb] = mb_x1f
-            x1v[mb] = mb_x1v
-        if x2slice:
-            x2f[mb] = np.array(
-                mb_x2f[(fdata["mb_index"][mb][2]): (fdata["mb_index"][mb][2] + 2)]
-            )
-            x2v[mb] = np.array([np.average(x2f[mb])])
-        else:
-            x2f[mb] = mb_x2f
-            x2v[mb] = mb_x2v
-        if x3slice:
-            x3f[mb] = np.array(
-                mb_x3f[(fdata["mb_index"][mb][4]): (fdata["mb_index"][mb][4] + 2)]
-            )
-            x3v[mb] = np.array([np.average(x3f[mb])])
-        else:
-            x3f[mb] = mb_x3f
-            x3v[mb] = mb_x3v
+        # Binary indices are offsets from the active MeshBlock. They can be
+        # negative for ghost output or nonzero for a slice. Singleton axes have
+        # no ghost padding, even though read_binary subtracts nghost on all axes.
+        for axis, ncells, nout, faces, centers in (
+            (0, nx1, nx1_out, x1f, x1v),
+            (1, nx2, nx2_out, x2f, x2v),
+            (2, nx3, nx3_out, x3f, x3v),
+        ):
+            lo, hi = geometry[2*axis:2*axis+2]
+            dx = (hi-lo)/ncells
+            offset = fdata["mb_index"][mb][2*axis] if ncells > 1 else 0
+            faces[mb] = lo + (offset + np.arange(nout+1))*dx
+            centers[mb] = 0.5*(faces[mb, 1:] + faces[mb, :-1])
 
     # set dataset names and number of variables
     dataset_names = [np.array("uov", dtype="|S21")]

@@ -34,6 +34,7 @@ class Z4c_AMR {
   void RefineRadii(MeshBlockPack *pmbp);        // Refine based on the radii
 
   RefinementMethod method;
+  int max_ref_lev;  // relative to root; -1 leaves the mesh-wide limit unchanged
 
   // Optinally set the minimum refinement level inside different radial shells
   std::vector<Real> radius;

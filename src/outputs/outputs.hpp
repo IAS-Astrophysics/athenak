@@ -21,7 +21,7 @@
     #error NHISTORY > NREDUCTION in outputs.hpp
 #endif
 
-#define NOUTPUT_CHOICES 154
+#define NOUTPUT_CHOICES 175
 // choices for output variables used in <ouput> blocks in input file
 // TO ADD MORE CHOICES:
 //   - add more strings to array below, change NOUTPUT_CHOICES above appropriately
@@ -100,7 +100,28 @@ static const char *var_choice[NOUTPUT_CHOICES] = {
   // Particles (151-152)
   "prtcl_all", "prtcl_d",
   // Gravity (153)
-  "grav_phi"
+  "grav_phi",
+  // Telegraph lapse (154-156)
+  "z4c_Bx", "z4c_By", "z4c_Bz",
+  // Vacuum curvature diagnostics (157-174)
+  "z4c_Kretschmann",
+  "z4c_Exx",
+  "z4c_Exy",
+  "z4c_Exz",
+  "z4c_Eyy",
+  "z4c_Eyz",
+  "z4c_Ezz",
+  "z4c_Bxx",
+  "z4c_Bxy",
+  "z4c_Bxz",
+  "z4c_Byy",
+  "z4c_Byz",
+  "z4c_Bzz",
+  "z4c_Px",
+  "z4c_Py",
+  "z4c_Pz",
+  "z4c_Pnorm",
+  "z4c_diag"
 };
 
 

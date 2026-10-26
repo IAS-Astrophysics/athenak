@@ -39,6 +39,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <iomanip>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -631,7 +633,7 @@ Real ParameterInput::GetOrAddReal(std::string block, std::string name, Real def_
     ret = static_cast<Real>(atof(val.c_str()));
   } else {
     pb = FindOrAddBlock(block);
-    ss_value << def_value;
+    ss_value << std::setprecision(std::numeric_limits<Real>::max_digits10) << def_value;
     AddParameter(pb, name, ss_value.str(), "# Default value added at run time", true);
     ret = def_value;
   }
@@ -719,6 +721,9 @@ int ParameterInput::SetInteger(std::string block, std::string name, int value) {
 //----------------------------------------------------------------------------------------
 //! \fn Real ParameterInput::SetReal(std::string block, std::string name, Real value)
 //  \brief updates a real parameter; creates it if it does not exist
+//  Retains the upstream six-significant-digit representation: initialization code
+//  also uses this API to set evolution parameters such as the final time.
+//  Use SetRealExact for checkpoint state that must round-trip without loss.
 
 Real ParameterInput::SetReal(std::string block, std::string name, Real value) {
   InputBlock* pb;
@@ -729,6 +734,17 @@ Real ParameterInput::SetReal(std::string block, std::string name, Real value) {
   ss_value << value;
   AddParameter(pb, name, ss_value.str(), "# Updated during run time", true);
   Unlock();
+  return value;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn Real ParameterInput::SetRealExact(std::string block, std::string name, Real value)
+//  \brief stores restart state without changing legacy SetReal initialization semantics
+
+Real ParameterInput::SetRealExact(std::string block, std::string name, Real value) {
+  std::stringstream ss_value;
+  ss_value << std::setprecision(std::numeric_limits<Real>::max_digits10) << value;
+  SetString(block, name, ss_value.str());
   return value;
 }
 
