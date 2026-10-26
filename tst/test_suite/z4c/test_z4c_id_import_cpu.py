@@ -27,7 +27,7 @@ def source(tmp_path):
 def import_data(directory, source, success=True):
     exe = os.environ.get("ATHENA_ID_EXE")
     if not exe:
-        pytest.skip("Set ATHENA_ID_EXE to a PROBLEM=id_solve build")
+        pytest.skip("Set ATHENA_ID_EXE to a PROBLEM=z4c/id_solve build")
     return run_case(directory, f"\n<problem>\nid_filename={source}\n",
                     executable=exe, success=success)
 
@@ -69,7 +69,7 @@ def test_active_fine_block_preference(tmp_path):
         f["extrin"] = np.zeros_like(values)
     executable = os.environ.get("ATHENA_ID_EXE")
     if not executable:
-        pytest.skip("Set ATHENA_ID_EXE to a PROBLEM=id_solve build")
+        pytest.skip("Set ATHENA_ID_EXE to a PROBLEM=z4c/id_solve build")
     run_case(tmp_path / "run", f"""
 <problem>
 id_filename={path}
