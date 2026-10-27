@@ -607,13 +607,15 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     if constexpr (mass_fractions) {
       // Limited reconstructions of the individual fractions need not sum to 1; a
       // zero sum (floor-overwritten cell) becomes pure species 0.
+      // Roundoff-level deviations are normalized silently; only a real violation
+      // counts as an adjustment (which makes the c2p write the state back).
       Real sum = 0.0;
       for (int s = 0; s < n_species; s++) { sum += Y[s]; }
       if (sum > 0.0) {
         if (sum != 1.0) {
           const Real inv = 1.0/sum;
           for (int s = 0; s < n_species; s++) { Y[s] *= inv; }
-          adjusted = true;
+          adjusted = adjusted || (fabs(sum - 1.0) > 1e-10);
         }
       } else {
         Y[0] = 1.0;
