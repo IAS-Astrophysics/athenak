@@ -23,6 +23,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
+#include "nuclear/nuclear.hpp"
 #include "diffusion/viscosity.hpp"
 #include "diffusion/resistivity.hpp"
 #include "diffusion/conduction.hpp"

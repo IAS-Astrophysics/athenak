@@ -28,6 +28,7 @@
 #include "driver.hpp"
 #include "gravity/gravity.hpp"
 #include "utils/utils.hpp"
+#include "nuclear/nuclear.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -468,6 +469,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  nuclear::Nuclear *pnuc = pmesh->pmb_pack->pnuc;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -557,6 +559,17 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
       }
 
       // Execute TaskLists
+      // This is the Tasklist that defines the operator split. Perhaps we should add 
+      // another one for Strang splitting to ensure second order convergence.
+      if (opsplit) {
+        for (int stage=1; stage<=(nopsplit_stages); ++stage) {
+          ExecuteTaskList(pmesh, "opsplit_before_stagen", stage);
+          ExecuteTaskList(pmesh, "opsplit_stagen", stage);
+          ExecuteTaskList(pmesh, "opsplit_after_stagen", stage);
+        }
+        ExecuteTaskList(pmesh, "opsplit_after_timeintegrator", 1);
+      }
+
       // Work before time integrator indicated by "0" in stage
       ExecuteTaskList(pmesh, "before_timeintegrator", 0);
       // time-integrator tasks for each stage of integrator
@@ -588,6 +601,8 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
           EndSTSSweep();
         }
       }
+
+
 
       // Work outside of TaskLists:
       // increment time, ncycle, etc.

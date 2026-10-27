@@ -32,6 +32,8 @@
 #include "units/units.hpp"
 #include "meshblock_pack.hpp"
 #include "gravity/gravity.hpp"
+#include "nuclear/nuclear.hpp"
+
 
 //----------------------------------------------------------------------------------------
 // MeshBlockPack constructor:
@@ -50,6 +52,10 @@ MeshBlockPack::MeshBlockPack(Mesh *pm, int igids, int igide) :
   tl_map.insert(std::make_pair("before_parabolic_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("parabolic_stagen",std::make_shared<TaskList>()));
   tl_map.insert(std::make_pair("after_parabolic_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("opsplit_before_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("opsplit_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("opsplit_after_stagen",std::make_shared<TaskList>()));
+  tl_map.insert(std::make_pair("opsplit_after_timeintegrator",std::make_shared<TaskList>()));
 }
 
 //----------------------------------------------------------------------------------------
@@ -61,6 +67,7 @@ MeshBlockPack::~MeshBlockPack() {
   if (pdyngr != nullptr) {delete pdyngr;}
   if (ptmunu != nullptr) {delete ptmunu;}
   if (padm   != nullptr) {delete padm;}
+  if (pnuc   !=nullptr) {delete pnuc;}
   if (pz4c   != nullptr) {
     delete pz4c;
     // cce dump
@@ -105,6 +112,18 @@ void MeshBlockPack::AddCoordinates(ParameterInput *pin) {
 void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
+
+  // (0) NUCLEAR
+  // Create Nuclear physics module.  Create Tasklist that call a wrapper inside
+  // the pgen called user_src_nuc_func to perform the integration. It requires
+  // to define pnuc-> dt_cycle To work correctly.
+  if (pin->DoesBlockExist("nuclear")) {
+    pnuc = new nuclear::Nuclear(this, pin);
+    nphysics++;
+    pnuc->AssembleNuclearTasks(tl_map);
+  } else {
+    pnuc = nullptr;
+  }
 
   // (1) Units.  Create first so that they can be used in other physics constructors
   // Default units are simply code units

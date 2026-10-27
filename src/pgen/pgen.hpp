@@ -39,6 +39,9 @@ class ProblemGenerator {
   // true if user srcterms are specified
   bool user_srcs;
 
+  // true if nuclear sources are present
+  bool user_nuc_srcs;
+
   // true if user history outputs are specified
   bool user_hist;
 
@@ -51,6 +54,8 @@ class ProblemGenerator {
   // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
   UserBoundaryFnPtr user_bcs_func=nullptr;
   UserSrctermFnPtr user_srcs_func=nullptr;
+  // function pointer used to integrate the reaction network
+  UserSrctermFnPtr user_srcs_nuc_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
 
