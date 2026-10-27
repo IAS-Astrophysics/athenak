@@ -65,10 +65,18 @@ void EOSHelmholtz::SetSpecies(int n, const Real *A, const Real *Z, const Real *d
 void EOSHelmholtz::update_density_bounds() {
   // Conservative: n in [min_n, max_n] keeps n*Ye inside the table for every Ye the
   // species list can produce.
+  // Neutral species (free neutrons) do not bound Ye from below: a cell without
+  // electrons is outside the electron table whatever its density, so the lowest
+  // Ye of the charged species sets the guard.
   Real ye_min = 1.0, ye_max = 0.0;
   for (int s = 0; s < n_species; ++s) {
-    ye_min = std::min(ye_min, m_zoa[s]);
+    if (m_Z[s] > 0.0) { ye_min = std::min(ye_min, m_zoa[s]); }
     ye_max = std::max(ye_max, m_zoa[s]);
+  }
+  if (!(ye_max > 0.0)) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "EOSHelmholtz: the species list has no charged species" << std::endl;
+    std::exit(EXIT_FAILURE);
   }
   min_n = m_ne_min/ye_min;
   max_n = m_ne_max/ye_max;

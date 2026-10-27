@@ -127,6 +127,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   static constexpr bool supports_entropy = std::is_base_of_v<SupportsEntropy, EOSPolicy>;
   static constexpr bool supports_potentials =
     std::is_base_of_v<SupportsChemicalPotentials, EOSPolicy>;
+  static constexpr bool mass_fractions =
+    std::is_base_of_v<SupportsMassFractions, EOSPolicy>;
 
  public:
   //! \fn EOS()
@@ -601,7 +603,25 @@ class EOS : public EOSPolicy, public ErrorPolicy {
 
   //! \brief Limit Y to a specified range
   KOKKOS_INLINE_FUNCTION bool ApplySpeciesLimits(Real *Y) const {
-    return SpeciesLimits(Y, min_Y, max_Y, n_species);
+    bool adjusted = SpeciesLimits(Y, min_Y, max_Y, n_species);
+    if constexpr (mass_fractions) {
+      // Limited reconstructions of the individual fractions need not sum to 1; a
+      // zero sum (floor-overwritten cell) becomes pure species 0.
+      Real sum = 0.0;
+      for (int s = 0; s < n_species; s++) { sum += Y[s]; }
+      if (sum > 0.0) {
+        if (sum != 1.0) {
+          const Real inv = 1.0/sum;
+          for (int s = 0; s < n_species; s++) { Y[s] *= inv; }
+          adjusted = true;
+        }
+      } else {
+        Y[0] = 1.0;
+        for (int s = 1; s < n_species; s++) { Y[s] = 0.0; }
+        adjusted = true;
+      }
+    }
+    return adjusted;
   }
 
   //! \brief Limit the pressure to a specified range at a given density and composition

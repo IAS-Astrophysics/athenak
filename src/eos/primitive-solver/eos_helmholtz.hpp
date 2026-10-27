@@ -29,7 +29,8 @@
 
 namespace Primitive {
 
-class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
+class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
+                     public SupportsMassFractions {
 
  public:
   enum TableVariables {
