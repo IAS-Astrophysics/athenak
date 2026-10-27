@@ -50,7 +50,8 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   /// Species list behind Y[]: mass number, charge number and ATOMIC mass excess
   /// [MeV] of each of the n species (host only). Atomic, because the electron
   /// table carries no rest mass and charge neutrality supplies exactly Z
-  /// electrons per nucleus. Sets n_species.
+  /// electrons per nucleus. A and Z need not be integers (effective species).
+  /// Sets n_species; validates, and echoes the table on rank 0.
   void SetSpecies(int n, const Real *A, const Real *Z, const Real *dm);
 
   /// The species count is fixed by SetSpecies; anything else is a parfile error.
@@ -74,7 +75,6 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
       m_log_t("helm log T", 1),
       m_t("helm T", 1),
       m_table("helm table", 1, 1, 1) {
-    n_species = 1;
     eos_units = MakeNuclear();
     m_initialized = false;
     m_id_log_ne = std::numeric_limits<Real>::quiet_NaN();
@@ -87,11 +87,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
       min_Y[s] = 0.0;
       max_Y[s] = 1.0;
     }
-    // ponytail: He4/C12/O16 hard-coded until the network supplies the species list.
-    constexpr Real A[3]  = {4.0, 12.0, 16.0};
-    constexpr Real Z[3]  = {2.0, 6.0, 8.0};
-    constexpr Real dm[3] = {2.42491587, 0.0, -4.73700141};  // AME2020 atomic [MeV]
-    SetSpecies(3, A, Z, dm);
+    n_species = 0;  // SetSpecies must be called before the table is read
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {

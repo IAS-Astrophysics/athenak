@@ -18,6 +18,7 @@
 #include <Kokkos_Core.hpp>
 
 #include "athena.hpp"
+#include "globals.hpp"
 #include "eos_helmholtz.hpp"
 #include "utils/tr_table.hpp"
 
@@ -30,9 +31,24 @@ void EOSHelmholtz::SetSpecies(int n, const Real *A, const Real *Z, const Real *d
               << MAX_SPECIES << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  for (int s = 0; s < n; ++s) {
+    if (!(A[s] > 0.0) || !(Z[s] >= 0.0) || !(Z[s] <= A[s]) || !std::isfinite(dm[s])) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "EOSHelmholtz::SetSpecies: species " << s << " has A = "
+                << A[s] << ", Z = " << Z[s] << ", dm = " << dm[s] << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
   n_species = n;
   m_min_h = std::numeric_limits<Real>::max();
+  if (global_variable::my_rank == 0) {
+    std::cout << "EOSHelmholtz species (A, Z, atomic mass excess dm [MeV], dm/A):\n";
+  }
   for (int s = 0; s < n; ++s) {
+    if (global_variable::my_rank == 0) {
+      std::printf("  %2d  A = %8.4f  Z = %8.4f  dm = %12.6f  dm/A = %10.6f\n",
+                  s, A[s], Z[s], dm[s], dm[s]/A[s]);
+    }
     m_A[s]     = A[s];
     m_Z[s]     = Z[s];
     m_dm[s]    = dm[s];
@@ -61,6 +77,12 @@ void EOSHelmholtz::update_density_bounds() {
 void EOSHelmholtz::ReadTableFromFile(std::string fname) {
   if (m_initialized) {
     return;
+  }
+  if (n_species < 1) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "EOSHelmholtz: SetSpecies must be called before reading the table"
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
   TableReader::Table table;
   auto read_result = table.ReadTable(fname);

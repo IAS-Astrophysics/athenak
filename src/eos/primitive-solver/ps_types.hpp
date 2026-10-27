@@ -17,17 +17,9 @@
 #define MAX_SPECIES 3
 #define NHYDRO ((5) + (MAX_SPECIES))
 
-//! Layout of the composition vector Y[] handed to the Helmholtz EOS: mass fractions
-//! of the network species. Ye, the mean ion mass and the rest mass per baryon are
-//! derived from these and the per-species (A, Z, mass excess) held by the EOS.
-// ponytail: He4/C12/O16 hard-coded until the network supplies the species list.
-enum ScalarVariables {
-  SCHE4  = 0,  //! mass fraction of He4
-  SCC12  = 1,  //! mass fraction of C12
-  SCO16  = 2,  //! mass fraction of O16
-  SCNVAR = 3   //! number of scalar variables
-};
-static_assert(SCNVAR <= MAX_SPECIES, "MAX_SPECIES must hold every network species");
+//! The composition vector Y[] handed to the Helmholtz EOS holds the mass fractions of
+//! the species set by EOSHelmholtz::SetSpecies (<mhd> A, Z, dm); Ye, the mean ion mass
+//! and the rest mass per baryon are derived from them. At most MAX_SPECIES of them.
 
 enum ConsIndex {CDN=0, CSX=1, CSY=2, CSZ=3, CTA=4, CYD=5, NCONS=(NHYDRO)};
 // FIXME: Make sure that the position of IYF makes sense.

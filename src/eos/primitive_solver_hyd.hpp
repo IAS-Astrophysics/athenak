@@ -16,6 +16,7 @@
 // C++ headers
 #include <string>
 #include <type_traits>
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -92,14 +93,27 @@ class PrimitiveSolverHydro {
     }
     // Parameters for Helmholtz EoS
     if constexpr (std::is_same_v<Primitive::EOSHelmholtz, EOSPolicy>) {
-      // The species list is fixed by the EOS; the scalar count has to match it.
-      const int nscal = pin->GetOrAddInteger(block, "nscalars", SCNVAR);
-      if (nscal != ps.GetEOS().GetNSpecies()) {
-        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                  << std::endl << "Helmholtz EOS carries " << ps.GetEOS().GetNSpecies()
-                  << " species, but nscalars = " << nscal << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
+      // Species behind the nscalars mass fractions: comma-separated lists of mass
+      // number, charge number and ATOMIC mass excess [MeV] (AME convention), one
+      // entry per scalar. Non-integer A, Z are fine (effective species).
+      const int nscal = pin->GetOrAddInteger(block, "nscalars", 0);
+      auto read_list = [&](const char *key) {
+        std::vector<Real> v;
+        std::stringstream ss(pin->GetString(block, key));
+        std::string tok;
+        while (std::getline(ss, tok, ',')) { v.push_back(std::stod(tok)); }
+        if (static_cast<int>(v.size()) != nscal) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<" << block << "> " << key << " has " << v.size()
+                    << " entries, nscalars = " << nscal << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+        return v;
+      };
+      const auto A = read_list("A");
+      const auto Z = read_list("Z");
+      const auto dm = read_list("dm");
+      ps.GetEOSMutable().SetSpecies(nscal, A.data(), Z.data(), dm.data());
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
         ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());
