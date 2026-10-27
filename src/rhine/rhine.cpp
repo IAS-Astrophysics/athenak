@@ -556,13 +556,16 @@ TaskStatus RHINE::NetworkStepEOS(Real dt_apply_code) {
     const Real to_code = D / mb_MeV * alpha * time_cgs;  // densitized code rate
     const Real lnu = -fnu * dm_nu * to_code;
     const Real qdot = -dma * to_code - lnu;
+    const bool exiting = apply_ && aux_(m, A_NSEST, k, j, i) >= 2.0;
     if (own_rates) {
       aux_(m, A_QDOT, k, j, i) = qdot;
       aux_(m, A_LNU,  k, j, i) = lnu;
-      if (want_phys_) { aux_(m, A_QPHYS, k, j, i) = -(1.0 - fnu) * dm_phys * to_code; }
+      if (want_phys_ && !exiting) {
+        aux_(m, A_QPHYS, k, j, i) = -(1.0 - fnu) * dm_phys * to_code;
+      }
     }
 
-    if (apply_ && aux_(m, A_NSEST, k, j, i) >= 2.0) {
+    if (exiting) {
       aux_(m, A_QEXIT, k, j, i) = qdot;
       aux_(m, A_NSEST, k, j, i) = 3.0;
     }
