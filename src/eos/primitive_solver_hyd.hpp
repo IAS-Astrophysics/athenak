@@ -16,6 +16,7 @@
 // C++ headers
 #include <string>
 #include <type_traits>
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -92,7 +93,31 @@ class PrimitiveSolverHydro {
     }
     // Parameters for Helmholtz EoS
     if constexpr (std::is_same_v<Primitive::EOSHelmholtz, EOSPolicy>) {
-      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", SCNVAR));
+      // Species behind the nscalars mass fractions: comma-separated lists of mass
+      // number, charge number and ATOMIC mass excess [MeV] (AME convention), one
+      // entry per scalar. Non-integer A, Z are fine (effective species).
+      const int nscal = pin->GetOrAddInteger(block, "nscalars", 0);
+      auto read_list = [&](const char *key) {
+        std::vector<Real> v;
+        std::stringstream ss(pin->GetString(block, key));
+        std::string tok;
+        while (std::getline(ss, tok, ',')) { v.push_back(std::stod(tok)); }
+        if (static_cast<int>(v.size()) != nscal) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                    << std::endl << "<" << block << "> " << key << " has " << v.size()
+                    << " entries, nscalars = " << nscal << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+        return v;
+      };
+      const auto A = read_list("A");
+      const auto Z = read_list("Z");
+      const auto dm = read_list("dm");
+      // Optional ground-state spin degeneracies 2J+1 (entropy only); default 1.
+      std::vector<Real> g;
+      if (pin->DoesParameterExist(block, "g")) { g = read_list("g"); }
+      ps.GetEOSMutable().SetSpecies(nscal, A.data(), Z.data(), dm.data(),
+                                    g.empty() ? nullptr : g.data());
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
         ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());
@@ -109,11 +134,10 @@ class PrimitiveSolverHydro {
         std::exit(EXIT_FAILURE);
       }
 
-      // Coulomb correction true/false, table path, and Ye min/max.
+      // Coulomb correction true/false and the electron table path. The Ye range
+      // follows from the species list.
       ps.GetEOSMutable().SetCoulomb(pin->GetOrAddBoolean(block, "eir_coulomb", true));
-      ps.GetEOSMutable().ReadTableFromFile(pin->GetString(block, "electron_table"),
-                                          pin->GetReal(block, "eir_min_Ye"),
-                                          pin->GetReal(block, "eir_max_Ye"));
+      ps.GetEOSMutable().ReadTableFromFile(pin->GetString(block, "electron_table"));
       assert(ps.GetEOSMutable().IsInitialized());
     }
     // Parameters for Hybrid EoS

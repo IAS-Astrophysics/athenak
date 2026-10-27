@@ -75,6 +75,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
 
   int nhyd  = pmy_pack->pmhd->nmhd;
   int nvars = pmy_pack->pmhd->nmhd + pmy_pack->pmhd->nscalars;
+  const bool upwind_scalars_ = upwind_scalars;  // else keep the solver's species flux
   int nmb1 = pmy_pack->nmb_thispack - 1;
   const auto recon_method_ = pmy_pack->pmhd->recon_method;
 
@@ -135,8 +136,8 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                                              flx, eyl, ezl);
       });
 
-    // Scalar fluxes (upwind from sign of mass flux)
-    if (nvars > nhyd) {
+    // Scalar fluxes: mass-flux upwinding overwrites the solver flux when requested
+    if (upwind_scalars_ && nvars > nhyd) {
       par_for("dyngrflux_x1_scalars", DevExeSpace(),
         0, nmb1, kl, ku, jl, ju, il, iu,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -187,7 +188,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                                              flx, eyl, ezl);
       });
 
-    if (nvars > nhyd) {
+    if (upwind_scalars_ && nvars > nhyd) {
       par_for("dyngrflux_x2_scalars", DevExeSpace(),
         0, nmb1, kl, ku, jl, ju, is-1, ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
@@ -236,7 +237,7 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
                                              flx, eyl, ezl);
       });
 
-    if (nvars > nhyd) {
+    if (upwind_scalars_ && nvars > nhyd) {
       par_for("dyngrflux_x3_scalars", DevExeSpace(),
         0, nmb1, kl, ku, js-1, je+1, is-1, ie+1,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {

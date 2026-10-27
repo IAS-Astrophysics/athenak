@@ -82,6 +82,10 @@ void SingleStateLLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eo
   flux[CSY] = 0.5*sdetg*(alpha*(fl[CSY] + fr[CSY]) - lambda*(cons_r[CSY] - cons_l[CSY]));
   flux[CSZ] = 0.5*sdetg*(alpha*(fl[CSZ] + fr[CSZ]) - lambda*(cons_r[CSZ] - cons_l[CSZ]));
   flux[CTA] = 0.5*sdetg*(alpha*(fl[CTA] + fr[CTA]) - lambda*(cons_r[CTA] - cons_l[CTA]));
+  for (int n = 0; n < nscal; n++) {
+    flux[CYD + n] = 0.5*sdetg*(alpha*(fl[CYD + n] + fr[CYD + n]) -
+                               lambda*(cons_r[CYD + n] - cons_l[CYD + n]));
+  }
 
   bflux[IBY] = - 0.5 * sdetg *
                (alpha*(bfl[iby] + bfr[iby]) - lambda * (Bu_rund[iby] - Bu_lund[iby]));
@@ -210,6 +214,10 @@ void LLF_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                                   lambda * (cons_r[CSY] - cons_l[CSY]));
     flx(m, IVZ, k, j, i) = 0.5 * sdetg * (alpha*(fl[CSZ] + fr[CSZ]) -
                                   lambda * (cons_r[CSZ] - cons_l[CSZ]));
+    for (int n = 0; n < nscal; n++) {
+      flx(m, nhyd + n, k, j, i) = 0.5 * sdetg * (alpha*(fl[CYD + n] + fr[CYD + n]) -
+                                          lambda * (cons_r[CYD + n] - cons_l[CYD + n]));
+    }
     // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
     // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
     // containers for ey and ez for each direction are passed in as arguments to this

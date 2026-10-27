@@ -1,0 +1,112 @@
+# AthenaK input file: Sod-type shock tube with the standalone Helmholtz EOS
+# (He4/C12/O16 composition) in flat space via the dyn_grmhd primitive solver.
+# States are white-dwarf-like: 1e7 g/cc at 0.05 MeV (left), 1.25e6 g/cc at 0.02 MeV
+# (right), in geometric solar units (rho_unit = 6.1758e17 g/cc,
+# P_unit = 5.5505e38 erg/cc).
+
+<comment>
+problem   = shock tube with Helmholtz EOS, pure He4 (left) vs C12/O16 (right)
+
+<job>
+basename  = st_helm_comp
+
+<mesh>
+nghost    = 3
+nx1       = 400
+x1min     = -0.5
+x1max     = 0.5
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 1
+x2min     = -0.5
+x2max     = 0.5
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 1
+x3min     = -0.5
+x3max     = 0.5
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 200           # two blocks, one per GPU/rank on ara
+nx2       = 1
+nx3       = 1
+
+<coord>
+special_rel = true
+general_rel = false
+minkowski   = true
+
+<adm>
+
+<time>
+evolution   = dynamic
+integrator  = rk2
+cfl_number  = 0.4
+nlim        = -1
+tlim        = 20.0
+ndiag       = 1000
+
+<mhd>
+reconstruct = plm
+rsolver     = hlle
+gamma       = 1.6667          # unused with dyn_eos, kept for compatibility
+dfloor      = 1.0e-20
+tfloor      = 1.0e-6          # MeV
+dyn_eos     = helmholtz
+eos         = ideal           # compatibility placeholder
+dyn_error   = reset_floor
+electron_table = tables/electron_table.athtab
+eir_coulomb = true
+nscalars    = 3               # mass fractions of the species below
+A           = 4, 12, 16       # He4, C12, O16: mass number
+Z           = 2, 6, 8         # charge number
+dm          = 2.42491587, 0.0, -4.73700141   # atomic mass excess [MeV], AME2020
+species_names = he4, c12, o16   # output labels only
+s0_atmosphere = 1.0           # atmosphere is pure He4
+s1_atmosphere = 0.0
+s2_atmosphere = 0.0
+
+<problem>
+pgen_name  = shock_tube
+shock_dir  = 1
+xshock     = 0.0
+
+dl = 1.6192e-11
+pl = 1.6969e-15
+ul = 0.0
+vl = 0.0
+wl = 0.0
+bxl = 0.0
+byl = 0.0
+bzl = 0.0
+yl_0 = 1.0                   # left: pure He4
+yl_1 = 0.0
+yl_2 = 0.0
+
+dr = 2.0240e-12
+pr = 7.6616e-17
+ur = 0.0
+vr = 0.0
+wr = 0.0
+bxr = 0.0
+byr = 0.0
+bzr = 0.0
+yr_0 = 0.0                   # right: half C12, half O16
+yr_1 = 0.5
+yr_2 = 0.5
+
+<output1>
+file_type   = tab
+variable    = mhd_w
+data_format = %14.6e
+dt          = 20.0
+slice_x2    = 0.0
+slice_x3    = 0.0
+
+<output2>
+file_type   = hst
+dt          = 1.0

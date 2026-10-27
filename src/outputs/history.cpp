@@ -297,9 +297,11 @@ void HistoryOutput::LoadMHDHistoryData(HistoryData *pdata, Mesh *pm) {
   pdata->label[nmhd_+4] = "2-ME";
   pdata->label[nmhd_+5] = "3-ME";
 
+  const auto &names_ = pm->pmb_pack->pmhd->scalar_names;
   for (int s=0; s<nscalars_; ++s) {
     std::ostringstream labelSS;
-    labelSS << "scal-" << s;
+    labelSS << "scal-";
+    if (names_.empty()) { labelSS << s; } else { labelSS << names_[s]; }
     pdata->label[nmhd_+6+s] = labelSS.str();
   }
 

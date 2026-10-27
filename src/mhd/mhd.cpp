@@ -7,6 +7,7 @@
 //! \brief implementation of MHD class constructor and assorted functions
 
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <algorithm>
 
@@ -107,6 +108,23 @@ MHD::MHD(MeshBlockPack *ppack, ParameterInput *pin) :
 
   // (2) Initialize scalars, diffusion, source terms
   nscalars = pin->GetOrAddInteger("mhd","nscalars",0);
+  // Optional labels for the scalars in outputs (s_<name>, r_<name>, scal-<name>);
+  // no other effect.
+  if (pin->DoesParameterExist("mhd", "species_names")) {
+    std::stringstream ss(pin->GetString("mhd", "species_names"));
+    std::string tok;
+    while (std::getline(ss, tok, ',')) {
+      tok.erase(0, tok.find_first_not_of(" \t"));
+      tok.erase(tok.find_last_not_of(" \t") + 1);
+      scalar_names.push_back(tok);
+    }
+    if (static_cast<int>(scalar_names.size()) != nscalars) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "<mhd> species_names has " << scalar_names.size()
+                << " entries, nscalars = " << nscalars << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   // Viscosity (only constructed if needed)
   if (pin->DoesParameterExist("mhd","nu_iso") ||
