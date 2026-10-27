@@ -20,16 +20,11 @@
 
 namespace nuclear {
 
-struct NuclearParams {
-   Real edot_limiter;   
-};
-
 //----------------------------------------------------------------------------------------
 //! \struct NuclearTaskIDs
 //  \brief container to hold TaskIDs of all Nuclear tasks
 struct NuclearTaskIDs {
   TaskID Nuclear_integrate;
-  TaskID Nuclear_dt;
 };
 
 //----------------------------------------------------------------------------------------
@@ -46,15 +41,20 @@ class Nuclear {
                                            //
   //DvceArray5D<Real> Ydot;
 
-  NuclearParams params{};              // user parameters for grey M1
   NuclearTaskIDs id;          // container to hold names of TaskIDs
-  Real dtnew{};
-  Real dt_nuc{};              //we need to initialize it inside the pgen.
+  Real dt_nuc{};              // network substep size, set by the pgen
+  int max_substeps{};         // cap on the network substeps per hydro step
 
   void AssembleNuclearTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
 
   TaskStatus Integrate(Driver* pdrive, int stage);
-  TaskStatus NewTimeStep(Driver* pdrive, int stage);
+  // Hydro ghost-zone refresh after the burn (see nuclear_task.cpp)
+  TaskStatus InitRecvU(Driver* pdrive, int stage);
+  TaskStatus SendU(Driver* pdrive, int stage);
+  TaskStatus RecvU(Driver* pdrive, int stage);
+  TaskStatus SetGhostZones(Driver* pdrive, int stage);
+  TaskStatus ClearSendU(Driver* pdrive, int stage);
+  TaskStatus ClearRecvU(Driver* pdrive, int stage);
 
  private:
   MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack

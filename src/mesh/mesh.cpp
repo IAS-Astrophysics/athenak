@@ -648,10 +648,6 @@ void Mesh::NewTimeStep(const Real tlim) {
   if (pmb_pack->ppart != nullptr) {
     dt_cycle = std::min(dt_cycle, (pmb_pack->ppart->dtnew) );
   }
-  // Nuclear timestep
-  if (pmb_pack->pnuc != nullptr) {
-    dt_cycle = std::min(dt_cycle, (pmb_pack->pnuc->dtnew) );
-  }
 
 #if MPI_PARALLEL_ENABLED
   // get minimum cycle and parabolic timesteps over all MPI ranks

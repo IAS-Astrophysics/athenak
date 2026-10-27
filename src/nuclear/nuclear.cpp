@@ -25,7 +25,9 @@ namespace nuclear {
     isunits = pin->DoesBlockExist("units");
     ismhd = pin->DoesBlockExist("mhd");
 
-    params.edot_limiter = pin->GetOrAddReal("nuclear", "edot_limiter", 0.5);
+    // Maximum number of network substeps per hydro step. If dt_nuc asks for more, the
+    // substeps are enlarged to dt/max_substeps (and a warning is printed).
+    max_substeps = pin->GetOrAddInteger("nuclear", "max_substeps", 100);
   }
 
   Nuclear::~Nuclear() {}

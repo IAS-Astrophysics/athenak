@@ -483,9 +483,6 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
     }
-    if (pnuc != nullptr) {
-      (void) pmesh->pmb_pack->pnuc->NewTimeStep(this, nexp_stages);
-    }
 
     pmesh->NewTimeStep(tlim);
     RefreshSTSCycleState(pmesh);
