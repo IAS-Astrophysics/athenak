@@ -9,9 +9,10 @@
 //  \brief Device port of EOSHelmholtz: a thermal EOS built on a tabulated
 //         electron gas (2D in log n_e, log T) plus analytic ion/radiation terms.
 //
-//  Used only as a sub-component of EOSTransition (never a standalone EOSPolicy).
 //  The electron-gas table lives in Kokkos Views and evaluation is device
-//  callable. Composition is passed through Y[] via the ScalarVariables indices.
+//  callable. Y[] holds the mass fractions of the network species (ScalarVariables);
+//  Ye, the ion number per baryon and the rest mass per baryon are derived from them
+//  and the per-species (A, Z, mass excess) set by SetSpecies.
 
 ///  \warning Assumes the table is uniformly spaced in log n_e and log T.
 
@@ -42,34 +43,24 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
     ECNVARS  = 7
   };
 
-  /// Reads the table file (host only).
-  void ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye);
+  /// Reads the table file (host only). The Ye range, and with it the density
+  /// bounds, follows from the species list, so SetSpecies must come first.
+  void ReadTableFromFile(std::string fname);
 
-  /// Set the number of species. Throw an exception if
-  /// the number of species is invalid.
-  KOKKOS_INLINE_FUNCTION void SetNSpecies(int n) {
-    // Number of species must be within limits
-    assert (n<=MAX_SPECIES && n>=0);
+  /// Species list behind Y[]: mass number, charge number and ATOMIC mass excess
+  /// [MeV] of each of the n species (host only). Atomic, because the electron
+  /// table carries no rest mass and charge neutrality supplies exactly Z
+  /// electrons per nucleus. Sets n_species.
+  void SetSpecies(int n, const Real *A, const Real *Z, const Real *dm);
 
-    n_species = n;
-    return;
-  }
+  /// The species count is fixed by SetSpecies; anything else is a parfile error.
+  KOKKOS_INLINE_FUNCTION void SetNSpecies(int n) { assert(n == n_species); }
 
   /// Set the baryon mass.
   ///
   /// N.B. mb is a convention, not a physical mass: the reference mass per
   /// baryon that defines rho = mb*n and the rest-mass/eps split.
   KOKKOS_INLINE_FUNCTION void SetBaryonMass(Real new_mb) { mb = new_mb; }
-
-  /// Set the physical nucleon masses [MeV].
-  ///
-  /// Used by EOSTransition to adopt the values carried by the compose table so
-  /// that both halves of the blend build their chemical potentials and
-  /// rest-mass zero points from the same constants.
-  KOKKOS_INLINE_FUNCTION void SetNucleonMasses(Real new_mn, Real new_mp) {
-    mn = new_mn;
-    mp = new_mp;
-  }
 
   /// Enable/disable the ion Coulomb (OCP) correction to P, eps and s.
   KOKKOS_INLINE_FUNCTION void SetCoulomb(bool use) { use_coulomb = use; }
@@ -90,13 +81,17 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
     m_id_log_t  = std::numeric_limits<Real>::quiet_NaN();
     m_nn = 0;
     m_nt = 0;
-    mn = mn_codata;
-    mp = mp_codata;
-
-    min_Y[SCYE] = 0.0;  min_Y[SCXN] = 0.0;  min_Y[SCXP] = 0.0;
-    min_Y[SCXA] = 0.0;  min_Y[SCXH] = 0.0;  min_Y[SCAH] = 1.0;
-    max_Y[SCYE] = 1.0;  max_Y[SCXN] = 1.0;  max_Y[SCXP] = 1.0;
-    max_Y[SCXA] = 1.0;  max_Y[SCXH] = 1.0;  max_Y[SCAH] = 500.0;
+    m_ne_min = std::numeric_limits<Real>::quiet_NaN();
+    m_ne_max = std::numeric_limits<Real>::quiet_NaN();
+    for (int s = 0; s < MAX_SPECIES; ++s) {
+      min_Y[s] = 0.0;
+      max_Y[s] = 1.0;
+    }
+    // ponytail: He4/C12/O16 hard-coded until the network supplies the species list.
+    constexpr Real A[3]  = {4.0, 12.0, 16.0};
+    constexpr Real Z[3]  = {2.0, 6.0, 8.0};
+    constexpr Real dm[3] = {2.42491587, 0.0, -4.73700141};  // AME2020 atomic [MeV]
+    SetSpecies(3, A, Z, dm);
   }
 
   KOKKOS_INLINE_FUNCTION Real TemperatureFromE(Real n, Real e, Real *Y) const {
@@ -134,7 +129,8 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
                         : temperature_from_var(ECENT, s, n, Y);
   }
 
-  KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergy(Real n, Real T, const Real *Y) const {
+  KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergy(Real n, Real T,
+                                                     const Real *Y) const {
     return eval_lin_at_nty(ECLOGEPS, n, T, Y);
   }
 
@@ -144,10 +140,6 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
 
   KOKKOS_INLINE_FUNCTION Real Pressure(Real n, Real T, Real *Y) const {
     return eval_lin_at_nty(ECLOGP, n, T, Y);
-  }
-
-  KOKKOS_INLINE_FUNCTION Real Abar(Real n, Real T, Real *Y) const {
-    return 1.0/inverse_abar(Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
@@ -161,9 +153,9 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   KOKKOS_INLINE_FUNCTION Real SoundSpeed(Real n, Real T, Real *Y) const {
     // Timmes & Arnett (1999) Gamma_1 from the (n, T) derivatives. One table
     // point (log n_e, log T) and one Coulomb prep serve all five channels.
-    const Real ln_ne = Kokkos::log(n*Y[SCYE]);
-    const Real lT    = Kokkos::log(T);
     const CoulombPrep cp = coulomb_prep(n, Y);
+    const Real ln_ne = Kokkos::log(n*cp.comp.ye);
+    const Real lT    = Kokkos::log(T);
     auto ch = [&](int vi) {
       return add_rad_ion_lin(vi, eval_at_lnty(vi, ln_ne, lT), n, T, lT, Y, cp);
     };
@@ -180,34 +172,8 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
     return Kokkos::sqrt(gam1/z);
   }
 
-  // Yn/Yp are floored: min_Y[SCXN] is 0 and frozen-out ejecta legitimately
-  // reach it, which would send mu -> -inf and overflow the nurates degeneracy
-  // parameters. The floor is far below any composition the rates resolve.
-  KOKKOS_INLINE_FUNCTION Real NeutronChemicalPotential(Real n, Real T, Real *Y) const {
-    Real Yn = Kokkos::fmax(Y[SCXN], min_Y_free);
-    return mn + T*Kokkos::log(n*Yn/2*Kokkos::pow(sac_const/(mn*T), 1.5));
-  }
-
-  KOKKOS_INLINE_FUNCTION Real ProtonChemicalPotential(Real n, Real T, Real *Y) const {
-    Real Yp = Kokkos::fmax(Y[SCXP], min_Y_free);
-    return mp + T*Kokkos::log(n*Yp/2*Kokkos::pow(sac_const/(mp*T), 1.5));
-  }
-
   KOKKOS_INLINE_FUNCTION Real ElectronChemicalPotential(Real n, Real T, Real *Y) const {
     return eval_lin_at_nty(ECETA, n, T, Y)*T + me;
-  }
-
-  KOKKOS_INLINE_FUNCTION Real BaryonChemicalPotential(Real n, Real T, Real *Y) const {
-    return NeutronChemicalPotential(n, T, Y);
-  }
-
-  KOKKOS_INLINE_FUNCTION Real ChargeChemicalPotential(Real n, Real T, Real *Y) const {
-    return ProtonChemicalPotential(n, T, Y) - NeutronChemicalPotential(n, T, Y);
-  }
-
-  KOKKOS_INLINE_FUNCTION Real ElectronLeptonChemicalPotential(Real n, Real T,
-                                                              Real *Y) const {
-    return ElectronChemicalPotential(n, T, Y) + ChargeChemicalPotential(n, T, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real MinimumEnthalpy() const { return m_min_h; }
@@ -237,13 +203,42 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   }
 
  private:
-  KOKKOS_INLINE_FUNCTION Real inverse_abar(const Real *Y) const {
-    Real abar = Y[SCXN] + Y[SCXP] + Y[SCXA]/4 +
-                ((Y[SCXH] > 0.0) ? Y[SCXH]/Y[SCAH] : 0.0);
-    if (abar <= 0.0) {
-      return 1.0;
+  //! Per-baryon sums over the species: electrons, ions, charged ions, and the
+  //! rest mass per baryon in units of mb minus one (mbar = m_u + sum X_i dm_i/A_i).
+  //! The last is the binding-energy term that used to be its own advected scalar.
+  struct Composition {
+    Real ye;        // electrons per baryon
+    Real inv_abar;  // ions per baryon = 1/Abar
+    Real y_chg;     // charged ions per baryon (free neutrons carry no charge)
+    Real eb;        // mbar/mb - 1
+  };
+  //! The sums are taken over X/sum(X): limited reconstructions of the individual
+  //! species do not sum to 1 at a smeared composition contact, and since Ye
+  //! inherits that error the electron pressure would too. A non-positive sum (a
+  //! floor-overwritten cell) falls back to pure species 0.
+  KOKKOS_INLINE_FUNCTION Composition composition(const Real *Y) const {
+    Composition c = {0.0, 0.0, 0.0, 0.0};
+    Real xsum = 0.0;
+    for (int s = 0; s < n_species; ++s) { xsum += Y[s]; }
+    Real dmoa = 0.0;
+    if (xsum > 0.0) {
+      const Real inv = 1.0/xsum;
+      for (int s = 0; s < n_species; ++s) {
+        const Real xi = Y[s]*inv;
+        const Real yi = xi*m_inv_A[s];
+        c.inv_abar += yi;
+        c.ye       += xi*m_zoa[s];
+        dmoa       += xi*m_dmoa[s];
+        if (m_Z[s] > 0.0) { c.y_chg += yi; }
+      }
+    } else {
+      c.inv_abar = m_inv_A[0];
+      c.ye       = m_zoa[0];
+      dmoa       = m_dmoa[0];
+      if (m_Z[0] > 0.0) { c.y_chg = c.inv_abar; }
     }
-    return abar;
+    c.eb = (m_u + dmoa)/mb - 1.0;
+    return c;
   }
 
   // Classical one-component-plasma Coulomb correction for a single mean ion averaged
@@ -262,21 +257,21 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   // (n, Y), so the ion-sphere cbrt and log(Gamma_T) are taken once per prep and every
   // temperature then costs a division, and for Gamma < 1 one exp in place of the pow.
   // Callers that evaluate many temperatures at one (n, Y) (the inversions, the
-  // multi-channel SoundSpeed, the transition strip solver) build the prep once.
+  // multi-channel SoundSpeed) build the prep once.
   struct CoulombPrep {
-    Real inv_abar;    // 1/abar (ion term)
-    Real y_chg;       // charged ions per baryon; 0 = no correction
+    Composition comp;
+    Real y_chg;       // charged ions per baryon entering the correction; 0 = off
     Real gamma_T;     // Gamma*T = zbar^2 e^2/a_i [MeV]
     Real ln_gamma_T;  // log(gamma_T)
   };
   KOKKOS_INLINE_FUNCTION CoulombPrep coulomb_prep(Real n, const Real *Y) const {
-    CoulombPrep cp = {inverse_abar(Y), 0.0, 0.0, 0.0};
+    CoulombPrep cp = {composition(Y), 0.0, 0.0, 0.0};
     if (!use_coulomb) { return cp; }
-    Real y_chg = Y[SCXP] + Y[SCXA]/4 + ((Y[SCXH] > 0.0) ? Y[SCXH]/Y[SCAH] : 0.0);
-    if (!(y_chg > 1e-30) || !(Y[SCYE] > 0.0)) {
+    const Real y_chg = cp.comp.y_chg;
+    if (!(y_chg > 1e-30) || !(cp.comp.ye > 0.0)) {
       return cp;
     }
-    Real zbar  = Y[SCYE]/y_chg;  // charge neutrality
+    Real zbar  = cp.comp.ye/y_chg;  // charge neutrality
     Real a_i   = Kokkos::cbrt(3.0/(4.0*M_PI*n*y_chg));
     cp.y_chg      = y_chg;
     cp.gamma_T    = zbar*zbar*esqu/a_i;
@@ -311,10 +306,10 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
       c.s  = -(c2*x - a2*(b2 - 1.0)/b2*y);
     }
     const Real pcoul = n*y_chg*T*c.u/3.0;
-    const Real p_ir  = asol/3.0*T*T*T*T + n*cp.inv_abar*T;
+    const Real p_ir  = asol/3.0*T*T*T*T + n*cp.comp.inv_abar*T;
     if (p_ir + pcoul <= 0.0) {
       if (p_e < 0.0) {
-        p_e = Kokkos::exp(eval_at_lnty(ECLOGP, Kokkos::log(n*Y[SCYE]), lT));
+        p_e = Kokkos::exp(eval_at_lnty(ECLOGP, Kokkos::log(n*cp.comp.ye), lT));
       }
       if (p_e + p_ir + pcoul <= 0.0) {
         return CoulombTerms{0.0, 0.0, 0.0, 0.0, 0.0};
@@ -332,12 +327,12 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   KOKKOS_INLINE_FUNCTION Real add_rad_ion_lin(int vi, Real var, Real n, Real T,
                                               Real lT, const Real *Y,
                                               const CoulombPrep &cp) const {
-    const Real Ye      = Y[SCYE];
+    const Real Ye      = cp.comp.ye;
     const Real eps_fac = Ye/mb;
     switch (vi) {
       case ECLOGP: {
         Real pele = Kokkos::exp(var);
-        Real ptot = pele + (asol/3.0*T*T*T*T + n*cp.inv_abar*T);
+        Real ptot = pele + (asol/3.0*T*T*T*T + n*cp.comp.inv_abar*T);
         if (use_coulomb) {
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y, pele);
           Real pcoul = n*c.y_chg*T*c.u/3.0;
@@ -347,22 +342,18 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
       }
       case ECENT: {
         Real srad = 4.0*asol/3.0*T*T*T/n;
-        Real Yn = Y[SCXN];
-        Real Yp = Y[SCXP];
-        Real Ya = Y[SCXA]/4;
-        Real Yh = Y[SCXH]/Y[SCAH];
-        Real sn = (Yn > 0.0) ?
-          Yn*(2.5 - Kokkos::log(n*Yn/g_n*Kokkos::pow(sac_const/(mn*T), 1.5))) : 0.0;
-        Real sp = (Yp > 0.0) ?
-          Yp*(2.5 - Kokkos::log(n*Yp/g_p*Kokkos::pow(sac_const/(mp*T), 1.5))) : 0.0;
-        Real sa = (Ya > 0.0) ?
-          Ya*(2.5 - Kokkos::log(n*Ya/g_a*Kokkos::pow(sac_const/(ma*T), 1.5))) : 0.0;
-        Real sh = 0.0;
-        if (Yh > 0.0) {
-          Real mbar = mb*(1 + Y[SCEB]);
-          Real mh   = (mbar - Yn*mn - Yp*mp - Ya*ma)/Yh;
-          if (mh > 0.0) {
-            sh = Yh*(2.5 - Kokkos::log(n*Yh/g_h*Kokkos::pow(sac_const/(mh*T), 1.5)));
+        // Sackur-Tetrode per species; a vanishing species contributes 0, not 0*inf.
+        // ponytail: spin degeneracy g = 1 (He4, C12, O16 are J = 0); needs a per-species
+        // g once n, p (g = 2) or odd nuclei enter the list.
+        Real xsum = 0.0;
+        for (int s = 0; s < n_species; ++s) { xsum += Y[s]; }
+        const Real xnorm = (xsum > 0.0) ? 1.0/xsum : 0.0;
+        Real sion = 0.0;
+        for (int s = 0; s < n_species; ++s) {
+          const Real yi = ((xsum > 0.0) ? Y[s]*xnorm : (s == 0 ? 1.0 : 0.0))*m_inv_A[s];
+          if (yi > 0.0) {
+            sion += yi*(2.5 - Kokkos::log(n*yi*Kokkos::pow(sac_const/(m_mion[s]*T),
+                                                             1.5)));
           }
         }
         Real scoul = 0.0;
@@ -370,12 +361,12 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           scoul = c.y_chg*c.s;
         }
-        return Ye*var + srad + sn + sp + sa + sh + scoul;
+        return Ye*var + srad + sion + scoul;
       }
       case ECLOGEPS: {
         Real erad  = asol*T*T*T*T/(n*mb);
-        Real eion  = 1.5*T*cp.inv_abar/mb;
-        Real ebind = Y[SCEB];
+        Real eion  = 1.5*T*cp.comp.inv_abar/mb;
+        Real ebind = cp.comp.eb;
         Real etot  = eps_fac*Kokkos::exp(var) + erad + eion + ebind;
         if (use_coulomb) {
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
@@ -386,7 +377,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
       }
       case ECDEPSDT: {
         Real deraddt = 4.0*asol*T*T*T/(n*mb);
-        Real deiondt = 1.5*cp.inv_abar/mb;
+        Real deiondt = 1.5*cp.comp.inv_abar/mb;
         Real decouldt = 0.0;
         if (use_coulomb) {
           // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T
@@ -396,7 +387,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
         return eps_fac*var + deraddt + deiondt + decouldt;
       }
       case ECDPDN: {
-        Real dpiondn = T*cp.inv_abar;
+        Real dpiondn = T*cp.comp.inv_abar;
         Real dpcouldn = 0.0;
         if (use_coulomb) {
           // d/dn of n*y_chg*T*u(Gamma)/3 with dGamma/dn = Gamma/(3n)
@@ -407,7 +398,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
       }
       case ECDPDT: {
         Real dpraddt = 4.0/3.0*asol*T*T*T;
-        Real dpiondt = n*cp.inv_abar;
+        Real dpiondt = n*cp.comp.inv_abar;
         Real dpcouldt = 0.0;
         if (use_coulomb) {
           // d/dT of n*y_chg*T*u(Gamma)/3 with dGamma/dT = -Gamma/T
@@ -426,13 +417,14 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   KOKKOS_INLINE_FUNCTION Real eval_lin_at_nty(int vi, Real n, Real T,
                                               const Real *Y) const {
     const Real lT = Kokkos::log(T);
-    Real var = eval_at_lnty(vi, Kokkos::log(n*Y[SCYE]), lT);
-    if (vi == ECETA) { return var; }  // no analytic terms: skip the prep
-    return add_rad_ion_lin(vi, var, n, T, lT, Y, coulomb_prep(n, Y));
+    const CoulombPrep cp = coulomb_prep(n, Y);
+    Real var = eval_at_lnty(vi, Kokkos::log(n*cp.comp.ye), lT);
+    if (vi == ECETA) { return var; }  // no analytic terms
+    return add_rad_ion_lin(vi, var, n, T, lT, Y, cp);
   }
 
   /// Pressure and energy density with ln_ne = log(n Ye), lT = log(T) and the prep
-  /// supplied by the caller (EOSTransition's strip solver scans T at fixed n, Y).
+  /// supplied by the caller (temperature scans at fixed n, Y).
   KOKKOS_INLINE_FUNCTION Real pressure_at(Real n, Real T, Real ln_ne, Real lT,
                                           const Real *Y, const CoulombPrep &cp) const {
     return add_rad_ion_lin(ECLOGP, eval_at_lnty(ECLOGP, ln_ne, lT), n, T, lT, Y, cp);
@@ -485,11 +477,11 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
   KOKKOS_INLINE_FUNCTION Real temperature_from_var(int iv, Real var, Real n,
                                                    const Real *Y,
                                                    int *guess_it = nullptr) const {
-    int in;
-    Real wn0, wn1;
-    weight_idx_ln(&wn0, &wn1, &in, Kokkos::log(n*Y[SCYE]));
     // (n, Y)-only parts of the ion/Coulomb terms, identical at every T.
     const CoulombPrep cp = coulomb_prep(n, Y);
+    int in;
+    Real wn0, wn1;
+    weight_idx_ln(&wn0, &wn1, &in, Kokkos::log(n*cp.comp.ye));
 
     auto f = [=](int it) {
       Real var_pt = wn0*m_table(iv, in+0, it) + wn1*m_table(iv, in+1, it);
@@ -600,9 +592,18 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
  private:
   Real m_id_log_ne, m_id_log_t;
   int m_nn, m_nt;
+  Real m_ne_min, m_ne_max;  // electron-density edges of the table [fm^-3]
   Real m_min_h;
   bool m_initialized;
   bool use_coulomb = true;  // ion Coulomb (OCP) correction
+
+  // Species list (see SetSpecies) and the per-species factors the composition
+  // sums use: 1/A, Z/A, dm/A [MeV] and the nuclear mass A m_u + dm - Z me [MeV].
+  Real m_A[MAX_SPECIES], m_Z[MAX_SPECIES], m_dm[MAX_SPECIES];
+  Real m_inv_A[MAX_SPECIES], m_zoa[MAX_SPECIES], m_dmoa[MAX_SPECIES], m_mion[MAX_SPECIES];
+
+  /// Density bounds from the table edges and the Ye range of the species list.
+  void update_density_bounds();
 
   // Table storage on device.
   DvceArray1D<Real> m_log_ne;
@@ -613,22 +614,10 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy {
  public:
   static constexpr Real hbarc = 197.3269804;  // MeV fm
   static constexpr Real asol = M_PI*M_PI/(15.0*hbarc*hbarc*hbarc);  // (MeV fm)^-3
-  static constexpr Real min_Y_free = 1.0e-30;  // floor for Yn/Yp in log()
   static constexpr Real sac_const = hbarc*hbarc*2.0*M_PI;           // (MeV fm)^2
   static constexpr Real me = 0.5109989461;   // MeV
   static constexpr Real esqu = 1.4399764;    // e^2 [MeV fm]
-  // Physical nucleon masses [MeV]. The CODATA values are the defaults; when the
-  // Helmholtz EOS is driven by EOSTransition these are replaced by the values
-  // carried by the compose table (SetNucleonMasses), since the table energies
-  // and chemical potentials were built with them.
-  static constexpr Real mn_codata = 939.5654133;  // MeV
-  static constexpr Real mp_codata = 938.2720813;  // MeV
-  Real mn, mp;                                    // MeV
-  static constexpr Real ma = 3727.379378;    // MeV
-  static constexpr int g_n = 2;
-  static constexpr int g_p = 2;
-  static constexpr int g_a = 1;
-  static constexpr int g_h = 1;
+  static constexpr Real m_u = 931.49410242;  // atomic mass unit [MeV], CODATA 2018
 };
 
 }  // namespace Primitive

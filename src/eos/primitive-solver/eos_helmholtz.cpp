@@ -4,10 +4,11 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file eos_helmholtz.cpp
-//  \brief Host-side .athtab reader for the device EOSHelmholtz table.
+//  \brief Host-side setup of EOSHelmholtz: species list and .athtab electron table.
 
 #include <math.h>
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -22,7 +23,42 @@
 
 namespace Primitive {
 
-void EOSHelmholtz::ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye) {
+void EOSHelmholtz::SetSpecies(int n, const Real *A, const Real *Z, const Real *dm) {
+  if (n < 1 || n > MAX_SPECIES) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "EOSHelmholtz::SetSpecies: " << n << " species, MAX_SPECIES is "
+              << MAX_SPECIES << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  n_species = n;
+  m_min_h = std::numeric_limits<Real>::max();
+  for (int s = 0; s < n; ++s) {
+    m_A[s]     = A[s];
+    m_Z[s]     = Z[s];
+    m_dm[s]    = dm[s];
+    m_inv_A[s] = 1.0/A[s];
+    m_zoa[s]   = Z[s]/A[s];
+    m_dmoa[s]  = dm[s]/A[s];
+    m_mion[s]  = A[s]*m_u + dm[s] - Z[s]*me;
+    // enthalpy per baryon is bounded below by the rest mass per baryon
+    m_min_h = std::min(m_min_h, m_u + m_dmoa[s]);
+  }
+  if (m_initialized) { update_density_bounds(); }
+}
+
+void EOSHelmholtz::update_density_bounds() {
+  // Conservative: n in [min_n, max_n] keeps n*Ye inside the table for every Ye the
+  // species list can produce.
+  Real ye_min = 1.0, ye_max = 0.0;
+  for (int s = 0; s < n_species; ++s) {
+    ye_min = std::min(ye_min, m_zoa[s]);
+    ye_max = std::max(ye_max, m_zoa[s]);
+  }
+  min_n = m_ne_min/ye_min;
+  max_n = m_ne_max/ye_max;
+}
+
+void EOSHelmholtz::ReadTableFromFile(std::string fname) {
   if (m_initialized) {
     return;
   }
@@ -55,8 +91,8 @@ void EOSHelmholtz::ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye
 
   { // n_e grid
     Real* ne = table["ne"];
-    min_n = ne[0]/min_Ye;
-    max_n = ne[m_nn-1]/max_Ye;
+    m_ne_min = ne[0];
+    m_ne_max = ne[m_nn-1];
     for (int in = 0; in < m_nn; ++in) {
       host_log_ne(in) = log(ne[in]);
     }
@@ -117,12 +153,8 @@ void EOSHelmholtz::ReadTableFromFile(std::string fname, Real min_Ye, Real max_Ye
   }
   Kokkos::deep_copy(m_table,  host_table);
 
-  max_Y[SCYE] = max_Ye;
-  min_Y[SCYE] = min_Ye;
-  min_Y[SCEB] = -0.01;  max_Y[SCEB] = 0.0;
   m_initialized = true;
-  m_min_h = mb * (1.0 + min_Y[SCEB]);
-  m_initialized = true;
+  update_density_bounds();
 }
 
 }  // namespace Primitive

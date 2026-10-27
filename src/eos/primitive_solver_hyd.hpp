@@ -92,7 +92,14 @@ class PrimitiveSolverHydro {
     }
     // Parameters for Helmholtz EoS
     if constexpr (std::is_same_v<Primitive::EOSHelmholtz, EOSPolicy>) {
-      ps.GetEOSMutable().SetNSpecies(pin->GetOrAddInteger(block, "nscalars", SCNVAR));
+      // The species list is fixed by the EOS; the scalar count has to match it.
+      const int nscal = pin->GetOrAddInteger(block, "nscalars", SCNVAR);
+      if (nscal != ps.GetEOS().GetNSpecies()) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Helmholtz EOS carries " << ps.GetEOS().GetNSpecies()
+                  << " species, but nscalars = " << nscal << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
         ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());
@@ -109,11 +116,10 @@ class PrimitiveSolverHydro {
         std::exit(EXIT_FAILURE);
       }
 
-      // Coulomb correction true/false, table path, and Ye min/max.
+      // Coulomb correction true/false and the electron table path. The Ye range
+      // follows from the species list.
       ps.GetEOSMutable().SetCoulomb(pin->GetOrAddBoolean(block, "eir_coulomb", true));
-      ps.GetEOSMutable().ReadTableFromFile(pin->GetString(block, "electron_table"),
-                                          pin->GetReal(block, "eir_min_Ye"),
-                                          pin->GetReal(block, "eir_max_Ye"));
+      ps.GetEOSMutable().ReadTableFromFile(pin->GetString(block, "electron_table"));
       assert(ps.GetEOSMutable().IsInitialized());
     }
     // Parameters for Hybrid EoS
