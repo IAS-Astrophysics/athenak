@@ -35,9 +35,18 @@ template<class ScalarFlag>
 KOKKOS_INLINE_FUNCTION
 void ScalarFluxesFOFC(const DvceArray5D<Real> &flx, const ScalarFlag &fofc_scal,
                       const Real * const wl, const Real * const wr, const bool fofc_flag,
+                      const Real * const flux, const bool upwind,
                       const int nmhd, const int nscal, const int imf, const int nmf,
                       const int m, const int k, const int j, const int i,
                       const int kf, const int jf, const int iff) {
+  // A fully flagged cell takes the first-order solver flux for every scalar, the same
+  // flux and dissipation as tau, unless the scalars are upwinded on the mass flux.
+  if (fofc_flag && !upwind) {
+    for (int n = 0; n < nscal; ++n) {
+      flx(m, nmhd + n, kf, jf, iff) = flux[CYD + n];
+    }
+    return;
+  }
   const Real fdn = flx(m, IDN, kf, jf, iff);
   const bool upl = (fdn >= 0.0);
 
@@ -269,6 +278,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   }
 
   auto &use_fofc_ = pmy_pack->pmhd->use_fofc;
+  const bool upwind_scalars_ = upwind_scalars;
   auto fofc_ = pmy_pack->pmhd->fofc;
   auto fofc_scal_ = pmy_pack->pmhd->fofc_scal;
   auto &eos_ = eos;
@@ -349,8 +359,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
 
       // Calculate fluxes of scalars
-      ScalarFluxesFOFC(flx1, fofc_scal_, wli, wri, fofc_flag, nmhd_, nscal_,
-                       imf_, nmf_, m, k, j, i, k, j, i);
+      ScalarFluxesFOFC(flx1, fofc_scal_, wli, wri, fofc_flag, flux, upwind_scalars_,
+                       nmhd_, nscal_, imf_, nmf_, m, k, j, i, k, j, i);
 
       if (multi_d) {
         Real wlj[NPRIM], *wrj;
@@ -386,8 +396,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        ScalarFluxesFOFC(flx2, fofc_scal_, wlj, wrj, fofc_flag, nmhd_, nscal_,
-                         imf_, nmf_, m, k, j, i, k, j, i);
+        ScalarFluxesFOFC(flx2, fofc_scal_, wlj, wrj, fofc_flag, flux, upwind_scalars_,
+                         nmhd_, nscal_, imf_, nmf_, m, k, j, i, k, j, i);
       }
 
       if (three_d) {
@@ -424,8 +434,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        ScalarFluxesFOFC(flx3, fofc_scal_, wmk, wpk, fofc_flag, nmhd_, nscal_,
-                         imf_, nmf_, m, k, j, i, k, j, i);
+        ScalarFluxesFOFC(flx3, fofc_scal_, wmk, wpk, fofc_flag, flux, upwind_scalars_,
+                         nmhd_, nscal_, imf_, nmf_, m, k, j, i, k, j, i);
       }
     }
   });
@@ -496,8 +506,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       }
 
       // Calculate fluxes of scalars
-      ScalarFluxesFOFC(flx1, fofc_scal_, wli, wri, fofc_flag, nmhd_, nscal_,
-                       imf_, nmf_, m, k, j, i, k, j, i+1);
+      ScalarFluxesFOFC(flx1, fofc_scal_, wli, wri, fofc_flag, flux, upwind_scalars_,
+                       nmhd_, nscal_, imf_, nmf_, m, k, j, i, k, j, i+1);
 
       if (multi_d) {
         Real *wlj, wrj[NPRIM];
@@ -533,8 +543,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        ScalarFluxesFOFC(flx2, fofc_scal_, wlj, wrj, fofc_flag, nmhd_, nscal_,
-                         imf_, nmf_, m, k, j, i, k, j+1, i);
+        ScalarFluxesFOFC(flx2, fofc_scal_, wlj, wrj, fofc_flag, flux, upwind_scalars_,
+                         nmhd_, nscal_, imf_, nmf_, m, k, j, i, k, j+1, i);
       }
 
       if (three_d) {
@@ -571,8 +581,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         }
 
         // Calculate fluxes of scalars
-        ScalarFluxesFOFC(flx3, fofc_scal_, wmk, wpk, fofc_flag, nmhd_, nscal_,
-                         imf_, nmf_, m, k, j, i, k+1, j, i);
+        ScalarFluxesFOFC(flx3, fofc_scal_, wmk, wpk, fofc_flag, flux, upwind_scalars_,
+                         nmhd_, nscal_, imf_, nmf_, m, k, j, i, k+1, j, i);
       }
     }
   });

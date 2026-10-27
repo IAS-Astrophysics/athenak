@@ -84,6 +84,10 @@ void SingleStateHLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& e
                 qa*(cons_r[CSZ] - cons_l[CSZ])) * qb;
   f_hll[CTA] = (lambda_r*fl[CTA] - lambda_l*fr[CTA] +
                 qa*(cons_r[CTA] - cons_l[CTA])) * qb;
+  for (int n = 0; n < nscal; n++) {
+    f_hll[CYD + n] = (lambda_r*fl[CYD + n] - lambda_l*fr[CYD + n] +
+                      qa*(cons_r[CYD + n] - cons_l[CYD + n])) * qb;
+  }
   bf_hll[ibx] = 0.0;
   bf_hll[iby] = (lambda_r*bfl[iby] - lambda_l*bfr[iby] +
                  qa*(Bu_r[iby] - Bu_l[iby])) * qb;
@@ -110,6 +114,9 @@ void SingleStateHLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& e
   flux[CSY] = vol * f_interface[CSY];
   flux[CSZ] = vol * f_interface[CSZ];
   flux[CTA] = vol * f_interface[CTA];
+  for (int n = 0; n < nscal; n++) {
+    flux[CYD + n] = vol * f_interface[CYD + n];
+  }
 
   bflux[IBY] = - vol * bf_interface[iby];
   bflux[IBZ] = vol * bf_interface[ibz];
@@ -234,6 +241,10 @@ void HLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                   qa*(cons_r[CSZ] - cons_l[CSZ])) * qb;
     f_hll[CTA] = ((lambda_r*fl[CTA] - lambda_l*fr[CTA]) +
                   qa*(cons_r[CTA] - cons_l[CTA])) * qb;
+    for (int n = 0; n < nscal; n++) {
+      f_hll[CYD + n] = ((lambda_r*fl[CYD + n] - lambda_l*fr[CYD + n]) +
+                        qa*(cons_r[CYD + n] - cons_l[CYD + n])) * qb;
+    }
     bf_hll[ibx] = 0.0;
     bf_hll[iby] = ((lambda_r*bfl[iby] - lambda_l*bfr[iby]) +
                    qa*(Bu_r[iby] - Bu_l[iby])) * qb;
@@ -260,6 +271,9 @@ void HLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     flx(m, IVX, k, j, i) = vol * f_interface[CSX];
     flx(m, IVY, k, j, i) = vol * f_interface[CSY];
     flx(m, IVZ, k, j, i) = vol * f_interface[CSZ];
+    for (int n = 0; n < nscal; n++) {
+      flx(m, nhyd + n, k, j, i) = vol * f_interface[CYD + n];
+    }
     // The notation here is slightly misleading, as it suggests that Ey = -Fx(By) and
     // Ez = Fx(Bz), rather than Ez = -Fx(By) and Ey = Fx(Bz). However, the appropriate
     // containers for ey and ez for each direction are passed in as arguments to this
