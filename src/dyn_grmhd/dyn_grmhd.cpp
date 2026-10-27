@@ -153,6 +153,10 @@ DynGRMHD::DynGRMHD(MeshBlockPack *pp, ParameterInput *pin) :
   enforce_maximum = pin->GetOrAddBoolean("mhd", "enforce_maximum", true);
   dmp_M = pin->GetOrAddReal("mhd", "dmp_M", 1.2);
   scalar_pplimiter = pin->GetOrAddBoolean("mhd", "scalar_pplimiter", true);
+  // Upwinding the species on the mass flux leaves them sharp but lets tau's dissipative
+  // flux carry composition-dependent rest mass across a contact without the species
+  // following (gr-athena: time/xorder_upwind_scalars). Off: the solver's flux.
+  upwind_scalars = pin->GetOrAddBoolean("mhd", "upwind_scalars", false);
 
   fixed_evolution = pin->GetOrAddBoolean("mhd", "fixed", false);
 

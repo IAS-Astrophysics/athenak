@@ -201,6 +201,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   }
 
   auto &use_fofc_ = pmy_pack->pmhd->use_fofc;
+  const bool upwind_scalars_ = upwind_scalars;
   auto fofc_ = pmy_pack->pmhd->fofc;
   auto fofc_scal_ = pmy_pack->pmhd->fofc_scal;
   auto &eos_ = eos;
@@ -269,7 +270,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+        if (fofc_flag && !upwind_scalars_) {
+          flx1(m, nmhd_ + n, k, j, i) = flux[CYD + n];  // same solver flux as tau
+        } else if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
           if (flx1(m, IDN, k, j, i) >= 0.0) {
             flx1(m, nmhd_ + n, k, j, i) = flx1(m,IDN,k,j,i)*wli[PYF + n];
           } else {
@@ -310,7 +313,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+          if (fofc_flag && !upwind_scalars_) {
+            flx2(m, nmhd_ + n, k, j, i) = flux[CYD + n];  // same solver flux as tau
+          } else if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
             if (flx2(m, IDN, k, j, i) >= 0.0) {
               flx2(m, nmhd_ + n, k, j, i) = flx2(m,IDN,k,j,i)*wlj[PYF + n];
             } else {
@@ -352,7 +357,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+          if (fofc_flag && !upwind_scalars_) {
+            flx3(m, nmhd_ + n, k, j, i) = flux[CYD + n];  // same solver flux as tau
+          } else if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
             if (flx3(m, IDN, k, j, i) >= 0.0) {
               flx3(m, nmhd_ + n, k, j, i) = flx3(m,IDN,k,j,i)*wmk[PYF + n];
             } else {
@@ -420,7 +427,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
       // Calculate fluxes of scalars
       for (int n = 0; n < nscal_; n++) {
-        if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+        if (fofc_flag && !upwind_scalars_) {
+          flx1(m, nmhd_ + n, k, j, i+1) = flux[CYD + n];  // same solver flux as tau
+        } else if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
           if (flx1(m, IDN, k, j, i+1) >= 0.0) {
             flx1(m, nmhd_ + n, k, j, i+1) = flx1(m,IDN,k,j,i+1)*wli[PYF + n];
           } else {
@@ -461,7 +470,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+          if (fofc_flag && !upwind_scalars_) {
+            flx2(m, nmhd_ + n, k, j+1, i) = flux[CYD + n];  // same solver flux as tau
+          } else if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
             if (flx2(m, IDN, k, j+1, i) >= 0.0) {
               flx2(m, nmhd_ + n, k, j+1, i) = flx2(m,IDN,k,j+1,i)*wlj[PYF + n];
             } else {
@@ -503,7 +514,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Calculate fluxes of scalars
         for (int n = 0; n < nscal_; n++) {
-          if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
+          if (fofc_flag && !upwind_scalars_) {
+            flx3(m, nmhd_ + n, k+1, j, i) = flux[CYD + n];  // same solver flux as tau
+          } else if (fofc_flag || fofc_scal_(m,n,k,j,i)) {
             if (flx3(m, IDN, k+1, j, i) >= 0.0) {
               flx3(m, nmhd_ + n, k+1, j, i) = flx3(m,IDN,k+1,j,i)*wmk[PYF + n];
             } else {
