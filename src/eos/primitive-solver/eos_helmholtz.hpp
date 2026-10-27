@@ -52,8 +52,10 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
   /// [MeV] of each of the n species (host only). Atomic, because the electron
   /// table carries no rest mass and charge neutrality supplies exactly Z
   /// electrons per nucleus. A and Z need not be integers (effective species).
-  /// Sets n_species; validates, and echoes the table on rank 0.
-  void SetSpecies(int n, const Real *A, const Real *Z, const Real *dm);
+  /// g is the ground-state spin degeneracy 2J+1 entering the Sackur-Tetrode
+  /// entropy; nullptr means 1. Sets n_species; validates, echoes on rank 0.
+  void SetSpecies(int n, const Real *A, const Real *Z, const Real *dm,
+                  const Real *g = nullptr);
 
   /// The species count is fixed by SetSpecies; anything else is a parfile error.
   KOKKOS_INLINE_FUNCTION void SetNSpecies(int n) { assert(n == n_species); }
@@ -340,8 +342,8 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
       case ECENT: {
         Real srad = 4.0*asol/3.0*T*T*T/n;
         // Sackur-Tetrode per species; a vanishing species contributes 0, not 0*inf.
-        // ponytail: spin degeneracy g = 1 (He4, C12, O16 are J = 0); needs a per-species
-        // g once n, p (g = 2) or odd nuclei enter the list.
+        // Ground-state spin degeneracy only (no excited states): fine below a few GK
+        // for light nuclei, exact for n and p.
         Real xsum = 0.0;
         for (int s = 0; s < n_species; ++s) { xsum += Y[s]; }
         const Real xnorm = (xsum > 0.0) ? 1.0/xsum : 0.0;
@@ -349,8 +351,8 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         for (int s = 0; s < n_species; ++s) {
           const Real yi = ((xsum > 0.0) ? Y[s]*xnorm : (s == 0 ? 1.0 : 0.0))*m_inv_A[s];
           if (yi > 0.0) {
-            sion += yi*(2.5 - Kokkos::log(n*yi*Kokkos::pow(sac_const/(m_mion[s]*T),
-                                                             1.5)));
+            sion += yi*(2.5 - Kokkos::log(n*yi/m_g[s]*Kokkos::pow(sac_const/(m_mion[s]*T),
+                                                                    1.5)));
           }
         }
         Real scoul = 0.0;
@@ -596,7 +598,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
 
   // Species list (see SetSpecies) and the per-species factors the composition
   // sums use: 1/A, Z/A, dm/A [MeV] and the nuclear mass A m_u + dm - Z me [MeV].
-  Real m_A[MAX_SPECIES], m_Z[MAX_SPECIES], m_dm[MAX_SPECIES];
+  Real m_A[MAX_SPECIES], m_Z[MAX_SPECIES], m_dm[MAX_SPECIES], m_g[MAX_SPECIES];
   Real m_inv_A[MAX_SPECIES], m_zoa[MAX_SPECIES], m_dmoa[MAX_SPECIES], m_mion[MAX_SPECIES];
 
   /// Density bounds from the table edges and the Ye range of the species list.

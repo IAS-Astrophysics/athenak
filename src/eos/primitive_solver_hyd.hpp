@@ -113,7 +113,11 @@ class PrimitiveSolverHydro {
       const auto A = read_list("A");
       const auto Z = read_list("Z");
       const auto dm = read_list("dm");
-      ps.GetEOSMutable().SetSpecies(nscal, A.data(), Z.data(), dm.data());
+      // Optional ground-state spin degeneracies 2J+1 (entropy only); default 1.
+      std::vector<Real> g;
+      if (pin->DoesParameterExist(block, "g")) { g = read_list("g"); }
+      ps.GetEOSMutable().SetSpecies(nscal, A.data(), Z.data(), dm.data(),
+                                    g.empty() ? nullptr : g.data());
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
         ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());

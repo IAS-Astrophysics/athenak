@@ -24,7 +24,8 @@
 
 namespace Primitive {
 
-void EOSHelmholtz::SetSpecies(int n, const Real *A, const Real *Z, const Real *dm) {
+void EOSHelmholtz::SetSpecies(int n, const Real *A, const Real *Z, const Real *dm,
+                              const Real *g) {
   if (n < 1 || n > MAX_SPECIES) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "EOSHelmholtz::SetSpecies: " << n << " species, MAX_SPECIES is "
@@ -32,23 +33,27 @@ void EOSHelmholtz::SetSpecies(int n, const Real *A, const Real *Z, const Real *d
     std::exit(EXIT_FAILURE);
   }
   for (int s = 0; s < n; ++s) {
-    if (!(A[s] > 0.0) || !(Z[s] >= 0.0) || !(Z[s] <= A[s]) || !std::isfinite(dm[s])) {
+    if (!(A[s] > 0.0) || !(Z[s] >= 0.0) || !(Z[s] <= A[s]) || !std::isfinite(dm[s]) ||
+        (g != nullptr && !(g[s] > 0.0))) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "EOSHelmholtz::SetSpecies: species " << s << " has A = "
-                << A[s] << ", Z = " << Z[s] << ", dm = " << dm[s] << std::endl;
+                << A[s] << ", Z = " << Z[s] << ", dm = " << dm[s]
+                << ", g = " << (g ? g[s] : 1.0) << std::endl;
       std::exit(EXIT_FAILURE);
     }
   }
   n_species = n;
   m_min_h = std::numeric_limits<Real>::max();
   if (global_variable::my_rank == 0) {
-    std::cout << "EOSHelmholtz species (A, Z, atomic mass excess dm [MeV], dm/A):\n";
+    std::cout << "EOSHelmholtz species (A, Z, atomic mass excess dm [MeV], dm/A, "
+              << "spin degeneracy g):\n";
   }
   for (int s = 0; s < n; ++s) {
     if (global_variable::my_rank == 0) {
-      std::printf("  %2d  A = %8.4f  Z = %8.4f  dm = %12.6f  dm/A = %10.6f\n",
-                  s, A[s], Z[s], dm[s], dm[s]/A[s]);
+      std::printf("  %2d  A = %8.4f  Z = %8.4f  dm = %12.6f  dm/A = %10.6f  g = %g\n",
+                  s, A[s], Z[s], dm[s], dm[s]/A[s], g ? g[s] : 1.0);
     }
+    m_g[s]     = g ? g[s] : 1.0;
     m_A[s]     = A[s];
     m_Z[s]     = Z[s];
     m_dm[s]    = dm[s];
