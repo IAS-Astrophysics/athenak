@@ -65,6 +65,7 @@ nscalars    = 3               # mass fractions of the species below
 A           = 4, 12, 16       # He4, C12, O16: mass number
 Z           = 2, 6, 8         # charge number
 dm          = 2.42491587, 0.0, -4.73700141   # atomic mass excess [MeV], AME2020
+species_names = he4, c12, o16   # output labels only
 s0_atmosphere = 1.0           # atmosphere is pure He4
 s1_atmosphere = 0.0
 s2_atmosphere = 0.0

@@ -415,12 +415,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         variable.compare("rad_mhd_u_bcc") == 0) {
       int nmhd = pm->pmb_pack->pmhd->nmhd;
       int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+      const auto &names = pm->pmb_pack->pmhd->scalar_names;
       for (int n=nmhd; n<nvars; ++n) {
         char number[3];
         std::snprintf(number,sizeof(number),"%02d",(n - nmhd)%100);
         std::string vname;
         vname.assign("r_");
-        vname.append(number);
+        vname.append(names.empty() ? std::string(number) : names[n - nmhd]);
         outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->u0));
       }
     }
@@ -434,12 +435,13 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
         variable.compare("rad_mhd_w_bcc") == 0) {
       int nmhd = pm->pmb_pack->pmhd->nmhd;
       int nvars = nmhd + pm->pmb_pack->pmhd->nscalars;
+      const auto &names = pm->pmb_pack->pmhd->scalar_names;
       for (int n=nmhd; n<nvars; ++n) {
         char number[3];
         std::snprintf(number,sizeof(number),"%02d",(n - nmhd)%100);
         std::string vname;
         vname.assign("s_");
-        vname.append(number);
+        vname.append(names.empty() ? std::string(number) : names[n - nmhd]);
         outvars.emplace_back(vname,n,&(pm->pmb_pack->pmhd->w0));
       }
     }
