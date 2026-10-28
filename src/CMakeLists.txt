@@ -161,6 +161,7 @@ add_executable(
         pgen/tests/be_collapse.cpp
 
         pgen/unit_tests/eos_compose.cpp
+        pgen/unit_tests/eos_helmholtz.cpp
         pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
