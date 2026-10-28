@@ -199,11 +199,22 @@ class PrimitiveSolverHydro {
     // Set maximum B^2/D
     ps.GetEOSMutable().SetMaximumMagnetization(pin->GetOrAddReal(block, "max_bsq", 1e6));
 
+    // Mass fractions default to a pure-species-0 atmosphere and must sum to 1, since
+    // nothing renormalizes the cells after a floor or failure reset.
+    constexpr bool mass_fractions = std::is_base_of_v<SupportsMassFractions, EOSPolicy>;
+    Real ysum = 0.0;
     for (int n = 0; n < ps.GetEOS().GetNSpecies(); n++) {
       std::stringstream spec_name;
       spec_name << "s" << n << "_atmosphere";
-      ps.GetEOSMutable().SetSpeciesAtmosphere(
-          pin->GetOrAddReal(block, spec_name.str(), 0.0), n);
+      ps.GetEOSMutable().SetSpeciesAtmosphere(pin->GetOrAddReal(block, spec_name.str(),
+          (mass_fractions && n == 0) ? 1.0 : 0.0), n);
+      ysum += ps.GetEOS().GetSpeciesAtmosphere(n);
+    }
+    if (mass_fractions && fabs(ysum - 1.0) > 1e-12) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "atmosphere mass fractions sum to " << ysum
+                << std::endl;
+      exit(EXIT_FAILURE);
     }
   }
 
