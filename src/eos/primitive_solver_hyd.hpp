@@ -20,6 +20,7 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <limits>
 
 // PrimitiveSolver headers
 #include "eos/primitive-solver/eos.hpp"
@@ -210,7 +211,8 @@ class PrimitiveSolverHydro {
           (mass_fractions && n == 0) ? 1.0 : 0.0), n);
       ysum += ps.GetEOS().GetSpeciesAtmosphere(n);
     }
-    if (mass_fractions && fabs(ysum - 1.0) > 1e-12) {
+    const Real ytol = std::max<Real>(1e-12, 16*std::numeric_limits<Real>::epsilon());
+    if (mass_fractions && fabs(ysum - 1.0) > ytol) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "atmosphere mass fractions sum to " << ysum
                 << std::endl;
