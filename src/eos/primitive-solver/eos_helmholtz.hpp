@@ -30,7 +30,8 @@
 namespace Primitive {
 
 class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
-                     public SupportsMassFractions {
+                     public SupportsMassFractions, public SupportsTemperatureFromEntropy,
+                     public SupportsSpecificHeat, public SupportsDensityFromPressure {
 
  public:
   enum TableVariables {
@@ -128,6 +129,33 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
                         : temperature_from_var(ECENT, s, n, Y);
   }
 
+  //! Density at which the pressure is p at fixed T. NaN if p is not bracketed by
+  //  the table's density range at this composition.
+  KOKKOS_INLINE_FUNCTION Real DensityFromPressureTemperature(Real p, Real T,
+                                                             Real *Y) const {
+    return density_from_pressure(p, Y, [=](Real) { return T; });
+  }
+
+  //! Density on the isentrope s at which the pressure is p; the temperature there
+  //  through T. NaN (both) if p is not bracketed, or if the isentrope leaves the
+  //  table's temperature range at the solution (TemperatureFromEntropy clamps to
+  //  min_T/max_T there, so that n would not be on the isentrope).
+  KOKKOS_INLINE_FUNCTION Real DensityFromPressureEntropy(Real p, Real s, Real *Y,
+                                                         Real *T = nullptr) const {
+    Real n = density_from_pressure(p, Y, [&](Real nt) {
+      return TemperatureFromEntropy(nt, s, Y);
+    });
+    Real Ts = Kokkos::Experimental::quiet_NaN_v<Real>;
+    if (Kokkos::isfinite(n)) {
+      Ts = TemperatureFromEntropy(n, s, Y);
+      if (!(Ts > min_T) || !(Ts < max_T)) {
+        n = Ts = Kokkos::Experimental::quiet_NaN_v<Real>;
+      }
+    }
+    if (T != nullptr) { *T = Ts; }
+    return n;
+  }
+
   KOKKOS_INLINE_FUNCTION Real SpecificInternalEnergy(Real n, Real T,
                                                      const Real *Y) const {
     return eval_lin_at_nty(ECLOGEPS, n, T, Y);
@@ -143,6 +171,11 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
 
   KOKKOS_INLINE_FUNCTION Real Entropy(Real n, Real T, Real *Y) const {
     return eval_lin_at_nty(ECENT, n, T, Y);
+  }
+
+  //! (d eps/dT) at fixed n, Y [1/MeV]: table channel plus radiation, ion and Coulomb.
+  KOKKOS_INLINE_FUNCTION Real SpecificHeat(Real n, Real T, Real *Y) const {
+    return eval_lin_at_nty(ECDEPSDT, n, T, Y);
   }
 
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
@@ -250,6 +283,8 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
     Real gamma;  // plasma coupling parameter
     Real u;      // E_C per ion in units of T
     Real du;     // du/dGamma
+    Real ucv;    // u - Gamma du, written without the O(Gamma) cancellation (enters
+                 // d/dT of the Coulomb energy and pressure)
     Real s;      // S_C per ion in kB
   };
   // The (n, Y)-only part of the ion and Coulomb terms. Gamma = Gamma_T/T at fixed
@@ -282,7 +317,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
   KOKKOS_INLINE_FUNCTION CoulombTerms coulomb_terms(const CoulombPrep &cp, Real n,
                                                      Real T, Real lT, const Real *Y,
                                                      Real p_e = -1.0) const {
-    CoulombTerms c = {0.0, 0.0, 0.0, 0.0, 0.0};
+    CoulombTerms c = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     if (!(cp.y_chg > 0.0) || !(T > 0.0)) {
       return c;
     }
@@ -296,12 +331,14 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
       Real x = Kokkos::sqrt(Kokkos::sqrt(gamma));  // gamma^(1/4)
       c.u  = a1*gamma + b1*x + c1/x + d1;
       c.du = a1 + 0.25*(b1*x - c1/x)/gamma;
+      c.ucv = 0.75*b1*x + 1.25*c1/x + d1;
       c.s  = -(3.0*b1*x - 5.0*c1/x + d1*(lng - 1.0) - e1);
     } else {
       Real x = gamma*Kokkos::sqrt(gamma);  // gamma^(3/2)
       Real y = Kokkos::exp(b2*lng);        // gamma^b2
       c.u  = -3.0*c2*x + a2*y;
       c.du = (-4.5*c2*x + a2*b2*y)/gamma;
+      c.ucv = 1.5*c2*x + a2*(1.0 - b2)*y;
       c.s  = -(c2*x - a2*(b2 - 1.0)/b2*y);
     }
     const Real pcoul = n*y_chg*T*c.u/3.0;
@@ -311,7 +348,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         p_e = Kokkos::exp(eval_at_lnty(ECLOGP, Kokkos::log(n*cp.comp.ye), lT));
       }
       if (p_e + p_ir + pcoul <= 0.0) {
-        return CoulombTerms{0.0, 0.0, 0.0, 0.0, 0.0};
+        return CoulombTerms{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
       }
     }
     c.y_chg = y_chg;
@@ -381,7 +418,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         if (use_coulomb) {
           // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
-          decouldt = c.y_chg*(c.u - c.gamma*c.du)/mb;
+          decouldt = c.y_chg*c.ucv/mb;
         }
         return eps_fac*var + deraddt + deiondt + decouldt;
       }
@@ -402,7 +439,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         if (use_coulomb) {
           // d/dT of n*y_chg*T*u(Gamma)/3 with dGamma/dT = -Gamma/T
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
-          dpcouldt = n*c.y_chg*(c.u - c.gamma*c.du)/3.0;
+          dpcouldt = n*c.y_chg*c.ucv/3.0;
         }
         return var + dpraddt + dpiondt + dpcouldt;
       }
@@ -586,6 +623,76 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
       lt = lt_new;
     }
     return Kokkos::exp(lt);
+  }
+
+  /// Invert the pressure for the density at fixed composition, with the temperature
+  /// given by T_of(n) (a constant, or T(n, s) on an isentrope). Same scheme as
+  /// temperature_from_var with the roles swapped: bracket between neighbouring n_e
+  /// nodes by bisection on the node index, then false position (Anderson-Bjorck) in
+  /// ln n inside that cell, where the electron interpolant is smooth. Returns NaN if p
+  /// is not bracketed by the table's density range at this composition. Meant for
+  /// initial data: every residual costs a full pressure evaluation, and on an
+  /// isentrope a temperature inversion as well. P(n) need not be monotonic (the
+  /// Coulomb positivity guard switches at low T); the result is then one of several
+  /// solutions.
+  template <class TFn>
+  KOKKOS_INLINE_FUNCTION Real density_from_pressure(Real p, Real *Y, TFn&& T_of) const {
+    const Real nan = Kokkos::Experimental::quiet_NaN_v<Real>;
+    const Real ye = composition(Y).ye;
+    if (!(ye > 0.0) || !(p > 0.0)) { return nan; }
+    const Real lye = Kokkos::log(ye);  // ln n = ln n_e - ln Ye
+
+    auto g = [&](Real ln) {
+      Real n = Kokkos::exp(ln);
+      return Pressure(n, T_of(n), Y) - p;
+    };
+    auto f = [&](int in) { return g(m_log_ne(in) - lye); };
+
+    int ilo = 0, ihi = m_nn - 1;
+    Real flo = f(ilo), fhi = f(ihi);
+    if (!(flo*fhi <= 0.0)) { return nan; }  // no sign change, or NaN
+    while (ihi - ilo > 1) {
+      int ip = ilo + (ihi - ilo)/2;
+      Real fp = f(ip);
+      if (fp*flo <= 0) {
+        ihi = ip;
+        fhi = fp;
+      } else {
+        ilo = ip;
+        flo = fp;
+      }
+    }
+    if (flo == 0) { return Kokkos::exp(m_log_ne(ilo) - lye); }
+    if (fhi == 0) { return Kokkos::exp(m_log_ne(ihi) - lye); }
+
+    Real la = m_log_ne(ilo) - lye, lb_ = m_log_ne(ihi) - lye;
+    Real fa = flo, fb = fhi;
+    Real ln   = la - fa*(lb_ - la)/(fb - fa);
+    int side  = 0;
+    for (int i = 0; i < 50; ++i) {
+      Real fn = g(ln);
+      if (fn == 0.0) { break; }
+      if (fn*fa > 0) {
+        if (side == 1) {
+          Real m = 1.0 - fn/fa;
+          fb = (m > 0) ? fb*m : 0.5*fb;
+        }
+        la = ln; fa = fn; side = 1;
+      } else {
+        if (side == -1) {
+          Real m = 1.0 - fn/fb;
+          fa = (m > 0) ? fa*m : 0.5*fa;
+        }
+        lb_ = ln; fb = fn; side = -1;
+      }
+      Real ln_new = la - fa*(lb_ - la)/(fb - fa);
+      if (Kokkos::fabs(ln_new - ln) <= 1e-13*(Kokkos::fabs(ln_new) + 1.0)) {
+        ln = ln_new;
+        break;
+      }
+      ln = ln_new;
+    }
+    return Kokkos::exp(ln);
   }
 
  private:
