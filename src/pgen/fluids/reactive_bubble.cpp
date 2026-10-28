@@ -28,8 +28,10 @@
 #include "coordinates/cell_locations.hpp"
 #include "units/units.hpp"
 #include "pgen/fluids/reactive_bubble.hpp"
-#include "pgen/fluids/microphysics.hpp"
+#include "nuclear/microphysics.hpp"
 #include "nuclear/nuclear.hpp"
+
+using nuclear::Thermo;
 
 namespace {
   Real g_grav;
@@ -73,19 +75,19 @@ Real Rk4PressureIntegrationStep(const Real &pres, const Real &s_base, const Real
   for (int n = 0; n < NSPECIES; n++) stage.xn[n] = xn[n];
 
   stage.p = pres; stage.s = s_base;
-  burn<Primitive::IdealGas>(eos_input_ps, stage, eos);
+  nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, stage, eos);
   Real k1 = stage.rho*g_grav;
 
   stage.p = pres + k1*dy/2.0; stage.s = s_base;
-  burn<Primitive::IdealGas>(eos_input_ps, stage, eos);
+  nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, stage, eos);
   Real k2 = stage.rho*g_grav;
 
   stage.p = pres + k2*dy/2.0; stage.s = s_base;
-  burn<Primitive::IdealGas>(eos_input_ps, stage, eos);
+  nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, stage, eos);
   Real k3 = stage.rho*g_grav;
 
   stage.p = pres + k3*dy; stage.s = s_base;
-  burn<Primitive::IdealGas>(eos_input_ps, stage, eos);
+  nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, stage, eos);
   Real k4 = stage.rho*g_grav;
 
   Real pres_int = pres + dy *(k1 + 2.0*k2 + 2.0*k3 + k4) / 6.0;
@@ -208,7 +210,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     base.rho = rho_base;
     base.t = temp_base;
     for (int n = 0; n < NSPECIES; n++) base.xn[n] = X_initial[n];
-    burn<Primitive::IdealGas>(eos_input_rt, base, eos);
+    nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_rt, base, eos);
     Real s_base = base.s;
     Real p_base = base.p;
 
@@ -222,14 +224,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
     soln(0).pres = Rk4PressureIntegrationStep(p_base, s_base, g_grav, dy/2.0, X_initial, eos);
     atm.p = soln(0).pres; atm.s = s_base;
-    burn<Primitive::IdealGas>(eos_input_ps, atm, eos);
+    nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, atm, eos);
     soln(0).rho = atm.rho;
     soln(0).temp = atm.t;
     soln(0).yloc = ymin + 0.5*dy;
     for (int i = 0; i < ((NFACT)*npts - 1); i++) {
       soln(i+1).pres = Rk4PressureIntegrationStep(soln(i).pres, s_base, g_grav, dy, X_initial, eos);
       atm.p = soln(i+1).pres; atm.s = s_base;
-      burn<Primitive::IdealGas>(eos_input_ps, atm, eos);
+      nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, atm, eos);
       soln(i+1).rho = atm.rho;
       soln(i+1).temp = atm.t;
       soln(i+1).yloc = soln(i).yloc + dy;
@@ -247,7 +249,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       }
       pres_avg /= static_cast<Real>(NFACT);
       atm.p = pres_avg; atm.s = s_base;
-      burn<Primitive::IdealGas>(eos_input_ps, atm, eos);
+      nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, atm, eos);
       sol.h_view(n).pres = pres_avg;
       sol.h_view(n).rho  = atm.rho;
       sol.h_view(n).temp = atm.t;
@@ -283,12 +285,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
       pres_avg_hi /= static_cast<Real>(NFACT);
 
       atm.p = pres_avg_lo; atm.s = s_base;
-      burn<Primitive::IdealGas>(eos_input_ps, atm, eos);
+      nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, atm, eos);
       ghost_atm.pres_lo[ng-1-g] = pres_avg_lo;
       ghost_atm.rho_lo[ng-1-g]  = atm.rho;
 
       atm.p = pres_avg_hi; atm.s = s_base;
-      burn<Primitive::IdealGas>(eos_input_ps, atm, eos);
+      nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_ps, atm, eos);
       ghost_atm.pres_hi[g] = pres_avg_hi;
       ghost_atm.rho_hi[g]  = atm.rho;
     }
@@ -356,7 +358,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         cell.p = pres;
         cell.t = temp;
         auto eos_local = eos;
-        burn<Primitive::IdealGas>(eos_input_pt, cell, eos_local);
+        nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_pt, cell, eos_local);
         rho = cell.rho;
 
         // Define the primitive vector
@@ -423,7 +425,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         cell.p = pres;
         cell.t = temp;
         auto eos_local = eos;
-        burn<Primitive::IdealGas>(eos_input_pt, cell, eos_local);
+        nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_pt, cell, eos_local);
         Real rho = cell.rho;
 
         // Define the primitive vector
@@ -658,7 +660,7 @@ namespace {
           state.xn[n] = UX0[n]/rho;
         }
         state.e = UX0[IE]/rho;
-        burn<Primitive::IdealGas>(eos_input_re, state, eos_local);
+        nuclear::burn<Primitive::IdealGas>(nuclear::eos_input_re, state, eos_local);
         for(int n=0; n<NSPECIES; n++) {
           ex[n] = -state.abar*state.abar*aion_inv(n)*state.dedA;
         }

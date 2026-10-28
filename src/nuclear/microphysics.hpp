@@ -1,13 +1,13 @@
-#ifndef PGEN_FLUIDS_MICROPHYSICS_HPP_
-#define PGEN_FLUIDS_MICROPHYSICS_HPP_
+#ifndef NUCLEAR_MICROPHYSICS_HPP_
+#define NUCLEAR_MICROPHYSICS_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file microphysics.hpp
-//! \brief Defines Thermo and burn<EOSType>(), filling in the remaining
-//! thermodynamic state from a given pair of inputs selected by eos_input_t.
+//! \brief Defines nuclear::Thermo and nuclear::burn<EOSType>(), filling in the
+//! remaining thermodynamic state from a given pair of inputs selected by eos_input_t.
 
 #include <cmath>
 #include <type_traits>
@@ -17,7 +17,9 @@
 #include "eos/primitive-solver/eos.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
 #include "eos/primitive-solver/idealgas.hpp"
-#include "pgen/fluids/reactive_bubble.hpp"
+#include "nuclear/network/network.hpp"
+
+namespace nuclear {
 
 // Physical constants (cgs). `inline constexpr` (C++17 inline variables) gives
 // this header a single definition across every translation unit that
@@ -249,4 +251,6 @@ void burn(eos_input_t input, Thermo &state,
 
 }
 
-#endif  // PGEN_FLUIDS_MICROPHYSICS_HPP_
+}  // namespace nuclear
+
+#endif  // NUCLEAR_MICROPHYSICS_HPP_
