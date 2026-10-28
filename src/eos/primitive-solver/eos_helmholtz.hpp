@@ -137,9 +137,9 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
   }
 
   //! Density on the isentrope s at which the pressure is p; the temperature there
-  //  through T. NaN (both) if p is not bracketed, or if the isentrope leaves the
-  //  table's temperature range at the solution (TemperatureFromEntropy clamps to
-  //  min_T/max_T there, so that n would not be on the isentrope).
+  //  through T. NaN (both) if p is not bracketed, or if s is outside the entropies
+  //  attainable at the solution (TemperatureFromEntropy clamps to min_T/max_T there,
+  //  so that n would not be on the isentrope).
   KOKKOS_INLINE_FUNCTION Real DensityFromPressureEntropy(Real p, Real s, Real *Y,
                                                          Real *T = nullptr) const {
     Real n = density_from_pressure(p, Y, [&](Real nt) {
@@ -147,9 +147,10 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
     });
     Real Ts = Kokkos::Experimental::quiet_NaN_v<Real>;
     if (Kokkos::isfinite(n)) {
-      Ts = TemperatureFromEntropy(n, s, Y);
-      if (!(Ts > min_T) || !(Ts < max_T)) {
-        n = Ts = Kokkos::Experimental::quiet_NaN_v<Real>;
+      if (s >= Entropy(n, min_T, Y) && s <= Entropy(n, max_T, Y)) {
+        Ts = TemperatureFromEntropy(n, s, Y);
+      } else {
+        n = Kokkos::Experimental::quiet_NaN_v<Real>;
       }
     }
     if (T != nullptr) { *T = Ts; }
@@ -416,9 +417,17 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         Real deiondt = 1.5*cp.comp.inv_abar/mb;
         Real decouldt = 0.0;
         if (use_coulomb) {
-          // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T
+          // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T, included under the
+          // same condition as the Coulomb energy in ECLOGEPS (which needs eps itself,
+          // one more table lookup)
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
-          decouldt = c.y_chg*c.ucv/mb;
+          if (c.y_chg > 0.0) {
+            Real eps_e = Kokkos::exp(eval_at_lnty(ECLOGEPS, Kokkos::log(n*Ye), lT));
+            Real etot  = eps_fac*eps_e + asol*T*T*T*T/(n*mb) + 1.5*T*cp.comp.inv_abar/mb
+                       + cp.comp.eb;
+            Real ecoul = c.y_chg*T*c.u/mb;
+            if (etot + ecoul > 0.0) { decouldt = c.y_chg*c.ucv/mb; }
+          }
         }
         return eps_fac*var + deraddt + deiondt + decouldt;
       }
@@ -692,6 +701,10 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
       }
       ln = ln_new;
     }
+    // P(n) jumps where the Coulomb positivity guard switches, and the iteration can
+    // converge onto that jump (or run out of steps) without P = p. A finite n is
+    // returned only if it solves the equation.
+    if (!(Kokkos::fabs(g(ln)) <= 1e-10*p)) { return nan; }
     return Kokkos::exp(ln);
   }
 
