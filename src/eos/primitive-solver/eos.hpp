@@ -603,27 +603,25 @@ class EOS : public EOSPolicy, public ErrorPolicy {
 
   //! \brief Limit Y to a specified range
   KOKKOS_INLINE_FUNCTION bool ApplySpeciesLimits(Real *Y) const {
-    bool adjusted = SpeciesLimits(Y, min_Y, max_Y, n_species);
+    return SpeciesLimits(Y, min_Y, max_Y, n_species);
+  }
+
+  //! \brief Normalize mass fractions to sum 1 (no-op unless SupportsMassFractions).
+  //  Applied to the flux states only, so the species fluxes sum to the mass flux and
+  //  sum(X) = 1 is carried by the update; cell states are never rescaled. A zero sum
+  //  becomes pure species 0.
+  KOKKOS_INLINE_FUNCTION void NormalizeMassFractions(Real *Y) const {
     if constexpr (mass_fractions) {
-      // Limited reconstructions of the individual fractions need not sum to 1; a
-      // zero sum (floor-overwritten cell) becomes pure species 0.
-      // Roundoff-level deviations are normalized silently; only a real violation
-      // counts as an adjustment (which makes the c2p write the state back).
       Real sum = 0.0;
       for (int s = 0; s < n_species; s++) { sum += Y[s]; }
       if (sum > 0.0) {
-        if (sum != 1.0) {
-          const Real inv = 1.0/sum;
-          for (int s = 0; s < n_species; s++) { Y[s] *= inv; }
-          adjusted = adjusted || (fabs(sum - 1.0) > 1e-10);
-        }
+        const Real inv = 1.0/sum;
+        for (int s = 0; s < n_species; s++) { Y[s] *= inv; }
       } else {
         Y[0] = 1.0;
         for (int s = 1; s < n_species; s++) { Y[s] = 0.0; }
-        adjusted = true;
       }
     }
-    return adjusted;
   }
 
   //! \brief Limit the pressure to a specified range at a given density and composition
