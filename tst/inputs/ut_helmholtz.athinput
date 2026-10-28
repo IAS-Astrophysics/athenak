@@ -1,0 +1,77 @@
+# AthenaK input file: unit test of the Helmholtz EOS wrapper getters (entropy and
+# density inversions, specific heat, unit conversion). Needs the electron table at
+# inputs/tables/electron_table.athtab relative to the working directory (not in the
+# repo), the same convention as the CompOSE unit test and its table.
+
+<comment>
+problem   = Helmholtz EOS unit test
+
+<job>
+basename  = ut_helm
+
+<mesh>
+nghost    = 3
+nx1       = 8
+x1min     = 0
+x1max     = 1.0
+ix1_bc    = outflow
+ox1_bc    = outflow
+
+nx2       = 1
+x2min     = 0.0
+x2max     = 1.0
+ix2_bc    = periodic
+ox2_bc    = periodic
+
+nx3       = 1
+x3min     = 0.0
+x3max     = 1.0
+ix3_bc    = periodic
+ox3_bc    = periodic
+
+<meshblock>
+nx1       = 8
+nx2       = 1
+nx3       = 1
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.8
+nlim       = 0
+tlim       = 0
+ndiag      = 1
+
+<coord>
+general_rel = true
+minkowski   = true
+excise      = false
+m           = 0.0
+a           = 0.0
+
+<mhd>
+eos         = ideal           # compatibility placeholder
+dyn_eos     = helmholtz
+dyn_error   = reset_floor
+reconstruct = plm
+rsolver     = hlle
+gamma       = 1.6667          # unused with dyn_eos
+dfloor      = 1.0e-20
+tfloor      = 1.0e-6          # MeV
+electron_table = inputs/tables/electron_table.athtab
+eir_coulomb = true
+nscalars    = 3               # mass fractions of the species below
+A           = 4, 12, 16       # He4, C12, O16: mass number
+Z           = 2, 6, 8         # charge number
+dm          = 2.42491587, 0.0, -4.73700141   # atomic mass excess [MeV], AME2020
+species_names = he4, c12, o16
+s0_atmosphere = 1.0
+s1_atmosphere = 0.0
+s2_atmosphere = 0.0
+
+<adm>
+
+<problem>
+pgen_name = eos_helmholtz
+nn = 64
+nT = 64
