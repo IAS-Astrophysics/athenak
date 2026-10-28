@@ -40,6 +40,11 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
 
   const Real ialpha = 1.0/alpha;
 
+  // Flux states carry normalized mass fractions, so sum_s F(DY_s) = F(D) for every
+  // solver path (HLLE, LLF, FOFC); this alone keeps sum(X) = 1 in the cells.
+  eos.ps.GetEOS().NormalizeMassFractions(&prim_l[PYF]);
+  eos.ps.GetEOS().NormalizeMassFractions(&prim_r[PYF]);
+
   // Calculate conserved variables
   eos.ps.PrimToCon(prim_l, cons_l, Bu_l, g3d);
   eos.ps.PrimToCon(prim_r, cons_r, Bu_r, g3d);
