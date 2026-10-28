@@ -58,7 +58,7 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
   // contract (P(n1) = p) and counted.
   const int nn = pin->GetOrAddInteger("problem", "nn", 64);
   const int nT = pin->GetOrAddInteger("problem", "nT", 64);
-  const int nY = 3;
+  const int nY = 4;
   const Real nmin = pin->GetOrAddReal("problem", "nmin", 1.0e-12);
   const Real nmax = pin->GetOrAddReal("problem", "nmax", 1.0e-4);
   const Real Tmin = pin->GetOrAddReal("problem", "Tmin", 1.0e-5);
@@ -82,7 +82,7 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
   bool success_all = true;
   Real max_cv_dev = 0.0;
   int n_contract = 0;  // n(p,.) points off the round trip but with P(n1) = p
-  int n_unreach = 0;   // (p,s) points where the isentrope leaves the table (NaN)
+  int n_unreach = 0;   // NaN results of the density inversions (see the getters)
   Kokkos::parallel_reduce("ut_helmholtz",
                           Kokkos::RangePolicy<>(DevExeSpace(), 0, nn*nT*nY),
   KOKKOS_LAMBDA(const int &idx, bool &success, Real &cv_dev, int &ncon, int &nunr) {
@@ -93,6 +93,7 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
     Real Y[MAX_SPECIES] = {0.0};
     if (iY == 0) { Y[0] = 1.0; }                                   // pure He4
     else if (iY == 1) { Y[1] = 1.0; }                              // pure C12
+    else if (iY == 2) { Y[2] = 1.0; }                              // pure O16 (eb < 0)
     else { Y[0] = 1.0/3.0; Y[1] = 1.0/3.0; Y[2] = 1.0/3.0; }        // equal thirds
 
     const Real n = exp(lnmin + in*dln);
@@ -124,7 +125,9 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
     Real p = eos.GetPressure(n, T, Y);
     Real n1 = eos.GetDensityFromPressureTemperature(p, T, Y);
     err = fabs(n1/n - 1.0);
-    if (!(err <= tol)) {
+    if (!isfinite(n1)) {
+      nunr++;  // converged onto a jump of P(n), no solution in that cell
+    } else if (!(err <= tol)) {
       Real errp = fabs(eos.GetPressure(n1, T, Y)/p - 1.0);
       if (!(errp <= tol_p)) fail("n(p,T): P(n1,T) != p", n1, errp);
       ncon++;
@@ -177,7 +180,7 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
     std::cout << "EOSHelmholtz unit test: " << nn*nT*nY
               << " points, max |cv/cv_fd - 1| = " << max_cv_dev
               << ", n(p,.) accepted via P residual: " << n_contract
-              << ", (p,s) unreachable: " << n_unreach << std::endl;
+              << ", n(p,.) unreachable: " << n_unreach << std::endl;
   }
   // Every grid point is a solution with T inside the table, so NaN or contract-only
   // results must stay rare (multi-root Coulomb-guard points). A getter that always
