@@ -55,6 +55,7 @@
 
 #include <limits>
 #include <cassert>
+#include <type_traits>
 
 #include "ps_types.hpp"
 #include "unit_system.hpp"
@@ -129,6 +130,13 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     std::is_base_of_v<SupportsChemicalPotentials, EOSPolicy>;
   static constexpr bool mass_fractions =
     std::is_base_of_v<SupportsMassFractions, EOSPolicy>;
+  static constexpr bool supports_T_from_s =
+    std::is_base_of_v<SupportsTemperatureFromEntropy, EOSPolicy>;
+  static constexpr bool supports_specific_heat =
+    std::is_base_of_v<SupportsSpecificHeat, EOSPolicy>;
+  static constexpr bool supports_density_inversion =
+    std::is_base_of_v<SupportsDensityFromPressure, EOSPolicy>;
+
 
  public:
   //! \fn EOS()
@@ -212,6 +220,91 @@ class EOS : public EOSPolicy, public ErrorPolicy {
       return EOSPolicy::Entropy(n, T*code_units.TemperatureConversion(eos_units), Y)/mb *
              eos_units.EntropyConversion(code_units)/eos_units.MassConversion(code_units);
     } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetTemperatureFromEntropy(Real n, Real s, Real *Y)
+  //  \brief Get the temperature from the number density, entropy per mass, and
+  //         particle fractions. Inverse of GetEntropy; NaN if the policy has no
+  //         entropy inversion.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] s  The entropy per mass
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The temperature according to the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetTemperatureFromEntropy(Real n, Real s, Real *Y) const {
+    if constexpr (supports_T_from_s) {
+      const Real s_b = s*mb*eos_units.MassConversion(code_units)/
+                       eos_units.EntropyConversion(code_units);  // per baryon [kB]
+      return EOSPolicy::TemperatureFromEntropy(n, s_b, Y) *
+             eos_units.TemperatureConversion(code_units);
+    } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetSpecificHeat(Real n, Real T, Real *Y)
+  //  \brief Get the specific heat (d eps/dT at fixed n and Y) per mass from the number
+  //         density, temperature, and particle fractions. NaN if unsupported.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The specific heat for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetSpecificHeat(Real n, Real T, Real *Y) const {
+    if constexpr (supports_specific_heat) {
+      const Real Tc = code_units.TemperatureConversion(eos_units);
+      return EOSPolicy::SpecificHeat(n, T*Tc, Y) * Tc *
+             eos_units.EnergyConversion(code_units)/eos_units.MassConversion(code_units);
+    } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetDensityFromPressureTemperature(Real p, Real T, Real *Y)
+  //  \brief Get the number density at which GetPressure(n, T, Y) = p. Policy-level
+  //         table inversion; meant for initial data. NaN if unsupported or if p is
+  //         not reachable at this T. Where the policy's P(n) is not monotonic the
+  //         result is one of several solutions.
+  //
+  //  \param[in] p  The pressure
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The number density (EOS units, as everywhere in this wrapper).
+  KOKKOS_INLINE_FUNCTION Real GetDensityFromPressureTemperature(Real p, Real T,
+                                                                Real *Y) const {
+    if constexpr (supports_density_inversion) {
+      return EOSPolicy::DensityFromPressureTemperature(
+               p*code_units.PressureConversion(eos_units),
+               T*code_units.TemperatureConversion(eos_units), Y);
+    } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetDensityFromPressureEntropy(Real p, Real s, Real *Y, Real *T)
+  //  \brief Get the number density on the isentrope s at which the pressure is p.
+  //         Policy-level table inversion; meant for initial data.
+  //
+  //  \param[in] p  The pressure
+  //  \param[in] s  The entropy per mass
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \param[out] T  If given, the temperature at the solution.
+  //  \return The number density, NaN (and T NaN) if unsupported, p is not reachable,
+  //          or the isentrope leaves the EOS's temperature range at the solution.
+  KOKKOS_INLINE_FUNCTION Real GetDensityFromPressureEntropy(Real p, Real s, Real *Y,
+                                                            Real *T = nullptr) const {
+    if constexpr (supports_density_inversion && supports_T_from_s) {
+      const Real s_b = s*mb*eos_units.MassConversion(code_units)/
+                       eos_units.EntropyConversion(code_units);  // per baryon [kB]
+      Real Ts;
+      Real n = EOSPolicy::DensityFromPressureEntropy(
+                 p*code_units.PressureConversion(eos_units), s_b, Y, &Ts);
+      if (T != nullptr) { *T = Ts*eos_units.TemperatureConversion(code_units); }
+      return n;
+    } else {
+      if (T != nullptr) { *T = std::numeric_limits<Real>::quiet_NaN(); }
       return std::numeric_limits<Real>::quiet_NaN();
     }
   }

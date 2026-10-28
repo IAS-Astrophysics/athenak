@@ -30,6 +30,14 @@ enum PrimIndex {PRH=0,PVX=1, PVY=2, PVZ=3, PPR=4, PTM=5, PYF=6, NPRIM=((NHYDRO)+
 enum SpatialMetricIndex{S11=0, S12=1, S13=2, S22=3, S23=4, S33=5, NSPMETRIC=6};
 
 class SupportsEntropy{};
+// Marks a policy with TemperatureFromEntropy(n, s, Y) (s per baryon). Separate from
+// SupportsEntropy: EOSCompOSE has Entropy() but no inversion.
+class SupportsTemperatureFromEntropy{};
+// Marks a policy with SpecificHeat(n, T, Y) = (d eps/dT) at fixed n, Y.
+class SupportsSpecificHeat{};
+// Marks a policy with DensityFromPressureTemperature(p, T, Y) and, together with
+// SupportsTemperatureFromEntropy, DensityFromPressureEntropy(p, s, Y, &T).
+class SupportsDensityFromPressure{};
 // Marks an EOS whose species Y[] are mass fractions of one baryon pool, so that the
 // EOS wrapper renormalizes them to sum(Y) = 1 wherever it limits them (face states
 // and the c2p), keeping the species and energy fluxes built from one composition.
