@@ -179,6 +179,7 @@ void HLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     }
     eos.ps.GetEOS().ApplyDensityLimits(prim_l[PRH]);
     eos.ps.GetEOS().ApplySpeciesLimits(&prim_l[PYF]);
+    eos.ps.GetEOS().NormalizeMassFractions(&prim_l[PYF]);  // before T(P, Y)
     prim_l[PPR] = wl(m, IPR, k, j, i);
     prim_l[PTM] = eos.ps.GetEOS().GetTemperatureFromP(
                   prim_l[PRH], prim_l[PPR], &prim_l[PYF]);
@@ -195,6 +196,7 @@ void HLLE_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     }
     eos.ps.GetEOS().ApplyDensityLimits(prim_r[PRH]);
     eos.ps.GetEOS().ApplySpeciesLimits(&prim_r[PYF]);
+    eos.ps.GetEOS().NormalizeMassFractions(&prim_r[PYF]);  // before T(P, Y)
     prim_r[PPR] = wr(m, IPR, k, j, i);
     prim_r[PTM] = eos.ps.GetEOS().GetTemperatureFromP(
                   prim_r[PRH], prim_r[PPR], &prim_r[PYF]);

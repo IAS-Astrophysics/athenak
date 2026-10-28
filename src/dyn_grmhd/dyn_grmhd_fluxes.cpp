@@ -88,11 +88,6 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto &adm_   = pmy_pack->padm->adm;
   bool use_fofc = pmy_pack->pmhd->use_fofc;
 
-  // Species that the EOS constrains by sum(X) = 1, as indices into the flux
-  // array (nmfrac = 0 for policies with no such constraint).
-  const int nmfrac = dyn_eos_.ps.GetEOS().GetNMassFractions();
-  const int imfrac = nhyd + dyn_eos_.ps.GetEOS().GetMassFractionIndex();
-
   auto wl_ = pmy_pack->pmhd->wl3d;
   auto wr_ = pmy_pack->pmhd->wr3d;
   auto bl_ = pmy_pack->pmhd->bl3d;
@@ -142,30 +137,21 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
       });
 
     // Scalar fluxes upwinded on the mass flux, only if upwind_scalars (else the
-    // Riemann solver's flux stands).  The whole species vector is
-    // upwinded from one side, so renormalizing that side's mass fractions to
-    // sum(X) = 1 makes the species fluxes sum exactly to the mass flux -- which is
-    // what preserves sum(X) = 1 in the evolved state.
+    // Riemann solver's flux stands). The upwind state gets the same mass-fraction
+    // normalization as the solver states, so the species fluxes sum to the mass flux.
     if (upwind_scalars_ && nvars > nhyd) {
       par_for("dyngrflux_x1_scalars", DevExeSpace(),
         0, nmb1, kl, ku, jl, ju, il, iu,
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
           const Real fdn = flx1(m, IDN, k, j, i);
           const bool upl = (fdn >= 0.0);
-          Real xnorm = 1.0;
-          if (nmfrac > 0) {
-            Real xsum = 0.0;
-            for (int n = imfrac; n < imfrac+nmfrac; ++n) {
-              xsum += upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
-            }
-            if (xsum > 0.0) {
-              xnorm = 1.0/xsum;
-            }
+          Real y[MAX_SPECIES];
+          for (int n = 0; n < nvars - nhyd; ++n) {
+            y[n] = upl ? wl_(m, nhyd + n, k, j, i) : wr_(m, nhyd + n, k, j, i);
           }
-          for (int n = nhyd; n < nvars; ++n) {
-            const Real x = upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
-            flx1(m, n, k, j, i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
-                                  fdn*x*xnorm : fdn*x;
+          dyn_eos_.ps.GetEOS().NormalizeMassFractions(y);
+          for (int n = 0; n < nvars - nhyd; ++n) {
+            flx1(m, nhyd + n, k, j, i) = fdn*y[n];
           }
         });
     }
@@ -214,20 +200,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
           const Real fdn = flx2(m, IDN, k, j, i);
           const bool upl = (fdn >= 0.0);
-          Real xnorm = 1.0;
-          if (nmfrac > 0) {
-            Real xsum = 0.0;
-            for (int n = imfrac; n < imfrac+nmfrac; ++n) {
-              xsum += upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
-            }
-            if (xsum > 0.0) {
-              xnorm = 1.0/xsum;
-            }
+          Real y[MAX_SPECIES];
+          for (int n = 0; n < nvars - nhyd; ++n) {
+            y[n] = upl ? wl_(m, nhyd + n, k, j, i) : wr_(m, nhyd + n, k, j, i);
           }
-          for (int n = nhyd; n < nvars; ++n) {
-            const Real x = upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
-            flx2(m, n, k, j, i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
-                                  fdn*x*xnorm : fdn*x;
+          dyn_eos_.ps.GetEOS().NormalizeMassFractions(y);
+          for (int n = 0; n < nvars - nhyd; ++n) {
+            flx2(m, nhyd + n, k, j, i) = fdn*y[n];
           }
         });
     }
@@ -274,20 +253,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         KOKKOS_LAMBDA(int m, int k, int j, int i) {
           const Real fdn = flx3(m, IDN, k, j, i);
           const bool upl = (fdn >= 0.0);
-          Real xnorm = 1.0;
-          if (nmfrac > 0) {
-            Real xsum = 0.0;
-            for (int n = imfrac; n < imfrac+nmfrac; ++n) {
-              xsum += upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
-            }
-            if (xsum > 0.0) {
-              xnorm = 1.0/xsum;
-            }
+          Real y[MAX_SPECIES];
+          for (int n = 0; n < nvars - nhyd; ++n) {
+            y[n] = upl ? wl_(m, nhyd + n, k, j, i) : wr_(m, nhyd + n, k, j, i);
           }
-          for (int n = nhyd; n < nvars; ++n) {
-            const Real x = upl ? wl_(m, n, k, j, i) : wr_(m, n, k, j, i);
-            flx3(m, n, k, j, i) = ((n >= imfrac) && (n < imfrac+nmfrac)) ?
-                                  fdn*x*xnorm : fdn*x;
+          dyn_eos_.ps.GetEOS().NormalizeMassFractions(y);
+          for (int n = 0; n < nvars - nhyd; ++n) {
+            flx3(m, nhyd + n, k, j, i) = fdn*y[n];
           }
         });
     }
