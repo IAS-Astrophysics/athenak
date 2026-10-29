@@ -40,6 +40,11 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
 
   const Real ialpha = 1.0/alpha;
 
+  // Flux states carry normalized mass fractions, so sum_s F(DY_s) = F(D) for every
+  // solver path (HLLE, LLF, FOFC); this alone keeps sum(X) = 1 in the cells.
+  eos.ps.GetEOS().NormalizeMassFractions(&prim_l[PYF]);
+  eos.ps.GetEOS().NormalizeMassFractions(&prim_r[PYF]);
+
   // Calculate conserved variables
   eos.ps.PrimToCon(prim_l, cons_l, Bu_l, g3d);
   eos.ps.PrimToCon(prim_r, cons_r, Bu_r, g3d);
@@ -69,6 +74,11 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   flux_l[csx] += (prim_l[PPR] + 0.5*bsql);
   flux_l[CTA] = (cons_l[CTA]*vcl - alpha*bul0*Bu_l[ibx]*iWl
           + (prim_l[PPR] + 0.5*bsql)*prim_l[ivx]*iWl);
+  // Species ride on the mass flux; carried here so the solvers can give them the same
+  // dissipation as tau (whose rest-mass part depends on them).
+  for (int n = 0; n < nscal; n++) {
+    flux_l[CYD + n] = cons_l[CYD + n]*vcl;
+  }
 
   bflux_l[ibx] = 0.0;
   bflux_l[iby] = (Bu_l[iby]*vcl -
@@ -101,6 +111,9 @@ void SingleStateFlux(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
   flux_r[csx] += (prim_r[PPR] + 0.5*bsqr);
   flux_r[CTA] = (cons_r[CTA]*vcr - alpha*bur0*Bu_r[ibx]*iWr
           + (prim_r[PPR] + 0.5*bsqr)*prim_r[ivx]*iWr);
+  for (int n = 0; n < nscal; n++) {
+    flux_r[CYD + n] = cons_r[CYD + n]*vcr;
+  }
 
   bflux_r[ibx] = 0.0;
   bflux_r[iby] = (Bu_r[iby]*vcr -

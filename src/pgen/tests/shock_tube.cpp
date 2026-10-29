@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -23,6 +24,28 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+
+namespace {
+//! Left/right values of each passive scalar. yl_<r>/yr_<r> in <problem> override the
+//! common yl/yr, so a composition discontinuity can be set up per species.
+struct ScalarIC {
+  static constexpr int max = 16;
+  Real l[max], r[max];
+};
+ScalarIC ReadScalarIC(ParameterInput *pin, int nscal, Real yl, Real yr) {
+  ScalarIC sc;
+  if (nscal > ScalarIC::max) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "shock_tube supports at most " << ScalarIC::max << " scalars" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  for (int r = 0; r < nscal; ++r) {
+    sc.l[r] = pin->GetOrAddReal("problem", "yl_" + std::to_string(r), yl);
+    sc.r[r] = pin->GetOrAddReal("problem", "yr_" + std::to_string(r), yr);
+  }
+  return sc;
+}
+}  // namespace
 #include "coordinates/adm.hpp"
 #include "pgen/pgen.hpp"
 
@@ -122,6 +145,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
 
     auto &w0 = pmbp->phydro->w0;
     auto &nscal = pmbp->phydro->nscalars;
+    const ScalarIC sc = ReadScalarIC(pin, nscal, yl, yr);
     auto shk_dir_ = shk_dir;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
@@ -151,7 +175,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
         for (int r=0; r<nscal; ++r) {
-          w0(m,IYF+r,k,j,i) = yl;
+          w0(m,IYF+r,k,j,i) = sc.l[r];
         }
       } else {
         w0(m,IDN,k,j,i) = wr.d;
@@ -160,7 +184,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
         for (int r=0; r<nscal; ++r) {
-          w0(m,IYF+r,k,j,i) = yr;
+          w0(m,IYF+r,k,j,i) = sc.r[r];
         }
       }
     });
@@ -220,6 +244,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
     auto &b0 = pmbp->pmhd->b0;
     auto &bcc0 = pmbp->pmhd->bcc0;
     auto &nscal = pmbp->pmhd->nscalars;
+    const ScalarIC sc = ReadScalarIC(pin, nscal, yl, yr);
     auto shk_dir_ = shk_dir;
     par_for("pgen_shock1", DevExeSpace(),0,(pmbp->nmb_thispack-1),ks,ke,js,je,is,ie,
     KOKKOS_LAMBDA(int m,int k, int j, int i) {
@@ -255,7 +280,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivz,k,j,i) = wl.vz*u0l;
         w0(m,IEN,k,j,i) = wl.e;
         for (int r=0; r<nscal; ++r) {
-          w0(m,IYF+r,k,j,i) = yl;
+          w0(m,IYF+r,k,j,i) = sc.l[r];
         }
         b0.x1f(m,k,j,i) = bxl;
         b0.x2f(m,k,j,i) = byl;
@@ -273,7 +298,7 @@ void ProblemGenerator::ShockTube(ParameterInput *pin, const bool restart) {
         w0(m,ivz,k,j,i) = wr.vz*u0r;
         w0(m,IEN,k,j,i) = wr.e;
         for (int r=0; r<nscal; ++r) {
-          w0(m,IYF+r,k,j,i) = yr;
+          w0(m,IYF+r,k,j,i) = sc.r[r];
         }
         b0.x1f(m,k,j,i) = bxr;
         b0.x2f(m,k,j,i) = byr;

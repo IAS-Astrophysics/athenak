@@ -146,6 +146,8 @@ class DynGRMHD {
   Real dmp_M;               // threshold multiplier for discrete maximum principle.
   bool fixed_evolution;     // Disable mhd evolution
   bool scalar_pplimiter;    // Apply positivity preserving limiter on scalar
+  bool upwind_scalars;      // species flux = mass flux x upwind X (sharper) instead of
+                            // the Riemann solver's own flux (consistent with tau)
 };
 
 template<class EOSPolicy, class ErrorPolicy>
