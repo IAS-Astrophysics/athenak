@@ -539,7 +539,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \brief Rescale the mass-fraction block to sum 1 (no-op if the EOS has none).
   //  Applied to the flux states only, so the species fluxes sum to the mass flux and
   //  sum(X) = 1 is carried by the update without rescaling cells (Plewa & Mueller 1999).
-  //  A zero sum becomes free nucleons by Ye, as in DynGRMHD::EnforceSpeciesSum.
+  //  A zero sum becomes free nucleons by Ye, as in DynGRMHD::EnforceSpeciesSum. With
+  //  Ye = 0 as well (e.g. an unset atmosphere) the block stays zero for the EOS guard.
   KOKKOS_INLINE_FUNCTION void NormalizeMassFractions(Real *Y) const {
     constexpr int imf = EOSPolicy::i_massfrac;
     constexpr int nmf = EOSPolicy::n_massfrac;
@@ -551,7 +552,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
         for (int n = imf; n < imf + nmf; ++n) { Y[n] *= inv; }
       } else {
         if constexpr (EOSPolicy::i_yefrac >= 0 && nmf >= 2) {
-          const Real ye = fmin(fmax(Y[EOSPolicy::i_yefrac], 0.0), 1.0);
+          const Real ye = fmin(Y[EOSPolicy::i_yefrac], 1.0);
+          if (!(ye > 0.0)) { return; }
           Y[imf] = 1.0 - ye;
           Y[imf + 1] = ye;
           for (int n = imf + 2; n < imf + nmf; ++n) { Y[n] = 0.0; }

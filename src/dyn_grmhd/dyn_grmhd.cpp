@@ -229,7 +229,8 @@ void DynGRMHD::EnforceSpeciesSum(DvceArray5D<Real> &u, int il, int iu,
       for (int n=imf; n<imf+nmf; ++n) {
         u(m,n,k,j,i) *= ratio;
       }
-    } else if ((fabs(dens) > eps) && (iye >= 0) && (nmf >= 2)) {
+    } else if ((fabs(dens) > eps) && (iye >= 0) && (nmf >= 2)
+               && (u(m,iye,k,j,i) > 0.0)) {
       // Degenerate landing: split into free nucleons consistent with Ye, as the
       // q_h fallback of EOSTransition::SanitizeMassFractions does.  Assumes the
       // first two constrained species are Xn and Xp, which holds for every policy

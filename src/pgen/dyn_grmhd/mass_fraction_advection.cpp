@@ -36,7 +36,7 @@ KOKKOS_INLINE_FUNCTION Real Uniform01(std::uint64_t x) {
   x ^= (x >> 31);
   return static_cast<Real>(x >> 11)*(1.0/9007199254740992.0);
 }
-constexpr int kMaxScal = 16;
+constexpr int kMaxScal = MAX_SPECIES;
 struct ScalarConst { Real v[kMaxScal]; };  // uniform scalars, captured by value
 }  // namespace
 
@@ -53,9 +53,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &indcs = pmy_mesh_->mb_indcs;
   int is = indcs.is, ie = indcs.ie, js = indcs.js, je = indcs.je;
   int ks = indcs.ks, ke = indcs.ke;
-  const int nx1 = indcs.nx1;
+  const int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
   auto &size = pmbp->pmb->mb_size;
-  const Real xmin = pmy_mesh_->mesh_size.x1min;
+  auto &msize = pmy_mesh_->mesh_size;
+  const Real x1min = msize.x1min, x2min = msize.x2min, x3min = msize.x3min;
+  const std::uint64_t ng1 = pmy_mesh_->mesh_indcs.nx1, ng2 = pmy_mesh_->mesh_indcs.nx2;
   const Real rho = pin->GetReal("problem", "rho");
   const Real P   = pin->GetReal("problem", "press");
   const Real v   = pin->GetReal("problem", "vx");
@@ -66,6 +68,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   const int nmf = (pmbp->pdyngr->nmfrac > 0) ? pmbp->pdyngr->nmfrac : nscal;
   const int tie_from = pin->GetOrAddInteger("problem", "tie_from", -1);
   const int tie_to   = pin->GetOrAddInteger("problem", "tie_to", -1);
+  const bool tie_off = (tie_from < 0 && tie_to < 0);
+  const bool tie_ok = (tie_from >= imf && tie_from < imf + nmf &&
+                       tie_to >= imf && tie_to < imf + nmf);
+  if (!tie_off && !tie_ok) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "tie_from/tie_to must lie in [" << imf << ","
+              << imf + nmf << ")" << std::endl;
+    exit(EXIT_FAILURE);
+  }
   ScalarConst sc;
   for (int s = 0; s < nscal; ++s) {
     sc.v[s] = pin->GetOrAddReal("problem", "s" + std::to_string(s), 0.0);
@@ -75,8 +86,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   auto &bcc0 = pmbp->pmhd->bcc0;
   par_for("pgen_mfadv", DevExeSpace(), 0, pmbp->nmb_thispack-1, ks, ke, js, je, is, ie,
   KOKKOS_LAMBDA(int m, int k, int j, int i) {
-    Real x = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
-    std::uint64_t g = static_cast<std::uint64_t>((x - xmin)/size.d_view(m).dx1);
+    // global cell index, so every cell gets its own composition in 1D/2D/3D
+    Real x1 = CellCenterX(i-is, nx1, size.d_view(m).x1min, size.d_view(m).x1max);
+    Real x2 = CellCenterX(j-js, nx2, size.d_view(m).x2min, size.d_view(m).x2max);
+    Real x3 = CellCenterX(k-ks, nx3, size.d_view(m).x3min, size.d_view(m).x3max);
+    std::uint64_t g1 = static_cast<std::uint64_t>((x1 - x1min)/size.d_view(m).dx1);
+    std::uint64_t g2 = static_cast<std::uint64_t>((x2 - x2min)/size.d_view(m).dx2);
+    std::uint64_t g3 = static_cast<std::uint64_t>((x3 - x3min)/size.d_view(m).dx3);
+    std::uint64_t g = g1 + ng1*(g2 + ng2*g3);
     w0(m,IDN,k,j,i) = rho;
     w0(m,IVX,k,j,i) = W*v;
     w0(m,IVY,k,j,i) = 0.0;
@@ -86,7 +103,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     for (int s = imf; s < imf + nmf; ++s) {
       r[s] = xfl + Uniform01(seed*1000003ULL + g*kMaxScal + s);
     }
-    if (tie_from >= 0 && tie_to >= 0) { r[tie_to] = r[tie_from]; }
+    if (!tie_off) { r[tie_to] = r[tie_from]; }
     for (int s = imf; s < imf + nmf; ++s) { sum += r[s]; }
     for (int s = 0; s < nscal; ++s) {
       w0(m,IYF+s,k,j,i) = (s >= imf && s < imf + nmf) ? r[s]/sum : sc.v[s];
