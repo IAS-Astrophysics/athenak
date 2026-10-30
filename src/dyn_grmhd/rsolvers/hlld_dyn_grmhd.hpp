@@ -6,7 +6,7 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file hlld_dyngrmhd.hpp
-//! \brief HLLE Riemann solver for GRMHD that first transforms to local flat space
+//! \brief HLLD Riemann solver for GRMHD that first transforms to local flat space
 
 #include <math.h>
 
@@ -338,8 +338,8 @@ void HLLD_DYNGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
     const int max_iters = 15;
     int count = 0;
     // Check that the initial guess makes sense.
-    if (((lal <= lambda_l || vc <= lal || vc >= lar || lar >= lambda_r) && fold > tol)
-        || !Kokkos::isfinite(fold)) {
+    if (((lal <= lambda_l || vc <= lal || vc >= lar || lar >= lambda_r) &&
+          Kokkos::fabs(fold) > tol) || !Kokkos::isfinite(fold)) {
       count = max_iters;
     } else if (Kokkos::fabs(fold) > tol) {
       // We need two guesses to initialize the secant method. We perturb the first guess
