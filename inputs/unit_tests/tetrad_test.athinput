@@ -1,0 +1,46 @@
+# Athena++ (Kokkos version) input file for TOV star
+
+<comment>
+problem  = Unmagnetized TOV star
+
+<job>
+basename = tov
+
+<mesh>
+nghost = 4       # Number of ghost cells
+nx1    = 16      # number of cells in x1-direction
+x1min  = -1.0    # minimum x1
+x1max  = 1.0     # maximum x1
+ix1_bc = periodic# inner boundary
+ox1_bc = periodic# outer boundary
+
+nx2    = 1       # number of cells in x2-direction
+x2min  = -1.0    # minimum x2
+x2max  = 1.0     # maximum x2
+ix2_bc = periodic# inner boundary
+ox2_bc = periodic# outer boundary
+
+nx3    = 1       # number of cells in x3-direction
+x3min  = -1.0    # minimum x3
+x3max  = 1.0     # maximum x3
+ix3_bc = periodic# inner boundary
+ox3_bc = periodic# outer boundary
+
+<meshblock>
+nx1  = 16        # Number of cells in each MeshBlock, X1-dir
+nx2  = 1         # Number of cells in each MeshBlock, X2-dir
+nx3  = 1         # Number of cells in each MeshBlock, X3-dir
+
+<time>
+evolution  = static # dynamic/kinematic/static
+cfl_number = 0.1
+ndiag      = 1          # cycles between diagnostic output
+
+<coord>
+general_rel = false # general relativity
+
+<hydro>
+eos         = ideal     # EOS type
+reconstruct = wenoz     # spatial reconstruction method
+rsolver     = advect # Riemann solver to be used
+gamma       = 2.0       # ratio of specific heats Gamma

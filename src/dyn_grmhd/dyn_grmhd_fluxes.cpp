@@ -27,6 +27,8 @@
 #include "reconstruct/recon.hpp"
 #include "dyn_grmhd/rsolvers/llf_dyn_grmhd.hpp"
 #include "dyn_grmhd/rsolvers/hlle_dyn_grmhd.hpp"
+#include "dyn_grmhd/rsolvers/hlle_transforming.hpp"
+#include "dyn_grmhd/rsolvers/hlld_dyn_grmhd.hpp"
 // include PrimitiveSolver stuff
 #include "eos/primitive-solver/idealgas.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
@@ -51,13 +53,20 @@ void SolveFaceDynGR(const PrimitiveSolverHydro<EOSPolicy, ErrorPolicy>& eos,
                     const int nhyd, const int nscal,
                     const adm::ADM::ADM_vars& adm,
                     const DvceArray5D<Real> &flx, const DvceArray4D<Real> &ey,
-                    const DvceArray4D<Real> &ez) {
+                    const DvceArray4D<Real> &ez,
+                    const DvceArray4D<size_t> &hlld_fail) {
   if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr) {
     LLF_DYNGR<ivx>(eos, indcs, size, coord, m, k, j, i, wl, wr, bl, br, bx,
                    nhyd, nscal, adm, flx, ey, ez);
   } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
     HLLE_DYNGR<ivx>(eos, indcs, size, coord, m, k, j, i, wl, wr, bl, br, bx,
                     nhyd, nscal, adm, flx, ey, ez);
+  } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlle_transform) {
+    HLLE_TRANSFORMING<ivx>(eos, indcs, size, coord, m, k, j, i, wl, wr, bl, br, bx,
+                    nhyd, nscal, adm, flx, ey, ez);
+  } else if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    HLLD_DYNGR<ivx>(eos, indcs, size, coord, m, k, j, i, wl, wr, bl, br, bx,
+                    nhyd, nscal, adm, flx, ey, ez, hlld_fail);
   }
 }
 
@@ -92,9 +101,18 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
   auto bl_ = pmy_pack->pmhd->bl3d;
   auto br_ = pmy_pack->pmhd->br3d;
 
+  auto &hlld_fail_ = hlld_fail;
+
   // Short-circuit the flux calculation if everything is to be fixed.
   if (fixed_evolution) {
     return TaskStatus::complete;
+  }
+
+  // If HLLD is enabled, there is an optional failure monitor we can use.
+  if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    if (monitor_failures) {
+      Kokkos::deep_copy(hlld_fail, 0);
+    }
   }
 
   //------------------------------------------------------------------------------------
@@ -129,10 +147,11 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto indcs = indcs_;  auto size = size_;  auto coord = coord_;  auto adm = adm_;
         auto wl = wl_;  auto wr = wr_;  auto bl = bl_;  auto br = br_;
         auto bx = bx_;  auto flx = flx1;  auto eyl = e31;  auto ezl = e21;
+        auto &hlld_fail_mask = hlld_fail_;
         const int nh = nhyd, ns = nvars - nhyd;
         SolveFaceDynGR<rsolver_method_, IVX>(dyn_eos, indcs, size, coord, m, k, j, i,
                                              wl, wr, bl, br, bx, nh, ns, adm,
-                                             flx, eyl, ezl);
+                                             flx, eyl, ezl, hlld_fail_mask);
       });
 
     // Scalar fluxes (upwind from sign of mass flux)
@@ -181,10 +200,11 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto indcs = indcs_;  auto size = size_;  auto coord = coord_;  auto adm = adm_;
         auto wl = wl_;  auto wr = wr_;  auto bl = bl_;  auto br = br_;
         auto bx = by_;  auto flx = flx2;  auto eyl = e12;  auto ezl = e32;
+        auto &hlld_fail_mask = hlld_fail_;
         const int nh = nhyd, ns = nvars - nhyd;
         SolveFaceDynGR<rsolver_method_, IVY>(dyn_eos, indcs, size, coord, m, k, j, i,
                                              wl, wr, bl, br, bx, nh, ns, adm,
-                                             flx, eyl, ezl);
+                                             flx, eyl, ezl, hlld_fail_mask);
       });
 
     if (nvars > nhyd) {
@@ -230,10 +250,11 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
         auto indcs = indcs_;  auto size = size_;  auto coord = coord_;  auto adm = adm_;
         auto wl = wl_;  auto wr = wr_;  auto bl = bl_;  auto br = br_;
         auto bx = bz_;  auto flx = flx3;  auto eyl = e23;  auto ezl = e13;
+        auto &hlld_fail_mask = hlld_fail_;
         const int nh = nhyd, ns = nvars - nhyd;
         SolveFaceDynGR<rsolver_method_, IVZ>(dyn_eos, indcs, size, coord, m, k, j, i,
                                              wl, wr, bl, br, bx, nh, ns, adm,
-                                             flx, eyl, ezl);
+                                             flx, eyl, ezl, hlld_fail_mask);
       });
 
     if (nvars > nhyd) {
@@ -251,9 +272,42 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::CalcFluxes(Driver *pdriver, int s
     }
   }
 
+  // If the HLLD failure monitor is enabled, reduce the number of failures.
+  if constexpr (rsolver_method_ == DynGRMHD_RSolver::hlld_dyngr) {
+    if (monitor_failures) {
+      int nx1 = indcs_.nx1;
+      int nx2 = indcs_.nx2;
+      int nx3 = indcs_.nx3;
+      const int nmkji = (pmy_pack->nmb_thispack)*nx3*nx2*nx1;
+      const int nkji = nx3*nx2*nx1;
+      const int nji = nx2*nx1;
+
+      size_t sum = 0;
+
+      Kokkos::parallel_reduce("HLLDFailureCount",
+      Kokkos::RangePolicy<>(DevExeSpace(), 0,nmkji),
+      KOKKOS_LAMBDA(const int &idx, size_t &mb_sum) {
+        int m = (idx)/nkji;
+        int k = (idx - m*nkji)/nji;
+        int j = (idx - m*nkji - k*nji)/nx1;
+        int i = (idx - m*nkji - k*nji - j*nx1) + is;
+        k += ks;
+        j += js;
+
+        mb_sum += hlld_fail_(m, k, j, i);
+      }, Kokkos::Sum<size_t>(sum));
+      failure_count += sum;
+    }
+  }
+
   // Call FOFC if necessary
   if (pmy_pack->pmhd->use_fofc || pmy_pack->pcoord->coord_data.bh_excise) {
-    FOFC<rsolver_method_>(pdriver, stage);
+    if constexpr (rsolver_method_ == DynGRMHD_RSolver::llf_dyngr ||
+                  rsolver_method_ == DynGRMHD_RSolver::hlle_dyngr) {
+      FOFC<rsolver_method_>(pdriver, stage);
+    } else {
+      FOFC<DynGRMHD_RSolver::hlle_dyngr>(pdriver, stage);
+    }
   }
 
   return TaskStatus::complete;
@@ -267,7 +321,13 @@ TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
             CalcFluxes<DynGRMHD_RSolver::llf_dyngr>(Driver *pdriver, int stage); \
 template \
 TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
-            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage);
+            CalcFluxes<DynGRMHD_RSolver::hlle_dyngr>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlle_transform>(Driver *pdriver, int stage); \
+template \
+TaskStatus DynGRMHDPS<EOSPolicy, ErrorPolicy>::\
+            CalcFluxes<DynGRMHD_RSolver::hlld_dyngr>(Driver *pdriver, int stage);
 
 INSTANTIATE_CALC_FLUXES(Primitive::IdealGas, Primitive::ResetFloor)
 INSTANTIATE_CALC_FLUXES(Primitive::PiecewisePolytrope, Primitive::ResetFloor)

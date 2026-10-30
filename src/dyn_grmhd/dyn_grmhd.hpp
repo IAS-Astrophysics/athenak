@@ -14,7 +14,8 @@
 #include "driver/driver.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 
-enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr};   // Riemann solvers for dynamical GR
+// Riemann solvers for dynamical GR
+enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr, hlle_transform, hlld_dyngr};
 enum class DynGRMHD_EOS {eos_ideal, eos_piecewise_poly,
                       eos_compose, eos_hybrid};        // EOS policies for dynamical GR
 enum class DynGRMHD_Error {reset_floor};               // Error policies for dynamical GR
@@ -88,6 +89,9 @@ class DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage) = 0;
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke) = 0;
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke) = 0;
+  virtual void PrimToConInit(DvceArray5D<Real> &w, DvceArray5D<Real> &bcc,
+                             DvceArray5D<Real> &u, int is, int ie, int js, int je,
+                             int ks, int ke) = 0;
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke) = 0;
 
@@ -103,6 +107,11 @@ class DynGRMHD {
   // Storage for temperature
   DvceArray5D<Real> temperature;
 
+  // Monitor for HLLD failures
+  DvceArray4D<size_t> hlld_fail;
+
+  size_t failure_count;
+
  protected:
   MeshBlockPack *pmy_pack;  // ptr to MeshBlockPack containing this Hydro
   int scratch_level;        // GPU scratch level for flux and source calculations
@@ -110,6 +119,8 @@ class DynGRMHD {
   Real dmp_M;               // threshold multiplier for discrete maximum principle.
   bool fixed_evolution;     // Disable mhd evolution
   bool scalar_pplimiter;    // Apply positivity preserving limiter on scalar
+
+  bool monitor_failures;
 };
 
 template<class EOSPolicy, class ErrorPolicy>
@@ -135,6 +146,9 @@ class DynGRMHDPS : public DynGRMHD {
   virtual TaskStatus ConToPrim(Driver* pdrive, int stage);
   virtual void ConToPrimBC(int is, int ie, int js, int je, int ks, int ke);
   virtual void PrimToConInit(int is, int ie, int js, int je, int ks, int ke);
+  virtual void PrimToConInit(DvceArray5D<Real> &w, DvceArray5D<Real>& bcc,
+                             DvceArray5D<Real> &u, int is, int ie, int js, int je,
+                             int ks, int ke);
   virtual void ConvertInternalEnergyToPressure(int is, int ie,
                                                int js, int je, int ks, int ke);
 
