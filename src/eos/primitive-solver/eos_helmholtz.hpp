@@ -664,6 +664,7 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
     Real flo = f(ilo), fhi = f(ihi);
     while (!Kokkos::isfinite(flo) && ilo < ihi) { flo = f(++ilo); }
     while (!Kokkos::isfinite(fhi) && ihi > ilo) { fhi = f(--ihi); }
+
     if (!(flo*fhi <= 0.0)) { return nan; }  // no sign change, or NaN
     while (ihi - ilo > 1) {
       int ip = ilo + (ihi - ilo)/2;
