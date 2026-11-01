@@ -106,5 +106,24 @@ Primitive::UnitSystem Primitive::MakeMKS() {
   };
 }
 
+Primitive::UnitSystem Primitive::MakeCmGC1() {
+  return UnitSystem{
+    1.0, // c
+    CGS.G/(CGS.c*CGS.c), // G, cm/g
+    CGS.kb/(CGS.c*CGS.c), // kb, g/K
+    CGS.Msun, // Msun, g
+    CGS.MeV/(CGS.c*CGS.c), // MeV, g
+
+    1.0, // length, cm
+    CGS.c, // time, cm (1 s = c cm)
+    1.0, // number density, cm^-3
+    1.0, // mass, g
+    1.0/(CGS.c*CGS.c), // energy, g
+    1.0/(CGS.c*CGS.c), // pressure, g/cm^3
+    1.0, // temperature, K
+    1.0/(CGS.c*CGS.c), // chemical potential, g
+  };
+}
+
 #undef PS_SQR
 #undef PS_CUBE
