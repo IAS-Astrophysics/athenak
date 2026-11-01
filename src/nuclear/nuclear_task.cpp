@@ -13,6 +13,7 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "hydro/hydro.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
 #include "nuclear/nuclear.hpp"
 
 namespace nuclear {
@@ -34,18 +35,31 @@ namespace nuclear {
 	  (void) irecv; (void) setgz; (void) crecv;
 	}
 
-	// The functions below wrap the Hydro tasks. Hydro is constructed after Nuclear in
-	// MeshBlockPack::AddPhysics(), so phydro is looked up when the tasks run. They use
-	// stage = -1 where it matters: the burn computes no fluxes, so no flux-correction
-	// messages are posted or cleared.
+	// The functions below wrap the Hydro or MHD tasks. Hydro/MHD are constructed after
+	// Nuclear in MeshBlockPack::AddPhysics(), so phydro/pmhd are looked up when the tasks
+	// run. They use stage = -1 where it matters: the burn computes no fluxes, so no
+	// flux-correction messages are posted or cleared. With MHD, B is exchanged along with
+	// U (the burn does not change it), because MHD::InitRecv/ClearRecv always post/clear
+	// the receives of both, as in Driver::InitBoundaryValuesAndPrimitives().
 
 	TaskStatus Nuclear::InitRecvU(Driver *pdrive, int stage) {
+	  if (pmy_pack->pmhd != nullptr) {
+	    return pmy_pack->pmhd->InitRecv(pdrive, -1);  // stage < 0 suppresses InitFluxRecv
+	  }
 	  hydro::Hydro *phyd = pmy_pack->phydro;
 	  if (phyd == nullptr) return TaskStatus::complete;
 	  return phyd->InitRecv(pdrive, -1);  // stage < 0 suppresses InitFluxRecv
 	}
 
 	TaskStatus Nuclear::SendU(Driver *pdrive, int stage) {
+	  mhd::MHD *pmhd = pmy_pack->pmhd;
+	  if (pmhd != nullptr) {
+	    (void) pmhd->RestrictU(pdrive, stage);
+	    (void) pmhd->RestrictB(pdrive, stage);
+	    TaskStatus tstat = pmhd->SendU(pdrive, stage);
+	    if (tstat != TaskStatus::complete) return tstat;
+	    return pmhd->SendB(pdrive, stage);
+	  }
 	  hydro::Hydro *phyd = pmy_pack->phydro;
 	  if (phyd == nullptr) return TaskStatus::complete;
 	  (void) phyd->RestrictU(pdrive, stage);
@@ -53,6 +67,12 @@ namespace nuclear {
 	}
 
 	TaskStatus Nuclear::RecvU(Driver *pdrive, int stage) {
+	  mhd::MHD *pmhd = pmy_pack->pmhd;
+	  if (pmhd != nullptr) {
+	    TaskStatus tstat = pmhd->RecvU(pdrive, stage);
+	    if (tstat != TaskStatus::complete) return tstat;
+	    return pmhd->RecvB(pdrive, stage);
+	  }
 	  hydro::Hydro *phyd = pmy_pack->phydro;
 	  if (phyd == nullptr) return TaskStatus::complete;
 	  return phyd->RecvU(pdrive, stage);
@@ -60,6 +80,15 @@ namespace nuclear {
 
 	// Prolongation at fine/coarse boundaries, physical BCs, and primitives everywhere
 	TaskStatus Nuclear::SetGhostZones(Driver *pdrive, int stage) {
+	  mhd::MHD *pmhd = pmy_pack->pmhd;
+	  if (pmhd != nullptr) {
+	    (void) pmhd->Prolongate(pdrive, stage);
+	    (void) pmhd->ApplyPhysicalBCs(pdrive, stage);
+	    if (pmy_pack->pdyngr != nullptr) {
+	      return pmy_pack->pdyngr->ConToPrim(pdrive, stage);
+	    }
+	    return pmhd->ConToPrim(pdrive, stage);
+	  }
 	  hydro::Hydro *phyd = pmy_pack->phydro;
 	  if (phyd == nullptr) return TaskStatus::complete;
 	  (void) phyd->Prolongate(pdrive, stage);
@@ -68,12 +97,18 @@ namespace nuclear {
 	}
 
 	TaskStatus Nuclear::ClearSendU(Driver *pdrive, int stage) {
+	  if (pmy_pack->pmhd != nullptr) {
+	    return pmy_pack->pmhd->ClearSend(pdrive, -1);  // stage = -1 only clears U, B
+	  }
 	  hydro::Hydro *phyd = pmy_pack->phydro;
 	  if (phyd == nullptr) return TaskStatus::complete;
 	  return phyd->ClearSend(pdrive, -1);  // stage = -1 only clears SendU
 	}
 
 	TaskStatus Nuclear::ClearRecvU(Driver *pdrive, int stage) {
+	  if (pmy_pack->pmhd != nullptr) {
+	    return pmy_pack->pmhd->ClearRecv(pdrive, -1);  // stage = -1 only clears U, B
+	  }
 	  hydro::Hydro *phyd = pmy_pack->phydro;
 	  if (phyd == nullptr) return TaskStatus::complete;
 	  return phyd->ClearRecv(pdrive, -1);  // stage = -1 only clears RecvU

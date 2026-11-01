@@ -6,17 +6,19 @@
 // Licensed under the 3-clause BSD License (the "LICENSE")
 //========================================================================================
 //! \file microphysics.hpp
-//! \brief Defines nuclear::Thermo and nuclear::burn<EOSType>(), filling in the
-//! remaining thermodynamic state from a given pair of inputs selected by eos_input_t.
+//! \brief Defines nuclear::Thermo and nuclear::burn() for the Helmholtz EOS, filling
+//! in the remaining thermodynamic state from a given pair of inputs selected by
+//! eos_input_t. The IdealGas overload is in nuclear/microphysics_idealgas.hpp.
 
 #include <cmath>
+#include <limits>
 #include <type_traits>
 
 #include "athena.hpp"
 #include "units/units.hpp"
 #include "eos/primitive-solver/eos.hpp"
 #include "eos/primitive-solver/reset_floor.hpp"
-#include "eos/primitive-solver/idealgas.hpp"
+#include "eos/primitive-solver/eos_helmholtz.hpp"
 #include "nuclear/network/network.hpp"
 
 namespace nuclear {
@@ -27,6 +29,10 @@ namespace nuclear {
 inline constexpr Real kB = units::Units::k_boltzmann_cgs;
 inline constexpr Real m_u = units::Units::atomic_mass_unit_cgs;
 inline constexpr Real hbar = units::Units::red_plank_constant_cgs;
+inline constexpr Real c_light = units::Units::speed_of_light_cgs;
+inline constexpr Real MeV_erg = 1.6021766208e-6;  // same value as Primitive::MakeCGS()
+// Helmholtz EOS number densities are in fm^-3 (nuclear units): 1 fm^-3 = 1e39 cm^-3
+inline constexpr Real cm3_per_fm3 = 1.0e39;
 
 //! \struct Thermo
 //! \brief Thermodynamic state used by burn(). Which of rho/t/p/e/s are
@@ -42,8 +48,7 @@ struct Thermo {
   Real cv{};
   Real abar{};
   Real zbar{};
-  Real dedA{};
-  Real dedZ{};
+  Real dedX[NSPECIES]{};
 };
 
 // --- C++17 "does this type have member X" detection idiom ---
@@ -101,50 +106,25 @@ template <typename T>
 inline constexpr bool has_zbar_v = has_zbar<T>::value;
 
 template <typename T, typename = void>
-struct has_dedA : std::false_type {};
+struct has_dedX : std::false_type {};
 template <typename T>
-struct has_dedA<T, std::void_t<decltype(std::declval<T>().dedA)>> : std::true_type {};
+struct has_dedX<T, std::void_t<decltype(std::declval<T>().dedX)>> : std::true_type {};
 template <typename T>
-inline constexpr bool has_dedA_v = has_dedA<T>::value;
-
-template <typename T, typename = void>
-struct has_dedZ : std::false_type {};
-template <typename T>
-struct has_dedZ<T, std::void_t<decltype(std::declval<T>().dedZ)>> : std::true_type {};
-template <typename T>
-inline constexpr bool has_dedZ_v = has_dedZ<T>::value;
+inline constexpr bool has_dedX_v = has_dedX<T>::value;
 
 enum eos_input_t : int {
   eos_input_rt = 0,
   eos_input_ps,
   eos_input_re,
   eos_input_pt,
+  eos_input_rp,
 };
 
-//! \fn burn
-//! \brief Given a thermodynamic input pair (selected at runtime by `input`)
-//! and composition, fills in the remaining fields of `state` using `eos`.
-//! Always resolves to a canonical (rho, t, xn[]) state first (inverting the
-//! given pair if needed), then runs the shared rho/T-based computation for
-//! whichever of p/e/s are present on the state type.
-//!
-//! `eos` must already have SetNSpecies() called on it -- construct it once on
-//! the host (it is not safe to default-construct an EOS<> object on-device;
-//! its constructor is not KOKKOS_INLINE_FUNCTION) and capture it by value into
-//! whatever Kokkos kernel calls burn() per cell. burn() itself only ever calls
-//! eos.SetBaryonMass()/.Get*(), all of which are already KOKKOS_INLINE_FUNCTION.
-//!
-//! Everything here is plain cgs (matching kB/m_u/hbar above, and `eos`'s
-//! default-constructed IdealGas state): never call eos.SetCodeUnitSystem() or
-//! eos.SetEOSUnitSystem() anywhere -- doing so would break the invariant this
-//! file relies on, namely that EOS<>::Get*()'s internal unit-conversion
-//! factors are all identity because code_units == eos_units (IdealGas's
-//! default). That's what lets raw cgs values flow through Get*() unconverted.
-template <typename EOSType>
+//! \fn composition
+//! \brief Fills the composition-only fields of `state` (abar, zbar, mu) from
+//! state.xn[]. Shared by every burn() overload.
 KOKKOS_INLINE_FUNCTION
-void burn(eos_input_t input, Thermo &state,
-          Primitive::EOS<EOSType, Primitive::ResetFloor> &eos) {
- 
+void composition(Thermo &state) {
   if constexpr (has_abar_v<Thermo>) {
     // abar (mean atomic mass number): 1/Abar = Sum X_n/A_n -- same formula
     // as mu below (equal to it, under this neutral-gas model), but kept as
@@ -174,9 +154,39 @@ void burn(eos_input_t input, Thermo &state,
     }
     state.mu = 1.0 / mu_inv;
   }
+}
 
-  Real mb = state.mu * m_u;
-  eos.SetBaryonMass(mb);
+//! \fn burn
+//! \brief Helmholtz EOS. Given a thermodynamic input pair (selected at runtime
+//! by `input`) and composition, fills in the remaining fields of `state` using
+//! `eos`. Always resolves to a canonical (rho, t, xn[]) state first (inverting
+//! the given pair if needed), then runs the shared rho/T-based computation for
+//! whichever of p/e/s are present on the state type.
+//!
+//! Everything here is plain cgs, T in K (matching kB/m_u/c_light above). `eos`
+//! must be a shallow copy of the DynGRMHD EOS (it shares the table) with
+//! SetCodeUnitSystem(Primitive::MakeCGS()) called on it, made once on the host
+//! and captured by value into whatever Kokkos kernel calls burn() per cell:
+//!   auto eos = static_cast<dyngr::DynGRMHDPS<Primitive::EOSHelmholtz,
+//!                 Primitive::ResetFloor>*>(pmbp->pdyngr)->eos.ps.GetEOS();
+//!   eos.SetCodeUnitSystem(Primitive::MakeCGS());
+//! The wrapper then converts to and from the table's nuclear units. The number
+//! density n it takes is in EOS units, n = rho/GetBaryonMass().
+//!
+//! Input pairs: rt (rho, t), ps (p, s), re (rho, e), pt (p, t), rp (rho, p).
+//! The (p, s) and (p, t) inversions give NaN if p is not reachable, or if the
+//! isentrope leaves the table; the caller has to check for it.
+//!
+//! The IdealGas overload lives in nuclear/microphysics_idealgas.hpp.
+KOKKOS_INLINE_FUNCTION
+void burn(eos_input_t input, Thermo &state,
+          const Primitive::EOS<Primitive::EOSHelmholtz, Primitive::ResetFloor> &eos) {
+  composition(state);
+
+  // Baryon mass [g]: a fixed convention read from the table (it sets the
+  // rest-mass/eps split, so it must not be changed), which also carries the
+  // fm^-3 -> cm^-3 factor.
+  const Real mb = eos.GetBaryonMass();
 
   switch (input) {
     case eos_input_rt:
@@ -184,71 +194,65 @@ void burn(eos_input_t input, Thermo &state,
       break;
 
     case eos_input_ps: {
-      // Invert (p, s) -> (rho, t) [Sackur-Tetrode monatomic ideal gas]
-      Real fac_rho = pow(1.0 / (2.0 * M_PI * hbar * hbar), 0.6);
-      state.rho = pow(state.p, 0.6) * pow(mb, 1.6) * fac_rho *
-                  exp(1.0 - 2.0 * mb * state.s / (5.0 * kB));
-
-      Real fac_t = pow(2.0 * M_PI * hbar * hbar / mb, 0.6);
-      state.t = pow(state.p, 0.4) * fac_t *
-                exp(2.0 * mb * state.s / (5.0* kB) - 1.0) / kB;
+      // Table inversion on the isentrope; gives t at the solution too.
+      state.rho = eos.GetDensityFromPressureEntropy(state.p, state.s, state.xn,
+                                                    &state.t) * mb;
       break;
     }
 
     case eos_input_re: {
-      // Invert specific internal energy -> t, at fixed rho. GetTemperatureFromE
-      // expects an energy DENSITY (rest-mass included), not specific internal
-      // energy: e_density = rho*(1 + specific internal energy).
+      // Invert specific internal energy -> t, at fixed rho. Takes eps directly, so
+      // the rest-mass energy density rho*c^2 is never formed (no cancellation).
       Real n = state.rho / mb;
-      Real e_density = state.rho * (1.0 + state.e);
-      state.t = eos.GetTemperatureFromE(n, e_density, state.xn) / kB;
+      state.t = eos.GetTemperatureFromSpecificInternalEnergy(n, state.e, state.xn);
       break;
     }
 
     case eos_input_pt: {
-      // Invert (p, t) -> rho [ideal gas law]
-      state.rho = mb * state.p / (kB * state.t);
+      // Table inversion at fixed t
+      state.rho = eos.GetDensityFromPressureTemperature(state.p, state.t,
+                                                        state.xn) * mb;
+      break;
+    }
+
+    case eos_input_rp: {
+      // Invert pressure -> t, at fixed rho (as DynGRMHD gets T from its primitives)
+      Real n = state.rho / mb;
+      state.t = eos.GetTemperatureFromP(n, state.p, state.xn);
       break;
     }
   }
 
   Real n = state.rho / mb;
-  Real t_energy = kB * state.t;
 
   if constexpr (has_cv_v<Thermo>) {
-    // Specific heat (de/dT at constant rho and composition), monatomic ideal gas:
-    // cv = (3/2) kB / (mu m_u)  [erg/g/K]
-    state.cv = 1.5 * kB / (state.mu * m_u);
+    state.cv = eos.GetSpecificHeat(n, state.t, state.xn);
   }
 
-
-
   if constexpr (has_energy_v<Thermo>) {
-    state.e = eos.GetSpecificInternalEnergy(n, t_energy, state.xn);
+    state.e = eos.GetSpecificInternalEnergy(n, state.t, state.xn);
   }
 
   if constexpr (has_entropy_v<Thermo>) {
-    Real rhoinv = 1.0 / state.rho;
-    Real fac = pow(1.0 / (2.0 * M_PI * hbar * hbar), 1.5);
-    state.s = kB / mb * (2.5 + log(pow(mb, 2.5) * rhoinv * pow(t_energy, 1.5) * fac));
+    state.s = eos.GetEntropy(n, state.t, state.xn);
   }
 
   if constexpr (has_pressure_v<Thermo>) {
-    state.p = eos.GetPressure(n, t_energy, state.xn);
+    state.p = eos.GetPressure(n, state.t, state.xn);
   }
 
-
-  if constexpr (has_dedA_v<Thermo>) {
-    // Monatomic ideal gas: e = 1.5*kB*T/(Abar*m_u) -> de/dAbar = -1.5*kB*T/(Abar^2*m_u)
-    state.dedA = -1.5 * kB * state.t / (state.abar * state.abar * m_u);
+  // de/dX_n at fixed (rho, T): only the nuclear binding term, which dominates
+  // (~1e18 vs ~1e16 erg/g for the ion and electron thermal terms at 1e9 K).
+  // The EOS's rest mass per baryon is mbar = m_u + Sum X_i dm_i/A_i, and eps
+  // carries (mbar/mb - 1)*c^2, so de/dX_n = dm_n*c^2/(A_n*mb), with dm_n the
+  // atomic mass excess. mb here is the baryon mass in g; GetBaryonMass() also
+  // carries the fm^-3 -> cm^-3 density factor.
+  if constexpr (has_dedX_v<Thermo>) {
+    const Real mb_g = mb / cm3_per_fm3;
+    for(int n=0; n<NSPECIES; n++) {
+      state.dedX[n] = dmass_ions(n) * MeV_erg * aion_inv(n) / mb_g;
+    }
   }
-
-
-  if constexpr (has_dedZ_v<Thermo>) {
-    state.dedZ = 0.0;
-  }
-
-
 }
 
 }  // namespace nuclear

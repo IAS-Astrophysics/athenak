@@ -7,7 +7,8 @@
 //========================================================================================
 //! \file network.hpp
 //! \brief He4/C12/O16 reaction network: species data, REACLIB rates, the RHS and the
-//! Jacobian of the conserved (rho*X[n], rho*e) system.
+//! Jacobian of the conserved rho*X[n] system (species only; the energy release is
+//! carried by the Helmholtz EOS through the binding energy in eps).
 
 #include <cmath>
 #include <string>
@@ -16,19 +17,13 @@
 #include "athena.hpp"
 #include "units/units.hpp"
 
-// IE (not lowercase `ie`): the energy-slot index into NX-sized arrays
-// (UX[], F[], J[][]). Deliberately distinct from the common AthenaK
-// mesh-bound-index convention `is, ie, js, je, ks, ke`, which this enum
-// would otherwise silently shadow wherever both appear in the same scope.
 enum {
  ihe4=0,
  ic12=1,
  io16=2,
- IE=3,
 };
 
-constexpr int NSPECIES = IE;
-constexpr int NX = IE + 1;
+constexpr int NSPECIES = 3;
 
 
 // Per-species constants, as functions so they are usable in both host and device code
@@ -48,6 +43,18 @@ KOKKOS_INLINE_FUNCTION Real aion_inv(int n) {
     1.0/   4.0, // 0 : He4
     1.0/  12.0, // 1 : C12
     1.0/  16.0, // 2 : O16
+  };
+  return v[n];
+}
+
+
+// Atomic mass excess [MeV] (AME2020). Must match <mhd>/dm of the Helmholtz EOS, which
+// puts the binding energy into eps through these same values.
+KOKKOS_INLINE_FUNCTION Real dmass_ions(int n) {
+  constexpr Real v[NSPECIES] = {
+    2.42491587,   // 0 : He4
+    0.0,          // 1 : C12
+    -4.73700141,  // 2 : O16
   };
   return v[n];
 }
@@ -270,10 +277,23 @@ void ener_rate(const Real &rho, const Real &temp, const Real X[], Real &enuc, Re
 }
 
 
+KOKKOS_INLINE_FUNCTION
+Real heating_timescale(const Real &rho, const Real &temp, const Real X[], const Real &cv) {
+  // Nuclear heating timescale cv*T/|enuc| [s]: the time for the burning to raise T by
+  // about T. enuc is the specific rate [erg/g/s] and cv the specific heat [erg/g/K].
+  // Without burning (enuc = 0) it returns the largest Real, so a min over cells
+  // ignores the cell.
+  Real enuc, enuc_dt;
+  ener_rate(rho, temp, X, enuc, enuc_dt);
+  Real abs_enuc = Kokkos::fabs(enuc);
+  return (abs_enuc > 0.0) ? cv*temp/abs_enuc : Kokkos::Experimental::finite_max_v<Real>;
+}
+
+
 
 KOKKOS_INLINE_FUNCTION
-void ActualRHS(Real rho, Real temp, Real X[], Real F[]) {
-  
+void ActualRHS(Real rho, Real temp, Real X[], Real F[], Real &enuc_dot) {
+
   Real enuc;
   Real enuc_dt;
   ener_rate(rho, temp, X, enuc, enuc_dt);
@@ -281,8 +301,13 @@ void ActualRHS(Real rho, Real temp, Real X[], Real F[]) {
   Real ydot_nuc_dt[NSPECIES];
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
-  // UX = (rho*X[n], rho*e) are per unit volume: enuc [erg/g/s] -> rho*enuc [erg/cm^3/s]
-  F[IE] = rho * enuc;
+  // Nuclear energy release rate per unit volume: enuc [erg/g/s] -> rho*enuc
+  // [erg/cm^3/s]. Diagnostic only, not part of the Newton system: with the Helmholtz
+  // EOS, eps includes the binding energy, so burning conserves rho*eps and the release
+  // shows up as a higher T at fixed eps.
+  enuc_dot = rho * enuc;
+
+  // UX = rho*X[n] is per unit volume
   for (int n=0; n<NSPECIES; n++) {
     F[n] = rho* aion(n) * ydot_nuc[n];
   }
@@ -291,9 +316,7 @@ void ActualRHS(Real rho, Real temp, Real X[], Real F[]) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]) {
- 
-  Real m_u = units::Units::atomic_mass_unit_cgs;
+void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NSPECIES]) {
 
   tf_t tfactors = evaluate_tfactors(temp);
 
@@ -308,17 +331,14 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
 
   Real ydot_nuc[NSPECIES];
   Real ydot_nuc_dt[NSPECIES];
-  Real enuc;
-  Real enuc_dt;
   Real scratch;
 
   Real Y[NSPECIES];
-  
+
   for (int n=0; n<NSPECIES; n++) {
-    Y[n] = X[n] * aion_inv(n); 
+    Y[n] = X[n] * aion_inv(n);
   }
 
-  ener_rate(rho, temp, X, enuc, enuc_dt);
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
   scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 0.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
@@ -330,9 +350,6 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
   scratch = 0.0;
   J[ihe4][io16] = scratch;
 
-  scratch = ydot_nuc_dt[ihe4] / cv;
-  J[ihe4][IE] = scratch;
-
   scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho + 0.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
   J[ic12][ihe4] = scratch;
 
@@ -341,9 +358,6 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
 
   scratch = 0.0;
   J[ic12][io16] = scratch;
-
-  scratch = ydot_nuc_dt[ic12] / cv;
-  J[ic12][IE] = scratch;
 
   scratch = k_C12_He4_to_O16_reaclib*Y[ic12]*rho;
   J[io16][ihe4] = scratch;
@@ -354,20 +368,6 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
   scratch = 0.0;
   J[io16][io16] = scratch;
 
-  scratch = ydot_nuc_dt[io16] / cv;
-  J[io16][IE] = scratch;
-
-
-  for(int m=0; m<NSPECIES; m++) {
-    Real sum_enuc_dY = 0.0;
-    for(int n=0; n<NSPECIES; n++) {
-      sum_enuc_dY += -mion(n)*J[m][n] / m_u;
-    }
-    J[IE][m] = sum_enuc_dY;
-  }
-
-  J[IE][IE] = enuc_dt / cv;
-
   //Add the weights:
   for(int m=0; m<NSPECIES; m++) {
     for(int n=0; n<NSPECIES; n++) {
@@ -375,23 +375,12 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
     }
   }
 
-  for(int m=0; m<NSPECIES; m++) {
-    J[m][IE] *= aion(m);
-  }
-
-  for(int n=0; n<NSPECIES; n++) {
-    J[IE][n] *= aion_inv(n);
-  }
-
-  //Add the EOS correction
+  //Add the EOS correction: at fixed eps, dT/dX_n = -ex[n]/cv, so the rates' temperature
+  //dependence enters every column through dXdot_m/dT = aion(m)*ydot_nuc_dt[m]
   for(int m=0; m<NSPECIES; m++) {
     for(int n=0; n<NSPECIES; n++) {
-      J[m][n] -= aion(m)*ex[n]*J[m][IE] / cv;
+      J[m][n] -= aion(m)*ydot_nuc_dt[m]*ex[n] / cv;
     }
-  }
-
-  for(int n=0; n<NSPECIES; n++) {
-    J[IE][n] -= ex[n] * enuc_dt / cv;
   }
 }
 
