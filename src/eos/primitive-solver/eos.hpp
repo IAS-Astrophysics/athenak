@@ -169,6 +169,25 @@ class EOS : public EOSPolicy, public ErrorPolicy {
            eos_units.TemperatureConversion(code_units);
   }
 
+  //! \fn Real GetTemperatureFromSpecificInternalEnergy(Real n, Real eps, Real *Y)
+  //  \brief Calculate the temperature from number density, specific internal energy
+  //         and particle fractions. Unlike GetTemperatureFromE it never forms the
+  //         energy density (1 + eps)*n*mb, which cancels catastrophically when c != 1
+  //         (e.g. cgs code units, where eps/c^2 ~ 1e-4). Only for policies that
+  //         provide TemperatureFromEps (EOSHelmholtz).
+  //
+  //  \param[in] n    The number density
+  //  \param[in] eps  The specific internal energy
+  //  \param[in] Y    An array of particle fractions, expected to be of size n_species.
+  //  \return The temperature according to the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetTemperatureFromSpecificInternalEnergy(Real n, Real eps,
+                                                                      Real *Y) const {
+    const Real eps_eos = eps*code_units.EnergyConversion(eos_units)/
+                         code_units.MassConversion(eos_units);
+    return EOSPolicy::TemperatureFromEps(n, eps_eos, Y) *
+           eos_units.TemperatureConversion(code_units);
+  }
+
   //! \fn Real GetTemperatureFromP(Real n, Real p, Real *Y)
   //  \brief Calculate the temperature from number density, pressure, and
   //         particle fractions.
@@ -746,11 +765,11 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     code_units = units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetCodeUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION const UnitSystem& GetCodeUnitSystem() const {
     return code_units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetEOSUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION const UnitSystem& GetEOSUnitSystem() const {
     return eos_units;
   }
 };
