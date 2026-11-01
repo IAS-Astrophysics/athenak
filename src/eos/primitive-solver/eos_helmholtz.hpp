@@ -657,8 +657,13 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
     };
     auto f = [&](int in) { return g(m_log_ne(in) - lye); };
 
+    // Bracket from the lowest and highest nodes where P is finite: the electron table
+    // can have non-finite entries along its edges (e.g. P = NaN at the lowest density
+    // for a band of T), which would otherwise reject a root well inside the table.
     int ilo = 0, ihi = m_nn - 1;
     Real flo = f(ilo), fhi = f(ihi);
+    while (!Kokkos::isfinite(flo) && ilo < ihi) { flo = f(++ilo); }
+    while (!Kokkos::isfinite(fhi) && ihi > ilo) { fhi = f(--ihi); }
     if (!(flo*fhi <= 0.0)) { return nan; }  // no sign change, or NaN
     while (ihi - ilo > 1) {
       int ip = ilo + (ihi - ilo)/2;
