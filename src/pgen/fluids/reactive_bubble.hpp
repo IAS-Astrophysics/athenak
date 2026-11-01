@@ -92,13 +92,14 @@ void LUSolve(const Real LU[][N], const int piv[N], const Real b[N], Real x[N]) {
 //! \brief Builds A = I - dt*J and LU-factorizes it in place into LU.
 
 KOKKOS_INLINE_FUNCTION
-bool FactorNewtonMatrix(const Real dt, const Real J[][NX], Real LU[][NX], int piv[NX]) {
-  for (int m=0; m<NX; m++) {
-    for (int n=0; n<NX; n++) {
+bool FactorNewtonMatrix(const Real dt, const Real J[][NSPECIES], Real LU[][NSPECIES],
+                        int piv[NSPECIES]) {
+  for (int m=0; m<NSPECIES; m++) {
+    for (int n=0; n<NSPECIES; n++) {
       LU[m][n] = ((m == n) ? 1.0 : 0.0) - dt*J[m][n];
     }
   }
-  return LUDecompose<NX>(LU, piv);
+  return LUDecompose<NSPECIES>(LU, piv);
 }
 
 
@@ -107,48 +108,37 @@ bool FactorNewtonMatrix(const Real dt, const Real J[][NX], Real LU[][NX], int pi
 //! \brief One (simplified) Newton iteration of the backward Euler step. Solves
 //!   (I - dt*J) DUX0 = UX - UX0 + dt*F(UX0)
 //! with the stored LU factors, where UX is the state at the start of the step and UX0
-//! the current iterate. The caller then sets UX0 += DUX0. Errors are measured from the
-//! Newton step: index 0 is the energy component, index 1 the max over mass fractions.
+//! the current iterate. The caller then sets UX0 += DUX0. Only the partial densities
+//! rho*X[n] are integrated (operator splitting): the energy release is carried by the
+//! Helmholtz EOS, so there is no energy component.
 
 KOKKOS_INLINE_FUNCTION
-void BackEulerIteration(const Real rho, const Real dt, const Real UX[NX],
-                        const Real UX0[NX], Real DUX0[NX], const Real F[NX],
-                        const Real LU[][NX], const int piv[NX],
-                        const Real e_atol, const Real e_rtol,
-                        const Real y_atol, const Real y_rtol,
-                        Real abs_res[2], Real rel_res[2], Real err[2]) {
-  const Real tiny = 1.0e-30;
+void BackEulerIteration(const Real rho, const Real dt, const Real UX[NSPECIES],
+                        const Real UX0[NSPECIES], Real DUX0[NSPECIES],
+                        const Real F[NSPECIES], const Real LU[][NSPECIES],
+                        const int piv[NSPECIES], const Real y_atol, const Real y_rtol,
+                        Real &abs_res, Real &rel_res, Real &err) {
   const Real x_floor = 1.0e-30;
 
-  Real b[NX];
-  for (int n=0; n<NX; n++) {
+  Real b[NSPECIES];
+  for (int n=0; n<NSPECIES; n++) {
     b[n] = UX[n] - UX0[n] + dt*F[n];
   }
 
-  LUSolve<NX>(LU, piv, b, DUX0);
+  LUSolve<NSPECIES>(LU, piv, b, DUX0);
 
-  // Convergence errors of the conserved variables, normalized by the mixed tolerance
-  // atol + rtol*|x| (converged when err <= 1):
-  //   err[0]: rho*e  [erg/cm^3]  with e_atol, e_rtol
-  //   err[1]: max_n rho*X[n] [g/cm^3] with y_atol, y_rtol
-  // abs_res/rel_res are the plain absolute/relative updates (used to detect stalls).
-
-  // Energy component
-  Real e_new = Kokkos::fabs(UX0[IE] + DUX0[IE]);
-  abs_res[0] = Kokkos::fabs(DUX0[IE]);
-  rel_res[0] = abs_res[0] / Kokkos::fmax(e_new, tiny);
-  err[0] = abs_res[0] / (e_atol + e_rtol*e_new);
-
-  // Partial density (rho*X[n]) components
-  abs_res[1] = 0.0;
-  rel_res[1] = 0.0;
-  err[1] = 0.0;
+  // Convergence error of rho*X[n] [g/cm^3], max over species, normalized by the mixed
+  // tolerance y_atol + y_rtol*|x| (converged when err <= 1). abs_res/rel_res are the
+  // plain absolute/relative updates (used to detect stalls).
+  abs_res = 0.0;
+  rel_res = 0.0;
+  err = 0.0;
   for (int n=0; n<NSPECIES; n++) {
     Real dx = Kokkos::fabs(DUX0[n]);
     Real x_new = Kokkos::fabs(UX0[n] + DUX0[n]);
-    abs_res[1] = Kokkos::fmax(abs_res[1], dx);
-    rel_res[1] = Kokkos::fmax(rel_res[1], dx / Kokkos::fmax(x_new, rho*x_floor));
-    err[1] = Kokkos::fmax(err[1], dx / (y_atol + y_rtol*x_new));
+    abs_res = Kokkos::fmax(abs_res, dx);
+    rel_res = Kokkos::fmax(rel_res, dx / Kokkos::fmax(x_new, rho*x_floor));
+    err = Kokkos::fmax(err, dx / (y_atol + y_rtol*x_new));
   }
 }
 
