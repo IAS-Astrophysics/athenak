@@ -403,14 +403,16 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
       case ECLOGEPS: {
         Real erad  = asol*T*T*T*T/(n*mb);
         Real eion  = 1.5*T*cp.comp.inv_abar/mb;
-        Real ebind = cp.comp.eb;
-        Real etot  = eps_fac*Kokkos::exp(var) + erad + eion + ebind;
+        // Positivity guard on the thermal energy only: the binding offset eb is a
+        // convention relative to mb (negative for the Fe group) and must not decide
+        // whether the Coulomb energy is kept.
+        Real eth = eps_fac*Kokkos::exp(var) + erad + eion;
         if (use_coulomb) {
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           Real ecoul = c.y_chg*T*c.u/mb;
-          if (etot + ecoul > 0.0) { etot += ecoul; }
+          if (eth + ecoul > 0.0) { eth += ecoul; }
         }
-        return etot;
+        return eth + cp.comp.eb;
       }
       case ECDEPSDT: {
         Real deraddt = 4.0*asol*T*T*T/(n*mb);
@@ -418,15 +420,14 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         Real decouldt = 0.0;
         if (use_coulomb) {
           // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T, included under the
-          // same condition as the Coulomb energy in ECLOGEPS (which needs eps itself,
-          // one more table lookup)
+          // same condition as the Coulomb energy in ECLOGEPS (which needs the thermal
+          // eps itself, one more table lookup)
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           if (c.y_chg > 0.0) {
             Real eps_e = Kokkos::exp(eval_at_lnty(ECLOGEPS, Kokkos::log(n*Ye), lT));
-            Real etot  = eps_fac*eps_e + asol*T*T*T*T/(n*mb) + 1.5*T*cp.comp.inv_abar/mb
-                       + cp.comp.eb;
+            Real eth   = eps_fac*eps_e + asol*T*T*T*T/(n*mb) + 1.5*T*cp.comp.inv_abar/mb;
             Real ecoul = c.y_chg*T*c.u/mb;
-            if (etot + ecoul > 0.0) { decouldt = c.y_chg*c.ucv/mb; }
+            if (eth + ecoul > 0.0) { decouldt = c.y_chg*c.ucv/mb; }
           }
         }
         return eps_fac*var + deraddt + deiondt + decouldt;
