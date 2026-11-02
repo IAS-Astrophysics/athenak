@@ -27,7 +27,6 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "units/units.hpp"
 #include "pgen/fluids/reactive_bubble.hpp"
 #include "nuclear/microphysics.hpp"
 #include "nuclear/nuclear.hpp"
@@ -46,13 +45,10 @@ namespace {
   Real y_rtol_nuc;
   Real dt_nuc_factor;  // dt_nuc = dt_nuc_factor * min(cv*T/|edot|)
                        
-  // cgs -> code conversion factors of the code units cm, g, c = 1 (multiply a cgs value
-  // to get it in code units). 
-  constexpr Real c_cgs    = units::Units::speed_of_light_cgs;
-  constexpr Real len_c2c  = 1.0/units::Units::cm_cgs;                  
-  constexpr Real rho_c2c  = 1.0/units::Units::g_cm3_cgs;                
-  constexpr Real pres_c2c = 1.0/(units::Units::dyne_cm2_cgs*c_cgs*c_cgs); 
-  constexpr Real time_c2c = c_cgs*units::Units::s_cgs/units::Units::cm_cgs; 
+  // cgs -> code conversion factors (multiply a cgs value to get it in code units), set
+  // in UserProblem from the unit systems of the DynGRMHD EOS and of its cgs copy. Host
+  // only: the kernels take local copies.
+  Real len_c2c, rho_c2c, pres_c2c, time_c2c;
   void SetReactiveSources(Mesh* pm, const Real bdt);
   void HydrostaticBCs(Mesh* pm);
   void SetADMVariablesToRindler(MeshBlockPack *pmbp);
@@ -162,6 +158,12 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // profile; constructed on the host and captured by value.
   EOSHelm eos = eos_dyngr;
   eos.SetCodeUnitSystem(Primitive::MakeCGS());
+  const Primitive::UnitSystem &code = eos_dyngr.GetCodeUnitSystem();
+  const Primitive::UnitSystem &cgs  = eos.GetCodeUnitSystem();
+  len_c2c  = cgs.LengthConversion(code);
+  rho_c2c  = cgs.MassDensityConversion(code);
+  pres_c2c = cgs.PressureConversion(code);
+  time_c2c = cgs.TimeConversion(code);
 
   max_iter_nuc     = pin->GetInteger("problem", "max_iter_nuc");
   n_refactor_nuc   = pin->GetOrAddInteger("problem", "nuc_refactor", 3);
@@ -183,7 +185,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   g_grav       = pin->GetReal("problem", "g_grav");
   rindler_yref = pin->GetOrAddReal("problem", "y_ref", ymin);
   y_ref_cgs    = rindler_yref/len_c2c;
-  rindler_k    = g_grav/(c_cgs*c_cgs)/len_c2c;
+  rindler_k    = g_grav*len_c2c/(time_c2c*time_c2c);
   Real dy_cell = (ymax - ymin)/static_cast<Real>(npts);
   Real alpha_min = 1.0 + rindler_k*(ymin - ng*dy_cell - rindler_yref);
   if (!(g_grav > 0.0) || !(alpha_min > 0.0)) {
@@ -260,6 +262,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
   const Real g_ = g_grav;      // local copies: capturable by device lambda
   const Real yref_ = y_ref_cgs;
+  const Real rho_c2c_ = rho_c2c, pres_c2c_ = pres_c2c;
   int nbad = 0;
 
   Kokkos::parallel_reduce("pgen_reactive_hse", Kokkos::RangePolicy<>(DevExeSpace(), 0, 1),
@@ -332,14 +335,14 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
 
       atm.p = pres_avg_lo; atm.s = s_base;
       nuclear::burn(nuclear::eos_input_ps, atm, eos);
-      ghost.d_view(ng-1-g)        = atm.rho*rho_c2c;
-      ghost.d_view(ng + ng-1-g)   = pres_avg_lo*pres_c2c;
+      ghost.d_view(ng-1-g)        = atm.rho*rho_c2c_;
+      ghost.d_view(ng + ng-1-g)   = pres_avg_lo*pres_c2c_;
       if (!Kokkos::isfinite(atm.rho)) bad++;
 
       atm.p = pres_avg_hi; atm.s = s_base;
       nuclear::burn(nuclear::eos_input_ps, atm, eos);
-      ghost.d_view(2*ng + g)      = atm.rho*rho_c2c;
-      ghost.d_view(3*ng + g)      = pres_avg_hi*pres_c2c;
+      ghost.d_view(2*ng + g)      = atm.rho*rho_c2c_;
+      ghost.d_view(3*ng + g)      = pres_avg_hi*pres_c2c_;
       if (!Kokkos::isfinite(atm.rho)) bad++;
     }
   }, Kokkos::Sum<int>(nbad));
@@ -429,11 +432,11 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     nuclear::burn(nuclear::eos_input_pt, cell, eos);
 
     // Primitive vector in code units. DynGRMHD stores the pressure in IPR.
-    w0(m,IDN,k,j,i) = cell.rho*rho_c2c;
+    w0(m,IDN,k,j,i) = cell.rho*rho_c2c_;
     w0(m,IVX,k,j,i) = 0.0;
     w0(m,IVY,k,j,i) = 0.0;
     w0(m,IVZ,k,j,i) = 0.0;
-    w0(m,IPR,k,j,i) = pres*pres_c2c;
+    w0(m,IPR,k,j,i) = pres*pres_c2c_;
     for (int n=0; n<nscalars; n++) {
       w0(m,nmhd+n,k,j,i) = X_mass.d_view(n);
     }
@@ -672,6 +675,7 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
     const Real factor = dt_nuc_factor;
+    const Real rho_c2c_ = rho_c2c, pres_c2c_ = pres_c2c;
     Real min_theat = std::numeric_limits<float>::max();
     int nfail_total = 0;  // number of cells where the Newton solver failed
 
@@ -705,9 +709,9 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
 
       // Primitives in cgs: rho, X[n], and T from the pressure (DynGRMHD stores p in
       // IPR); eps at that T is held fixed during the burn.
-      const Real rho = w0(m,IDN,k,j,i)/rho_c2c;  // fixed during the burn
+      const Real rho = w0(m,IDN,k,j,i)/rho_c2c_;  // fixed during the burn
       state.rho = rho;
-      state.p = w0(m,IPR,k,j,i)/pres_c2c;
+      state.p = w0(m,IPR,k,j,i)/pres_c2c_;
       for(int n=0; n<NSPECIES; n++) {
         state.xn[n] = w0(m,nmhd+n,k,j,i);
         UX[n] = rho*state.xn[n];
