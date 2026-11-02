@@ -136,6 +136,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     std::is_base_of_v<SupportsSpecificHeat, EOSPolicy>;
   static constexpr bool supports_density_inversion =
     std::is_base_of_v<SupportsDensityFromPressure, EOSPolicy>;
+  static constexpr bool supports_composition_derivative =
+    std::is_base_of_v<SupportsCompositionDerivative, EOSPolicy>;
 
 
  public:
@@ -374,6 +376,30 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION Real GetSpecificInternalEnergy(Real n, Real T, Real *Y) const {
     return SpecificInternalEnergy(n, T*code_units.TemperatureConversion(eos_units), Y) *
            eos_units.EnergyConversion(code_units)/eos_units.MassConversion(code_units);
+  }
+
+  //! \fn void GetSpecificInternalEnergyDX(Real n, Real T, Real *Y, Real *dedX)
+  //  \brief Get (d eps/dX_k) at fixed n and T, per mass, up to a k-independent
+  //         constant (only differences between species are meaningful). NaN if
+  //         unsupported.
+  //
+  //  \param[in]  n     The number density
+  //  \param[in]  T     The temperature
+  //  \param[in]  Y     An array of size n_species of the particle fractions.
+  //  \param[out] dedX  An array of size n_species receiving the derivatives.
+  KOKKOS_INLINE_FUNCTION void GetSpecificInternalEnergyDX(Real n, Real T, Real *Y,
+                                                          Real *dedX) const {
+    if constexpr (supports_composition_derivative) {
+      EOSPolicy::SpecificInternalEnergyDX(n, T*code_units.TemperatureConversion(eos_units),
+                                          Y, dedX);
+      const Real fac = eos_units.EnergyConversion(code_units)/
+                       eos_units.MassConversion(code_units);
+      for (int k = 0; k < n_species; ++k) { dedX[k] *= fac; }
+    } else {
+      for (int k = 0; k < n_species; ++k) {
+        dedX[k] = std::numeric_limits<Real>::quiet_NaN();
+      }
+    }
   }
 
   //! \fn Real GetBaryonChemicalPotential(Real n, Real T, Real *Y)

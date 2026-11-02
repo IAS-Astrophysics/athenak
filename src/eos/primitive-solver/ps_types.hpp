@@ -35,6 +35,9 @@ class SupportsEntropy{};
 class SupportsTemperatureFromEntropy{};
 // Marks a policy with SpecificHeat(n, T, Y) = (d eps/dT) at fixed n, Y.
 class SupportsSpecificHeat{};
+// Marks a policy with SpecificInternalEnergyDX(n, T, Y, dedX) = (d eps/dX_k) at fixed
+// n, T, up to a k-independent constant.
+class SupportsCompositionDerivative{};
 // Marks a policy with DensityFromPressureTemperature(p, T, Y) and, together with
 // SupportsTemperatureFromEntropy, DensityFromPressureEntropy(p, s, Y, &T).
 class SupportsDensityFromPressure{};

@@ -739,7 +739,7 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
 
       // Begin Euler Iteration
       for(int iter=0; (iter<max_iter) && factor_ok; iter++) {
-        ActualRHS(rho, state.t, state.xn, F, enuc_dot);
+        ActualRHS(rho, state.t, state.xn, ex, F, enuc_dot);
 
         // Euler iteration, reusing the L and U factors:
         BackEulerIteration(rho, dt, UX, UX0, DUX0, F, LU, piv, y_atol, y_rtol,
@@ -789,7 +789,8 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
 
       // Heating timescale cv*T/|edot| [s] at the burned state (state is up to date with
       // UX0 after the last update_state() call)
-      min_th = Kokkos::fmin(heating_timescale(rho, state.t, state.xn, state.cv), min_th);
+      min_th = Kokkos::fmin(heating_timescale(rho, state.t, state.xn, ex, state.cv),
+                            min_th);
     }, Kokkos::Min<Real>(min_theat), Kokkos::Sum<int>(nfail_total));
 
     // Stop the run if the Newton solver failed in any cell

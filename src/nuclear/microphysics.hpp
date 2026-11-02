@@ -30,9 +30,6 @@ inline constexpr Real kB = units::Units::k_boltzmann_cgs;
 inline constexpr Real m_u = units::Units::atomic_mass_unit_cgs;
 inline constexpr Real hbar = units::Units::red_plank_constant_cgs;
 inline constexpr Real c_light = units::Units::speed_of_light_cgs;
-inline constexpr Real MeV_erg = 1.6021766208e-6;  // same value as Primitive::MakeCGS()
-// Helmholtz EOS number densities are in fm^-3 (nuclear units): 1 fm^-3 = 1e39 cm^-3
-inline constexpr Real cm3_per_fm3 = 1.0e39;
 
 //! \struct Thermo
 //! \brief Thermodynamic state used by burn(). Which of rho/t/p/e/s are
@@ -241,17 +238,11 @@ void burn(eos_input_t input, Thermo &state,
     state.p = eos.GetPressure(n, state.t, state.xn);
   }
 
-  // de/dX_n at fixed (rho, T): only the nuclear binding term, which dominates
-  // (~1e18 vs ~1e16 erg/g for the ion and electron thermal terms at 1e9 K).
-  // The EOS's rest mass per baryon is mbar = m_u + Sum X_i dm_i/A_i, and eps
-  // carries (mbar/mb - 1)*c^2, so de/dX_n = dm_n*c^2/(A_n*mb), with dm_n the
-  // atomic mass excess. mb here is the baryon mass in g; GetBaryonMass() also
-  // carries the fm^-3 -> cm^-3 density factor.
+  // de/dX_n at fixed (rho, T) [erg/g]: binding (~1e18), ion, electron and Coulomb
+  // terms, up to an n-independent constant that drops out of every composition change
+  // with Sum dX_n = 0.
   if constexpr (has_dedX_v<Thermo>) {
-    const Real mb_g = mb / cm3_per_fm3;
-    for(int n=0; n<NSPECIES; n++) {
-      state.dedX[n] = dmass_ions(n) * MeV_erg * aion_inv(n) / mb_g;
-    }
+    eos.GetSpecificInternalEnergyDX(n, state.t, state.xn, state.dedX);
   }
 }
 

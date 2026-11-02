@@ -6,8 +6,9 @@
 //! \file eos_helmholtz.cpp
 //! \brief Unit test of the EOS<> wrapper getters added for the nuclear network coupling
 //! with the Helmholtz policy: GetTemperatureFromEntropy, GetDensityFromPressure*,
-//! GetSpecificHeat, and their unit conversion. Round trips over a (n, T, Y) grid inside
-//! the table range, in geometric_solar units and on a cgs copy of the EOS.
+//! GetSpecificHeat, GetSpecificInternalEnergyDX, and their unit conversion. Round trips
+//! over a (n, T, Y) grid inside the table range, in geometric_solar units and on a cgs
+//! copy of the EOS.
 
 #include <iostream>
 #include <limits>
@@ -79,11 +80,13 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
 
   bool success_all = true;
   Real max_cv_dev = 0.0;
+  Real max_dx_dev = 0.0;
   int n_contract = 0;  // n(p,.) points off the round trip but with P(n1) = p
   int n_unreach = 0;   // NaN results of the density inversions (see the getters)
   Kokkos::parallel_reduce("ut_helmholtz",
                           Kokkos::RangePolicy<>(DevExeSpace(), 0, nn*nT*nY),
-  KOKKOS_LAMBDA(const int &idx, bool &success, Real &cv_dev, int &ncon, int &nunr) {
+  KOKKOS_LAMBDA(const int &idx, bool &success, Real &cv_dev, Real &dx_dev, int &ncon,
+                int &nunr) {
     const int in = idx/(nT*nY);
     const int iT = (idx - in*nT*nY)/nY;
     const int iY = idx - in*nT*nY - iT*nY;
@@ -91,7 +94,7 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
     Real Y[MAX_SPECIES] = {0.0};
     if (iY == 0) { Y[0] = 1.0; }                                   // pure He4
     else if (iY == 1) { Y[1] = 1.0; }                              // pure C12
-    else if (iY == 2) { Y[2] = 1.0; }                              // pure O16 (eb < 0)
+    else if (iY == 2) { Y[2] = 1.0; }                              // pure Fe56 (eb < 0)
     else { Y[0] = 1.0/3.0; Y[1] = 1.0/3.0; Y[2] = 1.0/3.0; }        // equal thirds
 
     const Real n = exp(lnmin + in*dln);
@@ -164,7 +167,40 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
     cv_dev = fmax(cv_dev, err);
     if (!(err <= tol_cv) || !(cv > 0.0)) fail("cv vs FD", cv, err);
 
-    // (e) cgs copy against the geometric_solar values through the unit factors
+    // (e) deps/dX_k - deps/dX_j vs central finite difference of eps along e_k - e_j
+    // (sum dX = 0, so the k-independent constant of the getter drops out) at the mixed
+    // composition. The third species has Z/A != 1/2, so the electron and Zbar Coulomb
+    // terms are exercised, with the table-derivative vs secant tolerance. Where pairs
+    // dominate (n_e below ~10 pair densities) the FD reference itself is the 1e-5
+    // residue of a cancellation in the interpolated u_e, so that pair is skipped.
+    Real dedX[MAX_SPECIES], dedX_cgs[MAX_SPECIES];
+    eos.GetSpecificInternalEnergyDX(n, T, Y, dedX);
+    eos_cgs.GetSpecificInternalEnergyDX(n, T*Tc, Y, dedX_cgs);
+    if (iY == 3) {
+      const Real h = 1.0e-3;
+      const Real hbarc = 197.327, me = 0.511;  // MeV fm, MeV (T is in MeV here)
+      const Real n_pair = 0.183*T*T*T/(hbarc*hbarc*hbarc)*exp(-me/T);
+      const int jmax = (0.49*n > 10.0*n_pair) ? 3 : 2;
+      for (int j = 1; j < jmax; ++j) {
+        Real Yp[MAX_SPECIES], Ym[MAX_SPECIES];
+        for (int s = 0; s < 3; ++s) { Yp[s] = Y[s]; Ym[s] = Y[s]; }
+        Yp[0] += h; Yp[j] -= h;
+        Ym[0] -= h; Ym[j] += h;
+        Real d_fd = (eos.GetSpecificInternalEnergy(n, T, Yp) -
+                     eos.GetSpecificInternalEnergy(n, T, Ym))/(2.0*h);
+        Real d = dedX[0] - dedX[j];
+        err = fabs(d/d_fd - 1.0);
+        dx_dev = fmax(dx_dev, err);
+        if (!(err <= tol_cv)) {
+          fail((j == 1) ? "dedX[0]-dedX[1] vs FD" : "dedX[0]-dedX[2] vs FD", d, err);
+          Kokkos::printf("  FD value %.10e\n", d_fd);  // NOLINT
+        }
+        err = fabs((dedX_cgs[0] - dedX_cgs[j])/(d*EM) - 1.0);
+        if (!(err <= tol_units)) fail("dedX units", dedX_cgs[0] - dedX_cgs[j], err);
+      }
+    }
+
+    // (f) cgs copy against the geometric_solar values through the unit factors
     Real cv_cgs = eos_cgs.GetSpecificHeat(n, T*Tc, Y);
     err = fabs(cv_cgs/(cv*EM/Tc) - 1.0);
     if (!(err <= tol_units)) fail("cv units", cv_cgs, err);
@@ -172,11 +208,13 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
     err = fabs(T_cgs/(T1*Tc) - 1.0);
     if (!(err <= tol_units)) fail("T(n,s) units", T_cgs, err);
   }, Kokkos::LAnd<bool>(success_all), Kokkos::Max<Real>(max_cv_dev),
-     Kokkos::Sum<int>(n_contract), Kokkos::Sum<int>(n_unreach));
+     Kokkos::Max<Real>(max_dx_dev), Kokkos::Sum<int>(n_contract),
+     Kokkos::Sum<int>(n_unreach));
 
   if (global_variable::my_rank == 0) {
     std::cout << "EOSHelmholtz unit test: " << nn*nT*nY
               << " points, max |cv/cv_fd - 1| = " << max_cv_dev
+              << ", max |dedX/dedX_fd - 1| = " << max_dx_dev
               << ", n(p,.) accepted via P residual: " << n_contract
               << ", n(p,.) unreachable: " << n_unreach << std::endl;
   }
