@@ -597,7 +597,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //! \fn void SetTemperatureFloor(Real floor)
   //  \brief Set the temperature floor (in code units) used by the EOS ErrorPolicy.
   KOKKOS_INLINE_FUNCTION void SetTemperatureFloor(Real floor) {
-    T_atm = (floor >= min_T) ? floor : min_T;
+    const Real T_min = GetMinimumTemperature();
+    T_atm = (floor >= T_min) ? floor : T_min;
   }
 
   //! \fn void SetSpeciesAtmosphere(Real atmo, int i)
@@ -639,14 +640,14 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return min_n;
   }
 
-  //! \brief Get the maximum temperature  (in EOS units) permitted by the EOS.
+  //! \brief Get the maximum temperature (in code units) permitted by the EOS.
   KOKKOS_INLINE_FUNCTION Real GetMaximumTemperature() const {
-    return max_T;
+    return max_T*eos_units.TemperatureConversion(code_units);
   }
 
-  //! \brief Get the minimum temperature (in EOS units) permitted by the EOS.
+  //! \brief Get the minimum temperature (in code units) permitted by the EOS.
   KOKKOS_INLINE_FUNCTION Real GetMinimumTemperature() const {
-    return min_T;
+    return min_T*eos_units.TemperatureConversion(code_units);
   }
 
   //! \brief Get the minimum fraction permitted by the EOS.

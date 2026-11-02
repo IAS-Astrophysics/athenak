@@ -46,8 +46,6 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
   const Real Tc = gs.TemperatureConversion(cgs);
   const Real EM = gs.EnergyConversion(cgs)/gs.MassConversion(cgs);
   const Real SM = gs.EntropyConversion(cgs)/gs.MassConversion(cgs);
-  // Table temperatures are in EOS units; geometric_solar code temperature is MeV too
-  const Real T_eos2code = Primitive::MakeNuclear().TemperatureConversion(gs);
 
   // Grid in the physically meaningful window of the table, <problem>/nmin..nmax [fm^-3]
   // (defaults ~1.7e3..1.7e11 g/cm^3) and Tmin..Tmax [code units, defaults 1e-5..10 MeV,
@@ -65,8 +63,8 @@ void ProblemGenerator::EOSHelmholtz(ParameterInput *pin, const bool restart) {
   const Real Tmax = pin->GetOrAddReal("problem", "Tmax", 10.0);
   Real lnmin = log(fmax(eos.GetMinimumDensity(), nmin));
   Real lnmax = log(fmin(eos.GetMaximumDensity(), nmax));
-  Real lTmin = log(fmax(eos.GetMinimumTemperature()*T_eos2code, Tmin));
-  Real lTmax = log(fmin(eos.GetMaximumTemperature()*T_eos2code, Tmax));
+  Real lTmin = log(fmax(eos.GetMinimumTemperature(), Tmin));
+  Real lTmax = log(fmin(eos.GetMaximumTemperature(), Tmax));
   const Real shrink = 0.05;
   const Real dn_tot = lnmax - lnmin, dT_tot = lTmax - lTmin;
   lnmin += shrink*dn_tot; lnmax -= shrink*dn_tot;
