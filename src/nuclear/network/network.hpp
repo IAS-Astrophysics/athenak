@@ -341,7 +341,7 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NSP
 
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
-  scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 0.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
+  scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 1.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
   J[ihe4][ihe4] = scratch;
 
   scratch = -k_C12_He4_to_O16_reaclib*Y[ihe4]*rho;
@@ -363,7 +363,7 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NSP
   J[io16][ihe4] = scratch;
 
   scratch = k_C12_He4_to_O16_reaclib*Y[ihe4]*rho;
-  J[io16][ic12] = aion(io16)*aion_inv(ic12)*scratch;
+  J[io16][ic12] = scratch;
 
   scratch = 0.0;
   J[io16][io16] = scratch;
