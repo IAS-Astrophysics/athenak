@@ -251,61 +251,47 @@ void rhs_nuc(const Real &rho, const Real &temp, const Real X[], Real ydot_nuc[],
 
 
 KOKKOS_INLINE_FUNCTION
-void ener_rate(const Real &rho, const Real &temp, const Real X[], Real &enuc, Real &enuc_dt) {
-  // Specific energy rate contribution and its temperature derivative.
-
-  Real ydot_nuc[NSPECIES];
-  Real ydot_nuc_dt[NSPECIES];
-
-  rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
-  enuc = 0.0;
-  enuc_dt = 0.0;
-
+Real ener_rate(const Real X[], const Real dedX[], const Real ydot_nuc[]) {
+  // Specific heating rate [erg/g/s] at fixed (rho, eps): cv dT/dt = -Sum_n dedX[n] dX_n/dt
+  // with dedX = (d eps/dX_n) at fixed (rho, T) from the EOS (binding, ion, electron and
+  // Coulomb terms). The k-independent constant in dedX drops out since Sum dX_n/dt = 0.
+  Real enuc = 0.0;
   for (int n=0; n<NSPECIES; n++) {
-    enuc += ydot_nuc[n] * mion(n);
+    enuc -= dedX[n] * aion(n) * ydot_nuc[n];
   }
-
-  for (int n=0; n<NSPECIES; n++) {
-    enuc_dt += ydot_nuc_dt[n] * mion(n);
-  }
-
-  Real m_u = units::Units::atomic_mass_unit_cgs;
-  Real c_cgs = units::Units::speed_of_light_cgs;
-  enuc *= -c_cgs*c_cgs/m_u;
-  enuc_dt *= -c_cgs*c_cgs/m_u;
-  return;
+  return enuc;
 }
 
 
 KOKKOS_INLINE_FUNCTION
-Real heating_timescale(const Real &rho, const Real &temp, const Real X[], const Real &cv) {
+Real heating_timescale(const Real &rho, const Real &temp, const Real X[],
+                       const Real dedX[], const Real &cv) {
   // Nuclear heating timescale cv*T/|enuc| [s]: the time for the burning to raise T by
   // about T. enuc is the specific rate [erg/g/s] and cv the specific heat [erg/g/K].
   // Without burning (enuc = 0) it returns the largest Real, so a min over cells
   // ignores the cell.
-  Real enuc, enuc_dt;
-  ener_rate(rho, temp, X, enuc, enuc_dt);
-  Real abs_enuc = Kokkos::fabs(enuc);
+  Real ydot_nuc[NSPECIES];
+  Real ydot_nuc_dt[NSPECIES];
+  rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
+  Real abs_enuc = Kokkos::fabs(ener_rate(X, dedX, ydot_nuc));
   return (abs_enuc > 0.0) ? cv*temp/abs_enuc : Kokkos::Experimental::finite_max_v<Real>;
 }
 
 
 
 KOKKOS_INLINE_FUNCTION
-void ActualRHS(Real rho, Real temp, Real X[], Real F[], Real &enuc_dot) {
+void ActualRHS(Real rho, Real temp, Real X[], const Real dedX[], Real F[],
+               Real &enuc_dot) {
 
-  Real enuc;
-  Real enuc_dt;
-  ener_rate(rho, temp, X, enuc, enuc_dt);
   Real ydot_nuc[NSPECIES];
   Real ydot_nuc_dt[NSPECIES];
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
-  // Nuclear energy release rate per unit volume: enuc [erg/g/s] -> rho*enuc
-  // [erg/cm^3/s]. Diagnostic only, not part of the Newton system: with the Helmholtz
-  // EOS, eps includes the binding energy, so burning conserves rho*eps and the release
-  // shows up as a higher T at fixed eps.
-  enuc_dot = rho * enuc;
+  // Nuclear heating rate per unit volume: enuc [erg/g/s] -> rho*enuc [erg/cm^3/s].
+  // Diagnostic only, not part of the Newton system: with the Helmholtz EOS, eps includes
+  // the binding energy, so burning conserves rho*eps and the release shows up as a
+  // higher T at fixed eps.
+  enuc_dot = rho * ener_rate(X, dedX, ydot_nuc);
 
   // UX = rho*X[n] is per unit volume
   for (int n=0; n<NSPECIES; n++) {
@@ -341,7 +327,7 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NSP
 
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
-  scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 0.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
+  scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 1.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
   J[ihe4][ihe4] = scratch;
 
   scratch = -k_C12_He4_to_O16_reaclib*Y[ihe4]*rho;
@@ -363,7 +349,7 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NSP
   J[io16][ihe4] = scratch;
 
   scratch = k_C12_He4_to_O16_reaclib*Y[ihe4]*rho;
-  J[io16][ic12] = aion(io16)*aion_inv(ic12)*scratch;
+  J[io16][ic12] = scratch;
 
   scratch = 0.0;
   J[io16][io16] = scratch;

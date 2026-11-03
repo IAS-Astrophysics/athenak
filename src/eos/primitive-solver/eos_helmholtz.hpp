@@ -31,7 +31,8 @@ namespace Primitive {
 
 class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
                      public SupportsMassFractions, public SupportsTemperatureFromEntropy,
-                     public SupportsSpecificHeat, public SupportsDensityFromPressure {
+                     public SupportsSpecificHeat, public SupportsDensityFromPressure,
+                     public SupportsCompositionDerivative {
 
  public:
   enum TableVariables {
@@ -177,6 +178,42 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
   //! (d eps/dT) at fixed n, Y [1/MeV]: table channel plus radiation, ion and Coulomb.
   KOKKOS_INLINE_FUNCTION Real SpecificHeat(Real n, Real T, Real *Y) const {
     return eval_lin_at_nty(ECDEPSDT, n, T, Y);
+  }
+
+  //! (d eps/dX_k) at fixed n, T, k = 0..n_species-1, up to a k-independent constant
+  //! (the d/dX of the sum(X) normalisation in composition()). Only differences
+  //! dedX_k - dedX_j are meaningful, which is all a composition change with
+  //! sum(dX) = 0 needs. Binding, ion, electron and Coulomb terms; radiation does not
+  //! depend on X. The electron term is d(n_e u_e)/dn_e at fixed T = mu_e - T dmu_e/dT
+  //! = -T^2 (d eta/dT) at fixed n_e (eta kinetic, like u_e), from the table's eta
+  //! channel. The equivalent u_e + (P_e - T dP_e/dT)/n_e cancels to O(1e-5) where
+  //! pairs dominate and is useless from interpolated channels there.
+  KOKKOS_INLINE_FUNCTION void SpecificInternalEnergyDX(Real n, Real T, const Real *Y,
+                                                       Real *dedX) const {
+    const CoulombPrep cp = coulomb_prep(n, Y);
+    const Real ye    = cp.comp.ye;
+    const Real ln_ne = Kokkos::log(n*ye);
+    const Real lT    = Kokkos::log(T);
+    const Real mu_e  = -T*dlnt_at_lnty(ECETA, ln_ne, lT);
+    // Coulomb: d(y_chg u(Gamma))/dX_k with Gamma ~ n^(1/3) Ye^2 y_chg^(-5/3) / T, under
+    // the same positivity guard as the Coulomb energy in ECLOGEPS
+    Real cyc = 0.0, cze = 0.0;
+    if (use_coulomb) {
+      const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
+      if (c.y_chg > 0.0) {
+        const Real u_e  = Kokkos::exp(eval_at_lnty(ECLOGEPS, ln_ne, lT));
+        const Real eth  = ye*u_e/mb + asol*T*T*T*T/(n*mb) + 1.5*T*cp.comp.inv_abar/mb;
+        const Real ecoul = c.y_chg*T*c.u/mb;
+        if (eth + ecoul > 0.0) {
+          cyc = T*(c.u - 5.0/3.0*c.gamma*c.du);
+          cze = 2.0*T*c.gamma*c.du*c.y_chg/ye;
+        }
+      }
+    }
+    for (int k = 0; k < n_species; ++k) {
+      const Real yc = (m_Z[k] > 0.0) ? m_inv_A[k] : 0.0;
+      dedX[k] = (m_dmoa[k] + 1.5*T*m_inv_A[k] + (mu_e + cze)*m_zoa[k] + cyc*yc)/mb;
+    }
   }
 
   KOKKOS_INLINE_FUNCTION Real Enthalpy(Real n, Real T, Real *Y) const {
@@ -403,14 +440,16 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
       case ECLOGEPS: {
         Real erad  = asol*T*T*T*T/(n*mb);
         Real eion  = 1.5*T*cp.comp.inv_abar/mb;
-        Real ebind = cp.comp.eb;
-        Real etot  = eps_fac*Kokkos::exp(var) + erad + eion + ebind;
+        // Positivity guard on the thermal energy only: the binding offset eb is a
+        // convention relative to mb (negative for the Fe group) and must not decide
+        // whether the Coulomb energy is kept.
+        Real eth = eps_fac*Kokkos::exp(var) + erad + eion;
         if (use_coulomb) {
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           Real ecoul = c.y_chg*T*c.u/mb;
-          if (etot + ecoul > 0.0) { etot += ecoul; }
+          if (eth + ecoul > 0.0) { eth += ecoul; }
         }
-        return etot;
+        return eth + cp.comp.eb;
       }
       case ECDEPSDT: {
         Real deraddt = 4.0*asol*T*T*T/(n*mb);
@@ -418,15 +457,14 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
         Real decouldt = 0.0;
         if (use_coulomb) {
           // d/dT of y_chg*T*u(Gamma)/mb with dGamma/dT = -Gamma/T, included under the
-          // same condition as the Coulomb energy in ECLOGEPS (which needs eps itself,
-          // one more table lookup)
+          // same condition as the Coulomb energy in ECLOGEPS (which needs the thermal
+          // eps itself, one more table lookup)
           const CoulombTerms c = coulomb_terms(cp, n, T, lT, Y);
           if (c.y_chg > 0.0) {
             Real eps_e = Kokkos::exp(eval_at_lnty(ECLOGEPS, Kokkos::log(n*Ye), lT));
-            Real etot  = eps_fac*eps_e + asol*T*T*T*T/(n*mb) + 1.5*T*cp.comp.inv_abar/mb
-                       + cp.comp.eb;
+            Real eth   = eps_fac*eps_e + asol*T*T*T*T/(n*mb) + 1.5*T*cp.comp.inv_abar/mb;
             Real ecoul = c.y_chg*T*c.u/mb;
-            if (etot + ecoul > 0.0) { decouldt = c.y_chg*c.ucv/mb; }
+            if (eth + ecoul > 0.0) { decouldt = c.y_chg*c.ucv/mb; }
           }
         }
         return eps_fac*var + deraddt + deiondt + decouldt;
@@ -512,6 +550,16 @@ class EOSHelmholtz : public EOSPolicyInterface, public SupportsEntropy,
     weight_idx_lt(&wt0, &wt1, &it, log_t);
     return wn0*(wt0*m_table(iv, in+0, it+0) + wt1*m_table(iv, in+0, it+1)) +
            wn1*(wt0*m_table(iv, in+1, it+0) + wt1*m_table(iv, in+1, it+1));
+  }
+
+  /// d/d(log T) of the bilinear interpolant of a channel, constant within a T cell.
+  KOKKOS_INLINE_FUNCTION Real dlnt_at_lnty(int iv, Real log_n, Real log_t) const {
+    int in, it;
+    Real wn0, wn1, wt0, wt1;
+    weight_idx_ln(&wn0, &wn1, &in, log_n);
+    weight_idx_lt(&wt0, &wt1, &it, log_t);
+    return (wn0*(m_table(iv, in+0, it+1) - m_table(iv, in+0, it+0)) +
+            wn1*(m_table(iv, in+1, it+1) - m_table(iv, in+1, it+0)))*m_id_log_t;
   }
 
   /// Invert one table variable for temperature at fixed (n, Y). Returns NaN on
