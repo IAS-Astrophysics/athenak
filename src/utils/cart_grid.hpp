@@ -21,7 +21,7 @@ class CartesianGrid {
  public:
   // Creates a geodesic grid with refinement level nlev and radius rad
   CartesianGrid(MeshBlockPack *pmy_pack, Real center[3],
-                Real extend[3], int numpoints[3], bool is_cheb = false);
+                Real extend[3], int numpoints[3], bool is_cheb = false, int rpow = 0);
 
   // parameters for the grid
   Real center_x1, center_x2, center_x3;   // grid centers
@@ -33,6 +33,7 @@ class CartesianGrid {
 
   // dump on chebyshev or uniform grid, default is uniform
   bool is_cheby;
+  int r_pow;  // interpolate r^r_pow f, then divide; use ordinary interpolation at r=0
 
   // For simplicity, unravel all points into a 1d array
   DualArray3D<Real> interp_vals;   // container for data interpolated to sphere

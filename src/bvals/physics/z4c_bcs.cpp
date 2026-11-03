@@ -162,7 +162,8 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
           for (int i=0; i<ng; ++i) {
             if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GXZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AXZ ||
-                n==z4c::Z4c::I_Z4C_GAMX || n==z4c::Z4c::I_Z4C_BETAX) {
+                n==z4c::Z4c::I_Z4C_GAMX || n==z4c::Z4c::I_Z4C_BETAX ||
+              n==z4c::Z4c::I_Z4C_BX) {
               u0(m,n,k,j,is-i-1) = -u0(m,n,k,j,is+i);
             } else {
               u0(m,n,k,j,is-i-1) =  u0(m,n,k,j,is+i);
@@ -192,7 +193,8 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
           for (int i=0; i<ng; ++i) {
             if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GXZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AXZ ||
-                n==z4c::Z4c::I_Z4C_GAMX || n==z4c::Z4c::I_Z4C_BETAX) {
+                n==z4c::Z4c::I_Z4C_GAMX || n==z4c::Z4c::I_Z4C_BETAX ||
+              n==z4c::Z4c::I_Z4C_BX) {
               u0(m,n,k,j,ie+i+1) = -u0(m,n,k,j,ie-i);
             } else {
               u0(m,n,k,j,ie+i+1) =  u0(m,n,k,j,ie-i);
@@ -230,7 +232,8 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
           for (int j=0; j<ng; ++j) {
             if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GYZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AYZ ||
-                n==z4c::Z4c::I_Z4C_GAMY || n==z4c::Z4c::I_Z4C_BETAY) {
+                n==z4c::Z4c::I_Z4C_GAMY || n==z4c::Z4c::I_Z4C_BETAY ||
+              n==z4c::Z4c::I_Z4C_BY) {
               u0(m,n,k,js-j-1,i) = -u0(m,n,k,js+j,i);
             } else {
               u0(m,n,k,js-j-1,i) =  u0(m,n,k,js+j,i);
@@ -260,7 +263,8 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
           for (int j=0; j<ng; ++j) {
             if (n==z4c::Z4c::I_Z4C_GXY || n==z4c::Z4c::I_Z4C_GYZ ||
                 n==z4c::Z4c::I_Z4C_AXY || n==z4c::Z4c::I_Z4C_AYZ ||
-                n==z4c::Z4c::I_Z4C_GAMY || n==z4c::Z4c::I_Z4C_BETAY) {
+                n==z4c::Z4c::I_Z4C_GAMY || n==z4c::Z4c::I_Z4C_BETAY ||
+              n==z4c::Z4c::I_Z4C_BY) {
               u0(m,n,k,je+j+1,i) = -u0(m,n,k,je-j,i);
             } else {
               u0(m,n,k,je+j+1,i) =  u0(m,n,k,je-j,i);
@@ -297,7 +301,8 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
         for (int k=0; k<ng; ++k) {
           if (n==z4c::Z4c::I_Z4C_GXZ || n==z4c::Z4c::I_Z4C_GYZ ||
               n==z4c::Z4c::I_Z4C_AXZ || n==z4c::Z4c::I_Z4C_AYZ ||
-              n==z4c::Z4c::I_Z4C_GAMZ || n==z4c::Z4c::I_Z4C_BETAZ) {
+              n==z4c::Z4c::I_Z4C_GAMZ || n==z4c::Z4c::I_Z4C_BETAZ ||
+              n==z4c::Z4c::I_Z4C_BZ) {
             u0(m,n,ks-k-1,j,i) = -u0(m,n,ks+k,j,i);
           } else {
             u0(m,n,ks-k-1,j,i) =  u0(m,n,ks+k,j,i);
@@ -327,7 +332,8 @@ void BCHelper(MeshBlockPack *ppack, DualArray2D<Real> u_in, DvceArray5D<Real> u0
         for (int k=0; k<ng; ++k) {
           if (n==z4c::Z4c::I_Z4C_GXZ || n==z4c::Z4c::I_Z4C_GYZ ||
               n==z4c::Z4c::I_Z4C_AXZ || n==z4c::Z4c::I_Z4C_AYZ ||
-              n==z4c::Z4c::I_Z4C_GAMZ || n==z4c::Z4c::I_Z4C_BETAZ) {
+              n==z4c::Z4c::I_Z4C_GAMZ || n==z4c::Z4c::I_Z4C_BETAZ ||
+              n==z4c::Z4c::I_Z4C_BZ) {
             u0(m,n,ke+k+1,j,i) = -u0(m,n,ke-k,j,i);
           } else {
             u0(m,n,ke+k+1,j,i) =  u0(m,n,ke-k,j,i);

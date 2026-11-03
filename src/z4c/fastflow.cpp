@@ -518,7 +518,7 @@ void FastFlow::Write(int iter, Real time) {
   if (ah_found && (time_first_found < 0)) {
     std::string parname {"time_first_found_" + std::to_string(nh)};
     time_first_found = time;
-    pin->SetReal("fastflow", parname, time_first_found);
+    pin->SetRealExact("fastflow", parname, time_first_found);
   }
 }
 
@@ -568,7 +568,7 @@ void FastFlow::Find(int iter, Real time) {
   // Retain the found shape in restart: this serves as primary ini. guess.
   pin->SetBoolean("fastflow", "ah_found_a0_" + std::to_string(nh), ah_found);
   if (ah_found) {
-    pin->SetReal("fastflow", "last_a0_" + std::to_string(nh), last_a0);
+    pin->SetRealExact("fastflow", "last_a0_" + std::to_string(nh), last_a0);
     SaveShape();
 
     // Auto-detect when the black hole has finished forming: the horizon must

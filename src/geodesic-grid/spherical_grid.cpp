@@ -136,10 +136,14 @@ void SphericalGrid::SetInterpolationIndices() {
       // The upper bounds are exclusive so that a point landing exactly on a MeshBlock
       // face is owned by exactly one block, and the search stops at the first match:
       // interpolated values are MPI_SUM-reduced over ranks, so a point claimed twice
-      // would be counted twice.
-      if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) < x1max) &&
-          (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) < x2max) &&
-          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) < x3max)) {
+      // would be counted twice. A point exactly on the
+      // upper face of the whole domain belongs to the last block (InterpolationOwns).
+      if (InterpolationOwns(rcoord.h_view(n,0), x1min, x1max,
+                             pmy_pack->pmesh->mesh_size.x1max) &&
+          InterpolationOwns(rcoord.h_view(n,1), x2min, x2max,
+                             pmy_pack->pmesh->mesh_size.x2max) &&
+          InterpolationOwns(rcoord.h_view(n,2), x3min, x3max,
+                             pmy_pack->pmesh->mesh_size.x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
                                                           (x1min+offset*dx1))/dx1));

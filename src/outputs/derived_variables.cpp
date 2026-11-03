@@ -35,6 +35,8 @@
 #include "coordinates/adm.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
+#include "z4c/z4c.hpp"
+#include "z4c_diagnostics.hpp"
 #include "utils/current.hpp"
 
 KOKKOS_INLINE_FUNCTION
@@ -1580,6 +1582,27 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       dv(m,idv_local,k,j,i) = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
     });
     i_dv += 1; // increment derived variable index
+  }
+  // Allocate once for all requested derived components, preserving their offsets.
+  int selected = -2;
+  for (int v=180; v<197; ++v) {
+    if (name == var_choice[v]) selected = v-180;
+  }
+  if (name == "z4c_diag") selected = -1;
+  if (selected != -2) {
+    auto *pz4c = pm->pmb_pack->pz4c;
+    pz4c->Z4cToADM(pm->pmb_pack);
+    if (derived_var.extent(0) != nmb_alloc || derived_var.extent(1) != n_dv ||
+        derived_var.extent(2) != n3 || derived_var.extent(3) != n2 ||
+        derived_var.extent(4) != n1) {
+      Kokkos::realloc(derived_var,nmb_alloc,n_dv,n3,n2,n1);
+    }
+    switch (pz4c->opt.fd_stencil) {
+      case 2: z4c_diagnostics::Compute<2>(pm,derived_var,i_dv,selected); break;
+      case 3: z4c_diagnostics::Compute<3>(pm,derived_var,i_dv,selected); break;
+      case 4: z4c_diagnostics::Compute<4>(pm,derived_var,i_dv,selected); break;
+    }
+    i_dv += selected<0 ? 17 : 1;
   }
   i_dv = i_dv % n_dv; // reset derived variable index
 }
