@@ -141,18 +141,18 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
 
-  // Code units cm, g, c = 1 on the DynGRMHD EOS. <mhd> has no units entry, so DynGRMHD
-  // was constructed with the default c=1 system, providing a freedom to choose the unit system
-  // inside the pgen; the PrimitiveSolver holds the EOS by value and every kernel reads it from 
-  // there, so setting it here applies to the whole run (restarts included, since UserProblem runs again). 
-  // The floors were// set at construction in the old units: set them again from <mhd>/dfloor [g/cm^3]
-  // and <mhd>/tfloor [K].
+  // Code units: G = c = 1, set by DynGRMHD from <mhd>/units (default geometric_solar:
+  // lengths in G*Msun/c^2, temperature in MeV). DynGRMHD needs G = c = 1, so the unit
+  // systems with G != 1 are rejected.
+  const std::string units = pin->GetOrAddString("mhd", "units", "geometric_solar");
+  if (units.compare("geometric_solar") != 0 && units.compare("geometric_kilometer") != 0) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+              << "reactive_bubble needs G = c = 1 code units: mhd/units must be "
+              << "geometric_solar or geometric_kilometer, not " << units << std::endl;
+    exit(EXIT_FAILURE);
+  }
   auto &eos_dyngr = static_cast<dyngr::DynGRMHDPS<Primitive::EOSHelmholtz,
                    Primitive::ResetFloor>*>(pmbp->pdyngr)->eos.ps.GetEOSMutable();
-  eos_dyngr.SetCodeUnitSystem(Primitive::MakeCmGC1());
-  eos_dyngr.SetDensityFloor(pin->GetOrAddReal("mhd", "dfloor", (FLT_MIN))/
-                            eos_dyngr.GetBaryonMass());
-  eos_dyngr.SetTemperatureFloor(pin->GetOrAddReal("mhd", "tfloor", (FLT_MIN)));
 
   // Shallow cgs copy of the EOS (shares the table) for burn() and the hydrostatic
   // profile; constructed on the host and captured by value.
@@ -164,6 +164,15 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   rho_c2c  = cgs.MassDensityConversion(code);
   pres_c2c = cgs.PressureConversion(code);
   time_c2c = cgs.TimeConversion(code);
+
+  // Floors: DynGRMHD set them at construction reading <mhd>/dfloor and tfloor as code
+  // units. Here they are cgs (dfloor [g/cm^3], tfloor [K]): set them again, converted.
+  // The PrimitiveSolver holds the EOS by value and every kernel reads it from there, so
+  // this applies to the whole run (restarts included, since UserProblem runs again).
+  eos_dyngr.SetDensityFloor(pin->GetOrAddReal("mhd", "dfloor", (FLT_MIN))*rho_c2c/
+                            eos_dyngr.GetBaryonMass());
+  eos_dyngr.SetTemperatureFloor(pin->GetOrAddReal("mhd", "tfloor", (FLT_MIN))*
+                                cgs.TemperatureConversion(code));
 
   max_iter_nuc     = pin->GetInteger("problem", "max_iter_nuc");
   n_refactor_nuc   = pin->GetOrAddInteger("problem", "nuc_refactor", 3);
@@ -181,9 +190,10 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   int ng = pm->mb_indcs.ng;
 
   // Gravity through the Rindler lapse. g_grav [cm/s^2] > 0 points toward -y; y_ref
-  // (code length units, default: base of the domain) is where alpha = 1.
+  // [cm] (default: base of the domain) is where alpha = 1. rindler_yref is in code
+  // length, y_ref_cgs in cm.
   g_grav       = pin->GetReal("problem", "g_grav");
-  rindler_yref = pin->GetOrAddReal("problem", "y_ref", ymin);
+  rindler_yref = pin->GetOrAddReal("problem", "y_ref", ymin/len_c2c)*len_c2c;
   y_ref_cgs    = rindler_yref/len_c2c;
   rindler_k    = g_grav*len_c2c/(time_c2c*time_c2c);
   Real dy_cell = (ymax - ymin)/static_cast<Real>(npts);
@@ -217,11 +227,13 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   Real rho_base    = pin->GetReal("problem", "rho_base");
   Real temp_base   = pin->GetReal("problem", "temp_base");
   bool perturb     = pin->GetOrAddBoolean("problem", "perturb", true);
-  // Length scale of the perturbation [code length]: T = T0*(1 + 0.6*(1 + tanh(4 - r/sigma)))
-  // (Zingale et al. 2019, Eq. 89, Table 9)
-  Real sigma       = pin->GetOrAddReal("problem", "sigma", 2.56e5);
-  // Vertical position of the bubble centre [code length] (x2 in 2D, x3 in 3D):
-  Real y_bubble    = pin->GetOrAddReal("problem", "y0", 0.5*(ymin + ymax));
+  // Length scale of the perturbation, read in [cm] and kept in code length:
+  // T = T0*(1 + 0.6*(1 + tanh(4 - r/sigma))) (Zingale et al. 2019, Eq. 89, Table 9)
+  Real sigma       = pin->GetOrAddReal("problem", "sigma", 2.56e5)*len_c2c;
+  // Vertical position of the bubble centre (x2 in 2D, x3 in 3D), read in [cm] and kept
+  // in code length; default: centre of the domain
+  Real y_bubble    = pin->GetOrAddReal("problem", "y0",
+                                       0.5*(ymin + ymax)/len_c2c)*len_c2c;
 
   // --------------------Initialize MHD variables -----------------
   int nmhd = pmbp->pmhd->nmhd;

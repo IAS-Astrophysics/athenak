@@ -173,8 +173,6 @@ UnitSystem MakeNuclear();
 //! MKS unit systems
 UnitSystem MakeMKS();
 
-//! cm, g and c = 1 (time in cm/c, energies in g), temperature in K
-UnitSystem MakeCmGC1();
 
 } // namespace Primitive
 
