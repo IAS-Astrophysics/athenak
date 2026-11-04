@@ -21,6 +21,21 @@
 namespace nuclear {
 
 //----------------------------------------------------------------------------------------
+//! \struct NuclearParams
+//  \brief Parameters of the network integration methods, read from <nuclear>. Fields
+//  shared by all methods have no prefix; method-specific ones carry the method's prefix
+//  (be_: backward Euler, nuclear/integrate/backward_euler.hpp). Plain data, so it can be
+//  captured by value into device kernels.
+struct NuclearParams {
+  // shared by all integration methods
+  Real y_atol;        // absolute tolerance on rho*X[n] [g/cm^3]
+  Real y_rtol;        // relative tolerance on rho*X[n]
+  int max_iter;       // max nonlinear iterations per network substep
+  // backward Euler
+  int be_n_refactor;  // refactor the Jacobian at least every be_n_refactor iterations
+};
+
+//----------------------------------------------------------------------------------------
 //! \struct NuclearTaskIDs
 //  \brief container to hold TaskIDs of all Nuclear tasks
 struct NuclearTaskIDs {
@@ -44,6 +59,8 @@ class Nuclear {
   NuclearTaskIDs id;          // container to hold names of TaskIDs
   Real dt_nuc{};              // network substep size, set by the pgen
   int max_substeps{};         // cap on the network substeps per hydro step
+  Real dt_nuc_factor{};       // dt_nuc = dt_nuc_factor*min(cv*T/|edot|), set by the pgen
+  NuclearParams params{};     // parameters of the network integration methods
 
   void AssembleNuclearTasks(std::map<std::string, std::shared_ptr<TaskList>> tl);
 
