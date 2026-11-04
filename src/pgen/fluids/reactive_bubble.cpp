@@ -27,7 +27,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "pgen/fluids/reactive_bubble.hpp"
+#include "nuclear/integrate/backward_euler.hpp"
 #include "nuclear/microphysics.hpp"
 #include "nuclear/nuclear.hpp"
 
@@ -38,12 +38,7 @@ namespace {
   Real g_grav;         
   Real y_ref_cgs;      
   Real rindler_k;      
-  Real rindler_yref;   
-  int max_iter_nuc;
-  int n_refactor_nuc;
-  Real y_atol_nuc;
-  Real y_rtol_nuc;
-  Real dt_nuc_factor;  // dt_nuc = dt_nuc_factor * min(cv*T/|edot|)
+  Real rindler_yref;
                        
   // cgs -> code conversion factors (multiply a cgs value to get it in code units), set
   // in UserProblem from the unit systems of the DynGRMHD EOS and of its cgs copy. Host
@@ -145,7 +140,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   // lengths in G*Msun/c^2, temperature in MeV). DynGRMHD needs G = c = 1, so the unit
   // systems with G != 1 are rejected.
   const std::string units = pin->GetOrAddString("mhd", "units", "geometric_solar");
-  if (units.compare("geometric_solar") != 0 && units.compare("geometric_kilometer") != 0) {
+  if (units.compare("geometric_solar") != 0 &&
+      units.compare("geometric_kilometer") != 0) {
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
               << "reactive_bubble needs G = c = 1 code units: mhd/units must be "
               << "geometric_solar or geometric_kilometer, not " << units << std::endl;
@@ -174,11 +170,8 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   eos_dyngr.SetTemperatureFloor(pin->GetOrAddReal("mhd", "tfloor", (FLT_MIN))*
                                 cgs.TemperatureConversion(code));
 
-  max_iter_nuc     = pin->GetInteger("problem", "max_iter_nuc");
-  n_refactor_nuc   = pin->GetOrAddInteger("problem", "nuc_refactor", 3);
-  y_atol_nuc       = pin-> GetReal("problem", "y_atol");
-  y_rtol_nuc       = pin-> GetReal("problem", "y_rtol");
-  dt_nuc_factor    = pin->GetOrAddReal("problem", "dt_nuc_factor", 0.1);
+  // The network parameters (Newton solver: nuclear::NuclearParams; substep control:
+  // dt_nuc_factor, max_substeps) are read by the Nuclear module from <nuclear>.
 
   user_srcs_nuc_func = &SetReactiveSources;
   user_bcs_func = &HydrostaticBCs;
@@ -668,14 +661,12 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
     auto &w0 = pmbp->pmhd->w0;
     int nmhd = pmbp->pmhd->nmhd;
 
-    const Real y_atol = y_atol_nuc;
-    const Real y_rtol = y_rtol_nuc;
-    const int max_iter = max_iter_nuc;
-    const int n_refactor = n_refactor_nuc;
+    // Network integration parameters from <nuclear>, captured by value into the kernel
+    const nuclear::NuclearParams prm = pmbp->pnuc->params;
     const Real dt = bdt/time_c2c;     // [s]
 
     // cgs copy of the DynGRMHD EOS (shares the table), captured by value into the
-    // per-cell Newton-solve kernel below.
+    // per-cell burn kernel below.
     EOSHelm eos = static_cast<dyngr::DynGRMHDPS<Primitive::EOSHelmholtz,
                   Primitive::ResetFloor>*>(pmbp->pdyngr)->eos.ps.GetEOS();
     eos.SetCodeUnitSystem(Primitive::MakeCGS());
@@ -686,7 +677,7 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
     const int nmkji = (nmb1 + 1)*nx3*nx2*nx1;
     const int nkji = nx3*nx2*nx1;
     const int nji  = nx2*nx1;
-    const Real factor = dt_nuc_factor;
+    const Real factor = pmbp->pnuc->dt_nuc_factor;
     const Real rho_c2c_ = rho_c2c, pres_c2c_ = pres_c2c;
     Real min_theat = std::numeric_limits<float>::max();
     int nfail_total = 0;  // number of cells where the Newton solver failed
@@ -703,117 +694,40 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
 
       Thermo state;
 
-      // RHS, d(eps)/dX[n], and the conserved rho*X[n] vector: UX is the state at the
-      // start of the step, UX0 the current Newton iterate and DUX0 the Newton update.
-      Real F[NSPECIES];
-      Real ex[NSPECIES];
-      Real DUX0[NSPECIES];
-      Real UX0[NSPECIES];
-      Real UX[NSPECIES];
-
-      // Jacobian and its LU factors (reused across iterations)
-      Real J[NSPECIES][NSPECIES];
-      Real LU[NSPECIES][NSPECIES];
-      int piv[NSPECIES];
-
-      Real abs_res, rel_res, err;
-      Real enuc_dot;
-
       // Primitives in cgs: rho, X[n], and T from the pressure (DynGRMHD stores p in
       // IPR); eps at that T is held fixed during the burn.
       const Real rho = w0(m,IDN,k,j,i)/rho_c2c_;  // fixed during the burn
+      Real X[NSPECIES];
       state.rho = rho;
       state.p = w0(m,IPR,k,j,i)/pres_c2c_;
       for(int n=0; n<NSPECIES; n++) {
-        state.xn[n] = w0(m,nmhd+n,k,j,i);
-        UX[n] = rho*state.xn[n];
-        UX0[n] = UX[n];
+        X[n] = w0(m,nmhd+n,k,j,i);
+        state.xn[n] = X[n];
       }
 
       nuclear::burn(nuclear::eos_input_rp, state, eos);
       const Real eps = state.e;  // held fixed during the burn (tau is unchanged)
 
-      // Composition, T (at fixed eps), cv and d(e)/dX[n] of the current iterate UX0
-      auto update_state = [&]() {
-        for(int n=0; n<NSPECIES; n++) {
-          state.xn[n] = UX0[n]/rho;
-        }
-        state.e = eps;
-        nuclear::burn(nuclear::eos_input_re, state, eos);
-        for(int n=0; n<NSPECIES; n++) {
-          ex[n] = state.dedX[n];
-        }
-      };
+      // Backward Euler burn over dt (cgs): X[n] is returned burned and renormalized,
+      // t_heat = cv*T/|edot| [s] at the burned state. A failure (singular matrix, no
+      // convergence within max_iter, or a non-finite result) is counted, and the run is
+      // stopped after the kernel if any cell failed.
+      Real t_heat;
+      if (!nuclear::BackwardEulerBurn(rho, eps, dt, X, eos, prm, state, t_heat)) nfail++;
 
-      // Jacobian and LU factorization at the start of the step
-      update_state();
-      PopulateJac(rho, state.t, state.xn, state.cv, ex, J);
-      bool factor_ok = FactorNewtonMatrix(dt, J, LU, piv);
-      int iters_since_factor = 0;
-      Real rel_res_old = 0.0;
-      bool converged = false;
-
-      // Begin Euler Iteration
-      for(int iter=0; (iter<max_iter) && factor_ok; iter++) {
-        ActualRHS(rho, state.t, state.xn, ex, F, enuc_dot);
-
-        // Euler iteration, reusing the L and U factors:
-        BackEulerIteration(rho, dt, UX, UX0, DUX0, F, LU, piv, y_atol, y_rtol,
-                           abs_res, rel_res, err);
-
-        for(int n=0; n<NSPECIES; n++) {
-          UX0[n] += DUX0[n];
-        }
-        update_state();
-        iters_since_factor++;
-
-        // Converged when, for every species, |d(rho*X)| <= y_atol + y_rtol*|rho*X|
-        if (err <= 1.0) {
-          converged = true;
-          break;
-        }
-
-        // Refactor when convergence stalls or after n_refactor iterations
-        bool stalled = (iters_since_factor > 1) && (rel_res > 0.5*rel_res_old);
-        rel_res_old = rel_res;
-        if (stalled || (iters_since_factor >= n_refactor)) {
-          PopulateJac(rho, state.t, state.xn, state.cv, ex, J);
-          factor_ok = FactorNewtonMatrix(dt, J, LU, piv);
-          iters_since_factor = 0;
-        }
-      }
-
-      // Count a Newton failure: singular matrix, no convergence within max_iter, or a
-      // non-finite result (also T, e.g. eps outside the table). The run is stopped after
-      // the kernel if any cell failed.
-      bool finite = Kokkos::isfinite(state.t);
-      for(int n=0; n<NSPECIES; n++) {
-        finite = finite && Kokkos::isfinite(UX0[n]);
-      }
-      if (!(converged && finite)) nfail++;
-
-      // Mass fractions of the last iterate, renormalized so that sum_n X[n] = 1
-      // (corrects the drift from the burn and from advecting the species separately)
-      Real sum_rhox = 0.0;
-      for(int n=0; n<NSPECIES; n++) {
-        sum_rhox += UX0[n];
-      }
       // Conserved D*X[n]; D and tau are unchanged by the burn
       for(int n=0; n<NSPECIES; n++) {
-        u0(m, nmhd+n, k, j, i) = u0(m,IDN,k,j,i)*UX0[n]/sum_rhox;
+        u0(m, nmhd+n, k, j, i) = u0(m,IDN,k,j,i)*X[n];
       }
 
-      // Heating timescale cv*T/|edot| [s] at the burned state (state is up to date with
-      // UX0 after the last update_state() call)
-      min_th = Kokkos::fmin(heating_timescale(rho, state.t, state.xn, ex, state.cv),
-                            min_th);
+      min_th = Kokkos::fmin(t_heat, min_th);
     }, Kokkos::Min<Real>(min_theat), Kokkos::Sum<int>(nfail_total));
 
     // Stop the run if the Newton solver failed in any cell
     if (nfail_total > 0) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
                 << std::endl << "Nuclear Newton solver failed in " << nfail_total
-                << " cells (no convergence in max_iter_nuc=" << max_iter
+                << " cells (no convergence in nuclear/max_iter=" << prm.max_iter
                 << " iterations, singular matrix, or non-finite result)"
                 << std::endl << "cycle=" << pm->ncycle << " time=" << pm->time
                 << " substep h=" << bdt << std::endl;
