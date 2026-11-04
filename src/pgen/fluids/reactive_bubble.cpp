@@ -35,11 +35,11 @@ using nuclear::Thermo;
 using EOSHelm = Primitive::EOS<Primitive::EOSHelmholtz, Primitive::ResetFloor>;
 
 namespace {
-  Real g_grav;         
-  Real y_ref_cgs;      
-  Real rindler_k;      
+  Real g_grav;
+  Real y_ref_cgs;
+  Real rindler_k;
   Real rindler_yref;
-                       
+
   // cgs -> code conversion factors (multiply a cgs value to get it in code units), set
   // in UserProblem from the unit systems of the DynGRMHD EOS and of its cgs copy. Host
   // only: the kernels take local copies.
@@ -61,8 +61,8 @@ namespace {
 }
 
 
-struct Atm{ 
-  Real rho; 
+struct Atm{
+  Real rho;
   Real pres;
   Real temp;
   Real yloc;
@@ -72,8 +72,8 @@ struct Atm{
 // Right-hand side of the hydrostatic balance of a static fluid in the Rindler metric
 // ds^2 = -alpha^2 c^2 dt^2 + dx^2 + dy^2 + dz^2, alpha = 1 + g*(y - y_ref)/c^2:
 //   dp/dy = -(rho*(c^2 + eps) + p)/c^2 * g/alpha
-// with eos_input_ps (fixed entropy s_base and composition xn[]). Device only in GPU builds: 
-// the Helmholtz table lives in device memory.
+// with eos_input_ps (fixed entropy s_base and composition xn[]). Device only in GPU
+// builds: the Helmholtz table lives in device memory.
 KOKKOS_INLINE_FUNCTION
 Real HydrostaticRHS(const Real &y, const Real &pres, const Real &s_base,
     const Real xn[NSPECIES], const EOSHelm &eos, const Real &g, const Real &y_ref) {
@@ -81,7 +81,7 @@ Real HydrostaticRHS(const Real &y, const Real &pres, const Real &s_base,
   for (int n = 0; n < NSPECIES; n++) {
     stage.xn[n] = xn[n];
   }
-  stage.p = pres; 
+  stage.p = pres;
   stage.s = s_base;
   nuclear::burn(nuclear::eos_input_ps, stage, eos);
   const Real c2 = nuclear::c_light*nuclear::c_light;
@@ -306,7 +306,7 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
         pres_avg += soln(m + (NFACT)*n).pres;
       }
       pres_avg /= static_cast<Real>(NFACT);
-      atm.p = pres_avg; 
+      atm.p = pres_avg;
       atm.s = s_base;
       nuclear::burn(nuclear::eos_input_ps, atm, eos);
       sol.d_view(n).pres = pres_avg;
