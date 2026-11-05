@@ -39,8 +39,9 @@ void SourceTerms::NewTimeStep(const DvceArray5D<Real> &w0, const EOS_Data &eos_d
     Real temp_unit = pmy_pack->punit->temperature_cgs();
     Real n_unit = pmy_pack->punit->density_cgs()/pmy_pack->punit->mu()
                   / pmy_pack->punit->atomic_mass_unit_cgs;
+    const Real nH_unit = ISMHydrogenNumberDensityUnit();
     Real cooling_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
-                        / n_unit/n_unit;
+                        / nH_unit/nH_unit;
     Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
                         / n_unit;
 

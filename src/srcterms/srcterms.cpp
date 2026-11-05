@@ -10,6 +10,8 @@
 
 #include "srcterms.hpp"
 
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <string> // string
 
@@ -55,6 +57,26 @@ SourceTerms::SourceTerms(std::string block, MeshBlockPack *pp, ParameterInput *p
   // (2) Optically thin ISM cooling
   if (ism_cooling) {
     hrate = pin->GetReal(block, "hrate");
+    const bool has_xh = pin->DoesParameterExist(block, "hydrogen_mass_fraction");
+    const bool has_mu_h = pin->DoesParameterExist(block, "mu_H");
+    if (!has_xh && !has_mu_h) {
+      std::cerr << "ISM cooling in <" << block
+                << "> requires hydrogen_mass_fraction or mu_H." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    const Real xh = has_xh ? pin->GetReal(block, "hydrogen_mass_fraction") : 1.0;
+    const Real mu_h = has_mu_h ? pin->GetReal(block, "mu_H") : 1.0;
+    if (!(xh > 0.0 && xh <= 1.0 && std::isfinite(mu_h) && mu_h >= 1.0)) {
+      std::cerr << "ISM cooling in <" << block << "> requires 0 < hydrogen_mass_fraction"
+                << " <= 1 and finite mu_H >= 1." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (has_xh && has_mu_h && std::abs(xh*mu_h - 1.0) > 1.0e-6) {
+      std::cerr << "Inconsistent hydrogen_mass_fraction and mu_H in <" << block
+                << "> (expected mu_H = 1/hydrogen_mass_fraction)." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    ism_hydrogen_mass_fraction = has_xh ? xh : 1.0/mu_h;
   }
 
   // (3) optically thin relativistic cooling
@@ -128,6 +150,12 @@ void SourceTerms::ConstantAccel(const DvceArray5D<Real> &w0, const EOS_Data &eos
   return;
 }
 
+//! Hydrogen nuclei per cm^3 at unit code density, for n_H^2 Lambda_hd.
+Real SourceTerms::ISMHydrogenNumberDensityUnit() const {
+  const Real amu_cgs = units::Units::atomic_mass_unit_cgs;
+  return ism_hydrogen_mass_fraction*pmy_pack->punit->density_cgs()/amu_cgs;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void SourceTerms::ISMCooling()
 //! \brief Add explict ISM cooling and heating source terms in the energy equations.
@@ -146,8 +174,9 @@ void SourceTerms::ISMCooling(const DvceArray5D<Real> &w0, const EOS_Data &eos_da
   Real temp_unit = pmy_pack->punit->temperature_cgs();
   Real n_unit = pmy_pack->punit->density_cgs()/pmy_pack->punit->mu()
                 /pmy_pack->punit->atomic_mass_unit_cgs;
+  const Real nH_unit = ISMHydrogenNumberDensityUnit();
   Real cooling_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()
-                      /n_unit/n_unit;
+                      /nH_unit/nH_unit;
   Real heating_unit = pmy_pack->punit->pressure_cgs()/pmy_pack->punit->time_cgs()/n_unit;
 
   par_for("cooling", DevExeSpace(), 0, nmb1, ks, ke, js, je, is, ie,
