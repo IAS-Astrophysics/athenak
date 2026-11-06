@@ -127,6 +127,7 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   static constexpr bool supports_entropy = std::is_base_of_v<SupportsEntropy, EOSPolicy>;
   static constexpr bool supports_potentials = std::is_base_of_v<SupportsChemicalPotentials, EOSPolicy>;
   static constexpr bool supports_transition = std::is_base_of_v<SupportsTransition, EOSPolicy>;
+  static constexpr bool supports_interpotdiff = std::is_base_of_v<SupportsInteractionPotentialDifference, EOSPolicy>;
 
  public:
   //! \fn EOS()
@@ -329,6 +330,23 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION Real GetElectronLeptonChemicalPotential(Real n, Real T, Real *Y) const {
    if constexpr (supports_potentials) {
     return EOSPolicy::ElectronLeptonChemicalPotential(n, T*code_units.TemperatureConversion(eos_units), Y) *
+            eos_units.ChemicalPotentialConversion(code_units);
+   } else {
+    return Kokkos::Experimental::quiet_NaN_v<Real>;
+   }
+  }
+
+  //! \fn Real GetInteractionPotentialDifference(Real n, Real T, Real *Y)
+  //  \brief Get the effective interaction potential difference from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The effective interaction potential difference for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetInteractionPotentialDifference(Real n, Real T, Real *Y) const {
+   if constexpr (supports_interpotdiff) {
+    return EOSPolicy::InteractionPotentialDifference(n, T*code_units.TemperatureConversion(eos_units), Y) *
             eos_units.ChemicalPotentialConversion(code_units);
    } else {
     return Kokkos::Experimental::quiet_NaN_v<Real>;

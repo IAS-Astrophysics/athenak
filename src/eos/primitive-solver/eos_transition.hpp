@@ -34,7 +34,8 @@ namespace Primitive {
 template<typename LogPolicy>
 class EOSTransition : public EOSPolicyInterface, public LogPolicy,
                       public SupportsEntropy, public SupportsChemicalPotentials,
-                      public SupportsTransition {
+                      public SupportsTransition,
+                      public SupportsInteractionPotentialDifference {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;

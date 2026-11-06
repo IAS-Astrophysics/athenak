@@ -74,7 +74,7 @@ struct NuratesParams {
 };
 
 //! \fn void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn,
-//!                      Real &mu_n, Real &mu_p, Real &mu_e, Real &n_nue,
+//!                      Real &mu_n, Real &mu_p, Real &mu_e, Real &dU, Real &n_nue,
 //!                      Real &j_nue, Real &chi_nue,
 //!                      Real &n_anue, Real &j_anue, Real &chi_anue, Real &n_nux,
 //!                      Real &j_nux, Real &chi_nux, Real &n_anux, Real &j_anux,
@@ -100,6 +100,7 @@ struct NuratesParams {
 //   \param[in] mu_n            neutron chemical potential (MeV)
 //   \param[in] mu_p            proton chemical potential (MeV)
 //   \param[in] mu_e            electron chemical potential (MeV)
+//   \param[in] dU              effective nucleon potential difference (MeV)
 //   \param[in] n_nue           number density e- neutrinos (code units)
 //   \param[in] j_nue           energy density e- neutrinos (code units)
 //   \param[in] chi_nue         eddington factor e- neutrinos (dimensionless)
@@ -144,7 +145,7 @@ struct NuratesParams {
 
 KOKKOS_INLINE_FUNCTION
 void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n,
-                             Real &mu_p, Real &mu_e,
+                             Real &mu_p, Real &mu_e, Real &dU,
                              Real nudens_0[4],
                              Real nudens_1[4],
                              Real chi[4],
@@ -267,9 +268,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
   grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
   grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
-  // The reconstructed-distribution fallbacks are applied below, not in bns_nurates.
-  grey_op_params.opacity_pars.use_eq_fallback_temp = false;
-  grey_op_params.opacity_pars.use_eq_fallback_y = false;
   grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
   grey_op_params.opacity_pars.brem_implementation =
       nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
@@ -279,13 +277,13 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
   grey_op_params.eos_pars.temp = temp;              // [MeV]
   grey_op_params.eos_pars.yp = yp;                  // [dimensionless]
-  grey_op_params.eos_pars.yn = yn;              // [dimensionless]
+  grey_op_params.eos_pars.yn = yn;                  // [dimensionless]
   grey_op_params.eos_pars.mu_e = mu_e;              // [MeV]
   grey_op_params.eos_pars.mu_p = mu_p;              // [MeV]
   grey_op_params.eos_pars.mu_n = mu_n;              // [MeV]
 
-  // @TODO: add these quantities!
-  grey_op_params.eos_pars.dU = 0;      // [MeV]
+  grey_op_params.eos_pars.dU = dU;      // [MeV]
+  // @TODO: add this quantity!
   grey_op_params.eos_pars.dm_eff = 1.29333251;  // [MeV]
 
   // reconstruct distribution function
@@ -309,8 +307,7 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     grey_op_params.m1_pars.chi[id_anux] = chi_anux;
 
     grey_op_params.distr_pars =
-        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars,
-                                   &grey_op_params.opacity_pars);
+        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
 
     // The reconstructed spectral temperature T_nu = J/n diverges when the
     // number density collapses (neutral-current-only heavy neutrinos in the

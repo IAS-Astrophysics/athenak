@@ -29,6 +29,7 @@ class LagrangeInterpolator {
   Real ResetPointAndInterpolate(
     DvceArray5D<Real> &val, int nvars, Real rcoords2[3]);
   bool point_exist; // point exist on this rank (meshblock pack)
+
  private:
   HostArray1D<Real> rcoord; // xyz coordinate for interpolated value
 
@@ -39,6 +40,8 @@ class LagrangeInterpolator {
   HostArray1D<int>
     interp_indcs; // indices of MeshBlock and zones therein for interp
   HostArray2D<Real> interp_wghts; // weights for interpolation
+  DvceArray3D<Real> stencil_;     // (2ng)^3 interpolation stencil gathered on the device
+  HostArray3D<Real> stencil_h_;   // host mirror of stencil_
 };
 
 #endif // UTILS_LAGRANGE_INTERPOLATOR_HPP_

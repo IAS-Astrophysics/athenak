@@ -42,6 +42,7 @@ class SupportsChemicalPotentials{};
 // Marks an EOS that blends an NSE table with an out-of-NSE half, so that
 // consumers can ask whether a cell is in NSE (see EOS::GetTransitionWeight).
 class SupportsTransition{};
+class SupportsInteractionPotentialDifference{};
 
 //! Indices into the weight array of the partially-equilibrated weak-equilibrium
 //! residuals: one weight per neutrino channel, per species wherever the two members of

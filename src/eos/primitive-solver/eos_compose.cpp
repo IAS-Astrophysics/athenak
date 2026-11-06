@@ -337,6 +337,9 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
       }
       m_has_dU = true;
     } else {
+      std::cout << "### WARNING in " << __FILE__ << std::endl
+                << "The EOS table does not provide dU. Setting dU = 0, so"
+                << " <bns_nurates>/use_dU has no effect.\n";
       for (size_t in=0; in<m_nn; ++in) {
         for (size_t iy=0; iy<m_ny; ++iy) {
           for (size_t it=0; it<m_nt; ++it) {

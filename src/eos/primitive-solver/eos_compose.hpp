@@ -33,7 +33,8 @@ template<typename LogPolicy> class EOSTransition;
 
 template<typename LogPolicy>
 class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy,
-                   public SupportsChemicalPotentials {
+                   public SupportsChemicalPotentials,
+                   public SupportsInteractionPotentialDifference {
   template<typename LP> friend class EOSTransition;
 
  private:
@@ -162,10 +163,6 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   KOKKOS_INLINE_FUNCTION Real ZN(Real n, Real T, Real *Y) const {
     return eval_at_nty(ECZN, n, T, Y[0]);
   }
-  KOKKOS_INLINE_FUNCTION Real InteractionPotentialDifference(Real n, Real T,
-                                                             Real *Y) const {
-    return eval_at_nty(ECDU, n, T, Y[0]);
-  }
 
   /// Calculate the energy density using.
   KOKKOS_INLINE_FUNCTION Real Energy(Real n, Real T, const Real *Y) const {
@@ -222,6 +219,13 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                                                               Real *Y) const {
     assert (m_initialized);
     return eval_at_nty(ECMUL, n, T, Y[0]);
+  }
+
+  /// Calculate the effective nucleon interaction potential difference
+  KOKKOS_INLINE_FUNCTION Real InteractionPotentialDifference(Real n, Real T,
+                                                              Real *Y) const {
+    assert (m_initialized);
+    return eval_at_nty(ECDU, n, T, Y[0]);
   }
 
   /// Calculate the proton fraction
