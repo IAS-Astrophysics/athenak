@@ -273,8 +273,8 @@ TOVStar TOVStar::ConstructTOV(ParameterInput *pin, TOVEOS& eos, bool verbose) {
   P(n_r) = tov.pfloor;
   M(n_r) = tov.M_edge;
   alp(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), alp(n_r-1), alp(n_r));
-  R(n_r) = tov.R_edge;
   R_iso(n_r) = Interpolate(tov.R_edge, R(n_r-1), R(n_r), R_iso(n_r-1), R_iso(n_r));
+  R(n_r) = tov.R_edge;
 
   for (int i = 0; i <= n_r; i++) {
     alp(i) = exp(alp(i));
