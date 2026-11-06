@@ -226,10 +226,19 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
   Kokkos::fence();
 
   if (BHNS) {
-    idr->set_param("BH_filler_method","ChebTn_Ylm_perfect_s2",idr);
+    std::string filler_method = pin->GetOrAddString("problem", "bh_filler_method",
+                                                    "ChebTn_Ylm_perfect_s2");
+    idr->set_param("BH_filler_method", filler_method.c_str(), idr);
   }
-  if (BHNS || BNS) {
-    idr->set_param("ADM_B1I_form", "zero", idr);
+
+  // Default: compute K_ij from the full shift including the B1 form and 
+  // then export beta = B0, i.e. the intertial frame. ADM_B1I_form = zero drops B1 
+  // before building K_ij and this can corrupt K_ij for Kerr-Schild free data 
+  // where B1 is not a conformal Killing vector of g~. For flat g~ this does 
+  // not matter.
+  if (pin->DoesParameterExist("problem", "elliptica_B1I_form")) {
+    std::string b1_form = pin->GetString("problem", "elliptica_B1I_form");
+    idr->set_param("ADM_B1I_form", b1_form.c_str(), idr);
   }
 
   // Interpolate the data
