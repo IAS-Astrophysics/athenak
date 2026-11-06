@@ -609,6 +609,10 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
   /// Low level functions for neutrino equilibrium, not intended for outside use.
   /// See BetaEquilibriumPartial for what the weights mean.
+  struct PeqFermiState {
+    Real eta, S2, D3;
+  };
+
   KOKKOS_INLINE_FUNCTION int trapped_equilibrium_2DNR(Real n, Real e_rhs, Real Yle_rhs,
                                                        const Real w[PEQ_NWEIGHTS],
                                                        Real x0[2], Real x1[2]) const {
@@ -621,7 +625,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     //compute the initial residuals
     Real y[2] = {0.0};
-    func_eq_weak(n,e_rhs,Yle_rhs,w,x1,y);
+    PeqFermiState fermi = func_eq_weak(n,e_rhs,Yle_rhs,w,x1,y);
 
     // compute the error from the residuals
     Real err = error_func_eq_weak(Yle_rhs,y);
@@ -634,12 +638,14 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real dxa[2] = {0.0};
     Real norm[2] = {0.0};
     Real x1_tmp[2] = {0.0};
+    const Real Ye_delta = 0.5*nu_grad_cells/m_id_yq;
+    const Real T_fac = Kokkos::exp2(0.5*nu_grad_cells/m_id_log_t);
 
     // loop until a low enough residual is found or until  a too
     // large number of steps has been performed
     while (err>nu_2DNR_eps_lim && n_iter<=nu_2DNR_n_max && !KKT) {
       // compute the Jacobian
-      ierr = jacobi_eq_weak(n,e_rhs,Yle_rhs,w,x1,J);
+      ierr = jacobi_eq_weak(n,e_rhs,Yle_rhs,w,x1,J,fermi,Ye_delta,T_fac);
       if (ierr != 0) {
         return ierr;
       }
@@ -724,7 +730,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
         // compute the residuals and the error for the trial point
         Real y_tmp[2] = {0.0};
-        func_eq_weak(n,e_rhs,Yle_rhs,w,x1_tmp,y_tmp);
+        const PeqFermiState trial_fermi = func_eq_weak(n,e_rhs,Yle_rhs,w,x1_tmp,y_tmp);
         Real err_tmp = error_func_eq_weak(Yle_rhs,y_tmp);
 
         // accept the first cut that makes progress
@@ -734,6 +740,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
           y[0] = y_tmp[0];
           y[1] = y_tmp[1];
           err = err_tmp;
+          // Only accepted residual data belongs to the next Jacobian.
+          fermi = trial_fermi;
           improved = true;
           break;
         }
@@ -901,7 +909,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   // the second term contributes nothing, so a branch on it would only trade three
   // rational evaluations for warp divergence. |eta| stays far below the argument at
   // which S_2 ~ |eta|^3/3 could overflow, so there is no 0 * inf to guard against.
-  KOKKOS_INLINE_FUNCTION void func_eq_weak(Real n, Real e_rhs, Real Yle_rhs,
+  KOKKOS_INLINE_FUNCTION PeqFermiState func_eq_weak(Real n, Real e_rhs, Real Yle_rhs,
                                             const Real w[PEQ_NWEIGHTS],
                                             Real x[2], Real y[2]) const {
     Real T = x[0];
@@ -925,12 +933,14 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     // The factor 3 on nu_n_prefactor undoes the 1/3 it carries for P_2.
     const Real P3 = nu_7pi4_60 + 0.5*eta2*(pi2 + 0.5*eta2);
+    const Real S2 = fermi_sum_2(eta, eta2);
+    const Real D3 = fermi_diff_3(eta, P3);
     y[0] = Y[0] + (wbar_L*nu_n_prefactor*t3*eta*(pi2 + eta2) +
-                   dw_L*3.0*nu_n_prefactor*t3*fermi_sum_2(eta, eta2))/n - Yle_rhs;
+                   dw_L*3.0*nu_n_prefactor*t3*S2)/n - Yle_rhs;
     y[1] = (e + nu_e_prefactor*t4*(wbar_E*P3 + w_E_x*nu_7pi4_30 +
-                                   dw_E*fermi_diff_3(eta, P3)))/e_rhs - 1.0;
+                                   dw_E*D3))/e_rhs - 1.0;
 
-    return;
+    return {eta, S2, D3};
   }
 
   /// Scalar error the Newton iteration converges on. The energy residual is already
@@ -942,7 +952,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
   KOKKOS_INLINE_FUNCTION int jacobi_eq_weak(Real n, Real e_rhs, Real Yle_rhs,
                                              const Real w[PEQ_NWEIGHTS],
-                                             Real x[2], Real J[2][2]) const {
+                                             Real x[2], Real J[2][2],
+                                             const PeqFermiState &fermi,
+                                             Real Ye_delta, Real T_fac) const {
     int ierr = 0;
 
     Real T = x[0];
@@ -954,8 +966,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       return ierr;
     }
 
-    Real mu_l = ElectronLeptonChemicalPotential(n, T, Y);
-    Real eta = mu_l/T;
+    Real eta = fermi.eta;
     Real eta2 = eta*eta;
 
     if (Kokkos::isnan(eta)) {
@@ -964,7 +975,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     }
 
     Real detadt,detadye,dedt,dedye;
-    ierr = eta_e_gradient(n,T,Y,eta,detadt,detadye,dedt,dedye);
+    ierr = eta_e_gradient(n,T,Y,eta,detadt,detadye,dedt,dedye,Ye_delta,T_fac);
     if (ierr != 0){
       return ierr;
     }
@@ -982,9 +993,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // The derivatives of the half-difference terms are exact: F_k' = k F_{k-1} gives
     // dS_2/deta = 2 D_1 and dD_3/deta = 3 S_2, so S_2 serves both the lepton row and
     // the energy row and nothing is differentiated by hand.
-    const Real P3 = nu_7pi4_60 + 0.5*eta2*(pi2 + 0.5*eta2);
-    const Real S2 = fermi_sum_2(eta, eta2);
-    const Real D3 = fermi_diff_3(eta, P3);
+    const Real S2 = fermi.S2;
+    const Real D3 = fermi.D3;
     const Real dS2 = 2.0*fermi_diff_1(eta, eta2);
     const Real c_n3 = 3.0*nu_n_prefactor;
 
@@ -1007,7 +1017,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return ierr;
   }
 
-  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta, Real &deta_dT, Real &deta_dYe, Real &de_dT, Real &de_dYe) const {
+  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta,
+      Real &deta_dT, Real &deta_dYe, Real &de_dT, Real &de_dYe,
+      Real Ye_delta, Real T_fac) const {
     int ierr=1;
 
     // Tie the finite-difference steps to the table spacing. The interpolation is
@@ -1017,9 +1029,6 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     // secant of fixed width in the table's own variables is continuous and piecewise
     // linear in the evaluation point instead, because the interpolant is continuous.
     // The narrower step buys precision the table does not contain.
-    const Real Ye_delta = 0.5*nu_grad_cells/m_id_yq;
-    const Real T_fac = Kokkos::exp2(0.5*nu_grad_cells/m_id_log_t);
-
     Real Y1[MAX_SPECIES] = {0.0};
     Real Y2[MAX_SPECIES] = {0.0};
 

@@ -23,6 +23,7 @@
 #include "eos/eos.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
+#include "radiation_m1/radiation_m1_nurates.hpp"
 
 template<class LogPolicy>
 void PerformTests(Mesh* pmesh, ParameterInput *pin);
@@ -958,6 +959,59 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
                 << "(tolerances " << tol_T << " on T, " << tol_Y << " on Y_e).\n";
       success = false;
     }
+  }
+  // Dilute spectra with the same J/n have the same scattering opacity,
+  // regardless of their overall normalization.
+  radiationm1::NuratesParams dilute_params{};
+  dilute_params.use_iso = true;
+  dilute_params.max_recon_temp = 2000.0;
+  dilute_params.quadrature = bns_nurates::quadrature_default;
+  dilute_params.quadrature.nx = 6;
+  dilute_params.quadrature.dim = 1;
+  dilute_params.quadrature.type = bns_nurates::kGauleg;
+  dilute_params.quadrature.x1 = 0;
+  dilute_params.quadrature.x2 = 1;
+  bns_nurates::GaussLegendre(&dilute_params.quadrature);
+  dilute_params.quadrature_2 = dilute_params.quadrature;
+  auto code_units = eos.GetCodeUnitSystem();
+  auto eos_units = eos.GetEOSUnitSystem();
+  auto nurates_units = Primitive::MakeNGS();
+  bool dilute_ok = true;
+  Kokkos::parallel_reduce("nurates_dilute_normalization", 1,
+  KOKKOS_LAMBDA(const int &, bool &ok) {
+    Real n = logs.exp2_(ln_lo), T = 1.0, Y[3] = {0.1, 0.0, 0.0};
+    Real yp = eos.GetProtonFraction(n, T, Y), yn = eos.GetNeutronFraction(n, T, Y);
+    Real mu_n = eos.GetBaryonChemicalPotential(n, T, Y);
+    Real mu_q = eos.GetChargeChemicalPotential(n, T, Y);
+    Real mu_p = mu_n + mu_q;
+    Real mu_e = eos.GetElectronLeptonChemicalPotential(n, T, Y) - mu_q;
+    Real dU = 0.0, reference[4]{};
+    for (int trial = 0; trial < 2; ++trial) {
+      const Real number = (trial == 0 ? 1e-9 : 5e-10);
+      Real N[4], J[4], chi[4];
+      for (int s = 0; s < 4; ++s) {
+        N[s] = number/eos_units.NumberDensityConversion(nurates_units);
+        J[s] = 30*number/code_units.EnergyDensityConversion(nurates_units);
+        chi[s] = 1.0/3.0;
+      }
+      Real eta0[4]{}, eta1[4]{}, abs0[4]{}, abs1[4]{}, scat0[4]{}, scat1[4]{};
+      Real eta_nonthermal[4]{}, abs_nonthermal[4]{};
+      bool fallback = false;
+      radiationm1::ComputeNuratesOpacities(n, T, yp, yn, mu_n, mu_p, mu_e, dU,
+          N, J, chi, eta0, eta1, abs0, abs1, scat0, scat1,
+          eta_nonthermal, abs_nonthermal, fallback, dilute_params,
+          code_units, eos_units, nurates_units);
+      ok = ok && !fallback;
+      for (int s = 0; s < 4; ++s) {
+        ok = ok && Kokkos::isfinite(scat1[s]) && scat1[s] > 0;
+        if (trial == 0) reference[s] = scat1[s];
+        else ok = ok && Kokkos::fabs(scat1[s]/reference[s] - 1) < 1e-10;
+      }
+    }
+  }, Kokkos::LAnd<bool>(dilute_ok));
+  if (!dilute_ok) {
+    std::cout << "Dilute reconstruction changed scattering under a common n,J rescaling.\n";
+    success = false;
   }
 #endif  // ENABLE_NURATES
 

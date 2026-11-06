@@ -317,6 +317,27 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
     // chi=1/3). temp_t/temp_f are in [MeV], directly comparable to the cap.
     bool used_fallback = false;
     for (int s = 0; s < total_num_species; ++s) {
+      const Real n_s = (grey_op_params.m1_pars.n[s] > 1e-100)
+                           ? grey_op_params.m1_pars.n[s] : 1e-100;
+      const Real j_s = (grey_op_params.m1_pars.J[s] > 1e-100)
+                           ? grey_op_params.m1_pars.J[s] : 1e-100;
+      const Real n_over_j = n_s / j_s;
+      const Real y_s =
+          n_s * n_over_j * n_over_j * n_over_j / bns_nurates::kBS_FourPi_hc3;
+      // Invert y = F2(eta)^4/F3(eta)^3 through cubic order in x = (27/2)*y.
+      // Keep this correction local to M1: the rate headers are shared with NN.
+      if (y_s < 2.0e-3 / 27.0) {
+        const Real x = 13.5*y_s;
+        const Real log_x = (y_s > std::numeric_limits<Real>::min())
+            ? Kokkos::log(x)
+            : 4*Kokkos::log(n_s) - 3*Kokkos::log(j_s)
+              + Kokkos::log(13.5/bns_nurates::kBS_FourPi_hc3);
+        grey_op_params.distr_pars.eta_t[s] =
+            log_x + x*(5.0/16.0 + x*(55.0/4608.0 + x*(65.0/27648.0)));
+        grey_op_params.distr_pars.temp_t[s] =
+            (j_s/(3*n_s))*(1 + x*(-1.0/16.0
+                + x*(13.0/10368.0 - x*(151.0/331776.0))));
+      }
       if (grey_op_params.distr_pars.temp_t[s] > nurates_params.max_recon_temp ||
           grey_op_params.distr_pars.temp_f[s] > nurates_params.max_recon_temp) {
         used_fallback = true;
@@ -325,13 +346,6 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
       if (nurates_params.use_recon_y_fallback) {
         // y3, the upper edge of bns_nurates' eta_t fit (CalculateThickParamsFromM1)
         constexpr Real y3 = 0.7901234567745267;
-        const Real n_s = (grey_op_params.m1_pars.n[s] > 1e-100)
-                             ? grey_op_params.m1_pars.n[s] : 1e-100;
-        const Real j_s = (grey_op_params.m1_pars.J[s] > 1e-100)
-                             ? grey_op_params.m1_pars.J[s] : 1e-100;
-        const Real n_over_j = n_s / j_s;
-        const Real y_s =
-            n_s * n_over_j * n_over_j * n_over_j / bns_nurates::kBS_FourPi_hc3;
         if (!(y_s < y3)) {
           used_fallback = true;
           break;
