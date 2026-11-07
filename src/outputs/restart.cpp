@@ -11,11 +11,13 @@
 #include <algorithm>
 #include <cstdio>      // fwrite(), fclose(), fopen(), fnprintf(), snprintf()
 #include <cstdlib>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <utility> // make_pair
+#include <vector>
 
 #include "athena.hpp"
 #include "coordinates/cell_locations.hpp"
@@ -283,28 +285,29 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   // total size of all cell-centered variables and face-centered fields to be written by
   // this rank
   IOWrapperSizeT data_size = 0;
+  const IOWrapperSizeT cells = static_cast<IOWrapperSizeT>(nout1)*nout2*nout3;
   if (phydro != nullptr) {
-    data_size += nout1*nout2*nout3*nhydro*sizeof(Real); // hydro u0
+    data_size += cells*nhydro*sizeof(Real); // hydro u0
   }
   if (pmhd != nullptr) {
-    data_size += nout1*nout2*nout3*nmhd*sizeof(Real);   // mhd u0
-    data_size += (nout1+1)*nout2*nout3*sizeof(Real);    // mhd b0.x1f
-    data_size += nout1*(nout2+1)*nout3*sizeof(Real);    // mhd b0.x2f
-    data_size += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
+    data_size += cells*nmhd*sizeof(Real);   // mhd u0
+    data_size += static_cast<IOWrapperSizeT>(nout1+1)*nout2*nout3*sizeof(Real);
+    data_size += static_cast<IOWrapperSizeT>(nout1)*(nout2+1)*nout3*sizeof(Real);
+    data_size += static_cast<IOWrapperSizeT>(nout1)*nout2*(nout3+1)*sizeof(Real);
   }
   if (prad != nullptr) {
-    data_size += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
+    data_size += cells*nrad*sizeof(Real);   // radiation i0
   }
   if (pradm1 != nullptr) {
-    data_size += nout1*nout2*nout3*nradm1*sizeof(Real);   // radiation m1 u0
+    data_size += cells*nradm1*sizeof(Real);   // radiation m1 u0
   }
   if (pturb != nullptr) {
-    data_size += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
+    data_size += cells*nforce*sizeof(Real); // forcing
   }
   if (pz4c != nullptr) {
-    data_size += nout1*nout2*nout3*nz4c*sizeof(Real);   // z4c u0
+    data_size += cells*nz4c*sizeof(Real);   // z4c u0
   } else if (padm != nullptr) {
-    data_size += nout1*nout2*nout3*nadm*sizeof(Real);   // adm u_adm
+    data_size += cells*nadm*sizeof(Real);   // adm u_adm
   }
   if (global_variable::my_rank == 0 || single_file_per_rank) {
     resfile.Write_any_type(&(data_size), sizeof(IOWrapperSizeT), "byte",
@@ -328,352 +331,81 @@ void RestartOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     offset_myrank += data_size*(pm->gids_eachrank[global_variable::my_rank]);
   }
 
-  IOWrapperSizeT myoffset = offset_myrank;
-
-  // write cell-centered variables, one MeshBlock at a time (but parallelized over all
-  // ranks). MeshBlocks are written seperately to reduce number of data elements per write
-  // call, to avoid exceeding 2^31 limit for very large grids per MPI rank.
-  if (phydro != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered hydro data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_hyd, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered hydro data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
+  // Preserve block-major file order without collective data sieving between fields.
+  // Bound staging memory and MPI byte counts independently of the rank's block count.
+  const IOWrapperSizeT local_size = data_size * pm->nmb_thisrank;
+  const std::size_t capacity = std::min<IOWrapperSizeT>(64*1024*1024, local_size);
+  std::vector<char> buffer(capacity);
+  std::size_t used = 0;
+  IOWrapperSizeT written = 0;
+  auto flush = [&]() {
+    if (used == 0) {return;}
+    if (resfile.Write_any_type_at(buffer.data(), used, offset_myrank + written,
+                                  "byte", single_file_per_rank) != used) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "packed data not written correctly to rst file, "
+                << "restart file is broken." << std::endl;
+      std::exit(EXIT_FAILURE);
     }
-    offset_myrank += nout1*nout2*nout3*nhydro*sizeof(Real); // hydro u0
-    myoffset = offset_myrank;
+    written += used;
+    used = 0;
+  };
+  auto append = [&](const auto &view) {
+    const char *data = reinterpret_cast<const char *>(view.data());
+    std::size_t remaining = view.size()*sizeof(Real);
+    if (!view.span_is_contiguous() || remaining > local_size-written-used) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "unexpected array layout or size in packed restart."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    while (remaining > 0) {
+      std::size_t count = std::min(remaining, capacity-used);
+      std::memcpy(buffer.data()+used, data, count);
+      used += count;
+      data += count;
+      remaining -= count;
+      if (used == capacity) {flush();}
+    }
+  };
+  for (int m=0; m<pm->nmb_thisrank; ++m) {
+    if (phydro != nullptr) {
+      append(Kokkos::subview(outarray_hyd,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+    }
+    if (pmhd != nullptr) {
+      append(Kokkos::subview(outarray_mhd,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+      append(Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+      append(Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+      append(Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL));
+    }
+    if (prad != nullptr) {
+      append(Kokkos::subview(outarray_rad,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+    }
+    if (pradm1 != nullptr) {
+      append(Kokkos::subview(outarray_radm1,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+    }
+    if (pturb != nullptr) {
+      append(Kokkos::subview(outarray_force,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+    }
+    if (pz4c != nullptr) {
+      append(Kokkos::subview(outarray_z4c,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+    } else if (padm != nullptr) {
+      append(Kokkos::subview(outarray_adm,m,Kokkos::ALL,Kokkos::ALL,
+                             Kokkos::ALL,Kokkos::ALL));
+    }
   }
-  if (pmhd != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered mhd data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_mhd, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered mhd data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
-    }
-    offset_myrank += nout1*nout2*nout3*nmhd*sizeof(Real);   // mhd u0
-    myoffset = offset_myrank;
-
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to x1-face field
-        auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        size_t fldcnt = x1fptr.size();
-        if (resfile.Write_any_type_at_all(x1fptr.data(),fldcnt,myoffset,"Real",
-                                          single_file_per_rank) != fldcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "b0.x1f data not written correctly to rst file, "
-                    << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += fldcnt*sizeof(Real);
-
-        // get ptr to x2-face field
-        auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        fldcnt = x2fptr.size();
-        if (resfile.Write_any_type_at_all(x2fptr.data(),fldcnt,myoffset,"Real",
-                                          single_file_per_rank) != fldcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "b0.x2f data not written correctly to rst file, "
-                    << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += fldcnt*sizeof(Real);
-
-        // get ptr to x3-face field
-        auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        fldcnt = x3fptr.size();
-        if (resfile.Write_any_type_at_all(x3fptr.data(),fldcnt,myoffset,"Real",
-                                          single_file_per_rank) != fldcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "b0.x3f data not written correctly to rst file, "
-                    << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += fldcnt*sizeof(Real);
-
-        myoffset += data_size-(x1fptr.size()+x2fptr.size()+x3fptr.size())*sizeof(Real);
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to x1-face field
-        auto x1fptr = Kokkos::subview(outfield.x1f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        size_t fldcnt = x1fptr.size();
-        if (resfile.Write_any_type_at(x1fptr.data(),fldcnt,myoffset,"Real",
-                                      single_file_per_rank) != fldcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "b0.x1f data not written correctly to rst file, "
-                    << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += fldcnt*sizeof(Real);
-
-        // get ptr to x2-face field
-        auto x2fptr = Kokkos::subview(outfield.x2f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        fldcnt = x2fptr.size();
-        if (resfile.Write_any_type_at(x2fptr.data(),fldcnt,myoffset,"Real",
-                                      single_file_per_rank) != fldcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "b0.x2f data not written correctly to rst file, "
-                    << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += fldcnt*sizeof(Real);
-
-        // get ptr to x3-face field
-        auto x3fptr = Kokkos::subview(outfield.x3f,m,Kokkos::ALL,Kokkos::ALL,Kokkos::ALL);
-        fldcnt = x3fptr.size();
-        if (resfile.Write_any_type_at(x3fptr.data(),fldcnt,myoffset,"Real",
-                                      single_file_per_rank) != fldcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "b0.x3f data not written correctly to rst file, "
-                    << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += fldcnt*sizeof(Real);
-
-        myoffset += data_size-(x1fptr.size()+x2fptr.size()+x3fptr.size())*sizeof(Real);
-      }
-    }
-    offset_myrank += (nout1+1)*nout2*nout3*sizeof(Real);    // mhd b0.x1f
-    offset_myrank += nout1*(nout2+1)*nout3*sizeof(Real);    // mhd b0.x2f
-    offset_myrank += nout1*nout2*(nout3+1)*sizeof(Real);    // mhd b0.x3f
-    myoffset = offset_myrank;
-  }
-
-  if (prad != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered rad data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_rad, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(),mbcnt,myoffset,"Real",
-                                      single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered rad data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
-    }
-    offset_myrank += nout1*nout2*nout3*nrad*sizeof(Real);   // radiation i0
-    myoffset = offset_myrank;
-  }
-
-  if (pradm1 != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_radm1, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered radm1 data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_radm1, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        int mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(),mbcnt,myoffset,"Real",
-                                      single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered radm1 data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
-    }
-    offset_myrank += nout1*nout2*nout3*nradm1*sizeof(Real);   // radiation m1 u0
-    myoffset = offset_myrank;
-  }
-
-  if (pturb != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-          << std::endl << "cell-centered turb data not written correctly to rst file, "
-          << "restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_force, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered turb data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
-    }
-    offset_myrank += nout1*nout2*nout3*nforce*sizeof(Real); // forcing
-    myoffset = offset_myrank;
-  }
-
-  if (pz4c != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered z4c data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_z4c, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered z4c data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
-    }
-    offset_myrank += nout1*nout2*nout3*nz4c*sizeof(Real); // z4c u0
-    myoffset = offset_myrank;
-  } else if (padm != nullptr) {
-    for (int m=0;  m<noutmbs_max; ++m) {
-      // every rank has a MB to write, so write collectively
-      if (m < noutmbs_min) {
-        // get ptr to cell-centered MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at_all(mbptr.data(),mbcnt,myoffset,"Real",
-                                          single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered adm data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-
-      // some ranks are finished writing, so use non-collective write
-      } else if (m < pm->nmb_thisrank) {
-        // get ptr to MeshBlock data
-        auto mbptr = Kokkos::subview(outarray_adm, m, Kokkos::ALL, Kokkos::ALL,
-                                     Kokkos::ALL, Kokkos::ALL);
-        size_t mbcnt = mbptr.size();
-        if (resfile.Write_any_type_at(mbptr.data(), mbcnt, myoffset,"Real",
-                                      single_file_per_rank) != mbcnt) {
-          std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                    << std::endl << "cell-centered adm data not written correctly"
-                    << " to rst file, restart file is broken." << std::endl;
-          exit(EXIT_FAILURE);
-        }
-        myoffset += data_size;
-      }
-    }
-    offset_myrank += nout1*nout2*nout3*nadm*sizeof(Real); // adm u_adm
-    myoffset = offset_myrank;
+  flush();
+  if (written != local_size) {
+    std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+              << std::endl << "packed restart size does not match the header."
+              << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
   //--- STEP 5.  Write cyclic zoom restart data if enabled

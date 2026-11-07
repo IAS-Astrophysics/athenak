@@ -27,8 +27,11 @@
 #include <sys/stat.h>  // mkdir
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>  // snprintf
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -294,6 +297,23 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
 
     // Open file
     std::ofstream ofile(fname, std::ios::binary);
+    std::array<char, 64*1024> buffer;
+    std::size_t used = 0;
+    auto flush = [&]() {
+      ofile.write(buffer.data(), used);
+      used = 0;
+    };
+    auto append = [&](const void *values, std::size_t bytes) {
+      const char *data = static_cast<const char *>(values);
+      while (bytes > 0) {
+        std::size_t count = std::min(bytes, buffer.size()-used);
+        std::memcpy(buffer.data()+used, data, count);
+        used += count;
+        data += count;
+        bytes -= count;
+        if (used == buffer.size()) {flush();}
+      }
+    };
 
     ofile << "# vtk DataFile Version 3.0" << std::endl;
     const std::streamsize hdr_prec = ofile.precision();
@@ -325,9 +345,10 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           Swap4Bytes(&dline[2]);
         }
 
-        ofile.write(reinterpret_cast<char *>(&dline[0]), 3 * sizeof(float));
+        append(dline, 3*sizeof(float));
       }
     }
+    flush();
 
     float t = static_cast<float>(pm->time);
     if (!big_end) {
@@ -351,8 +372,9 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       if (!big_end) {
         Swap4Bytes(&rr);
       }
-      ofile.write(reinterpret_cast<char *>(&rr), sizeof(float));
+      append(&rr, sizeof(float));
     }
+    flush();
 
     // every block below starts on a new line, since the preceding one ends in binary data
     ofile << "\nPOINT_DATA " << psurf->npoints;
@@ -367,9 +389,10 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           if (!big_end) {
             Swap4Bytes(&d);
           }
-          ofile.write(reinterpret_cast<char *>(&d), sizeof(float));
+          append(&d, sizeof(float));
         }
       }
+      flush();
     }
 
     int nout_vars = outvars.size();
@@ -382,9 +405,17 @@ void SphericalSurfaceOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
           if (!big_end) {
             Swap4Bytes(&d);
           }
-          ofile.write(reinterpret_cast<char *>(&d), sizeof(float));
+          append(&d, sizeof(float));
         }
       }
+      flush();
+    }
+    ofile.close();
+    if (!ofile) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "spherical surface data not written correctly to "
+                << fname << std::endl;
+      std::exit(EXIT_FAILURE);
     }
 
 #if MPI_PARALLEL_ENABLED

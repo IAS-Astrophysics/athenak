@@ -75,8 +75,30 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   IOWrapper binfile;
+  bool gather_slice = false;
+#if MPI_PARALLEL_ENABLED
+  std::size_t slice_record_size = 0;
+  std::size_t slice_total_size = 0;
+  if (bin_slice && !single_file_per_rank) {
+    const auto &indcs = pm->mb_indcs;
+    int ng = out_params.include_gzs ? indcs.ng : 0;
+    std::size_t n1 = out_params.slice1 ? 1 : indcs.nx1 + 2*ng;
+    std::size_t n2 = out_params.slice2 ? 1 : (indcs.nx2 > 1 ? indcs.nx2 + 2*ng : 1);
+    std::size_t n3 = out_params.slice3 ? 1 : (indcs.nx3 > 1 ? indcs.nx3 + 2*ng : 1);
+    slice_record_size = 10*sizeof(int32_t) + 6*sizeof(Real)
+                        + n1*n2*n3*outvars.size()*sizeof(float);
+    std::size_t blocks = std::accumulate(noutmbs.begin(), noutmbs.end(), std::size_t{0});
+    slice_total_size = slice_record_size*blocks;
+    // Small slices are latency dominated; one writer avoids all-rank file metadata
+    // operations. Larger slices retain the distributed path and its memory footprint.
+    gather_slice = slice_total_size <= 64*1024*1024;
+    if (gather_slice) {binfile.SetCommunicator(MPI_COMM_SELF);}
+  }
+#endif
   std::size_t header_offset=0;
-  binfile.Open(fname.c_str(), IOWrapper::FileMode::write, single_file_per_rank);
+  if (!gather_slice || global_variable::my_rank == 0) {
+    binfile.Open(fname.c_str(), IOWrapper::FileMode::write, single_file_per_rank);
+  }
 
   // Basic parts of the format:
   // 1. Size of the header
@@ -233,6 +255,34 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // now write binary data
+#if MPI_PARALLEL_ENABLED
+  if (gather_slice) {
+    std::vector<int> counts(global_variable::nranks), displacements(global_variable::nranks);
+    int offset = 0;
+    for (int rank=0; rank<global_variable::nranks; ++rank) {
+      displacements[rank] = offset;
+      counts[rank] = slice_record_size*noutmbs[rank];
+      offset += counts[rank];
+    }
+    std::vector<char> gathered(global_variable::my_rank == 0 ? slice_total_size : 0);
+    int count = data_size*nout_mbs;
+    int ierr = MPI_Gatherv(data,count,MPI_BYTE,gathered.data(),counts.data(),
+                           displacements.data(),MPI_BYTE,0,MPI_COMM_WORLD);
+    if (ierr != MPI_SUCCESS) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "MPI error gathering binary slice." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if (global_variable::my_rank == 0 &&
+        binfile.Write_any_type_at(gathered.data(),slice_total_size,header_offset,
+                                  "byte",false) != slice_total_size) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "gathered binary slice was not written correctly."
+                << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  } else
+#endif
   if (bin_slice) {
     std::vector<int> rank_offset(global_variable::nranks, 0);
     std::partial_sum(noutmbs.begin(),std::prev(noutmbs.end()),
@@ -301,7 +351,9 @@ void MeshBinaryOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   }
 
   // close the output file and clean up ptrs to data
-  binfile.Close(single_file_per_rank);
+  if (!gather_slice || global_variable::my_rank == 0) {
+    binfile.Close(single_file_per_rank);
+  }
   delete [] data;
   delete [] single_data;
 
