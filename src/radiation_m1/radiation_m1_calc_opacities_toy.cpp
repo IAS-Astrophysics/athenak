@@ -12,7 +12,6 @@
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "radiation_m1.hpp"
-#include "radiation_m1_nurates.hpp"
 
 namespace radiationm1 {
 
