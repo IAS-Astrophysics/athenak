@@ -595,7 +595,7 @@ void find_traj_t(Real t, Real bbh_t[NTRAJ]) {
   bbh_t[X1] = r_BH1_0*std::cos(bbh.om*t);
   bbh_t[Y1] = r_BH1_0*std::sin(bbh.om*t);
   bbh_t[Z1] = 0.0;
-  bbh_t[X2] = r_BH1_0*std::cos(bbh.om*t);
+  bbh_t[X2] = r_BH2_0*std::cos(bbh.om*t);
   bbh_t[Y2] = r_BH2_0*std::sin(bbh.om*t);
   bbh_t[Z2] = 0.0;
   bbh_t[VX1] = -r_BH1_0*bbh.om*std::sin(bbh.om*t);
