@@ -136,6 +136,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     std::is_base_of_v<SupportsSpecificHeat, EOSPolicy>;
   static constexpr bool supports_density_inversion =
     std::is_base_of_v<SupportsDensityFromPressure, EOSPolicy>;
+  static constexpr bool supports_composition_derivative =
+    std::is_base_of_v<SupportsCompositionDerivative, EOSPolicy>;
 
 
  public:
@@ -166,6 +168,25 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \return The temperature according to the EOS.
   KOKKOS_INLINE_FUNCTION Real GetTemperatureFromE(Real n, Real e, Real *Y) const {
     return TemperatureFromE(n, e*code_units.PressureConversion(eos_units), Y) *
+           eos_units.TemperatureConversion(code_units);
+  }
+
+  //! \fn Real GetTemperatureFromSpecificInternalEnergy(Real n, Real eps, Real *Y)
+  //  \brief Calculate the temperature from number density, specific internal energy
+  //         and particle fractions. Unlike GetTemperatureFromE it never forms the
+  //         energy density (1 + eps)*n*mb, which cancels catastrophically when c != 1
+  //         (e.g. cgs code units, where eps/c^2 ~ 1e-4). Only for policies that
+  //         provide TemperatureFromEps (EOSHelmholtz).
+  //
+  //  \param[in] n    The number density
+  //  \param[in] eps  The specific internal energy
+  //  \param[in] Y    An array of particle fractions, expected to be of size n_species.
+  //  \return The temperature according to the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetTemperatureFromSpecificInternalEnergy(Real n, Real eps,
+                                                                      Real *Y) const {
+    const Real eps_eos = eps*code_units.EnergyConversion(eos_units)/
+                         code_units.MassConversion(eos_units);
+    return EOSPolicy::TemperatureFromEps(n, eps_eos, Y) *
            eos_units.TemperatureConversion(code_units);
   }
 
@@ -355,6 +376,30 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION Real GetSpecificInternalEnergy(Real n, Real T, Real *Y) const {
     return SpecificInternalEnergy(n, T*code_units.TemperatureConversion(eos_units), Y) *
            eos_units.EnergyConversion(code_units)/eos_units.MassConversion(code_units);
+  }
+
+  //! \fn void GetSpecificInternalEnergyDX(Real n, Real T, Real *Y, Real *dedX)
+  //  \brief Get (d eps/dX_k) at fixed n and T, per mass, up to a k-independent
+  //         constant (only differences between species are meaningful). NaN if
+  //         unsupported.
+  //
+  //  \param[in]  n     The number density
+  //  \param[in]  T     The temperature
+  //  \param[in]  Y     An array of size n_species of the particle fractions.
+  //  \param[out] dedX  An array of size n_species receiving the derivatives.
+  KOKKOS_INLINE_FUNCTION void GetSpecificInternalEnergyDX(Real n, Real T, Real *Y,
+                                                          Real *dedX) const {
+    if constexpr (supports_composition_derivative) {
+      EOSPolicy::SpecificInternalEnergyDX(n, T*code_units.TemperatureConversion(eos_units),
+                                          Y, dedX);
+      const Real fac = eos_units.EnergyConversion(code_units)/
+                       eos_units.MassConversion(code_units);
+      for (int k = 0; k < n_species; ++k) { dedX[k] *= fac; }
+    } else {
+      for (int k = 0; k < n_species; ++k) {
+        dedX[k] = std::numeric_limits<Real>::quiet_NaN();
+      }
+    }
   }
 
   //! \fn Real GetBaryonChemicalPotential(Real n, Real T, Real *Y)
@@ -578,7 +623,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //! \fn void SetTemperatureFloor(Real floor)
   //  \brief Set the temperature floor (in code units) used by the EOS ErrorPolicy.
   KOKKOS_INLINE_FUNCTION void SetTemperatureFloor(Real floor) {
-    T_atm = (floor >= min_T) ? floor : min_T;
+    const Real T_min = GetMinimumTemperature();
+    T_atm = (floor >= T_min) ? floor : T_min;
   }
 
   //! \fn void SetSpeciesAtmosphere(Real atmo, int i)
@@ -620,14 +666,14 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     return min_n;
   }
 
-  //! \brief Get the maximum temperature  (in EOS units) permitted by the EOS.
+  //! \brief Get the maximum temperature (in code units) permitted by the EOS.
   KOKKOS_INLINE_FUNCTION Real GetMaximumTemperature() const {
-    return max_T;
+    return max_T*eos_units.TemperatureConversion(code_units);
   }
 
-  //! \brief Get the minimum temperature (in EOS units) permitted by the EOS.
+  //! \brief Get the minimum temperature (in code units) permitted by the EOS.
   KOKKOS_INLINE_FUNCTION Real GetMinimumTemperature() const {
-    return min_T;
+    return min_T*eos_units.TemperatureConversion(code_units);
   }
 
   //! \brief Get the minimum fraction permitted by the EOS.
@@ -746,11 +792,11 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     code_units = units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetCodeUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION const UnitSystem& GetCodeUnitSystem() const {
     return code_units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetEOSUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION const UnitSystem& GetEOSUnitSystem() const {
     return eos_units;
   }
 };

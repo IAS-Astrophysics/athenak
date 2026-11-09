@@ -114,6 +114,7 @@ add_executable(
         mhd/mhd_update.cpp
 
         nuclear/nuclear.cpp
+        nuclear/nuclear_burn.cpp
         nuclear/nuclear_integrate.cpp
         nuclear/nuclear_task.cpp
 

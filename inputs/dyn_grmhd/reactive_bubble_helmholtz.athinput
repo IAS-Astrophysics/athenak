@@ -1,0 +1,109 @@
+# AthenaK input file: reactive_bubble with the Helmholtz EOS on DynGRMHD
+# Hydrostatic He atmosphere (He4 with 1e-8 traces of C12 and O16) with an optional
+# temperature bubble and nuclear burning (operator-split, mass fractions only).
+# Gravity enters through a static Rindler metric, alpha = 1 + g*(y - y_ref)/c^2,
+# set by the pgen (no source terms). The magnetic field is zero.
+# Build with: cmake -D PROBLEM=fluids/reactive_bubble ...
+#
+# Code units: geometric solar, G = c = 1 (default of <mhd>/units = geometric_solar).
+# Length unit G*Msun/c^2 = 1.47662844e5 cm, time unit G*Msun/c^3 = 4.92550230e-6 s
+# (1 s = 2.03024979e5 code time units), temperatures in MeV.
+# <mesh> and <time> are in code units. <problem> (rho_base, temp_base, g_grav, y_ref,
+# sigma, y0) and <mhd>/dfloor, tfloor are in cgs; the pgen converts them. The network
+# runs in cgs.
+
+<comment>
+problem   = reactive bubble, Helmholtz EOS, DynGRMHD, Rindler gravity
+
+<job>
+basename  = bubble_helm   # problem ID: basename of output filenames
+
+<mesh>
+nghost    = 3             # Number of ghost cells
+nx1       = 512           # Number of zones in X1-direction
+x1min     = -0.8668395942 # minimum value of X1 [code] = -1.28e5 cm
+x1max     = 0.8668395942  # maximum value of X1 [code] = 1.28e5 cm
+ix1_bc    = periodic      # inner-X1 boundary flag
+ox1_bc    = periodic      # outer-X1 boundary flag
+
+nx2       = 512           # Number of zones in X2-direction (vertical in 2D)
+x2min     = -0.8668395942 # minimum value of X2 [code] = -1.28e5 cm (base of the atmosphere)
+x2max     = 0.8668395942  # maximum value of X2 [code] = 1.28e5 cm
+ix2_bc    = user          # inner-X2 boundary flag (hydrostatic BCs)
+ox2_bc    = user          # outer-X2 boundary flag (hydrostatic BCs)
+
+nx3       = 1             # Number of zones in X3-direction
+x3min     = -0.8668395942 # minimum value of X3 [code] = -1.28e5 cm
+x3max     = 0.8668395942  # maximum value of X3 [code] = 1.28e5 cm
+ix3_bc    = periodic      # inner-X3 boundary flag
+ox3_bc    = periodic      # outer-X3 boundary flag
+
+<meshblock>
+nx1       = 32            # Number of cells in each MeshBlock, X1-dir
+nx2       = 32            # Number of cells in each MeshBlock, X2-dir
+nx3       = 1             # Number of cells in each MeshBlock, X3-dir
+
+<coord>
+special_rel = true
+general_rel = false
+minkowski   = true        # only used by the default Kerr-Schild ADM setter, which
+                          # the pgen replaces with the Rindler metric
+
+<adm>                     # static metric: set once by the pgen (dynamic = false)
+
+<time>
+evolution  = dynamic      # dynamic/kinematic/static
+integrator = rk2          # time integration algorithm
+cfl_number = 0.4          # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1           # cycle limit
+tlim       = 2.03024979e4 # time limit [code] = 0.1 s
+ndiag      = 1            # cycles between diagostic output
+
+<mhd>
+reconstruct = plm         # spatial reconstruction method
+rsolver     = hlle        # Riemann-solver to be used
+gamma       = 1.6667      # unused with dyn_eos, kept for compatibility
+eos         = ideal       # compatibility placeholder
+dyn_eos     = helmholtz
+dyn_error   = reset_floor
+dfloor      = 2.0e3       # density floor [g/cm^3]; the electron table starts at
+                          # n_e ~ 1e-12 fm^-3 (~1.7e3 g/cm^3 for Ye = 1/2)
+tfloor      = 1.0e5       # temperature floor [K]
+electron_table = src/pgen/fluids/helm_table_hires.athtab  # relative to the run
+                          # directory; use an absolute path otherwise
+eir_coulomb = true
+nscalars    = 3           # He4, C12, O16; A, Z, dm from nuclear/network
+species_names = he4, c12, o16   # output labels only
+s0_atmosphere = 1.0       # atmosphere is pure He4
+s1_atmosphere = 0.0
+s2_atmosphere = 0.0
+
+<problem>
+rho_base      = 1.0e5     # density at the base of the domain [g/cm^3]
+temp_base     = 1.0e8     # temperature at the base of the domain [K]
+g_grav        = 1.0e10    # gravitational acceleration [cm/s^2], > 0, toward -x2
+#y_ref        = -1.28e5   # height where the lapse is 1 [cm]; default: x2min
+perturb       = true      # temperature bubble on top of the atmosphere
+sigma         = 8.533e3   # perturbation length scale [cm] (L/30)
+#y0           = 0.0       # vertical position of the bubble centre [cm]; default: centre
+
+# Nuclear burning is on whenever the <nuclear> block is present: to turn it on,
+# uncomment the block below.
+#<nuclear>
+## Substep control
+#max_substeps  = 100      # max network substeps per hydro step
+#dt_nuc_factor = 0.1      # network substep = dt_nuc_factor * min(cv*T/|edot|)
+## Backward Euler Newton solver (mass fractions only, cgs)
+#max_iter      = 20       # max Newton iterations per substep
+#n_refactor    = 3        # refactor the Jacobian at least every n_refactor iterations
+#y_atol        = 1.0e-10  # on rho*X [g/cm^3]
+#y_rtol        = 1.0e-10
+
+<output1>
+file_type  = hst          # History data dump
+dt         = 20.3024979   # time increment between outputs [code] = 1e-4 s
+
+<output2>
+file_type  = bin          # binary data dump
+variable   = mhd_w        # primitive variables (rho, v, p, scalars)
+dt         = 1015.12489   # time increment between outputs [code] = 0.005 s
