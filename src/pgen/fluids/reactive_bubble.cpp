@@ -16,7 +16,6 @@
 #include <sstream>
 #include <string>
 #include <iostream>
-#include <limits>
 
 #include "parameter_input.hpp"
 #include "athena.hpp"
@@ -27,9 +26,7 @@
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/cell_locations.hpp"
-#include "nuclear/integrate/backward_euler.hpp"
 #include "nuclear/microphysics.hpp"
-#include "nuclear/nuclear.hpp"
 
 using nuclear::Thermo;
 using EOSHelm = Primitive::EOS<Primitive::EOSHelmholtz, Primitive::ResetFloor>;
@@ -44,7 +41,6 @@ namespace {
   // in UserProblem from the unit systems of the DynGRMHD EOS and of its cgs copy. Host
   // only: the kernels take local copies.
   Real len_c2c, rho_c2c, pres_c2c, time_c2c;
-  void SetReactiveSources(Mesh* pm, const Real bdt);
   void HydrostaticBCs(Mesh* pm);
   void SetADMVariablesToRindler(MeshBlockPack *pmbp);
 
@@ -170,10 +166,9 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
   eos_dyngr.SetTemperatureFloor(pin->GetOrAddReal("mhd", "tfloor", (FLT_MIN))*
                                 cgs.TemperatureConversion(code));
 
-  // The network parameters (Newton solver: nuclear::NuclearParams; substep control:
-  // dt_nuc_factor, max_substeps) are read by the Nuclear module from <nuclear>.
+  // The nuclear burn (Nuclear::BurnStep, nuclear/nuclear_burn.cpp) is done by the
+  // Nuclear module whenever the <nuclear> block exists; it reads its own parameters.
 
-  user_srcs_nuc_func = &SetReactiveSources;
   user_bcs_func = &HydrostaticBCs;
 
   // Vertical extent of the mesh (x2 in 2D, x3 in 3D), code units
@@ -198,16 +193,6 @@ void ProblemGenerator::UserProblem(ParameterInput *pin, const bool restart) {
     exit(EXIT_FAILURE);
   }
   pmbp->padm->SetADMVariables = &SetADMVariablesToRindler;
-
-  // Initial guess of the network substep size [code time], used until the first burn
-  // sets it from cv*T/|edot| in SetReactiveSources (also needed on restarts)
-  if (pmbp->pnuc != nullptr) {
-    auto &mesh_indcs = pm->mesh_indcs;
-    int npts_nuc = three_d
-                 ? std::min({mesh_indcs.nx1, mesh_indcs.nx2, mesh_indcs.nx3})
-                 : std::min(mesh_indcs.nx1, mesh_indcs.nx2);
-    pmbp->pnuc->dt_nuc = (1.5e-4)*(64.0/static_cast<Real>(npts_nuc))*time_c2c;
-  }
 
   // Fine grid of the hydrostatic integration: NFACT points per cell, similar to
   // cshock.cpp
@@ -644,104 +629,5 @@ void SetADMVariablesToRindler(MeshBlockPack *pmbp) {
         }
       });
     }
-  }
-
-  void SetReactiveSources(Mesh* pm, const Real bdt) {
-    // Operator-split burn of the mass fractions over bdt [code time]. Only the partial
-    // densities D*X[n] change: with the Helmholtz EOS, eps includes the nuclear binding
-    // energy, so the release keeps tau (and eps, at these low velocities, where
-    // tau ~ rho*eps) fixed and shows up as a higher T and p after ConToPrim.
-    // The network runs in cgs on a copy of the EOS.
-    auto &pmbp = pm->pmb_pack;
-    auto &indcs = pm->mb_indcs;
-    int is=indcs.is, ie=indcs.ie, js=indcs.js, je=indcs.je, ks=indcs.ks, ke=indcs.ke;
-    int nmb1 = pmbp->nmb_thispack - 1;
-
-    auto &u0 = pmbp->pmhd->u0;
-    auto &w0 = pmbp->pmhd->w0;
-    int nmhd = pmbp->pmhd->nmhd;
-
-    // Network integration parameters from <nuclear>, captured by value into the kernel
-    const nuclear::NuclearParams prm = pmbp->pnuc->params;
-    const Real dt = bdt/time_c2c;     // [s]
-
-    // cgs copy of the DynGRMHD EOS (shares the table), captured by value into the
-    // per-cell burn kernel below.
-    EOSHelm eos = static_cast<dyngr::DynGRMHDPS<Primitive::EOSHelmholtz,
-                  Primitive::ResetFloor>*>(pmbp->pdyngr)->eos.ps.GetEOS();
-    eos.SetCodeUnitSystem(Primitive::MakeCGS());
-
-    // Burn every cell over dt, and at the same time find min(cv*T/|edot|) at the burned
-    // state, which sets the network substep size (dt_nuc) of the next hydro step.
-    const int nx1 = indcs.nx1, nx2 = indcs.nx2, nx3 = indcs.nx3;
-    const int nmkji = (nmb1 + 1)*nx3*nx2*nx1;
-    const int nkji = nx3*nx2*nx1;
-    const int nji  = nx2*nx1;
-    const Real factor = pmbp->pnuc->dt_nuc_factor;
-    const Real rho_c2c_ = rho_c2c, pres_c2c_ = pres_c2c;
-    Real min_theat = std::numeric_limits<float>::max();
-    int nfail_total = 0;  // number of cells where the Newton solver failed
-
-    Kokkos::parallel_reduce("integrate_jacobian",
-    Kokkos::RangePolicy<>(DevExeSpace(), 0, nmkji),
-    KOKKOS_LAMBDA(const int &idx, Real &min_th, int &nfail) {
-      int m = (idx)/nkji;
-      int k = (idx - m*nkji)/nji;
-      int j = (idx - m*nkji - k*nji)/nx1;
-      int i = (idx - m*nkji - k*nji - j*nx1) + is;
-      k += ks;
-      j += js;
-
-      Thermo state;
-
-      // Primitives in cgs: rho, X[n], and T from the pressure (DynGRMHD stores p in
-      // IPR); eps at that T is held fixed during the burn.
-      const Real rho = w0(m,IDN,k,j,i)/rho_c2c_;  // fixed during the burn
-      Real X[NSPECIES];
-      state.rho = rho;
-      state.p = w0(m,IPR,k,j,i)/pres_c2c_;
-      for(int n=0; n<NSPECIES; n++) {
-        X[n] = w0(m,nmhd+n,k,j,i);
-        state.xn[n] = X[n];
-      }
-
-      nuclear::burn(nuclear::eos_input_rp, state, eos);
-      const Real eps = state.e;  // held fixed during the burn (tau is unchanged)
-
-      // Backward Euler burn over dt (cgs): X[n] is returned burned and renormalized,
-      // t_heat = cv*T/|edot| [s] at the burned state. A failure (singular matrix, no
-      // convergence within max_iter, or a non-finite result) is counted, and the run is
-      // stopped after the kernel if any cell failed.
-      Real t_heat;
-      if (!nuclear::BackwardEulerBurn(rho, eps, dt, X, eos, prm, state, t_heat)) nfail++;
-
-      // Conserved D*X[n]; D and tau are unchanged by the burn
-      for(int n=0; n<NSPECIES; n++) {
-        u0(m, nmhd+n, k, j, i) = u0(m,IDN,k,j,i)*X[n];
-      }
-
-      min_th = Kokkos::fmin(t_heat, min_th);
-    }, Kokkos::Min<Real>(min_theat), Kokkos::Sum<int>(nfail_total));
-
-    // Stop the run if the Newton solver failed in any cell
-    if (nfail_total > 0) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "Nuclear Newton solver failed in " << nfail_total
-                << " cells (no convergence in nuclear/max_iter=" << prm.max_iter
-                << " iterations, singular matrix, or non-finite result)"
-                << std::endl << "cycle=" << pm->ncycle << " time=" << pm->time
-                << " substep h=" << bdt << std::endl;
-      exit(EXIT_FAILURE);
-    }
-
-    // Network substep size for the next hydro step [code time]: Nuclear::Integrate
-    // reads it once at the start of the next hydro step, before subcycling. Without any
-    // burning min_theat stays huge, and the hydro step is covered by a single substep.
-    pmbp->pnuc->dt_nuc = factor*min_theat*time_c2c;
-
-    // New primitives of the active cells (T and p rise at fixed eps); the ghost zones
-    // are refreshed by the Nuclear tasks afterwards
-    pmbp->pdyngr->ConToPrimBC(is, ie, js, je, ks, ke);
-    return;
   }
 }

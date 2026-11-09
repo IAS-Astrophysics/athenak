@@ -174,7 +174,6 @@ void composition(Thermo &state) {
 //! The (p, s) and (p, t) inversions give NaN if p is not reachable, or if the
 //! isentrope leaves the table; the caller has to check for it.
 //!
-//! The IdealGas overload lives in nuclear/microphysics_idealgas.hpp.
 KOKKOS_INLINE_FUNCTION
 void burn(eos_input_t input, Thermo &state,
           const Primitive::EOS<Primitive::EOSHelmholtz, Primitive::ResetFloor> &eos) {
@@ -238,9 +237,6 @@ void burn(eos_input_t input, Thermo &state,
     state.p = eos.GetPressure(n, state.t, state.xn);
   }
 
-  // de/dX_n at fixed (rho, T) [erg/g]: binding (~1e18), ion, electron and Coulomb
-  // terms, up to an n-independent constant that drops out of every composition change
-  // with Sum dX_n = 0.
   if constexpr (has_dedX_v<Thermo>) {
     eos.GetSpecificInternalEnergyDX(n, state.t, state.xn, state.dedX);
   }

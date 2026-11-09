@@ -48,8 +48,9 @@ KOKKOS_INLINE_FUNCTION Real aion_inv(int n) {
 }
 
 
-// Atomic mass excess [MeV] (AME2020). Must match <mhd>/dm of the Helmholtz EOS, which
-// puts the binding energy into eps through these same values.
+// Atomic mass excess [MeV] (AME2020). The Helmholtz EOS reads aion, zion and dmass_ions
+// directly (eos/primitive_solver_hyd.hpp) and puts the binding energy into eps through
+// these same values.
 KOKKOS_INLINE_FUNCTION Real dmass_ions(int n) {
   constexpr Real v[NSPECIES] = {
     2.42491587,   // 0 : He4
