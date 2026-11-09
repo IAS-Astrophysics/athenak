@@ -106,7 +106,7 @@ inline std::int64_t rotl(std::int64_t i, int s) {
 using DevExeSpace = Kokkos::DefaultExecutionSpace;
 using HostExeSpace = Kokkos::DefaultHostExecutionSpace;
 using DevMemSpace = Kokkos::DefaultExecutionSpace::memory_space;
-using HostMemSpace = Kokkos::HostSpace;
+using HostMemSpace = Kokkos::View<Real *, DevMemSpace>::host_mirror_space;
 using ScratchMemSpace = DevExeSpace::scratch_memory_space;
 using LayoutWrapper = Kokkos::LayoutRight;                // increments last index fastest
 using TeamMember_t = Kokkos::TeamPolicy<>::member_type;   // for Kokkos thread teams
