@@ -142,6 +142,10 @@ endif()
 # define the C99 ‘restrict’ keyword away under C++
 target_compile_definitions(athena PRIVATE $<$<COMPILE_LANGUAGE:CXX>:restrict=__restrict__>)
 
+if (Kokkos_ENABLE_SYCL)
+  target_compile_definitions(athena PRIVATE ATHENA_M1_SYCL_OUTLINING)
+endif()
+
 if (Kokkos_ARCH_NATIVE)
 	target_compile_options(athena PRIVATE $<$<COMPILE_LANGUAGE:C>:-march=native>)
 endif()
@@ -281,4 +285,3 @@ target_include_directories(athena PUBLIC
 configure_file(config.hpp.in config.hpp)
 
 install( TARGETS athena DESTINATION bin )
-

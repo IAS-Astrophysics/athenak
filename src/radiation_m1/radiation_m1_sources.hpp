@@ -123,6 +123,9 @@ SrcSignal source_update_eddington(
 // .  q^new = q^star + dt S[q^new]
 // The source term is S^a = (eta - ka J) u^a - (ka + ks) H^a and includes
 // also emission.
+#if defined(KOKKOS_ENABLE_SYCL) && defined(ATHENA_M1_SYCL_OUTLINING)
+__attribute__((noinline))
+#endif
 KOKKOS_INLINE_FUNCTION
 SrcSignal source_update_ll(
     const BrentFunctor &BrentFunc, const HybridsjFunctor &HybridsjFunc, const Real &cdt,
