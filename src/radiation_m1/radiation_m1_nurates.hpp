@@ -37,6 +37,9 @@ struct NuratesParams {
   bool use_brem;
   bool use_iso;
   bool use_inelastic_scatt;
+  bool use_nucleon_recoil;          // energy exchange with recoiling nucleons
+                                    // (bns_nurates nucleon_recoil.hpp)
+  bool nucleon_recoil_all_species;  // ... for all species, not only nux/anux
   bool use_WM_ab;
   bool use_WM_sc;
   bool use_dU;
@@ -260,6 +263,12 @@ void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_
   grey_op_params.opacity_flags.use_pair = nurates_params.use_pair;
   grey_op_params.opacity_flags.use_iso = nurates_params.use_iso;
   grey_op_params.opacity_flags.use_inelastic_scatt = nurates_params.use_inelastic_scatt;
+  // Nucleon recoil enters the non-thermal (energy-only) coefficients, like NEPS, and
+  // is taken out of the scattering opacity; nothing else here needs to know.
+  grey_op_params.opacity_flags.use_nucleon_recoil =
+      !nurates_params.use_nucleon_recoil         ? BS_RECOIL_OFF
+      : nurates_params.nucleon_recoil_all_species ? BS_RECOIL_ALL
+                                                  : BS_RECOIL_HEAVY;
 
   // other flags
   grey_op_params.opacity_pars.use_WM_ab = nurates_params.use_WM_ab;

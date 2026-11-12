@@ -149,6 +149,12 @@ RadiationM1::RadiationM1(MeshBlockPack *ppack, ParameterInput *pin)
     nurates_params.use_iso = pin->GetOrAddBoolean("bns_nurates", "use_iso", true);
     nurates_params.use_inelastic_scatt =
         pin->GetOrAddBoolean("bns_nurates", "use_inelastic_scatt", false);
+    // energy exchange with recoiling, thermally moving nucleons (heavy species by
+    // default); energy-only, so N and Ye are untouched
+    nurates_params.use_nucleon_recoil =
+        pin->GetOrAddBoolean("bns_nurates", "use_nucleon_recoil", false);
+    nurates_params.nucleon_recoil_all_species =
+        pin->GetOrAddBoolean("bns_nurates", "nucleon_recoil_all_species", false);
     nurates_params.use_WM_ab = pin->GetOrAddBoolean("bns_nurates", "use_WM_ab", true);
     nurates_params.use_WM_sc = pin->GetOrAddBoolean("bns_nurates", "use_WM_sc", true);
     nurates_params.use_dU = pin->GetOrAddBoolean("bns_nurates", "use_dU", true);
