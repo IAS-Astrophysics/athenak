@@ -242,9 +242,11 @@ void ParameterInput::LoadFromFile(IOWrapper &input, bool single_file_per_rank) {
       header = loc + 10; // store the header length
       break;
     }
-    if (header > kBufSize*20) {
+    // The dump can be long: fastflow stores each horizon's spectral shape as a
+    // string (last_shape_N), and every line of a block is padded to its longest value.
+    if (header > kBufSize*1024) {
       std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
-                << std::endl << "<par_end> is not found in the first 40KBytes."
+                << std::endl << "<par_end> is not found in the first 4 MBytes."
                 << std::endl << "Probably the file is broken or the wrong file is "
                 << "specified" << std::endl;
       std::exit(EXIT_FAILURE);
