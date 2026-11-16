@@ -212,6 +212,7 @@ class Z4c {
   Real * psi_out;
   Real waveform_dt;
   Real last_output_time;
+  bool weyl_exchange_active = false;
   int nrad; // number of radii to perform wave extraction
 
   // CCE
