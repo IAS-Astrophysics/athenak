@@ -92,6 +92,8 @@ void Z4c::WaveExtr(MeshBlockPack *pmbp) {
             Real phi = grids[g]->polar_pos.h_view(ip,1);
             Real datareal = grids[g]->interp_vals.h_view(ip,0);
             Real dataim = grids[g]->interp_vals.h_view(ip,1);
+            // Angles outside this rank contribute exactly zero.
+            if (datareal == 0.0 && dataim == 0.0) continue;
             Real weight = grids[g]->solid_angles.h_view(ip);
             swsh(&ylmR,&ylmI,l,m,theta,phi);
             // The spherical harmonics transform as
