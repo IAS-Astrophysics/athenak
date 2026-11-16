@@ -37,13 +37,13 @@ using Real = double;
 //----------------------------------------------------------------------------------------
 // general purpose macros (never modified)
 
-// number of bits used to store MeshBlock local ID in MPI message tags.  Thus maximum
-// number of MBs per rank is 2^(NUM_BITS_LID). This limit is required because the MPI
-// standard requires signed int tag, with MPI_TAG_UB>=2^15-1 = 32,767 (inclusive). In fact
-// virtually every library allows this limit to be exceeded. As of 2025, the Intel MPI
-// library provided the most stringent limit of 20 bits per tag. Six bits are needed to
-// store the buffer ID, leaving NUM_BITS_LID=14
-#define NUM_BITS_LID 14
+// Number of bits used to store the MeshBlock local ID in MPI message tags.
+// Six additional bits encode the boundary-buffer ID. Ten local-ID bits permit
+// 1024 MeshBlocks per rank and keep the largest tag at 65535. The previous
+// 14-bit allocation required 20 tag bits, exceeding the tag range supported by
+// the current Aurora MPI configuration. The Mesh constructor checks the
+// per-rank MeshBlock count against this limit.
+#define NUM_BITS_LID 10
 
 #define SQR(x) ( (x)*(x) )
 #define SIGN(x) ( ((x) < 0.0) ? -1.0 : 1.0 )
