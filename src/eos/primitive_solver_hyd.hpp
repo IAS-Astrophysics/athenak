@@ -43,6 +43,7 @@
 #include "mhd/mhd.hpp"
 #include "coordinates/coordinates.hpp"
 #include "coordinates/cell_locations.hpp"
+#include "nuclear/network/network.hpp"
 
 template<class EOSPolicy, class ErrorPolicy>
 class PrimitiveSolverHydro {
@@ -94,9 +95,16 @@ class PrimitiveSolverHydro {
     }
     // Parameters for Helmholtz EoS
     if constexpr (std::is_same_v<Primitive::EOSHelmholtz, EOSPolicy>) {
-      // Species behind the nscalars mass fractions: comma-separated lists of mass
-      // number, charge number and ATOMIC mass excess [MeV] (AME convention), one
-      // entry per scalar. Non-integer A, Z are fine (effective species).
+      // Species behind the nscalars mass fractions: taken from the nuclear network
+      // (nuclear/network/network.hpp), mass number aion(n), charge number zion(n) and
+      // ATOMIC mass excess dmass_ions(n) [MeV] (AME convention), so the binding energy
+      // in eps is the one the network releases.
+      Real A[NSPECIES], Z[NSPECIES], dm[NSPECIES];
+      for (int n = 0; n < NSPECIES; ++n) {
+        A[n] = aion(n);
+        Z[n] = zion(n);
+        dm[n] = dmass_ions(n);
+      }
       const int nscal = pin->GetOrAddInteger(block, "nscalars", 0);
       auto read_list = [&](const char *key) {
         std::vector<Real> v;
@@ -111,14 +119,10 @@ class PrimitiveSolverHydro {
         }
         return v;
       };
-      const auto A = read_list("A");
-      const auto Z = read_list("Z");
-      const auto dm = read_list("dm");
       // Optional ground-state spin degeneracies 2J+1 (entropy only); default 1.
       std::vector<Real> g;
       if (pin->DoesParameterExist(block, "g")) { g = read_list("g"); }
-      ps.GetEOSMutable().SetSpecies(nscal, A.data(), Z.data(), dm.data(),
-                                    g.empty() ? nullptr : g.data());
+      ps.GetEOSMutable().SetSpecies(NSPECIES, A, Z, dm, g.empty() ? nullptr : g.data());
       std::string units = pin->GetOrAddString(block, "units", "geometric_solar");
       if (!units.compare("geometric_solar")) {
         ps.GetEOSMutable().SetCodeUnitSystem(Primitive::MakeGeometricSolar());

@@ -1,24 +1,29 @@
-#ifndef PGEN_FLUIDS_REACTIVE_BUBBLE_HPP_
-#define PGEN_FLUIDS_REACTIVE_BUBBLE_HPP_
+#ifndef NUCLEAR_NETWORK_NETWORK_HPP_
+#define NUCLEAR_NETWORK_NETWORK_HPP_
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file network.hpp
+//! \brief He4/C12/O16 reaction network: species data, REACLIB rates, the RHS and the
+//! Jacobian of the conserved rho*X[n] system (species only; the energy release is
+//! carried by the Helmholtz EOS through the binding energy in eps).
 
 #include <cmath>
+#include <string>
+#include <vector>
 
 #include "athena.hpp"
 #include "units/units.hpp"
 
-// IE (not lowercase `ie`): the energy-slot index into NX-sized arrays
-// (UX[], F[], J[][]). Deliberately distinct from the common AthenaK
-// mesh-bound-index convention `is, ie, js, je, ks, ke`, which this enum
-// would otherwise silently shadow wherever both appear in the same scope.
 enum {
  ihe4=0,
  ic12=1,
  io16=2,
- IE=3,
 };
 
-constexpr int NSPECIES = IE;
-constexpr int NX = IE + 1;
+constexpr int NSPECIES = 3;
 
 
 // Per-species constants, as functions so they are usable in both host and device code
@@ -38,6 +43,19 @@ KOKKOS_INLINE_FUNCTION Real aion_inv(int n) {
     1.0/   4.0, // 0 : He4
     1.0/  12.0, // 1 : C12
     1.0/  16.0, // 2 : O16
+  };
+  return v[n];
+}
+
+
+// Atomic mass excess [MeV] (AME2020). The Helmholtz EOS reads aion, zion and dmass_ions
+// directly (eos/primitive_solver_hyd.hpp) and puts the binding energy into eps through
+// these same values.
+KOKKOS_INLINE_FUNCTION Real dmass_ions(int n) {
+  constexpr Real v[NSPECIES] = {
+    2.42491587,   // 0 : He4
+    0.0,          // 1 : C12
+    -4.73700141,  // 2 : O16
   };
   return v[n];
 }
@@ -234,45 +252,49 @@ void rhs_nuc(const Real &rho, const Real &temp, const Real X[], Real ydot_nuc[],
 
 
 KOKKOS_INLINE_FUNCTION
-void ener_rate(const Real &rho, const Real &temp, const Real X[], Real &enuc, Real &enuc_dt) {
-  // Specific energy rate contribution and its temperature derivative.
+Real ener_rate(const Real X[], const Real dedX[], const Real ydot_nuc[]) {
+  // Specific heating rate [erg/g/s] at fixed (rho, eps): cv dT/dt = -Sum_n dedX[n] dX_n/dt
+  // with dedX = (d eps/dX_n) at fixed (rho, T) from the EOS (binding, ion, electron and
+  // Coulomb terms). The k-independent constant in dedX drops out since Sum dX_n/dt = 0.
+  Real enuc = 0.0;
+  for (int n=0; n<NSPECIES; n++) {
+    enuc -= dedX[n] * aion(n) * ydot_nuc[n];
+  }
+  return enuc;
+}
 
+
+KOKKOS_INLINE_FUNCTION
+Real heating_timescale(const Real &rho, const Real &temp, const Real X[],
+                       const Real dedX[], const Real &cv) {
+  // Nuclear heating timescale cv*T/|enuc| [s]: the time for the burning to raise T by
+  // about T. enuc is the specific rate [erg/g/s] and cv the specific heat [erg/g/K].
+  // Without burning (enuc = 0) it returns the largest Real, so a min over cells
+  // ignores the cell.
   Real ydot_nuc[NSPECIES];
   Real ydot_nuc_dt[NSPECIES];
-
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
-  enuc = 0.0;
-  enuc_dt = 0.0;
-
-  for (int n=0; n<NSPECIES; n++) {
-    enuc += ydot_nuc[n] * mion(n);
-  }
-
-  for (int n=0; n<NSPECIES; n++) {
-    enuc_dt += ydot_nuc_dt[n] * mion(n);
-  }
-
-  Real m_u = units::Units::atomic_mass_unit_cgs;
-  Real c_cgs = units::Units::speed_of_light_cgs;
-  enuc *= -c_cgs*c_cgs/m_u;
-  enuc_dt *= -c_cgs*c_cgs/m_u;
-  return;
+  Real abs_enuc = Kokkos::fabs(ener_rate(X, dedX, ydot_nuc));
+  return (abs_enuc > 0.0) ? cv*temp/abs_enuc : Kokkos::Experimental::finite_max_v<Real>;
 }
 
 
 
 KOKKOS_INLINE_FUNCTION
-void ActualRHS(Real rho, Real temp, Real X[], Real F[]) {
-  
-  Real enuc;
-  Real enuc_dt;
-  ener_rate(rho, temp, X, enuc, enuc_dt);
+void ActualRHS(Real rho, Real temp, Real X[], const Real dedX[], Real F[],
+               Real &enuc_dot) {
+
   Real ydot_nuc[NSPECIES];
   Real ydot_nuc_dt[NSPECIES];
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
-  // UX = (rho*X[n], rho*e) are per unit volume: enuc [erg/g/s] -> rho*enuc [erg/cm^3/s]
-  F[IE] = rho * enuc;
+  // Nuclear heating rate per unit volume: enuc [erg/g/s] -> rho*enuc [erg/cm^3/s].
+  // Diagnostic only, not part of the Newton system: with the Helmholtz EOS, eps includes
+  // the binding energy, so burning conserves rho*eps and the release shows up as a
+  // higher T at fixed eps.
+  enuc_dot = rho * ener_rate(X, dedX, ydot_nuc);
+
+  // UX = rho*X[n] is per unit volume
   for (int n=0; n<NSPECIES; n++) {
     F[n] = rho* aion(n) * ydot_nuc[n];
   }
@@ -281,9 +303,7 @@ void ActualRHS(Real rho, Real temp, Real X[], Real F[]) {
 }
 
 KOKKOS_INLINE_FUNCTION
-void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]) {
- 
-  Real m_u = units::Units::atomic_mass_unit_cgs;
+void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NSPECIES]) {
 
   tf_t tfactors = evaluate_tfactors(temp);
 
@@ -298,20 +318,17 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
 
   Real ydot_nuc[NSPECIES];
   Real ydot_nuc_dt[NSPECIES];
-  Real enuc;
-  Real enuc_dt;
   Real scratch;
 
   Real Y[NSPECIES];
-  
+
   for (int n=0; n<NSPECIES; n++) {
-    Y[n] = X[n] * aion_inv(n); 
+    Y[n] = X[n] * aion_inv(n);
   }
 
-  ener_rate(rho, temp, X, enuc, enuc_dt);
   rhs_nuc(rho, temp, X, ydot_nuc, ydot_nuc_dt);
 
-  scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 0.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
+  scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho - 1.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
   J[ihe4][ihe4] = scratch;
 
   scratch = -k_C12_He4_to_O16_reaclib*Y[ihe4]*rho;
@@ -319,9 +336,6 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
 
   scratch = 0.0;
   J[ihe4][io16] = scratch;
-
-  scratch = ydot_nuc_dt[ihe4] / cv;
-  J[ihe4][IE] = scratch;
 
   scratch = -k_C12_He4_to_O16_reaclib*Y[ic12]*rho + 0.5*k_He4_He4_He4_to_C12_reaclib*Kokkos::pow(Y[ihe4], 2)*Kokkos::pow(rho, 2);
   J[ic12][ihe4] = scratch;
@@ -332,31 +346,14 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
   scratch = 0.0;
   J[ic12][io16] = scratch;
 
-  scratch = ydot_nuc_dt[ic12] / cv;
-  J[ic12][IE] = scratch;
-
   scratch = k_C12_He4_to_O16_reaclib*Y[ic12]*rho;
   J[io16][ihe4] = scratch;
 
   scratch = k_C12_He4_to_O16_reaclib*Y[ihe4]*rho;
-  J[io16][ic12] = aion(io16)*aion_inv(ic12)*scratch;
+  J[io16][ic12] = scratch;
 
   scratch = 0.0;
   J[io16][io16] = scratch;
-
-  scratch = ydot_nuc_dt[io16] / cv;
-  J[io16][IE] = scratch;
-
-
-  for(int m=0; m<NSPECIES; m++) {
-    Real sum_enuc_dY = 0.0;
-    for(int n=0; n<NSPECIES; n++) {
-      sum_enuc_dY += -mion(n)*J[m][n] / m_u;
-    }
-    J[IE][m] = sum_enuc_dY;
-  }
-
-  J[IE][IE] = enuc_dt / cv;
 
   //Add the weights:
   for(int m=0; m<NSPECIES; m++) {
@@ -365,172 +362,13 @@ void PopulateJac(Real rho, Real temp, Real X[], Real cv, Real ex[], Real J[][NX]
     }
   }
 
-  for(int m=0; m<NSPECIES; m++) {
-    J[m][IE] *= aion(m);
-  }
-
-  for(int n=0; n<NSPECIES; n++) {
-    J[IE][n] *= aion_inv(n);
-  }
-
-  //Add the EOS correction
+  //Add the EOS correction: at fixed eps, dT/dX_n = -ex[n]/cv, so the rates' temperature
+  //dependence enters every column through dXdot_m/dT = aion(m)*ydot_nuc_dt[m]
   for(int m=0; m<NSPECIES; m++) {
     for(int n=0; n<NSPECIES; n++) {
-      J[m][n] -= aion(m)*ex[n]*J[m][IE] / cv;
+      J[m][n] -= aion(m)*ydot_nuc_dt[m]*ex[n] / cv;
     }
-  }
-
-  for(int n=0; n<NSPECIES; n++) {
-    J[IE][n] -= ex[n] * enuc_dt / cv;
   }
 }
 
-
-//----------------------------------------------------------------------------------------
-//! \fn LUDecompose()
-//! \brief In-place LU decomposition with partial pivoting (Doolittle). On return the
-//! strict lower part of A holds L (unit diagonal implied), the upper part holds U, and
-//! piv[k] is the row swapped into position k. Returns false if A is singular.
-
-template<int N>
-KOKKOS_INLINE_FUNCTION
-bool LUDecompose(Real A[][N], int piv[N]) {
-  for (int k=0; k<N; k++) {
-    // find pivot row
-    int p = k;
-    Real amax = Kokkos::fabs(A[k][k]);
-    for (int r=k+1; r<N; r++) {
-      if (Kokkos::fabs(A[r][k]) > amax) {
-        amax = Kokkos::fabs(A[r][k]);
-        p = r;
-      }
-    }
-    piv[k] = p;
-    if (amax < 1.0e-300) return false;
-
-    if (p != k) {
-      for (int c=0; c<N; c++) {
-        Real tmp = A[k][c];
-        A[k][c] = A[p][c];
-        A[p][c] = tmp;
-      }
-    }
-
-    // eliminate below the pivot, storing multipliers in L
-    Real pinv = 1.0/A[k][k];
-    for (int r=k+1; r<N; r++) {
-      A[r][k] *= pinv;
-      for (int c=k+1; c<N; c++) {
-        A[r][c] -= A[r][k]*A[k][c];
-      }
-    }
-  }
-  return true;
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn LUSolve()
-//! \brief Solves A x = b using the factors from LUDecompose(). LU and piv are not
-//! modified, so they can be reused for several right-hand sides.
-
-template<int N>
-KOKKOS_INLINE_FUNCTION
-void LUSolve(const Real LU[][N], const int piv[N], const Real b[N], Real x[N]) {
-  for (int n=0; n<N; n++) {
-    x[n] = b[n];
-  }
-
-  // apply row permutation, in the same order as the factorization
-  for (int k=0; k<N; k++) {
-    if (piv[k] != k) {
-      Real tmp = x[k];
-      x[k] = x[piv[k]];
-      x[piv[k]] = tmp;
-    }
-  }
-
-  // forward substitution: L y = P b
-  for (int r=1; r<N; r++) {
-    for (int c=0; c<r; c++) {
-      x[r] -= LU[r][c]*x[c];
-    }
-  }
-
-  // back substitution: U x = y
-  for (int r=N-1; r>=0; r--) {
-    for (int c=r+1; c<N; c++) {
-      x[r] -= LU[r][c]*x[c];
-    }
-    x[r] /= LU[r][r];
-  }
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn FactorNewtonMatrix()
-//! \brief Builds A = I - dt*J and LU-factorizes it in place into LU.
-
-KOKKOS_INLINE_FUNCTION
-bool FactorNewtonMatrix(const Real dt, const Real J[][NX], Real LU[][NX], int piv[NX]) {
-  for (int m=0; m<NX; m++) {
-    for (int n=0; n<NX; n++) {
-      LU[m][n] = ((m == n) ? 1.0 : 0.0) - dt*J[m][n];
-    }
-  }
-  return LUDecompose<NX>(LU, piv);
-}
-
-
-//----------------------------------------------------------------------------------------
-//! \fn BackEulerIteration()
-//! \brief One (simplified) Newton iteration of the backward Euler step. Solves
-//!   (I - dt*J) DUX0 = UX - UX0 + dt*F(UX0)
-//! with the stored LU factors, where UX is the state at the start of the step and UX0
-//! the current iterate. The caller then sets UX0 += DUX0. Errors are measured from the
-//! Newton step: index 0 is the energy component, index 1 the max over mass fractions.
-
-KOKKOS_INLINE_FUNCTION
-void BackEulerIteration(const Real rho, const Real dt, const Real UX[NX],
-                        const Real UX0[NX], Real DUX0[NX], const Real F[NX],
-                        const Real LU[][NX], const int piv[NX],
-                        const Real e_atol, const Real e_rtol,
-                        const Real y_atol, const Real y_rtol,
-                        Real abs_res[2], Real rel_res[2], Real err[2]) {
-  const Real tiny = 1.0e-30;
-  const Real x_floor = 1.0e-30;
-
-  Real b[NX];
-  for (int n=0; n<NX; n++) {
-    b[n] = UX[n] - UX0[n] + dt*F[n];
-  }
-
-  LUSolve<NX>(LU, piv, b, DUX0);
-
-  // Convergence errors of the conserved variables, normalized by the mixed tolerance
-  // atol + rtol*|x| (converged when err <= 1):
-  //   err[0]: rho*e  [erg/cm^3]  with e_atol, e_rtol
-  //   err[1]: max_n rho*X[n] [g/cm^3] with y_atol, y_rtol
-  // abs_res/rel_res are the plain absolute/relative updates (used to detect stalls).
-
-  // Energy component
-  Real e_new = Kokkos::fabs(UX0[IE] + DUX0[IE]);
-  abs_res[0] = Kokkos::fabs(DUX0[IE]);
-  rel_res[0] = abs_res[0] / Kokkos::fmax(e_new, tiny);
-  err[0] = abs_res[0] / (e_atol + e_rtol*e_new);
-
-  // Partial density (rho*X[n]) components
-  abs_res[1] = 0.0;
-  rel_res[1] = 0.0;
-  err[1] = 0.0;
-  for (int n=0; n<NSPECIES; n++) {
-    Real dx = Kokkos::fabs(DUX0[n]);
-    Real x_new = Kokkos::fabs(UX0[n] + DUX0[n]);
-    abs_res[1] = Kokkos::fmax(abs_res[1], dx);
-    rel_res[1] = Kokkos::fmax(rel_res[1], dx / Kokkos::fmax(x_new, rho*x_floor));
-    err[1] = Kokkos::fmax(err[1], dx / (y_atol + y_rtol*x_new));
-  }
-}
-
-#endif  // PGEN_FLUIDS_REACTIVE_BUBBLE_HPP_
-
+#endif  // NUCLEAR_NETWORK_NETWORK_HPP_
