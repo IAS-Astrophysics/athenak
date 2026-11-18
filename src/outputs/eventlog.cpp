@@ -42,6 +42,7 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   int* pfail   = &(pm->ecounter.neos_fail);
   int* pmaxit  = &(pm->ecounter.maxit_c2p);
   int* pfofc   = &(pm->ecounter.nfofc);
+  int* pqneg   = &(pm->ecounter.nqrad_neg);
   MPI_Allreduce(MPI_IN_PLACE, pdfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pefloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, ptfloor, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
@@ -49,6 +50,7 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
   MPI_Allreduce(MPI_IN_PLACE, pfail,   1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pmaxit,  1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE, pfofc,   1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE, pqneg,   1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #endif
 
   // check if there is any data to be written
@@ -59,7 +61,8 @@ void EventLogOutput::LoadOutputData(Mesh *pm) {
       pm->ecounter.neos_vceil  > 0 ||
       pm->ecounter.neos_fail   > 0 ||
       pm->ecounter.nfofc > 0 ||
-      pm->ecounter.maxit_c2p > 0) {
+      pm->ecounter.maxit_c2p > 0 ||
+      pm->ecounter.nqrad_neg > 0) {
     no_output=false;
   }
 }
@@ -91,7 +94,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
     if (!(header_written)) {
       std::fprintf(pfile,"# Athena event counter data\n");
       std::fprintf(pfile,"#  cycle eos_dfloor eos_efloor eos_tfloor eos_vceil");
-      std::fprintf(pfile," eos_fail c2p_it fofc");
+      std::fprintf(pfile," eos_fail c2p_it fofc qrad_neg");
       std::fprintf(pfile,"\n");  // terminate line
       header_written = true;
     }
@@ -106,6 +109,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
       std::fprintf(pfile, " %8d", pm->ecounter.neos_fail);
       std::fprintf(pfile, " %6d", pm->ecounter.maxit_c2p);
       std::fprintf(pfile, " %8d", pm->ecounter.nfofc);
+      std::fprintf(pfile, " %8d", pm->ecounter.nqrad_neg);
       std::fprintf(pfile,"\n"); // terminate line
     }
     std::fclose(pfile);
@@ -119,6 +123,7 @@ void EventLogOutput::WriteOutputFile(Mesh *pm, ParameterInput *pin) {
   pm->ecounter.neos_fail = 0;
   pm->ecounter.maxit_c2p = 0;
   pm->ecounter.nfofc = 0;
+  pm->ecounter.nqrad_neg = 0;
 
   // increment output time, clean up
   if (out_params.last_time < 0.0) {

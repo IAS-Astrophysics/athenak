@@ -94,7 +94,7 @@ inline double NewtonLegendreRoot(
 //    * Gauss–Legendre weight formula:  w_i = 2 / ( (1 - x_i^2) [Pn'(x_i)]^2 )
 //    * Returns a 2D array [2][n]:  row 0 => roots, row 1 => weights
 //----------------------------------------------------------------------------
-std::vector<std::vector<Real>> RootsAndWeights(int n) {
+inline std::vector<std::vector<Real>> RootsAndWeights(int n) {
   // temporary pair array for sorting by root
   std::vector<std::pair<double,double>> rw_pairs(n);
 
