@@ -43,48 +43,60 @@ Real InterpQuadChi(Real chi0, Real chi1, Real chi2) {
 //! increments; S0, S1, S2 are the source function at the upwind footpoint, the local
 //! cell, and the downwind footpoint. On return:
 //!   I_cell = a0*S0 + a1*S1 + a2*S2 + edtau*I_upwind        (Eq. 20)
+//! The weights are built from the exponential moments c_k of the upwind segment, which
+//! below taumin are evaluated by series rather than by cancellation-prone differences.
 
 KOKKOS_INLINE_FUNCTION
 void InterpQuadSourceSlopeLim(Real dtaum, Real dtaup, Real S0, Real S1, Real S2,
                               Real *edtau, Real *a0, Real *a1, Real *a2) {
-  const Real taumin = 1.0e-6;
+  if (!(dtaum > 0.0)) {   // zero-length segment: transmit I_upwind
+    (*edtau) = 1.0;
+    (*a0) = 0.0;
+    (*a1) = 0.0;
+    (*a2) = 0.0;
+    return;
+  }
+
+  Real dtaus  = dtaum + dtaup;
+  Real dtaus1 = 1.0 / dtaus;
+  Real dtaup1 = 1.0 / dtaup;
+  Real dtaum1 = 1.0 / dtaum;
+  Real dtausp1 = dtaus1 * dtaup1;
+  Real dtaum2 = dtaum * dtaum;
+
+  // moments c_k = int_0^dtaum u^k e^(u-dtaum) du; series at small tau avoids cancellation
+  const Real taumin = 1.0e-2;
+  Real c0, c1, c2;
   if (dtaum < taumin) {
-    // expand to 2nd order in dtaum to avoid catastrophic cancellation at small tau
-    (*edtau) = 1.0 - dtaum*(1.0 - 0.5*dtaum);
-    Real taurat = dtaup / dtaum;
-    Real Sc = S1 - 0.5/(1.0+taurat) * (taurat*(S1-S0) + (S2-S1)/taurat);
-    if ((S0-Sc)*(S1-Sc) <= 0.0) {
-      (*a0) = dtaum * (taurat/(1.0+taurat) - 0.5*dtaum);
-      (*a1) = dtaum * 0.5 * (1.0+taurat) / taurat;
-      (*a2) = -dtaum * 0.5 / (taurat*(1.0+taurat));
-    } else {
-      (*a0) = 0.6666666666666667 * dtaum;
-      (*a1) = 0.3333333333333333 * dtaum;
-      (*a2) = 0.0;
-    }
+    const Real d = dtaum;
+    c0 = d*(1.0 - d*(1.0/2.0 - d*(1.0/6.0 - d*(1.0/24.0
+         - d*(1.0/120.0 - d*(1.0/720.0 - d/5040.0))))));
+    c1 = dtaum2*(1.0/2.0 - d*(1.0/6.0 - d*(1.0/24.0
+         - d*(1.0/120.0 - d*(1.0/720.0 - d/5040.0)))));
+    c2 = dtaum2*d*(1.0/3.0 - d*(1.0/12.0 - d*(1.0/60.0
+         - d*(1.0/360.0 - d/2520.0))));
+    (*edtau) = 1.0 - c0;
   } else {
-    Real dtaus  = dtaum + dtaup;
-    Real dtaus1 = 1.0 / dtaus;
-    Real dtaup1 = 1.0 / dtaup;
-    Real dtaum1 = 1.0 / dtaum;
-    Real dtausp1 = dtaus1 * dtaup1;
-    Real dtaum2 = dtaum * dtaum;
-
     (*edtau) = exp(-dtaum);
-    Real c0 = 1.0 - (*edtau);
-    Real c1 = dtaum - c0;
-    Real c2 = dtaum2 - 2.0*c1;
+    c0 = 1.0 - (*edtau);
+    c1 = dtaum - c0;
+    c2 = dtaum2 - 2.0*c1;
+  }
 
+  // Bezier control point and overshoot test; no downwind point -> limited form
+  bool unlimited = false;
+  if (dtaup > 0.0) {
     Real Sc = S1 - 0.5*(dtaup*(S1-S0)*dtaus1 + dtaum2*(S2-S1)*dtausp1);
-    if ((S0-Sc)*(S1-Sc) <= 0.0) {
-      (*a0) = c0 + (c2 - (dtaus+dtaum)*c1) * dtaum1 * dtaus1;
-      (*a1) = (dtaus*c1 - c2) * dtaum1 * dtaup1;
-      (*a2) = (c2 - dtaum*c1) * dtausp1;
-    } else {
-      (*a1) = c2 / dtaum2;
-      (*a0) = c0 - (*a1);
-      (*a2) = 0.0;
-    }
+    unlimited = ((S0-Sc)*(S1-Sc) <= 0.0);
+  }
+  if (unlimited) {
+    (*a0) = c0 + (c2 - (dtaus+dtaum)*c1) * dtaum1 * dtaus1;
+    (*a1) = (dtaus*c1 - c2) * dtaum1 * dtaup1;
+    (*a2) = (c2 - dtaum*c1) * dtausp1;
+  } else {
+    (*a1) = c2 / dtaum2;
+    (*a0) = c0 - (*a1);
+    (*a2) = 0.0;
   }
 }
 
