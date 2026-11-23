@@ -51,6 +51,44 @@ jobs:
           name: cpu_test_log.txt
           path: ${{ github.workspace }}/tst/test_log.txt
 
+  regression_nurates_cpu-job:
+    needs: [lint-job]
+    runs-on: [self-hosted, ias-cluster]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: fetch bns_nurates
+        shell: bash
+        env:
+          # pinned bns_nurates commit (main as of 2026-11-23); the reference values in
+          # test_m1_singlezone_nurates_cpu.py were recorded with it, so bump both together
+          BNS_NURATES_SHA: 22114c7c45685cf142c3e50ee62e8a1098051b40
+        run: |
+          # bns_nurates is header-only and not a submodule; the CI fetches the pinned
+          # commit into the src/bns_nurates location the CMake build expects
+          rm -rf ${{ github.workspace }}/src/bns_nurates
+          git init -q ${{ github.workspace }}/src/bns_nurates
+          cd ${{ github.workspace }}/src/bns_nurates
+          git fetch -q --depth 1 https://github.com/RelNucAs/bns_nurates.git $BNS_NURATES_SHA
+          git checkout -q FETCH_HEAD
+          git log -1 --format='bns_nurates %H %s'
+      - name: cpu regression test with bns_nurates
+        shell: bash
+        run: |
+          source /usr/share/Modules/init/bash
+          module load gcc-toolset/10 anaconda3
+          python -m pip install --user flake8 numpy pytest testutils
+          cd ${{ github.workspace }}/tst
+          echo "Running M1 tests on CPU with bns_nurates..."
+          python run_test_suite.py --cpu "-D Athena_ENABLE_NURATES=ON" \
+            --test test_suite/m1 test_suite/unit_tests/test_rad_m1_core_cpu.py
+      - name: Archive log_file_nurates_cpu
+        uses: actions/upload-artifact@v6
+        with:
+          name: nurates_cpu_test_log.txt
+          path: ${{ github.workspace }}/tst/test_log.txt
+
   regression_mpi_cpu-job:
     needs: [lint-job]
     runs-on: [self-hosted, ias-cluster]

@@ -61,29 +61,12 @@ m           = 0.0
 a           = 0.0
 excise      = false
 
+# Production settings: everything not listed takes the code default, as in the BNS runs
 <radiation_m1>
-closure_fun = eddington
-src_update = implicit
-opacity_type = bns-nurates
-gr_sources = false # default: true
-matter_sources = true # default: true
-backreact = true # false
-
-theta_limiter = false # default: false
+opacity_type = bns-nurates   # default is none
 
 <bns_nurates>
-use_inelastic_scatt = false
-use_WM_ab = false
-use_WM_sc = false
-use_NN_medium_corr = false
-
-use_dU = false
-use_dm_eff = false
-
-use_equilibrium_distribution = true # default: true
-kirchhoff_tau_trap = -1.0 # default: 1.0; < 0: always Kirchhoff
-
-opacity_corr_fac_max = 3.0
+use_inelastic_scatt = true   # NEPS on, as in production
 
 <problem>
 pgen_name = rad_m1_singlezonetest
