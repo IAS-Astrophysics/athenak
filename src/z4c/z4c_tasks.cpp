@@ -19,8 +19,8 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_finder.hpp"
 #include "z4c/driftcontrol/driftcontrol.hpp"
-#include "z4c/fastflow.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
@@ -83,13 +83,13 @@ void Z4c::QueueZ4cTasks() {
                  Task_Run, {Z4c_AlgC});
   if (pmy_pack->pdyngr != nullptr) {
     pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
-                   {Z4c_Z4c2ADM}, {Z4c_FastFlow});
+                   {Z4c_Z4c2ADM}, {Z4c_Horizon});
   }
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
   pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT",
                  Task_Run, {Z4c_Z4c2ADM});
-  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_FastFlow, "Z4c_FastFlow",
+  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_Horizon, "Z4c_Horizon",
                  Task_Run, {Z4c_PT});
 
   // End task list
@@ -326,21 +326,7 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
 }
 
 TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
-  Real time = pmy_pack->pmesh->time;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  if (stage == pdrive->nexp_stages) {
-    for (auto & pahf : pfastflow) {
-      switch (indcs.ng) {
-        case 2: pahf->MetricDerivatives<2>(time); break;
-        case 3: pahf->MetricDerivatives<3>(time); break;
-        case 4: pahf->MetricDerivatives<4>(time); break;
-      }
-    }
-    for (auto & pahf : pfastflow) {
-      pahf->Find(stage, time);
-      pahf->Write(stage, time);
-    }
-  }
+  if (phfind != nullptr) phfind->Find(pdrive, stage);
   return TaskStatus::complete;
 }
 

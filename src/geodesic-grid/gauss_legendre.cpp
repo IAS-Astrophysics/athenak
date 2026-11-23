@@ -37,6 +37,10 @@ GaussLegendreGrid::GaussLegendreGrid(MeshBlockPack *pmy_pack, int ntheta, Real r
   int &ng = pmy_pack->pmesh->mb_indcs.ng;
   nangles = 2*ntheta*ntheta;
 
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  amr_nmb_created = (pmr == nullptr) ? 0 : pmr->nmb_created;
+  amr_nmb_deleted = (pmr == nullptr) ? 0 : pmr->nmb_deleted;
+
   Kokkos::realloc(int_weights,nangles);
   Kokkos::realloc(polar_pos,nangles,2);
   Kokkos::realloc(cart_pos,nangles,3);
@@ -145,6 +149,21 @@ void GaussLegendreGrid::SetInterpolationIndices() {
   return;
 }
 
+void GaussLegendreGrid::UpdateInterpolationOnMeshChange() {
+  if (!pmy_pack->pmesh->adaptive) return;
+
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  if (pmr == nullptr) return;
+  if (pmr->nmb_created == amr_nmb_created && pmr->nmb_deleted == amr_nmb_deleted) return;
+
+  amr_nmb_created = pmr->nmb_created;
+  amr_nmb_deleted = pmr->nmb_deleted;
+  SetInterpolationIndices();
+  SetInterpolationWeights();
+
+  return;
+}
+
 //----------------------------------------------------------------------------------------
 //! \fn void GaussLegendreGrid::SetInterpolationWeights
 //! \brief set weights used by Lagrangian interpolation
@@ -216,11 +235,8 @@ void GaussLegendreGrid::SetInterpolationWeights() {
 //! \brief interpolate Cartesian data to surface of sphere
 
 void GaussLegendreGrid::InterpolateToSphere(int var_ind, DvceArray5D<Real> &val) {
-  // reinitialize interpolation indices and weights if AMR
-  //if (pmy_pack->pmesh->adaptive) {
-  //  SetInterpolationIndices();
-  //  SetInterpolationWeights();
-  //}
+  UpdateInterpolationOnMeshChange();
+
   auto &indcs = pmy_pack->pmesh->mb_indcs;
   int &is = indcs.is; int &js = indcs.js; int &ks = indcs.ks;
   int &ng = indcs.ng;

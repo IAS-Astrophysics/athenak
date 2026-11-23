@@ -20,7 +20,7 @@ set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++17")
 # Kokkos recommends NOT using default compiler extensions
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# following policy required to enable target_link_libraries() below 
+# following policy required to enable target_link_libraries() below
 cmake_policy(SET CMP0079 NEW)
 
 # Use 'Release' as default build type. Use 'Debug' for testing.
@@ -64,7 +64,7 @@ endif()
 # set OpenMP macro (true/false)
 set(ENABLE_OPENMP OFF)
 if (Athena_ENABLE_OPENMP)
-  find_package(OpenMP COMPONENTS CXX)
+  find_package(OpenMP COMPONENTS C CXX)
   if (NOT OpenMP_FOUND)
     message(FATAL_ERROR "OpenMP package is required but could not be found.")
   endif()
@@ -119,11 +119,20 @@ target_link_libraries(athena PUBLIC Threads::Threads)
 
 target_link_libraries(athena PUBLIC Kokkos::kokkos)
 if (ENABLE_MPI)
+  target_compile_definitions(athena PUBLIC OMPI_SKIP_MPICXX)
   target_link_libraries(athena PUBLIC MPI::MPI_CXX)
 endif()
 if (ENABLE_OPENMP)
-  target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
+  target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX OpenMP::OpenMP_C)
 endif()
+
+# define the C99 ‘restrict’ keyword away under C++
+target_compile_definitions(athena PRIVATE $<$<COMPILE_LANGUAGE:CXX>:restrict=__restrict__>)
+
+if (Kokkos_ARCH_NATIVE)
+	target_compile_options(athena PRIVATE $<$<COMPILE_LANGUAGE:C>:-march=native>)
+endif()
+
 if (${PROBLEM} MATCHES "z4c/two_punctures/*")
 	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
 	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)
