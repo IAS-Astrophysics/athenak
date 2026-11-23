@@ -757,13 +757,14 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     }
   }
 
-  // radiation m1 lab number density
-  if (out_params.variable.compare("rad_m1_N") == 0 ||
-      out_params.variable.compare("rad_m1_moments") == 0) {
+  // radiation m1 lab number density (only evolved when there is more than one species)
+  if ((out_params.variable.compare("rad_m1_N") == 0 ||
+       out_params.variable.compare("rad_m1_moments") == 0) &&
+      pm->pmb_pack->pradm1->nvars > M1_N_IDX) {
     for (int nuidx = 0; nuidx < pm->pmb_pack->pradm1->nspecies; ++nuidx) {
       outvars.emplace_back(
           "N:" + std::to_string(nuidx),
-          radiationm1::CombinedIdx(nuidx, 4, pm->pmb_pack->pradm1->nvars),
+          radiationm1::CombinedIdx(nuidx, M1_N_IDX, pm->pmb_pack->pradm1->nvars),
           &(pm->pmb_pack->pradm1->u0));
     }
   }

@@ -24,8 +24,6 @@
 //  \brief Sets initial conditions for radiation M1 beams test
 
 void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool restart) {
-  if (restart) return;
-
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pradm1 == nullptr) {
@@ -56,6 +54,10 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
   if (pmbp->pradm1->params.src_update == radiationm1::Implicit) {
     pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionImplicit};
   }
+
+  // The toy opacity model is not stored in the restart file, so it must be set
+  // again on restart before returning.
+  if (restart) return;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

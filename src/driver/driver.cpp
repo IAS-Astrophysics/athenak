@@ -787,6 +787,9 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->Prolongate(this, 0); // coarse grid BCs and prolongation
     (void) pz4c->ApplyPhysicalBCs(this, 0); // fine grid BCs
+    if (pm->pmb_pack->pcoord->coord_data.bh_excise) {
+      pm->pmb_pack->pcoord->UpdateExcisionMasks();
+    }
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
@@ -869,6 +872,7 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pradm1->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
     (void) pradm1->Prolongate(this, 0); // coarse grid BCs and prolongation
     (void) pradm1->ApplyPhysicalBCs(this, 0); // fine grid BCs
+    (void) pradm1->SetMask(this, 0);
   }
 
   return;

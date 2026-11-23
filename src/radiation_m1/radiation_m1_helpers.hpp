@@ -306,10 +306,11 @@ void apply_floor(const AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> &g_uu, Re
 
   const Real F2 = tensor_dot(g_uu, F_d, F_d);
   const Real lim = E * E * (1 - params.rad_eps);
-  if (F2 > lim) {
-    const Real fac = lim / F2;
+  if (!(F2 <= lim)) {  // also catches a NaN flux
+    // F2 is quadratic in F, so the rescaling factor is the square root of lim / F2
+    const Real fac = Kokkos::isfinite(F2) ? Kokkos::sqrt(lim / F2) : 0.0;
     for (int a = 0; a < 4; ++a) {
-      F_d(a) *= fac;
+      F_d(a) = (fac > 0.0) ? fac * F_d(a) : 0.0;
     }
   }
 }

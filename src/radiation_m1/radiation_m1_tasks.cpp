@@ -186,6 +186,7 @@ TaskStatus RadiationM1::SetMask(Driver *pdrive, int stage) {
           }
         }
       });
+  is_chi_updated = false;
   return TaskStatus::complete;
 }
 

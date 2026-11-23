@@ -23,8 +23,6 @@
 
 void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
                                               const bool restart) {
-  if (restart) return;
-
   MeshBlockPack *pmbp = pmy_mesh_->pmb_pack;
 
   if (pmbp->pradm1 == nullptr) {
@@ -54,6 +52,10 @@ void ProblemGenerator::RadiationM1LatticeTest(ParameterInput *pin,
   }
 
   pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Lattice};
+
+  // The toy opacity model is not stored in the restart file, so it must be set
+  // again on restart before returning.
+  if (restart) return;
 
   // capture variables for kernel
   auto &indcs = pmy_mesh_->mb_indcs;

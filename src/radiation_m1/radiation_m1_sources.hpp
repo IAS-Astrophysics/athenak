@@ -179,7 +179,10 @@ SrcSignal source_update_ll(
     return SrcScat;
   }
 
-  // begin multiroots solve
+  // begin multiroots solve; HybridsjFunctor reads the closure from the params, so pass
+  // it the requested one (the Eddington retry in source_update depends on this)
+  RadiationM1Params solve_params = m1_params;
+  solve_params.closure_type = closure_type;
   HybridsjState hybridsj_state{};
   HybridsjParams hybridsj_params{};
 
@@ -191,25 +194,27 @@ SrcSignal source_update_ll(
     hybridsj_params.x[i] = x[i];
   }
   auto ierr = HybridsjInitialize(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc,
-                                 src_params, m1_params);
+                                 src_params, solve_params);
 
   int iter = 0;
   do {
-    if (iter < m1_params.source_maxiter) {
-      ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc,
-                             src_params, m1_params);
-      iter++;
+    if (iter >= m1_params.source_maxiter) {
+#ifdef DEBUG_BUILD
+      Kokkos::printf(
+          "source_update: Exceeded maximum number of iterations of Hybridsj.\n");
+#endif
+      return SrcFail;
     }
 
+    ierr = HybridsjIterate(HybridsjFunc, hybridsj_state, hybridsj_params, BrentFunc,
+                           src_params, solve_params);
+    iter++;
+
     // the solver is stuck!
-    if (ierr == LinalgEnoprogj || ierr == LinalgEbadfunc ||
-        iter >= m1_params.source_maxiter) {
+    if (ierr == LinalgEnoprogj || ierr == LinalgEbadfunc) {
 #ifdef DEBUG_BUILD
       if (ierr == LinalgEbadfunc) {
         Kokkos::printf("source_update: NaNs/Infs found in implicit solve.\n");
-      } else if (iter > m1_params.source_maxiter) {
-        Kokkos::printf(
-            "source_update: Exceeded maximum number of iterations of Hybridsj.\n");
       } else {
         Kokkos::printf("source_update: Non-linear solver is stuck.\n");
       }

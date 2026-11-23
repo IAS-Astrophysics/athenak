@@ -657,6 +657,24 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) = Ff_d(2);
           u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) = Ff_d(3);
 
+          // Energy and momentum change the matter source actually produced, after
+          // the floor, measured from the equally floored transport predictor (as for
+          // N below). Backreacting this instead of theta*DrEFN keeps E and F_i
+          // conserved when the floor clips the source.
+          Real Ebase = u1_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i) +
+                       beta_dt * rEFN[nuidx][M1_E_IDX];
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> Fbase_d{};
+          pack_F_d(adm.beta_u(m, 0, k, j, i), adm.beta_u(m, 1, k, j, i),
+                   adm.beta_u(m, 2, k, j, i),
+                   u1_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i) +
+                       beta_dt * rEFN[nuidx][M1_FX_IDX],
+                   u1_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i) +
+                       beta_dt * rEFN[nuidx][M1_FY_IDX],
+                   u1_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i) +
+                       beta_dt * rEFN[nuidx][M1_FZ_IDX],
+                   Fbase_d);
+          apply_floor(g_uu, Ebase, Fbase_d, params_);
+
           Real DNf{};
           if (nspecies_ > 1) {
             const Real Npred =
@@ -677,10 +695,10 @@ TaskStatus RadiationM1::TimeUpdate_(Driver *d, int stage) {
           }
 
           if (params_.backreact && stage == 2 && (ismhd_)) {
-            umhd0_(m, IEN, k, j, i) -= theta * DrEFN[nuidx][M1_E_IDX];
-            umhd0_(m, IM1, k, j, i) -= theta * DrEFN[nuidx][M1_FX_IDX];
-            umhd0_(m, IM2, k, j, i) -= theta * DrEFN[nuidx][M1_FY_IDX];
-            umhd0_(m, IM3, k, j, i) -= theta * DrEFN[nuidx][M1_FZ_IDX];
+            umhd0_(m, IEN, k, j, i) -= Ef - Ebase;
+            umhd0_(m, IM1, k, j, i) -= Ff_d(1) - Fbase_d(1);
+            umhd0_(m, IM2, k, j, i) -= Ff_d(2) - Fbase_d(2);
+            umhd0_(m, IM3, k, j, i) -= Ff_d(3) - Fbase_d(3);
             if (nspecies_ > 1) {
               umhd0_(m, IYF, k, j, i) -= mb * (DNf * (nuidx == 0) - DNf * (nuidx == 1));
             }
