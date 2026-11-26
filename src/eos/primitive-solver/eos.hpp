@@ -127,6 +127,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   static constexpr bool supports_entropy = std::is_base_of_v<SupportsEntropy, EOSPolicy>;
   static constexpr bool supports_potentials =
     std::is_base_of_v<SupportsChemicalPotentials, EOSPolicy>;
+  static constexpr bool supports_interpotdiff =
+    std::is_base_of_v<SupportsInteractionPotentialDifference, EOSPolicy>;
 
  public:
   //! \fn EOS()
@@ -207,7 +209,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \return The entropy per baryon for this EOS.
   KOKKOS_INLINE_FUNCTION Real GetEntropy(Real n, Real T, Real *Y) const {
     if constexpr (supports_entropy) {
-      return EOSPolicy::Entropy(n, T*code_units.TemperatureConversion(eos_units), Y)/mb *
+      return EOSPolicy::Entropy(n,
+               T*code_units.TemperatureConversion(eos_units), Y)/mb *
              eos_units.EntropyConversion(code_units)/eos_units.MassConversion(code_units);
     } else {
       return std::numeric_limits<Real>::quiet_NaN();
@@ -273,8 +276,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION Real GetBaryonChemicalPotential(Real n, Real T, Real *Y) const {
     if constexpr (supports_potentials) {
       return EOSPolicy::BaryonChemicalPotential(n,
-               T*code_units->TemperatureConversion(*eos_units), Y) *
-             eos_units->ChemicalPotentialConversion(*code_units);
+               T*code_units.TemperatureConversion(eos_units), Y) *
+             eos_units.ChemicalPotentialConversion(code_units);
     } else {
       return std::numeric_limits<Real>::quiet_NaN();
     }
@@ -291,8 +294,8 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   KOKKOS_INLINE_FUNCTION Real GetChargeChemicalPotential(Real n, Real T, Real *Y) const {
     if constexpr (supports_potentials) {
       return EOSPolicy::ChargeChemicalPotential(n,
-               T*code_units->TemperatureConversion(*eos_units), Y) *
-             eos_units->ChemicalPotentialConversion(*code_units);
+               T*code_units.TemperatureConversion(eos_units), Y) *
+             eos_units.ChemicalPotentialConversion(code_units);
     } else {
       return std::numeric_limits<Real>::quiet_NaN();
     }
@@ -310,8 +313,61 @@ class EOS : public EOSPolicy, public ErrorPolicy {
                                                                  Real *Y) const {
     if constexpr (supports_potentials) {
       return EOSPolicy::ElectronLeptonChemicalPotential(n,
-               T*code_units->TemperatureConversion(*eos_units), Y) *
-             eos_units->ChemicalPotentialConversion(*code_units);
+               T*code_units.TemperatureConversion(eos_units), Y) *
+             eos_units.ChemicalPotentialConversion(code_units);
+    } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetInteractionPotentialDifference(Real n, Real T, Real *Y)
+  //  \brief Get the effective interaction potential difference from the number
+  //         density, temperature, and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The effective interaction potential difference for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetInteractionPotentialDifference(Real n, Real T,
+                                                                Real *Y) const {
+    if constexpr (supports_interpotdiff) {
+      return EOSPolicy::InteractionPotentialDifference(n,
+               T*code_units.TemperatureConversion(eos_units), Y) *
+             eos_units.ChemicalPotentialConversion(code_units);
+    } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetProtonFraction(Real n, Real T, Real *Y)
+  //  \brief Get the proton fraction from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The proton fraction for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetProtonFraction(Real n, Real T, Real *Y) const {
+    if constexpr (supports_potentials) {
+      return EOSPolicy::ProtonFraction(n,
+               T*code_units.TemperatureConversion(eos_units), Y);
+    } else {
+      return std::numeric_limits<Real>::quiet_NaN();
+    }
+  }
+
+  //! \fn Real GetNeutronFraction(Real n, Real T, Real *Y)
+  //  \brief Get the neutron fraction from the number density, temperature,
+  //         and particle fractions.
+  //
+  //  \param[in] n  The number density
+  //  \param[in] T  The temperature
+  //  \param[in] Y  An array of size n_species of the particle fractions.
+  //  \return The proton fraction for the EOS.
+  KOKKOS_INLINE_FUNCTION Real GetNeutronFraction(Real n, Real T, Real *Y) const {
+    if constexpr (supports_potentials) {
+      return EOSPolicy::NeutronFraction(n,
+               T*code_units.TemperatureConversion(eos_units), Y);
     } else {
       return std::numeric_limits<Real>::quiet_NaN();
     }
@@ -329,15 +385,61 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   //  \param[inout] Y_eq    The equilibrium particle fractions.
   //  \param[in]    T_guess Initial guess for the temperature.
   //  \param[in]    Y_guess Initial guesses for the particle fractions.
+  //  \param[out]   status  If not null, receives an EOSPolicy-defined code saying where
+  //                        the answer came from (interior solution, table edge, or a
+  //                        fallback), for callers that need to treat them differently.
   //  \return Whether the equilibrium was successfully found.
   KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumTrapped(Real n, Real e, Real *Yl,
-                                Real &T_eq, Real *Y_eq, Real T_guess, Real *Y_guess) {
+                                                         Real &T_eq, Real *Y_eq,
+                                                         Real T_guess,
+                                                         Real *Y_guess,
+                                                         int *status = nullptr) const {
     if constexpr (supports_potentials) {
-      int ierr = EOSPolicy::BetaEquilibriumTrapped(n,
-                   e*code_units->PressureConversion(*eos_units), Yl, T_eq, Y_eq,
-                   T_guess*code_units->TemperatureConversion(*eos_units), Y_guess);
+      int ierr = EOSPolicy::BetaEquilibriumTrapped(
+          n, e*code_units.PressureConversion(eos_units), Yl,
+          T_eq, Y_eq,
+          T_guess*code_units.TemperatureConversion(eos_units), Y_guess, status);
 
-      T_eq = T_eq*eos_units->TemperatureConversion(*code_units);
+      T_eq = T_eq*eos_units.TemperatureConversion(code_units);
+
+      return ierr==0;
+    } else {
+      return false;
+    }
+  }
+
+  //! \fn Real GetBetaEquilibriumPartial(Real n, Real e_rhs, Real *Yl_rhs,
+  //!     const Real w[PEQ_NWEIGHTS], Real &T_eq, Real *Y_eq, Real T_guess,
+  //!     Real *Y_guess)
+  //  \brief Get the partially-equilibrated temperature and species fractions: the
+  //         weighted generalisation of GetBetaEquilibriumTrapped, which is the case of
+  //         all five weights equal to 1.
+  //
+  //  \param[in]    n       The number density
+  //  \param[in]    e_rhs   Matter energy density plus the *weighted* neutrino energy
+  //  \param[in]    Yl_rhs  Electron fraction plus the *weighted* neutrino lepton number
+  //  \param[in]    w       Weights of the neutrino terms, indexed by PeqWeightIndex
+  //  \param[inout] T_eq    The equilibrium temperature.
+  //  \param[inout] Y_eq    The equilibrium particle fractions.
+  //  \param[in]    T_guess Initial guess for the temperature.
+  //  \param[in]    Y_guess Initial guesses for the particle fractions.
+  //  \param[out]   status  As for GetBetaEquilibriumTrapped.
+  //  \return Whether the equilibrium was successfully found.
+  //
+  //  The weights are dimensionless, so only e_rhs and the temperatures are converted.
+  //  See EOSCompOSE::BetaEquilibriumPartial for how e_rhs and Yl_rhs must be built.
+  KOKKOS_INLINE_FUNCTION bool GetBetaEquilibriumPartial(Real n, Real e_rhs, Real *Yl_rhs,
+                                                         const Real w[PEQ_NWEIGHTS],
+                                                         Real &T_eq, Real *Y_eq,
+                                                         Real T_guess, Real *Y_guess,
+                                                         int *status = nullptr) const {
+    if constexpr (supports_potentials) {
+      int ierr = EOSPolicy::BetaEquilibriumPartial(
+          n, e_rhs*code_units.PressureConversion(eos_units), Yl_rhs,
+          w, T_eq, Y_eq,
+          T_guess*code_units.TemperatureConversion(eos_units), Y_guess, status);
+
+      T_eq = T_eq*eos_units.TemperatureConversion(code_units);
 
       return ierr==0;
     } else {
@@ -346,20 +448,21 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   }
 
   //! \fn Real GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3])
-  // \brief Get the trapped neutrino net number and energy densities.
+  //  \brief Get the trapped neutrino net number and energy densities.
   //
   //  \param[in]    n    The number density
   //  \param[in]    T    The temperature
   //  \param[in]    Y    An array of size n_species of the particle fractions.
   //  \param[inout] n_nu The net number densities for each neutrino generation.
   //  \param[inout] e_nu The total energy densities for each neutrino generation.
-  inline void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) {
+  KOKKOS_INLINE_FUNCTION void GetTrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3],
+                                                  Real e_nu[3]) const {
     if constexpr (supports_potentials) {
-      EOSPolicy::TrappedNeutrinos(n, T*code_units->TemperatureConversion(*eos_units), Y,
+      EOSPolicy::TrappedNeutrinos(n, T*code_units.TemperatureConversion(eos_units), Y,
                                   n_nu, e_nu);
 
-      Real n_units = eos_units->DensityConversion(*code_units);
-      Real e_units = eos_units->PressureConversion(*code_units);
+      Real n_units = eos_units.NumberDensityConversion(code_units);
+      Real e_units = eos_units.PressureConversion(code_units);
 
       for (int i=0; i<3; ++i) {
         n_nu[i] = n_nu[i]*n_units;
@@ -370,20 +473,20 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   }
 
   //! \fn Real GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl)
-  // \brief Get the total lepton fractions for each generation of matter from the species
-  //        fractions and the neutrino number densities.
+  //  \brief Get the total lepton fractions for each generation of matter from the
+  //         species fractions and the neutrino number densities.
   //
-  //  \param[in]    n    The number density (N.B this should already be in EoS units, via
-  //                     rho/GetBaryonMass())
+  //  \param[in]    n    The number density (N.B this should already be in EoS units,
+  //                     via rho/GetBaryonMass())
   //  \param[in]    Y    The particle fractions.
-  //  \param[in]    n_nu The number densities for each neutrino species (e, ae, m, am, t,
-  //                     at) (N.B. these are expected to be in code units).
+  //  \param[in]    n_nu The number densities for each neutrino species
+  //                     (e, ae, m, am, t, at) (N.B. these are expected to be in code
+  //                     units).
   //  \param[inout] Yl   The total lepton fractions.
-  inline void GetLeptonFractions(Real n, Real *Y, Real n_nu[6], Real *Yl) {
-    Real n_units = code_units->DensityConversion(*eos_units);
-
+  KOKKOS_INLINE_FUNCTION void GetLeptonFractions(Real n, Real *Y, Real n_nu[6],
+                                                 Real *Yl) const {
     for (int i=0; i<3; ++i) {
-      Yl[i] = Y[i] + n_units*(n_nu[2*i] - n_nu[2*i+1])/n;
+      Yl[i] = Y[i] + (n_nu[2*i] - n_nu[2*i+1])/n;
     }
 
     return;
@@ -396,11 +499,12 @@ class EOS : public EOSPolicy, public ErrorPolicy {
   }
 
   //! \fn Real GetBaryonMass() const
-  //  \brief Get the baryon mass used by this EOS. Note that
-  //         this factor also converts the density.
+  //  \brief Get the baryon mass used by this EOS. Note that this factor
+  //         also converts from number density in EOS unit to mass density in code units.
   KOKKOS_INLINE_FUNCTION Real GetBaryonMass() const {
-    return mb*eos_units.MassConversion(code_units) *
-              eos_units.DensityConversion(code_units);
+    return mb * eos_units.MassConversion(code_units) *
+           (eos_units.NumberDensityConversion(code_units) /
+            eos_units.VolumeConversion(code_units));
   }
 
   //! \fn bool ApplyPrimitiveFloor(Real& n, Real& vu[3], Real& p, Real& T)
@@ -633,11 +737,11 @@ class EOS : public EOSPolicy, public ErrorPolicy {
     code_units = units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetCodeUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION UnitSystem& GetCodeUnitSystem() {
     return code_units;
   }
 
-  KOKKOS_INLINE_FUNCTION UnitSystem& GetEOSUnitSystem() const {
+  KOKKOS_INLINE_FUNCTION UnitSystem& GetEOSUnitSystem() {
     return eos_units;
   }
 };

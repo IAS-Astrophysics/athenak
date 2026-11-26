@@ -12,6 +12,7 @@
 #include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 #include "driver/driver.hpp"
+#include "eos/primitive-solver/unit_system.hpp"
 #include "eos/primitive_solver_hyd.hpp"
 
 enum class DynGRMHD_RSolver {llf_dyngr, hlle_dyngr};   // Riemann solvers for dynamical GR
@@ -64,6 +65,14 @@ struct DynGRMHDTaskIDs {
   TaskID zadep;
   TaskID c2pdep;
   TaskID rkdep;
+
+  TaskID postrad_restu;
+  TaskID postrad_sendu;
+  TaskID postrad_recvu;
+  TaskID postrad_bcs;
+  TaskID postrad_prol;
+  TaskID postrad_c2p;
+  TaskID postrad_clear;
 };
 
 namespace dyngr {
@@ -93,6 +102,15 @@ class DynGRMHD {
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost) = 0;
+
+  // Full C2P, including temperature publication, is skipped in fixed mode.
+  bool IsFixedEvolution() const { return fixed_evolution; }
+
+  // Unit systems of the EOS, exposed on the non-templated base so that code
+  // which cannot see the EOS policies (e.g. derived output variables) can still
+  // convert between code units and EOS (nuclear) units.
+  virtual Primitive::UnitSystem GetCodeUnitSystem() = 0;
+  virtual Primitive::UnitSystem GetEOSUnitSystem() = 0;
 
   // DynGRMHD policies
   DynGRMHD_RSolver rsolver_method;
@@ -140,6 +158,14 @@ class DynGRMHDPS : public DynGRMHD {
 
   virtual void AddCoordTerms(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,
                              const Real dt, DvceArray5D<Real> &u0, int nghost);
+
+  virtual Primitive::UnitSystem GetCodeUnitSystem() {
+    return eos.ps.GetEOSMutable().GetCodeUnitSystem();
+  }
+
+  virtual Primitive::UnitSystem GetEOSUnitSystem() {
+    return eos.ps.GetEOSMutable().GetEOSUnitSystem();
+  }
 
   template<int NGHOST>
   void AddCoordTermsEOS(const DvceArray5D<Real> &w0, const DvceArray5D<Real> &bcc0,

@@ -13,10 +13,10 @@
 #include <string>
 #include <vector>
 
-#include "parameter_input.hpp"
 #include "coordinates/coordinates.hpp"
 #include "diffusion/parabolic_process.hpp"
 #include "driver/driver.hpp"
+#include "parameter_input.hpp"
 #include "tasklist/task_list.hpp"
 
 // Forward declarations
@@ -36,6 +36,7 @@ namespace z4c {class CCE;}
 namespace adm {class ADM;}
 namespace particles {class Particles;}
 namespace units {class Units;}
+namespace radiationm1 {class RadiationM1;}
 namespace gravity {class Gravity;}
 
 //----------------------------------------------------------------------------------------
@@ -74,6 +75,7 @@ class MeshBlockPack {
   ion_neutral::IonNeutral *pionn=nullptr;
   TurbulenceDriver *pturb=nullptr;
   radiation::Radiation *prad=nullptr;
+  radiationm1::RadiationM1 *pradm1=nullptr;
   std::vector<z4c::CCE *> pz4c_cce;
   particles::Particles *ppart=nullptr;
   gravity::Gravity *pgrav=nullptr;
