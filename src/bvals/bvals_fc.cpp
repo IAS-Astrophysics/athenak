@@ -8,6 +8,7 @@
 //! Mesh variables.
 //! Prolongation of FC variables  occurs in ProlongateFC() function called from task list
 
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <algorithm>

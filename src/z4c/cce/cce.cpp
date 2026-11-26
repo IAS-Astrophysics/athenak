@@ -79,13 +79,8 @@ CCE::~CCE() {}
 void CCE::InterpolateAndDecompose(MeshBlockPack *pmbp) {
   Real ylmR,ylmI;
 
-  // reinitialize interpolation indices and weights if AMR
-  if(pmbp->pmesh->adaptive) {
-    for (int k = 0; k < nr; ++k) {
-      grids[k]->SetInterpolationIndices();
-      grids[k]->SetInterpolationWeights();
-    }
-  }
+  // interpolation indices and weights are refreshed by InterpolateToSphere() below
+  // whenever AMR has moved the mesh since they were last built
 
   // raveled shape of array & counts for mpi
   int count = 10*nr*num_angular_modes;

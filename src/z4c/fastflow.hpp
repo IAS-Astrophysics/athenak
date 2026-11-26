@@ -11,6 +11,7 @@
 
 #include <cstdio>
 
+#include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
@@ -60,10 +61,26 @@ class FastFlow {
   void ComputeSphericalHarmonics();
   void RadiiFromSphericalHarmonics();
   void SurfaceIntegrals();
+  // Latch the excision region at the current center/rr_min; no-op if already latched.
+  void FreezeExcisionRegion(Real latch_time);
 
   // Some of the main parameters in the fast-flow algorithm
   bool ah_found; // Horizon found
   Real time_first_found; // Time, when horizon first found
+  bool ah_excise_ready; // latched: horizon has settled -> safe to begin excision
+  // Auto excision-trigger, set from <coord> (detects when the BH has stopped forming):
+  bool excise_auto;         // false (default) => excise as soon as horizon found
+  Real excise_settle_rrate; // max |dR/R|/dt for a find to count as "settled"
+  Real excise_settle_hrms;  // max surface hrms for a find to count as "settled"
+  int  excise_settle_count; // consecutive settled finds required to latch
+  Real settle_prev_time;    // previous find time (for radius-rate estimate)
+  Real settle_prev_radius;  // previous find mean coordinate radius
+  int  settle_streak;       // running count of consecutive settled finds
+  // Frozen excision region (coord/freeze_excision).  Owned here, not in Coordinates,
+  // which is rebuilt on every remesh while FastFlow survives.  Persisted into restarts.
+  bool ah_frozen;         // latched: excision region fixed at first activation
+  Real frozen_center[3];  // horizon center at the time of latching
+  Real frozen_radius;     // horizon minimum radius at the time of latching
   Real initial_radius; // Initial guess for the radius of the horizon
   Real rr_min; // Minimum radius
   Real expand_guess; // Expand the initial guess by this factor
@@ -226,6 +243,13 @@ class FastFlowFinder : public HorizonFinder {
   Real MinRadius(int h) const override { return pff[h]->rr_min; }
   Real Mass(int h) const override { return pff[h]->ah_prop[FastFlow::hmass]; }
   const Real *Spin(int h) const override { return &pff[h]->ah_prop[FastFlow::hSx]; }
+  bool ExciseReady(int h) const override { return pff[h]->ah_excise_ready; }
+  bool Frozen(int h) const override { return pff[h]->ah_frozen; }
+  void FreezeExcisionRegion(int h, Real time) override {
+    pff[h]->FreezeExcisionRegion(time);
+  }
+  const Real *FrozenCenter(int h) const override { return pff[h]->frozen_center; }
+  Real FrozenRadius(int h) const override { return pff[h]->frozen_radius; }
 
  private:
   MeshBlockPack *pmbp;

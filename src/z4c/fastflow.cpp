@@ -166,6 +166,45 @@ FastFlow::FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n):
   ah_found = pin->GetOrAddBoolean("fastflow", "ah_found_a0_" + n_str, false);
   time_first_found = pin->GetOrAddReal("fastflow", "time_first_found_" + n_str, -1.0);
 
+  // Auto excision trigger.  The latch is per-horizon runtime state and is persisted
+  // here alongside the other horizon state; the knobs driving it are excision policy
+  // and live in <coord> next to excision_scheme and freeze_excision.
+  ah_excise_ready = pin->GetOrAddBoolean("fastflow", "ah_excise_ready_"+n_str, false);
+
+  // These knobs used to live in <fastflow>.  Reject the old spelling rather than let it
+  // silently fall back to the defaults: excise_auto would revert to false, starting
+  // excision at the first horizon find -- and, with coord/freeze_excision, latching the
+  // region there.  Old restart files carry the parfile, so this also catches restarts.
+  const char *moved[] = {"excise_auto", "excise_settle_rrate",
+                         "excise_settle_hrms", "excise_settle_count"};
+  for (const char *par : moved) {
+    if (pin->DoesParameterExist("fastflow", par)) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "fastflow/" << par << " has moved to coord/" << par
+                << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  excise_settle_rrate = pin->GetOrAddReal("coord", "excise_settle_rrate", 1.0e-3);
+  excise_settle_hrms  = pin->GetOrAddReal("coord", "excise_settle_hrms", 5.0e-3);
+  excise_settle_count = pin->GetOrAddInteger("coord", "excise_settle_count", 5);
+  settle_prev_time = -1.0;
+  settle_prev_radius = -1.0;
+  settle_streak = 0;
+  // excise_auto=false (default) disables the settle-based trigger: the horizon
+  // is marked excise-ready from the start, so excision begins as soon as it is
+  // found. Set excise_auto=true to wait until the horizon has settled.
+  excise_auto = pin->GetOrAddBoolean("coord", "excise_auto", false);
+  if (!excise_auto) { ah_excise_ready = true; }
+
+  // Frozen excision region: latch and snapshot, both persisted across restarts.
+  ah_frozen = pin->GetOrAddBoolean("fastflow", "ah_frozen_" + n_str, false);
+  frozen_center[0] = pin->GetOrAddReal("fastflow", "frozen_center_x_" + n_str, 0.0);
+  frozen_center[1] = pin->GetOrAddReal("fastflow", "frozen_center_y_" + n_str, 0.0);
+  frozen_center[2] = pin->GetOrAddReal("fastflow", "frozen_center_z_" + n_str, 0.0);
+  frozen_radius = pin->GetOrAddReal("fastflow", "frozen_radius_" + n_str, -1.0);
+
   // Center
   center[0] = pin->GetOrAddReal("fastflow", "center_x_" + n_str, 0.0);
   center[1] = pin->GetOrAddReal("fastflow", "center_y_" + n_str, 0.0);
@@ -531,6 +570,61 @@ void FastFlow::Find(int iter, Real time) {
   if (ah_found) {
     pin->SetReal("fastflow", "last_a0_" + std::to_string(nh), last_a0);
     SaveShape();
+
+    // Auto-detect when the black hole has finished forming: the horizon must
+    // have stopped growing (small relative change of the mean coordinate radius)
+    // and be smooth (low hrms) for excise_settle_count consecutive finds. Once
+    // that holds, latch ah_excise_ready so horizon excision may begin. All
+    // quantities used here (ah_prop, time) are consistent across MPI ranks, and
+    // the latch is persisted into restarts. It never un-latches.
+    if (!ah_excise_ready) {
+      Real R = ah_prop[hmeanradius];
+      bool smooth = (ah_prop[hhrms] < excise_settle_hrms);
+      bool slow = false;
+      if (settle_prev_radius > 0.0 && R > 0.0 && time > settle_prev_time) {
+        Real rrate = fabs(R - settle_prev_radius)
+                     / ((time - settle_prev_time) * R);
+        slow = (rrate < excise_settle_rrate);
+      }
+      settle_streak = (slow && smooth) ? (settle_streak + 1) : 0;
+      settle_prev_time = time;
+      settle_prev_radius = R;
+      if (settle_streak >= excise_settle_count) {
+        ah_excise_ready = true;
+        pin->SetBoolean("fastflow", "ah_excise_ready_" + std::to_string(nh),
+                        ah_excise_ready);
+      }
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void FastFlow::FreezeExcisionRegion(Real time)
+//! \brief Latch the excision region at the current horizon center and minimum radius.
+//! Called from Coordinates::UpdateExcisionMasks when coord/freeze_excision is set.  The
+//! snapshot is persisted into restarts and never re-taken.  All quantities used are
+//! identical across MPI ranks, so every rank latches the same values in the same cycle.
+void FastFlow::FreezeExcisionRegion(Real latch_time) {
+  if (ah_frozen) return;
+
+  frozen_center[0] = center[0];
+  frozen_center[1] = center[1];
+  frozen_center[2] = center[2];
+  frozen_radius = rr_min;
+  ah_frozen = true;
+
+  std::string n_str = std::to_string(nh);
+  pin->SetBoolean("fastflow", "ah_frozen_" + n_str, ah_frozen);
+  pin->SetReal("fastflow", "frozen_center_x_" + n_str, frozen_center[0]);
+  pin->SetReal("fastflow", "frozen_center_y_" + n_str, frozen_center[1]);
+  pin->SetReal("fastflow", "frozen_center_z_" + n_str, frozen_center[2]);
+  pin->SetReal("fastflow", "frozen_radius_" + n_str, frozen_radius);
+
+  if (global_variable::my_rank == 0) {
+    std::cout << "### Excision region frozen for horizon " << nh
+              << " at time = " << latch_time
+              << ": center = (" << frozen_center[0] << ", " << frozen_center[1] << ", "
+              << frozen_center[2] << "), radius = " << frozen_radius << std::endl;
   }
 }
 
@@ -988,7 +1082,7 @@ void FastFlow::FastFlowLoop(bool warm) {
       break;
     }
 
-    if (meanradius < 0.) {
+    if ((meanradius < 0.) || (rr_min < 0.)) {
       if (verbose && ioproc) {
         fprintf(pofile_verbose, "Failed, meanradius < 0\n");
         fflush(pofile_verbose);

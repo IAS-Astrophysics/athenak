@@ -207,12 +207,36 @@ void Coordinates::UpdateExcisionMasks() {
     DualArray2D<bool> hfound("hfound", hsize, 1);
 
     // fill horizon arrays on host
+    bool freeze_r = (coord_data.freeze_excision && coord_data.freeze_excision_radius);
+    bool freeze_c = (coord_data.freeze_excision && coord_data.freeze_excision_center);
+    Real mesh_time = pmy_pack->pmesh->time;
     for (int h = 0; h < hsize; ++h) {
-      hcenter.h_view(h,0) = phf->Center(h)[0]; // center x-coord.
-      hcenter.h_view(h,1) = phf->Center(h)[1]; // center y-coord.
-      hcenter.h_view(h,2) = phf->Center(h)[2]; // center z-coord.
-      hradius.h_view(h,0) = phf->MinRadius(h); // minimum radius
-      hfound.h_view(h,0) = phf->Found(h); // found/not found
+      // Excise only once the horizon finder has flagged this horizon as settled
+      // (ExciseReady, auto-detected in FastFlow::Find once the BH has stopped
+      // forming, and latched across restarts).
+      bool active = (phf->Found(h) && phf->ExciseReady(h));
+      // Latch the snapshot the first time excision becomes active.  FastFlow's rr_min
+      // is reset to -1 by the constructor and not carried through restarts, so wait for
+      // a find in this execution to set it -- otherwise a restart would freeze a
+      // garbage radius.
+      if ((freeze_r || freeze_c) &&
+          (phf->Frozen(h) || (active && phf->MinRadius(h) > 0.0))) {
+        phf->FreezeExcisionRegion(h, mesh_time);
+      }
+      bool frozen_r = (freeze_r && phf->Frozen(h));
+      bool frozen_c = (freeze_c && phf->Frozen(h));
+
+      // The tracked center comes from the compact object tracker, so it stays valid in
+      // cycles where the horizon find does not converge.
+      const Real *c = frozen_c ? phf->FrozenCenter(h) : phf->Center(h);
+      hcenter.h_view(h,0) = c[0];
+      hcenter.h_view(h,1) = c[1];
+      hcenter.h_view(h,2) = c[2];
+
+      // The minimum radius is the only part needing a converged find, so once frozen
+      // the region stays excised even when the find fails.
+      hradius.h_view(h,0) = frozen_r ? phf->FrozenRadius(h) : phf->MinRadius(h);
+      hfound.h_view(h,0) = frozen_r ? true : active;
     }
 
     // sync to device

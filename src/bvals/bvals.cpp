@@ -38,7 +38,15 @@ MeshBoundaryValues::MeshBoundaryValues(MeshBlockPack *pp, ParameterInput *pin, b
   rank_sendhdr_vars_("rank_sendhdr_vars",1),
   rank_recvhdr_vars_("rank_recvhdr_vars",1),
   send_agg_offset_("send_agg_offset",1),
-  recv_agg_offset_("recv_agg_offset",1)
+  recv_agg_offset_("recv_agg_offset",1),
+  rank_packed_flux_nvars_(-1),
+  rank_packed_flux_mesh_seq_(-1),
+  rank_sendbuf_flux_("rank_sendbuf_flux",1),
+  rank_recvbuf_flux_("rank_recvbuf_flux",1),
+  rank_sendhdr_flux_("rank_sendhdr_flux",1),
+  rank_recvhdr_flux_("rank_recvhdr_flux",1),
+  send_flx_agg_offset_("send_flx_agg_offset",1),
+  recv_flx_agg_offset_("recv_flx_agg_offset",1)
 #endif
   ,
   pmy_pack(pp),
@@ -306,6 +314,237 @@ void MeshBoundaryValues::BuildRankPackedVarMetadata(const int nvars) {
     }
     Kokkos::deep_copy(recv_agg_offset_, recv_off_h);
     Kokkos::deep_copy(send_agg_offset_, send_off_h);
+  }
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn int MeshBoundaryValues::GetFluxDataSize
+//! \brief Size (in Reals) of the flux-correction payload for one (MeshBlock,neighbour).
+//! `sending` picks the level test for the send path (neighbour coarser, or same for FC)
+//! versus the recv path (neighbour finer, or same for FC). Returns 0 for pairs that do
+//! not participate, which keeps them out of the packed message entirely.
+
+int MeshBoundaryValues::GetFluxDataSize(const MeshBoundaryBuffer &buf, int m, int n,
+                                        int nvars, bool is_fc, bool sending) const {
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+  const int nlev = nghbr.h_view(m,n).lev;
+  const int mlev = mblev.h_view(m);
+  if (is_fc) {
+    // FC (EMF) corrections are exchanged with coarser AND same-level neighbours
+    if (sending) {
+      if (nlev <  mlev) return nvars*buf.iflxc_ndat;
+      if (nlev == mlev) return nvars*buf.iflxs_ndat;
+    } else {
+      if (nlev >  mlev) return nvars*buf.iflxc_ndat;
+      if (nlev == mlev) return nvars*buf.iflxs_ndat;
+    }
+    return 0;
+  }
+  // CC corrections travel fine -> coarse only, and always use the coarse index set
+  if (sending) {
+    if (nlev < mlev) return nvars*buf.iflxc_ndat;
+  } else {
+    if (nlev > mlev) return nvars*buf.iflxc_ndat;
+  }
+  return 0;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void MeshBoundaryValues::BuildRankPackedFluxMetadata
+//! \brief Group flux-correction buffers by destination rank so the per-step path posts
+//! one MPI message per peer instead of one per (MeshBlock,neighbour). Mirrors
+//! BuildRankPackedVarMetadata, including its one-shot header exchange, but the
+//! participating set is asymmetric (see GetFluxDataSize) and is filtered by buffer index:
+//! CC exchanges on faces only, FC on faces and edges.
+
+void MeshBoundaryValues::BuildRankPackedFluxMetadata(const int nvars, const bool is_fc) {
+  rank_packed_flux_nvars_ = nvars;
+  rank_packed_flux_mesh_seq_ = pmy_pack->pmesh->GetAMRLoadBalanceUpdateSeq();
+  send_flux_entries_.clear();
+  recv_flux_entries_.clear();
+  send_flux_msgs_.clear();
+  recv_flux_msgs_.clear();
+  send_flux_reqs_.clear();
+  recv_flux_reqs_.clear();
+
+  int nmb = pmy_pack->nmb_thispack;
+  int nnghbr = pmy_pack->pmb->nnghbr;
+  auto &nghbr = pmy_pack->pmb->nghbr;
+  auto &mblev = pmy_pack->pmb->mb_lev;
+  int my_rank = global_variable::my_rank;
+
+  std::map<int, std::vector<RankPackedVarEntry>> send_by_rank;
+  std::map<int, std::vector<RankPackedVarEntry>> recv_by_rank;
+
+  for (int m=0; m<nmb; ++m) {
+    for (int n=0; n<nnghbr; ++n) {
+      if (nghbr.h_view(m,n).gid < 0) continue;
+      int drank = nghbr.h_view(m,n).rank;
+      if (drank == my_rank) continue;
+      // buffer-index filter must match the kernels: FC uses faces+edges, CC faces only
+      if (is_fc) {
+        if (n >= 48) continue;
+      } else {
+        if (!((n < 16) || ((n >= 24) && (n < 32)))) continue;
+      }
+      const int nlev = nghbr.h_view(m,n).lev;
+      const int mlev = mblev.h_view(m);
+
+      // send side: neighbour coarser (CC), or coarser-or-same (FC)
+      if (is_fc ? (nlev <= mlev) : (nlev < mlev)) {
+        RankPackedVarEntry e;
+        e.m = m;
+        e.n = n;
+        e.lid = nghbr.h_view(m,n).gid - pmy_pack->pmesh->gids_eachrank[drank];
+        e.dn = nghbr.h_view(m,n).dest;
+        e.data_size = GetFluxDataSize(sendbuf[n], m, n, nvars, is_fc, true);
+        e.offset = 0;
+        if (e.data_size > 0) send_by_rank[drank].push_back(e);
+      }
+
+      // recv side: neighbour finer (CC), or finer-or-same (FC)
+      if (is_fc ? (nlev >= mlev) : (nlev > mlev)) {
+        RankPackedVarEntry e;
+        e.m = m;
+        e.n = n;
+        e.lid = m;
+        e.dn = n;
+        e.data_size = GetFluxDataSize(recvbuf[n], m, n, nvars, is_fc, false);
+        e.offset = 0;
+        if (e.data_size > 0) recv_by_rank[drank].push_back(e);
+      }
+    }
+  }
+
+  int send_total = 0, send_hdr_total = 0, send_entry_total = 0;
+  for (auto &kv : send_by_rank) {
+    int msg_offset = send_total;
+    int hdr_offset = send_hdr_total;
+    int entry_offset = send_entry_total;
+    for (auto &entry : kv.second) {
+      entry.offset = send_total;
+      send_flux_entries_.push_back(entry);
+      send_total += entry.data_size;
+      ++send_entry_total;
+    }
+    send_hdr_total += 3*static_cast<int>(kv.second.size());
+    RankPackedVarMessage msg;
+    msg.rank = kv.first;
+    msg.nentries = static_cast<int>(kv.second.size());
+    msg.entry_offset = entry_offset;
+    msg.hdr_offset = hdr_offset;
+    msg.offset = msg_offset;
+    msg.data_size = send_total - msg_offset;
+    send_flux_msgs_.push_back(msg);
+  }
+
+  int recv_total = 0, recv_hdr_total = 0, recv_entry_total = 0;
+  for (auto &kv : recv_by_rank) {
+    int msg_offset = recv_total;
+    int hdr_offset = recv_hdr_total;
+    int entry_offset = recv_entry_total;
+    for (auto &entry : kv.second) {
+      entry.offset = recv_total;
+      recv_flux_entries_.push_back(entry);
+      recv_total += entry.data_size;
+      ++recv_entry_total;
+    }
+    recv_hdr_total += 3*static_cast<int>(kv.second.size());
+    RankPackedVarMessage msg;
+    msg.rank = kv.first;
+    msg.nentries = static_cast<int>(kv.second.size());
+    msg.entry_offset = entry_offset;
+    msg.hdr_offset = hdr_offset;
+    msg.offset = msg_offset;
+    msg.data_size = recv_total - msg_offset;
+    recv_flux_msgs_.push_back(msg);
+  }
+
+  Kokkos::realloc(rank_sendbuf_flux_, std::max(1, send_total));
+  Kokkos::realloc(rank_recvbuf_flux_, std::max(1, recv_total));
+  Kokkos::realloc(rank_sendhdr_flux_, std::max(1, send_hdr_total));
+  Kokkos::realloc(rank_recvhdr_flux_, std::max(1, recv_hdr_total));
+
+  send_flux_reqs_.assign(send_flux_msgs_.size(), MPI_REQUEST_NULL);
+  recv_flux_reqs_.assign(recv_flux_msgs_.size(), MPI_REQUEST_NULL);
+
+  for (const auto &msg : send_flux_msgs_) {
+    for (int e = 0; e < msg.nentries; ++e) {
+      const auto &entry = send_flux_entries_[msg.entry_offset + e];
+      const int hidx = msg.hdr_offset + 3*e;
+      rank_sendhdr_flux_(hidx    ) = entry.lid;
+      rank_sendhdr_flux_(hidx + 1) = entry.dn;
+      rank_sendhdr_flux_(hidx + 2) = entry.data_size;
+    }
+  }
+
+  // One-shot header exchange on comm_flux; tag 3 keeps it clear of the payload tag 1
+  // used below and of the vars header tag 2 on comm_vars.
+  {
+    const int meta_tag = 3;
+    std::vector<MPI_Request> exch_reqs(
+        send_flux_msgs_.size() + recv_flux_msgs_.size(), MPI_REQUEST_NULL);
+    std::size_t r = 0;
+    for (const auto &msg : recv_flux_msgs_) {
+      MPI_Irecv(rank_recvhdr_flux_.data() + msg.hdr_offset, 3*msg.nentries, MPI_INT,
+                msg.rank, meta_tag, comm_flux, &exch_reqs[r++]);
+    }
+    for (const auto &msg : send_flux_msgs_) {
+      MPI_Isend(rank_sendhdr_flux_.data() + msg.hdr_offset, 3*msg.nentries, MPI_INT,
+                msg.rank, meta_tag, comm_flux, &exch_reqs[r++]);
+    }
+    if (!exch_reqs.empty()) {
+      MPI_Waitall(static_cast<int>(exch_reqs.size()), exch_reqs.data(),
+                  MPI_STATUSES_IGNORE);
+    }
+  }
+
+  // Build the per-(m,n) aggregate-offset maps from the received headers. Also verify
+  // that each peer's advertised payload is exactly the size we sized our receive for:
+  // a mismatch would silently misalign every subsequent entry and corrupt the corrected
+  // fluxes, so it is a hard error rather than something to paper over.
+  {
+    const int nmb_max =
+        std::max(pmy_pack->nmb_thispack, pmy_pack->pmesh->nmb_maxperrank);
+    const int map_len = nmb*nnghbr;
+    recv_flx_agg_offset_ = DvceArray1D<int>("recv_flx_agg_offset", std::max(1, map_len));
+    send_flx_agg_offset_ = DvceArray1D<int>("send_flx_agg_offset", std::max(1, map_len));
+    auto recv_off_h = Kokkos::create_mirror_view(recv_flx_agg_offset_);
+    auto send_off_h = Kokkos::create_mirror_view(send_flx_agg_offset_);
+    for (int i = 0; i < map_len; ++i) { recv_off_h(i) = -1; send_off_h(i) = -1; }
+
+    for (const auto &msg : recv_flux_msgs_) {
+      int off = msg.offset;
+      for (int e = 0; e < msg.nentries; ++e) {
+        const int hidx = msg.hdr_offset + 3*e;
+        const int lid = rank_recvhdr_flux_(hidx);
+        const int dn = rank_recvhdr_flux_(hidx + 1);
+        const int dsize = rank_recvhdr_flux_(hidx + 2);
+        if ((lid < 0) || (lid >= nmb_max) || (dn < 0) || (dn >= nnghbr) ||
+            (dsize <= 0)) {
+          std::cout << "### FATAL ERROR in " << __FILE__ << " at line "
+                    << __LINE__ << std::endl
+                    << "Invalid rank-packed flux recv header from peer "
+                    << msg.rank << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
+        if (lid < nmb) recv_off_h(lid*nnghbr + dn) = off;
+        off += dsize;
+      }
+      if ((off - msg.offset) != msg.data_size) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "Rank-packed flux payload from peer " << msg.rank
+                  << " is " << (off - msg.offset) << " Reals but this rank sized its "
+                  << "receive for " << msg.data_size << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+    for (const auto &entry : send_flux_entries_) {
+      send_off_h(entry.m*nnghbr + entry.n) = entry.offset;
+    }
+    Kokkos::deep_copy(recv_flx_agg_offset_, recv_off_h);
+    Kokkos::deep_copy(send_flx_agg_offset_, send_off_h);
   }
 }
 #endif

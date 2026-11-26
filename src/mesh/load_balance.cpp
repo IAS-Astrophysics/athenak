@@ -18,6 +18,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "z4c/z4c.hpp"
 
 #if MPI_PARALLEL_ENABLED
@@ -147,6 +148,9 @@ void MeshRefinement::InitRecvAMR(int nleaf) {
   }
   if (pmy_mesh->pmb_pack->prad != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->prad->prgeo->nangles);
+  }
+  if (pmy_mesh->pmb_pack->pradm1 != nullptr) {
+    ncc_tosend += (pmy_mesh->pmb_pack->pradm1->nvarstot);
   }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->pz4c->nz4c);
@@ -397,6 +401,9 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   if (pmy_mesh->pmb_pack->prad != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->prad->prgeo->nangles);
   }
+  if (pmy_mesh->pmb_pack->pradm1 != nullptr) {
+    ncc_tosend += (pmy_mesh->pmb_pack->pradm1->nvarstot);
+  }
   if (pmy_mesh->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pmy_mesh->pmb_pack->pz4c->nz4c);
   }
@@ -520,6 +527,7 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
   radiation::Radiation* prad = pmy_mesh->pmb_pack->prad;
+  radiationm1::RadiationM1* pradm1 = pmy_mesh->pmb_pack->pradm1;
   z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
 
   int ncc_sent = 0, nfc_sent = 0;
@@ -536,6 +544,10 @@ void MeshRefinement::PackAndSendAMR(int nleaf) {
   if (prad != nullptr) {
     PackAMRBuffersCC(prad->i0, prad->coarse_i0, ncc_sent, nfc_sent);
     ncc_sent += prad->prgeo->nangles;
+  }
+  if (pradm1 != nullptr) {
+    PackAMRBuffersCC(pradm1->u0, pradm1->coarse_u0, ncc_sent, nfc_sent);
+    ncc_sent += pradm1->nvarstot;
   }
   if (pz4c != nullptr) {
     PackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_sent, nfc_sent);
@@ -818,6 +830,7 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
   hydro::Hydro* phydro = pmy_mesh->pmb_pack->phydro;
   mhd::MHD* pmhd = pmy_mesh->pmb_pack->pmhd;
   radiation::Radiation* prad = pmy_mesh->pmb_pack->prad;
+  radiationm1::RadiationM1* pradm1 = pmy_mesh->pmb_pack->pradm1;
   z4c::Z4c* pz4c = pmy_mesh->pmb_pack->pz4c;
 
   int ncc_recv=0, nfc_recv=0;
@@ -836,10 +849,19 @@ void MeshRefinement::ClearRecvAndUnpackAMR() {
     UnpackAMRBuffersCC(prad->i0, prad->coarse_i0, ncc_recv, nfc_recv);
     ncc_recv += prad->prgeo->nangles;
   }
+  if (pradm1 != nullptr) {
+    UnpackAMRBuffersCC(pradm1->u0, pradm1->coarse_u0, ncc_recv, nfc_recv);
+    ncc_recv += pradm1->nvarstot;
+  }
   if (pz4c != nullptr) {
     UnpackAMRBuffersCC(pz4c->u0, pz4c->coarse_u0, ncc_recv, nfc_recv);
     ncc_recv += pz4c->nz4c;
   }
+  // recv_data is a fixed-length buffer (allocated once in the MeshRefinement ctor and
+  // reused every AMR cycle), so it must NOT be shrunk here -- doing so leaves it at size
+  // 1 for the next cross-rank migration, which then receives out of bounds. recvbuf is
+  // resized to nmb_recv each cycle in InitRecvAMR, so releasing it here is fine.
+  Kokkos::realloc(recvbuf, 1);
 #endif
   return;
 }
@@ -1025,6 +1047,11 @@ void MeshRefinement::ClearSendAMR() {
     std::exit(EXIT_FAILURE);
   }
   delete [] send_req;
+  // send_data is a fixed-length buffer (allocated once in the MeshRefinement ctor and
+  // reused every AMR cycle), so it must NOT be shrunk here -- doing so leaves it at size
+  // 1 for the next cross-rank migration, which then packs/sends out of bounds. sendbuf is
+  // resized to nmb_send each cycle in PackAndSendAMR, so releasing it here is fine.
+  Kokkos::realloc(sendbuf, 1);
 #endif
   return;
 }

@@ -27,6 +27,12 @@ class HorizonFinder {
   virtual Real MinRadius(int h) const = 0;
   virtual Real Mass(int h) const = 0;
   virtual const Real *Spin(int h) const = 0;
+
+  virtual bool ExciseReady(int h) const { return true; }
+  virtual bool Frozen(int h) const { return false; }
+  virtual void FreezeExcisionRegion(int h, Real time) {}
+  virtual const Real *FrozenCenter(int h) const { return Center(h); }
+  virtual Real FrozenRadius(int h) const { return MinRadius(h); }
 };
 
 #endif  // Z4C_HORIZON_FINDER_HPP_

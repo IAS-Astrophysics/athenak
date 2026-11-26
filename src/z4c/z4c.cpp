@@ -37,6 +37,14 @@ std::unique_ptr<HorizonFinder> HorizonFinder::Create(MeshBlockPack *pmbp,
   if (type == "none") return nullptr;
   if (type == "fastflow") return std::make_unique<FastFlowFinder>(pmbp, pin);
   if (type == "bhahaha") {
+    for (const char *par : {"excise_auto", "freeze_excision"}) {
+      if (pin->GetOrAddBoolean("coord", par, false)) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "coord/" << par << " is only supported with "
+                  << "horizon_finder = fastflow" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
     auto phf = std::make_unique<BHAHAHorizonFinder>(pmbp, pin);
     int n = phf->NumHorizons();
     int nco = 0;
@@ -156,6 +164,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.eps_floor = pin->GetOrAddReal("z4c", "eps_floor", 1e-12);
   opt.damp_kappa1 = pin->GetOrAddReal("z4c", "damp_kappa1", 0.0);
   opt.damp_kappa2 = pin->GetOrAddReal("z4c", "damp_kappa2", 0.0);
+  opt.rz4 = pin->GetOrAddReal("z4c", "rz4", 0.0);
   // Gauge conditions (default to moving puncture gauge)
   opt.lapse_harmonicf = pin->GetOrAddReal("z4c", "lapse_harmonicf", 1.0);
   opt.lapse_harmonic = pin->GetOrAddReal("z4c", "lapse_harmonic", 0.0);
@@ -176,6 +185,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
+  opt.sbc_metric = pin->GetOrAddBoolean("z4c", "sbc_metric", false);
 
   opt.excise_chi = pin->GetOrAddReal("z4c", "excise_chi", 0.0625);
 
