@@ -33,19 +33,23 @@ enum class ExcisionScheme {
 
 struct CoordData {
   // following data is only used in GR calculations to compute metric
-  bool is_minkowski;               // flag to specify Minkowski (flat) space
+  bool is_minkowski = false;       // flag to specify Minkowski (flat) space
   Real bh_spin;                    // needed for GR metric
-  bool bh_excise;                  // flag to specify excision
+  bool bh_excise = false;          // flag to specify excision (unset outside GR!)
   Real rexcise;                    // excision radius (SKS)
   Real dexcise;                    // rest-mass density inside excised region
   Real pexcise;                    // pressure inside excised region
   Real texcise;                    // temperature inside excised region (for smooth exc.)
   Real flux_excise_r;              // reduce to first-order inside this radius
+  bool excision_flux_emf = true;   // let flux excision rewrite the face EMFs too
   ExcisionScheme excision_scheme;  // excision method
   Real excise_lapse;               // if excision_scheme = lapse, excise under this lapse
   bool smooth_excision = false;    // flag to specify smooth excision (fastflow)
   Real horizon_factor;             // factor to muliply the horizon factor by (fastflow)
   Real tdamp;                      // damping time (needed for smooth excision)
+  bool freeze_excision = false;    // fix excision region when first activated (fastflow)
+  bool freeze_excision_radius = true;   // freeze the size of the region (freeze_excision)
+  bool freeze_excision_center = false;  // pin it in space instead of tracking the BH
 };
 
 //----------------------------------------------------------------------------------------

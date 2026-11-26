@@ -41,10 +41,10 @@ class GaussLegendreGrid {
     void SetInterpolationCoordinates();  // set indexing for interpolation
     void SetInterpolationIndices();      // set indexing for interpolation
     void SetInterpolationWeights();      // set weights for interpolation
-    void UpdateInterpolationOnMeshChange();
+    void UpdateInterpolationOnMeshChange();  // redo both if AMR moved the mesh
 
  private:
-    int amr_nmb_created;
+    int amr_nmb_created;      // mesh stamp the interpolation indices were built against
     int amr_nmb_deleted;
     MeshBlockPack* pmy_pack;  // ptr to MeshBlockPack containing this Hydro
 };

@@ -152,6 +152,7 @@ class Z4c {
     // Constraint damping parameters
     Real damp_kappa1;
     Real damp_kappa2;
+    Real rz4;              // Kyutoku+14 radial Theta suppression radius; <=0 disables
     // Gauge conditions for the lapse
     Real lapse_oplog;
     Real lapse_harmonicf;
@@ -211,6 +212,7 @@ class Z4c {
   Real * psi_out;
   Real waveform_dt;
   Real last_output_time;
+  bool weyl_exchange_active = false;
   int nrad; // number of radii to perform wave extraction
 
   // CCE
