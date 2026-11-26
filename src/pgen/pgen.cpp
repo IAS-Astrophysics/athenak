@@ -1012,6 +1012,8 @@ void ProblemGenerator::CallProblemGenerator(ParameterInput *pin, bool is_restart
     RadiationM1BrentTest(pin, is_restart);
   } else if (pgen_fun_name.compare("rad_m1_hybridsjtest") == 0) {
     RadiationM1HybridsjTest(pin, is_restart);
+  } else if (pgen_fun_name.compare("rad_m1_spheretest") == 0) {
+    RadiationM1SphereTest(pin, is_restart);
 #if ENABLE_NURATES
   } else if (pgen_fun_name.compare("rad_m1_singlezonetest") == 0) {
     RadiationM1SingleZoneTest(pin, is_restart);
