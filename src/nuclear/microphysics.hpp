@@ -8,7 +8,7 @@
 //! \file microphysics.hpp
 //! \brief Defines nuclear::Thermo and nuclear::burn() for the Helmholtz EOS, filling
 //! in the remaining thermodynamic state from a given pair of inputs selected by
-//! eos_input_t. The IdealGas overload is in nuclear/microphysics_idealgas.hpp.
+//! eos_input_t.
 
 #include <cmath>
 #include <limits>
