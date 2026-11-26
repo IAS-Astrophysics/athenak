@@ -1,0 +1,57 @@
+# Unit tests for the grey M1 solver: pointwise kernels (closure, frame projections,
+# rootfinders, floors, matter sources, implicit source solve, QR and Hybridsj), the ADM
+# geometry M1 builds from the metric, and the flux kernel.  The flux checks write a
+# chosen metric and radiation state into the <adm> and <radiation_m1> arrays of the 1D
+# mesh below and call RadiationM1::CalculateFluxes once; nothing is evolved and no EOS
+# or opacity table is needed.  The pgen exits non-zero if any check fails.  Checks tagged [KNOWN] document defects from the pre-merge audit; set
+# problem/strict_known=true to count them as failures.
+
+<comment>
+problem = unit tests of the M1 pointwise kernels
+
+<job>
+basename = ut_rad_m1_core
+
+<mesh>
+nghost = 2
+
+nx1    = 8
+x1min  = 0.0
+x1max  = 1.0
+ix1_bc = periodic
+ox1_bc = periodic
+
+nx2    = 1
+x2min  = -0.5
+x2max  = 0.5
+ix2_bc = periodic
+ox2_bc = periodic
+
+nx3    = 1
+x3min  = -0.5
+x3max  = 0.5
+ix3_bc = periodic
+ox3_bc = periodic
+
+<time>
+evolution  = dynamic
+integrator = rk2
+cfl_number = 0.3
+tlim       = 0.0
+nlim       = 0
+
+<meshblock>
+nx1 = 8
+nx2 = 1
+nx3 = 1
+
+# Fixed (non-evolved) metric; the pgen overwrites it for each flux check.
+<adm>
+
+<radiation_m1>
+closure_fun    = minerbo
+matter_sources = false
+
+<problem>
+pgen_name    = rad_m1_core
+strict_known = false
