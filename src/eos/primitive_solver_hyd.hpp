@@ -106,6 +106,12 @@ class PrimitiveSolverHydro {
         dm[n] = dmass_ions(n);
       }
       const int nscal = pin->GetOrAddInteger(block, "nscalars", 0);
+      if (nscal != NSPECIES) {
+        std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                  << std::endl << "<" << block << "> nscalars must be " << NSPECIES
+                  << " with dyn_eos = helmholtz" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       auto read_list = [&](const char *key) {
         std::vector<Real> v;
         std::stringstream ss(pin->GetString(block, key));
