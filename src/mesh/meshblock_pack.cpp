@@ -113,18 +113,6 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   int nphysics = 0;
   TaskID none(0);
 
-  // (0) NUCLEAR
-  // Create Nuclear physics module.  Create Tasklist that call a wrapper inside
-  // the pgen called user_src_nuc_func to perform the integration. It requires
-  // to define pnuc-> dt_cycle To work correctly.
-  if (pin->DoesBlockExist("nuclear")) {
-    pnuc = new nuclear::Nuclear(this, pin);
-    nphysics++;
-    pnuc->AssembleNuclearTasks(tl_map);
-  } else {
-    pnuc = nullptr;
-  }
-
   // (1) Units.  Create first so that they can be used in other physics constructors
   // Default units are simply code units
   if (pin->DoesBlockExist("units")) {
@@ -250,6 +238,18 @@ void MeshBlockPack::AddPhysics(ParameterInput *pin) {
   if (pz4c != nullptr || padm != nullptr) {
     pnr = new numrel::NumericalRelativity(this, pin);
     pnr->AssembleNumericalRelativityTasks(tl_map);
+  }
+
+  // (8b) NUCLEAR
+  // Create Nuclear physics module (operator-split burn of the species mass fractions)
+  // and its tasks in the opsplit_*stagen task lists, which only Nuclear uses. Built after
+  // the fluid and DynGRMHD, whose EOS and code units the constructor checks and reads.
+  if (pin->DoesBlockExist("nuclear")) {
+    pnuc = new nuclear::Nuclear(this, pin);
+    nphysics++;
+    pnuc->AssembleNuclearTasks(tl_map);
+  } else {
+    pnuc = nullptr;
   }
 
   // (9) PARTICLES

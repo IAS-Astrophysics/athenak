@@ -39,9 +39,6 @@ class ProblemGenerator {
   // true if user srcterms are specified
   bool user_srcs;
 
-  // true if nuclear sources are present
-  bool user_nuc_srcs;
-
   // true if user history outputs are specified
   bool user_hist;
 
@@ -54,8 +51,6 @@ class ProblemGenerator {
   // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
   UserBoundaryFnPtr user_bcs_func=nullptr;
   UserSrctermFnPtr user_srcs_func=nullptr;
-  // function pointer used to integrate the reaction network
-  UserSrctermFnPtr user_srcs_nuc_func=nullptr;
   UserRefinementFnPtr user_ref_func=nullptr;
   UserHistoryFnPtr user_hist_func=nullptr;
 
@@ -84,7 +79,6 @@ class ProblemGenerator {
 
   // predefined problem generator functions for unit tests
   void EOSCompose(ParameterInput *pin, const bool restart);
-  void EOSHelmholtz(ParameterInput *pin, const bool restart);
   void GaussLegendre(ParameterInput *pin, const bool restart);
 
   // Generic error output function (using difference u0-u1)

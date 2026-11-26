@@ -114,6 +114,7 @@ add_executable(
         mhd/mhd_update.cpp
 
         nuclear/nuclear.cpp
+        nuclear/nuclear_burn.cpp
         nuclear/nuclear_integrate.cpp
         nuclear/nuclear_task.cpp
 
@@ -161,7 +162,6 @@ add_executable(
         pgen/tests/be_collapse.cpp
 
         pgen/unit_tests/eos_compose.cpp
-        pgen/unit_tests/eos_helmholtz.cpp
         pgen/unit_tests/gauss_legendre.cpp
 
         radiation/radiation.cpp
