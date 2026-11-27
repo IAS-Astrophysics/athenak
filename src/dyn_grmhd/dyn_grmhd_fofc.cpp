@@ -94,6 +94,29 @@ void ShareMassFractionWeight(Real *wthe, const int imf, const int nmf) {
 }
 
 //----------------------------------------------------------------------------------------
+//! \fn void ReleaseEqualFluxWeights
+//! \brief Lift the positivity-limiter weight of any scalar whose first- and high-order
+//!        fluxes agree to roundoff of the mass flux.
+//!
+//! Blending two equal fluxes changes nothing, so such a weight carries no constraint.
+//! It can still come out as zero for a species sitting at its bound (X = 0, Ah = 1)
+//! and undershooting it by roundoff, and the shared mass-fraction weight would then
+//! take the whole block to first order.
+
+KOKKOS_INLINE_FUNCTION
+void ReleaseEqualFluxWeights(Real *wthe, const Real *flx_llf,
+                             const DvceArray5D<Real> &flx, const int nmhd,
+                             const int nscal, const int m, const int k, const int j,
+                             const int i) {
+  const Real tiny = DBL_EPSILON*fabs(flx(m, IDN, k, j, i));
+  for (int n = 0; n < nscal; ++n) {
+    if (fabs(flx(m, nmhd + n, k, j, i) - flx_llf[n]) <= tiny) {
+      wthe[n] = 1.0;
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------
 //! \fn void DynGRMHDPS::FOFC
 //! \brief Implements first-order flux-correction (FOFC) algorithm for MHD.  First an
 //! estimate of the updated conserved variables is made. This estimate is then used to
@@ -644,8 +667,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       if ( uD > 0.0 ) {
         for (int n=0; n < nscal_; ++n) {
           Real uY_m = utest_(m,nmhd_+n,k,j,i-1) - bet_pp * flx1(m,nmhd_+n,k,j,i);
-          Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
-          Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
+          Real min_DY_ = eos_min_Y(n) * uD;
+          Real max_DY_ = eos_max_Y(n) * uD;
           if ( uY_m < min_DY_ ) {
             wthe_m[n] = ( ( utest_(m,nmhd_+n,k,j,i-1) - min_DY_ ) * bet_ppi
               - flx_llf[n] ) / ( flx1(m,nmhd_+n,k,j,i) - flx_llf[n] );
@@ -664,8 +687,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       if ( uD > 0.0 ) {
         for (int n=0; n < nscal_; ++n) {
           Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx1(m,nmhd_+n,k,j,i);
-          Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
-          Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
+          Real min_DY_ = eos_min_Y(n) * uD;
+          Real max_DY_ = eos_max_Y(n) * uD;
           if ( uY_p < min_DY_ ) {
             wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
               + flx_llf[n] ) / ( flx_llf[n] - flx1(m,nmhd_+n,k,j,i) );
@@ -682,6 +705,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
       for (int n=0; n < nscal_; ++n) {
         wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
       }
+      ReleaseEqualFluxWeights(wthe, flx_llf, flx1, nmhd_, nscal_, m, k, j, i);
       ShareMassFractionWeight(wthe, imf_, nmf_);
       for (int n=0; n < nscal_; ++n) {
         flx1(m,nmhd_+n,k,j,i) = flx_llf[n]
@@ -707,8 +731,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_m = utest_(m,nmhd_+n,k,j-1,i) - bet_pp * flx2(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = eos_min_Y(n) * uD;
+            Real max_DY_ = eos_max_Y(n) * uD;
             if ( uY_m < min_DY_ ) {
               wthe_m[n] = ( ( utest_(m,nmhd_+n,k,j-1,i) - min_DY_ ) * bet_ppi
                 - flx_llf[n] ) / ( flx2(m,nmhd_+n,k,j,i) - flx_llf[n] );
@@ -726,8 +750,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx2(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = eos_min_Y(n) * uD;
+            Real max_DY_ = eos_max_Y(n) * uD;
             if ( uY_p < min_DY_ ) {
               wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
                 + flx_llf[n] ) / ( flx_llf[n] - flx2(m,nmhd_+n,k,j,i) );
@@ -744,6 +768,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
         }
+        ReleaseEqualFluxWeights(wthe, flx_llf, flx2, nmhd_, nscal_, m, k, j, i);
         ShareMassFractionWeight(wthe, imf_, nmf_);
         for (int n=0; n < nscal_; ++n) {
           flx2(m,nmhd_+n,k,j,i) = flx_llf[n]
@@ -770,8 +795,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_m = utest_(m,nmhd_+n,k-1,j,i) - bet_pp * flx3(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = eos_min_Y(n) * uD;
+            Real max_DY_ = eos_max_Y(n) * uD;
             if ( uY_m < min_DY_ ) {
               wthe_m[n] = ( ( utest_(m,nmhd_+n,k-1,j,i) - min_DY_ ) * bet_ppi
                 - flx_llf[n] ) / ( flx3(m,nmhd_+n,k,j,i) - flx_llf[n] );
@@ -789,8 +814,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         if ( uD > 0.0 ) {
           for (int n=0; n < nscal_; ++n) {
             Real uY_p = utest_(m,nmhd_+n,k,j,i) + bet_pp * flx3(m,nmhd_+n,k,j,i);
-            Real min_DY_ = (eos_min_Y(n) + DBL_EPSILON) * uD;
-            Real max_DY_ = (eos_max_Y(n) - DBL_EPSILON) * uD;
+            Real min_DY_ = eos_min_Y(n) * uD;
+            Real max_DY_ = eos_max_Y(n) * uD;
             if ( uY_p < min_DY_ ) {
               wthe_p[n] = ( ( utest_(m,nmhd_+n,k,j,i) - min_DY_ ) * bet_ppi
                 + flx_llf[n] ) / ( flx_llf[n] - flx3(m,nmhd_+n,k,j,i) );
@@ -807,6 +832,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         for (int n=0; n < nscal_; ++n) {
           wthe[n] = fmax(0.0, fmin(1.0, fmin(wthe_m[n], wthe_p[n])));
         }
+        ReleaseEqualFluxWeights(wthe, flx_llf, flx3, nmhd_, nscal_, m, k, j, i);
         ShareMassFractionWeight(wthe, imf_, nmf_);
         for (int n=0; n < nscal_; ++n) {
           flx3(m,nmhd_+n,k,j,i) = flx_llf[n]
