@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_ROOTS_HYBRIDJ_HPP
-#define RADIATION_M1_ROOTS_HYBRIDJ_HPP
+#ifndef RADIATION_M1_RADIATION_M1_ROOTS_HYBRIDSJ_HPP_
+#define RADIATION_M1_RADIATION_M1_ROOTS_HYBRIDSJ_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -496,4 +496,4 @@ MathSignal HybridsjTestDelta(const Real (&dx)[M1_MULTIROOTS_DIM],
 }
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_ROOTS_HYBRIDJ_HPP
+#endif  // RADIATION_M1_RADIATION_M1_ROOTS_HYBRIDSJ_HPP_

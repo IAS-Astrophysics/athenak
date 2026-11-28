@@ -9,6 +9,8 @@
 // C++ headers
 
 // Athena++ headers
+#include <iostream>
+
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "driver/driver.hpp"
@@ -105,11 +107,11 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
 
   auto cgs_units = Primitive::MakeCGS();
   auto code_units = eos.GetCodeUnitSystem();
-  
+
   Real rho_code = rho;
   Real nb = rho / mb;
   Real w_lorentz = 1. / Kokkos::sqrt(1. - vx * vx - vy * vy - vz * vz);
-  
+
   // initialize ADM variables
   adm::ADM::ADM_vars &adm = pmbp->padm->adm;
   par_for(
@@ -139,9 +141,11 @@ void ProblemGenerator::RadiationM1SingleZoneTest_(ParameterInput *pin,
         w0_(m, IYF, k, j, i) = ye;
 
         for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
-          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, m1_nvars_), k, j, i) = m1_params_.rad_E_floor;
+          uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_E_IDX, m1_nvars_), k, j, i) =
+              m1_params_.rad_E_floor;
           if (nspecies_ > 1) {
-            uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, m1_nvars_), k, j, i) = m1_params_.rad_N_floor;
+            uradm1_(m, radiationm1::CombinedIdx(nuidx, M1_N_IDX, m1_nvars_), k, j, i) =
+                m1_params_.rad_N_floor;
           }
         }
       });

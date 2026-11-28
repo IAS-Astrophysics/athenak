@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <cstdio>
 
 #include "athena.hpp"
 #include "parameter_input.hpp"
@@ -861,7 +862,9 @@ void PerformNuEqTests(Mesh *pmesh, ParameterInput *pin) {
   const Real eta_floor = 1.0e-6;
 
   const int nsplit = 2;
-  const Real w_split[nsplit][2] = {{0.95, 0.65}, {0.90, 0.30}};
+  const Real w_split[nsplit][2] = {
+    {0.95, 0.65}, {0.90, 0.30}
+  };
 
   for (int iw = 0; iw < nsplit; ++iw) {
     const Real w_p = w_split[iw][0];

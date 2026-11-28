@@ -554,14 +554,16 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               if (v==1) {
 #if MPI_PARALLEL_ENABLED
                 flx.x2e(m,k,j,il) += (recvoff(m*nnghbr + n) >= 0) ?
-                    aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) : rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+                    aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) :
+                    rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
 #else
                 flx.x2e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
 #endif
               } else if (v==2) {
 #if MPI_PARALLEL_ENABLED
                 flx.x3e(m,k,j,il) += (recvoff(m*nnghbr + n) >= 0) ?
-                    aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) : rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
+                    aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl + nj*(k-kl))) :
+                    rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
 #else
                 flx.x3e(m,k,j,il) += rbuf[n].flux(m,ndat*v + (j-jl + nj*(k-kl)));
 #endif
@@ -592,14 +594,16 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             if (v==0) {
 #if MPI_PARALLEL_ENABLED
               flx.x1e(m,k,jl,i) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) :
+                  rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
 #else
               flx.x1e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
 #endif
             } else if (v==2) {
 #if MPI_PARALLEL_ENABLED
               flx.x3e(m,k,jl,i) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(k-kl)) :
+                  rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
 #else
               flx.x3e(m,k,jl,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(k-kl));
 #endif
@@ -618,7 +622,8 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int k = idx + kl;
 #if MPI_PARALLEL_ENABLED
               flx.x3e(m,k,jl,il) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (k-kl)) : rbuf[n].flux(m,ndat*v + (k-kl));
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (k-kl)) :
+                  rbuf[n].flux(m,ndat*v + (k-kl));
 #else
               flx.x3e(m,k,jl,il) += rbuf[n].flux(m,ndat*v + (k-kl));
 #endif
@@ -648,14 +653,16 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
             if (v==0) {
 #if MPI_PARALLEL_ENABLED
               flx.x1e(m,kl,j,i) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) :
+                  rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
 #else
               flx.x1e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
 #endif
             } else if (v==1) {
 #if MPI_PARALLEL_ENABLED
               flx.x2e(m,kl,j,i) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) : rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il + ni*(j-jl)) :
+                  rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
 #else
               flx.x2e(m,kl,j,i) += rbuf[n].flux(m,ndat*v + i-il + ni*(j-jl));
 #endif
@@ -674,7 +681,8 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int j = idx + jl;
 #if MPI_PARALLEL_ENABLED
               flx.x2e(m,kl,j,il) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl)) : rbuf[n].flux(m,ndat*v + (j-jl));
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + (j-jl)) :
+                  rbuf[n].flux(m,ndat*v + (j-jl));
 #else
               flx.x2e(m,kl,j,il) += rbuf[n].flux(m,ndat*v + (j-jl));
 #endif
@@ -691,7 +699,8 @@ void MeshBoundaryValuesFC::SumBoundaryFluxes(DvceEdgeFld4D<Real> &flx,
               int i = idx + il;
 #if MPI_PARALLEL_ENABLED
               flx.x1e(m,kl,jl,i) += (recvoff(m*nnghbr + n) >= 0) ?
-                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il) : rbuf[n].flux(m,ndat*v + i-il);
+                  aggrbuf(recvoff(m*nnghbr + n) + ndat*v + i-il) :
+                  rbuf[n].flux(m,ndat*v + i-il);
 #else
               flx.x1e(m,kl,jl,i) += rbuf[n].flux(m,ndat*v + i-il);
 #endif

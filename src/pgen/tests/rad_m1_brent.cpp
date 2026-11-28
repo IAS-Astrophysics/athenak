@@ -9,6 +9,8 @@
 // C++ headers
 
 // Athena++ headers
+#include <cstdio>
+
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "mesh/mesh.hpp"
@@ -18,7 +20,7 @@
 #include "radiation_m1/radiation_m1_roots_brent.hpp"
 
 class BrentFunc {
-public:
+ public:
   KOKKOS_INLINE_FUNCTION
   Real operator()(const Real x) { return 3. * x * x - 7. * x - 5; }
 };

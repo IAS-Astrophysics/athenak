@@ -1274,7 +1274,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       name.compare("rad_m1_e") == 0 ||
       name.compare("rad_m1_absF") == 0 ||
       name.compare("rad_m1_fluid_frame") == 0) {
-    using namespace radiationm1;
+    using namespace radiationm1;  // NOLINT(build/namespaces)
     auto *pradm1        = pm->pmb_pack->pradm1;
     const int nspecies_ = pradm1->nspecies;
     const int nvars_    = pradm1->nvars;

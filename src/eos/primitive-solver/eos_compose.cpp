@@ -66,7 +66,7 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
     // nearest table values at or below a specified i and yq.
     { // read nb
       Real * table_nb = table["nb"];
-      
+
       for (size_t in=0; in<m_nn; ++in) {
         host_log_nb(in) = log2_(table_nb[in]);
       }
@@ -88,11 +88,11 @@ void EOSCompOSE<LogPolicy>::ReadTableFromFile(std::string fname) {
 
     { // read T
       Real * table_t = table["t"];
-      
+
       for (size_t it=0; it<m_nt; ++it) {
         host_log_t(it) = log2_(table_t[it]);
       }
-     
+
       m_id_log_t = 1.0/(host_log_t(1) - host_log_t(0));
       min_T = table_t[0];
       max_T = table_t[m_nt-1];

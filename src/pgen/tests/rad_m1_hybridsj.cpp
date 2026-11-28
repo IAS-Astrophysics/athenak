@@ -18,7 +18,7 @@
 #include "radiation_m1/radiation_m1_roots_hybridsj.hpp"
 
 class HybridsjFunc {
-public:
+ public:
   KOKKOS_INLINE_FUNCTION
   void operator()(const Real (&x)[M1_MULTIROOTS_DIM],
                   Real (&f)[M1_MULTIROOTS_DIM],
@@ -95,7 +95,8 @@ void ProblemGenerator::RadiationM1HybridsjTest(ParameterInput *pin,
       {0.42274137, 0.22774634, 0.51149515, 0.83359161},
       {0.31137829, 0.93582124, 0.54958705, 0.64094763},
       {0.30909202, 0.61688019, 0.80969002, 0.07436079},
-      {0.0283099, 0.76613643, 0.18623546, 0.33547237}};
+      {0.0283099, 0.76613643, 0.18623546, 0.33547237}
+  };
 
   Real Q[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]{};
   Real R[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM]{};

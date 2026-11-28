@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_LINALG_HPP
-#define RADIATION_M1_LINALG_HPP
+#ifndef RADIATION_M1_RADIATION_M1_LINALG_HPP_
+#define RADIATION_M1_RADIATION_M1_LINALG_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -8,6 +8,8 @@
 //========================================================================================
 //! \file radiation_m1_linalg.hpp
 //  \brief Linear algebra routines for M1
+
+#include <algorithm>
 
 #include "athena.hpp"
 #include "radiation_m1_macro.hpp"
@@ -261,4 +263,4 @@ void qr_R_solve(const Real (&r)[M1_MULTIROOTS_DIM][M1_MULTIROOTS_DIM],
   }
 }
 }  // namespace radiationm1
-#endif  // RADIATION_M1_LINALG_HPP
+#endif  // RADIATION_M1_RADIATION_M1_LINALG_HPP_

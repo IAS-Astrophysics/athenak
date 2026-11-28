@@ -343,7 +343,7 @@ class AthenaPointTensor<T, sym, ndim, 1> {
   }
 
  private:
-  Real data_[ndim];
+  Real data_[ndim];  // NOLINT(runtime/arrays)
 };
 
 //----------------------------------------------------------------------------------------

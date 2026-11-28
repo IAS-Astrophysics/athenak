@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_MACRO_HPP
-#define RADIATION_M1_MACRO_HPP
+#ifndef RADIATION_M1_RADIATION_M1_MACRO_HPP_
+#define RADIATION_M1_RADIATION_M1_MACRO_HPP_
 
 //========================================================================================
 // AthenaXXX astrophysical plasma code
@@ -17,4 +17,4 @@
 
 #define M1_MULTIROOTS_DIM 4
 
-#endif // RADIATION_M1_MACRO_HPP
+#endif  // RADIATION_M1_RADIATION_M1_MACRO_HPP_

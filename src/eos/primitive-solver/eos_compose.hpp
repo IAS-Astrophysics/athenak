@@ -17,6 +17,7 @@
 
 #include <string>
 #include <limits>
+#include <cstdio>
 
 #include <Kokkos_Core.hpp>
 
@@ -30,7 +31,9 @@
 namespace Primitive {
 
 template<typename LogPolicy>
-class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy, public SupportsChemicalPotentials, public SupportsInteractionPotentialDifference {
+class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsEntropy,
+                   public SupportsChemicalPotentials,
+                   public SupportsInteractionPotentialDifference {
  private:
   using LogPolicy::log2_;
   using LogPolicy::exp2_;
@@ -261,7 +264,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     }
 #endif
     const int n_at = 16;
-    Real vec_guess[n_at][2] = { 
+    Real vec_guess[n_at][2] = {
       {1.00e0, 1.00e0},
       {0.90e0, 1.25e0},
       {0.90e0, 1.10e0},
@@ -345,7 +348,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   }
 
   /// Calculate trapped neutrino net number and energy densities
-  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3], Real e_nu[3]) const {
+  KOKKOS_INLINE_FUNCTION void TrappedNeutrinos(Real n, Real T, Real *Y, Real n_nu[3],
+                                               Real e_nu[3]) const {
     Real mu_le = ElectronLeptonChemicalPotential(n, T, Y);
     Real eta_e = mu_le/T;
     Real eta_e2 = eta_e*eta_e;
@@ -359,13 +363,15 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     Real T3 = T*T*T;
     Real T4 = T3*T;
 
-    n_nu[0] = nu_n_prefactor * T3 * (eta_e * (pi2 + eta_e2)); // n_nu_e   - n_anu_e   [fm^-3]
-    n_nu[1] = nu_n_prefactor * T3 * (eta_m * (pi2 + eta_m2)); // n_nu_mu  - n_anu_mu  [fm^-3]
-    n_nu[2] = nu_n_prefactor * T3 * (eta_t * (pi2 + eta_t2)); // n_nu_tau - n_anu_tau [fm^-3]
+    // n_nu = n_nu_x - n_anu_x [fm^-3] for x = e, mu, tau
+    n_nu[0] = nu_n_prefactor * T3 * (eta_e * (pi2 + eta_e2));
+    n_nu[1] = nu_n_prefactor * T3 * (eta_m * (pi2 + eta_m2));
+    n_nu[2] = nu_n_prefactor * T3 * (eta_t * (pi2 + eta_t2));
 
-    e_nu[0] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_e2*(pi2 + 0.5*eta_e2)); // e_nu_e   + e_anu_e   [MeV fm^-3]
-    e_nu[1] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_m2*(pi2 + 0.5*eta_m2)); // e_nu_mu  + e_anu_mu  [MeV fm^-3]
-    e_nu[2] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_t2*(pi2 + 0.5*eta_t2)); // e_nu_tau + e_anu_tau [MeV fm^-3]
+    // e_nu = e_nu_x + e_anu_x [MeV fm^-3] for x = e, mu, tau
+    e_nu[0] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_e2*(pi2 + 0.5*eta_e2));
+    e_nu[1] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_m2*(pi2 + 0.5*eta_m2));
+    e_nu[2] = nu_e_prefactor * T4 * (nu_7pi4_60 + 0.5*eta_t2*(pi2 + 0.5*eta_t2));
 
     return;
   }
@@ -550,7 +556,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         flo = f(ilo);
       }
     }
-    
+
     if (flo*fhi>0.0 && (iv==ECLOGP || iv==ECLOGE || iv==ECENT)) {
       /*if (iv == ECLOGE) {
         Real vlo = eval_at_nty(iv,n,min_T,Yq);
@@ -565,12 +571,12 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       //if (var <= eval_at_nty(iv,n,min_T,Yq)) {
       if (f(0) <= 0) {
         return min_T;
-      } //else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
-      else if (f(m_nt-1) >= 0) {
+        //} else if (var >= eval_at_nty(iv,n,max_T,Yq)) {
+      } else if (f(m_nt-1) >= 0) {
         return max_T;
       }
     }
-    
+
     if (flo*fhi > 0) {
       int imin = 0;
       Real fmin = f(imin);
@@ -584,7 +590,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
                      "  ihi = %i\n"
                      "  fmin = %20.17g\n"
                      "  flo = %20.17g\n"
-                     "  fhigh = %20.17g\n", iv, var, n , Yq, imin, ilo, ihi, fmin, flo, fhi);
+                     "  fhigh = %20.17g\n", iv, var, n , Yq, imin, ilo, ihi, fmin, flo,
+                     fhi);
       assert(flo*fhi <= 0);
     }
     while (ihi - ilo > 1) {
@@ -663,7 +670,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
         norm[0] = -1.0;
       } else if (x1[0] == max_T) {
         norm[0] = 1.0;
-      } else { 
+      } else {
         norm[0] = 0.0;
       }
 
@@ -683,7 +690,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
       dxa[0] = dx1[0] - (dx1[0]*norm[0] + dx1[1]*norm[1])*norm[0]/scal;
       dxa[1] = dx1[1] - (dx1[0]*norm[0] + dx1[1]*norm[1])*norm[1]/scal;
 
-      if ((dxa[0]*dxa[0] + dxa[1]*dxa[1]) < (nu_2DNR_eps_lim*nu_2DNR_eps_lim * (dx1[0]*dx1[0] + dx1[1]*dx1[1]))) {
+      if ((dxa[0]*dxa[0] + dxa[1]*dxa[1]) <
+          (nu_2DNR_eps_lim*nu_2DNR_eps_lim * (dx1[0]*dx1[0] + dx1[1]*dx1[1]))) {
         KKT = true;
         ierr = 2;
         return ierr;
@@ -755,7 +763,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     } else {
       ierr = 1;
     }
-    
+
     return ierr;
   }
 
@@ -965,7 +973,7 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
 
     Real detadt,detadye,dedt,dedye;
     ierr = eta_e_gradient(n,T,Y,eta,detadt,detadye,dedt,dedye);
-    if (ierr != 0){
+    if (ierr != 0) {
       return ierr;
     }
 
@@ -1007,7 +1015,9 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     return ierr;
   }
 
-  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta, Real &deta_dT, Real &deta_dYe, Real &de_dT, Real &de_dYe) const {
+  KOKKOS_INLINE_FUNCTION int eta_e_gradient(Real n, Real T, Real *Y, Real eta,
+                                            Real &deta_dT, Real &deta_dYe,
+                                            Real &de_dT, Real &de_dYe) const {
     int ierr=1;
 
     // Tie the finite-difference steps to the table spacing. The interpolation is
@@ -1057,7 +1067,8 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
     deta_dT  = (dmu_l_dT - eta )/T; // [1/MeV]
     deta_dYe = dmu_l_dYe/T;      // [-]
 
-    if (Kokkos::isnan(deta_dT)||Kokkos::isnan(deta_dYe)||Kokkos::isnan(de_dT)||Kokkos::isnan(de_dYe)) {
+    if (Kokkos::isnan(deta_dT)||Kokkos::isnan(deta_dYe)||
+        Kokkos::isnan(de_dT)||Kokkos::isnan(de_dYe)) {
       ierr = 1;
     } else {
       ierr = 0;
@@ -1111,16 +1122,16 @@ class EOSCompOSE : public EOSPolicyInterface, public LogPolicy, public SupportsE
   const Real pi2      = pi*pi;                  // pi**2 [-]
   const Real pi4      = pi2*pi2;                // pi**4 [-]
 
-  const Real nu_n_prefactor = 4.0/3.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm); // 4/3 *pi/(hc)**3 [1/MeV^3/fm^3]
-  const Real nu_e_prefactor = 4.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);     // 4*pi/(hc)**3    [1/MeV^3 fm^3]
+  // 4/3 *pi/(hc)**3 [1/MeV^3/fm^3]
+  const Real nu_n_prefactor = 4.0/3.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);
+  // 4*pi/(hc)**3    [1/MeV^3 fm^3]
+  const Real nu_e_prefactor = 4.0*pi/(hc_mevfm*hc_mevfm*hc_mevfm);
 
   const Real nu_pi2_6 = pi2/6.0;         // pi**2/6     [-]
   const Real nu_7pi4_60 = 7.0*pi4/60.0;  // 7*pi**4/60  [-]
   const Real nu_7pi4_30 = 7.0*pi4/30.0;  // 7*pi**4/30  [-]
   const Real nu_7pi4_15 = 7.0*pi4/15.0;  // 7*pi**4/15  [-]
   const Real nu_14pi4_15 = 14.0*pi4/15.0; // 14*pi**4/15 [-]
-
-
 };
 
 }; // namespace Primitive

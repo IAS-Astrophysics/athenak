@@ -9,6 +9,8 @@
 // C++ headers
 
 // Athena++ headers
+#include <iostream>
+
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "mesh/mesh.hpp"
@@ -34,7 +36,8 @@ void ProblemGenerator::RadiationM1SphereTest(ParameterInput *pin,
     exit(EXIT_FAILURE);
   }
 
-  pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Sphere};
+  pmbp->pradm1->toy_opacity_fn =
+      radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::Sphere};
 
   // The toy opacity model is not stored in the restart file, so it must be set
   // again on restart before returning.

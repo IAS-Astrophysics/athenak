@@ -185,6 +185,7 @@ Z4c::Z4c(MeshBlockPack *ppack, ParameterInput *pin) :
   opt.use_z4c = pin->GetOrAddBoolean("z4c", "use_z4c", true);
 
   opt.user_Sbc = pin->GetOrAddBoolean("z4c", "user_Sbc", false);
+  opt.sbc_metric = pin->GetOrAddBoolean("z4c", "sbc_metric", true);
 
   opt.excise_chi = pin->GetOrAddReal("z4c", "excise_chi", 0.0625);
 

@@ -9,6 +9,8 @@
 // C++ headers
 
 // Athena++ headers
+#include <iostream>
+
 #include <coordinates/cell_locations.hpp>
 
 #include "athena.hpp"
@@ -49,10 +51,12 @@ void ProblemGenerator::RadiationM1DiffusionTest(ParameterInput *pin, const bool 
   }
 
   if (pmbp->pradm1->params.src_update == radiationm1::Explicit) {
-    pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionExplicit};
+    pmbp->pradm1->toy_opacity_fn =
+        radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionExplicit};
   }
   if (pmbp->pradm1->params.src_update == radiationm1::Implicit) {
-    pmbp->pradm1->toy_opacity_fn = radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionImplicit};
+    pmbp->pradm1->toy_opacity_fn =
+        radiationm1::ToyOpacity{radiationm1::ToyOpacityModel::DiffusionImplicit};
   }
 
   // The toy opacity model is not stored in the restart file, so it must be set

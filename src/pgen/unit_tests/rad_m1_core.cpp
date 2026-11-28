@@ -50,6 +50,7 @@
 //  Run via tst/inputs/ut_rad_m1_core.athinput; exits non-zero on failure, which is what
 //  tst/test_suite/unit_tests/test_rad_m1_core_cpu.py checks.
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
@@ -516,7 +517,8 @@ void TestLinalg() {
   const Real A[N][N] = {{4.0, 1.0, -2.0, 0.5},
                         {1.0, 3.0, 0.0, -1.0},
                         {-2.0, 0.0, 5.0, 1.5},
-                        {0.5, -1.0, 1.5, 2.0}};
+                        {0.5, -1.0, 1.5, 2.0}
+  };
   Real Q[N][N], R[N][N];
   qr_factorize(A, Q, R);
   Real err_qr = 0.0, err_orth = 0.0, err_tri = 0.0;
@@ -579,7 +581,9 @@ void TestLinalg() {
 struct Geometry {
   Real alpha = 1.3;
   Real beta[3] = {0.2, -0.1, 0.05};
-  Real gam[3][3] = {{1.2, 0.1, 0.02}, {0.1, 1.1, 0.05}, {0.02, 0.05, 0.9}};
+  Real gam[3][3] = {
+    {1.2, 0.1, 0.02}, {0.1, 1.1, 0.05}, {0.02, 0.05, 0.9}
+  };
 };
 
 //! Inverse and determinant of a symmetric 3x3 matrix by cofactors (independent of the
@@ -698,7 +702,9 @@ void TestADM() {
 struct FluxSetup {
   Real alpha = 1.0;
   Real beta[3] = {0.0, 0.0, 0.0};
-  Real gam[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+  Real gam[3][3] = {
+    {1, 0, 0}, {0, 1, 0}, {0, 0, 1}
+  };
   Real zx = 0.0;          // fluid W v^x
   bool matter = false;    // matter_sources: switches on the 1/(kappa dx) correction
   Real kappa = 0.0;       // abs_1 in every cell
@@ -730,7 +736,8 @@ void RunFluxKernel(MeshBlockPack *pmbp, const FluxSetup &fs, StateFn state,
   using A = adm::ADM;
   const int gidx[3][3] = {{A::I_ADM_GXX, A::I_ADM_GXY, A::I_ADM_GXZ},
                           {A::I_ADM_GXY, A::I_ADM_GYY, A::I_ADM_GYZ},
-                          {A::I_ADM_GXZ, A::I_ADM_GYZ, A::I_ADM_GZZ}};
+                          {A::I_ADM_GXZ, A::I_ADM_GYZ, A::I_ADM_GZZ}
+  };
   const int bidx[3] = {A::I_ADM_BETAX, A::I_ADM_BETAY, A::I_ADM_BETAZ};
   for (int m = 0; m < nmb; ++m) {
     for (int i = 0; i < ncells1; ++i) {

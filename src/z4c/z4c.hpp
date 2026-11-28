@@ -176,6 +176,9 @@ class Z4c {
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
+    // Extend the Sommerfeld condition to chi, g~_ab (-> 1, delta_ab) and the lapse
+    // (alpha -> 1).  Default on in project/largesim-m1 (off on main).
+    bool sbc_metric;
     // Boundary extrapolation order
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation

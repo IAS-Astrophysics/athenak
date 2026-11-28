@@ -231,10 +231,10 @@ void SetupSystem(ParameterInput *pin, Mesh* pmy_mesh_) {
     idr->set_param("BH_filler_method", filler_method.c_str(), idr);
   }
 
-  // Default: compute K_ij from the full shift including the B1 form and 
-  // then export beta = B0, i.e. the intertial frame. ADM_B1I_form = zero drops B1 
-  // before building K_ij and this can corrupt K_ij for Kerr-Schild free data 
-  // where B1 is not a conformal Killing vector of g~. For flat g~ this does 
+  // Default: compute K_ij from the full shift including the B1 form and
+  // then export beta = B0, i.e. the intertial frame. ADM_B1I_form = zero drops B1
+  // before building K_ij and this can corrupt K_ij for Kerr-Schild free data
+  // where B1 is not a conformal Killing vector of g~. For flat g~ this does
   // not matter.
   if (pin->DoesParameterExist("problem", "elliptica_B1I_form")) {
     std::string b1_form = pin->GetString("problem", "elliptica_B1I_form");

@@ -24,7 +24,6 @@
 #include "mesh/mesh.hpp"
 #include "mhd/mhd.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
-#include "coordinates/adm.hpp"
 #include "z4c/tmunu.hpp"
 #include "z4c/z4c.hpp"
 #include "radiation_m1/radiation_m1.hpp"
@@ -87,7 +86,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
     std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
        << "Output of DynMHD variable requested in <output> block '"
        << out_params.block_name << "' but no DynMHD object has been constructed."
-       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block" << std::endl;
+       << std::endl << "Input file is likely missing a <adm> or <z4c>, and/or <mhd> block"
+       << std::endl;
     exit(EXIT_FAILURE);
   }
   if ((ivar==50) && (pm->pmb_pack->pturb == nullptr)) {
@@ -184,7 +184,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
   // it previously stopped at 166 and left rad_m1_J/H/n/fnu/e/absF to segfault instead.
   if (((ivar>=154) && (ivar<172)) || (ivar==176)) {
     if (pm->pmb_pack->pradm1 == nullptr) {
-      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__ << std::endl
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl
          << "Output of radiation m1 variables requested in <output> block '"
          << out_params.block_name << "' but radiation M1 object not constructed."
          << std::endl << "Input file is likely missing corresponding block" << std::endl;
@@ -924,7 +925,8 @@ BaseTypeOutput::BaseTypeOutput(ParameterInput *pin, Mesh *pm, OutputParameters o
       outvars.emplace_back("n:" + std::to_string(nuidx), nspec + nuidx, &(derived_var));
     }
     for (int nuidx = 0; nuidx < nspec; ++nuidx) {
-      outvars.emplace_back("chi:" + std::to_string(nuidx), 2*nspec + nuidx, &(derived_var));
+      outvars.emplace_back("chi:" + std::to_string(nuidx), 2*nspec + nuidx,
+                           &(derived_var));
     }
   }
 

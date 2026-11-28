@@ -9,6 +9,8 @@
 // C++ headers
 
 // Athena++ headers
+#include <iostream>
+
 #include <coordinates/cell_locations.hpp>
 
 #include "athena.hpp"

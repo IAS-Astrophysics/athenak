@@ -154,7 +154,7 @@ TaskStatus RadiationM1::FloorAndCalcClosure(Driver* pdrive, int stage) {
                          proj_ud, E, F_d, chi, Ptemp_dd, params_,
                          params_.closure_type);
             chi_(m, nuidx, k, j, i) = chi;
-          };
+          }
         }
       });
   is_chi_updated = true;

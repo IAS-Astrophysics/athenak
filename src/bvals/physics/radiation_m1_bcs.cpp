@@ -493,9 +493,11 @@ static void ApplyRadM1BCsToArray(MeshBlockPack *ppack,
 //! \fn void MeshBoundaryValues::RadiationM1BCs()
 //! \brief Apply physical boundary conditions for all RadiationM1 variables on the fine
 //  array at faces of the MB which are at the edge of the computational domain. This is
-//  applied *after* prolongation (see RadiationM1::Prolongate / RadiationM1::ApplyPhysicalBCs),
+//  applied *after* prolongation (see RadiationM1::Prolongate /
+//  RadiationM1::ApplyPhysicalBCs),
 //  so that the corner ghost zones between a coarse neighbor and a physical boundary --
-//  which are filled by prolongation from the coarse/fine interface ghosts -- read valid data.
+//  which are filled by prolongation from the coarse/fine interface ghosts -- read valid
+//  data.
 
 void MeshBoundaryValues::RadiationM1BCs(MeshBlockPack *ppack,
                                         DualArray2D<Real> i_in,

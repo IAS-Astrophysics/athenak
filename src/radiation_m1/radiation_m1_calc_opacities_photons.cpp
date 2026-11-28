@@ -6,6 +6,8 @@
 //! \file radiation_m1_calc_opacities_photons.cpp
 //! \brief calculate photon opacities for grey M1
 
+#include <iostream>
+
 #include "athena.hpp"
 #include "coordinates/adm.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"

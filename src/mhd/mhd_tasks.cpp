@@ -82,15 +82,24 @@ void MHD::AssembleMHDTasks(std::map<std::string, std::shared_ptr<TaskList>> tl) 
 
   // operator-split MHD refresh after the M1 radiation update (Strang split)
   if (pmy_pack->pradm1 != nullptr) {
-    id.postrad_initrecvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::InitRecvU, this, id.crecv);
-    id.postrad_restu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RestrictU, this, id.postrad_initrecvu);
-    id.postrad_sendu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::SendU, this, id.postrad_restu);
-    id.postrad_recvu = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::RecvU, this, id.postrad_sendu);
-    id.postrad_bcs = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ApplyPhysicalBCs, this, id.postrad_recvu);
-    id.postrad_prol = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::Prolongate, this, id.postrad_bcs);
-    id.postrad_c2p = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ConToPrim, this, id.postrad_prol);
-    id.postrad_csend = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearSendU, this, id.postrad_c2p);
-    id.postrad_crecv = tl["opsplit_after_timeintegrator"]->AddTask(&mhd::MHD::ClearRecvU, this, id.postrad_csend);
+    id.postrad_initrecvu = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::InitRecvU, this, id.crecv);
+    id.postrad_restu = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::RestrictU, this, id.postrad_initrecvu);
+    id.postrad_sendu = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::SendU, this, id.postrad_restu);
+    id.postrad_recvu = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::RecvU, this, id.postrad_sendu);
+    id.postrad_bcs = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::ApplyPhysicalBCs, this, id.postrad_recvu);
+    id.postrad_prol = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::Prolongate, this, id.postrad_bcs);
+    id.postrad_c2p = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::ConToPrim, this, id.postrad_prol);
+    id.postrad_csend = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::ClearSendU, this, id.postrad_c2p);
+    id.postrad_crecv = tl["opsplit_after_timeintegrator"]->AddTask(
+        &mhd::MHD::ClearRecvU, this, id.postrad_csend);
   }
 
   // super-time-stepped parabolic (diffusion) sub-stages

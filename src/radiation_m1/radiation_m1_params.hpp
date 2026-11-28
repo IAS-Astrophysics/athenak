@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_PARAMS_HPP
-#define RADIATION_M1_PARAMS_HPP
+#ifndef RADIATION_M1_RADIATION_M1_PARAMS_HPP_
+#define RADIATION_M1_RADIATION_M1_PARAMS_HPP_
 
 #include "athena.hpp"
 #include "athena_tensor.hpp"
@@ -65,7 +65,7 @@ struct RadiationM1Params {
   bool beam_sources;    // include beam sources
   bool backreact;
   bool backreact_tmunu;
-  
+
   int nspecies;              // number of neutrino species
   Real closure_epsilon;      // precision with which to find closure
   int closure_maxiter;       // maximum number of iterations in closure root finder
@@ -84,7 +84,8 @@ struct RadiationM1Params {
   Real source_epsrel;   // target relative precision for non-linear solver
   int source_maxiter;   // maximum number of iterations for non-linear solver
 
-  Real source_thin_limit;   // Use the explicit update below this optical depth per timestep
+  Real source_thin_limit;   // Use the explicit update below this optical depth per
+                            // timestep
   Real source_thick_limit;  // Use the optically thick limit if the equilibration time is
                             // less than the timestep over this factor
   Real source_therm_limit;  // Assume neutrinos to be thermalized above this optical depth
@@ -175,4 +176,4 @@ struct SrcParams {
 };
 
 }  // namespace radiationm1
-#endif  // RADIATION_M1_PARAMS_HPP
+#endif  // RADIATION_M1_RADIATION_M1_PARAMS_HPP_

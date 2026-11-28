@@ -1,5 +1,5 @@
-#ifndef RADIATION_M1_HPP
-#define RADIATION_M1_HPP
+#ifndef RADIATION_M1_RADIATION_M1_HPP_
+#define RADIATION_M1_RADIATION_M1_HPP_
 //========================================================================================
 // AthenaXXX astrophysical plasma code
 // Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
@@ -74,7 +74,7 @@ class RadiationM1 {
   bool isadm;                              // flag to check if <adm> present
 
   bool is_chi_updated;                     // true if the closure is already up to date
-  
+
   RadiationM1Params params{};              // user parameters for grey M1
   PhotonOpacityParams photon_op_params{};  // params for photon opacities
 #if ENABLE_NURATES
@@ -98,8 +98,8 @@ class RadiationM1 {
   Real dtnew{};
 
   // conditional quantities
-  DvceArray5D<Real> w0;        // fluid quantities, when MHD is off, unused otherwise 
-  // TODO: get rid of this:
+  DvceArray5D<Real> w0;        // fluid quantities, when MHD is off, unused otherwise
+  // TODO(radiation_m1): get rid of this:
   RadiationM1Beam rad_m1_beam;  // beam ID values (only needed when beams on)
 
   // functions...
@@ -147,4 +147,4 @@ void ApplyBeamSourcesBlackHole(Mesh* pmesh);
 
 }  // namespace radiationm1
 
-#endif  // RADIATION_M1_HPP
+#endif  // RADIATION_M1_RADIATION_M1_HPP_

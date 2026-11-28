@@ -131,7 +131,7 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
   if (!is_vacuum) tmunu = pmy_pack->ptmunu->tmunu;
 
   // Radial suppression of the Z4c Theta equation (Kyutoku, Shibata & Taniguchi 2014,
-  // arXiv:1405.6207 Sec. II).  
+  // arXiv:1405.6207 Sec. II).
   bool rz4_on     = (opt.rz4 > 0.0);
   Real rz4_inv_r2 = rz4_on ? 1.0/SQR(opt.rz4) : 0.0;
 
@@ -590,22 +590,24 @@ TaskStatus Z4c::CalcRHS(Driver *pdriver, int stage) {
     //
     // Their words: "because the outer boundary of SACRA has a nonsmooth rectangular shape
     // ... we adopt simple outgoing-wave boundary conditions rather than constraint-
-    // preserving and incoming-radiation-controlling ones ..., which require a normal vector
-    // to the boundary.  To suppress unphysical incoming modes from the boundary, we instead
-    // force the right-hand side of Eq. (28) [the Theta equation] to damp exponentially by
-    // multiplying exp[-r^2/(L/2)^2].  The same factor is also multiplied for all kappa1 ...
-    // This prescription is justified, because all the modified terms vanish for physical
-    // solutions."  They also flag the caveat that it modifies the principal part.
+    // preserving and incoming-radiation-controlling ones ..., which require a normal
+    // vector to the boundary.  To suppress unphysical incoming modes from the boundary,
+    // we instead force the right-hand side of Eq. (28) [the Theta equation] to damp
+    // exponentially by multiplying exp[-r^2/(L/2)^2].  The same factor is also multiplied
+    // for all kappa1 ... This prescription is justified, because all the modified terms
+    // vanish for physical solutions."  They also flag the caveat that it modifies the
+    // principal part.
     //
-    // So: the WHOLE Theta RHS (source and damping together, advection is on the LHS and is
-    // untouched) and EVERY occurrence of kappa1 are scaled.  Scaling source and damping
-    // together preserves Theta_eq = S/D and only slows the relaxation rate.
+    // So: the WHOLE Theta RHS (source and damping together, advection is on the LHS and
+    // is untouched) and EVERY occurrence of kappa1 are scaled.  Scaling source and
+    // damping together preserves Theta_eq = S/D and only slows the relaxation rate.
     //
-    // Measured here on VVLR_eq against a matched control from an identical restart: boundary
-    // tau_amp 4556 -> 6483 M, but Z-norm2 grew 6.9x faster (removing the kappa1 damping of
-    // Gam^i is what costs that).  Kyutoku+14 judged the prescription on ADM mass and angular
-    // momentum conservation, not on constraint norms, which may be why the trade is not
-    // reported there.  r is measured from the grid origin, not a tracker.
+    // Measured here on VVLR_eq against a matched control from an identical restart:
+    // boundary tau_amp 4556 -> 6483 M, but Z-norm2 grew 6.9x faster (removing the kappa1
+    // damping of Gam^i is what costs that).  Kyutoku+14 judged the prescription on ADM
+    // mass and angular momentum conservation, not on constraint norms, which may be why
+    // the trade is not reported there.  r is measured from the grid origin, not a
+    // tracker.
 
     // -----------------------------------------------------------------------------------
     // Assemble RHS
