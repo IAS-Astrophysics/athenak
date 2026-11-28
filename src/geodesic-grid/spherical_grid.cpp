@@ -43,6 +43,11 @@ SphericalGrid::SphericalGrid(MeshBlockPack *ppack, int nlev, Real rad, int nintp
   Kokkos::realloc(interp_indcs,nangles,4);
   Kokkos::realloc(interp_wghts,nangles,ninterp,3);
 
+  // stamp of the mesh the indices below are computed against
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  amr_nmb_created = (pmr == nullptr) ? 0 : pmr->nmb_created;
+  amr_nmb_deleted = (pmr == nullptr) ? 0 : pmr->nmb_deleted;
+
   // Call functions to prepare SphericalGrid object for interpolation
   SetInterpolationCoordinates();
   SetInterpolationIndices();
@@ -127,10 +132,14 @@ void SphericalGrid::SetInterpolationIndices() {
       Real &dx3 = size.h_view(m).dx3;
 
       // save MeshBlock and zone indicies for nearest position to spherical patch center
-      // if this angle position resides in this MeshBlock
-      if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) <= x1max) &&
-          (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) <= x2max) &&
-          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) <= x3max)) {
+      // if this angle position resides in this MeshBlock.
+      // The upper bounds are exclusive so that a point landing exactly on a MeshBlock
+      // face is owned by exactly one block, and the search stops at the first match:
+      // interpolated values are MPI_SUM-reduced over ranks, so a point claimed twice
+      // would be counted twice.
+      if ((rcoord.h_view(n,0) >= x1min && rcoord.h_view(n,0) < x1max) &&
+          (rcoord.h_view(n,1) >= x2min && rcoord.h_view(n,1) < x2max) &&
+          (rcoord.h_view(n,2) >= x3min && rcoord.h_view(n,2) < x3max)) {
         iindcs.h_view(n,0) = m;
         iindcs.h_view(n,1) = static_cast<int>(std::floor((rcoord.h_view(n,0)-
                                                           (x1min+offset*dx1))/dx1));
@@ -138,6 +147,7 @@ void SphericalGrid::SetInterpolationIndices() {
                                                           (x2min+offset*dx2))/dx2));
         iindcs.h_view(n,3) = static_cast<int>(std::floor((rcoord.h_view(n,2)-
                                                           (x3min+offset*dx3))/dx3));
+        break;
       }
     }
   }
@@ -145,6 +155,32 @@ void SphericalGrid::SetInterpolationIndices() {
   // sync dual arrays
   interp_indcs.template modify<HostMemSpace>();
   interp_indcs.template sync<DevExeSpace>();
+
+  return;
+}
+
+//----------------------------------------------------------------------------------------
+//! \fn void SphericalGrid::UpdateInterpolationOnMeshChange
+//! \brief recompute interpolation indices and weights after the mesh has changed
+//
+// interp_indcs stores the *local* MeshBlock index of the owner of each angle, so any
+// refinement, derefinement or load balance invalidates it: an index can point at a
+// MeshBlock that now covers a different region, or past the end of a shrunken pack.
+// nmb_created/nmb_deleted are cumulative counters that MeshRefinement only advances when
+// blocks were actually redistributed, so comparing against them makes this a no-op on
+// the (many) calls where the mesh did not move.
+
+void SphericalGrid::UpdateInterpolationOnMeshChange() {
+  if (!pmy_pack->pmesh->adaptive) return;
+
+  MeshRefinement *pmr = pmy_pack->pmesh->pmr;
+  if (pmr == nullptr) return;
+  if (pmr->nmb_created == amr_nmb_created && pmr->nmb_deleted == amr_nmb_deleted) return;
+
+  amr_nmb_created = pmr->nmb_created;
+  amr_nmb_deleted = pmr->nmb_deleted;
+  SetInterpolationIndices();
+  SetInterpolationWeights();
 
   return;
 }
@@ -229,11 +265,8 @@ void SphericalGrid::InterpolateToSphere(int nvars, DvceArray5D<Real>& val) {
 //! \brief interpolate an (inclusive) index range of Cartesian data to surface of sphere
 
 void SphericalGrid::InterpolateToSphere(int vs, int ve, DvceArray5D<Real>& val) {
-  // reinitialize interpolation indices and weights if AMR
-  if (pmy_pack->pmesh->adaptive) {
-    SetInterpolationIndices();
-    SetInterpolationWeights();
-  }
+  // reinitialize interpolation indices and weights if the mesh has changed
+  UpdateInterpolationOnMeshChange();
 
   // capturing variables for kernel
   auto &indcs = pmy_pack->pmesh->mb_indcs;

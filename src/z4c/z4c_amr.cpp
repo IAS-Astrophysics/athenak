@@ -53,6 +53,22 @@ Z4c_AMR::Z4c_AMR(ParameterInput *pin) {
       break;
     }
   }
+
+  disk_reflevel = pin->GetOrAddInteger("z4c_amr", "disk_reflevel", -1);
+  if (disk_reflevel >= 0) {
+    disk_rmax    = pin->GetReal("z4c_amr", "disk_rmax");
+    disk_zmax    = pin->GetReal("z4c_amr", "disk_zmax");
+    disk_tracker = pin->GetOrAddInteger("z4c_amr", "disk_tracker", 0);
+
+    // Optional automatic disk refinement.
+    disk_auto    = pin->GetOrAddBoolean("z4c_amr", "disk_auto", false);
+    if (disk_auto) {
+      pin_             = pin;
+      disk_merger_sep  = pin->GetOrAddReal("z4c_amr", "disk_merger_sep", 1.0);
+      disk_delay       = pin->GetOrAddReal("z4c_amr", "disk_delay", 0.0);
+      disk_merger_time = pin->GetOrAddReal("z4c_amr", "disk_merger_time", -1.0);
+    }
+  }
 }
 
 // 1: refines, -1: de-refines, 0: does nothing
@@ -65,6 +81,9 @@ void Z4c_AMR::Refine(MeshBlockPack *pmy_pack) {
     RefineDchiMax(pmy_pack);
   }
   RefineRadii(pmy_pack);
+  if (disk_reflevel >= 0 && DiskActive(pmy_pack)) {
+    RefineDisk(pmy_pack);
+  }
 }
 
 // refine region within a certain distance from each compact object
@@ -263,6 +282,90 @@ void Z4c_AMR::RefineRadii(MeshBlockPack *pmbp) {
         } else if (level == reflevel[ir] && refine_flag.h_view(m + mbs) == -1) {
           refine_flag.h_view(m + mbs) = 0;
         }
+      }
+    }
+  }
+
+  // sync host and device
+  refine_flag.template modify<HostMemSpace>();
+  refine_flag.template sync<DevExeSpace>();
+}
+
+// Decide whether disk refinement is active. Without disk_auto it always is
+// if a disk refinement block exists. With disk_auto, detect merger from
+// separation of trackers 0 and 1 and activate disk_delay later.
+bool Z4c_AMR::DiskActive(MeshBlockPack *pmbp) {
+  if (!disk_auto) return true;
+
+  Real time = pmbp->pmesh->time;
+  auto &ptracker = pmbp->pz4c->ptracker;
+
+  if (disk_merger_time < 0.0) {
+    if (ptracker.size() < 2) {
+      std::cout << "### FATAL ERROR in " << __FILE__ << " at line " << __LINE__
+                << std::endl << "disk_auto requires at least two compact object "
+                << "trackers (nco >= 2)." << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    Real sep2 = 0.0;
+    for (int a = 0; a < 3; ++a) {
+      sep2 += SQ(ptracker[0]->GetPos(a) - ptracker[1]->GetPos(a));
+    }
+    if (sep2 < SQ(disk_merger_sep)) {
+      disk_merger_time = time;
+      pin_->SetReal("z4c_amr", "disk_merger_time", disk_merger_time);
+      if (global_variable::my_rank == 0) {
+        std::cout << "Z4c_AMR: merger detected at t = " << disk_merger_time
+                  << " (tracker separation " << std::sqrt(sep2) << " < "
+                  << disk_merger_sep << "); disk refinement starts at t = "
+                  << disk_merger_time + disk_delay << std::endl;
+      }
+    }
+  }
+
+  return (disk_merger_time >= 0.0) && (time >= disk_merger_time + disk_delay);
+}
+
+// Enforce a minimum resolution within a cylinder R < disk_rmax, |z| < disk_zmax
+// centred on a compact object tracker (or the origin if disk_tracker < 0).
+// Uses the exact minimum distance between the cylinder axis / midplane and the block.
+void Z4c_AMR::RefineDisk(MeshBlockPack *pmbp) {
+  Mesh *pmesh       = pmbp->pmesh;
+  auto &refine_flag = pmesh->pmr->refine_flag;
+  auto &size        = pmbp->pmb->mb_size;
+  int nmb           = pmbp->nmb_thispack;
+  int mbs           = pmesh->gids_eachrank[global_variable::my_rank];
+
+  Real c[3] = {0.0, 0.0, 0.0};
+  if (disk_tracker >= 0 &&
+      disk_tracker < static_cast<int>(pmbp->pz4c->ptracker.size())) {
+    for (int a = 0; a < 3; ++a) {
+      c[a] = pmbp->pz4c->ptracker[disk_tracker]->GetPos(a);
+    }
+  }
+
+  for (int m = 0; m < nmb; ++m) {
+    // current refinement level
+    int level = pmesh->lloc_eachmb[m + mbs].level - pmesh->root_level;
+
+    // MeshBlock bounds relative to the disk centre
+    Real x1min = size.h_view(m).x1min - c[0];
+    Real x1max = size.h_view(m).x1max - c[0];
+    Real x2min = size.h_view(m).x2min - c[1];
+    Real x2max = size.h_view(m).x2max - c[1];
+    Real x3min = size.h_view(m).x3min - c[2];
+    Real x3max = size.h_view(m).x3max - c[2];
+
+    // closest point of the block to the cylinder axis and to the midplane
+    Real px = fmax(x1min, fmin(0.0, x1max));
+    Real py = fmax(x2min, fmin(0.0, x2max));
+    Real pz = fmax(x3min, fmin(0.0, x3max));
+
+    if (SQ(px) + SQ(py) < SQ(disk_rmax) && fabs(pz) < disk_zmax) {
+      if (level < disk_reflevel) {
+        refine_flag.h_view(m + mbs) = 1;
+      } else if (level == disk_reflevel && refine_flag.h_view(m + mbs) == -1) {
+        refine_flag.h_view(m + mbs) = 0;
       }
     }
   }

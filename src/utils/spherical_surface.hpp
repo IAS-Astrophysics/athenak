@@ -74,6 +74,8 @@ class SphericalSurface {
   // functions
   void InitializeAngleAndWeights();
   void InitializeRadius();
+  // move the center of the surfaces, e.g. to follow a compact object
+  bool SetCenter(Real xc_new, Real yc_new, Real zc_new);
 
   // interpolate scalar field to sphere
   void InterpolateToSphere(int nvars, DvceArray5D<Real> &val);

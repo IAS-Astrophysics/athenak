@@ -16,9 +16,9 @@
 #include "parameter_input.hpp"
 
 using ProblemFinalizeFnPtr = void (*)(ParameterInput *pin, Mesh *pm);
-using UserBoundaryFnPtr = void (*)(Mesh* pm);
-using UserSrctermFnPtr = void (*)(Mesh* pm, const Real bdt);
-using UserRefinementFnPtr = void (*)(MeshBlockPack* pmbp);
+using UserBoundaryFnPtr = void (*)(Mesh *pm);
+using UserSrctermFnPtr = void (*)(Mesh *pm, const Real bdt);
+using UserRefinementFnPtr = void (*)(MeshBlockPack *pmbp);
 using UserHistoryFnPtr = void (*)(HistoryData *pdata, Mesh *pm);
 
 //----------------------------------------------------------------------------------------
@@ -45,14 +45,15 @@ class ProblemGenerator {
   // vector of SphericalGrid objects for analysis
   std::vector<std::unique_ptr<SphericalGrid>> spherical_grids;
 
-  // function pointer for final work after main loop (e.g. compute errors).  Called by
-  // Driver::Finalize()
-  ProblemFinalizeFnPtr pgen_final_func=nullptr;
-  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task list
-  UserBoundaryFnPtr user_bcs_func=nullptr;
-  UserSrctermFnPtr user_srcs_func=nullptr;
-  UserRefinementFnPtr user_ref_func=nullptr;
-  UserHistoryFnPtr user_hist_func=nullptr;
+  // function pointer for final work after main loop (e.g. compute errors).
+  // Called by Driver::Finalize()
+  ProblemFinalizeFnPtr pgen_final_func = nullptr;
+  // function pointer for user-enrolled BCs.  Called in ApplyPhysicalBCs in task
+  // list
+  UserBoundaryFnPtr user_bcs_func = nullptr;
+  UserSrctermFnPtr user_srcs_func = nullptr;
+  UserRefinementFnPtr user_ref_func = nullptr;
+  UserHistoryFnPtr user_hist_func = nullptr;
 
   // predefined problem generator functions (default test suite)
   void CallProblemGenerator(ParameterInput *pin, bool is_restart);
@@ -73,6 +74,16 @@ class ProblemGenerator {
   void RadiationBeam(ParameterInput *pin, const bool restart);
   void Z4cBoostedPuncture(ParameterInput *pin, const bool restart);
   void Z4cLinearWave(ParameterInput *pin, const bool restart);
+  void RadiationM1BeamTest(ParameterInput *pin, const bool restart);
+  void RadiationM1BrentTest(ParameterInput *pin, const bool restart);
+  void RadiationM1HybridsjTest(ParameterInput *pin, const bool restart);
+  void RadiationM1SphereTest(ParameterInput *pin, const bool restart);
+  void RadiationM1LatticeTest(ParameterInput *pin, const bool restart);
+  void RadiationM1DiffusionTest(ParameterInput *pin, const bool restart);
+  void RadiationM1VelocityJumpTest(ParameterInput *pin, const bool restart);
+  void RadiationM1SingleZoneTest(ParameterInput *pin, const bool restart);
+  template <class EOSPolicy, class ErrorPolicy>
+  void RadiationM1SingleZoneTest_(ParameterInput *pin, const bool restart);
   void SelfGravity(ParameterInput *pin, const bool restart);
   void BinaryGravity(ParameterInput *pin, const bool restart);
   void BECollapse(ParameterInput *pin, const bool restart);
@@ -80,6 +91,7 @@ class ProblemGenerator {
   // predefined problem generator functions for unit tests
   void EOSCompose(ParameterInput *pin, const bool restart);
   void GaussLegendre(ParameterInput *pin, const bool restart);
+  void RadM1Core(ParameterInput *pin, const bool restart);
 
   // Generic error output function (using difference u0-u1)
   void OutputErrors(ParameterInput *pin, Mesh *pm);
@@ -92,4 +104,4 @@ class ProblemGenerator {
   Mesh* pmy_mesh_;
 };
 
-#endif // PGEN_PGEN_HPP_
+#endif  // PGEN_PGEN_HPP_

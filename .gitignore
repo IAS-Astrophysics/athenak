@@ -22,5 +22,8 @@ tst/test_log.txt
 *.swp
 Lorene
 
+# bns_nurates
+src/bns_nurates/
+
 # python cache
 __pycache__/

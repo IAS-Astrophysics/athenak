@@ -25,6 +25,12 @@
 // use OpenMP parallelization? default=0 (false)
 #define OPENMP_PARALLEL_ENABLED @OPENMP_PARALLEL_ENABLED@
 
+// use bns_nurates
+#define ENABLE_NURATES @ENABLE_NURATES@
+
+// number of species for radiation_m1
+#define M1_TOTAL_NUM_SPECIES @M1_TOTAL_NUM_SPECIES@
+
 // Kokkos tight loop layout
 //#define @PAR_LOOP_LAYOUT@
 

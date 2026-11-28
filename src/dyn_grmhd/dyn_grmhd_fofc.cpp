@@ -206,7 +206,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
   auto &eos_ = eos;
   auto &use_excise_ = pmy_pack->pcoord->coord_data.bh_excise;
   auto &excision_flux_ = pmy_pack->pcoord->excision_flux;
+  auto &excision_flux_emf_ = pmy_pack->pcoord->coord_data.excision_flux_emf;
   auto &w0_ = pmy_pack->pmhd->w0;
+  auto &temperature_ = temperature;
   auto &b0_ = pmy_pack->pmhd->b0;
   auto &adm = pmy_pack->padm->adm;
 
@@ -235,13 +237,22 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     bool fofc_excision = false;
     if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
 
+    // Whether the face EMFs are rewritten along with the hydro fluxes.  In a mask cell
+    // this is a deliberate choice (excision_flux_emf), not a consequence of how the cell
+    // came to be flagged: rewriting the EMFs makes the induction equation run a
+    // different scheme inside the mask from outside, switching across a hard boolean
+    // staircase.  Outside the mask, genuine FOFC keeps its EMF path.
+    bool fofc_emf = fofc_excision ? excision_flux_emf_ : fofc_flag;
+
     // Apply FOFC
     if (fofc_flag || fofc_excision || fofc_scalar_any) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
-      ExtractPrimitives(wli, w0_,eos_, nmhd_, nscal_, m, k, j, i-1);
-      ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i);
+      ExtractPrimitives(wli, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i - 1);
+      ExtractPrimitives(wri, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i);
       Real g3d[NSPMETRIC], beta_u[3], alpha;
       Real flux[NCONS], bflux[NMAG];
       if (fofc_flag || fofc_excision) {
@@ -263,8 +274,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Store 1st-order fluxes at i-1/2
         InsertFluxes(flux, flx1, m, k, j, i);
-        e3x1_(m, k, j, i) = bflux[IBY];
-        e2x1_(m, k, j, i) = bflux[IBZ];
+        if (fofc_emf) {
+          e3x1_(m, k, j, i) = bflux[IBY];
+          e2x1_(m, k, j, i) = bflux[IBZ];
+        }
       }
 
       // Calculate fluxes of scalars
@@ -282,7 +295,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real wlj[NPRIM], *wrj;
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
-        ExtractPrimitives(wlj, w0_, eos_, nmhd_, nscal_, m, k, j-1, i);
+        ExtractPrimitives(wlj, w0_, temperature_, eos_, nmhd_, nscal_, m, k,
+                          j - 1, i);
         wrj = &wri[0];
         if (fofc_flag || fofc_excision) {
           ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j-1, i);
@@ -304,8 +318,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
           // Store 1st-order fluxes at j-1/2
           InsertFluxes(flux, flx2, m, k, j, i);
-          e1x2_(m,k,j,i) = bflux[IBY];
-          e3x2_(m,k,j,i) = bflux[IBZ];
+          if (fofc_emf) {
+            e1x2_(m,k,j,i) = bflux[IBY];
+            e3x2_(m,k,j,i) = bflux[IBZ];
+          }
         }
 
         // Calculate fluxes of scalars
@@ -324,7 +340,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real wmk[NPRIM], *wpk;
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
-        ExtractPrimitives(wmk, w0_, eos_, nmhd_, nscal_, m, k-1, j, i);
+        ExtractPrimitives(wmk, w0_, temperature_, eos_, nmhd_, nscal_, m, k - 1,
+                          j, i);
         wpk = &wri[0];
         if (fofc_flag || fofc_excision) {
           ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k-1, j, i);
@@ -346,8 +363,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
           // Store 1st-order fluxes at k-1/2
           InsertFluxes(flux, flx3, m, k, j, i);
-          e2x3_(m,k,j,i) = bflux[IBY];
-          e1x3_(m,k,j,i) = bflux[IBZ];
+          if (fofc_emf) {
+            e2x3_(m,k,j,i) = bflux[IBY];
+            e1x3_(m,k,j,i) = bflux[IBZ];
+          }
         }
 
         // Calculate fluxes of scalars
@@ -385,13 +404,22 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
     bool fofc_excision = false;
     if (use_excise_) { fofc_excision = excision_flux_(m,k,j,i); }
 
+    // Whether the face EMFs are rewritten along with the hydro fluxes.  In a mask cell
+    // this is a deliberate choice (excision_flux_emf), not a consequence of how the cell
+    // came to be flagged: rewriting the EMFs makes the induction equation run a
+    // different scheme inside the mask from outside, switching across a hard boolean
+    // staircase.  Outside the mask, genuine FOFC keeps its EMF path.
+    bool fofc_emf = fofc_excision ? excision_flux_emf_ : fofc_flag;
+
     // Apply FOFC
     if (fofc_flag || fofc_excision || fofc_scalar_any) {
       // Reconstruct states
       Real wli[NPRIM], wri[NPRIM];
       Real bli[NMAG], bri[NMAG];
-      ExtractPrimitives(wli, w0_,eos_, nmhd_, nscal_, m, k, j, i);
-      ExtractPrimitives(wri, w0_, eos_, nmhd_, nscal_, m, k, j, i+1);
+      ExtractPrimitives(wli, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i);
+      ExtractPrimitives(wri, w0_, temperature_, eos_, nmhd_, nscal_, m, k, j,
+                        i + 1);
       Real g3d[NSPMETRIC], beta_u[3], alpha;
       Real flux[NCONS], bflux[NMAG];
       if (fofc_flag || fofc_excision) {
@@ -414,8 +442,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
         // Store 1st-order fluxes at i+1/2
         InsertFluxes(flux, flx1, m, k, j, i+1);
-        e3x1_(m, k, j, i+1) = bflux[IBY];
-        e2x1_(m, k, j, i+1) = bflux[IBZ];
+        if (fofc_emf) {
+          e3x1_(m, k, j, i+1) = bflux[IBY];
+          e2x1_(m, k, j, i+1) = bflux[IBZ];
+        }
       }
 
       // Calculate fluxes of scalars
@@ -434,7 +464,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real blj[NMAG], brj[NMAG];
         // Reconstruct states
         wlj = &wli[0];
-        ExtractPrimitives(wrj, w0_, eos_, nmhd_, nscal_, m, k, j+1, i);
+        ExtractPrimitives(wrj, w0_, temperature_, eos_, nmhd_, nscal_, m, k,
+                          j + 1, i);
         if (fofc_flag || fofc_excision) {
           ExtractBField(blj, bcc0_, IBY, IBZ, IBX, m, k, j, i);
           ExtractBField(brj, bcc0_, IBY, IBZ, IBX, m, k, j+1, i);
@@ -455,8 +486,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
           // Store 1st-order fluxes at j+1/2
           InsertFluxes(flux, flx2, m, k, j+1, i);
-          e1x2_(m,k,j+1,i) = bflux[IBY];
-          e3x2_(m,k,j+1,i) = bflux[IBZ];
+          if (fofc_emf) {
+            e1x2_(m,k,j+1,i) = bflux[IBY];
+            e3x2_(m,k,j+1,i) = bflux[IBZ];
+          }
         }
 
         // Calculate fluxes of scalars
@@ -476,7 +509,8 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
         Real bmk[NPRIM], bpk[NMAG];
         // Reconstruct states
         wmk = &wli[0];
-        ExtractPrimitives(wpk, w0_, eos_, nmhd_, nscal_, m, k+1, j, i);
+        ExtractPrimitives(wpk, w0_, temperature_, eos_, nmhd_, nscal_, m, k + 1,
+                          j, i);
         if (fofc_flag || fofc_excision) {
           ExtractBField(bmk, bcc0_, IBZ, IBX, IBY, m, k, j, i);
           ExtractBField(bpk, bcc0_, IBZ, IBX, IBY, m, k+1, j, i);
@@ -497,8 +531,10 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::FOFC(Driver *pdriver, int stage) {
 
           // Store 1st-order fluxes at k+1/2
           InsertFluxes(flux, flx3, m, k+1, j, i);
-          e2x3_(m,k+1,j,i) = bflux[IBY];
-          e1x3_(m,k+1,j,i) = bflux[IBZ];
+          if (fofc_emf) {
+            e2x3_(m,k+1,j,i) = bflux[IBY];
+            e1x3_(m,k+1,j,i) = bflux[IBZ];
+          }
         }
 
         // Calculate fluxes of scalars
@@ -757,4 +793,5 @@ INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NormalLogs>, Primitive::ResetF
 INSTANTIATE_FOFC(Primitive::EOSCompOSE<Primitive::NQTLogs>, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NormalLogs>, Primitive::ResetFloor)
 INSTANTIATE_FOFC(Primitive::EOSHybrid<Primitive::NQTLogs>, Primitive::ResetFloor)
+
 } // namespace dyngr

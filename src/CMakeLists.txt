@@ -150,6 +150,8 @@ add_executable(
         pgen/tests/rad_beam.cpp
         pgen/tests/rad_linear_wave.cpp
         pgen/tests/z4c_boosted_puncture.cpp
+        pgen/tests/rad_m1_diffusiontest.cpp
+        pgen/tests/rad_m1_velocityjump.cpp
         pgen/tests/z4c_linear_wave.cpp
         pgen/tests/jeans_wave.cpp
         pgen/tests/binary_gravity.cpp
@@ -157,6 +159,7 @@ add_executable(
 
         pgen/unit_tests/eos_compose.cpp
         pgen/unit_tests/gauss_legendre.cpp
+        pgen/unit_tests/rad_m1_core.cpp
 
         radiation/radiation.cpp
         radiation/radiation_fluxes.cpp
@@ -192,6 +195,7 @@ add_executable(
         utils/cart_grid.cpp
         utils/watchdog.cpp
         utils/spherical_surface.cpp
+        utils/arbitrary_grid_interpolator.cpp
 
 
         z4c/compact_object_tracker.cpp
@@ -210,8 +214,88 @@ add_executable(
         z4c/z4c_wave_extr.cpp
         z4c/z4c_amr.cpp
         z4c/cce/cce.cpp
+        z4c/BHaHAHA_horizon_finder.cpp
+
+        z4c/bhahaha/bah_KO_apply.c
+        z4c/bhahaha/bah_MoL_free_memory_non_y_n_gfs.c
+        z4c/bhahaha/bah_MoL_free_memory_y_n_gfs.c
+        z4c/bhahaha/bah_MoL_malloc_non_y_n_gfs.c
+        z4c/bhahaha/bah_MoL_malloc_y_n_gfs.c
+        z4c/bhahaha/bah_MoL_step_forward_in_time.c
+        z4c/bhahaha/bah_apply_bcs_inner_only.c
+        z4c/bhahaha/bah_apply_bcs_r_maxmin_partial_r_hDD_upwinding.c
+        z4c/bhahaha/bah_bcstruct_set_up.c
+        z4c/bhahaha/bah_cfl_limited_timestep_based_on_h_equals_r.c
+        z4c/bhahaha/bah_commondata_struct_set_to_default.c
+        z4c/bhahaha/bah_diagnostics.c
+        z4c/bhahaha/bah_diagnostics_area_centroid_and_Theta_norms.c
+        z4c/bhahaha/bah_diagnostics_file_output.c
+        z4c/bhahaha/bah_diagnostics_integration_weights.c
+        z4c/bhahaha/bah_diagnostics_min_max_mean_radii_wrt_centroid.c
+        z4c/bhahaha/bah_diagnostics_proper_circumferences.c
+        z4c/bhahaha/bah_error_message.c
+        z4c/bhahaha/bah_find_horizon.c
+        z4c/bhahaha/bah_hDD_dD_and_W_dD_in_interp_src_grid_interior.c
+        z4c/bhahaha/bah_initial_data.c
+        z4c/bhahaha/bah_interpolation_1d_radial_spokes_on_3d_src_grid.c
+        z4c/bhahaha/bah_interpolation_2d_external_input_to_interp_src_grid.c
+        z4c/bhahaha/bah_interpolation_2d_general__uniform_src_grid.c
+        z4c/bhahaha/bah_numgrid__evol_set_up.c
+        z4c/bhahaha/bah_numgrid__external_input_set_up.c
+        z4c/bhahaha/bah_numgrid__interp_src_set_up.c
+        z4c/bhahaha/bah_over_relaxation.c
+        z4c/bhahaha/bah_params_struct_set_to_default.c
+        z4c/bhahaha/bah_poisoning_check_inputs.c
+        z4c/bhahaha/bah_poisoning_set_inputs.c
+        z4c/bhahaha/bah_quadratic_extrapolation.c
+        z4c/bhahaha/bah_radial_grid_cell_centered_set_up.c
+        z4c/bhahaha/bah_rfm_precompute_defines.c
+        z4c/bhahaha/bah_rfm_precompute_free.c
+        z4c/bhahaha/bah_rfm_precompute_malloc.c
+        z4c/bhahaha/bah_rhs_eval.c
+        z4c/bhahaha/bah_xx_to_Cart.c
+        z4c/bhahaha/bah_xyz_center_r_minmax.c
         z4c/driftcontrol/driftcontrol.cpp
+
+        radiation_m1/radiation_m1.cpp
+        radiation_m1/radiation_m1_tasks.cpp
+        radiation_m1/radiation_m1_update.cpp
+        radiation_m1/radiation_m1_fluxes.cpp
+        radiation_m1/radiation_m1_helpers.hpp
+        radiation_m1/radiation_m1_newdt.cpp
+        radiation_m1/radiation_m1_macro.hpp
+        radiation_m1/radiation_m1_calc_closure.cpp
+        radiation_m1/radiation_m1_tmunu.cpp
+        bvals/physics/radiation_m1_bcs.cpp
+        radiation_m1/radiation_m1_beams.cpp
+        pgen/tests/rad_m1_beams.cpp
+        pgen/tests/rad_m1_brent.cpp
+        radiation_m1/radiation_m1_calc_opacities_toy.cpp
+        pgen/tests/rad_m1_latticetest.cpp
+        pgen/tests/rad_m1_spheretest.cpp
+        pgen/tests/rad_m1_hybridsj.cpp
+        radiation_m1/radiation_m1_toy.hpp
+        radiation_m1/radiation_m1_calc_opacities_photons.cpp
 )
+
+# add bns_nurates
+if (ENABLE_NURATES)
+    target_compile_definitions(athena PUBLIC ENABLE_NURATES)
+    target_sources(athena
+        PRIVATE
+            radiation_m1/radiation_m1_calc_opacities_nurates.cpp
+            pgen/tests/rad_m1_singlezone.cpp
+    )
+endif()
+
+# Selective large register file (256 reg) for the kernels that benefit; everything
+# else keeps the default so simple memory-bound kernels do not lose occupancy.
+if (DEFINED ATHENA_GRF_LARGE_FILES)
+  message(STATUS "large-GRF (256 reg) files: ${ATHENA_GRF_LARGE_FILES}")
+  set_source_files_properties(${ATHENA_GRF_LARGE_FILES}
+      PROPERTIES COMPILE_OPTIONS
+      "-Xsycl-target-backend=spir64_gen;-options -ze-opt-large-register-file")
+endif()
 
 # custom problem generator to be included in compile
 # specify on command line using '-D PROBLEM=file' where 'file' is name of file in

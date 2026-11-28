@@ -1,0 +1,591 @@
+#ifndef RADIATION_M1_RADIATION_M1_NURATES_HPP_
+#define RADIATION_M1_RADIATION_M1_NURATES_HPP_
+
+//========================================================================================
+// AthenaXXX astrophysical plasma code
+// Copyright(C) 2020 James M. Stone <jmstone@ias.edu> and the Athena code team
+// Licensed under the 3-clause BSD License (the "LICENSE")
+//========================================================================================
+//! \file radiation_m1_nurates.hpp
+//  \brief structs and functions for bns_nurates
+
+#include <limits>
+#include <string>
+
+#include "config.hpp"
+
+#if ENABLE_NURATES
+
+#include "athena.hpp"
+#include "bns_nurates_ns.hpp"
+#include "eos/primitive-solver/eos.hpp"
+#include "eos/primitive-solver/unit_system.hpp"
+#include "radiation_m1_params.hpp"
+
+namespace radiationm1 {
+
+struct NuratesParams {
+  Real opacity_corr_fac_max;  // maximum correction factor for optically thin regime
+  Real nb_min;
+  Real temp_min_mev;
+  Real max_recon_temp;  // [MeV] fall back to the equilibrium distribution when the
+                        // reconstructed spectral temperature exceeds this
+  bool use_recon_y_fallback;  // also fall back where y >= y3 (bns_nurates' fit edge)
+
+  bool use_abs_em;
+  bool use_pair;
+  bool use_brem;
+  bool use_iso;
+  bool use_inelastic_scatt;
+  bool use_WM_ab;
+  bool use_WM_sc;
+  bool use_dU;
+  bool use_dm_eff;
+  bool use_equilibrium_distribution;
+  bool use_NN_medium_corr;
+  bool neglect_blocking;
+  bool use_decay;
+  bool use_BRT_brem;
+  Real exclude_pair_brem_nb_max;  // remove pair/brem from nue/anue in eq-spectrum
+                                  // cells where the baryon number density is below
+                                  // this [nm^-3]; <= 0: never
+
+  int eq_warmup_cycles;  // force use_equilibrium_distribution for the first
+                         // this-many cycles on a fresh start, to avoid
+                         // reconstructing the distribution from the floored,
+                         // neutrinoless initial field
+
+  Real kirchhoff_tau_trap;  // use Kirchhoff only above this effective optical
+                            // depth; < 0: always Kirchhoff
+
+  // Partially-equilibrated (T*, Ye*) emissivity predictor, always run in Kirchhoff
+  // cells: the equilibrium Kirchhoff's law is handed. The trapped weak equilibrium is
+  // the w -> 1 endpoint of a one-parameter family in w = a/(1+a), a = dtau*kappa_abs,
+  // and the local blackbody is the w -> 0 one; the predictor evaluates the family at
+  // the w the cell actually has.
+  Real peq_w_floor;             // skip the cell below this weight (tier-0 gate)
+  Real peq_dlnT_tol;             // skip below this predicted |dlnT| (tier-1 gate)
+  Real peq_dYe_tol;              // skip below this predicted |dYe|  (tier-1 gate)
+
+  int quad_nx;  // no. of quadrature points for 1d integration (bns_nurates)
+  bns_nurates::MyQuadrature quadrature;
+  int quad_nx_2;
+  bns_nurates::MyQuadrature quadrature_2;
+};
+
+//! \fn void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn,
+//!                      Real &mu_n, Real &mu_p, Real &mu_e, Real &dU, Real &n_nue,
+//!                      Real &j_nue, Real &chi_nue,
+//!                      Real &n_anue, Real &j_anue, Real &chi_anue, Real &n_nux,
+//!                      Real &j_nux, Real &chi_nux, Real &n_anux, Real &j_anux,
+//!                      Real &chi_anux, Real &R_nue, Real &R_anue, Real &R_nux,
+//!                      Real &R_anux, Real &Q_nue, Real &Q_anue, Real &Q_nux,
+//!                      Real &Q_anux, Real &sigma_0_nue, Real &sigma_0_anue,
+//!                      Real &sigma_0_nux, Real &sigma_0_anux, Real &sigma_1_nue,
+//!                      Real &sigma_1_anue, Real &sigma_1_nux, Real &sigma_1_anux,
+//!                      Real &scat_0_nue, Real &scat_0_anue, Real &scat_0_nux,
+//!                      Real &scat_0_anux, Real &scat_1_nue, Real &scat_1_anue,
+//!                      Real &scat_1_nux, Real &scat_1_anux,
+//!                      const NuratesParams nurates_params,
+//!                      Primitive::UnitSystem const &code_units,
+//!                      Primitive::UnitSystem const &eos_units,
+//!                      Primitive::UnitSystem const &nurates_units)
+//
+//   \brief Computes the rates given the M1 quantities
+//
+//   \param[in] nb              baryon number density (fm^-3)
+//   \param[in] temp            temperature (MeV)
+//   \param[in] yp              proton fraction (dimensionless)
+//   \param[in] yn              neutron fraction (dimensionless)
+//   \param[in] mu_n            neutron chemical potential (MeV)
+//   \param[in] mu_p            proton chemical potential (MeV)
+//   \param[in] mu_e            electron chemical potential (MeV)
+//   \param[in] dU              effective nucleon potential difference (MeV)
+//   \param[in] n_nue           number density e- neutrinos (code units)
+//   \param[in] j_nue           energy density e- neutrinos (code units)
+//   \param[in] chi_nue         eddington factor e- neutrinos (dimensionless)
+//   \param[in] n_anue          number density e- anti-neutrinos (code units)
+//   \param[in] j_anue          energy density e- anti-neutrinos (code units)
+//   \param[in] chi_anue        eddington factor e- anti-neutrinos (dimensionless)
+//   \param[in] n_nux           number density mu/tau neutrinos (code units)
+//   \param[in] j_nux           energy density mu/tau neutrinos (code units)
+//   \param[in] chi_nux         eddington factor mu/tau neutrinos (dimensionless)
+//   \param[in] n_anux          number density mu/tau neutrinos (code units)
+//   \param[in] j_anux          energy density mu/tau neutrinos (code units)
+//   \param[in] chi_anux        eddington factor mu/tau neutrinos (dimensionless)
+//
+//   \param[out] R_nue          number emissivity e- neutrinos (code units)
+//   \param[out] R_anue         number emissivity e- anti-neutrinos (code units)
+//   \param[out] R_nux          number emissivity mu/tau neutrinos (code units)
+//   \param[out] R_anux         number emissivity mu/tau anti-neutrinos (code units)
+//   \param[out] Q_nue          energy emissivity e- neutrinos (code units)
+//   \param[out] Q_anue         energy emissivity e- anti-neutrinos (code units)
+//   \param[out] Q_nux          energy emissivity mu/tau neutrinos (code units)
+//   \param[out] Q_anux         energy emissivity mu/tau anti-neutrinos (code units)
+//   \param[out] sigma_0_nue    number inv mean-free path e- neutrinos (code units)
+//   \param[out] sigma_0_anue   number inv mean-free path e- anti-neutrinos (code units)
+//   \param[out] sigma_0_nux    number inv mean-free path mu/tau neutrinos (code units)
+//   \param[out] sigma_0_anux   num inv mean-free path mu/tau anti-neutrinos (code units)
+//   \param[out] sigma_1_nue    energy inv mean-free path e- neutrinos (code units)
+//   \param[out] sigma_1_anue   energy inv mean-free path e- anti-neutrinos (code units)
+//   \param[out] sigma_1_nux    energy inv mean-free path mu/tau neutrinos (code units)
+//   \param[out] sigma_1_anux   energy inv mean-free path mu/tau neutrinos (code units)
+//   \param[out] scat_0_nue     number scatt coeff e- neutrinos (code units)
+//   \param[out] scat_0_anue    number scatt coeff e- anti-neutrinos (code units)
+//   \param[out] scat_0_nux     number scatt coeff mu/tau neutrinos (code units)
+//   \param[out] scat_0_anux    number scatt coeff mu/tau anti-neutrinos (code units)
+//   \param[out] scat_1_nue     energy scatt coeff e- neutrinos (code units)
+//   \param[out] scat_1_anue    energy scatt coeff e- ant-neutrinos (code units)
+//   \param[out] scat_1_nux     energy scatt coeff mu/tau neutrinos (code units)
+//   \param[out] scat_1_anux    energy scatt coeff mu/tau anti-neutrinos (code units)
+//   \param[in]  nurates_params params for nurates
+//   \param[in]  code_units     code units
+//   \param[in]  eos_units      eos units
+//   \param[in]  nurates_units   bns_nurates units
+
+KOKKOS_INLINE_FUNCTION
+void ComputeNuratesOpacities(Real &nb, Real &temp, Real &yp, Real &yn, Real &mu_n,
+                             Real &mu_p, Real &mu_e, Real &dU,
+                             Real nudens_0[4],
+                             Real nudens_1[4],
+                             Real chi[4],
+                             Real eta_0[4],
+                             Real eta_1[4],
+                             Real abs_0[4],
+                             Real abs_1[4],
+                             Real scat_0[4],
+                             Real scat_1[4],
+                             Real eta_1_non_th[4],
+                             Real abs_1_non_th[4],
+                             bool &eq_fallback,
+                             NuratesParams const &nurates_params,
+                             Primitive::UnitSystem const &code_units,
+                             Primitive::UnitSystem const &eos_units,
+                             Primitive::UnitSystem const &nurates_units) {
+  Real const unit_length = code_units.LengthConversion(nurates_units);
+  Real const unit_time = code_units.TimeConversion(nurates_units);
+  // Note that the number densities are always in EOS units
+  Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
+  Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
+
+  Real const & n_nue = nudens_0[0];
+  Real const & n_anue = nudens_0[1];
+  Real const & n_nux = nudens_0[2];
+  Real const & n_anux = nudens_0[3];
+  Real const & j_nue = nudens_1[0];
+  Real const & j_anue = nudens_1[1];
+  Real const & j_nux = nudens_1[2];
+  Real const & j_anux = nudens_1[3];
+  Real & chi_nue = chi[0];
+  Real & chi_anue = chi[1];
+  Real & chi_nux = chi[2];
+  Real & chi_anux = chi[3];
+  Real & R_nue = eta_0[0];
+  Real & R_anue = eta_0[1];
+  Real & R_nux = eta_0[2];
+  Real & R_anux = eta_0[3];
+  Real & Q_nue = eta_1[0];
+  Real & Q_anue = eta_1[1];
+  Real & Q_nux = eta_1[2];
+  Real & Q_anux = eta_1[3];
+  Real & sigma_0_nue = abs_0[0];
+  Real & sigma_0_anue = abs_0[1];
+  Real & sigma_0_nux = abs_0[2];
+  Real & sigma_0_anux = abs_0[3];
+  Real & sigma_1_nue = abs_1[0];
+  Real & sigma_1_anue = abs_1[1];
+  Real & sigma_1_nux = abs_1[2];
+  Real & sigma_1_anux = abs_1[3];
+  Real & scat_0_nue = scat_0[0];
+  Real & scat_0_anue = scat_0[1];
+  Real & scat_0_nux = scat_0[2];
+  Real & scat_0_anux = scat_0[3];
+  Real & scat_1_nue = scat_1[0];
+  Real & scat_1_anue = scat_1[1];
+  Real & scat_1_nux = scat_1[2];
+  Real & scat_1_anux = scat_1[3];
+  // Non-thermal (inelastic scattering / NEPS) energy emissivity and absorption.
+  Real & Q_non_th_nue = eta_1_non_th[0];
+  Real & Q_non_th_anue = eta_1_non_th[1];
+  Real & Q_non_th_nux = eta_1_non_th[2];
+  Real & Q_non_th_anux = eta_1_non_th[3];
+  Real & sigma_1_non_th_nue = abs_1_non_th[0];
+  Real & sigma_1_non_th_anue = abs_1_non_th[1];
+  Real & sigma_1_non_th_nux = abs_1_non_th[2];
+  Real & sigma_1_non_th_anux = abs_1_non_th[3];
+
+  Q_non_th_nue = 0.;
+  Q_non_th_anue = 0.;
+  Q_non_th_nux = 0.;
+  Q_non_th_anux = 0.;
+  sigma_1_non_th_nue = 0.;
+  sigma_1_non_th_anue = 0.;
+  sigma_1_non_th_nux = 0.;
+  sigma_1_non_th_anux = 0.;
+
+  if ((nb < nurates_params.nb_min) || (temp < nurates_params.temp_min_mev)) {
+    R_nue = 0.;
+    R_anue = 0.;
+    R_nux = 0.;
+    R_anux = 0.;
+    Q_nue = 0.;
+    Q_anue = 0.;
+    Q_nux = 0.;
+    Q_anux = 0.;
+    sigma_0_nue = 0.;
+    sigma_0_anue = 0.;
+    sigma_0_nux = 0.;
+    sigma_0_anux = 0.;
+    sigma_1_nue = 0.;
+    sigma_1_anue = 0.;
+    sigma_1_nux = 0.;
+    sigma_1_anux = 0.;
+    scat_0_nue = 0.;
+    scat_0_anue = 0.;
+    scat_0_nux = 0.;
+    scat_0_anux = 0.;
+    scat_1_nue = 0.;
+    scat_1_anue = 0.;
+    scat_1_nux = 0.;
+    scat_1_anux = 0.;
+    return;
+  }
+
+  // populate opacity params
+  bns_nurates::GreyOpacityParams grey_op_params = {0};
+
+  // reaction flags
+  grey_op_params.opacity_flags.use_abs_em = nurates_params.use_abs_em;
+  grey_op_params.opacity_flags.use_brem = nurates_params.use_brem;
+  grey_op_params.opacity_flags.use_pair = nurates_params.use_pair;
+  grey_op_params.opacity_flags.use_iso = nurates_params.use_iso;
+  grey_op_params.opacity_flags.use_inelastic_scatt = nurates_params.use_inelastic_scatt;
+
+  // other flags
+  grey_op_params.opacity_pars.use_WM_ab = nurates_params.use_WM_ab;
+  grey_op_params.opacity_pars.use_WM_sc = nurates_params.use_WM_sc;
+  grey_op_params.opacity_pars.use_dU = nurates_params.use_dU;
+  grey_op_params.opacity_pars.use_dm_eff = nurates_params.use_dm_eff;
+  grey_op_params.opacity_pars.use_NN_medium_corr = nurates_params.use_NN_medium_corr;
+  grey_op_params.opacity_pars.neglect_blocking = nurates_params.neglect_blocking;
+  grey_op_params.opacity_pars.use_decay = nurates_params.use_decay;
+  grey_op_params.opacity_pars.brem_implementation =
+      nurates_params.use_BRT_brem ? bns_nurates::BREM_BRT06
+                                  : bns_nurates::BREM_HR98;
+
+  // populate EOS quantities
+  grey_op_params.eos_pars.nb = nb * unit_num_dens;  // [baryon/nm^3]
+  grey_op_params.eos_pars.temp = temp;              // [MeV]
+  grey_op_params.eos_pars.yp = yp;                  // [dimensionless]
+  grey_op_params.eos_pars.yn = yn;                  // [dimensionless]
+  grey_op_params.eos_pars.mu_e = mu_e;              // [MeV]
+  grey_op_params.eos_pars.mu_p = mu_p;              // [MeV]
+  grey_op_params.eos_pars.mu_n = mu_n;              // [MeV]
+
+  grey_op_params.eos_pars.dU = dU;      // [MeV]
+  // @TODO: add this quantity!
+  grey_op_params.eos_pars.dm_eff = 1.29333251;  // [MeV]
+
+  // reconstruct distribution function
+  if (!nurates_params.use_equilibrium_distribution) {
+    // populate M1 quantities
+    // Note: factor 1/2 comes because in M1 "nux" means "mu & tau" and in bns_nurates
+    // "nux" means "mu or tau"
+    grey_op_params.m1_pars.n[id_nue] = n_nue * unit_num_dens;          // [nm^-3]
+    grey_op_params.m1_pars.n[id_anue] = n_anue * unit_num_dens;        // [nm^-3]
+    grey_op_params.m1_pars.n[id_nux] = 0.5 * n_nux * unit_num_dens;    // [nm^-3]
+    grey_op_params.m1_pars.n[id_anux] = 0.5 * n_anux * unit_num_dens;  // [nm^-3]
+
+    grey_op_params.m1_pars.J[id_nue] = j_nue * unit_ene_dens;          // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_anue] = j_anue * unit_ene_dens;        // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_nux] = 0.5 * j_nux * unit_ene_dens;    // [MeV nm^-3]
+    grey_op_params.m1_pars.J[id_anux] = 0.5 * j_anux * unit_ene_dens;  // [MeV nm^-3]
+
+    grey_op_params.m1_pars.chi[id_nue] = chi_nue;
+    grey_op_params.m1_pars.chi[id_anue] = chi_anue;
+    grey_op_params.m1_pars.chi[id_nux] = chi_nux;
+    grey_op_params.m1_pars.chi[id_anux] = chi_anux;
+
+    grey_op_params.distr_pars =
+        CalculateDistrParamsFromM1(&grey_op_params.m1_pars, &grey_op_params.eos_pars);
+
+    // The reconstructed spectral temperature T_nu = J/n diverges when the
+    // number density collapses (neutral-current-only heavy neutrinos in the
+    // low-density disk). When it exceeds a physical cap, fall this cell back to
+    // the equilibrium distribution -- identical to the use_equilibrium_
+    // distribution=true branch below (matter-anchored spectrum + densities +
+    // chi=1/3). temp_t/temp_f are in [MeV], directly comparable to the cap.
+    bool used_fallback = false;
+    for (int s = 0; s < total_num_species; ++s) {
+      if (grey_op_params.distr_pars.temp_t[s] > nurates_params.max_recon_temp ||
+          grey_op_params.distr_pars.temp_f[s] > nurates_params.max_recon_temp) {
+        used_fallback = true;
+        break;
+      }
+      if (nurates_params.use_recon_y_fallback) {
+        // y3, the upper edge of bns_nurates' eta_t fit (CalculateThickParamsFromM1)
+        constexpr Real y3 = 0.7901234567745267;
+        const Real n_s = (grey_op_params.m1_pars.n[s] > 1e-100)
+                             ? grey_op_params.m1_pars.n[s] : 1e-100;
+        const Real j_s = (grey_op_params.m1_pars.J[s] > 1e-100)
+                             ? grey_op_params.m1_pars.J[s] : 1e-100;
+        const Real n_over_j = n_s / j_s;
+        const Real y_s =
+            n_s * n_over_j * n_over_j * n_over_j / bns_nurates::kBS_FourPi_hc3;
+        if (!(y_s < y3)) {
+          used_fallback = true;
+          break;
+        }
+      }
+    }
+    eq_fallback = used_fallback;
+    if (used_fallback) {
+      grey_op_params.distr_pars =
+          bns_nurates::NuEquilibriumParams(&grey_op_params.eos_pars);
+      bns_nurates::ComputeM1DensitiesEq(&grey_op_params.eos_pars,
+                                        &grey_op_params.distr_pars,
+                                        &grey_op_params.m1_pars);
+      grey_op_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;
+      grey_op_params.m1_pars.chi[id_anue] = 0.333333333333333333333333333;
+      grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
+      grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
+    }
+  } else {
+    // compute neutrino distribution parameters assuming equilibrium
+    grey_op_params.distr_pars =
+        bns_nurates::NuEquilibriumParams(&grey_op_params.eos_pars);
+
+    // compute gray neutrino number and energy densities assuming equilibrium
+    // N.B.: required for normalization factor of energy-averaged opacities
+    bns_nurates::ComputeM1DensitiesEq(&grey_op_params.eos_pars,
+                                      &grey_op_params.distr_pars,
+                                      &grey_op_params.m1_pars);
+
+    // populate eddington factor
+    grey_op_params.m1_pars.chi[id_nue] = 0.333333333333333333333333333;
+    grey_op_params.m1_pars.chi[id_anue] = 0.333333333333333333333333333;
+    grey_op_params.m1_pars.chi[id_nux] = 0.333333333333333333333333333;
+    grey_op_params.m1_pars.chi[id_anux] = 0.333333333333333333333333333;
+  }
+
+  // The factors of 2 below come from the fact that bns_nurates and this module weight
+  // the heavy neutrinos differently. This module weights them with a factor of 2
+  // (because "nux" means "mu AND tau"), bns_nurates with a factor of 1 (because
+  // "nux" means "mu OR tau"). Note: the factor of 2 is applied to the
+  // emissivities (sources, summed over the two heavy species) but NOT to the
+  // absorption/scattering inverse mean-free paths (per-neutrino, intensive).
+
+  // extract scattering number coefficient (zero in both formalisms)
+  scat_0_nue = 0;
+  scat_0_anue = 0;
+  scat_0_nux = 0;
+  scat_0_anux = 0;
+
+  // Pair and brem are removed from nue/anue below the density cut (see
+  // radiation_m1.cpp), in equilibrium-spectrum cells only (including recon
+  // fallbacks). Set here, after the spectrum is chosen; bns_nurates reads it only
+  // when computing the opacities below.
+  grey_op_params.opacity_pars.exclude_pair_brem_nue_anue =
+      (nurates_params.use_equilibrium_distribution || eq_fallback) &&
+      nurates_params.exclude_pair_brem_nb_max > 0.0 &&
+      nb * unit_num_dens < nurates_params.exclude_pair_brem_nb_max;
+
+  // compute opacities with inelastic scattering (NEPS) treated separately
+  // from thermal processes. In this formalism NEPS is NOT included in the
+  // number emissivity (eta_0) / absorption (kappa_0_a), and the energy
+  // coefficients are split into thermal (_th) and non-thermal (_non_th) parts.
+  bns_nurates::M1OpacitiesNonThermalSeparated opacities =
+      ComputeM1OpacitiesNonThermalSeparated(&nurates_params.quadrature,
+                                            &nurates_params.quadrature_2,
+                                            &grey_op_params);
+
+  // Number rates contain thermal processes only; NEPS affects energy only.
+  R_nue = opacities.eta_0[id_nue];
+  R_anue = opacities.eta_0[id_anue];
+  R_nux = opacities.eta_0[id_nux] * 2.;
+  R_anux = opacities.eta_0[id_anux] * 2.;
+  Q_nue = opacities.eta_th[id_nue] + opacities.eta_non_th[id_nue];
+  Q_anue = opacities.eta_th[id_anue] + opacities.eta_non_th[id_anue];
+  Q_nux = (opacities.eta_th[id_nux] + opacities.eta_non_th[id_nux]) * 2.;
+  Q_anux = (opacities.eta_th[id_anux] + opacities.eta_non_th[id_anux]) * 2.;
+
+  // non-thermal (NEPS) energy emissivity, same convention as Q above
+  Q_non_th_nue = opacities.eta_non_th[id_nue];
+  Q_non_th_anue = opacities.eta_non_th[id_anue];
+  Q_non_th_nux = opacities.eta_non_th[id_nux] * 2.;
+  Q_non_th_anux = opacities.eta_non_th[id_anux] * 2.;
+
+  // Number absorption also contains thermal processes only.
+  sigma_0_nue = opacities.kappa_0_a[id_nue];
+  sigma_0_anue = opacities.kappa_0_a[id_anue];
+  sigma_0_nux = opacities.kappa_0_a[id_nux];
+  sigma_0_anux = opacities.kappa_0_a[id_anux];
+  sigma_1_nue = opacities.kappa_a_th[id_nue] + opacities.kappa_a_non_th[id_nue];
+  sigma_1_anue = opacities.kappa_a_th[id_anue] + opacities.kappa_a_non_th[id_anue];
+  sigma_1_nux = opacities.kappa_a_th[id_nux] + opacities.kappa_a_non_th[id_nux];
+  sigma_1_anux = opacities.kappa_a_th[id_anux] + opacities.kappa_a_non_th[id_anux];
+
+  // non-thermal (NEPS) energy absorption, same convention as sigma_1 above
+  sigma_1_non_th_nue = opacities.kappa_a_non_th[id_nue];
+  sigma_1_non_th_anue = opacities.kappa_a_non_th[id_anue];
+  sigma_1_non_th_nux = opacities.kappa_a_non_th[id_nux];
+  sigma_1_non_th_anux = opacities.kappa_a_non_th[id_anux];
+
+
+  // extract scattering inverse mean-free path
+  scat_1_nue = opacities.kappa_s[id_nue];
+  scat_1_anue = opacities.kappa_s[id_anue];
+  scat_1_nux = opacities.kappa_s[id_nux];
+  scat_1_anux = opacities.kappa_s[id_anux];
+
+  // Check for NaNs/Infs
+  assert(Kokkos::isfinite(R_nue));
+  assert(Kokkos::isfinite(R_anue));
+  assert(Kokkos::isfinite(R_nux));
+  assert(Kokkos::isfinite(R_anux));
+  assert(Kokkos::isfinite(Q_nue));
+  assert(Kokkos::isfinite(Q_anue));
+  assert(Kokkos::isfinite(Q_nux));
+  assert(Kokkos::isfinite(Q_anux));
+  assert(Kokkos::isfinite(sigma_0_nue));
+  assert(Kokkos::isfinite(sigma_0_anue));
+  assert(Kokkos::isfinite(sigma_0_nux));
+  assert(Kokkos::isfinite(sigma_0_anux));
+  assert(Kokkos::isfinite(sigma_1_nue));
+  assert(Kokkos::isfinite(sigma_1_anue));
+  assert(Kokkos::isfinite(sigma_1_nux));
+  assert(Kokkos::isfinite(sigma_1_anux));
+  assert(Kokkos::isfinite(scat_0_nue));
+  assert(Kokkos::isfinite(scat_0_anue));
+  assert(Kokkos::isfinite(scat_0_nux));
+  assert(Kokkos::isfinite(scat_0_anux));
+  assert(Kokkos::isfinite(scat_1_nue));
+  assert(Kokkos::isfinite(scat_1_anue));
+  assert(Kokkos::isfinite(scat_1_nux));
+  assert(Kokkos::isfinite(scat_1_anux));
+
+  // convert to code units
+  Real const unit_num_dens_dot = unit_num_dens / unit_time;
+  Real const unit_ene_dens_dot = unit_ene_dens / unit_time;
+
+  R_nue = R_nue / unit_num_dens_dot;
+  R_anue = R_anue / unit_num_dens_dot;
+  R_nux = R_nux / unit_num_dens_dot;
+  R_anux = R_anux / unit_num_dens_dot;
+  Q_nue = Q_nue / unit_ene_dens_dot;
+  Q_anue = Q_anue / unit_ene_dens_dot;
+  Q_nux = Q_nux / unit_ene_dens_dot;
+  Q_anux = Q_anux / unit_ene_dens_dot;
+  sigma_0_nue = sigma_0_nue * unit_length;
+  sigma_0_anue = sigma_0_anue * unit_length;
+  sigma_0_nux = sigma_0_nux * unit_length;
+  sigma_0_anux = sigma_0_anux * unit_length;
+  sigma_1_nue = sigma_1_nue * unit_length;
+  sigma_1_anue = sigma_1_anue * unit_length;
+  sigma_1_nux = sigma_1_nux * unit_length;
+  sigma_1_anux = sigma_1_anux * unit_length;
+  scat_0_nue = scat_0_nue * unit_length;
+  scat_0_anue = scat_0_anue * unit_length;
+  scat_0_nux = scat_0_nux * unit_length;
+  scat_0_anux = scat_0_anux * unit_length;
+  scat_1_nue = scat_1_nue * unit_length;
+  scat_1_anue = scat_1_anue * unit_length;
+  scat_1_nux = scat_1_nux * unit_length;
+  scat_1_anux = scat_1_anux * unit_length;
+  // non-thermal parts use the same units as their (thermal+non-thermal) totals
+  Q_non_th_nue = Q_non_th_nue / unit_ene_dens_dot;
+  Q_non_th_anue = Q_non_th_anue / unit_ene_dens_dot;
+  Q_non_th_nux = Q_non_th_nux / unit_ene_dens_dot;
+  Q_non_th_anux = Q_non_th_anux / unit_ene_dens_dot;
+  sigma_1_non_th_nue = sigma_1_non_th_nue * unit_length;
+  sigma_1_non_th_anue = sigma_1_non_th_anue * unit_length;
+  sigma_1_non_th_nux = sigma_1_non_th_nux * unit_length;
+  sigma_1_non_th_anux = sigma_1_non_th_anux * unit_length;
+}
+
+//! \fn void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real nb, Real temp,
+//!                       Real &n_nue, Real &n_anue, Real &n_nux, Real &en_nue,
+//!                       Real &en_anue, Real &en_nux, NuratesParams nurates_params,
+//!                       Primitive::UnitSystem const &code_units,
+//!                       Primitive::UnitSystem const &eos_units,
+//!                       Primitive::UnitSystem const &nurates_units)
+//
+//   \brief Computes the neutrino number and energy density
+//
+//   \param[in]  mu_n            neutron chemical potential (MeV)
+//   \param[in]  mu_p            proton chemical potential (MeV)
+//   \param[in]  mu_e            electron chemical potential (Mev)
+//   \param[in]  temp            temperature (MeV)
+//   \param[out] n_nue           number density electron neutrinos (code units)
+//   \param[out] n_anue          number density electron anti-neutrinos (code units)
+//   \param[out] n_nux           number density mu/tau neutrinos (code units)
+//   \param[out] en_nue          energy density electron neutrinos (code units)
+//   \param[out] en_anue         energy density electron anti-neutrinos (code units)
+//   \param[out] en_nux          energy density mu/tau neutrinos (code units)
+//   \param[in]  nurates_params  struct for nurates parameters
+//   \param[in]  code_units      code units
+//   \param[in]  eos_units       eos units
+//   \param[in]  nurates_units   bns_nurates units
+KOKKOS_INLINE_FUNCTION
+void NeutrinoDens(Real mu_n, Real mu_p, Real mu_e, Real temp, Real &n_nue, Real &n_anue,
+                  Real &n_nux, Real &en_nue, Real &en_anue, Real &en_nux,
+                  NuratesParams const &nurates_params,
+                  Primitive::UnitSystem const &code_units,
+                  Primitive::UnitSystem const &eos_units,
+                  Primitive::UnitSystem const &nurates_units) {
+  Real eta_nue = (mu_p + mu_e - mu_n) / temp;
+  Real eta_anue = -eta_nue;
+  Real eta_nux = 0.0;
+
+  // A live screen rather than an assert, because -DNDEBUG is on in every default build
+  // (CMakeLists.txt forces CMAKE_BUILD_TYPE=Release when it is unset). FDI_p2/FDI_p3
+  // return a clean 0.0 for a non-finite argument, so without this a bad eta or
+  // temperature yields finite ZERO densities: Kirchhoff's law would emit exactly nothing
+  // for that species and the caller's finiteness screen would see nothing wrong.
+  // Propagating is what the callers are written to catch.
+  if (!Kokkos::isfinite(eta_nue) || !Kokkos::isfinite(temp)) {
+    const Real bad = std::numeric_limits<Real>::quiet_NaN();
+    n_nue = bad;
+    n_anue = bad;
+    n_nux = bad;
+    en_nue = bad;
+    en_anue = bad;
+    en_nux = bad;
+    return;
+  }
+
+  const Real hc_mevnm = 1.23984172e-10 * 1e7; // hc in units of MeV*nm
+  const Real hc_mevnm3 = hc_mevnm * hc_mevnm * hc_mevnm;
+  const Real temp3 = temp * temp * temp;
+  const Real temp4 = temp3 * temp;
+
+  n_nue = 4.0 * M_PI / hc_mevnm3 * temp3 *
+          bns_nurates::FDI_p2(eta_nue);                                // [nm^-3]
+  n_anue = 4.0 * M_PI / hc_mevnm3 * temp3 *
+           bns_nurates::FDI_p2(eta_anue);                              // [nm^-3]
+  n_nux = 16.0 * M_PI / hc_mevnm3 * temp3 *
+          bns_nurates::FDI_p2(eta_nux);                                // [nm^-3]
+
+  en_nue = 4.0 * M_PI / hc_mevnm3 * temp4 *
+           bns_nurates::FDI_p3(eta_nue);                               // [MeV nm^-3]
+  en_anue = 4.0 * M_PI / hc_mevnm3 * temp4 *
+            bns_nurates::FDI_p3(eta_anue);                             // [MeV nm^-3]
+  en_nux = 16.0 * M_PI / hc_mevnm3 * temp4 *
+           bns_nurates::FDI_p3(eta_nux);                               // [MeV nm^-3]
+
+  // Note that the number densities are always in EOS units
+  Real const unit_num_dens = eos_units.NumberDensityConversion(nurates_units);
+  Real const unit_ene_dens = code_units.EnergyDensityConversion(nurates_units);
+
+  n_nue = n_nue / unit_num_dens;
+  n_anue = n_anue / unit_num_dens;
+  n_nux = n_nux / unit_num_dens;
+
+  en_nue = en_nue / unit_ene_dens;
+  en_anue = en_anue / unit_ene_dens;
+  en_nux = en_nux / unit_ene_dens;
+}
+
+}  // namespace radiationm1
+#endif  // ENABLE_NURATES
+#endif  // RADIATION_M1_RADIATION_M1_NURATES_HPP_

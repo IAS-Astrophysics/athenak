@@ -27,7 +27,7 @@
 class Coordinates;
 class Driver;
 class CompactObjectTracker;
-class FastFlow;
+class HorizonFinder;
 class HorizonDump;
 class DriftControl;
 
@@ -152,6 +152,7 @@ class Z4c {
     // Constraint damping parameters
     Real damp_kappa1;
     Real damp_kappa2;
+    Real rz4;              // Kyutoku+14 radial Theta suppression radius; <=0 disables
     // Gauge conditions for the lapse
     Real lapse_oplog;
     Real lapse_harmonicf;
@@ -175,6 +176,9 @@ class Z4c {
     bool use_z4c;
     // Apply the Sommerfeld condition for user BCs.
     bool user_Sbc;
+    // Extend the Sommerfeld condition to chi, g~_ab (-> 1, delta_ab) and the lapse
+    // (alpha -> 1).  Default off.
+    bool sbc_metric;
     // Boundary extrapolation order
     int extrap_order;
     // Value of chi to specify the excision region for constraint evaluation
@@ -211,6 +215,7 @@ class Z4c {
   Real * psi_out;
   Real waveform_dt;
   Real last_output_time;
+  bool weyl_exchange_active = false;
   int nrad; // number of radii to perform wave extraction
 
   // CCE
@@ -267,7 +272,7 @@ class Z4c {
 
   Z4c_AMR *pamr;
   std::vector<std::unique_ptr<CompactObjectTracker>> ptracker;
-  std::vector<std::unique_ptr<FastFlow>> pfastflow;
+  std::unique_ptr<HorizonFinder> phfind;
   std::vector<std::unique_ptr<HorizonDump>> phorizon_dump;
   std::unique_ptr<DriftControl> pdrift_control;
 

@@ -11,6 +11,8 @@
 
 #include <cstdio>
 
+#include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,6 +21,7 @@
 #include "coordinates/adm.hpp"
 #include "geodesic-grid/gauss_legendre.hpp"
 #include "z4c_macros.hpp"
+#include "z4c/horizon_finder.hpp"
 
 // Forward declaration
 class Mesh;
@@ -37,7 +40,14 @@ enum SpatialMetricDrvsIndex {D1S11=0, D1S12=1, D1S13=2, D1S22=3, D1S23=4, D1S33=
 //! \class FastFlow
 //! \brief Apparent Horizon Finder class based on fast-flow algorithm
 class FastFlow {
+  friend class FastFlowFinder;
+
  public:
+  enum class StepRule {fixed, monotone, bb1, bb2};
+  enum class ExitCode {success = 0, not_finite = 1, hmean_diverged = 2,
+                       meanradius_neg = 3, mass_collapse = 4, max_iters = 5,
+                       stagnated = 6};
+
   // Constructor for FastFlow object
   FastFlow(MeshBlockPack *pmbp, ParameterInput *pin, int n);
 
@@ -47,28 +57,59 @@ class FastFlow {
   void Find(int iter, Real time); // main functionality for finding AH
   void Write(int iter, Real time); // function for result writing
   template <int NGHOST>
-  void MetricDerivatives(Real time); // compute the metric derivatives
-  template <int NGHOST>
   void MetricInterp();
   void ComputeSphericalHarmonics();
   void RadiiFromSphericalHarmonics();
-  void UpdateFlowSpectralComponents();
   void SurfaceIntegrals();
+  // Latch the excision region at the current center/rr_min; no-op if already latched.
+  void FreezeExcisionRegion(Real latch_time);
 
   // Some of the main parameters in the fast-flow algorithm
   bool ah_found; // Horizon found
   Real time_first_found; // Time, when horizon first found
+  bool ah_excise_ready; // latched: horizon has settled -> safe to begin excision
+  // Auto excision-trigger, set from <coord> (detects when the BH has stopped forming):
+  bool excise_auto;         // false (default) => excise as soon as horizon found
+  Real excise_settle_rrate; // max |dR/R|/dt for a find to count as "settled"
+  Real excise_settle_hrms;  // max surface hrms for a find to count as "settled"
+  int  excise_settle_count; // consecutive settled finds required to latch
+  Real settle_prev_time;    // previous find time (for radius-rate estimate)
+  Real settle_prev_radius;  // previous find mean coordinate radius
+  int  settle_streak;       // running count of consecutive settled finds
+  // Frozen excision region (coord/freeze_excision).  Owned here, not in Coordinates,
+  // which is rebuilt on every remesh while FastFlow survives.  Persisted into restarts.
+  bool ah_frozen;         // latched: excision region fixed at first activation
+  Real frozen_center[3];  // horizon center at the time of latching
+  Real frozen_radius;     // horizon minimum radius at the time of latching
   Real initial_radius; // Initial guess for the radius of the horizon
   Real rr_min; // Minimum radius
   Real expand_guess; // Expand the initial guess by this factor
   Real center[3]; // Center around which the horizon is searched
 
   // Fast-Flow parameters
-  Real hmean_tol; // for convergence
-  Real mass_tol; // for convergence
+  Real hmean_max; // divergence guard
+  Real mass_tol;
+  Real spec_tol;
+  Real hrms_tol;
+  Real hrms_rel_tol;
+  Real hrms_rel_skip; // hrms*M below which the hrms_rel_tol check is skipped
   int flow_iterations; // number of flow iterations
   Real flow_alpha_beta_const; // alpha & beta constants in the iteration formula
                               // Eqs. (43) & (44) of https://arxiv.org/pdf/gr-qc/9707050
+  StepRule step_rule;
+  Real alpha_min, alpha_max, alpha_grow, alpha_shrink;
+  bool stagnation_detect;
+  int stagnation_window;
+  Real stagnation_improvement_frac;
+  int stagnation_warmup;
+  int mode_ramp_lmin;
+  int mode_ramp_iters_per_step;
+  int mode_ramp_modes_per_step;
+  bool auto_retry;
+  int max_retries;
+  Real retry_shrink;
+  Real retry_grow;
+  bool propagate_iter_coefficients;
   bool verbose;
   bool output_ylm;
   bool output_grid;
@@ -93,11 +134,14 @@ class FastFlow {
   int lmpoints; // lmax * lmax
   int nh; // Counter variable
   bool wait_until_punc_are_close;
-  [[maybe_unused]] bool use_stored_metric_drvts;
   int nhorizon; // Number of horizons
   std::string flow_function;
   int flowflag = 0;
   int fastflow_iter = 0;
+  Real spec_resid_last = -1.0;
+  Real hmean_last = 0.0;
+  Real alpha_last = -1.0;
+  ExitCode last_exit = ExitCode::max_iters;
 
   // Pointer to Gauss-Legendre object
   GaussLegendreGrid *gl_grid;
@@ -110,6 +154,7 @@ class FastFlow {
   // Arrays for spectral coefficients
   DualArray1D<Real> a0, ac, as;
   Real last_a0; // last coefficient a_00
+  std::vector<Real> last_shape; // last found coefficients, layout [a0 | ac | as]
 
   // Arrays used for the fields on the sphere
   DvceArray1D<Real> rr, rr_dth, rr_dph;
@@ -137,15 +182,14 @@ class FastFlow {
     hhmean,
     hSx, hSy, hSz, hS,
     hmass,
+    hmass_irr,
+    hchi,
     hmeanradius,
     hminradius,
     hnvar
   };
-  static constexpr int kHnvar = 11;
+  static constexpr int kHnvar = 13;
   Real ah_prop[kHnvar]; // Array of horizon quantities
-
-  // 5D Device array for the metric derivatives
-  DvceArray5D<Real> dg;
 
   // Vectors to hold the DvceArray1D interpolated values of GaussLegendreGrid
   DvceArray2D<Real> g_interp, K_interp, dg_interp;
@@ -154,8 +198,14 @@ class FastFlow {
   DualArray1D<int> havepoint;
 
   // Functions used in the fast-flow algorithm
-  void FastFlowLoop();
-  void InitialGuess();
+  void FastFlowLoop(bool warm);
+  bool InitialGuess(bool cold, Real radius_factor);
+  void ProjectExpansion(Real *spec0, Real *specc, Real *specs);
+  void RecomputeABfac(Real alpha, Real *ABfac) const;
+  void PackCoefficients(std::vector<Real> &v) const;
+  void UnpackCoefficients(const std::vector<Real> &v);
+  void SaveShape();
+  void LoadShape();
 
   // Pointers to MeshBlockPack and ParameterInput
   MeshBlockPack *pmbp;
@@ -181,6 +231,29 @@ class FastFlow {
   Real PuncSumMasses();
   void PuncWeightedMassCentralPoint(Real *xc, Real *yc, Real *zc);
   bool PuncAreClose();
+};
+
+class FastFlowFinder : public HorizonFinder {
+ public:
+  FastFlowFinder(MeshBlockPack *pmbp, ParameterInput *pin);
+  void Find(Driver *pdrive, int stage) override;
+  int NumHorizons() const override { return static_cast<int>(pff.size()); }
+  bool Found(int h) const override { return pff[h]->ah_found; }
+  const Real *Center(int h) const override { return pff[h]->center; }
+  Real MinRadius(int h) const override { return pff[h]->rr_min; }
+  Real Mass(int h) const override { return pff[h]->ah_prop[FastFlow::hmass]; }
+  const Real *Spin(int h) const override { return &pff[h]->ah_prop[FastFlow::hSx]; }
+  bool ExciseReady(int h) const override { return pff[h]->ah_excise_ready; }
+  bool Frozen(int h) const override { return pff[h]->ah_frozen; }
+  void FreezeExcisionRegion(int h, Real time) override {
+    pff[h]->FreezeExcisionRegion(time);
+  }
+  const Real *FrozenCenter(int h) const override { return pff[h]->frozen_center; }
+  Real FrozenRadius(int h) const override { return pff[h]->frozen_radius; }
+
+ private:
+  MeshBlockPack *pmbp;
+  std::vector<std::unique_ptr<FastFlow>> pff;
 };
 
 #endif  // Z4C_FASTFLOW_HPP_

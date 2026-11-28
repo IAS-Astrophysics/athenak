@@ -123,6 +123,7 @@ void EOSHybrid<LogPolicy>::ReadTableFromFile(std::string fname) {
     m_initialized = true;
 
     m_min_h = std::numeric_limits<Real>::max();
+
     // New form of bound based on properties of NQT functions and their
     // departure from 'true' log behaviour
     for (size_t in = 0; in < m_nn-1; ++in) {

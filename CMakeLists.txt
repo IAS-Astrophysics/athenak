@@ -20,7 +20,7 @@ set(CMAKE_CXX17_STANDARD_COMPILE_OPTION "-std=c++17")
 # Kokkos recommends NOT using default compiler extensions
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# following policy required to enable target_link_libraries() below 
+# following policy required to enable target_link_libraries() below
 cmake_policy(SET CMP0079 NEW)
 
 # Use 'Release' as default build type. Use 'Debug' for testing.
@@ -34,6 +34,8 @@ endif()
 option(Athena_SINGLE_PRECISION "Compile for single precision" OFF)
 option(Athena_ENABLE_MPI "Compile with MPI parallelism enabled" OFF)
 option(Athena_ENABLE_OPENMP "Compile with OpenMP parallelism enabled" OFF)
+option(Athena_ENABLE_NURATES "Compile with bns_nurates enabled" OFF)
+option(Athena_ENABLE_RNS "Compile with RNS support enabled" OFF)
 set(PROBLEM built_in_pgens CACHE STRING "Name of problem generator function")
 
 #------ set macros exported to config.hpp ------------------------------------------------
@@ -64,7 +66,7 @@ endif()
 # set OpenMP macro (true/false)
 set(ENABLE_OPENMP OFF)
 if (Athena_ENABLE_OPENMP)
-  find_package(OpenMP COMPONENTS CXX)
+  find_package(OpenMP COMPONENTS C CXX)
   if (NOT OpenMP_FOUND)
     message(FATAL_ERROR "OpenMP package is required but could not be found.")
   endif()
@@ -76,6 +78,16 @@ if (ENABLE_OPENMP)
 else()
   set(OPENMP_PARALLEL_ENABLED 0)
 endif()
+
+# set nurates macro (true/false)
+if(Athena_ENABLE_NURATES)
+  set(ENABLE_NURATES 1)
+  set(M1_TOTAL_NUM_SPECIES 4)
+  message(STATUS "Compiling with bns-nurates")
+else()
+  set(ENABLE_NURATES 0)
+  set(M1_TOTAL_NUM_SPECIES 1)
+endif ()
 
 #set user problem generator flag
 if (NOT ${PROBLEM} STREQUAL "built_in_pgens")
@@ -99,6 +111,7 @@ endif()
 
 # If this is a debug build, set kokkos debug on
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  add_definitions(-DDEBUG_BUILD)
   message(STATUS "Enabling Kokkos debug mode")
   set(Kokkos_ENABLE_DEBUG ON CACHE BOOL "Most general debug settings")
   set(Kokkos_ENABLE_DEBUG_BOUNDS_CHECK ON CACHE BOOL
@@ -119,11 +132,20 @@ target_link_libraries(athena PUBLIC Threads::Threads)
 
 target_link_libraries(athena PUBLIC Kokkos::kokkos)
 if (ENABLE_MPI)
+  target_compile_definitions(athena PUBLIC OMPI_SKIP_MPICXX)
   target_link_libraries(athena PUBLIC MPI::MPI_CXX)
 endif()
 if (ENABLE_OPENMP)
-  target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX)
+  target_link_libraries(athena PUBLIC OpenMP::OpenMP_CXX OpenMP::OpenMP_C)
 endif()
+
+# define the C99 ‘restrict’ keyword away under C++
+target_compile_definitions(athena PRIVATE $<$<COMPILE_LANGUAGE:CXX>:restrict=__restrict__>)
+
+if (Kokkos_ARCH_NATIVE)
+	target_compile_options(athena PRIVATE $<$<COMPILE_LANGUAGE:C>:-march=native>)
+endif()
+
 if (${PROBLEM} MATCHES "z4c/two_punctures/*")
 	target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/twopuncturesc/include)
 	target_link_libraries(athena PUBLIC ${CMAKE_SOURCE_DIR}/twopuncturesc/lib/libTwoPunctures.a)
@@ -135,6 +157,11 @@ if (${PROBLEM} MATCHES "z4c/two_punctures/*")
 	set(TWO_PUNCTURES 1)
 else()
 	set(TWO_PUNCTURES 0)
+endif()
+
+# Optionally include bns_nurates headers
+if (ENABLE_NURATES)
+  target_include_directories(athena PRIVATE ${CMAKE_SOURCE_DIR}/bns_nurates/include)
 endif()
 
 if (${PROBLEM} MATCHES "z4c/spectre/*")

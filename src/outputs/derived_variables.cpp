@@ -24,10 +24,15 @@
 #include "geodesic-grid/geodesic_grid.hpp"
 #include "mesh/mesh.hpp"
 #include "eos/eos.hpp"
+#include "dyn_grmhd/dyn_grmhd.hpp"
+#include "eos/primitive-solver/unit_system.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
 #include "radiation/radiation_tetrad.hpp"
+#include "radiation_m1/radiation_m1.hpp"
+#include "radiation_m1/radiation_m1_helpers.hpp"
+#include "coordinates/adm.hpp"
 #include "particles/particles.hpp"
 #include "outputs.hpp"
 #include "utils/current.hpp"
@@ -1073,7 +1078,7 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
   }
 
   // radiation moments
-  if (name.compare(0, 3, "rad") == 0) {
+  if (name.compare(0, 3, "rad") == 0 && name.compare(0, 6, "rad_m1") != 0) {
     // Determine if coordinate and/or fluid frame moments required
     bool needs_coord_only = (name.compare("rad_coord") == 0);
     bool needs_fluid_only = (name.compare("rad_fluid") == 0);
@@ -1253,6 +1258,281 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
     });
   }
 
+  // M1 fluid-frame neutrino quanities: fluid frame energy density
+  // J = u_a u_b T^{ab}, fluid-frame flux H^i = -proj^i_a u_b T^{ab}, and
+  // comoving number density n = N/Gamma.
+  //
+  // The evolved N is carried in EOS number density units (fm^-3 for a nuclear
+  // EOS) whereas E and F_i are in code units, so J and H are rescaled into EOS
+  // energy density units (MeV/fm^3) on output. This keeps every dimensional
+  // quantity here in the same (nuclear) system and makes <e> = J/n come out in
+  // MeV rather than in a mixed code/nuclear hybrid.
+  if (name.compare("rad_m1_J") == 0 ||
+      name.compare("rad_m1_H") == 0 ||
+      name.compare("rad_m1_n") == 0 ||
+      name.compare("rad_m1_fnu") == 0 ||
+      name.compare("rad_m1_e") == 0 ||
+      name.compare("rad_m1_absF") == 0 ||
+      name.compare("rad_m1_fluid_frame") == 0) {
+    using namespace radiationm1;  // NOLINT(build/namespaces)
+    auto *pradm1        = pm->pmb_pack->pradm1;
+    const int nspecies_ = pradm1->nspecies;
+    const int nvars_    = pradm1->nvars;
+
+    // Select mode based on the variable for downstream computation
+    int mode = (name.compare("rad_m1_H") == 0)    ? 1
+             : (name.compare("rad_m1_n") == 0)    ? 2
+             : (name.compare("rad_m1_fnu") == 0)  ? 3
+             : (name.compare("rad_m1_e") == 0)    ? 4
+             : (name.compare("rad_m1_absF") == 0) ? 5
+             : (name.compare("rad_m1_fluid_frame") == 0) ? 6 : 0;
+
+    int ncomp = (mode == 1 || mode == 6) ? 3*nspecies_
+              : (mode == 3) ? 4*nspecies_ : nspecies_;
+    Kokkos::realloc(derived_var, nmb_alloc, ncomp, n3, n2, n1);
+    auto dv = derived_var;
+
+    auto u0_  = pradm1->u0;
+    auto chi_ = pradm1->chi;
+    auto &adm = pm->pmb_pack->padm->adm;
+    RadiationM1Params params_ = pradm1->params;
+
+    // Code energy density -> EOS energy density (MeV/fm^3 for a nuclear EOS).
+    Real ene_conv = 1.0;
+    if (pm->pmb_pack->pdyngr != nullptr) {
+      Primitive::UnitSystem code_units = pm->pmb_pack->pdyngr->GetCodeUnitSystem();
+      Primitive::UnitSystem eos_units  = pm->pmb_pack->pdyngr->GetEOSUnitSystem();
+      ene_conv = code_units.EnergyDensityConversion(eos_units);
+    }
+
+    // M1 requires dyn_grmhd primitives (fall back to hydro/mhd)
+    DvceArray5D<Real> w0_;
+    if (pm->pmb_pack->pmhd != nullptr) {
+      w0_ = pm->pmb_pack->pmhd->w0;
+    } else if (pm->pmb_pack->phydro != nullptr) {
+      w0_ = pm->pmb_pack->phydro->w0;
+    } else {
+      w0_ = pradm1->w0;
+    }
+
+    par_for("rad_m1_fluidframe", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      // Load 4-metric, its inverse, shift and normal vector
+      Real garr_dd[16];
+      Real garr_uu[16];
+      AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_uu{};
+      AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> g_dd{};
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> beta_u{};
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> n_d{};
+      const Real alp = adm.alpha(m,k,j,i);
+      pack_n_d(alp, n_d);
+
+      adm::SpacetimeMetric(
+        alp, adm.beta_u(m,0,k,j,i), adm.beta_u(m,1,k,j,i),
+        adm.beta_u(m,2,k,j,i), adm.g_dd(m,0,0,k,j,i),
+        adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+        adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i),
+        adm.g_dd(m,2,2,k,j,i), garr_dd);
+      adm::SpacetimeUpperMetric(
+        alp, adm.beta_u(m,0,k,j,i), adm.beta_u(m,1,k,j,i),
+        adm.beta_u(m,2,k,j,i), adm.g_dd(m,0,0,k,j,i),
+        adm.g_dd(m,0,1,k,j,i), adm.g_dd(m,0,2,k,j,i),
+        adm.g_dd(m,1,1,k,j,i), adm.g_dd(m,1,2,k,j,i),
+        adm.g_dd(m,2,2,k,j,i), garr_uu);
+
+      for (int a = 0; a < 4; ++a) {
+        for (int b = 0; b < 4; ++b) {
+          g_dd(a,b) = garr_dd[a + b * 4];
+          g_uu(a,b) = garr_uu[a + b * 4];
+        }
+      }
+      pack_beta_u(adm.beta_u(m,0,k,j,i), adm.beta_u(m,1,k,j,i),
+                  adm.beta_u(m,2,k,j,i), beta_u);
+
+      // Lorentz factor, 4-velocity, 3-velocity, fluid projector
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_u{};
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> u_d{};
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_u{};
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> v_d{};
+      AthenaPointTensor<Real, TensorSymm::NONE, 4, 2> proj_ud{};
+      const Real w_lorentz = get_w_lorentz(w0_(m,IVX,k,j,i), w0_(m,IVY,k,j,i),
+                                           w0_(m,IVZ,k,j,i), g_dd);
+      pack_u_u(w_lorentz / alp,
+               w0_(m,IVX,k,j,i) - w_lorentz * adm.beta_u(m,0,k,j,i) / alp,
+               w0_(m,IVY,k,j,i) - w_lorentz * adm.beta_u(m,1,k,j,i) / alp,
+               w0_(m,IVZ,k,j,i) - w_lorentz * adm.beta_u(m,2,k,j,i) / alp, u_u); // u^i
+      pack_v_u(u_u(0), u_u(1), u_u(2), u_u(3), alp, adm.beta_u(m,0,k,j,i),
+               adm.beta_u(m,1,k,j,i), adm.beta_u(m,2,k,j,i), v_u); // v^i
+      tensor_contract(g_dd, u_u, u_d);
+      tensor_contract(g_dd, v_u, v_d);
+      calc_proj(u_d, u_u, proj_ud); // proj^i_a
+
+      for (int nuidx = 0; nuidx < nspecies_; ++nuidx) {
+        const Real E = u0_(m, CombinedIdx(nuidx, M1_E_IDX, nvars_), k, j, i);
+        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> F_d{};
+        pack_F_d(beta_u(1), beta_u(2), beta_u(3),
+                 u0_(m, CombinedIdx(nuidx, M1_FX_IDX, nvars_), k, j, i),
+                 u0_(m, CombinedIdx(nuidx, M1_FY_IDX, nvars_), k, j, i),
+                 u0_(m, CombinedIdx(nuidx, M1_FZ_IDX, nvars_), k, j, i), F_d);
+
+        // Radiation stress tensor
+        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> P_dd{};
+        apply_closure(g_dd, g_uu, n_d, w_lorentz, u_u, v_d, proj_ud, E, F_d,
+                      chi_(m,nuidx,k,j,i), P_dd, params_);
+        AthenaPointTensor<Real, TensorSymm::SYM2, 4, 2> T_dd{};
+        assemble_rT(n_d, E, F_d, P_dd, T_dd);
+
+        // Fluid-frame projections
+        Real J = calc_J_from_rT(T_dd, u_u);
+        AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_d{};
+        calc_H_from_rT(T_dd, u_u, proj_ud, H_d);
+        apply_floor(g_uu, J, H_d, params_);
+
+        if (mode == 0) {
+          dv(m,nuidx,k,j,i) = J * ene_conv;
+        } else if (mode == 1) {
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u{};
+          tensor_contract(g_uu, H_d, H_u);
+          dv(m,3*nuidx+0,k,j,i) = H_u(1) * ene_conv;
+          dv(m,3*nuidx+1,k,j,i) = H_u(2) * ene_conv;
+          dv(m,3*nuidx+2,k,j,i) = H_u(3) * ene_conv;
+        } else if (mode == 3) {
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> H_u{};
+          AthenaPointTensor<Real, TensorSymm::NONE, 4, 1> fnu_u{};
+          tensor_contract(g_uu, H_d, H_u);
+          assemble_fnu(u_u, J, H_u, fnu_u, params_);
+          dv(m,4*nuidx+0,k,j,i) = fnu_u(0);
+          dv(m,4*nuidx+1,k,j,i) = fnu_u(1);
+          dv(m,4*nuidx+2,k,j,i) = fnu_u(2);
+          dv(m,4*nuidx+3,k,j,i) = fnu_u(3);
+        } else if (mode == 4) {
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+          bool j_ok = Kokkos::isfinite(J) && J > params_.rad_E_floor;
+          Real e_val = (j_ok && nnu > params_.rad_N_floor) ? J * ene_conv / nnu : 0.0;
+          dv(m,nuidx,k,j,i) = Kokkos::isfinite(e_val) ? e_val : 0.0;
+        } else if (mode == 5) {
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+
+          Real gam = adm::SpatialDet(
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i));
+          Real volform = Kokkos::sqrt(gam);
+
+          Real flux_fac = flux_factor(g_uu, J, H_d, params_.rad_E_floor);
+          dv(m,nuidx,k,j,i) = nnu * Kokkos::sqrt(flux_fac) / volform;
+        } else if (mode == 6) {
+          // Undensitized, as handed to the opacity calculation: J/sqrt(gamma),
+          // n = N/(Gamma sqrt(gamma)), and chi
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+          const Real volform = Kokkos::sqrt(adm::SpatialDet(
+              adm.g_dd(m, 0, 0, k, j, i), adm.g_dd(m, 0, 1, k, j, i),
+              adm.g_dd(m, 0, 2, k, j, i), adm.g_dd(m, 1, 1, k, j, i),
+              adm.g_dd(m, 1, 2, k, j, i), adm.g_dd(m, 2, 2, k, j, i)));
+          dv(m, nuidx, k, j, i) = J * ene_conv / volform;
+          dv(m, nspecies_ + nuidx, k, j, i) = nnu / volform;
+          dv(m, 2*nspecies_ + nuidx, k, j, i) = chi_(m, nuidx, k, j, i);
+        } else {
+          Real nnu = 0.0;
+          if (nvars_ > M1_N_IDX) {
+            const Real N = u0_(m, CombinedIdx(nuidx, M1_N_IDX, nvars_), k, j, i);
+            const Real Gamma = compute_Gamma(w_lorentz, v_u, J, E, F_d, params_);
+            nnu = N / Gamma;
+          }
+          dv(m,nuidx,k,j,i) = nnu;
+        }
+      }
+    });
+  }
+
+  // lower time-component of the fluid four velocity, u_t
+  if (name.compare("u_t") == 0) {
+    Kokkos::realloc(derived_var, nmb_alloc, 1, n3, n2, n1);
+    auto dv = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+    DvceArray5D<Real> w0_;
+    if (pm->pmb_pack->pmhd != nullptr) {
+      w0_ = pm->pmb_pack->pmhd->w0;
+    } else {
+      w0_ = pm->pmb_pack->phydro->w0;
+    }
+
+    par_for("u_t", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      const Real alpha = adm.alpha(m,k,j,i);
+      const Real betax = adm.beta_u(m,0,k,j,i);
+      const Real betay = adm.beta_u(m,1,k,j,i);
+      const Real betaz = adm.beta_u(m,2,k,j,i);
+      const Real gxx = adm.g_dd(m,0,0,k,j,i);
+      const Real gxy = adm.g_dd(m,0,1,k,j,i);
+      const Real gxz = adm.g_dd(m,0,2,k,j,i);
+      const Real gyy = adm.g_dd(m,1,1,k,j,i);
+      const Real gyz = adm.g_dd(m,1,2,k,j,i);
+      const Real gzz = adm.g_dd(m,2,2,k,j,i);
+      const Real velx = w0_(m,IVX,k,j,i);
+      const Real vely = w0_(m,IVY,k,j,i);
+      const Real velz = w0_(m,IVZ,k,j,i);
+      const Real vsq = gxx*velx*velx + gyy*vely*vely + gzz*velz*velz
+                     + 2.0*(gxy*velx*vely + gxz*velx*velz + gyz*vely*velz);
+      const Real W = Kokkos::sqrt(1.0 + vsq);
+      dv(m,0,k,j,i) = -alpha*W
+          + gxx*betax*velx + gyy*betay*vely + gzz*betaz*velz
+          + gxy*(betax*vely + betay*velx)
+          + gxz*(betax*velz + betaz*velx)
+          + gyz*(betay*velz + betaz*vely);
+    });
+  }
+
+  // WinNet velocity V^i = \alpha v^i - \beta^i
+  if (name.compare("win_Vi") == 0) {
+    Kokkos::realloc(derived_var, nmb_alloc, 3, n3, n2, n1);
+    auto dv = derived_var;
+    auto &adm = pm->pmb_pack->padm->adm;
+    DvceArray5D<Real> w0_;
+    if (pm->pmb_pack->pmhd != nullptr) {
+      w0_ = pm->pmb_pack->pmhd->w0;
+    } else {
+      w0_ = pm->pmb_pack->phydro->w0;
+    }
+    par_for("win_Vi", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      const Real alpha = adm.alpha(m,k,j,i);
+      const Real betax = adm.beta_u(m,0,k,j,i);
+      const Real betay = adm.beta_u(m,1,k,j,i);
+      const Real betaz = adm.beta_u(m,2,k,j,i);
+      const Real gxx = adm.g_dd(m,0,0,k,j,i);
+      const Real gxy = adm.g_dd(m,0,1,k,j,i);
+      const Real gxz = adm.g_dd(m,0,2,k,j,i);
+      const Real gyy = adm.g_dd(m,1,1,k,j,i);
+      const Real gyz = adm.g_dd(m,1,2,k,j,i);
+      const Real gzz = adm.g_dd(m,2,2,k,j,i);
+      const Real velx = w0_(m,IVX,k,j,i);
+      const Real vely = w0_(m,IVY,k,j,i);
+      const Real velz = w0_(m,IVZ,k,j,i);
+      const Real vsq = gxx*velx*velx + gyy*vely*vely + gzz*velz*velz
+                     + 2.0*(gxy*velx*vely + gxz*velx*velz + gyz*vely*velz);
+      const Real W = Kokkos::sqrt(1.0 + vsq);
+      dv(m,0,k,j,i) = alpha * (velx / W) - betax;
+      dv(m,1,k,j,i) = alpha * (vely / W) - betay;
+      dv(m,2,k,j,i) = alpha * (velz / W) - betaz;
+    });
+  }
+
   // Particle density binned to mesh.
   if (name.compare("prtcl_d") == 0) {
     Kokkos::realloc(derived_var, nmb_alloc, 1, n3, n2, n1);
@@ -1278,6 +1558,28 @@ void BaseTypeOutput::ComputeDerivedVariable(std::string name, Mesh *pm) {
       }
       pdens(m,0,kp,jp,ip) += 1.0;
     });
+  }
+
+  // spherical coordinate radius r = sqrt(x^2 + y^2 + z^2) from cell centers
+  if (name.compare("r_sph") == 0) {
+    if (derived_var.extent(4) <= 1)
+      Kokkos::realloc(derived_var, nmb_alloc, n_dv, n3, n2, n1);
+    auto dv = derived_var;
+    int nx1_ = indcs.nx1;
+    int nx2_ = indcs.nx2;
+    int nx3_ = indcs.nx3;
+    int idv_local = i_dv;
+    par_for("r_sph", DevExeSpace(), 0, (nmb-1), ks, ke, js, je, is, ie,
+    KOKKOS_LAMBDA(int m, int k, int j, int i) {
+      Real x1v = CellCenterX(i-is, nx1_, size.d_view(m).x1min,
+                                         size.d_view(m).x1max);
+      Real x2v = CellCenterX(j-js, nx2_, size.d_view(m).x2min,
+                                         size.d_view(m).x2max);
+      Real x3v = CellCenterX(k-ks, nx3_, size.d_view(m).x3min,
+                                         size.d_view(m).x3max);
+      dv(m,idv_local,k,j,i) = sqrt(x1v*x1v + x2v*x2v + x3v*x3v);
+    });
+    i_dv += 1; // increment derived variable index
   }
   i_dv = i_dv % n_dv; // reset derived variable index
 }

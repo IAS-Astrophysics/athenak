@@ -14,6 +14,7 @@
 #include <string> // string
 
 #include "athena.hpp"
+#include "driver.hpp"
 #include "globals.hpp"
 #include "parameter_input.hpp"
 #include "mesh/mesh.hpp"
@@ -21,13 +22,13 @@
 #include "outputs/outputs.hpp"
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
-#include "z4c/z4c.hpp"
 #include "dyn_grmhd/dyn_grmhd.hpp"
 #include "ion-neutral/ion-neutral.hpp"
 #include "radiation/radiation.hpp"
-#include "driver.hpp"
 #include "gravity/gravity.hpp"
 #include "utils/utils.hpp"
+#include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 
 #if MPI_PARALLEL_ENABLED
 #include <mpi.h>
@@ -468,6 +469,7 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
   mhd::MHD *pmhd = pmesh->pmb_pack->pmhd;
   radiation::Radiation *prad = pmesh->pmb_pack->prad;
   z4c::Z4c *pz4c = pmesh->pmb_pack->pz4c;
+  radiationm1::RadiationM1 *pradm1 = pmesh->pmb_pack->pradm1;
   if (time_evolution != TimeEvolution::tstatic) {
     if (phydro != nullptr) {
       (void) pmesh->pmb_pack->phydro->NewTimeStep(this, nexp_stages);
@@ -481,7 +483,9 @@ void Driver::Initialize(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool re
     if (pz4c != nullptr) {
       (void) pmesh->pmb_pack->pz4c->NewTimeStep(this, nexp_stages);
     }
-
+    if (pradm1 != nullptr) {
+      (void) pmesh->pmb_pack->pradm1->NewTimeStep(this, nexp_stages);
+    }
     pmesh->NewTimeStep(tlim);
     RefreshSTSCycleState(pmesh);
   }
@@ -567,11 +571,35 @@ void Driver::Execute(Mesh *pmesh, ParameterInput *pin, Outputs *pout, bool wdfla
         if (pmesh->pmb_pack->pgrav != nullptr)
             {pmesh->pmb_pack->pgrav->pmgd->Solve(this, stage);}
         ExecuteTaskList(pmesh, "stagen", stage);
+        // std::cout << "stagen " << std::endl;
         ExecuteTaskList(pmesh, "after_stagen", stage);
+        // std::cout << "after_stagen " << std::endl;
       }
 
       // Work after time integrator indicated by "1" in stage
       ExecuteTaskList(pmesh, "after_timeintegrator", 1);
+#if MPI_PARALLEL_ENABLED
+      (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
+      // operator-split update (used by M1 radiation)
+      if (opsplit) {
+        for (int stage=1; stage<=(nopsplit_stages); ++stage) {
+          ExecuteTaskList(pmesh, "opsplit_before_stagen", stage);
+          // std::cout << "opsplit_before_stagen" << std::endl;
+          ExecuteTaskList(pmesh, "opsplit_stagen", stage);
+          // std::cout << "opsplit_stagen" << std::endl;
+          ExecuteTaskList(pmesh, "opsplit_after_stagen", stage);
+          // std::cout << "opsplit_after_stagen" << std::endl;
+        }
+#if MPI_PARALLEL_ENABLED
+        (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
+        ExecuteTaskList(pmesh, "opsplit_after_timeintegrator", 1);
+        // std::cout << "opsplit_after_timeintegrator" << std::endl;
+#if MPI_PARALLEL_ENABLED
+        (void)MPI_Barrier(MPI_COMM_WORLD);
+#endif
+      }
 
       // Diffusion coefficients may depend on the post-RK state. Refresh the global
       // stability bound before choosing the second Strang-split half-sweep.
@@ -759,6 +787,9 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) pz4c->Z4cBoundaryRHS(this, 0);
     (void) pz4c->Prolongate(this, 0); // coarse grid BCs and prolongation
     (void) pz4c->ApplyPhysicalBCs(this, 0); // fine grid BCs
+    if (pm->pmb_pack->pcoord->coord_data.bh_excise) {
+      pm->pmb_pack->pcoord->UpdateExcisionMasks();
+    }
   }
 
   // Initialize HYDRO: ghost zones and primitive variables (everywhere)
@@ -825,6 +856,23 @@ void Driver::InitBoundaryValuesAndPrimitives(Mesh *pm) {
     (void) prad->RecvI(this, 0);
     (void) prad->Prolongate(this, 0); // coarse grid BCs and prolongation
     (void) prad->ApplyPhysicalBCs(this, 0); // fine grid BCs
+  }
+
+  // Initialize radiation M1: ghost zones and intensity (everywhere)
+  // DOES NOT include communications for shearing box boundaries
+  radiationm1::RadiationM1 *pradm1 = pm->pmb_pack->pradm1;
+  if (pradm1 != nullptr) {
+    (void) pradm1->RestrictU(this, 0);
+    (void) pradm1->InitRecv(this, -1);  // stage < 0 suppresses InitFluxRecv
+    (void) pradm1->SendU(this, 0);
+    (void) pradm1->ClearSend(this, -1); // stage = -1 only clear SendU
+    (void) pradm1->ClearRecv(this, -1); // stage = -1 only clear RecvU
+    (void) pradm1->RecvU(this, 0);
+    (void) pradm1->ClearSend(this, -4); // stage = -4 only clear SendU_Shr
+    (void) pradm1->ClearRecv(this, -4); // stage = -4 only clear RecvU_Shr
+    (void) pradm1->Prolongate(this, 0); // coarse grid BCs and prolongation
+    (void) pradm1->ApplyPhysicalBCs(this, 0); // fine grid BCs
+    (void) pradm1->SetMask(this, 0);
   }
 
   return;

@@ -23,6 +23,7 @@
 #include "bvals/bvals.hpp"
 #include "mhd/mhd.hpp"
 #include "z4c/z4c.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
 #include "coordinates/coordinates.hpp"
 #include "z4c/tmunu.hpp"
@@ -169,9 +170,11 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   using namespace mhd;  // NOLINT(build/namespaces)
   using namespace z4c;  // NOLINT(build/namespaces)
   using namespace numrel; // NOLINT(build/namespaces))
+  using namespace radiationm1; // NOLINT(build/namespaces)
   Z4c *pz4c = pmy_pack->pz4c;
   adm::ADM *padm = pmy_pack->padm;
   MHD *pmhd = pmy_pack->pmhd;
+  RadiationM1 *pradm1 = pmy_pack->pradm1;
   NumericalRelativity *pnr = pmy_pack->pnr;
 
   // Start task list
@@ -198,6 +201,12 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   if (pz4c != nullptr) {
     pnr->QueueTask(&DynGRMHD::SetTmunu, this, MHD_SetTmunu, "MHD_SetTmunu",
                    Task_Run, {MHD_CopyU});
+    if (pradm1 != nullptr) {
+      pnr->QueueTask(&RadiationM1::FloorAndCalcClosure, pradm1, M1_Closure, "M1_Closure",
+                     Task_Run);
+      pnr->QueueTask(&RadiationM1::SetTmunu, pradm1, M1_SetTmunu, "M1_SetTmunu",
+                     Task_Run, {MHD_SetTmunu});
+    }
   }
   pnr->QueueTask(&MHD::SendFlux, pmhd, MHD_SendFlux, "MHD_SendFlux",
                  Task_Run, {MHD_Flux});
@@ -244,6 +253,28 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::QueueDynGRMHDTasks() {
   // End task list
   pnr->QueueTask(&MHD::ClearSend, pmhd, MHD_ClearS, "MHD_ClearS", Task_End);
   pnr->QueueTask(&MHD::ClearRecv, pmhd, MHD_ClearR, "MHD_ClearR", Task_End);
+
+  // After time integrator task list
+  if (pmy_pack->pradm1 != nullptr) {
+    pnr->QueueTask(&MHD::InitRecvU, pmhd, MHD_URecv, "MHD_URecv",
+                   Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::RestrictU, pmhd, MHD_RestU, "MHD_RestU",
+                   Task_AfterTimeIntegrator);
+    pnr->QueueTask(&MHD::SendU, pmhd, MHD_SendU, "MHD_SendU",
+                   Task_AfterTimeIntegrator, {MHD_RestU});
+    pnr->QueueTask(&MHD::RecvU, pmhd, MHD_RecvU, "MHD_RecvU",
+                   Task_AfterTimeIntegrator, {MHD_SendU});
+    pnr->QueueTask(&MHD::Prolongate, pmhd, MHD_Prolong, "MHD_Prolong",
+                   Task_AfterTimeIntegrator, {MHD_RecvU});
+    pnr->QueueTask(&MHD::ApplyPhysicalBCs, pmhd, MHD_BCS, "MHD_BCS",
+                   Task_AfterTimeIntegrator, {MHD_Prolong});
+    pnr->QueueTask(&DynGRMHDPS<EOSPolicy, ErrorPolicy>::ConToPrim, this, MHD_C2P,
+                   "MHD_C2P", Task_AfterTimeIntegrator, {MHD_BCS});
+    pnr->QueueTask(&MHD::ClearSendU, pmhd, MHD_ClearSU, "MHD_ClearSU",
+                   Task_AfterTimeIntegrator, {MHD_C2P});
+    pnr->QueueTask(&MHD::ClearRecvU, pmhd, MHD_ClearRU, "MHD_ClearRU",
+                   Task_AfterTimeIntegrator, {MHD_C2P});
+  }
 }
 
 //----------------------------------------------------------------------------------------
@@ -513,6 +544,7 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
 
   auto &adm = pmy_pack->padm->adm;
   auto &eos_ = eos.ps.GetEOS();
+  auto &temperature_ = temperature;
   //auto &tmunu = pmy_pack->ptmunu->tmunu;
 
   // fetch flag for smooth excision and
@@ -589,7 +621,9 @@ void DynGRMHDPS<EOSPolicy, ErrorPolicy>::AddCoordTermsEOS(const DvceArray5D<Real
       prim_pt[PYF + s] = prim(m, nhyd + s, k, j, i);
     }
     prim_pt[PPR] = prim(m, IPR, k, j, i);
-    prim_pt[PTM] = eos_.GetTemperatureFromP(prim_pt[PRH], prim_pt[PPR], &prim_pt[PYF]);
+    // Full C2P publishes this temperature with the cell-centered primitive
+    // state.
+    prim_pt[PTM] = temperature_(m, 0, k, j, i);
 
     // Get the conserved variables. Note that we don't use PrimitiveSolver here --
     // that's because we would need to recalculate quantities used in E and S_d in order

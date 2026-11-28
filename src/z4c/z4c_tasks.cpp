@@ -19,8 +19,8 @@
 #include "mesh/mesh.hpp"
 #include "bvals/bvals.hpp"
 #include "z4c/compact_object_tracker.hpp"
+#include "z4c/horizon_finder.hpp"
 #include "z4c/driftcontrol/driftcontrol.hpp"
-#include "z4c/fastflow.hpp"
 #include "z4c/horizon_dump.hpp"
 #include "z4c/z4c.hpp"
 #include "tasklist/numerical_relativity.hpp"
@@ -32,7 +32,7 @@ namespace z4c {
 //! \fn  void Z4c::QueueZ4cTasks
 //! \brief queue Z4c tasks into NumericalRelativity
 void Z4c::QueueZ4cTasks() {
-  printf("AssembleZ4cTasks\n");
+  Kokkos::printf("AssembleZ4cTasks\n");
   using namespace mhd;     // NOLINT(build/namespaces)
   using namespace numrel;  // NOLINT(build/namespaces)
   NumericalRelativity *pnr = pmy_pack->pnr;
@@ -47,15 +47,15 @@ void Z4c::QueueZ4cTasks() {
   switch (indcs.ng) {
     case 2:
       pnr->QueueTask(&Z4c::CalcRHS<2>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, M1_SetTmunu});
       break;
     case 3:
       pnr->QueueTask(&Z4c::CalcRHS<3>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, M1_SetTmunu});
       break;
     case 4:
       pnr->QueueTask(&Z4c::CalcRHS<4>, this, Z4c_CalcRHS, "Z4c_CalcRHS",
-                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu});
+                     Task_Run, {Z4c_CopyU}, {MHD_SetTmunu, M1_SetTmunu});
       break;
   }
   pnr->QueueTask(&Z4c::Z4cBoundaryRHS, this, Z4c_SomBC, "Z4c_SomBC", Task_Run,
@@ -83,13 +83,13 @@ void Z4c::QueueZ4cTasks() {
                  Task_Run, {Z4c_AlgC});
   if (pmy_pack->pdyngr != nullptr) {
     pnr->QueueTask(&Z4c::UpdateExcisionMasks, this, Z4c_Excise, "Z4c_Excise", Task_Run,
-                   {Z4c_Z4c2ADM}, {Z4c_FastFlow});
+                   {Z4c_Z4c2ADM}, {Z4c_Horizon});
   }
   pnr->QueueTask(&Z4c::NewTimeStep, this, Z4c_Newdt, "Z4c_Newdt", Task_Run,
                  {Z4c_Z4c2ADM});
   pnr->QueueTask(&Z4c::TrackCompactObjects, this, Z4c_PT, "Z4c_PT",
                  Task_Run, {Z4c_Z4c2ADM});
-  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_FastFlow, "Z4c_FastFlow",
+  pnr->QueueTask(&Z4c::FindHorizon, this, Z4c_Horizon, "Z4c_Horizon",
                  Task_Run, {Z4c_PT});
 
   // End task list
@@ -326,21 +326,7 @@ TaskStatus Z4c::TrackCompactObjects(Driver *pdrive, int stage) {
 }
 
 TaskStatus Z4c::FindHorizon(Driver *pdrive, int stage) {
-  Real time = pmy_pack->pmesh->time;
-  auto &indcs = pmy_pack->pmesh->mb_indcs;
-  if (stage == pdrive->nexp_stages) {
-    for (auto & pahf : pfastflow) {
-      switch (indcs.ng) {
-        case 2: pahf->MetricDerivatives<2>(time); break;
-        case 3: pahf->MetricDerivatives<3>(time); break;
-        case 4: pahf->MetricDerivatives<4>(time); break;
-      }
-    }
-    for (auto & pahf : pfastflow) {
-      pahf->Find(stage, time);
-      pahf->Write(stage, time);
-    }
-  }
+  if (phfind != nullptr) phfind->Find(pdrive, stage);
   return TaskStatus::complete;
 }
 
@@ -398,8 +384,7 @@ TaskStatus Z4c::CalcWeylScalar(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if (last_output_time==time_32 && stage == pdrive->nexp_stages) {
+    if (weyl_exchange_active && stage == pdrive->nexp_stages) {
       auto &indcs = pmy_pack->pmesh->mb_indcs;
       switch (indcs.ng) {
         case 2: Z4cWeyl<2>(pmy_pack);
@@ -418,8 +403,7 @@ TaskStatus Z4c::CalcWaveForm(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       WaveExtr(pmy_pack);
     }
     return TaskStatus::complete;
@@ -434,8 +418,7 @@ TaskStatus Z4c::SendWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       TaskStatus tstat = pbval_weyl->PackAndSendCC(u_weyl, coarse_u_weyl);
       return tstat;
     } else {
@@ -452,8 +435,7 @@ TaskStatus Z4c::RecvWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       TaskStatus tstat = pbval_weyl->RecvAndUnpackCC(u_weyl, coarse_u_weyl);
       return tstat;
     } else {
@@ -470,8 +452,7 @@ TaskStatus Z4c::RestrictWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       if (pmy_pack->pmesh->multilevel) {
         pmy_pack->pmesh->pmr->RestrictCC(u_weyl, coarse_u_weyl, true);
       }
@@ -489,8 +470,7 @@ TaskStatus Z4c::ProlongateWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       if (pmy_pack->pmesh->multilevel) {
         pbval_weyl->ProlongateCC(u_weyl, coarse_u_weyl);
       }
@@ -510,7 +490,10 @@ TaskStatus Z4c::InitRecvWeyl(Driver *pdrive, int stage) {
   } else {
     float time_32 = static_cast<float>(pmy_pack->pmesh->time);
     float next_32 = static_cast<float>(last_output_time+waveform_dt);
-    if (((time_32 >= next_32) || (time_32 == 0)) && stage == pdrive->nexp_stages) {
+    // gate all Weyl tasks of this cycle on whether receives were posted here
+    weyl_exchange_active = ((time_32 >= next_32) || (time_32 == 0)) &&
+                           stage == pdrive->nexp_stages;
+    if (weyl_exchange_active) {
       last_output_time = time_32;
       TaskStatus tstat = pbval_weyl->InitRecv(2);
       return tstat;
@@ -528,8 +511,7 @@ TaskStatus Z4c::ClearRecvWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       TaskStatus tstat = pbval_weyl->ClearRecv();
       return tstat;
     } else {
@@ -546,8 +528,7 @@ TaskStatus Z4c::ClearSendWeyl(Driver *pdrive, int stage) {
   if (pmy_pack->pz4c->nrad == 0) {
     return TaskStatus::complete;
   } else {
-    float time_32 = static_cast<float>(pmy_pack->pmesh->time);
-    if ((last_output_time==time_32) && (stage == pdrive->nexp_stages)) {
+    if (weyl_exchange_active && (stage == pdrive->nexp_stages)) {
       TaskStatus tstat = pbval_weyl->ClearSend();
       return tstat;
     } else {

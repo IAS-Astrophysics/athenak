@@ -29,6 +29,7 @@
 #include "hydro/hydro.hpp"
 #include "mhd/mhd.hpp"
 #include "radiation/radiation.hpp"
+#include "radiation_m1/radiation_m1.hpp"
 #include "coordinates/adm.hpp"
 #include "z4c/z4c.hpp"
 #include "z4c/z4c_amr.hpp"
@@ -58,6 +59,7 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   recvbuf("lb recv buff",1),
   send_data("lb send data",1),
   recv_data("lb recv data",1),
+  amr_host_stage(false),
 #endif
   pmy_mesh(pm) {
   if (pin->DoesBlockExist("mesh_refinement")) {
@@ -68,6 +70,10 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
     if (pin->DoesParameterExist("mesh_refinement", "prolong_primitives")) {
       prolong_prims = pin->GetBoolean("mesh_refinement", "prolong_primitives");
     }
+#if MPI_PARALLEL_ENABLED
+    // read flag to stage the AMR exchange through host buffers (see .hpp)
+    amr_host_stage = pin->GetOrAddBoolean("mesh_refinement", "amr_host_staging", false);
+#endif
   }
 
   // allocate arrays for AMR, add RefinementCriteria object
@@ -112,6 +118,9 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   if (pm->pmb_pack->prad != nullptr) {
     ncc_tosend += (pm->pmb_pack->prad->prgeo->nangles);
   }
+  if (pm->pmb_pack->pradm1 != nullptr) {
+    ncc_tosend += (pm->pmb_pack->pradm1->nvarstot);
+  }
   if (pm->pmb_pack->pz4c != nullptr) {
     ncc_tosend += (pm->pmb_pack->pz4c->nz4c);
   }
@@ -123,6 +132,11 @@ MeshRefinement::MeshRefinement(Mesh *pm, ParameterInput *pin) :
   int ndata = nmb*(ncc_tosend + nfc_tosend)*ncells;
   Kokkos::realloc(recv_data, ndata);
   Kokkos::realloc(send_data, ndata);
+  // Host mirrors for the AMR exchange, allocated only when it is staged
+  if (amr_host_stage) {
+    Kokkos::realloc(send_data_h, ndata);
+    Kokkos::realloc(recv_data_h, ndata);
+  }
 #endif
 }
 
@@ -167,7 +181,8 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
       RepairAMRFC(pmbp->pmhd->b0);
       // Repair changes internal faces after the first exchange finalized exterior
       // faces. Refresh neighboring ghost fields and their primitives before the next
-      // reconstruction consumes them.
+      // reconstruction consumes them. This also re-exchanges M1 moments, since
+      // InitBoundaryValuesAndPrimitives covers RadiationM1 as well.
       pdriver->InitBoundaryValuesAndPrimitives(pmy_mesh);
     }
     if (pmbp->phydro != nullptr) {
@@ -181,6 +196,9 @@ void MeshRefinement::AdaptiveMeshRefinement(Driver *pdriver, ParameterInput *pin
     }
     if (pmbp->pz4c != nullptr) {
       (void) pmbp->pz4c->NewTimeStep(pdriver, pdriver->nexp_stages);
+    }
+    if (pmbp->pradm1 != nullptr) {
+      (void) pmbp->pradm1->NewTimeStep(pdriver, pdriver->nexp_stages);
     }
 
     nmb_created += nnew;
@@ -516,6 +534,7 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   hydro::Hydro* phydro = pm->pmb_pack->phydro;
   mhd::MHD* pmhd = pm->pmb_pack->pmhd;
   radiation::Radiation* prad = pm->pmb_pack->prad;
+  radiationm1::RadiationM1* pradm1 = pm->pmb_pack->pradm1;
   z4c::Z4c* pz4c = pm->pmb_pack->pz4c;
   adm::ADM* padm = pm->pmb_pack->padm;
   if ((ndel > 0) && (pmhd != nullptr)) {
@@ -547,6 +566,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     if (prad != nullptr) {
       DerefineCCSameRank(prad->i0, prad->coarse_i0);
     }
+    if (pradm1 != nullptr) {
+      DerefineCCSameRank(pradm1->u0, pradm1->coarse_u0);
+    }
     if (pz4c != nullptr) {
       DerefineCCSameRank(pz4c->u0, pz4c->coarse_u0);
     }
@@ -564,6 +586,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   }
   if (prad != nullptr) {
     CopyCC(prad->i0);
+  }
+  if (pradm1 != nullptr) {
+    CopyCC(pradm1->u0);
   }
   if (pz4c != nullptr) {
     CopyCC(pz4c->u0);
@@ -583,6 +608,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       CopyForRefinementCC(prad->i0, prad->coarse_i0);
+    }
+    if (pradm1 != nullptr) {
+      CopyForRefinementCC(pradm1->u0, pradm1->coarse_u0);
     }
     if (pz4c != nullptr) {
       CopyForRefinementCC(pz4c->u0, pz4c->coarse_u0);
@@ -618,6 +646,9 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
     }
     if (prad != nullptr) {
       RefineCC(new_to_old, prad->i0, prad->coarse_i0);
+    }
+    if (pradm1 != nullptr) {
+      RefineCC(new_to_old, pradm1->u0, pradm1->coarse_u0);
     }
     if (pz4c != nullptr) {
       RefineCC(new_to_old, pz4c->u0, pz4c->coarse_u0, true);
@@ -663,6 +694,17 @@ void MeshRefinement::RedistAndRefineMeshBlocks(ParameterInput *pin, int nnew, in
   pm->pmb_pack->AddMeshBlocks(pin);
   pm->pmb_pack->AddCoordinates(pin);
   pm->pmb_pack->pmb->SetNeighbors(pm->ptree, pm->rank_eachmb);
+
+  // The new masks are allocated but empty, and Z4c::UpdateExcisionMasks only runs at the
+  // last stage of a cycle, so excision would be off until the end of the next cycle.
+  // Horizon masks depend only on the center/radius held by FastFlow, which survives the
+  // remesh, so they can be rebuilt now.  Lapse masks are not: they read ADM data that is
+  // not yet guaranteed to be valid here.
+  if (pm->pmb_pack->pcoord->coord_data.bh_excise &&
+      pm->pmb_pack->pcoord->coord_data.excision_scheme == ExcisionScheme::horizon &&
+      pm->pmb_pack->pz4c != nullptr) {
+    pm->pmb_pack->pcoord->UpdateExcisionMasks();
+  }
 
   Kokkos::realloc(fc_amr_repair, new_nmb_total);
   for (int m=0; m<new_nmb_total; ++m) {

@@ -36,6 +36,21 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: true
+      - name: fetch bns_nurates
+        shell: bash
+        env:
+          # pinned bns_nurates commit (main as of 2026-11-23); the reference values in
+          # test_m1_singlezone_nurates_cpu.py were recorded with it, so bump both together
+          BNS_NURATES_SHA: 22114c7c45685cf142c3e50ee62e8a1098051b40
+        run: |
+          # bns_nurates is header-only and not a submodule; the CI fetches the pinned
+          # commit into the src/bns_nurates location the CMake build expects
+          rm -rf ${{ github.workspace }}/src/bns_nurates
+          git init -q ${{ github.workspace }}/src/bns_nurates
+          cd ${{ github.workspace }}/src/bns_nurates
+          git fetch -q --depth 1 https://github.com/RelNucAs/bns_nurates.git $BNS_NURATES_SHA
+          git checkout -q FETCH_HEAD
+          git log -1 --format='bns_nurates %H %s'
       - name: cpu regression test
         shell: bash
         run: |
@@ -44,7 +59,7 @@ jobs:
           python -m pip install --user flake8 numpy pytest testutils
           cd ${{ github.workspace }}/tst
           echo "Running regression script on CPU..."
-          python run_test_suite.py --cpu
+          python run_test_suite.py --cpu "-D Athena_ENABLE_NURATES=ON"
       - name: Archive log_file_cpu
         uses: actions/upload-artifact@v6
         with:
@@ -80,6 +95,21 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: true
+      - name: fetch bns_nurates
+        shell: bash
+        env:
+          # pinned bns_nurates commit (main as of 2026-11-23); the reference values in
+          # test_m1_singlezone_nurates_cpu.py were recorded with it, so bump both together
+          BNS_NURATES_SHA: 22114c7c45685cf142c3e50ee62e8a1098051b40
+        run: |
+          # bns_nurates is header-only and not a submodule; the CI fetches the pinned
+          # commit into the src/bns_nurates location the CMake build expects
+          rm -rf ${{ github.workspace }}/src/bns_nurates
+          git init -q ${{ github.workspace }}/src/bns_nurates
+          cd ${{ github.workspace }}/src/bns_nurates
+          git fetch -q --depth 1 https://github.com/RelNucAs/bns_nurates.git $BNS_NURATES_SHA
+          git checkout -q FETCH_HEAD
+          git log -1 --format='bns_nurates %H %s'
       - name: gpu regression test
         shell: bash
         run: |
@@ -89,7 +119,7 @@ jobs:
           cd ${{ github.workspace }}/tst
           export CUDA_VISIBLE_DEVICES=1
           echo "Running regressions script on GPU..."
-          python run_test_suite.py --gpu "-DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${{ github.workspace }}/kokkos/bin/nvcc_wrapper"
+          python run_test_suite.py --gpu "-D Athena_ENABLE_NURATES=ON -DKokkos_ARCH_AMPERE80=On -DCMAKE_CXX_COMPILER=${{ github.workspace }}/kokkos/bin/nvcc_wrapper"
       - name: Archive log_file_gpu
         uses: actions/upload-artifact@v6
         with:
